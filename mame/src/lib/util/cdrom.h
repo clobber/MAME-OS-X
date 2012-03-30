@@ -56,10 +56,9 @@
 #define CD_MAX_SUBCODE_DATA		(96)
 
 #define CD_FRAME_SIZE			(CD_MAX_SECTOR_DATA + CD_MAX_SUBCODE_DATA)
-#define CD_FRAMES_PER_HUNK		(4) // should be 8 for v5 CDs, with a 4-frame pad at the end to maintain SHA1 compatibility
+#define CD_FRAMES_PER_HUNK		(4)
 
 #define CD_METADATA_WORDS		(1+(CD_MAX_TRACKS * 6))
-
 enum
 {
 	CD_TRACK_MODE1 = 0, 		/* mode 1 2048 bytes/sector */
@@ -76,7 +75,7 @@ enum
 
 enum
 {
-	CD_SUB_NORMAL = 0,			/* "cooked" 96 bytes per sector */
+	CD_SUB_NORMAL = 0, 			/* "cooked" 96 bytes per sector */
 	CD_SUB_RAW,					/* raw uninterleaved 96 bytes per sector */
 	CD_SUB_NONE					/* no subcode data stored */
 };
@@ -100,12 +99,6 @@ struct _cdrom_track_info
 	UINT32 subsize;		/* size of subchannel data in each sector of this track */
 	UINT32 frames;		/* number of frames in this track */
 	UINT32 extraframes;	/* number of "spillage" frames in this track */
-	UINT32 pregap;		/* number of pregap frames */
-	UINT32 postgap;		/* number of postgap frames */
-	UINT32 pgtype;		/* type of sectors in pregap */
-	UINT32 pgsub;		/* type of subchannel data in pregap */
-	UINT32 pgdatasize;	/* size of data in each sector of the pregap */
-	UINT32 pgsubsize;	/* size of subchannel data in each sector of the pregap */
 
 	/* fields used in MAME only */
 	UINT32 physframeofs;	/* frame number on the real CD this track starts at */
@@ -130,8 +123,6 @@ struct _cdrom_toc
 cdrom_file *cdrom_open(chd_file *chd);
 void cdrom_close(cdrom_file *file);
 
-cdrom_file *cdrom_open(const char *inputfile);
-
 /* core read access */
 UINT32 cdrom_read_data(cdrom_file *file, UINT32 lbasector, void *buffer, UINT32 datatype);
 UINT32 cdrom_read_subcode(cdrom_file *file, UINT32 lbasector, void *buffer);
@@ -148,11 +139,9 @@ const cdrom_toc *cdrom_get_toc(cdrom_file *file);
 
 /* extra utilities */
 void cdrom_convert_type_string_to_track_info(const char *typestring, cdrom_track_info *info);
-void cdrom_convert_type_string_to_pregap_info(const char *typestring, cdrom_track_info *info);
 void cdrom_convert_subtype_string_to_track_info(const char *typestring, cdrom_track_info *info);
-void cdrom_convert_subtype_string_to_pregap_info(const char *typestring, cdrom_track_info *info);
-const char *cdrom_get_type_string(UINT32 trktype);
-const char *cdrom_get_subtype_string(UINT32 subtype);
+const char *cdrom_get_type_string(const cdrom_track_info *info);
+const char *cdrom_get_subtype_string(const cdrom_track_info *info);
 chd_error cdrom_parse_metadata(chd_file *chd, cdrom_toc *toc);
 chd_error cdrom_write_metadata(chd_file *chd, const cdrom_toc *toc);
 
@@ -161,11 +150,6 @@ chd_error cdrom_write_metadata(chd_file *chd, const cdrom_toc *toc);
 /***************************************************************************
     INLINE FUNCTIONS
 ***************************************************************************/
-
-INLINE UINT32 msf_to_lba(UINT32 msf)
-{
-	return ( ((msf&0x00ff0000)>>16) * 60 * 75) + (((msf&0x0000ff00)>>8) * 75) + ((msf&0x000000ff)>>0);
-}
 
 INLINE UINT32 lba_to_msf(UINT32 lba)
 {
@@ -180,22 +164,5 @@ INLINE UINT32 lba_to_msf(UINT32 lba)
 	       ((s / 10) << 12) | ((s % 10) <<  8) |
 	       ((f / 10) <<  4) | ((f % 10) <<  0);
 }
-
-// segacd needs it like this.. investigate
-// Angelo also says PCE tracks often start playing at the
-// wrong address.. related?
-INLINE UINT32 lba_to_msf_alt(int lba)
-{
-	UINT32 ret = 0;
-
-	ret |= ((lba / (60 * 75))&0xff)<<16;
-	ret |= (((lba / 75) % 60)&0xff)<<8;
-	ret |= ((lba % 75)&0xff)<<0;
-
-	return ret;
-}
-
-
-
 
 #endif	// __CDROM_H__

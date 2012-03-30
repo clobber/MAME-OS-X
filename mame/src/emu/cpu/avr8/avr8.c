@@ -17,7 +17,7 @@
     Written by MooglyGuy
 */
 
-#include "emu.h"
+#include "cpuintrf.h"
 #include "debugger.h"
 #include "avr8.h"
 
@@ -26,11 +26,10 @@ struct _avr8_state
 {
     UINT32 pc;
 
-    legacy_cpu_device *device;
-    address_space *program;
-    address_space *io;
+    const device_config *device;
+    const address_space *program;
+    const address_space *io;
     int icount;
-	UINT32 addr_mask;
 };
 
 enum
@@ -76,11 +75,13 @@ enum
 #define ZREG            ((READ_IO_8(cpustate, 31) << 8) | READ_IO_8(cpustate, 30))
 #define SPREG           ((READ_IO_8(cpustate, AVR8_IO_SPH) << 8) | READ_IO_8(cpustate, AVR8_IO_SPL))
 
-INLINE avr8_state *get_safe_token(device_t *device)
+INLINE avr8_state *get_safe_token(const device_config *device)
 {
     assert(device != NULL);
-    assert(device->type() == ATMEGA88 || device->type() == ATMEGA644);
-    return (avr8_state *)downcast<legacy_cpu_device *>(device)->token();
+    assert(device->token != NULL);
+    assert(device->type == CPU);
+    assert(cpu_get_type(device) == CPU_AVR8);
+    return (avr8_state *)device->token;
 }
 
 /*****************************************************************************/
@@ -92,56 +93,34 @@ static void unimplemented_opcode(avr8_state *cpustate, UINT32 op)
 
 /*****************************************************************************/
 
-INLINE bool avr8_is_long_opcode(UINT16 op)
-{
-	if((op & 0xf000) == 0x9000)
-	{
-		if((op & 0x0f00) < 0x0400)
-		{
-			if((op & 0x000f) == 0x0000)
-			{
-				return true;
-			}
-		}
-		else if((op & 0x0f00) < 0x0600)
-		{
-			if((op & 0x000f) >= 0x000c)
-			{
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 INLINE UINT8 READ_PRG_8(avr8_state *cpustate, UINT32 address)
 {
-    return cpustate->program->read_byte(address);
+    return memory_read_byte_16le(cpustate->program, address);
 }
 
 INLINE UINT16 READ_PRG_16(avr8_state *cpustate, UINT32 address)
 {
-    return cpustate->program->read_word(address << 1);
+    return memory_read_word_16le(cpustate->program, address << 1);
 }
 
 INLINE void WRITE_PRG_8(avr8_state *cpustate, UINT32 address, UINT8 data)
 {
-    cpustate->program->write_byte(address, data);
+    memory_write_byte_16le(cpustate->program, address, data);
 }
 
 INLINE void WRITE_PRG_16(avr8_state *cpustate, UINT32 address, UINT16 data)
 {
-    cpustate->program->write_word(address, data);
+    memory_write_word_16le(cpustate->program, address, data);
 }
 
 INLINE UINT8 READ_IO_8(avr8_state *cpustate, UINT16 address)
 {
-    return cpustate->io->read_byte(address);
+    return memory_read_byte(cpustate->io, address);
 }
 
 INLINE void WRITE_IO_8(avr8_state *cpustate, UINT16 address, UINT8 data)
 {
-    cpustate->io->write_byte(address, data);
+    memory_write_byte(cpustate->io, address, data);
 }
 
 INLINE void PUSH(avr8_state *cpustate, UINT8 val)
@@ -170,13 +149,10 @@ static void avr8_set_irq_line(avr8_state *cpustate, UINT16 vector, int state)
     // Horrible hack, not accurate
     if(state)
     {
-		if(SREG_R(AVR8_SREG_I))
-		{
-			SREG_W(AVR8_SREG_I, 0);
-			PUSH(cpustate, (cpustate->pc >> 8) & 0x00ff);
-			PUSH(cpustate, cpustate->pc & 0x00ff);
-			cpustate->pc = vector;
-		}
+        SREG_W(AVR8_SREG_I, 0);
+        PUSH(cpustate, (cpustate->pc >> 8) & 0x00ff);
+        PUSH(cpustate, cpustate->pc & 0x00ff);
+        cpustate->pc = vector;
     }
 }
 
@@ -189,12 +165,10 @@ static CPU_INIT( avr8 )
     cpustate->pc = 0;
 
     cpustate->device = device;
-    cpustate->program = device->space(AS_PROGRAM);
-    cpustate->io = device->space(AS_IO);
+    cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+    cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
 
     WRITE_IO_8(cpustate, AVR8_IO_SREG, 0);
-
-	device->save_item(NAME(cpustate->pc));
 }
 
 static CPU_EXIT( avr8 )
@@ -222,9 +196,11 @@ static CPU_EXECUTE( avr8 )
     //UINT16 pr = 0;
     avr8_state *cpustate = get_safe_token(device);
 
+    cpustate->icount = cycles;
+
     while (cpustate->icount > 0)
     {
-        cpustate->pc &= cpustate->addr_mask;
+        cpustate->pc &= 0x0fff;
 
         debugger_instruction_hook(device, cpustate->pc << 1);
 
@@ -667,22 +643,21 @@ static CPU_EXECUTE( avr8 )
                                 break;
                             case 0x000c:
                             case 0x000d:    // JMP k
-								offs = KCONST22(op) << 16;
-                                cpustate->pc++;
-                                offs |= READ_PRG_16(cpustate, cpustate->pc);
-                                cpustate->pc = offs;
-								cpustate->pc--;
-								opcycles = 4;
+                                //op <<= 8;
+                                //op |= oprom[pos++];
+                                //op <<= 8;
+                                //op |= oprom[pos++];
+                                //output += sprintf( output, "JMP     0x%06x", KCONST22(op) );
+                                unimplemented_opcode(cpustate, op);
                                 break;
                             case 0x000e:    // CALL k
                             case 0x000f:
-								PUSH(cpustate, ((cpustate->pc + 1) >> 8) & 0x00ff);
-								PUSH(cpustate, (cpustate->pc + 1) & 0x00ff);
-								offs = KCONST22(op) << 16;
-                                cpustate->pc++;
-                                offs |= READ_PRG_16(cpustate, cpustate->pc);
-                                cpustate->pc = offs;
-								cpustate->pc--;
+                                //op <<= 8;
+                                //op |= oprom[pos++];
+                                //op <<= 8;
+                                //op |= oprom[pos++];
+                                //output += sprintf( output, "CALL    0x%06x", KCONST22(op) );
+                                unimplemented_opcode(cpustate, op);
                                 break;
                             default:
                                 unimplemented_opcode(cpustate, op);
@@ -853,11 +828,8 @@ static CPU_EXECUTE( avr8 )
                         opcycles = 2;
                         break;
                     case 0x0900:    // SBIC A,b
-                		if(!(READ_IO_8(cpustate, ACONST5(op)) & (1 << RR3(op))))
-                		{
-							opcycles += avr8_is_long_opcode(op) ? 2 : 1;
-                            cpustate->pc += avr8_is_long_opcode(op) ? 2 : 1;
-						}
+                        //output += sprintf( output, "SBIC    0x%02x, %d", ACONST5(op), RR3(op) );
+                        unimplemented_opcode(cpustate, op);
                         break;
                     case 0x0a00:    // SBI A,b
                         //output += sprintf( output, "SBI     0x%02x, %d", ACONST5(op), RR3(op) );
@@ -872,13 +844,8 @@ static CPU_EXECUTE( avr8 )
                     case 0x0d00:
                     case 0x0e00:
                     case 0x0f00:    // MUL Rd,Rr
-                        sd = (UINT8)READ_IO_8(cpustate, RD5(op)) * (UINT8)READ_IO_8(cpustate, RR5(op));
-                        WRITE_IO_8(cpustate, 1, (sd >> 8) & 0x00ff);
-                        WRITE_IO_8(cpustate, 0, sd & 0x00ff);
-                        SREG_W(AVR8_SREG_C, (sd & 0x8000) ? 1 : 0);
-                        SREG_W(AVR8_SREG_Z, (sd == 0) ? 1 : 0);
-                        opcycles = 2;
                         //output += sprintf( output, "MUL     R%d, R%d", RD5(op), RR5(op) );
+                        unimplemented_opcode(cpustate, op);
                         break;
                 }
                 break;
@@ -990,6 +957,8 @@ static CPU_EXECUTE( avr8 )
 
         cpustate->icount -= opcycles;
     }
+
+    return cycles - cpustate->icount;
 }
 
 /*****************************************************************************/
@@ -1070,7 +1039,7 @@ static CPU_SET_INFO( avr8 )
 
 CPU_GET_INFO( avr8 )
 {
-    avr8_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+    avr8_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
     switch(state)
     {
@@ -1086,15 +1055,15 @@ CPU_GET_INFO( avr8 )
         case CPUINFO_INT_MIN_CYCLES:            info->i = 1;                    break;
         case CPUINFO_INT_MAX_CYCLES:            info->i = 4;                    break;
 
-        case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM: info->i = 8;                    break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 22;                   break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;                    break;
-        case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:    info->i = 0;                    break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:    info->i = 0;                    break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:    info->i = 0;                    break;
-        case DEVINFO_INT_DATABUS_WIDTH + AS_IO:      info->i = 8;                    break;
-        case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:      info->i = 11;                   break;
-        case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:      info->i = 0;                    break;
+        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM: info->i = 8;                    break;
+        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 22;                   break;
+        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;                    break;
+        case CPUINFO_INT_DATABUS_WIDTH_DATA:    info->i = 0;                    break;
+        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:    info->i = 0;                    break;
+        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:    info->i = 0;                    break;
+        case CPUINFO_INT_DATABUS_WIDTH_IO:      info->i = 8;                    break;
+        case CPUINFO_INT_ADDRBUS_WIDTH_IO:      info->i = 11;                   break;
+        case CPUINFO_INT_ADDRBUS_SHIFT_IO:      info->i = 0;                    break;
 
         case CPUINFO_INT_PC:    /* intentional fallthrough */
         case CPUINFO_INT_REGISTER + AVR8_PC:    info->i = cpustate->pc << 1;                    break;
@@ -1158,48 +1127,3 @@ CPU_GET_INFO( avr8 )
         case CPUINFO_STR_REGISTER + AVR8_SP:            sprintf(info->s, "SP: %04x", SPREG ); break;
     }
 }
-
-static CPU_INIT( atmega88 )
-{
-	CPU_INIT_CALL(avr8);
-    avr8_state *cpustate = get_safe_token(device);
-	cpustate->addr_mask = 0x0fff;
-}
-
-static CPU_INIT( atmega644 )
-{
-	CPU_INIT_CALL(avr8);
-    avr8_state *cpustate = get_safe_token(device);
-	cpustate->addr_mask = 0xffff;
-}
-
-CPU_GET_INFO( atmega88 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to functions --- */
-		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(atmega88);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "ATmega88");				break;
-
-		default:										CPU_GET_INFO_CALL(avr8); break;
-	}
-}
-
-CPU_GET_INFO( atmega644 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as pointers to functions --- */
-		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(atmega644);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "ATmega644");				break;
-
-		default:										CPU_GET_INFO_CALL(avr8); break;
-	}
-}
-
-DEFINE_LEGACY_CPU_DEVICE(ATMEGA88, atmega88);
-DEFINE_LEGACY_CPU_DEVICE(ATMEGA644, atmega644);

@@ -7,38 +7,40 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "includes/bublbobl.h"
 
 
+UINT8 *bublbobl_mcu_sharedram;
+
+
 WRITE8_HANDLER( bublbobl_bankswitch_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-
 	/* bits 0-2 select ROM bank */
-	memory_set_bank(space->machine(), "bank1", (data ^ 4) & 7);
+	memory_set_bank(space->machine, 1, (data ^ 4) & 7);
 
 	/* bit 3 n.c. */
 
 	/* bit 4 resets second Z80 */
-	device_set_input_line(state->m_slave, INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine, "slave", INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* bit 5 resets mcu */
-	if (state->m_mcu != NULL) // only if we have a MCU
-		device_set_input_line(state->m_mcu, INPUT_LINE_RESET, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
+	if (cputag_get_cpu(space->machine, "mcu") != NULL) // only if we have a MCU
+		cputag_set_input_line(space->machine, "mcu", INPUT_LINE_RESET, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
 
 	/* bit 6 enables display */
-	state->m_video_enable = data & 0x40;
+	bublbobl_video_enable = data & 0x40;
 
 	/* bit 7 flips screen */
-	flip_screen_set(space->machine(), data & 0x80);
+	flip_screen_set(space->machine, data & 0x80);
 }
 
 WRITE8_HANDLER( tokio_bankswitch_w )
 {
 	/* bits 0-2 select ROM bank */
-	memory_set_bank(space->machine(), "bank1", data & 7);
+	memory_set_bank(space->machine, 1, data & 7);
 
 	/* bits 3-7 unknown */
 }
@@ -46,15 +48,14 @@ WRITE8_HANDLER( tokio_bankswitch_w )
 WRITE8_HANDLER( tokio_videoctrl_w )
 {
 	/* bit 7 flips screen */
-	flip_screen_set(space->machine(), data & 0x80);
+	flip_screen_set(space->machine, data & 0x80);
 
 	/* other bits unknown */
 }
 
 WRITE8_HANDLER( bublbobl_nmitrigger_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	device_set_input_line(state->m_slave, INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "slave", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -74,13 +75,12 @@ static const UINT8 tokio_prot_data[] =
 	0x00,0x00,0x00,0x00,0x02,0x00,0x01,0x02,0x00,0x01,0x01,0x00,0x00,0x02,0x01,0x00,
 	0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x01
 };
+static int tokio_prot_count;
 
 READ8_HANDLER( tokio_mcu_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-
-	state->m_tokio_prot_count %= sizeof(tokio_prot_data);
-	return tokio_prot_data[state->m_tokio_prot_count++];
+	tokio_prot_count %= sizeof(tokio_prot_data);
+	return tokio_prot_data[tokio_prot_count++];
 }
 
 READ8_HANDLER( tokiob_mcu_r )
@@ -89,56 +89,49 @@ READ8_HANDLER( tokiob_mcu_r )
 }
 
 
+
+static int sound_nmi_enable,pending_nmi,sound_status;
+
 static TIMER_CALLBACK( nmi_callback )
 {
-	bublbobl_state *state = machine.driver_data<bublbobl_state>();
-
-	if (state->m_sound_nmi_enable)
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-	else
-		state->m_pending_nmi = 1;
+	if (sound_nmi_enable) cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	else pending_nmi = 1;
 }
 
 WRITE8_HANDLER( bublbobl_sound_command_w )
 {
-	soundlatch_w(space, offset, data);
-	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
+	soundlatch_w(space,offset,data);
+	timer_call_after_resynch(space->machine, NULL, data,nmi_callback);
 }
 
 WRITE8_HANDLER( bublbobl_sh_nmi_disable_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_sound_nmi_enable = 0;
+	sound_nmi_enable = 0;
 }
 
 WRITE8_HANDLER( bublbobl_sh_nmi_enable_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-
-	state->m_sound_nmi_enable = 1;
-	if (state->m_pending_nmi)
+	sound_nmi_enable = 1;
+	if (pending_nmi)
 	{
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-		state->m_pending_nmi = 0;
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		pending_nmi = 0;
 	}
 }
 
 WRITE8_HANDLER( bublbobl_soundcpu_reset_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_RESET, data ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, data ? ASSERT_LINE : CLEAR_LINE);
 }
 
 READ8_HANDLER( bublbobl_sound_status_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return state->m_sound_status;
+	return sound_status;
 }
 
 WRITE8_HANDLER( bublbobl_sound_status_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_sound_status = data;
+	sound_status = data;
 }
 
 
@@ -149,159 +142,146 @@ Bubble Bobble MCU
 
 ***************************************************************************/
 
+static UINT8 ddr1, ddr2, ddr3, ddr4;
+static UINT8 port1_in, port2_in, port3_in, port4_in;
+static UINT8 port1_out, port2_out, port3_out, port4_out;
+
 READ8_HANDLER( bublbobl_mcu_ddr1_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return state->m_ddr1;
+	return ddr1;
 }
 
 WRITE8_HANDLER( bublbobl_mcu_ddr1_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr1 = data;
+	ddr1 = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_ddr2_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return state->m_ddr2;
+	return ddr2;
 }
 
 WRITE8_HANDLER( bublbobl_mcu_ddr2_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr2 = data;
+	ddr2 = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_ddr3_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return state->m_ddr3;
+	return ddr3;
 }
 
 WRITE8_HANDLER( bublbobl_mcu_ddr3_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr3 = data;
+	ddr3 = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_ddr4_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return state->m_ddr4;
+	return ddr4;
 }
 
 WRITE8_HANDLER( bublbobl_mcu_ddr4_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr4 = data;
+	ddr4 = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_port1_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-
-	//logerror("%04x: 6801U4 port 1 read\n", cpu_get_pc(&space->device()));
-	state->m_port1_in = input_port_read(space->machine(), "IN0");
-	return (state->m_port1_out & state->m_ddr1) | (state->m_port1_in & ~state->m_ddr1);
+//logerror("%04x: 6801U4 port 1 read\n",cpu_get_pc(space->cpu));
+	port1_in = input_port_read(space->machine, "IN0");
+	return (port1_out & ddr1) | (port1_in & ~ddr1);
 }
 
 WRITE8_HANDLER( bublbobl_mcu_port1_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 1 write %02x\n", cpu_get_pc(&space->device()), data);
+//logerror("%04x: 6801U4 port 1 write %02x\n",cpu_get_pc(space->cpu),data);
 
 	// bit 4: coin lockout
-	coin_lockout_global_w(space->machine(), ~data & 0x10);
+	coin_lockout_global_w(~data & 0x10);
 
 	// bit 5: select 1-way or 2-way coin counter
 
 	// bit 6: trigger IRQ on main CPU (jumper switchable to vblank)
 	// trigger on high->low transition
-	if ((state->m_port1_out & 0x40) && (~data & 0x40))
+	if ((port1_out & 0x40) && (~data & 0x40))
 	{
-		// logerror("triggering IRQ on main CPU\n");
-		device_set_input_line_vector(state->m_maincpu, 0, state->m_mcu_sharedram[0]);
-		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
+//      logerror("triggering IRQ on main CPU\n");
+		cpu_set_input_line_vector(cputag_get_cpu(space->machine, "maincpu"), 0, bublbobl_mcu_sharedram[0]);
+		cputag_set_input_line(space->machine, "maincpu", 0, HOLD_LINE);
 	}
 
 	// bit 7: select read or write shared RAM
 
-	state->m_port1_out = data;
+	port1_out = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_port2_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-
-	//logerror("%04x: 6801U4 port 2 read\n", cpu_get_pc(&space->device()));
-	return (state->m_port2_out & state->m_ddr2) | (state->m_port2_in & ~state->m_ddr2);
+//logerror("%04x: 6801U4 port 2 read\n",cpu_get_pc(space->cpu));
+	return (port2_out & ddr2) | (port2_in & ~ddr2);
 }
 
 WRITE8_HANDLER( bublbobl_mcu_port2_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 2 write %02x\n", cpu_get_pc(&space->device()), data);
+//logerror("%04x: 6801U4 port 2 write %02x\n",cpu_get_pc(space->cpu),data);
 	static const char *const portnames[] = { "DSW0", "DSW1", "IN1", "IN2" };
 
 	// bits 0-3: bits 8-11 of shared RAM address
 
 	// bit 4: clock (goes to PAL A78-04.12)
 	// latch on low->high transition
-	if ((~state->m_port2_out & 0x10) && (data & 0x10))
+	if ((~port2_out & 0x10) && (data & 0x10))
 	{
-		int address = state->m_port4_out | ((data & 0x0f) << 8);
+		int address = port4_out | ((data & 0x0f) << 8);
 
-		if (state->m_port1_out & 0x80)
+		if (port1_out & 0x80)
 		{
 			// read
 			if ((address & 0x0800) == 0x0000)
-				state->m_port3_in = input_port_read(space->machine(), portnames[address & 3]);
+				port3_in = input_port_read(space->machine, portnames[address & 3]);
 			else if ((address & 0x0c00) == 0x0c00)
-				state->m_port3_in = state->m_mcu_sharedram[address & 0x03ff];
-			// logerror("reading %02x from shared RAM %04x\n", state->m_port3_in, address);
+				port3_in = bublbobl_mcu_sharedram[address & 0x03ff];
+//          logerror("reading %02x from shared RAM %04x\n",port3_in,address);
 		}
 		else
 		{
 			// write
-			// logerror("writing %02x to shared RAM %04x\n", state->m_port3_out, address);
+//          logerror("writing %02x to shared RAM %04x\n",port3_out,address);
 			if ((address & 0x0c00) == 0x0c00)
-				state->m_mcu_sharedram[address & 0x03ff] = state->m_port3_out;
+				bublbobl_mcu_sharedram[address & 0x03ff] = port3_out;
 		}
 	}
 
-	state->m_port2_out = data;
+	port2_out = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_port3_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 3 read\n", cpu_get_pc(&space->device()));
-	return (state->m_port3_out & state->m_ddr3) | (state->m_port3_in & ~state->m_ddr3);
+//logerror("%04x: 6801U4 port 3 read\n",cpu_get_pc(space->cpu));
+	return (port3_out & ddr3) | (port3_in & ~ddr3);
 }
 
 WRITE8_HANDLER( bublbobl_mcu_port3_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 3 write %02x\n", cpu_get_pc(&space->device()), data);
-	state->m_port3_out = data;
+//logerror("%04x: 6801U4 port 3 write %02x\n",cpu_get_pc(space->cpu),data);
+
+	port3_out = data;
 }
 
 READ8_HANDLER( bublbobl_mcu_port4_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 4 read\n", cpu_get_pc(&space->device()));
-	return (state->m_port4_out & state->m_ddr4) | (state->m_port4_in & ~state->m_ddr4);
+//logerror("%04x: 6801U4 port 4 read\n",cpu_get_pc(space->cpu));
+	return (port4_out & ddr4) | (port4_in & ~ddr4);
 }
 
 WRITE8_HANDLER( bublbobl_mcu_port4_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 6801U4 port 4 write %02x\n", cpu_get_pc(&space->device()), data);
+//logerror("%04x: 6801U4 port 4 write %02x\n",cpu_get_pc(space->cpu),data);
 
 	// bits 0-7 of shared RAM address
 
-	state->m_port4_out = data;
+	port4_out = data;
 }
 
 /***************************************************************************
@@ -313,72 +293,71 @@ in boblbobl, so they don't matter. All checks are patched out in sboblbob.
 
 ***************************************************************************/
 
+static int ic43_a,ic43_b;
+
+
 READ8_HANDLER( boblbobl_ic43_a_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	// if (offset >= 2)
-	//     logerror("%04x: ic43_a_r (offs %d) res = %02x\n", cpu_get_pc(&space->device()), offset, res);
+//  if (offset >= 2)
+//      logerror("%04x: ic43_a_r (offs %d) res = %02x\n",cpu_get_pc(space->cpu),offset,res);
 
 	if (offset == 0)
-		return state->m_ic43_a << 4;
+		return ic43_a << 4;
 	else
-		return space->machine().rand() & 0xff;
+		return mame_rand(space->machine) & 0xff;
 }
 
 WRITE8_HANDLER( boblbobl_ic43_a_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
 	int res = 0;
 
 	switch (offset)
 	{
 		case 0:
-			if (~state->m_ic43_a & 8) res ^= 1;
-			if (~state->m_ic43_a & 1) res ^= 2;
-			if (~state->m_ic43_a & 1) res ^= 4;
-			if (~state->m_ic43_a & 2) res ^= 4;
-			if (~state->m_ic43_a & 4) res ^= 8;
+			if (~ic43_a & 8) res ^= 1;
+			if (~ic43_a & 1) res ^= 2;
+			if (~ic43_a & 1) res ^= 4;
+			if (~ic43_a & 2) res ^= 4;
+			if (~ic43_a & 4) res ^= 8;
 			break;
 		case 1:
-			if (~state->m_ic43_a & 8) res ^= 1;
-			if (~state->m_ic43_a & 2) res ^= 1;
-			if (~state->m_ic43_a & 8) res ^= 2;
-			if (~state->m_ic43_a & 1) res ^= 4;
-			if (~state->m_ic43_a & 4) res ^= 8;
+			if (~ic43_a & 8) res ^= 1;
+			if (~ic43_a & 2) res ^= 1;
+			if (~ic43_a & 8) res ^= 2;
+			if (~ic43_a & 1) res ^= 4;
+			if (~ic43_a & 4) res ^= 8;
 			break;
 		case 2:
-			if (~state->m_ic43_a & 4) res ^= 1;
-			if (~state->m_ic43_a & 8) res ^= 2;
-			if (~state->m_ic43_a & 2) res ^= 4;
-			if (~state->m_ic43_a & 1) res ^= 8;
-			if (~state->m_ic43_a & 4) res ^= 8;
+			if (~ic43_a & 4) res ^= 1;
+			if (~ic43_a & 8) res ^= 2;
+			if (~ic43_a & 2) res ^= 4;
+			if (~ic43_a & 1) res ^= 8;
+			if (~ic43_a & 4) res ^= 8;
 			break;
 		case 3:
-			if (~state->m_ic43_a & 2) res ^= 1;
-			if (~state->m_ic43_a & 4) res ^= 2;
-			if (~state->m_ic43_a & 8) res ^= 2;
-			if (~state->m_ic43_a & 8) res ^= 4;
-			if (~state->m_ic43_a & 1) res ^= 8;
+			if (~ic43_a & 2) res ^= 1;
+			if (~ic43_a & 4) res ^= 2;
+			if (~ic43_a & 8) res ^= 2;
+			if (~ic43_a & 8) res ^= 4;
+			if (~ic43_a & 1) res ^= 8;
 			break;
 	}
-	state->m_ic43_a = res;
+	ic43_a = res;
 }
 
 WRITE8_HANDLER( boblbobl_ic43_b_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
 	static const int xorval[4] = { 4, 1, 8, 2 };
 
-	//  logerror("%04x: ic43_b_w (offs %d) %02x\n", cpu_get_pc(&space->device()), offset, data);
-	state->m_ic43_b = (data >> 4) ^ xorval[offset];
+//  logerror("%04x: ic43_b_w (offs %d) %02x\n",cpu_get_pc(space->cpu),offset,data);
+	ic43_b = (data >> 4) ^ xorval[offset];
 }
 
 READ8_HANDLER( boblbobl_ic43_b_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//  logerror("%04x: ic43_b_r (offs %d)\n", cpu_get_pc(&space->device()), offset);
+//  logerror("%04x: ic43_b_r (offs %d)\n",cpu_get_pc(space->cpu),offset);
 	if (offset == 0)
-		return state->m_ic43_b << 4;
+		return ic43_b << 4;
 	else
 		return 0xff;	// not used?
 }
@@ -395,37 +374,36 @@ READ8_HANDLER( boblbobl_ic43_b_r )
  The following is ENTIRELY GUESSWORK!!!
 
 ***************************************************************************/
-static TIMER_CALLBACK( bublbobl_m68705_irq_ack )
-{
-	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
-}
+
 
 INTERRUPT_GEN( bublbobl_m68705_interrupt )
 {
-	device_set_input_line(device, 0, ASSERT_LINE);
-
-	device->machine().scheduler().timer_set(attotime::from_msec(1000/60), FUNC(bublbobl_m68705_irq_ack)); /* TODO: understand how this is ack'ed */
+	/* I don't know how to handle the interrupt line so I just toggle it every time. */
+	if (cpu_getiloops(device) & 1)
+		cpu_set_input_line(device,0,CLEAR_LINE);
+	else
+		cpu_set_input_line(device,0,ASSERT_LINE);
 }
 
 
-READ8_HANDLER( bublbobl_68705_port_a_r )
+
+static UINT8 portA_in,portA_out,ddrA;
+
+READ8_HANDLER( bublbobl_68705_portA_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 68705 port A read %02x\n", cpu_get_pc(&space->device()), state->m_port_a_in);
-	return (state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a);
+//logerror("%04x: 68705 port A read %02x\n",cpu_get_pc(space->cpu),portA_in);
+	return (portA_out & ddrA) | (portA_in & ~ddrA);
 }
 
-WRITE8_HANDLER( bublbobl_68705_port_a_w )
+WRITE8_HANDLER( bublbobl_68705_portA_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 68705 port A write %02x\n", cpu_get_pc(&space->device()), data);
-	state->m_port_a_out = data;
+//logerror("%04x: 68705 port A write %02x\n",cpu_get_pc(space->cpu),data);
+	portA_out = data;
 }
 
-WRITE8_HANDLER( bublbobl_68705_ddr_a_w )
+WRITE8_HANDLER( bublbobl_68705_ddrA_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr_a = data;
+	ddrA = data;
 }
 
 
@@ -449,82 +427,83 @@ WRITE8_HANDLER( bublbobl_68705_ddr_a_w )
  *  7   W  not used?
  */
 
-READ8_HANDLER( bublbobl_68705_port_b_r )
+static UINT8 portB_in,portB_out,ddrB;
+
+READ8_HANDLER( bublbobl_68705_portB_r )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	return (state->m_port_b_out & state->m_ddr_b) | (state->m_port_b_in & ~state->m_ddr_b);
+	return (portB_out & ddrB) | (portB_in & ~ddrB);
 }
 
-WRITE8_HANDLER( bublbobl_68705_port_b_w )
+static int address,latch;
+
+WRITE8_HANDLER( bublbobl_68705_portB_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	//logerror("%04x: 68705 port B write %02x\n", cpu_get_pc(&space->device()), data);
+//logerror("%04x: 68705 port B write %02x\n",cpu_get_pc(space->cpu),data);
 	static const char *const portnames[] = { "DSW0", "DSW1", "IN1", "IN2" };
 
-	if ((state->m_ddr_b & 0x01) && (~data & 0x01) && (state->m_port_b_out & 0x01))
+	if ((ddrB & 0x01) && (~data & 0x01) && (portB_out & 0x01))
 	{
-		state->m_port_a_in = state->m_latch;
+		portA_in = latch;
 	}
-	if ((state->m_ddr_b & 0x02) && (data & 0x02) && (~state->m_port_b_out & 0x02)) /* positive edge trigger */
+	if ((ddrB & 0x02) && (data & 0x02) && (~portB_out & 0x02)) /* positive edge trigger */
 	{
-		state->m_address = (state->m_address & 0xff00) | state->m_port_a_out;
-		//logerror("%04x: 68705 address %02x\n", cpu_get_pc(&space->device()), state->m_port_a_out);
+		address = (address & 0xff00) | portA_out;
+//logerror("%04x: 68705 address %02x\n",cpu_get_pc(space->cpu),portA_out);
 	}
-	if ((state->m_ddr_b & 0x04) && (data & 0x04) && (~state->m_port_b_out & 0x04)) /* positive edge trigger */
+	if ((ddrB & 0x04) && (data & 0x04) && (~portB_out & 0x04)) /* positive edge trigger */
 	{
-		state->m_address = (state->m_address & 0x00ff) | ((state->m_port_a_out & 0x0f) << 8);
+		address = (address & 0x00ff) | ((portA_out & 0x0f) << 8);
 	}
-	if ((state->m_ddr_b & 0x10) && (~data & 0x10) && (state->m_port_b_out & 0x10))
+	if ((ddrB & 0x10) && (~data & 0x10) && (portB_out & 0x10))
 	{
 		if (data & 0x08)	/* read */
 		{
-			if ((state->m_address & 0x0800) == 0x0000)
+			if ((address & 0x0800) == 0x0000)
 			{
-				//logerror("%04x: 68705 read input port %02x\n", cpu_get_pc(&space->device()), state->m_address);
-				state->m_latch = input_port_read(space->machine(), portnames[state->m_address & 3]);
+//logerror("%04x: 68705 read input port %02x\n",cpu_get_pc(space->cpu),address);
+				latch = input_port_read(space->machine, portnames[address & 3]);
 			}
-			else if ((state->m_address & 0x0c00) == 0x0c00)
+			else if ((address & 0x0c00) == 0x0c00)
 			{
-				//logerror("%04x: 68705 read %02x from address %04x\n", cpu_get_pc(&space->device()), state->m_mcu_sharedram[state->m_address], state->m_address);
-				state->m_latch = state->m_mcu_sharedram[state->m_address & 0x03ff];
+//logerror("%04x: 68705 read %02x from address %04x\n",cpu_get_pc(space->cpu),bublbobl_mcu_sharedram[address],address);
+				latch = bublbobl_mcu_sharedram[address & 0x03ff];
 			}
 			else
-				logerror("%04x: 68705 unknown read address %04x\n", cpu_get_pc(&space->device()), state->m_address);
+logerror("%04x: 68705 unknown read address %04x\n",cpu_get_pc(space->cpu),address);
 		}
 		else	/* write */
 		{
-			if ((state->m_address & 0x0c00) == 0x0c00)
+			if ((address & 0x0c00) == 0x0c00)
 			{
-				//logerror("%04x: 68705 write %02x to address %04x\n", cpu_get_pc(&space->device()), state->m_port_a_out, state->m_address);
-				state->m_mcu_sharedram[state->m_address & 0x03ff] = state->m_port_a_out;
+//logerror("%04x: 68705 write %02x to address %04x\n",cpu_get_pc(space->cpu),portA_out,address);
+				bublbobl_mcu_sharedram[address & 0x03ff] = portA_out;
 			}
 			else
-				logerror("%04x: 68705 unknown write to address %04x\n", cpu_get_pc(&space->device()), state->m_address);
+logerror("%04x: 68705 unknown write to address %04x\n",cpu_get_pc(space->cpu),address);
 		}
 	}
-	if ((state->m_ddr_b & 0x20) && (~data & 0x20) && (state->m_port_b_out & 0x20))
+	if ((ddrB & 0x20) && (~data & 0x20) && (portB_out & 0x20))
 	{
 		/* hack to get random EXTEND letters (who is supposed to do this? 68705? PAL?) */
-		state->m_mcu_sharedram[0x7c] = space->machine().rand() % 6;
+		bublbobl_mcu_sharedram[0x7c] = mame_rand(space->machine)%6;
 
-		device_set_input_line_vector(state->m_maincpu, 0, state->m_mcu_sharedram[0]);
-		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
+		cpu_set_input_line_vector(cputag_get_cpu(space->machine, "maincpu"), 0, bublbobl_mcu_sharedram[0]);
+		cputag_set_input_line(space->machine, "maincpu", 0, HOLD_LINE);
 	}
-	if ((state->m_ddr_b & 0x40) && (~data & 0x40) && (state->m_port_b_out & 0x40))
+	if ((ddrB & 0x40) && (~data & 0x40) && (portB_out & 0x40))
 	{
-		logerror("%04x: 68705 unknown port B bit %02x\n", cpu_get_pc(&space->device()), data);
+logerror("%04x: 68705 unknown port B bit %02x\n",cpu_get_pc(space->cpu),data);
 	}
-	if ((state->m_ddr_b & 0x80) && (~data & 0x80) && (state->m_port_b_out & 0x80))
+	if ((ddrB & 0x80) && (~data & 0x80) && (portB_out & 0x80))
 	{
-		logerror("%04x: 68705 unknown port B bit %02x\n", cpu_get_pc(&space->device()), data);
+logerror("%04x: 68705 unknown port B bit %02x\n",cpu_get_pc(space->cpu),data);
 	}
 
-	state->m_port_b_out = data;
+	portB_out = data;
 }
 
-WRITE8_HANDLER( bublbobl_68705_ddr_b_w )
+WRITE8_HANDLER( bublbobl_68705_ddrB_w )
 {
-	bublbobl_state *state = space->machine().driver_data<bublbobl_state>();
-	state->m_ddr_b = data;
+	ddrB = data;
 }
 

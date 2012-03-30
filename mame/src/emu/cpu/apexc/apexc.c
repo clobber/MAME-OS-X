@@ -323,13 +323,13 @@ field:      X address   D           Function    Y address   D (part 2)
       another track.
 */
 
-#include "emu.h"
+#include "cpuintrf.h"
 #include "debugger.h"
 #include "apexc.h"
 
 #ifndef SUPPORT_ODD_WORD_SIZES
-#define apexc_readmem(address)	cpustate->program->read_dword((address)<<2)
-#define apexc_writemem(address, data)	cpustate->program->write_dword((address)<<2, (data))
+#define apexc_readmem(address)	memory_read_dword_32be(cpustate->program, (address)<<2)
+#define apexc_writemem(address, data)	memory_write_dword_32be(cpustate->program, (address)<<2, (data))
 /* eewww ! - Fortunately, there is no memory mapped I/O, so we can simulate masked write
 without danger */
 #define apexc_writemem_masked(address, data, mask)										\
@@ -356,11 +356,10 @@ struct _apexc_state
 
 	int running;	/* 1 flag: */
 				/* running: flag implied by the existence of the stop instruction */
-	UINT32 pc;	/* address of next instruction for the disassembler */
 
-	legacy_cpu_device *device;
-	address_space *program;
-	address_space *io;
+	const device_config *device;
+	const address_space *program;
+	const address_space *io;
 	int icount;
 };
 
@@ -368,11 +367,13 @@ struct _apexc_state
 #define DELAY(n)	{cpustate->icount -= (n); cpustate->current_word = (cpustate->current_word + (n)) & 0x1f;}
 
 
-INLINE apexc_state *get_safe_token(device_t *device)
+INLINE apexc_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == APEXC);
-	return (apexc_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_APEXC);
+	return (apexc_state *)device->token;
 }
 
 
@@ -474,12 +475,12 @@ static void word_write(apexc_state *cpustate, int address, UINT32 data, UINT32 m
 
 static int papertape_read(apexc_state *cpustate)
 {
-	return cpustate->io->read_byte(0) & 0x1f;
+	return memory_read_byte_8be(cpustate->io, 0) & 0x1f;
 }
 
 static void papertape_punch(apexc_state *cpustate, int data)
 {
-	cpustate->io->write_byte(0, data);
+	memory_write_byte_8be(cpustate->io, 0, data);
 }
 
 /*
@@ -539,7 +540,6 @@ static void execute(apexc_state *cpustate)
 	function = (cpustate->cr >> 7) & 0x1F;
 	c6 = (cpustate->cr >> 1) & 0x3F;
 	vector = cpustate->cr & 1;
-	cpustate->pc = y<<2;
 
 	function &= 0x1E;	/* this is a mere guess - the LSBit is reserved for future additions */
 
@@ -595,7 +595,6 @@ static void execute(apexc_state *cpustate)
 			{
 				/* load ml with X */
 				delay1 = load_ml(cpustate, x, vector);
-				cpustate->pc = x<<2;
 				/* burn pre-fetch delay if needed */
 				if (delay1)
 				{
@@ -801,17 +800,8 @@ static CPU_INIT( apexc )
 	apexc_state *cpustate = get_safe_token(device);
 
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->io = device->space(AS_IO);
-
-	device->save_item(NAME(cpustate->a));
-	device->save_item(NAME(cpustate->r));
-	device->save_item(NAME(cpustate->cr));
-	device->save_item(NAME(cpustate->ml));
-	device->save_item(NAME(cpustate->working_store));
-	device->save_item(NAME(cpustate->current_word));
-	device->save_item(NAME(cpustate->running));
-	device->save_item(NAME(cpustate->pc));
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
 }
 
 static CPU_RESET( apexc )
@@ -833,9 +823,11 @@ static CPU_EXECUTE( apexc )
 {
 	apexc_state *cpustate = get_safe_token(device);
 
+	cpustate->icount = cycles;
+
 	do
 	{
-		debugger_instruction_hook(device, cpustate->pc);
+		debugger_instruction_hook(device, effective_address(cpustate, cpustate->ml));
 
 		if (cpustate->running)
 			execute(cpustate);
@@ -844,6 +836,8 @@ static CPU_EXECUTE( apexc )
 			DELAY(cpustate->icount);	/* burn cycles once for all */
 		}
 	} while (cpustate->icount > 0);
+
+	return cycles - cpustate->icount;
 }
 
 static CPU_SET_INFO( apexc )
@@ -876,7 +870,6 @@ static CPU_SET_INFO( apexc )
 	case CPUINFO_INT_REGISTER + APEXC_A:		cpustate->a = info->i;							break;
 	case CPUINFO_INT_REGISTER + APEXC_R:		cpustate->r = info->i;							break;
 	case CPUINFO_INT_REGISTER + APEXC_ML:		cpustate->ml = info->i & 0x3ff;					break;
-	case CPUINFO_INT_REGISTER + APEXC_PC:		cpustate->pc = info->i;					break;
 	case CPUINFO_INT_REGISTER + APEXC_WS:		cpustate->working_store = info->i & 0xf;		break;
 	case CPUINFO_INT_REGISTER + APEXC_STATE:	cpustate->running = info->i ? TRUE : FALSE;		break;
 	}
@@ -884,7 +877,7 @@ static CPU_SET_INFO( apexc )
 
 CPU_GET_INFO( apexc )
 {
-	apexc_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	apexc_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -899,19 +892,23 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 2;	/* IIRC */				break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 75;	/* IIRC */				break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */				break;
 	case CPUINFO_INT_PC:
-	case CPUINFO_INT_PREVIOUSPC:					info->i = cpustate->pc;	/* psuedo-PC */				break;
+		/* no PC - return memory location register instead, this should be
+        equivalent unless executed in the midst of an instruction */
+		info->i = effective_address(cpustate, cpustate->ml);
+		break;
+	case CPUINFO_INT_PREVIOUSPC:					info->i = 0;	/* no PC */				break;
 
 	/*case CPUINFO_INT_INPUT_STATE + ...:*/							/* no interrupts */
 
@@ -919,7 +916,6 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_INT_REGISTER + APEXC_A:			info->i = cpustate->a;						break;
 	case CPUINFO_INT_REGISTER + APEXC_R:			info->i = cpustate->r;						break;
 	case CPUINFO_INT_REGISTER + APEXC_ML:			info->i = cpustate->ml;						break;
-	case CPUINFO_INT_REGISTER + APEXC_PC:			info->i = cpustate->pc;						break;
 	case CPUINFO_INT_REGISTER + APEXC_WS:			info->i = cpustate->working_store;			break;
 	case CPUINFO_INT_REGISTER + APEXC_STATE:		info->i = cpustate->running;				break;
 	case CPUINFO_INT_REGISTER + APEXC_ML_FULL:		info->i = effective_address(cpustate, cpustate->ml);	break;
@@ -944,11 +940,8 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_STR_REGISTER + APEXC_A:			sprintf(info->s, "A :%08X", cpustate->a); break;
 	case CPUINFO_STR_REGISTER + APEXC_R:			sprintf(info->s, "R :%08X", cpustate->r); break;
 	case CPUINFO_STR_REGISTER + APEXC_ML:			sprintf(info->s, "ML:%03X", cpustate->ml); break;
-	case CPUINFO_STR_REGISTER + APEXC_PC:			sprintf(info->s, "PC:%03X", cpustate->pc); break;
 	case CPUINFO_STR_REGISTER + APEXC_WS:			sprintf(info->s, "WS:%01X", cpustate->working_store); break;
 
 	case CPUINFO_STR_REGISTER + APEXC_STATE:		sprintf(info->s, "CPU state:%01X", cpustate->running ? TRUE : FALSE); break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(APEXC, apexc);

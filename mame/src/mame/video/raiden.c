@@ -1,35 +1,34 @@
-#include "emu.h"
-#include "includes/raiden.h"
 
+#include "driver.h"
+
+static tilemap *bg_layer,*fg_layer,*tx_layer;
+UINT16 *raiden_back_data,*raiden_fore_data,*raiden_scroll_ram;
+
+static int flipscreen,alternate;
 
 /******************************************************************************/
 
 WRITE16_HANDLER( raiden_background_w )
 {
-	raiden_state *state = space->machine().driver_data<raiden_state>();
-	COMBINE_DATA(&state->m_back_data[offset]);
-	state->m_bg_layer->mark_tile_dirty(offset);
+	COMBINE_DATA(&raiden_back_data[offset]);
+	tilemap_mark_tile_dirty(bg_layer, offset);
 }
 
 WRITE16_HANDLER( raiden_foreground_w )
 {
-	raiden_state *state = space->machine().driver_data<raiden_state>();
-	COMBINE_DATA(&state->m_fore_data[offset]);
-	state->m_fg_layer->mark_tile_dirty(offset);
+	COMBINE_DATA(&raiden_fore_data[offset]);
+	tilemap_mark_tile_dirty(fg_layer, offset);
 }
 
 WRITE16_HANDLER( raiden_text_w )
 {
-	raiden_state *state = space->machine().driver_data<raiden_state>();
-	UINT16 *videoram = state->m_videoram;
-	COMBINE_DATA(&videoram[offset]);
-	state->m_tx_layer->mark_tile_dirty(offset);
+	COMBINE_DATA(&videoram16[offset]);
+	tilemap_mark_tile_dirty(tx_layer, offset);
 }
 
 static TILE_GET_INFO( get_back_tile_info )
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	int tile=state->m_back_data[tile_index];
+	int tile=raiden_back_data[tile_index];
 	int color=tile >> 12;
 
 	tile=tile&0xfff;
@@ -43,8 +42,7 @@ static TILE_GET_INFO( get_back_tile_info )
 
 static TILE_GET_INFO( get_fore_tile_info )
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	int tile=state->m_fore_data[tile_index];
+	int tile=raiden_fore_data[tile_index];
 	int color=tile >> 12;
 
 	tile=tile&0xfff;
@@ -58,9 +56,7 @@ static TILE_GET_INFO( get_fore_tile_info )
 
 static TILE_GET_INFO( get_text_tile_info )
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	UINT16 *videoram = state->m_videoram;
-	int tiledata = videoram[tile_index];
+	int tiledata = videoram16[tile_index];
 	int tile = (tiledata & 0xff) | ((tiledata >> 6) & 0x300);
 	int color = (tiledata >> 8) & 0x0f;
 
@@ -73,56 +69,50 @@ static TILE_GET_INFO( get_text_tile_info )
 
 VIDEO_START( raiden )
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	state->m_bg_layer = tilemap_create(machine, get_back_tile_info,tilemap_scan_cols,     16,16,32,32);
-	state->m_fg_layer = tilemap_create(machine, get_fore_tile_info,tilemap_scan_cols,16,16,32,32);
-	state->m_tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_cols,8,8,32,32);
-	state->m_alternate=0;
+	bg_layer = tilemap_create(machine, get_back_tile_info,tilemap_scan_cols,     16,16,32,32);
+	fg_layer = tilemap_create(machine, get_fore_tile_info,tilemap_scan_cols,16,16,32,32);
+	tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_cols,8,8,32,32);
+	alternate=0;
 
-	state->m_fg_layer->set_transparent_pen(15);
-	state->m_tx_layer->set_transparent_pen(15);
+	tilemap_set_transparent_pen(fg_layer,15);
+	tilemap_set_transparent_pen(tx_layer,15);
 }
 
 VIDEO_START( raidena )
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	state->m_bg_layer = tilemap_create(machine, get_back_tile_info,tilemap_scan_cols,     16,16,32,32);
-	state->m_fg_layer = tilemap_create(machine, get_fore_tile_info,tilemap_scan_cols,16,16,32,32);
-	state->m_tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,32,32);
-	state->m_alternate=1;
+	bg_layer = tilemap_create(machine, get_back_tile_info,tilemap_scan_cols,     16,16,32,32);
+	fg_layer = tilemap_create(machine, get_fore_tile_info,tilemap_scan_cols,16,16,32,32);
+	tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,32,32);
+	alternate=1;
 
-	state->m_fg_layer->set_transparent_pen(15);
-	state->m_tx_layer->set_transparent_pen(15);
+	tilemap_set_transparent_pen(fg_layer,15);
+	tilemap_set_transparent_pen(tx_layer,15);
 }
 
 WRITE16_HANDLER( raiden_control_w )
 {
-	raiden_state *state = space->machine().driver_data<raiden_state>();
 	/* All other bits unknown - could be playfield enables */
 
 	/* Flipscreen */
 	if (offset==3 && ACCESSING_BITS_0_7) {
-		state->m_flipscreen=data&0x2;
-		space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		flipscreen=data&0x2;
+		tilemap_set_flip_all(space->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 	}
 }
 
 WRITE16_HANDLER( raidena_control_w )
 {
-	raiden_state *state = space->machine().driver_data<raiden_state>();
 	/* raidena uses 0x40 instead of 0x02 */
 
 	/* Flipscreen */
 	if (offset==3 && ACCESSING_BITS_0_7) {
-		state->m_flipscreen=data&0x40;
-		space->machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+		flipscreen=data&0x40;
+		tilemap_set_flip_all(space->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
 	}
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,int pri_mask)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,int pri_mask)
 {
-	raiden_state *state = machine.driver_data<raiden_state>();
-	UINT16 *buffered_spriteram16 = machine.generic.buffered_spriteram.u16;
 	int offs,fx,fy,x,y,color,sprite;
 
 	for (offs = 0x1000/2-4;offs >= 0;offs -= 4)
@@ -140,46 +130,45 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const re
 		x = buffered_spriteram16[offs+2] & 0xff;
 		if (buffered_spriteram16[offs+2] & 0x100) x=0-(0x100-x);
 
-		if (state->m_flipscreen) {
+		if (flipscreen) {
 			x=240-x;
 			y=240-y;
 			if (fx) fx=0; else fx=1;
 			if (fy) fy=0; else fy=1;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[3],
+		drawgfx_transpen(bitmap,cliprect,machine->gfx[3],
 				sprite,
 				color,fx,fy,x,y,15);
 	}
 }
 
-SCREEN_UPDATE_IND16( raiden )
+VIDEO_UPDATE( raiden )
 {
-	raiden_state *state = screen.machine().driver_data<raiden_state>();
 	/* Setup the tilemaps, alternate version has different scroll positions */
-	if (!state->m_alternate) {
-		state->m_bg_layer->set_scrollx(0, state->m_scroll_ram[0]);
-		state->m_bg_layer->set_scrolly(0, state->m_scroll_ram[1]);
-		state->m_fg_layer->set_scrollx(0, state->m_scroll_ram[2]);
-		state->m_fg_layer->set_scrolly(0, state->m_scroll_ram[3]);
+	if (!alternate) {
+		tilemap_set_scrollx( bg_layer,0, raiden_scroll_ram[0]);
+		tilemap_set_scrolly( bg_layer,0, raiden_scroll_ram[1]);
+		tilemap_set_scrollx( fg_layer,0, raiden_scroll_ram[2]);
+		tilemap_set_scrolly( fg_layer,0, raiden_scroll_ram[3]);
 	}
 	else {
-		state->m_bg_layer->set_scrolly(0, ((state->m_scroll_ram[0x01]&0x30)<<4)+((state->m_scroll_ram[0x02]&0x7f)<<1)+((state->m_scroll_ram[0x02]&0x80)>>7) );
-		state->m_bg_layer->set_scrollx(0, ((state->m_scroll_ram[0x09]&0x30)<<4)+((state->m_scroll_ram[0x0a]&0x7f)<<1)+((state->m_scroll_ram[0x0a]&0x80)>>7) );
-		state->m_fg_layer->set_scrolly(0, ((state->m_scroll_ram[0x11]&0x30)<<4)+((state->m_scroll_ram[0x12]&0x7f)<<1)+((state->m_scroll_ram[0x12]&0x80)>>7) );
-		state->m_fg_layer->set_scrollx(0, ((state->m_scroll_ram[0x19]&0x30)<<4)+((state->m_scroll_ram[0x1a]&0x7f)<<1)+((state->m_scroll_ram[0x1a]&0x80)>>7) );
+		tilemap_set_scrolly( bg_layer,0, ((raiden_scroll_ram[0x01]&0x30)<<4)+((raiden_scroll_ram[0x02]&0x7f)<<1)+((raiden_scroll_ram[0x02]&0x80)>>7) );
+		tilemap_set_scrollx( bg_layer,0, ((raiden_scroll_ram[0x09]&0x30)<<4)+((raiden_scroll_ram[0x0a]&0x7f)<<1)+((raiden_scroll_ram[0x0a]&0x80)>>7) );
+		tilemap_set_scrolly( fg_layer,0, ((raiden_scroll_ram[0x11]&0x30)<<4)+((raiden_scroll_ram[0x12]&0x7f)<<1)+((raiden_scroll_ram[0x12]&0x80)>>7) );
+		tilemap_set_scrollx( fg_layer,0, ((raiden_scroll_ram[0x19]&0x30)<<4)+((raiden_scroll_ram[0x1a]&0x7f)<<1)+((raiden_scroll_ram[0x1a]&0x80)>>7) );
 	}
 
-	state->m_bg_layer->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,bg_layer,0,0);
 
 	/* Draw sprites underneath foreground */
-	draw_sprites(screen.machine(),bitmap,cliprect,0x40);
-	state->m_fg_layer->draw(bitmap, cliprect, 0,0);
+	draw_sprites(screen->machine,bitmap,cliprect,0x40);
+	tilemap_draw(bitmap,cliprect,fg_layer,0,0);
 
 	/* Rest of sprites */
-	draw_sprites(screen.machine(),bitmap,cliprect,0x80);
+	draw_sprites(screen->machine,bitmap,cliprect,0x80);
 
 	/* Text layer */
-	state->m_tx_layer->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,tx_layer,0,0);
 	return 0;
 }

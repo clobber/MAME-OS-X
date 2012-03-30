@@ -9,7 +9,7 @@ driver by Nicola Salmoria
     Snap Jack
     Cosmic Avenger
 
-  Similar or bootleg PCB:
+  Simular or bootleg PCB:
     Dorodon (by Falcon)
     Space Raider
 
@@ -58,81 +58,39 @@ TODO:
  * one unknown dip
  */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
-#include "includes/ladybug.h"
 
 
-/* Sound comm between CPU's */
-static READ8_HANDLER( sraider_sound_low_r )
-{
-	ladybug_state *state = space->machine().driver_data<ladybug_state>();
-	return state->m_sound_low;
-}
+extern UINT8 *sraider_grid_data;
 
-static READ8_HANDLER( sraider_sound_high_r )
-{
-	ladybug_state *state = space->machine().driver_data<ladybug_state>();
-	return state->m_sound_high;
-}
+WRITE8_HANDLER( ladybug_videoram_w );
+WRITE8_HANDLER( ladybug_colorram_w );
+WRITE8_HANDLER( ladybug_flipscreen_w );
 
-static WRITE8_HANDLER( sraider_sound_low_w )
-{
-	ladybug_state *state = space->machine().driver_data<ladybug_state>();
-	state->m_sound_low = data;
-}
+PALETTE_INIT( ladybug );
+VIDEO_START( ladybug );
+VIDEO_UPDATE( ladybug );
 
-static WRITE8_HANDLER( sraider_sound_high_w )
-{
-	ladybug_state *state = space->machine().driver_data<ladybug_state>();
-	state->m_sound_high = data;
-}
+PALETTE_INIT( sraider );
+VIDEO_START( sraider );
+VIDEO_UPDATE( sraider );
+VIDEO_EOF( sraider );
 
-/* Protection? */
-static READ8_HANDLER( sraider_8005_r )
-{
-	/* This must return X011111X or cpu #1 will hang */
-	/* see code at rst $10 */
-	return 0x3e;
-}
+READ8_HANDLER( sraider_8005_r );
+WRITE8_HANDLER( sraider_sound_low_w );
+WRITE8_HANDLER( sraider_sound_high_w );
+READ8_HANDLER( sraider_sound_low_r );
+READ8_HANDLER( sraider_sound_high_r );
+WRITE8_HANDLER( sraider_io_w );
+WRITE8_HANDLER( sraider_misc_w );
 
-/* Unknown IO */
-static WRITE8_HANDLER( sraider_misc_w )
-{
-	ladybug_state *state = space->machine().driver_data<ladybug_state>();
 
-	switch(offset)
-	{
-		/* These 8 bits are stored in the latch at A7 */
-		case 0x00:
-		case 0x01:
-		case 0x02:
-		case 0x03:
-		case 0x04:
-		case 0x05:
-		case 0x06:
-		case 0x07:
-			state->m_weird_value[offset & 7] = data & 1;
-			break;
-		/* These 6 bits are stored in the latch at N7 */
-		case 0x08:
-			state->m_sraider_0x30 = data&0x3f;
-			break;
-		/* These 6 bits are stored in the latch at N8 */
-		case 0x10:
-			state->m_sraider_0x38 = data&0x3f;
-			break;
-		default:
-			mame_printf_debug("(%04X) write to %02X\n", cpu_get_pc(&space->device()), offset);
-			break;
-	}
-}
-
-static ADDRESS_MAP_START( ladybug_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ladybug_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(ladybug_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x7000, 0x73ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x8000, 0x8fff) AM_READNOP
 	AM_RANGE(0x9000, 0x9000) AM_READ_PORT("IN0")
 	AM_RANGE(0x9001, 0x9001) AM_READ_PORT("IN1")
@@ -141,16 +99,16 @@ static ADDRESS_MAP_START( ladybug_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(ladybug_flipscreen_w)
 	AM_RANGE(0xb000, 0xbfff) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0xc000, 0xcfff) AM_DEVWRITE("sn2", sn76496_w)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(ladybug_videoram_w) AM_BASE_MEMBER(ladybug_state, m_videoram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(ladybug_colorram_w) AM_BASE_MEMBER(ladybug_state, m_colorram)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(ladybug_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(ladybug_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("IN2")
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sraider_cpu1_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sraider_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_RAM
-	AM_RANGE(0x7000, 0x73ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(ladybug_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x7000, 0x73ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x8005, 0x8005) AM_READ(sraider_8005_r)  // protection check?
 	AM_RANGE(0x8006, 0x8006) AM_WRITE(sraider_sound_low_w)
 	AM_RANGE(0x8007, 0x8007) AM_WRITE(sraider_sound_high_w)
@@ -158,25 +116,25 @@ static ADDRESS_MAP_START( sraider_cpu1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x9001, 0x9001) AM_READ_PORT("IN1")
 	AM_RANGE(0x9002, 0x9002) AM_READ_PORT("DSW0")
 	AM_RANGE(0x9003, 0x9003) AM_READ_PORT("DSW1")
-	AM_RANGE(0xd000, 0xd3ff) AM_WRITE(ladybug_videoram_w) AM_BASE_MEMBER(ladybug_state, m_videoram)
-	AM_RANGE(0xd400, 0xd7ff) AM_WRITE(ladybug_colorram_w) AM_BASE_MEMBER(ladybug_state, m_colorram)
+	AM_RANGE(0xd000, 0xd3ff) AM_WRITE(ladybug_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xd400, 0xd7ff) AM_WRITE(ladybug_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0xe000, 0xe000) AM_WRITENOP  //unknown 0x10 when in attract, 0x20 when coined/playing
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sraider_cpu2_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sraider_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x63ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_READ(sraider_sound_low_r)
 	AM_RANGE(0xa000, 0xa000) AM_READ(sraider_sound_high_r)
 	AM_RANGE(0xc000, 0xc000) AM_READNOP //some kind of sync
-	AM_RANGE(0xe000, 0xe0ff) AM_WRITEONLY AM_BASE_MEMBER(ladybug_state, m_grid_data)
+	AM_RANGE(0xe000, 0xe0ff) AM_WRITE(SMH_RAM) AM_BASE(&sraider_grid_data)
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(sraider_io_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sraider_cpu2_io_map, AS_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
+static ADDRESS_MAP_START( sraider_cpu2_io_map, ADDRESS_SPACE_IO, 8 )
+  	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x08, 0x08) AM_DEVWRITE("sn2", sn76496_w)
 	AM_RANGE(0x10, 0x10) AM_DEVWRITE("sn3", sn76496_w)
@@ -189,19 +147,15 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin1_inserted )
 {
-	ladybug_state *state = field.machine().driver_data<ladybug_state>();
-
 	/* left coin insertion causes an NMI */
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, newval ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, newval ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static INPUT_CHANGED( coin2_inserted )
 {
-	ladybug_state *state = field.machine().driver_data<ladybug_state>();
-
 	/* right coin insertion causes an IRQ */
 	if (newval)
-		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
+		cputag_set_input_line(field->port->machine, "maincpu", 0, HOLD_LINE);
 }
 
 
@@ -210,7 +164,7 @@ static INPUT_CHANGED( coin2_inserted )
 
 static CUSTOM_INPUT( ladybug_p1_control_r )
 {
-	return input_port_read(field.machine(), LADYBUG_P1_CONTROL_PORT_TAG);
+	return input_port_read(field->port->machine, LADYBUG_P1_CONTROL_PORT_TAG);
 }
 
 static CUSTOM_INPUT( ladybug_p2_control_r )
@@ -218,10 +172,10 @@ static CUSTOM_INPUT( ladybug_p2_control_r )
 	UINT32 ret;
 
 	/* upright cabinet only uses a single set of controls */
-	if (input_port_read(field.machine(), "DSW0") & 0x20)
-		ret = input_port_read(field.machine(), LADYBUG_P2_CONTROL_PORT_TAG);
+	if (input_port_read(field->port->machine, "DSW0") & 0x20)
+		ret = input_port_read(field->port->machine, LADYBUG_P2_CONTROL_PORT_TAG);
 	else
-		ret = input_port_read(field.machine(), LADYBUG_P1_CONTROL_PORT_TAG);
+		ret = input_port_read(field->port->machine, LADYBUG_P1_CONTROL_PORT_TAG);
 
 	return ret;
 }
@@ -286,7 +240,7 @@ static INPUT_PORTS_START( ladybug )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x05 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x05 all give 1 Coin/1 Credit */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
@@ -298,7 +252,7 @@ static INPUT_PORTS_START( ladybug )
 	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x50 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x50 all give 1 Coin/1 Credit */
 
 	PORT_START("COIN")	/* FAKE */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(coin1_inserted, 0)
@@ -387,7 +341,7 @@ static INPUT_PORTS_START( snapjack )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x04 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x04 all give 1 Coin/1 Credit */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x50, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x70, DEF_STR( 3C_1C ) )
@@ -400,7 +354,7 @@ static INPUT_PORTS_START( snapjack )
 	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x04 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x04 all give 1 Coin/1 Credit */
 
 	PORT_START("COIN")	/* FAKE */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(coin1_inserted, 0)
@@ -472,7 +426,7 @@ static INPUT_PORTS_START( cavenger )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x05 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x05 all give 1 Coin/1 Credit */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
@@ -484,7 +438,7 @@ static INPUT_PORTS_START( cavenger )
 	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x50 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x50 all give 1 Coin/1 Credit */
 
 	PORT_START("COIN")	/* FAKE */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(coin1_inserted, 0)
@@ -558,7 +512,7 @@ static INPUT_PORTS_START( dorodon )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x05 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x05 all give 1 Coin/1 Credit */
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
@@ -570,7 +524,7 @@ static INPUT_PORTS_START( dorodon )
 	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
-	/* settings 0x00 through 0x50 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x50 all give 1 Coin/1 Credit */
 
 	PORT_START("COIN")	/* FAKE */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_CHANGED(coin1_inserted, 0)
@@ -625,7 +579,7 @@ static INPUT_PORTS_START( sraider )
 	/* Free Play setting works when it's set for both */
 	PORT_START("DSW1")	/* DSW1 */
 	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )
-	/* settings 0x00 through 0x05 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x05 all give 1 Coin/1 Credit */
 	PORT_DIPSETTING(    0x06, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x0a, DEF_STR( 2C_1C ) )
@@ -638,7 +592,7 @@ static INPUT_PORTS_START( sraider )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )
-	/* settings 0x00 through 0x50 all give 1 Coin/1 Credit */
+	/* settings 0x00 thru 0x50 all give 1 Coin/1 Credit */
 	PORT_DIPSETTING(    0x60, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0xa0, DEF_STR( 2C_1C ) )
@@ -722,138 +676,84 @@ static GFXDECODE_START( sraider )
 GFXDECODE_END
 
 
-static MACHINE_START( ladybug )
-{
-	ladybug_state *state = machine.driver_data<ladybug_state>();
-	state->m_maincpu = machine.device("maincpu");
-}
-
-static MACHINE_START( sraider )
-{
-	ladybug_state *state = machine.driver_data<ladybug_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-
-	state->save_item(NAME(state->m_grid_color));
-	state->save_item(NAME(state->m_sound_low));
-	state->save_item(NAME(state->m_sound_high));
-	state->save_item(NAME(state->m_sraider_0x30));
-	state->save_item(NAME(state->m_sraider_0x38));
-	state->save_item(NAME(state->m_weird_value));
-
-	/* for stars */
-	state->save_item(NAME(state->m_star_speed));
-	state->save_item(NAME(state->m_stars_enable));
-	state->save_item(NAME(state->m_stars_speed));
-	state->save_item(NAME(state->m_stars_state));
-	state->save_item(NAME(state->m_stars_offset));
-	state->save_item(NAME(state->m_stars_count));
-}
-
-static MACHINE_RESET( sraider )
-{
-	ladybug_state *state = machine.driver_data<ladybug_state>();
-	int i;
-
-	state->m_grid_color = 0;
-	state->m_sound_low = 0;
-	state->m_sound_high = 0;
-	state->m_sraider_0x30 = 0;
-	state->m_sraider_0x38 = 0;
-
-	/* for stars */
-	state->m_star_speed = 0;
-	state->m_stars_enable = 0;
-	state->m_stars_speed = 0;
-	state->m_stars_state = 0;
-	state->m_stars_offset = 0;
-	state->m_stars_count = 0;
-
-	for (i = 0; i < 8; i++)
-		state->m_weird_value[i] = 0;
-}
-
-static MACHINE_CONFIG_START( ladybug, ladybug_state )
+static MACHINE_DRIVER_START( ladybug )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(ladybug_map)
-
-	MCFG_MACHINE_START(ladybug)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(ladybug_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 4*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(ladybug)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 4*8, 28*8-1)
 
-	MCFG_GFXDECODE(ladybug)
-	MCFG_PALETTE_LENGTH(4*8+4*16)
+	MDRV_GFXDECODE(ladybug)
+	MDRV_PALETTE_LENGTH(4*8+4*16)
 
-	MCFG_PALETTE_INIT(ladybug)
-	MCFG_VIDEO_START(ladybug)
+	MDRV_PALETTE_INIT(ladybug)
+	MDRV_VIDEO_START(ladybug)
+	MDRV_VIDEO_UPDATE(ladybug)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn1", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn2", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn2", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( sraider, ladybug_state )
+static MACHINE_DRIVER_START( sraider )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(sraider_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(sraider_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80, 4000000)	/* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(sraider_cpu2_map)
-	MCFG_CPU_IO_MAP(sraider_cpu2_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-
-	MCFG_MACHINE_START(sraider)
-	MCFG_MACHINE_RESET(sraider)
+	MDRV_CPU_ADD("sub", Z80, 4000000)	/* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(sraider_cpu2_map)
+	MDRV_CPU_IO_MAP(sraider_cpu2_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 4*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(sraider)
-	MCFG_SCREEN_VBLANK_STATIC(sraider)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 4*8, 28*8-1)
 
-	MCFG_GFXDECODE(sraider)
-	MCFG_PALETTE_LENGTH(4*8+4*16+32+2)
+	MDRV_GFXDECODE(sraider)
+	MDRV_PALETTE_LENGTH(4*8+4*16+32+2)
 
-	MCFG_PALETTE_INIT(sraider)
-	MCFG_VIDEO_START(sraider)
+	MDRV_PALETTE_INIT(sraider)
+	MDRV_VIDEO_START(sraider)
+	MDRV_VIDEO_UPDATE(sraider)
+	MDRV_VIDEO_EOF(sraider)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn1", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn2", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn2", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn3", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn3", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn4", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn4", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn5", SN76489, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn5", SN76489, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -1060,23 +960,23 @@ static DRIVER_INIT( dorodon )
 	/* decode the opcodes */
 
 	offs_t i;
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x6000);
-	UINT8 *rom = machine.region("maincpu")->base();
-	UINT8 *table = machine.region("user1")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *table = memory_region(machine, "user1");
 
-	space->set_decrypted_region(0x0000, 0x5fff, decrypted);
+	memory_set_decrypted_region(space, 0x0000, 0x5fff, decrypted);
 
 	for (i = 0; i < 0x6000; i++)
 		decrypted[i] = table[rom[i]];
 }
 
 
-GAME( 1981, cavenger, 0,       ladybug, cavenger, 0,       ROT0,   "Universal", "Cosmic Avenger", GAME_SUPPORTS_SAVE )
-GAME( 1981, ladybug,  0,       ladybug, ladybug,  0,       ROT270, "Universal", "Lady Bug", GAME_SUPPORTS_SAVE )
-GAME( 1981, ladybugb, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1981, ladybgb2, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1982, dorodon,  0,       ladybug, dorodon,  dorodon, ROT270, "UPL (Falcon license?)", "Dorodon (set 1)", GAME_SUPPORTS_SAVE ) // license or bootleg?
-GAME( 1982, dorodon2, dorodon, ladybug, dorodon,  dorodon, ROT270, "UPL (Falcon license?)", "Dorodon (set 2)", GAME_SUPPORTS_SAVE ) // "
-GAME( 1982, snapjack, 0,       ladybug, snapjack, 0,       ROT0,   "Universal", "Snap Jack", GAME_SUPPORTS_SAVE )
-GAME( 1982, sraider,  0,       sraider, sraider,  0,       ROT270, "Universal", "Space Raider", GAME_SUPPORTS_SAVE )
+GAME( 1981, cavenger, 0,       ladybug, cavenger, 0,       ROT0,   "Universal", "Cosmic Avenger", 0 )
+GAME( 1981, ladybug,  0,       ladybug, ladybug,  0,       ROT270, "Universal", "Lady Bug", 0 )
+GAME( 1981, ladybugb, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 1)", 0 )
+GAME( 1981, ladybgb2, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 2)", 0 )
+GAME( 1982, dorodon,  0,       ladybug, dorodon,  dorodon, ROT270, "Falcon",    "Dorodon (set 1)", 0 )
+GAME( 1982, dorodon2, dorodon, ladybug, dorodon,  dorodon, ROT270, "Falcon",    "Dorodon (set 2)", 0 )
+GAME( 1982, snapjack, 0,       ladybug, snapjack, 0,       ROT0,   "Universal", "Snap Jack", 0 )
+GAME( 1982, sraider,  0,       sraider, sraider,  0,       ROT270, "Universal", "Space Raider", 0 )

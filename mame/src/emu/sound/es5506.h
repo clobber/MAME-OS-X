@@ -10,23 +10,21 @@
 #ifndef __ES5506_H__
 #define __ES5506_H__
 
-#include "devlegcy.h"
-
 typedef struct _es5505_interface es5505_interface;
 struct _es5505_interface
 {
 	const char * region0;						/* memory region where the sample ROM lives */
 	const char * region1;						/* memory region where the sample ROM lives */
-	void (*irq_callback)(device_t *device, int state);	/* irq callback */
-	UINT16 (*read_port)(device_t *device);			/* input port read */
+	void (*irq_callback)(const device_config *device, int state);	/* irq callback */
+	UINT16 (*read_port)(const device_config *device);			/* input port read */
 };
 
 READ16_DEVICE_HANDLER( es5505_r );
 WRITE16_DEVICE_HANDLER( es5505_w );
-void es5505_voice_bank_w(device_t *device, int voice, int bank);
-void es5505_set_channel_volume(device_t *device, int channel, int volume);
+void es5505_voice_bank_w(const device_config *device, int voice, int bank);
 
-DECLARE_LEGACY_SOUND_DEVICE(ES5505, es5505);
+DEVICE_GET_INFO( es5505 );
+#define SOUND_ES5505 DEVICE_GET_INFO_NAME( es5505 )
 
 
 typedef struct _es5506_interface es5506_interface;
@@ -36,14 +34,15 @@ struct _es5506_interface
 	const char * region1;						/* memory region where the sample ROM lives */
 	const char * region2;						/* memory region where the sample ROM lives */
 	const char * region3;						/* memory region where the sample ROM lives */
-	void (*irq_callback)(device_t *device, int state);	/* irq callback */
-	UINT16 (*read_port)(device_t *device);			/* input port read */
+	void (*irq_callback)(const device_config *device, int state);	/* irq callback */
+	UINT16 (*read_port)(const device_config *device);			/* input port read */
 };
 
 READ8_DEVICE_HANDLER( es5506_r );
 WRITE8_DEVICE_HANDLER( es5506_w );
-void es5506_voice_bank_w(device_t *device, int voice, int bank);
+void es5506_voice_bank_w(const device_config *device, int voice, int bank);
 
-DECLARE_LEGACY_SOUND_DEVICE(ES5506, es5506);
+DEVICE_GET_INFO( es5506 );
+#define SOUND_ES5506 DEVICE_GET_INFO_NAME( es5506 )
 
 #endif /* __ES5506_H__ */

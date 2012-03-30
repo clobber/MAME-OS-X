@@ -4,80 +4,82 @@ Atari Sprint 8 driver
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6800/m6800.h"
 #include "includes/sprint8.h"
 
+static int steer_dir[8];
+static int steer_flag[8];
+
+static int collision_reset;
+static int collision_index;
 
 
-
-void sprint8_set_collision(running_machine &machine, int n)
+void sprint8_set_collision(running_machine *machine, int n)
 {
-	sprint8_state *state = machine.driver_data<sprint8_state>();
-	if (state->m_collision_reset == 0)
+	if (collision_reset == 0)
 	{
 		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
-		state->m_collision_index = n;
+		collision_index = n;
 	}
 }
 
 
-static TIMER_DEVICE_CALLBACK( input_callback )
+static TIMER_CALLBACK( input_callback )
 {
-	sprint8_state *state = timer.machine().driver_data<sprint8_state>();
+	static UINT8 dial[8];
 	static const char *const dialnames[] = { "DIAL1", "DIAL2", "DIAL3", "DIAL4", "DIAL5", "DIAL6", "DIAL7", "DIAL8" };
 
 	int i;
 
 	for (i = 0; i < 8; i++)
 	{
-		UINT8 val = input_port_read(timer.machine(), dialnames[i]) >> 4;
+		UINT8 val = input_port_read(machine, dialnames[i]) >> 4;
 
-		signed char delta = (val - state->m_dial[i]) & 15;
+		signed char delta = (val - dial[i]) & 15;
 
 		if (delta & 8)
 			delta |= 0xf0; /* extend sign to 8 bits */
 
-		state->m_steer_flag[i] = (delta != 0);
+		steer_flag[i] = (delta != 0);
 
 		if (delta > 0)
-			state->m_steer_dir[i] = 0;
+			steer_dir[i] = 0;
 
 		if (delta < 0)
-			state->m_steer_dir[i] = 1;
+			steer_dir[i] = 1;
 
-		state->m_dial[i] = val;
+		dial[i] = val;
 	}
 }
 
 
 static MACHINE_RESET( sprint8 )
 {
-	sprint8_state *state = machine.driver_data<sprint8_state>();
-	state->m_collision_reset = 0;
-	state->m_collision_index = 0;
+	collision_reset = 0;
+	collision_index = 0;
+
+	timer_pulse(machine, video_screen_get_frame_period(machine->primary_screen), NULL, 0, input_callback);
 }
 
 
 static READ8_HANDLER( sprint8_collision_r )
 {
-	sprint8_state *state = space->machine().driver_data<sprint8_state>();
-	return state->m_collision_index;
+	return collision_index;
 }
 
 
 static READ8_HANDLER( sprint8_input_r )
 {
-	sprint8_state *state = space->machine().driver_data<sprint8_state>();
 	static const char *const portnames[] = { "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8" };
-	UINT8 val = input_port_read(space->machine(), portnames[offset]);
+	UINT8 val = input_port_read(space->machine, portnames[offset]);
 
-	if (state->m_steer_dir[offset])
+	if (steer_dir[offset])
 	{
 		val |= 0x02;
 	}
-	if (state->m_steer_flag[offset])
+	if (steer_flag[offset])
 	{
 		val |= 0x04;
 	}
@@ -88,38 +90,37 @@ static READ8_HANDLER( sprint8_input_r )
 
 static WRITE8_HANDLER( sprint8_lockout_w )
 {
-	coin_lockout_w(space->machine(), offset, !(data & 1));
+	coin_lockout_w(offset, !(data & 1));
 }
 
 
 static WRITE8_HANDLER( sprint8_int_reset_w )
 {
-	sprint8_state *state = space->machine().driver_data<sprint8_state>();
-	state->m_collision_reset = !(data & 1);
+	collision_reset = !(data & 1);
 
-	if (state->m_collision_reset)
-		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	if (collision_reset)
+		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 
-static ADDRESS_MAP_START( sprint8_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sprint8_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
-	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(sprint8_video_ram_w) AM_BASE_MEMBER(sprint8_state, m_video_ram)
+	AM_RANGE(0x1800, 0x1bff) AM_RAM_WRITE(sprint8_video_ram_w) AM_BASE(&sprint8_video_ram)
 	AM_RANGE(0x1c00, 0x1c00) AM_READ(sprint8_collision_r)
 	AM_RANGE(0x1c01, 0x1c08) AM_READ(sprint8_input_r)
 	AM_RANGE(0x1c09, 0x1c09) AM_READ_PORT("IN0")
 	AM_RANGE(0x1c0a, 0x1c0a) AM_READ_PORT("IN1")
 	AM_RANGE(0x1c0f, 0x1c0f) AM_READ_PORT("VBLANK")
-	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_BASE_MEMBER(sprint8_state, m_pos_h_ram)
-	AM_RANGE(0x1c10, 0x1c1f) AM_WRITEONLY AM_BASE_MEMBER(sprint8_state, m_pos_v_ram)
-	AM_RANGE(0x1c20, 0x1c2f) AM_WRITEONLY AM_BASE_MEMBER(sprint8_state, m_pos_d_ram)
+	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_BASE(&sprint8_pos_h_ram)
+	AM_RANGE(0x1c10, 0x1c1f) AM_WRITEONLY AM_BASE(&sprint8_pos_v_ram)
+	AM_RANGE(0x1c20, 0x1c2f) AM_WRITEONLY AM_BASE(&sprint8_pos_d_ram)
 	AM_RANGE(0x1c30, 0x1c37) AM_WRITE(sprint8_lockout_w)
 	AM_RANGE(0x1d00, 0x1d00) AM_WRITE(sprint8_int_reset_w)
 	AM_RANGE(0x1d01, 0x1d01) AM_DEVWRITE("discrete", sprint8_crash_w)
 	AM_RANGE(0x1d02, 0x1d02) AM_DEVWRITE("discrete", sprint8_screech_w)
 	AM_RANGE(0x1d03, 0x1d03) AM_WRITENOP
 	AM_RANGE(0x1d04, 0x1d04) AM_WRITENOP
-	AM_RANGE(0x1d05, 0x1d05) AM_WRITEONLY AM_BASE_MEMBER(sprint8_state, m_team)
+	AM_RANGE(0x1d05, 0x1d05) AM_WRITEONLY AM_BASE(&sprint8_team)
 	AM_RANGE(0x1d06, 0x1d06) AM_DEVWRITE("discrete", sprint8_attract_w)
 	AM_RANGE(0x1e00, 0x1e07) AM_DEVWRITE("discrete", sprint8_motor_w)
 	AM_RANGE(0x1f00, 0x1f00) AM_WRITENOP /* probably a watchdog, disabled in service mode */
@@ -453,49 +454,48 @@ static GFXDECODE_START( sprint8 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( sprint8, sprint8_state )
+static MACHINE_DRIVER_START( sprint8 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6800, 11055000 / 11) /* ? */
-	MCFG_CPU_PROGRAM_MAP(sprint8_map)
+	MDRV_CPU_ADD("maincpu", M6800, 11055000 / 11) /* ? */
+	MDRV_CPU_PROGRAM_MAP(sprint8_map)
 
-	MCFG_MACHINE_RESET(sprint8)
-
-	MCFG_TIMER_ADD_PERIODIC("input_timer", input_callback, attotime::from_hz(60))
+	MDRV_MACHINE_RESET(sprint8)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(512, 261)
-	MCFG_SCREEN_VISIBLE_AREA(0, 495, 0, 231)
-	MCFG_SCREEN_UPDATE_STATIC(sprint8)
-	MCFG_SCREEN_VBLANK_STATIC(sprint8)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 261)
+	MDRV_SCREEN_VISIBLE_AREA(0, 495, 0, 231)
 
-	MCFG_GFXDECODE(sprint8)
-	MCFG_PALETTE_LENGTH(36)
+	MDRV_GFXDECODE(sprint8)
+	MDRV_PALETTE_LENGTH(36)
 
-	MCFG_PALETTE_INIT(sprint8)
-	MCFG_VIDEO_START(sprint8)
+	MDRV_PALETTE_INIT(sprint8)
+	MDRV_VIDEO_START(sprint8)
+	MDRV_VIDEO_UPDATE(sprint8)
+	MDRV_VIDEO_EOF(sprint8)
 
 
 	/* sound hardware */
 	/* the proper way is to hook up 4 speakers, but they are not really
      * F/R/L/R speakers.  Though you can pretend the 1-2 mix is the front. */
-	MCFG_SPEAKER_ADD("speaker_1_2", 0.0, 0.0, 1.0)		/* front */
-	MCFG_SPEAKER_ADD("speaker_3_7", -0.2, 0.0, 1.0)		/* left */
-	MCFG_SPEAKER_ADD("speaker_5_6",  0.0, 0.0, -0.5)	/* back */
-	MCFG_SPEAKER_ADD("speaker_4_8", 0.2, 0.0, 1.0)		/* right */
+	MDRV_SPEAKER_ADD("speaker_1_2", 0.0, 0.0, 1.0)		/* front */
+	MDRV_SPEAKER_ADD("speaker_3_7", -0.2, 0.0, 1.0)		/* left */
+	MDRV_SPEAKER_ADD("speaker_5_6",  0.0, 0.0, -0.5)	/* back */
+	MDRV_SPEAKER_ADD("speaker_4_8", 0.2, 0.0, 1.0)		/* right */
 
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(sprint8)
-	MCFG_SOUND_ROUTE(0, "speaker_1_2", 1.0)
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(sprint8)
+	MDRV_SOUND_ROUTE(0, "speaker_1_2", 1.0)
 	/* volumes on other channels defaulted to off, */
 	/* user can turn them up if needed. */
 	/* The game does not sound good with all channels mixed to stereo. */
-	MCFG_SOUND_ROUTE(1, "speaker_3_7", 0.0)
-	MCFG_SOUND_ROUTE(2, "speaker_5_6", 0.0)
-	MCFG_SOUND_ROUTE(3, "speaker_4_8", 0.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ROUTE(1, "speaker_3_7", 0.0)
+	MDRV_SOUND_ROUTE(2, "speaker_5_6", 0.0)
+	MDRV_SOUND_ROUTE(3, "speaker_4_8", 0.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( sprint8 )

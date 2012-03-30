@@ -16,7 +16,7 @@
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "cpuintrf.h"
 
 #define RDOP(addr)   (oprom[addr - pc])
 #define RDBYTE(addr) (opram[addr - pc])

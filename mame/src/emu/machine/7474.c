@@ -37,230 +37,135 @@
 
 *****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "7474.h"
 
 
+#define MAX_TTL7474  12
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-// device type definition
-const device_type MACHINE_TTL7474 = &device_creator<ttl7474_device>;
-
-//-------------------------------------------------
-//  ttl7474_device - constructor
-//-------------------------------------------------
-
-ttl7474_device::ttl7474_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, MACHINE_TTL7474, "7474", tag, owner, clock)
+struct TTL7474
 {
-	memset(&m_output_cb, 0, sizeof(m_output_cb));
-	memset(&m_comp_output_cb, 0, sizeof(m_comp_output_cb));
-    init();
-}
+	/* callback */
+	void (*output_cb)(running_machine *);
+
+	/* inputs */
+	UINT8 clear;			/* pin 1/13 */
+	UINT8 preset;			/* pin 4/10 */
+	UINT8 clock;			/* pin 3/11 */
+	UINT8 d;				/* pin 2/12 */
+
+	/* outputs */
+	UINT8 output;			/* pin 5/9 */
+	UINT8 output_comp;	/* pin 6/8 */
+
+	/* internal */
+	UINT8 last_clock;
+	UINT8 last_output;
+	UINT8 last_output_comp;
+};
+
+static struct TTL7474 chips[MAX_TTL7474];
 
 
-//-------------------------------------------------
-//  static_set_target_tag - configuration helper
-//  to set the target tag
-//-------------------------------------------------
-
-void ttl7474_device::static_set_target_tag(device_t &device, const char *tag)
+void TTL7474_update(running_machine *machine, int which)
 {
-	ttl7474_device &ttl7474 = downcast<ttl7474_device &>(device);
-	ttl7474.m_output_cb.tag = tag;
-	ttl7474.m_comp_output_cb.tag = tag;
-}
-
-
-//-------------------------------------------------
-//  static_set_output_cb - configuration helper
-//  to set the output callback
-//-------------------------------------------------
-
-void ttl7474_device::static_set_output_cb(device_t &device, write_line_device_func callback)
-{
-	ttl7474_device &ttl7474 = downcast<ttl7474_device &>(device);
-	if (callback != NULL)
+	if (!chips[which].preset && chips[which].clear)			  /* line 1 in truth table */
 	{
-		ttl7474.m_output_cb.type = DEVCB_TYPE_DEVICE;
-		ttl7474.m_output_cb.index = 0;
-		ttl7474.m_output_cb.writeline = callback;
+		chips[which].output 	 = 1;
+		chips[which].output_comp = 0;
 	}
-	else
-		ttl7474.m_output_cb.type = DEVCB_TYPE_NULL;
-}
-
-
-//-------------------------------------------------
-//  static_set_comp_output_cb - configuration
-//  helper to set the comp. output callback
-//-------------------------------------------------
-
-void ttl7474_device::static_set_comp_output_cb(device_t &device, write_line_device_func callback)
-{
-	ttl7474_device &ttl7474 = downcast<ttl7474_device &>(device);
-	if (callback != NULL)
+	else if (chips[which].preset && !chips[which].clear)	  /* line 2 in truth table */
 	{
-		ttl7474.m_comp_output_cb.type = DEVCB_TYPE_DEVICE;
-		ttl7474.m_comp_output_cb.index = 0;
-		ttl7474.m_comp_output_cb.writeline = callback;
+		chips[which].output 	 = 0;
+		chips[which].output_comp = 1;
 	}
-	else
-		ttl7474.m_comp_output_cb.type = DEVCB_TYPE_NULL;
-}
-
-
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void ttl7474_device::device_start()
-{
-    save_item(NAME(m_clear));
-    save_item(NAME(m_preset));
-    save_item(NAME(m_clk));
-    save_item(NAME(m_d));
-    save_item(NAME(m_output));
-    save_item(NAME(m_output_comp));
-    save_item(NAME(m_last_clock));
-    save_item(NAME(m_last_output));
-    save_item(NAME(m_last_output_comp));
-
-	m_output_func.resolve(m_output_cb, *this);
-	m_comp_output_func.resolve(m_comp_output_cb, *this);
-}
-
-
-//-------------------------------------------------
-//  device_reset - device-specific reset
-//-------------------------------------------------
-
-void ttl7474_device::device_reset()
-{
-    init();
-}
-
-
-//-------------------------------------------------
-//  update - update internal state
-//-------------------------------------------------
-
-void ttl7474_device::update()
-{
-    if (!m_preset && m_clear)       	// line 1 in truth table
+	else if (!chips[which].preset && !chips[which].clear)	  /* line 3 in truth table */
 	{
-        m_output    = 1;
-        m_output_comp = 0;
+		chips[which].output 	 = 1;
+		chips[which].output_comp = 1;
 	}
-    else if (m_preset && !m_clear)      // line 2 in truth table
+	else if (!chips[which].last_clock && chips[which].clock)  /* line 4 in truth table */
 	{
-        m_output    = 0;
-        m_output_comp = 1;
-	}
-    else if (!m_preset && !m_clear)     // line 3 in truth table
-	{
-        m_output    = 1;
-        m_output_comp = 1;
-	}
-    else if (!m_last_clock && m_clk)	// line 4 in truth table
-	{
-        m_output    =  m_d;
-        m_output_comp = !m_d;
+		chips[which].output 	 =  chips[which].d;
+		chips[which].output_comp = !chips[which].d;
 	}
 
-    m_last_clock = m_clk;
+	chips[which].last_clock = chips[which].clock;
 
 
-	// call callback if any of the outputs changed
-    if (m_output != m_last_output)
+	/* call callback if any of the outputs changed */
+	if (  chips[which].output_cb &&
+	    ((chips[which].output      != chips[which].last_output) ||
+	     (chips[which].output_comp != chips[which].last_output_comp)))
 	{
-        m_last_output = m_output;
-		m_output_func(m_output);
-	}
-	// call callback if any of the outputs changed
-    if (m_output_comp != m_last_output_comp)
-	{
-        m_last_output_comp = m_output_comp;
-		m_comp_output_func(m_output_comp);
+		chips[which].last_output = chips[which].output;
+		chips[which].last_output_comp = chips[which].output_comp;
+
+		chips[which].output_cb(machine);
 	}
 }
 
 
-//-------------------------------------------------
-//  clear_w - set the clear line state
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( ttl7474_device::clear_w )
+void TTL7474_clear_w(int which, int data)
 {
-    m_clear = state & 1;
-	update();
+	chips[which].clear = data ? 1 : 0;
+}
+
+void TTL7474_preset_w(int which, int data)
+{
+	chips[which].preset = data ? 1 : 0;
+}
+
+void TTL7474_clock_w(int which, int data)
+{
+	chips[which].clock = data ? 1 : 0;
+}
+
+void TTL7474_d_w(int which, int data)
+{
+	chips[which].d = data ? 1 : 0;
 }
 
 
-//-------------------------------------------------
-//  clear_w - set the clear line state
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( ttl7474_device::preset_w )
+int TTL7474_output_r(int which)
 {
-    m_preset = state & 1;
-	update();
+	return chips[which].output;
+}
+
+int TTL7474_output_comp_r(int which)
+{
+	return chips[which].output_comp;
 }
 
 
-//-------------------------------------------------
-//  clock_w - set the clock line state
-//-------------------------------------------------
-
-WRITE_LINE_MEMBER( ttl7474_device::clock_w )
+void TTL7474_config(running_machine *machine, int which, const struct TTL7474_interface *intf)
 {
-    m_clk = state & 1;
-	update();
-}
+	if (which >= MAX_TTL7474)
+	{
+		logerror("Only %d 7474's are supported at this time.\n", MAX_TTL7474);
+		return;
+	}
 
 
-//-------------------------------------------------
-//  d_w - set the d line state
-//-------------------------------------------------
+    chips[which].output_cb = (intf ? intf->output_cb : 0);
 
-WRITE_LINE_MEMBER( ttl7474_device::d_w )
-{
-    m_d = state & 1;
-	update();
-}
+	/* all inputs are open first */
+    chips[which].clear = 1;
+    chips[which].preset = 1;
+    chips[which].clock = 1;
+    chips[which].d = 1;
 
+    chips[which].last_clock = 1;
+    chips[which].last_output = -1;
+    chips[which].last_output_comp = -1;
 
-//-------------------------------------------------
-//  output_r - get the output line state
-//-------------------------------------------------
-
-READ_LINE_MEMBER( ttl7474_device::output_r )
-{
-    return m_output;
-}
-
-
-//-----------------------------------------------------
-//  output_comp_r - get the output-compare line state
-//-----------------------------------------------------
-
-READ_LINE_MEMBER( ttl7474_device::output_comp_r )
-{
-    return m_output_comp;
-}
-
-void ttl7474_device::init()
-{
-    m_clear = 1;
-    m_preset = 1;
-    m_clk = 1;
-    m_d = 1;
-
-    m_output = -1;
-    m_last_clock = 1;
-    m_last_output = -1;
-    m_last_output_comp = -1;
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].clear);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].preset);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].clock);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].d);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].output);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].output_comp);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].last_clock);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].last_output);
+    state_save_register_item(machine, "ttl7474", NULL, which, chips[which].last_output_comp);
 }

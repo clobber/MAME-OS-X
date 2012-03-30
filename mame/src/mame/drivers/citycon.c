@@ -7,46 +7,55 @@ Dip locations added from dip listing at crazykong.com
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/ay8910.h"
 #include "sound/2203intf.h"
-#include "includes/citycon.h"
+
+
+extern UINT8 *citycon_videoram;
+extern UINT8 *citycon_scroll;
+extern UINT8 *citycon_linecolor;
+WRITE8_HANDLER( citycon_videoram_w );
+WRITE8_HANDLER( citycon_linecolor_w );
+WRITE8_HANDLER( citycon_background_w );
+
+VIDEO_UPDATE( citycon );
+VIDEO_START( citycon );
 
 
 static READ8_HANDLER( citycon_in_r )
 {
-	return input_port_read(space->machine(), flip_screen_get(space->machine()) ? "P2" : "P1");
+	return input_port_read(space->machine, flip_screen_get(space->machine) ? "P2" : "P1");
 }
 
 static READ8_HANDLER( citycon_irq_ack_r )
 {
-	citycon_state *state = space->machine().driver_data<citycon_state>();
-	device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 
 	return 0;
 }
 
-static ADDRESS_MAP_START( citycon_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( citycon_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(citycon_videoram_w) AM_BASE_MEMBER(citycon_state, m_videoram)
-	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(citycon_linecolor_w) AM_BASE_MEMBER(citycon_state, m_linecolor)
-	AM_RANGE(0x2800, 0x28ff) AM_RAM AM_BASE_SIZE_MEMBER(citycon_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x1000, 0x1fff) AM_RAM_WRITE(citycon_videoram_w) AM_BASE(&citycon_videoram)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(citycon_linecolor_w) AM_BASE(&citycon_linecolor)
+	AM_RANGE(0x2800, 0x28ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x2800, 0x2fff) AM_NOP //0x2900-0x2fff cleared at post but unused
 	AM_RANGE(0x3000, 0x3000) AM_READWRITE(citycon_in_r, citycon_background_w)	/* player 1 & 2 inputs multiplexed */
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("DSW1") AM_WRITE(soundlatch_w)
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("DSW2") AM_WRITE(soundlatch2_w)
-	AM_RANGE(0x3004, 0x3005) AM_READNOP AM_WRITEONLY AM_BASE_MEMBER(citycon_state, m_scroll)
+	AM_RANGE(0x3004, 0x3005) AM_READNOP AM_WRITEONLY AM_BASE(&citycon_scroll)
 	AM_RANGE(0x3007, 0x3007) AM_READ(citycon_irq_ack_r)
-	AM_RANGE(0x3800, 0x3cff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3800, 0x3cff) AM_RAM_WRITE(paletteram_RRRRGGGGBBBBxxxx_be_w) AM_BASE(&paletteram)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x4000, 0x4001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
-//  AM_RANGE(0x4002, 0x4002) AM_DEVREAD("aysnd", ay8910_r)  /* ?? */
-	AM_RANGE(0x6000, 0x6001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0x4000, 0x4001) AM_DEVWRITE("ay", ay8910_address_data_w)
+//  AM_RANGE(0x4002, 0x4002) AM_DEVREAD("ay", ay8910_r)  /* ?? */
+	AM_RANGE(0x6000, 0x6001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -187,64 +196,45 @@ static const ym2203_interface ym2203_config =
 
 
 
-static MACHINE_START( citycon )
-{
-	citycon_state *state = machine.driver_data<citycon_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-
-	state->save_item(NAME(state->m_bg_image));
-}
-
-static MACHINE_RESET( citycon )
-{
-	citycon_state *state = machine.driver_data<citycon_state>();
-
-	state->m_bg_image = 0;
-}
-
-
-static MACHINE_CONFIG_START( citycon, citycon_state )
+static MACHINE_DRIVER_START( citycon )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, 2048000)        /* 2.048 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(citycon_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MDRV_CPU_ADD("maincpu", M6809, 2048000)        /* 2.048 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(citycon_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_CPU_ADD("audiocpu", M6809, 640000)       /* 0.640 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-//  MCFG_CPU_VBLANK_INT("screen", irq0_line_hold) //actually unused, probably it was during development
-
-	MCFG_MACHINE_START(citycon)
-	MCFG_MACHINE_RESET(citycon)
+	MDRV_CPU_ADD("audiocpu", M6809, 640000)       /* 0.640 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+//  MDRV_CPU_VBLANK_INT("screen", irq0_line_hold) //actually unused, probably it was during development
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(citycon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(citycon)
-	MCFG_PALETTE_LENGTH(640+1024)	/* 640 real palette + 1024 virtual palette */
-	MCFG_PALETTE_INIT(all_black) /* guess */
+	MDRV_GFXDECODE(citycon)
+	MDRV_PALETTE_LENGTH(640+1024)	/* 640 real palette + 1024 virtual palette */
+	MDRV_PALETTE_INIT(all_black) /* guess */
 
-	MCFG_VIDEO_START(citycon)
+	MDRV_VIDEO_START(citycon)
+	MDRV_VIDEO_UPDATE(citycon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1250000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ADD("ay", AY8910, 1250000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MCFG_SOUND_ADD("ymsnd", YM2203, 1250000)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.40)
-	MCFG_SOUND_ROUTE(1, "mono", 0.40)
-	MCFG_SOUND_ROUTE(2, "mono", 0.40)
-	MCFG_SOUND_ROUTE(3, "mono", 0.20)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2203, 1250000)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.40)
+	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MDRV_SOUND_ROUTE(2, "mono", 0.40)
+	MDRV_SOUND_ROUTE(3, "mono", 0.20)
+MACHINE_DRIVER_END
 
 
 
@@ -339,8 +329,9 @@ ROM_END
 
 static DRIVER_INIT( citycon )
 {
-	UINT8 *rom = machine.region("gfx1")->base();
+	UINT8 *rom = memory_region(machine, "gfx1");
 	int i;
+
 
 	/*
       City Connection controls the text color code for each _scanline_, not
@@ -348,22 +339,22 @@ static DRIVER_INIT( citycon )
       I convert the 2bpp char data into 5bpp, and create a virtual palette so
       characters can still be drawn in one pass.
       */
-	for (i = 0x0fff; i >= 0; i--)
+	for (i = 0x0fff;i >= 0;i--)
 	{
 		int mask;
 
-		rom[3 * i] = rom[i];
-		rom[3 * i + 1] = 0;
-		rom[3 * i + 2] = 0;
+		rom[3*i] = rom[i];
+		rom[3*i+1] = 0;
+		rom[3*i+2] = 0;
 		mask = rom[i] | (rom[i] << 4) | (rom[i] >> 4);
-		if (i & 0x01) rom[3 * i + 1] |= mask & 0xf0;
-		if (i & 0x02) rom[3 * i + 1] |= mask & 0x0f;
-		if (i & 0x04) rom[3 * i + 2] |= mask & 0xf0;
+		if (i & 0x01) rom[3*i+1] |= mask & 0xf0;
+		if (i & 0x02) rom[3*i+1] |= mask & 0x0f;
+		if (i & 0x04) rom[3*i+2] |= mask & 0xf0;
 	}
 }
 
 
 
-GAME( 1985, citycon,  0,       citycon, citycon, citycon, ROT0, "Jaleco", "City Connection (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1985, citycona, citycon, citycon, citycon, citycon, ROT0, "Jaleco", "City Connection (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1985, cruisin,  citycon, citycon, citycon, citycon, ROT0, "Jaleco (Kitkorp license)", "Cruisin", GAME_SUPPORTS_SAVE )
+GAME( 1985, citycon,  0,       citycon, citycon, citycon, ROT0, "Jaleco", "City Connection (set 1)", 0 )
+GAME( 1985, citycona, citycon, citycon, citycon, citycon, ROT0, "Jaleco", "City Connection (set 2)", 0 )
+GAME( 1985, cruisin,  citycon, citycon, citycon, citycon, ROT0, "Jaleco (Kitkorp license)", "Cruisin", 0 )

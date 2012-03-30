@@ -21,84 +21,72 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/bbusters.h"
+#include "driver.h"
 
+static tilemap *fix_tilemap,*pf1_tilemap,*pf2_tilemap;
+static const UINT8 *scale_table_ptr;
+static UINT8 scale_line_count;
+
+UINT16 *bbusters_pf1_data,*bbusters_pf2_data,*bbusters_pf1_scroll_data,*bbusters_pf2_scroll_data;
 
 /******************************************************************************/
 
 static TILE_GET_INFO( get_bbusters_tile_info )
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
-	UINT16 tile = state->m_videoram[tile_index];
-
+	UINT16 tile=videoram16[tile_index];
 	SET_TILE_INFO(0,tile&0xfff,tile>>12,0);
 }
 
 static TILE_GET_INFO( get_pf1_tile_info )
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
-	UINT16 tile = state->m_pf1_data[tile_index];
-
+	UINT16 tile=bbusters_pf1_data[tile_index];
 	SET_TILE_INFO(3,tile&0xfff,tile>>12,0);
 }
 
 static TILE_GET_INFO( get_pf2_tile_info )
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
-	UINT16 tile = state->m_pf2_data[tile_index];
-
+	UINT16 tile=bbusters_pf2_data[tile_index];
 	SET_TILE_INFO(4,tile&0xfff,tile>>12,0);
 }
 
 WRITE16_HANDLER( bbusters_video_w )
 {
-	bbusters_state *state = space->machine().driver_data<bbusters_state>();
-
-	COMBINE_DATA(&state->m_videoram[offset]);
-	state->m_fix_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&videoram16[offset]);
+	tilemap_mark_tile_dirty(fix_tilemap,offset);
 }
 
 WRITE16_HANDLER( bbusters_pf1_w )
 {
-	bbusters_state *state = space->machine().driver_data<bbusters_state>();
-
-	COMBINE_DATA(&state->m_pf1_data[offset]);
-	state->m_pf1_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&bbusters_pf1_data[offset]);
+	tilemap_mark_tile_dirty(pf1_tilemap,offset);
 }
 
 WRITE16_HANDLER( bbusters_pf2_w )
 {
-	bbusters_state *state = space->machine().driver_data<bbusters_state>();
-
-	COMBINE_DATA(&state->m_pf2_data[offset]);
-	state->m_pf2_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&bbusters_pf2_data[offset]);
+	tilemap_mark_tile_dirty(pf2_tilemap,offset);
 }
 
 /******************************************************************************/
 
 VIDEO_START( bbuster )
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
+	fix_tilemap = tilemap_create(machine, get_bbusters_tile_info,tilemap_scan_rows,8,8,32,32);
+	pf1_tilemap = tilemap_create(machine, get_pf1_tile_info,tilemap_scan_cols,16,16,128,32);
+	pf2_tilemap = tilemap_create(machine, get_pf2_tile_info,tilemap_scan_cols,16,16,128,32);
 
-	state->m_fix_tilemap = tilemap_create(machine, get_bbusters_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_pf1_tilemap = tilemap_create(machine, get_pf1_tile_info, tilemap_scan_cols, 16, 16, 128, 32);
-	state->m_pf2_tilemap = tilemap_create(machine, get_pf2_tile_info, tilemap_scan_cols, 16, 16, 128, 32);
-
-	state->m_pf1_tilemap->set_transparent_pen(15);
-	state->m_fix_tilemap->set_transparent_pen(15);
+	tilemap_set_transparent_pen(pf1_tilemap, 15);
+	tilemap_set_transparent_pen(fix_tilemap, 15);
 }
 
 VIDEO_START( mechatt )
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
+	fix_tilemap = tilemap_create(machine, get_bbusters_tile_info,tilemap_scan_rows,8,8,32,32);
+	pf1_tilemap = tilemap_create(machine, get_pf1_tile_info,tilemap_scan_cols,16,16,256,32);
+	pf2_tilemap = tilemap_create(machine, get_pf2_tile_info,tilemap_scan_cols,16,16,256,32);
 
-	state->m_fix_tilemap = tilemap_create(machine, get_bbusters_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_pf1_tilemap = tilemap_create(machine, get_pf1_tile_info, tilemap_scan_cols, 16, 16, 256, 32);
-	state->m_pf2_tilemap = tilemap_create(machine, get_pf2_tile_info, tilemap_scan_cols, 16, 16, 256, 32);
-
-	state->m_pf1_tilemap->set_transparent_pen(15);
-	state->m_fix_tilemap->set_transparent_pen(15);
+	tilemap_set_transparent_pen(pf1_tilemap, 15);
+	tilemap_set_transparent_pen(fix_tilemap, 15);
 }
 
 /******************************************************************************/
@@ -156,22 +144,21 @@ INLINE const UINT8 *get_source_ptr(gfx_element *gfx, UINT32 sprite, int dx, int 
 	return gfx_element_get_data(gfx, (sprite+code) % gfx->total_elements) + ((dy%16) * gfx->line_modulo);
 }
 
-static void bbusters_draw_block(running_machine &machine, bitmap_ind16 &dest,int x,int y,int size,int flipx,int flipy,UINT32 sprite,int color,int bank,int block)
+static void bbusters_draw_block(running_machine *machine, bitmap_t *dest,int x,int y,int size,int flipx,int flipy,UINT32 sprite,int color,int bank,int block)
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
-	gfx_element *gfx = machine.gfx[bank];
+	gfx_element *gfx = machine->gfx[bank];
 	pen_t pen_base = gfx->color_base + gfx->color_granularity * (color % gfx->total_colors);
-	UINT32 xinc=(state->m_scale_line_count * 0x10000 ) / size;
+	UINT32 xinc=(scale_line_count * 0x10000 ) / size;
 	UINT8 pixel;
 	int x_index;
 	int dy=y;
-	int sx, ex = state->m_scale_line_count;
+	int sx,ex=scale_line_count;
 
-	while (state->m_scale_line_count) {
+	while (scale_line_count) {
 
 		if (dy>=16 && dy<240) {
-			UINT16 *destline = &dest.pix16(dy);
-			UINT8 srcline=*state->m_scale_table_ptr;
+			UINT16 *destline = BITMAP_ADDR16(dest, dy, 0);
+			UINT8 srcline=*scale_table_ptr;
 			const UINT8 *srcptr=0;
 
 			if (!flipy)
@@ -198,15 +185,14 @@ static void bbusters_draw_block(running_machine &machine, bitmap_ind16 &dest,int
 		}
 
 		dy++;
-		state->m_scale_table_ptr--;
-		state->m_scale_line_count--;
+		scale_table_ptr--;
+		scale_line_count--;
 	}
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const UINT16 *source, int bank, int colval, int colmask)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const UINT16 *source, int bank, int colval, int colmask)
 {
-	bbusters_state *state = machine.driver_data<bbusters_state>();
-	const UINT8 *scale_table=machine.region("user1")->base();
+	const UINT8 *scale_table=memory_region(machine, "user1");
 	int offs;
 
 	for (offs = 0;offs <0x800 ;offs += 4) {
@@ -251,26 +237,26 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const U
 		switch ((source[offs+0]>>8)&0x3) {
 			case 0:
 				scale=source[offs+0]&0x7;
-				state->m_scale_table_ptr = scale_table+0x387f+(0x80*scale);
-				state->m_scale_line_count = 0x10-scale;
+				scale_table_ptr=scale_table+0x387f+(0x80*scale);
+				scale_line_count=0x10-scale;
 				bbusters_draw_block(machine,bitmap,x,y,16,fx,fy,sprite,colour,bank,block);
 				break;
 			case 1: /* 2 x 2 */
 				scale=source[offs+0]&0xf;
-				state->m_scale_table_ptr = scale_table+0x707f+(0x80*scale);
-				state->m_scale_line_count = 0x20-scale;
+				scale_table_ptr=scale_table+0x707f+(0x80*scale);
+				scale_line_count=0x20-scale;
 				bbusters_draw_block(machine,bitmap,x,y,32,fx,fy,sprite,colour,bank,block);
 				break;
 			case 2: /* 64 by 64 block (2 x 2) x 2 */
 				scale=source[offs+0]&0x1f;
-				state->m_scale_table_ptr = scale_table+0xa07f+(0x80*scale);
-				state->m_scale_line_count = 0x40-scale;
+				scale_table_ptr=scale_table+0xa07f+(0x80*scale);
+				scale_line_count=0x40-scale;
 				bbusters_draw_block(machine,bitmap,x,y,64,fx,fy,sprite,colour,bank,block);
 				break;
 			case 3: /* 2 x 2 x 2 x 2 */
 				scale=source[offs+0]&0x3f;
-				state->m_scale_table_ptr = scale_table+0xc07f+(0x80*scale);
-				state->m_scale_line_count = 0x80-scale;
+				scale_table_ptr=scale_table+0xc07f+(0x80*scale);
+				scale_line_count=0x80-scale;
 				bbusters_draw_block(machine,bitmap,x,y,128,fx,fy,sprite,colour,bank,block);
 				break;
 		}
@@ -279,36 +265,32 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const U
 
 /******************************************************************************/
 
-SCREEN_UPDATE_IND16( bbuster )
+VIDEO_UPDATE( bbuster )
 {
-	bbusters_state *state = screen.machine().driver_data<bbusters_state>();
+	tilemap_set_scrollx( pf1_tilemap,0, bbusters_pf1_scroll_data[0] );
+	tilemap_set_scrolly( pf1_tilemap,0, bbusters_pf1_scroll_data[1] );
+	tilemap_set_scrollx( pf2_tilemap,0, bbusters_pf2_scroll_data[0] );
+	tilemap_set_scrolly( pf2_tilemap,0, bbusters_pf2_scroll_data[1] );
 
-	state->m_pf1_tilemap->set_scrollx(0, state->m_pf1_scroll_data[0]);
-	state->m_pf1_tilemap->set_scrolly(0, state->m_pf1_scroll_data[1]);
-	state->m_pf2_tilemap->set_scrollx(0, state->m_pf2_scroll_data[0]);
-	state->m_pf2_tilemap->set_scrolly(0, state->m_pf2_scroll_data[1]);
-
-	state->m_pf2_tilemap->draw(bitmap, cliprect, 0, 0);
-	//draw_sprites(screen.machine(), bitmap, screen.machine().generic.buffered_spriteram2.u16, 2, 0x8, 0x8);
-	state->m_pf1_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, screen.machine().generic.buffered_spriteram2.u16, 2, 0, 0);
-	draw_sprites(screen.machine(), bitmap, screen.machine().generic.buffered_spriteram.u16, 1, 0, 0);
-	state->m_fix_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+//  draw_sprites(screen->machine,bitmap,buffered_spriteram16_2,2,0x8,0x8);
+	tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	draw_sprites(screen->machine,bitmap,buffered_spriteram16_2,2,0,0);
+	draw_sprites(screen->machine,bitmap,buffered_spriteram16,1,0,0);
+	tilemap_draw(bitmap,cliprect,fix_tilemap,0,0);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( mechatt )
+VIDEO_UPDATE( mechatt )
 {
-	bbusters_state *state = screen.machine().driver_data<bbusters_state>();
+	tilemap_set_scrollx( pf1_tilemap,0, bbusters_pf1_scroll_data[0] );
+	tilemap_set_scrolly( pf1_tilemap,0, bbusters_pf1_scroll_data[1] );
+	tilemap_set_scrollx( pf2_tilemap,0, bbusters_pf2_scroll_data[0] );
+	tilemap_set_scrolly( pf2_tilemap,0, bbusters_pf2_scroll_data[1] );
 
-	state->m_pf1_tilemap->set_scrollx(0, state->m_pf1_scroll_data[0]);
-	state->m_pf1_tilemap->set_scrolly(0, state->m_pf1_scroll_data[1]);
-	state->m_pf2_tilemap->set_scrollx(0, state->m_pf2_scroll_data[0]);
-	state->m_pf2_tilemap->set_scrolly(0, state->m_pf2_scroll_data[1]);
-
-	state->m_pf2_tilemap->draw(bitmap, cliprect, 0, 0);
-	state->m_pf1_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, screen.machine().generic.buffered_spriteram.u16, 1, 0, 0);
-	state->m_fix_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	draw_sprites(screen->machine,bitmap,buffered_spriteram16,1,0,0);
+	tilemap_draw(bitmap,cliprect,fix_tilemap,0,0);
 	return 0;
 }

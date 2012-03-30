@@ -59,9 +59,19 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "sound/samples.h"
 #include "includes/zaxxon.h"
+
+
+
+/*************************************
+ *
+ *  Local sound states
+ *
+ *************************************/
+
+static UINT8 sound_state[3];
 
 
 
@@ -74,18 +84,18 @@
 static const char *const zaxxon_sample_names[] =
 {
 	"*zaxxon",
-	"03",   /* 0 - Homing Missile */
-	"02",   /* 1 - Base Missile */
-	"01",   /* 2 - Laser (force field) */
-	"00",   /* 3 - Battleship (end of level boss) */
-	"11",   /* 4 - S-Exp (enemy explosion) */
-	"10",   /* 5 - M-Exp (ship explosion) */
-	"08",   /* 6 - Cannon (ship fire) */
-	"23",   /* 7 - Shot (enemy fire) */
-	"21",   /* 8 - Alarm 2 (target lock) */
-	"20",   /* 9 - Alarm 3 (low fuel) */
-	"05",   /* 10 - initial background noise */
-	"04",   /* 11 - looped asteroid noise */
+	"03.wav",   /* 0 - Homing Missile */
+	"02.wav",   /* 1 - Base Missile */
+	"01.wav",   /* 2 - Laser (force field) */
+	"00.wav",   /* 3 - Battleship (end of level boss) */
+	"11.wav",   /* 4 - S-Exp (enemy explosion) */
+	"10.wav",   /* 5 - M-Exp (ship explosion) */
+	"08.wav",   /* 6 - Cannon (ship fire) */
+	"23.wav",   /* 7 - Shot (enemy fire) */
+	"21.wav",   /* 8 - Alarm 2 (target lock) */
+	"20.wav",   /* 9 - Alarm 3 (low fuel) */
+	"05.wav",   /* 10 - initial background noise */
+	"04.wav",   /* 11 - looped asteroid noise */
 	0
 };
 
@@ -97,11 +107,11 @@ static const samples_interface zaxxon_samples_interface =
 };
 
 
-MACHINE_CONFIG_FRAGMENT( zaxxon_samples )
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(zaxxon_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_START( zaxxon_samples )
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(zaxxon_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 
@@ -113,10 +123,9 @@ MACHINE_CONFIG_END
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_a_w )
 {
-	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
-	device_t *samples = device->machine().device("samples");
-	UINT8 diff = data ^ state->m_sound_state[0];
-	state->m_sound_state[0] = data;
+	const device_config *samples = devtag_get_device(device->machine, "samples");
+	UINT8 diff = data ^ sound_state[0];
+	sound_state[0] = data;
 
 	/* PLAYER SHIP A/B: volume */
 	sample_set_volume(samples, 10, 0.5 + 0.157 * (data & 0x03));
@@ -149,10 +158,9 @@ WRITE8_DEVICE_HANDLER( zaxxon_sound_a_w )
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_b_w )
 {
-	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
-	device_t *samples = device->machine().device("samples");
-	UINT8 diff = data ^ state->m_sound_state[1];
-	state->m_sound_state[1] = data;
+	const device_config *samples = devtag_get_device(device->machine, "samples");
+	UINT8 diff = data ^ sound_state[1];
+	sound_state[1] = data;
 
 	/* S-EXP: channel 4 */
 	if ((diff & 0x10) && !(data & 0x10)) sample_start(samples, 4, 4, FALSE);
@@ -167,10 +175,9 @@ WRITE8_DEVICE_HANDLER( zaxxon_sound_b_w )
 
 WRITE8_DEVICE_HANDLER( zaxxon_sound_c_w )
 {
-	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
-	device_t *samples = device->machine().device("samples");
-	UINT8 diff = data ^ state->m_sound_state[2];
-	state->m_sound_state[2] = data;
+	const device_config *samples = devtag_get_device(device->machine, "samples");
+	UINT8 diff = data ^ sound_state[2];
+	sound_state[2] = data;
 
 	/* SHOT: channel 7 */
 	if ((diff & 0x01) && !(data & 0x01)) sample_start(samples, 7, 7, FALSE);
@@ -193,11 +200,11 @@ WRITE8_DEVICE_HANDLER( zaxxon_sound_c_w )
 static const char *const congo_sample_names[] =
 {
 	"*congo",
-	"gorilla",	/* 0 */
-	"bass",		/* 1 */
-	"congal",	/* 2 */
-	"congah",	/* 3 */
-	"rim",		/* 4 */
+	"gorilla.wav",	/* 0 */
+	"bass.wav",		/* 1 */
+	"congal.wav",	/* 2 */
+	"congah.wav",	/* 3 */
+	"rim.wav",		/* 4 */
 	0
 };
 
@@ -209,11 +216,11 @@ static const samples_interface congo_samples_interface =
 };
 
 
-MACHINE_CONFIG_FRAGMENT( congo_samples )
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(congo_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_START( congo_samples )
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(congo_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 
@@ -225,10 +232,9 @@ MACHINE_CONFIG_END
 
 WRITE8_DEVICE_HANDLER( congo_sound_b_w )
 {
-	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
-	device_t *samples = device->machine().device("samples");
-	UINT8 diff = data ^ state->m_sound_state[1];
-	state->m_sound_state[1] = data;
+	const device_config *samples = devtag_get_device(device->machine, "samples");
+	UINT8 diff = data ^ sound_state[1];
+	sound_state[1] = data;
 
 	/* bit 7 = mute */
 
@@ -239,10 +245,9 @@ WRITE8_DEVICE_HANDLER( congo_sound_b_w )
 
 WRITE8_DEVICE_HANDLER( congo_sound_c_w )
 {
-	zaxxon_state *state = device->machine().driver_data<zaxxon_state>();
-	device_t *samples = device->machine().device("samples");
-	UINT8 diff = data ^ state->m_sound_state[2];
-	state->m_sound_state[2] = data;
+	const device_config *samples = devtag_get_device(device->machine, "samples");
+	UINT8 diff = data ^ sound_state[2];
+	sound_state[2] = data;
 
 	/* BASS DRUM: channel 1 */
 	if ((diff & 0x01) && !(data & 0x01)) sample_start(samples, 1, 1, FALSE);

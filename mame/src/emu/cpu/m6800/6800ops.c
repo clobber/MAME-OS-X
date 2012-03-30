@@ -18,14 +18,14 @@ HNZVC
 //OP_HANDLER( illegal )
 OP_HANDLER( illegal )
 {
-	logerror("m6800: illegal opcode: address %04X, op %02X\n",PC-1,(int) M_RDOP_ARG(PC-1)&0xFF);
+	logerror("m6800: illegal opcode: address %04X, op %02X\n",PC,(int) M_RDOP_ARG(PC)&0xFF);
 }
 
 /* HD63701 only */
 //OP_HANDLER( trap )
 OP_HANDLER( trap )
 {
-	logerror("m6800: illegal opcode: address %04X, op %02X\n",PC-1,(int) M_RDOP_ARG(PC-1)&0xFF);
+	logerror("m6800: illegal opcode: address %04X, op %02X\n",PC,(int) M_RDOP_ARG(PC)&0xFF);
 	TAKE_TRAP;
 }
 
@@ -230,13 +230,15 @@ OP_HANDLER( bra )
 	UINT8 t;
 	IMMBYTE(t);
 	PC+=SIGNED(t);
+	/* speed up busy loops */
+	if (t==0xfe) EAT_CYCLES;
 }
 
 /* $21 BRN relative ----- */
-static UINT8 m6800_brn_t; // hack around GCC 4.6 error because we need the side effects of IMMBYTE
 OP_HANDLER( brn )
 {
-	IMMBYTE(m6800_brn_t);
+	UINT8 t;
+	IMMBYTE(t);
 }
 
 /* $22 BHI relative ----- */
@@ -1596,7 +1598,7 @@ OP_HANDLER( jsr_ex )
 {
 	EXTENDED;
 	PUSHWORD(pPC);
-	PC = EA;
+ 	PC = EA;
 }
 
 /* $be LDS extended -**0- */

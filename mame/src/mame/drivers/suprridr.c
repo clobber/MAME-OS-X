@@ -17,8 +17,6 @@
         * what are the writes to $08DB and $08E8 for?
           (guess: a discrete sound effect)
 
-    ** driver should probably be merged with timelimt.c
-
 ****************************************************************************
 
     PCB Layout
@@ -81,10 +79,14 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "includes/suprridr.h"
+#include "suprridr.h"
 #include "sound/ay8910.h"
+
+static UINT8 nmi_enable;
+static UINT8 sound_data;
+
 
 
 /*************************************
@@ -95,16 +97,14 @@
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_nmi_enable = data;
+	nmi_enable = data;
 }
 
 
 static INTERRUPT_GEN( main_nmi_gen )
 {
-	suprridr_state *state = device->machine().driver_data<suprridr_state>();
-	if (state->m_nmi_enable)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if (nmi_enable)
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -117,28 +117,26 @@ static INTERRUPT_GEN( main_nmi_gen )
 
 static TIMER_CALLBACK( delayed_sound_w )
 {
-	suprridr_state *state = machine.driver_data<suprridr_state>();
-	state->m_sound_data = param;
+	sound_data = param;
 	cputag_set_input_line(machine, "audiocpu", 0, ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( sound_data_w )
 {
-	space->machine().scheduler().synchronize(FUNC(delayed_sound_w), data);
+	timer_call_after_resynch(space->machine, NULL, data, delayed_sound_w);
 }
 
 
 static READ8_DEVICE_HANDLER( sound_data_r )
 {
-	suprridr_state *state = device->machine().driver_data<suprridr_state>();
-	return state->m_sound_data;
+	return sound_data;
 }
 
 
 static WRITE8_HANDLER( sound_irq_ack_w )
 {
-	cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
 }
 
 
@@ -152,7 +150,7 @@ static WRITE8_HANDLER( sound_irq_ack_w )
 static WRITE8_HANDLER( coin_lock_w )
 {
 	/* cleared when 9 credits are hit, but never reset! */
-/*  coin_lockout_global_w(space->machine(), ~data & 1); */
+/*  coin_lockout_global_w(~data & 1); */
 }
 
 
@@ -163,13 +161,13 @@ static WRITE8_HANDLER( coin_lock_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(suprridr_bgram_w) AM_BASE_MEMBER(suprridr_state, m_bgram)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(suprridr_fgram_w) AM_BASE_MEMBER(suprridr_state, m_fgram)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(suprridr_bgram_w) AM_BASE(&suprridr_bgram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(suprridr_fgram_w) AM_BASE(&suprridr_fgram)
 	AM_RANGE(0x9800, 0x983f) AM_RAM
-	AM_RANGE(0x9840, 0x987f) AM_RAM AM_BASE_MEMBER(suprridr_state, m_spriteram)
+	AM_RANGE(0x9840, 0x987f) AM_RAM AM_BASE(&spriteram)
 	AM_RANGE(0x9880, 0x9bff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("SYSTEM")
@@ -185,7 +183,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(watchdog_reset_r)
 ADDRESS_MAP_END
@@ -198,13 +196,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x3800, 0x3bff) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sound_irq_ack_w)
 	AM_RANGE(0x8c, 0x8d) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -230,10 +228,10 @@ static CUSTOM_INPUT( suprridr_control_r )
 	UINT32 ret;
 
 	/* screen flip multiplexes controls */
-	if (suprridr_is_screen_flipped(field.machine()))
-		ret = input_port_read(field.machine(), SUPRRIDR_P2_CONTROL_PORT_TAG);
+	if (suprridr_is_screen_flipped())
+		ret = input_port_read(field->port->machine, SUPRRIDR_P2_CONTROL_PORT_TAG);
 	else
-		ret = input_port_read(field.machine(), SUPRRIDR_P1_CONTROL_PORT_TAG);
+		ret = input_port_read(field->port->machine, SUPRRIDR_P1_CONTROL_PORT_TAG);
 
 	return ret;
 }
@@ -356,42 +354,43 @@ static const ay8910_interface ay8910_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( suprridr, suprridr_state )
+static MACHINE_DRIVER_START( suprridr )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_49_152MHz/16)		/* 3 MHz */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", main_nmi_gen)
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_49_152MHz/16)		/* 3 MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", main_nmi_gen)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 10000000/4)		/* 2.5 MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_portmap)
+	MDRV_CPU_ADD("audiocpu", Z80, 10000000/4)		/* 2.5 MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_portmap)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(suprridr)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(suprridr)
-	MCFG_PALETTE_LENGTH(96)
+	MDRV_GFXDECODE(suprridr)
+	MDRV_PALETTE_LENGTH(96)
 
-	MCFG_PALETTE_INIT(suprridr)
-	MCFG_VIDEO_START(suprridr)
+	MDRV_PALETTE_INIT(suprridr)
+	MDRV_VIDEO_START(suprridr)
+	MDRV_VIDEO_UPDATE(suprridr)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, XTAL_49_152MHz/32)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay1", AY8910, XTAL_49_152MHz/32)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay2", AY8910, XTAL_49_152MHz/32)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, XTAL_49_152MHz/32)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 
@@ -445,4 +444,4 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, suprridr, 0, suprridr, suprridr, 0, ROT90, "Taito Corporation (Venture Line license)", "Super Rider", GAME_IMPERFECT_SOUND )
+GAME( 1983, suprridr, 0, suprridr, suprridr, 0, ROT90, "Venture Line (Taito Corporation license)", "Super Rider", GAME_IMPERFECT_SOUND )

@@ -12,55 +12,60 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/2203intf.h"
 #include "sound/3812intf.h"
 #include "sound/msm5205.h"
-#include "includes/pcktgal.h"
-#include "video/decbac06.h"
+
+extern WRITE8_HANDLER( pcktgal_videoram_w );
+extern WRITE8_HANDLER( pcktgal_flipscreen_w );
+
+extern PALETTE_INIT( pcktgal );
+extern VIDEO_START( pcktgal );
+extern VIDEO_UPDATE( pcktgal );
 
 /***************************************************************************/
 
 static WRITE8_HANDLER( pcktgal_bank_w )
 {
-	UINT8 *RAM = space->machine().region("maincpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
 
-	if (data & 1) { memory_set_bankptr(space->machine(), "bank1", &RAM[0x4000]); }
-	else { memory_set_bankptr(space->machine(), "bank1", &RAM[0x10000]); }
+	if (data & 1) { memory_set_bankptr(space->machine, 1, &RAM[0x4000]); }
+	else { memory_set_bankptr(space->machine, 1, &RAM[0x10000]); }
 
-	if (data & 2) { memory_set_bankptr(space->machine(), "bank2", &RAM[0x6000]); }
-	else { memory_set_bankptr(space->machine(), "bank2", &RAM[0x12000]); }
+	if (data & 2) { memory_set_bankptr(space->machine, 2, &RAM[0x6000]); }
+	else { memory_set_bankptr(space->machine, 2, &RAM[0x12000]); }
 }
 
 static WRITE8_HANDLER( pcktgal_sound_bank_w )
 {
-	memory_set_bank(space->machine(), "bank3", (data >> 2) & 1);
+	memory_set_bank(space->machine, 3, (data >> 2) & 1);
 }
 
 static WRITE8_HANDLER( pcktgal_sound_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
+static int msm5205next;
 
-static void pcktgal_adpcm_int(device_t *device)
+static void pcktgal_adpcm_int(const device_config *device)
 {
-	pcktgal_state *state = device->machine().driver_data<pcktgal_state>();
+	static int toggle;
 
-	msm5205_data_w(device,state->m_msm5205next >> 4);
-	state->m_msm5205next<<=4;
+	msm5205_data_w(device,msm5205next >> 4);
+	msm5205next<<=4;
 
-	state->m_toggle = 1 - state->m_toggle;
-	if (state->m_toggle)
-		cputag_set_input_line(device->machine(), "audiocpu", M6502_IRQ_LINE, HOLD_LINE);
+	toggle = 1 - toggle;
+	if (toggle)
+		cputag_set_input_line(device->machine, "audiocpu", M6502_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( pcktgal_adpcm_data_w )
 {
-	pcktgal_state *state = space->machine().driver_data<pcktgal_state>();
-	state->m_msm5205next=data;
+	msm5205next=data;
 }
 
 static READ8_DEVICE_HANDLER( pcktgal_adpcm_reset_r )
@@ -71,25 +76,24 @@ static READ8_DEVICE_HANDLER( pcktgal_adpcm_reset_r )
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( pcktgal_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( pcktgal_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x0fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_8bit_r, deco_bac06_pf_data_8bit_w)
-	AM_RANGE(0x1000, 0x11ff) AM_RAM AM_BASE_SIZE_MEMBER(pcktgal_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x0800, 0x0fff) AM_RAM_WRITE(pcktgal_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x1000, 0x11ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("P1")
-	AM_RANGE(0x1800, 0x1807) AM_DEVWRITE("tilegen1", deco_bac06_pf_control0_8bit_w)
-	AM_RANGE(0x1810, 0x181f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_control1_8bit_r, deco_bac06_pf_control1_8bit_w)
-
+	AM_RANGE(0x1801, 0x1801) AM_WRITE(pcktgal_flipscreen_w)
+	/* 1800 - 0x181f are unused BAC-06 registers, see video/dec0.c */
 	AM_RANGE(0x1a00, 0x1a00) AM_READ_PORT("P2") AM_WRITE(pcktgal_sound_w)
 	AM_RANGE(0x1c00, 0x1c00) AM_READ_PORT("DSW") AM_WRITE(pcktgal_bank_w)
-	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank2")
+	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK(1)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(2)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( pcktgal_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( pcktgal_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
@@ -97,7 +101,7 @@ static ADDRESS_MAP_START( pcktgal_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(pcktgal_sound_bank_w)
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r)
 	AM_RANGE(0x3400, 0x3400) AM_DEVREAD("msm", pcktgal_adpcm_reset_r)	/* ? not sure */
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank3")
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(3)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -126,29 +130,29 @@ static INPUT_PORTS_START( pcktgal )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW1:1,2")
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:3")
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "Allow 2 Players Game" )	PORT_DIPLOCATION("SW1:4")
-	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:5")
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Time" )			PORT_DIPLOCATION("SW1:6")
-	PORT_DIPSETTING(    0x00, "100" )
-	PORT_DIPSETTING(    0x20, "120" )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(    0x00, "3" )
-	PORT_DIPSETTING(    0x40, "4" )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x02, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( 1C_3C ) )
+ 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Flip_Screen ) )
+	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+ 	PORT_DIPNAME( 0x08, 0x08, "Allow 2 Players Game" )
+	PORT_DIPSETTING(	0x00, DEF_STR( No ) )
+	PORT_DIPSETTING(	0x08, DEF_STR( Yes ) )
+ 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x10, DEF_STR( On ) )
+ 	PORT_DIPNAME( 0x20, 0x20, "Time" )
+	PORT_DIPSETTING(	0x00, "100" )
+	PORT_DIPSETTING(	0x20, "120" )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Lives ) )
+	PORT_DIPSETTING(	0x00, "3" )
+	PORT_DIPSETTING(	0x40, "4" )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
 /***************************************************************************/
@@ -217,54 +221,52 @@ static const msm5205_interface msm5205_config =
 
 /***************************************************************************/
 
-static MACHINE_CONFIG_START( pcktgal, pcktgal_state )
+static MACHINE_DRIVER_START( pcktgal )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, 2000000)
-	MCFG_CPU_PROGRAM_MAP(pcktgal_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("maincpu", M6502, 2000000)
+	MDRV_CPU_PROGRAM_MAP(pcktgal_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_CPU_ADD("audiocpu", M6502, 1500000)
-	MCFG_CPU_PROGRAM_MAP(pcktgal_sound_map)
+	MDRV_CPU_ADD("audiocpu", M6502, 1500000)
+	MDRV_CPU_PROGRAM_MAP(pcktgal_sound_map)
 							/* IRQs are caused by the ADPCM chip */
 							/* NMIs are caused by the main CPU */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(pcktgal)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(pcktgal)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_GFXDECODE(pcktgal)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_PALETTE_INIT(pcktgal)
-
-	MCFG_DEVICE_ADD("tilegen1", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,0,0);
+	MDRV_PALETTE_INIT(pcktgal)
+	MDRV_VIDEO_START(pcktgal)
+	MDRV_VIDEO_UPDATE(pcktgal)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+	MDRV_SOUND_ADD("ym1", YM2203, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
-	MCFG_SOUND_ADD("ym2", YM3812, 3000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("ym2", YM3812, 3000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("msm", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( bootleg, pcktgal )
-	MCFG_GFXDECODE(bootleg)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_UPDATE_STATIC(pcktgalb)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( bootleg )
+	MDRV_IMPORT_FROM(pcktgal)
+	MDRV_GFXDECODE(bootleg)
+MACHINE_DRIVER_END
 
 /***************************************************************************/
 
@@ -412,27 +414,27 @@ ROM_END
 static DRIVER_INIT( deco222 )
 {
 	int A;
-	address_space *space = machine.device("audiocpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x10000);
-	UINT8 *rom = machine.region("audiocpu")->base();
+	UINT8 *rom = memory_region(machine, "audiocpu");
 
-	space->set_decrypted_region(0x8000, 0xffff, decrypted);
+	memory_set_decrypted_region(space, 0x8000, 0xffff, decrypted);
 
 	/* bits 5 and 6 of the opcodes are swapped */
 	for (A = 0x8000;A < 0x18000;A++)
 		decrypted[A-0x8000] = (rom[A] & 0x9f) | ((rom[A] & 0x20) << 1) | ((rom[A] & 0x40) >> 1);
 
-	memory_configure_bank(machine, "bank3", 0, 2, machine.region("audiocpu")->base() + 0x10000, 0x4000);
-	memory_configure_bank_decrypted(machine, "bank3", 0, 2, &decrypted[0x8000], 0x4000);
+	memory_configure_bank(machine, 3, 0, 2, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
+	memory_configure_bank_decrypted(machine, 3, 0, 2, &decrypted[0x8000], 0x4000);
 }
 
 static DRIVER_INIT( graphics )
 {
-	UINT8 *rom = machine.region("gfx1")->base();
-	int len = machine.region("gfx1")->bytes();
+	UINT8 *rom = memory_region(machine, "gfx1");
+	int len = memory_region_length(machine, "gfx1");
 	int i,j,temp[16];
 
-	memory_configure_bank(machine, "bank3", 0, 2, machine.region("audiocpu")->base() + 0x10000, 0x4000);
+	memory_configure_bank(machine, 3, 0, 2, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
 
 	/* Tile graphics roms have some swapped lines, original version only */
 	for (i = 0x00000;i < len;i += 32)

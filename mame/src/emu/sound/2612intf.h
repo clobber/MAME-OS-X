@@ -3,14 +3,12 @@
 #ifndef __2612INTF_H__
 #define __2612INTF_H__
 
-#include "devlegcy.h"
-
 void ym2612_update_request(void *param);
 
 typedef struct _ym2612_interface ym2612_interface;
 struct _ym2612_interface
 {
-	void (*handler)(device_t *device, int irq);
+	void (*handler)(const device_config *device, int irq);
 };
 
 READ8_DEVICE_HANDLER( ym2612_r );
@@ -27,13 +25,14 @@ WRITE8_DEVICE_HANDLER( ym2612_data_port_a_w );
 WRITE8_DEVICE_HANDLER( ym2612_data_port_b_w );
 
 
-DECLARE_LEGACY_SOUND_DEVICE(YM2612, ym2612);
+DEVICE_GET_INFO( ym2612 );
+#define SOUND_YM2612 DEVICE_GET_INFO_NAME( ym2612 )
 
 
 typedef struct _ym3438_interface ym3438_interface;
 struct _ym3438_interface
 {
-	void (*handler)(device_t *device, int irq);
+	void (*handler)(const device_config *device, int irq);
 };
 
 
@@ -51,6 +50,7 @@ struct _ym3438_interface
 #define ym3438_data_port_b_w	ym2612_data_port_b_w
 
 
-DECLARE_LEGACY_SOUND_DEVICE(YM3438, ym3438);
+DEVICE_GET_INFO( ym3438 );
+#define SOUND_YM3438 DEVICE_GET_INFO_NAME( ym3438 )
 
 #endif /* __2612INTF_H__ */

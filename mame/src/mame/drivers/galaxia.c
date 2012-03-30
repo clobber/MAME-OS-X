@@ -23,32 +23,36 @@ TS 2008.08.12:
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "video/s2636.h"
-#include "sound/s2636.h"
 #include "cpu/s2650/s2650.h"
 
+static UINT8 *galaxia_video;
+static UINT8 *galaxia_color;
 
-class galaxia_state : public driver_device
+static s2636_t *s2636_0, *s2636_1, *s2636_2;
+static UINT8 *galaxia_s2636_0_ram;
+static UINT8 *galaxia_s2636_1_ram;
+static UINT8 *galaxia_s2636_2_ram;
+
+static VIDEO_START( galaxia )
 {
-public:
-	galaxia_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+	int width = video_screen_get_width(machine->primary_screen);
+	int height = video_screen_get_height(machine->primary_screen);
 
-	UINT8 *m_video;
-	UINT8 *m_color;
-};
+	/* configure the S2636 chips */
+	s2636_0 = s2636_config(machine, galaxia_s2636_0_ram, height, width,  3, -27);
+	s2636_1 = s2636_config(machine, galaxia_s2636_1_ram, height, width,  3, -27);
+	s2636_2 = s2636_config(machine, galaxia_s2636_2_ram, height, width,  3, -27);
+}
 
-
-
-static SCREEN_UPDATE_IND16( galaxia )
+static VIDEO_UPDATE( galaxia )
 {
-	galaxia_state *state = screen.machine().driver_data<galaxia_state>();
 	int x,y, count;
 
-	device_t *s2636_0 = screen.machine().device("s2636_0");
-	device_t *s2636_1 = screen.machine().device("s2636_1");
-	device_t *s2636_2 = screen.machine().device("s2636_2");
+	bitmap_t *s2636_0_bitmap;
+	bitmap_t *s2636_1_bitmap;
+	bitmap_t *s2636_2_bitmap;
 
 	count = 0;
 
@@ -56,38 +60,38 @@ static SCREEN_UPDATE_IND16( galaxia )
 	{
 		for (x=0;x<256/8;x++)
 		{
-			int tile = state->m_video[count];
-			drawgfx_opaque(bitmap,cliprect,screen.machine().gfx[0],tile,0,0,0,x*8,y*8);
+			int tile = galaxia_video[count];
+			drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[0],tile,0,0,0,x*8,y*8);
 			count++;
 		}
 	}
 
-	bitmap_ind16 &s2636_0_bitmap = s2636_update(s2636_0, cliprect);
-	bitmap_ind16 &s2636_1_bitmap = s2636_update(s2636_1, cliprect);
-	bitmap_ind16 &s2636_2_bitmap = s2636_update(s2636_2, cliprect);
+	s2636_0_bitmap = s2636_update(s2636_0, cliprect);
+	s2636_1_bitmap = s2636_update(s2636_1, cliprect);
+	s2636_2_bitmap = s2636_update(s2636_2, cliprect);
 
 	/* copy the S2636 images into the main bitmap */
 	{
 		int y;
 
-		for (y = cliprect.min_y; y <= cliprect.max_y; y++)
+		for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 		{
 			int x;
 
-			for (x = cliprect.min_x; x <= cliprect.max_x; x++)
+			for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 			{
-				int pixel0 = s2636_0_bitmap.pix16(y, x);
-				int pixel1 = s2636_1_bitmap.pix16(y, x);
-				int pixel2 = s2636_2_bitmap.pix16(y, x);
+				int pixel0 = *BITMAP_ADDR16(s2636_0_bitmap, y, x);
+				int pixel1 = *BITMAP_ADDR16(s2636_1_bitmap, y, x);
+				int pixel2 = *BITMAP_ADDR16(s2636_2_bitmap, y, x);
 
 				if (S2636_IS_PIXEL_DRAWN(pixel0))
-					bitmap.pix16(y, x) = S2636_PIXEL_COLOR(pixel0);
+					*BITMAP_ADDR16(bitmap, y, x) = S2636_PIXEL_COLOR(pixel0);
 
 				if (S2636_IS_PIXEL_DRAWN(pixel1))
-					bitmap.pix16(y, x) = S2636_PIXEL_COLOR(pixel1);
+					*BITMAP_ADDR16(bitmap, y, x) = S2636_PIXEL_COLOR(pixel1);
 
 				if (S2636_IS_PIXEL_DRAWN(pixel2))
-					bitmap.pix16(y, x) = S2636_PIXEL_COLOR(pixel2);
+					*BITMAP_ADDR16(bitmap, y, x) = S2636_PIXEL_COLOR(pixel2);
 			}
 		}
 	}
@@ -96,36 +100,34 @@ static SCREEN_UPDATE_IND16( galaxia )
 
 static WRITE8_HANDLER(galaxia_video_w)
 {
-	galaxia_state *state = space->machine().driver_data<galaxia_state>();
-	if (cpu_get_reg(&space->device(), S2650_FO))
+	if (cpu_get_reg(space->cpu, S2650_FO))
 	{
-		state->m_video[offset]=data;
+		galaxia_video[offset]=data;
 	}
 	else
 	{
-		state->m_color[offset]=data;
+		galaxia_color[offset]=data;
 	}
 }
 
 static READ8_HANDLER(galaxia_video_r)
 {
-	galaxia_state *state = space->machine().driver_data<galaxia_state>();
-	return state->m_video[offset];
+	return galaxia_video[offset];
 }
 
-static ADDRESS_MAP_START( mem_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mem_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x13ff) AM_ROM
 	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_RAM
-	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_0", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_1", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_2", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(galaxia_video_r, galaxia_video_w)  AM_BASE_MEMBER(galaxia_state, m_video)
+	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_0_ram)
+	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_1_ram)
+	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_2_ram)
+	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(galaxia_video_r, galaxia_video_w)  AM_BASE(&galaxia_video)
 	AM_RANGE(0x1c00, 0x1fff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x2000, 0x33ff) AM_ROM
 	AM_RANGE(0x7214, 0x7214) AM_READ_PORT("IN0")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN7")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
@@ -136,18 +138,18 @@ static ADDRESS_MAP_START( io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( astrowar_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( astrowar_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x13ff) AM_ROM
 	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_RAM
-	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_0", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_1", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_DEVREADWRITE("s2636_2", s2636_work_ram_r, s2636_work_ram_w)
-	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(galaxia_video_r, galaxia_video_w)  AM_BASE_MEMBER(galaxia_state, m_video)
+	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_0_ram)
+	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_1_ram)
+	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_RAM AM_BASE(&galaxia_s2636_2_ram)
+	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(galaxia_video_r, galaxia_video_w)  AM_BASE(&galaxia_video)
 	AM_RANGE(0x1c00, 0x1fff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x2000, 0x33ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( astrowar_io, AS_IO, 8 )
+static ADDRESS_MAP_START( astrowar_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
@@ -237,74 +239,38 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( galaxia_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x03);
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x03);
 }
 
-
-static const s2636_interface s2636_0_config =
-{
-	"screen",
-	0x100,
-	3, -27,
-	"s2636snd_0"
-};
-
-static const s2636_interface s2636_1_config =
-{
-	"screen",
-	0x100,
-	3, -27,
-	"s2636snd_1"
-};
-
-static const s2636_interface s2636_2_config =
-{
-	"screen",
-	0x100,
-	3, -27,
-	"s2636snd_2"
-};
-
-static MACHINE_CONFIG_START( galaxia, galaxia_state )
+static MACHINE_DRIVER_START( galaxia )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", S2650,2000000)		 /* ? MHz */
-	MCFG_CPU_PROGRAM_MAP(mem_map)
-	MCFG_CPU_IO_MAP(io_map)
-	MCFG_CPU_VBLANK_INT("screen", galaxia_interrupt)
+	MDRV_CPU_ADD("maincpu", S2650,2000000)		 /* ? MHz */
+	MDRV_CPU_PROGRAM_MAP(mem_map)
+	MDRV_CPU_IO_MAP(io_map)
+	MDRV_CPU_VBLANK_INT("screen", galaxia_interrupt)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(galaxia)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
 
-	MCFG_GFXDECODE(galaxia)
-	MCFG_PALETTE_LENGTH(0x100)
+	MDRV_GFXDECODE(galaxia)
+	MDRV_PALETTE_LENGTH(0x100)
 
-	MCFG_S2636_ADD("s2636_0", s2636_0_config)
-	MCFG_S2636_ADD("s2636_1", s2636_1_config)
-	MCFG_S2636_ADD("s2636_2", s2636_2_config)
+	MDRV_VIDEO_START(galaxia)
+	MDRV_VIDEO_UPDATE(galaxia)
+MACHINE_DRIVER_END
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("s2636snd_0", S2636_SOUND, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-
-	MCFG_SOUND_ADD("s2636snd_1", S2636_SOUND, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-
-	MCFG_SOUND_ADD("s2636snd_2", S2636_SOUND, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( astrowar, galaxia )
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(astrowar_mem)
-	MCFG_CPU_IO_MAP(astrowar_io)
-	MCFG_GFXDECODE(astrowar)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( astrowar )
+	MDRV_IMPORT_FROM( galaxia )
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(astrowar_mem)
+	MDRV_CPU_IO_MAP(astrowar_io)
+	MDRV_GFXDECODE(astrowar)
+MACHINE_DRIVER_END
 
 ROM_START( galaxia )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -352,9 +318,8 @@ ROM_END
 
 static DRIVER_INIT(galaxia)
 {
-	galaxia_state *state = machine.driver_data<galaxia_state>();
-	state->m_color=auto_alloc_array(machine, UINT8, 0x400);
+	galaxia_color=auto_alloc_array(machine, UINT8, 0x400);
 }
 
-GAME( 1979, galaxia, 0, galaxia, galaxia, galaxia, ROT90, "Zaccaria", "Galaxia", GAME_NOT_WORKING )
-GAME( 1980, astrowar, 0, astrowar, galaxia, galaxia, ROT90, "Zaccaria", "Astro Wars", GAME_NOT_WORKING|GAME_WRONG_COLORS )
+GAME( 1979, galaxia, 0, galaxia, galaxia, galaxia, ROT90, "Zaccaria", "Galaxia", GAME_NOT_WORKING|GAME_NO_SOUND )
+GAME( 1980, astrowar, 0, astrowar, galaxia, galaxia, ROT90, "Zaccaria", "Astro Wars", GAME_NOT_WORKING|GAME_NO_SOUND|GAME_WRONG_COLORS )

@@ -3,8 +3,10 @@
     prom GB09.K6 may be related to background tile-sprite priority
 */
 
-#include "emu.h"
-#include "includes/shootout.h"
+#include "driver.h"
+
+static tilemap *background, *foreground;
+extern UINT8 *shootout_textram;
 
 
 PALETTE_INIT( shootout )
@@ -12,7 +14,7 @@ PALETTE_INIT( shootout )
 	int i;
 
 
-	for (i = 0;i < machine.total_colors();i++)
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -38,13 +40,10 @@ PALETTE_INIT( shootout )
 
 
 
-static TILE_GET_INFO( get_bg_tile_info )
-{
-	shootout_state *state = machine.driver_data<shootout_state>();
-	int attributes = state->m_videoram[tile_index+0x400]; /* CCCC -TTT */
-	int tile_number = state->m_videoram[tile_index] + 256*(attributes&7);
+static TILE_GET_INFO( get_bg_tile_info ){
+	int attributes = videoram[tile_index+0x400]; /* CCCC -TTT */
+	int tile_number = videoram[tile_index] + 256*(attributes&7);
 	int color = attributes>>4;
-
 	SET_TILE_INFO(
 			2,
 			tile_number,
@@ -52,13 +51,10 @@ static TILE_GET_INFO( get_bg_tile_info )
 			0);
 }
 
-static TILE_GET_INFO( get_fg_tile_info )
-{
-	shootout_state *state = machine.driver_data<shootout_state>();
-	int attributes = state->m_textram[tile_index+0x400]; /* CCCC --TT */
-	int tile_number = state->m_textram[tile_index] + 256*(attributes&0x3);
+static TILE_GET_INFO( get_fg_tile_info ){
+	int attributes = shootout_textram[tile_index+0x400]; /* CCCC --TT */
+	int tile_number = shootout_textram[tile_index] + 256*(attributes&0x3);
 	int color = attributes>>4;
-
 	SET_TILE_INFO(
 			0,
 			tile_number,
@@ -66,43 +62,30 @@ static TILE_GET_INFO( get_fg_tile_info )
 			0);
 }
 
-WRITE8_HANDLER( shootout_videoram_w )
-{
-	shootout_state *state = space->machine().driver_data<shootout_state>();
-
-	state->m_videoram[offset] = data;
-	state->m_background->mark_tile_dirty(offset&0x3ff );
+WRITE8_HANDLER( shootout_videoram_w ){
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty( background, offset&0x3ff );
+}
+WRITE8_HANDLER( shootout_textram_w ){
+	shootout_textram[offset] = data;
+	tilemap_mark_tile_dirty( foreground, offset&0x3ff );
 }
 
-WRITE8_HANDLER( shootout_textram_w )
-{
-	shootout_state *state = space->machine().driver_data<shootout_state>();
-
-	state->m_textram[offset] = data;
-	state->m_foreground->mark_tile_dirty(offset&0x3ff );
+VIDEO_START( shootout ){
+	background = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,8,8,32,32);
+	foreground = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32,32);
+		tilemap_set_transparent_pen( foreground, 0 );
 }
 
-VIDEO_START( shootout )
-{
-	shootout_state *state = machine.driver_data<shootout_state>();
-
-	state->m_background = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_foreground = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_foreground->set_transparent_pen(0 );
-}
-
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int bank_bits )
-{
-	shootout_state *state = machine.driver_data<shootout_state>();
-	UINT8 *spriteram = state->m_spriteram;
-	const gfx_element *gfx = machine.gfx[1];
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int bank_bits ){
+	static int bFlicker;
+	const gfx_element *gfx = machine->gfx[1];
 	const UINT8 *source = spriteram+127*4;
 	int count;
 
-	state->m_bFlicker = !state->m_bFlicker;
+	bFlicker = !bFlicker;
 
-	for( count=0; count<128; count++ )
-	{
+	for( count=0; count<128; count++ ){
 		int attributes = source[1];
 		/*
             76543210
@@ -114,7 +97,7 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
             -------x    enable
         */
 		if ( attributes & 0x01 ){ /* visible */
-			if( state->m_bFlicker || (attributes&0x02)==0 ){
+			if( bFlicker || (attributes&0x02)==0 ){
 				int priority_mask = (attributes&0x08)?0x2:0;
 				int sx = (240 - source[2])&0xff;
 				int sy = (240 - source[0])&0xff;
@@ -144,7 +127,7 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 						0 /*color*/,
 						flipx,flipy,
 						vx,vy,
-						machine.priority_bitmap,
+						machine->priority_bitmap,
 						priority_mask,0);
 
 					number++;
@@ -163,34 +146,30 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 						0 /*color*/,
 						flipx,flipy,
 						vx,vy,
-						machine.priority_bitmap,
+						machine->priority_bitmap,
 						priority_mask,0);
-			}
+				}
 		}
 		source -= 4;
 	}
 }
 
-SCREEN_UPDATE_IND16( shootout )
+VIDEO_UPDATE( shootout )
 {
-	shootout_state *state = screen.machine().driver_data<shootout_state>();
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-
-	state->m_background->draw(bitmap, cliprect, 0,0);
-	state->m_foreground->draw(bitmap, cliprect, 0,1);
-	draw_sprites(screen.machine(), bitmap,cliprect,3/*bank bits */);
+	tilemap_draw(bitmap,cliprect,background,0,0);
+	tilemap_draw(bitmap,cliprect,foreground,0,1);
+	draw_sprites(screen->machine, bitmap,cliprect,3/*bank bits */);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( shootouj )
+VIDEO_UPDATE( shootouj )
 {
-	shootout_state *state = screen.machine().driver_data<shootout_state>();
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-
-	state->m_background->draw(bitmap, cliprect, 0,0);
-	state->m_foreground->draw(bitmap, cliprect, 0,1);
-	draw_sprites(screen.machine(), bitmap,cliprect,2/*bank bits*/);
+	tilemap_draw(bitmap,cliprect,background,0,0);
+	tilemap_draw(bitmap,cliprect,foreground,0,1);
+	draw_sprites(screen->machine, bitmap,cliprect,2/*bank bits*/);
 	return 0;
 }

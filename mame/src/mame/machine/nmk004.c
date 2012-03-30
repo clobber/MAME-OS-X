@@ -1,34 +1,34 @@
-#include "emu.h"
+#include "driver.h"
 #include "nmk004.h"
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
 
 
 
-#define FM_CHANNELS          6
-#define PSG_CHANNELS         3
-#define EFFECTS_CHANNELS     8
+#define FM_CHANNELS			6
+#define PSG_CHANNELS		3
+#define EFFECTS_CHANNELS	8
 
-#define FM_FLAG_NEED_INITIALIZATION      (1<<0)
-#define FM_FLAG_UNKNOWN2                 (1<<1)
-#define FM_FLAG_NOTE_IS_PAUSE            (1<<2)
-#define FM_FLAG_UNKNOWN3                 (1<<3)
-#define FM_FLAG_MODULATE_NOTE            (1<<4)
-#define FM_FLAG_MUST_SEND_KEYON          (1<<5)
-#define FM_FLAG_MUST_SEND_CONFIGURATION  (1<<6)
-#define FM_FLAG_ACTIVE                   (1<<7)
+#define FM_FLAG_NEED_INITIALIZATION			(1<<0)
+#define FM_FLAG_UNKNOWN2					(1<<1)
+#define FM_FLAG_NOTE_IS_PAUSE				(1<<2)
+#define FM_FLAG_UNKNOWN3					(1<<3)
+#define FM_FLAG_MODULATE_NOTE				(1<<4)
+#define FM_FLAG_MUST_SEND_KEYON				(1<<5)
+#define FM_FLAG_MUST_SEND_CONFIGURATION		(1<<6)
+#define FM_FLAG_ACTIVE						(1<<7)
 
-#define PSG_FLAG_ACTIVE                  (1<<0)
-#define PSG_FLAG_NOTE_IS_PAUSE           (1<<1)
-#define PSG_FLAG_NEED_INITIALIZATION     (1<<2)
-#define PSG_FLAG_INITIALIZE_VOLUME       (1<<3)
-#define PSG_FLAG_NOTE_IS_NOISE           (1<<5)
-#define PSG_FLAG_NOISE_NOT_ENABLED       (1<<6)
+#define PSG_FLAG_ACTIVE						(1<<0)
+#define PSG_FLAG_NOTE_IS_PAUSE				(1<<1)
+#define PSG_FLAG_NEED_INITIALIZATION		(1<<2)
+#define PSG_FLAG_INITIALIZE_VOLUME			(1<<3)
+#define PSG_FLAG_NOTE_IS_NOISE				(1<<5)
+#define PSG_FLAG_NOISE_NOT_ENABLED			(1<<6)
 
-#define EFFECTS_FLAG_NEED_INITIALIZATION (1<<0)
-#define EFFECTS_FLAG_ACTIVE              (1<<7)
+#define EFFECTS_FLAG_NEED_INITIALIZATION	(1<<0)
+#define EFFECTS_FLAG_ACTIVE					(1<<7)
 
-#define NOTE_PAUSE             0x0c
+#define NOTE_PAUSE	0x0c
 
 struct psg_control
 {
@@ -88,32 +88,24 @@ struct effects_control
 /* C1CA-C1CB */	UINT16 timer_duration;
 };
 
-struct nmk004_state
+static struct
 {
-public:
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
-	void set_machine(running_machine &machine) { m_machine = &machine; }
-
 	const UINT8 *rom;	// NMK004 data ROM
 	UINT8 from_main;	// command from main CPU
 	UINT8 to_main;		// answer to main CPU
 	int protection_check;
 
-	device_t *ymdevice;
-	okim6295_device *oki1device;
-	okim6295_device *oki2device;
+	running_machine *machine;
+	const device_config *ymdevice;
+	const device_config *oki1device;
+	const device_config *oki2device;
 
 	/* C001      */	UINT8 last_command;		// last command received
 	/* C016      */	UINT8 oki_playing;		// bitmap of active Oki channels
 	/* C020-C19F */	struct fm_control fm_control[FM_CHANNELS];
 	/* C220-C2DF */	struct psg_control psg_control[PSG_CHANNELS];
 	/* C1A0-C21F */	struct effects_control effects_control[EFFECTS_CHANNELS];
-
-private:
-	running_machine *m_machine;
-};
-
-static nmk004_state NMK004_state;
+} NMK004_state;
 
 
 #define SAMPLE_TABLE_0		0xefe0
@@ -152,12 +144,12 @@ static void oki_play_sample(int sample_no)
 	UINT8 byte1 = read8(table_start + 2 * (sample_no & 0x7f) + 0);
 	UINT8 byte2 = read8(table_start + 2 * (sample_no & 0x7f) + 1);
 	int chip = (byte1 & 0x80) >> 7;
-	okim6295_device *okidevice = (chip) ? NMK004_state.oki2device : NMK004_state.oki1device;
+	const device_config *okidevice = (chip) ? NMK004_state.oki2device : NMK004_state.oki1device;
 
 	if ((byte1 & 0x7f) == 0)
 	{
 		// stop all channels
-		okidevice->write_command( 0x78 );
+		okim6295_w(okidevice, 0, 0x78 );
 	}
 	else
 	{
@@ -171,26 +163,26 @@ static void oki_play_sample(int sample_no)
 		NMK004_state.oki_playing |= 1 << (ch + 4*chip);
 
 		// stop channel
-		okidevice->write_command( 0x08 << ch );
+		okim6295_w(okidevice, 0, (0x08 << ch) );
 
 		if (sample != 0)
 		{
-			UINT8 *rom = NMK004_state.machine().region((chip == 0) ? "oki1" : "oki2")->base();
+			UINT8 *rom = memory_region(NMK004_state.machine, (chip == 0) ? "oki1" : "oki2");
 			int bank = (byte2 & 0x0c) >> 2;
 			int vol = (byte2 & 0x70) >> 4;
 
 			if (bank != 3)
 				memcpy(rom + 0x20000,rom + 0x40000 + bank * 0x20000,0x20000);
 
-			okidevice->write_command( 0x80 | sample );
-			okidevice->write_command( (0x10 << ch) | vol );
+			okim6295_w(okidevice, 0, 0x80 | sample );
+			okim6295_w(okidevice, 0, (0x10 << ch) | vol );
 		}
 	}
 }
 
 static void oki_update_state(void)
 {
-	NMK004_state.oki_playing = ((NMK004_state.oki2device->read_status() & 0x0f) << 4) | (NMK004_state.oki1device->read_status() & 0x0f);
+	NMK004_state.oki_playing = ((okim6295_r(NMK004_state.oki2device, 0) & 0x0f) << 4) | (okim6295_r(NMK004_state.oki1device, 0) & 0x0f);
 }
 
 
@@ -996,7 +988,7 @@ static void update_music(void)
 
 
 
-void NMK004_irq(device_t *device, int irq)
+void NMK004_irq(const device_config *device, int irq)
 {
 	if (irq)
 	{
@@ -1028,12 +1020,12 @@ static TIMER_CALLBACK( real_nmk004_init )
 
 	memset(&NMK004_state, 0, sizeof(NMK004_state));
 
-	NMK004_state.set_machine(machine);
-	NMK004_state.ymdevice = machine.device("ymsnd");
-	NMK004_state.oki1device = machine.device<okim6295_device>("oki1");
-	NMK004_state.oki2device = machine.device<okim6295_device>("oki2");
+	NMK004_state.machine = machine;
+	NMK004_state.ymdevice = devtag_get_device(machine, "ym");
+	NMK004_state.oki1device = devtag_get_device(machine, "oki1");
+	NMK004_state.oki2device = devtag_get_device(machine, "oki2");
 
-	NMK004_state.rom = machine.region("audiocpu")->base();
+	NMK004_state.rom = memory_region(machine, "audiocpu");
 
 	ym2203_control_port_w(NMK004_state.ymdevice, 0, 0x2f);
 
@@ -1051,10 +1043,10 @@ static TIMER_CALLBACK( real_nmk004_init )
 	NMK004_state.protection_check = 0;
 }
 
-void NMK004_init(running_machine &machine)
+void NMK004_init(running_machine *machine)
 {
 	/* we have to do this via a timer because we get called before the sound reset */
-	machine.scheduler().synchronize(FUNC(real_nmk004_init));
+	timer_call_after_resynch(machine, NULL, 0, real_nmk004_init);
 }
 
 
@@ -1062,7 +1054,7 @@ WRITE16_HANDLER( NMK004_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-//logerror("%06x: NMK004_w %02x\n",cpu_get_pc(&space->device()),data);
+//logerror("%06x: NMK004_w %02x\n",cpu_get_pc(space->cpu),data);
 		NMK004_state.from_main = data & 0xff;
 	}
 }
@@ -1072,7 +1064,7 @@ READ16_HANDLER( NMK004_r )
 //static int last;
 	int res = NMK004_state.to_main;
 
-//if (res != last) logerror("%06x: NMK004_r %02x\n",cpu_get_pc(&space->device()),res);
+//if (res != last) logerror("%06x: NMK004_r %02x\n",cpu_get_pc(space->cpu),res);
 //last = res;
 
 	return res;

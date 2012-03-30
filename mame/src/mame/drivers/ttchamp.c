@@ -41,33 +41,23 @@ The PCB is Spanish and manufacured by Gamart.
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/nec/nec.h"
 
-
-class ttchamp_state : public driver_device
-{
-public:
-	ttchamp_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 *m_peno_vram;
-	UINT16 m_paloff;
-};
+static UINT16 *peno_vram;
 
 
 static VIDEO_START(ttchamp)
 {
 }
 
-static SCREEN_UPDATE_IND16(ttchamp)
+static VIDEO_UPDATE(ttchamp)
 {
-	ttchamp_state *state = screen.machine().driver_data<ttchamp_state>();
 	int y,x,count;
 //  int i;
 	static const int xxx=320,yyy=204;
 
-	bitmap.fill(get_black_pen(screen.machine()));
+	bitmap_fill(bitmap, 0, get_black_pen(screen->machine));
 
 //  for (i=0;i<256;i++)
 //  {
@@ -85,60 +75,59 @@ static SCREEN_UPDATE_IND16(ttchamp)
 	{
 		for(x=0;x<xxx;x++)
 		{
-			/*if(hotblock_port0&0x40)*/bitmap.pix16(y, x) = ((UINT8 *)state->m_peno_vram)[BYTE_XOR_LE(count)]+0x300;
+			/*if(hotblock_port0&0x40)*/*BITMAP_ADDR16(bitmap, y, x) = ((UINT8 *)peno_vram)[BYTE_XOR_LE(count)]+0x300;
             count++;
         }
     }
     return 0;
 }
 
+static UINT16 paloff;
 
 static WRITE16_HANDLER( paloff_w )
 {
-	ttchamp_state *state = space->machine().driver_data<ttchamp_state>();
-    COMBINE_DATA(&state->m_paloff);
+    COMBINE_DATA(&paloff);
 }
 
 #ifdef UNUSED_FUNCTION
 static WRITE16_HANDLER( pcup_prgbank_w )
 {
     int bank;
-    UINT8 *ROM1 = space->machine().region("user1")->base();
+    UINT8 *ROM1 = memory_region(space->machine, "user1");
 
     if (ACCESSING_BITS_0_7)
     {
         bank = (data>>4) &0x07;
-        memory_set_bankptr(space->machine(), "bank2",&ROM1[0x80000*(bank)]);
+        memory_set_bankptr(space->machine, 2,&ROM1[0x80000*(bank)]);
     }
 }
 #endif
 
 static WRITE16_HANDLER( paldat_w )
 {
-	ttchamp_state *state = space->machine().driver_data<ttchamp_state>();
-    palette_set_color_rgb(space->machine(),state->m_paloff & 0x7fff,pal5bit(data>>0),pal5bit(data>>5),pal5bit(data>>10));
+    palette_set_color_rgb(space->machine,paloff & 0x7fff,pal5bit(data>>0),pal5bit(data>>5),pal5bit(data>>10));
 }
 
 static READ16_HANDLER( peno_rand )
 {
-    return 0xffff;// space->machine().rand();
+    return 0xffff;// mame_rand(space->machine);
 }
 
 #ifdef UNUSED_FUNCTION
 static READ16_HANDLER( peno_rand2 )
 {
-    return space->machine().rand();
+    return mame_rand(space->machine);
 }
 #endif
 
-static ADDRESS_MAP_START( ttchamp_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( ttchamp_map, ADDRESS_SPACE_PROGRAM, 16 )
     AM_RANGE(0x00000, 0x0ffff) AM_RAM
-    AM_RANGE(0x10000, 0x1ffff) AM_RAM AM_BASE_MEMBER(ttchamp_state, m_peno_vram)
-    AM_RANGE(0x20000, 0x7ffff) AM_ROMBANK("bank1") // ?
-    AM_RANGE(0x80000, 0xfffff) AM_ROMBANK("bank2") // ?
+    AM_RANGE(0x10000, 0x1ffff) AM_RAM AM_BASE(&peno_vram)
+    AM_RANGE(0x20000, 0x7ffff) AM_READ(SMH_BANK(1)) // ?
+    AM_RANGE(0x80000, 0xfffff) AM_READ(SMH_BANK(2)) // ?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ttchamp_io, AS_IO, 16 )
+static ADDRESS_MAP_START( ttchamp_io, ADDRESS_SPACE_IO, 16 )
     AM_RANGE(0x0000, 0x0001) AM_WRITENOP
 
     AM_RANGE(0x0002, 0x0003) AM_READ_PORT("SYSTEM")
@@ -230,28 +219,29 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( ttchamp_irq ) /* right? */
 {
-	device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_CONFIG_START( ttchamp, ttchamp_state )
+static MACHINE_DRIVER_START( ttchamp )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", V30, 8000000)
-	MCFG_CPU_PROGRAM_MAP(ttchamp_map)
-	MCFG_CPU_IO_MAP(ttchamp_io)
-	MCFG_CPU_VBLANK_INT("screen", ttchamp_irq)
+	MDRV_CPU_ADD("maincpu", V30, 8000000)
+	MDRV_CPU_PROGRAM_MAP(ttchamp_map)
+	MDRV_CPU_IO_MAP(ttchamp_io)
+	MDRV_CPU_VBLANK_INT("screen", ttchamp_irq)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(1024,1024)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 200-1)
-	MCFG_SCREEN_UPDATE_STATIC(ttchamp)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(1024,1024)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 0, 200-1)
 
-	MCFG_PALETTE_LENGTH(0x8000)
+	MDRV_PALETTE_LENGTH(0x8000)
 
-	MCFG_VIDEO_START(ttchamp)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(ttchamp)
+	MDRV_VIDEO_UPDATE(ttchamp)
+MACHINE_DRIVER_END
 
 ROM_START( ttchamp )
 
@@ -317,7 +307,7 @@ Dumped by tirino73 >isolani (at) interfree.it<
 ROM_START( ttchampa )
 	/* this is from a different board */
 
-	ROM_REGION16_LE( 0x200000, "user1", 0 )
+	ROM_REGION16_BE( 0x200000, "user1", 0 )
 	ROM_LOAD16_BYTE( "ttennis2.bin", 0x000000, 0x080000,  CRC(b060e72c) SHA1(376e71bb4b1687fec4b719cbc5a7b25b64d159ac) )
 	ROM_LOAD16_BYTE( "ttennis3.bin", 0x000001, 0x080000,  CRC(33e085a8) SHA1(ea6af05690b4b0803c303a3c858df10e4d907fb1) )
 	ROM_LOAD16_BYTE( "4.bin", 0x100000, 0x080000,  CRC(4388dead) SHA1(1965e4b84452b244e32c8d218aace8d287c67ec2) )
@@ -332,9 +322,9 @@ ROM_END
 
 static DRIVER_INIT (ttchamp)
 {
-	UINT8 *ROM1 = machine.region("user1")->base();
-	memory_set_bankptr(machine, "bank1",&ROM1[0x120000]);
-	memory_set_bankptr(machine, "bank2",&ROM1[0x180000]);
+	UINT8 *ROM1 = memory_region(machine, "user1");
+	memory_set_bankptr(machine, 1,&ROM1[0x120000]);
+	memory_set_bankptr(machine, 2,&ROM1[0x180000]);
 }
 
 GAME( 199?, ttchamp, 0,        ttchamp, ttchamp, ttchamp, ROT0,  "Gamart?", "Table Tennis Champions (set 1)", GAME_NOT_WORKING|GAME_NO_SOUND )

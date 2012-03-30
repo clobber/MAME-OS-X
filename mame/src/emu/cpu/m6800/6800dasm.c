@@ -17,7 +17,6 @@
  *
  */
 
-#include "emu.h"
 #include "debugger.h"
 #include "m6800.h"
 
@@ -262,11 +261,6 @@ CPU_DISASSEMBLE( m6803 )
 CPU_DISASSEMBLE( m6808 )
 {
 	return Dasm680x(6808,buffer,pc,oprom,opram);
-}
-
-CPU_DISASSEMBLE( hd6301 )
-{
-	return Dasm680x(6301,buffer,pc,oprom,opram);
 }
 
 CPU_DISASSEMBLE( hd63701 )

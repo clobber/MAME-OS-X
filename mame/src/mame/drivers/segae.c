@@ -11,10 +11,7 @@
  An interesting feature of the system is that the CPU is contained on the ROM
  board, the MAIN System E board contains the Graphics processor, this opens the
  possibility for using processors other than the Standard Z80 to run the main
- game code on; several games have an encrypted Z80 module instead. However, the
- system as a whole is very Z80-centric; using a completely non-Z80 processor
- would require the addition of glue logic to the rom board to make the cpu
- 'look' like a Z80 to the rest of the system.
+ game code on; several games have an encrypted Z80 module instead.
 
  Also interesting is each VDP has double the Video RAM found on the SMS console
  this is banked through Port Writes, the System also allows for the Video RAM
@@ -53,11 +50,10 @@
 
     0xe0 r/o            Inputs (Coins, Start Btns)
     0xe1 r/o            Controls (Transformer)
-    0xe2 r/o            Controls P2 (Opa Opa)
 
     0xf2 - 0xf3 r/o     Dipswitches
 
-    0xf8 r/o            Analog Input (Hang On Jr, Riddle of Pythagoras)
+    0xf8 r/o            Analog Input (Hang On Jr)
 
     0x7e r/o            V Counter (vertical beam pos in scanlines)
     0x7f r/o            H Counter (horizontal beam pos in 'pixel clock cycles')
@@ -102,15 +98,14 @@ PCB Layout
 |                  | 2 |             | 2 |            |
 |                  | 4 |             | 4 |            |
 |                  |---|             |---|            |
-|               |--ROM-BOARD-(mounted above here)--|  |
+|               |--------ROM-BOARD-(above)---------|  |
 |               |                                  |  |
-|               |CN2                     XTAL1     |  |
+|               |CN2                   10.7386MHz  |  |
 |               |         D4168                    |  |
 |  VOL          |         D4168                    |  |
 | LA4460        |----------------------------------|  |
 |-----------------------------------------------------|
 Notes:
-      XTAL1              - 10.7386Mhz
       315-5124 VDP clock - 10.7386MHz
       SN76496 clock      - 3.579533MHz [10.7386/3]
       D4168              - 8k x8 SRAM
@@ -298,58 +293,12 @@ covert megatech / megaplay drivers to use new code etc. etc.
 
 */
 
-#define ADDRESS_MAP_MODERN
-
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "machine/mc8123.h"
-#include "machine/segacrp2.h"
-#include "video/315_5124.h"
-#include "includes/segaipt.h"
-
-
-class systeme_state : public driver_device
-{
-protected:
-	virtual void driver_start();
-	virtual void machine_start();
-
-public:
-	systeme_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag)
-		, m_maincpu(*this, "maincpu")
-		, m_vdp1(*this, "vdp1")
-		, m_vdp2(*this, "vdp2")
-		{ }
-
-	DECLARE_WRITE8_MEMBER( videoram_write );
-	DECLARE_WRITE8_MEMBER( bank_write );
-	DECLARE_WRITE_LINE_MEMBER( int_callback );
-
-	DECLARE_READ8_MEMBER( ridleofp_port_f8_read );
-	DECLARE_WRITE8_MEMBER( ridleofp_port_fa_write );
-	DECLARE_READ8_MEMBER( hangonjr_port_f8_read );
-	DECLARE_WRITE8_MEMBER( hangonjr_port_fa_write );
-
-	// Devices
-	required_device<cpu_device>          m_maincpu;
-	required_device<sega315_5124_device> m_vdp1;
-	required_device<sega315_5124_device> m_vdp2;
-
-	// Video RAM
-	memory_region *m_vdp1_vram;
-	memory_region *m_vdp2_vram;
-
-	UINT8 m_f7_bank_value;
-	UINT8 m_port_fa_last;
-	int m_port_to_read;
-	int m_last1;
-	int m_last2;
-	int m_diff1;
-	int m_diff2;
-};
-
+#include "machine/segacrpt.h"
+#include "segamsys.h"
 
 /****************************************************************************************
  Memory Maps
@@ -359,182 +308,106 @@ public:
 
 ****************************************************************************************/
 
+static UINT8 f7_bank_value;
+
 /* we have to fill in the ROM addresses for systeme due to the encrypted games */
-static ADDRESS_MAP_START( systeme_map, AS_PROGRAM, 8, systeme_state )
-	AM_RANGE(0x0000, 0x7fff) AM_ROM														/* Fixed ROM */
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1") AM_WRITE( videoram_write )				/* Banked ROM */
-	AM_RANGE(0xc000, 0xffff) AM_RAM
+static ADDRESS_MAP_START( systeme_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_ROM								/* Fixed ROM */
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)						/* Banked ROM */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( io_map, AS_IO, 8, systeme_state )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-
-	AM_RANGE(0x7b, 0x7b) AM_DEVWRITE_LEGACY( "sn1", sn76496_w )
-	AM_RANGE(0x7e, 0x7f) AM_DEVWRITE_LEGACY( "sn2", sn76496_w )
-	AM_RANGE(0x7e, 0x7e) AM_DEVREAD( "vdp1", sega315_5124_device, vcount_read )
-	AM_RANGE(0xba, 0xba) AM_DEVREADWRITE( "vdp1", sega315_5124_device, vram_read, vram_write )
-	AM_RANGE(0xbb, 0xbb) AM_DEVREADWRITE( "vdp1", sega315_5124_device, register_read, register_write )
-	AM_RANGE(0xbe, 0xbe) AM_DEVREADWRITE( "vdp2", sega315_5124_device, vram_read, vram_write )
-	AM_RANGE(0xbf, 0xbf) AM_DEVREADWRITE( "vdp2", sega315_5124_device, register_read, register_write )
-	AM_RANGE(0xe0, 0xe0) AM_READ_PORT( "e0" )
-	AM_RANGE(0xe1, 0xe1) AM_READ_PORT( "e1" )
-	AM_RANGE(0xe2, 0xe2) AM_READ_PORT( "e2" )
-	AM_RANGE(0xf2, 0xf2) AM_READ_PORT( "f2" )
-	AM_RANGE(0xf3, 0xf3) AM_READ_PORT( "f3" )
-	AM_RANGE(0xf7, 0xf7) AM_WRITE( bank_write )
-ADDRESS_MAP_END
-
-
-static ADDRESS_MAP_START( vdp1_map, AS_0, 8, systeme_state )
-	AM_RANGE( 0x0000, 0x3fff ) AM_RAMBANK("vdp1_bank")
-ADDRESS_MAP_END
-
-
-static ADDRESS_MAP_START( vdp2_map, AS_0, 8, systeme_state )
-	AM_RANGE( 0x0000, 0x3fff ) AM_RAMBANK("vdp2_bank")
-ADDRESS_MAP_END
-
-
-WRITE8_MEMBER( systeme_state::videoram_write )
+static WRITE8_HANDLER( segasyse_videoram_w )
 {
-	if (m_f7_bank_value & 0x20)
+	if (f7_bank_value & 0x20)
 	{ // to vdp1 vram
-		if (m_f7_bank_value & 0x80)
+		if (f7_bank_value & 0x80)
 		{
-			m_vdp1_vram->base()[offset] = data;
+			vdp1_vram_bank0[offset] = data;
 		}
 		else
 		{
-			m_vdp1_vram->base()[0x4000 + offset] = data;
+			vdp1_vram_bank1[offset] = data;
 		}
 	}
 	else
 	{ // to vdp2 vram
-		if (m_f7_bank_value & 0x40)
+		if (f7_bank_value & 0x40)
 		{
-			m_vdp2_vram->base()[offset] = data;
+			vdp2_vram_bank0[offset] = data;
 		}
 		else
 		{
-			m_vdp2_vram->base()[0x4000 + offset] = data;
+			vdp2_vram_bank1[offset] = data;
 		}
 	}
 
 }
 
-
-WRITE8_MEMBER( systeme_state::bank_write )
+static WRITE8_HANDLER( systeme_bank_w )
 {
-	m_f7_bank_value = data;
+	int rombank;
+	f7_bank_value = data;
 
-	memory_set_bankptr(machine(), "vdp1_bank", m_vdp1_vram->base() + ( ( data & 0x80 ) ? 0x4000 : 0 ) );
-	memory_set_bankptr(machine(), "vdp2_bank", m_vdp2_vram->base() + ( ( data & 0x40 ) ? 0x4000 : 0 ) );
+	rombank = data & 0x0f;
 
-	memory_set_bank(machine(), "bank1", data & 0x0f);
+	segae_set_vram_banks(data);
+
+	//memcpy(sms_rom+0x8000, memory_region(space->machine, "user1")+0x10000+rombank*0x4000, 0x4000);
+	memory_set_bank(space->machine, 1, rombank);
+
 }
 
 
-void systeme_state::driver_start()
+static void init_ports_systeme(running_machine *machine)
 {
-	/* Allocate video RAM */
-	m_vdp1_vram = machine().region_alloc("vdp1_vram", 2 * 0x4000, 1, ENDIANNESS_LITTLE);
-	m_vdp2_vram = machine().region_alloc("vdp2_vram", 2 * 0x4000, 1, ENDIANNESS_LITTLE);
+	/* INIT THE PORTS *********************************************************************************************/
 
-	memory_configure_bank(machine(), "bank1", 0, 16, machine().region("maincpu")->base() + 0x10000, 0x4000);
+	const address_space *io = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	const device_config *sn1 = devtag_get_device(machine, "sn1");
+	const device_config *sn2 = devtag_get_device(machine, "sn2");
 
-	if ( !strcmp( m_system->name, "ridleofp" ) )
-	{
-		m_maincpu->memory().space(AS_IO)->install_read_handler(0xf8, 0xf8, read8_delegate(FUNC(systeme_state::ridleofp_port_f8_read), this));
-		m_maincpu->memory().space(AS_IO)->install_write_handler(0xfa, 0xfa, write8_delegate(FUNC(systeme_state::ridleofp_port_fa_write), this));
-	}
-	else if ( !strcmp( m_system->name, "hangonjr" ) )
-	{
-		m_maincpu->memory().space(AS_IO)->install_read_handler(0xf8, 0xf8, read8_delegate(FUNC(systeme_state::hangonjr_port_f8_read), this));
-		m_maincpu->memory().space(AS_IO)->install_write_handler(0xfa, 0xfa, write8_delegate(FUNC(systeme_state::hangonjr_port_fa_write), this));
-	}
-	else if ( !strcmp( m_system->name, "opaopa" ) )
-	{
-		mc8123_decrypt_rom(machine(), "maincpu", "user1", "bank1", 8);
-	}
-	else if ( !strcmp( m_system->name, "fantzn2" ) )
-	{
-		mc8123_decrypt_rom(machine(), "maincpu", "user1", NULL, 0);
-	}
-	else if ( !strcmp( m_system->name, "astrofl" ) )
-	{
-		sega_315_5177_decode(machine(), "maincpu");
-	}
+	memory_install_write8_device_handler(io, sn2, 0x7b, 0x7b, 0, 0, sn76496_w);
+	memory_install_write8_device_handler(io, sn1, 0x7e, 0x7f, 0, 0, sn76496_w);
+	memory_install_read8_handler        (io, 0x7e, 0x7e, 0, 0, sms_vcounter_r);
+
+	memory_install_readwrite8_handler(io, 0xba, 0xba, 0, 0, sms_vdp_data_r, sms_vdp_data_w);
+	memory_install_readwrite8_handler(io, 0xbb, 0xbb, 0, 0, sms_vdp_ctrl_r, sms_vdp_ctrl_w);
+
+	memory_install_readwrite8_handler(io, 0xbe, 0xbe, 0, 0, sms_vdp_2_data_r, sms_vdp_2_data_w);
+	memory_install_readwrite8_handler(io, 0xbf, 0xbf, 0, 0, sms_vdp_2_ctrl_r, sms_vdp_2_ctrl_w);
+
+	memory_install_read_port_handler     (io, 0xe0, 0xe0, 0, 0, "e0");
+	memory_install_read_port_handler     (io, 0xe1, 0xe1, 0, 0, "e1");
+	memory_install_read_port_handler     (io, 0xe2, 0xe2, 0, 0, "e2");
+	memory_install_read_port_handler     (io, 0xf2, 0xf2, 0, 0, "f2");
+	memory_install_read_port_handler     (io, 0xf3, 0xf3, 0, 0, "f3");
+
+	memory_install_write8_handler    (io, 0xf7, 0xf7, 0, 0, systeme_bank_w );
 }
 
 
-void systeme_state::machine_start()
+
+static void init_systeme_map(running_machine *machine)
 {
-	save_item(NAME(m_f7_bank_value));
-	save_item(NAME(m_port_fa_last));
-	save_item(NAME(m_port_to_read));
-	save_item(NAME(m_last1));
-	save_item(NAME(m_last2));
-	save_item(NAME(m_diff1));
-	save_item(NAME(m_diff2));
+	memory_configure_bank(machine, 1, 0, 16, memory_region(machine, "maincpu") + 0x10000, 0x4000);
+
+	/* alternate way of accessing video ram */
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0xbfff, 0, 0, segasyse_videoram_w);
+
+	/* main ram area */
+	sms_mainram = auto_alloc_array(machine, UINT8, 0x4000);
+	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc000, 0xffff, 0, 0, (read8_space_func)SMH_BANK(2), (write8_space_func)SMH_BANK(2));
+	memory_set_bankptr(machine,  2, sms_mainram );
+	memset(sms_mainram,0x00,0x4000);
+
+	init_ports_systeme(machine);
 }
 
-
-/*- Hang On Jr. Specific -*/
-READ8_MEMBER( systeme_state::hangonjr_port_f8_read )
+DRIVER_INIT( segasyse )
 {
-	UINT8 temp;
-
-	temp = 0;
-
-	if (m_port_fa_last == 0x08)  /* 0000 1000 */ /* Angle */
-		temp = input_port_read(machine(), "IN2");
-
-	if (m_port_fa_last == 0x09)  /* 0000 1001 */ /* Accel */
-		temp = input_port_read(machine(), "IN3");
-
-	return temp;
-}
-
-WRITE8_MEMBER( systeme_state::hangonjr_port_fa_write)
-{
-	/* Seems to write the same pattern again and again bits ---- xx-x used */
-	m_port_fa_last = data;
-}
-
-/*- Riddle of Pythagoras Specific -*/
-
-READ8_MEMBER( systeme_state::ridleofp_port_f8_read )
-{
-	switch (m_port_to_read)
-	{
-		default:
-		case 0:	return m_diff1 & 0xff;
-		case 1:	return m_diff1 >> 8;
-		case 2:	return m_diff2 & 0xff;
-		case 3:	return m_diff2 >> 8;
-	}
-}
-
-WRITE8_MEMBER( systeme_state::ridleofp_port_fa_write )
-{
-	/* 0x10 is written before reading the dial (hold counters?) */
-	/* 0x03 is written after reading the dial (reset counters?) */
-
-	m_port_to_read = (data & 0x0c) >> 2;
-
-	if (data & 1)
-	{
-		int curr = input_port_read(machine(), "IN2");
-		m_diff1 = ((curr - m_last1) & 0x0fff) | (curr & 0xf000);
-		m_last1 = curr;
-	}
-	if (data & 2)
-	{
-		int curr = input_port_read(machine(), "IN3") & 0x0fff;
-		m_diff2 = ((curr - m_last2) & 0x0fff) | (curr & 0xf000);
-		m_last2 = curr;
-	}
+	init_systeme_map(machine);
+	DRIVER_INIT_CALL(hazemd_segasyse);
 }
 
 
@@ -549,29 +422,80 @@ WRITE8_MEMBER( systeme_state::ridleofp_port_fa_write )
     (in fact, the only playable game that use it is
     Riddle of Pythagoras) */
 
-static INPUT_PORTS_START( segae_joy1_generic )
+#define SEGA_COIN_A \
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2,3,4") \
+	PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) ) \
+	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) ) \
+	PORT_DIPSETTING(    0x09, DEF_STR( 2C_1C ) ) \
+	PORT_DIPSETTING(    0x05, "2 Coins/1 Credit 5/3 6/4" ) \
+	PORT_DIPSETTING(    0x04, "2 Coins/1 Credit, 4/3" ) \
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) ) \
+	PORT_DIPSETTING(    0x03, "1 Coin/1 Credit, 5/6" ) \
+	PORT_DIPSETTING(    0x02, "1 Coin/1 Credit, 4/5" ) \
+	PORT_DIPSETTING(    0x01, "1 Coin/1 Credit, 2/3" ) \
+	PORT_DIPSETTING(    0x06, DEF_STR( 2C_3C ) ) \
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_2C ) ) \
+	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) ) \
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) ) \
+	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) ) \
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+
+#define SEGA_COIN_B \
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:5,6,7,8") \
+	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) ) \
+	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) ) \
+	PORT_DIPSETTING(    0x90, DEF_STR( 2C_1C ) ) \
+	PORT_DIPSETTING(    0x50, "2 Coins/1 Credit 5/3 6/4" ) \
+	PORT_DIPSETTING(    0x40, "2 Coins/1 Credit, 4/3" ) \
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) ) \
+	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit, 5/6" ) \
+	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit, 4/5" ) \
+	PORT_DIPSETTING(    0x10, "1 Coin/1 Credit, 2/3" ) \
+	PORT_DIPSETTING(    0x60, DEF_STR( 2C_3C ) ) \
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ) ) \
+	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) ) \
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) ) \
+	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) ) \
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
+
+
+static INPUT_PORTS_START( transfrm ) /* Used By Transformer */
 	PORT_START("f2")	/* Read from Port 0xf2 */
-	SEGA_COINAGE_NO_FREE_LOC(SW1)
+	SEGA_COIN_A
+	SEGA_COIN_B
 
 	PORT_START("f3")	/* Read from Port 0xf3 */
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SW2:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW2:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SW2:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
+	PORT_DIPNAME( 0x01, 0x00, "1 Player Only" ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPSETTING(    0x00, "Infinite (Cheat)")
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, "10k, 30k, 50k and 70k" )
+	PORT_DIPSETTING(    0x30, "20k, 60k, 100k and 140k"  )
+	PORT_DIPSETTING(    0x10, "30k, 80k, 130k and 180k" )
+	PORT_DIPSETTING(    0x00, "50k, 150k and 250k" )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
 
 	PORT_START("e0")	/* Read from Port 0xe0 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
 	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_START1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_START2 ) // spare
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_START2 )
 
 	PORT_START("e1")	/* Read from Port 0xe1 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_JOYSTICK_UP  ) PORT_8WAY
@@ -584,37 +508,92 @@ static INPUT_PORTS_START( segae_joy1_generic )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
 
 	PORT_START("e2")	/* Read from Port 0xe2 */
-	//PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( segae_joy2_generic )
+static INPUT_PORTS_START( fantzn2 ) /* Used By Fantasy Zone 2 */
 	PORT_START("f2")	/* Read from Port 0xf2 */
-	SEGA_COINAGE_NO_FREE_LOC(SW1)
+	SEGA_COIN_A
+	SEGA_COIN_B
 
 	PORT_START("f3")	/* Read from Port 0xf3 */
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SW2:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW2:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SW2:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:1" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPNAME( 0x30, 0x30, "Timer" ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, "90" )	/* 210 seconds */
+	PORT_DIPSETTING(    0x30, "80" )	/* 180 seconds */
+	PORT_DIPSETTING(    0x10, "70" )	/* 150 seconds */
+	PORT_DIPSETTING(    0x00, "60" )	/* 120 seconds */
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
 
 	PORT_START("e0")	/* Read from Port 0xe0 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
 	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_START1 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_START2 )
+
+	PORT_START("e1")	/* Read from Port 0xe1 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_JOYSTICK_UP  ) PORT_8WAY
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_JOYSTICK_DOWN ) PORT_8WAY
+	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_JOYSTICK_LEFT ) PORT_8WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_JOYSTICK_RIGHT ) PORT_8WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_BUTTON2 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
+
+	PORT_START("e2")	/* Read from Port 0xe2 */
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( opaopa ) /* Used By Opa Opa */
+	PORT_START("f2")	/* Read from Port 0xf2 */
+	SEGA_COIN_A
+	SEGA_COIN_B
+
+	PORT_START("f3")	/* Read from Port 0xf3 */
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x30, "0x30 Unknown" )
+	PORT_DIPSETTING(    0x20, "0x20 Unknown" )
+	PORT_DIPSETTING(    0x10, "0x10 Unknown" )
+	PORT_DIPSETTING(    0x00, "0x00 Unknown" )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+
+	PORT_START("e0")	/* Read from Port 0xe0 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
+	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_START1 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_START2 )
 
@@ -639,19 +618,73 @@ static INPUT_PORTS_START( segae_joy2_generic )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( segae_hangonjr_generic )
+
+static INPUT_PORTS_START( tetrisse ) /* Used By Tetris */
 	PORT_START("f2")	/* Read from Port 0xf2 */
-	SEGA_COINAGE_NO_FREE_LOC(SW1)
+	SEGA_COIN_A
+	SEGA_COIN_B
 
 	PORT_START("f3")	/* Read from Port 0xf3 */
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SW2:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW2:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SW2:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
+	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:1" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:3" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW2:4" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" )
+
+	PORT_START("e0")	/* Read from Port 0xe0 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
+	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_START1 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_START2 )
+
+	PORT_START("e1")	/* Read from Port 0xe1 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_JOYSTICK_UP  ) PORT_8WAY
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_JOYSTICK_DOWN ) PORT_8WAY
+	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_JOYSTICK_LEFT ) PORT_8WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_JOYSTICK_RIGHT ) PORT_8WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_BUTTON2 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
+
+	PORT_START("e2")	/* Read from Port 0xe2 */
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( hangonjr ) /* Used By Hang On Jr */
+	PORT_START("f2")	/* Read from Port 0xf2 */
+	SEGA_COIN_A
+	SEGA_COIN_B
+
+	PORT_START("f3")	/* Read from Port 0xf3 */
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:1") /* Supose to be demo sound but has no effect */
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x06, 0x06, "Enemies" ) PORT_DIPLOCATION("SW2:2,3")
+	PORT_DIPSETTING(    0x06, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:4,5")
+	PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW2:6" )	/*  These three dips seems to be unused */
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" )
 
 	PORT_START("e0")	/* Read from Port 0xe0 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
@@ -659,29 +692,21 @@ static INPUT_PORTS_START( segae_hangonjr_generic )
 	PORT_SERVICE_NO_TOGGLE(0x04, IP_ACTIVE_LOW)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_START1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
 	PORT_START("e1")	/* Read from Port 0xe1 */
-	//PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
 	PORT_START("e2")	/* Read from Port 0xe2 */
-	//PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
 
 	PORT_START("IN2")	/* Read from Port 0xf8 */
 	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_MINMAX(0x20,0xe0) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
@@ -690,49 +715,52 @@ static INPUT_PORTS_START( segae_hangonjr_generic )
 	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(20)
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( segae_ridleofp_generic )
+static INPUT_PORTS_START( ridleofp ) /* Used By Riddle Of Pythagoras */
 	PORT_START("f2")	/* Read from Port 0xf2 */
-	SEGA_COINAGE_EASY_FREE_LOC(SW1)
+	SEGA_COIN_A
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	SEGA_COIN_B
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 
 	PORT_START("f3")	/* Read from Port 0xf3 */
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SW2:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SW2:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SW2:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SW2:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
+	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x02, "4" )
+	PORT_DIPSETTING(    0x01, "5" )
+	PORT_DIPSETTING(    0x00, "100 (Cheat)")
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:3" )
+	PORT_DIPNAME( 0x08, 0x08, "Ball Speed" ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )  // difficult (on datasheet)
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW2:5" )
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:6,7") /* Values came from an original dipsheet */
+	PORT_DIPSETTING(    0x60, "50K 100K 200K 1M 2M 10M 20M 50M" )
+	PORT_DIPSETTING(    0x40, "100K 200K 1M 2M 10M 20M 50M" )
+	PORT_DIPSETTING(    0x20, "200K 1M 2M 10M 20M 50M" )
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" )
 
 	PORT_START("e0")	/* Read from Port 0xe0 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_COIN2 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_SERVICE1 )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_START1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED ) // Would Be IPT_START2 but the code doesn't use it
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN ) // Would Be IPT_START2 but the code doesn't use it
 
-	PORT_START("e1")	/* Read from Port 0xe1 */
-	//PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
+	PORT_START("e1")	/* Port 0xe1 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 
 	PORT_START("e2")	/* Read from Port 0xe2 */
-	//PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x02, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x04, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x08, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x10, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x20, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x40, IP_ACTIVE_LOW,  IPT_UNUSED )
-	//PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNUSED )
 
 	PORT_START("IN2")	/* Read from Port 0xf8 */
 	PORT_BIT( 0x0fff, 0x0000, IPT_DIAL ) PORT_SENSITIVITY(60) PORT_KEYDELTA(125)
@@ -747,147 +775,6 @@ static INPUT_PORTS_START( segae_ridleofp_generic )
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW,  IPT_UNKNOWN )
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW,  IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW,  IPT_UNKNOWN )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( transfrm ) /* Used By Transformer */
-	PORT_INCLUDE( segae_joy1_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	PORT_DIPNAME( 0x01, 0x00, "1 Player Only" ) PORT_DIPLOCATION("SW2:1")
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x08, "4" )
-	PORT_DIPSETTING(    0x04, "5" )
-	PORT_DIPSETTING(    0x00, "Infinite (Cheat)")
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(    0x20, "10k, 30k, 50k and 70k" )
-	PORT_DIPSETTING(    0x30, "20k, 60k, 100k and 140k"  )
-	PORT_DIPSETTING(    0x10, "30k, 80k, 130k and 180k" )
-	PORT_DIPSETTING(    0x00, "50k, 150k and 250k" )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
-	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( fantzn2 ) /* Used By Fantasy Zone 2 */
-	PORT_INCLUDE( segae_joy1_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	//"SW2:1" unused
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x08, "4" )
-	PORT_DIPSETTING(    0x04, "5" )
-	PORT_DIPNAME( 0x30, 0x30, "Timer" ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(    0x20, "90" )	/* 210 seconds */
-	PORT_DIPSETTING(    0x30, "80" )	/* 180 seconds */
-	PORT_DIPSETTING(    0x10, "70" )	/* 150 seconds */
-	PORT_DIPSETTING(    0x00, "60" )	/* 120 seconds */
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
-	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( opaopa ) /* Used By Opa Opa */
-	PORT_INCLUDE( segae_joy2_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	//"SW2:1" unused
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
-	PORT_DIPSETTING(    0x00, "2" )
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x08, "4" )
-	PORT_DIPSETTING(    0x04, "5" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5,6") // Bonus life egg appearance
-	PORT_DIPSETTING(    0x20, "25k, 45k and 70k" )
-	PORT_DIPSETTING(    0x30, "40k, 60k and 90k" )
-	PORT_DIPSETTING(    0x10, "50k and 90k" )
-	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
-	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( tetrisse ) /* Used By Tetris */
-	PORT_INCLUDE( segae_joy1_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	//"SW2:1" unused
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	//"SW2:3" unused
-	//"SW2:4" unused
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	//"SW2:7" unused
-	//"SW2:8" unused
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( hangonjr ) /* Used By Hang On Jr */
-	PORT_INCLUDE( segae_hangonjr_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	//"SW2:1" unused //Japanese manual says "DIP SW 2:1 / Sounds After Game Over / Off=No / On=Yes", but no effect
-	PORT_DIPNAME( 0x06, 0x06, "Enemies" ) PORT_DIPLOCATION("SW2:2,3") // Enemies appearance frequency
-	PORT_DIPSETTING(    0x06, DEF_STR( Easy ) ) // Japanese manual says "Normal"
-	PORT_DIPSETTING(    0x04, DEF_STR( Medium ) )  //  "Medium" = "Normal" * 130%
-	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )    //    "Hard" = "Normal" * 160%
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) ) // "Hardest" = "Normal" * 190%
-	PORT_DIPNAME( 0x18, 0x18, "Time Adj." ) PORT_DIPLOCATION("SW2:4,5") // time limit per stage //   Stage  1  2  3  4  5  6  7  8  9 10
-	PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )                         // Japanese manual says // Normal  65 57 55 55 55 65 55 56 55 55
-	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )                                               // Medium  65 54 56 55 55 65 54 55 55 55
-	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )                                                 // Hard    60 56 56 56 55 60 56 56 55 55
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )                                              // Hardest 60 54 56 55 55 60 54 55 55 55
-	//"SW2:6" unused // Japanese manual says "DIP SW 2:6,7,8 NOT USED"
-	//"SW2:7" unused
-	//"SW2:8" unused
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( ridleofp ) /* Used By Riddle Of Pythagoras */
-	PORT_INCLUDE( segae_ridleofp_generic )
-
-	PORT_MODIFY("f3")	/* Read from Port 0xf3 */
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:1,2")
-	PORT_DIPSETTING(    0x03, "3" )
-	PORT_DIPSETTING(    0x02, "4" )
-	PORT_DIPSETTING(    0x01, "5" )
-	PORT_DIPSETTING(    0x00, "100 (Cheat)")
-	//"SW2:3" unused
-	PORT_DIPNAME( 0x08, 0x08, "Ball Speed" ) PORT_DIPLOCATION("SW2:4")
-	PORT_DIPSETTING(    0x08, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Difficult ) )  // "Difficult" on datasheet, not "Hard"
-	//"SW2:5" unused
-	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:6,7") /* Values came from an original dipsheet */
-	PORT_DIPSETTING(    0x60, "50K 100K 200K 1M 2M 10M 20M 50M" )
-	PORT_DIPSETTING(    0x40, "100K 200K 1M 2M 10M 20M 50M" )
-	PORT_DIPSETTING(    0x20, "200K 1M 2M 10M 20M 50M" )
-	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
-	//"SW2:8" unused
 INPUT_PORTS_END
 
 
@@ -976,93 +863,149 @@ ROM_START( opaopa )
 	ROM_LOAD( "317-0042.key",  0x0000, 0x2000, CRC(d6312538) SHA1(494ac7f080775c21dc7d369e6ea78f3299e6975a) )
 ROM_END
 
+static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+ADDRESS_MAP_END
 
-WRITE_LINE_MEMBER( systeme_state::int_callback )
-{
-	m_maincpu->set_input_line(0, state);
-}
+static MACHINE_DRIVER_START( systeme )
+	MDRV_CPU_ADD("maincpu", Z80, 10738600/2) /* correct?  */
+	MDRV_CPU_PROGRAM_MAP(systeme_map)
+	MDRV_CPU_IO_MAP(io_map)
 
-
-static const sega315_5124_interface _315_5124_1_intf =
-{
-	false,
-	"screen",
-	DEVCB_NULL,
-	DEVCB_NULL,
-};
+	/* IRQ handled via the timers */
+	MDRV_MACHINE_RESET(systeme)
 
 
-static const sega315_5124_interface _315_5124_2_intf =
-{
-	false,
-	"screen",
-	DEVCB_DRIVER_LINE_MEMBER(systeme_state, int_callback),
-	DEVCB_NULL,
-};
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)) // Vblank handled manually.
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
+	MDRV_SCREEN_SIZE(256, 256)
+//  MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 223)
+	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 191)
 
 
-static SCREEN_UPDATE_RGB32( systeme )
-{
-	systeme_state *state = screen.machine().driver_data<systeme_state>();
-	bitmap_rgb32 &vdp1_bitmap = state->m_vdp1->get_bitmap();
-	bitmap_rgb32 &vdp2_bitmap = state->m_vdp2->get_bitmap();
-	bitmap_ind8 &vdp2_y1 = state->m_vdp2->get_y1_bitmap();
+	MDRV_PALETTE_LENGTH(0x200)
 
-	for( int y = cliprect.min_y; y <= cliprect.max_y; y++ )
-	{
-		UINT32 *dest_ptr = &bitmap.pix32(y);
-		UINT32 *vdp1_ptr = &vdp1_bitmap.pix32(y);
-		UINT32 *vdp2_ptr = &vdp2_bitmap.pix32(y);
-		UINT8 *y1_ptr = &vdp2_y1.pix8(y);
-
-		for ( int x = cliprect.min_x; x <= cliprect.max_x; x++ )
-		{
-			dest_ptr[x] = ( y1_ptr[x] ) ? vdp1_ptr[x] : vdp2_ptr[x];
-//dest_ptr[x] = y1_ptr[x] ? 0xFF0000 : 0x00FF00;
-		}
-	}
-
-	return 0;
-}
-
-
-static MACHINE_CONFIG_START( systeme, systeme_state )
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_10_738635MHz/2) /* Z80B @ 5.3693Mhz */
-	MCFG_CPU_PROGRAM_MAP(systeme_map)
-	MCFG_CPU_IO_MAP(io_map)
-
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(XTAL_10_738635MHz/2, \
-		SEGA315_5124_WIDTH , SEGA315_5124_LBORDER_START + SEGA315_5124_LBORDER_WIDTH, SEGA315_5124_LBORDER_START + SEGA315_5124_LBORDER_WIDTH + 256, \
-		SEGA315_5124_HEIGHT_NTSC, SEGA315_5124_TBORDER_START + SEGA315_5124_NTSC_192_TBORDER_HEIGHT, SEGA315_5124_TBORDER_START + SEGA315_5124_NTSC_192_TBORDER_HEIGHT + 192)
-	MCFG_SCREEN_UPDATE_STATIC( systeme )	/* Combines and copies a bitmap */
-
-	MCFG_PALETTE_LENGTH(SEGA315_5124_PALETTE_SIZE)
-	MCFG_PALETTE_INIT(sega315_5124)
-
-	MCFG_SEGA315_5124_ADD("vdp1", _315_5124_1_intf)
-	MCFG_DEVICE_ADDRESS_MAP(AS_0, vdp1_map)
-
-	MCFG_SEGA315_5124_ADD("vdp2", _315_5124_2_intf)
-	MCFG_DEVICE_ADDRESS_MAP(AS_0, vdp2_map)
+	MDRV_VIDEO_START(sms)
+	MDRV_VIDEO_UPDATE(systeme) /* Copies a bitmap */
+	MDRV_VIDEO_EOF(systeme) /* Used to Sync the timing */
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SEGAPSG, XTAL_10_738635MHz/3)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("sn1", SN76496, 3579540)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("sn2", SEGAPSG, XTAL_10_738635MHz/3)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn2", SN76496, 3579540)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
-//    YEAR, NAME,     PARENT,   MACHINE, INPUT,    INIT, MONITOR,COMPANY,FULLNAME,FLAGS
-GAME( 1985, hangonjr, 0,        systeme, hangonjr, 0,    ROT0,   "Sega", "Hang-On Jr.", 0 )
-GAME( 1986, transfrm, 0,        systeme, transfrm, 0,    ROT0,   "Sega", "Transformer", 0 )
-GAME( 1986, astrofl,  transfrm, systeme, transfrm, 0,    ROT0,   "Sega", "Astro Flash (Japan)", 0 )
-GAME( 1986, ridleofp, 0,        systeme, ridleofp, 0,    ROT90,  "Sega / Nasco", "Riddle of Pythagoras (Japan)", 0 )
-GAME( 1987, opaopa,   0,        systeme, opaopa,   0,    ROT0,   "Sega", "Opa Opa (MC-8123, 317-0042)", 0 )
-GAME( 1988, fantzn2,  0,        systeme, fantzn2,  0,    ROT0,   "Sega", "Fantasy Zone 2 (MC-8123, 317-0057)", 0 )
-GAME( 1988, tetrisse, 0,        systeme, tetrisse, 0,    ROT0,   "Sega", "Tetris (Japan, System E)", 0 )
+/*- Hang On Jr. Specific -*/
+static UINT8 port_fa_last;		/* Last thing written to port 0xfa (control related) */
+
+static READ8_HANDLER (segae_hangonjr_port_f8_r)
+{
+	UINT8 temp;
+
+	temp = 0;
+
+	if (port_fa_last == 0x08)  /* 0000 1000 */ /* Angle */
+		temp = input_port_read(space->machine, "IN2");
+
+	if (port_fa_last == 0x09)  /* 0000 1001 */ /* Accel */
+		temp = input_port_read(space->machine, "IN3");
+
+	return temp;
+}
+
+static WRITE8_HANDLER (segae_hangonjr_port_fa_w)
+{
+	/* Seems to write the same pattern again and again bits ---- xx-x used */
+	port_fa_last = data;
+}
+
+/*- Riddle of Pythagoras Specific -*/
+
+static int port_to_read,last1,last2,diff1,diff2;
+
+static READ8_HANDLER (segae_ridleofp_port_f8_r)
+{
+	switch (port_to_read)
+	{
+		default:
+		case 0:	return diff1 & 0xff;
+		case 1:	return diff1 >> 8;
+		case 2:	return diff2 & 0xff;
+		case 3:	return diff2 >> 8;
+	}
+}
+
+static WRITE8_HANDLER (segae_ridleofp_port_fa_w)
+{
+	/* 0x10 is written before reading the dial (hold counters?) */
+	/* 0x03 is written after reading the dial (reset counters?) */
+
+	port_to_read = (data & 0x0c) >> 2;
+
+	if (data & 1)
+	{
+		int curr = input_port_read(space->machine, "IN2");
+		diff1 = ((curr - last1) & 0x0fff) | (curr & 0xf000);
+		last1 = curr;
+	}
+	if (data & 2)
+	{
+		int curr = input_port_read(space->machine, "IN3") & 0x0fff;
+		diff2 = ((curr - last2) & 0x0fff) | (curr & 0xf000);
+		last2 = curr;
+	}
+}
+
+static DRIVER_INIT( ridleofp )
+{
+	DRIVER_INIT_CALL(segasyse);
+
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, segae_ridleofp_port_f8_r);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xfa, 0xfa, 0, 0, segae_ridleofp_port_fa_w);
+}
+
+
+static DRIVER_INIT( hangonjr )
+{
+	DRIVER_INIT_CALL(segasyse);
+
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xf8, 0xf8, 0, 0, segae_hangonjr_port_f8_r);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xfa, 0xfa, 0, 0, segae_hangonjr_port_fa_w);
+}
+
+static DRIVER_INIT( opaopa )
+{
+	DRIVER_INIT_CALL(segasyse);
+
+	mc8123_decrypt_rom(machine, "maincpu", "user1", 1, 8);
+}
+
+static DRIVER_INIT( fantzn2 )
+{
+	DRIVER_INIT_CALL(segasyse);
+
+	mc8123_decrypt_rom(machine, "maincpu", "user1", 0, 0);
+}
+
+static DRIVER_INIT( astrofl )
+{
+	DRIVER_INIT_CALL(segasyse);
+
+	astrofl_decode(machine, "maincpu");
+}
+
+GAME( 1985, hangonjr, 0,        systeme, hangonjr, hangonjr, ROT0,  "Sega", "Hang-On Jr.", 0 )
+GAME( 1986, transfrm, 0,        systeme, transfrm, segasyse, ROT0,  "Sega", "Transformer", 0 )
+GAME( 1986, astrofl,  transfrm, systeme, transfrm, astrofl,  ROT0,  "Sega", "Astro Flash (Japan)", 0 )
+GAME( 1986, ridleofp, 0,        systeme, ridleofp, ridleofp, ROT90, "Sega / Nasco", "Riddle of Pythagoras (Japan)", 0 )
+GAME( 1987, opaopa,   0,        systeme, opaopa,   opaopa,   ROT0,  "Sega", "Opa Opa (MC-8123, 317-0042)", 0 )
+GAME( 1988, fantzn2,  0,        systeme, fantzn2,  fantzn2,  ROT0,  "Sega", "Fantasy Zone 2 (MC-8123, 317-0057)", 0 )
+GAME( 1988, tetrisse, 0,        systeme, tetrisse, segasyse, ROT0,  "Sega", "Tetris (Japan, System E)", 0 )
 

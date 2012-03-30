@@ -4,6 +4,11 @@
   Desert Assault     (c) 1991 Data East Corporation (USA 4 players)
   Desert Assault     (c) 1991 Data East Corporation (USA 2 players)
 
+  I'm not sure if one of the alpha blending effects is correct (mode 0x8000,
+  the usual mode 0x4000 should be correct).  It may be some kind of orthogonal
+  priority effect where it should cut a hole in other higher priority sprites
+  to reveal a non-alpha'd hole, or alpha against a further back tilemap.
+
   Emulation by Bryan McPhail, mish@tendril.co.uk
 
 
@@ -94,7 +99,7 @@ Stephh's notes (based on the games M68000 code and some tests) :
       * BUTTON2n : "nuke"
 
 
-3) 'dassault4'
+3) 'dassaul4'
 
   - always 4 players :
 
@@ -116,37 +121,39 @@ Dip locations verified with US conversion kit manual.
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
-#include "includes/dassault.h"
+#include "deco16ic.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "video/deco16ic.h"
-#include "video/decocomn.h"
-#include "video/decospr.h"
+
+VIDEO_START( dassault );
+VIDEO_UPDATE( dassault );
+
+static UINT16 *dassault_ram,*shared_ram,*dassault_ram2;
 
 /**********************************************************************************/
 
 static READ16_HANDLER( dassault_control_r )
 {
-	switch (offset << 1)
+	switch (offset<<1)
 	{
 		case 0: /* Player 1 & Player 2 joysticks & fire buttons */
-			return input_port_read(space->machine(), "P1_P2");
+			return input_port_read(space->machine, "P1_P2");
 
 		case 2: /* Player 3 & Player 4 joysticks & fire buttons */
-			return input_port_read(space->machine(), "P3_P4");
+			return input_port_read(space->machine, "P3_P4");
 
 		case 4: /* Dip 1 (stored at 0x3f8035) */
-			return input_port_read(space->machine(), "DSW1");
+			return input_port_read(space->machine, "DSW1");
 
 		case 6: /* Dip 2 (stored at 0x3f8034) */
-			return input_port_read(space->machine(), "DSW2");
+			return input_port_read(space->machine, "DSW2");
 
 		case 8: /* VBL, Credits */
-			return input_port_read(space->machine(), "SYSTEM");
+			return input_port_read(space->machine, "SYSTEM");
 	}
 
 	return 0xffff;
@@ -154,113 +161,107 @@ static READ16_HANDLER( dassault_control_r )
 
 static WRITE16_HANDLER( dassault_control_w )
 {
-	coin_counter_w(space->machine(), 0, data & 1);
-	if (data & 0xfffe)
-		logerror("Coin cointrol %04x\n", data);
+	coin_counter_w(0,data&1);
+	if (data&0xfffe)
+		logerror("Coin cointrol %04x\n",data);
 }
 
 static READ16_HANDLER( dassault_sub_control_r )
 {
-	return input_port_read(space->machine(), "VBLANK1");
+	return input_port_read(space->machine, "VBLANK1");
 }
 
 static WRITE16_HANDLER( dassault_sound_w )
 {
-	dassault_state *state = space->machine().driver_data<dassault_state>();
 	soundlatch_w(space, 0, data & 0xff);
-	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE); /* IRQ1 */
+	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE); /* IRQ1 */
 }
 
 /* The CPU-CPU irq controller is overlaid onto the end of the shared memory */
 static READ16_HANDLER( dassault_irq_r )
 {
-	dassault_state *state = space->machine().driver_data<dassault_state>();
-	switch (offset)
-	{
-	case 0: device_set_input_line(state->m_maincpu, 5, CLEAR_LINE); break;
-	case 1: device_set_input_line(state->m_subcpu, 6, CLEAR_LINE); break;
+	switch (offset) {
+		case 0: cputag_set_input_line(space->machine, "maincpu", 5, CLEAR_LINE); break;
+		case 1: cputag_set_input_line(space->machine, "sub", 6, CLEAR_LINE); break;
 	}
-	return state->m_shared_ram[(0xffc / 2) + offset]; /* The values probably don't matter */
+	return shared_ram[(0xffc/2)+offset]; /* The values probably don't matter */
 }
 
 static WRITE16_HANDLER( dassault_irq_w )
 {
-	dassault_state *state = space->machine().driver_data<dassault_state>();
 	switch (offset)
 	{
-	case 0: device_set_input_line(state->m_maincpu, 5, ASSERT_LINE); break;
-	case 1: device_set_input_line(state->m_subcpu, 6, ASSERT_LINE); break;
+		case 0: cputag_set_input_line(space->machine, "maincpu", 5, ASSERT_LINE); break;
+		case 1: cputag_set_input_line(space->machine, "sub", 6, ASSERT_LINE); break;
 	}
 
-	COMBINE_DATA(&state->m_shared_ram[(0xffc / 2) + offset]); /* The values probably don't matter */
+	COMBINE_DATA(&shared_ram[(0xffc / 2) + offset]); /* The values probably don't matter */
 }
 
 static WRITE16_HANDLER( shared_ram_w )
 {
-	dassault_state *state = space->machine().driver_data<dassault_state>();
-	COMBINE_DATA(&state->m_shared_ram[offset]);
+	COMBINE_DATA(&shared_ram[offset]);
 }
 
 static READ16_HANDLER( shared_ram_r )
 {
-	dassault_state *state = space->machine().driver_data<dassault_state>();
-	return state->m_shared_ram[offset];
+	return shared_ram[offset];
 }
 
 /**********************************************************************************/
 
-static ADDRESS_MAP_START( dassault_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( dassault_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_DEVWRITE("deco_common", decocomn_nonbuffered_palette_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(deco16_nonbuffered_palette_w) AM_BASE(&paletteram16)
 
 	AM_RANGE(0x140004, 0x140007) AM_WRITENOP /* ? */
 	AM_RANGE(0x180000, 0x180001) AM_WRITE(dassault_sound_w)
 
 	AM_RANGE(0x1c0000, 0x1c000f) AM_READ(dassault_control_r)
-	AM_RANGE(0x1c000a, 0x1c000b) AM_DEVWRITE("deco_common", decocomn_priority_w)
+	AM_RANGE(0x1c000a, 0x1c000b) AM_WRITE(deco16_priority_w)
 	AM_RANGE(0x1c000c, 0x1c000d) AM_WRITE(buffer_spriteram16_2_w)
 	AM_RANGE(0x1c000e, 0x1c000f) AM_WRITE(dassault_control_w)
 
-	AM_RANGE(0x200000, 0x201fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x202000, 0x203fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x212000, 0x212fff) AM_WRITEONLY AM_BASE_MEMBER(dassault_state, m_pf2_rowscroll)
-	AM_RANGE(0x220000, 0x22000f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
+	AM_RANGE(0x200000, 0x201fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data)
+	AM_RANGE(0x202000, 0x203fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data)
+	AM_RANGE(0x212000, 0x212fff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x220000, 0x22000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf12_control)
 
-	AM_RANGE(0x240000, 0x240fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf1_data_r, deco16ic_pf1_data_w)
-	AM_RANGE(0x242000, 0x242fff) AM_DEVREADWRITE("tilegen2", deco16ic_pf2_data_r, deco16ic_pf2_data_w)
-	AM_RANGE(0x252000, 0x252fff) AM_WRITEONLY AM_BASE_MEMBER(dassault_state, m_pf4_rowscroll)
-	AM_RANGE(0x260000, 0x26000f) AM_DEVWRITE("tilegen2", deco16ic_pf_control_w)
+	AM_RANGE(0x240000, 0x240fff) AM_RAM_WRITE(deco16_pf3_data_w) AM_BASE(&deco16_pf3_data)
+	AM_RANGE(0x242000, 0x242fff) AM_RAM_WRITE(deco16_pf4_data_w) AM_BASE(&deco16_pf4_data)
+	AM_RANGE(0x252000, 0x252fff) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf4_rowscroll)
+	AM_RANGE(0x260000, 0x26000f) AM_WRITE(SMH_RAM) AM_BASE(&deco16_pf34_control)
 
-	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE_MEMBER(dassault_state, m_ram) /* Main ram */
-	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2) /* Spriteram (2nd) */
+	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE(&dassault_ram) /* Main ram */
+	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE(&spriteram16_2) AM_SIZE(&spriteram_2_size) /* Spriteram (2nd) */
 	AM_RANGE(0x3feffc, 0x3fefff) AM_READWRITE(dassault_irq_r, dassault_irq_w)
-	AM_RANGE(0x3fe000, 0x3fefff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(dassault_state, m_shared_ram) /* Shared ram */
+	AM_RANGE(0x3fe000, 0x3fefff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&shared_ram) /* Shared ram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dassault_sub_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( dassault_sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(buffer_spriteram16_w)
 	AM_RANGE(0x100002, 0x100007) AM_WRITENOP /* ? */
 	AM_RANGE(0x100004, 0x100005) AM_READ(dassault_sub_control_r)
 
-	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE_MEMBER(dassault_state, m_ram2) /* Sub cpu ram */
-	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram) /* Sprite ram */
+	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_BASE(&dassault_ram2) /* Sub cpu ram */
+	AM_RANGE(0x3fc000, 0x3fcfff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size) /* Sprite ram */
 	AM_RANGE(0x3feffc, 0x3fefff) AM_READWRITE(dassault_irq_r, dassault_irq_w)
 	AM_RANGE(0x3fe000, 0x3fefff) AM_READWRITE(shared_ram_r, shared_ram_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -421,7 +422,7 @@ static INPUT_PORTS_START( dassault )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( dassault4 )
+static INPUT_PORTS_START( dassaul4 )
 	PORT_INCLUDE( common )
 
 	PORT_MODIFY("P1_P2")
@@ -501,24 +502,21 @@ static GFXDECODE_START( dassault )
 	GFXDECODE_ENTRY( "gfx2", 0, charlayout,     0,  32 )	/* Characters 8x8 */
 	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,     0,  32 )	/* Tiles 16x16 */
 	GFXDECODE_ENTRY( "gfx3", 0, tilelayout,   512,  32 )	/* Tiles 16x16 */
-	GFXDECODE_ENTRY( "gfx4", 0, tilelayout,  0/*1024*/,  64 )	/* Sprites 16x16 */
-	GFXDECODE_ENTRY( "gfx5", 0, tilelayout,  0/*2048*/,  64 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx4", 0, tilelayout,  1024,  64 )	/* Sprites 16x16 */
+	GFXDECODE_ENTRY( "gfx5", 0, tilelayout,  2048,  64 )	/* Sprites 16x16 */
 GFXDECODE_END
 
 /**********************************************************************************/
 
-static void sound_irq(device_t *device, int state)
+static void sound_irq(const device_config *device, int state)
 {
-	dassault_state *driver_state = device->machine().driver_data<dassault_state>();
-	device_set_input_line(driver_state->m_audiocpu, 1, state);
+	cputag_set_input_line(device->machine, "audiocpu", 1, state);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	dassault_state *state = device->machine().driver_data<dassault_state>();
-
 	/* the second OKIM6295 ROM is bank switched */
-	state->m_oki2->set_bank_base((data & 1) * 0x40000);
+	okim6295_set_bank_base(devtag_get_device(device->machine, "oki2"), (data & 1) * 0x40000);
 }
 
 static const ym2151_interface ym2151_config =
@@ -529,105 +527,60 @@ static const ym2151_interface ym2151_config =
 
 /**********************************************************************************/
 
-static const decocomn_interface dassault_decocomn_intf =
-{
-	"screen",
-};
-
-static int dassault_bank_callback( const int bank )
-{
-	return ((bank >> 4) & 0xf) << 12;
-}
-
-static const deco16ic_interface dassault_deco16ic_tilegen1_intf =
-{
-	"screen",
-	0, 1,
-	0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, /* color base (default values) */
-	0x0f, 0x0f, /* color masks (default values) */
-	dassault_bank_callback,
-	dassault_bank_callback,
-	0,1,
-};
-
-static const deco16ic_interface dassault_deco16ic_tilegen2_intf =
-{
-	"screen",
-	0, 1,
-	0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, /* color base (default values) */
-	0x0f, 0x0f,	/* color masks (default values) */
-	dassault_bank_callback,
-	dassault_bank_callback,
-	0,2,
-};
-
-
-static MACHINE_CONFIG_START( dassault, dassault_state )
+static MACHINE_DRIVER_START( dassault )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 14000000) /* Accurate */
-	MCFG_CPU_PROGRAM_MAP(dassault_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 14000000) /* Accurate */
+	MDRV_CPU_PROGRAM_MAP(dassault_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_CPU_ADD("sub", M68000, 14000000) /* Accurate */
-	MCFG_CPU_PROGRAM_MAP(dassault_sub_map)
-	MCFG_CPU_VBLANK_INT("screen", irq5_line_hold)
+	MDRV_CPU_ADD("sub", M68000, 14000000) /* Accurate */
+	MDRV_CPU_PROGRAM_MAP(dassault_sub_map)
+	MDRV_CPU_VBLANK_INT("screen", irq5_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", H6280,32220000/8)	/* Accurate */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", H6280,32220000/8)	/* Accurate */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-//  MCFG_QUANTUM_TIME(attotime::from_hz(8400)) /* 140 CPU slices per frame */
-	MCFG_QUANTUM_PERFECT_CPU("maincpu") // I was seeing random lockups.. let's see if this helps
+	MDRV_QUANTUM_TIME(HZ(8400)) /* 140 CPU slices per frame */
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(dassault)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(40*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
 
-	MCFG_VIDEO_START(dassault)
+	MDRV_GFXDECODE(dassault)
+	MDRV_PALETTE_LENGTH(4096)
 
-	MCFG_GFXDECODE(dassault)
-	MCFG_PALETTE_LENGTH(4096)
-
-	MCFG_DECOCOMN_ADD("deco_common", dassault_decocomn_intf)
-
-	MCFG_DECO16IC_ADD("tilegen1", dassault_deco16ic_tilegen1_intf)
-	MCFG_DECO16IC_ADD("tilegen2", dassault_deco16ic_tilegen2_intf)
-
-	MCFG_DEVICE_ADD("spritegen1", DECO_SPRITE, 0)
-	decospr_device::set_gfx_region(*device, 3);
-
-	MCFG_DEVICE_ADD("spritegen2", DECO_SPRITE, 0)
-	decospr_device::set_gfx_region(*device, 4);
-
+	MDRV_VIDEO_START(dassault)
+	MDRV_VIDEO_UPDATE(dassault)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 32220000/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+	MDRV_SOUND_ADD("ym1", YM2203, 32220000/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 
-	MCFG_SOUND_ADD("ym2", YM2151, 32220000/9)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.45)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.45)
+	MDRV_SOUND_ADD("ym2", YM2151, 32220000/9)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MCFG_OKIM6295_ADD("oki1", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("oki1", OKIM6295, 1023924)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
-	MCFG_OKIM6295_ADD("oki2", 2047848, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki2", OKIM6295, 2047848)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+MACHINE_DRIVER_END
 
 /**********************************************************************************/
 
@@ -831,43 +784,68 @@ ROM_END
 
 /**********************************************************************************/
 
+static READ16_HANDLER( dassault_main_skip )
+{
+	int ret=dassault_ram[0];
+
+	if (cpu_get_previouspc(space->cpu)==0x1170 && ret&0x8000)
+		cpu_spinuntil_int(space->cpu);
+
+	return ret;
+}
+
+static READ16_HANDLER( thndzone_main_skip )
+{
+	int ret=dassault_ram[0];
+
+	if (cpu_get_pc(space->cpu)==0x114c && ret&0x8000)
+		cpu_spinuntil_int(space->cpu);
+
+	return ret;
+}
 
 static DRIVER_INIT( dassault )
 {
-	const UINT8 *src = machine.region("gfx1")->base();
-	UINT8 *dst = machine.region("gfx2")->base();
-	UINT8 *tmp = auto_alloc_array(machine, UINT8, 0x80000);
+	const UINT8 *src = memory_region(machine, "gfx1");
+	UINT8 *dst = memory_region(machine, "gfx2");
+	UINT8 *tmp = alloc_array_or_die(UINT8, 0x80000);
 
 	/* Playfield 4 also has access to the char graphics, make things easier
     by just copying the chars to both banks (if I just used a different gfx
     bank then the colours would be wrong). */
-	memcpy(tmp + 0x000000, dst + 0x80000, 0x80000);
-	memcpy(dst + 0x090000, tmp + 0x00000, 0x80000);
-	memcpy(dst + 0x080000, src + 0x00000, 0x10000);
-	memcpy(dst + 0x110000, src + 0x10000, 0x10000);
+	memcpy(tmp+0x000000,dst+0x80000,0x80000);
+	memcpy(dst+0x090000,tmp+0x00000,0x80000);
+	memcpy(dst+0x080000,src+0x00000,0x10000);
+	memcpy(dst+0x110000,src+0x10000,0x10000);
 
-	auto_free(machine, tmp);
+	free(tmp);
+
+	/* Save time waiting on vblank bit */
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3f8000, 0x3f8001, 0, 0, dassault_main_skip);
 }
 
 static DRIVER_INIT( thndzone )
 {
-	const UINT8 *src = machine.region("gfx1")->base();
-	UINT8 *dst = machine.region("gfx2")->base();
-	UINT8 *tmp = auto_alloc_array(machine, UINT8, 0x80000);
+	const UINT8 *src = memory_region(machine, "gfx1");
+	UINT8 *dst = memory_region(machine, "gfx2");
+	UINT8 *tmp = alloc_array_or_die(UINT8, 0x80000);
 
 	/* Playfield 4 also has access to the char graphics, make things easier
     by just copying the chars to both banks (if I just used a different gfx
     bank then the colours would be wrong). */
-	memcpy(tmp + 0x000000, dst + 0x80000, 0x80000);
-	memcpy(dst + 0x090000, tmp + 0x00000, 0x80000);
-	memcpy(dst + 0x080000, src + 0x00000, 0x10000);
-	memcpy(dst + 0x110000, src + 0x10000, 0x10000);
+	memcpy(tmp+0x000000,dst+0x80000,0x80000);
+	memcpy(dst+0x090000,tmp+0x00000,0x80000);
+	memcpy(dst+0x080000,src+0x00000,0x10000);
+	memcpy(dst+0x110000,src+0x10000,0x10000);
 
-	auto_free(machine, tmp);
+	free(tmp);
+
+	/* Save time waiting on vblank bit */
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x3f8000, 0x3f8001, 0, 0, thndzone_main_skip);
 }
 
 /**********************************************************************************/
 
-GAME( 1991, thndzone, 0,        dassault, thndzone, thndzone, ROT0, "Data East Corporation", "Thunder Zone (World)", GAME_SUPPORTS_SAVE )
-GAME( 1991, dassault, thndzone, dassault, dassault, dassault, ROT0, "Data East Corporation", "Desert Assault (US)", GAME_SUPPORTS_SAVE )
-GAME( 1991, dassault4,thndzone, dassault, dassault4,dassault, ROT0, "Data East Corporation", "Desert Assault (US 4 Players)", GAME_SUPPORTS_SAVE )
+GAME( 1991, thndzone, 0,        dassault, thndzone, thndzone, ROT0, "Data East Corporation", "Thunder Zone (World)", 0 )
+GAME( 1991, dassault, thndzone, dassault, dassault, dassault, ROT0, "Data East Corporation", "Desert Assault (US)", 0 )
+GAME( 1991, dassault4,thndzone, dassault, dassaul4, dassault, ROT0, "Data East Corporation", "Desert Assault (US 4 Players)", 0 )

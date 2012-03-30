@@ -104,17 +104,17 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
+#include "machine/8255ppi.h"
+#include "machine/segacrpt.h"
+#include "audio/segasnd.h"
+#include "segag80r.h"
 #include "sound/dac.h"
 #include "sound/sn76496.h"
 #include "sound/samples.h"
 #include "sound/sp0250.h"
-#include "audio/segasnd.h"
-#include "machine/8255ppi.h"
-#include "machine/segacrpt.h"
-#include "machine/segag80.h"
-#include "includes/segag80r.h"
 
 
 /*************************************
@@ -141,6 +141,18 @@
 
 /*************************************
  *
+ *  Global variables
+ *
+ *************************************/
+
+extern UINT8 (*sega_decrypt)(offs_t, UINT8);
+
+static UINT8 *mainram;
+
+
+
+/*************************************
+ *
  *  Machine setup and config
  *
  *************************************/
@@ -149,13 +161,19 @@ static INPUT_CHANGED( service_switch )
 {
 	/* pressing the service switch sends an NMI */
 	if (newval)
-		cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static MACHINE_START( g80r )
 {
 	/* register for save states */
+}
+
+
+static MACHINE_RESET( pignewt )
+{
+	sega_usb_reset(machine, 0x10);
 }
 
 
@@ -166,30 +184,23 @@ static MACHINE_START( g80r )
  *
  *************************************/
 
-static offs_t decrypt_offset(address_space *space, offs_t offset)
+static offs_t decrypt_offset(const address_space *space, offs_t offset)
 {
-	segag80r_state *state = space->machine().driver_data<segag80r_state>();
-
 	/* ignore anything but accesses via opcode $32 (LD $(XXYY),A) */
-	offs_t pc = cpu_get_previouspc(&space->device());
-	if ((UINT16)pc == 0xffff || space->read_byte(pc) != 0x32)
+	offs_t pc = cpu_get_previouspc(space->cpu);
+	if ((UINT16)pc == 0xffff || memory_read_byte(space, pc) != 0x32)
 		return offset;
 
 	/* fetch the low byte of the address and munge it */
-	return (offset & 0xff00) | (*state->m_decrypt)(pc, space->read_byte(pc + 1));
+	return (offset & 0xff00) | (*sega_decrypt)(pc, memory_read_byte(space, pc + 1));
 }
 
-static WRITE8_HANDLER( mainram_w )
-{
-	segag80r_state *state = space->machine().driver_data<segag80r_state>();
-	state->m_mainram[decrypt_offset(space, offset)] = data;
-}
-
+static WRITE8_HANDLER( mainram_w )         { mainram[decrypt_offset(space, offset)] = data; }
 static WRITE8_HANDLER( vidram_w )          { segag80r_videoram_w(space, decrypt_offset(space, offset), data); }
 static WRITE8_HANDLER( monsterb_vidram_w ) { monsterb_videoram_w(space, decrypt_offset(space, offset), data); }
 static WRITE8_HANDLER( pignewt_vidram_w )  { pignewt_videoram_w(space, decrypt_offset(space, offset), data); }
 static WRITE8_HANDLER( sindbadm_vidram_w ) { sindbadm_videoram_w(space, decrypt_offset(space, offset), data); }
-static WRITE8_DEVICE_HANDLER( usb_ram_w )         { sega_usb_ram_w(device, decrypt_offset(device->machine().device("maincpu")->memory().space(AS_PROGRAM), offset), data); }
+static WRITE8_HANDLER( usb_ram_w )         { sega_usb_ram_w(space, decrypt_offset(space, offset), data); }
 
 
 
@@ -215,10 +226,10 @@ static READ8_HANDLER( mangled_ports_r )
 	/* read as two bits from each of 4 ports. For this reason, the input   */
 	/* ports have been organized logically, and are demangled at runtime.  */
 	/* 4 input ports each provide 8 bits of information. */
-	UINT8 d7d6 = input_port_read(space->machine(), "D7D6");
-	UINT8 d5d4 = input_port_read(space->machine(), "D5D4");
-	UINT8 d3d2 = input_port_read(space->machine(), "D3D2");
-	UINT8 d1d0 = input_port_read(space->machine(), "D1D0");
+	UINT8 d7d6 = input_port_read(space->machine, "D7D6");
+	UINT8 d5d4 = input_port_read(space->machine, "D5D4");
+	UINT8 d3d2 = input_port_read(space->machine, "D3D2");
+	UINT8 d1d0 = input_port_read(space->machine, "D1D0");
 	int shift = offset & 3;
 	return demangle(d7d6 >> shift, d5d4 >> shift, d3d2 >> shift, d1d0 >> shift);
 }
@@ -230,17 +241,17 @@ static READ8_HANDLER( spaceod_mangled_ports_r )
 	/* versus cocktail cabinets; we fix this here. The input ports are */
 	/* coded for cocktail mode; for upright mode, we manually shuffle the */
 	/* bits around. */
-	UINT8 d7d6 = input_port_read(space->machine(), "D7D6");
-	UINT8 d5d4 = input_port_read(space->machine(), "D5D4");
-	UINT8 d3d2 = input_port_read(space->machine(), "D3D2");
-	UINT8 d1d0 = input_port_read(space->machine(), "D1D0");
+	UINT8 d7d6 = input_port_read(space->machine, "D7D6");
+	UINT8 d5d4 = input_port_read(space->machine, "D5D4");
+	UINT8 d3d2 = input_port_read(space->machine, "D3D2");
+	UINT8 d1d0 = input_port_read(space->machine, "D1D0");
 	int shift = offset & 3;
 
 	/* tweak bits for the upright case */
 	UINT8 upright = d3d2 & 0x04;
 	if (upright)
 	{
-		UINT8 fc = input_port_read(space->machine(), "FC");
+		UINT8 fc = input_port_read(space->machine, "FC");
 		d7d6 |= 0x60;
 		d5d4 = (d5d4 & ~0x1c) |
 				((~fc & 0x20) >> 3) | /* IPT_BUTTON2 */
@@ -254,8 +265,8 @@ static READ8_HANDLER( spaceod_mangled_ports_r )
 
 static READ8_HANDLER( spaceod_port_fc_r )
 {
-	UINT8 upright = input_port_read(space->machine(), "D3D2") & 0x04;
-	UINT8 fc = input_port_read(space->machine(), "FC");
+	UINT8 upright = input_port_read(space->machine, "D3D2") & 0x04;
+	UINT8 fc = input_port_read(space->machine, "FC");
 
 	/* tweak bits for the upright case */
 	if (upright)
@@ -271,8 +282,8 @@ static READ8_HANDLER( spaceod_port_fc_r )
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(space->machine(), 0, (data >> 7) & 1);
-	coin_counter_w(space->machine(), 1, (data >> 6) & 1);
+	coin_counter_w(0, (data >> 7) & 1);
+	coin_counter_w(1, (data >> 6) & 1);
 }
 
 
@@ -286,16 +297,16 @@ static WRITE8_HANDLER( coin_count_w )
 
 static WRITE8_DEVICE_HANDLER( sindbadm_soundport_w )
 {
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(device->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
-	device->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(50));
+	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(50));
 }
 
 
 static WRITE8_DEVICE_HANDLER( sindbadm_misc_w )
 {
-	coin_counter_w(device->machine(), 0, data & 0x02);
+	coin_counter_w(0, data & 0x02);
 //  mame_printf_debug("Unknown = %02X\n", data);
 }
 
@@ -333,17 +344,17 @@ static const ppi8255_interface sindbadm_ppi_intf =
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM		/* CPU board ROM */
 	AM_RANGE(0x0800, 0x7fff) AM_ROM		/* PROM board ROM area */
 	AM_RANGE(0x8000, 0xbfff) AM_ROM		/* PROM board ROM area */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE_MEMBER(segag80r_state, m_mainram)
-	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(vidram_w) AM_BASE_MEMBER(segag80r_state, m_videoram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE(&mainram)
+	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(vidram_w) AM_BASE(&videoram)
 ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xbe, 0xbf) AM_READWRITE(segag80r_video_port_r, segag80r_video_port_w)
 	AM_RANGE(0xf9, 0xf9) AM_MIRROR(0x04) AM_WRITE(coin_count_w)
@@ -352,7 +363,7 @@ static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_ppi8255_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_ppi8255_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x0c, 0x0f) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xbe, 0xbf) AM_READWRITE(segag80r_video_port_r, segag80r_video_port_w)
@@ -362,7 +373,7 @@ static ADDRESS_MAP_START( main_ppi8255_portmap, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sindbadm_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( sindbadm_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x42, 0x43) AM_READWRITE(segag80r_video_port_r, segag80r_video_port_w)
 	AM_RANGE(0x80, 0x83) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
@@ -378,7 +389,7 @@ ADDRESS_MAP_END
  *************************************/
 
 /* complete memory map derived from System 1 schematics */
-static ADDRESS_MAP_START( sindbadm_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sindbadm_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_MIRROR(0x1800) AM_RAM
 	AM_RANGE(0xa000, 0xa003) AM_MIRROR(0x1ffc) AM_DEVWRITE("sn1", sindbadm_SN76496_w)
@@ -429,16 +440,16 @@ static INPUT_PORTS_START( g80r_generic )
 	PORT_DIPNAME( 0x0f, 0x03, DEF_STR( Coin_A )) PORT_DIPLOCATION("SW2:8,7,6,5")
 	PORT_DIPSETTING(	0x00, DEF_STR( 4C_1C ))
 	PORT_DIPSETTING(	0x01, DEF_STR( 3C_1C ))
-	PORT_DIPSETTING(	0x02, DEF_STR( 2C_1C ))
 	PORT_DIPSETTING(	0x09, "2 Coins/1 Credit 5/3 6/4" )
 	PORT_DIPSETTING(	0x0a, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(	0x02, DEF_STR( 2C_1C ))
 	PORT_DIPSETTING(	0x03, DEF_STR( 1C_1C ))
 	PORT_DIPSETTING(	0x0b, "1 Coin/1 Credit 5/6" )
 	PORT_DIPSETTING(	0x0c, "1 Coin/1 Credit 4/5" )
 	PORT_DIPSETTING(	0x0d, "1 Coin/1 Credit 2/3" )
 	PORT_DIPSETTING(	0x04, DEF_STR( 1C_2C ))
-	PORT_DIPSETTING(	0x0e, "1 Coin/2 Credits 5/11" )
 	PORT_DIPSETTING(	0x0f, "1 Coin/2 Credits 4/9" )
+	PORT_DIPSETTING(	0x0e, "1 Coin/2 Credits 5/11" )
 	PORT_DIPSETTING(	0x05, DEF_STR( 1C_3C ))
 	PORT_DIPSETTING(	0x06, DEF_STR( 1C_4C ))
 	PORT_DIPSETTING(	0x07, DEF_STR( 1C_5C ))
@@ -446,16 +457,16 @@ static INPUT_PORTS_START( g80r_generic )
 	PORT_DIPNAME( 0xf0, 0x30, DEF_STR( Coin_B )) PORT_DIPLOCATION("SW2:4,3,2,1")
 	PORT_DIPSETTING(	0x00, DEF_STR( 4C_1C ))
 	PORT_DIPSETTING(	0x10, DEF_STR( 3C_1C ))
-	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ))
 	PORT_DIPSETTING(	0x90, "2 Coins/1 Credit 5/3 6/4" )
 	PORT_DIPSETTING(	0xa0, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(	0x20, DEF_STR( 2C_1C ))
 	PORT_DIPSETTING(	0x30, DEF_STR( 1C_1C ))
 	PORT_DIPSETTING(	0xb0, "1 Coin/1 Credit 5/6" )
 	PORT_DIPSETTING(	0xc0, "1 Coin/1 Credit 4/5" )
 	PORT_DIPSETTING(	0xd0, "1 Coin/1 Credit 2/3" )
 	PORT_DIPSETTING(	0x40, DEF_STR( 1C_2C ))
-	PORT_DIPSETTING(	0xe0, "1 Coin/2 Credits 5/11" )
 	PORT_DIPSETTING(	0xf0, "1 Coin/2 Credits 4/9" )
+	PORT_DIPSETTING(	0xe0, "1 Coin/2 Credits 5/11" )
 	PORT_DIPSETTING(	0x50, DEF_STR( 1C_3C ))
 	PORT_DIPSETTING(	0x60, DEF_STR( 1C_4C ))
 	PORT_DIPSETTING(	0x70, DEF_STR( 1C_5C ))
@@ -739,9 +750,9 @@ static INPUT_PORTS_START( sindbadm )
 	PORT_DIPSETTING(    0x05, "2 Coins/1 Credit 5/3" )
 	PORT_DIPSETTING(    0x04, "2 Coins/1 Credit 4/3" )
 	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ))
-	PORT_DIPSETTING(    0x03, "1 Coin/1 Credit 5/6" )
-	PORT_DIPSETTING(    0x02, "1 Coin/1 Credit 4/5" )
 	PORT_DIPSETTING(    0x01, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x02, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x03, "1 Coin/1 Credit 5/6" )
 	PORT_DIPSETTING(    0x06, DEF_STR( 2C_3C ))
 	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_2C ))
 	PORT_DIPSETTING(    0x00, "1 Coin/2 Credits 5/11" )
@@ -756,9 +767,9 @@ static INPUT_PORTS_START( sindbadm )
 	PORT_DIPSETTING(    0x50, "2 Coins/1 Credit 5/3" )
 	PORT_DIPSETTING(    0x40, "2 Coins/1 Credit 4/3" )
 	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ))
-	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit 5/6" )
-	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit 4/5" )
 	PORT_DIPSETTING(    0x10, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit 5/6" )
 	PORT_DIPSETTING(    0x60, DEF_STR( 2C_3C ))
 	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ))
 	PORT_DIPSETTING(    0x00, "1 Coin/2 Credits 5/11" )
@@ -820,123 +831,132 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( g80r_base, segag80r_state )
+static MACHINE_DRIVER_START( g80r_base )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, VIDEO_CLOCK/4)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", segag80r_vblank_start)
+	MDRV_CPU_ADD("maincpu", Z80, VIDEO_CLOCK/4)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", segag80r_vblank_start)
 
-	MCFG_MACHINE_START(g80r)
+	MDRV_MACHINE_START(g80r)
 
 	/* video hardware */
-	MCFG_GFXDECODE(segag80r)
-	MCFG_PALETTE_LENGTH(64)
+	MDRV_GFXDECODE(segag80r)
+	MDRV_PALETTE_LENGTH(64)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(segag80r)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_VIDEO_START(segag80r)
+	MDRV_VIDEO_START(segag80r)
+	MDRV_VIDEO_UPDATE(segag80r)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( astrob, g80r_base )
+static MACHINE_DRIVER_START( astrob )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(g80r_base)
 
 	/* sound boards */
-	MCFG_FRAGMENT_ADD(astrob_sound_board)
-	MCFG_FRAGMENT_ADD(sega_speech_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(astrob_sound_board)
+	MDRV_IMPORT_FROM(sega_speech_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( 005, g80r_base )
+static MACHINE_DRIVER_START( 005 )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(g80r_base)
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(main_ppi8255_portmap)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_IO_MAP(main_ppi8255_portmap)
 
 	/* sound boards */
-	MCFG_FRAGMENT_ADD(005_sound_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(005_sound_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( spaceod, g80r_base )
+static MACHINE_DRIVER_START( spaceod )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(g80r_base)
 
 	/* background board changes */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_GFXDECODE(spaceod)
-	MCFG_PALETTE_LENGTH(64+64)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_GFXDECODE(spaceod)
+	MDRV_PALETTE_LENGTH(64+64)
 
 	/* sound boards */
-	MCFG_FRAGMENT_ADD(spaceod_sound_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(spaceod_sound_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( monsterb, g80r_base )
+static MACHINE_DRIVER_START( monsterb )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(g80r_base)
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(main_ppi8255_portmap)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_IO_MAP(main_ppi8255_portmap)
 
 	/* background board changes */
-	MCFG_GFXDECODE(monsterb)
-	MCFG_PALETTE_LENGTH(64+64)
+	MDRV_GFXDECODE(monsterb)
+	MDRV_PALETTE_LENGTH(64+64)
 
 	/* sound boards */
-	MCFG_FRAGMENT_ADD(monsterb_sound_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(monsterb_sound_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( pignewt, g80r_base )
+static MACHINE_DRIVER_START( pignewt )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(g80r_base)
 
 	/* background board changes */
-	MCFG_GFXDECODE(monsterb)
-	MCFG_PALETTE_LENGTH(64+64)
+	MDRV_GFXDECODE(monsterb)
+	MDRV_PALETTE_LENGTH(64+64)
 
 	/* sound boards */
-	MCFG_FRAGMENT_ADD(sega_universal_sound_board)
-MACHINE_CONFIG_END
+	MDRV_MACHINE_RESET(pignewt)
+	MDRV_IMPORT_FROM(sega_universal_sound_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( sindbadm, g80r_base )
+static MACHINE_DRIVER_START( sindbadm )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(sindbadm_portmap)
-	MCFG_CPU_VBLANK_INT("screen", sindbadm_vblank_start)
+	MDRV_IMPORT_FROM(g80r_base)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_IO_MAP(sindbadm_portmap)
+	MDRV_CPU_VBLANK_INT("screen", sindbadm_vblank_start)
 
-	MCFG_PPI8255_ADD( "ppi8255", sindbadm_ppi_intf )
+	MDRV_PPI8255_ADD( "ppi8255", sindbadm_ppi_intf )
 
 	/* video hardware */
-	MCFG_GFXDECODE(monsterb)
-	MCFG_PALETTE_LENGTH(64+64)
+	MDRV_GFXDECODE(monsterb)
+	MDRV_PALETTE_LENGTH(64+64)
 
 	/* sound boards */
 
-	MCFG_CPU_ADD("audiocpu", Z80, SINDBADM_SOUND_CLOCK/2)
-	MCFG_CPU_PROGRAM_MAP(sindbadm_sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)
+	MDRV_CPU_ADD("audiocpu", Z80, SINDBADM_SOUND_CLOCK/2)
+	MDRV_CPU_PROGRAM_MAP(sindbadm_sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)
 
 	/* sound hardware */
-	MCFG_SOUND_ADD("sn1", SN76496, SINDBADM_SOUND_CLOCK/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn1", SN76496, SINDBADM_SOUND_CLOCK/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn2", SN76496, SINDBADM_SOUND_CLOCK/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn2", SN76496, SINDBADM_SOUND_CLOCK/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -1075,7 +1095,7 @@ ROM_START( astrob1 )
 	ROM_LOAD( "812a.speech-u3", 0x1800, 0x0800, CRC(410ad0d2) SHA1(9b5f05bb64a6ecfe3543025a10c6ec67de797333) )
 ROM_END
 
-ROM_START( astrobg )
+ROM_START( astrode )
 	ROM_REGION( 0xc000, "maincpu", 0 )
 	ROM_LOAD( "829b.u25",   0x0000, 0x0800, CRC(14ae953c) SHA1(eb63d1b95faa5193db7fa6ab245e99325d519b5e) )
 	ROM_LOAD( "834b.u01",   0x0800, 0x0800, CRC(82630950) SHA1(6e13cf5868d64835d9de823801cc4162b3c7b316) )
@@ -1259,39 +1279,39 @@ ROM_END
 
 ROM_START( monsterb2 )
 	ROM_REGION( 0xc000, "maincpu", 0 )
-	ROM_LOAD( "epr-1548.2",   0x0000, 0x2000, CRC(239f77c1) SHA1(2945e4b135c1c46bf3e0d947b3d9be052f12e8d8) )
-	ROM_LOAD( "epr-1549.3",   0x2000, 0x2000, CRC(40aeb223) SHA1(8e0cc1b53ded819673719ffe1fd69feb1ca6fa29) )
-	ROM_LOAD( "epr-1550.13",  0x4000, 0x2000, CRC(b42bb2b3) SHA1(88bd5b027c46cde9f89e90f50ae2c381681ae483) )
-	ROM_LOAD( "epr-1551.14",  0x6000, 0x2000, CRC(ad7728cc) SHA1(e9ca8a92dae39528ae7a003cb641af4342067b14) )
-	ROM_LOAD( "epr-1552.22",  0x8000, 0x2000, CRC(e876e216) SHA1(31301f2b576689aefcb42a4233f8fafb7f4791a7) )
-	ROM_LOAD( "epr-1553.23",  0xa000, 0x2000, CRC(4a839fb2) SHA1(3a15d74a0abd0548cb90c13f4d5baebe3ec83d23) )
+	ROM_LOAD( "epr-1548",     0x0000, 0x2000, CRC(239f77c1) SHA1(2945e4b135c1c46bf3e0d947b3d9be052f12e8d8) )
+	ROM_LOAD( "epr-1549",     0x2000, 0x2000, CRC(40aeb223) SHA1(8e0cc1b53ded819673719ffe1fd69feb1ca6fa29) )
+	ROM_LOAD( "epr-1550",     0x4000, 0x2000, CRC(b42bb2b3) SHA1(88bd5b027c46cde9f89e90f50ae2c381681ae483) )
+	ROM_LOAD( "epr-1551",     0x6000, 0x2000, CRC(ad7728cc) SHA1(e9ca8a92dae39528ae7a003cb641af4342067b14) )
+	ROM_LOAD( "epr-1552",     0x8000, 0x2000, CRC(e876e216) SHA1(31301f2b576689aefcb42a4233f8fafb7f4791a7) )
+	ROM_LOAD( "epr-1553",     0xa000, 0x2000, CRC(4a839fb2) SHA1(3a15d74a0abd0548cb90c13f4d5baebe3ec83d23) )
 
 	ROM_REGION( 0x400, "audiocpu", 0 )
-	ROM_LOAD( "7751.34",      0x0000, 0x0400, CRC(6a9534fc) SHA1(67ad94674db5c2aab75785668f610f6f4eccd158) )
+	ROM_LOAD( "7751.bin",     0x0000, 0x0400, CRC(6a9534fc) SHA1(67ad94674db5c2aab75785668f610f6f4eccd158) ) /* 7751 - U34 */
 
 	ROM_REGION( 0x10000, "gfx1", 0 )
-	ROM_LOAD( "epr-1661.19",  0x0000, 0x2000, CRC(e93a2281) SHA1(61c9022edfb8fee2b7214d87d6bbed415fba9601) )
-	ROM_LOAD( "epr-1662.5",   0x2000, 0x2000, CRC(1e589101) SHA1(6805644e18e5b18b96e6a407ec217f02c8931ec2) )
+	ROM_LOAD( "epr-1661",     0x0000, 0x2000, CRC(e93a2281) SHA1(61c9022edfb8fee2b7214d87d6bbed415fba9601) ) /* ??? */
+	ROM_LOAD( "epr-1662",     0x2000, 0x2000, CRC(1e589101) SHA1(6805644e18e5b18b96e6a407ec217f02c8931ec2) ) /* ??? */
 
 	ROM_REGION( 0x2000, "gfx2", 0 )
-	ROM_LOAD( "epr-1554.58",  0x0000, 0x2000, CRC(a87937d0) SHA1(cfc2fca52bd74beb2f20ece07e9dd3e3f1038f7c) )
+	ROM_LOAD( "epr-1554",     0x0000, 0x2000, CRC(a87937d0) SHA1(cfc2fca52bd74beb2f20ece07e9dd3e3f1038f7c) ) /* ??? */
 
 	ROM_REGION( 0x2000, "n7751", 0 )
-	ROM_LOAD( "epr-1543.19",  0x0000, 0x1000, CRC(b525ce8f) SHA1(61e541061a0a579101e52ffa2431540010b9df3e) )
-	ROM_LOAD( "epr-1544.23",  0x1000, 0x1000, CRC(56c79fb0) SHA1(26de83efcc97318220603f83acf4387f6d70d806) )
+	ROM_LOAD( "epr-1543",     0x0000, 0x1000, CRC(b525ce8f) SHA1(61e541061a0a579101e52ffa2431540010b9df3e) ) /* U19 */
+	ROM_LOAD( "epr-1544",     0x1000, 0x1000, CRC(56c79fb0) SHA1(26de83efcc97318220603f83acf4387f6d70d806) ) /* U23 */
 
 	ROM_REGION( 0x0020, "prom", 0 )
-	ROM_LOAD( "pr-1542.31",   0x0000, 0x0020, CRC(414ebe9b) SHA1(3df8694e3d26635d19fd4cdf02bd0998e8538b5b) )
+	ROM_LOAD( "spr-1512",     0x0000, 0x0020, CRC(414ebe9b) SHA1(3df8694e3d26635d19fd4cdf02bd0998e8538b5b) )  /* U31 */
 
 	ROM_REGION( 0x2000, "user2", 0 )		      /* other proms (unused) */
-	ROM_LOAD( "pr-1535.118",  0x0000, 0x0020, CRC(087df496) SHA1(b6905626595f7a5587a0fd5db0d0bbf7f1fdf695) )
-	ROM_LOAD( "pr-1536.128",  0x0000, 0x0020, CRC(57c65534) SHA1(5714720ddb3c90f10fd880faa9c18990c7947a0d) )
-	ROM_LOAD( "pr-1537.156",  0x0000, 0x0020, CRC(e4451c6c) SHA1(8a4290fccca37564db3a4415057602c7f530947f) )
-	ROM_LOAD( "pr-1538.55",   0x0000, 0x0100, CRC(025996b1) SHA1(16e927c3a94c46ab2d870a37aa0dfacb4f95bdbf) )
-	ROM_LOAD( "pr-1539.135",  0x0000, 0x0100, CRC(dd18a9ab) SHA1(365e2f36e60c54f2d782b0c918350f6b565aeda8) )
-	ROM_LOAD( "pr1540.36",    0x0000, 0x0100, CRC(e767ab01) SHA1(97a1f891f95a2f862ee1319033411d51c47bd593) )
-	ROM_LOAD( "pr1541.145",   0x0000, 0x0100, CRC(411aa2a5) SHA1(bc6a7119679aaa22f171a9038f49265e8cd4a166) )
-	ROM_LOAD( "pr-5021.39",   0x0000, 0x0020, CRC(5222c542) SHA1(0745570ca38cf81e28a0fd6221ee26f559ada6b4) )
+	ROM_LOAD( "pr-1535",     0x0000, 0x20, CRC(087df496) SHA1(b6905626595f7a5587a0fd5db0d0bbf7f1fdf695) ) /* ??? */
+	ROM_LOAD( "pr-1536",     0x0000, 0x20, CRC(57c65534) SHA1(5714720ddb3c90f10fd880faa9c18990c7947a0d) ) /* ??? */
+	ROM_LOAD( "pr-1537",     0x0000, 0x20, CRC(e4451c6c) SHA1(8a4290fccca37564db3a4415057602c7f530947f) ) /* ??? */
+	ROM_LOAD( "pr-1538",     0x0000, 0x100, CRC(025996b1) SHA1(16e927c3a94c46ab2d870a37aa0dfacb4f95bdbf) ) /* ??? */
+	ROM_LOAD( "pr-1539",     0x0000, 0x100, CRC(dd18a9ab) SHA1(365e2f36e60c54f2d782b0c918350f6b565aeda8) ) /* ??? */
+	ROM_LOAD( "pr-1540",     0x0000, 0x100, CRC(e767ab01) SHA1(97a1f891f95a2f862ee1319033411d51c47bd593) ) /* ??? */
+	ROM_LOAD( "pr-1541",     0x0000, 0x100, CRC(411aa2a5) SHA1(bc6a7119679aaa22f171a9038f49265e8cd4a166) ) /* ??? */
+	ROM_LOAD( "pr-5021",     0x0000, 0x20, CRC(ad1f2839) SHA1(765fdb90cbd1ab1551851a9a0c8ed0cb15928a25) ) /* ??? */
 ROM_END
 
 
@@ -1369,25 +1389,25 @@ ROM_END
 
 ROM_START( sindbadm )
 	ROM_REGION( 0xc000, "maincpu", 0 )
-	ROM_LOAD( "epr-5393.4d", 0x0000, 0x2000, CRC(51f2e51e) SHA1(0fd96863d0dfaa0bab09be6fea1e7d12b9c40d68) )
-	ROM_LOAD( "epr-5394.4e", 0x2000, 0x2000, CRC(d39ce2ee) SHA1(376065a40caa499da99e556098a03387edca5883) )
-	ROM_LOAD( "epr-5395.4h", 0x4000, 0x2000, CRC(b1d15c82) SHA1(04f888faee0103cce8c0cd57296d75474b770632) )
-	ROM_LOAD( "epr-5396.4j", 0x6000, 0x2000, CRC(ea9d40bf) SHA1(f61ec6e405ba3aa4166a5d6127d9e7bc940f19df) )
-	ROM_LOAD( "epr-5397.4l", 0x8000, 0x2000, CRC(595d16dc) SHA1(ea8aa068fc45bb2ee64c4290fad4b8b51e1abe97) )
-	ROM_LOAD( "epr-5398.4m", 0xa000, 0x2000, CRC(e57ff63c) SHA1(eac36221cb210743d3c04e51da5956623a28dbdb) )
+	ROM_LOAD( "epr5393.new", 0x0000, 0x2000, CRC(51f2e51e) SHA1(0fd96863d0dfaa0bab09be6fea1e7d12b9c40d68) )
+	ROM_LOAD( "epr5394.new", 0x2000, 0x2000, CRC(d39ce2ee) SHA1(376065a40caa499da99e556098a03387edca5883) )
+	ROM_LOAD( "epr5395.new", 0x4000, 0x2000, CRC(b1d15c82) SHA1(04f888faee0103cce8c0cd57296d75474b770632) )
+	ROM_LOAD( "epr5396.new", 0x6000, 0x2000, CRC(ea9d40bf) SHA1(f61ec6e405ba3aa4166a5d6127d9e7bc940f19df) )
+	ROM_LOAD( "epr5397.new", 0x8000, 0x2000, CRC(595d16dc) SHA1(ea8aa068fc45bb2ee64c4290fad4b8b51e1abe97) )
+	ROM_LOAD( "epr5398.new", 0xa000, 0x2000, CRC(e57ff63c) SHA1(eac36221cb210743d3c04e51da5956623a28dbdb) )
 
 	ROM_REGION( 0x2000, "audiocpu", 0 )
-	ROM_LOAD( "epr-5400.4a", 0x0000, 0x2000, CRC(5114f18e) SHA1(343f96c728f96df5d50a9888fc87488d9440d7f4) )
+	ROM_LOAD( "epr5400.new", 0x0000, 0x2000, CRC(5114f18e) SHA1(343f96c728f96df5d50a9888fc87488d9440d7f4) )
 
 	ROM_REGION( 0x4000, "gfx1", 0 )
-	ROM_LOAD( "epr-5428.9m", 0x0000, 0x2000, CRC(f6044a1e) SHA1(19622aa0991553604236a1ff64a3e5dd1d881ed8) )
-	ROM_LOAD( "epr-5429.9p", 0x2000, 0x2000, CRC(b23eca10) SHA1(e00ab3b50b52e16d7281ece42d73603fb188c9b3) )
+	ROM_LOAD( "epr5428.new", 0x0000, 0x2000, CRC(f6044a1e) SHA1(19622aa0991553604236a1ff64a3e5dd1d881ed8) )
+	ROM_LOAD( "epr5429.new", 0x2000, 0x2000, CRC(b23eca10) SHA1(e00ab3b50b52e16d7281ece42d73603fb188c9b3) )
 
 	ROM_REGION( 0x8000, "gfx2", 0 )
-	ROM_LOAD( "epr-5424.9e", 0x0000, 0x2000, CRC(4bfc2e95) SHA1(7d513df944d5768b14983f44a1e3c76930a55e9a) )
-	ROM_LOAD( "epr-5425.9h", 0x2000, 0x2000, CRC(b654841a) SHA1(9b224fbe5f4c7bbb486a3d15550cc10e4f317631) )
-	ROM_LOAD( "epr-5426.9j", 0x4000, 0x2000, CRC(9de0da28) SHA1(79e01005861e2426a8112544b1bc6d1c6a9ce936) )
-	ROM_LOAD( "epr-5427.9l", 0x6000, 0x2000, CRC(a94f4d41) SHA1(fe4f412ea3680c0e5a6242827eab9e82a841d7c7) )
+	ROM_LOAD( "epr5424.new", 0x0000, 0x2000, CRC(4bfc2e95) SHA1(7d513df944d5768b14983f44a1e3c76930a55e9a) )
+	ROM_LOAD( "epr5425.new", 0x2000, 0x2000, CRC(b654841a) SHA1(9b224fbe5f4c7bbb486a3d15550cc10e4f317631) )
+	ROM_LOAD( "epr5426.new", 0x4000, 0x2000, CRC(9de0da28) SHA1(79e01005861e2426a8112544b1bc6d1c6a9ce936) )
+	ROM_LOAD( "epr5427.new", 0x6000, 0x2000, CRC(a94f4d41) SHA1(fe4f412ea3680c0e5a6242827eab9e82a841d7c7) )
 ROM_END
 
 
@@ -1398,15 +1418,15 @@ ROM_END
  *
  *************************************/
 
-static void monsterb_expand_gfx(running_machine &machine, const char *region)
+static void monsterb_expand_gfx(running_machine *machine, const char *region)
 {
 	UINT8 *temp, *dest;
 	int i;
 
 	/* expand the background ROMs; A11/A12 of each ROM is independently controlled via */
 	/* banking */
-	dest = machine.region(region)->base();
-	temp = auto_alloc_array(machine, UINT8, 0x4000);
+	dest = memory_region(machine, region);
+	temp = alloc_array_or_die(UINT8, 0x4000);
 	memcpy(temp, dest, 0x4000);
 
 	/* 16 effective total banks */
@@ -1415,7 +1435,7 @@ static void monsterb_expand_gfx(running_machine &machine, const char *region)
 		memcpy(&dest[0x0000 + i * 0x800], &temp[0x0000 + (i & 3) * 0x800], 0x800);
 		memcpy(&dest[0x8000 + i * 0x800], &temp[0x2000 + (i >> 2) * 0x800], 0x800);
 	}
-	auto_free(machine, temp);
+	free(temp);
 }
 
 
@@ -1428,141 +1448,115 @@ static void monsterb_expand_gfx(running_machine &machine, const char *region)
 
 static DRIVER_INIT( astrob )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	device_t *speech = machine.device("segaspeech");
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-
 	/* configure the 315-0062 security chip */
-	state->m_decrypt = segag80_security(62);
+	sega_security(62);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_NONE;
+	segag80r_background_pcb = G80_BACKGROUND_NONE;
 
 	/* install speech board */
-	iospace->install_legacy_write_handler(*speech, 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*speech, 0x3b, 0x3b, FUNC(sega_speech_control_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x38, 0x38, 0, 0, sega_speech_data_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x3b, 0x3b, 0, 0, sega_speech_control_w);
 
 	/* install Astro Blaster sound board */
-	iospace->install_legacy_write_handler(0x3e, 0x3f, FUNC(astrob_sound_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x3e, 0x3f, 0, 0, astrob_sound_w);
 }
 
 
 static DRIVER_INIT( 005 )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-
 	/* configure the 315-0070 security chip */
-	state->m_decrypt = segag80_security(70);
+	sega_security(70);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_NONE;
+	segag80r_background_pcb = G80_BACKGROUND_NONE;
 }
 
 
 static DRIVER_INIT( spaceod )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-
 	/* configure the 315-0063 security chip */
-	state->m_decrypt = segag80_security(63);
+	sega_security(63);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_SPACEOD;
+	segag80r_background_pcb = G80_BACKGROUND_SPACEOD;
 
 	/* configure ports for the background board */
-	iospace->install_legacy_readwrite_handler(0x08, 0x0f, FUNC(spaceod_back_port_r), FUNC(spaceod_back_port_w));
+	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x08, 0x0f, 0, 0, spaceod_back_port_r, spaceod_back_port_w);
 
 	/* install Space Odyssey sound board */
-	iospace->install_legacy_write_handler(0x0e, 0x0f, FUNC(spaceod_sound_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x0e, 0x0f, 0, 0, spaceod_sound_w);
 
 	/* install our wacky mangled ports */
-	iospace->install_legacy_read_handler(0xf8, 0xfb, FUNC(spaceod_mangled_ports_r));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spaceod_port_fc_r));
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xf8, 0xfb, 0, 0, spaceod_mangled_ports_r);
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xfc, 0xfc, 0, 0, spaceod_port_fc_r);
 }
 
 
 static DRIVER_INIT( monsterb )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-
 	/* configure the 315-0082 security chip */
-	state->m_decrypt = segag80_security(82);
+	sega_security(82);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_MONSTERB;
+	segag80r_background_pcb = G80_BACKGROUND_MONSTERB;
 	monsterb_expand_gfx(machine, "gfx1");
 
 	/* install background board handlers */
-	iospace->install_legacy_write_handler(0xb8, 0xbd, FUNC(monsterb_back_port_w));
-	pgmspace->install_legacy_write_handler(0xe000, 0xffff, FUNC(monsterb_vidram_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xb8, 0xbd, 0, 0, monsterb_back_port_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xffff, 0, 0, monsterb_vidram_w);
 }
 
 
 static DRIVER_INIT( monster2 )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-
 	/* configure the 315-5006 security chip */
 	spatter_decode(machine, "maincpu");
-	state->m_decrypt = segag80_security(0);
+	sega_security(0);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_PIGNEWT;
+	segag80r_background_pcb = G80_BACKGROUND_PIGNEWT;
 	monsterb_expand_gfx(machine, "gfx1");
 
 	/* install background board handlers */
-	iospace->install_legacy_write_handler(0xb4, 0xb5, FUNC(pignewt_back_color_w));
-	iospace->install_legacy_write_handler(0xb8, 0xbd, FUNC(pignewt_back_port_w));
-	pgmspace->install_legacy_write_handler(0xe000, 0xffff, FUNC(pignewt_vidram_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xb4, 0xb5, 0, 0, pignewt_back_color_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xb8, 0xbd, 0, 0, pignewt_back_port_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xffff, 0, 0, pignewt_vidram_w);
 }
 
 
 static DRIVER_INIT( pignewt )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	device_t *usbsnd = machine.device("usbsnd");
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-
 	/* configure the 315-0063? security chip */
-	state->m_decrypt = segag80_security(63);
+	sega_security(63);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_PIGNEWT;
+	segag80r_background_pcb = G80_BACKGROUND_PIGNEWT;
 	monsterb_expand_gfx(machine, "gfx1");
 
 	/* install background board handlers */
-	iospace->install_legacy_write_handler(0xb4, 0xb5, FUNC(pignewt_back_color_w));
-	iospace->install_legacy_write_handler(0xb8, 0xbd, FUNC(pignewt_back_port_w));
-	pgmspace->install_legacy_write_handler(0xe000, 0xffff, FUNC(pignewt_vidram_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xb4, 0xb5, 0, 0, pignewt_back_color_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0xb8, 0xbd, 0, 0, pignewt_back_port_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xffff, 0, 0, pignewt_vidram_w);
 
 	/* install Universal sound board */
-	iospace->install_legacy_readwrite_handler(*usbsnd, 0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
-	pgmspace->install_legacy_readwrite_handler(*usbsnd, 0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
+	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x3f, 0x3f, 0, 0, sega_usb_status_r, sega_usb_data_w);
+	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xd000, 0xdfff, 0, 0, sega_usb_ram_r, usb_ram_w);
 }
 
 
 static DRIVER_INIT( sindbadm )
 {
-	segag80r_state *state = machine.driver_data<segag80r_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-
 	/* configure the encrypted Z80 */
 	sindbadm_decode(machine, "maincpu");
-	state->m_decrypt = segag80_security(0);
+	sega_security(0);
 
 	/* configure video */
-	state->m_background_pcb = G80_BACKGROUND_SINDBADM;
+	segag80r_background_pcb = G80_BACKGROUND_SINDBADM;
 
 	/* install background board handlers */
-	iospace->install_legacy_write_handler(0x40, 0x41, FUNC(sindbadm_back_port_w));
-	pgmspace->install_legacy_write_handler(0xe000, 0xffff, FUNC(sindbadm_vidram_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x40, 0x41, 0, 0, sindbadm_back_port_w);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xe000, 0xffff, 0, 0, sindbadm_vidram_w);
 }
 
 
@@ -1573,23 +1567,22 @@ static DRIVER_INIT( sindbadm )
  *
  *************************************/
 
-//    YEAR, NAME,      PARENT,   MACHINE,  INPUT,    INIT,     MONITOR,COMPANY,FULLNAME,FLAGS
 /* basic G-80 system with: CPU board, PROM board, Video I board, custom sound boards */
-GAME( 1981, astrob,    0,        astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (version 3)", GAME_IMPERFECT_SOUND )
-GAME( 1981, astrob2,   astrob,   astrob,   astrob2,  astrob,   ROT270, "Sega", "Astro Blaster (version 2)", GAME_IMPERFECT_SOUND )
-GAME( 1981, astrob2a,  astrob,   astrob,   astrob2,  astrob,   ROT270, "Sega", "Astro Blaster (version 2a)", GAME_IMPERFECT_SOUND )
-GAME( 1981, astrob1,   astrob,   astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (version 1)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // instant death if you start game with 1 credit, protection?, bad dump?
-GAME( 1981, astrobg,   astrob,   astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (German)", GAME_IMPERFECT_SOUND )
-GAME( 1981, 005,       0,        005,      005,      005,      ROT270, "Sega", "005", GAME_IMPERFECT_SOUND )
+GAME( 1981, astrob,   0,       astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (version 3)", GAME_IMPERFECT_SOUND )
+GAME( 1981, astrob2,  astrob,  astrob,   astrob2,  astrob,   ROT270, "Sega", "Astro Blaster (version 2)", GAME_IMPERFECT_SOUND )
+GAME( 1981, astrob2a, astrob,  astrob,   astrob2,  astrob,   ROT270, "Sega", "Astro Blaster (version 2a)", GAME_IMPERFECT_SOUND )
+GAME( 1981, astrob1,  astrob,  astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (version 1)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING ) // instant death if you start game with 1 credit, protection?, bad dump?
+GAME( 1981, astrode,  astrob,  astrob,   astrob,   astrob,   ROT270, "Sega", "Astro Blaster (German)", GAME_IMPERFECT_SOUND )
+GAME( 1981, 005,      0,       005,      005,      005,      ROT270, "Sega", "005", GAME_IMPERFECT_SOUND )
 
 
 /* basic G-80 system with individual background boards */
-GAME( 1981, spaceod,   0,        spaceod,  spaceod,  spaceod,  ROT270, "Sega", "Space Odyssey (version 2)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spaceod2,  spaceod,  spaceod,  spaceod,  spaceod,  ROT270, "Sega", "Space Odyssey (version 1)", GAME_IMPERFECT_SOUND )
-GAME( 1982, monsterb,  0,        monsterb, monsterb, monsterb, ROT270, "Sega", "Monster Bash", GAME_IMPERFECT_SOUND )
+GAME( 1981, spaceod,  0,       spaceod,  spaceod,  spaceod,  ROT270, "Sega", "Space Odyssey (version 2)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spaceod2, spaceod, spaceod,  spaceod,  spaceod,  ROT270, "Sega", "Space Odyssey (version 1)", GAME_IMPERFECT_SOUND )
+GAME( 1982, monsterb, 0,       monsterb, monsterb, monsterb, ROT270, "Sega", "Monster Bash", GAME_IMPERFECT_SOUND )
 
 /* 2-board G-80 system */
-GAME( 1982, monsterb2, monsterb, monsterb, monsterb, monster2, ROT270, "Sega", "Monster Bash (2 board version)", GAME_IMPERFECT_SOUND )
-GAME( 1983, pignewt,   0,        pignewt,  pignewt,  pignewt,  ROT270, "Sega", "Pig Newton (version C)", GAME_IMPERFECT_SOUND )
-GAME( 1983, pignewta,  pignewt,  pignewt,  pignewta, pignewt,  ROT270, "Sega", "Pig Newton (version A)", GAME_IMPERFECT_SOUND )
-GAME( 1983, sindbadm,  0,        sindbadm, sindbadm, sindbadm, ROT270, "Sega", "Sindbad Mystery", 0 )
+GAME( 1982, monsterb2,monsterb,monsterb, monsterb, monster2, ROT270, "Sega", "Monster Bash (2 board version)", GAME_IMPERFECT_SOUND )
+GAME( 1983, pignewt,  0,       pignewt,  pignewt,  pignewt,  ROT270, "Sega", "Pig Newton (version C)", GAME_IMPERFECT_SOUND )
+GAME( 1983, pignewta, pignewt, pignewt,  pignewta, pignewt,  ROT270, "Sega", "Pig Newton (version A)", GAME_IMPERFECT_SOUND )
+GAME( 1983, sindbadm, 0,       sindbadm, sindbadm, sindbadm, ROT270, "Sega", "Sindbad Mystery", 0 )

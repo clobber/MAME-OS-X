@@ -1,180 +1,137 @@
 /***************************************************************************
 
-    Bottom of the Ninth (c) 1989 Konami
+Bottom of the Ninth (c) 1989 Konami
 
-    Similar to S.P.Y.
+Similar to S.P.Y.
 
-    driver by Nicola Salmoria
+driver by Nicola Salmoria
 
-    2008-07
-    Dip locations and factory settings verified with US manual.
-    To be verified for Main Stadium
+2008-07
+Dip locations and factory settings verified with US manual.
+To be verified for Main Stadium
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "cpu/m6809/m6809.h"
-#include "video/konicdev.h"
+#include "video/konamiic.h"
 #include "sound/k007232.h"
-#include "includes/konamipt.h"
-#include "includes/bottom9.h"
+#include "konamipt.h"
+
+extern int bottom9_video_enable;
+
+VIDEO_START( bottom9 );
+VIDEO_UPDATE( bottom9 );
+
+
 
 static INTERRUPT_GEN( bottom9_interrupt )
 {
-	bottom9_state *state = device->machine().driver_data<bottom9_state>();
-
-	if (k052109_is_irq_enabled(state->m_k052109))
-		device_set_input_line(device, 0, HOLD_LINE);
+	if (K052109_is_IRQ_enabled())
+		cpu_set_input_line(device, 0, HOLD_LINE);
 }
 
-static READ8_HANDLER( k052109_051960_r )
-{
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
 
-	if (k052109_get_rmrd_line(state->m_k052109) == CLEAR_LINE)
-	{
-		if (offset >= 0x3800 && offset < 0x3808)
-			return k051937_r(state->m_k051960, offset - 0x3800);
-		else if (offset < 0x3c00)
-			return k052109_r(state->m_k052109, offset);
-		else
-			return k051960_r(state->m_k051960, offset - 0x3c00);
-	}
-	else
-		return k052109_r(state->m_k052109, offset);
-}
-
-static WRITE8_HANDLER( k052109_051960_w )
-{
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
-	if (offset >= 0x3800 && offset < 0x3808)
-		k051937_w(state->m_k051960, offset - 0x3800, data);
-	else if (offset < 0x3c00)
-		k052109_w(state->m_k052109, offset, data);
-	else
-		k051960_w(state->m_k051960, offset - 0x3c00, data);
-}
+static int zoomreadroms,K052109_selected;
 
 static READ8_HANDLER( bottom9_bankedram1_r )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
-	if (state->m_k052109_selected)
-		return k052109_051960_r(space, offset);
+	if (K052109_selected)
+		return K052109_051960_r(space,offset);
 	else
 	{
-		if (state->m_zoomreadroms)
-			return k051316_rom_r(state->m_k051316, offset);
+		if (zoomreadroms)
+			return K051316_rom_0_r(space,offset);
 		else
-			return k051316_r(state->m_k051316, offset);
+			return K051316_0_r(space,offset);
 	}
 }
 
 static WRITE8_HANDLER( bottom9_bankedram1_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
-	if (state->m_k052109_selected)
-		k052109_051960_w(space, offset, data);
-	else
-		k051316_w(state->m_k051316, offset, data);
+	if (K052109_selected) K052109_051960_w(space,offset,data);
+	else K051316_0_w(space,offset,data);
 }
 
 static READ8_HANDLER( bottom9_bankedram2_r )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
-	if (state->m_k052109_selected)
-		return k052109_051960_r(space, offset + 0x2000);
-	else
-		return space->machine().generic.paletteram.u8[offset];
+	if (K052109_selected) return K052109_051960_r(space,offset + 0x2000);
+	else return paletteram[offset];
 }
 
 static WRITE8_HANDLER( bottom9_bankedram2_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
-	if (state->m_k052109_selected)
-		k052109_051960_w(space, offset + 0x2000, data);
-	else
-		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
+	if (K052109_selected) K052109_051960_w(space,offset + 0x2000,data);
+	else paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
 }
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	int bank;
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	int offs;
 
 	/* bit 0 = RAM bank */
-	if ((data & 1) == 0)
-		popmessage("bankswitch RAM bank 0");
+if ((data & 1) == 0) popmessage("bankswitch RAM bank 0");
 
 	/* bit 1-4 = ROM bank */
-	if (data & 0x10)
-		bank = 8 + ((data & 0x06) >> 1);
-	else
-		bank = ((data & 0x0e) >> 1);
-
-	memory_set_bank(space->machine(), "bank1", bank);
+	if (data & 0x10) offs = 0x20000 + (data & 0x06) * 0x1000;
+	else offs = 0x10000 + (data & 0x0e) * 0x1000;
+	memory_set_bankptr(space->machine, 1,&RAM[offs]);
 }
 
 static WRITE8_HANDLER( bottom9_1f90_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-
 	/* bits 0/1 = coin counters */
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
+	coin_counter_w(0,data & 0x01);
+	coin_counter_w(1,data & 0x02);
 
 	/* bit 2 = enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->m_k052109, (data & 0x04) ? ASSERT_LINE : CLEAR_LINE);
+	K052109_set_RMRD_line((data & 0x04) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 3 = disable video */
-	state->m_video_enable = ~data & 0x08;
+	bottom9_video_enable = ~data & 0x08;
 
 	/* bit 4 = enable 051316 ROM reading */
-	state->m_zoomreadroms = data & 0x10;
+	zoomreadroms = data & 0x10;
 
 	/* bit 5 = RAM bank */
-	state->m_k052109_selected = data & 0x20;
+	K052109_selected = data & 0x20;
 }
 
 static WRITE8_HANDLER( bottom9_sh_irqtrigger_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
+	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
 }
+
+static int nmienable;
 
 static INTERRUPT_GEN( bottom9_sound_interrupt )
 {
-	bottom9_state *state = device->machine().driver_data<bottom9_state>();
-	if (state->m_nmienable)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if (nmienable)
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-	state->m_nmienable = data;
+	nmienable = data;
 }
 
 static WRITE8_HANDLER( sound_bank_w )
 {
-	bottom9_state *state = space->machine().driver_data<bottom9_state>();
-	int bank_A, bank_B;
+	int bank_A,bank_B;
 
 	bank_A = ((data >> 0) & 0x03);
 	bank_B = ((data >> 2) & 0x03);
-	k007232_set_bank(state->m_k007232_1, bank_A, bank_B);
-
+	k007232_set_bank( devtag_get_device(space->machine, "konami1"), bank_A, bank_B );
 	bank_A = ((data >> 4) & 0x03);
 	bank_B = ((data >> 6) & 0x03);
-	k007232_set_bank(state->m_k007232_2, bank_A, bank_B);
+	k007232_set_bank( devtag_get_device(space->machine, "konami2"), bank_A, bank_B );
 }
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_READWRITE(bottom9_bankedram1_r, bottom9_bankedram1_w)
 	AM_RANGE(0x1f80, 0x1f80) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x1f90, 0x1f90) AM_WRITE(bottom9_1f90_w)
@@ -186,20 +143,20 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1fd2, 0x1fd2) AM_READ_PORT("P2")
 	AM_RANGE(0x1fd3, 0x1fd3) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1fe0, 0x1fe0) AM_READ_PORT("DSW2")
-	AM_RANGE(0x1ff0, 0x1fff) AM_DEVWRITE("k051316", k051316_ctrl_w)
-	AM_RANGE(0x2000, 0x27ff) AM_READWRITE(bottom9_bankedram2_r, bottom9_bankedram2_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(k052109_051960_r, k052109_051960_w)
+	AM_RANGE(0x1ff0, 0x1fff) AM_WRITE(K051316_ctrl_0_w)
+	AM_RANGE(0x2000, 0x27ff) AM_READWRITE(bottom9_bankedram2_r, bottom9_bankedram2_w) AM_BASE(&paletteram)
+	AM_RANGE(0x0000, 0x3fff) AM_READWRITE(K052109_051960_r, K052109_051960_w)
 	AM_RANGE(0x4000, 0x5fff) AM_RAM
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(sound_bank_w)
-	AM_RANGE(0xa000, 0xa00d) AM_DEVREADWRITE("k007232_1", k007232_r, k007232_w)
-	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("k007232_2", k007232_r, k007232_w)
+	AM_RANGE(0xa000, 0xa00d) AM_DEVREADWRITE("konami1", k007232_r, k007232_w)
+	AM_RANGE(0xb000, 0xb00d) AM_DEVREADWRITE("konami2", k007232_r, k007232_w)
 	AM_RANGE(0xd000, 0xd000) AM_READ(soundlatch_r)
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(nmi_enable_w)
 ADDRESS_MAP_END
@@ -257,12 +214,6 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( mstadium )
 	PORT_INCLUDE( bottom9 )
 
-	PORT_MODIFY("P1")
-	KONAMI8_ALT_B123(1)
-
-	PORT_MODIFY("P2")
-	KONAMI8_ALT_B123(2)
-
 	PORT_MODIFY("DSW2")
 	PORT_DIPNAME( 0x03, 0x01, "Play Inning" ) PORT_DIPLOCATION("SW2:1,2")
 	PORT_DIPSETTING(    0x03, "1" )
@@ -281,16 +232,16 @@ INPUT_PORTS_END
 
 
 
-static void volume_callback0( device_t *device, int v )
+static void volume_callback0(const device_config *device, int v)
 {
-	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
-	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
+	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
+	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
 }
 
-static void volume_callback1( device_t *device, int v )
+static void volume_callback1(const device_config *device, int v)
 {
-	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
-	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
+	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
+	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
 }
 
 static const k007232_interface k007232_interface_1 =
@@ -305,106 +256,45 @@ static const k007232_interface k007232_interface_2 =
 
 
 
-static const k052109_interface bottom9_k052109_intf =
-{
-	"gfx1", 0,
-	NORMAL_PLANE_ORDER,
-	KONAMI_ROM_DEINTERLEAVE_2,
-	bottom9_tile_callback
-};
-
-static const k051960_interface bottom9_k051960_intf =
-{
-	"gfx2", 1,
-	NORMAL_PLANE_ORDER,
-	KONAMI_ROM_DEINTERLEAVE_2,
-	bottom9_sprite_callback
-};
-
-static const k051316_interface bottom9_k051316_intf =
-{
-	"gfx3", 2,
-	4, FALSE, 0,
-	0, 0, 0,
-	bottom9_zoom_callback
-};
-
-static MACHINE_START( bottom9 )
-{
-	bottom9_state *state = machine.driver_data<bottom9_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 12, &ROM[0x10000], 0x2000);
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_k052109 = machine.device("k052109");
-	state->m_k051960 = machine.device("k051960");
-	state->m_k051316 = machine.device("k051316");
-	state->m_k007232_1 = machine.device("k007232_1");
-	state->m_k007232_2 = machine.device("k007232_2");
-
-	state->save_item(NAME(state->m_video_enable));
-	state->save_item(NAME(state->m_zoomreadroms));
-	state->save_item(NAME(state->m_k052109_selected));
-	state->save_item(NAME(state->m_nmienable));
-}
-
-static MACHINE_RESET( bottom9 )
-{
-	bottom9_state *state = machine.driver_data<bottom9_state>();
-
-	state->m_video_enable = 0;
-	state->m_zoomreadroms = 0;
-	state->m_k052109_selected = 0;
-	state->m_nmienable = 0;
-}
-
-static MACHINE_CONFIG_START( bottom9, bottom9_state )
+static MACHINE_DRIVER_START( bottom9 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, 2000000) /* ? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", bottom9_interrupt)
+	MDRV_CPU_ADD("maincpu", M6809, 2000000) /* ? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", bottom9_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3579545)
-	MCFG_CPU_PROGRAM_MAP(audio_map)
-	MCFG_CPU_PERIODIC_INT(bottom9_sound_interrupt,8*60)	/* irq is triggered by the main CPU */
-
-	MCFG_MACHINE_START(bottom9)
-	MCFG_MACHINE_RESET(bottom9)
+	MDRV_CPU_ADD("audiocpu", Z80, 3579545)
+	MDRV_CPU_PROGRAM_MAP(audio_map)
+	MDRV_CPU_VBLANK_INT_HACK(bottom9_sound_interrupt,8)	/* irq is triggered by the main CPU */
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
-	MCFG_SCREEN_UPDATE_STATIC(bottom9)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
 
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(bottom9)
-
-	MCFG_K052109_ADD("k052109", bottom9_k052109_intf)
-	MCFG_K051960_ADD("k051960", bottom9_k051960_intf)
-	MCFG_K051316_ADD("k051316", bottom9_k051316_intf)
+	MDRV_VIDEO_START(bottom9)
+	MDRV_VIDEO_UPDATE(bottom9)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("k007232_1", K007232, 3579545)
-	MCFG_SOUND_CONFIG(k007232_interface_1)
-	MCFG_SOUND_ROUTE(0, "mono", 0.40)
-	MCFG_SOUND_ROUTE(1, "mono", 0.40)
+	MDRV_SOUND_ADD("konami1", K007232, 3579545)
+	MDRV_SOUND_CONFIG(k007232_interface_1)
+	MDRV_SOUND_ROUTE(0, "mono", 0.40)
+	MDRV_SOUND_ROUTE(1, "mono", 0.40)
 
-	MCFG_SOUND_ADD("k007232_2", K007232, 3579545)
-	MCFG_SOUND_CONFIG(k007232_interface_2)
-	MCFG_SOUND_ROUTE(0, "mono", 0.40)
-	MCFG_SOUND_ROUTE(1, "mono", 0.40)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("konami2", K007232, 3579545)
+	MDRV_SOUND_CONFIG(k007232_interface_2)
+	MDRV_SOUND_ROUTE(0, "mono", 0.40)
+	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -416,8 +306,8 @@ MACHINE_CONFIG_END
 ROM_START( bottom9 )
 	ROM_REGION( 0x28000, "maincpu", 0 ) /* code + banked roms */
 	ROM_LOAD( "891n03.k17",   0x10000, 0x10000, CRC(8b083ff3) SHA1(045fef944b192e4bb147fa0f28680c0602af7377) )
-	ROM_LOAD( "891-t02.k15",  0x20000, 0x08000, CRC(2c10ced2) SHA1(ecd43825a67b495cade94a454c96a19143d87760) )
-	ROM_CONTINUE(             0x08000, 0x08000 )
+    ROM_LOAD( "891-t02.k15",  0x20000, 0x08000, CRC(2c10ced2) SHA1(ecd43825a67b495cade94a454c96a19143d87760) )
+    ROM_CONTINUE(             0x08000, 0x08000 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Z80 code */
 	ROM_LOAD( "891j01.g8",    0x0000, 0x8000, CRC(31b0a0a8) SHA1(8e047f81c19f25de97fa22e70dcfe9e06bfae699) )
@@ -457,13 +347,13 @@ ROM_START( bottom9 )
 	ROM_REGION( 0x0200, "proms", 0 )
 	ROM_LOAD( "891b11.f23",   0x0000, 0x0100, CRC(ecb854aa) SHA1(3bd321ca3076d4e0042e0af656d51909fa6a5b3b) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x40000, "k007232_1", 0 ) /* samples for 007232 #0 */
+	ROM_REGION( 0x40000, "konami1", 0 ) /* samples for 007232 #0 */
 	ROM_LOAD( "891e08a",      0x00000, 0x10000, CRC(cef667bf) SHA1(e773fc0ced45e01e13cdee18c404d609356d2d0e) )
 	ROM_LOAD( "891e08b",      0x10000, 0x10000, CRC(f7c14a7a) SHA1(05261a065de33e158e8d72d74eb657035abb5d03) )
 	ROM_LOAD( "891e08c",      0x20000, 0x10000, CRC(756b7f3c) SHA1(6f36f0b4e08db27a8b6e180d12be6427677ad62d) )
 	ROM_LOAD( "891e08d",      0x30000, 0x10000, CRC(cd0d7305) SHA1(82403ce1f38014ebf94008a66c98697a572303f9) )
 
-	ROM_REGION( 0x40000, "k007232_2", 0 ) /* samples for 007232 #1 */
+	ROM_REGION( 0x40000, "konami2", 0 ) /* samples for 007232 #1 */
 	ROM_LOAD( "891e04a",      0x00000, 0x10000, CRC(daebbc74) SHA1(f61daebf80e5e4640c4cea4ea5767e64a49d928d) )
 	ROM_LOAD( "891e04b",      0x10000, 0x10000, CRC(5ffb9ad1) SHA1(e8f00c63dc3091aa344e82dc29f41aedd5a764b4) )
 	ROM_LOAD( "891e04c",      0x20000, 0x10000, CRC(2dbbf16b) SHA1(84b2005a1fe61a6a0cf1aa6e0fdf7ff8b1f8f82a) )
@@ -473,8 +363,8 @@ ROM_END
 ROM_START( bottom9n )
 	ROM_REGION( 0x28000, "maincpu", 0 ) /* code + banked roms */
 	ROM_LOAD( "891n03.k17",   0x10000, 0x10000, CRC(8b083ff3) SHA1(045fef944b192e4bb147fa0f28680c0602af7377) )
-	ROM_LOAD( "891n02.k15",   0x20000, 0x08000, CRC(d44d9ed4) SHA1(2a12bcfba81ab7e074569e2ad2da6a237a1c0ce5) )
-	ROM_CONTINUE(             0x08000, 0x08000 )
+    ROM_LOAD( "891n02.k15",   0x20000, 0x08000, CRC(d44d9ed4) SHA1(2a12bcfba81ab7e074569e2ad2da6a237a1c0ce5) )
+    ROM_CONTINUE(             0x08000, 0x08000 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Z80 code */
 	ROM_LOAD( "891j01.g8",    0x0000, 0x8000, CRC(31b0a0a8) SHA1(8e047f81c19f25de97fa22e70dcfe9e06bfae699) )
@@ -514,13 +404,13 @@ ROM_START( bottom9n )
 	ROM_REGION( 0x0200, "proms", 0 )
 	ROM_LOAD( "891b11.f23",   0x0000, 0x0100, CRC(ecb854aa) SHA1(3bd321ca3076d4e0042e0af656d51909fa6a5b3b) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x40000, "k007232_1", 0 ) /* samples for 007232 #0 */
+	ROM_REGION( 0x40000, "konami1", 0 ) /* samples for 007232 #0 */
 	ROM_LOAD( "891e08a",      0x00000, 0x10000, CRC(cef667bf) SHA1(e773fc0ced45e01e13cdee18c404d609356d2d0e) )
 	ROM_LOAD( "891e08b",      0x10000, 0x10000, CRC(f7c14a7a) SHA1(05261a065de33e158e8d72d74eb657035abb5d03) )
 	ROM_LOAD( "891e08c",      0x20000, 0x10000, CRC(756b7f3c) SHA1(6f36f0b4e08db27a8b6e180d12be6427677ad62d) )
 	ROM_LOAD( "891e08d",      0x30000, 0x10000, CRC(cd0d7305) SHA1(82403ce1f38014ebf94008a66c98697a572303f9) )
 
-	ROM_REGION( 0x40000, "k007232_2", 0 ) /* samples for 007232 #1 */
+	ROM_REGION( 0x40000, "konami2", 0 ) /* samples for 007232 #1 */
 	ROM_LOAD( "891e04a",      0x00000, 0x10000, CRC(daebbc74) SHA1(f61daebf80e5e4640c4cea4ea5767e64a49d928d) )
 	ROM_LOAD( "891e04b",      0x10000, 0x10000, CRC(5ffb9ad1) SHA1(e8f00c63dc3091aa344e82dc29f41aedd5a764b4) )
 	ROM_LOAD( "891e04c",      0x20000, 0x10000, CRC(2dbbf16b) SHA1(84b2005a1fe61a6a0cf1aa6e0fdf7ff8b1f8f82a) )
@@ -530,8 +420,8 @@ ROM_END
 ROM_START( mstadium )
 	ROM_REGION( 0x28000, "maincpu", 0 ) /* code + banked roms */
 	ROM_LOAD( "891-403.k17",   0x10000, 0x10000, CRC(1c00c4e8) SHA1(8a3400a8df44f21616422e5af3bca84d0f390f63) )
-	ROM_LOAD( "891-402.k15",   0x20000, 0x08000, CRC(b850bbce) SHA1(a64300d1b1068e59eb59c427946c9bff164e2da8) )
-	ROM_CONTINUE(             0x08000, 0x08000 )
+    ROM_LOAD( "891-402.k15",   0x20000, 0x08000, CRC(b850bbce) SHA1(a64300d1b1068e59eb59c427946c9bff164e2da8) )
+    ROM_CONTINUE(             0x08000, 0x08000 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* Z80 code */
 	ROM_LOAD( "891w01.g8",    0x0000, 0x8000, CRC(edec565a) SHA1(69cba0d00c6ef76c4ce2b553e3fd15de8abbbf31) )
@@ -571,13 +461,13 @@ ROM_START( mstadium )
 	ROM_REGION( 0x0200, "proms", 0 )
 	ROM_LOAD( "891b11.f23",   0x0000, 0x0100, CRC(ecb854aa) SHA1(3bd321ca3076d4e0042e0af656d51909fa6a5b3b) )	/* priority encoder (not used) */
 
-	ROM_REGION( 0x40000, "k007232_1", 0 ) /* samples for 007232 #0 */
+	ROM_REGION( 0x40000, "konami1", 0 ) /* samples for 007232 #0 */
 	ROM_LOAD( "891e08a",      0x00000, 0x10000, CRC(cef667bf) SHA1(e773fc0ced45e01e13cdee18c404d609356d2d0e) )
 	ROM_LOAD( "891e08b",      0x10000, 0x10000, CRC(f7c14a7a) SHA1(05261a065de33e158e8d72d74eb657035abb5d03) )
 	ROM_LOAD( "891e08c",      0x20000, 0x10000, CRC(756b7f3c) SHA1(6f36f0b4e08db27a8b6e180d12be6427677ad62d) )
 	ROM_LOAD( "891e08d",      0x30000, 0x10000, CRC(cd0d7305) SHA1(82403ce1f38014ebf94008a66c98697a572303f9) )
 
-	ROM_REGION( 0x40000, "k007232_2", 0 ) /* samples for 007232 #1 */
+	ROM_REGION( 0x40000, "konami2", 0 ) /* samples for 007232 #1 */
 	ROM_LOAD( "891e04a",      0x00000, 0x10000, CRC(daebbc74) SHA1(f61daebf80e5e4640c4cea4ea5767e64a49d928d) )
 	ROM_LOAD( "891e04b",      0x10000, 0x10000, CRC(5ffb9ad1) SHA1(e8f00c63dc3091aa344e82dc29f41aedd5a764b4) )
 	ROM_LOAD( "891e04c",      0x20000, 0x10000, CRC(2dbbf16b) SHA1(84b2005a1fe61a6a0cf1aa6e0fdf7ff8b1f8f82a) )
@@ -586,6 +476,14 @@ ROM_END
 
 
 
-GAME( 1989, bottom9,  0,       bottom9, bottom9,  0, ROT0, "Konami", "Bottom of the Ninth (version T)", GAME_SUPPORTS_SAVE )
-GAME( 1989, bottom9n, bottom9, bottom9, bottom9,  0, ROT0, "Konami", "Bottom of the Ninth (version N)", GAME_SUPPORTS_SAVE )
-GAME( 1989, mstadium, bottom9, bottom9, mstadium, 0, ROT0, "Konami", "Main Stadium (Japan)", GAME_SUPPORTS_SAVE )
+static DRIVER_INIT( bottom9 )
+{
+	konami_rom_deinterleave_2(machine, "gfx1");
+	konami_rom_deinterleave_2(machine, "gfx2");
+}
+
+
+
+GAME( 1989, bottom9,  0,       bottom9, bottom9,  bottom9, ROT0, "Konami", "Bottom of the Ninth (version T)", 0 )
+GAME( 1989, bottom9n, bottom9, bottom9, bottom9,  bottom9, ROT0, "Konami", "Bottom of the Ninth (version N)", 0 )
+GAME( 1989, mstadium, bottom9, bottom9, mstadium, bottom9, ROT0, "Konami", "Main Stadium (Japan)", 0 )

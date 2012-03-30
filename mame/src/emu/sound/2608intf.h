@@ -3,8 +3,6 @@
 #ifndef __2608INTF_H__
 #define __2608INTF_H__
 
-#include "devlegcy.h"
-
 #include "fm.h"
 #include "ay8910.h"
 
@@ -14,7 +12,7 @@ typedef struct _ym2608_interface ym2608_interface;
 struct _ym2608_interface
 {
 	const ay8910_interface ay8910_intf;
-	void ( *handler )( device_t *device, int irq );	/* IRQ handler for the YM2608 */
+	void ( *handler )( const device_config *device, int irq );	/* IRQ handler for the YM2608 */
 };
 
 READ8_DEVICE_HANDLER( ym2608_r );
@@ -29,6 +27,7 @@ WRITE8_DEVICE_HANDLER( ym2608_control_port_b_w );
 WRITE8_DEVICE_HANDLER( ym2608_data_port_a_w );
 WRITE8_DEVICE_HANDLER( ym2608_data_port_b_w );
 
-DECLARE_LEGACY_SOUND_DEVICE(YM2608, ym2608);
+DEVICE_GET_INFO( ym2608 );
+#define SOUND_YM2608 DEVICE_GET_INFO_NAME( ym2608 )
 
 #endif /* __2608INTF_H__ */

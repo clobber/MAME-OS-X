@@ -3,7 +3,7 @@
     Atari Tempest hardware
 
     Games supported:
-        * Tempest [5 sets]
+        * Tempest [4 sets]
         * Tempest Tubes
 
     Known bugs:
@@ -266,31 +266,24 @@ Revision 2
 Revision 3
 136002-316.h1  Fixes screen collapse between players when using newer deflection board
 
-136002-134.f1  Contains the 136002-316.h1 code fix even though it's listed as a rev 1 rom
-
 Note: Roms for Tempest Analog Vector-Generator PCB Assembly A037383-03 or A037383-04 are twice
       the size as those for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02
 
+Known roms (listed in the manual) currently not dumped:
+
+Version 1 for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02
+ 136002-137.p1
+ 136002-135.j1
+
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/mathbox.h"
 #include "video/avgdvg.h"
 #include "video/vector.h"
 #include "machine/atari_vg.h"
 #include "sound/pokey.h"
-
-
-class tempest_state : public driver_device
-{
-public:
-	tempest_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_player_select;
-};
-
 
 #define MASTER_CLOCK (XTAL_12_096MHz)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
@@ -301,11 +294,11 @@ public:
 #define TEMPEST_BUTTONS_P2_TAG	("BUTTONSP2")
 
 
+static UINT8 tempest_player_select;
 
 static MACHINE_START( tempest )
 {
-	tempest_state *state = machine.driver_data<tempest_state>();
-	state->save_item(NAME(state->m_player_select));
+	state_save_register_global(machine, tempest_player_select);
 }
 
 /*************************************
@@ -316,8 +309,8 @@ static MACHINE_START( tempest )
 
 static WRITE8_HANDLER( wdclr_w )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
-	watchdog_reset(space->machine());
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+	watchdog_reset(space->machine);
 }
 
 /*************************************
@@ -328,15 +321,13 @@ static WRITE8_HANDLER( wdclr_w )
 
 static CUSTOM_INPUT( tempest_knob_r )
 {
-	tempest_state *state = field.machine().driver_data<tempest_state>();
-	return input_port_read(field.machine(), (state->m_player_select == 0) ?
+	return input_port_read(field->port->machine, (tempest_player_select == 0) ?
 										TEMPEST_KNOB_P1_TAG : TEMPEST_KNOB_P2_TAG);
 }
 
 static CUSTOM_INPUT( tempest_buttons_r )
 {
-	tempest_state *state = field.machine().driver_data<tempest_state>();
-	return input_port_read(field.machine(), (state->m_player_select == 0) ?
+	return input_port_read(field->port->machine, (tempest_player_select == 0) ?
 										TEMPEST_BUTTONS_P1_TAG : TEMPEST_BUTTONS_P2_TAG);
 }
 
@@ -344,19 +335,19 @@ static CUSTOM_INPUT( tempest_buttons_r )
 static CUSTOM_INPUT( clock_r )
 {
 	/* Emulate the 3kHz source on bit 7 (divide 1.5MHz by 512) */
-	return (field.machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
+	return (cputag_get_total_cycles(field->port->machine, "maincpu") & 0x100) ? 1 : 0;
 }
 
 
 static READ8_DEVICE_HANDLER( input_port_1_bit_r )
 {
-	return (input_port_read(device->machine(), "IN1/DSW0") & (1 << offset)) ? 0 : 228;
+	return (input_port_read(device->machine, "IN1/DSW0") & (1 << offset)) ? 0 : 228;
 }
 
 
 static READ8_DEVICE_HANDLER( input_port_2_bit_r )
 {
-	return (input_port_read(device->machine(), "IN2") & (1 << offset)) ? 0 : 228;
+	return (input_port_read(device->machine, "IN2") & (1 << offset)) ? 0 : 228;
 }
 
 
@@ -369,19 +360,18 @@ static READ8_DEVICE_HANDLER( input_port_2_bit_r )
 
 static WRITE8_HANDLER( tempest_led_w )
 {
-	tempest_state *state = space->machine().driver_data<tempest_state>();
-	set_led_status(space->machine(), 0, ~data & 0x02);
-	set_led_status(space->machine(), 1, ~data & 0x01);
+	set_led_status(0, ~data & 0x02);
+	set_led_status(1, ~data & 0x01);
 	/* FLIP is bit 0x04 */
-	state->m_player_select = data & 0x04;
+	tempest_player_select = data & 0x04;
 }
 
 
 static WRITE8_HANDLER( tempest_coin_w )
 {
-	coin_counter_w(space->machine(), 0, (data & 0x01));
-	coin_counter_w(space->machine(), 1, (data & 0x02));
-	coin_counter_w(space->machine(), 2, (data & 0x04));
+	coin_counter_w(0, (data & 0x01));
+	coin_counter_w(1, (data & 0x02));
+	coin_counter_w(2, (data & 0x04));
 	avg_set_flip_x(data & 0x08);
 	avg_set_flip_y(data & 0x10);
 }
@@ -394,21 +384,21 @@ static WRITE8_HANDLER( tempest_coin_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x080f) AM_WRITEONLY AM_BASE(&avgdvg_colorram)
+	AM_RANGE(0x0800, 0x080f) AM_WRITE(SMH_RAM) AM_BASE(&tempest_colorram)
 	AM_RANGE(0x0c00, 0x0c00) AM_READ_PORT("IN0")
 	AM_RANGE(0x0d00, 0x0d00) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0e00, 0x0e00) AM_READ_PORT("DSW2")
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
-	AM_RANGE(0x3000, 0x3fff) AM_ROM
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x3000, 0x3fff) AM_READ(SMH_ROM)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(tempest_coin_w)
 	AM_RANGE(0x4800, 0x4800) AM_WRITE(avgdvg_go_w)
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(wdclr_w)
 	AM_RANGE(0x5800, 0x5800) AM_WRITE(avgdvg_reset_w)
-	AM_RANGE(0x6000, 0x603f) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
-	AM_RANGE(0x6040, 0x6040) AM_DEVREAD("mathbox", mathbox_status_r) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
-	AM_RANGE(0x6050, 0x6050) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
+	AM_RANGE(0x6000, 0x603f) AM_DEVWRITE("earom", atari_vg_earom_w)
+	AM_RANGE(0x6040, 0x6040) AM_DEVREAD("mathbox", mathbox_status_r) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x6050, 0x6050) AM_DEVREAD("earom", atari_vg_earom_r)
 	AM_RANGE(0x6060, 0x6060) AM_DEVREAD("mathbox", mathbox_lo_r)
 	AM_RANGE(0x6070, 0x6070) AM_DEVREAD("mathbox", mathbox_hi_r)
 	AM_RANGE(0x6080, 0x609f) AM_DEVWRITE("mathbox", mathbox_go_w)
@@ -454,12 +444,12 @@ static INPUT_PORTS_START( tempest )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_DIPNAME(  0x03, 0x03, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("DE2:4,3")
+	PORT_DIPNAME(  0x03, 0x03, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(     0x02, DEF_STR( Easy ) )
 	PORT_DIPSETTING(     0x03, "Medium1" )
 	PORT_DIPSETTING(     0x00, "Medium2" )
 	PORT_DIPSETTING(     0x01, DEF_STR( Hard ) )
-	PORT_DIPNAME(  0x04, 0x04, "Rating" ) PORT_DIPLOCATION("DE2:2")
+	PORT_DIPNAME(  0x04, 0x04, "Rating" )
 	PORT_DIPSETTING(     0x04, "1, 3, 5, 7, 9" )
 	PORT_DIPSETTING(     0x00, "tied to high score" )
 	PORT_BIT(0x18, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(tempest_buttons_r, NULL)
@@ -468,20 +458,20 @@ static INPUT_PORTS_START( tempest )
 	PORT_BIT(0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")	/* N13 on analog vector generator PCB */
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coinage ) ) PORT_DIPLOCATION("N13:8,7")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" ) PORT_DIPLOCATION("N13:6,5")
+	PORT_DIPNAME( 0x0c, 0x00, "Right Coin" )
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x04, "*4" )
 	PORT_DIPSETTING(    0x08, "*5" )
 	PORT_DIPSETTING(    0x0c, "*6" )
-	PORT_DIPNAME( 0x10, 0x00, "Left Coin" ) PORT_DIPLOCATION("N13:4")
+	PORT_DIPNAME( 0x10, 0x00, "Left Coin" )
 	PORT_DIPSETTING(    0x00, "*1" )
 	PORT_DIPSETTING(    0x10, "*2" )
-	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" ) PORT_DIPLOCATION("N13:3,2,1")
+	PORT_DIPNAME( 0xe0, 0x00, "Bonus Coins" )
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPSETTING(    0x80, "1 each 5" )
 	PORT_DIPSETTING(    0x40, "1 each 4 (+Demo)" )
@@ -492,15 +482,15 @@ static INPUT_PORTS_START( tempest )
 	PORT_DIPSETTING(    0xe0, "Freeze Mode" )
 
 	PORT_START("DSW2")	/* L12 on analog vector generator PCB */
-	PORT_DIPNAME( 0x01, 0x00, "Minimum" ) PORT_DIPLOCATION("L12:8")
+	PORT_DIPNAME( 0x01, 0x00, "Minimum" )
 	PORT_DIPSETTING(    0x00, "1 Credit" )
 	PORT_DIPSETTING(    0x01, "2 Credit" )
-	PORT_DIPNAME( 0x06, 0x00, DEF_STR( Language ) ) PORT_DIPLOCATION("L12:7,6")
+	PORT_DIPNAME( 0x06, 0x00, DEF_STR( Language ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( French ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( German ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( Spanish ) )
-	PORT_DIPNAME( 0x38, 0x00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("L12:5,4,3")
+	PORT_DIPNAME( 0x38, 0x00, DEF_STR( Bonus_Life ) )
 	PORT_DIPSETTING(    0x08, "10000" )
 	PORT_DIPSETTING(    0x00, "20000" )
 	PORT_DIPSETTING(    0x10, "30000" )
@@ -509,7 +499,7 @@ static INPUT_PORTS_START( tempest )
 	PORT_DIPSETTING(    0x28, "60000" )
 	PORT_DIPSETTING(    0x30, "70000" )
 	PORT_DIPSETTING(    0x38, DEF_STR( None ) )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Lives ) ) PORT_DIPLOCATION("L12:2,1")
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0xc0, "2" )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x40, "4" )
@@ -580,41 +570,41 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( tempest, tempest_state )
+static MACHINE_DRIVER_START( tempest )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_assert, (double)MASTER_CLOCK / 4096 / 12)
-	MCFG_WATCHDOG_TIME_INIT(attotime::from_hz(CLOCK_3KHZ / 256))
+	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_assert, (double)MASTER_CLOCK / 4096 / 12)
+	MDRV_WATCHDOG_TIME_INIT(HZ(CLOCK_3KHZ / 256))
 
-	MCFG_ATARIVGEAROM_ADD("earom")
+	MDRV_ATARIVGEAROM_ADD("earom")
 
-	MCFG_MACHINE_START(tempest)
+	MDRV_MACHINE_START(tempest)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", VECTOR)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(400, 300)
-	MCFG_SCREEN_VISIBLE_AREA(0, 580, 0, 570)
-	MCFG_SCREEN_UPDATE_STATIC(vector)
+	MDRV_SCREEN_ADD("screen", VECTOR)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_SIZE(400, 300)
+	MDRV_SCREEN_VISIBLE_AREA(0, 580, 0, 570)
 
-	MCFG_VIDEO_START(avg_tempest)
+	MDRV_VIDEO_START(avg_tempest)
+	MDRV_VIDEO_UPDATE(vector)
 
 	/* Drivers */
-	MCFG_MATHBOX_ADD("mathbox")
+	MDRV_MATHBOX_ADD("mathbox")
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK / 8)
-	MCFG_SOUND_CONFIG(pokey_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK / 8)
+	MDRV_SOUND_CONFIG(pokey_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
-	MCFG_SOUND_CONFIG(pokey_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
+	MDRV_SOUND_CONFIG(pokey_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -626,107 +616,11 @@ MACHINE_CONFIG_END
 
 ROM_START( tempest ) /* rev 3 */
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-03 or A037383-04 */
-	ROM_LOAD( "136002-133.d1",  0x9000, 0x1000, CRC(1d0cc503) SHA1(7bef95db9b1102d6b1166bda0ccb276ef4cc3764) ) /* 136002-113 + 136002-114 */
-	ROM_LOAD( "136002-134.f1",  0xa000, 0x1000, CRC(c88e3524) SHA1(89144baf1efc703b2336774793ce345b37829ee7) ) /* 136002-115 + 136002-316 */
-	ROM_LOAD( "136002-235.j1",  0xb000, 0x1000, CRC(a4b2ce3f) SHA1(a5f5fb630a48c5d25346f90d4c13aaa98f60b228) ) /* 136002-217 + 136002-118 */
-	ROM_LOAD( "136002-136.lm1", 0xc000, 0x1000, CRC(65a9a9f9) SHA1(73aa7d6f4e7093ccb2d97f6344f354872bcfd72a) ) /* 136002-119 + 136002-120 */
-	ROM_LOAD( "136002-237.p1",  0xd000, 0x1000, CRC(de4e9e34) SHA1(04be074e45bf5cd95a852af97cd04e35b7f27fc4) ) /* 136002-121 + 136002-222 */
-	ROM_RELOAD(                 0xf000, 0x1000 ) /* for reset/interrupt vectors */
-	/* Vector ROM */
-	ROM_LOAD( "136002-138.np3", 0x3000, 0x1000, CRC(9995256d) SHA1(2b725ee1a57d423c7d7377a1744f48412e0f2f69) )
-
-	/* AVG PROM */
-	ROM_REGION( 0x100, "user1", 0 )
-	ROM_LOAD( "136002-125.d7",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
-
-	/* Mathbox PROMs */
-	ROM_REGION( 0x20, "user2", 0 )
-	ROM_LOAD( "136002.126",   0x0000, 0x0020, CRC(8b04f921) SHA1(317b3397482f13b2d1bc21f296d3b3f9a118787b) )
-
-	ROM_REGION32_BE( 0x400, "user3", 0 )
-	ROMX_LOAD( "136002.132", 0, 0x100, CRC(2af82e87) SHA1(3816835a9ccf99a76d246adf204989d9261bb065), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.131", 0, 0x100, CRC(b31f6e24) SHA1(ce5f8ca34d06a5cfa0076b47400e61e0130ffe74), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.130", 1, 0x100, CRC(8119b847) SHA1(c4fbaedd4ce1ad6a4128cbe902b297743edb606a), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.129", 1, 0x100, CRC(09f5a4d5) SHA1(d6f2ac07ca9ee385c08831098b0dcaf56808993b), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.128", 2, 0x100, CRC(823b61ae) SHA1(d99a839874b45f64e14dae92a036e47a53705d16), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.127", 2, 0x100, CRC(276eadd5) SHA1(55718cd8ec4bcf75076d5ef0ee1ed2551e19d9ba), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-ROM_END
-
-
-ROM_START( tempest1r ) /* rev 1 */
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-03 or A037383-04 */
-	ROM_LOAD( "136002-133.d1",  0x9000, 0x1000, CRC(1d0cc503) SHA1(7bef95db9b1102d6b1166bda0ccb276ef4cc3764) ) /* 136002-113 + 136002-114 */
-	ROM_LOAD( "136002-134.f1",  0xa000, 0x1000, CRC(c88e3524) SHA1(89144baf1efc703b2336774793ce345b37829ee7) ) /* 136002-115 + 136002-316 */
-	ROM_LOAD( "136002-135.j1",  0xb000, 0x1000, CRC(1ca27781) SHA1(cafbec28d682e98a74fdd5b8dfcfa33c64ff6a93) ) /* 136002-117 + 136002-118 */
-	ROM_LOAD( "136002-136.lm1", 0xc000, 0x1000, CRC(65a9a9f9) SHA1(73aa7d6f4e7093ccb2d97f6344f354872bcfd72a) ) /* 136002-119 + 136002-120 */
-	ROM_LOAD( "136002-137.p1",  0xd000, 0x1000, CRC(d75fd2ef) SHA1(19f611a77989d201d346b3e89fac5789663a01ce) ) /* 136002-121 + 136002-122 */
-	ROM_RELOAD(                 0xf000, 0x1000 ) /* for reset/interrupt vectors */
-	/* Vector ROM */
-	ROM_LOAD( "136002-138.np3", 0x3000, 0x1000, CRC(9995256d) SHA1(2b725ee1a57d423c7d7377a1744f48412e0f2f69) )
-
-	/* AVG PROM */
-	ROM_REGION( 0x100, "user1", 0 )
-	ROM_LOAD( "136002-125.d7",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
-
-	/* Mathbox PROMs */
-	ROM_REGION( 0x20, "user2", 0 )
-	ROM_LOAD( "136002.126",   0x0000, 0x0020, CRC(8b04f921) SHA1(317b3397482f13b2d1bc21f296d3b3f9a118787b) )
-
-	ROM_REGION32_BE( 0x400, "user3", 0 )
-	ROMX_LOAD( "136002.132", 0, 0x100, CRC(2af82e87) SHA1(3816835a9ccf99a76d246adf204989d9261bb065), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.131", 0, 0x100, CRC(b31f6e24) SHA1(ce5f8ca34d06a5cfa0076b47400e61e0130ffe74), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.130", 1, 0x100, CRC(8119b847) SHA1(c4fbaedd4ce1ad6a4128cbe902b297743edb606a), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.129", 1, 0x100, CRC(09f5a4d5) SHA1(d6f2ac07ca9ee385c08831098b0dcaf56808993b), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.128", 2, 0x100, CRC(823b61ae) SHA1(d99a839874b45f64e14dae92a036e47a53705d16), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.127", 2, 0x100, CRC(276eadd5) SHA1(55718cd8ec4bcf75076d5ef0ee1ed2551e19d9ba), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-ROM_END
-
-
-ROM_START( tempest3 ) /* rev 3 */
-	ROM_REGION( 0x10000, "maincpu", 0 )
 	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02 */
 	ROM_LOAD( "136002-113.d1",   0x9000, 0x0800, CRC(65d61fe7) SHA1(38a1e8a8f65b7887cf3e190269fe4ce2c6f818aa) )
 	ROM_LOAD( "136002-114.e1",   0x9800, 0x0800, CRC(11077375) SHA1(ed8ff0ca969da6672a7683b93d4fcf2935a0d903) )
 	ROM_LOAD( "136002-115.f1",   0xa000, 0x0800, CRC(f3e2827a) SHA1(bd04fcfbbba995e08c3144c1474fcddaaeb1c700) )
 	ROM_LOAD( "136002-316.h1",   0xa800, 0x0800, CRC(aeb0f7e9) SHA1(a5cc25015b98692673cfc1c7c2e9634efd750870) )
-	ROM_LOAD( "136002-217.j1",   0xb000, 0x0800, CRC(ef2eb645) SHA1(b1a2c969e8897e335d5354de6ae04a65d4b2a1e4) )
-	ROM_LOAD( "136002-118.k1",   0xb800, 0x0800, CRC(beb352ab) SHA1(f213166d3970e0bd0f29d8dea8d6afa6990cce38) )
-	ROM_LOAD( "136002-119.lm1",  0xc000, 0x0800, CRC(a4de050f) SHA1(ea302e43a313a5a18115e74ddbaaedde0fbecda7) )
-	ROM_LOAD( "136002-120.mn1",  0xc800, 0x0800, CRC(35619648) SHA1(48f1e8bed7ec6afa0b4c549a30e5ec331c071e40) )
-	ROM_LOAD( "136002-121.p1",   0xd000, 0x0800, CRC(73d38e47) SHA1(9980606376a79ba94f8e2a325871a6c8d10d83fc) )
-	ROM_LOAD( "136002-222.r1",   0xd800, 0x0800, CRC(707bd5c3) SHA1(2f0af6fb7154c244c794f7247e5c16a1e06ddf7d) )
-	ROM_RELOAD(                  0xf800, 0x0800 ) /* for reset/interrupt vectors */
-	/* Vector ROM */
-	ROM_LOAD( "136002-123.np3",  0x3000, 0x0800, CRC(29f7e937) SHA1(686c8b9b8901262e743497cee7f2f7dd5cb3af7e) ) /* May be labeled "136002-111", same data */
-	ROM_LOAD( "136002-124.r3",   0x3800, 0x0800, CRC(c16ec351) SHA1(a30a3662c740810c0f20e3712679606921b8ca06) ) /* May be labeled "136002-112", same data */
-
-	/* AVG PROM */
-	ROM_REGION( 0x100, "user1", 0 )
-	ROM_LOAD( "136002-125.d7",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
-
-	/* Mathbox PROMs */
-	ROM_REGION( 0x20, "user2", 0 )
-	ROM_LOAD( "136002.126",   0x0000, 0x0020, CRC(8b04f921) SHA1(317b3397482f13b2d1bc21f296d3b3f9a118787b) )
-
-	ROM_REGION32_BE( 0x400, "user3", 0 )
-	ROMX_LOAD( "136002.132", 0, 0x100, CRC(2af82e87) SHA1(3816835a9ccf99a76d246adf204989d9261bb065), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.131", 0, 0x100, CRC(b31f6e24) SHA1(ce5f8ca34d06a5cfa0076b47400e61e0130ffe74), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.130", 1, 0x100, CRC(8119b847) SHA1(c4fbaedd4ce1ad6a4128cbe902b297743edb606a), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.129", 1, 0x100, CRC(09f5a4d5) SHA1(d6f2ac07ca9ee385c08831098b0dcaf56808993b), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-	ROMX_LOAD( "136002.128", 2, 0x100, CRC(823b61ae) SHA1(d99a839874b45f64e14dae92a036e47a53705d16), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
-	ROMX_LOAD( "136002.127", 2, 0x100, CRC(276eadd5) SHA1(55718cd8ec4bcf75076d5ef0ee1ed2551e19d9ba), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
-ROM_END
-
-
-ROM_START( tempest2 ) /* rev 2 */
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02 */
-	ROM_LOAD( "136002-113.d1",   0x9000, 0x0800, CRC(65d61fe7) SHA1(38a1e8a8f65b7887cf3e190269fe4ce2c6f818aa) )
-	ROM_LOAD( "136002-114.e1",   0x9800, 0x0800, CRC(11077375) SHA1(ed8ff0ca969da6672a7683b93d4fcf2935a0d903) )
-	ROM_LOAD( "136002-115.f1",   0xa000, 0x0800, CRC(f3e2827a) SHA1(bd04fcfbbba995e08c3144c1474fcddaaeb1c700) )
-	ROM_LOAD( "136002-116.h1",   0xa800, 0x0800, CRC(7356896c) SHA1(a013ede292189a8f5a907de882ee1a573d784b3c) )
 	ROM_LOAD( "136002-217.j1",   0xb000, 0x0800, CRC(ef2eb645) SHA1(b1a2c969e8897e335d5354de6ae04a65d4b2a1e4) )
 	ROM_LOAD( "136002-118.k1",   0xb800, 0x0800, CRC(beb352ab) SHA1(f213166d3970e0bd0f29d8dea8d6afa6990cce38) )
 	ROM_LOAD( "136002-119.lm1",  0xc000, 0x0800, CRC(a4de050f) SHA1(ea302e43a313a5a18115e74ddbaaedde0fbecda7) )
@@ -792,6 +686,72 @@ ROM_START( tempest1 ) /* rev 1 */
 ROM_END
 
 
+ROM_START( tempest2 ) /* rev 2 */
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02 */
+	ROM_LOAD( "136002-113.d1",   0x9000, 0x0800, CRC(65d61fe7) SHA1(38a1e8a8f65b7887cf3e190269fe4ce2c6f818aa) )
+	ROM_LOAD( "136002-114.e1",   0x9800, 0x0800, CRC(11077375) SHA1(ed8ff0ca969da6672a7683b93d4fcf2935a0d903) )
+	ROM_LOAD( "136002-115.f1",   0xa000, 0x0800, CRC(f3e2827a) SHA1(bd04fcfbbba995e08c3144c1474fcddaaeb1c700) )
+	ROM_LOAD( "136002-116.h1",   0xa800, 0x0800, CRC(7356896c) SHA1(a013ede292189a8f5a907de882ee1a573d784b3c) )
+	ROM_LOAD( "136002-217.j1",   0xb000, 0x0800, CRC(ef2eb645) SHA1(b1a2c969e8897e335d5354de6ae04a65d4b2a1e4) )
+	ROM_LOAD( "136002-118.k1",   0xb800, 0x0800, CRC(beb352ab) SHA1(f213166d3970e0bd0f29d8dea8d6afa6990cce38) )
+	ROM_LOAD( "136002-119.lm1",  0xc000, 0x0800, CRC(a4de050f) SHA1(ea302e43a313a5a18115e74ddbaaedde0fbecda7) )
+	ROM_LOAD( "136002-120.mn1",  0xc800, 0x0800, CRC(35619648) SHA1(48f1e8bed7ec6afa0b4c549a30e5ec331c071e40) )
+	ROM_LOAD( "136002-121.p1",   0xd000, 0x0800, CRC(73d38e47) SHA1(9980606376a79ba94f8e2a325871a6c8d10d83fc) )
+	ROM_LOAD( "136002-222.r1",   0xd800, 0x0800, CRC(707bd5c3) SHA1(2f0af6fb7154c244c794f7247e5c16a1e06ddf7d) )
+	ROM_RELOAD(                  0xf800, 0x0800 ) /* for reset/interrupt vectors */
+	/* Vector ROM */
+	ROM_LOAD( "136002-123.np3",  0x3000, 0x0800, CRC(29f7e937) SHA1(686c8b9b8901262e743497cee7f2f7dd5cb3af7e) ) /* May be labeled "136002-111", same data */
+	ROM_LOAD( "136002-124.r3",   0x3800, 0x0800, CRC(c16ec351) SHA1(a30a3662c740810c0f20e3712679606921b8ca06) ) /* May be labeled "136002-112", same data */
+
+	/* AVG PROM */
+	ROM_REGION( 0x100, "user1", 0 )
+	ROM_LOAD( "136002-125.d7",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
+
+	/* Mathbox PROMs */
+	ROM_REGION( 0x20, "user2", 0 )
+	ROM_LOAD( "136002.126",   0x0000, 0x0020, CRC(8b04f921) SHA1(317b3397482f13b2d1bc21f296d3b3f9a118787b) )
+
+	ROM_REGION32_BE( 0x400, "user3", 0 )
+	ROMX_LOAD( "136002.132", 0, 0x100, CRC(2af82e87) SHA1(3816835a9ccf99a76d246adf204989d9261bb065), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.131", 0, 0x100, CRC(b31f6e24) SHA1(ce5f8ca34d06a5cfa0076b47400e61e0130ffe74), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+	ROMX_LOAD( "136002.130", 1, 0x100, CRC(8119b847) SHA1(c4fbaedd4ce1ad6a4128cbe902b297743edb606a), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.129", 1, 0x100, CRC(09f5a4d5) SHA1(d6f2ac07ca9ee385c08831098b0dcaf56808993b), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+	ROMX_LOAD( "136002.128", 2, 0x100, CRC(823b61ae) SHA1(d99a839874b45f64e14dae92a036e47a53705d16), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.127", 2, 0x100, CRC(276eadd5) SHA1(55718cd8ec4bcf75076d5ef0ee1ed2551e19d9ba), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+ROM_END
+
+
+ROM_START( tempest3 ) /* rev 2 */
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-03 or A037383-04 */
+	ROM_LOAD( "136002-237.p1",  0x9000, 0x1000, CRC(1d0cc503) SHA1(7bef95db9b1102d6b1166bda0ccb276ef4cc3764) )
+	ROM_LOAD( "136002-136.lm1", 0xa000, 0x1000, CRC(c88e3524) SHA1(89144baf1efc703b2336774793ce345b37829ee7) )
+	ROM_LOAD( "136002-235.j1",  0xb000, 0x1000, CRC(a4b2ce3f) SHA1(a5f5fb630a48c5d25346f90d4c13aaa98f60b228) )
+	ROM_LOAD( "136002-134.f1",  0xc000, 0x1000, CRC(65a9a9f9) SHA1(73aa7d6f4e7093ccb2d97f6344f354872bcfd72a) )
+	ROM_LOAD( "136002-133.d1",  0xd000, 0x1000, CRC(de4e9e34) SHA1(04be074e45bf5cd95a852af97cd04e35b7f27fc4) )
+	ROM_RELOAD(                 0xf000, 0x1000 ) /* for reset/interrupt vectors */
+	/* Vector ROM */
+	ROM_LOAD( "136002-138.np3", 0x3000, 0x1000, CRC(9995256d) SHA1(2b725ee1a57d423c7d7377a1744f48412e0f2f69) )
+
+	/* AVG PROM */
+	ROM_REGION( 0x100, "user1", 0 )
+	ROM_LOAD( "136002-125.d7",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
+
+	/* Mathbox PROMs */
+	ROM_REGION( 0x20, "user2", 0 )
+	ROM_LOAD( "136002.126",   0x0000, 0x0020, CRC(8b04f921) SHA1(317b3397482f13b2d1bc21f296d3b3f9a118787b) )
+
+	ROM_REGION32_BE( 0x400, "user3", 0 )
+	ROMX_LOAD( "136002.132", 0, 0x100, CRC(2af82e87) SHA1(3816835a9ccf99a76d246adf204989d9261bb065), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.131", 0, 0x100, CRC(b31f6e24) SHA1(ce5f8ca34d06a5cfa0076b47400e61e0130ffe74), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+	ROMX_LOAD( "136002.130", 1, 0x100, CRC(8119b847) SHA1(c4fbaedd4ce1ad6a4128cbe902b297743edb606a), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.129", 1, 0x100, CRC(09f5a4d5) SHA1(d6f2ac07ca9ee385c08831098b0dcaf56808993b), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+	ROMX_LOAD( "136002.128", 2, 0x100, CRC(823b61ae) SHA1(d99a839874b45f64e14dae92a036e47a53705d16), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(3))
+	ROMX_LOAD( "136002.127", 2, 0x100, CRC(276eadd5) SHA1(55718cd8ec4bcf75076d5ef0ee1ed2551e19d9ba), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(3))
+ROM_END
+
+
 ROM_START( temptube )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	/* Roms are for Tempest Analog Vector-Generator PCB Assembly A037383-01 or A037383-02 */
@@ -834,9 +794,8 @@ ROM_END
  *
  *************************************/
 
-GAME( 1980, tempest,   0,       tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 3, Revised Hardware)", GAME_SUPPORTS_SAVE )
-GAME( 1980, tempest3,  tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1980, tempest2,  tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 2)", GAME_SUPPORTS_SAVE )
-GAME( 1980, tempest1,  tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1980, tempest1r, tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 1, Revised Hardware)", GAME_SUPPORTS_SAVE )
-GAME( 1980, temptube,  tempest, tempest, tempest, 0, ROT270, "hack",  "Tempest Tubes", GAME_SUPPORTS_SAVE )
+GAME( 1980, tempest,  0,       tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1980, tempest1, tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 1)", GAME_SUPPORTS_SAVE)
+GAME( 1980, tempest2, tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 2)", GAME_SUPPORTS_SAVE )
+GAME( 1980, tempest3, tempest, tempest, tempest, 0, ROT270, "Atari", "Tempest (rev 2, Revised Hardware)", GAME_SUPPORTS_SAVE )
+GAME( 1980, temptube, tempest, tempest, tempest, 0, ROT270, "hack",  "Tempest Tubes", GAME_SUPPORTS_SAVE )

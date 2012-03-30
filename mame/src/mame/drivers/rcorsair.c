@@ -11,7 +11,12 @@
 
 Red Corsair EPROM dump (dumped by Phil Morris) - notes follow:
 
-http://www.morris0.fsnet.co.uk
+As of 14th January 2003 a picture can be found here:
+
+http://www.morris0.fsnet.co.uk/red_corsair.jpg
+
+But that will no doubt be removed in the coming months, so grab it while
+you can. :)
 
 The game itself involves you guiding a pirate around various obstacles and
 picking up treasure. It's a top-down viewpoint.
@@ -46,33 +51,10 @@ so even the Main CPU is unknown, assuming the 8085 is the sound CPU
 
 */
 
-#define ADDRESS_MAP_MODERN
-
-#include "emu.h"
+#include "driver.h"
 #include "cpu/i8085/i8085.h"
 
-
-class rcorsair_state : public driver_device
-{
-public:
-	rcorsair_state(const machine_config &mconfig, device_type type, const char *tag)
-	: driver_device(mconfig, type, tag),
-	m_maincpu(*this, "maincpu")
-	{ }
-
-	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-
-protected:
-
-	// devices
-	required_device<cpu_device> m_maincpu;
-
-	// driver_device overrides
-	virtual void video_start();
-};
-
-
-static ADDRESS_MAP_START( rcorsair_map, AS_PROGRAM, 8, rcorsair_state )
+static ADDRESS_MAP_START( rcorsair_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -119,35 +101,38 @@ static GFXDECODE_START( rcorsair )
 	GFXDECODE_ENTRY( "gfx1", 0, tiles8x8_layout, 0, 16 )
 GFXDECODE_END
 
-void rcorsair_state::video_start()
+static VIDEO_START( rcorsair )
 {
 }
 
-UINT32 rcorsair_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static VIDEO_UPDATE( rcorsair )
 {
 
 	return 0;
 }
 
-static MACHINE_CONFIG_START( rcorsair, rcorsair_state )
+static MACHINE_DRIVER_START( rcorsair )
 
 	/* Main CPU is probably inside Custom Block with
        program code, unknown type */
 
-	MCFG_CPU_ADD("maincpu", I8085A,8000000)		 /* Sound CPU? */
-	MCFG_CPU_PROGRAM_MAP(rcorsair_map)
-//  MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", 8085A,8000000)		 /* Sound CPU? */
+	MDRV_CPU_PROGRAM_MAP(rcorsair_map)
+//  MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_UPDATE_DRIVER(rcorsair_state, screen_update)
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
 
-	MCFG_GFXDECODE(rcorsair)
-	MCFG_PALETTE_LENGTH(0x100)
-MACHINE_CONFIG_END
+	MDRV_GFXDECODE(rcorsair)
+	MDRV_PALETTE_LENGTH(0x100)
+
+	MDRV_VIDEO_START(rcorsair)
+	MDRV_VIDEO_UPDATE(rcorsair)
+MACHINE_DRIVER_END
 
 ROM_START( rcorsair )
 	ROM_REGION( 0x2000, "maincpu", 0 )
@@ -169,5 +154,4 @@ ROM_START( rcorsair )
 	ROM_LOAD( "prom_3c.bin", 0x00000, 0x100, CRC(edca1d4a) SHA1(a5ff659cffcd09cc161960da8f5cdd234e0db92c) ) // ?
 ROM_END
 
-
-GAME( 1984, rcorsair,  0,    rcorsair, inports, 0, ROT90, "Nakasawa", "Red Corsair", GAME_IS_SKELETON )
+GAME( 1984, rcorsair,  0,    rcorsair, inports, 0, ROT90, "Nakasawa", "Red Corsair", GAME_NOT_WORKING | GAME_NO_SOUND )

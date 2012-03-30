@@ -153,7 +153,7 @@ static UINT32 dm_read32(SHARC_REGS *cpustate, UINT32 address)
 		}
 	}
 
-	return cpustate->data->read_dword(address << 2);
+	return memory_read_dword_32le(cpustate->data, address << 2);
 }
 
 static void dm_write32(SHARC_REGS *cpustate, UINT32 address, UINT32 data)
@@ -198,5 +198,5 @@ static void dm_write32(SHARC_REGS *cpustate, UINT32 address, UINT32 data)
 		return;
 	}
 
-	cpustate->data->write_dword(address << 2, data);
+	memory_write_dword_32le(cpustate->data, address << 2, data);
 }

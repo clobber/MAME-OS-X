@@ -329,16 +329,14 @@ typedef struct _ygv608 {
 } YGV608, *pYGV608;
 
 
-void ygv608_set_gfxbank(UINT8 gfxbank);
-
 INTERRUPT_GEN( ygv608_timed_interrupt );
 VIDEO_START( ygv608 );
-SCREEN_UPDATE_IND16( ygv608 );
+VIDEO_UPDATE( ygv608 );
 
 READ16_HANDLER( ygv608_r );
 WRITE16_HANDLER( ygv608_w );
 
 // to be removed
-READ16_HANDLER( ygv608_debug_trigger );
+extern READ16_HANDLER( ygv608_debug_trigger );
 
 #endif

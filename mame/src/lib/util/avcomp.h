@@ -76,18 +76,10 @@ typedef enum _avcomp_error avcomp_error;
 ***************************************************************************/
 
 /* compression configuration */
-struct av_codec_compress_config
+typedef struct _av_codec_compress_config av_codec_compress_config;
+struct _av_codec_compress_config
 {
-	av_codec_compress_config()
-		: channels(0),
-		  samples(0),
-		  metalength(0),
-		  metadata(NULL)
-	{
-		memset(audio, 0, sizeof(audio));
-	}
-
-	bitmap_yuy16 video;						/* pointer to video bitmap */
+	bitmap_t *	video;						/* pointer to video bitmap */
 	UINT32		channels;					/* number of channels */
 	UINT32		samples;					/* number of samples per channel */
 	INT16 *		audio[16];					/* pointer to individual audio channels */
@@ -97,19 +89,10 @@ struct av_codec_compress_config
 
 
 /* decompression configuration */
-struct av_codec_decompress_config
+typedef struct _av_codec_decompress_config av_codec_decompress_config;
+struct _av_codec_decompress_config
 {
-	av_codec_decompress_config()
-		: maxsamples(0),
-		  actsamples(0),
-		  maxmetalength(0),
-		  actmetalength(0),
-		  metadata(NULL)
-	{
-		memset(audio, 0, sizeof(audio));
-	}
-
-	bitmap_yuy16 video;						/* pointer to video bitmap */
+	bitmap_t *	video;						/* pointer to video bitmap */
 	UINT32		maxsamples;					/* maximum number of samples per channel */
 	UINT32 *	actsamples;					/* actual number of samples per channel */
 	INT16 *		audio[16];					/* pointer to individual audio channels */
@@ -120,7 +103,7 @@ struct av_codec_decompress_config
 
 
 /* opaque state */
-struct avcomp_state;
+typedef struct _avcomp_state avcomp_state;
 
 
 
@@ -131,8 +114,8 @@ struct avcomp_state;
 avcomp_state *avcomp_init(UINT32 maxwidth, UINT32 maxheight, UINT32 maxchannels);
 void avcomp_free(avcomp_state *state);
 
-void avcomp_config_compress(avcomp_state *state, av_codec_compress_config *config);
-void avcomp_config_decompress(avcomp_state *state, av_codec_decompress_config *config);
+void avcomp_config_compress(avcomp_state *state, const av_codec_compress_config *config);
+void avcomp_config_decompress(avcomp_state *state, const av_codec_decompress_config *config);
 
 avcomp_error avcomp_encode_data(avcomp_state *state, const UINT8 *source, UINT8 *dest, UINT32 *complength);
 avcomp_error avcomp_decode_data(avcomp_state *state, const UINT8 *source, UINT32 complength, UINT8 *dest);

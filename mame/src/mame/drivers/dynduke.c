@@ -62,49 +62,60 @@ Also, implemented conditional port for Coin Mode (SW1:1)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/nec/nec.h"
 #include "cpu/z80/z80.h"
 #include "audio/seibu.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
-#include "includes/dynduke.h"
+
+WRITE16_HANDLER( dynduke_background_w );
+WRITE16_HANDLER( dynduke_foreground_w );
+WRITE16_HANDLER( dynduke_text_w );
+WRITE16_HANDLER( dynduke_gfxbank_w );
+WRITE16_HANDLER( dynduke_control_w );
+WRITE16_HANDLER( dynduke_paletteram_w );
+VIDEO_START( dynduke );
+VIDEO_UPDATE( dynduke );
+VIDEO_EOF( dynduke );
+
+extern UINT16 *dynduke_back_data, *dynduke_fore_data, *dynduke_scroll_ram;
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( master_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
-	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x080ff) AM_RAM AM_BASE_MEMBER(dynduke_state, m_scroll_ram)
-	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x08000, 0x080ff) AM_RAM AM_BASE(&dynduke_scroll_ram)
+	AM_RANGE(0x0a000, 0x0afff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x0b000, 0x0b001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0b002, 0x0b003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0b004, 0x0b005) AM_WRITENOP
 	AM_RANGE(0x0b006, 0x0b007) AM_WRITE(dynduke_control_w)
-	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, m_videoram)
+	AM_RANGE(0x0c000, 0x0c7ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE(&videoram16)
 	AM_RANGE(0x0d000, 0x0d00d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0xa0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x05fff) AM_RAM
-	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(dynduke_background_w) AM_BASE_MEMBER(dynduke_state, m_back_data)
-	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(dynduke_foreground_w) AM_BASE_MEMBER(dynduke_state, m_fore_data)
-	AM_RANGE(0x07000, 0x07fff) AM_RAM_WRITE(dynduke_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x06000, 0x067ff) AM_RAM_WRITE(dynduke_background_w) AM_BASE(&dynduke_back_data)
+	AM_RANGE(0x06800, 0x06fff) AM_RAM_WRITE(dynduke_foreground_w) AM_BASE(&dynduke_fore_data)
+	AM_RANGE(0x07000, 0x07fff) AM_RAM_WRITE(dynduke_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x0a000, 0x0a001) AM_WRITE(dynduke_gfxbank_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITENOP
 	AM_RANGE(0xc0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
 /* Memory map used by DlbDyn - probably an addressing PAL is different */
-static ADDRESS_MAP_START( masterj_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( masterj_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x06fff) AM_RAM
-	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x08000, 0x087ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE_MEMBER(dynduke_state, m_videoram)
+	AM_RANGE(0x07000, 0x07fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x08000, 0x087ff) AM_RAM_WRITE(dynduke_text_w) AM_BASE(&videoram16)
 	AM_RANGE(0x09000, 0x0900d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x0c000, 0x0c0ff) AM_RAM AM_BASE_MEMBER(dynduke_state, m_scroll_ram)
-	AM_RANGE(0x0e000, 0x0efff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x0c000, 0x0c0ff) AM_RAM AM_BASE(&dynduke_scroll_ram)
+	AM_RANGE(0x0e000, 0x0efff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x0f000, 0x0f001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0f002, 0x0f003) AM_READ_PORT("DSW")
 	AM_RANGE(0x0f004, 0x0f005) AM_WRITENOP
@@ -265,52 +276,54 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( dynduke_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	// VBL
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	// VBL
 }
 
 /* Machine Driver */
 
-static MACHINE_CONFIG_START( dynduke, dynduke_state )
+static MACHINE_DRIVER_START( dynduke )
 	// basic machine hardware
-	MCFG_CPU_ADD("maincpu", V30, 16000000/2) // NEC V30-8 CPU
-	MCFG_CPU_PROGRAM_MAP(master_map)
-	MCFG_CPU_VBLANK_INT("screen", dynduke_interrupt)
+	MDRV_CPU_ADD("maincpu", V30, 16000000/2) // NEC V30-8 CPU
+	MDRV_CPU_PROGRAM_MAP(master_map)
+	MDRV_CPU_VBLANK_INT("screen", dynduke_interrupt)
 
-	MCFG_CPU_ADD("slave", V30, 16000000/2) // NEC V30-8 CPU
-	MCFG_CPU_PROGRAM_MAP(slave_map)
-	MCFG_CPU_VBLANK_INT("screen", dynduke_interrupt)
+	MDRV_CPU_ADD("slave", V30, 16000000/2) // NEC V30-8 CPU
+	MDRV_CPU_PROGRAM_MAP(slave_map)
+	MDRV_CPU_VBLANK_INT("screen", dynduke_interrupt)
 
 	SEIBU_SOUND_SYSTEM_CPU(14318180/4)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(3600))
+	MDRV_QUANTUM_TIME(HZ(3600))
 
-	MCFG_MACHINE_RESET(seibu_sound)
+	MDRV_MACHINE_RESET(seibu_sound)
 
 	// video hardware
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(dynduke)
-	MCFG_SCREEN_VBLANK_STATIC(dynduke)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(dynduke)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(dynduke)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(dynduke)
+	MDRV_VIDEO_START(dynduke)
+	MDRV_VIDEO_UPDATE(dynduke)
+	MDRV_VIDEO_EOF(dynduke)
 
 	// sound hardware
 	SEIBU_SOUND_SYSTEM_YM3812_INTERFACE(14318180/4,1320000)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( dbldyn, dynduke )
+static MACHINE_DRIVER_START( dbldyn )
+	MDRV_IMPORT_FROM(dynduke)
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(masterj_map)
-MACHINE_CONFIG_END
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(masterj_map)
+MACHINE_DRIVER_END
 
 /* ROMs */
 

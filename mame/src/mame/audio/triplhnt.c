@@ -3,16 +3,16 @@
     audio\triplhnt.c
 
 *************************************************************************/
-#include "emu.h"
-#include "includes/triplhnt.h"
+#include "driver.h"
+#include "triplhnt.h"
 #include "sound/discrete.h"
 
 
 static const char *const triplhnt_sample_names[] =
 {
 	"*triplhnt",
-	"bear_rac",
-	"witch",
+	"bear_rac.wav",
+	"witch.wav",
 	0
 };
 
@@ -130,7 +130,7 @@ DISCRETE_SOUND_START(triplhnt)
 	/************************************************/
 	/* Bear Roar is a VCO with noise mixed in.      */
 	/************************************************/
-	DISCRETE_ADJUSTMENT(NODE_20,
+	DISCRETE_ADJUSTMENT_TAG(NODE_20,
 				10000,	// R86 + R88 @ 0
 				260000,	// R86 + R88 @ max
 				DISC_LOGADJ, "BEAR")

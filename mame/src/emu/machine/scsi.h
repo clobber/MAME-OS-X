@@ -8,6 +8,7 @@
 #ifndef _SCSI_H_
 #define _SCSI_H_
 
+#include "driver.h"
 
 typedef int (*pSCSIDispatch)( int operation, void *file, INT64 intparm, void *ptrparm );
 
@@ -20,17 +21,15 @@ typedef struct _SCSIClass
 
 typedef struct
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
 	const SCSIClass *scsiClass;
-	running_machine *m_machine;
+	running_machine *machine;
 } SCSIInstance;
 
 typedef struct
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
 	SCSIInstance *instance;
 	const char *diskregion;
-	running_machine *m_machine;
+	running_machine *machine;
 } SCSIAllocInstanceParams;
 
 // commands accepted by a SCSI device's dispatch handler
@@ -86,7 +85,7 @@ enum
 #define SCSI_PHASE_MESSAGE_OUT ( 6 )
 #define SCSI_PHASE_MESSAGE_IN ( 7 )
 
-extern void SCSIAllocInstance( running_machine &machine, const SCSIClass *scsiClass, SCSIInstance **instance, const char *diskregion );
+extern void SCSIAllocInstance( running_machine *machine, const SCSIClass *scsiClass, SCSIInstance **instance, const char *diskregion );
 extern void SCSIDeleteInstance( SCSIInstance *instance );
 extern void SCSISetDevice( SCSIInstance *instance, void *device );
 extern void SCSIGetDevice( SCSIInstance *instance, void **device );
@@ -99,7 +98,7 @@ extern void SCSIReadData( SCSIInstance *instance, void *data, int dataLength );
 extern void SCSISetPhase( SCSIInstance *instance, int phase );
 extern void SCSIGetPhase( SCSIInstance *instance, int *phase );
 
-extern SCSIInstance *SCSIMalloc( running_machine &machine, const SCSIClass *scsiClass );
+extern SCSIInstance *SCSIMalloc( running_machine *machine, const SCSIClass *scsiClass );
 extern int SCSIBase( const SCSIClass *scsiClass, int operation, void *file, INT64 intparm, UINT8 *ptrparm );
 extern void *SCSIThis( const SCSIClass *scsiClass, SCSIInstance *instance );
 extern int SCSISizeof( const SCSIClass *scsiClass );

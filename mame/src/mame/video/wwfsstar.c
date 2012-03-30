@@ -6,8 +6,11 @@
  see (drivers/wwfsstar.c) for more notes
 *******************************************************************************/
 
-#include "emu.h"
-#include "includes/wwfsstar.h"
+#include "driver.h"
+
+UINT16 *wwfsstar_fg0_videoram, *wwfsstar_bg0_videoram;
+extern int wwfsstar_scrollx, wwfsstar_scrolly;
+static tilemap *fg0_tilemap, *bg0_tilemap;
 
 /*******************************************************************************
  Write Handlers
@@ -17,18 +20,14 @@
 
 WRITE16_HANDLER( wwfsstar_fg0_videoram_w )
 {
-	wwfsstar_state *state = space->machine().driver_data<wwfsstar_state>();
-
-	COMBINE_DATA(&state->m_fg0_videoram[offset]);
-	state->m_fg0_tilemap->mark_tile_dirty(offset/2);
+	COMBINE_DATA(&wwfsstar_fg0_videoram[offset]);
+	tilemap_mark_tile_dirty(fg0_tilemap,offset/2);
 }
 
 WRITE16_HANDLER( wwfsstar_bg0_videoram_w )
 {
-	wwfsstar_state *state = space->machine().driver_data<wwfsstar_state>();
-
-	COMBINE_DATA(&state->m_bg0_videoram[offset]);
-	state->m_bg0_tilemap->mark_tile_dirty(offset/2);
+	COMBINE_DATA(&wwfsstar_bg0_videoram[offset]);
+	tilemap_mark_tile_dirty(bg0_tilemap,offset/2);
 }
 
 /*******************************************************************************
@@ -52,12 +51,10 @@ static TILE_GET_INFO( get_fg0_tile_info )
 
     **- End of Comments -*/
 
-	wwfsstar_state *state = machine.driver_data<wwfsstar_state>();
 	UINT16 *tilebase;
 	int tileno;
 	int colbank;
-
-	tilebase =  &state->m_fg0_videoram[tile_index*2];
+	tilebase =  &wwfsstar_fg0_videoram[tile_index*2];
 	tileno =  (tilebase[1] & 0x00ff) | ((tilebase[0] & 0x000f) << 8);
 	colbank = (tilebase[0] & 0x00f0) >> 4;
 	SET_TILE_INFO(
@@ -90,11 +87,9 @@ static TILE_GET_INFO( get_bg0_tile_info )
 
     **- End of Comments -*/
 
-	wwfsstar_state *state = machine.driver_data<wwfsstar_state>();
 	UINT16 *tilebase;
 	int tileno, colbank, flipx;
-
-	tilebase =  &state->m_bg0_videoram[tile_index*2];
+	tilebase =  &wwfsstar_bg0_videoram[tile_index*2];
 	tileno =  (tilebase[1] & 0x00ff) | ((tilebase[0] & 0x000f) << 8);
 	colbank = (tilebase[0] & 0x0070) >> 4;
 	flipx   = (tilebase[0] & 0x0080) >> 7;
@@ -111,7 +106,7 @@ static TILE_GET_INFO( get_bg0_tile_info )
  sprite colour marking could probably be improved..
 *******************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	/*- SPR RAM Format -**
 
@@ -134,9 +129,8 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 
     **- End of Comments -*/
 
-	wwfsstar_state *state = machine.driver_data<wwfsstar_state>();
-	const gfx_element *gfx = machine.gfx[1];
-	UINT16 *source = state->m_spriteram;
+	const gfx_element *gfx = machine->gfx[1];
+	UINT16 *source = spriteram16;
 	UINT16 *finish = source + 0x3ff/2;
 
 	while (source < finish)
@@ -195,7 +189,7 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			}
 		}
 
-		source+=5;
+	source+=5;
 	}
 }
 
@@ -211,25 +205,21 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 
 VIDEO_START( wwfsstar )
 {
-	wwfsstar_state *state = machine.driver_data<wwfsstar_state>();
+	fg0_tilemap = tilemap_create(machine, get_fg0_tile_info,tilemap_scan_rows, 8, 8,32,32);
+	tilemap_set_transparent_pen(fg0_tilemap,0);
 
-	state->m_fg0_tilemap = tilemap_create(machine, get_fg0_tile_info,tilemap_scan_rows, 8, 8,32,32);
-	state->m_fg0_tilemap->set_transparent_pen(0);
-
-	state->m_bg0_tilemap = tilemap_create(machine, get_bg0_tile_info,bg0_scan, 16, 16,32,32);
-	state->m_fg0_tilemap->set_transparent_pen(0);
+	bg0_tilemap = tilemap_create(machine, get_bg0_tile_info,bg0_scan, 16, 16,32,32);
+	tilemap_set_transparent_pen(fg0_tilemap,0);
 }
 
-SCREEN_UPDATE_IND16( wwfsstar )
+VIDEO_UPDATE( wwfsstar )
 {
-	wwfsstar_state *state = screen.machine().driver_data<wwfsstar_state>();
+	tilemap_set_scrolly( bg0_tilemap, 0, wwfsstar_scrolly  );
+	tilemap_set_scrollx( bg0_tilemap, 0, wwfsstar_scrollx  );
 
-	state->m_bg0_tilemap->set_scrolly(0, state->m_scrolly  );
-	state->m_bg0_tilemap->set_scrollx(0, state->m_scrollx  );
-
-	state->m_bg0_tilemap->draw(bitmap, cliprect, 0,0);
-	draw_sprites(screen.machine(), bitmap,cliprect );
-	state->m_fg0_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,bg0_tilemap,0,0);
+	draw_sprites(screen->machine, bitmap,cliprect );
+	tilemap_draw(bitmap,cliprect,fg0_tilemap,0,0);
 
 	return 0;
 }

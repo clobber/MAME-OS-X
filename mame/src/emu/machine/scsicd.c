@@ -4,11 +4,13 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "scsidev.h"
 #include "cdrom.h"
 #include "sound/cdda.h"
-#include "imagedev/chd_cd.h"
+#include "state.h"
+#ifdef MESS
+#include "devices/chd_cd.h"
+#endif
 #include "scsicd.h"
 
 typedef struct
@@ -20,8 +22,7 @@ typedef struct
 	UINT32 num_subblocks;
 	UINT32 cur_subblock;
 	UINT32 play_err_flag;
-	cdrom_file *cdrom;
-	bool is_file;
+ 	cdrom_file *cdrom;
 } SCSICd;
 
 static void phys_frame_to_msf(int phys_frame, int *m, int *s, int *f)
@@ -44,7 +45,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 	SCSICd *our_this = (SCSICd *)SCSIThis( &SCSIClassCDROM, scsiInstance );
 
 	cdrom_file *cdrom = our_this->cdrom;
-	device_t *cdda;
+	const device_config *cdda;
 	int trk;
 
 	SCSIGetCommand( scsiInstance, &command, &commandLength );
@@ -70,7 +71,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 			return SCSILengthFromUINT8( &command[ 4 ] );
 
 		case 0x1b: // START STOP UNIT
-			cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+			cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 			if (cdda != NULL)
 			{
 				cdda_stop_audio(cdda);
@@ -103,7 +104,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 				our_this->cur_subblock = 0;
 			}
 
-			cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+			cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 			if (cdda != NULL)
 			{
 				cdda_stop_audio(cdda);
@@ -143,7 +144,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 				length = 4;
 			}
 
-			cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+			cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 			if (cdda != NULL)
 			{
 				cdda_stop_audio(cdda);
@@ -173,7 +174,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 			if (cdrom_get_track_type(cdrom, trk) == CD_TRACK_AUDIO)
 			{
 				our_this->play_err_flag = 0;
-				cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+				cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 				if (cdda != NULL)
 					cdda_start_audio(cdda, our_this->lba, our_this->blocks);
 			}
@@ -203,7 +204,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 
 			if (our_this->blocks && cdrom)
 			{
-				cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+				cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 				if (cdda != NULL)
 					cdda_start_audio(cdda, our_this->lba, our_this->blocks);
 			}
@@ -215,7 +216,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 		case 0x4b: // PAUSE/RESUME
 			if (cdrom)
 			{
-				cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+				cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 				if (cdda != NULL)
 					cdda_pause_audio(cdda, (command[8] & 0x01) ^ 0x01);
 			}
@@ -254,7 +255,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 			if (cdrom_get_track_type(cdrom, trk) == CD_TRACK_AUDIO)
 			{
 				our_this->play_err_flag = 0;
-				cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+				cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 				if (cdda != NULL)
 					cdda_start_audio(cdda, our_this->lba, our_this->blocks);
 			}
@@ -282,7 +283,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 				our_this->cur_subblock = 0;
 			}
 
-			cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+			cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 			if (cdda != NULL)
 			{
 				cdda_stop_audio(cdda);
@@ -316,7 +317,7 @@ static void scsicd_read_data( SCSIInstance *scsiInstance, UINT8 *data, int dataL
 	cdrom_file *cdrom = our_this->cdrom;
 	UINT32 temp;
 	UINT8 tmp_buffer[2048];
-	device_t *cdda;
+	const device_config *cdda;
 
 	SCSIGetCommand( scsiInstance, &command, &commandLength );
 
@@ -329,7 +330,7 @@ static void scsicd_read_data( SCSIInstance *scsiInstance, UINT8 *data, int dataL
 
 			data[0] = 0x71;	// deferred error
 
-			cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+			cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 			if (cdda != NULL && cdda_audio_active(cdda))
 			{
 				data[12] = 0x00;
@@ -422,7 +423,7 @@ static void scsicd_read_data( SCSIInstance *scsiInstance, UINT8 *data, int dataL
 
 					msf = command[1] & 0x2;
 
-					cdda = cdda_from_cdrom(scsiInstance->machine(), cdrom);
+					cdda = cdda_from_cdrom(scsiInstance->machine, cdrom);
 					audio_active = cdda != NULL && cdda_audio_active(cdda);
 					if (audio_active)
 					{
@@ -671,7 +672,7 @@ static void scsicd_write_data( SCSIInstance *scsiInstance, UINT8 *data, int data
 
 static void scsicd_alloc_instance( SCSIInstance *scsiInstance, const char *diskregion )
 {
-	running_machine &machine = scsiInstance->machine();
+	running_machine *machine = scsiInstance->machine;
 	SCSICd *our_this = (SCSICd *)SCSIThis( &SCSIClassCDROM, scsiInstance );
 
 	our_this->lba = 0;
@@ -690,30 +691,28 @@ static void scsicd_alloc_instance( SCSIInstance *scsiInstance, const char *diskr
 	state_save_register_item( machine, "scsicd", diskregion, 0, our_this->cur_subblock );
 	state_save_register_item( machine, "scsicd", diskregion, 0, our_this->play_err_flag );
 
-	if (machine.device( diskregion )) {
-		our_this->is_file = TRUE;
-		cdrom_image_device *cdrom = machine.device<cdrom_image_device>(diskregion);
-		our_this->cdrom = cdrom->get_cdrom_file();
-	} else {
-		our_this->is_file = FALSE;
-		our_this->cdrom = cdrom_open(get_disk_handle( machine, diskregion ));
-	}
+#ifdef MESS
+	/* TODO: get rid of this ifdef MESS section */
+	our_this->cdrom = mess_cd_get_cdrom_file( devtag_get_device( machine, diskregion ) );
+#else
+	our_this->cdrom = cdrom_open(get_disk_handle( machine, diskregion ));
 
 	if (!our_this->cdrom)
 	{
 		logerror("SCSICD: no CD found!\n");
 	}
+#endif
 }
 
 static void scsicd_delete_instance( SCSIInstance *scsiInstance )
 {
+#ifndef MESS
 	SCSICd *our_this = (SCSICd *)SCSIThis( &SCSIClassCDROM, scsiInstance );
-	if (!our_this->is_file) {
-		if( our_this->cdrom )
-		{
-			cdrom_close( our_this->cdrom );
-		}
+	if( our_this->cdrom )
+	{
+		cdrom_close( our_this->cdrom );
 	}
+#endif
 }
 
 static void scsicd_get_device( SCSIInstance *scsiInstance, cdrom_file **cdrom )

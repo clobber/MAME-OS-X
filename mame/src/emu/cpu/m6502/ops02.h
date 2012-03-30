@@ -70,23 +70,23 @@
 /***************************************************************
  *  RDOP    read an opcode
  ***************************************************************/
-#define RDOP() cpustate->direct->read_decrypted_byte(PCW++); cpustate->icount -= 1
-#define PEEKOP() cpustate->direct->read_decrypted_byte(PCW)
+#define RDOP() memory_decrypted_read_byte(cpustate->space, PCW++); cpustate->icount -= 1
+#define PEEKOP() memory_decrypted_read_byte(cpustate->space, PCW)
 
 /***************************************************************
  *  RDOPARG read an opcode argument
  ***************************************************************/
-#define RDOPARG() cpustate->direct->read_raw_byte(PCW++); cpustate->icount -= 1
+#define RDOPARG() memory_raw_read_byte(cpustate->space, PCW++); cpustate->icount -= 1
 
 /***************************************************************
  *  RDMEM   read memory
  ***************************************************************/
-#define RDMEM(addr) cpustate->space->read_byte(addr); cpustate->icount -= 1
+#define RDMEM(addr) memory_read_byte_8le(cpustate->space, addr); cpustate->icount -= 1
 
 /***************************************************************
  *  WRMEM   write memory
  ***************************************************************/
-#define WRMEM(addr,data) cpustate->space->write_byte(addr,data); cpustate->icount -= 1
+#define WRMEM(addr,data) memory_write_byte_8le(cpustate->space, addr,data); cpustate->icount -= 1
 
 /***************************************************************
  *  BRA  branch relative
@@ -257,18 +257,13 @@
    RD_ZPI/WR_ZPI    5
  */
 #define RD_IMM		tmp = RDOPARG()
-#define RD_IMM_DISCARD RDOPARG()
 #define RD_DUM		RDMEM(PCW)
 #define RD_ACC		tmp = A
 #define RD_ZPG		EA_ZPG; tmp = RDMEM(EAD)
-#define RD_ZPG_DISCARD		EA_ZPG; RDMEM(EAD)
 #define RD_ZPX		EA_ZPX; tmp = RDMEM(EAD)
-#define RD_ZPX_DISCARD		EA_ZPX; RDMEM(EAD)
 #define RD_ZPY		EA_ZPY; tmp = RDMEM(EAD)
 #define RD_ABS		EA_ABS; tmp = RDMEM(EAD)
-#define RD_ABS_DISCARD		EA_ABS; RDMEM(EAD)
 #define RD_ABX_P	EA_ABX_P; tmp = RDMEM(EAD)
-#define RD_ABX_P_DISCARD	EA_ABX_P; RDMEM(EAD);
 #define RD_ABX_NP	EA_ABX_NP; tmp = RDMEM(EAD)
 #define RD_ABY_P	EA_ABY_P; tmp = RDMEM(EAD)
 #define RD_ABY_NP	EA_ABY_NP; tmp = RDMEM(EAD)
@@ -484,21 +479,21 @@
  *  DEC Decrement memory
  ***************************************************************/
 #define DEC 													\
-	tmp = (UINT8)(tmp-1);										\
+	tmp = (UINT8)(tmp-1); 										\
 	SET_NZ(tmp)
 
 /* 6502 ********************************************************
  *  DEX Decrement index X
  ***************************************************************/
 #define DEX 													\
-	X = (UINT8)(X-1);											\
+	X = (UINT8)(X-1); 											\
 	SET_NZ(X)
 
 /* 6502 ********************************************************
  *  DEY Decrement index Y
  ***************************************************************/
 #define DEY 													\
-	Y = (UINT8)(Y-1);											\
+	Y = (UINT8)(Y-1); 											\
 	SET_NZ(Y)
 
 /* 6502 ********************************************************
@@ -512,27 +507,27 @@
  *  ILL Illegal opcode
  ***************************************************************/
 #define ILL 													\
-	logerror("M6502 illegal opcode %04x: %02x\n",(PCW-1)&0xffff, cpustate->direct->read_decrypted_byte((PCW-1)&0xffff))
+	logerror("M6502 illegal opcode %04x: %02x\n",(PCW-1)&0xffff, memory_decrypted_read_byte(cpustate->space, (PCW-1)&0xffff))
 
 /* 6502 ********************************************************
  *  INC Increment memory
  ***************************************************************/
 #define INC 													\
-	tmp = (UINT8)(tmp+1);										\
+	tmp = (UINT8)(tmp+1); 										\
 	SET_NZ(tmp)
 
 /* 6502 ********************************************************
  *  INX Increment index X
  ***************************************************************/
 #define INX 													\
-	X = (UINT8)(X+1);											\
+	X = (UINT8)(X+1); 											\
 	SET_NZ(X)
 
 /* 6502 ********************************************************
  *  INY Increment index Y
  ***************************************************************/
 #define INY 													\
-	Y = (UINT8)(Y+1);											\
+	Y = (UINT8)(Y+1); 											\
 	SET_NZ(Y)
 
 /* 6502 ********************************************************
@@ -628,7 +623,7 @@
 	if ( P & F_I ) {											\
 		PULL(P);												\
 		if ((cpustate->irq_state != CLEAR_LINE) && !(P & F_I)) {	\
-			LOG(("M6502 '%s' PLP sets after_cli\n",cpustate->device->tag()));	\
+			LOG(("M6502 '%s' PLP sets after_cli\n",cpustate->device->tag));	\
 			cpustate->after_cli = 1;								\
 		}														\
 	} else {													\
@@ -670,7 +665,7 @@
 	P |= F_T | F_B; 											\
 	if( (cpustate->irq_state != CLEAR_LINE) && !(P & F_I) )			\
 	{															\
-		LOG(("M6502 '%s' RTI sets after_cli\n",cpustate->device->tag()));	\
+		LOG(("M6502 '%s' RTI sets after_cli\n",cpustate->device->tag)); 	\
 		cpustate->after_cli = 1;									\
 	}
 

@@ -8,8 +8,13 @@ Video hardware driver by Uki
 
 ******************************************************************************/
 
-#include "emu.h"
-#include "includes/strnskil.h"
+#include "driver.h"
+
+
+UINT8 *strnskil_xscroll;
+static UINT8 strnskil_scrl_ctrl;
+
+static tilemap *bg_tilemap;
 
 
 PALETTE_INIT( strnskil )
@@ -17,7 +22,7 @@ PALETTE_INIT( strnskil )
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x100);
+	machine->colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -26,7 +31,7 @@ PALETTE_INIT( strnskil )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -36,35 +41,30 @@ PALETTE_INIT( strnskil )
 	for (i = 0; i < 0x400; i++)
 	{
 		UINT8 ctabentry = color_prom[i];
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 }
 
 
 WRITE8_HANDLER( strnskil_videoram_w )
 {
-	strnskil_state *state = space->machine().driver_data<strnskil_state>();
-	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
+	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
 }
 
 WRITE8_HANDLER( strnskil_scrl_ctrl_w )
 {
-	strnskil_state *state = space->machine().driver_data<strnskil_state>();
-	state->m_scrl_ctrl = data >> 5;
+	strnskil_scrl_ctrl = data >> 5;
 
-	if (flip_screen_get(space->machine()) != (data & 0x08))
+	if (flip_screen_get(space->machine) != (data & 0x08))
 	{
-		flip_screen_set(space->machine(), data & 0x08);
-		space->machine().tilemap().mark_all_dirty();
+		flip_screen_set(space->machine, data & 0x08);
+		tilemap_mark_all_tiles_dirty_all(space->machine);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	strnskil_state *state = machine.driver_data<strnskil_state>();
-	UINT8 *videoram = state->m_videoram;
 	int attr = videoram[tile_index * 2];
 	int code = videoram[(tile_index * 2) + 1] + ((attr & 0x60) << 3);
 	int color = (attr & 0x1f) | ((attr & 0x80) >> 2);
@@ -74,17 +74,14 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( strnskil )
 {
-	strnskil_state *state = machine.driver_data<strnskil_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols,
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols,
 		 8, 8, 32, 32);
 
-	state->m_bg_tilemap->set_scroll_rows(32);
+	tilemap_set_scroll_rows(bg_tilemap, 32);
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	strnskil_state *state = machine.driver_data<strnskil_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
 	for (offs = 0x60; offs < 0x100; offs += 4)
@@ -115,37 +112,36 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			sx = sx - 256;
 
 		drawgfx_transmask(bitmap, cliprect,
-			machine.gfx[1],
+			machine->gfx[1],
 			code, color,
 			flipx, flipy,
 			px, py,
-			colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0));
+			colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, 0));
 	}
 }
 
-SCREEN_UPDATE_IND16( strnskil )
+VIDEO_UPDATE( strnskil )
 {
-	strnskil_state *state = screen.machine().driver_data<strnskil_state>();
 	int row;
-	const UINT8 *usr1 = screen.machine().region("user1")->base();
+	const UINT8 *usr1 = memory_region(screen->machine, "user1");
 
 	for (row = 0; row < 32; row++)
 	{
-		if (state->m_scrl_ctrl != 0x07)
+		if (strnskil_scrl_ctrl != 0x07)
 		{
-			switch (usr1[state->m_scrl_ctrl * 32 + row])
+			switch (usr1[strnskil_scrl_ctrl * 32 + row])
 			{
 			case 2:
-				state->m_bg_tilemap->set_scrollx(row, -~state->m_xscroll[1]);
+				tilemap_set_scrollx(bg_tilemap, row, -~strnskil_xscroll[1]);
 				break;
 			case 4:
-				state->m_bg_tilemap->set_scrollx(row, -~state->m_xscroll[0]);
+				tilemap_set_scrollx(bg_tilemap, row, -~strnskil_xscroll[0]);
 				break;
 			}
 		}
 	}
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

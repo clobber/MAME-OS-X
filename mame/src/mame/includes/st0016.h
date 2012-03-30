@@ -1,16 +1,4 @@
 
-class st0016_state : public driver_device
-{
-public:
-	st0016_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		m_maincpu(*this,"maincpu")
-		{ }
-
-	int mux_port;
-	required_device<cpu_device> m_maincpu;
-};
-
 #define ISMACS  (st0016_game&0x80)
 #define ISMACS1 (((st0016_game&0x180)==0x180))
 #define ISMACS2 (((st0016_game&0x180)==0x080))
@@ -30,6 +18,12 @@ public:
 #define ST0016_CHAR_BANK_MASK (ST0016_MAX_CHAR_BANK-1)
 #define ST0016_PAL_BANK_MASK  (ST0016_MAX_PAL_BANK-1)
 
+/*----------- defined in drivers/speglsht.c -----------*/
+
+extern UINT32 *speglsht_framebuffer;
+extern UINT32  speglsht_videoreg;
+
+
 /*----------- defined in drivers/st0016.c -----------*/
 
 extern UINT32 st0016_rom_bank;
@@ -38,25 +32,28 @@ WRITE8_HANDLER	(st0016_rom_bank_w);
 
 /*----------- defined in video/st0016.c -----------*/
 
-extern UINT8 macs_cart_slot;
-extern UINT32 st0016_game;
 extern UINT8 *st0016_charram;
 
+extern UINT8 *macs_ram1,*macs_ram2;
+
 READ8_HANDLER(st0016_dma_r);
-WRITE8_HANDLER	(st0016_sprite_bank_w);
-WRITE8_HANDLER	(st0016_palette_bank_w);
-WRITE8_HANDLER	(st0016_character_bank_w);
-READ8_HANDLER	(st0016_sprite_ram_r);
-WRITE8_HANDLER	(st0016_sprite_ram_w);
-READ8_HANDLER	(st0016_sprite2_ram_r);
-WRITE8_HANDLER	(st0016_sprite2_ram_w);
-READ8_HANDLER	(st0016_palette_ram_r);
-WRITE8_HANDLER	(st0016_palette_ram_w);
-READ8_HANDLER	(st0016_character_ram_r);
-WRITE8_HANDLER	(st0016_character_ram_w);
+WRITE8_HANDLER 	(st0016_sprite_bank_w);
+WRITE8_HANDLER 	(st0016_palette_bank_w);
+WRITE8_HANDLER 	(st0016_character_bank_w);
+READ8_HANDLER  	(st0016_sprite_ram_r);
+WRITE8_HANDLER 	(st0016_sprite_ram_w);
+READ8_HANDLER  	(st0016_sprite2_ram_r);
+WRITE8_HANDLER 	(st0016_sprite2_ram_w);
+READ8_HANDLER  	(st0016_palette_ram_r);
+WRITE8_HANDLER 	(st0016_palette_ram_w);
+READ8_HANDLER  	(st0016_character_ram_r);
+WRITE8_HANDLER 	(st0016_character_ram_w);
 READ8_HANDLER	(st0016_vregs_r);
 WRITE8_HANDLER	(st0016_vregs_w);
 
-void st0016_draw_screen(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
 VIDEO_START(st0016);
-SCREEN_UPDATE_IND16(st0016);
+VIDEO_UPDATE(st0016);
+
+extern UINT32 st0016_game;
+
+void st0016_save_init(running_machine *machine);

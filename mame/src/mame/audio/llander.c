@@ -4,8 +4,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/asteroid.h"
+#include "driver.h"
+#include "asteroid.h"
 #include "sound/discrete.h"
 
 /************************************************************************/

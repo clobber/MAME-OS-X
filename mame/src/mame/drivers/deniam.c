@@ -1,9 +1,11 @@
 /***************************************************************************
 
 Deniam games
+
 driver by Nicola Salmoria
 
-Check archive.org for http://deniam.co.kr
+
+http://deniam.co.kr/text/c_game01.htm
 
 Title            System     Date
 ---------------- ---------- ----------
@@ -40,89 +42,97 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
-#include "includes/deniam.h"
+
+extern UINT16 *deniam_videoram,*deniam_textram;
+
+DRIVER_INIT( logicpro );
+DRIVER_INIT( karianx );
+WRITE16_HANDLER( deniam_videoram_w );
+WRITE16_HANDLER( deniam_textram_w );
+WRITE16_HANDLER( deniam_palette_w );
+READ16_HANDLER( deniam_coinctrl_r );
+WRITE16_HANDLER( deniam_coinctrl_w );
+VIDEO_START( deniam );
+VIDEO_UPDATE( deniam );
+
+
 
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	deniam_state *state = space->machine().driver_data<deniam_state>();
 	if (ACCESSING_BITS_8_15)
 	{
-		soundlatch_w(space,offset, (data >> 8) & 0xff);
-		device_set_input_line(state->m_audio_cpu, INPUT_LINE_NMI, PULSE_LINE);
+		soundlatch_w(space,offset,(data >> 8) & 0xff);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static WRITE8_DEVICE_HANDLER( deniam16b_oki_rom_bank_w )
 {
-	okim6295_device *oki = downcast<okim6295_device *>(device);
-	oki->set_bank_base((data & 0x40) ? 0x40000 : 0x00000);
+	okim6295_set_bank_base(device,(data & 0x40) ? 0x40000 : 0x00000);
 }
 
 static WRITE16_DEVICE_HANDLER( deniam16c_oki_rom_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
-	{
-		okim6295_device *oki = downcast<okim6295_device *>(device);
-		oki->set_bank_base((data & 0x01) ? 0x40000 : 0x00000);
-	}
+		okim6295_set_bank_base(device,(data & 0x01) ? 0x40000 : 0x00000);
 }
 
-static WRITE16_HANDLER( deniam_irq_ack_w )
+static MACHINE_RESET( deniam )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 4, CLEAR_LINE);
+	/* logicpr2 does not reset the bank base on startup */
+	okim6295_set_bank_base(devtag_get_device(machine, "oki"),0x00000);
 }
 
-static ADDRESS_MAP_START( deniam16b_map, AS_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( deniam16b_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, m_videoram)
-	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, m_textram)
-	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, m_paletteram)
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE(&deniam_videoram)
+	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE(&deniam_textram)
+	AM_RANGE(0x440000, 0x4407ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE(&paletteram16)
 	AM_RANGE(0xc40000, 0xc40001) AM_WRITE(sound_command_w)
 	AM_RANGE(0xc40002, 0xc40003) AM_READWRITE(deniam_coinctrl_r, deniam_coinctrl_w)
-	AM_RANGE(0xc40004, 0xc40005) AM_WRITE(deniam_irq_ack_w)
 	AM_RANGE(0xc44000, 0xc44001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc44002, 0xc44003) AM_READ_PORT("P1")
-	AM_RANGE(0xc44004, 0xc44005) AM_READ_PORT("P2") AM_WRITENOP
+	AM_RANGE(0xc44004, 0xc44005) AM_READ_PORT("P2") AM_WRITENOP /* irq ack? */
 	AM_RANGE(0xc44006, 0xc44007) AM_READNOP	/* unused? */
 	AM_RANGE(0xc4400a, 0xc4400b) AM_READ_PORT("DSW")
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x01, 0x01) AM_READ(soundlatch_r)
-	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ymsnd", ym3812_w)
-	AM_RANGE(0x05, 0x05) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ym", ym3812_w)
+	AM_RANGE(0x05, 0x05) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x07, 0x07) AM_DEVWRITE("oki", deniam16b_oki_rom_bank_w)
 ADDRESS_MAP_END
 
 /* identical to 16b, but handles sound directly */
-static ADDRESS_MAP_START( deniam16c_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( deniam16c_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE_MEMBER(deniam_state, m_videoram)
-	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE_MEMBER(deniam_state, m_textram)
-	AM_RANGE(0x440000, 0x4407ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(deniam_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE_MEMBER(deniam_state, m_paletteram)
-	AM_RANGE(0xc40000, 0xc40001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x400000, 0x40ffff) AM_RAM_WRITE(deniam_videoram_w) AM_BASE(&deniam_videoram)
+	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(deniam_textram_w) AM_BASE(&deniam_textram)
+	AM_RANGE(0x440000, 0x4407ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x840000, 0x840fff) AM_WRITE(deniam_palette_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xc40000, 0xc40001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0xc40002, 0xc40003) AM_READWRITE(deniam_coinctrl_r, deniam_coinctrl_w)
-	AM_RANGE(0xc40004, 0xc40005) AM_WRITE(deniam_irq_ack_w)
 	AM_RANGE(0xc44000, 0xc44001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc44002, 0xc44003) AM_READ_PORT("P1")
-	AM_RANGE(0xc44004, 0xc44005) AM_READ_PORT("P2") AM_WRITENOP
+	AM_RANGE(0xc44004, 0xc44005) AM_READ_PORT("P2") AM_WRITENOP /* irq ack? */
 	AM_RANGE(0xc44006, 0xc44007) AM_READNOP	AM_DEVWRITE("oki", deniam16c_oki_rom_bank_w) /* read unused? */
-	AM_RANGE(0xc40008, 0xc4000b) AM_DEVWRITE8("ymsnd", ym3812_w, 0xff00)
+	AM_RANGE(0xc40008, 0xc4000b) AM_DEVWRITE8("ym", ym3812_w, 0xff00)
 	AM_RANGE(0xc4400a, 0xc4400b) AM_READ_PORT("DSW") /* probably YM3812 input port */
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -221,13 +231,11 @@ static GFXDECODE_START( deniam )
 GFXDECODE_END
 
 
-static void irqhandler( device_t *device, int linestate )
+static void irqhandler(const device_config *device, int linestate)
 {
-	deniam_state *state = device->machine().driver_data<deniam_state>();
-
 	/* system 16c doesn't have the sound CPU */
-	if (state->m_audio_cpu != NULL)
-		device_set_input_line(state->m_audio_cpu, 0, linestate);
+	if (cputag_get_cpu(device->machine, "audiocpu") != NULL)
+		cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -237,109 +245,81 @@ static const ym3812_interface ym3812_config =
 
 
 
-static MACHINE_START( deniam )
-{
-	deniam_state *state = machine.driver_data<deniam_state>();
-
-	state->m_audio_cpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_display_enable));
-	state->save_item(NAME(state->m_coinctrl));
-
-	state->save_item(NAME(state->m_bg_scrollx_offs));
-	state->save_item(NAME(state->m_bg_scrolly_offs));
-	state->save_item(NAME(state->m_fg_scrollx_offs));
-	state->save_item(NAME(state->m_fg_scrolly_offs));
-	state->save_item(NAME(state->m_bg_scrollx_reg));
-	state->save_item(NAME(state->m_bg_scrolly_reg));
-	state->save_item(NAME(state->m_fg_scrollx_reg));
-	state->save_item(NAME(state->m_fg_scrolly_reg));
-	state->save_item(NAME(state->m_bg_page_reg));
-	state->save_item(NAME(state->m_fg_page_reg));
-	state->save_item(NAME(state->m_bg_page));
-	state->save_item(NAME(state->m_fg_page));
-}
-
-
-static MACHINE_RESET( deniam )
-{
-	/* logicpr2 does not reset the bank base on startup */
-	machine.device<okim6295_device>("oki")->set_bank_base(0x00000);
-}
-
-static MACHINE_CONFIG_START( deniam16b, deniam_state )
+static MACHINE_DRIVER_START( deniam16b )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,XTAL_25MHz/2)	/* 12.5Mhz verified */
-	MCFG_CPU_PROGRAM_MAP(deniam16b_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_assert)
+	MDRV_CPU_ADD("maincpu", M68000,XTAL_25MHz/2)	/* 12.5Mhz verified */
+	MDRV_CPU_PROGRAM_MAP(deniam16b_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,XTAL_25MHz/4)	/* 6.25Mhz verified */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,XTAL_25MHz/4)	/* 6.25Mhz verified */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
 
-	MCFG_MACHINE_START(deniam)
-	MCFG_MACHINE_RESET(deniam)
+	MDRV_MACHINE_RESET(deniam)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	//MCFG_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
-	MCFG_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(deniam)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	//MDRV_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
+	MDRV_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(deniam)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(deniam)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(deniam)
+	MDRV_VIDEO_START(deniam)
+	MDRV_VIDEO_UPDATE(deniam)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_25MHz/6) /* "SM64" ym3812 clone; 4.166470 measured, = 4.166666Mhz verified */
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+	MDRV_SOUND_ADD("ym", YM3812, XTAL_25MHz/6) /* "SM64" ym3812 clone; 4.166470 measured, = 4.166666Mhz verified */
+	MDRV_SOUND_CONFIG(ym3812_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
-	MCFG_OKIM6295_ADD("oki", XTAL_25MHz/24, OKIM6295_PIN7_HIGH) /* 1.041620 measured, = 1.0416666Mhz verified */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_25MHz/24) /* 1.041620 measured, = 1.0416666Mhz verified */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // pin 7 verified high
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( deniam16c, deniam_state )
+static MACHINE_DRIVER_START( deniam16c )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,XTAL_25MHz/2)	/* 12.5Mhz verified */
-	MCFG_CPU_PROGRAM_MAP(deniam16c_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_assert)
+	MDRV_CPU_ADD("maincpu", M68000,XTAL_25MHz/2)	/* 12.5Mhz verified */
+	MDRV_CPU_PROGRAM_MAP(deniam16c_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_MACHINE_START(deniam)
-	MCFG_MACHINE_RESET(deniam)
+	MDRV_MACHINE_RESET(deniam)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	//MCFG_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
-	MCFG_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(deniam)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	//MDRV_SCREEN_VISIBLE_AREA(24*8, 64*8-1, 0*8, 28*8-1) // looks better but doesn't match hardware
+	MDRV_SCREEN_VISIBLE_AREA(24*8-4, 64*8-5, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(deniam)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(deniam)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(deniam)
+	MDRV_VIDEO_START(deniam)
+	MDRV_VIDEO_UPDATE(deniam)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, XTAL_25MHz/6) /* "SM64" ym3812 clone; 4.166470 measured, = 4.166666Mhz verified) */
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+	MDRV_SOUND_ADD("ym", YM3812, XTAL_25MHz/6) /* "SM64" ym3812 clone; 4.166470 measured, = 4.166666Mhz verified) */
+	MDRV_SOUND_CONFIG(ym3812_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
-	MCFG_OKIM6295_ADD("oki", XTAL_25MHz/24, OKIM6295_PIN7_HIGH)  /* 1.041620 measured, = 1.0416666Mhz verified */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_25MHz/24) /* 1.041620 measured, = 1.0416666Mhz verified */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // pin 7 verified high
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -435,7 +415,7 @@ ROM_END
 
 
 
-GAME( 1996, logicpro, 0,        deniam16b, logicpr2, logicpro, ROT0, "Deniam", "Logic Pro (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1996, croquis,  logicpro, deniam16b, logicpr2, logicpro, ROT0, "Deniam", "Croquis (Germany)", GAME_SUPPORTS_SAVE )
-GAME( 1996, karianx,  0,        deniam16b, karianx,  karianx,  ROT0, "Deniam", "Karian Cross (Rev. 1.0)", GAME_SUPPORTS_SAVE )
-GAME( 1997, logicpr2, 0,        deniam16c, logicpr2, logicpro, ROT0, "Deniam", "Logic Pro 2 (Japan)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1996, logicpro, 0,        deniam16b, logicpr2, logicpro, ROT0, "Deniam", "Logic Pro (Japan)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, croquis,  logicpro, deniam16b, logicpr2, logicpro, ROT0, "Deniam", "Croquis (Germany)", 0 )
+GAME( 1996, karianx,  0,        deniam16b, karianx,  karianx,  ROT0, "Deniam", "Karian Cross (Rev. 1.0)", 0 )
+GAME( 1997, logicpr2, 0,        deniam16c, logicpr2, logicpro, ROT0, "Deniam", "Logic Pro 2 (Japan)", GAME_IMPERFECT_SOUND )

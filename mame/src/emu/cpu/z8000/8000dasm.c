@@ -44,9 +44,9 @@
  *
  *****************************************************************************/
 
-#include "emu.h"
 #include "z8000.h"
 #include "z8000cpu.h"
+#include "cpuintrf.h"
 
 static int n[12];	/* opcode nibbles */
 static int b[6];	/* opcode bytes */
@@ -88,7 +88,7 @@ CPU_DISASSEMBLE( z8000 )
 
 	/* already initialized? */
 	if(z8000_exec == NULL)
-		z8002_init_tables();
+		z8000_init_tables();
 
     GET_OP(oprom, 0, new_pc - pc);
 	new_pc += 2;

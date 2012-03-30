@@ -35,9 +35,9 @@ OP_HANDLER( neg_di )
 	WM(EAD,r);
 }
 
-/* $01 ILLEGAL, same as $00 */
+/* $01 ILLEGAL */
 
-/* $02 ILLEGAL, same as $03 */
+/* $02 ILLEGAL */
 
 /* $03 COM direct -**01 */
 OP_HANDLER( com_di )
@@ -63,7 +63,7 @@ OP_HANDLER( lsr_di )
 	WM(EAD,t);
 }
 
-/* $05 ILLEGAL, same as $04 */
+/* $05 ILLEGAL */
 
 /* $06 ROR direct -**-* */
 OP_HANDLER( ror_di )
@@ -123,7 +123,7 @@ OP_HANDLER( dec_di )
 	WM(EAD,t);
 }
 
-/* $0B ILLEGAL, same as $0A */
+/* $0B ILLEGAL */
 
 /* $OC INC direct -***- */
 OP_HANDLER( inc_di )
@@ -195,6 +195,10 @@ OP_HANDLER( lbra )
 {
 	IMMWORD(EAP);
 	PC += EA;
+
+	if ( EA == 0xfffd )  /* EHC 980508 speed up busy loop */
+		if ( m68_state->icount > 0)
+			m68_state->icount = 0;
 }
 
 /* $17 LBSR relative ----- */
@@ -368,13 +372,16 @@ OP_HANDLER( bra )
 	UINT8 t;
 	IMMBYTE(t);
 	PC += SIGNED(t);
+	/* JB 970823 - speed up busy loops */
+	if( t == 0xfe )
+		if( m68_state->icount > 0 ) m68_state->icount = 0;
 }
 
 /* $21 BRN relative ----- */
-static UINT8 m6809_brn_t; // hack around GCC 4.6 error because we need the side effects of IMMBYTE
 OP_HANDLER( brn )
 {
-	IMMBYTE(m6809_brn_t);
+	UINT8 t;
+	IMMBYTE(t);
 }
 
 /* $1021 LBRN relative ----- */
@@ -672,7 +679,7 @@ OP_HANDLER( rti )
 	t = CC & CC_E;		/* HJB 990225: entire state saved? */
 	if(t)
 	{
-		m68_state->icount -= 9;
+ 		m68_state->icount -= 9;
 		PULLBYTE(A);
 		PULLBYTE(B);
 		PULLBYTE(DP);
@@ -778,9 +785,9 @@ OP_HANDLER( nega )
 	A = r;
 }
 
-/* $41 ILLEGAL, same as $40 */
+/* $41 ILLEGAL */
 
-/* $42 ILLEGAL, same as $43 */
+/* $42 ILLEGAL */
 
 /* $43 COMA inherent -**01 */
 OP_HANDLER( coma )
@@ -800,7 +807,7 @@ OP_HANDLER( lsra )
 	SET_Z8(A);
 }
 
-/* $45 ILLEGAL, same as $44 */
+/* $45 ILLEGAL */
 
 /* $46 RORA inherent -**-* */
 OP_HANDLER( rora )
@@ -851,7 +858,7 @@ OP_HANDLER( deca )
 	SET_FLAGS8D(A);
 }
 
-/* $4B ILLEGAL, same as $4A */
+/* $4B ILLEGAL */
 
 /* $4C INCA inherent -***- */
 OP_HANDLER( inca )
@@ -868,7 +875,7 @@ OP_HANDLER( tsta )
 	SET_NZ8(A);
 }
 
-/* $4E ILLEGAL, same as $4F */
+/* $4E ILLEGAL */
 
 /* $4F CLRA inherent -0100 */
 OP_HANDLER( clra )
@@ -887,9 +894,9 @@ OP_HANDLER( negb )
 	B = r;
 }
 
-/* $51 ILLEGAL, same as $50 */
+/* $51 ILLEGAL */
 
-/* $52 ILLEGAL, same as $53 */
+/* $52 ILLEGAL */
 
 /* $53 COMB inherent -**01 */
 OP_HANDLER( comb )
@@ -909,7 +916,7 @@ OP_HANDLER( lsrb )
 	SET_Z8(B);
 }
 
-/* $55 ILLEGAL, same as $54 */
+/* $55 ILLEGAL */
 
 /* $56 RORB inherent -**-* */
 OP_HANDLER( rorb )
@@ -962,7 +969,7 @@ OP_HANDLER( decb )
 	SET_FLAGS8D(B);
 }
 
-/* $5B ILLEGAL, same as $5A */
+/* $5B ILLEGAL */
 
 /* $5C INCB inherent -***- */
 OP_HANDLER( incb )
@@ -979,7 +986,7 @@ OP_HANDLER( tstb )
 	SET_NZ8(B);
 }
 
-/* $5E ILLEGAL, same as $5F */
+/* $5E ILLEGAL */
 
 /* $5F CLRB inherent -0100 */
 OP_HANDLER( clrb )
@@ -1000,9 +1007,9 @@ OP_HANDLER( neg_ix )
 	WM(EAD,r);
 }
 
-/* $61 ILLEGAL, same as $60 */
+/* $61 ILLEGAL */
 
-/* $62 ILLEGAL, same as $63 */
+/* $62 ILLEGAL */
 
 /* $63 COM indexed -**01 */
 OP_HANDLER( com_ix )
@@ -1028,7 +1035,7 @@ OP_HANDLER( lsr_ix )
 	WM(EAD,t);
 }
 
-/* $65 ILLEGAL, same as $64 */
+/* $65 ILLEGAL */
 
 /* $66 ROR indexed -**-* */
 OP_HANDLER( ror_ix )
@@ -1091,7 +1098,7 @@ OP_HANDLER( dec_ix )
 	WM(EAD,t);
 }
 
-/* $6B ILLEGAL, same as $6A */
+/* $6B ILLEGAL */
 
 /* $6C INC indexed -***- */
 OP_HANDLER( inc_ix )
@@ -1138,9 +1145,9 @@ OP_HANDLER( neg_ex )
 	WM(EAD,r);
 }
 
-/* $71 ILLEGAL, same as $70 */
+/* $71 ILLEGAL */
 
-/* $72 ILLEGAL, same as $73 */
+/* $72 ILLEGAL */
 
 /* $73 COM extended -**01 */
 OP_HANDLER( com_ex )
@@ -1160,7 +1167,7 @@ OP_HANDLER( lsr_ex )
 	WM(EAD,t);
 }
 
-/* $75 ILLEGAL, same as $74 */
+/* $75 ILLEGAL */
 
 /* $76 ROR extended -**-* */
 OP_HANDLER( ror_ex )
@@ -1209,7 +1216,7 @@ OP_HANDLER( dec_ex )
 	WM(EAD,t);
 }
 
-/* $7B ILLEGAL, same as $7A */
+/* $7B ILLEGAL */
 
 /* $7C INC extended -***- */
 OP_HANDLER( inc_ex )

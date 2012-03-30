@@ -19,7 +19,6 @@
  *
  *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "lr35902.h"
 
@@ -205,7 +204,7 @@ static const lr35902dasm mnemonic_main[256]= {
 CPU_DISASSEMBLE( lr35902 )
 {
 	const lr35902dasm *d;
-	const char /* *symbol,*/ *src;
+	const char *symbol, *src;
 	char *dst;
 	INT8 offset = 0;
 	UINT8 op, op1;
@@ -213,7 +212,7 @@ CPU_DISASSEMBLE( lr35902 )
 	int pos = 0;
 
 	dst = buffer;
-	//symbol = NULL;
+	symbol = NULL;
 
 	op = oprom[pos++];
 	op1 = 0; /* keep GCC happy */

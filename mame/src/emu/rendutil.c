@@ -9,7 +9,6 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "render.h"
 #include "rendutil.h"
 #include "png.h"
@@ -21,10 +20,10 @@
 ***************************************************************************/
 
 /* utilities */
-static void resample_argb_bitmap_average(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color &color, UINT32 dx, UINT32 dy);
-static void resample_argb_bitmap_bilinear(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color &color, UINT32 dx, UINT32 dy);
-static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png);
-static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png);
+static void resample_argb_bitmap_average(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color *color, UINT32 dx, UINT32 dy);
+static void resample_argb_bitmap_bilinear(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color *color, UINT32 dx, UINT32 dy);
+static void copy_png_to_bitmap(bitmap_t *bitmap, const png_info *png, int *hasalpha);
+static void copy_png_alpha_to_bitmap(bitmap_t *bitmap, const png_info *png, int *hasalpha);
 
 
 
@@ -53,27 +52,40 @@ INLINE UINT8 compute_brightness(rgb_t rgb)
     quality resampling of a texture
 -------------------------------------------------*/
 
-void render_resample_argb_bitmap_hq(bitmap_argb32 &dest, bitmap_argb32 &source, const render_color &color)
+void render_resample_argb_bitmap_hq(void *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const bitmap_t *source, const rectangle *orig_sbounds, const render_color *color)
 {
-	if (dest.width() == 0 || dest.height() == 0)
+	UINT32 swidth, sheight;
+	const UINT32 *sbase;
+	rectangle sbounds;
+	UINT32 dx, dy;
+
+	if (dwidth == 0 || dheight == 0)
 		return;
 
+	/* compute the real source bounds */
+	if (orig_sbounds != NULL)
+		sbounds = *orig_sbounds;
+	else
+	{
+		sbounds.min_x = sbounds.min_y = 0;
+		sbounds.max_x = source->width;
+		sbounds.max_y = source->height;
+	}
+
 	/* adjust the source base */
-	const UINT32 *sbase = &source.pix32(0);
+	sbase = (const UINT32 *)source->base + sbounds.min_y * source->rowpixels + sbounds.min_x;
 
 	/* determine the steppings */
-	UINT32 swidth = source.width();
-	UINT32 sheight = source.height();
-	UINT32 dwidth = dest.width();
-	UINT32 dheight = dest.height();
-	UINT32 dx = (swidth << 12) / dwidth;
-	UINT32 dy = (sheight << 12) / dheight;
+	swidth = sbounds.max_x - sbounds.min_x;
+	sheight = sbounds.max_y - sbounds.min_y;
+	dx = (swidth << 12) / dwidth;
+	dy = (sheight << 12) / dheight;
 
 	/* if the source is higher res than the target, use full averaging */
 	if (dx > 0x1000 || dy > 0x1000)
-		resample_argb_bitmap_average(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
+		resample_argb_bitmap_average((UINT32 *)dest, drowpixels, dwidth, dheight, sbase, source->rowpixels, swidth, sheight, color, dx, dy);
 	else
-		resample_argb_bitmap_bilinear(&dest.pix(0), dest.rowpixels(), dwidth, dheight, sbase, source.rowpixels(), swidth, sheight, color, dx, dy);
+		resample_argb_bitmap_bilinear((UINT32 *)dest, drowpixels, dwidth, dheight, sbase, source->rowpixels, swidth, sheight, color, dx, dy);
 }
 
 
@@ -83,17 +95,17 @@ void render_resample_argb_bitmap_hq(bitmap_argb32 &dest, bitmap_argb32 &source, 
     all contributing pixels
 -------------------------------------------------*/
 
-static void resample_argb_bitmap_average(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color &color, UINT32 dx, UINT32 dy)
+static void resample_argb_bitmap_average(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color *color, UINT32 dx, UINT32 dy)
 {
 	UINT64 sumscale = (UINT64)dx * (UINT64)dy;
 	UINT32 r, g, b, a;
 	UINT32 x, y;
 
 	/* precompute premultiplied R/G/B/A factors */
-	r = color.r * color.a * 256.0;
-	g = color.g * color.a * 256.0;
-	b = color.b * color.a * 256.0;
-	a = color.a * 256.0;
+	r = color->r * color->a * 256.0;
+	g = color->g * color->a * 256.0;
+	b = color->b * color->a * 256.0;
+	a = color->a * 256.0;
 
 	/* loop over the target vertically */
 	for (y = 0; y < dheight; y++)
@@ -175,17 +187,17 @@ static void resample_argb_bitmap_average(UINT32 *dest, UINT32 drowpixels, UINT32
     sampling via a bilinear filter
 -------------------------------------------------*/
 
-static void resample_argb_bitmap_bilinear(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color &color, UINT32 dx, UINT32 dy)
+static void resample_argb_bitmap_bilinear(UINT32 *dest, UINT32 drowpixels, UINT32 dwidth, UINT32 dheight, const UINT32 *source, UINT32 srowpixels, UINT32 swidth, UINT32 sheight, const render_color *color, UINT32 dx, UINT32 dy)
 {
 	UINT32 maxx = swidth << 12, maxy = sheight << 12;
 	UINT32 r, g, b, a;
 	UINT32 x, y;
 
 	/* precompute premultiplied R/G/B/A factors */
-	r = color.r * color.a * 256.0;
-	g = color.g * color.a * 256.0;
-	b = color.b * color.a * 256.0;
-	a = color.a * 256.0;
+	r = color->r * color->a * 256.0;
+	g = color->g * color->a * 256.0;
+	b = color->b * color->a * 256.0;
+	a = color->a * 256.0;
 
 	/* loop over the target vertically */
 	for (y = 0; y < dheight; y++)
@@ -544,70 +556,78 @@ void render_line_to_quad(const render_bounds *bounds, float width, render_bounds
 
 /*-------------------------------------------------
     render_load_png - load a PNG file into a
-    bitmap
+    bitmap_t
 -------------------------------------------------*/
 
-bool render_load_png(bitmap_argb32 &bitmap, emu_file &file, const char *dirname, const char *filename, bool load_as_alpha_to_existing)
+bitmap_t *render_load_png(const char *path, const char *dirname, const char *filename, bitmap_t *alphadest, int *hasalpha)
 {
-	// deallocate if we're not overlaying alpha
-	if (!load_as_alpha_to_existing)
-		bitmap.reset();
-
-	// open the file
-	astring fname;
-	if (dirname == NULL)
-		fname.cpy(filename);
-	else
-		fname.cpy(dirname).cat(PATH_SEPARATOR).cat(filename);
-	file_error filerr = file.open(fname);
-	if (filerr != FILERR_NONE)
-		return false;
-
-	// read the PNG data
+	bitmap_t *bitmap = NULL;
+	file_error filerr;
+	mame_file *file;
 	png_info png;
-	png_error result = png_read_file(file, &png);
-	file.close();
-	if (result != PNGERR_NONE)
-		return false;
+	astring *fname;
+	png_error result;
 
-	// verify we can handle this PNG
+	/* open the file */
+	if (dirname == NULL)
+		fname = astring_dupc(filename);
+	else
+		fname = astring_assemble_3(astring_alloc(), dirname, PATH_SEPARATOR, filename);
+	filerr = mame_fopen(path, astring_c(fname), OPEN_FLAG_READ, &file);
+	astring_free(fname);
+	if (filerr != FILERR_NONE)
+		return NULL;
+
+	/* read the PNG data */
+	result = png_read_file(mame_core_file(file), &png);
+	mame_fclose(file);
+	if (result != PNGERR_NONE)
+		return NULL;
+
+	/* verify we can handle this PNG */
 	if (png.bit_depth > 8)
 	{
 		logerror("%s: Unsupported bit depth %d (8 bit max)\n", filename, png.bit_depth);
 		png_free(&png);
-		return false;
+		return NULL;
 	}
 	if (png.interlace_method != 0)
 	{
 		logerror("%s: Interlace unsupported\n", filename);
 		png_free(&png);
-		return false;
+		return NULL;
 	}
 	if (png.color_type != 0 && png.color_type != 3 && png.color_type != 2 && png.color_type != 6)
 	{
 		logerror("%s: Unsupported color type %d\n", filename, png.color_type);
 		png_free(&png);
-		return false;
+		return NULL;
 	}
 
-	// if less than 8 bits, upsample
+	/* if less than 8 bits, upsample */
 	png_expand_buffer_8bit(&png);
 
-	// non-alpha case
-	bool hasalpha = false;
-	if (!load_as_alpha_to_existing)
+	/* non-alpha case */
+	if (alphadest == NULL)
 	{
-		bitmap.allocate(png.width, png.height);
-		hasalpha = copy_png_to_bitmap(bitmap, &png);
+		bitmap = bitmap_alloc(png.width, png.height, BITMAP_FORMAT_ARGB32);
+		if (bitmap != NULL)
+			copy_png_to_bitmap(bitmap, &png, hasalpha);
 	}
 
-	// alpha case
-	else if (png.width == bitmap.width() && png.height == bitmap.height())
-		hasalpha = copy_png_alpha_to_bitmap(bitmap, &png);
+	/* alpha case */
+	else
+	{
+		if (png.width == alphadest->width && png.height == alphadest->height)
+		{
+			bitmap = alphadest;
+			copy_png_alpha_to_bitmap(bitmap, &png, hasalpha);
+		}
+	}
 
-	// free PNG data
+	/* free PNG data */
 	png_free(&png);
-	return hasalpha;
+	return bitmap;
 }
 
 
@@ -616,7 +636,7 @@ bool render_load_png(bitmap_argb32 &bitmap, emu_file &file, const char *dirname,
     bitmap
 -------------------------------------------------*/
 
-static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
+static void copy_png_to_bitmap(bitmap_t *bitmap, const png_info *png, int *hasalpha)
 {
 	UINT8 accumalpha = 0xff;
 	UINT8 *src;
@@ -633,7 +653,7 @@ static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 				/* determine alpha and expand to 32bpp */
 				UINT8 alpha = (*src < png->num_trans) ? png->trans[*src] : 0xff;
 				accumalpha &= alpha;
-				bitmap.pix32(y, x) = MAKE_ARGB(alpha, png->palette[*src * 3], png->palette[*src * 3 + 1], png->palette[*src * 3 + 2]);
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(alpha, png->palette[*src * 3], png->palette[*src * 3 + 1], png->palette[*src * 3 + 2]);
 			}
 	}
 
@@ -644,7 +664,7 @@ static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		src = png->image;
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src++)
-				bitmap.pix32(y, x) = MAKE_ARGB(0xff, *src, *src, *src);
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(0xff, *src, *src, *src);
 	}
 
 	/* handle 32bpp non-alpha case */
@@ -654,7 +674,7 @@ static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		src = png->image;
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src += 3)
-				bitmap.pix32(y, x) = MAKE_ARGB(0xff, src[0], src[1], src[2]);
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(0xff, src[0], src[1], src[2]);
 	}
 
 	/* handle 32bpp alpha case */
@@ -666,12 +686,13 @@ static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 			for (x = 0; x < png->width; x++, src += 4)
 			{
 				accumalpha &= src[3];
-				bitmap.pix32(y, x) = MAKE_ARGB(src[3], src[0], src[1], src[2]);
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(src[3], src[0], src[1], src[2]);
 			}
 	}
 
 	/* set the hasalpha flag */
-	return (accumalpha != 0xff);
+	if (hasalpha != NULL)
+		*hasalpha = (accumalpha != 0xff);
 }
 
 
@@ -680,7 +701,7 @@ static bool copy_png_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
     to the alpha channel of a bitmap
 -------------------------------------------------*/
 
-static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
+static void copy_png_alpha_to_bitmap(bitmap_t *bitmap, const png_info *png, int *hasalpha)
 {
 	UINT8 accumalpha = 0xff;
 	UINT8 *src;
@@ -694,10 +715,10 @@ static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src++)
 			{
-				rgb_t pixel = bitmap.pix32(y, x);
+				rgb_t pixel = *BITMAP_ADDR32(bitmap, y, x);
 				UINT8 alpha = compute_brightness(MAKE_RGB(png->palette[*src * 3], png->palette[*src * 3 + 1], png->palette[*src * 3 + 2]));
 				accumalpha &= alpha;
-				bitmap.pix32(y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
 			}
 	}
 
@@ -709,9 +730,9 @@ static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src++)
 			{
-				rgb_t pixel = bitmap.pix32(y, x);
+				rgb_t pixel = *BITMAP_ADDR32(bitmap, y, x);
 				accumalpha &= *src;
-				bitmap.pix32(y, x) = MAKE_ARGB(*src, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(*src, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
 			}
 	}
 
@@ -723,10 +744,10 @@ static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src += 3)
 			{
-				rgb_t pixel = bitmap.pix32(y, x);
+				rgb_t pixel = *BITMAP_ADDR32(bitmap, y, x);
 				UINT8 alpha = compute_brightness(MAKE_RGB(src[0], src[1], src[2]));
 				accumalpha &= alpha;
-				bitmap.pix32(y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
 			}
 	}
 
@@ -738,13 +759,14 @@ static bool copy_png_alpha_to_bitmap(bitmap_argb32 &bitmap, const png_info *png)
 		for (y = 0; y < png->height; y++)
 			for (x = 0; x < png->width; x++, src += 4)
 			{
-				rgb_t pixel = bitmap.pix32(y, x);
+				rgb_t pixel = *BITMAP_ADDR32(bitmap, y, x);
 				UINT8 alpha = compute_brightness(MAKE_RGB(src[0], src[1], src[2]));
 				accumalpha &= alpha;
-				bitmap.pix32(y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
+				*BITMAP_ADDR32(bitmap, y, x) = MAKE_ARGB(alpha, RGB_RED(pixel), RGB_GREEN(pixel), RGB_BLUE(pixel));
 			}
 	}
 
 	/* set the hasalpha flag */
-	return (accumalpha != 0xff);
+	if (hasalpha != NULL)
+		*hasalpha = (accumalpha != 0xff);
 }

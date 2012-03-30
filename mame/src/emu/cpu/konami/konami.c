@@ -34,7 +34,6 @@
 
 *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "konami.h"
 
@@ -52,26 +51,27 @@ struct _konami_state
     PAIR    dp;         /* Direct Page register (page in MSB) */
 	PAIR	u, s;		/* Stack pointers */
 	PAIR	x, y;		/* Index registers */
-	PAIR	ea;
+	PAIR 	ea;
     UINT8   cc;
     UINT8	ireg;
     UINT8   irq_state[2];
-	device_irq_callback irq_callback;
+	cpu_irq_callback irq_callback;
     UINT8   int_state;  /* SYNC and CWAI flags */
 	UINT8	nmi_state;
 	UINT8	nmi_pending;
 	int		icount;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
+	const device_config *device;
+	const address_space *program;
 	konami_set_lines_func setlines_callback;
 };
 
-INLINE konami_state *get_safe_token(device_t *device)
+INLINE konami_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == KONAMI);
-	return (konami_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_KONAMI);
+	return (konami_state *)device->token;
 }
 
 /* flag bits in the cc register */
@@ -117,12 +117,12 @@ INLINE konami_state *get_safe_token(device_t *device)
 
 #define KONAMI_CWAI		8	/* set when CWAI is waiting for an interrupt */
 #define KONAMI_SYNC		16	/* set when SYNC is waiting for an interrupt */
-#define KONAMI_LDS		32	/* set when LDS occurred at least once */
+#define KONAMI_LDS		32	/* set when LDS occured at least once */
 
-#define RM(cs,Addr)				(cs)->program->read_byte(Addr)
-#define WM(cs,Addr,Value)		(cs)->program->write_byte(Addr,Value)
-#define ROP(cs,Addr)			(cs)->direct->read_decrypted_byte(Addr)
-#define ROP_ARG(cs,Addr)		(cs)->direct->read_raw_byte(Addr)
+#define RM(cs,Addr)				memory_read_byte_8be((cs)->program, Addr)
+#define WM(cs,Addr,Value)		memory_write_byte_8be((cs)->program, Addr,Value)
+#define ROP(cs,Addr)			memory_decrypted_read_byte((cs)->program, Addr)
+#define ROP_ARG(cs,Addr)		memory_raw_read_byte((cs)->program, Addr)
 
 #define SIGNED(a)	(UINT16)(INT16)(INT8)(a)
 
@@ -236,9 +236,9 @@ CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N
 #define EXTWORD(cs,w) EXTENDED(cs); w.d=RM16(cs,EAD)
 
 /* macros for branch instructions */
-#define BRANCH(cs,f) {					\
+#define BRANCH(cs,f) { 					\
 	UINT8 t;							\
-	IMMBYTE(cs,t);						\
+	IMMBYTE(cs,t); 						\
 	if( f ) 							\
 	{									\
 		PC += SIGNED(t);				\
@@ -247,7 +247,7 @@ CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N
 
 #define LBRANCH(cs,f) {                 \
 	PAIR t; 							\
-	IMMWORD(cs,t);						\
+	IMMWORD(cs,t); 						\
 	if( f ) 							\
 	{									\
 		cpustate->icount -= 1;			\
@@ -261,24 +261,24 @@ CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N,CC_N
 #define GETREG(val,reg) 				\
 	switch(reg) {						\
 	case 0: val = A;	break;			\
-	case 1: val = B;	break;			\
-	case 2: val = X;	break;			\
-	case 3: val = Y;	break;			\
-	case 4: val = S;	break; /* ? */	\
+	case 1: val = B; 	break; 			\
+	case 2: val = X; 	break;			\
+	case 3: val = Y;	break; 			\
+	case 4: val = S; 	break; /* ? */	\
 	case 5: val = U;	break;			\
 	default: val = 0xff; logerror("Unknown TFR/EXG idx at PC:%04x\n", PC ); break; \
-	}
+}
 
 #define SETREG(val,reg) 				\
 	switch(reg) {						\
 	case 0: A = val;	break;			\
 	case 1: B = val;	break;			\
-	case 2: X = val;	break;			\
+	case 2: X = val; 	break;			\
 	case 3: Y = val;	break;			\
 	case 4: S = val;	break; /* ? */	\
-	case 5: U = val;	break;			\
+	case 5: U = val; 	break;			\
 	default: logerror("Unknown TFR/EXG idx at PC:%04x\n", PC ); break; \
-	}
+}
 
 /* opcode timings */
 static const UINT8 cycles1[] =
@@ -404,22 +404,21 @@ static CPU_INIT( konami )
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 
-	device->save_item(NAME(PC));
-	device->save_item(NAME(U));
-	device->save_item(NAME(S));
-	device->save_item(NAME(X));
-	device->save_item(NAME(Y));
-	device->save_item(NAME(D));
-	device->save_item(NAME(DP));
-	device->save_item(NAME(CC));
-	device->save_item(NAME(cpustate->int_state));
-	device->save_item(NAME(cpustate->nmi_state));
-	device->save_item(NAME(cpustate->nmi_pending));
-	device->save_item(NAME(cpustate->irq_state[0]));
-	device->save_item(NAME(cpustate->irq_state[1]));
+	state_save_register_device_item(device, 0, PC);
+	state_save_register_device_item(device, 0, U);
+	state_save_register_device_item(device, 0, S);
+	state_save_register_device_item(device, 0, X);
+	state_save_register_device_item(device, 0, Y);
+	state_save_register_device_item(device, 0, D);
+	state_save_register_device_item(device, 0, DP);
+	state_save_register_device_item(device, 0, CC);
+	state_save_register_device_item(device, 0, cpustate->int_state);
+	state_save_register_device_item(device, 0, cpustate->nmi_state);
+	state_save_register_device_item(device, 0, cpustate->nmi_pending);
+	state_save_register_device_item(device, 0, cpustate->irq_state[0]);
+	state_save_register_device_item(device, 0, cpustate->irq_state[1]);
 }
 
 static CPU_RESET( konami )
@@ -474,6 +473,7 @@ static CPU_EXECUTE( konami )
 {
 	konami_state *cpustate = get_safe_token(device);
 
+	cpustate->icount = cycles;
 	check_irq_lines(cpustate);
 
 	if( cpustate->int_state & (KONAMI_CWAI | KONAMI_SYNC) )
@@ -499,10 +499,12 @@ static CPU_EXECUTE( konami )
 
         } while( cpustate->icount > 0 );
     }
+
+	return cycles - cpustate->icount;
 }
 
 
-void konami_configure_set_lines(device_t *device, konami_set_lines_func func)
+void konami_configure_set_lines(const device_config *device, konami_set_lines_func func)
 {
 	konami_state *cpustate = get_safe_token(device);
 	cpustate->setlines_callback = func;
@@ -524,7 +526,7 @@ static CPU_SET_INFO( konami )
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	set_irq_line(cpustate, INPUT_LINE_NMI, info->i);	break;
 
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + KONAMI_PC:			PC = info->i;							break;
+		case CPUINFO_INT_REGISTER + KONAMI_PC:			PC = info->i; 							break;
 		case CPUINFO_INT_SP:
 		case CPUINFO_INT_REGISTER + KONAMI_S:			S = info->i;							break;
 		case CPUINFO_INT_REGISTER + KONAMI_CC:			CC = info->i;							break;
@@ -545,7 +547,7 @@ static CPU_SET_INFO( konami )
 
 CPU_GET_INFO( konami )
 {
-	konami_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	konami_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -560,15 +562,15 @@ CPU_GET_INFO( konami )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 13;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + KONAMI_IRQ_LINE:	info->i = cpustate->irq_state[KONAMI_IRQ_LINE]; break;
 		case CPUINFO_INT_INPUT_STATE + KONAMI_FIRQ_LINE:info->i = cpustate->irq_state[KONAMI_FIRQ_LINE]; break;
@@ -628,5 +630,3 @@ CPU_GET_INFO( konami )
 		case CPUINFO_STR_REGISTER + KONAMI_DP:			sprintf(info->s, "DP:%02X", cpustate->dp.b.h); break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(KONAMI, konami);

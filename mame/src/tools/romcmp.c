@@ -10,11 +10,10 @@
 ***************************************************************************/
 
 #include "unzip.h"
+#include "osdepend.h"	/* for CLIB_DECL */
 #include "osdcore.h"
-#include "osdcomm.h"
 
 #include <stdarg.h>
-#include <stdlib.h>
 
 
 #define MAX_FILES 100
@@ -39,17 +38,13 @@
 /* O1 = Odd bytes 1st half */
 /* E2 = Even bytes 2nd half */
 /* O2 = Odd bytes 2nd half */
-enum
-{
-	MODE_A,
-	MODE_NIB1,MODE_NIB2,
-	MODE_12, MODE_22,
-	MODE_14, MODE_24, MODE_34, MODE_44,
-	MODE_E, MODE_O,
-	MODE_E12, MODE_O12, MODE_E22, MODE_O22,
-	TOTAL_MODES
-};
-
+enum {	MODE_A,
+		MODE_NIB1,MODE_NIB2,
+		MODE_12, MODE_22,
+		MODE_14, MODE_24, MODE_34, MODE_44,
+		MODE_E, MODE_O,
+		MODE_E12, MODE_O12, MODE_E22, MODE_O22,
+		TOTAL_MODES };
 static const char *const modenames[] =
 {
 	"          ",
@@ -553,7 +548,7 @@ static int load_files(int i, int *found, const char *path)
 }
 
 
-int CLIB_DECL main(int argc,char *argv[])
+int CLIB_DECL main(int argc,char **argv)
 {
 	int	err;
 	int total_modes = MODE_NIB2;	/* by default, use only MODE_A, MODE_NIB1 and MODE_NIB2 */

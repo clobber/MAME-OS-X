@@ -29,7 +29,8 @@ Offset 0:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "t6w28.h"
 
 
@@ -57,11 +58,13 @@ struct _t6w28_state
 };
 
 
-INLINE t6w28_state *get_safe_token(device_t *device)
+INLINE t6w28_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == T6W28);
-	return (t6w28_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_T6W28);
+	return (t6w28_state *)device->token;
 }
 
 
@@ -72,7 +75,7 @@ WRITE8_DEVICE_HANDLER( t6w28_w )
 
 
 	/* update the output buffer before changing the registers */
-	R->Channel->update();
+	stream_update(R->Channel);
 
 	offset &= 1;
 
@@ -304,12 +307,12 @@ static void t6w28_set_gain(t6w28_state *R,int gain)
 
 
 
-static int t6w28_init(device_t *device, t6w28_state *R)
+static int t6w28_init(const device_config *device, t6w28_state *R)
 {
-	int sample_rate = device->clock()/16;
+	int sample_rate = device->clock/16;
 	int i;
 
-	R->Channel = device->machine().sound().stream_alloc(*device,0,2,sample_rate,R,t6w28_update);
+	R->Channel = stream_create(device,0,2,sample_rate,R,t6w28_update);
 
 	R->SampleRate = sample_rate;
 
@@ -355,14 +358,14 @@ static DEVICE_START( t6w28 )
 	chip->WhitenoiseTaps = 0x06;
 	chip->WhitenoiseInvert = FALSE;
 
-	device->save_item(NAME(chip->Register));
-	device->save_item(NAME(chip->LastRegister));
-	device->save_item(NAME(chip->Volume));
-	device->save_item(NAME(chip->RNG));
-	device->save_item(NAME(chip->NoiseMode));
-	device->save_item(NAME(chip->Period));
-	device->save_item(NAME(chip->Count));
-	device->save_item(NAME(chip->Output));
+	state_save_register_device_item_array(device, 0, chip->Register);
+	state_save_register_device_item_array(device, 0, chip->LastRegister);
+	state_save_register_device_item_array(device, 0, chip->Volume);
+	state_save_register_device_item_array(device, 0, chip->RNG);
+	state_save_register_device_item_array(device, 0, chip->NoiseMode);
+	state_save_register_device_item_array(device, 0, chip->Period);
+	state_save_register_device_item_array(device, 0, chip->Count);
+	state_save_register_device_item_array(device, 0, chip->Output);
 }
 
 
@@ -375,7 +378,7 @@ DEVICE_GET_INFO( t6w28 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(t6w28_state);					break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(t6w28_state); 					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( t6w28 );		break;
@@ -391,5 +394,3 @@ DEVICE_GET_INFO( t6w28 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(T6W28, t6w28);

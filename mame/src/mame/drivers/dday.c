@@ -49,19 +49,35 @@ write:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/dday.h"
+
+extern UINT8 *dday_bgvideoram;
+extern UINT8 *dday_fgvideoram;
+extern UINT8 *dday_textvideoram;
+extern UINT8 *dday_colorram;
+
+PALETTE_INIT( dday );
+VIDEO_START( dday );
+VIDEO_UPDATE( dday );
+WRITE8_HANDLER( dday_bgvideoram_w );
+WRITE8_HANDLER( dday_fgvideoram_w );
+WRITE8_HANDLER( dday_textvideoram_w );
+WRITE8_HANDLER( dday_colorram_w );
+READ8_HANDLER( dday_colorram_r );
+WRITE8_HANDLER( dday_control_w );
+WRITE8_HANDLER( dday_sl_control_w );
+READ8_HANDLER( dday_countdown_timer_r );
 
 
-static ADDRESS_MAP_START( dday_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( dday_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(dday_sl_control_w)
-	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(dday_textvideoram_w) AM_BASE_MEMBER(dday_state, m_textvideoram)
-	AM_RANGE(0x5400, 0x57ff) AM_RAM_WRITE(dday_fgvideoram_w) AM_BASE_MEMBER(dday_state, m_fgvideoram)
-	AM_RANGE(0x5800, 0x5bff) AM_RAM_WRITE(dday_bgvideoram_w) AM_BASE_MEMBER(dday_state, m_bgvideoram)
-	AM_RANGE(0x5c00, 0x5fff) AM_READWRITE(dday_colorram_r, dday_colorram_w) AM_BASE_MEMBER(dday_state, m_colorram)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(dday_textvideoram_w) AM_BASE(&dday_textvideoram)
+	AM_RANGE(0x5400, 0x57ff) AM_RAM_WRITE(dday_fgvideoram_w) AM_BASE(&dday_fgvideoram)
+	AM_RANGE(0x5800, 0x5bff) AM_RAM_WRITE(dday_bgvideoram_w) AM_BASE(&dday_bgvideoram)
+	AM_RANGE(0x5c00, 0x5fff) AM_READWRITE(dday_colorram_r, dday_colorram_w) AM_BASE(&dday_colorram)
 	AM_RANGE(0x6000, 0x63ff) AM_RAM
 	AM_RANGE(0x6400, 0x6401) AM_MIRROR(0x000e) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x6800, 0x6801) AM_DEVWRITE("ay2", ay8910_address_data_w)
@@ -85,7 +101,7 @@ static INPUT_PORTS_START( dday )
 	PORT_BIT( 0xc0, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* doesn't seem to be */
                                                   /* accessed */
 	PORT_START("DSW0")
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW3:1,2")
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "2" ) PORT_CONDITION("DSW0", 0x80, PORTCOND_EQUALS, 0x80)
 	PORT_DIPSETTING(    0x01, "3" ) PORT_CONDITION("DSW0", 0x80, PORTCOND_EQUALS, 0x80)
 	PORT_DIPSETTING(    0x02, "4" ) PORT_CONDITION("DSW0", 0x80, PORTCOND_EQUALS, 0x80)
@@ -95,28 +111,28 @@ static INPUT_PORTS_START( dday )
 	PORT_DIPSETTING(    0x02, "7" ) PORT_CONDITION("DSW0", 0x80, PORTCOND_EQUALS, 0x00)
 	PORT_DIPSETTING(    0x03, "8" ) PORT_CONDITION("DSW0", 0x80, PORTCOND_EQUALS, 0x00)
 
-	PORT_DIPNAME( 0x0c, 0x00, "Extended Play At" )		PORT_DIPLOCATION("SW3:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, "Extended Play At" )
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x04, "15000" )
 	PORT_DIPSETTING(    0x08, "20000" )
 	PORT_DIPSETTING(    0x0c, "25000" )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW3:5") // No Difficulty setting?
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )	// No Difficulty setting?
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )		// Clearly old code revision, ddayc works much better
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW3:6")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW3:7")
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Start with 20000 Pts" )	PORT_DIPLOCATION("SW3:8") // Works the same as Centuri License, but not as well
+	PORT_DIPNAME( 0x80, 0x80, "Start with 20000 Pts" )	// Works the same as Centuri License, but not as well
 	PORT_DIPSETTING(    0x80, DEF_STR( No ) )			// Doesn't mention extended play, just gives lives
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )			// Also alters table for Extended Play
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW1:1,2,3,4")
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x0e, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x0c, DEF_STR( 2C_2C ) ) /* Not shown in manual */
+	PORT_DIPSETTING(    0x0c, DEF_STR( 2C_2C ) )
 	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x0a, DEF_STR( 2C_3C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_4C ) )
@@ -131,7 +147,7 @@ static INPUT_PORTS_START( dday )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_7C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_8C ) )
-	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW2:1,2,3,4")
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(    0xe0, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( 2C_2C ) )
 	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
@@ -161,33 +177,19 @@ static INPUT_PORTS_START( ddayc )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON2 ) /* Distance Button */
 
 	PORT_MODIFY("DSW0")
-	PORT_DIPNAME( 0x0c, 0x00, "Extended Play At" )		PORT_DIPLOCATION("SW3:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, "Extended Play At" )
 	PORT_DIPSETTING(    0x00, "4000" )
 	PORT_DIPSETTING(    0x04, "6000" )
 	PORT_DIPSETTING(    0x08, "8000" )
 	PORT_DIPSETTING(    0x0c, "10000" )
-	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW3:5,6")
+	PORT_DIPNAME( 0x30, 0x10, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )		// Easy   - No Bombs, No Troop Carriers
-	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )		// Normal - No Bombs, Troop Carriers
+	PORT_DIPSETTING(    0x20, DEF_STR( Normal ) )	// Normal - No Bombs, Troop Carriers
 	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )		// Hard   - Bombs, Troop Carriers
-	PORT_DIPSETTING(    0x00, "Hard (duplicate setting)" )	// Same as 0x10
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW3:7" )		// Doesn't seem to be used
-/*
-
- The manual shows these differences:
-
---------------------------------------------------------------------
-    DipSwitch Title   |  Function  | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
---------------------------------------------------------------------
-                      |  Very Easy |               |off|off|       |
-      Difficulty      |    Easy    |               |on |off|       |
-                      |  Difficult |               |off|on |       |
-                      |V. Difficult|               |on |on |       |
---------------------------------------------------------------------
-       Free Play                                               |on |
---------------------------------------------------------------------
-*/
-
+    PORT_DIPSETTING(    0x00, "Hard (duplicate setting)" )     // Same as 0x10
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )	// Doesn't seem to be used
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -234,61 +236,37 @@ GFXDECODE_END
 
 
 
-static MACHINE_START( dday )
-{
-	dday_state *state = machine.driver_data<dday_state>();
-
-	state->m_ay1 = machine.device("ay1");
-
-	state->save_item(NAME(state->m_control));
-	state->save_item(NAME(state->m_sl_enable));
-	state->save_item(NAME(state->m_sl_image));
-	state->save_item(NAME(state->m_timer_value));
-}
-
-static MACHINE_RESET( dday )
-{
-	dday_state *state = machine.driver_data<dday_state>();
-
-	state->m_control = 0;
-	state->m_sl_enable = 0;
-	state->m_sl_image = 0;
-}
-
-
-static MACHINE_CONFIG_START( dday, dday_state )
+static MACHINE_DRIVER_START( dday )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 2000000)     /* 2 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(dday_map)
-
-	MCFG_MACHINE_START(dday)
-	MCFG_MACHINE_RESET(dday)
+	MDRV_CPU_ADD("maincpu", Z80, 2000000)     /* 2 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(dday_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(dday)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(dday)
-	MCFG_PALETTE_LENGTH(256)
-	MCFG_PALETTE_INIT(dday)
+	MDRV_GFXDECODE(dday)
+	MDRV_PALETTE_LENGTH(256)
+	MDRV_PALETTE_INIT(dday)
 
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
-	MCFG_VIDEO_START(dday)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_VIDEO_START(dday)
+	MDRV_VIDEO_UPDATE(dday)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 1000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay1", AY8910, 1000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 1000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 1000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 
@@ -363,5 +341,5 @@ ROM_START( ddayc )
 ROM_END
 
 
-GAME( 1982, dday,  0,    dday, dday,  0, ROT0, "Olympia", "D-Day", GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1982, ddayc, dday, dday, ddayc, 0, ROT0, "Olympia (Centuri license)", "D-Day (Centuri)", GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1982, dday,  0,    dday, dday,  0, ROT0, "Olympia", "D-Day", GAME_IMPERFECT_COLORS )
+GAME( 1982, ddayc, dday, dday, ddayc, 0, ROT0, "Olympia (Centuri license)", "D-Day (Centuri)", GAME_IMPERFECT_COLORS )

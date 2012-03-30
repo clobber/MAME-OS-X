@@ -10,9 +10,8 @@
         * Rougien
 
     Known issues:
-        * stars playfield colors and scrolling is wrong in Rougien;
-        * Dunno where the "alien whistle" sample is supposed to play in Rougien;
-        * Mermaid has a ROM for sample playback, identify and hook it up;
+        * Are the stars really supposed to go up in Rougien?
+
 
 Yachtsman
 Esco/Sanritsu, 1982
@@ -104,7 +103,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 3) 'rougien'
 
-  - Player 2 ALWAYS uses 2nd set of inputs regardless of "Cabinet" Dip Switch.
+  - Player 2 AWLAYS uses 2nd set of inputs regardless of "Cabinet" Dip Switch.
   - Continue Play is always possible provided that you insert a coin when the
     message is displayed on the screen (there is a 6 "seconds" timer to do so).
   - Setting BOTH DSW bits 2 and 3 to ON gives you infinite credits and lives.
@@ -114,53 +113,67 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "sound/msm5205.h"
-#include "includes/mermaid.h"
+
+extern UINT8* mermaid_videoram2;
+extern UINT8* mermaid_bg_scrollram;
+extern UINT8* mermaid_fg_scrollram;
+
+WRITE8_HANDLER( mermaid_videoram2_w );
+WRITE8_HANDLER( mermaid_videoram_w );
+WRITE8_HANDLER( mermaid_colorram_w );
+WRITE8_HANDLER( mermaid_flip_screen_x_w );
+WRITE8_HANDLER( mermaid_flip_screen_y_w );
+WRITE8_HANDLER( mermaid_bg_scroll_w );
+WRITE8_HANDLER( mermaid_fg_scroll_w );
+WRITE8_HANDLER( rougien_gfxbankswitch1_w );
+WRITE8_HANDLER( rougien_gfxbankswitch2_w );
+READ8_HANDLER( mermaid_collision_r );
+
+PALETTE_INIT( mermaid );
+VIDEO_START( mermaid );
+VIDEO_UPDATE( mermaid );
+VIDEO_EOF( mermaid );
+
 
 /* Read/Write Handlers */
 
+static UINT8 *mermaid_ay8910_enable;
+
 static WRITE8_HANDLER( mermaid_ay8910_write_port_w )
 {
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-	if (state->m_ay8910_enable[0]) ay8910_data_w(state->m_ay1, offset, data);
-	if (state->m_ay8910_enable[1]) ay8910_data_w(state->m_ay2, offset, data);
+	if (mermaid_ay8910_enable[0]) ay8910_data_w(devtag_get_device(space->machine, "ay1"), offset, data);
+	if (mermaid_ay8910_enable[1]) ay8910_data_w(devtag_get_device(space->machine, "ay2"), offset, data);
 }
 
 static WRITE8_HANDLER( mermaid_ay8910_control_port_w )
 {
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-	if (state->m_ay8910_enable[0]) ay8910_address_w(state->m_ay1, offset, data);
-	if (state->m_ay8910_enable[1]) ay8910_address_w(state->m_ay2, offset, data);
+	if (mermaid_ay8910_enable[0]) ay8910_address_w(devtag_get_device(space->machine, "ay1"), offset, data);
+	if (mermaid_ay8910_enable[1]) ay8910_address_w(devtag_get_device(space->machine, "ay2"), offset, data);
 }
 
-
-static WRITE8_HANDLER( nmi_mask_w )
-{
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-
-	state->m_nmi_mask = data & 1;
-}
 
 /* Memory Map */
 
-static ADDRESS_MAP_START( mermaid_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mermaid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x9fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(mermaid_videoram2_w) AM_BASE_MEMBER(mermaid_state, m_videoram2)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(mermaid_videoram_w) AM_BASE_MEMBER(mermaid_state, m_videoram)
-	AM_RANGE(0xd800, 0xd81f) AM_RAM_WRITE(mermaid_bg_scroll_w) AM_BASE_MEMBER(mermaid_state, m_bg_scrollram)
-	AM_RANGE(0xd840, 0xd85f) AM_RAM_WRITE(mermaid_fg_scroll_w) AM_BASE_MEMBER(mermaid_state, m_fg_scrollram)
-	AM_RANGE(0xd880, 0xd8bf) AM_RAM AM_BASE_SIZE_MEMBER(mermaid_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(mermaid_colorram_w) AM_BASE_MEMBER(mermaid_state, m_colorram)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(mermaid_videoram2_w) AM_BASE(&mermaid_videoram2)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(mermaid_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xd800, 0xd81f) AM_RAM_WRITE(mermaid_bg_scroll_w) AM_BASE(&mermaid_bg_scrollram)
+	AM_RANGE(0xd840, 0xd85f) AM_RAM_WRITE(mermaid_fg_scroll_w) AM_BASE(&mermaid_fg_scrollram)
+	AM_RANGE(0xd880, 0xd8bf) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xdc00, 0xdfff) AM_RAM_WRITE(mermaid_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("DSW")
-	AM_RANGE(0xe000, 0xe001) AM_RAM AM_BASE_MEMBER(mermaid_state, m_ay8910_enable)
-	AM_RANGE(0xe002, 0xe004) AM_WRITENOP // ???
+	AM_RANGE(0xe000, 0xe001) AM_RAM AM_BASE(&mermaid_ay8910_enable)
+	AM_RANGE(0xe002, 0xe002) AM_WRITENOP	// ???
+	AM_RANGE(0xe003, 0xe003) AM_WRITENOP	// ???
+	AM_RANGE(0xe004, 0xe004) AM_WRITENOP	// ???
 	AM_RANGE(0xe005, 0xe005) AM_WRITE(mermaid_flip_screen_x_w)
 	AM_RANGE(0xe006, 0xe006) AM_WRITE(mermaid_flip_screen_y_w)
-	AM_RANGE(0xe007, 0xe007) AM_WRITE(nmi_mask_w)
+	AM_RANGE(0xe007, 0xe007) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("P1") AM_WRITENOP // ???
 	AM_RANGE(0xe801, 0xe801) AM_WRITENOP	// ???
 	AM_RANGE(0xe802, 0xe802) AM_WRITENOP	// ???
@@ -175,41 +188,6 @@ static ADDRESS_MAP_START( mermaid_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xf807, 0xf807) AM_WRITE(mermaid_ay8910_control_port_w)
 ADDRESS_MAP_END
 
-static WRITE8_HANDLER( rougien_sample_rom_lo_w )
-{
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-
-	state->m_adpcm_rom_sel = (data & 1) | (state->m_adpcm_rom_sel & 2);
-}
-
-static WRITE8_HANDLER( rougien_sample_rom_hi_w )
-{
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-
-	state->m_adpcm_rom_sel = ((data & 1)<<1) | (state->m_adpcm_rom_sel & 1);
-}
-
-static WRITE8_HANDLER( rougien_sample_playback_w )
-{
-	mermaid_state *state = space->machine().driver_data<mermaid_state>();
-
-	if((state->m_adpcm_play_reg & 1) && ((data & 1) == 0))
-	{
-		state->m_adpcm_pos = state->m_adpcm_rom_sel*0x1000;
-		state->m_adpcm_end = state->m_adpcm_pos+0x1000;
-		state->m_adpcm_idle = 0;
-		msm5205_reset_w(space->machine().device("adpcm"), 0);
-	}
-
-	state->m_adpcm_play_reg = data & 1;
-}
-
-static ADDRESS_MAP_START( rougien_map, AS_PROGRAM, 8 )
-	AM_RANGE(0xe002, 0xe002) AM_WRITE(rougien_sample_playback_w)
-	AM_RANGE(0xe802, 0xe802) AM_WRITE(rougien_sample_rom_hi_w)
-	AM_RANGE(0xe803, 0xe803) AM_WRITE(rougien_sample_rom_lo_w)
-	AM_IMPORT_FROM( mermaid_map )
-ADDRESS_MAP_END
 
 /* Input Ports */
 
@@ -368,140 +346,38 @@ GFXDECODE_END
 
 /* Machine Driver */
 
-static MACHINE_START( mermaid )
-{
-	mermaid_state *state = machine.driver_data<mermaid_state>();
+static MACHINE_DRIVER_START( mermaid )
+	// basic machine hardware
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	// ???
+	MDRV_CPU_PROGRAM_MAP(mermaid_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	state->m_maincpu = machine.device("maincpu");
-	state->m_ay1 = machine.device("ay1");
-	state->m_ay2 = machine.device("ay2");
+	// video hardware
 
-	state->save_item(NAME(state->m_coll_bit0));
-	state->save_item(NAME(state->m_coll_bit1));
-	state->save_item(NAME(state->m_coll_bit2));
-	state->save_item(NAME(state->m_coll_bit3));
-	state->save_item(NAME(state->m_coll_bit6));
-	state->save_item(NAME(state->m_rougien_gfxbank1));
-	state->save_item(NAME(state->m_rougien_gfxbank2));
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	state->save_item(NAME(state->m_adpcm_pos));
-	state->save_item(NAME(state->m_adpcm_end));
-	state->save_item(NAME(state->m_adpcm_idle));
-	state->save_item(NAME(state->m_adpcm_data));
-	state->save_item(NAME(state->m_adpcm_trigger));
-	state->save_item(NAME(state->m_adpcm_rom_sel));
-	state->save_item(NAME(state->m_adpcm_play_reg));
-}
+	MDRV_GFXDECODE(mermaid)
+	MDRV_PALETTE_LENGTH(4*16+2*2)
 
-static MACHINE_RESET( mermaid )
-{
-	mermaid_state *state = machine.driver_data<mermaid_state>();
+	MDRV_PALETTE_INIT(mermaid)
+	MDRV_VIDEO_START(mermaid)
+	MDRV_VIDEO_UPDATE(mermaid)
+	MDRV_VIDEO_EOF(mermaid)
 
-	state->m_coll_bit0 = 0;
-	state->m_coll_bit1 = 0;
-	state->m_coll_bit2 = 0;
-	state->m_coll_bit3 = 0;
-	state->m_coll_bit6 = 0;
-	state->m_rougien_gfxbank1 = 0;
-	state->m_rougien_gfxbank2 = 0;
+	// sound hardware
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	state->m_adpcm_idle = 1;
-	state->m_adpcm_rom_sel = 0;
-	state->m_adpcm_play_reg = 0;
-}
+	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-/* Similar to Jantotsu, apparently the HW has three ports that controls what kind of sample should be played. Every sample size is 0x1000. */
-static void rougien_adpcm_int( device_t *device )
-{
-	mermaid_state *state = device->machine().driver_data<mermaid_state>();
-
-//  popmessage("%08x",state->m_adpcm_pos);
-
-	if (state->m_adpcm_pos >= state->m_adpcm_end || state->m_adpcm_idle)
-	{
-		//state->m_adpcm_idle = 1;
-		msm5205_reset_w(device, 1);
-		state->m_adpcm_trigger = 0;
-	}
-	else
-	{
-		UINT8 *ROM = device->machine().region("adpcm")->base();
-
-		state->m_adpcm_data = ((state->m_adpcm_trigger ? (ROM[state->m_adpcm_pos] & 0x0f) : (ROM[state->m_adpcm_pos] & 0xf0) >> 4));
-		msm5205_data_w(device, state->m_adpcm_data & 0xf);
-		state->m_adpcm_trigger ^= 1;
-		if (state->m_adpcm_trigger == 0)
-		{
-			state->m_adpcm_pos++;
-			//if ((ROM[state->m_adpcm_pos] & 0xff) == 0x70)
-			//  state->m_adpcm_idle = 1;
-		}
-	}
-}
-
-
-static const msm5205_interface msm5205_config =
-{
-	rougien_adpcm_int,	/* interrupt function */
-	MSM5205_S96_4B
-};
-
-
-static INTERRUPT_GEN( vblank_irq )
-{
-	mermaid_state *state = device->machine().driver_data<mermaid_state>();
-
-	if(state->m_nmi_mask)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-}
-
-static MACHINE_CONFIG_START( mermaid, mermaid_state )
-
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	// ???
-	MCFG_CPU_PROGRAM_MAP(mermaid_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
-
-	MCFG_MACHINE_START(mermaid)
-	MCFG_MACHINE_RESET(mermaid)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mermaid)
-	MCFG_SCREEN_VBLANK_STATIC(mermaid)
-
-	MCFG_GFXDECODE(mermaid)
-	MCFG_PALETTE_LENGTH(4*16+2*2)
-
-	MCFG_PALETTE_INIT(mermaid)
-	MCFG_VIDEO_START(mermaid)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-
-	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( rougien, mermaid )
-
-	MCFG_DEVICE_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(rougien_map)
-
-	MCFG_PALETTE_INIT(rougien)
-
-	MCFG_SOUND_ADD("adpcm", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 /* ROMs */
 
@@ -528,41 +404,11 @@ ROM_START( mermaid )
 	ROM_LOAD( "g960_43.26",	0x0000, 0x1000, CRC(6f077417) SHA1(f2c20e03427a2f5a113c6a4cf95875b77a0ec418) )
 
 	ROM_REGION( 0x40, "proms", 0 )
-	ROM_LOAD( "col_a.96",	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) )
-	ROM_LOAD( "col_b.95",	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) )
+	ROM_LOAD( "col_a.96", 	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) )
+	ROM_LOAD( "col_b.95", 	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) )
 
-	ROM_REGION( 0x1000, "adpcm", 0 )	// unknown, ADPCM?
+	ROM_REGION( 0x1000, "user1", 0 )	// unknown
 	ROM_LOAD( "g960_42.39",	0x0000, 0x1000, CRC(287840bb) SHA1(9a1836f39f328b0c9672976d95a9ece45bb9e89f) )
-ROM_END
-
-ROM_START( yachtmn )
-	ROM_REGION( 0x10000, "maincpu", 0 )       // 64k for code
-	ROM_LOAD( "mer-1.15",	0x0000, 0x1000, CRC(a102b180) SHA1(f1f029797d09d89c98ffc96b1e57f3ab8e89f35a) )
-	ROM_LOAD( "mer-2.16",	0x1000, 0x1000, CRC(0f2ba7fc) SHA1(5eac8300eb755f5f3a88776dbc5cf7995d2f3c44) )
-	ROM_LOAD( "mer-3.17",	0x2000, 0x1000, CRC(46c22b6b) SHA1(3d6293cf99e9263e986a6046a0f08ee0416a2856) )
-	ROM_LOAD( "mer-4.18",	0x3000, 0x1000, CRC(0ec84a12) SHA1(4f2d1509785d659b7e66df0525cbbd3a500370e2) )
-	ROM_LOAD( "mer-5.19",	0x4000, 0x1000, CRC(315153d5) SHA1(c3fa4c1e59026e291ddbd448aede159af9827714) )
-	ROM_LOAD( "g960_37.20",	0x5000, 0x1000, CRC(7d602527) SHA1(1a888bd1829b9f12dd820c49785bea6bc8edab04) ) // mer-6.20
-	ROM_LOAD( "mer-7.21",	0x6000, 0x1000, CRC(20d56a6e) SHA1(b9867f073b38cbf6a98697fe6af6c4cb20d7f54b) )
-	ROM_LOAD( "g960_39.22",	0x7000, 0x1000, CRC(df0db390) SHA1(b466cf1abbf0703d6fbacc86c65d254ef310ba27) ) // mer-8.22
-	ROM_LOAD( "g960_40.23",	0x8000, 0x1000, CRC(fb7aba3f) SHA1(fe6903c11363ed4c34b29226df58e833150cc525) ) // mer-9.23
-	ROM_LOAD( "mer-10.24",	0x9000, 0x1000, CRC(04ca4f8c) SHA1(c7a437fabe3dd6968258f13e688bd6ed8500eb8e) )
-
-	ROM_REGION( 0x4000, "gfx1", 0 )
-	ROM_LOAD( "g960_45.77",	0x0000, 0x1000, CRC(1f6b735e) SHA1(dd7ea4ef674f0495a87fc1929ea14852e8d8d338) ) // merb-0.77
-	ROM_LOAD( "g960_44.76",	0x1000, 0x1000, CRC(fd76074e) SHA1(673a214fc41b923191b4136c0cf39fc5efa970ba) ) // merb-2.76
-	ROM_LOAD( "mera-0.79",	0x2000, 0x1000, CRC(6e3e48c4) SHA1(810e140310e668343bc2052e6c9527c090e0aa3c) )
-	ROM_LOAD( "g960_46.78",	0x3000, 0x1000, CRC(50c117cd) SHA1(45b4055497c785218e2aaaffa86d732912555821) ) // mera-2.78
-
-	ROM_REGION( 0x1000, "gfx2", 0 )
-	ROM_LOAD( "g960_43.26",	0x0000, 0x1000, CRC(6f077417) SHA1(f2c20e03427a2f5a113c6a4cf95875b77a0ec418) ) // merv_2.26
-
-	ROM_REGION( 0x40, "proms", 0 )
-	ROM_LOAD( "col_a.96",	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) ) // col_a.96
-	ROM_LOAD( "col_b.95",	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) ) // col_b.95
-
-	ROM_REGION( 0x1000, "adpcm", 0 )	// unknown, ADPCM?
-	ROM_LOAD( "g960_42.39",	0x0000, 0x1000, CRC(287840bb) SHA1(9a1836f39f328b0c9672976d95a9ece45bb9e89f) ) // mervce.39
 ROM_END
 
 ROM_START( rougien )
@@ -599,15 +445,45 @@ ROM_START( rougien )
 	ROM_LOAD( "prom_a.bin", 0x0000, 0x0020, CRC(49f619b9) SHA1(c936aaf79822628a2ffff169d236389bc2eef6a5) )
 	ROM_LOAD( "prom_b.bin", 0x0020, 0x0020, CRC(41ad4fc8) SHA1(a9d24586130f00cd350459635de5f4f7629e00b4) )
 
-	ROM_REGION( 0x10000, "adpcm", 0 )	// ADPCM data
-	ROM_LOAD( "rou-42.bin", 0x0000, 0x1000, CRC(5ce13444) SHA1(e6da83190b26b094159a3a97deffd31d0d20a061) ) // "rougien" speech
-	ROM_LOAD( "rou-41.bin", 0x1000, 0x1000, CRC(59ed0d88) SHA1(7faf6ab01fa3c1c04c38d2ea27b27c47450876de) ) // laugh
-	ROM_LOAD( "rou-40.bin", 0x2000, 0x1000, CRC(ab38b942) SHA1(9575f67e002c68d384122e05a12c6c0f21335825) ) // alien whistle
+	ROM_REGION( 0x3000, "user1", 0 )	// unknown
+	ROM_LOAD( "rou-40.bin", 0x0000, 0x1000, CRC(ab38b942) SHA1(9575f67e002c68d384122e05a12c6c0f21335825) )
+	ROM_LOAD( "rou-41.bin", 0x1000, 0x1000, CRC(59ed0d88) SHA1(7faf6ab01fa3c1c04c38d2ea27b27c47450876de) )
+	ROM_LOAD( "rou-42.bin", 0x2000, 0x1000, CRC(5ce13444) SHA1(e6da83190b26b094159a3a97deffd31d0d20a061) )
+ROM_END
+
+ROM_START( yachtmn )
+	ROM_REGION( 0x10000, "maincpu", 0 )       // 64k for code
+	ROM_LOAD( "mer-1.15",	0x0000, 0x1000, CRC(a102b180) SHA1(f1f029797d09d89c98ffc96b1e57f3ab8e89f35a) )
+	ROM_LOAD( "mer-2.16",	0x1000, 0x1000, CRC(0f2ba7fc) SHA1(5eac8300eb755f5f3a88776dbc5cf7995d2f3c44) )
+	ROM_LOAD( "mer-3.17",	0x2000, 0x1000, CRC(46c22b6b) SHA1(3d6293cf99e9263e986a6046a0f08ee0416a2856) )
+	ROM_LOAD( "mer-4.18",	0x3000, 0x1000, CRC(0ec84a12) SHA1(4f2d1509785d659b7e66df0525cbbd3a500370e2) )
+	ROM_LOAD( "mer-5.19",	0x4000, 0x1000, CRC(315153d5) SHA1(c3fa4c1e59026e291ddbd448aede159af9827714) )
+	ROM_LOAD( "g960_37.20",	0x5000, 0x1000, CRC(7d602527) SHA1(1a888bd1829b9f12dd820c49785bea6bc8edab04) ) // mer-6.20
+	ROM_LOAD( "mer-7.21",	0x6000, 0x1000, CRC(20d56a6e) SHA1(b9867f073b38cbf6a98697fe6af6c4cb20d7f54b) )
+	ROM_LOAD( "g960_39.22",	0x7000, 0x1000, CRC(df0db390) SHA1(b466cf1abbf0703d6fbacc86c65d254ef310ba27) ) // mer-8.22
+	ROM_LOAD( "g960_40.23",	0x8000, 0x1000, CRC(fb7aba3f) SHA1(fe6903c11363ed4c34b29226df58e833150cc525) ) // mer-9.23
+	ROM_LOAD( "mer-10.24",	0x9000, 0x1000, CRC(04ca4f8c) SHA1(c7a437fabe3dd6968258f13e688bd6ed8500eb8e) )
+
+	ROM_REGION( 0x4000, "gfx1", 0 )
+	ROM_LOAD( "g960_45.77",	0x0000, 0x1000, CRC(1f6b735e) SHA1(dd7ea4ef674f0495a87fc1929ea14852e8d8d338) ) // merb-0.77
+	ROM_LOAD( "g960_44.76",	0x1000, 0x1000, CRC(fd76074e) SHA1(673a214fc41b923191b4136c0cf39fc5efa970ba) ) // merb-2.76
+	ROM_LOAD( "mera-0.79",	0x2000, 0x1000, CRC(6e3e48c4) SHA1(810e140310e668343bc2052e6c9527c090e0aa3c) )
+	ROM_LOAD( "g960_46.78",	0x3000, 0x1000, CRC(50c117cd) SHA1(45b4055497c785218e2aaaffa86d732912555821) ) // mera-2.78
+
+	ROM_REGION( 0x1000, "gfx2", 0 )
+	ROM_LOAD( "g960_43.26",	0x0000, 0x1000, CRC(6f077417) SHA1(f2c20e03427a2f5a113c6a4cf95875b77a0ec418) ) // merv_2.26
+
+	ROM_REGION( 0x40, "proms", 0 )
+	ROM_LOAD( "col_a.96", 	    0x0000, 0x0020, CRC(ef87bcd6) SHA1(00a5888ad028fabeb7369eed33be5cd49b6b7bb0) ) // col_a.96
+	ROM_LOAD( "col_b.95", 	    0x0020, 0x0020, CRC(ca48abdd) SHA1(a864612c2c33acddfa9993ed10a1d63d2e3f145d) ) // col_b.95
+
+	ROM_REGION( 0x1000, "user1", 0 )	// unknown
+	ROM_LOAD( "g960_42.39",	0x0000, 0x1000, CRC(287840bb) SHA1(9a1836f39f328b0c9672976d95a9ece45bb9e89f) ) // mervce.39
 ROM_END
 
 
 /* Game Drivers */
 
-GAME( 1982, mermaid,  0,        mermaid,  mermaid,  0, ROT0, "Sanritsu / Rock-Ola", "Mermaid", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
-GAME( 1982, yachtmn,  mermaid,  mermaid,  yachtmn,  0, ROT0, "Sanritsu / Esco", "Yachtsman", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
-GAME( 1982, rougien,  0,        rougien,  rougien,  0, ROT0, "Sanritsu", "Rougien", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
+GAME( 1982, mermaid,  0,        mermaid,  mermaid,  0, ROT0, "[Sanritsu] Rock-Ola", "Mermaid", 0 )
+GAME( 1982, yachtmn,  mermaid,  mermaid,  yachtmn,  0, ROT0, "[Sanritsu] Esco", "Yachtsman", 0 )
+GAME( 1982, rougien,  0,        mermaid,  rougien,  0, ROT0, "Sanritsu", "Rougien", 0 )

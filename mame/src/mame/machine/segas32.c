@@ -1,7 +1,7 @@
 /* Sega System 32 Protection related functions */
 
-#include "emu.h"
-#include "includes/segas32.h"
+#include "driver.h"
+#include "segas32.h"
 
 
 /******************************************************************************
@@ -12,7 +12,7 @@
 
 #define xxxx 0x00
 
-const UINT8 ga2_v25_opcode_table[256] = {
+static const UINT8 ga2_v25_opcode_table[256] = {
      xxxx,xxxx,0xEA,xxxx,xxxx,0x8B,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,
      xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0xFA,
      xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0x49,xxxx,xxxx,xxxx,
@@ -33,21 +33,42 @@ const UINT8 ga2_v25_opcode_table[256] = {
 
 #undef xxxx
 
-void decrypt_ga2_protrom(running_machine &machine)
+static void nec_v25_cpu_decrypt(running_machine *machine)
 {
 	int i;
-	UINT8 *rom = machine.region("mcu")->base();
-	UINT8* temp = auto_alloc_array(machine, UINT8, 0x100000);
+	const address_space *space = cputag_get_address_space(machine, "mcu", ADDRESS_SPACE_PROGRAM);
+	UINT8 *rom = memory_region(machine, "mcu");
+	UINT8* decrypted = auto_alloc_array(machine, UINT8, 0x100000);
+	UINT8* temp = alloc_array_or_die(UINT8, 0x100000);
+
+	// set CPU3 opcode base
+	memory_set_decrypted_region(space, 0x00000, 0xfffff, decrypted);
 
 	// make copy of ROM so original can be overwritten
 	memcpy(temp, rom, 0x10000);
 
-	// unscramble the address lines
 	for(i = 0; i < 0x10000; i++)
-		rom[i] = temp[BITSWAP16(i, 14, 11, 15, 12, 13, 4, 3, 7, 5, 10, 2, 8, 9, 6, 1, 0)];
+	{
+		int j = BITSWAP16(i, 14, 11, 15, 12, 13, 4, 3, 7, 5, 10, 2, 8, 9, 6, 1, 0);
 
-	auto_free(machine, temp);
+		// normal ROM data with address swap undone
+		rom[i] = temp[j];
+
+		// decryped opcodes with address swap undone
+		decrypted[i] = ga2_v25_opcode_table[ temp[j] ];
+	}
+
+	memcpy(rom+0xf0000, rom, 0x10000);
+	memcpy(decrypted+0xf0000, decrypted, 0x10000);
+
+	free(temp);
 }
+
+void decrypt_ga2_protrom(running_machine *machine)
+{
+	nec_v25_cpu_decrypt(machine);
+}
+
 
 WRITE16_HANDLER( ga2_dpram_w )
 {
@@ -56,8 +77,7 @@ WRITE16_HANDLER( ga2_dpram_w )
 
 READ16_HANDLER( ga2_dpram_r )
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
-	return (state->m_ga2_dpram[offset])|(state->m_ga2_dpram[offset+1]<<8);
+	return (ga2_dpram[offset])|(ga2_dpram[offset+1]<<8);
 }
 
 
@@ -103,27 +123,26 @@ READ16_HANDLER(ga2_wakeup_protection_r)
 
 WRITE16_HANDLER(sonic_level_load_protection)
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
 	UINT16 level;
 //Perform write
-	state->m_system32_workram[CLEARED_LEVELS / 2] = (data & mem_mask) | (state->m_system32_workram[CLEARED_LEVELS / 2] & ~mem_mask);
+	system32_workram[CLEARED_LEVELS / 2] = (data & mem_mask) | (system32_workram[CLEARED_LEVELS / 2] & ~mem_mask);
 
 //Refresh current level
-		if (state->m_system32_workram[CLEARED_LEVELS / 2] == 0)
+		if (system32_workram[CLEARED_LEVELS / 2] == 0)
 		{
 			level = 0x0007;
 		}
 		else
 		{
-			const UINT8 *ROM = space->machine().region("maincpu")->base();
-			level =  *((ROM + LEVEL_ORDER_ARRAY) + (state->m_system32_workram[CLEARED_LEVELS / 2] * 2) - 1);
-			level |= *((ROM + LEVEL_ORDER_ARRAY) + (state->m_system32_workram[CLEARED_LEVELS / 2] * 2) - 2) << 8;
+			const UINT8 *ROM = memory_region(space->machine, "maincpu");
+			level =  *((ROM + LEVEL_ORDER_ARRAY) + (system32_workram[CLEARED_LEVELS / 2] * 2) - 1);
+			level |= *((ROM + LEVEL_ORDER_ARRAY) + (system32_workram[CLEARED_LEVELS / 2] * 2) - 2) << 8;
 		}
-		state->m_system32_workram[CURRENT_LEVEL / 2] = level;
+		system32_workram[CURRENT_LEVEL / 2] = level;
 
 //Reset level status
-		state->m_system32_workram[CURRENT_LEVEL_STATUS / 2] = 0x0000;
-		state->m_system32_workram[(CURRENT_LEVEL_STATUS + 2) / 2] = 0x0000;
+		system32_workram[CURRENT_LEVEL_STATUS / 2] = 0x0000;
+		system32_workram[(CURRENT_LEVEL_STATUS + 2) / 2] = 0x0000;
 }
 
 
@@ -138,7 +157,6 @@ WRITE16_HANDLER(sonic_level_load_protection)
 // and can write things into work RAM.  we simulate that here for burning rival.
 READ16_HANDLER(brival_protection_r)
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
 	if (mem_mask == 0xffff)	// only trap on word-wide reads
 	{
 		switch (offset)
@@ -150,12 +168,11 @@ READ16_HANDLER(brival_protection_r)
 		}
 	}
 
-	return state->m_system32_workram[0xba00/2 + offset];
+	return system32_workram[0xba00/2 + offset];
 }
 
 WRITE16_HANDLER(brival_protection_w)
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
 	static const int protAddress[6][2] =
 	{
 		{ 0x109517, 0x00/2 },
@@ -167,7 +184,7 @@ WRITE16_HANDLER(brival_protection_w)
 	};
 	char ret[32];
 	int curProtType;
-	UINT8 *ROM = space->machine().region("maincpu")->base();
+	UINT8 *ROM = memory_region(space->machine, "maincpu");
 
 	switch (offset)
 	{
@@ -199,7 +216,7 @@ WRITE16_HANDLER(brival_protection_w)
 	memcpy(ret, &ROM[protAddress[curProtType][0]], 16);
 	ret[16] = '\0';
 
-	memcpy(&state->m_system32_protram[protAddress[curProtType][1]], ret, 16);
+	memcpy(&system32_protram[protAddress[curProtType][1]], ret, 16);
 }
 
 
@@ -209,19 +226,19 @@ WRITE16_HANDLER(brival_protection_w)
  ******************************************************************************
  ******************************************************************************/
 
-void darkedge_fd1149_vblank(device_t *device)
+void darkedge_fd1149_vblank(const device_config *device)
 {
-	address_space *space = device->memory().space(AS_PROGRAM);
+	const address_space *space = cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM);
 
-	space->write_word(0x20f072, 0);
-	space->write_word(0x20f082, 0);
+	memory_write_word(space, 0x20f072, 0);
+	memory_write_word(space, 0x20f082, 0);
 
-	if( space->read_byte(0x20a12c) != 0 )
+	if( memory_read_byte(space, 0x20a12c) != 0 )
 	{
-		space->write_byte(0x20a12c, space->read_byte(0x20a12c)-1 );
+		memory_write_byte(space, 0x20a12c, memory_read_byte(space, 0x20a12c)-1 );
 
-		if( space->read_byte(0x20a12c) == 0 )
-			space->write_byte(0x20a12e, 1);
+		if( memory_read_byte(space, 0x20a12c) == 0 )
+			memory_write_byte(space, 0x20a12e, 1);
 	}
 }
 
@@ -229,14 +246,14 @@ void darkedge_fd1149_vblank(device_t *device)
 WRITE16_HANDLER( darkedge_protection_w )
 {
 	logerror("%06x:darkedge_prot_w(%06X) = %04X & %04X\n",
-		cpu_get_pc(&space->device()), 0xa00000 + 2*offset, data, mem_mask);
+		cpu_get_pc(space->cpu), 0xa00000 + 2*offset, data, mem_mask);
 }
 
 
 READ16_HANDLER( darkedge_protection_r )
 {
 	logerror("%06x:darkedge_prot_r(%06X) & %04X\n",
-		cpu_get_pc(&space->device()), 0xa00000 + 2*offset, mem_mask);
+		cpu_get_pc(space->cpu), 0xa00000 + 2*offset, mem_mask);
 	return 0xffff;
 }
 
@@ -250,7 +267,7 @@ READ16_HANDLER( darkedge_protection_r )
 
 WRITE16_HANDLER( dbzvrvs_protection_w )
 {
-	space->write_word( 0x2080c8, space->read_word( 0x200044 ) );
+	memory_write_word( space, 0x2080c8, memory_read_word( space, 0x200044 ) );
 }
 
 
@@ -271,12 +288,12 @@ READ16_HANDLER( dbzvrvs_protection_r )
 // protection ram is 8-bits wide and only occupies every other address
 READ16_HANDLER(arabfgt_protection_r)
 {
-	int PC = cpu_get_pc(&space->device());
+	int PC = cpu_get_pc(space->cpu);
 	int cmpVal;
 
 	if (PC == 0xfe0325 || PC == 0xfe01e5 || PC == 0xfe035e || PC == 0xfe03cc)
 	{
-		cmpVal = cpu_get_reg(&space->device(), 1);
+		cmpVal = cpu_get_reg(space->cpu, 1);
 
 		// R0 always contains the value the protection is supposed to return (!)
 		return cmpVal;
@@ -306,21 +323,20 @@ READ16_HANDLER(arf_wakeup_protection_r)
  ******************************************************************************
  ******************************************************************************/
 WRITE16_HANDLER( jleague_protection_w )
-{
-	segas32_state *state = space->machine().driver_data<segas32_state>();
-	COMBINE_DATA( &state->m_system32_workram[0xf700/2 + offset ] );
+		{
+	COMBINE_DATA( &system32_workram[0xf700/2 + offset ] );
 
 	switch( offset )
 	{
 		// Map team browser selection to opponent browser selection
 		// using same lookup table that V60 uses for sound sample mapping.
 		case 0:
-			space->write_byte( 0x20f708, space->read_word( 0x7bbc0 + data*2 ) );
+			memory_write_byte( space, 0x20f708, memory_read_word( space, 0x7bbc0 + data*2 ) );
 			break;
 
 		// move on to team browser
 		case 4/2:
-			space->write_byte( 0x200016, data & 0xff );
+			memory_write_byte( space, 0x200016, data & 0xff );
 			break;
 
 		default:
@@ -348,13 +364,13 @@ WRITE16_HANDLER( jleague_protection_w )
     99.99% of the dsp code is unused because the V60 ROM is hardcoded as part of a twin set,
     maybe the standalone board was for dev only? nop the 3 bytes at 0x06023A for standalone. (centred intro text)
 */
+static UINT16 arescue_dsp_io[6] = {0,0,0,0,0,0};
 
 READ16_HANDLER( arescue_dsp_r )
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
 	if( offset == 4/2 )
 	{
-		switch( state->m_arescue_dsp_io[0] )
+		switch( arescue_dsp_io[0] )
 		{
 			case 0:
 			case 1:
@@ -362,26 +378,25 @@ READ16_HANDLER( arescue_dsp_r )
 				break;
 
 			case 3:
-				state->m_arescue_dsp_io[0] = 0x8000;
-				state->m_arescue_dsp_io[2/2] = 0x0001;
+				arescue_dsp_io[0] = 0x8000;
+				arescue_dsp_io[2/2] = 0x0001;
 				break;
 
 			case 6:
-				state->m_arescue_dsp_io[0] = 4 * state->m_arescue_dsp_io[2/2];
+				arescue_dsp_io[0] = 4 * arescue_dsp_io[2/2];
 				break;
 
 			default:
-				logerror("Unhandled DSP cmd %04x (%04x).\n", state->m_arescue_dsp_io[0], state->m_arescue_dsp_io[1] );
+				logerror("Unhandled DSP cmd %04x (%04x).\n", arescue_dsp_io[0], arescue_dsp_io[1] );
 				break;
 		}
 	}
 
-	return state->m_arescue_dsp_io[offset];
+	return arescue_dsp_io[offset];
 }
 
 WRITE16_HANDLER( arescue_dsp_w )
 {
-	segas32_state *state = space->machine().driver_data<segas32_state>();
-	COMBINE_DATA(&state->m_arescue_dsp_io[offset]);
+	COMBINE_DATA(&arescue_dsp_io[offset]);
 }
 

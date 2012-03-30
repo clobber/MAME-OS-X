@@ -6,9 +6,12 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/mainevt.h"
+#include "driver.h"
+#include "video/konamiic.h"
+
+
+static int layer_colorbase[3],sprite_colorbase;
+
 
 
 /***************************************************************************
@@ -17,25 +20,21 @@
 
 ***************************************************************************/
 
-void mainevt_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void mainevt_tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-
 	*flags = (*color & 0x02) ? TILE_FLIPX : 0;
 
 	/* priority relative to HALF priority sprites */
 	*priority = (layer == 2) ? (*color & 0x20) >> 5 : 0;
 	*code |= ((*color & 0x01) << 8) | ((*color & 0x1c) << 7);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xc0) >> 6);
+	*color = layer_colorbase[layer] + ((*color & 0xc0) >> 6);
 }
 
-void dv_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void dv_tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-
 	/* (color & 0x02) is flip y handled internally by the 052109 */
 	*code |= ((*color & 0x01) << 8) | ((*color & 0x3c) << 7);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xc0) >> 6);
+	*color = layer_colorbase[layer] + ((*color & 0xc0) >> 6);
 }
 
 
@@ -45,29 +44,22 @@ void dv_tile_callback( running_machine &machine, int layer, int bank, int *code,
 
 ***************************************************************************/
 
-void mainevt_sprite_callback(running_machine &machine, int *code,int *color,int *priority_mask,int *shadow)
+static void mainevt_sprite_callback(int *code,int *color,int *priority_mask,int *shadow)
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-
 	/* bit 5 = priority over layer B (has precedence) */
 	/* bit 6 = HALF priority over layer B (used for crowd when you get out of the ring) */
-	if (*color & 0x20)
-		*priority_mask = 0xff00;
-	else if (*color & 0x40)
-		*priority_mask = 0xff00 | 0xf0f0;
-	else
-		*priority_mask = 0xff00 | 0xf0f0 | 0xcccc;
+	if (*color & 0x20)		*priority_mask = 0xff00;
+	else if (*color & 0x40)	*priority_mask = 0xff00|0xf0f0;
+	else					*priority_mask = 0xff00|0xf0f0|0xcccc;
 	/* bit 7 is shadow, not used */
 
-	*color = state->m_sprite_colorbase + (*color & 0x03);
+	*color = sprite_colorbase + (*color & 0x03);
 }
 
-void dv_sprite_callback(running_machine &machine, int *code,int *color,int *priority,int *shadow)
+static void dv_sprite_callback(int *code,int *color,int *priority,int *shadow)
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-
 	/* TODO: the priority/shadow handling (bits 5-7) seems to be quite complex (see PROM) */
-	*color = state->m_sprite_colorbase + (*color & 0x07);
+	*color = sprite_colorbase + (*color & 0x07);
 }
 
 
@@ -75,49 +67,49 @@ void dv_sprite_callback(running_machine &machine, int *code,int *color,int *prio
 
 VIDEO_START( mainevt )
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-	state->m_layer_colorbase[0] = 0;
-	state->m_layer_colorbase[1] = 8;
-	state->m_layer_colorbase[2] = 4;
-	state->m_sprite_colorbase = 12;
+	layer_colorbase[0] = 0;
+	layer_colorbase[1] = 8;
+	layer_colorbase[2] = 4;
+	sprite_colorbase = 12;
+
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,mainevt_tile_callback);
+	K051960_vh_start(machine,"gfx2",NORMAL_PLANE_ORDER,mainevt_sprite_callback);
 }
 
 VIDEO_START( dv )
 {
-	mainevt_state *state = machine.driver_data<mainevt_state>();
-	state->m_layer_colorbase[0] = 0;
-	state->m_layer_colorbase[1] = 0;
-	state->m_layer_colorbase[2] = 4;
-	state->m_sprite_colorbase = 8;
+	layer_colorbase[0] = 0;
+	layer_colorbase[1] = 0;
+	layer_colorbase[2] = 4;
+	sprite_colorbase = 8;
+
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,dv_tile_callback);
+	K051960_vh_start(machine,"gfx2",NORMAL_PLANE_ORDER,dv_sprite_callback);
 }
 
 /*****************************************************************************/
 
-SCREEN_UPDATE_IND16( mainevt )
+VIDEO_UPDATE( mainevt )
 {
-	mainevt_state *state = screen.machine().driver_data<mainevt_state>();
+	K052109_tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[1],TILEMAP_DRAW_OPAQUE,1);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],1,2);	/* low priority part of layer */
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],0,4);	/* high priority part of layer */
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[0],0,8);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, TILEMAP_DRAW_OPAQUE, 1);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 1, 2);	/* low priority part of layer */
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 4);	/* high priority part of layer */
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 8);
-
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, -1, -1);
+	K051960_sprites_draw(screen->machine,bitmap,cliprect,-1,-1);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( dv )
+VIDEO_UPDATE( dv )
 {
-	mainevt_state *state = screen.machine().driver_data<mainevt_state>();
+	K052109_tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
-
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, TILEMAP_DRAW_OPAQUE, 0);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 0);
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, 0);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[1],TILEMAP_DRAW_OPAQUE,0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],0,0);
+	K051960_sprites_draw(screen->machine,bitmap,cliprect,0,0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[0],0,0);
 	return 0;
 }

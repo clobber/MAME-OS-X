@@ -1,4 +1,3 @@
-#include "emu.h"
 #include "debugger.h"
 #include "sh4.h"
 
@@ -783,7 +782,7 @@ static UINT32 op1111(char *buffer, UINT32 pc, UINT16 opcode)
 	return 0;
 }
 
-unsigned DasmSH4(char *buffer, unsigned pc, UINT16 opcode)
+static unsigned DasmSH4(char *buffer, unsigned pc, UINT16 opcode)
 {
 	UINT32 flags;
 
@@ -814,10 +813,5 @@ unsigned DasmSH4(char *buffer, unsigned pc, UINT16 opcode)
 CPU_DISASSEMBLE( sh4 )
 {
 	return DasmSH4( buffer, pc, (oprom[1] << 8) | oprom[0] );
-}
-
-CPU_DISASSEMBLE( sh4be )
-{
-	return DasmSH4( buffer, pc, (oprom[0] << 8) | oprom[1] );
 }
 

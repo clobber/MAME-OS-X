@@ -1,6 +1,6 @@
-#include "emu.h"
 #include "debugger.h"
 #include "i960.h"
+#include <math.h>
 
 CPU_DISASSEMBLE( i960  );
 
@@ -33,19 +33,20 @@ struct _i960_state_t {
 
 	int immediate_irq, immediate_vector, immediate_pri;
 
-	device_irq_callback irq_cb;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
+	cpu_irq_callback irq_cb;
+	const device_config *device;
+	const address_space *program;
 
 	int icount;
 };
 
-INLINE i960_state_t *get_safe_token(device_t *device)
+INLINE i960_state_t *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == I960);
-	return (i960_state_t *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_I960);
+	return (i960_state_t *)device->token;
 }
 
 static void do_call(i960_state_t *i960, UINT32 adr, int type, UINT32 stack);
@@ -53,31 +54,31 @@ static void do_call(i960_state_t *i960, UINT32 adr, int type, UINT32 stack);
 INLINE UINT32 i960_read_dword_unaligned(i960_state_t *i960, UINT32 address)
 {
 	if (address & 3)
-		return i960->program->read_byte(address) | i960->program->read_byte(address+1)<<8 | i960->program->read_byte(address+2)<<16 | i960->program->read_byte(address+3)<<24;
+		return memory_read_byte_32le(i960->program, address) | memory_read_byte_32le(i960->program, address+1)<<8 | memory_read_byte_32le(i960->program, address+2)<<16 | memory_read_byte_32le(i960->program, address+3)<<24;
 	else
-		return i960->program->read_dword(address);
+		return memory_read_dword_32le(i960->program, address);
 }
 
 INLINE UINT16 i960_read_word_unaligned(i960_state_t *i960, UINT32 address)
 {
 	if (address & 1)
-		return i960->program->read_byte(address) | i960->program->read_byte(address+1)<<8;
+		return memory_read_byte_32le(i960->program, address) | memory_read_byte_32le(i960->program, address+1)<<8;
 	else
-		return i960->program->read_word(address);
+		return memory_read_word_32le(i960->program, address);
 }
 
 INLINE void i960_write_dword_unaligned(i960_state_t *i960, UINT32 address, UINT32 data)
 {
 	if (address & 3)
 	{
-		i960->program->write_byte(address, data & 0xff);
-		i960->program->write_byte(address+1, (data>>8)&0xff);
-		i960->program->write_byte(address+2, (data>>16)&0xff);
-		i960->program->write_byte(address+3, (data>>24)&0xff);
+		memory_write_byte_32le(i960->program, address, data & 0xff);
+		memory_write_byte_32le(i960->program, address+1, (data>>8)&0xff);
+		memory_write_byte_32le(i960->program, address+2, (data>>16)&0xff);
+		memory_write_byte_32le(i960->program, address+3, (data>>24)&0xff);
 	}
 	else
 	{
-		i960->program->write_dword(address, data);
+		memory_write_dword_32le(i960->program, address, data);
 	}
 }
 
@@ -85,22 +86,22 @@ INLINE void i960_write_word_unaligned(i960_state_t *i960, UINT32 address, UINT16
 {
 	if (address & 1)
 	{
-		i960->program->write_byte(address, data & 0xff);
-		i960->program->write_byte(address+1, (data>>8)&0xff);
+		memory_write_byte_32le(i960->program, address, data & 0xff);
+		memory_write_byte_32le(i960->program, address+1, (data>>8)&0xff);
 	}
 	else
 	{
-		i960->program->write_word(address, data);
+		memory_write_word_32le(i960->program, address, data);
 	}
 }
 
 INLINE void send_iac(i960_state_t *i960, UINT32 adr)
 {
 	UINT32 iac[4];
-	iac[0] = i960->program->read_dword(adr);
-	iac[1] = i960->program->read_dword(adr+4);
-	iac[2] = i960->program->read_dword(adr+8);
-	iac[3] = i960->program->read_dword(adr+12);
+	iac[0] = memory_read_dword_32le(i960->program, adr);
+	iac[1] = memory_read_dword_32le(i960->program, adr+4);
+	iac[2] = memory_read_dword_32le(i960->program, adr+8);
+	iac[3] = memory_read_dword_32le(i960->program, adr+12);
 
 	switch(iac[0]>>24) {
 	case 0x93: // reinit
@@ -137,22 +138,22 @@ INLINE UINT32 get_ea(i960_state_t *i960, UINT32 opcode)
 			return i960->r[abase] + (i960->r[index] << scale);
 
 		case 0xc:
-			ret = i960->direct->read_decrypted_dword(i960->IP);
+			ret = memory_decrypted_read_dword(i960->program, i960->IP);
 			i960->IP += 4;
 			return ret;
 
 		case 0xd:
-			ret = i960->direct->read_decrypted_dword(i960->IP) + i960->r[abase];
+			ret = memory_decrypted_read_dword(i960->program, i960->IP) + i960->r[abase];
 			i960->IP += 4;
 			return ret;
 
 		case 0xe:
-			ret = i960->direct->read_decrypted_dword(i960->IP) + (i960->r[index] << scale);
+			ret = memory_decrypted_read_dword(i960->program, i960->IP) + (i960->r[index] << scale);
 			i960->IP += 4;
 			return ret;
 
 		case 0xf:
-			ret = i960->direct->read_decrypted_dword(i960->IP) + i960->r[abase] + (i960->r[index] << scale);
+			ret = memory_decrypted_read_dword(i960->program, i960->IP) + i960->r[abase] + (i960->r[index] << scale);
 			i960->IP += 4;
 			return ret;
 
@@ -416,12 +417,12 @@ INLINE const char *i960_get_strflags(i960_state_t *i960)
 // interrupt dispatch
 static void take_interrupt(i960_state_t *i960, int vector, int lvl)
 {
-	int int_tab =  i960->program->read_dword(i960->PRCB+20);	// interrupt table
-	int int_SP  =  i960->program->read_dword(i960->PRCB+24);	// interrupt stack
+	int int_tab =  memory_read_dword_32le(i960->program, i960->PRCB+20);	// interrupt table
+	int int_SP  =  memory_read_dword_32le(i960->program, i960->PRCB+24);	// interrupt stack
 	int SP;
 	UINT32 IRQV;
 
-	IRQV = i960->program->read_dword(int_tab + 36 + (vector-8)*4);
+	IRQV = memory_read_dword_32le(i960->program, int_tab + 36 + (vector-8)*4);
 
 	// start the process
 	if(!(i960->PC & 0x2000))	// if this is a nested interrupt, don't re-get int_SP
@@ -439,10 +440,10 @@ static void take_interrupt(i960_state_t *i960, int vector, int lvl)
 	do_call(i960, IRQV, 7, SP);
 
 	// save the processor state
-	i960->program->write_dword(i960->r[I960_FP]-16, i960->PC);
-	i960->program->write_dword(i960->r[I960_FP]-12, i960->AC);
+	memory_write_dword_32le(i960->program, i960->r[I960_FP]-16, i960->PC);
+	memory_write_dword_32le(i960->program, i960->r[I960_FP]-12, i960->AC);
 	// store the vector
-	i960->program->write_dword(i960->r[I960_FP]-8, vector-8);
+	memory_write_dword_32le(i960->program, i960->r[I960_FP]-8, vector-8);
 
 	i960->PC &= ~0x1f00;	// clear priority, state, trace-fault pending, and trace enable
 	i960->PC |= (lvl<<16);	// set CPU level to current IRQ level
@@ -451,14 +452,14 @@ static void take_interrupt(i960_state_t *i960, int vector, int lvl)
 
 static void check_irqs(i960_state_t *i960)
 {
-	int int_tab =  i960->program->read_dword(i960->PRCB+20);	// interrupt table
+	int int_tab =  memory_read_dword_32le(i960->program, i960->PRCB+20);	// interrupt table
 	int cpu_pri = (i960->PC>>16)&0x1f;
 	int pending_pri;
 	int lvl, irq, take = -1;
 	int vword;
 	static const UINT32 lvlmask[4] = { 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000 };
 
-	pending_pri = i960->program->read_dword(int_tab);		// read pending priorities
+	pending_pri = memory_read_dword_32le(i960->program, int_tab);		// read pending priorities
 
 	if ((i960->immediate_irq) && ((cpu_pri < i960->immediate_pri) || (i960->immediate_pri == 31)))
 	{
@@ -476,14 +477,14 @@ static void check_irqs(i960_state_t *i960)
 				wordl = (lvl % 4) * 8;
 				wordh = (wordl + 8) - 1;
 
-				vword = i960->program->read_dword(int_tab + word);
+			  	vword = memory_read_dword_32le(i960->program, int_tab + word);
 
 				// take the first vector we find for this level
 				for (irq = wordh; irq >= wordl; irq--) {
 					if(vword & (1 << irq)) {
 						// clear pending bit
 						vword &= ~(1 << irq);
-						i960->program->write_dword(int_tab + word, vword);
+						memory_write_dword_32le(i960->program, int_tab + word, vword);
 						take = irq;
 						break;
 					}
@@ -495,14 +496,14 @@ static void check_irqs(i960_state_t *i960)
 
 					// try to recover...
 					pending_pri &= ~(1 << lvl);
-					i960->program->write_dword(int_tab, pending_pri);
+					memory_write_dword_32le(i960->program, int_tab, pending_pri);
 					return;
 				}
 
 				// if no vectors are waiting for this level, clear the level bit
 				if(!(vword & lvlmask[lvl % 4])) {
 					pending_pri &= ~(1 << lvl);
-					i960->program->write_dword(int_tab, pending_pri);
+					memory_write_dword_32le(i960->program, int_tab, pending_pri);
 				}
 
 				take += ((lvl/4) * 32);
@@ -531,7 +532,7 @@ static void do_call(i960_state_t *i960, UINT32 adr, int type, UINT32 stack)
 		// flush the current register set to the current frame
 		FP = i960->r[I960_FP] & ~0x3f;
 		for (i = 0; i < 16; i++) {
-			i960->program->write_dword(FP + (i*4), i960->r[i]);
+			memory_write_dword_32le(i960->program, FP + (i*4), i960->r[i]);
 		}
 	}
 	else	// a cache entry is available, use it
@@ -570,7 +571,7 @@ static void do_ret_0(i960_state_t *i960)
 	{
 		int i;
 		for(i=0; i<0x10; i++)
-			i960->r[i] = i960->program->read_dword(i960->r[I960_FP]+4*i);
+			i960->r[i] = memory_read_dword_32le(i960->program, i960->r[I960_FP]+4*i);
 
 		if (i960->rcache_pos < 0)
 		{
@@ -596,8 +597,8 @@ static void do_ret(i960_state_t *i960)
 		break;
 
 	case 7:
-		x = i960->program->read_dword(i960->r[I960_FP]-16);
-		y = i960->program->read_dword(i960->r[I960_FP]-12);
+		x = memory_read_dword(i960->program, i960->r[I960_FP]-16);
+		y = memory_read_dword(i960->program, i960->r[I960_FP]-12);
 		do_ret_0(i960);
 		i960->AC = y;
 		// #### test supervisor
@@ -1236,9 +1237,9 @@ INLINE void execute_op(i960_state_t *i960, UINT32 opcode)
 				t2 = get_2_ri(i960, opcode);
 				// interrupt control register
 				if(t1 == 0xff000004)
-					i960->ICR = i960->program->read_dword(t2);
+					i960->ICR = memory_read_dword_32le(i960->program, t2);
 				else
-					i960->program->write_dword(t1,    i960->program->read_dword(t2));
+					memory_write_dword_32le(i960->program, t1,    memory_read_dword_32le(i960->program, t2));
 				i960->AC = (i960->AC & ~7) | 2;
 				break;
 
@@ -1249,10 +1250,10 @@ INLINE void execute_op(i960_state_t *i960, UINT32 opcode)
 				if(t1 == 0xff000010)
 					send_iac(i960, t2);
 				else {
-					i960->program->write_dword(t1,    i960->program->read_dword(t2));
-					i960->program->write_dword(t1+4,  i960->program->read_dword(t2+4));
-					i960->program->write_dword(t1+8,  i960->program->read_dword(t2+8));
-					i960->program->write_dword(t1+12, i960->program->read_dword(t2+12));
+					memory_write_dword_32le(i960->program, t1,    memory_read_dword_32le(i960->program, t2));
+					memory_write_dword_32le(i960->program, t1+4,  memory_read_dword_32le(i960->program, t2+4));
+					memory_write_dword_32le(i960->program, t1+8,  memory_read_dword_32le(i960->program, t2+8));
+					memory_write_dword_32le(i960->program, t1+12, memory_read_dword_32le(i960->program, t2+12));
 				}
 				i960->AC = (i960->AC & ~7) | 2;
 				break;
@@ -1353,7 +1354,7 @@ INLINE void execute_op(i960_state_t *i960, UINT32 opcode)
 
 					for (i = 0; i < 0x10; i++)
 					{
-						i960->program->write_dword(i960->rcache_frame_addr[t1] + (i * sizeof(UINT32)), i960->rcache[t1][i]);
+						memory_write_dword_32le(i960->program, i960->rcache_frame_addr[t1] + (i * sizeof(UINT32)), i960->rcache[t1][i]);
 					}
 				}
 				i960->rcache_pos = 0;
@@ -1793,12 +1794,12 @@ INLINE void execute_op(i960_state_t *i960, UINT32 opcode)
 
 		case 0x80: // ldob
 			i960->icount -= 4;
-			i960->r[(opcode>>19)&0x1f] = i960->program->read_byte(get_ea(i960, opcode));
+			i960->r[(opcode>>19)&0x1f] = memory_read_byte_32le(i960->program, get_ea(i960, opcode));
 			break;
 
 		case 0x82: // stob
 			i960->icount -= 2;
-			i960->program->write_byte(get_ea(i960, opcode), i960->r[(opcode>>19)&0x1f]);
+			memory_write_byte_32le(i960->program, get_ea(i960, opcode), i960->r[(opcode>>19)&0x1f]);
 			break;
 
 		case 0x84: // bx
@@ -1929,12 +1930,12 @@ INLINE void execute_op(i960_state_t *i960, UINT32 opcode)
 
 		case 0xc0: // ldib
 			i960->icount -= 4;
-			i960->r[(opcode>>19)&0x1f] = (INT8)i960->program->read_byte(get_ea(i960, opcode));
+			i960->r[(opcode>>19)&0x1f] = (INT8)memory_read_byte_32le(i960->program, get_ea(i960, opcode));
 			break;
 
 		case 0xc2: // stib
 			i960->icount -= 2;
-			i960->program->write_byte(get_ea(i960, opcode), i960->r[(opcode>>19)&0x1f]);
+			memory_write_byte_32le(i960->program, get_ea(i960, opcode), i960->r[(opcode>>19)&0x1f]);
 			break;
 
 		case 0xc8: // ldis
@@ -1958,6 +1959,7 @@ static CPU_EXECUTE( i960 )
 	i960_state_t *i960 = get_safe_token(device);
 	UINT32 opcode;
 
+	i960->icount = cycles;
 	check_irqs(i960);
 	while(i960->icount > 0) {
 		i960->PIP = i960->IP;
@@ -1965,16 +1967,17 @@ static CPU_EXECUTE( i960 )
 
 		i960->bursting = 0;
 
-		opcode = i960->direct->read_decrypted_dword(i960->IP);
+		opcode = memory_decrypted_read_dword(i960->program, i960->IP);
 		i960->IP += 4;
 
 		execute_op(i960, opcode);
 	}
+	return cycles - i960->icount;
 }
 
 static void set_irq_line(i960_state_t *i960, int irqline, int state)
 {
-	int int_tab =  i960->program->read_dword(i960->PRCB+20);	// interrupt table
+	int int_tab =  memory_read_dword_32le(i960->program, i960->PRCB+20);	// interrupt table
 	int cpu_pri = (i960->PC>>16)&0x1f;
 	int vector =0;
 	int priority;
@@ -2023,16 +2026,16 @@ static void set_irq_line(i960_state_t *i960, int irqline, int state)
 		else
 		{
 			// store the interrupt in the "pending" table
-			pend = i960->program->read_dword(int_tab);
+			pend = memory_read_dword_32le(i960->program, int_tab);
 			pend |= (1 << priority);
-			i960->program->write_dword(int_tab, pend);
+			memory_write_dword_32le(i960->program, int_tab, pend);
 
 			// now bitfield-ize the vector
 			word = ((vector / 32) * 4) + 4;
 			wordofs = vector % 32;
-			pend = i960->program->read_dword(int_tab + word);
+			pend = memory_read_dword_32le(i960->program, int_tab + word);
 			pend |= (1 << wordofs);
-			i960->program->write_dword(int_tab + word, pend);
+			memory_write_dword_32le(i960->program, int_tab + word, pend);
 		}
 
 		// and ack it to the core now that it's queued
@@ -2068,28 +2071,27 @@ static CPU_INIT( i960 )
 
 	i960->irq_cb = irqcallback;
 	i960->device = device;
-	i960->program = device->space(AS_PROGRAM);
-	i960->direct = &i960->program->direct();
+	i960->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 
-	device->save_item(NAME(i960->PIP));
-	device->save_item(NAME(i960->SAT));
-	device->save_item(NAME(i960->PRCB));
-	device->save_item(NAME(i960->PC));
-	device->save_item(NAME(i960->AC));
-	device->save_item(NAME(i960->ICR));
-	device->save_item(NAME(i960->r));
-	device->save_item(NAME(i960->fp));
-	device->save_item(NAME(i960->rcache));
-	device->save_item(NAME(i960->rcache_frame_addr));
+	state_save_register_device_item(device, 0, i960->PIP);
+	state_save_register_device_item(device, 0, i960->SAT);
+	state_save_register_device_item(device, 0, i960->PRCB);
+	state_save_register_device_item(device, 0, i960->PC);
+	state_save_register_device_item(device, 0, i960->AC);
+	state_save_register_device_item(device, 0, i960->ICR);
+	state_save_register_device_item_array(device, 0, i960->r);
+ 	state_save_register_device_item_array(device, 0, i960->fp);
+	state_save_register_device_item_2d_array(device, 0, i960->rcache);
+	state_save_register_device_item_array(device, 0, i960->rcache_frame_addr);
 }
 
 static CPU_RESET( i960 )
 {
 	i960_state_t *i960 = get_safe_token(device);
 
-	i960->SAT        = i960->program->read_dword(0);
-	i960->PRCB       = i960->program->read_dword(4);
-	i960->IP         = i960->program->read_dword(12);
+	i960->SAT        = memory_read_dword_32le(i960->program, 0);
+	i960->PRCB       = memory_read_dword_32le(i960->program, 4);
+	i960->IP         = memory_read_dword_32le(i960->program, 12);
 	i960->PC         = 0x001f2002;
 	i960->AC         = 0;
 	i960->ICR	    = 0xff000000;
@@ -2099,14 +2101,14 @@ static CPU_RESET( i960 )
 	memset(i960->r, 0, sizeof(i960->r));
 	memset(i960->rcache, 0, sizeof(i960->rcache));
 
-	i960->r[I960_FP] = i960->program->read_dword(i960->PRCB+24);
+	i960->r[I960_FP] = memory_read_dword_32le(i960->program, i960->PRCB+24);
 	i960->r[I960_SP] = i960->r[I960_FP] + 64;
 	i960->rcache_pos = 0;
 }
 
 CPU_GET_INFO( i960 )
 {
-	i960_state_t *i960 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	i960_state_t *i960 = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	if(state >= CPUINFO_INT_REGISTER+I960_R0 && state <= CPUINFO_INT_REGISTER + I960_G15) {
 		info->i = i960->r[state - (CPUINFO_INT_REGISTER + I960_R0)];
@@ -2128,23 +2130,23 @@ CPU_GET_INFO( i960 )
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:		info->i           = 8;							break;
 
 		// Bus sizes
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:	info->i = 32;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:	info->i = 0;						break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;						break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:	info->i = 32;						break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:	info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;						break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;						break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;						break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_DATA:	info->i = 0;						break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;						break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;						break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;						break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;						break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;						break;
 	case CPUINFO_INT_LOGADDR_WIDTH_IO:		info->i = 0;						break;
 
 		// Internal maps
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map32 = NULL;break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:		info->internal_map32 = NULL;break;
-	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_IO:		info->internal_map32 = NULL;break;
+	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map32 = NULL;break;
+	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:		info->internal_map32 = NULL;break;
+	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_IO:		info->internal_map32 = NULL;break;
 
 		// CPU misc parameters
 	case DEVINFO_STR_NAME:					strcpy(info->s, "i960KB");							break;
@@ -2217,16 +2219,14 @@ CPU_GET_INFO( i960 )
 
 // call from any read/write handler for a memory area that can't be bursted
 // on the real hardware (e.g. Model 2's interrupt control registers)
-void i960_noburst(device_t *device)
+void i960_noburst(const device_config *device)
 {
 	i960_state_t *i960 = get_safe_token(device);
 	i960->bursting = 0;
 }
 
-void i960_stall(device_t *device)
+void i960_stall(const device_config *device)
 {
 	i960_state_t *i960 = get_safe_token(device);
 	i960->IP = i960->PIP;
 }
-
-DEFINE_LEGACY_CPU_DEVICE(I960, i960);

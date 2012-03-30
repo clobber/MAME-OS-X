@@ -1,4 +1,4 @@
-#include "emu.h"
+#include "driver.h"
 #include "sound/samples.h"
 #include "includes/gotya.h"
 
@@ -41,32 +41,40 @@ static const struct gotya_sample gotya_samples[] =
 
 WRITE8_HANDLER( gotya_soundlatch_w )
 {
-	gotya_state *state = space->machine().driver_data<gotya_state>();
+	const device_config *samples = devtag_get_device(space->machine, "samples");
+	static int theme_playing;
 	int sample_number;
+
 
 	if (data == 0)
 	{
-		sample_stop(state->m_samples, 0);
-		state->m_theme_playing = 0;
+		sample_stop(samples, 0);
+		theme_playing = 0;
 		return;
 	}
 
 	/* search for sample to play */
-	for (sample_number = 0; gotya_samples[sample_number].sound_command != -1; sample_number++)
+
+	for (sample_number = 0;
+		 gotya_samples[sample_number].sound_command != -1;
+		 sample_number++)
 	{
 		if (gotya_samples[sample_number].sound_command == data)
 		{
-			if (gotya_samples[sample_number].looping && state->m_theme_playing)
+			if (gotya_samples[sample_number].looping &&
+				theme_playing)
 			{
 				/* don't restart main theme */
 				return;
 			}
 
-			sample_start(state->m_samples, gotya_samples[sample_number].channel, sample_number, gotya_samples[sample_number].looping);
+			sample_start(samples, gotya_samples[sample_number].channel,
+						 sample_number,
+						 gotya_samples[sample_number].looping);
 
 			if (gotya_samples[sample_number].channel == 0)
 			{
-				state->m_theme_playing = gotya_samples[sample_number].looping;
+				theme_playing = gotya_samples[sample_number].looping;
 			}
 			return;
 		}

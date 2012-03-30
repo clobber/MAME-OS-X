@@ -18,8 +18,6 @@ Volfied (c) 1989 Taito Corporation
 
     OSC: 32MHz, 26.686MHz & 20MHz
 
-TC0030CMD is a custom Z80 with embedded 8K ram + 8k rom (20MHz OSC is next to chip, 20MHz/4 = 5MHz(?))
-
 Stephh's notes (based on the game M68000 code and some tests) :
 
 1) 'volfied*'
@@ -44,46 +42,56 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 /* Define clocks based on actual OSC on the PCB */
 
-#define CPU_CLOCK           (XTAL_32MHz / 4)		/* 8 MHz clock for 68000 */
-#define SOUND_CPU_CLOCK     (XTAL_32MHz / 8)		/* 4 MHz clock for Z80 sound CPU */
+#define CPU_CLOCK		(XTAL_32MHz / 4)		/* 8 MHz clock for 68000 */
+#define SOUND_CPU_CLOCK		(XTAL_32MHz / 8)		/* 4 MHz clock for Z80 sound CPU */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "includes/taitoipt.h"
+#include "taitoipt.h"
 #include "video/taitoic.h"
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
-#include "includes/volfied.h"
+#include "includes/cchip.h"
 
+WRITE16_HANDLER( volfied_sprite_ctrl_w );
+WRITE16_HANDLER( volfied_video_ram_w );
+WRITE16_HANDLER( volfied_video_ctrl_w );
+WRITE16_HANDLER( volfied_video_mask_w );
+
+READ16_HANDLER( volfied_video_ram_r );
+READ16_HANDLER( volfied_video_ctrl_r );
+
+VIDEO_UPDATE( volfied );
+VIDEO_START( volfied );
 
 /***********************************************************
                 MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM		/* program */
 	AM_RANGE(0x080000, 0x0fffff) AM_ROM		/* tiles   */
 	AM_RANGE(0x100000, 0x103fff) AM_RAM		/* main    */
-	AM_RANGE(0x200000, 0x203fff) AM_DEVREADWRITE("pc090oj", pc090oj_word_r, pc090oj_word_w)
+	AM_RANGE(0x200000, 0x203fff) AM_READWRITE(PC090OJ_word_0_r, PC090OJ_word_0_w)
 	AM_RANGE(0x400000, 0x47ffff) AM_READWRITE(volfied_video_ram_r, volfied_video_ram_w)
-	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(volfied_video_mask_w)
 	AM_RANGE(0x700000, 0x700001) AM_WRITE(volfied_sprite_ctrl_w)
 	AM_RANGE(0xd00000, 0xd00001) AM_READWRITE(volfied_video_ctrl_r, volfied_video_ctrl_w)
-	AM_RANGE(0xe00000, 0xe00001) AM_DEVWRITE8("tc0140syt", tc0140syt_port_w, 0x00ff)
-	AM_RANGE(0xe00002, 0xe00003) AM_DEVREADWRITE8("tc0140syt", tc0140syt_comm_r, tc0140syt_comm_w, 0x00ff)
+	AM_RANGE(0xe00000, 0xe00001) AM_WRITE8(taitosound_port_w, 0x00ff)
+	AM_RANGE(0xe00002, 0xe00003) AM_READWRITE8(taitosound_comm_r, taitosound_comm_w, 0x00ff)
 	AM_RANGE(0xf00000, 0xf007ff) AM_READWRITE(volfied_cchip_ram_r, volfied_cchip_ram_w)
 	AM_RANGE(0xf00802, 0xf00803) AM_READWRITE(volfied_cchip_ctrl_r, volfied_cchip_ctrl_w)
 	AM_RANGE(0xf00c00, 0xf00c01) AM_WRITE(volfied_cchip_bank_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( z80_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8800) AM_DEVWRITE("tc0140syt", tc0140syt_slave_port_w)
-	AM_RANGE(0x8801, 0x8801) AM_DEVREADWRITE("tc0140syt", tc0140syt_slave_comm_r, tc0140syt_slave_comm_w)
-	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0x8800, 0x8800) AM_WRITE(taitosound_slave_port_w)
+	AM_RANGE(0x8801, 0x8801) AM_READWRITE(taitosound_slave_comm_r, taitosound_slave_comm_w)
+	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
 	AM_RANGE(0x9800, 0x9800) AM_WRITENOP    /* ? */
 ADDRESS_MAP_END
 
@@ -207,10 +215,9 @@ GFXDECODE_END
 
 /* handler called by the YM2203 emulator when the internal timers cause an IRQ */
 
-static void irqhandler( device_t *device, int irq )
+static void irqhandler(const device_config *device, int irq)
 {
-	volfied_state *state = device->machine().driver_data<volfied_state>();
-	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -231,74 +238,47 @@ static const ym2203_interface ym2203_config =
                 MACHINE DRIVERS
 ***********************************************************/
 
-static MACHINE_START( volfied )
+static DRIVER_INIT( volfied )
 {
-	volfied_state *state = machine.driver_data<volfied_state>();
-
 	volfied_cchip_init(machine);
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_pc090oj = machine.device("pc090oj");
 }
 
-static MACHINE_RESET( volfied )
-{
-	volfied_cchip_reset(machine);
-}
-
-static const pc090oj_interface volfied_pc090oj_intf =
-{
-	0, 0, 0, 0
-};
-
-static const tc0140syt_interface volfied_tc0140syt_intf =
-{
-	"maincpu", "audiocpu"
-};
-
-static MACHINE_CONFIG_START( volfied, volfied_state )
+static MACHINE_DRIVER_START( volfied )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, CPU_CLOCK)   /* 8MHz */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)   /* 8MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, SOUND_CPU_CLOCK)   /* 4MHz sound CPU, required to run the game */
-	MCFG_CPU_PROGRAM_MAP(z80_map)
+	MDRV_CPU_ADD("audiocpu", Z80, SOUND_CPU_CLOCK)   /* 4MHz sound CPU, required to run the game */
+	MDRV_CPU_PROGRAM_MAP(z80_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(1200))
-
-	MCFG_MACHINE_START(volfied)
-	MCFG_MACHINE_RESET(volfied)
+	MDRV_QUANTUM_TIME(HZ(1200))
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(320, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 8, 247)
-	MCFG_SCREEN_UPDATE_STATIC(volfied)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(320, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 319, 8, 247)
 
-	MCFG_GFXDECODE(volfied)
-	MCFG_PALETTE_LENGTH(8192)
+	MDRV_GFXDECODE(volfied)
+	MDRV_PALETTE_LENGTH(8192)
 
-	MCFG_VIDEO_START(volfied)
-
-	MCFG_PC090OJ_ADD("pc090oj", volfied_pc090oj_intf)
+	MDRV_VIDEO_START(volfied)
+	MDRV_VIDEO_UPDATE(volfied)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2203, 4000000)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.15)
-	MCFG_SOUND_ROUTE(1, "mono", 0.15)
-	MCFG_SOUND_ROUTE(2, "mono", 0.15)
-	MCFG_SOUND_ROUTE(3, "mono", 0.60)
-
-	MCFG_TC0140SYT_ADD("tc0140syt", volfied_tc0140syt_intf)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2203, 4000000)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.15)
+	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MDRV_SOUND_ROUTE(2, "mono", 0.15)
+	MDRV_SOUND_ROUTE(3, "mono", 0.60)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -422,7 +402,7 @@ ROM_START( volfiedjo )
 ROM_END
 
 
-GAME( 1989, volfied,   0,       volfied, volfied,  0, ROT270, "Taito Corporation Japan",   "Volfied (World, revision 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, volfiedu,  volfied, volfied, volfiedu, 0, ROT270, "Taito America Corporation", "Volfied (US, revision 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, volfiedj,  volfied, volfied, volfiedj, 0, ROT270, "Taito Corporation",         "Volfied (Japan, revision 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, volfiedjo, volfied, volfied, volfiedj, 0, ROT270, "Taito Corporation",         "Volfied (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, volfied,  0,       volfied, volfied,  volfied, ROT270, "Taito Corporation Japan",   "Volfied (World, revision 1)", 0 )
+GAME( 1989, volfiedu, volfied, volfied, volfiedu, volfied, ROT270, "Taito America Corporation", "Volfied (US, revision 1)", 0 )
+GAME( 1989, volfiedj, volfied, volfied, volfiedj, volfied, ROT270, "Taito Corporation",         "Volfied (Japan, revision 1)", 0 )
+GAME( 1989, volfiedjo,volfied, volfied, volfiedj, volfied, ROT270, "Taito Corporation",         "Volfied (Japan)", 0 )

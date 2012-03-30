@@ -1,54 +1,68 @@
-#include "emu.h"
-#include "includes/tatsumi.h"
+#include "driver.h"
+#include "tatsumi.h"
 
+static tilemap *tx_layer;
+static tilemap *layer0, *layer1, *layer2, *layer3;
+
+static bitmap_t *temp_bitmap;
+
+static UINT8 *apache3_road_x_ram;
+static UINT8 apache3_road_z;
+
+UINT16 *roundup_r_ram, *roundup_p_ram, *roundup_l_ram;
+UINT16 *cyclwarr_videoram0, *cyclwarr_videoram1;
+UINT16* tatsumi_sprite_control_ram;
+static UINT16* roundup5_vram;
+
+static UINT16 bigfight_bank, bigfight_last_bank;
+
+static UINT8 roundupt_crt_selected_reg;
+static UINT8 roundupt_crt_reg[64];
+
+static UINT8* shadow_pen_array;
 
 /******************************************************************************/
 
 WRITE16_HANDLER(tatsumi_sprite_control_w)
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	COMBINE_DATA(&state->m_sprite_control_ram[offset]);
+	COMBINE_DATA(&tatsumi_sprite_control_ram[offset]);
 
 	/* 0xe0 is bank switch, others unknown */
 //  if ((offset==0xe0 && data&0xefff) || offset!=0xe0)
-//      logerror("%08x:  Tatsumi TZB215 sprite control %04x %08x\n", cpu_get_pc(&space->device()), offset, data);
+//      logerror("%08x:  Tatsumi TZB215 sprite control %04x %08x\n", cpu_get_pc(space->cpu), offset, data);
 }
 
 /******************************************************************************/
 
 WRITE16_HANDLER( apache3_road_z_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	state->m_apache3_road_z = data & 0xff;
+	apache3_road_z = data & 0xff;
 }
 
 WRITE8_HANDLER( apache3_road_x_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
 	// Note: Double buffered. Yes, this is correct :)
-	state->m_apache3_road_x_ram[data] = offset;
+	apache3_road_x_ram[data] = offset;
 }
 
 READ16_HANDLER( roundup5_vram_r )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	offset+=((state->m_control_word&0x0c00)>>10) * 0xc000;
-	return state->m_roundup5_vram[offset];
+	offset+=((tatsumi_control_word&0x0c00)>>10) * 0xc000;
+	return roundup5_vram[offset];
 }
 
 WRITE16_HANDLER( roundup5_vram_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	offset+=((state->m_control_word&0x0c00)>>10) * 0xc000;
+	offset+=((tatsumi_control_word&0x0c00)>>10) * 0xc000;
 
 //  if (offset>=0x30000)
-//      logerror("effective write to vram %06x %02x (control %04x)\n",offset,data,state->m_control_word);
+//      logerror("effective write to vram %06x %02x (control %04x)\n",offset,data,tatsumi_control_word);
 
-	COMBINE_DATA(&state->m_roundup5_vram[offset]);
+	COMBINE_DATA(&roundup5_vram[offset]);
 
 	offset=offset%0xc000;
 
-	gfx_element_mark_dirty(space->machine().gfx[1],offset/0x10);
+	gfx_element_mark_dirty(space->machine->gfx[1],offset/0x10);
 }
 
 
@@ -57,7 +71,7 @@ WRITE16_HANDLER( roundup5_palette_w )
 //  static int hack=0;
 	int word;
 
-	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	COMBINE_DATA(&paletteram16[offset]);
 
 //  if (offset==0xbfe)
 //      hack++;
@@ -79,8 +93,8 @@ bit 0:  3.9kOhm resistor
 //  logerror("PAL: %04x %02x\n",offset,data);
 
 	offset&=~1;
-	word = ((space->machine().generic.paletteram.u16[offset] & 0xff)<<8) | (space->machine().generic.paletteram.u16[offset+1] & 0xff);
-	palette_set_color_rgb(space->machine(),offset/2,pal5bit(word >> 10),pal5bit(word >> 5),pal5bit(word >> 0));
+	word = ((paletteram16[offset] & 0xff)<<8) | (paletteram16[offset+1] & 0xff);
+	palette_set_color_rgb(space->machine,offset/2,pal5bit(word >> 10),pal5bit(word >> 5),pal5bit(word >> 0));
 }
 
 
@@ -88,7 +102,7 @@ WRITE16_HANDLER( apache3_palette_w )
 {
 //  static int hack=0;
 
-	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	COMBINE_DATA(&paletteram16[offset]);
 
 //  if (offset==0xbfe)
 //      hack++;
@@ -109,62 +123,55 @@ bit 0:  3.9kOhm resistor
 
 //  logerror("PAL: %04x %02x\n",offset,data);
 
-	data = space->machine().generic.paletteram.u16[offset];
-	palette_set_color_rgb(space->machine(),offset,pal5bit(data >> 10),pal5bit(data >> 5),pal5bit(data >> 0));
+	data = paletteram16[offset];
+	palette_set_color_rgb(space->machine,offset,pal5bit(data >> 10),pal5bit(data >> 5),pal5bit(data >> 0));
 }
 
 
 WRITE16_HANDLER( roundup5_text_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	UINT16 *videoram = state->m_videoram;
-	COMBINE_DATA(&videoram[offset]);
-	state->m_tx_layer->mark_tile_dirty(offset);
+	COMBINE_DATA(&videoram16[offset]);
+	tilemap_mark_tile_dirty( tx_layer,offset);
 }
 
 READ16_HANDLER( cyclwarr_videoram0_r )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	 return state->m_cyclwarr_videoram0[offset];
+	 return cyclwarr_videoram0[offset];
 }
 
 READ16_HANDLER( cyclwarr_videoram1_r )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	 return state->m_cyclwarr_videoram1[offset];
+	 return cyclwarr_videoram1[offset];
 }
 
 WRITE16_HANDLER( cyclwarr_videoram0_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	COMBINE_DATA(&state->m_cyclwarr_videoram0[offset]);
+	COMBINE_DATA(&cyclwarr_videoram0[offset]);
 	if (offset>=0x400)
 	{
-		state->m_layer0->mark_tile_dirty(offset-0x400);
-		state->m_layer1->mark_tile_dirty(offset-0x400);
+		tilemap_mark_tile_dirty( layer0, offset-0x400);
+		tilemap_mark_tile_dirty( layer1, offset-0x400);
 	}
 }
 
 WRITE16_HANDLER( cyclwarr_videoram1_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
-	COMBINE_DATA(&state->m_cyclwarr_videoram1[offset]);
+	COMBINE_DATA(&cyclwarr_videoram1[offset]);
 	if (offset>=0x400)
 	{
-		state->m_layer2->mark_tile_dirty(offset-0x400);
-		state->m_layer3->mark_tile_dirty(offset-0x400);
+		tilemap_mark_tile_dirty( layer2, offset-0x400);
+		tilemap_mark_tile_dirty( layer3, offset-0x400);
 	}
 }
 
 WRITE16_HANDLER( roundup5_crt_w )
 {
-	tatsumi_state *state = space->machine().driver_data<tatsumi_state>();
 	if (offset==0 && ACCESSING_BITS_0_7)
-		state->m_roundupt_crt_selected_reg=data&0x3f;
+		roundupt_crt_selected_reg=data&0x3f;
 	if (offset==1 && ACCESSING_BITS_0_7) {
-		state->m_roundupt_crt_reg[state->m_roundupt_crt_selected_reg]=data;
-//      if (state->m_roundupt_crt_selected_reg!=0xa && state->m_roundupt_crt_selected_reg!=0xb && state->m_roundupt_crt_selected_reg!=29)
-//      logerror("%08x:  Crt write %02x %02x\n",cpu_get_pc(&space->device()),state->m_roundupt_crt_selected_reg,data);
+		roundupt_crt_reg[roundupt_crt_selected_reg]=data;
+//      if (roundupt_crt_selected_reg!=0xa && roundupt_crt_selected_reg!=0xb && roundupt_crt_selected_reg!=29)
+//      logerror("%08x:  Crt write %02x %02x\n",cpu_get_pc(space->cpu),roundupt_crt_selected_reg,data);
 	}
 }
 
@@ -172,9 +179,7 @@ WRITE16_HANDLER( roundup5_crt_w )
 
 static TILE_GET_INFO( get_text_tile_info )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	UINT16 *videoram = state->m_videoram;
-	int tile = videoram[tile_index];
+	int tile = videoram16[tile_index];
 	SET_TILE_INFO(
 			1,
 			tile & 0xfff,
@@ -184,17 +189,15 @@ static TILE_GET_INFO( get_text_tile_info )
 
 static TILE_GET_INFO( get_tile_info_bigfight_0 )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	int tile=state->m_cyclwarr_videoram0[(tile_index+0x400)%0x8000];
-	int bank = (state->m_bigfight_a40000[0] >> (((tile&0xc00)>>10)*4))&0xf;
+	int tile=cyclwarr_videoram0[(tile_index+0x400)%0x8000];
+	int bank = (bigfight_a40000[0] >> (((tile&0xc00)>>10)*4))&0xf;
 	SET_TILE_INFO(1,(tile&0x3ff)+(bank<<10),(tile>>12)&0xf,0);
 }
 
 static TILE_GET_INFO( get_tile_info_bigfight_1 )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	int tile=state->m_cyclwarr_videoram1[(tile_index+0x400)%0x8000];
-	int bank = (state->m_bigfight_a40000[0] >> (((tile&0xc00)>>10)*4))&0xf;
+	int tile=cyclwarr_videoram1[(tile_index+0x400)%0x8000];
+	int bank = (bigfight_a40000[0] >> (((tile&0xc00)>>10)*4))&0xf;
 	SET_TILE_INFO(1,(tile&0x3ff)+(bank<<10),(tile>>12)&0xf,0);
 }
 
@@ -202,55 +205,50 @@ static TILE_GET_INFO( get_tile_info_bigfight_1 )
 
 VIDEO_START( apache3 )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	state->m_tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
-	state->m_temp_bitmap.allocate(512, 512);
-	state->m_apache3_road_x_ram = auto_alloc_array(machine, UINT8, 512);
+	tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,64,64);
+	shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
+	temp_bitmap = auto_bitmap_alloc(machine, 512, 512, BITMAP_FORMAT_RGB32);
+	apache3_road_x_ram = auto_alloc_array(machine, UINT8, 512);
 
-	state->m_tx_layer->set_transparent_pen(0);
+	tilemap_set_transparent_pen(tx_layer,0);
 }
 
 VIDEO_START( roundup5 )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	state->m_tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,128,64);
-	state->m_shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
-	state->m_roundup5_vram = auto_alloc_array(machine, UINT16, (0x48000 * 4)/2);
+	tx_layer = tilemap_create(machine, get_text_tile_info,tilemap_scan_rows,8,8,128,64);
+	shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
+	roundup5_vram = auto_alloc_array(machine, UINT16, (0x48000 * 4)/2);
 
-	state->m_tx_layer->set_transparent_pen(0);
+	tilemap_set_transparent_pen(tx_layer,0);
 
-	gfx_element_set_source(machine.gfx[1], (UINT8 *)state->m_roundup5_vram);
+	gfx_element_set_source(machine->gfx[1], (UINT8 *)roundup5_vram);
 }
 
 VIDEO_START( cyclwarr )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	state->m_layer0 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,64,512);
-	//state->m_layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,64,512);
-	state->m_layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
-	state->m_layer2 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,64,512);
-	state->m_layer3 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,64,512);
+	layer0 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,64,512);
+	//layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,64,512);
+	layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
+	layer2 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,64,512);
+	layer3 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,64,512);
 
-	state->m_shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
+	shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
 }
 
 VIDEO_START( bigfight )
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	state->m_layer0 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
-	state->m_layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
-	state->m_layer2 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,128,256);
-	state->m_layer3 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,128,256);
+	layer0 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
+	layer1 = tilemap_create(machine, get_tile_info_bigfight_0,tilemap_scan_rows,8,8,128,256);
+	layer2 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,128,256);
+	layer3 = tilemap_create(machine, get_tile_info_bigfight_1,tilemap_scan_rows,8,8,128,256);
 
-	state->m_shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
+	shadow_pen_array = auto_alloc_array_clear(machine, UINT8, 8192);
 }
 
 /********************************************************************/
 
-template<class _BitmapClass>
-INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
-		_BitmapClass &dest_bmp, const rectangle &clip, const gfx_element *gfx,
+INLINE void roundupt_drawgfxzoomrotate(
+		bitmap_t *dest_bmp, const rectangle *clip, const gfx_element *gfx,
 		UINT32 code,UINT32 color,int flipx,int flipy,UINT32 ssx,UINT32 ssy,
 		int scalex, int scaley, int rotate, int write_priority_only )
 {
@@ -266,14 +264,26 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
     */
 
 	/* KW 991012 -- Added code to force clip to bitmap boundary */
-	myclip = clip;
-	myclip &= dest_bmp.cliprect();
+	if(clip)
+	{
+		myclip.min_x = clip->min_x;
+		myclip.max_x = clip->max_x;
+		myclip.min_y = clip->min_y;
+		myclip.max_y = clip->max_y;
+
+		if (myclip.min_x < 0) myclip.min_x = 0;
+		if (myclip.max_x >= dest_bmp->width) myclip.max_x = dest_bmp->width-1;
+		if (myclip.min_y < 0) myclip.min_y = 0;
+		if (myclip.max_y >= dest_bmp->height) myclip.max_y = dest_bmp->height-1;
+
+		clip=&myclip;
+	}
 
 	{
 		if( gfx )
 		{
-			const pen_t *pal = &gfx->machine().pens[gfx->color_base + gfx->color_granularity * (color % gfx->total_colors)];
-			const UINT8 *shadow_pens = state->m_shadow_pen_array + (gfx->color_granularity * (color % gfx->total_colors));
+			const pen_t *pal = &gfx->machine->pens[gfx->color_base + gfx->color_granularity * (color % gfx->total_colors)];
+			const UINT8 *shadow_pens = shadow_pen_array + (gfx->color_granularity * (color % gfx->total_colors));
 			const UINT8 *code_base = gfx_element_get_data(gfx, code % gfx->total_elements);
 
 			int block_size = 8 * scalex;
@@ -334,28 +344,31 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
 					y_index = 0;
 				}
 
-				if( sx < myclip.min_x)
-				{ /* clip left */
-					int pixels = myclip.min_x-sx;
-					sx += pixels;
-					x_index_base += pixels*dx;
-				}
-				if( sy < myclip.min_y )
-				{ /* clip top */
-					int pixels = myclip.min_y-sy;
-					sy += pixels;
-					y_index += pixels*dy;
-				}
-				/* NS 980211 - fixed incorrect clipping */
-				if( ex > myclip.max_x+1 )
-				{ /* clip right */
-					int pixels = ex-myclip.max_x-1;
-					ex -= pixels;
-				}
-				if( ey > myclip.max_y+1 )
-				{ /* clip bottom */
-					int pixels = ey-myclip.max_y-1;
-					ey -= pixels;
+				if( clip )
+				{
+					if( sx < clip->min_x)
+					{ /* clip left */
+						int pixels = clip->min_x-sx;
+						sx += pixels;
+						x_index_base += pixels*dx;
+					}
+					if( sy < clip->min_y )
+					{ /* clip top */
+						int pixels = clip->min_y-sy;
+						sy += pixels;
+						y_index += pixels*dy;
+					}
+					/* NS 980211 - fixed incorrect clipping */
+					if( ex > clip->max_x+1 )
+					{ /* clip right */
+						int pixels = ex-clip->max_x-1;
+						ex -= pixels;
+					}
+					if( ey > clip->max_y+1 )
+					{ /* clip bottom */
+						int pixels = ey-clip->max_y-1;
+						ey -= pixels;
+					}
 				}
 
 				if( ex>sx )
@@ -388,7 +401,7 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
 
 							for( y=sy; y<ey; y++ )
 							{
-								UINT32 *dest = &dest_bmp.pix32(y);
+								UINT32 *dest = BITMAP_ADDR32(dest_bmp, y, 0);
 								int cx = startx;
 								int cy = starty;
 
@@ -419,7 +432,8 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
 							for( y=sy; y<ey; y++ )
 							{
 								const UINT8 *source = code_base + (y_index>>16) * gfx->line_modulo;
-								typename _BitmapClass::pixel_t *dest = &dest_bmp.pix(y);
+								UINT32 *dest = BITMAP_ADDR32(dest_bmp, y, 0);
+								UINT8 *priority_dest = BITMAP_ADDR8(dest_bmp, y, 0);
 
 								int x, x_index = x_index_base;
 								for( x=sx; x<ex; x++ )
@@ -429,7 +443,7 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
 									{
 										// Only draw shadow pens if writing priority buffer
 										if (write_priority_only)
-											dest[x]=shadow_pens[c];
+											priority_dest[x]=shadow_pens[c];
 										else if (!shadow_pens[c])
 											dest[x]=pal[c];
 									}
@@ -447,14 +461,9 @@ INLINE void roundupt_drawgfxzoomrotate(tatsumi_state *state,
 	}
 }
 
-static void mycopyrozbitmap_core(bitmap_ind8 &bitmap,bitmap_rgb32 &srcbitmap,
+static void mycopyrozbitmap_core(bitmap_t *bitmap,bitmap_t *srcbitmap,
 		int dstx,int dsty, int srcwidth, int srcheight,int incxx,int incxy,int incyx,int incyy,
-		const rectangle &clip,int transparent_color)
-{ }
-
-static void mycopyrozbitmap_core(bitmap_rgb32 &bitmap,bitmap_rgb32 &srcbitmap,
-		int dstx,int dsty, int srcwidth, int srcheight,int incxx,int incxy,int incyx,int incyy,
-		const rectangle &clip,int transparent_color)
+		const rectangle *clip,int transparent_color)
 {
 	UINT32 cx;
 	UINT32 cy;
@@ -463,8 +472,8 @@ static void mycopyrozbitmap_core(bitmap_rgb32 &bitmap,bitmap_rgb32 &srcbitmap,
 	int sy;
 	int ex;
 	int ey;
-//  const int xmask = srcbitmap.width()-1;
-//  const int ymask = srcbitmap.height()-1;
+//  const int xmask = srcbitmap->width-1;
+//  const int ymask = srcbitmap->height-1;
 	const int widthshifted = srcwidth << 16;
 	const int heightshifted = srcheight << 16;
 	UINT32 *dest;
@@ -477,10 +486,10 @@ static void mycopyrozbitmap_core(bitmap_rgb32 &bitmap,bitmap_rgb32 &srcbitmap,
 	ex = dstx + srcwidth;
 	ey = dsty + srcheight;
 
-	if (sx<clip.min_x) sx=clip.min_x;
-	if (ex>clip.max_x) ex=clip.max_x;
-	if (sy<clip.min_y) sy=clip.min_y;
-	if (ey>clip.max_y) ey=clip.max_y;
+	if (sx<clip->min_x) sx=clip->min_x;
+	if (ex>clip->max_x) ex=clip->max_x;
+	if (sy<clip->min_y) sy=clip->min_y;
+	if (ey>clip->max_y) ey=clip->max_y;
 
 	if (sx <= ex)
 	{
@@ -490,13 +499,13 @@ static void mycopyrozbitmap_core(bitmap_rgb32 &bitmap,bitmap_rgb32 &srcbitmap,
 			x = sx;
 			cx = startx;
 			cy = starty;
-			dest = &bitmap.pix32(sy, sx);
+			dest = BITMAP_ADDR32(bitmap, sy, sx);
 
 			while (x <= ex)
 			{
 				if (cx < widthshifted && cy < heightshifted)
 				{
-					int c = srcbitmap.pix32(cy >> 16, cx >> 16);
+					int c = *BITMAP_ADDR32(srcbitmap, cy >> 16, cx >> 16);
 
 					if (c != transparent_color)
 						*dest = c;
@@ -514,13 +523,10 @@ static void mycopyrozbitmap_core(bitmap_rgb32 &bitmap,bitmap_rgb32 &srcbitmap,
 	}
 }
 
-template<class _BitmapClass>
-static void draw_sprites(running_machine &machine, _BitmapClass &bitmap, const rectangle &cliprect, int write_priority_only, int rambank)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int write_priority_only, int rambank)
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
-	UINT16 *spriteram16 = state->m_spriteram;
-	int offs, flip_x, flip_y, x, y, color;
-	int w, h, index, lines, scale, rotate;
+	int offs,fx,x,y,color;
+	int w,h,index,lines,scale,rotate;
 	UINT8 *src1, *src2;
 
 	int y_offset;
@@ -539,9 +545,7 @@ static void draw_sprites(running_machine &machine, _BitmapClass &bitmap, const r
             Word 0: 0xf000 - ?
                     0x0fff - Index into ROM sprite table
             Word 1: 0x8000 - X Flip
-                    0x4000 - Y Flip
-                    0x3000 - ?
-                    0x0ff8 - Color
+                    0x7ff8 - Colour (TODO:  Check top bit on Apache 3/Round up)
                     0x0007 - ?
             Word 2: 0xffff - X position
             Word 3: 0xffff - Y position
@@ -563,13 +567,12 @@ static void draw_sprites(running_machine &machine, _BitmapClass &bitmap, const r
             Bytes 2/3: Tile index to start fetching tiles from (increments per tile).
 
         */
-		y =			spriteram16[offs+3];
-		x =			spriteram16[offs+2];
-		scale =		spriteram16[offs+4] & 0x1ff;
-		color =		spriteram16[offs+1] >> 3 & 0x1ff;
-		flip_x =	spriteram16[offs+1] & 0x8000;
-		flip_y =	spriteram16[offs+1] & 0x4000;
-		rotate =	0;//spriteram16[offs+5]&0x1ff; // Todo:  Turned off for now
+		y = spriteram16[offs+3];
+		x = spriteram16[offs+2];
+		scale = spriteram16[offs+4]&0x1ff;
+		color = (spriteram16[offs+1]>>3)&0x1ff;
+		fx = spriteram16[offs+1]&0x8000;
+		rotate = 0;//spriteram16[offs+5]&0x1ff; // Todo:  Turned off for now
 
 		index = spriteram16[offs];
 
@@ -577,132 +580,122 @@ static void draw_sprites(running_machine &machine, _BitmapClass &bitmap, const r
 //          color=rand()%0xff;
 
 		/* End of sprite list marker */
-		if (index == 0xffff || spriteram16[offs + 4] == 0xffff) // todo
+		if (index==0xffff || spriteram16[offs+4]==0xffff) //todo
 			return;
 
-		if (index >= 0x4000)
+		if (index>=0x4000)
 			continue;
 
-		src1 = state->m_rom_sprite_lookup1 + (index * 4);
-		src2 = state->m_rom_sprite_lookup2 + (index * 4);
+		src1 = tatsumi_rom_sprite_lookup1 + (index*4);
+		src2 = tatsumi_rom_sprite_lookup2 + (index*4);
 
-		lines = src1[2];
-		y_offset = src1[0]&0xf8;
-		lines -= y_offset;
+		lines=src1[2];
+		y_offset=src1[0]&0xf8;
+		lines-=y_offset;
 
-		render_x = x << 16;
-		render_y = y << 16;
-		scale = scale << 9; /* 0x80 becomes 0x10000 */
+		render_x=x<<16;
+		render_y=y<<16;
+		scale=scale<<9; /* 0x80 becomes 0x10000 */
 
-		if (flip_y)
-			render_y -= y_offset * scale;
-		else
-			render_y += y_offset * scale;
+		render_y+=y_offset * scale;
 
 		if (rotate)
 		{
-			render_y = 0;
-			state->m_temp_bitmap.fill(0);
+			render_y=0;
+			bitmap_fill(temp_bitmap, 0, 0);
 		}
 
-		extent_x = extent_y = 0;
+		extent_x=extent_y=0;
 
-		src1 += 4;
-		h = 0;
-
-		while (lines > 0) {
-			int base, x_offs, x_width, x_pos, draw_this_line = 1;
-			int this_extent = 0;
+		src1+=4;
+		h=0;
+		while (lines>0) {
+			int base, x_offs, x_width, x_pos, draw_this_line=1;
+			int this_extent=0;
 
 			/* Odd and even lines come from different banks */
-			if (h & 1) {
-				x_width = src1[0] + 1;
-				x_offs = src1[1] * scale * 8;
-				base = src1[2] | (src1[3] << 8);
+			if (h&1) {
+				x_width=src1[0]+1;
+				x_offs=src1[1]*scale*8;
+				base=src1[2] | (src1[3]<<8);
 			}
 			else {
-				x_width = src2[0] + 1;
-				x_offs = src2[1] * scale * 8;
-				base = src2[2] | (src2[3] << 8);
+				x_width=src2[0]+1;
+				x_offs=src2[1]*scale*8;
+				base=src2[2] | (src2[3]<<8);
 			}
 
 			if (draw_this_line) {
-				base *= 2;
+				base*=2;
 
 				if (!rotate)
 				{
-					if (flip_x)
-						x_pos = render_x - x_offs - scale * 8;
+					if (fx)
+						x_pos=render_x-x_offs-scale*8;
 					else
-						x_pos = render_x + x_offs;
+						x_pos=render_x+x_offs;
 				}
 				else
-					x_pos = x_offs;
+					x_pos=x_offs;
 
-				for (w = 0; w < x_width; w++) {
+				for (w=0; w<x_width; w++) {
 					if (rotate)
-						roundupt_drawgfxzoomrotate(state,
-								state->m_temp_bitmap,cliprect,machine.gfx[0],
+						roundupt_drawgfxzoomrotate(
+								temp_bitmap,cliprect,machine->gfx[0],
 								base,
-								color,flip_x,flip_y,x_pos,render_y,
+								color,fx,0,x_pos,render_y,
 								scale,scale,0,write_priority_only);
 					else
-						roundupt_drawgfxzoomrotate(state,
-								bitmap,cliprect,machine.gfx[0],
+						roundupt_drawgfxzoomrotate(
+								bitmap,cliprect,machine->gfx[0],
 								base,
-								color,flip_x,flip_y,x_pos,render_y,
+								color,fx,0,x_pos,render_y,
 								scale,scale,0,write_priority_only);
 					base++;
 
-					if (flip_x)
-						x_pos -= scale * 8;
+					if (fx)
+						x_pos-=scale*8;
 					else
-						x_pos += scale * 8;
+						x_pos+=scale*8;
 
-					this_extent += scale * 8;
+					this_extent+=scale*8;
 				}
-				if (h & 1)
-					src1 += 4;
+				if (h&1)
+					src1+=4;
 				else
-					src2 += 4;
+					src2+=4;
 
 				if (this_extent > extent_x)
-					extent_x = this_extent;
-				this_extent = 0;
+					extent_x=this_extent;
+				this_extent=0;
 
-				if (flip_y)
-					render_y -= 8 * scale;
-				else
-					render_y += 8 * scale;
-				extent_y += 8 * scale;
-
+				render_y+=8 * scale;
+				extent_y+=8 * scale;
 				h++;
-				lines -= 8;
-			}
-			else
-			{
-				h = 32; // hack
+				lines-=8;
+			} else {
+				h=32; //hack
 			}
 		}
 
 		if (rotate)
 		{
-			double theta = rotate * ((2.0 * M_PI) / 512.0);
+			double theta=rotate * ((2.0 * M_PI)/512.0);
 
-			int incxx = (int)((float)65536.0 * cos(theta));
-			int incxy = (int)((float)65536.0 * -sin(theta));
-			int incyx = (int)((float)65536.0 * sin(theta));
-			int incyy = (int)((float)65536.0 * cos(theta));
+			int incxx=(int)((float)65536.0 * cos(theta));
+			int incxy=(int)((float)65536.0 * -sin(theta));
+			int incyx=(int)((float)65536.0 * sin(theta));
+			int incyy=(int)((float)65536.0 * cos(theta));
 
-			extent_x = extent_x >> 16;
-			extent_y = extent_y >> 16;
-			if (extent_x > 2 && extent_y > 2)
-				mycopyrozbitmap_core(bitmap, state->m_temp_bitmap, x/* + (extent_x/2)*/, y /*+ (extent_y/2)*/, extent_x, extent_y, incxx, incxy, incyx, incyy, cliprect, 0);
+			extent_x=extent_x>>16;
+			extent_y=extent_y>>16;
+			if (extent_x>2 && extent_y>2)
+			mycopyrozbitmap_core(bitmap, temp_bitmap, x/* + (extent_x/2)*/, y /*+ (extent_y/2)*/, extent_x, extent_y, incxx, incxy, incyx, incyy, cliprect, 0);
 		}
 	}
 }
 
-static void draw_sky(running_machine &machine, bitmap_rgb32 &bitmap,const rectangle &cliprect, int palette_base, int start_offset)
+static void draw_sky(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, int palette_base, int start_offset)
 {
 	// all todo
 	int x,y;
@@ -719,14 +712,13 @@ start_offset-=48;
 			if (col<palette_base) col=palette_base;
 			if (col>palette_base+127) col=palette_base+127;
 
-			bitmap.pix32(y, x) = machine.pens[col];
+			*BITMAP_ADDR32(bitmap, y, x) = machine->pens[col];
 		}
 	}
 }
 
-static void draw_road(running_machine &machine, bitmap_rgb32 &bitmap,const rectangle &cliprect,bitmap_ind8 &shadow_bitmap)
+static void draw_road(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,bitmap_t *shadow_bitmap)
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
 /*
 0xf980 0x0008 0x8c80 0x4a00 - road right to below, width unknown (32 pixels guess)
 0xfa80 0x0008 0x8c80 0x4a00 - road right to below, width unknown (32 pixels guess)
@@ -784,18 +776,18 @@ pos is 11.5 fixed point
 */
 	int y,x;
 	int visible_line=0;
-	const UINT16* data=state->m_roundup_r_ram;
+	const UINT16* data=roundup_r_ram;
 
 	// Road layer enable (?)
-	if ((state->m_roundup5_unknown0[0x1]&0x1)==0)
+	if ((roundup5_unknown0[0x1]&0x1)==0)
 		return;
 
 	// Road data bank select (double buffered)
-	if (state->m_roundup5_e0000_ram[0]&0x10)
+	if (roundup5_e0000_ram[0]&0x10)
 		data+=0x400;
 
 	// ??  Todo: This is wrong - don't know how to clip the road properly
-	y=256 - (state->m_roundup5_unknown0[0xb/2] >> 8);
+	y=256 - (roundup5_unknown0[0xb/2] >> 8);
 	data+=y*4;
 
 	visible_line=0;
@@ -807,10 +799,10 @@ pos is 11.5 fixed point
 		int pal=4; //(data[3]>>8)&0xf;
 		int step=((data[1]&0xff)<<8)|((data[1]&0xff00)>>8);
 		int samplePos=0;
-		const UINT16* linedata=state->m_roundup_p_ram;// + (0x100 * pal);
+		const UINT16* linedata=roundup_p_ram;// + (0x100 * pal);
 		int startPos=0, endPos=0;
 
-		int palette_byte;//=state->m_roundup_l_ram[visible_line/8];
+		int palette_byte;//=roundup_l_ram[visible_line/8];
 
 		/*
             Each road line consists of up to two sets of 128 pixel data that can be positioned
@@ -835,7 +827,7 @@ offset is from last pixel of first road segment?
 
         */
 
-		palette_byte=state->m_roundup_l_ram[visible_line/8];
+		palette_byte=roundup_l_ram[visible_line/8];
 		pal=4 + ((palette_byte>>(visible_line%8))&1);
 
 		visible_line++;
@@ -850,11 +842,11 @@ offset is from last pixel of first road segment?
 		/* Fill in left of road segment */
 		for (x=0; x<startPos && x<320; x++) {
 			int col = linedata[0]&0xf;
-			UINT8 shadow=shadow_bitmap.pix8(y, x);
+			UINT8 shadow=*BITMAP_ADDR8(shadow_bitmap, y, x);
 			if (shadow)
-				bitmap.pix32(y, x) = machine.pens[768 + pal*16 + col];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[768 + pal*16 + col];
 			else
-				bitmap.pix32(y, x) = machine.pens[256 + pal*16 + col];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[256 + pal*16 + col];
 		}
 
 		/* If startpos is negative, clip it and adjust the sampling position accordingly */
@@ -869,16 +861,16 @@ offset is from last pixel of first road segment?
 		for (x=startPos; x<320 && (samplePos>>11)<0x80; x++) {
 			// look up colour
 			int col = linedata[(samplePos>>11)&0x7f]&0xf;
-			UINT8 shadow=shadow_bitmap.pix8(y, x);
+			UINT8 shadow=*BITMAP_ADDR8(shadow_bitmap, y, x);
 
 			/* Clamp if we have reached the end of the pixel data */
 			//if ((samplePos>>11) > 0x7f)
 			//  col=linedata[0x7f]&0xf;
 
 			if (shadow)
-				bitmap.pix32(y, x) = machine.pens[768 + pal*16 + col];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[768 + pal*16 + col];
 			else
-				bitmap.pix32(y, x) = machine.pens[256 + pal*16 + col];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[256 + pal*16 + col];
 
 			samplePos+=step;
 		}
@@ -900,16 +892,16 @@ offset is from last pixel of first road segment?
 		/* Fill pixels */
 		for (x=startPos; x<320 && x<endPos; x++) {
 			int col = linedata[0x80]&0xf;
-			UINT8 shadow=shadow_bitmap.pix8(y, x);
+			UINT8 shadow=*BITMAP_ADDR8(shadow_bitmap, y, x);
 
 			/* Clamp if we have reached the end of the pixel data */
 			//if ((samplePos>>11) > 0x7f)
 			//  col=linedata[0x7f]&0xf;
 
 			if (shadow)
-				bitmap.pix32(y, x) = machine.pens[768 + pal*16 + col + 32];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[768 + pal*16 + col + 32];
 			else
-				bitmap.pix32(y, x) = machine.pens[256 + pal*16 + col + 32];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[256 + pal*16 + col + 32];
 		}
 
 		if (endPos<0) {
@@ -924,16 +916,16 @@ offset is from last pixel of first road segment?
 		for (/*x=endPos*/; x<320; x++) {
 			// look up colour
 			int col = linedata[((samplePos>>11)&0x7f) + 0x200]&0xf;
-			UINT8 shadow=shadow_bitmap.pix8(y, x);
+			UINT8 shadow=*BITMAP_ADDR8(shadow_bitmap, y, x);
 
 			/* Clamp if we have reached the end of the pixel data */
 			if ((samplePos>>11) > 0x7f)
 				col=linedata[0x7f + 0x200]&0xf;
 
 			if (shadow)
-				bitmap.pix32(y, x) = machine.pens[768 + pal*16 + col + 32];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[768 + pal*16 + col + 32];
 			else
-				bitmap.pix32(y, x) = machine.pens[256 + pal*16 + col + 32];
+				*BITMAP_ADDR32(bitmap, y, x) = machine->pens[256 + pal*16 + col + 32];
 
 			samplePos+=step;
 		}
@@ -941,35 +933,34 @@ offset is from last pixel of first road segment?
 	}
 }
 
-static void update_cluts(running_machine &machine, int fake_palette_offset, int object_base, int length)
+static void update_cluts(running_machine *machine, int fake_palette_offset, int object_base, int length)
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
 	/* Object palettes are build from a series of cluts stored in the object roms.
 
         We update 'Mame palettes' from the clut here in order to simplify the
         draw routines.  We also note down any uses of the 'shadow' pen (index 255).
     */
 	int i;
-	const UINT8* bank1=state->m_rom_clut0;
-	const UINT8* bank2=state->m_rom_clut1;
+	const UINT8* bank1=tatsumi_rom_clut0;
+	const UINT8* bank2=tatsumi_rom_clut1;
 	for (i=0; i<length; i+=8) {
 		palette_set_color(machine,fake_palette_offset+i+0,palette_get_color(machine,bank1[1]+object_base));
-		state->m_shadow_pen_array[i+0]=(bank1[1]==255);
+		shadow_pen_array[i+0]=(bank1[1]==255);
 		palette_set_color(machine,fake_palette_offset+i+1,palette_get_color(machine,bank1[0]+object_base));
-		state->m_shadow_pen_array[i+1]=(bank1[0]==255);
+		shadow_pen_array[i+1]=(bank1[0]==255);
 		palette_set_color(machine,fake_palette_offset+i+2,palette_get_color(machine,bank1[3]+object_base));
-		state->m_shadow_pen_array[i+2]=(bank1[3]==255);
+		shadow_pen_array[i+2]=(bank1[3]==255);
 		palette_set_color(machine,fake_palette_offset+i+3,palette_get_color(machine,bank1[2]+object_base));
-		state->m_shadow_pen_array[i+3]=(bank1[2]==255);
+		shadow_pen_array[i+3]=(bank1[2]==255);
 
 		palette_set_color(machine,fake_palette_offset+i+4,palette_get_color(machine,bank2[1]+object_base));
-		state->m_shadow_pen_array[i+4]=(bank2[1]==255);
+		shadow_pen_array[i+4]=(bank2[1]==255);
 		palette_set_color(machine,fake_palette_offset+i+5,palette_get_color(machine,bank2[0]+object_base));
-		state->m_shadow_pen_array[i+5]=(bank2[0]==255);
+		shadow_pen_array[i+5]=(bank2[0]==255);
 		palette_set_color(machine,fake_palette_offset+i+6,palette_get_color(machine,bank2[3]+object_base));
-		state->m_shadow_pen_array[i+6]=(bank2[3]==255);
+		shadow_pen_array[i+6]=(bank2[3]==255);
 		palette_set_color(machine,fake_palette_offset+i+7,palette_get_color(machine,bank2[2]+object_base));
-		state->m_shadow_pen_array[i+7]=(bank2[2]==255);
+		shadow_pen_array[i+7]=(bank2[2]==255);
 
 		bank1+=4;
 		bank2+=4;
@@ -978,14 +969,14 @@ static void update_cluts(running_machine &machine, int fake_palette_offset, int 
 
 /**********************************************************************/
 
-static void draw_bg(running_machine &machine, bitmap_rgb32 &dst, tilemap_t *src, const UINT16* scrollx, const UINT16* scrolly, const UINT16* tilemap_ram, int tile_bank, int xscroll_offset, int yscroll_offset, int xsize, int ysize)
+static void draw_bg(running_machine *machine, bitmap_t *dst, tilemap *src, const UINT16* scrollx, const UINT16* scrolly, const UINT16* tilemap_ram, int tile_bank, int xscroll_offset, int yscroll_offset, int xsize, int ysize)
 {
 	/*
         Each tile (0x4000 of them) has a lookup table in ROM to build an individual 3-bit palette
         from sets of 8 bit palettes!
     */
-	const UINT8* tile_cluts = machine.region("gfx4")->base();
-	const bitmap_ind16 &src_bitmap = src->pixmap();
+	const UINT8* tile_cluts = memory_region(machine, "gfx4");
+	const bitmap_t *src_bitmap = tilemap_get_pixmap(src);
 	int src_y_mask=ysize-1;
 	int src_x_mask=xsize-1;
 	int tile_y_mask=(ysize/8)-1;
@@ -1003,39 +994,38 @@ static void draw_bg(running_machine &machine, bitmap_rgb32 &dst, tilemap_t *src,
 			int bank = (tile_bank >> (((tilemap_ram[(tile_index+0x400)&0x7fff]&0xc00)>>10)*4))&0xf;
 			int tile = (tilemap_ram[(tile_index+0x400)&0x7fff]&0x3ff) | (bank<<10);
 
-			p=src_bitmap.pix16(src_y&src_y_mask, src_x&src_x_mask);
+			p=*BITMAP_ADDR16(src_bitmap, src_y&src_y_mask, src_x&src_x_mask);
 			pp=tile_cluts[tile*8 + (p&0x7)];
 			ppp=pp + ((p&0x78)<<5);
 
 			if ((p&0x7)!=0 || ((p&0x7)==0 && (pp&0x7)!=0)) // Transparent pixels are set by both the tile pixel data==0 AND colour palette==0
-				dst.pix32(y, x) = machine.pens[ppp];
+				*BITMAP_ADDR32(dst, y, x) = machine->pens[ppp];
 		}
 	}
 }
 
 /* Draw the sky and ground, applying rotation (eventually). Experimental! */
 #if 0
-static void draw_ground(running_machine &machine, bitmap_rgb32 &dst, const rectangle &cliprect)
+static void draw_ground(running_machine *machine, bitmap_t *dst, const rectangle *cliprect)
 {
-	tatsumi_state *state = machine.driver_data<tatsumi_state>();
 	int x, y;
-	const UINT8 *lut = machine.region("proms")->base();
+	const UINT8 *lut = memory_region(machine, "proms");
 
 	UINT16 gva = 0x180; // TODO
-	UINT8 sky_val = state->m_apache3_rotate_ctrl[1] & 0xff;
+	UINT8 sky_val = apache3_rotate_ctrl[1] & 0xff;
 
-	for (y = cliprect.min_y; y <= cliprect.max_y; ++y)
+	for (y = cliprect->min_y; y <= cliprect->max_y; ++y)
 	{
-		UINT16 rgdb = 0;//state->m_apache3_road_x_ram[gva & 0xff];
+		UINT16 rgdb = 0;//apache3_road_x_ram[gva & 0xff];
 		UINT16 gha = 0xf60; // test
-		int ln = (((lut[gva & 0x7f] & 0x7f) + (state->m_apache3_road_z & 0x7f)) >> 5) & 3;
+		int ln = (((lut[gva & 0x7f] & 0x7f) + (apache3_road_z & 0x7f)) >> 5) & 3;
 
 		if (gva & 0x100)
 		{
 			/* Sky */
-			for (x = cliprect.min_x; x <= cliprect.max_x; ++x)
+			for (x = cliprect->min_x; x <= cliprect->max_x; ++x)
 			{
-				dst.pix32(y, x) = machine.pens[0x100 + (sky_val & 0x7f)];
+				*BITMAP_ADDR32(dst, y, x) = machine->pens[0x100 + (sky_val & 0x7f)];
 
 				/* Update horizontal counter? */
 				gha = (gha + 1) & 0xfff;
@@ -1044,7 +1034,7 @@ static void draw_ground(running_machine &machine, bitmap_rgb32 &dst, const recta
 		else
 		{
 			/* Ground */
-			for (x = cliprect.min_x; x <= cliprect.max_x; ++x)
+			for (x = cliprect->min_x; x <= cliprect->max_x; ++x)
 			{
 				UINT8 colour;
 				UINT16 hval;
@@ -1058,14 +1048,14 @@ static void draw_ground(running_machine &machine, bitmap_rgb32 &dst, const recta
 				else
 					hval = hval;
 
-				pixels = state->m_apache3_g_ram[(((gva & 0xff) << 7) | ((hval >> 2) & 0x7f))];
+				pixels = apache3_g_ram[(((gva & 0xff) << 7) | ((hval >> 2) & 0x7f))];
 				pix_sel = hval & 3;
 
 				colour = (pixels >> (pix_sel << 1)) & 3;
 				colour = (BIT(hval, 11) << 4) | (colour << 2) | ln;
 
 				/* Draw the pixel */
-				dst.pix32(y, x) = machine.pens[0x200 + colour];
+				*BITMAP_ADDR32(dst, y, x) = machine->pens[0x200 + colour];
 
 				/* Update horizontal counter */
 				gha = (gha + 1) & 0xfff;
@@ -1080,87 +1070,83 @@ static void draw_ground(running_machine &machine, bitmap_rgb32 &dst, const recta
 #endif
 /**********************************************************************/
 
-SCREEN_UPDATE_RGB32( apache3 )
+VIDEO_UPDATE( apache3 )
 {
-	tatsumi_state *state = screen.machine().driver_data<tatsumi_state>();
-	update_cluts(screen.machine(), 1024, 0, 2048);
+	update_cluts(screen->machine, 1024, 0, 2048);
 
-	state->m_tx_layer->set_scrollx(0,24);
+	tilemap_set_scrollx(tx_layer,0,24);
 
-	bitmap.fill(screen.machine().pens[0], cliprect);
-	draw_sky(screen.machine(), bitmap, cliprect, 256, state->m_apache3_rotate_ctrl[1]);
-//  draw_ground(screen.machine(), bitmap, cliprect);
-	draw_sprites(screen.machine(), bitmap,cliprect,0, (state->m_sprite_control_ram[0x20]&0x1000) ? 0x1000 : 0);
-	state->m_tx_layer->draw(bitmap, cliprect, 0,0);
+	bitmap_fill(bitmap,cliprect,screen->machine->pens[0]);
+	draw_sky(screen->machine, bitmap, cliprect, 256, apache3_rotate_ctrl[1]);
+//  draw_ground(screen->machine, bitmap, cliprect);
+	draw_sprites(screen->machine, bitmap,cliprect,0, (tatsumi_sprite_control_ram[0x20]&0x1000) ? 0x1000 : 0);
+	tilemap_draw(bitmap,cliprect,tx_layer,0,0);
 	return 0;
 }
 
-SCREEN_UPDATE_RGB32( roundup5 )
+VIDEO_UPDATE( roundup5 )
 {
-	tatsumi_state *state = screen.machine().driver_data<tatsumi_state>();
-//  UINT16 bg_x_scroll=state->m_roundup5_unknown1[0];
-//  UINT16 bg_y_scroll=state->m_roundup5_unknown2[0];
+//  UINT16 bg_x_scroll=roundup5_unknown1[0];
+//  UINT16 bg_y_scroll=roundup5_unknown2[0];
 
-	update_cluts(screen.machine(), 1024, 512, 4096);
+	update_cluts(screen->machine, 1024, 512, 4096);
 
-	state->m_tx_layer->set_scrollx(0,24);
-	state->m_tx_layer->set_scrolly(0,0); //(((state->m_roundupt_crt_reg[0xe]<<8)|state->m_roundupt_crt_reg[0xf])>>5) + 96);
+	tilemap_set_scrollx(tx_layer,0,24);
+	tilemap_set_scrolly(tx_layer,0,0); //(((roundupt_crt_reg[0xe]<<8)|roundupt_crt_reg[0xf])>>5) + 96);
 
-	bitmap.fill(screen.machine().pens[384], cliprect); // todo
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(bitmap,cliprect,screen->machine->pens[384]); // todo
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	draw_sprites(screen.machine(), screen.machine().priority_bitmap,cliprect,1,(state->m_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0); // Alpha pass only
-	draw_road(screen.machine(), bitmap,cliprect,screen.machine().priority_bitmap);
-	draw_sprites(screen.machine(), bitmap,cliprect,0,(state->m_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0); // Full pass
-	state->m_tx_layer->draw(bitmap, cliprect, 0,0);
+	draw_sprites(screen->machine, screen->machine->priority_bitmap,cliprect,1,(tatsumi_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0); // Alpha pass only
+	draw_road(screen->machine, bitmap,cliprect,screen->machine->priority_bitmap);
+	draw_sprites(screen->machine, bitmap,cliprect,0,(tatsumi_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0); // Full pass
+	tilemap_draw(bitmap,cliprect,tx_layer,0,0);
 	return 0;
 }
 
-SCREEN_UPDATE_RGB32( cyclwarr )
+VIDEO_UPDATE( cyclwarr )
 {
-	tatsumi_state *state = screen.machine().driver_data<tatsumi_state>();
-	state->m_bigfight_bank=state->m_bigfight_a40000[0];
-	if (state->m_bigfight_bank!=state->m_bigfight_last_bank)
+	bigfight_bank=bigfight_a40000[0];
+	if (bigfight_bank!=bigfight_last_bank)
 	{
-		state->m_layer0->mark_all_dirty();
-		state->m_layer1->mark_all_dirty();
-		state->m_layer2->mark_all_dirty();
-		state->m_layer3->mark_all_dirty();
-		state->m_bigfight_last_bank=state->m_bigfight_bank;
+		tilemap_mark_all_tiles_dirty(layer0);
+		tilemap_mark_all_tiles_dirty(layer1);
+		tilemap_mark_all_tiles_dirty(layer2);
+		tilemap_mark_all_tiles_dirty(layer3);
+		bigfight_last_bank=bigfight_bank;
 	}
 
-	bitmap.fill(screen.machine().pens[0], cliprect);
+	bitmap_fill(bitmap,cliprect,screen->machine->pens[0]);
 
-	draw_bg(screen.machine(), bitmap, state->m_layer3, &state->m_cyclwarr_videoram1[0x000], &state->m_cyclwarr_videoram1[0x100], state->m_cyclwarr_videoram1, state->m_bigfight_a40000[0], 8, -0x80, 512, 4096);
-	draw_bg(screen.machine(), bitmap, state->m_layer2, &state->m_cyclwarr_videoram1[0x200], &state->m_cyclwarr_videoram1[0x300], state->m_cyclwarr_videoram1, state->m_bigfight_a40000[0], 8, -0x80, 512, 4096);
-	draw_bg(screen.machine(), bitmap, state->m_layer1, &state->m_cyclwarr_videoram0[0x000], &state->m_cyclwarr_videoram0[0x100], state->m_cyclwarr_videoram0, state->m_bigfight_a40000[0], 8, -0x40, 1024, 2048);
-	update_cluts(screen.machine(), 8192, 4096, 8192);
-	draw_sprites(screen.machine(), bitmap,cliprect,0,(state->m_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0);
-	draw_bg(screen.machine(), bitmap, state->m_layer0, &state->m_cyclwarr_videoram0[0x200], &state->m_cyclwarr_videoram0[0x300], state->m_cyclwarr_videoram0, state->m_bigfight_a40000[0], 0x10, -0x80, 512, 4096);
+	draw_bg(screen->machine, bitmap, layer3, &cyclwarr_videoram1[0x000], &cyclwarr_videoram1[0x100], cyclwarr_videoram1, bigfight_a40000[0], 8, -0x80, 512, 4096);
+	draw_bg(screen->machine, bitmap, layer2, &cyclwarr_videoram1[0x200], &cyclwarr_videoram1[0x300], cyclwarr_videoram1, bigfight_a40000[0], 8, -0x80, 512, 4096);
+	draw_bg(screen->machine, bitmap, layer1, &cyclwarr_videoram0[0x000], &cyclwarr_videoram0[0x100], cyclwarr_videoram0, bigfight_a40000[0], 8, -0x40, 1024, 2048);
+	update_cluts(screen->machine, 8192, 4096, 8192);
+	draw_sprites(screen->machine, bitmap,cliprect,0,(tatsumi_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0);
+	draw_bg(screen->machine, bitmap, layer0, &cyclwarr_videoram0[0x200], &cyclwarr_videoram0[0x300], cyclwarr_videoram0, bigfight_a40000[0], 0x10, -0x80, 512, 4096);
 
 	return 0;
 }
 
-SCREEN_UPDATE_RGB32( bigfight )
+VIDEO_UPDATE( bigfight )
 {
-	tatsumi_state *state = screen.machine().driver_data<tatsumi_state>();
-	state->m_bigfight_bank=state->m_bigfight_a40000[0];
-	if (state->m_bigfight_bank!=state->m_bigfight_last_bank)
+	bigfight_bank=bigfight_a40000[0];
+	if (bigfight_bank!=bigfight_last_bank)
 	{
-		state->m_layer0->mark_all_dirty();
-		state->m_layer1->mark_all_dirty();
-		state->m_layer2->mark_all_dirty();
-		state->m_layer3->mark_all_dirty();
-		state->m_bigfight_last_bank=state->m_bigfight_bank;
+		tilemap_mark_all_tiles_dirty(layer0);
+		tilemap_mark_all_tiles_dirty(layer1);
+		tilemap_mark_all_tiles_dirty(layer2);
+		tilemap_mark_all_tiles_dirty(layer3);
+		bigfight_last_bank=bigfight_bank;
 	}
 
-	bitmap.fill(screen.machine().pens[0], cliprect);
-	draw_bg(screen.machine(), bitmap, state->m_layer3, &state->m_cyclwarr_videoram1[0x000], &state->m_cyclwarr_videoram1[0x100], state->m_cyclwarr_videoram1, state->m_bigfight_a40000[0], 8, -0x40, 1024, 2048);
-	draw_bg(screen.machine(), bitmap, state->m_layer2, &state->m_cyclwarr_videoram1[0x200], &state->m_cyclwarr_videoram1[0x300], state->m_cyclwarr_videoram1, state->m_bigfight_a40000[0], 8, -0x40, 1024, 2048);
-	draw_bg(screen.machine(), bitmap, state->m_layer1, &state->m_cyclwarr_videoram0[0x000], &state->m_cyclwarr_videoram0[0x100], state->m_cyclwarr_videoram0, state->m_bigfight_a40000[0], 8, -0x40, 1024, 2048);
-	update_cluts(screen.machine(), 8192, 4096, 8192);
-	draw_sprites(screen.machine(), bitmap,cliprect,0,(state->m_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0);
-	draw_bg(screen.machine(), bitmap, state->m_layer0, &state->m_cyclwarr_videoram0[0x200], &state->m_cyclwarr_videoram0[0x300], state->m_cyclwarr_videoram0, state->m_bigfight_a40000[0], 0x10, -0x40, 1024, 2048);
+	bitmap_fill(bitmap,cliprect,screen->machine->pens[0]);
+	draw_bg(screen->machine, bitmap, layer3, &cyclwarr_videoram1[0x000], &cyclwarr_videoram1[0x100], cyclwarr_videoram1, bigfight_a40000[0], 8, -0x40, 1024, 2048);
+	draw_bg(screen->machine, bitmap, layer2, &cyclwarr_videoram1[0x200], &cyclwarr_videoram1[0x300], cyclwarr_videoram1, bigfight_a40000[0], 8, -0x40, 1024, 2048);
+	draw_bg(screen->machine, bitmap, layer1, &cyclwarr_videoram0[0x000], &cyclwarr_videoram0[0x100], cyclwarr_videoram0, bigfight_a40000[0], 8, -0x40, 1024, 2048);
+	update_cluts(screen->machine, 8192, 4096, 8192);
+	draw_sprites(screen->machine, bitmap,cliprect,0,(tatsumi_sprite_control_ram[0xe0]&0x1000) ? 0x1000 : 0);
+	draw_bg(screen->machine, bitmap, layer0, &cyclwarr_videoram0[0x200], &cyclwarr_videoram0[0x300], cyclwarr_videoram0, bigfight_a40000[0], 0x10, -0x40, 1024, 2048);
 
 	return 0;
 }

@@ -11,17 +11,17 @@
     Known bugs:
         * not sure if the analog inputs are handled correctly
 
-    Text Strings in sound CPU ROM read:
-    ARIES ELECA
-    1984JAN15 V-0
+Text Strings in sound CPU ROM read:
+ARIES ELECA
+1984JAN15 V-0
 
-    Text Strings in the bootleg sound CPU ROM read:
-    WHO AM I?      (In place of "ARIES ELECA")
-    1984JULY1 V-1  (In place of "1984JAN15 V-0")
-    1984 COPYRIGHT BY WHO
+Text Strings in the bootleg sound CPU ROM read:
+WHO AM I?      (In place of "ARIES ELECA")
+1984JULY1 V-1  (In place of "1984JAN15 V-0")
+1984 COPYRIGHT BY WHO
 
-    2008-08
-    Dip locations and factory settings verified with manual
+2008-08
+Dip locations and factory settings verified with manual
 
 ****************************************************************************
 
@@ -29,11 +29,23 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "includes/crgolf.h"
+#include "crgolf.h"
 #include "sound/ay8910.h"
 #include "sound/msm5205.h"
+
+
+/* constants */
+#define MASTER_CLOCK		18432000
+
+
+/* local variables */
+static UINT8 port_select;
+static UINT8 main_to_sound_data, sound_to_main_data;
+static UINT16 sample_offset;
+static UINT8 sample_count;
+
 
 
 /*************************************
@@ -44,40 +56,24 @@
 
 static WRITE8_HANDLER( rom_bank_select_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 15);
+	memory_set_bank(space->machine, 1, data & 15);
 }
 
 
 static MACHINE_START( crgolf )
 {
-	crgolf_state *state = machine.driver_data<crgolf_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
 	/* configure the banking */
-	memory_configure_bank(machine, "bank1", 0, 16, machine.region("maincpu")->base() + 0x10000, 0x2000);
-	memory_set_bank(machine, "bank1", 0);
+	memory_configure_bank(machine, 1, 0, 16, memory_region(machine, "maincpu") + 0x10000, 0x2000);
+	memory_set_bank(machine, 1, 0);
 
 	/* register for save states */
-	state->save_item(NAME(state->m_port_select));
-	state->save_item(NAME(state->m_main_to_sound_data));
-	state->save_item(NAME(state->m_sound_to_main_data));
-	state->save_item(NAME(state->m_sample_offset));
-	state->save_item(NAME(state->m_sample_count));
+	state_save_register_global(machine, port_select);
+	state_save_register_global(machine, main_to_sound_data);
+	state_save_register_global(machine, sound_to_main_data);
+	state_save_register_global(machine, sample_offset);
+	state_save_register_global(machine, sample_count);
 }
 
-
-static MACHINE_RESET( crgolf )
-{
-	crgolf_state *state = machine.driver_data<crgolf_state>();
-
-	state->m_port_select = 0;
-	state->m_main_to_sound_data = 0;
-	state->m_sound_to_main_data = 0;
-	state->m_sample_offset = 0;
-	state->m_sample_count = 0;
-}
 
 
 /*************************************
@@ -89,35 +85,32 @@ static MACHINE_RESET( crgolf )
 static READ8_HANDLER( switch_input_r )
 {
 	static const char *const portnames[] = { "IN0", "IN1", "P1", "P2", "DSW", "UNUSED0", "UNUSED1" };
-	crgolf_state *state = space->machine().driver_data<crgolf_state>();
 
-	return input_port_read(space->machine(), portnames[state->m_port_select]);
+	return input_port_read(space->machine, portnames[port_select]);
 }
 
 
 static READ8_HANDLER( analog_input_r )
 {
-	return ((input_port_read(space->machine(), "STICK0") >> 4) | (input_port_read(space->machine(), "STICK1") & 0xf0)) ^ 0x88;
+	return ((input_port_read(space->machine, "STICK0") >> 4) | (input_port_read(space->machine, "STICK1") & 0xf0)) ^ 0x88;
 }
 
 
 static WRITE8_HANDLER( switch_input_select_w )
 {
-	crgolf_state *state = space->machine().driver_data<crgolf_state>();
-
-	if (!(data & 0x40)) state->m_port_select = 6;
-	if (!(data & 0x20)) state->m_port_select = 5;
-	if (!(data & 0x10)) state->m_port_select = 4;
-	if (!(data & 0x08)) state->m_port_select = 3;
-	if (!(data & 0x04)) state->m_port_select = 2;
-	if (!(data & 0x02)) state->m_port_select = 1;
-	if (!(data & 0x01)) state->m_port_select = 0;
+	if (!(data & 0x40)) port_select = 6;
+	if (!(data & 0x20)) port_select = 5;
+	if (!(data & 0x10)) port_select = 4;
+	if (!(data & 0x08)) port_select = 3;
+	if (!(data & 0x04)) port_select = 2;
+	if (!(data & 0x02)) port_select = 1;
+	if (!(data & 0x01)) port_select = 0;
 }
 
 
 static WRITE8_HANDLER( unknown_w )
 {
-	logerror("%04X:unknown_w = %02X\n", cpu_get_pc(&space->device()), data);
+	logerror("%04X:unknown_w = %02X\n", cpu_get_pc(space->cpu), data);
 }
 
 
@@ -130,25 +123,21 @@ static WRITE8_HANDLER( unknown_w )
 
 static TIMER_CALLBACK( main_to_sound_callback )
 {
-	crgolf_state *state = machine.driver_data<crgolf_state>();
-
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
-	state->m_main_to_sound_data = param;
+	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, ASSERT_LINE);
+	main_to_sound_data = param;
 }
 
 
 static WRITE8_HANDLER( main_to_sound_w )
 {
-	space->machine().scheduler().synchronize(FUNC(main_to_sound_callback), data);
+	timer_call_after_resynch(space->machine, NULL, data, main_to_sound_callback);
 }
 
 
 static READ8_HANDLER( main_to_sound_r )
 {
-	crgolf_state *state = space->machine().driver_data<crgolf_state>();
-
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
-	return state->m_main_to_sound_data;
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, CLEAR_LINE);
+	return main_to_sound_data;
 }
 
 
@@ -161,25 +150,21 @@ static READ8_HANDLER( main_to_sound_r )
 
 static TIMER_CALLBACK( sound_to_main_callback )
 {
-	crgolf_state *state = machine.driver_data<crgolf_state>();
-
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, ASSERT_LINE);
-	state->m_sound_to_main_data = param;
+	cputag_set_input_line(machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+	sound_to_main_data = param;
 }
 
 
 static WRITE8_HANDLER( sound_to_main_w )
 {
-	space->machine().scheduler().synchronize(FUNC(sound_to_main_callback), data);
+	timer_call_after_resynch(space->machine, NULL, data, sound_to_main_callback);
 }
 
 
 static READ8_HANDLER( sound_to_main_r )
 {
-	crgolf_state *state = space->machine().driver_data<crgolf_state>();
-
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE);
-	return state->m_sound_to_main_data;
+	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+	return sound_to_main_data;
 }
 
 
@@ -190,26 +175,24 @@ static READ8_HANDLER( sound_to_main_r )
  *
  *************************************/
 
-static void vck_callback( device_t *device )
+static void vck_callback(const device_config *device)
 {
-	crgolf_state *state = device->machine().driver_data<crgolf_state>();
-
 	/* only play back if we have data remaining */
-	if (state->m_sample_count != 0xff)
+	if (sample_count != 0xff)
 	{
-		UINT8 data = device->machine().region("adpcm")->base()[state->m_sample_offset >> 1];
+		UINT8 data = memory_region(device->machine, "adpcm")[sample_offset >> 1];
 
 		/* write the next nibble and advance */
-		msm5205_data_w(device, (data >> (4 * (~state->m_sample_offset & 1))) & 0x0f);
-		state->m_sample_offset++;
+		msm5205_data_w(device, (data >> (4 * (~sample_offset & 1))) & 0x0f);
+		sample_offset++;
 
 		/* every 256 clocks, we decrement the length */
-		if (!(state->m_sample_offset & 0xff))
+		if (!(sample_offset & 0xff))
 		{
-			state->m_sample_count--;
+			sample_count--;
 
 			/* if we hit 0xff, automatically turn off playback */
-			if (state->m_sample_count == 0xff)
+			if (sample_count == 0xff)
 				msm5205_reset_w(device, 1);
 		}
 	}
@@ -218,8 +201,6 @@ static void vck_callback( device_t *device )
 
 static WRITE8_DEVICE_HANDLER( crgolfhi_sample_w )
 {
-	crgolf_state *state = device->machine().driver_data<crgolf_state>();
-
 	switch (offset)
 	{
 		/* offset 0 holds the MSM5205 in reset */
@@ -229,12 +210,12 @@ static WRITE8_DEVICE_HANDLER( crgolfhi_sample_w )
 
 		/* offset 1 is the length/256 nibbles */
 		case 1:
-			state->m_sample_count = data;
+			sample_count = data;
 			break;
 
 		/* offset 2 is the offset/256 nibbles */
 		case 2:
-			state->m_sample_offset = data << 8;
+			sample_offset = data << 8;
 			break;
 
 		/* offset 3 turns on playback */
@@ -252,15 +233,15 @@ static WRITE8_DEVICE_HANDLER( crgolfhi_sample_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x5fff) AM_RAM
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE_MEMBER(crgolf_state, m_color_select)
-	AM_RANGE(0x8004, 0x8004) AM_WRITEONLY AM_BASE_MEMBER(crgolf_state, m_screen_flip)
-	AM_RANGE(0x8005, 0x8005) AM_WRITEONLY AM_BASE_MEMBER(crgolf_state, m_screen_select)
-	AM_RANGE(0x8006, 0x8006) AM_WRITEONLY AM_BASE_MEMBER(crgolf_state, m_screenb_enable)
-	AM_RANGE(0x8007, 0x8007) AM_WRITEONLY AM_BASE_MEMBER(crgolf_state, m_screena_enable)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+	AM_RANGE(0x8003, 0x8003) AM_WRITEONLY AM_BASE(&crgolf_color_select)
+	AM_RANGE(0x8004, 0x8004) AM_WRITEONLY AM_BASE(&crgolf_screen_flip)
+	AM_RANGE(0x8005, 0x8005) AM_WRITEONLY AM_BASE(&crgolf_screen_select)
+	AM_RANGE(0x8006, 0x8006) AM_WRITEONLY AM_BASE(&crgolf_screenb_enable)
+	AM_RANGE(0x8007, 0x8007) AM_WRITEONLY AM_BASE(&crgolf_screena_enable)
 	AM_RANGE(0x8800, 0x8800) AM_READWRITE(sound_to_main_r, main_to_sound_w)
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(rom_bank_select_w)
 	AM_RANGE(0xa000, 0xffff) AM_READWRITE(crgolf_videoram_r, crgolf_videoram_w)
@@ -274,10 +255,10 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xc000, 0xc001) AM_DEVWRITE("ay", ay8910_address_data_w)
 	AM_RANGE(0xc002, 0xc002) AM_WRITENOP
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(switch_input_r, switch_input_select_w)
 	AM_RANGE(0xe001, 0xe001) AM_READWRITE(analog_input_r, unknown_w)
@@ -382,37 +363,37 @@ static const msm5205_interface msm5205_intf =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( crgolf, crgolf_state )
+static MACHINE_DRIVER_START( crgolf )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,MASTER_CLOCK/3/2)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,MASTER_CLOCK/3/2)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,MASTER_CLOCK/3/2)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("audiocpu", Z80,MASTER_CLOCK/3/2)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_START(crgolf)
-	MCFG_MACHINE_RESET(crgolf)
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_MACHINE_START(crgolf)
+	MDRV_QUANTUM_TIME(HZ(6000))
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD(crgolf_video)
+	MDRV_IMPORT_FROM(crgolf_video)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/3/2/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, MASTER_CLOCK/3/2/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( crgolfhi, crgolf )
+static MACHINE_DRIVER_START( crgolfhi )
+	MDRV_IMPORT_FROM(crgolf)
 
-	MCFG_SOUND_ADD("msm", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_intf)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_intf)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -599,8 +580,8 @@ ROM_END
 
 static DRIVER_INIT( crgolfhi )
 {
-	device_t *msm = machine.device("msm");
-	machine.device("audiocpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*msm, 0xa000, 0xa003, FUNC(crgolfhi_sample_w));
+	const device_config *msm = devtag_get_device(machine, "msm");
+	memory_install_write8_device_handler(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), msm, 0xa000, 0xa003, 0, 0, crgolfhi_sample_w);
 }
 
 

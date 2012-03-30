@@ -6,8 +6,17 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/crbaloon.h"
+
+
+UINT8 *crbaloon_videoram;
+UINT8 *crbaloon_colorram;
+UINT8 *crbaloon_spriteram;
+
+static UINT16 crbaloon_collision_address;
+static UINT8 crbaloon_collision_address_clear;
+static tilemap *bg_tilemap;
 
 
 /***************************************************************************
@@ -27,7 +36,7 @@ PALETTE_INIT( crbaloon )
 {
 	int i;
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine->config->total_colors; i++)
 	{
 		UINT8 pen;
 		int h, r, g, b;
@@ -49,74 +58,67 @@ PALETTE_INIT( crbaloon )
 
 WRITE8_HANDLER( crbaloon_videoram_w )
 {
-	crbaloon_state *state = space->machine().driver_data<crbaloon_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	crbaloon_videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( crbaloon_colorram_w )
 {
-	crbaloon_state *state = space->machine().driver_data<crbaloon_state>();
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	crbaloon_colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	crbaloon_state *state = machine.driver_data<crbaloon_state>();
-	int code = state->m_videoram[tile_index];
-	int color = state->m_colorram[tile_index] & 0x0f;
+	int code = crbaloon_videoram[tile_index];
+	int color = crbaloon_colorram[tile_index] & 0x0f;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
 
 VIDEO_START( crbaloon )
 {
-	crbaloon_state *state = machine.driver_data<crbaloon_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows_flip_xy,  8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows_flip_xy,  8, 8, 32, 32);
 
-	state->save_item(NAME(state->m_collision_address));
-	state->save_item(NAME(state->m_collision_address_clear));
+	state_save_register_global(machine, crbaloon_collision_address);
+	state_save_register_global(machine, crbaloon_collision_address_clear);
 }
 
 
-UINT16 crbaloon_get_collision_address(running_machine &machine)
+UINT16 crbaloon_get_collision_address(void)
 {
-	crbaloon_state *state = machine.driver_data<crbaloon_state>();
-	return state->m_collision_address_clear ? 0xffff : state->m_collision_address;
+	return crbaloon_collision_address_clear ? 0xffff : crbaloon_collision_address;
 }
 
 
-void crbaloon_set_clear_collision_address(running_machine &machine, int _crbaloon_collision_address_clear)
+void crbaloon_set_clear_collision_address(int _crbaloon_collision_address_clear)
 {
-	crbaloon_state *state = machine.driver_data<crbaloon_state>();
-	state->m_collision_address_clear = !_crbaloon_collision_address_clear; /* active LO */
+	crbaloon_collision_address_clear = !_crbaloon_collision_address_clear; /* active LO */
 }
 
 
 
-static void draw_sprite_and_check_collision(running_machine &machine, bitmap_ind16 &bitmap)
+static void draw_sprite_and_check_collision(running_machine *machine, bitmap_t *bitmap)
 {
-	crbaloon_state *state = machine.driver_data<crbaloon_state>();
 	int y;
-	UINT8 code = state->m_spriteram[0] & 0x0f;
-	UINT8 color = state->m_spriteram[0] >> 4;
-	UINT8 sy = state->m_spriteram[2] - 32;
+	UINT8 code = crbaloon_spriteram[0] & 0x0f;
+	UINT8 color = crbaloon_spriteram[0] >> 4;
+	UINT8 sy = crbaloon_spriteram[2] - 32;
 
-	UINT8 *gfx = machine.region("gfx2")->base() + (code << 7);
+	UINT8 *gfx = memory_region(machine, "gfx2") + (code << 7);
 
 
 	if (flip_screen_get(machine))
 		sy += 32;
 
 	/* assume no collision */
-    state->m_collision_address = 0xffff;
+    crbaloon_collision_address = 0xffff;
 
 	for (y = 0x1f; y >= 0; y--)
 	{
 		int x;
 		UINT8 data = 0;
-		UINT8 sx = state->m_spriteram[1];
+		UINT8 sx = crbaloon_spriteram[1];
 
 		for (x = 0x1f; x >= 0; x--)
 		{
@@ -131,12 +133,12 @@ static void draw_sprite_and_check_collision(running_machine &machine, bitmap_ind
 			/* draw the current pixel, but check collision first */
 			if (bit)
 			{
-				if (bitmap.pix16(sy, sx) & 0x01)
+				if (*BITMAP_ADDR16(bitmap, sy, sx) & 0x01)
 					/* compute the collision address -- the +1 is via observation
                        of the game code, probably wrong for cocktail mode */
-					state->m_collision_address = ((((sy ^ 0xff) >> 3) << 5) | ((sx ^ 0xff) >> 3)) + 1;
+					crbaloon_collision_address = ((((sy ^ 0xff) >> 3) << 5) | ((sx ^ 0xff) >> 3)) + 1;
 
-				bitmap.pix16(sy, sx) = (color << 1) | 1;
+				*BITMAP_ADDR16(bitmap, sy, sx) = (color << 1) | 1;
 			}
 
 			sx = sx + 1;
@@ -148,12 +150,11 @@ static void draw_sprite_and_check_collision(running_machine &machine, bitmap_ind
 }
 
 
-SCREEN_UPDATE_IND16( crbaloon )
+VIDEO_UPDATE( crbaloon )
 {
-	crbaloon_state *state = screen.machine().driver_data<crbaloon_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 
-	draw_sprite_and_check_collision(screen.machine(), bitmap);
+	draw_sprite_and_check_collision(screen->machine, bitmap);
 
 	return 0;
 }

@@ -4,9 +4,12 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/tms34010/tms34010.h"
-#include "includes/jpmimpct.h"
+#include "jpmimpct.h"
+
+
+UINT16 *tms_vram;
 
 
 /*************************************
@@ -14,6 +17,15 @@
  *  Brooktree Bt477 RAMDAC
  *
  *************************************/
+
+static struct
+{
+	UINT8 address;
+	UINT8 addr_cnt;
+	UINT8 pixmask;
+	UINT8 command;
+	rgb_t color;
+} bt477;
 
 
 /*
@@ -27,44 +39,43 @@
  *  1 1 0    Command register
  */
 
-WRITE16_HANDLER( jpmimpct_bt477_w )
+WRITE16_HANDLER( bt477_w )
 {
-	jpmimpct_state *state = space->machine().driver_data<jpmimpct_state>();
 	UINT8 val = data & 0xff;
 
 	switch (offset)
 	{
 		case 0x0:
 		{
-			state->m_bt477.address = val;
-			state->m_bt477.addr_cnt = 0;
+			bt477.address = val;
+			bt477.addr_cnt = 0;
 			break;
 		}
 		case 0x1:
 		{
-			UINT8 *addr_cnt = &state->m_bt477.addr_cnt;
-			rgb_t *color = &state->m_bt477.color;
+			UINT8 *addr_cnt = &bt477.addr_cnt;
+			rgb_t *color = &bt477.color;
 
 			color[*addr_cnt] = val;
 
 			if (++*addr_cnt == 3)
 			{
-				palette_set_color(space->machine(), state->m_bt477.address, MAKE_RGB(color[0], color[1], color[2]));
+				palette_set_color(space->machine, bt477.address, MAKE_RGB(color[0], color[1], color[2]));
 				*addr_cnt = 0;
 
 				/* Address register increments */
-				state->m_bt477.address++;
+				bt477.address++;
 			}
 			break;
 		}
 		case 0x2:
 		{
-			state->m_bt477.pixmask = val;
+			bt477.pixmask = val;
 			break;
 		}
 		case 0x6:
 		{
-			state->m_bt477.command = val;
+			bt477.command = val;
 			break;
 		}
 		default:
@@ -74,7 +85,7 @@ WRITE16_HANDLER( jpmimpct_bt477_w )
 	}
 }
 
-READ16_HANDLER( jpmimpct_bt477_r )
+READ16_HANDLER( bt477_r )
 {
 	popmessage("Bt477: Unhandled read access (offset:%x)", offset);
 	return 0;
@@ -87,16 +98,14 @@ READ16_HANDLER( jpmimpct_bt477_r )
  *
  *************************************/
 
-void jpmimpct_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
+void jpmimpct_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	jpmimpct_state *state = space->machine().driver_data<jpmimpct_state>();
-	memcpy(shiftreg, &state->m_vram[TOWORD(address)], 512 * sizeof(UINT16));
+	memcpy(shiftreg, &tms_vram[TOWORD(address)], 512 * sizeof(UINT16));
 }
 
-void jpmimpct_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
+void jpmimpct_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	jpmimpct_state *state = space->machine().driver_data<jpmimpct_state>();
-	memcpy(&state->m_vram[TOWORD(address)], shiftreg, 512 * sizeof(UINT16));
+	memcpy(&tms_vram[TOWORD(address)], shiftreg, 512 * sizeof(UINT16));
 }
 
 
@@ -106,19 +115,18 @@ void jpmimpct_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftr
  *
  *************************************/
 
-void jpmimpct_scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int scanline, const tms34010_display_params *params)
+void jpmimpct_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
-	jpmimpct_state *state = screen.machine().driver_data<jpmimpct_state>();
-	UINT16 *vram = &state->m_vram[(params->rowaddr << 8) & 0x3ff00];
-	UINT32 *dest = &bitmap.pix32(scanline);
+	UINT16 *vram = &tms_vram[(params->rowaddr << 8) & 0x3ff00];
+	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
 	int coladdr = params->coladdr;
 	int x;
 
 	for (x = params->heblnk; x < params->hsblnk; x += 2)
 	{
 		UINT16 pixels = vram[coladdr++ & 0xff];
-		dest[x + 0]	= screen.machine().pens[pixels & 0xff];
-		dest[x + 1] = screen.machine().pens[pixels >> 8];
+		dest[x + 0]	= screen->machine->pens[pixels & 0xff];
+		dest[x + 1] = screen->machine->pens[pixels >> 8];
 	}
 }
 
@@ -131,12 +139,11 @@ void jpmimpct_scanline_update(screen_device &screen, bitmap_rgb32 &bitmap, int s
 
 VIDEO_START( jpmimpct )
 {
-	jpmimpct_state *state = machine.driver_data<jpmimpct_state>();
-	memset(&state->m_bt477, 0, sizeof(state->m_bt477));
+	memset(&bt477, 0, sizeof(bt477));
 
-	state_save_register_global(machine, state->m_bt477.address);
-	state_save_register_global(machine, state->m_bt477.addr_cnt);
-	state_save_register_global(machine, state->m_bt477.pixmask);
-	state_save_register_global(machine, state->m_bt477.command);
-	state_save_register_global(machine, state->m_bt477.color);
+	state_save_register_global(machine, bt477.address);
+	state_save_register_global(machine, bt477.addr_cnt);
+	state_save_register_global(machine, bt477.pixmask);
+	state_save_register_global(machine, bt477.command);
+	state_save_register_global(machine, bt477.color);
 }

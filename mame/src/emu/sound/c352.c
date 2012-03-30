@@ -1,6 +1,6 @@
 /*
     c352.c - Namco C352 custom PCM chip emulation
-    v1.2
+    v1.1
     By R. Belmont
     Additional code by cync and the hoot development team
 
@@ -10,71 +10,110 @@
     32 voices
     Supports 8-bit linear and 8-bit muLaw samples
     Output: digital, 16 bit, 4 channels
-    Output sample rate is the input clock / (288 * 2).
+    Output sample rate is the input clock / 384.
  */
 
-#include "emu.h"
+#include <math.h>
+#include "sndintrf.h"
+#include "streams.h"
 #include "c352.h"
 
 #define VERBOSE (0)
 #define LOG(x) do { if (VERBOSE) logerror x; } while (0)
 
-// device type definition
-const device_type C352 = &device_creator<c352_device>;
+// flags
 
-// default address map
-static ADDRESS_MAP_START( c352, AS_0, 8 )
-	AM_RANGE(0x000000, 0xffffff) AM_ROM
-ADDRESS_MAP_END
+enum {
+	C352_FLG_BUSY		= 0x8000,	// channel is busy
+	C352_FLG_KEYON		= 0x4000,	// Keyon
+	C352_FLG_KEYOFF		= 0x2000,	// Keyoff
+	C352_FLG_LOOPTRG	= 0x1000,	// Loop Trigger
+	C352_FLG_LOOPHIST	= 0x0800,	// Loop History
+	C352_FLG_FM	 		= 0x0400,	// Frequency Modulation
+	C352_FLG_PHASERL	= 0x0200,	// Rear Left invert phase 180 degrees
+	C352_FLG_PHASEFL	= 0x0100,	// Front Left invert phase 180 degrees
+	C352_FLG_PHASEFR	= 0x0080,	// invert phase 180 degrees (e.g. flip sign of sample)
+	C352_FLG_LDIR		= 0x0040,	// loop direction
+	C352_FLG_LINK		= 0x0020,	// "long-format" sample (can't loop, not sure what else it means)
+	C352_FLG_NOISE		= 0x0010,	// play noise instead of sample
+	C352_FLG_MULAW		= 0x0008,	// sample is mulaw instead of linear 8-bit PCM
+	C352_FLG_FILTER		= 0x0004,	// don't apply filter
+	C352_FLG_REVLOOP	= 0x0003,	// loop backwards
+	C352_FLG_LOOP		= 0x0002,	// loop forward
+	C352_FLG_REVERSE	= 0x0001,	// play sample backwards
+};
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-//-------------------------------------------------
-//  c352_device - constructor
-//-------------------------------------------------
-
-c352_device::c352_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, C352, "C352", tag, owner, clock),
-	  device_sound_interface(mconfig, *this),
-	  device_memory_interface(mconfig, *this),
-	  m_space_config("samples", ENDIANNESS_LITTLE, 8, 24, 0, NULL, *ADDRESS_MAP_NAME(c352))
+typedef struct
 {
-}
+	UINT8	vol_l;
+	UINT8	vol_r;
+	UINT8	vol_l2;
+	UINT8	vol_r2;
+	UINT8	bank;
+	INT16	noise;
+	INT16   noisebuf;
+	UINT16  noisecnt;
+	UINT16	pitch;
+	UINT16	start_addr;
+	UINT16	end_addr;
+	UINT16	repeat_addr;
+	UINT32	flag;
 
-//-------------------------------------------------
-//  memory_space_config - return a description of
-//  any address spaces owned by this device
-//-------------------------------------------------
+	UINT16	start;
+	UINT16	repeat;
+	UINT32	current_addr;
+	UINT32	pos;
+} c352_ch_t;
 
-const address_space_config *c352_device::memory_space_config(address_spacenum spacenum) const
+typedef struct _c352_state c352_state;
+struct _c352_state
 {
-	return (spacenum == 0) ? &m_space_config : NULL;
+	sound_stream *stream;
+	c352_ch_t c352_ch[32];
+	unsigned char *c352_rom_samples;
+	UINT32 c352_rom_length;
+	int sample_rate_base;
+
+	long	channel_l[2048*2];
+	long	channel_r[2048*2];
+	long	channel_l2[2048*2];
+	long	channel_r2[2048*2];
+
+	short	mulaw_table[256];
+	unsigned int mseq_reg;
+};
+
+INLINE c352_state *get_safe_token(const device_config *device)
+{
+	assert(device != NULL);
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_C352);
+	return (c352_state *)device->token;
 }
 
 // noise generator
-int c352_device::get_mseq_bit()
+static int get_mseq_bit(c352_state *info)
 {
 	unsigned int mask = (1 << (7 - 1));
-	unsigned int reg = m_mseq_reg;
+	unsigned int reg = info->mseq_reg;
 	unsigned int bit = reg & (1 << (17 - 1));
 
 	if (bit)
 	{
-		reg = ((reg ^ mask) << 1) | 1;
+       		reg = ((reg ^ mask) << 1) | 1;
 	}
 	else
 	{
 		reg = reg << 1;
 	}
 
-	m_mseq_reg = reg;
+	info->mseq_reg = reg;
 
 	return (reg & 1);
 }
 
-void c352_device::mix_one_channel(unsigned long ch, long sample_count)
+static void c352_mix_one_channel(c352_state *info, unsigned long ch, long sample_count)
 {
 	int i;
 
@@ -83,19 +122,20 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 	UINT16 noisecnt;
 	INT32 frequency, delta, offset, cnt, flag;
 	UINT32 bank;
-	UINT32 pos;
+	UINT32 pos, len;
 
-	frequency = m_c352_ch[ch].pitch;
+	frequency = info->c352_ch[ch].pitch;
 	delta=frequency;
 
-	pos = m_c352_ch[ch].current_addr;	// sample pointer
-	offset = m_c352_ch[ch].pos;	// 16.16 fixed-point offset into the sample
-	flag = m_c352_ch[ch].flag;
-	bank = m_c352_ch[ch].bank << 16;
+	pos = info->c352_ch[ch].current_addr;	// sample pointer
+	offset = info->c352_ch[ch].pos;	// 16.16 fixed-point offset into the sample
+	flag = info->c352_ch[ch].flag;
+	bank = info->c352_ch[ch].bank << 16;
 
-	noisecnt = m_c352_ch[ch].noisecnt;
-	noisebuf = m_c352_ch[ch].noisebuf;
+	noisecnt = info->c352_ch[ch].noisecnt;
+	noisebuf = info->c352_ch[ch].noisebuf;
 
+	len = info->c352_rom_length;
 	for(i = 0 ; (i < sample_count) && (flag & C352_FLG_BUSY) ; i++)
 	{
 		offset += delta;
@@ -105,20 +145,20 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 			offset &= 0xffff;
 		}
 
-		if (pos > 0x1000000)
+		if (pos > len)
 		{
-			m_c352_ch[ch].flag &= ~C352_FLG_BUSY;
+			info->c352_ch[ch].flag &= ~C352_FLG_BUSY;
 			return;
 		}
 
-		sample = (char)m_direct->read_raw_byte(pos);
-		nextsample = (char)m_direct->read_raw_byte(pos+cnt);
+		sample = (char)info->c352_rom_samples[pos];
+		nextsample = (char)info->c352_rom_samples[pos+cnt];
 
 		// sample is muLaw, not 8-bit linear (Fighting Layer uses this extensively)
 		if (flag & C352_FLG_MULAW)
 		{
-			sample = m_mulaw_table[(unsigned char)sample];
-			nextsample = m_mulaw_table[(unsigned char)nextsample];
+			sample = info->mulaw_table[(unsigned char)sample];
+			nextsample = info->mulaw_table[(unsigned char)nextsample];
 		}
 		else
 		{
@@ -130,7 +170,7 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 		if (flag & C352_FLG_NOISE)
 		{
 			int noise_level = 0x8000;
-			sample = m_c352_ch[ch].noise = (m_c352_ch[ch].noise << 1) | get_mseq_bit();
+			sample = info->c352_ch[ch].noise = (info->c352_ch[ch].noise << 1) | get_mseq_bit(info);
 			sample = (sample & (noise_level - 1)) - (noise_level >> 1);
 			if (sample > 0x7f)
 			{
@@ -140,7 +180,7 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 			{
 				sample = 0xff;
 			}
-			sample = m_mulaw_table[(unsigned char)sample];
+			sample = info->mulaw_table[(unsigned char)sample];
 
 			if ( (pos+cnt) == pos )
 			{
@@ -156,7 +196,7 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 				}
 				else
 				{
-					sample = m_mulaw_table[0x7f];		// Nearest sound(s) is here.
+					sample = info->mulaw_table[0x7f];		// Nearest sound(s) is here.
 				}
 				noisebuf = 0;
 				noisecnt = ( flag & C352_FLG_FILTER ) ? 0 : 1;
@@ -171,31 +211,31 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 
 		if ( flag & C352_FLG_PHASEFL )
 		{
-			m_channel_l[i]  += ((-sample * m_c352_ch[ch].vol_l)>>8);
+			info->channel_l[i]  += ((-sample * info->c352_ch[ch].vol_l)>>8);
 		}
 		else
 		{
-			m_channel_l[i] += ((sample * m_c352_ch[ch].vol_l)>>8);
+			info->channel_l[i] += ((sample * info->c352_ch[ch].vol_l)>>8);
 		}
 
 		if ( flag & C352_FLG_PHASEFR )
 		{
-			m_channel_r[i]  += ((-sample * m_c352_ch[ch].vol_r)>>8);
+			info->channel_r[i]  += ((-sample * info->c352_ch[ch].vol_r)>>8);
 		}
 		else
 		{
-			m_channel_r[i] += ((sample * m_c352_ch[ch].vol_r)>>8);
+			info->channel_r[i] += ((sample * info->c352_ch[ch].vol_r)>>8);
 		}
 
 		if ( flag & C352_FLG_PHASERL )
 		{
-			m_channel_l2[i] += ((-sample * m_c352_ch[ch].vol_l2)>>8);
+			info->channel_l2[i] += ((-sample * info->c352_ch[ch].vol_l2)>>8);
 		}
 		else
 		{
-			m_channel_l2[i] += ((sample * m_c352_ch[ch].vol_l2)>>8);
+			info->channel_l2[i] += ((sample * info->c352_ch[ch].vol_l2)>>8);
 		}
-		m_channel_r2[i] += ((sample * m_c352_ch[ch].vol_r2)>>8);
+		info->channel_r2[i] += ((sample * info->c352_ch[ch].vol_r2)>>8);
 
 		if ( (flag & C352_FLG_REVERSE) && (flag & C352_FLG_LOOP) )
 		{
@@ -203,26 +243,26 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 			{
 				pos += cnt;
 				if (
-					(((pos&0xFFFF) > m_c352_ch[ch].end_addr) && ((pos&0xFFFF) < m_c352_ch[ch].start) && (m_c352_ch[ch].start > m_c352_ch[ch].end_addr) ) ||
-					(((pos&0xFFFF) > m_c352_ch[ch].end_addr) && ((pos&0xFFFF) > m_c352_ch[ch].start) && (m_c352_ch[ch].start < m_c352_ch[ch].end_addr) ) ||
-					((pos > (bank|0xFFFF)) && (m_c352_ch[ch].end_addr == 0xFFFF))
+					(((pos&0xFFFF) > info->c352_ch[ch].end_addr) && ((pos&0xFFFF) < info->c352_ch[ch].start) && (info->c352_ch[ch].start > info->c352_ch[ch].end_addr) ) ||
+					(((pos&0xFFFF) > info->c352_ch[ch].end_addr) && ((pos&0xFFFF) > info->c352_ch[ch].start) && (info->c352_ch[ch].start < info->c352_ch[ch].end_addr) ) ||
+					((pos > (bank|0xFFFF)) && (info->c352_ch[ch].end_addr == 0xFFFF))
 					)
 				{
-					m_c352_ch[ch].flag |= C352_FLG_LDIR;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					info->c352_ch[ch].flag |= C352_FLG_LDIR;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 			}
 			else
 			{
 				pos -= cnt;
 				if (
-					(((pos&0xFFFF) < m_c352_ch[ch].repeat) && ((pos&0xFFFF) < m_c352_ch[ch].end_addr) && (m_c352_ch[ch].end_addr > m_c352_ch[ch].start) ) ||
-					(((pos&0xFFFF) < m_c352_ch[ch].repeat) && ((pos&0xFFFF) > m_c352_ch[ch].end_addr) && (m_c352_ch[ch].end_addr < m_c352_ch[ch].start) ) ||
-					((pos < bank) && (m_c352_ch[ch].repeat == 0x0000))
+					(((pos&0xFFFF) < info->c352_ch[ch].repeat) && ((pos&0xFFFF) < info->c352_ch[ch].end_addr) && (info->c352_ch[ch].end_addr > info->c352_ch[ch].start) ) ||
+					(((pos&0xFFFF) < info->c352_ch[ch].repeat) && ((pos&0xFFFF) > info->c352_ch[ch].end_addr) && (info->c352_ch[ch].end_addr < info->c352_ch[ch].start) ) ||
+					((pos < bank) && (info->c352_ch[ch].repeat == 0x0000))
 					)
 				{
-					m_c352_ch[ch].flag &= ~C352_FLG_LDIR;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					info->c352_ch[ch].flag &= ~C352_FLG_LDIR;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 			}
 		}
@@ -230,73 +270,74 @@ void c352_device::mix_one_channel(unsigned long ch, long sample_count)
 		{
 			pos -= cnt;
 			if (
-				(((pos&0xFFFF) < m_c352_ch[ch].end_addr) && ((pos&0xFFFF) < m_c352_ch[ch].start) && (m_c352_ch[ch].start > m_c352_ch[ch].end_addr) ) ||
-				(((pos&0xFFFF) < m_c352_ch[ch].end_addr) && ((pos&0xFFFF) > m_c352_ch[ch].start) && (m_c352_ch[ch].start < m_c352_ch[ch].end_addr) ) ||
-				((pos < bank) && (m_c352_ch[ch].end_addr == 0x0000))
+				(((pos&0xFFFF) < info->c352_ch[ch].end_addr) && ((pos&0xFFFF) < info->c352_ch[ch].start) && (info->c352_ch[ch].start > info->c352_ch[ch].end_addr) ) ||
+				(((pos&0xFFFF) < info->c352_ch[ch].end_addr) && ((pos&0xFFFF) > info->c352_ch[ch].start) && (info->c352_ch[ch].start < info->c352_ch[ch].end_addr) ) ||
+				((pos < bank) && (info->c352_ch[ch].end_addr == 0x0000))
 				)
 			{
 				if ( (flag & C352_FLG_LINK) && (flag & C352_FLG_LOOP) )
 				{
-					m_c352_ch[ch].bank = m_c352_ch[ch].start_addr & 0xFF;
-					m_c352_ch[ch].start_addr = m_c352_ch[ch].repeat_addr;
-					m_c352_ch[ch].start = m_c352_ch[ch].start_addr;
-					m_c352_ch[ch].repeat = m_c352_ch[ch].repeat_addr;
-					pos = (m_c352_ch[ch].bank<<16) + m_c352_ch[ch].start_addr;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					info->c352_ch[ch].bank = info->c352_ch[ch].start_addr & 0xFF;
+					info->c352_ch[ch].start_addr = info->c352_ch[ch].repeat_addr;
+					info->c352_ch[ch].start = info->c352_ch[ch].start_addr;
+					info->c352_ch[ch].repeat = info->c352_ch[ch].repeat_addr;
+					pos = (info->c352_ch[ch].bank<<16) + info->c352_ch[ch].start_addr;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 				else if (flag & C352_FLG_LOOP)
 				{
-					pos = (pos & 0xFF0000) + m_c352_ch[ch].repeat;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					pos = (pos & 0xFF0000) + info->c352_ch[ch].repeat;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 				else
 				{
-					m_c352_ch[ch].flag |= C352_FLG_KEYOFF;
-					m_c352_ch[ch].flag &= ~C352_FLG_BUSY;
+					info->c352_ch[ch].flag |= C352_FLG_KEYOFF;
+					info->c352_ch[ch].flag &= ~C352_FLG_BUSY;
 					return;
 				}
 			}
 		} else {
 			pos += cnt;
 			if (
-				(((pos&0xFFFF) > m_c352_ch[ch].end_addr) && ((pos&0xFFFF) < m_c352_ch[ch].start) && (m_c352_ch[ch].start > m_c352_ch[ch].end_addr) ) ||
-				(((pos&0xFFFF) > m_c352_ch[ch].end_addr) && ((pos&0xFFFF) > m_c352_ch[ch].start) && (m_c352_ch[ch].start < m_c352_ch[ch].end_addr) ) ||
-				((pos > (bank|0xFFFF)) && (m_c352_ch[ch].end_addr == 0xFFFF))
+				(((pos&0xFFFF) > info->c352_ch[ch].end_addr) && ((pos&0xFFFF) < info->c352_ch[ch].start) && (info->c352_ch[ch].start > info->c352_ch[ch].end_addr) ) ||
+				(((pos&0xFFFF) > info->c352_ch[ch].end_addr) && ((pos&0xFFFF) > info->c352_ch[ch].start) && (info->c352_ch[ch].start < info->c352_ch[ch].end_addr) ) ||
+				((pos > (bank|0xFFFF)) && (info->c352_ch[ch].end_addr == 0xFFFF))
 				)
 			{
 				if ( (flag & C352_FLG_LINK) && (flag & C352_FLG_LOOP) )
 				{
-					m_c352_ch[ch].bank = m_c352_ch[ch].start_addr & 0xFF;
-					m_c352_ch[ch].start_addr = m_c352_ch[ch].repeat_addr;
-					m_c352_ch[ch].start = m_c352_ch[ch].start_addr;
-					m_c352_ch[ch].repeat = m_c352_ch[ch].repeat_addr;
-					pos = (m_c352_ch[ch].bank<<16) + m_c352_ch[ch].start_addr;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					info->c352_ch[ch].bank = info->c352_ch[ch].start_addr & 0xFF;
+					info->c352_ch[ch].start_addr = info->c352_ch[ch].repeat_addr;
+					info->c352_ch[ch].start = info->c352_ch[ch].start_addr;
+					info->c352_ch[ch].repeat = info->c352_ch[ch].repeat_addr;
+					pos = (info->c352_ch[ch].bank<<16) + info->c352_ch[ch].start_addr;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 				else if (flag & C352_FLG_LOOP)
 				{
-					pos = (pos & 0xFF0000) + m_c352_ch[ch].repeat;
-					m_c352_ch[ch].flag |= C352_FLG_LOOPHIST;
+					pos = (pos & 0xFF0000) + info->c352_ch[ch].repeat;
+					info->c352_ch[ch].flag |= C352_FLG_LOOPHIST;
 				}
 				else
 				{
-					m_c352_ch[ch].flag |= C352_FLG_KEYOFF;
-					m_c352_ch[ch].flag &= ~C352_FLG_BUSY;
+					info->c352_ch[ch].flag |= C352_FLG_KEYOFF;
+					info->c352_ch[ch].flag &= ~C352_FLG_BUSY;
 					return;
 				}
 			}
 		}
 	}
 
-	m_c352_ch[ch].noisecnt = noisecnt;
-	m_c352_ch[ch].noisebuf = noisebuf;
-	m_c352_ch[ch].pos = offset;
-	m_c352_ch[ch].current_addr = pos;
+	info->c352_ch[ch].noisecnt = noisecnt;
+	info->c352_ch[ch].noisebuf = noisebuf;
+	info->c352_ch[ch].pos = offset;
+	info->c352_ch[ch].current_addr = pos;
 }
 
 
-void c352_device::sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples)
+static STREAM_UPDATE( c352_update )
 {
+	c352_state *info = (c352_state *)param;
 	int i, j;
 	stream_sample_t *bufferl = outputs[0];
 	stream_sample_t *bufferr = outputs[1];
@@ -305,29 +346,29 @@ void c352_device::sound_stream_update(sound_stream &stream, stream_sample_t **in
 
 	for(i = 0 ; i < samples ; i++)
 	{
-	       m_channel_l[i] = m_channel_r[i] = m_channel_l2[i] = m_channel_r2[i] = 0;
+	       info->channel_l[i] = info->channel_r[i] = info->channel_l2[i] = info->channel_r2[i] = 0;
 	}
 
 	for (j = 0 ; j < 32 ; j++)
 	{
-		mix_one_channel(j, samples);
+		c352_mix_one_channel(info, j, samples);
 	}
 
 	for(i = 0 ; i < samples ; i++)
 	{
-		*bufferl++ = (short) (m_channel_l[i] >>3);
-		*bufferr++ = (short) (m_channel_r[i] >>3);
-		*bufferl2++ = (short) (m_channel_l2[i] >>3);
-		*bufferr2++ = (short) (m_channel_r2[i] >>3);
+		*bufferl++ = (short) (info->channel_l[i] >>3);
+		*bufferr++ = (short) (info->channel_r[i] >>3);
+		*bufferl2++ = (short) (info->channel_l2[i] >>3);
+		*bufferr2++ = (short) (info->channel_r2[i] >>3);
 	}
 }
 
-unsigned short c352_device::read_reg16(unsigned long address)
+static unsigned short c352_read_reg16(c352_state *info, unsigned long address)
 {
 	unsigned long	chan;
 	unsigned short	val;
 
-	m_stream->update();
+	stream_update(info->stream);
 
 	chan = (address >> 4) & 0xfff;
 	if (chan > 31)
@@ -338,7 +379,7 @@ unsigned short c352_device::read_reg16(unsigned long address)
 	{
 		if ((address & 0xf) == 6)
 		{
-			val = m_c352_ch[chan].flag;
+			val = info->c352_ch[chan].flag;
 		}
 		else
 		{
@@ -348,12 +389,12 @@ unsigned short c352_device::read_reg16(unsigned long address)
 	return val;
 }
 
-void c352_device::write_reg16(unsigned long address, unsigned short val)
+static void c352_write_reg16(c352_state *info, unsigned long address, unsigned short val)
 {
 	unsigned long	chan;
 	int i;
 
-	m_stream->update();
+	stream_update(info->stream);
 
 	chan = (address >> 4) & 0xfff;
 
@@ -364,23 +405,20 @@ void c352_device::write_reg16(unsigned long address, unsigned short val)
 			case 0x404:	// execute key-ons/offs
 				for ( i = 0 ; i <= 31 ; i++ )
 				{
-					if ( m_c352_ch[i].flag & C352_FLG_KEYON )
+					if ( info->c352_ch[i].flag & C352_FLG_KEYON )
 					{
-						if (m_c352_ch[i].start_addr != m_c352_ch[i].end_addr)
-						{
-							m_c352_ch[i].current_addr = (m_c352_ch[i].bank << 16) + m_c352_ch[i].start_addr;
-							m_c352_ch[i].start = m_c352_ch[i].start_addr;
-							m_c352_ch[i].repeat = m_c352_ch[i].repeat_addr;
-							m_c352_ch[i].noisebuf = 0;
-							m_c352_ch[i].noisecnt = 0;
-							m_c352_ch[i].flag &= ~(C352_FLG_KEYON | C352_FLG_LOOPHIST);
-							m_c352_ch[i].flag |= C352_FLG_BUSY;
-						}
+						info->c352_ch[i].current_addr = (info->c352_ch[i].bank << 16) + info->c352_ch[i].start_addr;
+						info->c352_ch[i].start = info->c352_ch[i].start_addr;
+						info->c352_ch[i].repeat = info->c352_ch[i].repeat_addr;
+						info->c352_ch[i].noisebuf = 0;
+						info->c352_ch[i].noisecnt = 0;
+						info->c352_ch[i].flag &= ~(C352_FLG_KEYON | C352_FLG_LOOPHIST);
+						info->c352_ch[i].flag |= C352_FLG_BUSY;
 					}
-					else if ( m_c352_ch[i].flag & C352_FLG_KEYOFF )
+					else if ( info->c352_ch[i].flag & C352_FLG_KEYOFF )
 					{
-						m_c352_ch[i].flag &= ~C352_FLG_BUSY;
-						m_c352_ch[i].flag &= ~(C352_FLG_KEYOFF);
+						info->c352_ch[i].flag &= ~C352_FLG_BUSY;
+						info->c352_ch[i].flag &= ~(C352_FLG_KEYOFF);
 					}
 				}
 				break;
@@ -400,51 +438,51 @@ void c352_device::write_reg16(unsigned long address, unsigned short val)
 	case 0x0:
 		// volumes (output 1)
 		LOG(("CH %02ld LVOL %02x RVOL %02x\n", chan, val & 0xff, val >> 8));
-		m_c352_ch[chan].vol_l = val & 0xff;
-		m_c352_ch[chan].vol_r = val >> 8;
+		info->c352_ch[chan].vol_l = val & 0xff;
+		info->c352_ch[chan].vol_r = val >> 8;
 		break;
 
 	case 0x2:
 		// volumes (output 2)
 		LOG(("CH %02ld RLVOL %02x RRVOL %02x\n", chan, val & 0xff, val >> 8));
-		m_c352_ch[chan].vol_l2 = val & 0xff;
-		m_c352_ch[chan].vol_r2 = val >> 8;
+		info->c352_ch[chan].vol_l2 = val & 0xff;
+		info->c352_ch[chan].vol_r2 = val >> 8;
 		break;
 
 	case 0x4:
 		// pitch
 		LOG(("CH %02ld PITCH %04x\n", chan, val));
-		m_c352_ch[chan].pitch = val;
+		info->c352_ch[chan].pitch = val;
 		break;
 
 	case 0x6:
 		// flags
 		LOG(("CH %02ld FLAG %02x\n", chan, val));
-		m_c352_ch[chan].flag = val;
+		info->c352_ch[chan].flag = val;
 		break;
 
 	case 0x8:
 		// bank (bits 16-31 of address);
-		m_c352_ch[chan].bank = val & 0xff;
-		LOG(("CH %02ld BANK %02x", chan, m_c352_ch[chan].bank));
+		info->c352_ch[chan].bank = val & 0xff;
+		LOG(("CH %02ld BANK %02x", chan, info->c352_ch[chan].bank));
 		break;
 
 	case 0xa:
 		// start address
 		LOG(("CH %02ld SADDR %04x\n", chan, val));
-		m_c352_ch[chan].start_addr = val;
+		info->c352_ch[chan].start_addr = val;
 		break;
 
 	case 0xc:
 		// end address
 		LOG(("CH %02ld EADDR %04x\n", chan, val));
-		m_c352_ch[chan].end_addr = val;
+		info->c352_ch[chan].end_addr = val;
 		break;
 
 	case 0xe:
 		// loop address
 		LOG(("CH %02ld LADDR %04x\n", chan, val));
-		m_c352_ch[chan].repeat_addr = val;
+		info->c352_ch[chan].repeat_addr = val;
 		break;
 
 	default:
@@ -453,19 +491,15 @@ void c352_device::write_reg16(unsigned long address, unsigned short val)
 	}
 }
 
-void c352_device::device_start()
+static void c352_init(c352_state *info, const device_config *device)
 {
 	int i;
 	double x_max = 32752.0;
 	double y_max = 127.0;
 	double u = 10.0;
 
-	// find our direct access
-	m_direct = &space()->direct();
-
-	m_sample_rate_base = clock() / 288;
-
-	m_stream = machine().sound().stream_alloc(*this, 0, 4, m_sample_rate_base, this);
+	// clear all channels states
+	memset(info->c352_ch, 0, sizeof(c352_ch_t)*32);
 
 	// generate mulaw table for mulaw format samples
 	for (i = 0; i < 256; i++)
@@ -477,54 +511,95 @@ void c352_device::device_start()
 	      {
 	        x = -x;
 	      }
-	      m_mulaw_table[i] = (short)x;
+	      info->mulaw_table[i] = (short)x;
 	}
+
+	// init noise generator
+	info->mseq_reg = 0x12345678;
 
 	// register save state info
 	for (i = 0; i < 32; i++)
 	{
-		save_item(NAME(m_c352_ch[i].vol_l), i);
-		save_item(NAME(m_c352_ch[i].vol_r), i);
-		save_item(NAME(m_c352_ch[i].vol_l2), i);
-		save_item(NAME(m_c352_ch[i].vol_r2), i);
-		save_item(NAME(m_c352_ch[i].bank), i);
-		save_item(NAME(m_c352_ch[i].noise), i);
-		save_item(NAME(m_c352_ch[i].noisebuf), i);
-		save_item(NAME(m_c352_ch[i].noisecnt), i);
-		save_item(NAME(m_c352_ch[i].pitch), i);
-		save_item(NAME(m_c352_ch[i].start_addr), i);
-		save_item(NAME(m_c352_ch[i].end_addr), i);
-		save_item(NAME(m_c352_ch[i].repeat_addr), i);
-		save_item(NAME(m_c352_ch[i].flag), i);
-		save_item(NAME(m_c352_ch[i].start), i);
-		save_item(NAME(m_c352_ch[i].repeat), i);
-		save_item(NAME(m_c352_ch[i].current_addr), i);
-		save_item(NAME(m_c352_ch[i].pos), i);
+		state_save_register_device_item(device, i, info->c352_ch[i].vol_l);
+		state_save_register_device_item(device, i, info->c352_ch[i].vol_r);
+		state_save_register_device_item(device, i, info->c352_ch[i].vol_l2);
+		state_save_register_device_item(device, i, info->c352_ch[i].vol_r2);
+		state_save_register_device_item(device, i, info->c352_ch[i].bank);
+		state_save_register_device_item(device, i, info->c352_ch[i].noise);
+		state_save_register_device_item(device, i, info->c352_ch[i].noisebuf);
+		state_save_register_device_item(device, i, info->c352_ch[i].noisecnt);
+		state_save_register_device_item(device, i, info->c352_ch[i].pitch);
+		state_save_register_device_item(device, i, info->c352_ch[i].start_addr);
+		state_save_register_device_item(device, i, info->c352_ch[i].end_addr);
+		state_save_register_device_item(device, i, info->c352_ch[i].repeat_addr);
+		state_save_register_device_item(device, i, info->c352_ch[i].flag);
+		state_save_register_device_item(device, i, info->c352_ch[i].start);
+		state_save_register_device_item(device, i, info->c352_ch[i].repeat);
+		state_save_register_device_item(device, i, info->c352_ch[i].current_addr);
+		state_save_register_device_item(device, i, info->c352_ch[i].pos);
 	}
 }
 
-void c352_device::device_reset()
+static DEVICE_START( c352 )
 {
-	// clear all channels states
-	memset(m_c352_ch, 0, sizeof(c352_ch_t)*32);
+	c352_state *info = get_safe_token(device);
 
-	// init noise generator
-	m_mseq_reg = 0x12345678;
+	info->c352_rom_samples = device->region;
+	info->c352_rom_length = device->regionbytes;
+
+	info->sample_rate_base = device->clock / 192;
+
+	info->stream = stream_create(device, 0, 4, info->sample_rate_base, info, c352_update);
+
+	c352_init(info, device);
 }
 
-READ16_MEMBER( c352_device::read )
+
+READ16_DEVICE_HANDLER( c352_r )
 {
-	return(read_reg16(offset*2));
+	return(c352_read_reg16(get_safe_token(device), offset*2));
 }
 
-WRITE16_MEMBER( c352_device::write )
+WRITE16_DEVICE_HANDLER( c352_w )
 {
 	if (mem_mask == 0xffff)
 	{
-		write_reg16(offset*2, data);
+		c352_write_reg16(get_safe_token(device), offset*2, data);
 	}
 	else
 	{
 		logerror("C352: byte-wide write unsupported at this time!\n");
 	}
 }
+
+
+
+
+
+
+
+/**************************************************************************
+ * Generic get_info
+ **************************************************************************/
+
+DEVICE_GET_INFO( c352 )
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as 64-bit signed integers --- */
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(c352_state);			break;
+
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( c352 );		break;
+		case DEVINFO_FCT_STOP:							/* nothing */								break;
+		case DEVINFO_FCT_RESET:							/* nothing */								break;
+
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "C352");					break;
+		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Namco PCM");				break;
+		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.1");						break;
+		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);					break;
+		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
+	}
+}
+

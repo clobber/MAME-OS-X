@@ -4,9 +4,20 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/segaic16.h"
-#include "includes/segas16.h"
+#include "driver.h"
+#include "segaic16.h"
+#include "includes/system16.h"
+
+
+
+/*************************************
+ *
+ *  Statics
+ *
+ *************************************/
+
+static UINT8 road_priority;
+
 
 
 /*************************************
@@ -23,9 +34,27 @@ VIDEO_START( xboard )
 	/* initialize the tile/text layers */
 	segaic16_tilemap_init(machine, 0, SEGAIC16_TILEMAP_16B, 0x1c00, 0, 2);
 
+	/* initialize the sprites */
+	segaic16_sprites_init(machine, 0, SEGAIC16_SPRITES_XBOARD, 0x000, 0);
+
 	/* initialize the road */
 	segaic16_road_init(machine, 0, SEGAIC16_ROAD_XBOARD, 0x1700, 0x1720, 0x1780, -166);
 }
+
+
+
+/*************************************
+ *
+ *  Miscellaneous setters
+ *
+ *************************************/
+
+void xboard_set_road_priority(int priority)
+{
+	/* this is only set at init time */
+	road_priority = priority;
+}
+
 
 
 /*************************************
@@ -34,23 +63,21 @@ VIDEO_START( xboard )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( xboard )
+VIDEO_UPDATE( xboard )
 {
-	segas1x_state *state = screen.machine().driver_data<segas1x_state>();
-
 	/* if no drawing is happening, fill with black and get out */
 	if (!segaic16_display_enable)
 	{
-		bitmap.fill(get_black_pen(screen.machine()), cliprect);
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 		return 0;
 	}
 
 	/* reset priorities */
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* draw the low priority road layer */
 	segaic16_road_draw(0, bitmap, cliprect, SEGAIC16_ROAD_BACKGROUND);
-	if (state->m_road_priority == 0)
+	if (road_priority == 0)
 		segaic16_road_draw(0, bitmap, cliprect, SEGAIC16_ROAD_FOREGROUND);
 
 	/* draw background */
@@ -62,7 +89,7 @@ SCREEN_UPDATE_IND16( xboard )
 	segaic16_tilemap_draw(screen, bitmap, cliprect, 0, SEGAIC16_TILEMAP_FOREGROUND, 1, 0x04);
 
 	/* draw the high priority road */
-	if (state->m_road_priority == 1)
+	if (road_priority == 1)
 		segaic16_road_draw(0, bitmap, cliprect, SEGAIC16_ROAD_FOREGROUND);
 
 	/* text layer */

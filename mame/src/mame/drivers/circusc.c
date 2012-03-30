@@ -47,33 +47,38 @@ To enter service mode, keep 1&2 pressed on reset
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/konami1.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/dac.h"
 #include "sound/sn76496.h"
 #include "sound/discrete.h"
-#include "includes/circusc.h"
+
+extern UINT8 *circusc_spritebank;
+extern UINT8 *circusc_scroll;
+extern UINT8 *circusc_videoram,*circusc_colorram;
+
+static UINT8 sn_latch;
+
+WRITE8_HANDLER( circusc_videoram_w );
+WRITE8_HANDLER( circusc_colorram_w );
+
+VIDEO_START( circusc );
+WRITE8_HANDLER( circusc_flipscreen_w );
+PALETTE_INIT( circusc );
+VIDEO_UPDATE( circusc );
+
 
 
 static MACHINE_START( circusc )
 {
-	circusc_state *state = machine.driver_data<circusc_state>();
-
-	state->m_audiocpu = machine.device<cpu_device>("audiocpu");
-	state->m_sn1 = machine.device("sn1");
-	state->m_sn2 = machine.device("sn2");
-	state->m_dac = machine.device("dac");
-	state->m_discrete = machine.device("fltdisc");
-
-	state->save_item(NAME(state->m_sn_latch));
+	state_save_register_global(machine, sn_latch);
 }
 
 static MACHINE_RESET( circusc )
 {
-	circusc_state *state = machine.driver_data<circusc_state>();
-	state->m_sn_latch = 0;
+	sn_latch = 0;
 }
 
 static READ8_HANDLER( circusc_sh_timer_r )
@@ -84,78 +89,76 @@ static READ8_HANDLER( circusc_sh_timer_r )
      * to D1-D4.
      *
      * The following:
-     * clock = state->m_audiocpu->total_cycles() >> 10;
+     * clock = cpu_get_total_cycles(space->cpu) >> 10;
      * return (clock & 0x0f) << 1;
      * Can be shortened to:
      */
 
-	circusc_state *state = space->machine().driver_data<circusc_state>();
 	int clock;
 
-	clock = state->m_audiocpu->total_cycles() >> 9;
+	clock = cpu_get_total_cycles(space->cpu) >> 9;
 
 	return clock & 0x1e;
 }
 
 static WRITE8_HANDLER( circusc_sh_irqtrigger_w )
 {
-	circusc_state *state = space->machine().driver_data<circusc_state>();
-	device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
+	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( circusc_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset, data);
+	coin_counter_w(offset,data);
 }
 
 static WRITE8_HANDLER(circusc_sound_w)
 {
-	circusc_state *state = space->machine().driver_data<circusc_state>();
+	const device_config *device;
+	//int c;
 
 	switch (offset & 7)
 	{
 		/* CS2 */
 		case 0:
-			state->m_sn_latch = data;
+			sn_latch = data;
 			break;
 
 		/* CS3 */
 		case 1:
-			sn76496_w(state->m_sn1, 0, state->m_sn_latch);
+			device = devtag_get_device(space->machine, "sn1");
+			sn76496_w(device, 0, sn_latch);
 			break;
 
 		/* CS4 */
 		case 2:
-			sn76496_w(state->m_sn2, 0, state->m_sn_latch);
+			device = devtag_get_device(space->machine, "sn2");
+			sn76496_w(device, 0, sn_latch);
 			break;
 
 		/* CS5 */
 		case 3:
-			dac_w(state->m_dac, 0, data);
+			device = devtag_get_device(space->machine, "dac");
+			dac_w(device, 0, data);
 			break;
 
 		/* CS6 */
 		case 4:
-			discrete_sound_w(state->m_discrete, NODE_05, (offset & 0x20) >> 5);
-			discrete_sound_w(state->m_discrete, NODE_06, (offset & 0x18) >> 3);
-			discrete_sound_w(state->m_discrete, NODE_07, (offset & 0x40) >> 6);
+			device = devtag_get_device(space->machine, "fltdisc");
+			discrete_sound_w(device, NODE_05, (offset & 0x20) >> 5);
+			discrete_sound_w(device, NODE_06, (offset & 0x18) >> 3);
+			discrete_sound_w(device, NODE_07, (offset & 0x40) >> 6);
 			break;
 	}
 }
 
-static WRITE8_HANDLER( irq_mask_w )
-{
-	circusc_state *state = space->machine().driver_data<circusc_state>();
 
-	state->m_irq_mask = data & 1;
-}
 
-static ADDRESS_MAP_START( circusc_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( circusc_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_MIRROR(0x03f8) AM_WRITE(circusc_flipscreen_w)		/* FLIP */
-	AM_RANGE(0x0001, 0x0001) AM_MIRROR(0x03f8) AM_WRITE(irq_mask_w)					/* INTST */
+	AM_RANGE(0x0001, 0x0001) AM_MIRROR(0x03f8) AM_WRITE(interrupt_enable_w)			/* INTST */
 //  AM_RANGE(0x0002, 0x0002) AM_MIRROR(0x03f8) AM_WRITENOP                          /* MUT - not used /*
 	AM_RANGE(0x0003, 0x0004) AM_MIRROR(0x03f8) AM_WRITE(circusc_coin_counter_w)		/* COIN1, COIN2 */
-	AM_RANGE(0x0005, 0x0005) AM_MIRROR(0x03f8) AM_WRITEONLY AM_BASE_MEMBER(circusc_state, m_spritebank) /* OBJ CHENG */
+	AM_RANGE(0x0005, 0x0005) AM_MIRROR(0x03f8) AM_WRITE(SMH_RAM) AM_BASE(&circusc_spritebank) /* OBJ CHENG */
 	AM_RANGE(0x0400, 0x0400) AM_MIRROR(0x03ff) AM_WRITE(watchdog_reset_w)			/* WDOG */
 	AM_RANGE(0x0800, 0x0800) AM_MIRROR(0x03ff) AM_WRITE(soundlatch_w)				/* SOUND DATA */
 	AM_RANGE(0x0c00, 0x0c00) AM_MIRROR(0x03ff) AM_WRITE(circusc_sh_irqtrigger_w)	/* SOUND-ON causes interrupt on audio CPU */
@@ -165,17 +168,17 @@ static ADDRESS_MAP_START( circusc_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x1003, 0x1003) AM_MIRROR(0x03fc) AM_READNOP              /* unpopulated DIPSW 3*/
 	AM_RANGE(0x1400, 0x1400) AM_MIRROR(0x03ff) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1800, 0x1800) AM_MIRROR(0x03ff) AM_READ_PORT("DSW2")
-	AM_RANGE(0x1c00, 0x1c00) AM_MIRROR(0x03ff) AM_WRITEONLY AM_BASE_MEMBER(circusc_state, m_scroll) /* VGAP */
+	AM_RANGE(0x1c00, 0x1c00) AM_MIRROR(0x03ff) AM_WRITE(SMH_RAM) AM_BASE(&circusc_scroll) /* VGAP */
 	AM_RANGE(0x2000, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(circusc_colorram_w) AM_BASE_MEMBER(circusc_state, m_colorram) /* colorram */
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(circusc_videoram_w) AM_BASE_MEMBER(circusc_state, m_videoram) /* videoram */
-	AM_RANGE(0x3800, 0x38ff) AM_RAM AM_BASE_MEMBER(circusc_state, m_spriteram_2) /* spriteram2 */
-	AM_RANGE(0x3900, 0x39ff) AM_RAM AM_BASE_SIZE_MEMBER(circusc_state, m_spriteram, m_spriteram_size) /* spriteram */
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(circusc_colorram_w) AM_BASE(&circusc_colorram) /* colorram */
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(circusc_videoram_w) AM_BASE(&circusc_videoram) /* videoram */
+	AM_RANGE(0x3800, 0x38ff) AM_RAM AM_BASE(&spriteram_2) /* spriteram2 */
+	AM_RANGE(0x3900, 0x39ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size) /* spriteram */
 	AM_RANGE(0x3a00, 0x3fff) AM_RAM
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x1c00) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x1fff) AM_READ(soundlatch_r)		/* CS0 */
@@ -336,60 +339,53 @@ static DISCRETE_SOUND_START( circusc )
 
 DISCRETE_SOUND_END
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	circusc_state *state = device->machine().driver_data<circusc_state>();
-
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-}
-
-static MACHINE_CONFIG_START( circusc, circusc_state )
+static MACHINE_DRIVER_START( circusc )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, 2048000)        /* 2 MHz? */
-	MCFG_CPU_PROGRAM_MAP(circusc_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
-	MCFG_WATCHDOG_VBLANK_INIT(8)
+	MDRV_CPU_ADD("maincpu", M6809, 2048000)        /* 2 MHz */
+	MDRV_CPU_PROGRAM_MAP(circusc_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_WATCHDOG_VBLANK_INIT(8)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_14_31818MHz/4)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80,14318180/4)     /* Z80 Clock is derived from a 14.31818 MHz crystal */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_MACHINE_START(circusc)
-	MCFG_MACHINE_RESET(circusc)
+	MDRV_MACHINE_START(circusc)
+	MDRV_MACHINE_RESET(circusc)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(circusc)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(circusc)
-	MCFG_PALETTE_LENGTH(16*16+16*16)
+	MDRV_GFXDECODE(circusc)
+	MDRV_PALETTE_LENGTH(16*16+16*16)
 
-	MCFG_PALETTE_INIT(circusc)
-	MCFG_VIDEO_START(circusc)
+	MDRV_PALETTE_INIT(circusc)
+	MDRV_VIDEO_START(circusc)
+	MDRV_VIDEO_UPDATE(circusc)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76496, XTAL_14_31818MHz/8)
-	MCFG_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 0)
+	MDRV_SOUND_ADD("sn1", SN76496, 14318180/8)
+	MDRV_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 0)
 
-	MCFG_SOUND_ADD("sn2", SN76496, XTAL_14_31818MHz/8)
-	MCFG_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 1)
+	MDRV_SOUND_ADD("sn2", SN76496, 14318180/8)
+	MDRV_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 1)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 2)
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE_EX(0, "fltdisc", 1.0, 2)
 
-	MCFG_SOUND_ADD("fltdisc", DISCRETE, 0)
+	MDRV_SOUND_ADD("fltdisc", DISCRETE, 0)
 
-	MCFG_SOUND_CONFIG_DISCRETE(circusc)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_CONFIG_DISCRETE(circusc)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 

@@ -97,7 +97,10 @@
 
 *************************************************************/
 
-#include "emu.h"
+#include <math.h>
+
+#include "sndintrf.h"
+#include "streams.h"
 #include "upd7759.h"
 
 
@@ -146,7 +149,7 @@ enum
 typedef struct _upd7759_state upd7759_state;
 struct _upd7759_state
 {
-	device_t *device;
+	const device_config *device;
 	sound_stream *channel;					/* stream channel for playback */
 
 	/* internal clock to output sample rate mapping */
@@ -160,7 +163,7 @@ struct _upd7759_state
 	UINT8		reset;						/* current state of the RESET line */
 	UINT8		start;						/* current state of the START line */
 	UINT8		drq;						/* current state of the DRQ line */
-	void (*drqcallback)(device_t *device, int param);			/* drq callback */
+	void (*drqcallback)(const device_config *device, int param);			/* drq callback */
 
 	/* internal state machine */
 	INT8		state;						/* current overall chip state */
@@ -220,11 +223,13 @@ static const int upd7759_state_table[16] = { -1, -1, 0, 0, 1, 2, 2, 3, -1, -1, 0
 
 
 
-INLINE upd7759_state *get_safe_token(device_t *device)
+INLINE upd7759_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == UPD7759);
-	return (upd7759_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_UPD7759);
+	return (upd7759_state *)device->token;
 }
 
 
@@ -535,7 +540,7 @@ static TIMER_CALLBACK( upd7759_slave_update )
 	UINT8 olddrq = chip->drq;
 
 	/* update the stream */
-	chip->channel->update();
+	stream_update(chip->channel);
 
 	/* advance the state */
 	advance_state(chip);
@@ -547,7 +552,7 @@ static TIMER_CALLBACK( upd7759_slave_update )
 
 	/* set a timer to go off when that is done */
 	if (chip->state != STATE_IDLE)
-		chip->timer->adjust(chip->clock_period * chip->clocks_left);
+		timer_adjust_oneshot(chip->timer, attotime_mul(chip->clock_period, chip->clocks_left), 0);
 }
 
 
@@ -582,7 +587,7 @@ static void upd7759_reset(upd7759_state *chip)
 
 	/* turn off any timer */
 	if (chip->timer)
-		chip->timer->adjust(attotime::never);
+		timer_adjust_oneshot(chip->timer, attotime_never, 0);
 }
 
 
@@ -592,69 +597,70 @@ static DEVICE_RESET( upd7759 )
 }
 
 
-static void upd7759_postload(upd7759_state *chip)
+static STATE_POSTLOAD( upd7759_postload )
 {
+	upd7759_state *chip = (upd7759_state *)param;
 	chip->rom = chip->rombase + chip->romoffset;
 }
 
 
-static void register_for_save(upd7759_state *chip, device_t *device)
+static void register_for_save(upd7759_state *chip, const device_config *device)
 {
-	device->save_item(NAME(chip->pos));
-	device->save_item(NAME(chip->step));
+	state_save_register_device_item(device, 0, chip->pos);
+	state_save_register_device_item(device, 0, chip->step);
 
-	device->save_item(NAME(chip->fifo_in));
-	device->save_item(NAME(chip->reset));
-	device->save_item(NAME(chip->start));
-	device->save_item(NAME(chip->drq));
+	state_save_register_device_item(device, 0, chip->fifo_in);
+	state_save_register_device_item(device, 0, chip->reset);
+	state_save_register_device_item(device, 0, chip->start);
+	state_save_register_device_item(device, 0, chip->drq);
 
-	device->save_item(NAME(chip->state));
-	device->save_item(NAME(chip->clocks_left));
-	device->save_item(NAME(chip->nibbles_left));
-	device->save_item(NAME(chip->repeat_count));
-	device->save_item(NAME(chip->post_drq_state));
-	device->save_item(NAME(chip->post_drq_clocks));
-	device->save_item(NAME(chip->req_sample));
-	device->save_item(NAME(chip->last_sample));
-	device->save_item(NAME(chip->block_header));
-	device->save_item(NAME(chip->sample_rate));
-	device->save_item(NAME(chip->first_valid_header));
-	device->save_item(NAME(chip->offset));
-	device->save_item(NAME(chip->repeat_offset));
+	state_save_register_device_item(device, 0, chip->state);
+	state_save_register_device_item(device, 0, chip->clocks_left);
+	state_save_register_device_item(device, 0, chip->nibbles_left);
+	state_save_register_device_item(device, 0, chip->repeat_count);
+	state_save_register_device_item(device, 0, chip->post_drq_state);
+	state_save_register_device_item(device, 0, chip->post_drq_clocks);
+	state_save_register_device_item(device, 0, chip->req_sample);
+	state_save_register_device_item(device, 0, chip->last_sample);
+	state_save_register_device_item(device, 0, chip->block_header);
+	state_save_register_device_item(device, 0, chip->sample_rate);
+	state_save_register_device_item(device, 0, chip->first_valid_header);
+	state_save_register_device_item(device, 0, chip->offset);
+	state_save_register_device_item(device, 0, chip->repeat_offset);
 
-	device->save_item(NAME(chip->adpcm_state));
-	device->save_item(NAME(chip->adpcm_data));
-	device->save_item(NAME(chip->sample));
+	state_save_register_device_item(device, 0, chip->adpcm_state);
+	state_save_register_device_item(device, 0, chip->adpcm_data);
+	state_save_register_device_item(device, 0, chip->sample);
 
-	device->save_item(NAME(chip->romoffset));
-	device->machine().save().register_postload(save_prepost_delegate(FUNC(upd7759_postload), chip));
+	state_save_register_device_item(device, 0, chip->romoffset);
+	state_save_register_postload(device->machine, upd7759_postload, chip);
 }
 
 
 static DEVICE_START( upd7759 )
 {
 	static const upd7759_interface defintrf = { 0 };
-	const upd7759_interface *intf = (device->static_config() != NULL) ? (const upd7759_interface *)device->static_config() : &defintrf;
+	const upd7759_interface *intf = (device->static_config != NULL) ? (const upd7759_interface *)device->static_config : &defintrf;
 	upd7759_state *chip = get_safe_token(device);
 
 	chip->device = device;
 
 	/* allocate a stream channel */
-	chip->channel = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/4, chip, upd7759_update);
+	chip->channel = stream_create(device, 0, 1, device->clock/4, chip, upd7759_update);
 
 	/* compute the stepping rate based on the chip's clock speed */
 	chip->step = 4 * FRAC_ONE;
 
 	/* compute the clock period */
-	chip->clock_period = attotime::from_hz(device->clock());
+	chip->clock_period = ATTOTIME_IN_HZ(device->clock);
 
 	/* set the intial state */
 	chip->state = STATE_IDLE;
 
 	/* compute the ROM base or allocate a timer */
-	chip->rom = chip->rombase = *device->region();
+	chip->rom = chip->rombase = device->region;
 	if (chip->rom == NULL)
-		chip->timer = device->machine().scheduler().timer_alloc(FUNC(upd7759_slave_update), chip);
+		chip->timer = timer_alloc(device->machine, upd7759_slave_update, chip);
 
 	/* set the DRQ callback */
 	chip->drqcallback = intf->drqcallback;
@@ -677,7 +683,7 @@ static DEVICE_START( upd7759 )
 
 *************************************************************/
 
-void upd7759_reset_w(device_t *device, UINT8 data)
+void upd7759_reset_w(const device_config *device, UINT8 data)
 {
 	/* update the reset value */
 	upd7759_state *chip = get_safe_token(device);
@@ -685,14 +691,14 @@ void upd7759_reset_w(device_t *device, UINT8 data)
 	chip->reset = (data != 0);
 
 	/* update the stream first */
-	chip->channel->update();
+	stream_update(chip->channel);
 
 	/* on the falling edge, reset everything */
 	if (oldreset && !chip->reset)
 		upd7759_reset(chip);
 }
 
-void upd7759_start_w(device_t *device, UINT8 data)
+void upd7759_start_w(const device_config *device, UINT8 data)
 {
 	/* update the start value */
 	upd7759_state *chip = get_safe_token(device);
@@ -702,7 +708,7 @@ void upd7759_start_w(device_t *device, UINT8 data)
 	logerror("upd7759_start_w: %d->%d\n", oldstart, chip->start);
 
 	/* update the stream first */
-	chip->channel->update();
+	stream_update(chip->channel);
 
 	/* on the rising edge, if we're idle, start going, but not if we're held in reset */
 	if (chip->state == STATE_IDLE && !oldstart && chip->start && chip->reset)
@@ -711,7 +717,7 @@ void upd7759_start_w(device_t *device, UINT8 data)
 
 		/* for slave mode, start the timer going */
 		if (chip->timer)
-			chip->timer->adjust(attotime::zero);
+			timer_adjust_oneshot(chip->timer, attotime_zero, 0);
 	}
 }
 
@@ -724,7 +730,7 @@ WRITE8_DEVICE_HANDLER( upd7759_port_w )
 }
 
 
-int upd7759_busy_r(device_t *device)
+int upd7759_busy_r(const device_config *device)
 {
 	/* return /BUSY */
 	upd7759_state *chip = get_safe_token(device);
@@ -732,7 +738,7 @@ int upd7759_busy_r(device_t *device)
 }
 
 
-void upd7759_set_bank_base(device_t *device, UINT32 base)
+void upd7759_set_bank_base(const device_config *device, UINT32 base)
 {
 	upd7759_state *chip = get_safe_token(device);
 	chip->rom = chip->rombase + base;
@@ -750,7 +756,7 @@ DEVICE_GET_INFO( upd7759 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(upd7759_state);			break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(upd7759_state); 			break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( upd7759 );		break;
@@ -766,5 +772,3 @@ DEVICE_GET_INFO( upd7759 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(UPD7759, upd7759);

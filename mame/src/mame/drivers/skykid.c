@@ -13,45 +13,58 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/namco.h"
-#include "includes/skykid.h"
 
+extern UINT8 *skykid_textram, *skykid_videoram, *skykid_spriteram;
+
+/* from video/skykid.c */
+VIDEO_START( skykid );
+READ8_HANDLER( skykid_videoram_r );
+WRITE8_HANDLER( skykid_videoram_w );
+READ8_HANDLER( skykid_textram_r );
+WRITE8_HANDLER( skykid_textram_w );
+WRITE8_HANDLER( skykid_scroll_x_w );
+WRITE8_HANDLER( skykid_scroll_y_w );
+WRITE8_HANDLER( skykid_flipscreen_priority_w );
+VIDEO_UPDATE( skykid );
+PALETTE_INIT( skykid );
+
+
+static UINT8 inputport_selected;
 
 static WRITE8_HANDLER( inputport_select_w )
 {
-	skykid_state *state = space->machine().driver_data<skykid_state>();
 	if ((data & 0xe0) == 0x60)
-		state->m_inputport_selected = data & 0x07;
+		inputport_selected = data & 0x07;
 	else if ((data & 0xe0) == 0xc0)
 	{
-		coin_lockout_global_w(space->machine(), ~data & 1);
-		coin_counter_w(space->machine(), 0,data & 2);
-		coin_counter_w(space->machine(), 1,data & 4);
+		coin_lockout_global_w(~data & 1);
+		coin_counter_w(0,data & 2);
+		coin_counter_w(1,data & 4);
 	}
 }
 
 static READ8_HANDLER( inputport_r )
 {
-	skykid_state *state = space->machine().driver_data<skykid_state>();
-	switch (state->m_inputport_selected)
+	switch (inputport_selected)
 	{
 		case 0x00:	/* DSW B (bits 0-4) */
-			return (input_port_read(space->machine(), "DSWB") & 0xf8) >> 3;
+			return (input_port_read(space->machine, "DSWB") & 0xf8) >> 3;
 		case 0x01:	/* DSW B (bits 5-7), DSW A (bits 0-1) */
-			return ((input_port_read(space->machine(), "DSWB") & 0x07) << 2) | ((input_port_read(space->machine(), "DSWA") & 0xc0) >> 6);
+			return ((input_port_read(space->machine, "DSWB") & 0x07) << 2) | ((input_port_read(space->machine, "DSWA") & 0xc0) >> 6);
 		case 0x02:	/* DSW A (bits 2-6) */
-			return (input_port_read(space->machine(), "DSWA") & 0x3e) >> 1;
+			return (input_port_read(space->machine, "DSWA") & 0x3e) >> 1;
 		case 0x03:	/* DSW A (bit 7), DSW C (bits 0-3) */
-			return ((input_port_read(space->machine(), "DSWA") & 0x01) << 4) | (input_port_read(space->machine(), "BUTTON2") & 0x0f);
+			return ((input_port_read(space->machine, "DSWA") & 0x01) << 4) | (input_port_read(space->machine, "BUTTON2") & 0x0f);
 		case 0x04:	/* coins, start */
-			return input_port_read(space->machine(), "SYSTEM");
+			return input_port_read(space->machine, "SYSTEM");
 		case 0x05:	/* 2P controls */
-			return input_port_read(space->machine(), "P2");
+			return input_port_read(space->machine, "P2");
 		case 0x06:	/* 1P controls */
-			return input_port_read(space->machine(), "P1");
+			return input_port_read(space->machine, "P1");
 		default:
 			return 0xff;
 	}
@@ -59,75 +72,72 @@ static READ8_HANDLER( inputport_r )
 
 static WRITE8_HANDLER( skykid_led_w )
 {
-	set_led_status(space->machine(), 0,data & 0x08);
-	set_led_status(space->machine(), 1,data & 0x10);
+	set_led_status(0,data & 0x08);
+	set_led_status(1,data & 0x10);
 }
 
 static WRITE8_HANDLER( skykid_subreset_w )
 {
 	int bit = !BIT(offset,11);
-	cputag_set_input_line(space->machine(), "mcu", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine, "mcu", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( skykid_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", !BIT(offset,11));
+	memory_set_bank(space->machine, 1, !BIT(offset,11));
 }
 
 static WRITE8_HANDLER( skykid_irq_1_ctrl_w )
 {
-	skykid_state *state = space->machine().driver_data<skykid_state>();
 	int bit = !BIT(offset,11);
-	state->m_main_irq_mask = bit;
+	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
 	if (!bit)
-		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( skykid_irq_2_ctrl_w )
 {
-	skykid_state *state = space->machine().driver_data<skykid_state>();
 	int bit = !BIT(offset,13);
-	state->m_mcu_irq_mask = bit;
+	cpu_interrupt_enable(cputag_get_cpu(space->machine, "mcu"), bit);
 	if (!bit)
-		cputag_set_input_line(space->machine(), "mcu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "mcu", 0, CLEAR_LINE);
 }
 
 static MACHINE_START( skykid )
 {
-	skykid_state *state = machine.driver_data<skykid_state>();
 	/* configure the banks */
-	memory_configure_bank(machine, "bank1", 0, 2, machine.region("maincpu")->base() + 0x10000, 0x2000);
+	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0x10000, 0x2000);
 
-	state_save_register_global(machine, state->m_inputport_selected);
+	state_save_register_global(machine, inputport_selected);
 }
 
 
 
-static ADDRESS_MAP_START( skykid_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1")				/* banked ROM */
-	AM_RANGE(0x2000, 0x2fff) AM_READWRITE(skykid_videoram_r,skykid_videoram_w) AM_BASE_MEMBER(skykid_state, m_videoram)/* Video RAM (background) */
-	AM_RANGE(0x4000, 0x47ff) AM_READWRITE(skykid_textram_r,skykid_textram_w) AM_BASE_MEMBER(skykid_state, m_textram)	/* video RAM (text layer) */
-	AM_RANGE(0x4800, 0x5fff) AM_RAM AM_BASE_MEMBER(skykid_state, m_spriteram)	/* RAM + Sprite RAM */
+static ADDRESS_MAP_START( skykid_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READ(SMH_BANK(1))				/* banked ROM */
+	AM_RANGE(0x2000, 0x2fff) AM_READWRITE(skykid_videoram_r,skykid_videoram_w) AM_BASE(&skykid_videoram)/* Video RAM (background) */
+	AM_RANGE(0x4000, 0x47ff) AM_READWRITE(skykid_textram_r,skykid_textram_w) AM_BASE(&skykid_textram)	/* video RAM (text layer) */
+	AM_RANGE(0x4800, 0x5fff) AM_RAM AM_BASE(&skykid_spriteram)	/* RAM + Sprite RAM */
 	AM_RANGE(0x6000, 0x60ff) AM_WRITE(skykid_scroll_y_w)		/* Y scroll register map */
 	AM_RANGE(0x6200, 0x63ff) AM_WRITE(skykid_scroll_x_w)		/* X scroll register map */
-	AM_RANGE(0x6800, 0x6bff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
+	AM_RANGE(0x6800, 0x6bff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) AM_BASE(&namco_wavedata)/* PSG device, shared RAM */
 	AM_RANGE(0x7000, 0x7fff) AM_WRITE(skykid_irq_1_ctrl_w)		/* IRQ control */
 	AM_RANGE(0x7800, 0x7fff) AM_READ(watchdog_reset_r)			/* watchdog reset */
-	AM_RANGE(0x8000, 0xffff) AM_ROM					/* ROM */
+	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_ROM)					/* ROM */
 	AM_RANGE(0x8000, 0x8fff) AM_WRITE(skykid_subreset_w)		/* MCU control */
 	AM_RANGE(0x9000, 0x9fff) AM_WRITE(skykid_bankswitch_w)		/* Bankswitch control */
 	AM_RANGE(0xa000, 0xa001) AM_WRITE(skykid_flipscreen_priority_w)	/* flip screen & priority */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r, m6801_io_w)
+static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_BASE(&namco_wavedata)		/* PSG device, shared RAM */
 	AM_RANGE(0x2000, 0x3fff) AM_WRITE(watchdog_reset_w)		/* watchdog? */
 	AM_RANGE(0x4000, 0x7fff) AM_WRITE(skykid_irq_2_ctrl_w)
-	AM_RANGE(0x8000, 0xbfff) AM_ROM
+	AM_RANGE(0x8000, 0xbfff) AM_READ(SMH_ROM)
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_ROM
+	AM_RANGE(0xf000, 0xffff) AM_READ(SMH_ROM)
 ADDRESS_MAP_END
 
 
@@ -136,11 +146,11 @@ static READ8_HANDLER( readFF )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
-	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ(inputport_r)			/* input ports read */
-	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
-	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
-	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_WRITE(skykid_led_w)			/* lamps */
+static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ(inputport_r)			/* input ports read */
+	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
+	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
+	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_WRITE(skykid_led_w)			/* lamps */
 ADDRESS_MAP_END
 
 
@@ -427,61 +437,46 @@ static const namco_interface namco_config =
 	0					/* stereo */
 };
 
-static INTERRUPT_GEN( main_vblank_irq )
-{
-	skykid_state *state = device->machine().driver_data<skykid_state>();
-
-	if(state->m_main_irq_mask)
-		device_set_input_line(device, 0, ASSERT_LINE);
-}
 
 
-static INTERRUPT_GEN( mcu_vblank_irq )
-{
-	skykid_state *state = device->machine().driver_data<skykid_state>();
-
-	if(state->m_mcu_irq_mask)
-		device_set_input_line(device, 0, ASSERT_LINE);
-}
-
-
-static MACHINE_CONFIG_START( skykid, skykid_state )
+static MACHINE_DRIVER_START( skykid )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809,49152000/32)
-	MCFG_CPU_PROGRAM_MAP(skykid_map)
-	MCFG_CPU_VBLANK_INT("screen", main_vblank_irq)
+	MDRV_CPU_ADD("maincpu", M6809,49152000/32)
+	MDRV_CPU_PROGRAM_MAP(skykid_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_CPU_ADD("mcu", HD63701,49152000/8)	/* or compatible 6808 with extra instructions */
-	MCFG_CPU_PROGRAM_MAP(mcu_map)
-	MCFG_CPU_IO_MAP(mcu_port_map)
-	MCFG_CPU_VBLANK_INT("screen", mcu_vblank_irq)
+	MDRV_CPU_ADD("mcu", HD63701,49152000/8)	/* or compatible 6808 with extra instructions */
+	MDRV_CPU_PROGRAM_MAP(mcu_map)
+	MDRV_CPU_IO_MAP(mcu_port_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* we need heavy synch */
+	MDRV_QUANTUM_TIME(HZ(6000))	/* we need heavy synch */
 
-	MCFG_MACHINE_START(skykid)
+	MDRV_MACHINE_START(skykid)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60.606060)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(36*8, 28*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(skykid)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60.606060)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(36*8, 28*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(skykid)
-	MCFG_PALETTE_LENGTH(64*4+128*4+64*8)
+	MDRV_GFXDECODE(skykid)
+	MDRV_PALETTE_LENGTH(64*4+128*4+64*8)
 
-	MCFG_PALETTE_INIT(skykid)
-	MCFG_VIDEO_START(skykid)
+	MDRV_PALETTE_INIT(skykid)
+	MDRV_VIDEO_START(skykid)
+	MDRV_VIDEO_UPDATE(skykid)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
-	MCFG_SOUND_CONFIG(namco_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
+	MDRV_SOUND_CONFIG(namco_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( skykid )
@@ -642,7 +637,7 @@ static DRIVER_INIT( skykid )
 	int i;
 
 	/* unpack the third sprite ROM */
-	rom = machine.region("gfx3")->base() + 0x4000;
+	rom = memory_region(machine, "gfx3") + 0x4000;
 	for (i = 0;i < 0x2000;i++)
 	{
 		rom[i + 0x4000] = rom[i];		// sprite set #1, plane 3
@@ -659,4 +654,4 @@ GAME( 1985, skykidd,  skykid, skykid, skykid,   skykid,  ROT180, "Namco", "Sky K
 
 // no license text is displayed but the PCB was licensed by Namco for production by Sipem (formerly Sidam) with Namco supplying the Custom chips (MCU etc.)
 // the level select is handled in a much more user-friendly way in this set and the dip for it is inverted (although this is displayed incorrectly in the test mode)
-GAME( 1985, skykids,  skykid, skykid, skykids,  skykid,  ROT180, "Namco (Sipem license)", "Sky Kid (Sipem)", GAME_SUPPORTS_SAVE ) /* Uses CUS63 aka 63a1 */
+GAME( 1985, skykids,  skykid, skykid, skykids,  skykid,  ROT180, "Namco [Sipem license]", "Sky Kid (Sipem)", GAME_SUPPORTS_SAVE ) /* Uses CUS63 aka 63a1 */

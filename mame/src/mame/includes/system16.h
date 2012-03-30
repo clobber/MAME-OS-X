@@ -1,118 +1,94 @@
+/******************** NEW STUFF *******************/
 
-// later, this might be merged with segas1x_state in segas16.h
+#include "video/segaic16.h"
+#include "sound/upd7759.h"
 
-class segas1x_bootleg_state : public driver_device
+/*----------- defined in video/segahang.c -----------*/
+
+VIDEO_START( hangon );
+VIDEO_START( sharrier );
+VIDEO_UPDATE( hangon );
+
+/*----------- defined in video/segas16a.c -----------*/
+
+VIDEO_START( system16a );
+VIDEO_UPDATE( system16a );
+
+/*----------- defined in video/segas16b.c -----------*/
+
+VIDEO_START( system16b );
+VIDEO_START( timscanr );
+VIDEO_UPDATE( system16b );
+
+/*----------- defined in video/segas18.c -----------*/
+
+VIDEO_START( system18 );
+VIDEO_UPDATE( system18 );
+
+void system18_set_grayscale(running_machine *machine, int enable);
+void system18_set_vdp_enable(running_machine *machine, int eanble);
+void system18_set_vdp_mixing(running_machine *machine, int mixing);
+
+/*----------- defined in video/segaorun.c -----------*/
+
+VIDEO_START( outrun );
+VIDEO_START( shangon );
+VIDEO_UPDATE( outrun );
+VIDEO_UPDATE( shangon );
+
+/*----------- defined in video/segaxbd.c -----------*/
+
+VIDEO_START( xboard );
+VIDEO_UPDATE( xboard );
+void xboard_set_road_priority(int priority);
+
+/*----------- defined in video/segaybd.c -----------*/
+
+VIDEO_START( yboard );
+VIDEO_UPDATE( yboard );
+
+
+/*----------- defined in machine/s16fd.c -----------*/
+
+void *fd1094_get_decrypted_base(void);
+void fd1094_machine_init(const device_config *device);
+void fd1094_driver_init(running_machine *machine, const char* tag, void (*set_decrypted)(running_machine *, UINT8 *));
+
+/*----------- defined in machine/system16.c -----------*/
+
+/* sound */
+extern const upd7759_interface sys16_upd7759_interface;
+
+extern int sys18_sound_info[4*2];
+
+typedef struct _sys16_patch sys16_patch;
+struct _sys16_patch
 {
-public:
-	segas1x_bootleg_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 *    m_bg0_tileram;
-	UINT16 *    m_bg1_tileram;
-	UINT16 *    m_textram;
-	UINT16 *    m_tileram;
-
-	UINT16 m_coinctrl;
-
-	/* game specific */
-	int m_passht4b_io1_val;
-	int m_passht4b_io2_val;
-	int m_passht4b_io3_val;
-
-	int m_beautyb_unkx;
-
-	int m_shinobl_kludge;
-
-	UINT16* m_goldnaxeb2_fgpage;
-	UINT16* m_goldnaxeb2_bgpage;
-
-	int m_eswat_tilebank0;
-
-
-	/* video-related */
-	tilemap_t *m_background;
-	tilemap_t *m_foreground;
-	tilemap_t *m_text_layer;
-	tilemap_t *m_background2;
-	tilemap_t *m_foreground2;
-	tilemap_t *m_bg_tilemaps[2];
-	tilemap_t *m_text_tilemap;
-	double m_weights[2][3][6];
-
-	int m_spritebank_type;
-	int m_back_yscroll;
-	int m_fore_yscroll;
-	int m_text_yscroll;
-
-	int m_bg1_trans; // alien syn + sys18
-
-	int m_tile_bank1;
-	int m_tile_bank0;
-	int m_bg_page[4];
-	int m_fg_page[4];
-
-	UINT16 m_datsu_page[4];
-
-	int m_bg2_page[4];
-	int m_fg2_page[4];
-
-	int m_old_bg_page[4];
-	int m_old_fg_page[4];
-	int m_old_tile_bank1;
-	int m_old_tile_bank0;
-	int m_old_bg2_page[4];
-	int m_old_fg2_page[4];
-
-	int m_bg_scrollx;
-	int m_bg_scrolly;
-	int m_fg_scrollx;
-	int m_fg_scrolly;
-	UINT16 m_tilemapselect;
-
-	int m_textlayer_lo_min;
-	int m_textlayer_lo_max;
-	int m_textlayer_hi_min;
-	int m_textlayer_hi_max;
-
-	int m_tilebank_switch;
-
-
-	/* sound-related */
-	int m_sample_buffer;
-	int m_sample_select;
-
-	UINT8 *m_soundbank_ptr;		/* Pointer to currently selected portion of ROM */
-
-	/* sys18 */
-	UINT8 *m_sound_bank;
-	UINT16 *m_splittab_bg_x;
-	UINT16 *m_splittab_bg_y;
-	UINT16 *m_splittab_fg_x;
-	UINT16 *m_splittab_fg_y;
-	int     m_sound_info[4*2];
-	int     m_refreshenable;
-	int     m_system18;
-
-	UINT8 *m_decrypted_region;	// goldnaxeb1 & bayrouteb1
-
-	/* devices */
-	device_t *m_maincpu;
-	device_t *m_soundcpu;
+	offs_t offset;
+	UINT8 data;
 };
+
+extern void sys16_patch_code( running_machine *machine, const sys16_patch *patch, int count );
+
+extern MACHINE_RESET( sys16_onetime );
+
+GFXDECODE_EXTERN( sys16 );
 
 /*----------- defined in video/system16.c -----------*/
 
-extern VIDEO_START( s16a_bootleg );
-extern VIDEO_START( s16a_bootleg_wb3bl );
-extern VIDEO_START( s16a_bootleg_shinobi );
-extern VIDEO_START( s16a_bootleg_passsht );
-extern SCREEN_UPDATE_IND16( s16a_bootleg );
-extern SCREEN_UPDATE_IND16( s16a_bootleg_passht4b );
-extern WRITE16_HANDLER( s16a_bootleg_tilemapselect_w );
-extern WRITE16_HANDLER( s16a_bootleg_bgscrolly_w );
-extern WRITE16_HANDLER( s16a_bootleg_bgscrollx_w );
-extern WRITE16_HANDLER( s16a_bootleg_fgscrolly_w );
-extern WRITE16_HANDLER( s16a_bootleg_fgscrollx_w );
+extern VIDEO_START( system16a_bootleg );
+extern VIDEO_START( system16a_bootleg_wb3bl );
+extern VIDEO_START( system16a_bootleg_shinobi );
+extern VIDEO_START( system16a_bootleg_passsht );
+extern VIDEO_UPDATE( system16a_bootleg );
+extern VIDEO_UPDATE( system16a_bootleg_passht4b );
+extern WRITE16_HANDLER( system16a_bootleg_tilemapselect_w );
+extern WRITE16_HANDLER( system16a_bootleg_bgscrolly_w );
+extern WRITE16_HANDLER( system16a_bootleg_bgscrollx_w );
+extern WRITE16_HANDLER( system16a_bootleg_fgscrolly_w );
+extern WRITE16_HANDLER( system16a_bootleg_fgscrollx_w );
+extern UINT16* system16a_bootleg_bg0_tileram;
+extern UINT16* system16a_bootleg_bg1_tileram;
 
 /* video hardware */
 extern WRITE16_HANDLER( sys16_tileram_w );
@@ -120,8 +96,53 @@ extern WRITE16_HANDLER( sys16_textram_w );
 
 /* "normal" video hardware */
 extern VIDEO_START( system16 );
-extern SCREEN_UPDATE_IND16( system16 );
+extern VIDEO_UPDATE( system16 );
 
 /* system18 video hardware */
 extern VIDEO_START( system18old );
-extern SCREEN_UPDATE_IND16( system18old );
+extern VIDEO_UPDATE( system18old );
+
+extern UINT16 *sys16_tileram;
+extern UINT16 *sys16_textram;
+extern UINT16 *sys16_spriteram;
+
+extern int sys16_sh_shadowpal;
+extern int sys16_MaxShadowColors;
+
+/* video driver constants (vary with game) */
+extern int sys16_sprxoffset;
+extern int sys16_bgxoffset;
+extern int sys16_fgxoffset;
+extern const int *sys16_obj_bank;
+extern int sys16_textlayer_lo_min;
+extern int sys16_textlayer_lo_max;
+extern int sys16_textlayer_hi_min;
+extern int sys16_textlayer_hi_max;
+extern int sys16_bg1_trans;
+extern int sys16_bg_priority_mode;
+extern int sys16_fg_priority_mode;
+extern int sys16_bg_priority_value;
+extern int sys16_fg_priority_value;
+extern int sys16_tilebank_switch;
+extern int sys16_rowscroll_scroll;
+extern int shinobl_kludge;
+
+/* video driver registers */
+extern int sys16_refreshenable;
+extern int sys16_tile_bank0;
+extern int sys16_tile_bank1;
+extern int sys16_bg_scrollx, sys16_bg_scrolly;
+extern int sys16_bg_page[4];
+extern int sys16_fg_scrollx, sys16_fg_scrolly;
+extern int sys16_fg_page[4];
+
+extern int sys16_bg2_page[4];
+extern int sys16_fg2_page[4];
+
+extern int sys18_bg2_active;
+extern int sys18_fg2_active;
+extern UINT16 *sys18_splittab_bg_x;
+extern UINT16 *sys18_splittab_bg_y;
+extern UINT16 *sys18_splittab_fg_x;
+extern UINT16 *sys18_splittab_fg_y;
+

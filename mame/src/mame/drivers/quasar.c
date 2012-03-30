@@ -10,8 +10,12 @@
   ------
   - Sound (missing invader effect - still not sure all noise in correct places)
   - Phase 3 - seems awfully hard - dip settings ?
-  - Hook up Coin Counter
-  - Test/Service Mode - not working?
+
+
+  - Make Asto Wars to boot
+  - Make Cat'n Mouse to boot
+    (it jumps to unpopulated rom, check jump at 0x2e62 and 0x4076)
+  - ...
 
 ************************************************************************
 
@@ -25,14 +29,53 @@ Quasar by Zaccaria (1980)
 
 I8085 Sound Board
 
+************************************************************************
+
+Zaccaria "Cat 'N Mouse" 1982
+
+similar to "Quasar" execept it uses an 82s100 for color table lookup
+and has a larger program prom
+
+
+Cat N Mouse (Zaccaria 1982)
+
+CPU Board
+
+               2650    7b 6b 5b 3b 2b
+                       7c 6c 5c 3c 2c
+
+                       2636 2636 2636
+        11g 10g 8g
+     14l
+                  clr
+
+Sound Board 1b11107
+
+6802
+6821
+8910
+
 ************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "cvs.h"
 #include "cpu/s2650/s2650.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/dac.h"
 #include "video/s2636.h"
-#include "includes/cvs.h"
+
+
+PALETTE_INIT( quasar );
+VIDEO_UPDATE( quasar );
+VIDEO_START( quasar );
+
+
+extern UINT8 *quasar_effectram;
+extern UINT8 quasar_effectcontrol;
+
+static UINT8 page = 0;
+static UINT8 IOpage;
+
 
 /************************************************************************
 
@@ -46,50 +89,43 @@ I8085 Sound Board
 
 static WRITE8_HANDLER( video_page_select_w )
 {
-	quasar_state *state = space->machine().driver_data<quasar_state>();
-	state->m_page = offset & 0x03;
+	page = offset & 0x03;
 }
 
 static WRITE8_HANDLER( io_page_select_w )
 {
-	quasar_state *state = space->machine().driver_data<quasar_state>();
-	state->m_io_page = offset & 0x03;
+	IOpage = offset & 0x03;
 }
 
 static WRITE8_HANDLER( quasar_video_w )
 {
-	quasar_state *state = space->machine().driver_data<quasar_state>();
-
-	switch (state->m_page)
+	switch (page)
 	{
-	case 0:  state->m_video_ram[offset] = data; break;
-	case 1:  state->m_color_ram[offset] = data & 7; break;	// 3 bits of ram only - 3 x 2102
-	case 2:  state->m_effectram[offset] = data; break;
-	case 3:  state->m_effectcontrol = data; break;
+	case 0:  cvs_video_ram[offset] = data; break;
+	case 1:  cvs_color_ram[offset] = data & 7; break;	// 3 bits of ram only - 3 x 2102
+	case 2:  quasar_effectram[offset] = data; break;
+	case 3:  quasar_effectcontrol = data; break;
 	}
 }
 
 static READ8_HANDLER( quasar_IO_r )
 {
-	quasar_state *state = space->machine().driver_data<quasar_state>();
 	UINT8 ans = 0;
 
-	switch (state->m_io_page)
-	{
-	case 0:  ans = input_port_read(space->machine(), "IN0"); break;
-	case 1:  ans = input_port_read(space->machine(), "IN1"); break;
-	case 2:  ans = input_port_read(space->machine(), "DSW0"); break;
-	case 3:  ans = input_port_read(space->machine(), "DSW1"); break;
-	}
+	if (IOpage == 0) ans = input_port_read(space->machine, "IN0");
+	if (IOpage == 1) ans = input_port_read(space->machine, "IN1");
+	if (IOpage == 2) ans = input_port_read(space->machine, "DSW0");
+	if (IOpage == 3) ans = input_port_read(space->machine, "DSW1");
 
 	return ans;
 }
 
 static WRITE8_HANDLER( quasar_bullet_w )
 {
-	quasar_state *state = space->machine().driver_data<quasar_state>();
-	state->m_bullet_ram[offset] = (data ^ 0xff);
+	cvs_bullet_ram[offset] = (data ^ 0xff);
 }
+
+//static int sh_page=0;
 
 static WRITE8_HANDLER( quasar_sh_command_w )
 {
@@ -104,7 +140,7 @@ static WRITE8_HANDLER( quasar_sh_command_w )
 
 static READ8_HANDLER( quasar_sh_command_r )
 {
-	return soundlatch_r(space, 0) + (input_port_read(space->machine(), "DSW2") & 0x30);
+	return soundlatch_r(space, 0) + (input_port_read(space->machine, "DSW2") & 0x30);
 }
 
 static READ8_HANDLER( audio_t1_r )
@@ -114,26 +150,26 @@ static READ8_HANDLER( audio_t1_r )
 
 // memory map taken from the manual
 
-static ADDRESS_MAP_START( quasar, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( quasar, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x13ff) AM_ROM
-	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_bullet_ram_or_palette_r, quasar_bullet_w) AM_BASE_MEMBER(quasar_state, m_bullet_ram)
-	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_0_or_character_ram_r, cvs_s2636_0_or_character_ram_w)
-	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_1_or_character_ram_r, cvs_s2636_1_or_character_ram_w)
-	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_2_or_character_ram_r, cvs_s2636_2_or_character_ram_w)
-	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(cvs_video_or_color_ram_r, quasar_video_w) AM_BASE_MEMBER(quasar_state, m_video_ram)
+	AM_RANGE(0x1400, 0x14ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_bullet_ram_or_palette_r, quasar_bullet_w) AM_BASE(&cvs_bullet_ram)
+	AM_RANGE(0x1500, 0x15ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_0_or_character_ram_r, cvs_s2636_0_or_character_ram_w) AM_BASE(&cvs_s2636_0_ram)
+	AM_RANGE(0x1600, 0x16ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_1_or_character_ram_r, cvs_s2636_1_or_character_ram_w) AM_BASE(&cvs_s2636_1_ram)
+	AM_RANGE(0x1700, 0x17ff) AM_MIRROR(0x6000) AM_READWRITE(cvs_s2636_2_or_character_ram_r, cvs_s2636_2_or_character_ram_w) AM_BASE(&cvs_s2636_2_ram)
+	AM_RANGE(0x1800, 0x1bff) AM_MIRROR(0x6000) AM_READWRITE(cvs_video_or_color_ram_r, quasar_video_w) AM_BASE(&cvs_video_ram)
 	AM_RANGE(0x1c00, 0x1fff) AM_MIRROR(0x6000) AM_RAM
 	AM_RANGE(0x2000, 0x33ff) AM_ROM
 	AM_RANGE(0x4000, 0x53ff) AM_ROM
 	AM_RANGE(0x6000, 0x73ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quasar_io, AS_IO, 8 )
+static ADDRESS_MAP_START( quasar_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x03) AM_READWRITE(quasar_IO_r, video_page_select_w)
 	AM_RANGE(0x08, 0x0b) AM_WRITE(io_page_select_w)
 	AM_RANGE(S2650_DATA_PORT,  S2650_DATA_PORT) AM_READWRITE(cvs_collision_clear, quasar_sh_command_w)
-	AM_RANGE(S2650_CTRL_PORT,  S2650_CTRL_PORT) AM_READ(cvs_collision_r) AM_WRITENOP
+	AM_RANGE(S2650_CTRL_PORT,  S2650_CTRL_PORT) AM_READWRITE(cvs_collision_r, SMH_NOP)
 	AM_RANGE(S2650_SENSE_PORT, S2650_SENSE_PORT) AM_READ_PORT("SENSE")
-	AM_RANGE(S2650_FO_PORT, S2650_FO_PORT) AM_RAM AM_BASE_MEMBER(quasar_state, m_fo_state)
+	AM_RANGE(S2650_FO_PORT, S2650_FO_PORT) AM_RAM AM_BASE(&cvs_fo_state)
 ADDRESS_MAP_END
 
 /*************************************
@@ -142,15 +178,15 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x7f) AM_RAM
 	AM_RANGE(0x80, 0x80) AM_READ(quasar_sh_command_r)
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(audio_t1_r)
-	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_signed_w)
+  	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("dac", dac_signed_w)
 ADDRESS_MAP_END
 
 /************************************************************************
@@ -160,7 +196,7 @@ ADDRESS_MAP_END
 ************************************************************************/
 
 static INPUT_PORTS_START( quasar )
-	PORT_START("IN0")
+	PORT_START("IN0")	/* Controls 0 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 )
@@ -168,19 +204,19 @@ static INPUT_PORTS_START( quasar )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE )			/* test switch */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 )			/* switch collaudo */
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )			/* table (from manual) */
+	PORT_START("IN1")	/* Controls 1 */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON4 )			/* tavalino */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_COCKTAIL
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_COCKTAIL
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_COCKTAIL
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )			/* count enable (from manual) */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START3 )				/* count enable */
 
-	PORT_START("DSW0")
+	PORT_START("DSW0")	/* DSW0 */
 	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Coin_A ) )			/* confirmed */
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_1C ) )
@@ -203,7 +239,7 @@ static INPUT_PORTS_START( quasar )
 	PORT_DIPSETTING(    0x00, "Collisions excluded" )
 	PORT_DIPSETTING(    0x80, "Collisions included" )
 
-	PORT_START("DSW1")
+	PORT_START("DSW1")	/* DSW1 */
 	PORT_DIPNAME( 0x07, 0x01, "High Score" )
 	PORT_DIPSETTING(    0x00, "No H.S." ) // this option only wants bit 0 OFF
 	PORT_DIPSETTING(    0x01, "Normal H.S." )
@@ -224,10 +260,10 @@ static INPUT_PORTS_START( quasar )
 	PORT_DIPSETTING(    0x80, "Stop at edge" )
 	PORT_DIPSETTING(    0x00, "Wrap Around" )
 
-	PORT_START("SENSE")
+	PORT_START("SENSE")	/* SENSE */
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
 
-	PORT_START("DSW2")
+	PORT_START("DSW2")	/* Sound DIP switch */
 #if 0
 	PORT_DIPNAME( 0x0f, 0x00, "Noise to play" )
 	PORT_DIPSETTING(    0x00, "00" )
@@ -275,101 +311,50 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( quasar_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x03);
+	generic_pulse_irq_line_and_vector(device,0,0x03);
 }
 
-static const s2636_interface s2636_0_config =
-{
-	"screen",
-	0x100,
-	CVS_S2636_Y_OFFSET, CVS_S2636_X_OFFSET,
-	NULL
-};
-
-static const s2636_interface s2636_1_config =
-{
-	"screen",
-	0x100,
-	CVS_S2636_Y_OFFSET, CVS_S2636_X_OFFSET,
-	NULL
-};
-
-static const s2636_interface s2636_2_config =
-{
-	"screen",
-	0x100,
-	CVS_S2636_Y_OFFSET, CVS_S2636_X_OFFSET,
-	NULL
-};
 
 // ****************************************
 // Quasar S2650 Main CPU, I8035 sound board
 // ****************************************
 
-static MACHINE_START( quasar )
-{
-	quasar_state *state = machine.driver_data<quasar_state>();
+static MACHINE_DRIVER_START( quasar )
 
-	MACHINE_START_CALL(cvs);
+	MDRV_CPU_ADD("maincpu", S2650, 14318000/4)	/* 14 mhz crystal divide by 4 on board */
+	MDRV_CPU_PROGRAM_MAP(quasar)
+	MDRV_CPU_IO_MAP(quasar_io)
+	MDRV_CPU_VBLANK_INT("screen", quasar_interrupt)
 
-	/* register state save */
-	state->save_item(NAME(state->m_effectcontrol));
-	state->save_item(NAME(state->m_page));
-	state->save_item(NAME(state->m_io_page));
-}
+	MDRV_CPU_ADD("soundcpu",I8035,6000000)			/* 6MHz crystal divide by 15 in CPU */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_portmap)
 
-static MACHINE_RESET( quasar )
-{
-	quasar_state *state = machine.driver_data<quasar_state>();
+	MDRV_MACHINE_START( cvs )
 
-	MACHINE_RESET_CALL(cvs);
-
-	state->m_effectcontrol = 0;
-	state->m_page = 0;
-	state->m_io_page = 8;
-}
-
-static MACHINE_CONFIG_START( quasar, quasar_state )
-
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", S2650, 14318000/4)	/* 14 mhz crystal divide by 4 on board */
-	MCFG_CPU_PROGRAM_MAP(quasar)
-	MCFG_CPU_IO_MAP(quasar_io)
-	MCFG_CPU_VBLANK_INT("screen", quasar_interrupt)
-
-	MCFG_CPU_ADD("soundcpu",I8035,6000000)			/* 6MHz crystal divide by 15 in CPU */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_portmap)
-
-	MCFG_MACHINE_START(quasar)
-	MCFG_MACHINE_RESET(quasar)
-
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)							/* From dot clock */
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(1*8+1, 29*8-1, 2*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(quasar)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(50)							/* From dot clock */
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(1*8+1, 29*8-1, 2*8, 32*8-1)
 
-	MCFG_GFXDECODE(quasar)
-	MCFG_PALETTE_LENGTH((64+1)*8+(4*256))
+	MDRV_GFXDECODE(quasar)
+	MDRV_PALETTE_LENGTH((64+1)*8+(4*256))
 
-	MCFG_S2636_ADD("s2636_0", s2636_0_config)
-	MCFG_S2636_ADD("s2636_1", s2636_1_config)
-	MCFG_S2636_ADD("s2636_2", s2636_2_config)
-
-	MCFG_PALETTE_INIT(quasar)
-	MCFG_VIDEO_START(quasar)
+	MDRV_PALETTE_INIT(quasar)
+	MDRV_VIDEO_START(quasar)
+	MDRV_VIDEO_UPDATE(quasar)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 ROM_START( quasar )
 	ROM_REGION( 0x8000, "maincpu", 0 )
@@ -431,6 +416,11 @@ ROM_START( quasara )
 	ROM_LOAD( "12m_q.bin",    0x0000, 0x0200, CRC(1ab8633d) SHA1(3aed29f2326676a8d8a5de6f6bb923b6510896d8) )
 ROM_END
 
+static DRIVER_INIT( quasar )
+{
+	page = 0;
+	IOpage = 8;
+}
 
-GAME( 1980, quasar,        0, quasar,   quasar,   0, ROT90, "Zelco / Zaccaria", "Quasar",             GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1980, quasara,  quasar, quasar,   quasar,   0, ROT90, "Zelco / Zaccaria", "Quasar (Alternate)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, quasar,        0, quasar,   quasar,   quasar, ROT90, "Zelco / Zaccaria", "Quasar",             GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1980, quasara,  quasar, quasar,   quasar,   quasar, ROT90, "Zelco / Zaccaria", "Quasar (Alternate)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

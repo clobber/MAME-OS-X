@@ -12,6 +12,7 @@
 #ifndef __34010OPS_H__
 #define __34010OPS_H__
 
+#include "cpuintrf.h"
 
 /* Size of the memory buffer allocated for the shiftr register */
 #define SHIFTREG_SIZE			(8 * 512 * sizeof(UINT16))
@@ -22,20 +23,20 @@
     MEMORY I/O MACROS
 ***************************************************************************/
 
-#define TMS34010_RDMEM(T,A)			((unsigned)(T)->program->read_byte (A))
-#define TMS34010_RDMEM_WORD(T,A)	((unsigned)(T)->program->read_word (A))
+#define TMS34010_RDMEM(T,A)			((unsigned)memory_read_byte_16le ((T)->program, A))
+#define TMS34010_RDMEM_WORD(T,A)	((unsigned)memory_read_word_16le ((T)->program, A))
 INLINE UINT32 TMS34010_RDMEM_DWORD(tms34010_state *tms, offs_t A)
 {
-	UINT32 result = tms->program->read_word(A);
-	return result | (tms->program->read_word(A+2)<<16);
+	UINT32 result = memory_read_word_16le(tms->program, A);
+	return result | (memory_read_word_16le(tms->program, A+2)<<16);
 }
 
-#define TMS34010_WRMEM(T,A,V)		((T)->program->write_byte(A,V))
-#define TMS34010_WRMEM_WORD(T,A,V)	((T)->program->write_word(A,V))
+#define TMS34010_WRMEM(T,A,V)		(memory_write_byte_16le((T)->program, A,V))
+#define TMS34010_WRMEM_WORD(T,A,V)	(memory_write_word_16le((T)->program, A,V))
 INLINE void TMS34010_WRMEM_DWORD(tms34010_state *tms, offs_t A,UINT32 V)
 {
-	tms->program->write_word(A,V);
-	tms->program->write_word(A+2,V>>16);
+	memory_write_word_16le(tms->program, A,V);
+	memory_write_word_16le(tms->program, A+2,V>>16);
 }
 
 
@@ -43,8 +44,8 @@ INLINE void TMS34010_WRMEM_DWORD(tms34010_state *tms, offs_t A,UINT32 V)
 /* IO registers accessor */
 #define IOREG(T,reg)				((T)->IOregs[reg])
 #define SMART_IOREG(T,reg)			((T)->IOregs[(T)->is_34020 ? (int)REG020_##reg : (int)REG_##reg])
-#define PBH(T)						(IOREG(T, REG_CONTROL) & 0x0100)
-#define PBV(T)						(IOREG(T, REG_CONTROL) & 0x0200)
+#define PBH(T) 						(IOREG(T, REG_CONTROL) & 0x0100)
+#define PBV(T) 						(IOREG(T, REG_CONTROL) & 0x0200)
 
 
 
@@ -52,10 +53,10 @@ INLINE void TMS34010_WRMEM_DWORD(tms34010_state *tms, offs_t A,UINT32 V)
     FIELD WRITE MACROS
 ***************************************************************************/
 
-#define WFIELDMAC(T,MASK,MAX)														\
-	UINT32 shift = offset & 0x0f;   												\
+#define WFIELDMAC(T,MASK,MAX) 														\
+	UINT32 shift = offset & 0x0f;     												\
 	UINT32 masked_data = data & (MASK);												\
-	UINT32 old;																		\
+	UINT32 old;				   														\
 																					\
 	offset = TOBYTE(offset & 0xfffffff0);											\
 																					\
@@ -66,14 +67,14 @@ INLINE void TMS34010_WRMEM_DWORD(tms34010_state *tms, offs_t A,UINT32 V)
 	}																				\
 	else																			\
 	{																				\
-		old = (UINT32)TMS34010_RDMEM_WORD(T, offset) & ~((MASK) << shift);			\
+		old = (UINT32)TMS34010_RDMEM_WORD(T, offset) & ~((MASK) << shift); 			\
 		TMS34010_WRMEM_WORD(T, offset, ((masked_data & (MASK)) << shift) | old);		\
 	}																				\
 
 #define WFIELDMAC_BIG(T,MASK,MAX)														\
-	UINT32 shift = offset & 0x0f;   												\
+	UINT32 shift = offset & 0x0f;     												\
 	UINT32 masked_data = data & (MASK);												\
-	UINT32 old;																		\
+	UINT32 old;				   														\
 																					\
 	offset = TOBYTE(offset & 0xfffffff0);											\
 																					\

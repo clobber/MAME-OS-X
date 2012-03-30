@@ -1,4 +1,5 @@
-#include "emu.h"
+#include <stdio.h>
+#include <string.h>
 #include "cpu/pdp1/tx0.h"
 
 CPU_DISASSEMBLE( tx0_64kw )
@@ -6,7 +7,7 @@ CPU_DISASSEMBLE( tx0_64kw )
 	int md;
 	int x;
 
-	md = oprom[0] << 24 | oprom[1] << 16 | oprom[2] << 8 | oprom[3];
+	md = *((UINT32 *) oprom);
 
 	x = md & 0177777;
 	switch (md >> 16)
@@ -32,7 +33,7 @@ CPU_DISASSEMBLE( tx0_8kw )
 	int md;
 	int x;
 
-	md = oprom[0] << 24 | oprom[1] << 16 | oprom[2] << 8 | oprom[3];
+	md = *((UINT32 *) oprom);
 
 	x = md & 0017777;
 	switch (md >> 13)

@@ -72,15 +72,13 @@
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "machine/6850acia.h"
 #include "machine/meters.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/upd7759.h"
 #include "sound/ay8910.h"
-#include "machine/nvram.h"
-
 
 /*
     Defines
@@ -90,10 +88,52 @@
 
 
 /*
+    Globals
+*/
+static UINT8 bank[4];
+static UINT8 *work_ram;
+static UINT8 *video_ram;
+static UINT8 h_scroll;
+static UINT8 v_scroll;
+static UINT8 flip_8;
+static UINT8 flip_22;
+static UINT8 videomode;
+
+/* UART source/sinks */
+static UINT8 z80_m6809_line;
+static UINT8 m6809_z80_line;
+static UINT8 data_r;
+static UINT8 data_t;
+
+static int irq_state;
+static int acia_irq;
+static int vblank_irq;
+static int blitter_irq;
+
+static UINT8 z80_int;
+static UINT8 z80_inten;
+
+/* EM and lamps stuff */
+static UINT32 meter_latch;
+static UINT32 mux_input;
+static UINT32 mux_outputlatch;
+
+/*
     Function prototypes
 */
-INLINE void z80_bank(running_machine &machine, int num, int data);
+INLINE void z80_bank(running_machine *machine, int num, int data);
 
+
+static void update_irqs(running_machine *machine)
+{
+	int newstate = blitter_irq || vblank_irq || acia_irq;
+
+	if (newstate != irq_state)
+	{
+		irq_state = newstate;
+		cputag_set_input_line(machine, "maincpu", 0, irq_state ? ASSERT_LINE : CLEAR_LINE);
+	}
+}
 
 /***************************************************************************
 
@@ -137,9 +177,9 @@ typedef union
 #define MODE_BITTOBYTE	0x04
 #define MODE_PALREMAP	0x10
 
-#define CMPFUNC_LT  	0x01
-#define CMPFUNC_EQ  	0x02
-#define CMPFUNC_GT  	0x04
+#define CMPFUNC_LT    	0x01
+#define CMPFUNC_EQ    	0x02
+#define CMPFUNC_GT    	0x04
 #define CMPFUNC_BEQ		0x08
 #define CMPFUNC_LOG0	0x10
 #define CMPFUNC_LOG1	0x20
@@ -149,7 +189,7 @@ typedef union
 /*
     Blitter state
 */
-struct blitter_t
+static struct
 {
 	ADDR_REG	program;
 
@@ -166,14 +206,14 @@ struct blitter_t
 	UINT8		innercnt;
 	UINT8		step;
 	UINT8		pattern;
-};
+} blitter;
 
 #define LOOPTYPE ( ( blitter.command&0x60 ) >> 5 )
 
 /*
     MUSIC Semiconductor TR9C1710 RAMDAC or equivalent
 */
-struct ramdac_t
+static struct
 {
 	UINT8	addr_w;
 	UINT8	addr_r;
@@ -187,32 +227,7 @@ struct ramdac_t
 	/* Access counts */
 	UINT8	count_r;
 	UINT8	count_w;
-};
-
-
-struct fdc_t
-{
-	UINT8	MSR;
-
-	int		side;
-	int		track;
-	int		sector;
-	int		number;
-	int		stop_track;
-	int		setup_read;
-
-	int		byte_pos;
-	int		offset;
-
-	int		phase;
-	int		next_phase;
-	int		cmd_len;
-	int		cmd_cnt;
-	int		res_len;
-	int		res_cnt;
-	UINT8	cmd[10];
-	UINT8	results[8];
-};
+} ramdac;
 
 
 #define BLUE_0 0
@@ -235,44 +250,6 @@ struct fdc_t
 #define RED_5 ( 5 << 5 )
 #define RED_6 ( 6 << 5 )
 #define RED_7 ( 7 << 5 )
-
-class bfcobra_state : public driver_device
-{
-public:
-	bfcobra_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_bank_data[4];
-	UINT8 *m_work_ram;
-	UINT8 *m_video_ram;
-	UINT8 m_h_scroll;
-	UINT8 m_v_scroll;
-	UINT8 m_flip_8;
-	UINT8 m_flip_22;
-	UINT8 m_videomode;
-	UINT8 m_z80_m6809_line;
-	UINT8 m_m6809_z80_line;
-	UINT8 m_data_r;
-	UINT8 m_data_t;
-	int m_irq_state;
-	int m_acia_irq;
-	int m_vblank_irq;
-	int m_blitter_irq;
-	UINT8 m_z80_int;
-	UINT8 m_z80_inten;
-	UINT32 m_meter_latch;
-	UINT32 m_mux_input;
-	UINT32 m_mux_outputlatch;
-	UINT8 m_col4bit[16];
-	UINT8 m_col3bit[16];
-	UINT8 m_col8bit[256];
-	UINT8 m_col7bit[256];
-	UINT8 m_col6bit[256];
-	struct blitter_t m_blitter;
-	struct ramdac_t m_ramdac;
-	struct fdc_t m_fdc;
-};
-
 
 static const UINT8 col4bit_default[16]=
 {
@@ -314,34 +291,37 @@ static const UINT8 col3bit_default[16]=
 	RED_7 | GREEN_7 | BLUE_3
 };
 
+static UINT8 col4bit[16];
+static UINT8 col3bit[16];
+static UINT8 col8bit[256];
+static UINT8 col7bit[256];
+static UINT8 col6bit[256];
 static const UINT8 col76index[] = {0, 2, 4, 7};
 
 
 static VIDEO_START( bfcobra )
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
 	int i;
 
-	memcpy(state->m_col4bit, col4bit_default, sizeof(state->m_col4bit));
-	memcpy(state->m_col3bit, col3bit_default, sizeof(state->m_col3bit));
+	memcpy(col4bit, col4bit_default, sizeof(col4bit));
+	memcpy(col3bit, col3bit_default, sizeof(col3bit));
 	for (i = 0; i < 256; ++i)
 	{
 		UINT8 col;
 
-		state->m_col8bit[i] = i;
+		col8bit[i] = i;
 		col = i & 0x7f;
 		col = (col & 0x1f) | (col76index[ ( (col & 0x60) >> 5 ) & 3] << 5);
-		state->m_col7bit[i] = col;
+		col7bit[i] = col;
 
 		col = (col & 3) | (col76index[( (col & 0x0c) >> 2) & 3] << 2 ) |
 			  (col76index[( (col & 0x30) >> 4) & 3] << 5 );
-		state->m_col6bit[i] = col;
+		col6bit[i] = col;
 	}
 }
 
-static SCREEN_UPDATE_RGB32( bfcobra )
+static VIDEO_UPDATE( bfcobra )
 {
-	bfcobra_state *state = screen.machine().driver_data<bfcobra_state>();
 	int x, y;
 	UINT8  *src;
 	UINT32 *dest;
@@ -351,47 +331,47 @@ static SCREEN_UPDATE_RGB32( bfcobra )
 
 	/* Select screen has to be programmed into two registers */
 	/* No idea what happens if the registers are different */
-	if (state->m_flip_8 & 0x40 && state->m_flip_22 & 0x40)
+	if (flip_8 & 0x40 && flip_22 & 0x40)
 		offset = 0x10000;
 	else
 		offset = 0;
 
-	if(state->m_videomode & 0x20)
+	if(videomode & 0x20)
 	{
-		hirescol = state->m_col3bit;
-		lorescol = state->m_col7bit;
+		hirescol = col3bit;
+		lorescol = col7bit;
 	}
-	else if(state->m_videomode & 0x40)
+	else if(videomode & 0x40)
 	{
-		hirescol = state->m_col4bit;
-		lorescol = state->m_col6bit;
+		hirescol = col4bit;
+		lorescol = col6bit;
 	}
 	else
 	{
-		hirescol = state->m_col4bit;
-		lorescol = state->m_col8bit;
+		hirescol = col4bit;
+		lorescol = col8bit;
 	}
 
-	for (y = cliprect.min_y; y <= cliprect.max_y; ++y)
+	for (y = cliprect->min_y; y <= cliprect->max_y; ++y)
 	{
-		UINT16 y_offset = (y + state->m_v_scroll) * 256;
-		src = &state->m_video_ram[offset + y_offset];
-		dest = &bitmap.pix32(y);
+		UINT16 y_offset = (y + v_scroll) * 256;
+		src = &video_ram[offset + y_offset];
+		dest = BITMAP_ADDR32(bitmap, y, 0);
 
-		for (x = cliprect.min_x; x <= cliprect.max_x / 2; ++x)
+		for (x = cliprect->min_x; x <= cliprect->max_x / 2; ++x)
 		{
-			UINT8 x_offset = x + state->m_h_scroll;
+			UINT8 x_offset = x + h_scroll;
 			UINT8 pen = *(src + x_offset);
 
-			if ( ( state->m_videomode & 0x81 ) == 1 || (state->m_videomode & 0x80 && pen & 0x80) )
+			if ( ( videomode & 0x81 ) == 1 || (videomode & 0x80 && pen & 0x80) )
 			{
-				*dest++ = screen.machine().pens[hirescol[pen & 0x0f]];
-				*dest++ = screen.machine().pens[hirescol[(pen >> 4) & 0x0f]];
+				*dest++ = screen->machine->pens[hirescol[pen & 0x0f]];
+				*dest++ = screen->machine->pens[hirescol[(pen >> 4) & 0x0f]];
 			}
 			else
 			{
-				*dest++ = screen.machine().pens[lorescol[pen]];
-				*dest++ = screen.machine().pens[lorescol[pen]];
+				*dest++ = screen->machine->pens[lorescol[pen]];
+				*dest++ = screen->machine->pens[lorescol[pen]];
 			}
 		}
 	}
@@ -399,28 +379,27 @@ static SCREEN_UPDATE_RGB32( bfcobra )
 	return 0;
 }
 
-INLINE UINT8* blitter_get_addr(running_machine &machine, UINT32 addr)
+INLINE UINT8* blitter_get_addr(running_machine *machine, UINT32 addr)
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
 	if (addr < 0x10000)
 	{
 		/* Is this region fixed? */
-		return (UINT8*)(machine.region("user1")->base() + addr);
+		return (UINT8*)(memory_region(machine, "user1") + addr);
 	}
 	else if(addr < 0x20000)
 	{
 		addr &= 0xffff;
-		addr += (state->m_bank_data[0] & 1) ? 0x10000 : 0;
+		addr += (bank[0] & 1) ? 0x10000 : 0;
 
-		return (UINT8*)(machine.region("user1")->base() + addr + ((state->m_bank_data[0] >> 1) * 0x20000));
+		return (UINT8*)(memory_region(machine, "user1") + addr + ((bank[0] >> 1) * 0x20000));
 	}
 	else if (addr >= 0x20000 && addr < 0x40000)
 	{
-		return (UINT8*)&state->m_video_ram[addr - 0x20000];
+		return (UINT8*)&video_ram[addr - 0x20000];
 	}
 	else
 	{
-		return (UINT8*)&state->m_work_ram[addr - 0x40000];
+		return (UINT8*)&work_ram[addr - 0x40000];
 	}
 }
 
@@ -430,12 +409,10 @@ INLINE UINT8* blitter_get_addr(running_machine &machine, UINT32 addr)
     The Flare One blitter is a simpler design with slightly different parameters
     and will require hardware tests to figure everything out correctly.
 */
-static void RunBlit(address_space *space)
+static void RunBlit(const address_space *space)
 {
-#define BLITPRG_READ(x)		blitter.x = *(blitter_get_addr(space->machine(), blitter.program.addr++))
+#define BLITPRG_READ(x)		blitter.x = *(blitter_get_addr(space->machine, blitter.program.addr++))
 
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	struct blitter_t &blitter = state->m_blitter;
 	int cycles_used = 0;
 
 
@@ -462,7 +439,7 @@ static void RunBlit(address_space *space)
 		/* This debug is now wrong ! */
 		if (DEBUG_BLITTER)
 		{
-			mame_printf_debug("\n%s:Blitter: Running command from 0x%.5x\n\n", device->machine().describe_context(), blitter.program.addr - 12);
+			mame_printf_debug("\n%s:Blitter: Running command from 0x%.5x\n\n", cpuexec_describe_context(device->machine), blitter.program.addr - 12);
 			mame_printf_debug("Command Reg         %.2x",	blitter.command);
 			mame_printf_debug("		%s %s %s %s %s %s %s\n",
 				blitter.command & CMD_RUN ? "RUN" : "     ",
@@ -544,7 +521,7 @@ static void RunBlit(address_space *space)
 						blitter.source.addr0 -=blitter.step;
 					}
 
-					*blitter_get_addr(space->machine(), blitter.dest.addr) = blitter.pattern;
+					*blitter_get_addr(space->machine, blitter.dest.addr) = blitter.pattern;
 					cycles_used++;
 
 				} while (--innercnt);
@@ -558,7 +535,7 @@ static void RunBlit(address_space *space)
 
 				if (LOOPTYPE == 3 && innercnt == blitter.innercnt)
 				{
-					srcdata = *(blitter_get_addr(space->machine(), blitter.source.addr & 0xfffff));
+					srcdata = *(blitter_get_addr(space->machine, blitter.source.addr & 0xfffff));
 					blitter.source.loword++;
 					cycles_used++;
 				}
@@ -568,7 +545,7 @@ static void RunBlit(address_space *space)
 				{
 					if (LOOPTYPE == 0 || LOOPTYPE == 1)
 					{
-						srcdata = *(blitter_get_addr(space->machine(), blitter.source.addr & 0xfffff));
+						srcdata = *(blitter_get_addr(space->machine, blitter.source.addr & 0xfffff));
 						cycles_used++;
 
 						if (blitter.modectl & MODE_SSIGN)
@@ -583,7 +560,7 @@ static void RunBlit(address_space *space)
 				/* Read destination pixel? */
 				if (LOOPTYPE == 0)
 				{
-					dstdata = *blitter_get_addr(space->machine(), blitter.dest.addr & 0xfffff);
+					dstdata = *blitter_get_addr(space->machine, blitter.dest.addr & 0xfffff);
 					cycles_used++;
 				}
 
@@ -652,10 +629,10 @@ static void RunBlit(address_space *space)
                             The existing destination pixel is used as a lookup
                             into the table and the colours is replaced.
                         */
-						UINT8 dest = *blitter_get_addr(space->machine(), blitter.dest.addr);
-						UINT8 newcol = *(blitter_get_addr(space->machine(), (blitter.source.addr + dest) & 0xfffff));
+						UINT8 dest = *blitter_get_addr(space->machine, blitter.dest.addr);
+						UINT8 newcol = *(blitter_get_addr(space->machine, (blitter.source.addr + dest) & 0xfffff));
 
-						*blitter_get_addr(space->machine(), blitter.dest.addr) = newcol;
+						*blitter_get_addr(space->machine, blitter.dest.addr) = newcol;
 						cycles_used += 3;
 					}
 					else
@@ -674,7 +651,7 @@ static void RunBlit(address_space *space)
 						if (blitter.compfunc & CMPFUNC_LOG0)
 							final_result |= ~result & ~dstdata;
 
-						*blitter_get_addr(space->machine(), blitter.dest.addr) = final_result;
+						*blitter_get_addr(space->machine, blitter.dest.addr) = final_result;
 						cycles_used++;
 					}
 				}
@@ -714,14 +691,12 @@ static void RunBlit(address_space *space)
 	} while (blitter.command  & CMD_RUN);
 
 	/* Burn Z80 cycles while blitter is in operation */
-	device_spin_until_time(&space->device(),  attotime::from_nsec( (1000000000 / Z80_XTAL)*cycles_used * 2 ) );
+	cpu_spinuntil_time(space->cpu,  ATTOTIME_IN_NSEC( (1000000000 / Z80_XTAL)*cycles_used * 2 ) );
 }
 
 
 static READ8_HANDLER( ramdac_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	struct ramdac_t &ramdac = state->m_ramdac;
 	UINT8 val = 0xff;
 
 	switch (offset & 3)
@@ -733,7 +708,7 @@ static READ8_HANDLER( ramdac_r )
 			if (*count == 0)
 			{
 				rgb_t color;
-				color = palette_get_color(space->machine(), ramdac.addr_r);
+				color = palette_get_color(space->machine, ramdac.addr_r);
 
 				ramdac.color_r[0] = RGB_RED(color);
 				ramdac.color_r[1] = RGB_GREEN(color);
@@ -754,7 +729,7 @@ static READ8_HANDLER( ramdac_r )
 		}
 		default:
 		{
-			mame_printf_debug("Unhandled RAMDAC read (PC:%.4x)\n", cpu_get_previouspc(&space->device()));
+			mame_printf_debug("Unhandled RAMDAC read (PC:%.4x)\n", cpu_get_previouspc(space->cpu));
 		}
 	}
 
@@ -763,8 +738,6 @@ static READ8_HANDLER( ramdac_r )
 
 static WRITE8_HANDLER( ramdac_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	struct ramdac_t &ramdac = state->m_ramdac;
 
 	switch (offset & 3)
 	{
@@ -779,7 +752,7 @@ static WRITE8_HANDLER( ramdac_w )
 			ramdac.color_w[ramdac.count_w] = pal6bit(data);
 			if (++ramdac.count_w == 3)
 			{
-				palette_set_color_rgb(space->machine(), ramdac.addr_w, ramdac.color_w[0], ramdac.color_w[1], ramdac.color_w[2]);
+				palette_set_color_rgb(space->machine, ramdac.addr_w, ramdac.color_w[0], ramdac.color_w[1], ramdac.color_w[2]);
 				ramdac.count_w = 0;
 				ramdac.addr_w++;
 			}
@@ -847,21 +820,8 @@ static WRITE8_HANDLER( ramdac_w )
 
 ***************************************************************************/
 
-static void update_irqs(running_machine &machine)
-{
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
-	int newstate = state->m_blitter_irq || state->m_vblank_irq || state->m_acia_irq;
-
-	if (newstate != state->m_irq_state)
-	{
-		state->m_irq_state = newstate;
-		cputag_set_input_line(machine, "maincpu", 0, state->m_irq_state ? ASSERT_LINE : CLEAR_LINE);
-	}
-}
-
 static READ8_HANDLER( chipset_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
 	UINT8 val = 0xff;
 
 	switch(offset)
@@ -870,22 +830,22 @@ static READ8_HANDLER( chipset_r )
 		case 2:
 		case 3:
 		{
-			val = state->m_bank_data[offset];
+			val = bank[offset];
 			break;
 		}
 		case 6:
 		{
 			/* TODO */
-			val = state->m_vblank_irq << 4;
+			val = vblank_irq << 4;
 			break;
 		}
 		case 7:
 		{
-			state->m_vblank_irq = 0;
+			vblank_irq = 0;
 			val = 0x1;
 
 			/* TODO */
-			update_irqs(space->machine());
+			update_irqs(space->machine);
 			break;
 		}
 		case 0x1C:
@@ -897,17 +857,17 @@ static READ8_HANDLER( chipset_r )
 		case 0x20:
 		{
 			/* Seems correct - used during RLE pic decoding */
-			val = state->m_blitter.dest.addr0;
+			val = blitter.dest.addr0;
 			break;
 		}
 		case 0x22:
 		{
-			val = 0x40 | input_port_read(space->machine(), "JOYSTICK");
+			val = 0x40 | input_port_read(space->machine, "JOYSTICK");
 			break;
 		}
 		default:
 		{
-			mame_printf_debug("Flare One unknown read: 0x%.2x (PC:0x%.4x)\n", offset, cpu_get_previouspc(&space->device()));
+			mame_printf_debug("Flare One unknown read: 0x%.2x (PC:0x%.4x)\n", offset, cpu_get_previouspc(space->cpu));
 		}
 	}
 
@@ -916,7 +876,6 @@ static READ8_HANDLER( chipset_r )
 
 static WRITE8_HANDLER( chipset_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
 	switch (offset)
 	{
 		case 0x01:
@@ -924,65 +883,65 @@ static WRITE8_HANDLER( chipset_w )
 		case 0x03:
 		{
 			if (data > 0x3f)
-				popmessage("%x: Unusual bank access (%x)\n", cpu_get_previouspc(&space->device()), data);
+				popmessage("%x: Unusual bank access (%x)\n", cpu_get_previouspc(space->cpu), data);
 
 			data &= 0x3f;
-			state->m_bank_data[offset] = data;
-			z80_bank(space->machine(), offset, data);
+			bank[offset] = data;
+			z80_bank(space->machine, offset, data);
 			break;
 		}
 
 		case 0x08:
 		{
-			state->m_flip_8 = data;
+			flip_8 = data;
 			break;
 		}
 		case 9:
-			state->m_videomode = data;
+			videomode = data;
 			break;
 
 		case 0x0B:
 		{
-			state->m_h_scroll = data;
+			h_scroll = data;
 			break;
 		}
 		case 0x0C:
 		{
-			state->m_v_scroll = data;
+			v_scroll = data;
 			break;
 		}
 		case 0x0E:
 		{
-			state->m_col4bit[5] = data;
-			state->m_col3bit[5] = data;
-			state->m_col3bit[5 + 8] = data;
+			col4bit[5] = data;
+			col3bit[5] = data;
+			col3bit[5 + 8] = data;
 			break;
 		}
 		case 0x0f:
 		{
-			state->m_col4bit[6] = data;
-			state->m_col3bit[6] = data;
-			state->m_col3bit[6 + 8] = data;
+			col4bit[6] = data;
+			col3bit[6] = data;
+			col3bit[6 + 8] = data;
 			break;
 		}
 		case 0x18:
 		{
-			state->m_blitter.program.addr0 = data;
+			blitter.program.addr0 = data;
 			break;
 		}
 		case 0x19:
 		{
-			state->m_blitter.program.addr1 = data;
+			blitter.program.addr1 = data;
 			break;
 		}
 		case 0x1A:
 		{
-			state->m_blitter.program.addr2 = data;
+			blitter.program.addr2 = data;
 			break;
 		}
 		case 0x20:
 		{
-			state->m_blitter.command = data;
+			blitter.command = data;
 
 			if (data & CMD_RUN)
 				RunBlit(space);
@@ -993,44 +952,47 @@ static WRITE8_HANDLER( chipset_w )
 		}
 		case 0x22:
 		{
-			state->m_flip_22 = data;
+			flip_22 = data;
 			break;
 		}
 		default:
 		{
-			mame_printf_debug("Flare One unknown write: 0x%.2x with 0x%.2x (PC:0x%.4x)\n", offset, data, cpu_get_previouspc(&space->device()));
+			mame_printf_debug("Flare One unknown write: 0x%.2x with 0x%.2x (PC:0x%.4x)\n", offset, data, cpu_get_previouspc(space->cpu));
 		}
 	}
 }
 
-INLINE void z80_bank(running_machine &machine, int num, int data)
+INLINE void z80_bank(running_machine *machine, int num, int data)
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
-	static const char * const bank_names[] = { "bank1", "bank2", "bank3" };
-
 	if (data < 0x08)
 	{
-		UINT32 offset = ((state->m_bank_data[0] >> 1) * 0x20000) + ((0x4000 * data) ^ ((state->m_bank_data[0] & 1) ? 0 : 0x10000));
+		/* TODO: Don't need this table! */
+		static const UINT32 offs_table[2][8] =
+		{
+			{ 0x10000, 0x14000, 0x18000, 0x1c000, 0x00000, 0x04000, 0x08000, 0x0c000 },
+			{ 0x00000, 0x04000, 0x08000, 0x0c000, 0x10000, 0x14000, 0x18000, 0x1c000 }
+		};
 
-		memory_set_bankptr(machine, bank_names[num - 1], machine.region("user1")->base() + offset);
+		UINT32 offset = ((bank[0] >> 1) * 0x20000) + offs_table[bank[0] & 0x1][data];
+
+		memory_set_bankptr(machine, num, memory_region(machine, "user1") + offset);
 	}
 	else if (data < 0x10)
 	{
-		memory_set_bankptr(machine, bank_names[num - 1], &state->m_video_ram[(data - 0x08) * 0x4000]);
+		memory_set_bankptr(machine, num, &video_ram[(data - 0x08) * 0x4000]);
 	}
 	else
 	{
-		memory_set_bankptr(machine, bank_names[num - 1], &state->m_work_ram[(data - 0x10) * 0x4000]);
+		memory_set_bankptr(machine, num, &work_ram[(data - 0x10) * 0x4000]);
 	}
 }
 
 static WRITE8_HANDLER( rombank_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	state->m_bank_data[0] = data;
-	z80_bank(space->machine(), 1, state->m_bank_data[1]);
-	z80_bank(space->machine(), 2, state->m_bank_data[2]);
-	z80_bank(space->machine(), 3, state->m_bank_data[3]);
+	bank[0] = data;
+	z80_bank(space->machine, 1, bank[1]);
+	z80_bank(space->machine, 2, bank[2]);
+	z80_bank(space->machine, 3, bank[3]);
 }
 
 
@@ -1044,7 +1006,7 @@ static WRITE8_HANDLER( rombank_w )
 
 ***************************************************************************/
 
-static void command_phase(struct fdc_t &fdc, UINT8 data);
+static void command_phase(UINT8 data);
 static void exec_w_phase(UINT8 data);
 //UINT8 exec_r_phase(void);
 
@@ -1079,29 +1041,50 @@ enum command
 	SCAN_HIGH_OR_EQUAL = 29
 };
 
-static void reset_fdc(running_machine &machine)
+static struct
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
-	memset(&state->m_fdc, 0, sizeof(state->m_fdc));
+	UINT8	MSR;
 
-	state->m_fdc.MSR = 0x80;
-	state->m_fdc.phase = COMMAND;
+	int		side;
+	int		track;
+	int		sector;
+	int		number;
+	int		stop_track;
+	int		setup_read;
+
+	int		byte_pos;
+	int		offset;
+
+	int		phase;
+	int		next_phase;
+	int		cmd_len;
+	int		cmd_cnt;
+	int		res_len;
+	int		res_cnt;
+	UINT8	cmd[10];
+	UINT8	results[8];
+} fdc;
+
+
+static void reset_fdc(void)
+{
+	memset(&fdc, 0, sizeof(fdc));
+
+	fdc.MSR = 0x80;
+	fdc.phase = COMMAND;
 }
 
 static READ8_HANDLER( fdctrl_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
 	UINT8 val = 0;
 
-	val = state->m_fdc.MSR;
+	val = fdc.MSR;
 
 	return val;
 }
 
 static READ8_HANDLER( fddata_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	struct fdc_t &fdc = state->m_fdc;
 	#define	BPS		1024
 	#define SPT		10
 	#define BPT		1024*10
@@ -1130,7 +1113,7 @@ static READ8_HANDLER( fddata_r )
 				}
 
 				fdc.offset = (BPT * fdc.track*2) + (fdc.side ? BPT : 0) + (BPS * (fdc.sector-1)) + fdc.byte_pos++;
-				val = *(space->machine().region("user2")->base() + fdc.offset);
+				val = *(memory_region(space->machine, "user2") + fdc.offset);
 
 				/* Move on to next sector? */
 				if (fdc.byte_pos == 1024)
@@ -1174,13 +1157,11 @@ static READ8_HANDLER( fddata_r )
 
 static WRITE8_HANDLER( fdctrl_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	struct fdc_t &fdc = state->m_fdc;
 	switch (fdc.phase)
 	{
 		case COMMAND:
 		{
-			command_phase(fdc, data);
+			command_phase(data);
 			break;
 		}
 		case EXECUTION_W:
@@ -1195,7 +1176,7 @@ static WRITE8_HANDLER( fdctrl_w )
 	}
 }
 
-static void command_phase(struct fdc_t &fdc, UINT8 data)
+static void command_phase(UINT8 data)
 {
 	if (fdc.cmd_cnt == 0)
 	{
@@ -1304,7 +1285,6 @@ WRITE8_HANDLER( fd_ctrl_w )
 
 static MACHINE_RESET( bfcobra )
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
 	unsigned int pal;
 
 	for (pal = 0; pal < 256; ++pal)
@@ -1312,11 +1292,11 @@ static MACHINE_RESET( bfcobra )
 		palette_set_color_rgb(machine, pal, pal3bit((pal>>5)&7), pal3bit((pal>>2)&7), pal2bit(pal&3));
 	}
 
-	state->m_bank_data[0] = 1;
-	memset(&state->m_ramdac, 0, sizeof(state->m_ramdac));
-	reset_fdc(machine);
+	bank[0] = 1;
+	memset(&ramdac, 0, sizeof(ramdac));
+	reset_fdc();
 
-	state->m_irq_state = state->m_blitter_irq = state->m_vblank_irq = state->m_acia_irq = 0;
+	irq_state = blitter_irq = vblank_irq = acia_irq = 0;
 }
 
 /***************************************************************************
@@ -1325,20 +1305,20 @@ static MACHINE_RESET( bfcobra )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( z80_prog_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank4")
-	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK("bank1")
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank2")
-	AM_RANGE(0xc000, 0xffff) AM_RAMBANK("bank3")
+static ADDRESS_MAP_START( z80_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK(4)
+	AM_RANGE(0x4000, 0x7fff) AM_RAMBANK(1)
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(2)
+	AM_RANGE(0xc000, 0xffff) AM_RAMBANK(3)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( z80_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( z80_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x23) AM_READWRITE(chipset_r, chipset_w)
-	AM_RANGE(0x24, 0x24) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, control_write)
-	AM_RANGE(0x25, 0x25) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, data_write)
-	AM_RANGE(0x26, 0x26) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, status_read)
-	AM_RANGE(0x27, 0x27) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, data_read)
+	AM_RANGE(0x24, 0x24) AM_DEVWRITE("acia6850_0", acia6850_ctrl_w)
+	AM_RANGE(0x25, 0x25) AM_DEVWRITE("acia6850_0", acia6850_data_w)
+	AM_RANGE(0x26, 0x26) AM_DEVREAD("acia6850_0", acia6850_stat_r)
+	AM_RANGE(0x27, 0x27) AM_DEVREAD("acia6850_0", acia6850_data_r)
 	AM_RANGE(0x30, 0x30) AM_READ(fdctrl_r)
 	AM_RANGE(0x31, 0x31) AM_READWRITE(fddata_r, fdctrl_w)
 	AM_RANGE(0x40, 0x40) AM_WRITE(rombank_w)
@@ -1376,52 +1356,49 @@ static READ8_HANDLER( int_latch_r )
 /* TODO */
 static READ8_HANDLER( meter_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	return state->m_meter_latch;
+	return meter_latch;
 }
 
 /* TODO: This is borrowed from Scorpion 1 */
 static WRITE8_HANDLER( meter_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
 	int i;
-	int  changed = state->m_meter_latch ^ data;
+	int  changed = meter_latch ^ data;
+	UINT64 cycles = cpu_get_total_cycles(space->cpu);
 
-	state->m_meter_latch = data;
+	meter_latch = data;
 
 	/*
         When a meter is triggered, the current drawn is sensed. If a meter
         is connected, the /FIRQ line will be pulsed.
     */
 	for (i = 0; i < 8; i++)
-	{
+ 	{
 		if (changed & (1 << i))
 		{
-			MechMtr_update(i, data & (1 << i) );
-			generic_pulse_irq_line(&space->device(), M6809_FIRQ_LINE);
+			Mechmtr_update(i, cycles, data & (1 << i) );
+			generic_pulse_irq_line(space->cpu, M6809_FIRQ_LINE);
 		}
-	}
+ 	}
 }
 
 /* TODO */
 static READ8_HANDLER( latch_r )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
-	return state->m_mux_input;
+	return mux_input;
 }
 
 static WRITE8_HANDLER( latch_w )
 {
-	bfcobra_state *state = space->machine().driver_data<bfcobra_state>();
 	/* TODO: This is borrowed from Scorpion 1 */
 	switch(offset)
 	{
 		case 0:
 		{
-			int changed = state->m_mux_outputlatch ^ data;
+			int changed = mux_outputlatch ^ data;
 			static const char *const port[] = { "STROBE0", "STROBE1", "STROBE2", "STROBE3", "STROBE4", "STROBE5", "STROBE6", "STROBE7" };
 
-			state->m_mux_outputlatch = data;
+			mux_outputlatch = data;
 
 			/* Clock has changed */
 			if (changed & 0x08)
@@ -1430,7 +1407,7 @@ static WRITE8_HANDLER( latch_w )
 
 				/* Clock is low */
 				if (!(data & 0x08))
-					state->m_mux_input = input_port_read(space->machine(), port[input_strobe]);
+					mux_input = input_port_read(space->machine, port[input_strobe]);
 			}
 			break;
 		}
@@ -1459,20 +1436,20 @@ static WRITE8_DEVICE_HANDLER( upd_w )
 	upd7759_start_w(device, data & 0x40 ? 0 : 1);
 }
 
-static ADDRESS_MAP_START( m6809_prog_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM	AM_SHARE("nvram")
+static ADDRESS_MAP_START( m6809_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM	AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0x2000, 0x2000) AM_RAM		// W 'B', 6F
 	AM_RANGE(0x2200, 0x2200) AM_RAM		// W 'F'
 	AM_RANGE(0x2600, 0x2600) AM_READWRITE(meter_r, meter_w)
 	AM_RANGE(0x2800, 0x2800) AM_RAM		// W
 	AM_RANGE(0x2A00, 0x2A02) AM_READWRITE(latch_r, latch_w)
 	AM_RANGE(0x2E00, 0x2E00) AM_READ(int_latch_r)
-	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("aysnd", ay8910_data_w)
-	AM_RANGE(0x3201, 0x3201) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0x3404, 0x3404) AM_DEVREADWRITE_MODERN("acia6850_1", acia6850_device, status_read, control_write)
-	AM_RANGE(0x3405, 0x3405) AM_DEVREADWRITE_MODERN("acia6850_1", acia6850_device, data_read, data_write)
-	AM_RANGE(0x3406, 0x3406) AM_DEVREADWRITE_MODERN("acia6850_2", acia6850_device, status_read, control_write)
-	AM_RANGE(0x3407, 0x3407) AM_DEVREADWRITE_MODERN("acia6850_2", acia6850_device, data_read, data_write)
+	AM_RANGE(0x3001, 0x3001) AM_DEVWRITE("ay", ay8910_data_w)
+	AM_RANGE(0x3201, 0x3201) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x3404, 0x3404) AM_DEVREADWRITE("acia6850_1", acia6850_stat_r, acia6850_ctrl_w)
+	AM_RANGE(0x3405, 0x3405) AM_DEVREADWRITE("acia6850_1", acia6850_data_r, acia6850_data_w)
+	AM_RANGE(0x3406, 0x3406) AM_DEVREADWRITE("acia6850_2", acia6850_stat_r, acia6850_ctrl_w)
+	AM_RANGE(0x3407, 0x3407) AM_DEVREADWRITE("acia6850_2", acia6850_data_r, acia6850_data_w)
 //  AM_RANGE(0x3408, 0x3408) AM_NOP
 //  AM_RANGE(0x340A, 0x340A) AM_NOP
 //  AM_RANGE(0x3600, 0x3600) AM_NOP
@@ -1587,14 +1564,13 @@ INPUT_PORTS_END
 /*
     Allocate work RAM and video RAM shared by the Z80 and chipset.
 */
-static void init_ram(running_machine &machine)
+static void init_ram(running_machine *machine)
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
 	/* 768kB work RAM */
-	state->m_work_ram = auto_alloc_array_clear(machine, UINT8, 0xC0000);
+	work_ram = auto_alloc_array_clear(machine, UINT8, 0xC0000);
 
 	/* 128kB video RAM */
-	state->m_video_ram = auto_alloc_array_clear(machine, UINT8, 0x20000);
+	video_ram = auto_alloc_array_clear(machine, UINT8, 0x20000);
 }
 
 /*
@@ -1603,21 +1579,18 @@ static void init_ram(running_machine &machine)
 
 static READ_LINE_DEVICE_HANDLER( z80_acia_rx_r )
 {
-	bfcobra_state *state = device->machine().driver_data<bfcobra_state>();
-	return state->m_m6809_z80_line;
+	return m6809_z80_line;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( z80_acia_tx_w )
 {
-	bfcobra_state *drvstate = device->machine().driver_data<bfcobra_state>();
-	drvstate->m_z80_m6809_line = state;
+	z80_m6809_line = state;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( z80_acia_irq )
 {
-	bfcobra_state *drvstate = device->machine().driver_data<bfcobra_state>();
-	drvstate->m_acia_irq = state ? CLEAR_LINE : ASSERT_LINE;
-	update_irqs(device->machine());
+	acia_irq = state ? CLEAR_LINE : ASSERT_LINE;
+	update_irqs(device->machine);
 }
 
 static ACIA6850_INTERFACE( z80_acia_if )
@@ -1634,19 +1607,17 @@ static ACIA6850_INTERFACE( z80_acia_if )
 
 static READ_LINE_DEVICE_HANDLER( m6809_acia_rx_r )
 {
-	bfcobra_state *state = device->machine().driver_data<bfcobra_state>();
-	return state->m_z80_m6809_line;
+	return z80_m6809_line;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m6809_acia_tx_w )
 {
-	bfcobra_state *drvstate = device->machine().driver_data<bfcobra_state>();
-	drvstate->m_m6809_z80_line = state;
+	m6809_z80_line = state;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( m6809_data_irq )
 {
-	cputag_set_input_line(device->machine(), "audiocpu", M6809_IRQ_LINE, state ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", M6809_IRQ_LINE, state ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static ACIA6850_INTERFACE( m6809_acia_if )
@@ -1663,14 +1634,12 @@ static ACIA6850_INTERFACE( m6809_acia_if )
 
 static READ_LINE_DEVICE_HANDLER( data_acia_rx_r )
 {
-	bfcobra_state *state = device->machine().driver_data<bfcobra_state>();
-	return state->m_data_r;
+	return data_r;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( data_acia_tx_w )
 {
-	bfcobra_state *drvstate = device->machine().driver_data<bfcobra_state>();
-	 drvstate->m_data_t = state;
+	 data_t = state;
 }
 
 
@@ -1690,7 +1659,6 @@ static ACIA6850_INTERFACE( data_acia_if )
 /* TODO: Driver vs Machine Init */
 static DRIVER_INIT( bfcobra )
 {
-	bfcobra_state *state = machine.driver_data<bfcobra_state>();
 	/*
         6809 ROM address and data lines are scrambled.
         This is the same scrambling as Scorpion 2.
@@ -1702,8 +1670,8 @@ static DRIVER_INIT( bfcobra )
 	UINT8 *rom;
 	UINT8 *tmp;
 
-	tmp = auto_alloc_array(machine, UINT8, 0x8000);
-	rom = machine.region("audiocpu")->base() + 0x8000;
+	tmp = alloc_array_or_die(UINT8, 0x8000);
+	rom = memory_region(machine, "audiocpu") + 0x8000;
 	memcpy(tmp, rom, 0x8000);
 
 	for (i = 0; i < 0x8000; i++)
@@ -1722,35 +1690,35 @@ static DRIVER_INIT( bfcobra )
 		rom[addr] = data;
 	}
 
-	auto_free(machine, tmp);
+	free(tmp);
 
 	init_ram(machine);
 
-	state->m_bank_data[0] = 1;
-	state->m_bank_data[1] = 0;
-	state->m_bank_data[2] = 0;
-	state->m_bank_data[3] = 0;
+	bank[0] = 1;
+	bank[1] = 0;
+	bank[2] = 0;
+	bank[3] = 0;
 
 	/* Fixed 16kB ROM region */
-	memory_set_bankptr(machine, "bank4", machine.region("user1")->base());
+	memory_set_bankptr(machine, 4, memory_region(machine, "user1"));
 
 	/* TODO: Properly sort out the data ACIA */
-	state->m_data_r = 1;
+	data_r = 1;
 
 	/* Finish this */
-	state_save_register_global(machine, state->m_z80_m6809_line);
-	state_save_register_global(machine, state->m_m6809_z80_line);
-	state_save_register_global(machine, state->m_data_r);
-	state_save_register_global(machine, state->m_data_t);
-	state_save_register_global(machine, state->m_h_scroll);
-	state_save_register_global(machine, state->m_v_scroll);
-	state_save_register_global(machine, state->m_flip_8);
-	state_save_register_global(machine, state->m_flip_22);
-	state_save_register_global(machine, state->m_z80_int);
-	state_save_register_global(machine, state->m_z80_inten);
-	state_save_register_global_array(machine, state->m_bank_data);
-	state_save_register_global_pointer(machine, state->m_work_ram, 0xc0000);
-	state_save_register_global_pointer(machine, state->m_video_ram, 0x20000);
+	state_save_register_global(machine, z80_m6809_line);
+	state_save_register_global(machine, m6809_z80_line);
+	state_save_register_global(machine, data_r);
+	state_save_register_global(machine, data_t);
+	state_save_register_global(machine, h_scroll);
+	state_save_register_global(machine, v_scroll);
+	state_save_register_global(machine, flip_8);
+	state_save_register_global(machine, flip_22);
+	state_save_register_global(machine, z80_int);
+	state_save_register_global(machine, z80_inten);
+	state_save_register_global_array(machine, bank);
+	state_save_register_global_pointer(machine, work_ram, 0xc0000);
+	state_save_register_global_pointer(machine, video_ram, 0x20000);
 }
 
 /* TODO */
@@ -1762,50 +1730,49 @@ static INTERRUPT_GEN( timer_irq )
 /* TODO */
 static INTERRUPT_GEN( vblank_gen )
 {
-	bfcobra_state *state = device->machine().driver_data<bfcobra_state>();
-	state->m_vblank_irq = 1;
-	update_irqs(device->machine());
+	vblank_irq = 1;
+	update_irqs(device->machine);
 }
 
-static MACHINE_CONFIG_START( bfcobra, bfcobra_state )
-	MCFG_CPU_ADD("maincpu", Z80, Z80_XTAL)
-	MCFG_CPU_PROGRAM_MAP(z80_prog_map)
-	MCFG_CPU_IO_MAP(z80_io_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_gen)
+static MACHINE_DRIVER_START( bfcobra )
+	MDRV_CPU_ADD("maincpu", Z80, Z80_XTAL)
+	MDRV_CPU_PROGRAM_MAP(z80_prog_map)
+	MDRV_CPU_IO_MAP(z80_io_map)
+	MDRV_CPU_VBLANK_INT("screen", vblank_gen)
 
-	MCFG_CPU_ADD("audiocpu", M6809, M6809_XTAL)
-	MCFG_CPU_PROGRAM_MAP(m6809_prog_map)
-	MCFG_CPU_PERIODIC_INT(timer_irq, 1000)
+	MDRV_CPU_ADD("audiocpu", M6809, M6809_XTAL)
+	MDRV_CPU_PROGRAM_MAP(m6809_prog_map)
+	MDRV_CPU_PERIODIC_INT(timer_irq, 1000)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_MACHINE_RESET(bfcobra)
+	MDRV_MACHINE_RESET(bfcobra)
 
 	/* TODO */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512 - 1, 0, 256 - 1)
-	MCFG_SCREEN_UPDATE_STATIC(bfcobra)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(50)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512 - 1, 0, 256 - 1)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, M6809_XTAL)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MCFG_SOUND_ADD("aysnd", AY8910, M6809_XTAL)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
+	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MCFG_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-
-	MCFG_VIDEO_START(bfcobra)
+	MDRV_VIDEO_START(bfcobra)
+	MDRV_VIDEO_UPDATE(bfcobra)
 
 	/* ACIAs */
-	MCFG_ACIA6850_ADD("acia6850_0", z80_acia_if)
-	MCFG_ACIA6850_ADD("acia6850_1", m6809_acia_if)
-	MCFG_ACIA6850_ADD("acia6850_2", data_acia_if)
-MACHINE_CONFIG_END
+	MDRV_ACIA6850_ADD("acia6850_0", z80_acia_if)
+	MDRV_ACIA6850_ADD("acia6850_1", m6809_acia_if)
+	MDRV_ACIA6850_ADD("acia6850_2", data_acia_if)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -1821,29 +1788,17 @@ ROM_START( inquiztr )
 	ROM_LOAD( "inq6809", 0x08000, 0x08000, CRC(ae996600) SHA1(f360399e77b81399d910770fa8106c196f04363c) )
 
 	ROM_REGION( 0x20000, "user1", 0 )
-	ROM_LOAD( "9576002.bin", 0x00000, 0x10000, CRC(5b8c8a04) SHA1(af5328fee79c370f45bff36f534aaf50964b6900) )
-
-	ROM_REGION( 0x20000, "altuser1", 0 )
-	ROM_LOAD( "9576028.bin", 0x10000, 0x10000, CRC(2d85682c) SHA1(baec47bff4b8beef5afbb737dc57b22bf93ebcf8) )
-
-	 // these look quite different.. (like they belong together) but booting with these gives a checksum error (banking?)
-	ROM_LOAD( "inqvypp1", 0x00000, 0x010000, CRC(9bac8c6e) SHA1(15e24d60c2f3997e637694f60daa552b22628766) )
-	ROM_LOAD( "inqvypp2", 0x10000, 0x010000, CRC(f9cd196c) SHA1(0ac31d87462cbee6f41e19aefe740d876910bdf5) )
+	ROM_LOAD( "9576028.bin", 0x00000, 0x10000, CRC(2d85682c) SHA1(baec47bff4b8beef5afbb737dc57b22bf93ebcf8) )
+	ROM_LOAD( "9576002.bin", 0x10000, 0x10000, CRC(5b8c8a04) SHA1(af5328fee79c370f45bff36f534aaf50964b6900) )
 
 	ROM_REGION( 0x1c2000, "user2", 0 )
 	ROM_LOAD( "inqdisk.img", 0x000000, 0x1c2000, NO_DUMP )
 ROM_END
 
-
-
-
 ROM_START( escounts )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
+//  ROM_LOAD( "escint1b", 0x08000, 0x08000, CRC(96918aae) SHA1(849ce7b8eccc89c45aacc840a73935f95788a141) )
 	ROM_LOAD( "esc12int", 0x08000, 0x08000, CRC(741a1fe6) SHA1(e741d0ae0d2f11036a358120381e4b0df4a560a1) )
-
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	ROM_LOAD( "bfm_esc.bin", 0x08000, 0x08000, CRC(27acb5a5) SHA1(da50d650ab6456d61d0fb7f89247f2040b4bb9a8) )
-	ROM_LOAD( "escint1b",    0x08000, 0x08000, CRC(fde413c9) SHA1(18724a1b771ba4c72e571c356591c5be32948d7a) )
 
 	ROM_REGION( 0x10000, "user1", 0 )
 	ROM_LOAD( "esccobpa", 0x00000, 0x10000, CRC(d8eadeb7) SHA1(9b94f1454e6a17bf8321b0ef4ddd0ed1a56150f7) )
@@ -1856,9 +1811,6 @@ ROM_END
 ROM_START( trebltop )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "95740078.bin", 0x08000, 0x08000, CRC(aca1980b) SHA1(3d4ed1dc545cc80f56d7daa13028fb10a12a718b) )
-
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	ROM_LOAD( "ttopint", 0x08000, 0x08000, CRC(cc798f90) SHA1(c3f541ebbb3a2c29cc4f00bbd47e289bcff50ecb) )
 
 	ROM_REGION( 0x20000, "user1", 0 )
 	ROM_LOAD( "95760031.bin", 0x00000, 0x10000, CRC(8e75edb8) SHA1(0aaa3834d5ac20f92bdf1f2b8f1eb71854469cbe) )
@@ -1876,10 +1828,6 @@ ROM_START( beeline )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "bln12int.a", 0x08000, 0x08000, CRC(cb97905e) SHA1(9725156bf64e53a56bc0f90795d4b07db41d059e) )
 
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	ROM_LOAD( "beeint12", 0x8000, 0x008000, CRC(0a77d0be) SHA1(8e55e7b4eb85cc2521d8fdf7ede02131ed80372e) )
-
-
 	ROM_REGION( 0x20000, "user1", 0 )
 	ROM_LOAD( "blncob.pa", 0x00000, 0x10000, CRC(8abc0017) SHA1(ecf6e7a4021b35295eb9bb9aed1b88fff27ffbd1) )
 	ROM_LOAD( "blncob.pb", 0x10000, 0x10000, CRC(feb121fe) SHA1(e83bfd6db00a3264e5076f257e261a1cb4605a83) )
@@ -1891,9 +1839,6 @@ ROM_END
 ROM_START( quizvadr )
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "q6809.bin", 0x08000, 0x8000, CRC(a74dff10) SHA1(87578694a022dc3d7ade9cc76d387c1ae5fc74d9) )
-
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	ROM_LOAD( "qvadrint", 0x08000, 0x08000, CRC(4c729943) SHA1(ab4e0fb6cfc66540ea1e9e36eebdf85f65c5fd2a) )
 
 	ROM_REGION( 0x200000, "user1", 0 )
 	ROM_LOAD( "5947011r.0", 0x000000, 0x80000, CRC(cac43c97) SHA1(3af529cd0f8ec57dd3596f5bca7b9c74cff171e4) )
@@ -1941,34 +1886,21 @@ ROM_START( qosb )
 	ROM_LOAD( "95740599.bin", 0x08000, 0x8000, CRC(bf1e321f) SHA1(51f18620f22ba2a1b110954284ddf00614d51a0e) )
 
 	ROM_REGION( 0x200000, "user1", 0 )
-	ROM_LOAD( "rom0_306.bin", 0x000000, 0x80000, CRC(c26c8f83) SHA1(6949027e1fe241cbb2e1cbbce18e47bcb0d84550) )
-	ROM_LOAD( "rom1_307.bin", 0x080000, 0x80000, CRC(94611c03) SHA1(81f545ff96ff3d44285315400da94d870c89f896) )
-	ROM_LOAD( "rom2_308.bin", 0x100000, 0x80000, CRC(f5572726) SHA1(e109265c5571d21213a6f405a13459e7bc6699bc) )
-	ROM_LOAD( "rom3_309.bin", 0x180000, 0x80000, CRC(1b5edfa8) SHA1(348488debd4aa52f064e351ed0c082274da1db2b) )
+	ROM_LOAD( "0306.bin", 0x000000, 0x80000, CRC(c26c8f83) SHA1(6949027e1fe241cbb2e1cbbce18e47bcb0d84550) )
+	ROM_LOAD( "1307.bin", 0x080000, 0x80000, CRC(94611c03) SHA1(81f545ff96ff3d44285315400da94d870c89f896) )
+	ROM_LOAD( "2308.bin", 0x100000, 0x80000, CRC(f5572726) SHA1(e109265c5571d21213a6f405a13459e7bc6699bc) )
+	ROM_LOAD( "3309.bin", 0x180000, 0x80000, CRC(1b5edfa8) SHA1(348488debd4aa52f064e351ed0c082274da1db2b) )
 
 	ROM_REGION( 0x20000, "upd", 0 )
 	ROM_LOAD( "snd1_218.ic7", 0x00000, 0x10000, CRC(061f496d) SHA1(653d16454d909c034191813b37d14010da7258c6) )
 	ROM_LOAD( "snd2_219.ic8", 0x10000, 0x10000, CRC(d7874a47) SHA1(5bbd4040c7c0299e8cc135e6c6cd05370b260e9b) )
-
-	/* there is a set close to this with
-
-        ROM_LOAD( "qosrom0", 0x0000, 0x080000, CRC(4f150634) SHA1(beb1d3c212b189f3baa08fe454e83f30108be08e) )
-        qosrom1 = rom1_307.bin          qosb       A Question of Sport (39-960-089)
-        ROM_LOAD( "qosrom2", 0x0000, 0x080000, CRC(c39737db) SHA1(ccfdb19dab3af064db44e6022248aef98749bc97) )
-        ROM_LOAD( "qosrom3", 0x0000, 0x080000, CRC(785b8ff9) SHA1(61b31e0e60c31ecb4b179bfe008a96155d939709) )
-        ROM_LOAD( "qossnd1", 0x0000, 0x010000, CRC(888a29f8) SHA1(0e5aa9db54e783708ece1e8c7bffb10d994ab384) )
-
-       but it simply looks like a bad dump, rom3 is an alt 'rom 2' and the others are mostly the same as qosb
-    */
-
 ROM_END
 
-
-GAME( 1989, inquiztr, 0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Inquizitor",                       GAME_NOT_WORKING )
-GAME( 1990, escounts, 0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Every Second Counts (39-360-053)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1991, trebltop, 0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Treble Top (39-360-070)",          GAME_IMPERFECT_GRAPHICS )
-GAME( 1991, beeline,  0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Beeline (39-360-075)",             GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS )
-GAME( 1991, quizvadr, 0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Quizvaders (39-360-078)",          GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, qos,      0			,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (set 1, 39-960-107)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, qosa,     qos		,	bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (set 2, 39-960-099)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, qosb,     qos		,	bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (set 3, 39-960-089)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1989, inquiztr, 0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Inquizitor",                       GAME_NOT_WORKING )
+GAME( 1990, escounts, 0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Every Second Counts (39-360-053)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1991, trebltop, 0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Treble Top (39-360-070)",          GAME_IMPERFECT_GRAPHICS )
+GAME( 1991, beeline,  0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Beeline (39-360-075)",             GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS )
+GAME( 1991, quizvadr, 0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "Quizvaders (39-360-078)",          GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, qos,      0,   bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (39-960-107)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, qosa,     qos, bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (39-960-099)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, qosb,     qos, bfcobra, bfcobra, bfcobra, ROT0, "BFM", "A Question of Sport (39-960-089)", GAME_IMPERFECT_GRAPHICS )

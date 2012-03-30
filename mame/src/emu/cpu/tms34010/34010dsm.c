@@ -5,7 +5,7 @@
  *
  */
 
-#include "emu.h"
+#include "cpuintrf.h"
 
 #ifdef STANDALONE
 #define PC __pc + (offset << 3)

@@ -6,76 +6,95 @@ Based on drivers from Juno First emulator by Chris Hardy (chrish@kcbbs.gen.nz)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "trackfld.h"
 #include "cpu/z80/z80.h"
-#include "cpu/m6800/m6800.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/dac.h"
 #include "sound/sn76496.h"
 #include "sound/vlm5030.h"
 #include "machine/konami1.h"
-#include "machine/nvram.h"
-#include "includes/konamipt.h"
-#include "audio/trackfld.h"
-#include "audio/hyprolyb.h"
-#include "includes/hyperspt.h"
+#include "konamipt.h"
+#include "cpu/m6800/m6800.h"
+#include "includes/trackfld.h"
+
+extern UINT8 *hyperspt_scroll;
+
+extern WRITE8_HANDLER( hyperspt_videoram_w );
+extern WRITE8_HANDLER( hyperspt_colorram_w );
+extern WRITE8_HANDLER( hyperspt_flipscreen_w );
+
+extern PALETTE_INIT( hyperspt );
+extern VIDEO_START( hyperspt );
+extern VIDEO_UPDATE( hyperspt );
+extern VIDEO_START( roadf );
 
 
 static WRITE8_HANDLER( hyperspt_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset, data);
+	coin_counter_w(offset,data);
 }
 
-static WRITE8_HANDLER( irq_mask_w )
+
+/*
+ Track'n'Field has 1k of battery backed RAM which can be erased by setting a dipswitch
+*/
+static UINT8 *nvram;
+static size_t nvram_size;
+
+static NVRAM_HANDLER( hyperspt )
 {
-	hyperspt_state *state = space->machine().driver_data<hyperspt_state>();
-
-	state->m_irq_mask = data & 1;
+	if (read_or_write)
+		mame_fwrite(file,nvram,nvram_size);
+	else if (file)
+		mame_fread(file,nvram,nvram_size);
 }
 
-static ADDRESS_MAP_START( hyperspt_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE_SIZE_MEMBER(hyperspt_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x10c0, 0x10ff) AM_RAM AM_BASE_MEMBER(hyperspt_state, m_scroll)	/* Scroll amount */
+
+
+static ADDRESS_MAP_START( hyperspt_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x10c0, 0x10ff) AM_RAM AM_BASE(&hyperspt_scroll)	/* Scroll amount */
 	AM_RANGE(0x1400, 0x1400) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x1480, 0x1480) AM_WRITE(hyperspt_flipscreen_w)
 	AM_RANGE(0x1481, 0x1481) AM_WRITE(konami_sh_irqtrigger_w)  /* cause interrupt on audio CPU */
 	AM_RANGE(0x1483, 0x1484) AM_WRITE(hyperspt_coin_counter_w)
-	AM_RANGE(0x1487, 0x1487) AM_WRITE(irq_mask_w)  /* Interrupt enable */
+	AM_RANGE(0x1487, 0x1487) AM_WRITE(interrupt_enable_w)  /* Interrupt enable */
 	AM_RANGE(0x1500, 0x1500) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1600, 0x1600) AM_READ_PORT("DSW2")
 	AM_RANGE(0x1680, 0x1680) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x1681, 0x1681) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x1682, 0x1682) AM_READ_PORT("P3_P4")
 	AM_RANGE(0x1683, 0x1683) AM_READ_PORT("DSW1")
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(hyperspt_videoram_w) AM_BASE_MEMBER(hyperspt_state, m_videoram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(hyperspt_colorram_w) AM_BASE_MEMBER(hyperspt_state, m_colorram)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(hyperspt_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(hyperspt_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x3000, 0x37ff) AM_RAM
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( roadf_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE_SIZE_MEMBER(hyperspt_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x10c0, 0x10ff) AM_RAM AM_BASE_MEMBER(hyperspt_state, m_scroll)	/* Scroll amount */
+static ADDRESS_MAP_START( roadf_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x1000, 0x10bf) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x10c0, 0x10ff) AM_RAM AM_BASE(&hyperspt_scroll)	/* Scroll amount */
 	AM_RANGE(0x1400, 0x1400) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x1480, 0x1480) AM_WRITE(hyperspt_flipscreen_w)
 	AM_RANGE(0x1481, 0x1481) AM_WRITE(konami_sh_irqtrigger_w)  /* cause interrupt on audio CPU */
 	AM_RANGE(0x1483, 0x1484) AM_WRITE(hyperspt_coin_counter_w)
-	AM_RANGE(0x1487, 0x1487) AM_WRITE(irq_mask_w)  /* Interrupt enable */
+	AM_RANGE(0x1487, 0x1487) AM_WRITE(interrupt_enable_w)  /* Interrupt enable */
 	AM_RANGE(0x1500, 0x1500) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x1600, 0x1600) AM_READ_PORT("DSW2")
 	AM_RANGE(0x1680, 0x1680) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x1681, 0x1681) AM_READ_PORT("P1")
 	AM_RANGE(0x1682, 0x1682) AM_READ_PORT("P2")
 	AM_RANGE(0x1683, 0x1683) AM_READ_PORT("DSW1")
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(hyperspt_videoram_w) AM_BASE_MEMBER(hyperspt_state, m_videoram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(hyperspt_colorram_w) AM_BASE_MEMBER(hyperspt_state, m_colorram)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(hyperspt_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(hyperspt_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x3000, 0x37ff) AM_RAM
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE(&nvram) AM_SIZE(&nvram_size)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
@@ -84,19 +103,19 @@ static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc000, 0xdfff) AM_DEVWRITE("vlm", hyperspt_sound_w)	  /* speech and output control */
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0xe001, 0xe001) AM_WRITE(konami_SN76496_latch_w)  /* Loads the snd command into the snd latch */
-	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("snsnd", konami_SN76496_w) 	 /* This address triggers the SN chip to read the data port. */
+	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("sn", konami_SN76496_w) 	 /* This address triggers the SN chip to read the data port. */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( soundb_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( soundb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x4fff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
 	AM_RANGE(0x8000, 0x8000) AM_READ(hyperspt_sh_timer_r)
 	AM_RANGE(0xa000, 0xa000) AM_NOP
-	AM_RANGE(0xc000, 0xdfff) AM_DEVWRITE("hyprolyb_adpcm", hyprolyb_adpcm_w)	  /* speech and output control */
+	AM_RANGE(0xc000, 0xdfff) AM_WRITE(hyprolyb_adpcm_w)	  /* speech and output control */
 	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("dac", dac_w)
 	AM_RANGE(0xe001, 0xe001) AM_WRITE(konami_SN76496_latch_w)  /* Loads the snd command into the snd latch */
-	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("snsnd", konami_SN76496_w) 	 /* This address triggers the SN chip to read the data port. */
+	AM_RANGE(0xe002, 0xe002) AM_DEVWRITE("sn", konami_SN76496_w) 	 /* This address triggers the SN chip to read the data port. */
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( hyperspt )
@@ -240,7 +259,7 @@ static const gfx_layout hyperspt_spritelayout =
 
 static GFXDECODE_START( hyperspt )
 	GFXDECODE_ENTRY( "gfx1", 0, hyperspt_spritelayout,     0, 16 )
-	GFXDECODE_ENTRY( "gfx2", 0, hyperspt_charlayout,	16*16, 16 )
+	GFXDECODE_ENTRY( "gfx2", 0, hyperspt_charlayout, 	16*16, 16 )
 GFXDECODE_END
 
 
@@ -273,74 +292,73 @@ static GFXDECODE_START( roadf )
 	GFXDECODE_ENTRY( "gfx2", 0, roadf_charlayout,	 16*16, 16 )
 GFXDECODE_END
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	hyperspt_state *state = device->machine().driver_data<hyperspt_state>();
-
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-}
 
 
-static MACHINE_CONFIG_START( hyperspt, hyperspt_state )
+static MACHINE_DRIVER_START( hyperspt )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, XTAL_18_432MHz/12)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(hyperspt_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", M6809, XTAL_18_432MHz/12)	/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(hyperspt_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,XTAL_14_31818MHz/4) /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80,XTAL_14_31818MHz/4) /* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(hyperspt)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(hyperspt)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(hyperspt)
-	MCFG_PALETTE_LENGTH(16*16+16*16)
+	MDRV_GFXDECODE(hyperspt)
+	MDRV_PALETTE_LENGTH(16*16+16*16)
 
-	MCFG_PALETTE_INIT(hyperspt)
-	MCFG_VIDEO_START(hyperspt)
+	MDRV_PALETTE_INIT(hyperspt)
+	MDRV_VIDEO_START(hyperspt)
+	MDRV_VIDEO_UPDATE(hyperspt)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("trackfld_audio", TRACKFLD_AUDIO, 0)
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("sn", SN76496, XTAL_14_31818MHz/8) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("snsnd", SN76496, XTAL_14_31818MHz/8) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-
-	MCFG_SOUND_ADD("vlm", VLM5030, XTAL_3_579545MHz) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("vlm", VLM5030, XTAL_3_579545MHz) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( hypersptb, hyperspt )
-	MCFG_DEVICE_REMOVE("vlm")
+static MACHINE_DRIVER_START( hypersptb )
+	MDRV_IMPORT_FROM(hyperspt)
+	MDRV_DEVICE_REMOVE("vlm")
 
-	MCFG_CPU_MODIFY("audiocpu")
-	MCFG_CPU_PROGRAM_MAP(soundb_map)
+	MDRV_CPU_MODIFY("audiocpu")
+	MDRV_CPU_PROGRAM_MAP(soundb_map)
 
-	MCFG_FRAGMENT_ADD(hyprolyb_adpcm)
-MACHINE_CONFIG_END
+	MDRV_CPU_ADD("adpcm", M6802, XTAL_14_31818MHz/8)	/* unknown clock */
+	MDRV_CPU_PROGRAM_MAP(hyprolyb_adpcm_map)
+
+	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(hyprolyb_msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( roadf, hyperspt )
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(roadf_map)
-	MCFG_GFXDECODE(roadf)
-	MCFG_VIDEO_START(roadf)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( roadf )
+	MDRV_IMPORT_FROM(hyperspt)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(roadf_map)
+	MDRV_GFXDECODE(roadf)
+	MDRV_VIDEO_START(roadf)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -537,8 +555,8 @@ static DRIVER_INIT( hyperspt )
 }
 
 
-GAME( 1984, hyperspt,  0,        hyperspt,  hyperspt, hyperspt, ROT0,  "Konami (Centuri license)", "Hyper Sports", GAME_SUPPORTS_SAVE )
-GAME( 1984, hypersptb, hyperspt, hypersptb, hyperspt, hyperspt, ROT0,  "bootleg", "Hyper Sports (bootleg)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // has ADPCM vis MSM5205 instead of VLM
-GAME( 1984, hpolym84,  hyperspt, hyperspt,  hyperspt, hyperspt, ROT0,  "Konami",  "Hyper Olympic '84", GAME_SUPPORTS_SAVE )
-GAME( 1984, roadf,     0,        roadf,     roadf,    hyperspt, ROT90, "Konami",  "Road Fighter (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1984, roadf2,    roadf,    roadf,     roadf,    hyperspt, ROT90, "Konami",  "Road Fighter (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1984, hyperspt, 0,		hyperspt, hyperspt, hyperspt, ROT0,  "Konami (Centuri license)", "Hyper Sports", 0 )
+GAME( 1984, hypersptb,hyperspt, hypersptb,hyperspt, hyperspt, ROT0,  "bootleg", "Hyper Sports (bootleg)", GAME_IMPERFECT_SOUND ) // has ADPCM vis MSM5205 instead of VLM
+GAME( 1984, hpolym84, hyperspt, hyperspt, hyperspt, hyperspt, ROT0,  "Konami", "Hyper Olympic '84", 0 )
+GAME( 1984, roadf,	  0,		roadf,	  roadf,	hyperspt, ROT90, "Konami", "Road Fighter (set 1)", 0 )
+GAME( 1984, roadf2,   roadf,	roadf,	  roadf,	hyperspt, ROT90, "Konami", "Road Fighter (set 2)", 0 )

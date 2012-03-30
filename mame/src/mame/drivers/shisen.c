@@ -5,28 +5,34 @@ Shisen
 driver by Nicola Salmoria
 
 ***************************************************************************/
-
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "audio/m72.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
-#include "includes/shisen.h"
+
+extern WRITE8_HANDLER( sichuan2_videoram_w );
+extern WRITE8_HANDLER( sichuan2_bankswitch_w );
+extern WRITE8_HANDLER( sichuan2_paletteram_w );
+
+extern VIDEO_START( sichuan2 );
+extern VIDEO_UPDATE( sichuan2 );
 
 static READ8_HANDLER( sichuan2_dsw1_r )
 {
-	int ret = input_port_read(space->machine(), "DSW1");
+	int ret = input_port_read(space->machine, "DSW1");
 
 	/* Based on the coin mode fill in the upper bits */
-	if (input_port_read(space->machine(), "DSW2") & 0x04)
+	if (input_port_read(space->machine, "DSW2") & 0x04)
 	{
 		/* Mode 1 */
-		ret	|= (input_port_read(space->machine(), "DSW1") << 4);
+		ret	|= (input_port_read(space->machine, "DSW1") << 4);
 	}
 	else
 	{
 		/* Mode 2 */
-		ret	|= (input_port_read(space->machine(), "DSW1") & 0xf0);
+		ret	|= (input_port_read(space->machine, "DSW1") & 0xf0);
 	}
 
 	return ret;
@@ -36,42 +42,42 @@ static WRITE8_HANDLER( sichuan2_coin_w )
 {
 	if ((data & 0xf9) != 0x01) logerror("coin ctrl = %02x\n",data);
 
-	coin_counter_w(space->machine(), 0, data & 0x02);
-	coin_counter_w(space->machine(), 1, data & 0x04);
+	coin_counter_w(0, data & 0x02);
+	coin_counter_w(1, data & 0x04);
 }
 
 
 
-static ADDRESS_MAP_START( shisen_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( shisen_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc800, 0xcaff) AM_RAM_WRITE(sichuan2_paletteram_w) AM_BASE_MEMBER(shisen_state, m_paletteram)
-	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(sichuan2_videoram_w) AM_BASE_MEMBER(shisen_state, m_videoram)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xc800, 0xcaff) AM_RAM_WRITE(sichuan2_paletteram_w) AM_BASE(&paletteram)
+	AM_RANGE(0xd000, 0xdfff) AM_RAM_WRITE(sichuan2_videoram_w) AM_BASE(&videoram)
 	AM_RANGE(0xe000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( shisen_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READWRITE(sichuan2_dsw1_r, sichuan2_coin_w)
-	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW2") AM_DEVWRITE("m72", m72_sound_command_byte_w)
+	AM_RANGE(0x01, 0x01) AM_READ_PORT("DSW2") AM_WRITE(m72_sound_command_byte_w)
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("P1") AM_WRITE(sichuan2_bankswitch_w)
 	AM_RANGE(0x03, 0x03) AM_READ_PORT("P2")
 	AM_RANGE(0x04, 0x04) AM_READ_PORT("COIN")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( shisen_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0xfd00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( shisen_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( shisen_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
 	AM_RANGE(0x80, 0x80) AM_READ(soundlatch_r)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("m72", shisen_sample_addr_w)
-	AM_RANGE(0x82, 0x82) AM_DEVWRITE("m72", m72_sample_w)
-	AM_RANGE(0x83, 0x83) AM_DEVWRITE("m72", m72_sound_irq_ack_w)
-	AM_RANGE(0x84, 0x84) AM_DEVREAD("m72", m72_sample_r)
+	AM_RANGE(0x80, 0x81) AM_WRITE(shisen_sample_addr_w)
+	AM_RANGE(0x82, 0x82) AM_DEVWRITE("dac", m72_sample_w)
+	AM_RANGE(0x83, 0x83) AM_WRITE(m72_sound_irq_ack_w)
+	AM_RANGE(0x84, 0x84) AM_READ(m72_sample_r)
 ADDRESS_MAP_END
 
 
@@ -134,7 +140,7 @@ static INPUT_PORTS_START( shisen )
 	PORT_DIPSETTING(    0x60, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x50, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) ) PORT_CONDITION("DSW2",0x04,PORTCOND_NOTEQUALS,0x04) PORT_DIPLOCATION("SW1:5,6")
+ 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) ) PORT_CONDITION("DSW2",0x04,PORTCOND_NOTEQUALS,0x04) PORT_DIPLOCATION("SW1:5,6")
 	PORT_DIPSETTING(    0x00, DEF_STR( 5C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 2C_1C ) )
@@ -209,46 +215,48 @@ static const ym2151_interface ym2151_config =
 
 
 
-static MACHINE_CONFIG_START( shisen, shisen_state )
+static MACHINE_DRIVER_START( shisen )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 6000000)	/* 6 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(shisen_map)
-	MCFG_CPU_IO_MAP(shisen_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 6000000)	/* 6 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(shisen_map)
+	MDRV_CPU_IO_MAP(shisen_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("soundcpu", Z80, 3579645)
-	MCFG_CPU_PROGRAM_MAP(shisen_sound_map)
-	MCFG_CPU_IO_MAP(shisen_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,128*55)	/* clocked by V1? (Vigilante) */
+	MDRV_CPU_ADD("soundcpu", Z80, 3579645)
+	MDRV_CPU_PROGRAM_MAP(shisen_sound_map)
+	MDRV_CPU_IO_MAP(shisen_sound_io_map)
+	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,128)	/* clocked by V1? (Vigilante) */
 								/* IRQs are generated by main Z80 and YM2151 */
+
+	MDRV_MACHINE_RESET(m72_sound)
+
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(55)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(sichuan2)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(55)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(shisen)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(shisen)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_START(sichuan2)
+	MDRV_VIDEO_START(sichuan2)
+	MDRV_VIDEO_UPDATE(sichuan2)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("m72", M72, 0)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.5)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.5)
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.5)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.5)
-
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
+MACHINE_DRIVER_END
 
 
 

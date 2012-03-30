@@ -4,10 +4,13 @@
 
 *********************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
+#include "cpuintrf.h"
+#include "cpuexec.h"
 #include "k053260.h"
 
-/* 2004-02-28: Fixed PPCM decoding. Games sound much better now.*/
+/* 2004-02-28: Fixed ppcm decoding. Games sound much better now.*/
 
 #define LOG 0
 
@@ -21,38 +24,38 @@ struct _k053260_channel
 	UINT32		start;
 	UINT32		bank;
 	UINT32		volume;
-	int			play;
+	int					play;
 	UINT32		pan;
 	UINT32		pos;
-	int			loop;
-	int			ppcm; /* packed PCM ( 4 bit signed ) */
-	int			ppcm_data;
+	int					loop;
+	int					ppcm; /* packed PCM ( 4 bit signed ) */
+	int					ppcm_data;
 };
 
 typedef struct _k053260_state k053260_state;
-struct _k053260_state
-{
-	sound_stream *				channel;
-	int							mode;
-	int							regs[0x30];
-	UINT8						*rom;
-	int							rom_size;
-	UINT32						*delta_table;
-	k053260_channel				channels[4];
-	const k053260_interface		*intf;
-	device_t				*device;
+struct _k053260_state {
+	sound_stream *					channel;
+	int								mode;
+	int								regs[0x30];
+	UINT8					*rom;
+	int								rom_size;
+	UINT32					*delta_table;
+	k053260_channel		channels[4];
+	const k053260_interface			*intf;
+	const device_config *device;
 };
 
-INLINE k053260_state *get_safe_token(device_t *device)
+INLINE k053260_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == K053260);
-	return (k053260_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_K053260);
+	return (k053260_state *)device->token;
 }
 
 
-static void InitDeltaTable( k053260_state *ic, int rate, int clock )
-{
+static void InitDeltaTable( k053260_state *ic, int rate, int clock ) {
 	int		i;
 	double	base = ( double )rate;
 	double	max = (double)(clock); /* Hz */
@@ -75,8 +78,7 @@ static void InitDeltaTable( k053260_state *ic, int rate, int clock )
 	}
 }
 
-static DEVICE_RESET( k053260 )
-{
+static DEVICE_RESET( k053260 ) {
 	k053260_state *ic = get_safe_token(device);
 	int i;
 
@@ -95,8 +97,7 @@ static DEVICE_RESET( k053260 )
 	}
 }
 
-INLINE int limit( int val, int max, int min )
-{
+INLINE int limit( int val, int max, int min ) {
 	if ( val > max )
 		val = max;
 	else if ( val < min )
@@ -108,8 +109,7 @@ INLINE int limit( int val, int max, int min )
 #define MAXOUT 0x7fff
 #define MINOUT -0x8000
 
-static STREAM_UPDATE( k053260_update )
-{
+static STREAM_UPDATE( k053260_update ) {
 	static const long dpcmcnv[] = { 0,1,2,4,8,16,32,64, -128, -64, -32, -16, -8, -4, -2, -1};
 
 	int i, j, lvol[4], rvol[4], play[4], loop[4], ppcm_data[4], ppcm[4];
@@ -159,7 +159,7 @@ static STREAM_UPDATE( k053260_update )
 						/* this is all due to the dynamic sample rate convertion */
 						if ( pos[i] == 0 || ( ( pos[i] ^ ( pos[i] - delta[i] ) ) & 0x8000 ) == 0x8000 )
 
-						{
+						 {
 							int newdata;
 							if ( pos[i] & 0x8000 ){
 
@@ -212,63 +212,45 @@ static DEVICE_START( k053260 )
 {
 	static const k053260_interface defintrf = { 0 };
 	k053260_state *ic = get_safe_token(device);
-	int rate = device->clock() / 32;
+	int rate = device->clock / 32;
 	int i;
 
 	/* Initialize our chip structure */
 	ic->device = device;
-	ic->intf = (device->static_config() != NULL) ? (const k053260_interface *)device->static_config() : &defintrf;
+	ic->intf = (device->static_config != NULL) ? (const k053260_interface *)device->static_config : &defintrf;
 
 	ic->mode = 0;
-
-	const memory_region *region = (ic->intf->rgnoverride != NULL) ? device->machine().region(ic->intf->rgnoverride) : device->region();
-
-	ic->rom = *region;
-	ic->rom_size = region->bytes();
+	ic->rom = device->region;
+	ic->rom_size = device->regionbytes;
+	if (ic->intf->rgnoverride != NULL)
+	{
+		ic->rom = memory_region(device->machine, ic->intf->rgnoverride);
+		ic->rom_size = memory_region_length(device->machine, ic->intf->rgnoverride);
+	}
 
 	DEVICE_RESET_CALL(k053260);
 
 	for ( i = 0; i < 0x30; i++ )
 		ic->regs[i] = 0;
 
-	ic->delta_table = auto_alloc_array( device->machine(), UINT32, 0x1000 );
+	ic->delta_table = auto_alloc_array( device->machine, UINT32, 0x1000 );
 
-	ic->channel = device->machine().sound().stream_alloc( *device, 0, 2, rate, ic, k053260_update );
+	ic->channel = stream_create( device, 0, 2, rate, ic, k053260_update );
 
-	InitDeltaTable( ic, rate, device->clock() );
-
-	/* register with the save state system */
-	device->save_item(NAME(ic->mode));
-	device->save_item(NAME(ic->regs));
-
-	for ( i = 0; i < 4; i++ )
-	{
-		device->save_item(NAME(ic->channels[i].rate), i);
-		device->save_item(NAME(ic->channels[i].size), i);
-		device->save_item(NAME(ic->channels[i].start), i);
-		device->save_item(NAME(ic->channels[i].bank), i);
-		device->save_item(NAME(ic->channels[i].volume), i);
-		device->save_item(NAME(ic->channels[i].play), i);
-		device->save_item(NAME(ic->channels[i].pan), i);
-		device->save_item(NAME(ic->channels[i].pos), i);
-		device->save_item(NAME(ic->channels[i].loop), i);
-		device->save_item(NAME(ic->channels[i].ppcm), i);
-		device->save_item(NAME(ic->channels[i].ppcm_data), i);
-	}
+	InitDeltaTable( ic, rate, device->clock );
 
 	/* setup SH1 timer if necessary */
 	if ( ic->intf->irq )
-		device->machine().scheduler().timer_pulse( attotime::from_hz(device->clock()) * 32, ic->intf->irq, "ic->intf->irq" );
+		timer_pulse( device->machine, attotime_mul(ATTOTIME_IN_HZ(device->clock), 32), NULL, 0, ic->intf->irq );
 }
 
-INLINE void check_bounds( k053260_state *ic, int channel )
-{
+INLINE void check_bounds( k053260_state *ic, int channel ) {
 
 	int channel_start = ( ic->channels[channel].bank << 16 ) + ic->channels[channel].start;
 	int channel_end = channel_start + ic->channels[channel].size - 1;
 
 	if ( channel_start > ic->rom_size ) {
-		logerror("K53260: Attempting to start playing past the end of the ROM ( start = %06x, end = %06x ).\n", channel_start, channel_end );
+		logerror("K53260: Attempting to start playing past the end of the rom ( start = %06x, end = %06x ).\n", channel_start, channel_end );
 
 		ic->channels[channel].play = 0;
 
@@ -276,7 +258,7 @@ INLINE void check_bounds( k053260_state *ic, int channel )
 	}
 
 	if ( channel_end > ic->rom_size ) {
-		logerror("K53260: Attempting to play past the end of the ROM ( start = %06x, end = %06x ).\n", channel_start, channel_end );
+		logerror("K53260: Attempting to play past the end of the rom ( start = %06x, end = %06x ).\n", channel_start, channel_end );
 
 		ic->channels[channel].size = ic->rom_size - channel_start;
 	}
@@ -296,7 +278,7 @@ WRITE8_DEVICE_HANDLER( k053260_w )
 		return;
 	}
 
-	 ic->channel->update();
+	stream_update( ic->channel);
 
 	/* before we update the regs, we need to check for a latched reg */
 	if ( r == 0x28 ) {
@@ -416,7 +398,7 @@ READ8_DEVICE_HANDLER( k053260_r )
 			}
 		break;
 
-		case 0x2e: /* read ROM */
+		case 0x2e: /* read rom */
 			if ( ic->mode & 1 )
 			{
 				UINT32 offs = ic->channels[0].start + ( ic->channels[0].pos >> BASE_SHIFT ) + ( ic->channels[0].bank << 16 );
@@ -424,7 +406,7 @@ READ8_DEVICE_HANDLER( k053260_r )
 				ic->channels[0].pos += ( 1 << 16 );
 
 				if ( offs > ic->rom_size ) {
-					logerror("%s: K53260: Attempting to read past ROM size in ROM Read Mode (offs = %06x, size = %06x).\n", device->machine().describe_context(),offs,ic->rom_size );
+					logerror("%s: K53260: Attempting to read past rom size in rom Read Mode (offs = %06x, size = %06x).\n", cpuexec_describe_context(device->machine),offs,ic->rom_size );
 
 					return 0;
 				}
@@ -451,16 +433,14 @@ DEVICE_GET_INFO( k053260 )
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( k053260 );		break;
 		case DEVINFO_FCT_STOP:							/* nothing */									break;
-		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME( k053260 );		break;
+		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME( k053260);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "K053260");						break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "Konami custom");				break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");							break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
+		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Konami custom");				break;
+		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");							break;
+		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
+		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(K053260, k053260);

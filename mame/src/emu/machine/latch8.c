@@ -6,7 +6,7 @@
 
 **********************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "memconv.h"
 #include "sound/discrete.h"
 #include "latch8.h"
@@ -19,18 +19,19 @@ struct _latch8_t
 	UINT8			 has_node_map;
 	UINT8			 has_devread;
 	UINT8			 has_read;
-	device_t	*devices[8];
+	const device_config	*devices[8];
 };
 
 /* ----------------------------------------------------------------------- */
 
-INLINE latch8_t *get_safe_token(device_t *device) {
+INLINE latch8_t *get_safe_token(const device_config *device) {
 	assert( device != NULL );
-	assert( device->type() == LATCH8 );
-	return ( latch8_t * ) downcast<legacy_device_base *>(device)->token();
+	assert( device->token != NULL );
+	assert( device->type == LATCH8 );
+	return ( latch8_t * ) device->token;
 }
 
-static void update(device_t *device, UINT8 new_val, UINT8 mask)
+static void update(const device_config *device, UINT8 new_val, UINT8 mask)
 {
 	/*  temporary hack until the discrete system is a device */
 	latch8_t *latch8 = get_safe_token(device);
@@ -44,13 +45,13 @@ static void update(device_t *device, UINT8 new_val, UINT8 mask)
 		UINT8 changed = old_val ^ latch8->value;
 		for (i=0; i<8; i++)
 			if (((changed & (1<<i)) != 0) && latch8->intf->node_map[i] != 0)
-				discrete_sound_w(device->machine().device(latch8->intf->node_device[i]), latch8->intf->node_map[i] , (latch8->value >> i) & 1);
+				discrete_sound_w(devtag_get_device(device->machine, latch8->intf->node_device[i]), latch8->intf->node_map[i] , (latch8->value >> i) & 1);
 	}
 }
 
 static TIMER_CALLBACK( latch8_timerproc )
 {
-	device_t *device = (device_t *)ptr;
+	const device_config *device = (const device_config *)ptr;
 	UINT8 new_val = param & 0xFF;
 	UINT8 mask = param >> 8;
 
@@ -72,7 +73,7 @@ READ8_DEVICE_HANDLER( latch8_r )
 		int i;
 		for (i=0; i<8; i++)
 		{
-			device_t *read_dev = latch8->devices[i];
+			const device_config *read_dev = latch8->devices[i];
 			if (read_dev != NULL)
 			{
 				res &= ~( 1 << i);
@@ -83,7 +84,7 @@ READ8_DEVICE_HANDLER( latch8_r )
 	if (latch8->has_read)
 	{
 		/*  temporary hack until all relevant systems are devices */
-		address_space *space = device->machine().firstcpu->memory().space(AS_PROGRAM);
+		const address_space *space = cpu_get_address_space(device->machine->firstcpu, ADDRESS_SPACE_PROGRAM);
 		int i;
 		for (i=0; i<8; i++)
 		{
@@ -105,7 +106,7 @@ WRITE8_DEVICE_HANDLER( latch8_w )
 	assert(offset == 0);
 
 	if (latch8->intf->nosync != 0xff)
-		device->machine().scheduler().synchronize(FUNC(latch8_timerproc), (0xFF << 8) | data, (void *)device);
+		timer_call_after_resynch(device->machine, (void *)device, (0xFF << 8) | data, latch8_timerproc);
 	else
 		update(device, data, 0xFF);
 }
@@ -123,7 +124,7 @@ WRITE8_DEVICE_HANDLER( latch8_reset)
 /* read bit x                 */
 /* return (latch >> x) & 0x01 */
 
-INLINE UINT8 latch8_bitx_r(device_t *device, offs_t offset, int bit)
+INLINE UINT8 latch8_bitx_r(const device_config *device, offs_t offset, int bit)
 {
 	latch8_t *latch8 = get_safe_token(device);
 
@@ -153,7 +154,7 @@ READ8_DEVICE_HANDLER( latch8_bit7_q_r) { return latch8_bitx_r(device, offset, 7)
 /* write bit x from data into bit determined by offset */
 /* latch = (latch & ~(1<<offset)) | (((data >> x) & 0x01) << offset) */
 
-INLINE void latch8_bitx_w(device_t *device, int bit, offs_t offset, UINT8 data)
+INLINE void latch8_bitx_w(const device_config *device, int bit, offs_t offset, UINT8 data)
 {
 	latch8_t *latch8 = get_safe_token(device);
 	UINT8 mask = (1<<offset);
@@ -165,7 +166,7 @@ INLINE void latch8_bitx_w(device_t *device, int bit, offs_t offset, UINT8 data)
 	if (latch8->intf->nosync & mask)
 		update(device, masked_data, mask);
 	else
-		device->machine().scheduler().synchronize(FUNC(latch8_timerproc), (mask << 8) | masked_data, (void *) device);
+		timer_call_after_resynch(device->machine, (void *) device, (mask << 8) | masked_data, latch8_timerproc);
 }
 
 WRITE8_DEVICE_HANDLER( latch8_bit0_w ) { latch8_bitx_w(device, 0, offset, data); }
@@ -187,7 +188,7 @@ static DEVICE_START( latch8 )
 	int i;
 
 	/* validate arguments */
-	latch8->intf = (latch8_config *)downcast<const legacy_device_base *>(device)->inline_config();
+	latch8->intf = (latch8_config *)device->inline_config;
 
 	latch8->value = 0x0;
 
@@ -196,7 +197,7 @@ static DEVICE_START( latch8 )
 		if (latch8->intf->node_map[i] )
 		{
 			if (!latch8->intf->node_device[i])
-				fatalerror("Device %s: Bit %d has invalid discrete device\n", device->tag(), i);
+				fatalerror("Device %s: Bit %d has invalid discrete device\n", device->tag, i);
 			latch8->has_node_map = 1;
 		}
 
@@ -205,10 +206,11 @@ static DEVICE_START( latch8 )
 		if (latch8->intf->devread[i].tag != NULL)
 		{
 			if (latch8->devices[i] != NULL)
-				fatalerror("Device %s: Bit %d already has a handler.\n", device->tag(), i);
-			latch8->devices[i] = device->machine().device(latch8->intf->devread[i].tag);
+				fatalerror("Device %s: Bit %d already has a handler.\n", device->tag, i);
+			latch8->devices[i] = devtag_get_device(device->machine,
+					latch8->intf->devread[i].tag);
 			if (latch8->devices[i] == NULL)
-				fatalerror("Device %s: Unable to find device %s\n", device->tag(), latch8->intf->devread[i].tag);
+				fatalerror("Device %s: Unable to find device %s\n", device->tag, latch8->intf->devread[i].tag);
 			latch8->has_devread = 1;
 		}
 
@@ -217,11 +219,11 @@ static DEVICE_START( latch8 )
 		if (latch8->intf->devread[i].read_handler != NULL)
 		{
 			if (latch8->devices[i] != NULL)
-				fatalerror("Device %s: Bit %d already has a handler.\n", device->tag(), i);
+				fatalerror("Device %s: Bit %d already has a handler.\n", device->tag, i);
 			latch8->has_read = 1;
 		}
 
-	device->save_item(NAME(latch8->value));
+	state_save_register_device_item(device, 0, latch8->value);
 }
 
 
@@ -240,6 +242,7 @@ DEVICE_GET_INFO( latch8 )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(latch8_t);				break;
 		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = sizeof(latch8_config);							break;
+		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;		break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(latch8);break;
@@ -254,6 +257,3 @@ DEVICE_GET_INFO( latch8 )
 		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
-
-
-DEFINE_LEGACY_DEVICE(LATCH8, latch8);

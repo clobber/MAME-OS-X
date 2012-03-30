@@ -22,81 +22,82 @@ Revisions:
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/ay8910.h"
-#include "includes/aeroboto.h"
+
+
+extern UINT8 *aeroboto_videoram;
+extern UINT8 *aeroboto_hscroll, *aeroboto_vscroll, *aeroboto_tilecolor;
+extern UINT8 *aeroboto_starx, *aeroboto_stary, *aeroboto_bgcolor;
+
+VIDEO_START( aeroboto );
+VIDEO_UPDATE( aeroboto );
+
+READ8_HANDLER( aeroboto_in0_r );
+WRITE8_HANDLER( aeroboto_3000_w );
+WRITE8_HANDLER( aeroboto_videoram_w );
+WRITE8_HANDLER( aeroboto_tilecolor_w );
+
+static UINT8 *aeroboto_mainram;
+static int disable_irq = 0;
 
 
 static READ8_HANDLER( aeroboto_201_r )
 {
-	aeroboto_state *state = space->machine().driver_data<aeroboto_state>();
 	/* if you keep a button pressed during boot, the game will expect this */
 	/* serie of values to be returned from 3004, and display "PASS 201" if it is */
-	static const UINT8 res[4] = { 0xff, 0x9f, 0x1b, 0x03 };
-
-	logerror("PC %04x: read 3004\n", cpu_get_pc(&space->device()));
-	return res[(state->m_count++) & 3];
+	static const UINT8 res[4] = { 0xff,0x9f,0x1b,0x03};
+	static int count;
+	logerror("PC %04x: read 3004\n",cpu_get_pc(space->cpu));
+	return res[(count++)&3];
 }
 
 
 static INTERRUPT_GEN( aeroboto_interrupt )
 {
-	aeroboto_state *state = device->machine().driver_data<aeroboto_state>();
-
-	if (!state->m_disable_irq)
-		device_set_input_line(device, 0, ASSERT_LINE);
+	if (!disable_irq)
+		cpu_set_input_line(device, 0, HOLD_LINE);
 	else
-		state->m_disable_irq--;
-}
-
-static READ8_HANDLER( aeroboto_irq_ack_r )
-{
-	cputag_set_input_line(space->machine(),"maincpu", 0, CLEAR_LINE);
-	return 0xff;
+		disable_irq--;
 }
 
 static READ8_HANDLER( aeroboto_2973_r )
 {
-	aeroboto_state *state = space->machine().driver_data<aeroboto_state>();
-
-	state->m_mainram[0x02be] = 0;
-	return 0xff;
+	aeroboto_mainram[0x02be] = 0;
+	return(0xff);
 }
 
 static WRITE8_HANDLER ( aeroboto_1a2_w )
 {
-	aeroboto_state *state = space->machine().driver_data<aeroboto_state>();
-
-	state->m_mainram[0x01a2] = data;
-	if (data)
-		state->m_disable_irq = 1;
+	aeroboto_mainram[0x01a2] = data;
+	if (data) disable_irq = 1;
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x01a2, 0x01a2) AM_WRITE(aeroboto_1a2_w)			// affects IRQ line (more protection?)
-	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE_MEMBER(aeroboto_state, m_mainram)	// main  RAM
+	AM_RANGE(0x0000, 0x07ff) AM_RAM AM_BASE(&aeroboto_mainram)	// main  RAM
 	AM_RANGE(0x0800, 0x08ff) AM_RAM								// tile color buffer; copied to 0x2000
-	AM_RANGE(0x0900, 0x09ff) AM_WRITEONLY						// a backup of default tile colors
-	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(aeroboto_videoram_w) AM_BASE_MEMBER(aeroboto_state, m_videoram)		// tile RAM
-	AM_RANGE(0x1800, 0x183f) AM_RAM AM_BASE_MEMBER(aeroboto_state, m_hscroll)	// horizontal scroll regs
-	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(aeroboto_tilecolor_w) AM_BASE_MEMBER(aeroboto_state, m_tilecolor)	// tile color RAM
+	AM_RANGE(0x0900, 0x09ff) AM_WRITEONLY 						// a backup of default tile colors
+	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(aeroboto_videoram_w) AM_BASE(&aeroboto_videoram)		// tile RAM
+	AM_RANGE(0x1800, 0x183f) AM_RAM AM_BASE(&aeroboto_hscroll)	// horizontal scroll regs
+	AM_RANGE(0x2000, 0x20ff) AM_RAM_WRITE(aeroboto_tilecolor_w) AM_BASE(&aeroboto_tilecolor)	// tile color RAM
 	AM_RANGE(0x1840, 0x27ff) AM_WRITENOP					// cleared during custom LSI test
-	AM_RANGE(0x2800, 0x28ff) AM_RAM AM_BASE_SIZE_MEMBER(aeroboto_state, m_spriteram, m_spriteram_size)	// sprite RAM
+	AM_RANGE(0x2800, 0x28ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)				// sprite RAM
 	AM_RANGE(0x2900, 0x2fff) AM_WRITENOP					// cleared along with sprite RAM
 	AM_RANGE(0x2973, 0x2973) AM_READ(aeroboto_2973_r)			// protection read
 	AM_RANGE(0x3000, 0x3000) AM_READWRITE(aeroboto_in0_r, aeroboto_3000_w)
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("DSW1") AM_WRITE(soundlatch_w)
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("DSW2") AM_WRITE(soundlatch2_w)
-	AM_RANGE(0x3003, 0x3003) AM_WRITEONLY AM_BASE_MEMBER(aeroboto_state, m_vscroll)
-	AM_RANGE(0x3004, 0x3004) AM_READ(aeroboto_201_r) AM_WRITEONLY AM_BASE_MEMBER(aeroboto_state, m_starx)
-	AM_RANGE(0x3005, 0x3005) AM_WRITEONLY AM_BASE_MEMBER(aeroboto_state, m_stary)	// usable but probably wrong
-	AM_RANGE(0x3006, 0x3006) AM_WRITEONLY AM_BASE_MEMBER(aeroboto_state, m_bgcolor)
-	AM_RANGE(0x3800, 0x3800) AM_READ(aeroboto_irq_ack_r)		// watchdog or IRQ ack
+	AM_RANGE(0x3003, 0x3003) AM_WRITEONLY AM_BASE(&aeroboto_vscroll)
+	AM_RANGE(0x3004, 0x3004) AM_READ(aeroboto_201_r) AM_WRITEONLY AM_BASE(&aeroboto_starx)
+	AM_RANGE(0x3005, 0x3005) AM_WRITEONLY AM_BASE(&aeroboto_stary)	// usable but probably wrong
+	AM_RANGE(0x3006, 0x3006) AM_WRITEONLY AM_BASE(&aeroboto_bgcolor)
+	AM_RANGE(0x3800, 0x3800) AM_READNOP							// watchdog or IRQ ack
 	AM_RANGE(0x4000, 0xffff) AM_ROM								// main ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x9000, 0x9001) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x9002, 0x9002) AM_DEVREAD("ay1", ay8910_r)
@@ -228,69 +229,48 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( formatz )
 {
-	aeroboto_state *state = machine.driver_data<aeroboto_state>();
-
-	state->m_stars_rom = machine.region("gfx2")->base();
-	state->m_stars_length = machine.region("gfx2")->bytes();
-
-	state->save_item(NAME(state->m_disable_irq));
-	state->save_item(NAME(state->m_count));
+    state_save_register_global(machine, disable_irq);
 }
 
-static MACHINE_RESET( formatz )
-{
-	aeroboto_state *state = machine.driver_data<aeroboto_state>();
-
-	state->m_disable_irq = 0;
-	state->m_count = 0;
-
-	state->m_charbank = 0;
-	state->m_starsoff = 0;
-	state->m_ox = 0;
-	state->m_oy = 0;
-	state->m_sx = 0;
-	state->m_sy = 0;
-}
-
-static MACHINE_CONFIG_START( formatz, aeroboto_state )
+static MACHINE_DRIVER_START( formatz )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, XTAL_10MHz/8) /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", aeroboto_interrupt)
+	MDRV_CPU_ADD("maincpu", M6809, XTAL_10MHz/8) /* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", aeroboto_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", M6809, XTAL_10MHz/16) /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("audiocpu", M6809, XTAL_10MHz/16) /* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_START(formatz)
-	MCFG_MACHINE_RESET(formatz)
+    MDRV_MACHINE_START(formatz)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 31*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(aeroboto)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 31*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(aeroboto)
+	MDRV_GFXDECODE(aeroboto)
 
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MCFG_VIDEO_START(aeroboto)
+	MDRV_PALETTE_INIT(RRRR_GGGG_BBBB)
+	MDRV_VIDEO_START(aeroboto)
+	MDRV_VIDEO_UPDATE(aeroboto)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, XTAL_10MHz/8) /* verified on pcb */
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay1", AY8910, XTAL_10MHz/8) /* verified on pcb */
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay2", AY8910, XTAL_10MHz/16) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, XTAL_10MHz/16) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 
@@ -355,4 +335,4 @@ ROM_END
 
 
 GAME( 1984, formatz,  0,       formatz, formatz, 0, ROT0, "Jaleco", "Formation Z", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
-GAME( 1984, aeroboto, formatz, formatz, formatz, 0, ROT0, "Jaleco (Williams license)", "Aeroboto", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
+GAME( 1984, aeroboto, formatz, formatz, formatz, 0, ROT0, "[Jaleco] (Williams license)", "Aeroboto", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )

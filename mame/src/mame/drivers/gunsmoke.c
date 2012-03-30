@@ -39,21 +39,21 @@ Stephh's notes (based on the games Z80 code and some tests) :
     You can enter 3 chars for your initials.
 
 
-2) 'gunsmokej'
+2) 'gunsmokj'
 
   - Japan version (but English text though).
     You can enter 8 chars for your initials.
 
 
-3) 'gunsmokeu'
+3) 'gunsmoku'
 
-  - US version licensed to Romstar.
+  - US version licenced to Romstar.
     You can enter 3 chars for your initials.
 
 
-4) 'gunsmokeua'
+4) 'gunsmoka'
 
-  - US version licensed to Romstar.
+  - US version licenced to Romstar.
     You can enter 3 chars for your initials.
   - This is probably a later version of the game because some code
     has been added for the "Lives" Dip Switch that replaces the
@@ -66,11 +66,22 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/2203intf.h"
-#include "includes/gunsmoke.h"
 
+extern UINT8 *gunsmoke_scrollx;
+extern UINT8 *gunsmoke_scrolly;
+
+extern WRITE8_HANDLER( gunsmoke_c804_w );
+extern WRITE8_HANDLER( gunsmoke_d806_w );
+extern WRITE8_HANDLER( gunsmoke_videoram_w );
+extern WRITE8_HANDLER( gunsmoke_colorram_w );
+
+extern PALETTE_INIT( gunsmoke );
+extern VIDEO_START( gunsmoke );
+extern VIDEO_UPDATE( gunsmoke );
 
 /* Read/Write Handlers */
 
@@ -92,14 +103,15 @@ static READ8_HANDLER( gunsmoke_protection_r )
     */
 
 	static const UINT8 gunsmoke_fixed_data[] = { 0xff, 0x00, 0x00 };
-	return gunsmoke_fixed_data[offset];
+
+    return gunsmoke_fixed_data[offset];
 }
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( gunsmoke_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( gunsmoke_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
 	AM_RANGE(0xc002, 0xc002) AM_READ_PORT("P2")
@@ -109,16 +121,16 @@ static ADDRESS_MAP_START( gunsmoke_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(gunsmoke_c804_w)	// ROM bank switch, screen flip
 	AM_RANGE(0xc806, 0xc806) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(gunsmoke_videoram_w) AM_BASE_MEMBER(gunsmoke_state, m_videoram)
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(gunsmoke_colorram_w) AM_BASE_MEMBER(gunsmoke_state, m_colorram)
-	AM_RANGE(0xd800, 0xd801) AM_RAM AM_BASE_MEMBER(gunsmoke_state, m_scrollx)
-	AM_RANGE(0xd802, 0xd802) AM_RAM AM_BASE_MEMBER(gunsmoke_state, m_scrolly)
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(gunsmoke_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(gunsmoke_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd800, 0xd801) AM_RAM AM_BASE(&gunsmoke_scrollx)
+	AM_RANGE(0xd802, 0xd802) AM_RAM AM_BASE(&gunsmoke_scrolly)
 	AM_RANGE(0xd806, 0xd806) AM_WRITE(gunsmoke_d806_w)	// sprites and bg enable
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(gunsmoke_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc800) AM_READ(soundlatch_r)
@@ -208,7 +220,7 @@ static INPUT_PORTS_START( gunsmoke )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( gunsmokeua )
+static INPUT_PORTS_START( gunsmoka )
 	PORT_INCLUDE(gunsmoke)
 
 	// Same as 'gunsmoke', but "Lives" Dip Switch instead of "Demonstration" Dip Switch
@@ -271,72 +283,47 @@ GFXDECODE_END
 
 /* Machine Driver */
 
-static MACHINE_START( gunsmoke )
-{
-	gunsmoke_state *state = machine.driver_data<gunsmoke_state>();
-	UINT8 *rombase = machine.region("maincpu")->base();
+static MACHINE_DRIVER_START( gunsmoke )
+	// basic machine hardware
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	// 4 MHz
+	MDRV_CPU_PROGRAM_MAP(gunsmoke_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	memory_configure_bank(machine, "bank1", 0, 4, &rombase[0x10000], 0x4000);
+	MDRV_CPU_ADD("audiocpu", Z80, 3000000)	// 3 MHz
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
 
-	state->save_item(NAME(state->m_chon));
-	state->save_item(NAME(state->m_objon));
-	state->save_item(NAME(state->m_bgon));
-	state->save_item(NAME(state->m_sprite3bank));
-}
+	// video hardware
 
-static MACHINE_RESET( gunsmoke )
-{
-	gunsmoke_state *state = machine.driver_data<gunsmoke_state>();
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	state->m_chon = 0;
-	state->m_objon = 0;
-	state->m_bgon = 0;
-	state->m_sprite3bank = 0;
-}
+	MDRV_GFXDECODE(gunsmoke)
+	MDRV_PALETTE_LENGTH(32*4+16*16+16*16)
 
-static MACHINE_CONFIG_START( gunsmoke, gunsmoke_state )
+	MDRV_PALETTE_INIT(gunsmoke)
+	MDRV_VIDEO_START(gunsmoke)
+	MDRV_VIDEO_UPDATE(gunsmoke)
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	// 4 MHz
-	MCFG_CPU_PROGRAM_MAP(gunsmoke_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	// sound hardware
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3000000)	// 3 MHz
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
+	MDRV_SOUND_ADD("ym1", YM2203, 1500000)
+	MDRV_SOUND_ROUTE(0, "mono", 0.22)
+	MDRV_SOUND_ROUTE(1, "mono", 0.22)
+	MDRV_SOUND_ROUTE(2, "mono", 0.22)
+	MDRV_SOUND_ROUTE(3, "mono", 0.14)
 
-	MCFG_MACHINE_START(gunsmoke)
-	MCFG_MACHINE_RESET(gunsmoke)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-
-	MCFG_GFXDECODE(gunsmoke)
-	MCFG_PALETTE_LENGTH(32*4+16*16+16*16)
-
-	MCFG_PALETTE_INIT(gunsmoke)
-	MCFG_VIDEO_START(gunsmoke)
-	MCFG_SCREEN_UPDATE_STATIC(gunsmoke)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ym1", YM2203, 1500000)
-	MCFG_SOUND_ROUTE(0, "mono", 0.22)
-	MCFG_SOUND_ROUTE(1, "mono", 0.22)
-	MCFG_SOUND_ROUTE(2, "mono", 0.22)
-	MCFG_SOUND_ROUTE(3, "mono", 0.14)
-
-	MCFG_SOUND_ADD("ym2", YM2203, 1500000)
-	MCFG_SOUND_ROUTE(0, "mono", 0.22)
-	MCFG_SOUND_ROUTE(1, "mono", 0.22)
-	MCFG_SOUND_ROUTE(2, "mono", 0.22)
-	MCFG_SOUND_ROUTE(3, "mono", 0.14)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, 1500000)
+	MDRV_SOUND_ROUTE(0, "mono", 0.22)
+	MDRV_SOUND_ROUTE(1, "mono", 0.22)
+	MDRV_SOUND_ROUTE(2, "mono", 0.22)
+	MDRV_SOUND_ROUTE(3, "mono", 0.14)
+MACHINE_DRIVER_END
 
 /* ROMs */
 
@@ -534,7 +521,7 @@ ROM_END
 
 /* Game Drivers */
 
-GAME( 1985, gunsmoke,  0,        gunsmoke, gunsmoke,  0, ROT270, "Capcom", "Gun.Smoke (World)", GAME_SUPPORTS_SAVE )
-GAME( 1985, gunsmokej, gunsmoke, gunsmoke, gunsmoke,  0, ROT270, "Capcom", "Gun.Smoke (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1985, gunsmokeu, gunsmoke, gunsmoke, gunsmoke,  0, ROT270, "Capcom (Romstar license)", "Gun.Smoke (US set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1986, gunsmokeua,gunsmoke, gunsmoke, gunsmokeua,0, ROT270, "Capcom (Romstar license)", "Gun.Smoke (US set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, gunsmoke, 0,        gunsmoke, gunsmoke, 0, ROT270, "Capcom", "Gun.Smoke (World)", GAME_SUPPORTS_SAVE )
+GAME( 1985, gunsmokej, gunsmoke, gunsmoke, gunsmoke, 0, ROT270, "Capcom", "Gun.Smoke (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1985, gunsmokeu, gunsmoke, gunsmoke, gunsmoke, 0, ROT270, "Capcom (Romstar license)", "Gun.Smoke (US set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, gunsmokeua, gunsmoke, gunsmoke, gunsmoka, 0, ROT270, "Capcom (Romstar license)", "Gun.Smoke (US set 2)", GAME_SUPPORTS_SAVE )

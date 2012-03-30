@@ -1,85 +1,79 @@
 /***************************************************************************
 
-    Ambush Memory Map (preliminary)
+Ambush Memory Map (preliminary)
 
-    driver by Zsolt Vasvari
-
-
-    Memory Mapped:
-
-    0000-7fff   R   ROM
-    8000-87ff   R/W RAM
-    a000        R   Watchdog Reset
-    c080-c09f   W   Scroll RAM (1 byte for each column)
-    c100-c1ff   W   Color RAM (1 line corresponds to 4 in the video ram)
-    c200-c3ff   W   Sprite RAM
-    c400-c7ff   W   Video RAM
-    c800        R   DIP Switches
-    cc00-cc03   W   ??? (Maybe analog sound triggers?)
-    cc04        W   Flip Screen
-    cc05        W   Color Bank Select
-    cc07        W   Coin Counter
+driver by Zsolt Vasvari
 
 
-    I/O Ports:
+Memory Mapped:
 
-    00-01       R/W AY8912 #0 (Port A = Input Port #0)
-    80-81       R/W AY8912 #1 (Port A = Input Port #1)
+0000-7fff   R   ROM
+8000-87ff   R/W RAM
+a000        R   Watchdog Reset
+c080-c09f   W   Scroll RAM (1 byte for each column)
+c100-c1ff   W   Color RAM (1 line corresponds to 4 in the video ram)
+c200-c3ff   W   Sprite RAM
+c400-c7ff   W   Video RAM
+c800        R   DIP Switches
+cc00-cc03   W   ??? (Maybe analog sound triggers?)
+cc04        W   Flip Screen
+cc05        W   Color Bank Select
+cc07        W   Coin Counter
 
 
-    TODO:
+I/O Ports:
 
-    - Verify actual Z80 and AY8912 clock speeds from PCB (XTAL confirmed)
+00-01       R/W AY8910 #0 (Port A = Input Port #0)
+80-81       R/W AY8910 #1 (Port A = Input Port #1)
+
+
+TODO:
+
+- Verify Z80 and AY8910 clock speeds
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/ambush.h"
 
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+extern UINT8 *ambush_scrollram;
+extern UINT8 *ambush_colorbank;
+
+PALETTE_INIT( ambush );
+VIDEO_UPDATE( ambush );
+
 
 static WRITE8_HANDLER( ambush_coin_counter_w )
 {
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
 }
 
 static WRITE8_HANDLER( flip_screen_w )
 {
-	flip_screen_set(space->machine(), data);
+	flip_screen_set(space->machine, data);
 }
 
 
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(watchdog_reset_r)
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xc080, 0xc09f) AM_BASE_MEMBER(ambush_state, m_scrollram)
-	AM_RANGE(0xc100, 0xc1ff) AM_BASE_MEMBER(ambush_state, m_colorram)
-	AM_RANGE(0xc200, 0xc3ff) AM_BASE_SIZE_MEMBER(ambush_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0xc400, 0xc7ff) AM_BASE_SIZE_MEMBER(ambush_state, m_videoram, m_videoram_size)
+	AM_RANGE(0xc080, 0xc09f) AM_BASE(&ambush_scrollram)
+	AM_RANGE(0xc100, 0xc1ff) AM_BASE(&colorram)
+	AM_RANGE(0xc200, 0xc3ff) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xc400, 0xc7ff) AM_BASE(&videoram) AM_SIZE(&videoram_size)
 	AM_RANGE(0xc800, 0xc800) AM_READ_PORT("DSW1")
 	AM_RANGE(0xcc00, 0xcc03) AM_WRITENOP
 	AM_RANGE(0xcc04, 0xcc04) AM_WRITE(flip_screen_w)
-	AM_RANGE(0xcc05, 0xcc05) AM_WRITEONLY AM_BASE_MEMBER(ambush_state, m_colorbank)
+	AM_RANGE(0xcc05, 0xcc05) AM_WRITEONLY AM_BASE(&ambush_colorbank)
 	AM_RANGE(0xcc07, 0xcc07) AM_WRITE(ambush_coin_counter_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_address_w)
 	AM_RANGE(0x01, 0x01) AM_DEVWRITE("ay1", ay8910_data_w)
@@ -87,12 +81,6 @@ static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	AM_RANGE(0x81, 0x81) AM_DEVWRITE("ay2", ay8910_data_w)
 ADDRESS_MAP_END
 
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( ambush )
 	PORT_START("SYSTEM")
@@ -157,18 +145,12 @@ static INPUT_PORTS_START( ambusht )
 INPUT_PORTS_END
 
 
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
-
 static const gfx_layout charlayout =
 {
 	8,8,    /* 8*8 chars */
 	1024,   /* 2048 characters */
 	2,      /* 2 bits per pixel */
-	{ 0, 0x2000*8 },  /* The bitplanes are separate */
+	{ 0, 0x2000*8 },  /* The bitplanes are seperate */
 	{ 0, 1, 2, 3, 4, 5, 6, 7},
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8},
 	8*8     /* every char takes 8 consecutive bytes */
@@ -179,7 +161,7 @@ static const gfx_layout spritelayout =
 	16,16,  /* 8*8 chars */
 	256,    /* 2048 characters */
 	2,      /* 2 bits per pixel */
-	{ 0, 0x2000*8 },  /* The bitplanes are separate */
+	{ 0, 0x2000*8 },  /* The bitplanes are seperate */
 	{     0,     1,     2,     3,     4,     5,     6,     7,
 	  8*8+0, 8*8+1, 8*8+2, 8*8+3, 8*8+4, 8*8+5, 8*8+6, 8*8+7 },
 	{  0*8,  1*8,  2*8,  3*8,  4*8,  5*8,  6*8,  7*8,
@@ -193,13 +175,7 @@ static GFXDECODE_START( ambush )
 GFXDECODE_END
 
 
-/*************************************
- *
- *  Sound interfaces
- *
- *************************************/
-
-static const ay8910_interface ay8912_interface_1 =
+static const ay8910_interface ay8910_interface_1 =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
@@ -209,7 +185,7 @@ static const ay8910_interface ay8912_interface_1 =
 	DEVCB_NULL
 };
 
-static const ay8910_interface ay8912_interface_2 =
+static const ay8910_interface ay8910_interface_2 =
 {
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
@@ -220,73 +196,47 @@ static const ay8910_interface ay8912_interface_2 =
 };
 
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_CONFIG_START( ambush, ambush_state )
+static MACHINE_DRIVER_START( ambush )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)		/* XTAL confirmed, divisor guessed */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.00 MHz??? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-3)  /* The -3 makes the cocktail mode perfect */
-	MCFG_SCREEN_UPDATE_STATIC(ambush)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-3)  /* The -3 makes the cocktail mode perfect */
+	MDRV_GFXDECODE(ambush)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_GFXDECODE(ambush)
-	MCFG_PALETTE_LENGTH(256)
-
-	MCFG_PALETTE_INIT(ambush)
+	MDRV_PALETTE_INIT(ambush)
+	MDRV_VIDEO_UPDATE(ambush)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8912, XTAL_18_432MHz/6/2)	/* XTAL confirmed, divisor guessed */
-	MCFG_SOUND_CONFIG(ay8912_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay2", AY8912, XTAL_18_432MHz/6/2)	/* XTAL confirmed, divisor guessed */
-	MCFG_SOUND_CONFIG(ay8912_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+/***************************************************************************
 
-/* displays an M next to ROM 1 during the test, why is internal checksum wrong (0x02 instead of 0x00) ? */
+  Game driver(s)
+
+***************************************************************************/
+
 ROM_START( ambush )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "a1.i7",    0x0000, 0x2000, CRC(a7cd149d) SHA1(470ebe60bc23a7908fb96caef8074d65f8c57625) )
-	ROM_LOAD( "a2.g7",    0x2000, 0x2000, CRC(8328d88a) SHA1(690f0af10a0550566b67ee570f849b2764448d15) )
-	ROM_LOAD( "a3.f7",    0x4000, 0x2000, CRC(8db57ab5) SHA1(5cc7d7ebdfc91fb8d9ed52836d70c1de68001402) )
-	ROM_LOAD( "a4.e7",    0x6000, 0x2000, CRC(4a34d2a4) SHA1(ad623161cd6031cb6503ff7445fdd9fb4ea83c8c) )
-
-	ROM_REGION( 0x4000, "gfx1", 0 )
-	ROM_LOAD( "fa2.n4",    0x0000, 0x2000, CRC(e7f134ba) SHA1(c38321f3da049f756337cba5b3c71f6935922f80) )
-	ROM_LOAD( "fa1.m4",    0x2000, 0x2000, CRC(ad10969e) SHA1(4cfccdc4ca377693e92d77cde16f88bbdb840b38) )
-
-	ROM_REGION( 0x0400, "proms", 0 )
-	ROM_LOAD( "a.bpr",        0x0000, 0x0100, CRC(5f27f511) SHA1(fe3ae701443ff50d3d03c0a5d0e0ab0e716b05cc) )  /* color PROMs */
-
-	ROM_LOAD( "b.bpr",        0x0100, 0x0100, CRC(1b03fd3b) SHA1(1a58b212476cacace6065056f23b59a69053a2f6) )	/* How is this selected, */
-	ROM_LOAD( "13.bpr",		  0x0200, 0x0100, CRC(547e970f) SHA1(e2ec0bece49fb283e43549703d6d5d6f561c69a6) )  /* I'm not sure what these do. */
-	ROM_LOAD( "14.bpr",		  0x0300, 0x0100, CRC(622a8ce7) SHA1(6834f67874251f2ef3a33aec893311f5d10e496f) )  /* They don't look like color PROMs */
-ROM_END
-
-ROM_START( ambushj )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "ambush.h7",    0x0000, 0x2000, CRC(ce306563) SHA1(c69b5c4465187a8eda6367d6cd3e0b71a57588d1) )
 	ROM_LOAD( "ambush.g7",    0x2000, 0x2000, CRC(90291409) SHA1(82f1e109bd066ad9fdea1ce0086be6c334e2658a) )
@@ -296,6 +246,26 @@ ROM_START( ambushj )
 	ROM_REGION( 0x4000, "gfx1", 0 )
 	ROM_LOAD( "ambush.n4",    0x0000, 0x2000, CRC(ecc0dc85) SHA1(577304bb575293b97b50eea4faafb5394e3da0f5) )
 	ROM_LOAD( "ambush.m4",    0x2000, 0x2000, CRC(e86ca98a) SHA1(fae0786bb78ead81653adddd2edb3058371ca5bc) )
+
+	ROM_REGION( 0x0400, "proms", 0 )
+	ROM_LOAD( "a.bpr",        0x0000, 0x0100, CRC(5f27f511) SHA1(fe3ae701443ff50d3d03c0a5d0e0ab0e716b05cc) )  /* color PROMs */
+
+	ROM_LOAD( "b.bpr",        0x0100, 0x0100, CRC(1b03fd3b) SHA1(1a58b212476cacace6065056f23b59a69053a2f6) )	/* How is this selected, */
+	ROM_LOAD( "13.bpr",		  0x0200, 0x0100, CRC(547e970f) SHA1(e2ec0bece49fb283e43549703d6d5d6f561c69a6) )  /* I'm not sure what these do. */
+	ROM_LOAD( "14.bpr",		  0x0300, 0x0100, CRC(622a8ce7) SHA1(6834f67874251f2ef3a33aec893311f5d10e496f) )  /* They don't look like color PROMs */
+ROM_END
+
+/* displays an M next to ROM 1 during the test, why is internal cheksum wrong (0x02 instead of 0x00) ? */
+ROM_START( ambusht )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "a1.i7",    0x0000, 0x2000, CRC(a7cd149d) SHA1(470ebe60bc23a7908fb96caef8074d65f8c57625) )
+	ROM_LOAD( "a2.g7",    0x2000, 0x2000, CRC(8328d88a) SHA1(690f0af10a0550566b67ee570f849b2764448d15) )
+	ROM_LOAD( "a3.f7",    0x4000, 0x2000, CRC(8db57ab5) SHA1(5cc7d7ebdfc91fb8d9ed52836d70c1de68001402) )
+	ROM_LOAD( "a4.e7",    0x6000, 0x2000, CRC(4a34d2a4) SHA1(ad623161cd6031cb6503ff7445fdd9fb4ea83c8c) )
+
+	ROM_REGION( 0x4000, "gfx1", 0 )
+	ROM_LOAD( "fa2.n4",    0x0000, 0x2000, CRC(e7f134ba) SHA1(c38321f3da049f756337cba5b3c71f6935922f80) )
+	ROM_LOAD( "fa1.m4",    0x2000, 0x2000, CRC(ad10969e) SHA1(4cfccdc4ca377693e92d77cde16f88bbdb840b38) )
 
 	ROM_REGION( 0x0400, "proms", 0 )
 	ROM_LOAD( "a.bpr",        0x0000, 0x0100, CRC(5f27f511) SHA1(fe3ae701443ff50d3d03c0a5d0e0ab0e716b05cc) )  /* color PROMs */
@@ -324,12 +294,6 @@ ROM_START( ambushv )
 	ROM_LOAD( "14.bpr",		  0x0300, 0x0100, CRC(622a8ce7) SHA1(6834f67874251f2ef3a33aec893311f5d10e496f) )  /* They don't look like color PROMs */
 ROM_END
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
-GAME( 1983, ambush,  0,      ambush,   ambusht,  0, ROT0, "Tecfri",                            "Ambush", GAME_SUPPORTS_SAVE )
-GAME( 1983, ambushj, ambush, ambush,   ambush,   0, ROT0, "Tecfri (Nippon Amuse license)",     "Ambush (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1983, ambushv, ambush, ambush,   ambush,   0, ROT0, "Tecfri (Volt Electronics license)", "Ambush (Volt Electronics)", GAME_SUPPORTS_SAVE )
+GAME( 1983, ambush,   0,        ambush,   ambush,   0, ROT0, "Nippon Amuse Co-Ltd", "Ambush", GAME_SUPPORTS_SAVE )
+GAME( 1983, ambushv,  ambush,   ambush,   ambush,   0, ROT0, "Volt Elec co-ltd", "Ambush (Volt Elec co-ltd)", GAME_SUPPORTS_SAVE )
+GAME( 1983, ambusht,  ambush,   ambush,   ambusht,  0, ROT0, "Tecfri", "Ambush (Tecfri)", GAME_SUPPORTS_SAVE )

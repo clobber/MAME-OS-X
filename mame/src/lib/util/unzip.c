@@ -41,7 +41,6 @@
 #include "unzip.h"
 
 #include <ctype.h>
-#include <stdlib.h>
 #include <zlib.h>
 
 

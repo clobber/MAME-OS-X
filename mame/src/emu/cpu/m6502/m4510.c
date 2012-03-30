@@ -100,7 +100,6 @@ z:      xxxx address bits a19 .. a16 for memory accesses with a15 1 ?
       1      map 8000-9fff
  */
 
-#include "emu.h"
 #include "debugger.h"
 #include "m6502.h"
 #include "m4510.h"
@@ -142,10 +141,9 @@ struct _m4510_Regs {
 	UINT16  low, high;
 	UINT32	mem[8];
 
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *space;
-	direct_read_data *direct;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *space;
 	int 	icount;
 
 	read8_space_func rdmem_id;					/* readmem callback for indexed instructions */
@@ -153,16 +151,17 @@ struct _m4510_Regs {
 
 	UINT8    ddr;
 	UINT8    port;
-
-	devcb_resolved_read8	in_port_func;
-	devcb_resolved_write8	out_port_func;
+	m6510_port_read_func port_read;
+	m6510_port_write_func port_write;
 };
 
-INLINE m4510_Regs *get_safe_token(device_t *device)
+INLINE m4510_Regs *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == M4510);
-	return (m4510_Regs *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_M4510);
+	return (m4510_Regs *)device->token;
 }
 
 /***************************************************************
@@ -172,41 +171,42 @@ INLINE m4510_Regs *get_safe_token(device_t *device)
 INLINE int m4510_cpu_readop(m4510_Regs *cpustate)
 {
 	register UINT16 t=cpustate->pc.w.l++;
-	return cpustate->direct->read_decrypted_byte(M4510_MEM(t));
+	return memory_decrypted_read_byte(cpustate->space, M4510_MEM(t));
 }
 
 INLINE int m4510_cpu_readop_arg(m4510_Regs *cpustate)
 {
 	register UINT16 t=cpustate->pc.w.l++;
-	return cpustate->direct->read_raw_byte(M4510_MEM(t));
+	return memory_raw_read_byte(cpustate->space, M4510_MEM(t));
 }
 
 #define M4510
 #include "t65ce02.c"
 
-static UINT8 default_rdmem_id(address_space *space, offs_t address)
+static UINT8 default_rdmem_id(const address_space *space, offs_t address)
 {
-	m4510_Regs *cpustate = get_safe_token(&space->device());
-	return space->read_byte(M4510_MEM(address));
+	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	return memory_read_byte_8le(space, M4510_MEM(address));
 }
-static void default_wrmem_id(address_space *space, offs_t address, UINT8 data)
+static void default_wrmem_id(const address_space *space, offs_t address, UINT8 data)
 {
-	m4510_Regs *cpustate = get_safe_token(&space->device());
-	space->write_byte(M4510_MEM(address), data);
+	m4510_Regs *cpustate = get_safe_token(space->cpu);
+	memory_write_byte_8le(space, M4510_MEM(address), data);
 }
 
 static CPU_INIT( m4510 )
 {
 	m4510_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->static_config();
+	const m6502_interface *intf = (const m6502_interface *)device->static_config;
 
 	cpustate->interrupt_inhibit = 0;
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wrmem_id;
+	cpustate->port_read = NULL;
+	cpustate->port_write = NULL;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->space = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->space->direct();
+	cpustate->space = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 
 	if ( intf )
 	{
@@ -216,15 +216,11 @@ static CPU_INIT( m4510 )
 		if ( intf->write_indexed_func )
 			cpustate->wrmem_id = intf->write_indexed_func;
 
-		cpustate->in_port_func.resolve(intf->in_port_func, *device);
-		cpustate->out_port_func.resolve(intf->out_port_func, *device);
-	}
-	else
-	{
-		devcb_read8 nullrcb = DEVCB_NULL;
-		devcb_write8 nullwcb = DEVCB_NULL;
-		cpustate->in_port_func.resolve(nullrcb, *device);
-		cpustate->out_port_func.resolve(nullwcb, *device);
+		if ( intf->port_read_func )
+			cpustate->port_read = intf->port_read_func;
+
+		if ( intf->port_write_func )
+			cpustate->port_write = intf->port_write_func;
 	}
 }
 
@@ -275,7 +271,7 @@ INLINE void m4510_take_irq(m4510_Regs *cpustate)
 		P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		LOG(("M4510 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
+		LOG(("M4510 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -285,6 +281,8 @@ INLINE void m4510_take_irq(m4510_Regs *cpustate)
 static CPU_EXECUTE( m4510 )
 {
 	m4510_Regs *cpustate = get_safe_token(device);
+
+	cpustate->icount = cycles;
 
 	do
 	{
@@ -303,7 +301,7 @@ static CPU_EXECUTE( m4510 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M4510 '%s' after_cli was >0", cpustate->device->tag()));
+			LOG(("M4510 '%s' after_cli was >0", cpustate->device->tag));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -320,6 +318,8 @@ static CPU_EXECUTE( m4510 )
 			m4510_take_irq(cpustate);
 
 	} while (cpustate->icount > 0);
+
+	return cycles - cpustate->icount;
 }
 
 static void m4510_set_irq_line(m4510_Regs *cpustate, int irqline, int state)
@@ -330,7 +330,7 @@ static void m4510_set_irq_line(m4510_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(("M4510 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
+			LOG(("M4510 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
 			EAD = M4510_NMI_VEC;
 			cpustate->icount -= 7;
 			PUSH(PCH);
@@ -339,7 +339,7 @@ static void m4510_set_irq_line(m4510_Regs *cpustate, int irqline, int state)
 			P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			LOG(("M4510 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
+			LOG(("M4510 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
 		}
 	}
 	else
@@ -347,21 +347,21 @@ static void m4510_set_irq_line(m4510_Regs *cpustate, int irqline, int state)
 		cpustate->irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(("M4510 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
+			LOG(("M4510 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
 			cpustate->pending_irq = 1;
 		}
 	}
 }
 
-UINT8 m4510_get_port(legacy_cpu_device *device)
+static UINT8 m4510_get_port(m4510_Regs *cpustate)
 {
-	m4510_Regs *cpustate = get_safe_token(device);
 	return (cpustate->port & cpustate->ddr) | (cpustate->ddr ^ 0xff);
 }
+
 static READ8_HANDLER( m4510_read_0000 )
 {
 	UINT8 result = 0x00;
-	m4510_Regs *cpustate = get_safe_token(&space->device());
+	m4510_Regs *cpustate = get_safe_token(space->cpu);
 
 	switch(offset)
 	{
@@ -369,7 +369,8 @@ static READ8_HANDLER( m4510_read_0000 )
 			result = cpustate->ddr;
 			break;
 		case 0x0001:	/* Data Port */
-			result = cpustate->in_port_func(0);
+			if (cpustate->port_read)
+				result = cpustate->port_read(cpustate->device, 0);
 			result = (cpustate->ddr & cpustate->port) | (~cpustate->ddr & result);
 			break;
 	}
@@ -378,7 +379,7 @@ static READ8_HANDLER( m4510_read_0000 )
 
 static WRITE8_HANDLER( m4510_write_0000 )
 {
-	m4510_Regs *cpustate = get_safe_token(&space->device());
+	m4510_Regs *cpustate = get_safe_token(space->cpu);
 
 	switch(offset)
 	{
@@ -390,10 +391,11 @@ static WRITE8_HANDLER( m4510_write_0000 )
 			break;
 	}
 
-	cpustate->out_port_func(0, m4510_get_port(downcast<legacy_cpu_device *>(&space->device())));
+	if (cpustate->port_write)
+		cpustate->port_write(cpustate->device, 0, m4510_get_port(cpustate));
 }
 
-static ADDRESS_MAP_START(m4510_mem, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(m4510_mem, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE(0x0000, 0x0001) AM_READWRITE(m4510_read_0000, m4510_write_0000)
 ADDRESS_MAP_END
 
@@ -401,7 +403,7 @@ static CPU_TRANSLATE( m4510 )
 {
 	m4510_Regs *cpustate = get_safe_token(device);
 
-	if (space == AS_PROGRAM)
+	if (space == ADDRESS_SPACE_PROGRAM)
 		*address = M4510_MEM(*address);
 	return TRUE;
 }
@@ -420,7 +422,7 @@ static CPU_SET_INFO( m4510 )
 		case CPUINFO_INT_INPUT_STATE + M4510_IRQ_LINE:	m4510_set_irq_line(cpustate, M4510_IRQ_LINE, info->i); break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	m4510_set_irq_line(cpustate, INPUT_LINE_NMI, info->i); break;
 
-		case CPUINFO_INT_PC:							PCW = info->i;								break;
+		case CPUINFO_INT_PC:							PCW = info->i; 								break;
 		case CPUINFO_INT_REGISTER + M4510_PC:			cpustate->pc.w.l = info->i;					break;
 		case CPUINFO_INT_SP:							SPL = info->i;							break;
 		case CPUINFO_INT_REGISTER + M4510_S:			cpustate->sp.b.l = info->i;					break;
@@ -453,7 +455,7 @@ static CPU_SET_INFO( m4510 )
 
 CPU_GET_INFO( m4510 )
 {
-	m4510_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	m4510_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -469,17 +471,17 @@ CPU_GET_INFO( m4510 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 20;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 20;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 13;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_PAGE_SHIFT_PROGRAM: 	info->i = 13;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M4510_IRQ_LINE:	info->i = cpustate->irq_state;				break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = cpustate->nmi_state;				break;
@@ -508,6 +510,7 @@ CPU_GET_INFO( m4510 )
 		case CPUINFO_INT_REGISTER + M4510_MEM5:			info->i = cpustate->mem[5];					break;
 		case CPUINFO_INT_REGISTER + M4510_MEM6:			info->i = cpustate->mem[6];					break;
 		case CPUINFO_INT_REGISTER + M4510_MEM7:			info->i = cpustate->mem[7];					break;
+		case CPUINFO_INT_M6510_PORT:					info->i = m4510_get_port(cpustate);				break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(m4510);			break;
@@ -518,7 +521,7 @@ CPU_GET_INFO( m4510 )
 		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m4510);			break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m4510_mem); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m4510_mem); break;
 		case CPUINFO_FCT_TRANSLATE:						info->translate = CPU_TRANSLATE_NAME(m4510);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
@@ -555,5 +558,3 @@ CPU_GET_INFO( m4510 )
 	}
 }
 
-#undef M4510
-DEFINE_LEGACY_CPU_DEVICE(M4510, m4510);

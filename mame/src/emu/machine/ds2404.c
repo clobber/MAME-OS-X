@@ -1,108 +1,43 @@
-/**********************************************************************
+/* Dallas DS2404 RTC/NVRAM */
 
-    DALLAS DS2404
-
-    RTC + BACKUP RAM
-
-**********************************************************************/
-
-#include "emu.h"
+#include "driver.h"
 #include "ds2404.h"
 #include <time.h>
-#include "devhelpr.h"
 
+typedef enum {
+	DS2404_STATE_IDLE = 1,				/* waiting for ROM command, in 1-wire mode */
+	DS2404_STATE_COMMAND,				/* waiting for memory command */
+	DS2404_STATE_ADDRESS1,				/* waiting for address bits 0-7 */
+	DS2404_STATE_ADDRESS2,				/* waiting for address bits 8-15 */
+	DS2404_STATE_OFFSET,				/* waiting for ending offset */
+	DS2404_STATE_INIT_COMMAND,
+	DS2404_STATE_READ_MEMORY,			/* Read Memory command active */
+	DS2404_STATE_WRITE_SCRATCHPAD,		/* Write Scratchpad command active */
+	DS2404_STATE_READ_SCRATCHPAD,		/* Read Scratchpad command active */
+	DS2404_STATE_COPY_SCRATCHPAD		/* Copy Scratchpad command active */
+} DS2404_STATE;
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
+typedef struct {
+	UINT16 address;
+	UINT16 offset;
+	UINT16 end_offset;
+	UINT8 a1, a2;
+	UINT8 sram[512];	/* 4096 bits */
+	UINT8 ram[32];		/* scratchpad ram, 256 bits */
+	UINT8 rtc[5];		/* 40-bit RTC counter */
+	DS2404_STATE state[8];
+	int state_ptr;
+} DS2404;
 
-// device type definition
-const device_type DS2404 = &device_creator<ds2404_device>;
+static DS2404 ds2404;
 
-//-------------------------------------------------
-//  ds2404_device - constructor
-//-------------------------------------------------
-
-ds2404_device::ds2404_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, DS2404, "DS2404", tag, owner, clock),
-	  device_nvram_interface(mconfig, *this)
-{
-}
-
-
-//-------------------------------------------------
-//  static_set_ref_year - configuration helper
-//  to set the reference year
-//-------------------------------------------------
-
-void ds2404_device::static_set_ref_year(device_t &device, UINT32 year)
-{
-	ds2404_device &ds2404 = downcast<ds2404_device &>(device);
-	ds2404.m_ref_year = year;
-}
-
-
-//-------------------------------------------------
-//  static_set_ref_month - configuration helper
-//  to set the reference month
-//-------------------------------------------------
-
-void ds2404_device::static_set_ref_month(device_t &device, UINT8 month)
-{
-	ds2404_device &ds2404 = downcast<ds2404_device &>(device);
-	ds2404.m_ref_month = month;
-}
-
-
-//-------------------------------------------------
-//  static_set_ref_day - configuration helper
-//  to set the reference day
-//-------------------------------------------------
-
-void ds2404_device::static_set_ref_day(device_t &device, UINT8 day)
-{
-	ds2404_device &ds2404 = downcast<ds2404_device &>(device);
-	ds2404.m_ref_day = day;
-}
-
-
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void ds2404_device::device_start()
-{
-	struct tm ref_tm;
-
-	memset(&ref_tm, 0, sizeof(ref_tm));
-	ref_tm.tm_year = m_ref_year - 1900;
-	ref_tm.tm_mon = m_ref_month - 1;
-	ref_tm.tm_mday = m_ref_day;
-
-	time_t ref_time = mktime(&ref_tm);
-
-	time_t current_time;
-	time(&current_time);
-	current_time -= ref_time;
-
-	m_rtc[0] = 0x0;
-	m_rtc[1] = (current_time >> 0) & 0xff;
-	m_rtc[2] = (current_time >> 8) & 0xff;
-	m_rtc[3] = (current_time >> 16) & 0xff;
-	m_rtc[4] = (current_time >> 24) & 0xff;
-
-	emu_timer *timer = machine().scheduler().timer_alloc(FUNC(ds2404_tick_callback), (void *)this);
-	timer->adjust(attotime::from_hz(256), 0, attotime::from_hz(256));
-}
-
-
-void ds2404_device::ds2404_rom_cmd(UINT8 cmd)
+static void ds2404_rom_cmd(UINT8 cmd)
 {
 	switch(cmd)
 	{
 		case 0xcc:		/* Skip ROM */
-			m_state[0] = DS2404_STATE_COMMAND;
-			m_state_ptr = 0;
+			ds2404.state[0] = DS2404_STATE_COMMAND;
+			ds2404.state_ptr = 0;
 			break;
 
 		default:
@@ -111,33 +46,33 @@ void ds2404_device::ds2404_rom_cmd(UINT8 cmd)
 	}
 }
 
-void ds2404_device::ds2404_cmd(UINT8 cmd)
+static void ds2404_cmd(UINT8 cmd)
 {
 	switch(cmd)
 	{
 		case 0x0f:		/* Write scratchpad */
-			m_state[0] = DS2404_STATE_ADDRESS1;
-			m_state[1] = DS2404_STATE_ADDRESS2;
-			m_state[2] = DS2404_STATE_INIT_COMMAND;
-			m_state[3] = DS2404_STATE_WRITE_SCRATCHPAD;
-			m_state_ptr = 0;
+			ds2404.state[0] = DS2404_STATE_ADDRESS1;
+			ds2404.state[1] = DS2404_STATE_ADDRESS2;
+			ds2404.state[2] = DS2404_STATE_INIT_COMMAND;
+			ds2404.state[3] = DS2404_STATE_WRITE_SCRATCHPAD;
+			ds2404.state_ptr = 0;
 			break;
 
 		case 0x55:		/* Copy scratchpad */
-			m_state[0] = DS2404_STATE_ADDRESS1;
-			m_state[1] = DS2404_STATE_ADDRESS2;
-			m_state[2] = DS2404_STATE_OFFSET;
-			m_state[3] = DS2404_STATE_INIT_COMMAND;
-			m_state[4] = DS2404_STATE_COPY_SCRATCHPAD;
-			m_state_ptr = 0;
+			ds2404.state[0] = DS2404_STATE_ADDRESS1;
+			ds2404.state[1] = DS2404_STATE_ADDRESS2;
+			ds2404.state[2] = DS2404_STATE_OFFSET;
+			ds2404.state[3] = DS2404_STATE_INIT_COMMAND;
+			ds2404.state[4] = DS2404_STATE_COPY_SCRATCHPAD;
+			ds2404.state_ptr = 0;
 			break;
 
 		case 0xf0:		/* Read memory */
-			m_state[0] = DS2404_STATE_ADDRESS1;
-			m_state[1] = DS2404_STATE_ADDRESS2;
-			m_state[2] = DS2404_STATE_INIT_COMMAND;
-			m_state[3] = DS2404_STATE_READ_MEMORY;
-			m_state_ptr = 0;
+			ds2404.state[0] = DS2404_STATE_ADDRESS1;
+			ds2404.state[1] = DS2404_STATE_ADDRESS2;
+			ds2404.state[2] = DS2404_STATE_INIT_COMMAND;
+			ds2404.state[3] = DS2404_STATE_READ_MEMORY;
+			ds2404.state_ptr = 0;
 			break;
 
 		default:
@@ -146,47 +81,47 @@ void ds2404_device::ds2404_cmd(UINT8 cmd)
 	}
 }
 
-UINT8 ds2404_device::ds2404_readmem()
+static UINT8 ds2404_readmem(void)
 {
-	if( m_address < 0x200 )
+	if( ds2404.address < 0x200 )
 	{
-		return m_sram[ m_address ];
+		return ds2404.sram[ ds2404.address ];
 	}
-	else if( m_address >= 0x202 && m_address <= 0x206 )
+	else if( ds2404.address >= 0x202 && ds2404.address <= 0x206 )
 	{
-		return m_rtc[ m_address - 0x202 ];
+		return ds2404.rtc[ ds2404.address - 0x202 ];
 	}
 	return 0;
 }
 
-void ds2404_device::ds2404_writemem(UINT8 value)
+static void ds2404_writemem(UINT8 value)
 {
-	if( m_address < 0x200 )
+	if( ds2404.address < 0x200 )
 	{
-		m_sram[ m_address ] = value;
+		ds2404.sram[ ds2404.address ] = value;
 	}
-	else if( m_address >= 0x202 && m_address <= 0x206 )
+	else if( ds2404.address >= 0x202 && ds2404.address <= 0x206 )
 	{
-		m_rtc[ m_address - 0x202 ] = value;
+		ds2404.rtc[ ds2404.address - 0x202 ] = value;
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_1w_reset_w)
+WRITE8_HANDLER( DS2404_1W_reset_w )
 {
-	m_state[0] = DS2404_STATE_IDLE;
-	m_state_ptr = 0;
+	ds2404.state[0] = DS2404_STATE_IDLE;
+	ds2404.state_ptr = 0;
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_3w_reset_w)
+WRITE8_HANDLER( DS2404_3W_reset_w )
 {
-	m_state[0] = DS2404_STATE_COMMAND;
-	m_state_ptr = 0;
+	ds2404.state[0] = DS2404_STATE_COMMAND;
+	ds2404.state_ptr = 0;
 }
 
-READ8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_r)
+READ8_HANDLER( DS2404_data_r )
 {
-	UINT8 value = 0;
-	switch(m_state[m_state_ptr])
+	UINT8 value;
+	switch( ds2404.state[ds2404.state_ptr] )
 	{
 		case DS2404_STATE_IDLE:
 		case DS2404_STATE_COMMAND:
@@ -198,13 +133,13 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_r)
 
 		case DS2404_STATE_READ_MEMORY:
 			value = ds2404_readmem();
-			break;
+			return value;
 
 		case DS2404_STATE_READ_SCRATCHPAD:
-			if(m_offset < 0x20)
-			{
-				value = m_ram[m_offset];
-				m_offset++;
+			if( ds2404.offset < 0x20 ) {
+				value = ds2404.ram[ds2404.offset];
+				ds2404.offset++;
+				return value;
 			}
 			break;
 
@@ -214,12 +149,14 @@ READ8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_r)
 		case DS2404_STATE_COPY_SCRATCHPAD:
 			break;
 	}
-	return value;
+	return 0;
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
+WRITE8_HANDLER( DS2404_data_w )
 {
-	switch( m_state[m_state_ptr] )
+	int i;
+
+	switch( ds2404.state[ds2404.state_ptr] )
 	{
 		case DS2404_STATE_IDLE:
 			ds2404_rom_cmd(data & 0xff);
@@ -230,18 +167,18 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
 			break;
 
 		case DS2404_STATE_ADDRESS1:
-			m_a1 = data & 0xff;
-			m_state_ptr++;
+			ds2404.a1 = data & 0xff;
+			ds2404.state_ptr++;
 			break;
 
 		case DS2404_STATE_ADDRESS2:
-			m_a2 = data & 0xff;
-			m_state_ptr++;
+			ds2404.a2 = data & 0xff;
+			ds2404.state_ptr++;
 			break;
 
 		case DS2404_STATE_OFFSET:
-			m_end_offset = data & 0xff;
-			m_state_ptr++;
+			ds2404.end_offset = data & 0xff;
+			ds2404.state_ptr++;
 			break;
 
 		case DS2404_STATE_INIT_COMMAND:
@@ -254,13 +191,10 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
 			break;
 
 		case DS2404_STATE_WRITE_SCRATCHPAD:
-			if( m_offset < 0x20 )
-			{
-				m_ram[m_offset] = data & 0xff;
-				m_offset++;
-			}
-			else
-			{
+			if( ds2404.offset < 0x20 ) {
+				ds2404.ram[ds2404.offset] = data & 0xff;
+				ds2404.offset++;
+			} else {
 				/* Set OF flag */
 			}
 			break;
@@ -269,9 +203,8 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
 			break;
 	}
 
-	if( m_state[m_state_ptr] == DS2404_STATE_INIT_COMMAND )
-	{
-		switch( m_state[m_state_ptr + 1] )
+	if( ds2404.state[ds2404.state_ptr] == DS2404_STATE_INIT_COMMAND ) {
+		switch( ds2404.state[ds2404.state_ptr+1] )
 		{
 			case DS2404_STATE_IDLE:
 			case DS2404_STATE_COMMAND:
@@ -282,37 +215,36 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_data_w)
 				break;
 
 			case DS2404_STATE_READ_MEMORY:
-				m_address = (m_a2 << 8) | m_a1;
-				m_address -= 1;
+				ds2404.address = (ds2404.a2 << 8) | ds2404.a1;
+				ds2404.address -= 1;
 				break;
 
 			case DS2404_STATE_WRITE_SCRATCHPAD:
-				m_address = (m_a2 << 8) | m_a1;
-				m_offset = m_address & 0x1f;
+				ds2404.address = (ds2404.a2 << 8) | ds2404.a1;
+				ds2404.offset = ds2404.address & 0x1f;
 				break;
 
 			case DS2404_STATE_READ_SCRATCHPAD:
-				m_address = (m_a2 << 8) | m_a1;
-				m_offset = m_address & 0x1f;
+				ds2404.address = (ds2404.a2 << 8) | ds2404.a1;
+				ds2404.offset = ds2404.address & 0x1f;
 				break;
 
 			case DS2404_STATE_COPY_SCRATCHPAD:
-				m_address = (m_a2 << 8) | m_a1;
+				ds2404.address = (ds2404.a2 << 8) | ds2404.a1;
 
-				for(int i = 0; i <= m_end_offset; i++)
-				{
-					ds2404_writemem(m_ram[i]);
-					m_address++;
+				for( i=0; i <= ds2404.end_offset; i++ ) {
+					ds2404_writemem( ds2404.ram[i] );
+					ds2404.address++;
 				}
 				break;
 		}
-		m_state_ptr++;
+		ds2404.state_ptr++;
 	}
 }
 
-WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_clk_w)
+WRITE8_HANDLER( DS2404_clk_w )
 {
-	switch( m_state[m_state_ptr] )
+	switch( ds2404.state[ds2404.state_ptr] )
 	{
 		case DS2404_STATE_IDLE:
 		case DS2404_STATE_COMMAND:
@@ -323,7 +255,7 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_clk_w)
 			break;
 
 		case DS2404_STATE_READ_MEMORY:
-			m_address++;
+			ds2404.address++;
 			break;
 
 		case DS2404_STATE_READ_SCRATCHPAD:
@@ -337,52 +269,52 @@ WRITE8_DEVICE_HANDLER_TRAMPOLINE(ds2404, ds2404_clk_w)
 	}
 }
 
-TIMER_CALLBACK( ds2404_device::ds2404_tick_callback )
+static TIMER_CALLBACK( DS2404_tick )
 {
-	reinterpret_cast<ds2404_device*>(ptr)->ds2404_tick();
-}
-
-void ds2404_device::ds2404_tick()
-{
-	for(int i = 0; i < 5; i++)
+	int i;
+	for( i = 0; i < 5; i++ )
 	{
-		m_rtc[ i ]++;
-		if(m_rtc[ i ] != 0)
+		ds2404.rtc[ i ]++;
+		if( ds2404.rtc[ i ] != 0 )
 		{
 			break;
 		}
 	}
 }
 
-
-//-------------------------------------------------
-//  nvram_default - called to initialize NVRAM to
-//  its default state
-//-------------------------------------------------
-
-void ds2404_device::nvram_default()
+void DS2404_init(running_machine *machine, int ref_year, int ref_month, int ref_day)
 {
-	memset(m_sram, 0, sizeof(m_sram));
+	struct tm ref_tm;
+	time_t ref_time;
+	time_t current_time;
+	emu_timer *timer;
+
+	memset( &ref_tm, 0, sizeof( ref_tm ) );
+	ref_tm.tm_year = ref_year - 1900;
+	ref_tm.tm_mon = ref_month - 1;
+	ref_tm.tm_mday = ref_day;
+
+	ref_time = mktime( &ref_tm );
+
+	time( &current_time );
+	current_time -= ref_time;
+
+	ds2404.rtc[ 0 ] = 0x0;
+	ds2404.rtc[ 1 ] = ( current_time >> 0 ) & 0xff;
+	ds2404.rtc[ 2 ] = ( current_time >> 8 ) & 0xff;
+	ds2404.rtc[ 3 ] = ( current_time >> 16 ) & 0xff;
+	ds2404.rtc[ 4 ] = ( current_time >> 24 ) & 0xff;
+
+	timer = timer_alloc( machine, DS2404_tick , NULL);
+	timer_adjust_periodic( timer, ATTOTIME_IN_HZ( 256 ), 0, ATTOTIME_IN_HZ( 256 ) );
 }
 
-
-//-------------------------------------------------
-//  nvram_read - called to read NVRAM from the
-//  .nv file
-//-------------------------------------------------
-
-void ds2404_device::nvram_read(emu_file &file)
+void DS2404_load(mame_file *file)
 {
-	file.read(m_sram, sizeof(m_sram));
+	mame_fread(file, ds2404.sram, 512);
 }
 
-
-//-------------------------------------------------
-//  nvram_write - called to write NVRAM to the
-//  .nv file
-//-------------------------------------------------
-
-void ds2404_device::nvram_write(emu_file &file)
+void DS2404_save(mame_file *file)
 {
-	file.write(m_sram, sizeof(m_sram));
+	mame_fwrite(file, ds2404.sram, 512);
 }

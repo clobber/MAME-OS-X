@@ -41,30 +41,17 @@ TODO:
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "machine/nvram.h"
 
-
-class caswin_state : public driver_device
-{
-public:
-	caswin_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_sc0_vram;
-	UINT8 *m_sc0_attr;
-	tilemap_t *m_sc0_tilemap;
-};
-
-
+static UINT8 *sc0_vram,*sc0_attr;
+static tilemap *sc0_tilemap;
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
-	caswin_state *state = machine.driver_data<caswin_state>();
-	int tile = (state->m_sc0_vram[tile_index] | ((state->m_sc0_attr[tile_index] & 0x70)<<4)) & 0x7ff;
-	int colour = state->m_sc0_attr[tile_index] & 0xf;
+	int tile = (sc0_vram[tile_index] | ((sc0_attr[tile_index] & 0x70)<<4)) & 0x7ff;
+	int colour = sc0_attr[tile_index] & 0xf;
 
 	SET_TILE_INFO(
 			0,
@@ -75,29 +62,25 @@ static TILE_GET_INFO( get_sc0_tile_info )
 
 static VIDEO_START(vvillage)
 {
-	caswin_state *state = machine.driver_data<caswin_state>();
-	state->m_sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
+	sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
 }
 
-static SCREEN_UPDATE_IND16(vvillage)
+static VIDEO_UPDATE(vvillage)
 {
-	caswin_state *state = screen.machine().driver_data<caswin_state>();
-	state->m_sc0_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,sc0_tilemap,0,0);
 	return 0;
 }
 
 static WRITE8_HANDLER( sc0_vram_w )
 {
-	caswin_state *state = space->machine().driver_data<caswin_state>();
-	state->m_sc0_vram[offset] = data;
-	state->m_sc0_tilemap->mark_tile_dirty(offset);
+	sc0_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc0_tilemap,offset);
 }
 
 static WRITE8_HANDLER( sc0_attr_w )
 {
-	caswin_state *state = space->machine().driver_data<caswin_state>();
-	state->m_sc0_attr[offset] = data;
-	state->m_sc0_tilemap->mark_tile_dirty(offset);
+	sc0_attr[offset] = data;
+	tilemap_mark_tile_dirty(sc0_tilemap,offset);
 }
 
 /*These two are tested during the two cherry sub-games.I really don't know what is supposed to do...*/
@@ -110,7 +93,7 @@ static WRITE8_HANDLER( vvillage_scroll_w )
 /*---- ---x flip screen */
 static WRITE8_HANDLER( vvillage_vregs_w )
 {
-	flip_screen_set(space->machine(), data & 1);
+	flip_screen_set(space->machine, data & 1);
 }
 
 /**********************
@@ -121,16 +104,16 @@ static WRITE8_HANDLER( vvillage_vregs_w )
 
 static READ8_HANDLER( vvillage_rng_r )
 {
-	return space->machine().rand();
+	return mame_rand(space->machine);
 }
 
 static WRITE8_HANDLER( vvillage_output_w )
 {
-	coin_counter_w(space->machine(), 0,data & 1);
-	coin_counter_w(space->machine(), 1,data & 1);
+	coin_counter_w(0,data & 1);
+	coin_counter_w(1,data & 1);
 	// data & 4 payout counter
-	coin_lockout_w(space->machine(), 0,data & 0x20);
-	coin_lockout_w(space->machine(), 1,data & 0x20);
+	coin_lockout_w(0,data & 0x20);
+	coin_lockout_w(1,data & 0x20);
 }
 
 static WRITE8_HANDLER( vvillage_lamps_w )
@@ -142,25 +125,25 @@ static WRITE8_HANDLER( vvillage_lamps_w )
     ---- --x- lamp button 2
     ---- ---x lamp button 1
     */
-	set_led_status(space->machine(), 0, data & 0x01);
-	set_led_status(space->machine(), 1, data & 0x02);
-	set_led_status(space->machine(), 2, data & 0x04);
-	set_led_status(space->machine(), 3, data & 0x08);
-	set_led_status(space->machine(), 4, data & 0x10);
+	set_led_status(0, data & 0x01);
+	set_led_status(1, data & 0x02);
+	set_led_status(2, data & 0x04);
+	set_led_status(3, data & 0x08);
+	set_led_status(4, data & 0x10);
 }
 
-static ADDRESS_MAP_START( vvillage_mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( vvillage_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xa000, 0xa000) AM_READ(vvillage_rng_r) //accessed by caswin only
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(caswin_state, m_sc0_vram)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(sc0_attr_w) AM_BASE_MEMBER(caswin_state, m_sc0_attr)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xf000, 0xf3ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&sc0_vram)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(sc0_attr_w) AM_BASE(&sc0_attr)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( vvillage_io, AS_IO, 8 )
+static ADDRESS_MAP_START( vvillage_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x01,0x01) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x02,0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
+	AM_RANGE(0x01,0x01) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x02,0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
 	AM_RANGE(0x10,0x10) AM_READ_PORT("IN0")
 	AM_RANGE(0x11,0x11) AM_READ_PORT("IN1")
 	AM_RANGE(0x10,0x10) AM_WRITE(vvillage_scroll_w)
@@ -291,35 +274,36 @@ static PALETTE_INIT( caswin )
 }
 
 
-static MACHINE_CONFIG_START( vvillage, caswin_state )
+static MACHINE_DRIVER_START( vvillage )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
-	MCFG_CPU_PROGRAM_MAP(vvillage_mem)
-	MCFG_CPU_IO_MAP(vvillage_io)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold )
+	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
+	MDRV_CPU_PROGRAM_MAP(vvillage_mem)
+	MDRV_CPU_IO_MAP(vvillage_io)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
-	MCFG_SCREEN_UPDATE_STATIC(vvillage)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_GFXDECODE(vvillage)
-	MCFG_PALETTE_LENGTH(0x40)
-	MCFG_PALETTE_INIT(caswin)
+	MDRV_GFXDECODE(vvillage)
+	MDRV_PALETTE_LENGTH(0x40)
+	MDRV_PALETTE_INIT(caswin)
 
-	MCFG_VIDEO_START(vvillage)
+	MDRV_VIDEO_START(vvillage)
+	MDRV_VIDEO_UPDATE(vvillage)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 4000000 / 4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay", AY8910, 4000000 / 4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+MACHINE_DRIVER_END
 
 ROM_START( caswin )
 	ROM_REGION( 0x8000, "maincpu", 0 )

@@ -8,16 +8,16 @@
     Raphael Nabet 2004
 */
 
-#include "emu.h"
+#include "cpuintrf.h"
 #include "debugger.h"
 #include "tx0.h"
 
 #define LOG 0
 #define LOG_EXTRA 0
 
-static void execute_instruction_64kw(device_t *device);
-static void execute_instruction_8kw(device_t *device);
-static void pulse_reset(device_t *device);
+static void execute_instruction_64kw(const device_config *device);
+static void execute_instruction_8kw(const device_config *device);
+static void pulse_reset(const device_config *device);
 
 
 /* TX-0 Registers */
@@ -64,20 +64,22 @@ struct _tx0_state
 
 	int icount;
 
-	legacy_cpu_device *device;
-	address_space *program;
+	const device_config *device;
+	const address_space *program;
 };
 
-INLINE tx0_state *get_safe_token(device_t *device)
+INLINE tx0_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == TX0_64KW ||
-		   device->type() == TX0_8KW);
-	return (tx0_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_TX0_64KW ||
+		   cpu_get_type(device) == CPU_TX0_8KW);
+	return (tx0_state *)device->token;
 }
 
-#define READ_TX0_18BIT(A) ((signed)cpustate->program->read_dword((A)<<2))
-#define WRITE_TX0_18BIT(A,V) (cpustate->program->write_dword((A)<<2,(V)))
+#define READ_TX0_18BIT(A) ((signed)memory_read_dword_32be(cpustate->program, (A)<<2))
+#define WRITE_TX0_18BIT(A,V) (memory_write_dword_32be(cpustate->program, (A)<<2,(V)))
 
 
 #define io_handler_rim 3
@@ -106,9 +108,9 @@ static int tx0_read(tx0_state *cpustate, offs_t address)
 	else if ((cpustate->lr_sel >> address) & 1)
 		/* live register (LR) */
 		return LR;
-
-	/* toggle switch storage (TSS) */
-	return cpustate->tss[address];
+	else
+		/* toggle switch storage (TSS) */
+		return cpustate->tss[address];
 }
 
 static void tx0_write(tx0_state *cpustate, offs_t address, int data)
@@ -125,18 +127,18 @@ static void tx0_write(tx0_state *cpustate, offs_t address, int data)
 		;
 }
 
-static void tx0_init_common(legacy_cpu_device *device, device_irq_callback irqcallback, int is_64kw)
+static void tx0_init_common(const device_config *device, cpu_irq_callback irqcallback, int is_64kw)
 {
 	tx0_state *cpustate = get_safe_token(device);
 
 	/* clean-up */
-	cpustate->iface = (const tx0_reset_param_t *)device->static_config();
+	cpustate->iface = (const tx0_reset_param_t *)device->static_config;
 
 	cpustate->address_mask = is_64kw ? ADDRESS_MASK_64KW : ADDRESS_MASK_8KW;
 	cpustate->ir_mask = is_64kw ? 03 : 037;
 
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 }
 
 static CPU_INIT( tx0_64kw )
@@ -163,6 +165,8 @@ static CPU_RESET( tx0 )
 static CPU_EXECUTE( tx0_64kw )
 {
 	tx0_state *cpustate = get_safe_token(device);
+
+	cpustate->icount = cycles;
 
 	do
 	{
@@ -263,12 +267,16 @@ static CPU_EXECUTE( tx0_64kw )
 		}
 	}
 	while (cpustate->icount > 0);
+
+	return cycles - cpustate->icount;
 }
 
 /* execute instructions on this CPU until icount expires */
 static CPU_EXECUTE( tx0_8kw )
 {
 	tx0_state *cpustate = get_safe_token(device);
+
+	cpustate->icount = cycles;
 
 	do
 	{
@@ -307,7 +315,7 @@ static CPU_EXECUTE( tx0_8kw )
 
 					MBR = AC;
 					IR = MBR >> 13;		/* basic opcode */
-					if ((IR == 16) || (IR == 8))	/* trn or add instruction? */
+					if ((IR == 16) || (IR == 8)) 	/* trn or add instruction? */
 					{
 						PC = MBR & ADDRESS_MASK_8KW;
 						cpustate->rim = 0;	/* exit read-in mode */
@@ -369,6 +377,8 @@ static CPU_EXECUTE( tx0_8kw )
 		}
 	}
 	while (cpustate->icount > 0);
+
+	return cycles - cpustate->icount;
 }
 
 
@@ -425,7 +435,7 @@ static CPU_SET_INFO( tx0 )
 
 CPU_GET_INFO( tx0_64kw )
 {
-	tx0_state *cpustate = ( device != NULL && device->token() != NULL ) ? get_safe_token(device) : NULL;
+	tx0_state *cpustate = ( device != NULL && device->token != NULL ) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -441,15 +451,15 @@ CPU_GET_INFO( tx0_64kw )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;									break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 3;									break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;							break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;							break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -2;							break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;							break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;							break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;							break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;							break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;							break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;							break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;							break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;							break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -2;							break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;							break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;							break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;							break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;							break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;							break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;							break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */						break;
 	case CPUINFO_INT_PC:							info->i = PC;									break;
@@ -502,7 +512,7 @@ CPU_GET_INFO( tx0_64kw )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;						break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME:							strcpy(info->s, "TX-0");						break;
+	case DEVINFO_STR_NAME: 							strcpy(info->s, "TX-0");						break;
 	case DEVINFO_STR_FAMILY:					strcpy(info->s, "TX-0");						break;
 	case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");							break;
 	case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
@@ -546,13 +556,12 @@ CPU_GET_INFO( tx0_64kw )
 	case CPUINFO_STR_REGISTER + TX0_CYCLE:			sprintf(info->s, "CYCLE:%X", cpustate->cycle); break;
 	case CPUINFO_STR_REGISTER + TX0_IOH:			sprintf(info->s, "IOH:%X", cpustate->ioh); break;
 	case CPUINFO_STR_REGISTER + TX0_IOS:			sprintf(info->s, "IOS:%X", cpustate->ios); break;
-	case CPUINFO_IS_OCTAL:							info->i = true;							break;
 	}
 }
 
 CPU_GET_INFO( tx0_8kw )
 {
-	tx0_state *cpustate = ( device != NULL && device->token() != NULL ) ? get_safe_token(device) : NULL;
+	tx0_state *cpustate = ( device != NULL && device->token != NULL ) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -568,15 +577,15 @@ CPU_GET_INFO( tx0_8kw )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 3;							break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 13;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -2;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 13;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -2;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */				break;
 	case CPUINFO_INT_PC:							info->i = PC;							break;
@@ -629,7 +638,7 @@ CPU_GET_INFO( tx0_8kw )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;				break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME:							strcpy(info->s, "TX-0");	break;
+	case DEVINFO_STR_NAME: 							strcpy(info->s, "TX-0");	break;
 	case DEVINFO_STR_FAMILY:					strcpy(info->s, "TX-0");	break;
 	case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");	break;
 	case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);	break;
@@ -673,13 +682,12 @@ CPU_GET_INFO( tx0_8kw )
 	case CPUINFO_STR_REGISTER + TX0_CYCLE:			sprintf(info->s, "CYCLE:%X", cpustate->cycle); break;
 	case CPUINFO_STR_REGISTER + TX0_IOH:			sprintf(info->s, "IOH:%X", cpustate->ioh); break;
 	case CPUINFO_STR_REGISTER + TX0_IOS:			sprintf(info->s, "IOS:%X", cpustate->ios); break;
-	case CPUINFO_IS_OCTAL:							info->i = true;							break;
 	}
 }
 
 
 /* execute one instruction */
-static void execute_instruction_64kw(device_t *device)
+static void execute_instruction_64kw(const device_config *device)
 {
 	tx0_state *cpustate = get_safe_token(device);
 
@@ -870,7 +878,7 @@ static void indexed_address_eval(tx0_state *cpustate)
 }
 
 /* execute one instruction */
-static void execute_instruction_8kw(device_t *device)
+static void execute_instruction_8kw(const device_config *device)
 {
 	tx0_state *cpustate = get_safe_token(device);
 
@@ -1276,7 +1284,7 @@ static void execute_instruction_8kw(device_t *device)
     reset most registers and flip-flops, and initialize a few emulator state
     variables.
 */
-static void pulse_reset(device_t *device)
+static void pulse_reset(const device_config *device)
 {
 	tx0_state *cpustate = get_safe_token(device);
 
@@ -1300,6 +1308,3 @@ static void pulse_reset(device_t *device)
 	if (cpustate->iface->io_reset_callback)
 		(*cpustate->iface->io_reset_callback)(device);
 }
-
-DEFINE_LEGACY_CPU_DEVICE(TX0_64KW, tx0_64kw);
-DEFINE_LEGACY_CPU_DEVICE(TX0_8KW, tx0_8kw);

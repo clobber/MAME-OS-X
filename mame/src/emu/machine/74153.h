@@ -36,31 +36,23 @@
 #ifndef TTL74153_H
 #define TTL74153_H
 
-#include "devlegcy.h"
 
-
-typedef struct _ttl74153_config ttl74153_config;
-struct _ttl74153_config
+/* The interface structure */
+struct TTL74153_interface
 {
-	void (*output_cb)(device_t *device);
+	void (*output_cb)(running_machine *machine);
 };
 
 
-#define MCFG_74153_ADD(_tag, _output_cb) \
-	MCFG_DEVICE_ADD(_tag, TTL74153, 0) \
-	MCFG_DEVICE_CONFIG_DATAPTR(ttl74153_config, output_cb, _output_cb)
-
-
+void TTL74153_config(running_machine *machine, int which, const struct TTL74153_interface *intf);
 
 /* must call TTL74153_update() after setting the inputs */
-void ttl74153_update(device_t *device);
+void TTL74153_update(int which);
 
-void ttl74153_a_w(device_t *device, int data);
-void ttl74153_b_w(device_t *device, int data);
-void ttl74153_input_line_w(device_t *device, int section, int input_line, int data);
-void ttl74153_enable_w(device_t *device, int section, int data);
-int ttl74153_output_r(device_t *device, int section);
-
-DECLARE_LEGACY_DEVICE(TTL74153, ttl74153);
+void TTL74153_a_w(int which, int data);
+void TTL74153_b_w(int which, int data);
+void TTL74153_input_line_w(int which, int section, int input_line, int data);
+void TTL74153_enable_w(int which, int section, int data);
+int TTL74153_output_r(int which, int section);
 
 #endif

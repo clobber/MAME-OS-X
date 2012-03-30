@@ -12,17 +12,35 @@ Might be some priority glitches
 
 ***/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/3812intf.h"
 #include "sound/msm5205.h"
 #include "rendlay.h"
-#include "includes/tbowl.h"
 
+static int adpcm_pos[2],adpcm_end[2];
+static int adpcm_data[2];
+static UINT8 *shared_ram;
+
+/* in video/tbowl.c */
+extern UINT8 *tbowl_txvideoram, *tbowl_bgvideoram, *tbowl_bg2videoram;
+extern UINT8 *tbowl_spriteram;
+
+WRITE8_HANDLER (tbowl_bg2videoram_w);
+WRITE8_HANDLER (tbowl_bgvideoram_w);
+WRITE8_HANDLER (tbowl_txvideoram_w);
+
+WRITE8_HANDLER (tbowl_bg2xscroll_lo); WRITE8_HANDLER (tbowl_bg2xscroll_hi);
+WRITE8_HANDLER (tbowl_bg2yscroll_lo); WRITE8_HANDLER (tbowl_bg2yscroll_hi);
+WRITE8_HANDLER (tbowl_bgxscroll_lo);  WRITE8_HANDLER (tbowl_bgxscroll_hi);
+WRITE8_HANDLER (tbowl_bgyscroll_lo);  WRITE8_HANDLER (tbowl_bgyscroll_hi);
+
+VIDEO_START( tbowl );
+VIDEO_UPDATE( tbowl );
 
 static WRITE8_HANDLER( tbowl_coin_counter_w )
 {
-	coin_counter_w(space->machine(), 0, data & 1);
+	coin_counter_w(0, data & 1);
 }
 
 /*** Banking
@@ -34,23 +52,23 @@ note: check this, its borrowed from tecmo.c / wc90.c at the moment and could wel
 static WRITE8_HANDLER( tbowlb_bankswitch_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine().region("maincpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
 
 
 	bankaddress = 0x10000 + ((data & 0xf8) << 8);
-	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
 }
 
 static WRITE8_HANDLER( tbowlc_bankswitch_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine().region("sub")->base();
+	UINT8 *RAM = memory_region(space->machine, "sub");
 
 
 	bankaddress = 0x10000 + ((data & 0xf8) << 8);
 
 
-	memory_set_bankptr(space->machine(), "bank2", &RAM[bankaddress]);
+	memory_set_bankptr(space->machine, 2, &RAM[bankaddress]);
 }
 
 /*** Shared Ram Handlers
@@ -59,20 +77,18 @@ static WRITE8_HANDLER( tbowlc_bankswitch_w )
 
 static READ8_HANDLER( shared_r )
 {
-	tbowl_state *state = space->machine().driver_data<tbowl_state>();
-	return state->m_shared_ram[offset];
+	return shared_ram[offset];
 }
 
 static WRITE8_HANDLER( shared_w )
 {
-	tbowl_state *state = space->machine().driver_data<tbowl_state>();
-	state->m_shared_ram[offset] = data;
+	shared_ram[offset] = data;
 }
 
 static WRITE8_HANDLER( tbowl_sound_command_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -87,15 +103,15 @@ static WRITE8_HANDLER( tbowl_sound_command_w )
 
 /* Board B */
 
-static ADDRESS_MAP_START( 6206B_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( 6206B_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
-	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(tbowl_bg2videoram_w) AM_BASE_MEMBER(tbowl_state, m_bg2videoram)
-	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(tbowl_bgvideoram_w) AM_BASE_MEMBER(tbowl_state, m_bgvideoram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(tbowl_txvideoram_w) AM_BASE_MEMBER(tbowl_state, m_txvideoram)
+	AM_RANGE(0xa000, 0xbfff) AM_RAM_WRITE(tbowl_bg2videoram_w) AM_BASE(&tbowl_bg2videoram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM_WRITE(tbowl_bgvideoram_w) AM_BASE(&tbowl_bgvideoram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(tbowl_txvideoram_w) AM_BASE(&tbowl_txvideoram)
 //  AM_RANGE(0xf000, 0xf000) AM_WRITE(unknown_write) * written during start-up, not again */
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
-	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(shared_r, shared_w) AM_BASE_MEMBER(tbowl_state, m_shared_ram) /* check */
+	AM_RANGE(0xf000, 0xf7ff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(shared_r, shared_w) AM_BASE(&shared_ram) /* check */
 	AM_RANGE(0xfc00, 0xfc00) AM_READ_PORT("P1") AM_WRITE(tbowlb_bankswitch_w)
 	AM_RANGE(0xfc01, 0xfc01) AM_READ_PORT("P2")
 //  AM_RANGE(0xfc01, 0xfc01) AM_WRITE(unknown_write) /* written during start-up, not again */
@@ -125,16 +141,16 @@ ADDRESS_MAP_END
 static WRITE8_HANDLER ( tbowl_trigger_nmi )
 {
 	/* trigger NMI on 6206B's Cpu? (guess but seems to work..) */
-	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( 6206C_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( 6206C_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_READONLY
-	AM_RANGE(0xc000, 0xd7ff) AM_WRITEONLY
-	AM_RANGE(0xd800, 0xdfff) AM_WRITEONLY AM_BASE_MEMBER(tbowl_state, m_spriteram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE_GENERIC(paletteram) // 2x palettes, one for each monitor?
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank2")
+	AM_RANGE(0xc000, 0xdfff) AM_READ(SMH_RAM)
+	AM_RANGE(0xc000, 0xd7ff) AM_WRITE(SMH_RAM)
+	AM_RANGE(0xd800, 0xdfff) AM_WRITE(SMH_RAM) AM_BASE(&tbowl_spriteram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE(&paletteram) // 2x palettes, one for each monitor?
+	AM_RANGE(0xf000, 0xf7ff) AM_READWRITE(SMH_BANK(2), SMH_ROM)
 	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(shared_r, shared_w)
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(tbowlc_bankswitch_w)
 	AM_RANGE(0xfc01, 0xfc01) AM_WRITENOP /* ? */
@@ -147,46 +163,43 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( tbowl_adpcm_start_w )
 {
-	tbowl_state *state = space->machine().driver_data<tbowl_state>();
-	device_t *adpcm = space->machine().device((offset & 1) ? "msm2" : "msm1");
-	state->m_adpcm_pos[offset & 1] = data << 8;
+	const device_config *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
+	adpcm_pos[offset & 1] = data << 8;
 	msm5205_reset_w(adpcm,0);
 }
 
 static WRITE8_HANDLER( tbowl_adpcm_end_w )
 {
-	tbowl_state *state = space->machine().driver_data<tbowl_state>();
-	state->m_adpcm_end[offset & 1] = (data + 1) << 8;
+	adpcm_end[offset & 1] = (data + 1) << 8;
 }
 
 static WRITE8_HANDLER( tbowl_adpcm_vol_w )
 {
-	device_t *adpcm = space->machine().device((offset & 1) ? "msm2" : "msm1");
+	const device_config *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
 	msm5205_set_volume(adpcm, (data & 0x7f) * 100 / 0x7f);
 }
 
-static void tbowl_adpcm_int(device_t *device)
+static void tbowl_adpcm_int(const device_config *device)
 {
-	tbowl_state *state = device->machine().driver_data<tbowl_state>();
-	int num = (strcmp(device->tag(), "msm1") == 0) ? 0 : 1;
-	if (state->m_adpcm_pos[num] >= state->m_adpcm_end[num] ||
-				state->m_adpcm_pos[num] >= device->machine().region("adpcm")->bytes()/2)
+	int num = (strcmp(device->tag, "msm1") == 0) ? 0 : 1;
+	if (adpcm_pos[num] >= adpcm_end[num] ||
+				adpcm_pos[num] >= memory_region_length(device->machine, "adpcm")/2)
 		msm5205_reset_w(device,1);
-	else if (state->m_adpcm_data[num] != -1)
+	else if (adpcm_data[num] != -1)
 	{
-		msm5205_data_w(device,state->m_adpcm_data[num] & 0x0f);
-		state->m_adpcm_data[num] = -1;
+		msm5205_data_w(device,adpcm_data[num] & 0x0f);
+		adpcm_data[num] = -1;
 	}
 	else
 	{
-		UINT8 *ROM = device->machine().region("adpcm")->base() + 0x10000 * num;
+		UINT8 *ROM = memory_region(device->machine, "adpcm") + 0x10000 * num;
 
-		state->m_adpcm_data[num] = ROM[state->m_adpcm_pos[num]++];
-		msm5205_data_w(device,state->m_adpcm_data[num] >> 4);
+		adpcm_data[num] = ROM[adpcm_pos[num]++];
+		msm5205_data_w(device,adpcm_data[num] >> 4);
 	}
 }
 
-static ADDRESS_MAP_START( 6206A_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( 6206A_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("ym1", ym3812_w)
@@ -280,7 +293,7 @@ static INPUT_PORTS_START( tbowl )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")	/* 0xfc08 -> 0xffb4 */
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW1:1,2,3")
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )
 	PORT_DIPSETTING (   0x00, DEF_STR( 8C_1C ) )
 	PORT_DIPSETTING (   0x01, DEF_STR( 7C_1C ) )
 	PORT_DIPSETTING (   0x02, DEF_STR( 6C_1C ) )
@@ -289,7 +302,7 @@ static INPUT_PORTS_START( tbowl )
 	PORT_DIPSETTING (   0x05, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING (   0x06, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING (   0x07, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0xf8, 0xb8, "Time (Players)" )		PORT_DIPLOCATION("SW1:4,5,6,7,8")
+	PORT_DIPNAME( 0xf8, 0xb8, "Time (Players)" )
 	PORT_DIPSETTING (   0x00, "7:00" )
 	PORT_DIPSETTING (   0x08, "6:00" )
 	PORT_DIPSETTING (   0x10, "5:00" )
@@ -324,52 +337,58 @@ static INPUT_PORTS_START( tbowl )
 //  PORT_DIPSETTING (   0xf8, "1:00" )
 
 	PORT_START("DSW2")	/* 0xfc09 -> 0xffb5 */
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:1,2") // To be checked again
-	PORT_DIPSETTING (   0x02, DEF_STR( Easy ) )
-	PORT_DIPSETTING (   0x03, DEF_STR( Normal ) )
-	PORT_DIPSETTING (   0x01, DEF_STR( Hard ) )
-	PORT_DIPSETTING (   0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0c, 0x0c, "Extra Time (Players)" )	PORT_DIPLOCATION("SW2:3,4") // For multiple "credits"
-	PORT_DIPSETTING (   0x00, "0:30" )			/* manual shows 0:10 */
-	PORT_DIPSETTING (   0x04, "0:20" )			/* manual shows 0:05 */
-	PORT_DIPSETTING (   0x08, "0:10" )			/* manual shows 0:02 */
+	PORT_DIPNAME( 0x03, 0x03, "Difficulty (unused ?)" )	// To be checked again
+	PORT_DIPSETTING (   0x00, "0x00" )
+	PORT_DIPSETTING (   0x01, "0x01" )
+	PORT_DIPSETTING (   0x02, "0x02" )
+	PORT_DIPSETTING (   0x03, "0x03" )
+	PORT_DIPNAME( 0x0c, 0x0c, "Extra Time (Players)" )	// For multiple "credits"
+	PORT_DIPSETTING (   0x00, "0:30" )
+	PORT_DIPSETTING (   0x04, "0:20" )
+	PORT_DIPSETTING (   0x08, "0:10" )
 	PORT_DIPSETTING (   0x0c, DEF_STR( None ) )
-	PORT_DIPNAME( 0x30, 0x30, "Timer Speed" )		PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING (   0x00, "Slowest" )			/* manual shows 1 Count = 60/60 Second - was 56/60 */
-	PORT_DIPSETTING (   0x10, "Slow" )			/* manual shows 1 Count = 54/60 Second - was 51/60 */
-	PORT_DIPSETTING (   0x30, DEF_STR( Normal ) )		/* manual shows 1 Count = 50/60 Second - was 47/60 */
-	PORT_DIPSETTING (   0x20, "Fast" )			/* manual shows 1 Count = 45/60 Second - was 42/60 */
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:7") // Check code at 0x0393
+	PORT_DIPNAME( 0x30, 0x30, "Timer Speed" )
+	PORT_DIPSETTING (   0x00, "56/60" )
+	PORT_DIPSETTING (   0x10, "51/60" )
+	PORT_DIPSETTING (   0x30, "47/60" )
+	PORT_DIPSETTING (   0x20, "42/60" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )	// Check code at 0x0393
 	PORT_DIPSETTING (   0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING (   0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Hi-Score Reset" )		PORT_DIPLOCATION("SW2:8") // Only if P1 buttons 1 and 2 are pressed during P.O.S.T. !
+	PORT_DIPNAME( 0x80, 0x80, "Hi-Score Reset" )		// Only if P1 buttons 1 and 2 are pressed during P.O.S.T. !
 	PORT_DIPSETTING (   0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING (   0x80, DEF_STR( On ) )
 
 	PORT_START("DSW3")	/* 0xfc0a -> 0xffb6 */
-	PORT_DIPNAME( 0x03, 0x03, "Time (Quarter)" )		PORT_DIPLOCATION("SW3:1,2")
+	PORT_DIPNAME( 0x03, 0x03, "Time (Quarter)" )
 	PORT_DIPSETTING (   0x00, "8:00" )
 	PORT_DIPSETTING (   0x01, "5:00" )
 	PORT_DIPSETTING (   0x03, "4:00" )
 	PORT_DIPSETTING (   0x02, "3:00" )
-	PORT_DIPNAME( 0x0c, 0x08, "Bonus Frequency" )		PORT_DIPLOCATION("SW3:3,4") // Check code at 0x6e16 (0x6e37 for tbowlj), each step is + 0x12
-	PORT_DIPSETTING (   0x00, "Most" )			/* Value in 0x8126.w = 0x54f3 (0x5414 for tbowlj) */
-	PORT_DIPSETTING (   0x04, "More" )			/* Value in 0x8126.w = 0x54e1 (0x5402 for tbowlj) */
-	PORT_DIPSETTING (   0x08, DEF_STR( Normal ) )		/* Value in 0x8126.w = 0x54cf (0x54f0 for tbowlj), manual shows this is Least, but values is > least */
-	PORT_DIPSETTING (   0x0c, "Least" ) 			/* Value in 0x8126.w = 0x54bd (0x54de for tbowlj), manual shows this is Normal, but value is least */
+	PORT_DIPNAME( 0x0c, 0x0c, "Unknown (in 0x8126.w)" )	// Check code at 0x6e16
+	PORT_DIPSETTING (   0x00, "0x00 = 0x54f3" )
+	PORT_DIPSETTING (   0x04, "0x04 = 0x54e1" )
+	PORT_DIPSETTING (   0x08, "0x08 = 0x54cf" )
+	PORT_DIPSETTING (   0x0c, "0x0c = 0x54bd" )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-
-static INPUT_PORTS_START( tbowlj ) /* "Quarter Time" Dip Switch for "3:00" and "4:00" are inverted */
+/* same as 'tbowl', but different "Quarter Time" Dip Switch
+   ("3:00" and "4:00" are inverted) */
+static INPUT_PORTS_START( tbowlj )
 	PORT_INCLUDE( tbowl )
 
 	PORT_MODIFY("DSW3")
-	PORT_DIPNAME( 0x03, 0x03, "Time (Quarter)" )		PORT_DIPLOCATION("SW3:1,2")
+	PORT_DIPNAME( 0x03, 0x03, "Time (Quarter)" )
 	PORT_DIPSETTING (   0x00, "8:00" )
 	PORT_DIPSETTING (   0x01, "5:00" )
 	PORT_DIPSETTING (   0x02, "4:00" )
 	PORT_DIPSETTING (   0x03, "3:00" )
+	PORT_DIPNAME( 0x0c, 0x0c, "Unknown (in 0x8126.w)" )	// Check code at 0x6e37
+	PORT_DIPSETTING (   0x00, "0x00 = 0x5414" )
+	PORT_DIPSETTING (   0x04, "0x04 = 0x5402" )
+	PORT_DIPSETTING (   0x08, "0x08 = 0x54f0" )
+	PORT_DIPSETTING (   0x0c, "0x0c = 0x54de" )
 INPUT_PORTS_END
 
 
@@ -423,9 +442,9 @@ GFXDECODE_END
 
 */
 
-static void irqhandler(device_t *device, int linestate)
+static void irqhandler(const device_config *device, int linestate)
 {
-	cputag_set_input_line(device->machine(), "audiocpu", 0, linestate);
+	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -453,72 +472,72 @@ The game is displayed on 2 monitors
 
 static MACHINE_RESET( tbowl )
 {
-	tbowl_state *state = machine.driver_data<tbowl_state>();
-	state->m_adpcm_pos[0] = state->m_adpcm_pos[1] = 0;
-	state->m_adpcm_end[0] = state->m_adpcm_end[1] = 0;
-	state->m_adpcm_data[0] = state->m_adpcm_data[1] = -1;
+	adpcm_pos[0] = adpcm_pos[1] = 0;
+	adpcm_end[0] = adpcm_end[1] = 0;
+	adpcm_data[0] = adpcm_data[1] = -1;
 }
 
-static MACHINE_CONFIG_START( tbowl, tbowl_state )
+static MACHINE_DRIVER_START( tbowl )
 
 	/* CPU on Board '6206B' */
-	MCFG_CPU_ADD("maincpu", Z80, 8000000) /* NEC D70008AC-8 (Z80 Clone) */
-	MCFG_CPU_PROGRAM_MAP(6206B_map)
-	MCFG_CPU_VBLANK_INT("lscreen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 8000000) /* NEC D70008AC-8 (Z80 Clone) */
+	MDRV_CPU_PROGRAM_MAP(6206B_map)
+	MDRV_CPU_VBLANK_INT("lscreen", irq0_line_hold)
 
 	/* CPU on Board '6206C' */
-	MCFG_CPU_ADD("sub", Z80, 8000000) /* NEC D70008AC-8 (Z80 Clone) */
-	MCFG_CPU_PROGRAM_MAP(6206C_map)
-	MCFG_CPU_VBLANK_INT("lscreen", irq0_line_hold)
+	MDRV_CPU_ADD("sub", Z80, 8000000) /* NEC D70008AC-8 (Z80 Clone) */
+	MDRV_CPU_PROGRAM_MAP(6206C_map)
+	MDRV_CPU_VBLANK_INT("lscreen", irq0_line_hold)
 
 	/* CPU on Board '6206A' */
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000) /* Actual Z80 */
-	MCFG_CPU_PROGRAM_MAP(6206A_map)
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000) /* Actual Z80 */
+	MDRV_CPU_PROGRAM_MAP(6206A_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
 	/* video hardware */
-	MCFG_GFXDECODE(tbowl)
-	MCFG_PALETTE_LENGTH(1024*2)
-	MCFG_DEFAULT_LAYOUT(layout_dualhsxs)
+	MDRV_GFXDECODE(tbowl)
+	MDRV_PALETTE_LENGTH(1024*2)
+	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
 
-	MCFG_SCREEN_ADD("lscreen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(tbowl_left)
+	MDRV_SCREEN_ADD("lscreen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_SCREEN_ADD("rscreen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(tbowl_right)
+	MDRV_SCREEN_ADD("rscreen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_VIDEO_START(tbowl)
+	MDRV_VIDEO_START(tbowl)
+	MDRV_VIDEO_UPDATE(tbowl)
 
-	MCFG_MACHINE_RESET( tbowl )
+	MDRV_MACHINE_RESET( tbowl )
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM3812, 4000000)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("ym1", YM3812, 4000000)
+	MDRV_SOUND_CONFIG(ym3812_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("ym2", YM3812, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("ym2", YM3812, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* something for the samples? */
-	MCFG_SOUND_ADD("msm1", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("msm1", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("msm2", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("msm2", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 /* Board Layout from readme.txt
@@ -675,5 +694,5 @@ ROM_START( tbowlj )
 	ROM_LOAD( "6206a.2",	0x10000, 0x10000, CRC(1e9e5936) SHA1(60370d1de28b1c5ffeff7843702aaddb19ff1f58) )
 ROM_END
 
-GAME( 1987, tbowl,    0,        tbowl,    tbowl,    0, ROT0,  "Tecmo", "Tecmo Bowl (World)", 0 )
+GAME( 1987, tbowl,    0,        tbowl,    tbowl,    0, ROT0,  "Tecmo", "Tecmo Bowl (World?)", 0 )
 GAME( 1987, tbowlj,   tbowl,    tbowl,    tbowlj,   0, ROT0,  "Tecmo", "Tecmo Bowl (Japan)", 0 )

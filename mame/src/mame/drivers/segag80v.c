@@ -21,7 +21,7 @@
     Sega Vector memory map (preliminary)
 
     Most of the info here comes from the wiretap archive at:
-    http://www.mikesarcade.com/cgi-bin/spies.cgi?action=url&type=info&page=segaxyfaq1.6.txt
+    http://www.spies.com/arcade/simulation/gameHardware/
 
      * Sega G80 Vector Simulation
 
@@ -122,7 +122,7 @@
 
     Known problems:
 
-    1 The games seem to run too fast. This is most noticeable
+    1 The games seem to run too fast. This is most noticable
       with the speech samples in Zektor - they don't match the mouth.
       Slowing down the Z80 doesn't help and in fact hurts performance.
 
@@ -132,13 +132,14 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
 #include "audio/segasnd.h"
-#include "machine/segag80.h"
-#include "includes/segag80v.h"
+#include "video/vector.h"
+#include "includes/segag80r.h"
+#include "segag80v.h"
 
 
 /*************************************
@@ -154,6 +155,26 @@
 
 /*************************************
  *
+ *  Global variables
+ *
+ *************************************/
+
+extern UINT8 (*sega_decrypt)(offs_t, UINT8);
+
+static UINT8 *mainram;
+static UINT8 has_usb;
+
+static UINT8 mult_data[2];
+static UINT16 mult_result;
+
+static UINT8 spinner_select;
+static UINT8 spinner_sign;
+static UINT8 spinner_count;
+
+
+
+/*************************************
+ *
  *  Machine setup and config
  *
  *************************************/
@@ -162,19 +183,26 @@ static INPUT_CHANGED( service_switch )
 {
 	/* pressing the service switch sends an NMI */
 	if (newval)
-		cputag_set_input_line(field.machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 static MACHINE_START( g80v )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
 	/* register for save states */
-	state_save_register_global_array(machine, state->m_mult_data);
-	state_save_register_global(machine, state->m_mult_result);
-	state_save_register_global(machine, state->m_spinner_select);
-	state_save_register_global(machine, state->m_spinner_sign);
-	state_save_register_global(machine, state->m_spinner_count);
+	state_save_register_global_array(machine, mult_data);
+	state_save_register_global(machine, mult_result);
+	state_save_register_global(machine, spinner_select);
+	state_save_register_global(machine, spinner_sign);
+	state_save_register_global(machine, spinner_count);
+}
+
+
+static MACHINE_RESET( g80v )
+{
+	/* if we have a Universal Sound Board, reset it here */
+	if (has_usb)
+		sega_usb_reset(machine, 0x10);
 }
 
 
@@ -185,31 +213,20 @@ static MACHINE_START( g80v )
  *
  *************************************/
 
-static offs_t decrypt_offset(address_space *space, offs_t offset)
+static offs_t decrypt_offset(const address_space *space, offs_t offset)
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-
 	/* ignore anything but accesses via opcode $32 (LD $(XXYY),A) */
-	offs_t pc = cpu_get_previouspc(&space->device());
-	if ((UINT16)pc == 0xffff || space->read_byte(pc) != 0x32)
+	offs_t pc = cpu_get_previouspc(space->cpu);
+	if ((UINT16)pc == 0xffff || memory_read_byte(space, pc) != 0x32)
 		return offset;
 
 	/* fetch the low byte of the address and munge it */
-	return (offset & 0xff00) | (*state->m_decrypt)(pc, space->read_byte(pc + 1));
+	return (offset & 0xff00) | (*sega_decrypt)(pc, memory_read_byte(space, pc + 1));
 }
 
-static WRITE8_HANDLER( mainram_w )
-{
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_mainram[decrypt_offset(space, offset)] = data;
-}
-
-static WRITE8_DEVICE_HANDLER( usb_ram_w ) { sega_usb_ram_w(device, decrypt_offset(device->machine().device("maincpu")->memory().space(AS_PROGRAM), offset), data); }
-static WRITE8_HANDLER( vectorram_w )
-{
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_vectorram[decrypt_offset(space, offset)] = data;
-}
+static WRITE8_HANDLER( mainram_w ) { mainram[decrypt_offset(space, offset)] = data; }
+static WRITE8_HANDLER( usb_ram_w ) { sega_usb_ram_w(space, decrypt_offset(space, offset), data); }
+static WRITE8_HANDLER( vectorram_w ) { vectorram[decrypt_offset(space, offset)] = data; }
 
 
 
@@ -235,10 +252,10 @@ static READ8_HANDLER( mangled_ports_r )
 	/* read as two bits from each of 4 ports. For this reason, the input   */
 	/* ports have been organized logically, and are demangled at runtime.  */
 	/* 4 input ports each provide 8 bits of information. */
-	UINT8 d7d6 = input_port_read(space->machine(), "D7D6");
-	UINT8 d5d4 = input_port_read(space->machine(), "D5D4");
-	UINT8 d3d2 = input_port_read(space->machine(), "D3D2");
-	UINT8 d1d0 = input_port_read(space->machine(), "D1D0");
+	UINT8 d7d6 = input_port_read(space->machine, "D7D6");
+	UINT8 d5d4 = input_port_read(space->machine, "D5D4");
+	UINT8 d3d2 = input_port_read(space->machine, "D3D2");
+	UINT8 d1d0 = input_port_read(space->machine, "D1D0");
 	int shift = offset & 3;
 	return demangle(d7d6 >> shift, d5d4 >> shift, d3d2 >> shift, d1d0 >> shift);
 }
@@ -253,18 +270,16 @@ static READ8_HANDLER( mangled_ports_r )
 
 static WRITE8_HANDLER( spinner_select_w )
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_spinner_select = data;
+	spinner_select = data;
 }
 
 
 static READ8_HANDLER( spinner_input_r )
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	INT8 delta;
 
-	if (state->m_spinner_select & 1)
-		return input_port_read(space->machine(), "FC");
+	if (spinner_select & 1)
+		return input_port_read(space->machine, "FC");
 
 /*
  * The values returned are always increasing.  That is, regardless of whether
@@ -274,13 +289,13 @@ static READ8_HANDLER( spinner_input_r )
  */
 
 	/* I'm sure this can be further simplified ;-) BW */
-	delta = input_port_read(space->machine(), "SPINNER");
+	delta = input_port_read(space->machine, "SPINNER");
 	if (delta != 0)
 	{
-		state->m_spinner_sign = (delta >> 7) & 1;
-		state->m_spinner_count += abs(delta);
+		spinner_sign = (delta >> 7) & 1;
+		spinner_count += abs(delta);
 	}
-	return ~((state->m_spinner_count << 1) | state->m_spinner_sign);
+	return ~((spinner_count << 1) | spinner_sign);
 }
 
 
@@ -293,28 +308,27 @@ static READ8_HANDLER( spinner_input_r )
 
 static CUSTOM_INPUT( elim4_joint_coin_r )
 {
-	return (input_port_read(field.machine(), "COINS") & 0xf) != 0xf;
+	return (input_port_read(field->port->machine, "COINS") & 0xf) != 0xf;
 }
 
 
 static READ8_HANDLER( elim4_input_r )
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
 	UINT8 result = 0;
 
 	/* bit 3 enables demux */
-	if (state->m_spinner_select & 8)
+	if (spinner_select & 8)
 	{
 		/* Demux bit 0-2. Only 6 and 7 are connected */
-		switch (state->m_spinner_select & 7)
+		switch (spinner_select & 7)
 		{
 			case 6:
 				/* player 3 & 4 controls */
-				result = input_port_read(space->machine(), "FC");
+				result = input_port_read(space->machine, "FC");
 				break;
 			case 7:
 				/* the 4 coin inputs */
-				result = input_port_read(space->machine(), "COINS");
+				result = input_port_read(space->machine, "COINS");
 				break;
 		}
 	}
@@ -333,18 +347,16 @@ static READ8_HANDLER( elim4_input_r )
 
 static WRITE8_HANDLER( multiply_w )
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	state->m_mult_data[offset] = data;
+	mult_data[offset] = data;
 	if (offset == 1)
-		state->m_mult_result = state->m_mult_data[0] * state->m_mult_data[1];
+		mult_result = mult_data[0] * mult_data[1];
 }
 
 
 static READ8_HANDLER( multiply_r )
 {
-	segag80v_state *state = space->machine().driver_data<segag80v_state>();
-	UINT8 result = state->m_mult_result;
-	state->m_mult_result >>= 8;
+	UINT8 result = mult_result;
+	mult_result >>= 8;
 	return result;
 }
 
@@ -358,8 +370,8 @@ static READ8_HANDLER( multiply_r )
 
 static WRITE8_HANDLER( coin_count_w )
 {
-	coin_counter_w(space->machine(), 0, (data >> 7) & 1);
-	coin_counter_w(space->machine(), 1, (data >> 6) & 1);
+	coin_counter_w(0, (data >> 7) & 1);
+	coin_counter_w(1, (data >> 6) & 1);
 }
 
 
@@ -368,7 +380,7 @@ static WRITE8_HANDLER( unknown_w )
 	/* writing an 0x04 here enables interrupts */
 	/* some games write 0x00/0x01 here as well */
 	if (data != 0x00 && data != 0x01 && data != 0x04)
-		mame_printf_debug("%04X:unknown_w = %02X\n", cpu_get_pc(&space->device()), data);
+		mame_printf_debug("%04X:unknown_w = %02X\n", cpu_get_pc(space->cpu), data);
 }
 
 
@@ -380,16 +392,16 @@ static WRITE8_HANDLER( unknown_w )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_ROM		/* CPU board ROM */
 	AM_RANGE(0x0800, 0xbfff) AM_ROM		/* PROM board ROM area */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE_MEMBER(segag80v_state, m_mainram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_BASE_MEMBER(segag80v_state, m_vectorram) AM_SIZE_MEMBER(segag80v_state, m_vectorram_size)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(mainram_w) AM_BASE(&mainram)
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(vectorram_w) AM_BASE(&vectorram) AM_SIZE(&vectorram_size)
 ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xbc, 0xbc) /* AM_READ ??? */
 	AM_RANGE(0xbd, 0xbe) AM_WRITE(multiply_w)
@@ -431,14 +443,14 @@ static INPUT_PORTS_START( g80v_generic )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )					/* P1.21 */
 
 	PORT_START("D3D2")
-	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW1:8" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW1:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, 0x01, "SW1:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x02, "SW1:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x04, "SW1:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x08, "SW1:1" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW1:8" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW1:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW1:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW1:5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x01, "SW1:4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x02, "SW1:3" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x04, "SW1:2" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x08, "SW1:1" )
 
 	PORT_START("D1D0")
 	PORT_DIPNAME( 0x0f, 0x03, DEF_STR( Coin_A )) PORT_DIPLOCATION("SW2:8,7,6,5")
@@ -516,7 +528,7 @@ static INPUT_PORTS_START( elim2 )
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))		// This switch is not documented in the manual
 	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	//"SW1:7" unused                                    // Unused according to manual
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )		// Unused according to manual
 	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
 	PORT_DIPSETTING(	0x04, "3" )
 	PORT_DIPSETTING(	0x08, "4" )
@@ -579,7 +591,7 @@ static INPUT_PORTS_START( elim4 )
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ))		PORT_DIPLOCATION("SW1:8")
 	PORT_DIPSETTING(	0x01, DEF_STR( Upright ))		// This switch is not documented in the manual
 	PORT_DIPSETTING(	0x00, DEF_STR( Cocktail ))
-	//"SW1:7" unused                                    // This switch is not documented in the manual
+	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:7" )		// This switch is not documented in the manual
 	PORT_DIPNAME( 0x0c, 0x04, DEF_STR( Lives ))			PORT_DIPLOCATION("SW1:6,5")
 	PORT_DIPSETTING(	0x04, "3" )
 	PORT_DIPSETTING(	0x08, "4" )
@@ -596,11 +608,11 @@ static INPUT_PORTS_START( elim4 )
 	PORT_DIPSETTING(	0x00, "30000" )
 
 	PORT_MODIFY("D1D0")
-	PORT_DIPUNUSED_DIPLOC( 0x01, 0x01, "SW2:8" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW2:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW2:4" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x01, 0x01, "SW2:8" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "SW2:7" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "SW2:6" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW2:5" )
+	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW2:4" )
 	PORT_DIPNAME( 0xe0, 0x00, DEF_STR( Coin_A ))		PORT_DIPLOCATION("SW2:3,2,1")
 	PORT_DIPSETTING(	0xe0, DEF_STR( 8C_1C ))
 	PORT_DIPSETTING(	0xc0, DEF_STR( 7C_1C ))
@@ -808,18 +820,18 @@ INPUT_PORTS_END
 static const char *const elim_sample_names[] =
 {
 	"*elim2",
-	"elim1",
-	"elim2",
-	"elim3",
-	"elim4",
-	"elim5",
-	"elim6",
-	"elim7",
-	"elim8",
-	"elim9",
-	"elim10",
-	"elim11",
-	"elim12",
+	"elim1.wav",
+	"elim2.wav",
+	"elim3.wav",
+	"elim4.wav",
+	"elim5.wav",
+	"elim6.wav",
+	"elim7.wav",
+	"elim8.wav",
+	"elim9.wav",
+	"elim10.wav",
+	"elim11.wav",
+	"elim12.wav",
 	0	/* end of array */
 };
 
@@ -841,16 +853,16 @@ static const char *const spacfury_sample_names[] =
 {
 	"*spacfury",
 	/* Sound samples */
-	"sfury1",
-	"sfury2",
-	"sfury3",
-	"sfury4",
-	"sfury5",
-	"sfury6",
-	"sfury7",
-	"sfury8",
-	"sfury9",
-	"sfury10",
+	"sfury1.wav",
+	"sfury2.wav",
+	"sfury3.wav",
+	"sfury4.wav",
+	"sfury5.wav",
+	"sfury6.wav",
+	"sfury7.wav",
+	"sfury8.wav",
+	"sfury9.wav",
+	"sfury10.wav",
 	0	/* end of array */
 };
 
@@ -871,17 +883,17 @@ static const samples_interface spacfury_samples_interface =
 static const char *const zektor_sample_names[] =
 {
 	"*zektor",
-	"elim1",  /*  0 fireball */
-	"elim2",  /*  1 bounce */
-	"elim3",  /*  2 Skitter */
-	"elim4",  /*  3 Eliminator */
-	"elim5",  /*  4 Electron */
-	"elim6",  /*  5 fire */
-	"elim7",  /*  6 thrust */
-	"elim8",  /*  7 Electron */
-	"elim9",  /*  8 small explosion */
-	"elim10", /*  9 med explosion */
-	"elim11", /* 10 big explosion */
+	"elim1.wav",  /*  0 fireball */
+	"elim2.wav",  /*  1 bounce */
+	"elim3.wav",  /*  2 Skitter */
+	"elim4.wav",  /*  3 Eliminator */
+	"elim5.wav",  /*  4 Electron */
+	"elim6.wav",  /*  5 fire */
+	"elim7.wav",  /*  6 thrust */
+	"elim8.wav",  /*  7 Electron */
+	"elim9.wav",  /*  8 small explosion */
+	"elim10.wav", /*  9 med explosion */
+	"elim11.wav", /* 10 big explosion */
 	0
 };
 
@@ -900,81 +912,87 @@ static const samples_interface zektor_samples_interface =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( g80v_base, segag80v_state )
+static MACHINE_DRIVER_START( g80v_base )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK/2)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, CPU_CLOCK/2)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_START(g80v)
+	MDRV_MACHINE_START(g80v)
+	MDRV_MACHINE_RESET(g80v)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", VECTOR)
-	MCFG_SCREEN_REFRESH_RATE(40)
-	MCFG_SCREEN_SIZE(400, 300)
-	MCFG_SCREEN_VISIBLE_AREA(512, 1536, 640-32, 1408+32)
-	MCFG_SCREEN_UPDATE_STATIC(segag80v)
+	MDRV_SCREEN_ADD("screen", VECTOR)
+	MDRV_SCREEN_REFRESH_RATE(40)
+	MDRV_SCREEN_SIZE(400, 300)
+	MDRV_SCREEN_VISIBLE_AREA(512, 1536, 640-32, 1408+32)
 
-	MCFG_VIDEO_START(segag80v)
+	MDRV_VIDEO_START(sega)
+	MDRV_VIDEO_UPDATE(sega)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( elim2, g80v_base )
-
-	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(elim2_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( spacfury, g80v_base )
+static MACHINE_DRIVER_START( elim2 )
+	MDRV_IMPORT_FROM(g80v_base)
 
 	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(spacfury_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(elim2_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( spacfury )
+	MDRV_IMPORT_FROM(g80v_base)
+
+	/* custom sound board */
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(spacfury_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	/* speech board */
-	MCFG_FRAGMENT_ADD(sega_speech_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(sega_speech_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( zektor, g80v_base )
+static MACHINE_DRIVER_START( zektor )
+	MDRV_IMPORT_FROM(g80v_base)
 
 	/* custom sound board */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(zektor_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(zektor_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("aysnd", AY8910, CPU_CLOCK/2/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+	MDRV_SOUND_ADD("ay", AY8910, CPU_CLOCK/2/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 
 	/* speech board */
-	MCFG_FRAGMENT_ADD(sega_speech_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(sega_speech_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( tacscan, g80v_base )
+static MACHINE_DRIVER_START( tacscan )
+	MDRV_IMPORT_FROM(g80v_base)
 
 	/* universal sound board */
-	MCFG_FRAGMENT_ADD(sega_universal_sound_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(sega_universal_sound_board)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( startrek, g80v_base )
+static MACHINE_DRIVER_START( startrek )
+	MDRV_IMPORT_FROM(g80v_base)
 
 	/* speech board */
-	MCFG_FRAGMENT_ADD(sega_speech_board)
+	MDRV_IMPORT_FROM(sega_speech_board)
 
 	/* universal sound board */
-	MCFG_FRAGMENT_ADD(sega_universal_sound_board)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(sega_universal_sound_board)
+MACHINE_DRIVER_END
 
 
 
@@ -1300,118 +1318,112 @@ ROM_END
 
 static DRIVER_INIT( elim2 )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(70);
+	sega_security(70);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
+	has_usb = FALSE;
+	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, elim1_sh_w);
+	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, elim2_sh_w);
 }
 
 
 static DRIVER_INIT( elim4 )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(76);
+	sega_security(76);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(elim1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(elim2_sh_w));
+	has_usb = FALSE;
+	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, elim1_sh_w);
+	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, elim2_sh_w);
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(elim4_input_r));
+	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
+	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, elim4_input_r);
 }
 
 
 static DRIVER_INIT( spacfury )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(64);
+	sega_security(64);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(spacfury1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(spacfury2_sh_w));
+	has_usb = FALSE;
+	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
+	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
+	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, spacfury1_sh_w);
+	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, spacfury2_sh_w);
 }
 
 
 static DRIVER_INIT( zektor )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
-	device_t *ay = machine.device("aysnd");
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	const device_config *ay = devtag_get_device(machine, "ay");
 
 	/* configure security */
-	state->m_decrypt = segag80_security(82);
+	sega_security(82);
 
 	/* configure sound */
-	state->m_usb = NULL;
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
-	iospace->install_legacy_write_handler(*ay, 0x3c, 0x3d, FUNC(ay8910_address_data_w));
-	iospace->install_legacy_write_handler(0x3e, 0x3e, FUNC(zektor1_sh_w));
-	iospace->install_legacy_write_handler(0x3f, 0x3f, FUNC(zektor2_sh_w));
+	has_usb = FALSE;
+	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
+	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
+	memory_install_write8_device_handler(iospace, ay, 0x3c, 0x3d, 0, 0, ay8910_address_data_w);
+	memory_install_write8_handler(iospace, 0x3e, 0x3e, 0, 0, zektor1_sh_w);
+	memory_install_write8_handler(iospace, 0x3f, 0x3f, 0, 0, zektor2_sh_w);
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
+	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
 }
 
 
 static DRIVER_INIT( tacscan )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	const address_space *pgmspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(76);
+	sega_security(76);
 
 	/* configure sound */
-	state->m_usb = machine.device("usbsnd");
-	iospace->install_legacy_readwrite_handler(*state->m_usb, 0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
-	pgmspace->install_legacy_readwrite_handler(*state->m_usb, 0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
+	has_usb = TRUE;
+	memory_install_readwrite8_handler(iospace, 0x3f, 0x3f, 0, 0, sega_usb_status_r, sega_usb_data_w);
+	memory_install_readwrite8_handler(pgmspace, 0xd000, 0xdfff, 0, 0, sega_usb_ram_r, usb_ram_w);
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
+	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
 }
 
 
 static DRIVER_INIT( startrek )
 {
-	segag80v_state *state = machine.driver_data<segag80v_state>();
-	address_space *pgmspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	address_space *iospace = machine.device("maincpu")->memory().space(AS_IO);
+	const address_space *pgmspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	/* configure security */
-	state->m_decrypt = segag80_security(64);
+	sega_security(64);
 
 	/* configure sound */
-	state->m_usb = machine.device("usbsnd");
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x38, 0x38, FUNC(sega_speech_data_w));
-	iospace->install_legacy_write_handler(*machine.device("segaspeech"), 0x3b, 0x3b, FUNC(sega_speech_control_w));
+	has_usb = TRUE;
+	memory_install_write8_handler(iospace, 0x38, 0x38, 0, 0, sega_speech_data_w);
+	memory_install_write8_handler(iospace, 0x3b, 0x3b, 0, 0, sega_speech_control_w);
 
-	iospace->install_legacy_readwrite_handler(*state->m_usb, 0x3f, 0x3f, FUNC(sega_usb_status_r), FUNC(sega_usb_data_w));
-	pgmspace->install_legacy_readwrite_handler(*state->m_usb, 0xd000, 0xdfff, FUNC(sega_usb_ram_r), FUNC(usb_ram_w));
+	memory_install_readwrite8_handler(iospace, 0x3f, 0x3f, 0, 0, sega_usb_status_r, sega_usb_data_w);
+	memory_install_readwrite8_handler(pgmspace, 0xd000, 0xdfff, 0, 0, sega_usb_ram_r, usb_ram_w);
 
 	/* configure inputs */
-	iospace->install_legacy_write_handler(0xf8, 0xf8, FUNC(spinner_select_w));
-	iospace->install_legacy_read_handler(0xfc, 0xfc, FUNC(spinner_input_r));
+	memory_install_write8_handler(iospace, 0xf8, 0xf8, 0, 0, spinner_select_w);
+	memory_install_read8_handler(iospace, 0xfc, 0xfc, 0, 0, spinner_input_r);
 }
 
 
@@ -1422,15 +1434,14 @@ static DRIVER_INIT( startrek )
  *
  *************************************/
 
-//    YEAR, NAME,      PARENT,   MACHINE,  INPUT,    INIT,     MONITOR,                     COMPANY,FULLNAME,FLAGS
-GAME( 1981, elim2,     0,        elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, set 1)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim2a,    elim2,    elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, set 2)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim2c,    elim2,    elim2,    elim2c,   elim2,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (2 Players, cocktail)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim4,     elim2,    elim2,    elim4,    elim4,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (4 Players)", GAME_IMPERFECT_SOUND )
-GAME( 1981, elim4p,    elim2,    elim2,    elim4,    elim4,    ORIENTATION_FLIP_Y,          "Gremlin", "Eliminator (4 Players, prototype)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfury,  0,        spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision C)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfurya, spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision A)", GAME_IMPERFECT_SOUND )
-GAME( 1981, spacfuryb, spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,          "Sega", "Space Fury (revision B)", GAME_IMPERFECT_SOUND )
-GAME( 1982, zektor,    0,        zektor,   zektor,   zektor,   ORIENTATION_FLIP_Y,          "Sega", "Zektor (revision B)", GAME_IMPERFECT_SOUND )
-GAME( 1982, tacscan,   0,        tacscan,  tacscan,  tacscan,  ORIENTATION_FLIP_X ^ ROT270, "Sega", "Tac/Scan", GAME_IMPERFECT_SOUND )
-GAME( 1982, startrek,  0,        startrek, startrek, startrek, ORIENTATION_FLIP_Y,          "Sega", "Star Trek", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim2,	  0,        elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, set 1)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim2a,   elim2,    elim2,    elim2,    elim2,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, set 2)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim2c,	  elim2,	elim2,	  elim2c,	elim2,	  ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (2 Players, cocktail)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim4,	  elim2,    elim2,    elim4,    elim4,    ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (4 Players)", GAME_IMPERFECT_SOUND )
+GAME( 1981, elim4p,	  elim2,	elim2,	  elim4,	elim4,	  ORIENTATION_FLIP_Y,   "Gremlin", "Eliminator (4 Players, prototype)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfury, 0,        spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision C)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfurya,spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision A)", GAME_IMPERFECT_SOUND )
+GAME( 1981, spacfuryb,spacfury, spacfury, spacfury, spacfury, ORIENTATION_FLIP_Y,   "Sega", "Space Fury (revision B)", GAME_IMPERFECT_SOUND )
+GAME( 1982, zektor,   0,        zektor,   zektor,   zektor,   ORIENTATION_FLIP_Y,   "Sega", "Zektor (revision B)", GAME_IMPERFECT_SOUND )
+GAME( 1982, tacscan,  0,        tacscan,  tacscan,  tacscan,  ORIENTATION_FLIP_X ^ ROT270, "Sega", "Tac/Scan", GAME_IMPERFECT_SOUND )
+GAME( 1982, startrek, 0,        startrek, startrek, startrek, ORIENTATION_FLIP_Y,   "Sega", "Star Trek", GAME_IMPERFECT_SOUND )

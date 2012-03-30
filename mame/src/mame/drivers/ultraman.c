@@ -1,21 +1,102 @@
 /***************************************************************************
 
-    Ultraman (c) 1991  Banpresto / Bandai
+Ultraman (c) 1991  Banpresto / Bandai
 
-    Driver by Manuel Abadia <manu@teleline.es>
+Driver by Manuel Abadia <manu@teleline.es>
 
-    2009-03:
-    Added dsw locations and verified factory setting based on Guru's notes
+2009-03:
+Added dsw locations and verified factory setting based on Guru's notes
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "video/konicdev.h"
+#include "video/konamiic.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "includes/ultraman.h"
+
+
+/* from video/ultraman.c */
+WRITE16_HANDLER( ultraman_gfxctrl_w );
+VIDEO_START( ultraman );
+VIDEO_UPDATE( ultraman );
+
+
+
+static READ16_HANDLER( ultraman_K051937_r )
+{
+	return K051937_r(space, offset);
+}
+
+static READ16_HANDLER( ultraman_K051960_r )
+{
+	return K051960_r(space, offset);
+}
+
+static READ16_HANDLER( ultraman_K051316_0_r )
+{
+	return K051316_0_r(space, offset);
+}
+
+static READ16_HANDLER( ultraman_K051316_1_r )
+{
+	return K051316_1_r(space, offset);
+}
+
+static READ16_HANDLER( ultraman_K051316_2_r )
+{
+	return K051316_2_r(space, offset);
+}
+
+static WRITE16_HANDLER( ultraman_K051316_0_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_0_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051316_1_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_1_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051316_2_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_2_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051316_ctrl_0_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_ctrl_0_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051316_ctrl_1_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_ctrl_1_w(space, offset, data & 0xff);
+
+}
+
+static WRITE16_HANDLER( ultraman_K051316_ctrl_2_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051316_ctrl_2_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051937_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051937_w(space, offset, data & 0xff);
+}
+
+static WRITE16_HANDLER( ultraman_K051960_w )
+{
+	if (ACCESSING_BITS_0_7)
+		K051960_w(space, offset, data & 0xff);
+}
 
 static WRITE16_HANDLER( sound_cmd_w )
 {
@@ -25,17 +106,16 @@ static WRITE16_HANDLER( sound_cmd_w )
 
 static WRITE16_HANDLER( sound_irq_trigger_w )
 {
-	ultraman_state *state = space->machine().driver_data<ultraman_state>();
-
 	if (ACCESSING_BITS_0_7)
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x08ffff) AM_RAM
-	AM_RANGE(0x180000, 0x183fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)/* Palette */
+	AM_RANGE(0x180000, 0x183fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)/* Palette */
 	AM_RANGE(0x1c0000, 0x1c0001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x1c0002, 0x1c0003) AM_READ_PORT("P1")
 	AM_RANGE(0x1c0004, 0x1c0005) AM_READ_PORT("P2")
@@ -45,26 +125,26 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x1c0020, 0x1c0021) AM_WRITE(sound_cmd_w)
 	AM_RANGE(0x1c0028, 0x1c0029) AM_WRITE(sound_irq_trigger_w)
 	AM_RANGE(0x1c0030, 0x1c0031) AM_WRITE(watchdog_reset16_w)
-	AM_RANGE(0x204000, 0x204fff) AM_DEVREADWRITE8("k051316_1", k051316_r, k051316_w, 0x00ff)	/* K051316 #0 RAM */
-	AM_RANGE(0x205000, 0x205fff) AM_DEVREADWRITE8("k051316_2", k051316_r, k051316_w, 0x00ff)	/* K051316 #1 RAM */
-	AM_RANGE(0x206000, 0x206fff) AM_DEVREADWRITE8("k051316_3", k051316_r, k051316_w, 0x00ff)	/* K051316 #2 RAM */
-	AM_RANGE(0x207f80, 0x207f9f) AM_DEVWRITE8("k051316_1", k051316_ctrl_w, 0x00ff)	/* K051316 #0 registers */
-	AM_RANGE(0x207fa0, 0x207fbf) AM_DEVWRITE8("k051316_2", k051316_ctrl_w, 0x00ff)	/* K051316 #1 registers */
-	AM_RANGE(0x207fc0, 0x207fdf) AM_DEVWRITE8("k051316_3", k051316_ctrl_w, 0x00ff)	/* K051316 #2 registers */
-	AM_RANGE(0x304000, 0x30400f) AM_DEVREADWRITE8("k051960", k051937_r, k051937_w, 0x00ff)		/* Sprite control */
-	AM_RANGE(0x304800, 0x304fff) AM_DEVREADWRITE8("k051960", k051960_r, k051960_w, 0x00ff)		/* Sprite RAM */
+	AM_RANGE(0x204000, 0x204fff) AM_READWRITE(ultraman_K051316_0_r, ultraman_K051316_0_w)	/* K051316 #0 RAM */
+	AM_RANGE(0x205000, 0x205fff) AM_READWRITE(ultraman_K051316_1_r, ultraman_K051316_1_w)	/* K051316 #1 RAM */
+	AM_RANGE(0x206000, 0x206fff) AM_READWRITE(ultraman_K051316_2_r, ultraman_K051316_2_w)	/* K051316 #2 RAM */
+	AM_RANGE(0x207f80, 0x207f9f) AM_WRITE(ultraman_K051316_ctrl_0_w	)	/* K051316 #0 registers */
+	AM_RANGE(0x207fa0, 0x207fbf) AM_WRITE(ultraman_K051316_ctrl_1_w	)	/* K051316 #1 registers */
+	AM_RANGE(0x207fc0, 0x207fdf) AM_WRITE(ultraman_K051316_ctrl_2_w	)	/* K051316 #2 registers */
+	AM_RANGE(0x304000, 0x30400f) AM_READWRITE(ultraman_K051937_r, ultraman_K051937_w)		/* Sprite control */
+	AM_RANGE(0x304800, 0x304fff) AM_READWRITE(ultraman_K051960_r, ultraman_K051960_w)		/* Sprite RAM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc000) AM_READ(soundlatch_r)	/* Sound latch read */
 //  AM_RANGE(0xd000, 0xd000) AM_WRITENOP      /* ??? */
-	AM_RANGE(0xe000, 0xe000) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)		/* M6295 */
-	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)	/* YM2151 */
+	AM_RANGE(0xe000, 0xe000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)		/* M6295 */
+	AM_RANGE(0xf000, 0xf001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)	/* YM2151 */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x00) AM_WRITENOP                     /* ??? */
 ADDRESS_MAP_END
@@ -159,109 +239,48 @@ static INPUT_PORTS_START( ultraman )
 INPUT_PORTS_END
 
 
-static const k051960_interface ultraman_k051960_intf =
-{
-	"gfx1", 0,
-	NORMAL_PLANE_ORDER,
-	KONAMI_ROM_DEINTERLEAVE_2,
-	ultraman_sprite_callback
-};
 
-static const k051316_interface ultraman_k051316_intf_0 =
-{
-	"gfx2", 1,
-	4, FALSE, 0,
-	0, 8, 0,
-	ultraman_zoom_callback_0
-};
 
-static const k051316_interface ultraman_k051316_intf_1 =
-{
-	"gfx3", 2,
-	4, FALSE, 0,
-	0, 8, 0,
-	ultraman_zoom_callback_1
-};
-
-static const k051316_interface ultraman_k051316_intf_2 =
-{
-	"gfx4", 3,
-	4, TRUE, 0,
-	0, 8, 0,
-	ultraman_zoom_callback_2
-};
-
-static MACHINE_START( ultraman )
-{
-	ultraman_state *state = machine.driver_data<ultraman_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_k051960 = machine.device("k051960");
-	state->m_k051316_1 = machine.device("k051316_1");
-	state->m_k051316_2 = machine.device("k051316_2");
-	state->m_k051316_3 = machine.device("k051316_3");
-
-	state->save_item(NAME(state->m_bank0));
-	state->save_item(NAME(state->m_bank1));
-	state->save_item(NAME(state->m_bank2));
-}
-
-static MACHINE_RESET( ultraman )
-{
-	ultraman_state *state = machine.driver_data<ultraman_state>();
-
-	state->m_bank0 = -1;
-	state->m_bank1 = -1;
-	state->m_bank2 = -1;
-}
-
-static MACHINE_CONFIG_START( ultraman, ultraman_state )
+static MACHINE_DRIVER_START( ultraman )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,24000000/2)		/* 12 MHz? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000,24000000/2)		/* 12 MHz? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,24000000/6)	/* 4 MHz? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,24000000/6)	/* 4 MHz? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(600))
-
-	MCFG_MACHINE_START(ultraman)
-	MCFG_MACHINE_RESET(ultraman)
+	MDRV_QUANTUM_TIME(HZ(600))
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
-	MCFG_SCREEN_UPDATE_STATIC(ultraman)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(14*8, (64-14)*8-1, 2*8, 30*8-1 )
 
-	MCFG_PALETTE_LENGTH(8192)
+	MDRV_PALETTE_LENGTH(8192)
 
-	MCFG_VIDEO_START(ultraman)
-
-	MCFG_K051960_ADD("k051960", ultraman_k051960_intf)
-	MCFG_K051316_ADD("k051316_1", ultraman_k051316_intf_0)
-	MCFG_K051316_ADD("k051316_2", ultraman_k051316_intf_1)
-	MCFG_K051316_ADD("k051316_3", ultraman_k051316_intf_2)
+	MDRV_VIDEO_START(ultraman)
+	MDRV_VIDEO_UPDATE(ultraman)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 24000000/6)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
+	MDRV_SOUND_ADD("ym", YM2151, 24000000/6)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
 
 
@@ -303,4 +322,11 @@ ROM_START( ultraman )
 ROM_END
 
 
-GAME( 1991, ultraman, 0, ultraman, ultraman, 0, ROT0, "Banpresto / Bandai", "Ultraman (Japan)", GAME_SUPPORTS_SAVE )
+
+static DRIVER_INIT( ultraman )
+{
+	konami_rom_deinterleave_2(machine, "gfx1");
+}
+
+
+GAME( 1991, ultraman, 0, ultraman, ultraman, ultraman, ROT0, "Banpresto/Bandai", "Ultraman (Japan)", 0 )

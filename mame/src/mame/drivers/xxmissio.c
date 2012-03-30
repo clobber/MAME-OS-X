@@ -8,87 +8,100 @@ XX Mission (c) 1986 UPL
 
 *****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/2203intf.h"
-#include "includes/xxmissio.h"
 
+VIDEO_START( xxmissio );
+VIDEO_UPDATE( xxmissio );
+
+extern UINT8 *xxmissio_bgram;
+extern UINT8 *xxmissio_fgram;
+extern UINT8 *xxmissio_spriteram;
+
+static UINT8 xxmissio_status;
+
+
+WRITE8_DEVICE_HANDLER( xxmissio_scroll_x_w );
+WRITE8_DEVICE_HANDLER( xxmissio_scroll_y_w );
+WRITE8_HANDLER( xxmissio_flipscreen_w );
+
+READ8_HANDLER( xxmissio_bgram_r );
+WRITE8_HANDLER( xxmissio_bgram_w );
+
+WRITE8_HANDLER( xxmissio_paletteram_w );
 
 static WRITE8_HANDLER( xxmissio_bank_sel_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 7);
+	memory_set_bank(space->machine, 1, data & 7);
 }
 
 static CUSTOM_INPUT( xxmissio_status_r )
 {
-	xxmissio_state *state = field.machine().driver_data<xxmissio_state>();
 	int bit_mask = (FPTR)param;
-	return (state->m_status & bit_mask) ? 1 : 0;
+	return (xxmissio_status & bit_mask) ? 1 : 0;
 }
 
 static WRITE8_HANDLER ( xxmissio_status_m_w )
 {
-	xxmissio_state *state = space->machine().driver_data<xxmissio_state>();
 	switch (data)
 	{
 		case 0x00:
-			state->m_status |= 0x20;
+			xxmissio_status |= 0x20;
 			break;
 
 		case 0x40:
-			state->m_status &= ~0x08;
-			cputag_set_input_line_and_vector(space->machine(), "sub", 0, HOLD_LINE, 0x10);
+			xxmissio_status &= ~0x08;
+			cputag_set_input_line_and_vector(space->machine, "sub", 0, HOLD_LINE, 0x10);
 			break;
 
 		case 0x80:
-			state->m_status |= 0x04;
+			xxmissio_status |= 0x04;
 			break;
 	}
 }
 
 static WRITE8_HANDLER ( xxmissio_status_s_w )
 {
-	xxmissio_state *state = space->machine().driver_data<xxmissio_state>();
 	switch (data)
 	{
 		case 0x00:
-			state->m_status |= 0x10;
+			xxmissio_status |= 0x10;
 			break;
 
 		case 0x40:
-			state->m_status |= 0x08;
+			xxmissio_status |= 0x08;
 			break;
 
 		case 0x80:
-			state->m_status &= ~0x04;
-			cputag_set_input_line_and_vector(space->machine(), "maincpu", 0, HOLD_LINE, 0x10);
+			xxmissio_status &= ~0x04;
+			cputag_set_input_line_and_vector(space->machine, "maincpu", 0, HOLD_LINE, 0x10);
 			break;
 	}
 }
 
 static INTERRUPT_GEN( xxmissio_interrupt_m )
 {
-	xxmissio_state *state = device->machine().driver_data<xxmissio_state>();
-	state->m_status &= ~0x20;
-	device_set_input_line(device, 0, HOLD_LINE);
+	xxmissio_status &= ~0x20;
+	cpu_set_input_line(device, 0, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( xxmissio_interrupt_s )
 {
-	xxmissio_state *state = device->machine().driver_data<xxmissio_state>();
-	state->m_status &= ~0x10;
-	device_set_input_line(device, 0, HOLD_LINE);
+	xxmissio_status &= ~0x10;
+	cpu_set_input_line(device, 0, HOLD_LINE);
 }
 
 static MACHINE_START( xxmissio )
 {
-	memory_configure_bank(machine, "bank1", 0, 8, machine.region("user1")->base(), 0x4000);
-	memory_set_bank(machine, "bank1", 0);
+	memory_configure_bank(machine, 1, 0, 8, memory_region(machine, "user1"), 0x4000);
+	memory_set_bank(machine, 1, 0);
 }
 
 /****************************************************************************/
 
-static ADDRESS_MAP_START( map1, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( map1, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 
 	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
@@ -100,20 +113,20 @@ static ADDRESS_MAP_START( map1, AS_PROGRAM, 8 )
 	AM_RANGE(0xa002, 0xa002) AM_WRITE(xxmissio_status_m_w)
 	AM_RANGE(0xa003, 0xa003) AM_WRITE(xxmissio_flipscreen_w)
 
-	AM_RANGE(0xc000, 0xc7ff) AM_SHARE("share1") AM_RAM AM_BASE_MEMBER(xxmissio_state, m_fgram)
-	AM_RANGE(0xc800, 0xcfff) AM_SHARE("share2") AM_READWRITE(xxmissio_bgram_r, xxmissio_bgram_w) AM_BASE_MEMBER(xxmissio_state, m_bgram)
-	AM_RANGE(0xd000, 0xd7ff) AM_SHARE("share3") AM_RAM AM_BASE_MEMBER(xxmissio_state, m_spriteram)
+	AM_RANGE(0xc000, 0xc7ff) AM_SHARE(1) AM_RAM AM_BASE(&xxmissio_fgram)
+	AM_RANGE(0xc800, 0xcfff) AM_SHARE(2) AM_READWRITE(xxmissio_bgram_r, xxmissio_bgram_w) AM_BASE(&xxmissio_bgram)
+	AM_RANGE(0xd000, 0xd7ff) AM_SHARE(3) AM_RAM AM_BASE(&xxmissio_spriteram)
 
-	AM_RANGE(0xd800, 0xdaff) AM_SHARE("share4") AM_RAM_WRITE(xxmissio_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xd800, 0xdaff) AM_SHARE(4) AM_RAM_WRITE(xxmissio_paletteram_w) AM_BASE(&paletteram)
 
-	AM_RANGE(0xe000, 0xefff) AM_SHARE("share5") AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_SHARE("share6") AM_RAM
+	AM_RANGE(0xe000, 0xefff) AM_SHARE(5) AM_RAM
+	AM_RANGE(0xf000, 0xffff) AM_SHARE(6) AM_RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( map2, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( map2, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
 
 	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x8002, 0x8003) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -125,14 +138,14 @@ static ADDRESS_MAP_START( map2, AS_PROGRAM, 8 )
 	AM_RANGE(0xa002, 0xa002) AM_WRITE(xxmissio_status_s_w)
 	AM_RANGE(0xa003, 0xa003) AM_WRITE(xxmissio_flipscreen_w)
 
-	AM_RANGE(0xc000, 0xc7ff) AM_SHARE("share1") AM_RAM
-	AM_RANGE(0xc800, 0xcfff) AM_SHARE("share2") AM_READWRITE(xxmissio_bgram_r, xxmissio_bgram_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_SHARE("share3") AM_RAM
+	AM_RANGE(0xc000, 0xc7ff) AM_SHARE(1) AM_RAM
+	AM_RANGE(0xc800, 0xcfff) AM_SHARE(2) AM_READWRITE(xxmissio_bgram_r, xxmissio_bgram_w)
+	AM_RANGE(0xd000, 0xd7ff) AM_SHARE(3) AM_RAM
 
-	AM_RANGE(0xd800, 0xdaff) AM_SHARE("share4") AM_RAM_WRITE(xxmissio_paletteram_w)
+	AM_RANGE(0xd800, 0xdaff) AM_SHARE(4) AM_RAM_WRITE(xxmissio_paletteram_w)
 
-	AM_RANGE(0xe000, 0xefff) AM_SHARE("share6") AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_SHARE("share5") AM_RAM
+	AM_RANGE(0xe000, 0xefff) AM_SHARE(6) AM_RAM
+	AM_RANGE(0xf000, 0xffff) AM_SHARE(5) AM_RAM
 ADDRESS_MAP_END
 
 
@@ -160,45 +173,51 @@ static INPUT_PORTS_START( xxmissio )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:3")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:4")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:5")
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SW1:6")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x40, 0x40, "Endless Game (Cheat)")	PORT_DIPLOCATION("SW1:7") /* Shown as "Unused" in the manual */
+	PORT_DIPNAME( 0x40, 0x40, "Endless Game (Cheat)")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_SERVICE_DIPLOC(  0x80, IP_ACTIVE_LOW, "SW1:8" )	 /* Shown as "Unused" in the manual */
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x01, "2" )
 	PORT_DIPSETTING(    0x03, "3" )
 	PORT_DIPSETTING(    0x02, "4" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0x04, 0x04, "First Bonus" )		PORT_DIPLOCATION("SW2:3")
+	PORT_DIPNAME( 0x04, 0x04, "First Bonus" )
 	PORT_DIPSETTING(    0x04, "30000" )
 	PORT_DIPSETTING(    0x00, "40000" )
-	PORT_DIPNAME( 0x18, 0x08, "Bonus Every" )		PORT_DIPLOCATION("SW2:4,5")
+	PORT_DIPNAME( 0x18, 0x08, "Bonus Every" )
 	PORT_DIPSETTING(    0x18, "50000" )
 	PORT_DIPSETTING(    0x08, "70000" )
 	PORT_DIPSETTING(    0x10, "90000" )
 	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW2:6" ) /* Shown as "Unused" in the manual */
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:7" ) /* Shown as "Unused" in the manual */
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" ) /* Shown as "Unused" in the manual */
+	PORT_DIPNAME( 0x20, 0x20, "Unknown 2-6" )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, "Unknown 2-7" )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Unknown 2-8" )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("STATUS")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(xxmissio_status_r, (void *)0x01)
@@ -284,51 +303,52 @@ static const ym2203_interface ym2203_interface_2 =
 	NULL
 };
 
-static MACHINE_CONFIG_START( xxmissio, xxmissio_state )
+static MACHINE_DRIVER_START( xxmissio )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,12000000/4)	/* 3.0MHz */
-	MCFG_CPU_PROGRAM_MAP(map1)
-	MCFG_CPU_VBLANK_INT("screen", xxmissio_interrupt_m)
+	MDRV_CPU_ADD("maincpu", Z80,12000000/4)	/* 3.0MHz */
+	MDRV_CPU_PROGRAM_MAP(map1)
+	MDRV_CPU_VBLANK_INT("screen", xxmissio_interrupt_m)
 
-	MCFG_CPU_ADD("sub", Z80,12000000/4)	/* 3.0MHz */
-	MCFG_CPU_PROGRAM_MAP(map2)
-	MCFG_CPU_PERIODIC_INT(xxmissio_interrupt_s,2*60)
+	MDRV_CPU_ADD("sub", Z80,12000000/4)	/* 3.0MHz */
+	MDRV_CPU_PROGRAM_MAP(map2)
+	MDRV_CPU_VBLANK_INT_HACK(xxmissio_interrupt_s,2)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_MACHINE_START(xxmissio)
+	MDRV_MACHINE_START(xxmissio)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 4*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(xxmissio)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 4*8, 28*8-1)
 
-	MCFG_GFXDECODE(xxmissio)
-	MCFG_PALETTE_LENGTH(768)
+	MDRV_GFXDECODE(xxmissio)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_VIDEO_START(xxmissio)
+	MDRV_VIDEO_START(xxmissio)
+	MDRV_VIDEO_UPDATE(xxmissio)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 12000000/8)
-	MCFG_SOUND_CONFIG(ym2203_interface_1)
-	MCFG_SOUND_ROUTE(0, "mono", 0.15)
-	MCFG_SOUND_ROUTE(1, "mono", 0.15)
-	MCFG_SOUND_ROUTE(2, "mono", 0.15)
-	MCFG_SOUND_ROUTE(3, "mono", 0.40)
+	MDRV_SOUND_ADD("ym1", YM2203, 12000000/8)
+	MDRV_SOUND_CONFIG(ym2203_interface_1)
+	MDRV_SOUND_ROUTE(0, "mono", 0.15)
+	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MDRV_SOUND_ROUTE(2, "mono", 0.15)
+	MDRV_SOUND_ROUTE(3, "mono", 0.40)
 
-	MCFG_SOUND_ADD("ym2", YM2203, 12000000/8)
-	MCFG_SOUND_CONFIG(ym2203_interface_2)
-	MCFG_SOUND_ROUTE(0, "mono", 0.15)
-	MCFG_SOUND_ROUTE(1, "mono", 0.15)
-	MCFG_SOUND_ROUTE(2, "mono", 0.15)
-	MCFG_SOUND_ROUTE(3, "mono", 0.40)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, 12000000/8)
+	MDRV_SOUND_CONFIG(ym2203_interface_2)
+	MDRV_SOUND_ROUTE(0, "mono", 0.15)
+	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MDRV_SOUND_ROUTE(2, "mono", 0.15)
+	MDRV_SOUND_ROUTE(3, "mono", 0.40)
+MACHINE_DRIVER_END
 
 /****************************************************************************/
 

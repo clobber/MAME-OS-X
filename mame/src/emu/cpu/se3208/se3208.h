@@ -1,3 +1,4 @@
+#include "cpuintrf.h"
 
 enum
 {
@@ -7,6 +8,7 @@ enum
 
 #define SE3208_INT	0
 
-DECLARE_LEGACY_CPU_DEVICE(SE3208, se3208);
+extern CPU_GET_INFO( se3208 );
+#define CPU_SE3208 CPU_GET_INFO_NAME( se3208 )
 
 CPU_DISASSEMBLE( se3208 );

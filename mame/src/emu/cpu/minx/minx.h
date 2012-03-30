@@ -4,6 +4,9 @@
 #define __MINX_H__
 
 
+#include "cpuintrf.h"
+#include "driver.h"
+
 enum
 {
         MINX_PC=1, MINX_SP, MINX_BA, MINX_HL, MINX_X, MINX_Y,
@@ -11,7 +14,8 @@ enum
         MINX_XI, MINX_YI,
 };
 
-DECLARE_LEGACY_CPU_DEVICE(MINX, minx);
+CPU_GET_INFO( minx );
+#define CPU_MINX CPU_GET_INFO_NAME( minx )
 
 extern CPU_DISASSEMBLE( minx );
 

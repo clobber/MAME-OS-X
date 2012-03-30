@@ -3,9 +3,6 @@
 Mr F Lea
 Pacific Novelty 1982
 
-TODO:
-- fix slave cpu irq generation
-
 4 way joystick and jump button
 
 I/O Board
@@ -40,245 +37,25 @@ Video Board
    x  x  VD_J11 VD_J10  x  x  VD_J7 VD_J6     VD_K4 VD_K3 VD_K2 VD_K1
    x  x  VD-L11 VD_L10  x  x  VD_L7 VD_L6     VD_L4 VD_L3 VD_L2 VD_L1
 
-
-Stephh's notes (based on the games Z80 code and some tests) :
-
-  - DSW1 bits 0 and 1 determine the "Bonus life" value (1 OFF - 0 ON) :
-      * ......11 : 10000 points
-      * ......10 : 20000 points
-      * ......01 : 30000 points
-      * ......00 : 40000 points
-  - DSW1 bit 2 determines the "Bonus life" occurrence (1 OFF - 0 ON) :
-      * .....1.. : many extra lives can be awarded every "value" points
-      * .....0.. : only one extra life can be awarded at "value" points
-  - When DSW1 bit 3 is OFF, you can't get any extra lives (code at 0x3368).
-  - I've decided to merge these 4 bits in a single choice for the end-user.
-  - Credits are coded on 1 byte (0xc6bd) then are divided by 2 for display
-    so it can display 1/2 credits when coinage is set to 2C_1C or 2C_3C.
-    Surprisingly, due to code at 0x2f77, credits are limited to 15 when
-    coinage is set to 1C_1C or 1C_2C and to 14 1/2 is set to 2C_1C or 2C_3C.
-  - Level is stored 1 byte (0xc70c), range 0x00-0x07 (code at 0x071d and 0x072c).
-    This means that if you complete level 8, you'll restart from level 1
-    with its initial difficulty (based on the Dip Switch settings).
-
 ******************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/mrflea.h"
 
+static int mrflea_io;
+static int mrflea_main;
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+static int mrflea_status;
 
-static WRITE8_HANDLER( mrflea_main_w )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-	state->m_status |= 0x01; // pending command to main CPU
-	state->m_main = data;
-}
+static int mrflea_select1;
 
-static WRITE8_HANDLER( mrflea_io_w )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-	state->m_status |= 0x08; // pending command to IO CPU
-	state->m_io = data;
-	device_set_input_line(state->m_subcpu, 0, HOLD_LINE );
-}
-
-static READ8_HANDLER( mrflea_main_r )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-	state->m_status &= ~0x01; // main CPU command read
-	return state->m_main;
-}
-
-static READ8_HANDLER( mrflea_io_r )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-	state->m_status &= ~0x08; // IO CPU command read
-	return state->m_io;
-}
-
-static READ8_HANDLER( mrflea_main_status_r )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-
-	/*  0x01: main CPU command pending
-        0x08: io cpu ready */
-	return state->m_status ^ 0x08;
-}
-
-static READ8_HANDLER( mrflea_io_status_r )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-
-	/*  0x08: IO CPU command pending
-        0x01: main cpu ready */
-	return state->m_status ^ 0x01;
-}
-
-static TIMER_DEVICE_CALLBACK( mrflea_slave_interrupt )
-{
-	mrflea_state *state = timer.machine().driver_data<mrflea_state>();
-	int scanline = param;
-
-	if ((scanline == 248) || (scanline == 248/2 && (state->m_status & 0x08)))
-		device_set_input_line(state->m_subcpu, 0, HOLD_LINE);
-}
-
-static READ8_HANDLER( mrflea_interrupt_type_r )
-{
-/* there are two interrupt types:
-    1. triggered (in response to sound command)
-    2. heartbeat (for music timing)
-*/
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-
-	if (state->m_status & 0x08 )
-		return 0x00; /* process command */
-
-	return 0x01; /* music/sound update? */
-}
-
-static WRITE8_HANDLER( mrflea_select1_w )
-{
-	mrflea_state *state = space->machine().driver_data<mrflea_state>();
-	state->m_select1 = data;
-}
-
-static READ8_HANDLER( mrflea_input1_r )
-{
-	return 0x00;
-}
-
-static WRITE8_HANDLER( mrflea_data1_w )
-{
-}
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( mrflea_master_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE_MEMBER(mrflea_state, m_videoram)
-	AM_RANGE(0xe800, 0xe83f) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE_MEMBER(mrflea_state, m_spriteram)
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( mrflea_master_io_map, AS_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog? */
-	AM_RANGE(0x40, 0x40) AM_WRITE(mrflea_io_w)
-	AM_RANGE(0x41, 0x41) AM_READ(mrflea_main_r)
-	AM_RANGE(0x42, 0x42) AM_READ(mrflea_main_status_r)
-	AM_RANGE(0x43, 0x43) AM_WRITENOP /* 0xa6,0x0d,0x05 */
-	AM_RANGE(0x60, 0x60) AM_WRITE(mrflea_gfx_bank_w)
-ADDRESS_MAP_END
-
-
-static ADDRESS_MAP_START( mrflea_slave_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_ROM
-	AM_RANGE(0x2000, 0x3fff) AM_ROM
-	AM_RANGE(0x8000, 0x80ff) AM_RAM
-	AM_RANGE(0x9000, 0x905a) AM_RAM /* ? */
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( mrflea_slave_io_map, AS_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog */
-	AM_RANGE(0x10, 0x10) AM_READ(mrflea_interrupt_type_r) AM_WRITENOP /* ? / irq ACK */
-	AM_RANGE(0x11, 0x11) AM_WRITENOP /* 0x83,0x00,0xfc */
-	AM_RANGE(0x20, 0x20) AM_READ(mrflea_io_r)
-	AM_RANGE(0x21, 0x21) AM_WRITE(mrflea_main_w)
-	AM_RANGE(0x22, 0x22) AM_READ(mrflea_io_status_r)
-	AM_RANGE(0x23, 0x23) AM_WRITENOP /* 0xb4,0x09,0x05 */
-	AM_RANGE(0x40, 0x40) AM_DEVREAD("ay1", ay8910_r)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay1", ay8910_data_address_w)
-	AM_RANGE(0x42, 0x42) AM_READWRITE(mrflea_input1_r, mrflea_data1_w)
-	AM_RANGE(0x43, 0x43) AM_WRITE(mrflea_select1_w)
-	AM_RANGE(0x44, 0x44) AM_DEVREAD("ay2", ay8910_r)
-	AM_RANGE(0x44, 0x45) AM_DEVWRITE("ay2", ay8910_data_address_w)
-	AM_RANGE(0x46, 0x46) AM_DEVREAD("ay3", ay8910_r)
-	AM_RANGE(0x46, 0x47) AM_DEVWRITE("ay3", ay8910_data_address_w)
-ADDRESS_MAP_END
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
-
-/* verified from Z80 code */
-static INPUT_PORTS_START( mrflea )
-	/* AY1 port 1 -> 0x807d (CPU1) -> 0xcabe (CPU0) with bits in reverse order */
-	PORT_START("IN0")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	/* AY1 port 0 -> 0x807e (CPU1) -> 0xcabf (CPU0) with bits in reverse order */
-	PORT_START("IN1")
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0xfb, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	/* AY2 port 1, cpl'ed -> 0x807f (CPU1) -> 0xcac1 (CPU0) */
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0f, 0x07, DEF_STR( Bonus_Life ) )       /* see notes - table of tables at 0x3475 (4 * 1 word, LSB first) */
-	PORT_DIPSETTING(    0x07, "Every 10k" )
-	PORT_DIPSETTING(    0x06, "Every 20k" )
-	PORT_DIPSETTING(    0x05, "Every 30k" )
-	PORT_DIPSETTING(    0x04, "Every 40k" )
-	PORT_DIPSETTING(    0x03, "10k only" )
-	PORT_DIPSETTING(    0x02, "20k only" )
-	PORT_DIPSETTING(    0x01, "30k only" )
-	PORT_DIPSETTING(    0x00, "40K only" )
-	PORT_DIPSETTING(    0x0f, DEF_STR( None ) )
-	PORT_DIPUNUSED( 0x10, 0x10 )
-	PORT_DIPUNUSED( 0x20, 0x20 )
-	PORT_DIPUNUSED( 0x40, 0x40 )
-	PORT_DIPUNUSED( 0x80, 0x80 )
-
-	/* AY2 port 0, cpl'ed -> 0x8080 (CPU1) -> 0xcac0 (CPU0) */
-	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )          /* see notes */
-	PORT_DIPSETTING( 0x02, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING( 0x03, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING( 0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) )
-	PORT_DIPSETTING( 0x0c, "3" )
-	PORT_DIPSETTING( 0x08, "4" )
-	PORT_DIPSETTING( 0x04, "5" )
-	PORT_DIPSETTING( 0x00, "7" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )       /* see notes */
-	PORT_DIPSETTING( 0x30, DEF_STR( Easy ) )
-	PORT_DIPSETTING( 0x20, DEF_STR( Medium ) )
-	PORT_DIPSETTING( 0x10, DEF_STR( Hard ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( Hardest ) )
-	PORT_DIPUNUSED( 0x40, 0x40 )
-	PORT_DIPUNUSED( 0x80, 0x80 )
-INPUT_PORTS_END
-
-
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
+extern WRITE8_HANDLER( mrflea_gfx_bank_w );
+extern WRITE8_HANDLER( mrflea_videoram_w );
+extern WRITE8_HANDLER( mrflea_spriteram_w );
+extern VIDEO_START( mrflea );
+extern VIDEO_UPDATE( mrflea );
 
 static const gfx_layout tile_layout = {
 	8,8,
@@ -308,11 +85,128 @@ static GFXDECODE_START( mrflea )
 	GFXDECODE_ENTRY( "gfx2", 0, tile_layout,	0x00, 1 )
 GFXDECODE_END
 
-/*************************************
- *
- *  Sound interfaces
- *
- *************************************/
+/*******************************************************/
+
+static WRITE8_HANDLER( mrflea_main_w )
+{
+	mrflea_status |= 0x01; // pending command to main CPU
+	mrflea_main = data;
+}
+
+static WRITE8_HANDLER( mrflea_io_w )
+{
+	mrflea_status |= 0x08; // pending command to IO CPU
+	mrflea_io = data;
+	cputag_set_input_line(space->machine, "sub", 0, HOLD_LINE );
+}
+
+static READ8_HANDLER( mrflea_main_r )
+{
+	mrflea_status &= ~0x01; // main CPU command read
+	return mrflea_main;
+}
+
+static READ8_HANDLER( mrflea_io_r )
+{
+	mrflea_status &= ~0x08; // IO CPU command read
+	return mrflea_io;
+}
+
+/*******************************************************/
+
+static READ8_HANDLER( mrflea_main_status_r )
+{
+	/*  0x01: main CPU command pending
+        0x08: io cpu ready */
+	return mrflea_status^0x08;
+}
+
+static READ8_HANDLER( mrflea_io_status_r )
+{
+	/*  0x08: IO CPU command pending
+        0x01: main cpu ready */
+	return mrflea_status^0x01;
+}
+
+static INTERRUPT_GEN( mrflea_slave_interrupt )
+{
+	if( cpu_getiloops(device)==0 || (mrflea_status&0x08) )
+		cpu_set_input_line(device, 0, HOLD_LINE);
+}
+
+static READ8_HANDLER( mrflea_interrupt_type_r )
+{
+/* there are two interrupt types:
+    1. triggered (in response to sound command)
+    2. heartbeat (for music timing)
+*/
+	if( mrflea_status&0x08 ) return 0x00; /* process command */
+	return 0x01; /* music/sound update? */
+}
+
+/*******************************************************/
+
+static ADDRESS_MAP_START( mrflea_master_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0xbfff) AM_ROM
+	AM_RANGE(0xc000, 0xcfff) AM_RAM
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(mrflea_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xe800, 0xe83f) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0xec00, 0xecff) AM_RAM_WRITE(mrflea_spriteram_w) AM_BASE(&spriteram)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( mrflea_master_io_map, ADDRESS_SPACE_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog? */
+	AM_RANGE(0x40, 0x40) AM_WRITE(mrflea_io_w)
+	AM_RANGE(0x41, 0x41) AM_READ(mrflea_main_r)
+	AM_RANGE(0x42, 0x42) AM_READ(mrflea_main_status_r)
+	AM_RANGE(0x43, 0x43) AM_WRITENOP /* 0xa6,0x0d,0x05 */
+	AM_RANGE(0x60, 0x60) AM_WRITE(mrflea_gfx_bank_w)
+ADDRESS_MAP_END
+
+/*******************************************************/
+
+static WRITE8_HANDLER( mrflea_select1_w )
+{
+	mrflea_select1 = data;
+}
+
+static READ8_HANDLER( mrflea_input1_r )
+{
+	return 0x00;
+}
+
+static WRITE8_HANDLER( mrflea_data1_w )
+{
+}
+
+static ADDRESS_MAP_START( mrflea_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_ROM
+	AM_RANGE(0x2000, 0x3fff) AM_ROM
+	AM_RANGE(0x8000, 0x80ff) AM_RAM
+	AM_RANGE(0x9000, 0x905a) AM_RAM /* ? */
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( mrflea_slave_io_map, ADDRESS_SPACE_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0x00, 0x00) AM_WRITENOP /* watchdog */
+	AM_RANGE(0x10, 0x10) AM_READWRITE(mrflea_interrupt_type_r, SMH_NOP) /* ? / irq ACK */
+	AM_RANGE(0x11, 0x11) AM_WRITENOP /* 0x83,0x00,0xfc */
+	AM_RANGE(0x20, 0x20) AM_READ(mrflea_io_r)
+	AM_RANGE(0x21, 0x21) AM_WRITE(mrflea_main_w)
+	AM_RANGE(0x22, 0x22) AM_READ(mrflea_io_status_r)
+	AM_RANGE(0x23, 0x23) AM_WRITENOP /* 0xb4,0x09,0x05 */
+	AM_RANGE(0x40, 0x40) AM_DEVREAD("ay1", ay8910_r)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay1", ay8910_data_address_w)
+	AM_RANGE(0x42, 0x42) AM_READWRITE(mrflea_input1_r, mrflea_data1_w)
+	AM_RANGE(0x43, 0x43) AM_WRITE(mrflea_select1_w)
+	AM_RANGE(0x44, 0x44) AM_DEVREAD("ay2", ay8910_r)
+	AM_RANGE(0x44, 0x45) AM_DEVWRITE("ay2", ay8910_data_address_w)
+	AM_RANGE(0x46, 0x46) AM_DEVREAD("ay3", ay8910_r)
+	AM_RANGE(0x46, 0x47) AM_DEVWRITE("ay3", ay8910_data_address_w)
+ADDRESS_MAP_END
+
+/*******************************************************/
 
 static const ay8910_interface mrflea_ay8910_interface_0 =
 {
@@ -330,87 +224,49 @@ static const ay8910_interface mrflea_ay8910_interface_1 =
 	DEVCB_INPUT_PORT("DSW1")
 };
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( mrflea )
-{
-	mrflea_state *state = machine.driver_data<mrflea_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_subcpu = machine.device("sub");
-
-	state->save_item(NAME(state->m_gfx_bank));
-	state->save_item(NAME(state->m_io));
-	state->save_item(NAME(state->m_main));
-	state->save_item(NAME(state->m_status));
-	state->save_item(NAME(state->m_select1));
-}
-
-static MACHINE_RESET( mrflea )
-{
-	mrflea_state *state = machine.driver_data<mrflea_state>();
-
-	state->m_gfx_bank = 0;
-	state->m_io = 0;
-	state->m_main = 0;
-	state->m_status = 0;
-	state->m_select1 = 0;
-}
-
-static MACHINE_CONFIG_START( mrflea, mrflea_state )
+static MACHINE_DRIVER_START( mrflea )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000) /* 4 MHz? */
-	MCFG_CPU_PROGRAM_MAP(mrflea_master_map)
-	MCFG_CPU_IO_MAP(mrflea_master_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold) /* NMI resets the game */
+	MDRV_CPU_ADD("maincpu", Z80, 4000000) /* 4 MHz? */
+	MDRV_CPU_PROGRAM_MAP(mrflea_master_map)
+	MDRV_CPU_IO_MAP(mrflea_master_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold) /* NMI resets the game */
 
-	MCFG_CPU_ADD("sub", Z80, 6000000)
-	MCFG_CPU_PROGRAM_MAP(mrflea_slave_map)
-	MCFG_CPU_IO_MAP(mrflea_slave_io_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", mrflea_slave_interrupt, "screen", 0, 1)
+	MDRV_CPU_ADD("sub", Z80, 6000000)
+	MDRV_CPU_PROGRAM_MAP(mrflea_slave_map)
+	MDRV_CPU_IO_MAP(mrflea_slave_io_map)
+	MDRV_CPU_VBLANK_INT_HACK(mrflea_slave_interrupt,2)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
-
-	MCFG_MACHINE_START(mrflea)
-	MCFG_MACHINE_RESET(mrflea)
+	MDRV_QUANTUM_TIME(HZ(6000))
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mrflea)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 31*8-1)
 
-	MCFG_GFXDECODE(mrflea)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(mrflea)
+	MDRV_PALETTE_LENGTH(32)
 
+	MDRV_VIDEO_START(mrflea)
+	MDRV_VIDEO_UPDATE(mrflea)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 2000000)
-	MCFG_SOUND_CONFIG(mrflea_ay8910_interface_0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay1", AY8910, 2000000)
+	MDRV_SOUND_CONFIG(mrflea_ay8910_interface_0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 2000000)
-	MCFG_SOUND_CONFIG(mrflea_ay8910_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay2", AY8910, 2000000)
+	MDRV_SOUND_CONFIG(mrflea_ay8910_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("ay3", AY8910, 2000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+	MDRV_SOUND_ADD("ay3", AY8910, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 ROM_START( mrflea )
 	ROM_REGION( 0x10000, "maincpu", 0 ) /* Z80 code; main CPU */
@@ -447,10 +303,76 @@ ROM_START( mrflea )
 	ROM_LOAD( "vd_l4",	0xe000, 0x2000, CRC(423735a5) SHA1(4ee93f93cd2b08560e148525e08880d64c64fcd2) )
 ROM_END
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
+static INPUT_PORTS_START( mrflea )
+	PORT_START("IN0")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-GAME( 1982, mrflea,   0,        mrflea,   mrflea,   0,        ROT270, "Pacific Novelty", "The Amazing Adventures of Mr. F. Lea" , GAME_SUPPORTS_SAVE )
+	PORT_START("IN1")
+	PORT_BIT( 0x03, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("DSW1")		/* DSW1 */
+/*
+    ------xx
+    -----x--
+    ----x---
+*/
+	PORT_DIPNAME( 0x03, 0x03, "Bonus?" )
+	PORT_DIPSETTING( 0x03, "A" )
+	PORT_DIPSETTING( 0x02, "B" )
+	PORT_DIPSETTING( 0x01, "C" )
+	PORT_DIPSETTING( 0x00, "D" )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING( 0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING( 0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+
+	PORT_START("DSW2")		/* DSW2 */
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )
+	PORT_DIPSETTING( 0x02, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING( 0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING( 0x01, DEF_STR( 1C_2C ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) )
+	PORT_DIPSETTING( 0x0c, "3" )
+	PORT_DIPSETTING( 0x08, "4" )
+	PORT_DIPSETTING( 0x04, "5" )
+	PORT_DIPSETTING( 0x00, "7" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING( 0x30, DEF_STR( Easy ) )
+	PORT_DIPSETTING( 0x20, DEF_STR( Medium ) )
+	PORT_DIPSETTING( 0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unused ) )
+	PORT_DIPSETTING( 0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+INPUT_PORTS_END
+
+
+GAME( 1982, mrflea,   0,        mrflea,   mrflea,   0,        ROT270, "Pacific Novelty", "The Amazing Adventures of Mr. F. Lea" , 0 )
+

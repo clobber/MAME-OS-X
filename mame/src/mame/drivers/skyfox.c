@@ -16,10 +16,22 @@ To Do:  The background rendering is entirely guesswork
 Verified Dip locations and recommended settings with manual
 
 ***************************************************************************/
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
-#include "includes/skyfox.h"
+
+/* Variables defined in video: */
+
+extern int skyfox_bg_pos, skyfox_bg_ctrl;
+
+
+/* Functions defined in video: */
+
+WRITE8_HANDLER( skyfox_vregs_w );
+
+PALETTE_INIT( skyfox );
+
+VIDEO_UPDATE( skyfox );
 
 
 /***************************************************************************
@@ -35,10 +47,10 @@ Verified Dip locations and recommended settings with manual
                                 Sky Fox
 ***************************************************************************/
 
-static ADDRESS_MAP_START( skyfox_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( skyfox_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM							// ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM							// RAM
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE_SIZE_MEMBER(skyfox_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	// Sprites
 	AM_RANGE(0xd400, 0xdfff) AM_RAM							// RAM?
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("INPUTS")			// Input Ports
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("DSW0")			//
@@ -63,7 +75,7 @@ ADDRESS_MAP_END
 ***************************************************************************/
 
 
-static ADDRESS_MAP_START( skyfox_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( skyfox_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM								// ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM								// RAM
 //  AM_RANGE(0x9000, 0x9001) AM_WRITENOP                        // ??
@@ -84,8 +96,7 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted )
 {
-	skyfox_state *state = field.machine().driver_data<skyfox_state>();
-	device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(field->port->machine, "maincpu", INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_PORTS_START( skyfox )
@@ -150,7 +161,7 @@ static INPUT_PORTS_START( skyfox )
 	PORT_DIPSETTING(    0x04, "5" )
 //  PORT_DIPSETTING(    0x05, "5" )
 //  PORT_DIPSETTING(    0x06, "5" )
-	PORT_DIPSETTING(	0x07, "Infinite (Cheat)")
+	PORT_DIPSETTING( 	0x07, "Infinite (Cheat)")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -214,65 +225,43 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( skyfox_interrupt )
 {
-	skyfox_state *state = device->machine().driver_data<skyfox_state>();
-
 	/* Scroll the bg */
-	state->m_bg_pos += (state->m_bg_ctrl >> 1) & 0x7;	// maybe..
+	skyfox_bg_pos += (skyfox_bg_ctrl >> 1) & 0x7;	// maybe..
 }
 
-static MACHINE_START( skyfox )
-{
-	skyfox_state *state = machine.driver_data<skyfox_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-
-	state->save_item(NAME(state->m_bg_pos));
-	state->save_item(NAME(state->m_bg_ctrl));
-}
-
-static MACHINE_RESET( skyfox )
-{
-	skyfox_state *state = machine.driver_data<skyfox_state>();
-
-	state->m_bg_pos = 0;
-	state->m_bg_ctrl = 0;
-}
-
-static MACHINE_CONFIG_START( skyfox, skyfox_state )
+static MACHINE_DRIVER_START( skyfox )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_8MHz/2) /* Verified at 4MHz */
-	MCFG_CPU_PROGRAM_MAP(skyfox_map)
-	MCFG_CPU_VBLANK_INT("screen", skyfox_interrupt)		/* NMI caused by coin insertion */
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(skyfox_map)
+	MDRV_CPU_VBLANK_INT("screen", skyfox_interrupt)		/* NMI caused by coin insertion */
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_14_31818MHz/8) /* Verified at 1.789772MHz */
-	MCFG_CPU_PROGRAM_MAP(skyfox_sound_map)
-
-	MCFG_MACHINE_START(skyfox)
-	MCFG_MACHINE_RESET(skyfox)
+	MDRV_CPU_ADD("audiocpu", Z80, 1748000)
+	MDRV_CPU_PROGRAM_MAP(skyfox_sound_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(62.65)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)	// we're using IPT_VBLANK
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0+0x60, 320-1+0x60, 0+16, 256-1-16)	// from $30*2 to $CC*2+8
-	MCFG_SCREEN_UPDATE_STATIC(skyfox)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)	// we're using IPT_VBLANK
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0+0x60, 320-1+0x60, 0+16, 256-1-16)	// from $30*2 to $CC*2+8
 
-	MCFG_GFXDECODE(skyfox)
-	MCFG_PALETTE_LENGTH(256+256)	/* 256 static colors (+256 for the background??) */
+	MDRV_GFXDECODE(skyfox)
+	MDRV_PALETTE_LENGTH(256+256)	/* 256 static colors (+256 for the background??) */
 
-	MCFG_PALETTE_INIT(skyfox)
+	MDRV_PALETTE_INIT(skyfox)
+	MDRV_VIDEO_UPDATE(skyfox)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_14_31818MHz/8) /* Verified at 1.789772MHz */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("ym1", YM2203, 1748000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("ym2", YM2203, XTAL_14_31818MHz/8) /* Verified at 1.789772MHz */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, 1748000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_DRIVER_END
 
 
 
@@ -340,14 +329,9 @@ Notes  -  This archive is of a bootleg copy,
        -  Although the colour PROMs have the same checksums,
           they are not the same.
 
-Main processor  - Z80 @ 4MHz (8MHz OSC / 2)
-Sound processor - Z80 @ 1.789772MHz (14.31818MHz OSC / 8)
-                - YM2203C x2 @ 1.789772MHzMHz (14.31818MHz OSC / 8)
-
-Vsync: 62.65hz
-
-  CPU board: Jaleco made in japan ER-8736
-Video Board: Jaleco made in japan ER-8737
+Main processor  - Z80  4MHz
+Sound processor - Z80  1.748MHz
+                - YM2203C x2
 
 ***************************************************************************/
 
@@ -377,32 +361,7 @@ ROM_START( skyfox )
 	ROM_LOAD( "sfoxbprm.bin", 0x200, 0x100, CRC(60d2ab41) SHA1(e58a54f2aaee5c07136d5437e513d61fb18fbd9f) )	// B
 ROM_END
 
-ROM_START( exerizer )
-	ROM_REGION( 0x10000, "maincpu", 0 )		/* Main Z80 Code */
-	ROM_LOAD( "1.2v",        0x00000, 0x8000, CRC(5df72a5d) SHA1(ca35ac06f3702fd650a584da2f442fbc61c00fce) )
-	ROM_LOAD( "2.3v",        0x08000, 0x8000, CRC(e15e0263) SHA1(005934327834aed46b17161aef82117ee508e9c4) )	// 1-b
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )		/* Sound Z80 Code */
-	ROM_LOAD( "9.5n",        0x00000, 0x8000, CRC(0b283bf5) SHA1(5b14d0beea689ee7e9174017e5a127435df4fbe3) )	// 1-i
-
-	ROM_REGION( 0x60000, "gfx1", 0 )	/* Sprites */
-	ROM_LOAD( "3-1.7w",      0x00000, 0x10000, CRC(3a17a929) SHA1(973fb36af416161e04a83d7869819d9b13df18cd) )
-	ROM_LOAD( "4.7u",        0x10000, 0x10000, CRC(358053bb) SHA1(589e3270eda0d44e73fbc7ac06e782f332920b39) )	// 1-d
-	ROM_LOAD( "5-1.7t",      0x20000, 0x10000, CRC(c1215a6e) SHA1(5ca30be8a68ac6a00907cc9e47ede0acec980f46) )
-	ROM_LOAD( "6.7s",        0x30000, 0x10000, CRC(cc37e15d) SHA1(80806df6185f7b8c2d3ab98420ca514df3e63c8d) )	// 1-f
-	ROM_LOAD( "7.7p",        0x40000, 0x10000, CRC(c9bbfe5c) SHA1(ce3f7d32baa8bb0bfc110877b5b5f4648ee959ac) )
-	ROM_LOAD( "8.7n",        0x50000, 0x10000, CRC(0e3edc49) SHA1(3d1c59ecaabe1c9517203b7e814db41d5cff0cd4) )	// 1-h
-
-	ROM_REGION( 0x08000, "gfx2", 0 )	/* Background - do not dispose */
-	ROM_LOAD( "10.5e",       0x0000, 0x8000, CRC(19f58f9c) SHA1(6887216243b47152129448cbb4c7d52309feed03) )	// 1-j
-
-	ROM_REGION( 0x300, "proms", 0 )	/* Color Proms */
-	ROM_LOAD( "r.1c",        0x000, 0x100, CRC(79913c7f) SHA1(e64e6a3eb55f37984cb2597c8ffba6bc3bad49c7) )	// 2-bpr
-	ROM_LOAD( "g.1b",        0x100, 0x100, CRC(fb73d434) SHA1(4a9bd61fbdce9441753c5921f95ead5c4655957e) )	// 3-bpr
-	ROM_LOAD( "b.1d",        0x200, 0x100, CRC(60d2ab41) SHA1(e58a54f2aaee5c07136d5437e513d61fb18fbd9f) )	// 1-bpr
-ROM_END
-
-ROM_START( exerizerb )
+ROM_START( exerizrb )
 	ROM_REGION( 0x10000, "maincpu", 0 )		/* Main Z80 Code */
 	ROM_LOAD( "1-a",         0x00000, 0x8000, CRC(5df72a5d) SHA1(ca35ac06f3702fd650a584da2f442fbc61c00fce) )
 	ROM_LOAD( "skyfox2.bin", 0x08000, 0x8000, CRC(e15e0263) SHA1(005934327834aed46b17161aef82117ee508e9c4) )	// 1-b
@@ -433,23 +392,22 @@ ROM_END
 /* Untangle the graphics: cut each 32x32x8 tile in 16 8x8x8 tiles */
 static DRIVER_INIT( skyfox )
 {
-	UINT8 *RAM = machine.region("gfx1")->base();
-	UINT8 *end = RAM + machine.region("gfx1")->bytes();
-	UINT8 buf[32 * 32];
+	UINT8 *RAM = memory_region(machine, "gfx1");
+	UINT8 *end = RAM + memory_region_length(machine, "gfx1");
+	UINT8 buf[32*32];
 
 	while (RAM < end)
 	{
 		int i;
-		for (i = 0; i < (32 * 32); i++)
-			buf[i] = RAM[(i % 8) + ((i / 8) % 8) * 32 + ((i / 64) % 4) * 8 + (i / 256) * 256];
+		for (i=0;i<(32*32);i++)
+			buf[i] = RAM[(i%8) + ((i/8)%8)*32 + ((i/64)%4)*8 + (i/256)*256];
 
-		memcpy(RAM, buf, 32 * 32);
-		RAM += 32 * 32;
+		memcpy(RAM,buf,32*32);
+		RAM += 32*32;
 	}
 }
 
 
 
-GAME( 1987, skyfox,    0,      skyfox, skyfox, skyfox, ROT90, "Jaleco (Nichibutsu USA license)", "Sky Fox" , GAME_SUPPORTS_SAVE )
-GAME( 1987, exerizer,  skyfox, skyfox, skyfox, skyfox, ROT90, "Jaleco", "Exerizer (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1987, exerizerb, skyfox, skyfox, skyfox, skyfox, ROT90, "bootleg", "Exerizer (Japan) (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1987, skyfox,   0,      skyfox, skyfox, skyfox, ROT90, "Jaleco (Nichibutsu USA license)", "Sky Fox" , 0 )
+GAME( 1987, exerizrb, skyfox, skyfox, skyfox, skyfox, ROT90, "bootleg", "Exerizer (Japan) (bootleg)", 0 )

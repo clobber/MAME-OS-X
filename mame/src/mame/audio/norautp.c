@@ -1,10 +1,10 @@
 /************************************************************************
- * Noraut/Kimble/Kramer Poker Sound System Analog emulation
- * Sept 2009, Derrick Renaud & Roberto Fresca.
+ * norautp Sound System Analog emulation
+ * Sept 2009, Derrick Renaud
  ************************************************************************/
 
-#include "emu.h"
-#include "includes/norautp.h"
+#include "driver.h"
+#include "norautp.h"
 
 
 /* Discrete Sound Input Nodes */
@@ -47,8 +47,7 @@ DISCRETE_SOUND_START( _name )                                               \
 DISCRETE_SOUND_END
 
 
-/***** Noraut Poker *****/
-
+/* Noraut Poker */
 /* Parts List - Resistors */
 #define NORAUTP_R1		RES_K(120)
 #define NORAUTP_R2		RES_K(2.2)
@@ -64,8 +63,7 @@ NORAUTP_SOUND_CIRCUIT(norautp,
 	NORAUTP_C1, NORAUTP_C2, NORAUTP_C3, NORAUTP_C4)
 
 
-/***** Draw Poker HI-LO *****/
-
+/* Noraut old Draw Poker Hi-Lo */
 /* Parts List - Resistors */
 #define DPHL_R1		RES_K(120)
 #define DPHL_R2		RES_K(1)
@@ -79,20 +77,3 @@ NORAUTP_SOUND_CIRCUIT(norautp,
 NORAUTP_SOUND_CIRCUIT(dphl,
 	DPHL_R1, DPHL_R2,
 	DPHL_C1, DPHL_C2, DPHL_C3, DPHL_C4)
-
-
-/***** Kimble Double HI-LO *****/
-
-/* Parts List - Resistors */
-#define KIMBLE_R1		RES_K(100)
-#define KIMBLE_R2		RES_K(1)
-
-/* Parts List - Capacitors */
-#define KIMBLE_C1		CAP_U(.01)
-#define KIMBLE_C2		CAP_U(.022)
-#define KIMBLE_C3		CAP_U(.047)
-#define KIMBLE_C4		CAP_U(.01)
-
-NORAUTP_SOUND_CIRCUIT(kimble,
-	KIMBLE_R1, KIMBLE_R2,
-	KIMBLE_C1, KIMBLE_C2, KIMBLE_C3, KIMBLE_C4)

@@ -18,12 +18,8 @@
  *****************************************************************************/
 
 //SJE: Changed all references to ICount to icount (to match MAME requirements)
-//TJL: (From Gilles Fetis) JPZ in TI documentation was wrong:
-//     if ((pSR & SR_N) == 0 && (pSR & SR_Z) != 0)
-//     should be:
-//     if ((pSR & SR_N) == 0)
 
-#include "emu.h"
+#include "cpuintrf.h"
 
 static void illegal(tms7000_state *cpustate)
 {
@@ -1875,8 +1871,8 @@ static void inv_b(tms7000_state *cpustate)
 {
 	UINT16 t;
 
-	t = ~(RDB);
-	WRB(t);
+	t = ~(RDA);
+	WRA(t);
 
 	CLR_NZC;
 	SET_N8(t);
@@ -2017,7 +2013,7 @@ static void jp(tms7000_state *cpustate)
 
 static void jpz(tms7000_state *cpustate)
 {
-	if ((pSR & SR_N) == 0)
+	if ((pSR & SR_N) == 0 && (pSR & SR_Z) != 0)
 	{
 		INT8 s;
 

@@ -18,7 +18,7 @@ wow_sh_ update- Null
 
 **************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/samples.h"
 #include "includes/astrocde.h"
@@ -41,10 +41,10 @@ static const char *const PhonemeTable[65] =
  0
 };
 
-/* Missing samples : ready,  from,  one,  bite,  youl,  explode,  if,  myself,  back,
-   cant,  do,  wait,  worlings,  very,  babies,  breath,  fire,  beat,  rest,
-   then,  never,  worlock,  escape,  door,  try,  any,  harder,  only,  meet,  with,
-   doom,  pop,
+/* Missing samples : ready.wav from.wav one.wav bite.wav youl.wav explode.wav if.wav myself.wav back.wav
+   cant.wav do.wav wait.wav worlings.wav very.wav babies.wav breath.wav fire.wav beat.wav rest.wav
+   then.wav never.wav worlock.wav escape.wav door.wav try.wav any.wav harder.wav only.wav meet.wav with.wav
+   doom.wav pop.wav
    Problems with YOU and YOU'LL and YOU'DD */
 
 static const char *const wowWordTable[] =
@@ -77,91 +77,97 @@ static const char *const wowWordTable[] =
 const char *const wow_sample_names[] =
 {
 	"*wow",
-	"a", "again", "ahh", "am", "and",
-	"anew", "another", "any", "anyone", "appear", "are", "are", "babies", "back",
-	"beat", "become", "best", "better", "bite", "bones", "breath", "but", "can", "cant",
-	"chance", "chest", "coin", "dance", "destroy",
-	"develop", "do", "dont", "doom", "door", "draw", "dungeon", "dungeons",
-	"each", "eaten", "escape", "explode", "fear", "find", "find", "fire", "for", "from",
-	"garwor", "get", "get", "get", "getting", "good", "hahahaha", "harder",
-	"hasnt", "have", "heavyw", "hey", "hope",
-	"hungry", "hungry", "hurry", "i", "i", "if", "if", "im", "i1", "ill", "in",
-	"insert", "invisibl", "it", "lie", "magic",
-	"magical", "me", "meet", "months",
-	"my", "my", "my", "my", "my", "myself", "near", "never",
-	"now", "of", "off", "one", "only", "oven", "pause", "pets", "powerful", "pop",
-	"radar", "ready",
-	"rest", "say", "science", "see", "spause", "start", "the", "the", "the", "the", "then",
-	"through", "thurwor", "time", "to", "to", "to", "treasure", "try", "very", "wait",
-	"war", "warrior", "watch", "we", "welcome",
-	"were", "while", "will", "with", "wizard", "wont",
-	"wor", "world", "worlings", "worlock",
-	"you", "you", "you", "you", "you", "youl", "youl", "youd", "your",0
+	"a.wav", "again.wav", "ahh.wav", "am.wav", "and.wav",
+	"anew.wav", "another.wav", "any.wav", "anyone.wav", "appear.wav", "are.wav", "are.wav", "babies.wav", "back.wav",
+	"beat.wav", "become.wav", "best.wav", "better.wav", "bite.wav", "bones.wav", "breath.wav", "but.wav", "can.wav", "cant.wav",
+	"chance.wav", "chest.wav", "coin.wav", "dance.wav", "destroy.wav",
+	"develop.wav", "do.wav", "dont.wav", "doom.wav", "door.wav", "draw.wav", "dungeon.wav", "dungeons.wav",
+	"each.wav", "eaten.wav", "escape.wav", "explode.wav", "fear.wav", "find.wav", "find.wav", "fire.wav", "for.wav", "from.wav",
+	"garwor.wav", "get.wav", "get.wav", "get.wav", "getting.wav", "good.wav", "hahahaha.wav", "harder.wav",
+	"hasnt.wav", "have.wav", "heavyw.wav", "hey.wav", "hope.wav",
+	"hungry.wav", "hungry.wav", "hurry.wav", "i.wav", "i.wav", "if.wav", "if.wav", "im.wav", "i1.wav", "ill.wav", "in.wav",
+	"insert.wav", "invisibl.wav", "it.wav", "lie.wav", "magic.wav",
+	"magical.wav", "me.wav", "meet.wav", "months.wav",
+	"my.wav", "my.wav", "my.wav", "my.wav", "my.wav", "myself.wav", "near.wav", "never.wav",
+	"now.wav", "of.wav", "off.wav", "one.wav", "only.wav", "oven.wav", "pause.wav", "pets.wav", "powerful.wav", "pop.wav",
+	"radar.wav", "ready.wav",
+	"rest.wav", "say.wav", "science.wav", "see.wav", "spause.wav", "start.wav", "the.wav", "the.wav", "the.wav", "the.wav", "then.wav",
+	"through.wav", "thurwor.wav", "time.wav", "to.wav", "to.wav", "to.wav", "treasure.wav", "try.wav", "very.wav", "wait.wav",
+	"war.wav", "warrior.wav", "watch.wav", "we.wav", "welcome.wav",
+	"were.wav", "while.wav", "will.wav", "with.wav", "wizard.wav", "wont.wav",
+	"wor.wav", "world.wav", "worlings.wav", "worlock.wav",
+	"you.wav", "you.wav", "you.wav", "you.wav", "you.wav", "youl.wav", "youl.wav", "youd.wav", "your.wav",0
 };
 
 
+/* Total word to join the phonemes together - Global to make it easier to use */
+
+static char totalword[256], *totalword_ptr;
+static char oldword[256];
+static int plural;
+
 READ8_HANDLER( wow_speech_r )
 {
-	astrocde_state *state = space->machine().driver_data<astrocde_state>();
-	device_t *samples = space->machine().device("samples");
-	int Phoneme/*, Intonation*/;
+	const device_config *samples = devtag_get_device(space->machine, "samples");
+	int Phoneme,Intonation;
 	int i = 0;
+
 	UINT8 data = offset >> 8;
 	offset &= 0xff;
 
-	state->m_totalword_ptr = state->m_totalword;
+	totalword_ptr = totalword;
 
 	Phoneme = data & 0x3F;
-	//Intonation = data >> 6;
+	Intonation = data >> 6;
 
-	//logerror("Data : %d Speech : %s at intonation %d\n",Phoneme, PhonemeTable[Phoneme],Intonation);
+//  logerror("Data : %d Speech : %s at intonation %d\n",Phoneme, PhonemeTable[Phoneme],Intonation);
 
 	if(Phoneme==63) {
-		sample_stop(samples, 0);
-		//logerror("Clearing sample %s\n",state->m_totalword);
-		state->m_totalword[0] = 0;				   /* Clear the total word stack */
-		return data;
+   		sample_stop(samples, 0);
+//              logerror("Clearing sample %s\n",totalword);
+				totalword[0] = 0;				   /* Clear the total word stack */
+				return data;
 	}
 	if (Phoneme==3)						   /* We know PA0 is never part of a word */
-		state->m_totalword[0] = 0;				   /* Clear the total word stack */
+				totalword[0] = 0;				   /* Clear the total word stack */
 
-	/* Phoneme to word translation */
+/* Phoneme to word translation */
 
-	if (strlen(state->m_totalword) == 0) {
-		strcpy(state->m_totalword,PhonemeTable[Phoneme]);	                   /* Copy over the first phoneme */
-		if (state->m_plural != 0) {
-			//logerror("found a possible plural at %d\n",state->m_plural-1);
-			if (!strcmp("S",state->m_totalword)) {		   /* Plural check */
-				sample_start(samples, 0, num_samples-2, 0);	   /* play the sample at position of word */
-				sample_set_freq(samples, 0, 11025);    /* play at correct rate */
-				state->m_totalword[0] = 0;				   /* Clear the total word stack */
-				state->m_oldword[0] = 0;				   /* Clear the total word stack */
-				return data;
-			} else {
-				 state->m_plural=0;
-			}
-		}
+	if (strlen(totalword) == 0) {
+	   strcpy(totalword,PhonemeTable[Phoneme]);	                   /* Copy over the first phoneme */
+	   if (plural != 0) {
+//        logerror("found a possible plural at %d\n",plural-1);
+		  if (!strcmp("S",totalword)) {		   /* Plural check */
+			 sample_start(samples, 0, num_samples-2, 0);	   /* play the sample at position of word */
+			 sample_set_freq(samples, 0, 11025);    /* play at correct rate */
+			 totalword[0] = 0;				   /* Clear the total word stack */
+			 oldword[0] = 0;				   /* Clear the total word stack */
+			 return data;
+		  } else {
+			 plural=0;
+		  }
+	   }
 	} else
-		strcat(state->m_totalword,PhonemeTable[Phoneme]);	                   /* Copy over the first phoneme */
+	   strcat(totalword,PhonemeTable[Phoneme]);	                   /* Copy over the first phoneme */
 
-	//logerror("Total word = %s\n",state->m_totalword);
+//  logerror("Total word = %s\n",totalword);
 
 	for (i=0; wowWordTable[i]; i++) {
-		if (!strcmp(wowWordTable[i],state->m_totalword)) {		   /* Scan the word (sample) table for the complete word */
-			/* WOW has Dungeon */
-			if ((!strcmp("GDTO1RFYA2N",state->m_totalword)) || (!strcmp("RO1U1BAH1T",state->m_totalword)) || (!strcmp("KO1UH3I3E1N",state->m_totalword))) {		   /* May be plural */
-				state->m_plural=i+1;
-				strcpy(state->m_oldword,state->m_totalword);
-				//logerror("Storing sample position %d and copying string %s\n",state->m_plural,state->m_oldword);
-			} else {
-				state->m_plural=0;
-			}
-			sample_start(samples, 0, i, 0);	                   /* play the sample at position of word */
-			sample_set_freq(samples, 0, 11025);         /* play at correct rate */
-			//logerror("Playing sample %d\n",i);
-			state->m_totalword[0] = 0;				   /* Clear the total word stack */
-			return data;
-		}
+	   if (!strcmp(wowWordTable[i],totalword)) {		   /* Scan the word (sample) table for the complete word */
+	  /* WOW has Dungeon */
+		  if ((!strcmp("GDTO1RFYA2N",totalword)) || (!strcmp("RO1U1BAH1T",totalword)) || (!strcmp("KO1UH3I3E1N",totalword))) {		   /* May be plural */
+			 plural=i+1;
+			 strcpy(oldword,totalword);
+//       logerror("Storing sample position %d and copying string %s\n",plural,oldword);
+		  } else {
+			 plural=0;
+		  }
+		  sample_start(samples, 0, i, 0);	                   /* play the sample at position of word */
+		  sample_set_freq(samples, 0, 11025);         /* play at correct rate */
+//        logerror("Playing sample %d\n",i);
+		  totalword[0] = 0;				   /* Clear the total word stack */
+		  return data;
+	   }
 	}
 
 	/* Note : We should really also use volume in this as well as frequency */
@@ -171,6 +177,6 @@ READ8_HANDLER( wow_speech_r )
 
 CUSTOM_INPUT( wow_speech_status_r )
 {
-	device_t *samples = field.machine().device("samples");
+	const device_config *samples = devtag_get_device(field->port->machine, "samples");
 	return !sample_playing(samples, 0);
 }

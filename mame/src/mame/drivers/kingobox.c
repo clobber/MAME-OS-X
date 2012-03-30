@@ -1,7 +1,7 @@
 /***************************************************************************
 
-King of Boxer - (c) 1985 Wood Place Inc.
-Ring King     - (c) 1985 Data East USA Inc. / Wood Place Inc.
+King of Boxer - (c) 1985 Woodplace Inc.
+Ring King     - (c) 1985 Data East USA Inc. / Woodplace Inc.
 
 Driver by:
 Ernesto Corvi
@@ -15,48 +15,65 @@ Main CPU:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
-#include "includes/kingobox.h"
+
+/* from video */
+extern UINT8 *kingofb_videoram2;
+extern UINT8 *kingofb_colorram2;
+extern UINT8 *kingofb_scroll_y;
+
+extern WRITE8_HANDLER( kingofb_videoram_w );
+extern WRITE8_HANDLER( kingofb_colorram_w );
+extern WRITE8_HANDLER( kingofb_videoram2_w );
+extern WRITE8_HANDLER( kingofb_colorram2_w );
+
+extern WRITE8_HANDLER( kingofb_f800_w );
+
+extern PALETTE_INIT( kingofb );
+extern VIDEO_START( kingofb );
+extern VIDEO_UPDATE( kingofb );
+
+extern PALETTE_INIT( ringking );
+extern VIDEO_START( ringking );
+extern VIDEO_UPDATE( ringking );
+
+int kingofb_nmi_enable = 0;
 
 static WRITE8_HANDLER( video_interrupt_w )
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	device_set_input_line_and_vector(state->m_video_cpu, 0, HOLD_LINE, 0xff);
+	cputag_set_input_line_and_vector(space->machine, "video", 0, HOLD_LINE, 0xff );
 }
 
 static WRITE8_HANDLER( sprite_interrupt_w )
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	device_set_input_line_and_vector(state->m_sprite_cpu, 0, HOLD_LINE, 0xff);
+	cputag_set_input_line_and_vector(space->machine, "sprite", 0, HOLD_LINE, 0xff );
 }
 
 static WRITE8_HANDLER( scroll_interrupt_w )
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	sprite_interrupt_w(space, offset, data);
-	*state->m_scroll_y = data;
+	sprite_interrupt_w( space, offset, data );
+	*kingofb_scroll_y = data;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
-	kingofb_state *state = space->machine().driver_data<kingofb_state>();
-	soundlatch_w(space, 0, data);
-	device_set_input_line_and_vector(state->m_audio_cpu, 0, HOLD_LINE, 0xff);
+	soundlatch_w( space, 0, data );
+	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff );
 }
 
 
-static ADDRESS_MAP_START( kingobox_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingobox_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM /* work ram */
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("share2") /* shared with sprite cpu */
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_SHARE("share1") /* shared with video cpu */
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE(2) /* shared with sprite cpu */
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_SHARE(1) /* shared with video cpu */
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM /* ???? */
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(kingofb_f800_w)	/* NMI enable, palette bank */
 	AM_RANGE(0xf801, 0xf801) AM_WRITENOP /* ???? */
-	AM_RANGE(0xf802, 0xf802) AM_WRITEONLY AM_BASE_MEMBER(kingofb_state, m_scroll_y)
+	AM_RANGE(0xf802, 0xf802) AM_WRITEONLY AM_BASE(&kingofb_scroll_y)
 	AM_RANGE(0xf803, 0xf803) AM_WRITE(scroll_interrupt_w)
 	AM_RANGE(0xf804, 0xf804) AM_WRITE(video_interrupt_w)
 	AM_RANGE(0xf807, 0xf807) AM_WRITE(sound_command_w) /* sound latch */
@@ -68,43 +85,43 @@ static ADDRESS_MAP_START( kingobox_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xfc05, 0xfc05) AM_READ_PORT("EXTRA")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingobox_video_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingobox_video_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* work ram */
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE("share1") /* shared with main */
-	AM_RANGE(0xc000, 0xc0ff) AM_RAM_WRITE(kingofb_videoram_w) AM_BASE_MEMBER(kingofb_state, m_videoram) /* background vram */
-	AM_RANGE(0xc400, 0xc4ff) AM_RAM_WRITE(kingofb_colorram_w) AM_BASE_MEMBER(kingofb_state, m_colorram) /* background colorram */
-	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(kingofb_videoram2_w) AM_BASE_MEMBER(kingofb_state, m_videoram2) /* foreground vram */
-	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(kingofb_colorram2_w) AM_BASE_MEMBER(kingofb_state, m_colorram2) /* foreground colorram */
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE(1) /* shared with main */
+	AM_RANGE(0xc000, 0xc0ff) AM_RAM_WRITE(kingofb_videoram_w) AM_BASE(&videoram) /* background vram */
+	AM_RANGE(0xc400, 0xc4ff) AM_RAM_WRITE(kingofb_colorram_w) AM_BASE(&colorram) /* background colorram */
+	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(kingofb_videoram2_w) AM_BASE(&kingofb_videoram2) /* foreground vram */
+	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(kingofb_colorram2_w) AM_BASE(&kingofb_colorram2) /* foreground colorram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingobox_sprite_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingobox_sprite_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* work ram */
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE("share2") /* shared with main */
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE_SIZE_MEMBER(kingofb_state, m_spriteram, m_spriteram_size) /* sprite ram */
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_SHARE(2) /* shared with main */
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size) /* sprite ram */
 	AM_RANGE(0xc400, 0xc43f) AM_RAM  /* something related to scroll? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingobox_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kingobox_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0x8000, 0x8000) AM_WRITENOP /* ??? */
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM /* work ram */
+    AM_RANGE(0xc000, 0xc3ff) AM_RAM /* work ram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( kingobox_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( kingobox_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("dac", dac_w)
-	AM_RANGE(0x08, 0x08) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x0c, 0x0c) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x08, 0x08) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x0c, 0x0c) AM_DEVWRITE("ay", ay8910_address_w)
 ADDRESS_MAP_END
 
 /* Ring King */
-static ADDRESS_MAP_START( ringking_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ringking_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM /* work ram */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("share2") /* shared with sprite cpu */
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_SHARE("share1") /* shared with video cpu */
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE(2) /* shared with sprite cpu */
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_SHARE(1) /* shared with video cpu */
 	AM_RANGE(0xd800, 0xd800) AM_WRITE(kingofb_f800_w)
 	AM_RANGE(0xd801, 0xd801) AM_WRITE(sprite_interrupt_w)
 	AM_RANGE(0xd802, 0xd802) AM_WRITE(video_interrupt_w)
@@ -115,86 +132,86 @@ static ADDRESS_MAP_START( ringking_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xe003, 0xe003) AM_READ_PORT("P2")
 	AM_RANGE(0xe004, 0xe004) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xe005, 0xe005) AM_READ_PORT("EXTRA")
-	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE_MEMBER(kingofb_state, m_scroll_y)
+	AM_RANGE(0xe800, 0xe800) AM_WRITEONLY AM_BASE(&kingofb_scroll_y)
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM /* ???? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ringking_video_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ringking_video_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* work ram */
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE("share1") /* shared with main */
-	AM_RANGE(0xa800, 0xa8ff) AM_RAM_WRITE(kingofb_videoram_w) AM_BASE_MEMBER(kingofb_state, m_videoram) /* background vram */
-	AM_RANGE(0xac00, 0xacff) AM_RAM_WRITE(kingofb_colorram_w) AM_BASE_MEMBER(kingofb_state, m_colorram) /* background colorram */
-	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(kingofb_videoram2_w) AM_BASE_MEMBER(kingofb_state, m_videoram2) /* foreground vram */
-	AM_RANGE(0xa400, 0xa7ff) AM_RAM_WRITE(kingofb_colorram2_w) AM_BASE_MEMBER(kingofb_state, m_colorram2) /* foreground colorram */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE(1) /* shared with main */
+	AM_RANGE(0xa800, 0xa8ff) AM_RAM_WRITE(kingofb_videoram_w) AM_BASE(&videoram) /* background vram */
+	AM_RANGE(0xac00, 0xacff) AM_RAM_WRITE(kingofb_colorram_w) AM_BASE(&colorram) /* background colorram */
+	AM_RANGE(0xa000, 0xa3ff) AM_RAM_WRITE(kingofb_videoram2_w) AM_BASE(&kingofb_videoram2) /* foreground vram */
+	AM_RANGE(0xa400, 0xa7ff) AM_RAM_WRITE(kingofb_colorram2_w) AM_BASE(&kingofb_colorram2) /* foreground colorram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ringking_sprite_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ringking_sprite_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM /* work ram */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("share2") /* shared with main */
-	AM_RANGE(0xa000, 0xa3ff) AM_RAM AM_BASE_SIZE_MEMBER(kingofb_state, m_spriteram, m_spriteram_size) /* sprite ram */
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE(2) /* shared with main */
+	AM_RANGE(0xa000, 0xa3ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size) /* sprite ram */
 	AM_RANGE(0xa400, 0xa43f) AM_RAM /* something related to scroll? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ringking_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( ringking_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVWRITE("dac", dac_w)
-	AM_RANGE(0x02, 0x02) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x02, 0x03) AM_DEVWRITE("aysnd", ay8910_data_address_w)
+	AM_RANGE(0x02, 0x02) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x02, 0x03) AM_DEVWRITE("ay", ay8910_data_address_w)
 ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( kingofb )
-	PORT_START("DSW1")	/* 0xfc01 */
-	PORT_DIPNAME( 0x03, 0x01, "Rest Up Points" )
-	PORT_DIPSETTING(    0x02, "70000" )
-	PORT_DIPSETTING(    0x01, "100000" )
-	PORT_DIPSETTING(    0x03, "150000" )
-	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x18, 0x00, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x18, DEF_STR( Hardest ) )
+    PORT_START("DSW1")	/* 0xfc01 */
+    PORT_DIPNAME( 0x03, 0x01, "Rest Up Points" )
+    PORT_DIPSETTING(    0x02, "70000" )
+    PORT_DIPSETTING(    0x01, "100000" )
+    PORT_DIPSETTING(    0x03, "150000" )
+    PORT_DIPSETTING(    0x00, DEF_STR( No ) )
+    PORT_DIPNAME( 0x04, 0x00, DEF_STR( Demo_Sounds ) )
+    PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+    PORT_DIPNAME( 0x18, 0x00, DEF_STR( Difficulty ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
+    PORT_DIPSETTING(    0x08, DEF_STR( Medium ) )
+    PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+    PORT_DIPSETTING(    0x18, DEF_STR( Hardest ) )
 	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+    PORT_DIPSETTING(    0x20, DEF_STR( Upright ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
+    PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x40, DEF_STR( On ) )
 	PORT_SERVICE( 0x80, IP_ACTIVE_HIGH )
 
-	PORT_START("DSW2")	/* 0xfc01 */
-	PORT_DIPNAME( 0x07, 0x00, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "Freeze" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+    PORT_START("DSW2")	/* 0xfc01 */
+    PORT_DIPNAME( 0x07, 0x00, DEF_STR( Coinage ) )
+    PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) )
+    PORT_DIPSETTING(    0x06, DEF_STR( 3C_1C ) )
+    PORT_DIPSETTING(    0x05, DEF_STR( 2C_1C ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
+    PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
+    PORT_DIPSETTING(    0x02, DEF_STR( 1C_3C ) )
+    PORT_DIPSETTING(    0x03, DEF_STR( 1C_4C ) )
+    PORT_DIPSETTING(    0x04, DEF_STR( 1C_5C ) )
+    PORT_DIPNAME( 0x08, 0x00, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x08, DEF_STR( On ) )
+    PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x10, DEF_STR( On ) )
+    PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+    PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+    PORT_DIPNAME( 0x80, 0x00, "Freeze" )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-	PORT_START("P1")	/* 0xfc02 */
+    PORT_START("P1")	/* 0xfc02 */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT )
@@ -204,7 +221,7 @@ static INPUT_PORTS_START( kingofb )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
-	PORT_START("P2")	/* 0xfc03 */
+    PORT_START("P2")	/* 0xfc03 */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_COCKTAIL
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_COCKTAIL
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_COCKTAIL
@@ -224,7 +241,7 @@ static INPUT_PORTS_START( kingofb )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
-	PORT_START("EXTRA")	/* 0xfc05 */
+    PORT_START("EXTRA")	/* 0xfc05 */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON3 )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_COCKTAIL
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )
@@ -236,50 +253,50 @@ static INPUT_PORTS_START( kingofb )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( ringking )
-	PORT_START("DSW1")	/* 0xe000 */
-	PORT_DIPNAME( 0x03, 0x03, "Replay" )
-	PORT_DIPSETTING(    0x01, "70000" )
-	PORT_DIPSETTING(    0x02, "100000" )
-	PORT_DIPSETTING(    0x00, "150000" )
-	PORT_DIPSETTING(    0x03, DEF_STR( No ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x18, 0x10, "Difficulty (2P)" )
-	PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+    PORT_START("DSW1")	/* 0xe000 */
+    PORT_DIPNAME( 0x03, 0x03, "Replay" )
+    PORT_DIPSETTING(    0x01, "70000" )
+    PORT_DIPSETTING(    0x02, "100000" )
+    PORT_DIPSETTING(    0x00, "150000" )
+    PORT_DIPSETTING(    0x03, DEF_STR( No ) )
+    PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x04, DEF_STR( On ) )
+    PORT_DIPNAME( 0x18, 0x10, "Difficulty (2P)" )
+    PORT_DIPSETTING(    0x18, DEF_STR( Easy ) )
+    PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
+    PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
 	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Cabinet ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Cocktail ) )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+    PORT_DIPSETTING(    0x20, DEF_STR( Cocktail ) )
+    PORT_BIT(			0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
-	PORT_START("DSW2")	/* 0xe001 */
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_3C ) )
-	PORT_DIPNAME( 0x30, 0x10, "Difficulty (1P)" )
-	PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x40, 0x40, "Boxing Match" )
-	PORT_DIPSETTING(    0x40, "2 Win, End" )
-	PORT_DIPSETTING(    0x00, "1 Win, End" )
-	PORT_DIPNAME( 0x80, 0x80, "Freeze" )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+    PORT_START("DSW2")	/* 0xe001 */
+    PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coin_A ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
+    PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+    PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
+    PORT_DIPSETTING(    0x01, DEF_STR( 1C_3C ) )
+    PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Coin_B ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
+    PORT_DIPSETTING(    0x0c, DEF_STR( 1C_1C ) )
+    PORT_DIPSETTING(    0x08, DEF_STR( 1C_2C ) )
+    PORT_DIPSETTING(    0x04, DEF_STR( 1C_3C ) )
+    PORT_DIPNAME( 0x30, 0x10, "Difficulty (1P)" )
+    PORT_DIPSETTING(    0x30, DEF_STR( Easy ) )
+    PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
+    PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+    PORT_DIPNAME( 0x40, 0x40, "Boxing Match" )
+    PORT_DIPSETTING(    0x40, "2 Win, End" )
+    PORT_DIPSETTING(    0x00, "1 Win, End" )
+    PORT_DIPNAME( 0x80, 0x80, "Freeze" )
+    PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+    PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
-	PORT_START("P1")	/* 0xe002 */
+    PORT_START("P1")	/* 0xe002 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
@@ -289,7 +306,7 @@ static INPUT_PORTS_START( ringking )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("P2")	/* 0xe003 */
+    PORT_START("P2")	/* 0xe003 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_COCKTAIL
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_COCKTAIL
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_COCKTAIL
@@ -309,7 +326,7 @@ static INPUT_PORTS_START( ringking )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("EXTRA")	/* 0xfc05 */
+    PORT_START("EXTRA")	/* 0xfc05 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON3 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_COCKTAIL
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -336,7 +353,7 @@ static const gfx_layout charlayout =
 static const gfx_layout spritelayout =
 {
 	16,16,	/* 16*16 chars */
-	1024,	/* 1024 characters */
+	1024, 	/* 1024 characters */
 	3,		/* bits per pixel */
 	{ 2*0x4000*8, 1*0x4000*8, 0*0x4000*8 },
 	{ 3*0x4000*8+0,3*0x4000*8+1,3*0x4000*8+2,3*0x4000*8+3,
@@ -394,7 +411,7 @@ static const gfx_layout rk_charlayout2 =
 static const gfx_layout rk_spritelayout =
 {
 	16,16,	/* 16*16 chars */
-	1024,	/* 1024 characters */
+	1024, 	/* 1024 characters */
 	3,		/* bits per pixel */
 	{ 0*0x8000*8, 1*0x8000*8, 2*0x8000*8 },
 	{ 7, 6, 5, 4, 3, 2, 1, 0,
@@ -407,7 +424,7 @@ static const gfx_layout rk_spritelayout =
 static const gfx_layout rk_tilelayout =
 {
 	16,16,	/* 16*16 chars */
-	512,	/* 1024 characters */
+	512, 	/* 1024 characters */
 	3,		/* bits per pixel */
 	{ 0*0x4000*8, 1*0x4000*8, 2*0x4000*8 },
 	{ 7, 6, 5, 4, 3, 2, 1, 0,
@@ -420,7 +437,7 @@ static const gfx_layout rk_tilelayout =
 static const gfx_layout rk_bglayout =
 {
 	16,16,	/* 16*16 chars */
-	256,	/* 1024 characters */
+	256, 	/* 1024 characters */
 	3,		/* bits per pixel */
 	{ 0x4000*8+4, 0, 4 },
 	{ 16*8+3, 16*8+2, 16*8+1, 16*8+0, 0x2000*8+3, 0x2000*8+2, 0x2000*8+1, 0x2000*8+0,
@@ -448,133 +465,108 @@ static const ay8910_interface ay8910_config =
 
 static INTERRUPT_GEN( kingofb_interrupt )
 {
-	kingofb_state *state = device->machine().driver_data<kingofb_state>();
 
-	if (state->m_nmi_enable)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if ( kingofb_nmi_enable )
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_START( kingofb )
-{
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-
-	state->m_video_cpu = machine.device("video");
-	state->m_sprite_cpu = machine.device("sprite");
-	state->m_audio_cpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_nmi_enable));
-	state->save_item(NAME(state->m_palette_bank));
-}
-
-static MACHINE_RESET( kingofb )
-{
-	kingofb_state *state = machine.driver_data<kingofb_state>();
-
-	state->m_nmi_enable = 0;
-	state->m_palette_bank = 0;
-}
-
-static MACHINE_CONFIG_START( kingofb, kingofb_state )
+static MACHINE_DRIVER_START( kingofb )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(kingobox_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(kingobox_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("video", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(kingobox_video_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("video", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(kingobox_video_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("sprite", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(kingobox_sprite_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("sprite", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(kingobox_sprite_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(kingobox_sound_map)
-	MCFG_CPU_IO_MAP(kingobox_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 6000)	/* Hz */
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(kingobox_sound_map)
+	MDRV_CPU_IO_MAP(kingobox_sound_io_map)
+	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, 6000)	/* Hz */
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* We really need heavy synching among the processors */
-
-	MCFG_MACHINE_START(kingofb)
-	MCFG_MACHINE_RESET(kingofb)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* We really need heavy synching among the processors */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(kingofb)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(kingobox)
-	MCFG_PALETTE_LENGTH(256+8*2)
+	MDRV_GFXDECODE(kingobox)
+	MDRV_PALETTE_LENGTH(256+8*2)
 
-	MCFG_PALETTE_INIT(kingofb)
-	MCFG_VIDEO_START(kingofb)
+	MDRV_PALETTE_INIT(kingofb)
+	MDRV_VIDEO_START(kingofb)
+	MDRV_VIDEO_UPDATE(kingofb)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 /* Ring King */
-static MACHINE_CONFIG_START( ringking, kingofb_state )
+static MACHINE_DRIVER_START( ringking )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(ringking_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(ringking_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("video", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(ringking_video_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("video", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(ringking_video_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("sprite", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(ringking_sprite_map)
-	MCFG_CPU_VBLANK_INT("screen", kingofb_interrupt)
+	MDRV_CPU_ADD("sprite", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(ringking_sprite_map)
+	MDRV_CPU_VBLANK_INT("screen", kingofb_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)        /* 4.0 MHz */
-	MCFG_CPU_PROGRAM_MAP(kingobox_sound_map)
-	MCFG_CPU_IO_MAP(ringking_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(nmi_line_pulse, 6000)	/* Hz */
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)        /* 4.0 MHz */
+	MDRV_CPU_PROGRAM_MAP(kingobox_sound_map)
+	MDRV_CPU_IO_MAP(ringking_sound_io_map)
+	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, 6000)	/* Hz */
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* We really need heavy synching among the processors */
-
-	MCFG_MACHINE_START(kingofb)
-	MCFG_MACHINE_RESET(kingofb)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* We really need heavy synching among the processors */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(ringking)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(rk)
-	MCFG_PALETTE_LENGTH(256+8*2)
+	MDRV_GFXDECODE(rk)
+	MDRV_PALETTE_LENGTH(256+8*2)
 
-	MCFG_PALETTE_INIT(ringking)
-	MCFG_VIDEO_START(ringking)
+	MDRV_PALETTE_INIT(ringking)
+	MDRV_VIDEO_START(ringking)
+	MDRV_VIDEO_UPDATE(ringking)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -789,40 +781,41 @@ ROM_START( ringkingw )
 	ROM_LOAD( "prom1.bin",    0x0800, 0x0400, CRC(913f5975) SHA1(3d1e40eeb4d5a3a4bd42ec73d05bfca13b2f1805) ) /* blue component */
 ROM_END
 
-static DRIVER_INIT( ringking3 )
+static DRIVER_INIT( ringkin3 )
 {
 	int i;
-	UINT8 *RAM = machine.region("proms")->base();
+	UINT8 *RAM = memory_region(machine, "proms");
 
 	/* expand the first color PROM to look like the kingofb ones... */
-	for (i = 0; i < 0x100; i++)
+	for (i = 0;i < 0x100;i++)
 		RAM[i] = RAM[i + 0x100] >> 4;
 }
 
-static DRIVER_INIT( ringkingw )
+static DRIVER_INIT( ringkinw )
 {
 	int i,j,k;
-	UINT8 *PROMS = machine.region("proms")->base();
-	UINT8 *USER1 = machine.region("user1")->base();
+	UINT8 *PROMS = memory_region(machine, "proms");
+	UINT8 *USER1 = memory_region(machine, "user1");
 
 	/* change the PROMs encode in a simple format to use kingofb decode */
-	for(i = 0, j = 0; j < 0x40; i++, j++)
+	for(i=0,j=0; j < 0x40; i++,j++)
 	{
 		if((i & 0xf) == 8)
-			i += 8;
+			i+=8;
 
 		for(k = 0; k <= 3; k++)
 		{
-			PROMS[j + 0x000 + 0x40 * k] = USER1[i + 0x000 + 0x100 * k]; /* R */
-			PROMS[j + 0x100 + 0x40 * k] = USER1[i + 0x400 + 0x100 * k]; /* G */
-			PROMS[j + 0x200 + 0x40 * k] = USER1[i + 0x800 + 0x100 * k]; /* B */
+			PROMS[j + 0x000 + 0x40*k] = USER1[i + 0x000 + 0x100*k]; /* R */
+			PROMS[j + 0x100 + 0x40*k] = USER1[i + 0x400 + 0x100*k]; /* G */
+			PROMS[j + 0x200 + 0x40*k] = USER1[i + 0x800 + 0x100*k]; /* B */
 		}
 	}
 }
 
 
-GAME( 1985, kingofb,   0,       kingofb,  kingofb,  0,        ROT90, "Wood Place Inc.", "King of Boxer (English)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking,  kingofb, ringking, ringking, 0,        ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking2, kingofb, ringking, ringking, 0,        ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking3, kingofb, kingofb,  kingofb,  ringking3,ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 3)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringkingw, kingofb, kingofb,  kingofb,  ringkingw,ROT90, "Wood Place Inc.", "Ring King (US, Wood Place Inc.)", GAME_SUPPORTS_SAVE )
+
+GAME( 1985, kingofb,   0,       kingofb,  kingofb,  0,        ROT90, "Woodplace", "King of Boxer (English)", 0 )
+GAME( 1985, ringking,  kingofb, ringking, ringking, 0,        ROT90, "Data East USA", "Ring King (US set 1)", 0 )
+GAME( 1985, ringking2, kingofb, ringking, ringking, 0,        ROT90, "Data East USA", "Ring King (US set 2)", 0 )
+GAME( 1985, ringking3, kingofb, kingofb,  kingofb,  ringkin3, ROT90, "Data East USA", "Ring King (US set 3)", 0 )
+GAME( 1985, ringkingw, kingofb, kingofb,  kingofb,  ringkinw, ROT90, "Woodplace", "Ring King (US, Woodplace license)", 0 )

@@ -9,6 +9,8 @@ Notes:
  Mode is for adjusting these screens (to not let the human opponent to read your tiles).
 
 TODO:
+-Video buffering? If you coin up, you can see the "credit 1" msg that gets build into the
+ video bitmaps...
 -According to the flyer, color bitplanes might be wrong on the A-N mahjong charset, might be
  a BTANB however...
 -I need schematics / pcb photos (component + solder sides) to understand if the background
@@ -92,74 +94,53 @@ dumped by sayu
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "sound/msm5205.h"
 
-#define MAIN_CLOCK XTAL_18_432MHz
+static UINT8 *jan_bitmap;
+static UINT8 vram_bank,col_bank;
+static UINT8 mux_data;
 
-class jantotsu_state : public driver_device
-{
-public:
-	jantotsu_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* sound-related */
-	UINT32   m_adpcm_pos;
-	UINT8    m_adpcm_idle;
-	int      m_adpcm_data;
-	UINT8    m_adpcm_trigger;
-
-	/* misc */
-	UINT8    m_mux_data;
-
-	/* video-related */
-	UINT8    m_vram_bank;
-	UINT8    m_col_bank;
-	UINT8    m_display_on;
-	UINT8    m_bitmap[0x8000];
-};
-
-
-/*************************************
- *
- *  Video emulation
- *
- *************************************/
+static UINT32 adpcm_pos;
+static UINT8 adpcm_idle;
+static int adpcm_data;
 
 static VIDEO_START(jantotsu)
 {
-	jantotsu_state *state = machine.driver_data<jantotsu_state>();
+	jan_bitmap = auto_alloc_array(machine, UINT8, 0x8000);
 
-	state->save_item(NAME(state->m_bitmap));
+	vram_bank = 0;
 }
 
-static SCREEN_UPDATE_RGB32(jantotsu)
+static VIDEO_UPDATE(jantotsu)
 {
-	jantotsu_state *state = screen.machine().driver_data<jantotsu_state>();
-	int x, y, i;
-	int count = 0;
-	UINT8 pen_i;
+	int x,y,i;
+	int count;
 
-	if(!state->m_display_on)
-		return 0;
-
-	for (y = 0; y < 256; y++)
+	count = 0;
+	for(y=0;y<256;y++)
 	{
-		for (x = 0; x < 256; x += 8)
+		for(x=0;x<256;x+=8)
 		{
-			UINT8 color;
+			int pen[4],color;
 
-			for (i = 0; i < 8; i++)
+			for (i=0;i<8;i++)
 			{
-				color = state->m_col_bank;
+				pen[0] = (jan_bitmap[count+0x0000])>>(7-i);
+				pen[1] = (jan_bitmap[count+0x2000])>>(7-i);
+				pen[2] = (jan_bitmap[count+0x4000])>>(7-i);
+				pen[3] = (jan_bitmap[count+0x6000])>>(7-i);
 
-				for(pen_i = 0;pen_i<4;pen_i++)
-					color |= (((state->m_bitmap[count + pen_i*0x2000]) >> (7 - i)) & 1) << pen_i;
+				color = ((pen[0] & 1)<<0);
+				color|= ((pen[1] & 1)<<1);
+				color|= ((pen[2] & 1)<<2);
+				color|= ((pen[3] & 1)<<3);
+				color|= col_bank;
 
-				if (cliprect.contains(x + i, y))
-					bitmap.pix32(y, x + i) = screen.machine().pens[color];
+				if((x+i)<=video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
+					*BITMAP_ADDR32(bitmap, y, x+i) = screen->machine->pens[color];
 			}
 
 			count++;
@@ -172,32 +153,27 @@ static SCREEN_UPDATE_RGB32(jantotsu)
 /* banked vram */
 static READ8_HANDLER( jantotsu_bitmap_r )
 {
-	jantotsu_state *state = space->machine().driver_data<jantotsu_state>();
-	return state->m_bitmap[offset + ((state->m_vram_bank & 3) * 0x2000)];
+	return jan_bitmap[offset+((vram_bank & 3)*0x2000)];
 }
 
 static WRITE8_HANDLER( jantotsu_bitmap_w )
 {
-	jantotsu_state *state = space->machine().driver_data<jantotsu_state>();
-	state->m_bitmap[offset + ((state->m_vram_bank & 3) * 0x2000)] = data;
+	jan_bitmap[offset+((vram_bank & 3)*0x2000)] = data;
 }
 
 static WRITE8_HANDLER( bankaddr_w )
 {
-	jantotsu_state *state = space->machine().driver_data<jantotsu_state>();
+	vram_bank = ((data & 0xc0)>>6); // top 2 bits?
 
-	state->m_vram_bank = ((data & 0xc0) >> 6);
+	// looks like the top 2 bits and bottom 2 bits are used..
+	// multiple buffers? different read / write ?
 
-	state->m_display_on = (data & 2);
-
-	/* bit 0 is unknown */
-	if(data & 0x3c)
-		logerror("I/O port $07 write trips %02x\n",data);
+//  printf("%02x\n",data & 0x03);
 }
 
 static PALETTE_INIT( jantotsu )
 {
-	int	bit0, bit1, bit2, r, g, b;
+	int	bit0, bit1, bit2 , r, g, b;
 	int	i;
 
 	for (i = 0; i < 0x20; ++i)
@@ -220,36 +196,33 @@ static PALETTE_INIT( jantotsu )
 	}
 }
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
-
 /*Multiplexer is mapped as 6-bits reads,bits 6 & 7 are always connected to the coin mechs.*/
 static READ8_HANDLER( jantotsu_mux_r )
 {
-	jantotsu_state *state = space->machine().driver_data<jantotsu_state>();
-	const char *const portnames[] = { "PL1_1", "PL1_2", "PL1_3", "PL1_4",
-									  "PL2_1", "PL2_2", "PL2_3", "PL2_4" };
-	UINT8 i,res;
+	static UINT8 coin_port;
 
-	//  printf("%02x\n", state->m_mux_data);
-	res = input_port_read(space->machine(), "COINS");
+	coin_port = input_port_read(space->machine, "COINS");
 
-	for(i=0;i<8;i++)
+//  printf("%02x\n",mux_data);
+
+	switch(mux_data)
 	{
-		if((~state->m_mux_data) & (1 << i))
-			res |= input_port_read(space->machine(), portnames[i]);
+		case 0x01: return input_port_read(space->machine, "PL1_1") | coin_port;
+		case 0x02: return input_port_read(space->machine, "PL1_2") | coin_port;
+		case 0x04: return input_port_read(space->machine, "PL1_3") | coin_port;
+		case 0x08: return input_port_read(space->machine, "PL1_4") | coin_port;
+		case 0x10: return input_port_read(space->machine, "PL2_1") | coin_port;
+		case 0x20: return input_port_read(space->machine, "PL2_2") | coin_port;
+		case 0x40: return input_port_read(space->machine, "PL2_3") | coin_port;
+		case 0x80: return input_port_read(space->machine, "PL2_4") | coin_port;
 	}
 
-	return res;
+	return coin_port;
 }
 
 static WRITE8_HANDLER( jantotsu_mux_w )
 {
-	jantotsu_state *state = space->machine().driver_data<jantotsu_state>();
-	state->m_mux_data = data;
+	mux_data = ~data;
 }
 
 /*If bits 6 & 7 doesn't return 0x80,the game hangs until this bit is set,
@@ -258,88 +231,73 @@ static WRITE8_HANDLER( jantotsu_mux_w )
   a side-by-side test (to know if the background colors really works) to be sure. */
 static READ8_HANDLER( jantotsu_dsw2_r )
 {
-	return (input_port_read(space->machine(), "DSW2") & 0x3f) | 0x80;
+	return (input_port_read(space->machine, "DSW2") & 0x3f) | 0x80;
 }
 
 static WRITE8_DEVICE_HANDLER( jan_adpcm_w )
 {
-	jantotsu_state *state = device->machine().driver_data<jantotsu_state>();
-
 	switch (offset)
 	{
 		case 0:
-			state->m_adpcm_pos = (data & 0xff) * 0x100;
-			state->m_adpcm_idle = 0;
-			msm5205_reset_w(device, 0);
+			adpcm_pos = (data & 0xff) * 0x100;
+			adpcm_idle = 0;
+			msm5205_reset_w(device,0);
 			/* I don't think that this will ever happen, it's there just to be sure
                (i.e. I'll probably never do a "nagare" in my entire life ;-) ) */
 			if(data & 0x20)
-				popmessage("ADPCM called with data = %02x, contact MAMEdev", data);
-//          printf("%02x 0\n", data);
+				popmessage("ADPCM called with data = %02x, contact MAMEdev",data);
+//          printf("%02x 0\n",data);
 			break;
 		/*same write as port 2? MSM sample ack? */
 		case 1:
-//          state->m_adpcm_idle = 1;
-//          msm5205_reset_w(device, 1);
-//          printf("%02x 1\n", data);
+//          adpcm_idle = 1;
+//          msm5205_reset_w(device,1);
+//          printf("%02x 1\n",data);
 			break;
 	}
 }
 
-static void jan_adpcm_int( device_t *device )
+static void jan_adpcm_int(const device_config *device)
 {
-	jantotsu_state *state = device->machine().driver_data<jantotsu_state>();
+	static UINT8 trigger;
 
-	if (state->m_adpcm_pos >= 0x10000 || state->m_adpcm_idle)
+	if (adpcm_pos >= 0x10000 || adpcm_idle)
 	{
-		//state->m_adpcm_idle = 1;
-		msm5205_reset_w(device, 1);
-		state->m_adpcm_trigger = 0;
+		//adpcm_idle = 1;
+		msm5205_reset_w(device,1);
+		trigger = 0;
 	}
 	else
 	{
-		UINT8 *ROM = device->machine().region("adpcm")->base();
+		UINT8 *ROM = memory_region(device->machine, "adpcm");
 
-		state->m_adpcm_data = ((state->m_adpcm_trigger ? (ROM[state->m_adpcm_pos] & 0x0f) : (ROM[state->m_adpcm_pos] & 0xf0) >> 4));
-		msm5205_data_w(device, state->m_adpcm_data & 0xf);
-		state->m_adpcm_trigger ^= 1;
-		if (state->m_adpcm_trigger == 0)
+		adpcm_data = ((trigger ? (ROM[adpcm_pos] & 0x0f) : (ROM[adpcm_pos] & 0xf0)>>4) );
+		msm5205_data_w(device,adpcm_data & 0xf);
+		trigger^=1;
+		if(trigger == 0)
 		{
-			state->m_adpcm_pos++;
-			if ((ROM[state->m_adpcm_pos] & 0xff) == 0x70)
-				state->m_adpcm_idle = 1;
+			adpcm_pos++;
+			if((ROM[adpcm_pos] & 0xff) == 0x70)
+				adpcm_idle = 1;
 		}
 	}
 }
 
 
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( jantotsu_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( jantotsu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(jantotsu_bitmap_r, jantotsu_bitmap_w)
+	AM_RANGE(0xe000, 0xffff) AM_READWRITE(jantotsu_bitmap_r,jantotsu_bitmap_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( jantotsu_io, AS_IO, 8 )
+static ADDRESS_MAP_START( jantotsu_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW1") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ(jantotsu_dsw2_r) AM_DEVWRITE("sn2", sn76496_w)
 	AM_RANGE(0x02, 0x03) AM_DEVWRITE("adpcm", jan_adpcm_w)
-	AM_RANGE(0x04, 0x04) AM_READWRITE(jantotsu_mux_r, jantotsu_mux_w)
+	AM_RANGE(0x04, 0x04) AM_READWRITE(jantotsu_mux_r,jantotsu_mux_w)
 	AM_RANGE(0x07, 0x07) AM_WRITE(bankaddr_w)
 ADDRESS_MAP_END
-
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( jantotsu )
 	PORT_START("COINS")
@@ -452,12 +410,14 @@ static INPUT_PORTS_START( jantotsu )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_MAHJONG_F ) PORT_PLAYER(2)
 INPUT_PORTS_END
 
-
-/*************************************
- *
- *  Sound interface
- *
- *************************************/
+static MACHINE_RESET( jantotsu )
+{
+	mux_data = 0;
+	/*Load hard-wired background color.*/
+	col_bank = (input_port_read(machine, "DSW2") & 0xc0)>>3;
+	adpcm_pos = 0;
+	adpcm_idle = 1;
+}
 
 static const msm5205_interface msm5205_config =
 {
@@ -465,83 +425,43 @@ static const msm5205_interface msm5205_config =
 	MSM5205_S64_4B	/* 6 KHz */
 };
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( jantotsu )
-{
-	jantotsu_state *state = machine.driver_data<jantotsu_state>();
-
-	state->save_item(NAME(state->m_vram_bank));
-	state->save_item(NAME(state->m_mux_data));
-	state->save_item(NAME(state->m_adpcm_pos));
-	state->save_item(NAME(state->m_adpcm_idle));
-	state->save_item(NAME(state->m_adpcm_data));
-	state->save_item(NAME(state->m_adpcm_trigger));
-}
-
-static MACHINE_RESET( jantotsu )
-{
-	jantotsu_state *state = machine.driver_data<jantotsu_state>();
-
-	/*Load hard-wired background color.*/
-	state->m_col_bank = (input_port_read(machine, "DSW2") & 0xc0) >> 3;
-
-	state->m_vram_bank = 0;
-	state->m_mux_data = 0;
-	state->m_adpcm_pos = 0;
-	state->m_adpcm_idle = 1;
-	state->m_adpcm_data = 0;
-	state->m_adpcm_trigger = 0;
-}
-
-static MACHINE_CONFIG_START( jantotsu, jantotsu_state )
-
+static MACHINE_DRIVER_START( jantotsu )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,MAIN_CLOCK/4)
-	MCFG_CPU_PROGRAM_MAP(jantotsu_map)
-	MCFG_CPU_IO_MAP(jantotsu_io)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("maincpu", Z80,18432000/4)
+	MDRV_CPU_PROGRAM_MAP(jantotsu_map)
+	MDRV_CPU_IO_MAP(jantotsu_io)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_MACHINE_START(jantotsu)
-	MCFG_MACHINE_RESET(jantotsu)
-
+	MDRV_MACHINE_RESET(jantotsu)
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) //not accurate
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
-	MCFG_SCREEN_UPDATE_STATIC(jantotsu)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) //not accurate
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 240-1)
 
-	MCFG_PALETTE_INIT(jantotsu)
-	MCFG_PALETTE_LENGTH(0x20)
+	MDRV_PALETTE_INIT(jantotsu)
+	MDRV_PALETTE_LENGTH(0x20)
 
-	MCFG_VIDEO_START(jantotsu)
+	MDRV_VIDEO_START(jantotsu)
+	MDRV_VIDEO_UPDATE(jantotsu)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76489A, MAIN_CLOCK/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("sn1", SN76489A, 18432000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("sn2", SN76489A, MAIN_CLOCK/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("sn2", SN76489A, 18432000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("adpcm", MSM5205, XTAL_384kHz)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("adpcm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+MACHINE_DRIVER_END
 
 
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
 
 ROM_START( jantotsu )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -562,11 +482,4 @@ ROM_START( jantotsu )
 	ROM_LOAD( "jat-60.10p", 0x00, 0x20,  CRC(65528ae0) SHA1(6e3bf27d10ec14e3c6a494667b03b68726fcff14) )
 ROM_END
 
-
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
-GAME( 1983, jantotsu,  0,    jantotsu, jantotsu,  0, ROT270, "Sanritsu", "4nin-uchi Mahjong Jantotsu", GAME_SUPPORTS_SAVE )
+GAME( 1983, jantotsu,  0,    jantotsu, jantotsu,  0, ROT270, "Sanritsu", "4nin-uchi Mahjong Jantotsu", GAME_IMPERFECT_GRAPHICS )

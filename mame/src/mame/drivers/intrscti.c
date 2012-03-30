@@ -11,33 +11,24 @@ I've not had a chance to wire up the board yet, but it might be possible to writ
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-
-
-class intrscti_state : public driver_device
-{
-public:
-	intrscti_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_ram;
-};
-
 
 static READ8_HANDLER( unk_r )
 {
-	return space->machine().rand();
+	return mame_rand(space->machine);
 }
 
-static ADDRESS_MAP_START( intrscti_map, AS_PROGRAM, 8 )
+static UINT8 *intrscti_ram;
+
+static ADDRESS_MAP_START( intrscti_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
-	AM_RANGE(0x7000, 0x77ff) AM_RAM AM_BASE_MEMBER(intrscti_state, m_ram) // video ram
+	AM_RANGE(0x7000, 0x77ff) AM_RAM AM_BASE(&intrscti_ram) // video ram
 	AM_RANGE(0x8000, 0x8fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( readport, AS_IO, 8 )
+static ADDRESS_MAP_START( readport, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ( unk_r )
 	AM_RANGE(0x01, 0x01) AM_READ( unk_r )
@@ -66,13 +57,12 @@ static VIDEO_START(intrscti)
 {
 }
 
-static SCREEN_UPDATE_IND16(intrscti)
+static VIDEO_UPDATE(intrscti)
 {
-	intrscti_state *state = screen.machine().driver_data<intrscti_state>();
 	int y,x;
 	int count;
 
-	bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 
 	count = 0;
 	for (y=0;y<64;y++)
@@ -80,8 +70,8 @@ static SCREEN_UPDATE_IND16(intrscti)
 		for (x=0;x<32;x++)
 		{
 			int dat;
-			dat = state->m_ram[count];
-			drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],dat/*+0x100*/,0,0,0,x*8,y*8,0);
+			dat = intrscti_ram[count];
+			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],dat/*+0x100*/,0,0,0,x*8,y*8,0);
 			count++;
 		}
 	}
@@ -90,26 +80,27 @@ static SCREEN_UPDATE_IND16(intrscti)
 	return 0;
 }
 
-static MACHINE_CONFIG_START( intrscti, intrscti_state )
+static MACHINE_DRIVER_START( intrscti )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
-	MCFG_CPU_PROGRAM_MAP(intrscti_map)
-	MCFG_CPU_IO_MAP(readport)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
+	MDRV_CPU_PROGRAM_MAP(intrscti_map)
+	MDRV_CPU_IO_MAP(readport)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(256, 512)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 512-1)
-	MCFG_SCREEN_UPDATE_STATIC(intrscti)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 512)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 512-1)
 
-	MCFG_GFXDECODE(intrscti)
-	MCFG_PALETTE_LENGTH(0x100)
+	MDRV_GFXDECODE(intrscti)
+	MDRV_PALETTE_LENGTH(0x100)
 
-	MCFG_VIDEO_START(intrscti)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(intrscti)
+	MDRV_VIDEO_UPDATE(intrscti)
+MACHINE_DRIVER_END
 
 
 ROM_START( intrscti )
@@ -129,7 +120,7 @@ ROM_END
 
 static DRIVER_INIT( intrscti )
 {
-	UINT8 *cpu = machine.region( "maincpu" )->base();
+	UINT8 *cpu = memory_region( machine, "maincpu" );
 	int i;
 	for (i=0x8000;i<0x8fff;i++)
 	{
@@ -137,4 +128,4 @@ static DRIVER_INIT( intrscti )
 	}
 }
 
-GAME( 19??, intrscti,  0,    intrscti, intrscti, intrscti, ROT0, "<unknown>", "Intersecti", GAME_IS_SKELETON )
+GAME( 19??, intrscti,  0,    intrscti, intrscti, intrscti, ROT0, "<unknown>", "Intersecti", GAME_NO_SOUND|GAME_NOT_WORKING )

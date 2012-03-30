@@ -1,125 +1,93 @@
 /***************************************************************************
 
-    Mikie memory map (preliminary)
+Mikie memory map (preliminary)
 
-    driver by Allard Van Der Bas
-
-
-    MAIN BOARD:
-    2800-288f Sprite RAM (288f, not 287f - quite unusual)
-    3800-3bff Color RAM
-    3c00-3fff Video RAM
-    4000-5fff ROM (?)
-    5ff0      Watchdog (?)
-    6000-ffff ROM
+driver by Allard Van Der Bas
 
 
-Stephh's notes (based on the games M6809 code and some tests) :
+MAIN BOARD:
+2800-288f Sprite RAM (288f, not 287f - quite unusual)
+3800-3bff Color RAM
+3c00-3fff Video RAM
+4000-5fff ROM (?)
+5ff0      Watchdog (?)
+6000-ffff ROM
 
-  - To enter service mode, keep START1 and START2 pressed on reset.
-    Then press START1 to cycle through the different tests.
-  - According to code at 0x618f, you can start a game with 255 lives
-    if you set DSW1 and DSW2 to the following settings :
-      * "Coin A"      : "Free Play"
-      * "Coin B"      : "No Coin B"
-      * "Lives"       : "7"
-      * "Cabinet"     : "Upright"
-      * "Bonus Life"  : "20k 70k 50k+"
-      * "Difficulty"  : "Medium"
-      * "Demo Sounds" : "Off"
-    DSW3 is not tested here, so settings can be anything.
-  - I'm very surprised to notice that 'mikie' and 'mikiej' have the same
-    PRG ROMS but different GFX ROMS.
-    This is very rare (unique ?) for the Konami games.
-  - There might exist undumped Konami/Centuri version(s) of this game :
-    the manual I've found speaks about a "conversion kit".
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/sn76496.h"
-#include "includes/konamipt.h"
-#include "includes/mikie.h"
+#include "konamipt.h"
 
+extern WRITE8_HANDLER( mikie_videoram_w );
+extern WRITE8_HANDLER( mikie_colorram_w );
+extern WRITE8_HANDLER( mikie_palettebank_w );
+extern WRITE8_HANDLER( mikie_flipscreen_w );
 
-#define MIKIE_TIMER_RATE 512
+extern PALETTE_INIT( mikie );
+extern VIDEO_START( mikie );
+extern VIDEO_UPDATE( mikie );
 
-#define XTAL	14318180
-#define OSC		18432000
-#define CLK		XTAL/4
-
-
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+/* Read/Write Handlers */
 
 static READ8_HANDLER( mikie_sh_timer_r )
 {
-	mikie_state *state = space->machine().driver_data<mikie_state>();
-	int clock = state->m_audiocpu->total_cycles() / MIKIE_TIMER_RATE;
+	int clock;
+
+	#define TIMER_RATE 512
+
+	clock = cpu_get_total_cycles(space->cpu) / TIMER_RATE;
 
 	return clock;
 }
 
 static WRITE8_HANDLER( mikie_sh_irqtrigger_w )
 {
-	mikie_state *state = space->machine().driver_data<mikie_state>();
+	static int last;
 
-	if (state->m_last_irq == 0 && data == 1)
+	if (last == 0 && data == 1)
 	{
 		// setting bit 0 low then high triggers IRQ on the sound CPU
-		device_set_input_line_and_vector(state->m_audiocpu, 0, HOLD_LINE, 0xff);
+		cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, HOLD_LINE, 0xff);
 	}
 
-	state->m_last_irq = data;
+	last = data;
 }
 
 static WRITE8_HANDLER( mikie_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset, data);
+	coin_counter_w(offset, data);
 }
 
-static WRITE8_HANDLER( irq_mask_w )
-{
-	mikie_state *state = space->machine().driver_data<mikie_state>();
+/* Memory Maps */
 
-	state->m_irq_mask = data & 1;
-}
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( mikie_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mikie_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM
 	AM_RANGE(0x2000, 0x2001) AM_WRITE(mikie_coin_counter_w)
 	AM_RANGE(0x2002, 0x2002) AM_WRITE(mikie_sh_irqtrigger_w)
 	AM_RANGE(0x2006, 0x2006) AM_WRITE(mikie_flipscreen_w)
-	AM_RANGE(0x2007, 0x2007) AM_WRITE(irq_mask_w)
+	AM_RANGE(0x2007, 0x2007) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x2100, 0x2100) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x2200, 0x2200) AM_WRITE(mikie_palettebank_w)
 	AM_RANGE(0x2300, 0x2300) AM_WRITENOP	// ???
 	AM_RANGE(0x2400, 0x2400) AM_READ_PORT("SYSTEM") AM_WRITE(soundlatch_w)
 	AM_RANGE(0x2401, 0x2401) AM_READ_PORT("P1")
 	AM_RANGE(0x2402, 0x2402) AM_READ_PORT("P2")
-	AM_RANGE(0x2403, 0x2403) AM_READ_PORT("DSW3")
-	AM_RANGE(0x2500, 0x2500) AM_READ_PORT("DSW1")
-	AM_RANGE(0x2501, 0x2501) AM_READ_PORT("DSW2")
-	AM_RANGE(0x2800, 0x288f) AM_RAM AM_BASE_SIZE_MEMBER(mikie_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x2403, 0x2403) AM_READ_PORT("DSW2")
+	AM_RANGE(0x2500, 0x2500) AM_READ_PORT("DSW0")
+	AM_RANGE(0x2501, 0x2501) AM_READ_PORT("DSW1")
+	AM_RANGE(0x2800, 0x288f) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x2890, 0x37ff) AM_RAM
-	AM_RANGE(0x3800, 0x3bff) AM_RAM_WRITE(mikie_colorram_w) AM_BASE_MEMBER(mikie_state, m_colorram)
-	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(mikie_videoram_w) AM_BASE_MEMBER(mikie_state, m_videoram)
+	AM_RANGE(0x3800, 0x3bff) AM_RAM_WRITE(mikie_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x3c00, 0x3fff) AM_RAM_WRITE(mikie_videoram_w) AM_BASE(&videoram)
 	AM_RANGE(0x4000, 0x5fff) AM_ROM	// Machine checks for extra rom
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x8000, 0x8000) AM_WRITENOP	// sound command latch
@@ -132,13 +100,8 @@ static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xa003, 0xa003) AM_WRITENOP	// ???
 ADDRESS_MAP_END
 
-/*************************************
- *
- *  Input ports
- *
- *************************************/
+/* Input Ports */
 
-/* verified from M6809 code */
 static INPUT_PORTS_START( mikie )
 	PORT_START("SYSTEM")
 	KONAMI8_SYSTEM_UNK
@@ -149,52 +112,44 @@ static INPUT_PORTS_START( mikie )
 	PORT_START("P2")
 	KONAMI8_COCKTAIL_4WAY_B12_UNK
 
-	PORT_START("DSW1")
-	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "No Coin B", SW1)
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Flip_Screen ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Controls ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Single ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Dual ) )
+	PORT_BIT( 0xfc, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+
+	PORT_START("DSW0")
+	KONAMI_COINAGE(DEF_STR( Free_Play ), "No Coin B")
 	/* "No Coin B" = coins produce sound, but no effect on coin counter */
 
-	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )			PORT_DIPLOCATION("SW2:1,2")
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x03, "3" )
 	PORT_DIPSETTING(    0x02, "4" )
 	PORT_DIPSETTING(    0x01, "5" )
 	PORT_DIPSETTING(    0x00, "7" )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("SW2:3")
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("SW2:4,5")
-	PORT_DIPSETTING(    0x18, "20k 70k 50k+" )
-	PORT_DIPSETTING(    0x10, "30K 90k 60k+" )
-	PORT_DIPSETTING(    0x08, "30k only" )
-	PORT_DIPSETTING(    0x00, "40K only" )
-	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("SW2:6,7")
-	PORT_DIPSETTING(	0x60, DEF_STR( Easy ) )             /* 1 */
-	PORT_DIPSETTING(	0x40, DEF_STR( Medium ) )           /* 2 */
-	PORT_DIPSETTING(	0x20, DEF_STR( Hard ) )             /* 3 */
-	PORT_DIPSETTING(	0x00, DEF_STR( Hardest ) )          /* 4 */
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x18, "20K 50K+" )
+	PORT_DIPSETTING(    0x10, "30K 60K+" )
+	PORT_DIPSETTING(    0x08, "30K" )
+	PORT_DIPSETTING(    0x00, "40K" )
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING(    0x60, "1 (Easy)" )
+	PORT_DIPSETTING(    0x40, "2" )
+	PORT_DIPSETTING(    0x20, "3" )
+	PORT_DIPSETTING(    0x00, "4 (Hard)" )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-
-	/* DSW3 is not mounted on PCB nor listed in manual */
-	PORT_START("DSW3")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Flip_Screen ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Upright Controls" )
-	PORT_DIPSETTING(    0x02, DEF_STR( Single ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Dual ) )
-	PORT_DIPUNUSED( 0x04, 0x04 )
-	PORT_DIPUNUSED( 0x08, 0x08 )
-	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
+/* Graphics Layouts */
 
 static const gfx_layout charlayout =
 {
@@ -220,88 +175,59 @@ static const gfx_layout spritelayout =
 	128*8	/* every sprite takes 64 bytes */
 };
 
+/* Graphics Decode Information */
+
 static GFXDECODE_START( mikie )
 	GFXDECODE_ENTRY( "gfx1", 0x0000, charlayout,         0, 16*8 )
 	GFXDECODE_ENTRY( "gfx2", 0x0000, spritelayout, 16*8*16, 16*8 )
 	GFXDECODE_ENTRY( "gfx2", 0x0001, spritelayout, 16*8*16, 16*8 )
 GFXDECODE_END
 
+/* Sound Interface */
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
+#define XTAL	14318180
+#define OSC		18432000
+#define CLK		XTAL/4
 
-static MACHINE_START( mikie )
-{
-	mikie_state *state = machine.driver_data<mikie_state>();
+/* Machine Driver */
 
-	state->m_maincpu = machine.device<cpu_device>("maincpu");
-	state->m_audiocpu = machine.device<cpu_device>("audiocpu");
+static MACHINE_DRIVER_START( mikie )
+	// basic machine hardware
+	MDRV_CPU_ADD("maincpu", M6809, OSC/12)
+	MDRV_CPU_PROGRAM_MAP(mikie_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	state->save_item(NAME(state->m_palettebank));
-	state->save_item(NAME(state->m_last_irq));
-}
+	MDRV_CPU_ADD("audiocpu", Z80, CLK)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-static MACHINE_RESET( mikie )
-{
-	mikie_state *state = machine.driver_data<mikie_state>();
+	// video hardware
 
-	state->m_palettebank = 0;
-	state->m_last_irq = 0;
-}
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60.59)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	mikie_state *state = device->machine().driver_data<mikie_state>();
+	MDRV_GFXDECODE(mikie)
+	MDRV_PALETTE_LENGTH(16*8*16+16*8*16)
 
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-}
+	MDRV_PALETTE_INIT(mikie)
+	MDRV_VIDEO_START(mikie)
+	MDRV_VIDEO_UPDATE(mikie)
 
-static MACHINE_CONFIG_START( mikie, mikie_state )
+	// sound hardware
+	// on the pcb there are 2x76489AN but SN76489 sounds correct in the locker room level (sound test 24)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, OSC/12)
-	MCFG_CPU_PROGRAM_MAP(mikie_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_SOUND_ADD("sn1", SN76489A, XTAL/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
-	MCFG_CPU_ADD("audiocpu", Z80, CLK)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_SOUND_ADD("sn2", SN76489A, CLK)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_DRIVER_END
 
-	MCFG_MACHINE_START(mikie)
-	MCFG_MACHINE_RESET(mikie)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60.59)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mikie)
-
-	MCFG_GFXDECODE(mikie)
-	MCFG_PALETTE_LENGTH(16*8*16+16*8*16)
-
-	MCFG_PALETTE_INIT(mikie)
-	MCFG_VIDEO_START(mikie)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("sn1", SN76489A, XTAL/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-
-	MCFG_SOUND_ADD("sn2", SN76489A, CLK)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_CONFIG_END
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+/* ROMs */
 
 ROM_START( mikie )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -381,12 +307,8 @@ ROM_START( mikiehs )
 	ROM_LOAD( "d18.f9",  0x0400, 0x0100, CRC(7396b374) SHA1(fedcc421a61d6623dc9c41b0a3e164efeb50ec7c) )	// sprite lookup table
 ROM_END
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
+/* Game Drivers */
 
-GAME( 1984, mikie,   0,     mikie, mikie, 0, ROT270, "Konami", "Mikie", GAME_SUPPORTS_SAVE )
-GAME( 1984, mikiej,  mikie, mikie, mikie, 0, ROT270, "Konami", "Shinnyuushain Tooru-kun", GAME_SUPPORTS_SAVE )
-GAME( 1984, mikiehs, mikie, mikie, mikie, 0, ROT270, "Konami", "Mikie (High School Graffiti)", GAME_SUPPORTS_SAVE )
+GAME( 1984, mikie,   0,     mikie, mikie, 0, ROT270, "Konami", "Mikie", 0 )
+GAME( 1984, mikiej,  mikie, mikie, mikie, 0, ROT270, "Konami", "Shinnyuushain Tooru-kun", 0 )
+GAME( 1984, mikiehs, mikie, mikie, mikie, 0, ROT270, "Konami", "Mikie (High School Graffiti)", 0 )

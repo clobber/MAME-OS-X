@@ -8,8 +8,16 @@ Functions to emulate the video hardware of the machine.
 ***************************************************************************/
 
 
-#include "emu.h"
-#include "includes/exzisus.h"
+#include "driver.h"
+
+
+UINT8 *exzisus_videoram0;
+UINT8 *exzisus_videoram1;
+UINT8 *exzisus_objectram0;
+UINT8 *exzisus_objectram1;
+size_t  exzisus_objectram_size0;
+size_t  exzisus_objectram_size1;
+
 
 
 /***************************************************************************
@@ -18,57 +26,49 @@ Functions to emulate the video hardware of the machine.
 
 READ8_HANDLER ( exzisus_videoram_0_r )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	return state->m_videoram0[offset];
+	return exzisus_videoram0[offset];
 }
 
 
 READ8_HANDLER ( exzisus_videoram_1_r )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	return state->m_videoram1[offset];
+	return exzisus_videoram1[offset];
 }
 
 
 READ8_HANDLER ( exzisus_objectram_0_r )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	return state->m_objectram0[offset];
+	return exzisus_objectram0[offset];
 }
 
 
 READ8_HANDLER ( exzisus_objectram_1_r )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	return state->m_objectram1[offset];
+	return exzisus_objectram1[offset];
 }
 
 
 WRITE8_HANDLER( exzisus_videoram_0_w )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	state->m_videoram0[offset] = data;
+	exzisus_videoram0[offset] = data;
 }
 
 
 WRITE8_HANDLER( exzisus_videoram_1_w )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	state->m_videoram1[offset] = data;
+	exzisus_videoram1[offset] = data;
 }
 
 
 WRITE8_HANDLER( exzisus_objectram_0_w )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	state->m_objectram0[offset] = data;
+	exzisus_objectram0[offset] = data;
 }
 
 
 WRITE8_HANDLER( exzisus_objectram_1_w )
 {
-	exzisus_state *state = space->machine().driver_data<exzisus_state>();
-	state->m_objectram1[offset] = data;
+	exzisus_objectram1[offset] = data;
 }
 
 
@@ -76,37 +76,36 @@ WRITE8_HANDLER( exzisus_objectram_1_w )
   Screen refresh
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( exzisus )
+VIDEO_UPDATE( exzisus )
 {
-	exzisus_state *state = screen.machine().driver_data<exzisus_state>();
 	int offs;
 	int sx, sy, xc, yc;
 	int gfx_num, gfx_attr, gfx_offs;
 
 	/* Is this correct ? */
-	bitmap.fill(1023, cliprect);
+	bitmap_fill(bitmap, cliprect, 1023);
 
 	/* ---------- 1st TC0010VCU ---------- */
 	sx = 0;
-	for (offs = 0 ; offs < state->m_objectram_size0 ; offs += 4)
+	for (offs = 0 ; offs < exzisus_objectram_size0 ; offs += 4)
     {
 		int height;
 
 		/* Skip empty sprites. */
-		if ( !(*(UINT32 *)(&state->m_objectram0[offs])) )
+		if ( !(*(UINT32 *)(&exzisus_objectram0[offs])) )
 		{
 			continue;
 		}
 
-		gfx_num = state->m_objectram0[offs + 1];
-		gfx_attr = state->m_objectram0[offs + 3];
+		gfx_num = exzisus_objectram0[offs + 1];
+		gfx_attr = exzisus_objectram0[offs + 3];
 
 		if ((gfx_num & 0x80) == 0)	/* 16x16 sprites */
 		{
 			gfx_offs = ((gfx_num & 0x7f) << 3);
 			height = 2;
 
-			sx = state->m_objectram0[offs + 2];
+			sx = exzisus_objectram0[offs + 2];
 			sx |= (gfx_attr & 0x40) << 2;
 		}
 		else	/* tilemaps (each sprite is a 16x256 column) */
@@ -120,12 +119,12 @@ SCREEN_UPDATE_IND16( exzisus )
 			}
 			else
 			{
-				sx = state->m_objectram0[offs + 2];
+				sx = exzisus_objectram0[offs + 2];
 				sx |= (gfx_attr & 0x40) << 2;
 			}
 		}
 
-		sy = 256 - (height << 3) - (state->m_objectram0[offs]);
+		sy = 256 - (height << 3) - (exzisus_objectram0[offs]);
 
 		for (xc = 0 ; xc < 2 ; xc++)
 		{
@@ -134,21 +133,21 @@ SCREEN_UPDATE_IND16( exzisus )
 			{
 				int code, color, x, y;
 
-				code  = (state->m_videoram0[goffs + 1] << 8) | state->m_videoram0[goffs];
-				color = (state->m_videoram0[goffs + 1] >> 6) | (gfx_attr & 0x0f);
+				code  = (exzisus_videoram0[goffs + 1] << 8) | exzisus_videoram0[goffs];
+				color = (exzisus_videoram0[goffs + 1] >> 6) | (gfx_attr & 0x0f);
 				x = (sx + (xc << 3)) & 0xff;
 				y = (sy + (yc << 3)) & 0xff;
 
-				if (flip_screen_get(screen.machine()))
+				if (flip_screen_get(screen->machine))
 				{
 					x = 248 - x;
 					y = 248 - y;
 				}
 
-				drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[0],
+				drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],
 						code & 0x3fff,
 						color,
-						flip_screen_get(screen.machine()), flip_screen_get(screen.machine()),
+						flip_screen_get(screen->machine), flip_screen_get(screen->machine),
 						x, y, 15);
 				goffs += 2;
 			}
@@ -158,25 +157,25 @@ SCREEN_UPDATE_IND16( exzisus )
 
 	/* ---------- 2nd TC0010VCU ---------- */
 	sx = 0;
-	for (offs = 0 ; offs < state->m_objectram_size1 ; offs += 4)
+	for (offs = 0 ; offs < exzisus_objectram_size1 ; offs += 4)
     {
 		int height;
 
 		/* Skip empty sprites. */
-		if ( !(*(UINT32 *)(&state->m_objectram1[offs])) )
+		if ( !(*(UINT32 *)(&exzisus_objectram1[offs])) )
 		{
 			continue;
 		}
 
-		gfx_num = state->m_objectram1[offs + 1];
-		gfx_attr = state->m_objectram1[offs + 3];
+		gfx_num = exzisus_objectram1[offs + 1];
+		gfx_attr = exzisus_objectram1[offs + 3];
 
 		if ((gfx_num & 0x80) == 0)	/* 16x16 sprites */
 		{
 			gfx_offs = ((gfx_num & 0x7f) << 3);
 			height = 2;
 
-			sx = state->m_objectram1[offs + 2];
+			sx = exzisus_objectram1[offs + 2];
 			sx |= (gfx_attr & 0x40) << 2;
 		}
 		else	/* tilemaps (each sprite is a 16x256 column) */
@@ -190,11 +189,11 @@ SCREEN_UPDATE_IND16( exzisus )
 			}
 			else
 			{
-				sx = state->m_objectram1[offs + 2];
+				sx = exzisus_objectram1[offs + 2];
 				sx |= (gfx_attr & 0x40) << 2;
 			}
 		}
-		sy = 256 - (height << 3) - (state->m_objectram1[offs]);
+		sy = 256 - (height << 3) - (exzisus_objectram1[offs]);
 
 		for (xc = 0 ; xc < 2 ; xc++)
 		{
@@ -203,21 +202,21 @@ SCREEN_UPDATE_IND16( exzisus )
 			{
 				int code, color, x, y;
 
-				code  = (state->m_videoram1[goffs + 1] << 8) | state->m_videoram1[goffs];
-				color = (state->m_videoram1[goffs + 1] >> 6) | (gfx_attr & 0x0f);
+				code  = (exzisus_videoram1[goffs + 1] << 8) | exzisus_videoram1[goffs];
+				color = (exzisus_videoram1[goffs + 1] >> 6) | (gfx_attr & 0x0f);
 				x = (sx + (xc << 3)) & 0xff;
 				y = (sy + (yc << 3)) & 0xff;
 
-				if (flip_screen_get(screen.machine()))
+				if (flip_screen_get(screen->machine))
 				{
 					x = 248 - x;
 					y = 248 - y;
 				}
 
-				drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[1],
+				drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[1],
 						code & 0x3fff,
 						color,
-						flip_screen_get(screen.machine()), flip_screen_get(screen.machine()),
+						flip_screen_get(screen->machine), flip_screen_get(screen->machine),
 						x, y, 15);
 				goffs += 2;
 			}

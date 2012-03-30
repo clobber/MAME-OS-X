@@ -19,7 +19,6 @@
  *
  *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "z80.h"
 
@@ -448,7 +447,7 @@ CPU_DISASSEMBLE( z80 )
 		break;
 	case 0xed:
 		op1 = oprom[pos++];
-		d = &mnemonic_ed[op1];
+ 		d = &mnemonic_ed[op1];
 		break;
 	case 0xdd:
 		ixy = "ix";

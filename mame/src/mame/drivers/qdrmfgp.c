@@ -9,8 +9,6 @@ OSC  :18.43200MHz/32.00000MHz
 Other(GQ460):Konami 053252,054156,056832,054539
 Other(GE557):Konami 056832,058141,058143
 
-TODO:
-- enabling irq acks breaks both games, why?
 
 --
 driver by Eisuke Watanabe
@@ -21,15 +19,24 @@ GP1 HDD data contents:
     0x52E-0x535 not used quiz (system music or invalid data)
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/idectrl.h"
 #include "sound/k054539.h"
-#include "video/konicdev.h"
-#include "machine/k053252.h"
-#include "machine/nvram.h"
-#include "includes/qdrmfgp.h"
+#include "video/konamiic.h"
 
+VIDEO_START( qdrmfgp );
+VIDEO_START( qdrmfgp2 );
+VIDEO_UPDATE( qdrmfgp );
+
+
+
+static UINT8 *sndram;
+static UINT16 *workram;
+static UINT16 control;
+static INT32 qdrmfgp_pal;
+static INT32 gp2_irq_control;
 
 /*************************************
  *
@@ -39,10 +46,9 @@ GP1 HDD data contents:
 
 static CUSTOM_INPUT( inputs_r )
 {
-	qdrmfgp_state *state = field.machine().driver_data<qdrmfgp_state>();
 	const char *tag1 = (const char *)param;
 	const char *tag2 = tag1 + strlen(tag1) + 1;
-	return input_port_read(field.machine(), (state->m_control & 0x0080) ? tag1 : tag2);
+	return input_port_read(field->port->machine, (control & 0x0080) ? tag1 : tag2);
 }
 
 static CUSTOM_INPUT( battery_sensor_r )
@@ -52,10 +58,13 @@ static CUSTOM_INPUT( battery_sensor_r )
 }
 
 
+int qdrmfgp_get_palette(void)
+{
+	return qdrmfgp_pal;
+}
+
 static WRITE16_HANDLER( gp_control_w )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-
 	/* bit 0        enable irq 1 (sound) */
 	/* bit 1        enable irq 2 (not used) */
 	/* bit 2        enable irq 3 (vblank) */
@@ -68,16 +77,15 @@ static WRITE16_HANDLER( gp_control_w )
 	/* bit 11       headphone volume: 1=up, 0=down */
 	/* bit 15       gfxrom bankswitch */
 
-	COMBINE_DATA(&state->m_control);
-	state->m_pal = state->m_control & 0x70;
+	COMBINE_DATA(&control);
+	qdrmfgp_pal = control & 0x70;
 
-	if (state->m_control & 0x0100)
+	if (control & 0x0100)
 	{
-		qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-		int vol = state->m_nvram[0x10] & 0xff;
+		int vol = generic_nvram16[0x10] & 0xff;
 		if (vol)
 		{
-			device_t *k054539 = space->machine().device("konami");
+			const device_config *k054539 = devtag_get_device(space->machine, "konami");
 			int i;
 			double gain = vol / 90.0;
 
@@ -89,8 +97,6 @@ static WRITE16_HANDLER( gp_control_w )
 
 static WRITE16_HANDLER( gp2_control_w )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-
 	/* bit 2        enable irq 3 (sound) */
 	/* bit 3        enable irq 4 (vblank) */
 	/* bit 4        enable irq 5 (hdd) */
@@ -101,16 +107,15 @@ static WRITE16_HANDLER( gp2_control_w )
 	/* bit 11       headphone volume: 1=up, 0=down */
 	/* bit 15       gfxrom bankswitch */
 
-	COMBINE_DATA(&state->m_control);
-	state->m_pal = 0;
+	COMBINE_DATA(&control);
+	qdrmfgp_pal = 0;
 
-	if (state->m_control & 0x0100)
+	if (control & 0x0100)
 	{
-		qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-		int vol = state->m_nvram[0x8] & 0xff;
+		int vol = generic_nvram16[0x8] & 0xff;
 		if (vol)
 		{
-			device_t *k054539 = space->machine().device("konami");
+			const device_config *k054539 = devtag_get_device(space->machine, "konami");
 			int i;
 			double gain = vol / 90.0;
 
@@ -123,58 +128,48 @@ static WRITE16_HANDLER( gp2_control_w )
 
 static READ16_HANDLER( v_rom_r )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-	device_t *k056832 = space->machine().device("k056832");
-	UINT8 *mem8 = space->machine().region("gfx1")->base();
-	int bank = k056832_word_r(k056832, 0x34/2, 0xffff);
+	UINT8 *mem8 = memory_region(space->machine, "gfx1");
+	int bank = K056832_word_r(space, 0x34/2, 0xffff);
 
 	offset += bank * 0x800 * 4;
 
-	if (state->m_control & 0x8000)
+	if (control & 0x8000)
 		offset += 0x800 * 2;
 
-	return (mem8[offset + 1] << 8) + mem8[offset];
+	return (mem8[offset+1] << 8) + mem8[offset];
 }
 
 
 static READ16_HANDLER( gp2_vram_r )
 {
-	device_t *k056832 = space->machine().device("k056832");
-
-	if (offset < 0x1000 / 2)
-		return k056832_ram_word_r(k056832, offset * 2 + 1, mem_mask);
+	if (offset < 0x1000/2)
+		return K056832_ram_word_r(space, offset*2+1, mem_mask);
 	else
-		return k056832_ram_word_r(k056832, (offset - 0x1000 / 2) * 2, mem_mask);
+		return K056832_ram_word_r(space, (offset-0x1000/2)*2, mem_mask);
 }
 
 static READ16_HANDLER( gp2_vram_mirror_r )
 {
-	device_t *k056832 = space->machine().device("k056832");
-
-	if (offset < 0x1000 / 2)
-		return k056832_ram_word_r(k056832, offset * 2, mem_mask);
+	if (offset < 0x1000/2)
+		return K056832_ram_word_r(space, offset*2, mem_mask);
 	else
-		return k056832_ram_word_r(k056832, (offset - 0x1000 / 2) * 2 + 1, mem_mask);
+		return K056832_ram_word_r(space, (offset-0x1000/2)*2+1, mem_mask);
 }
 
 static WRITE16_HANDLER( gp2_vram_w )
 {
-	device_t *k056832 = space->machine().device("k056832");
-
-	if (offset < 0x1000 / 2)
-		k056832_ram_word_w(k056832, offset * 2 + 1, data, mem_mask);
+	if (offset < 0x1000/2)
+		K056832_ram_word_w(space, offset*2+1, data, mem_mask);
 	else
-		k056832_ram_word_w(k056832, (offset - 0x1000 / 2) * 2, data, mem_mask);
+		K056832_ram_word_w(space, (offset-0x1000/2)*2, data, mem_mask);
 }
 
 static WRITE16_HANDLER( gp2_vram_mirror_w )
 {
-	device_t *k056832 = space->machine().device("k056832");
-
-	if (offset < 0x1000 / 2)
-		k056832_ram_word_w(k056832, offset * 2, data, mem_mask);
+	if (offset < 0x1000/2)
+		K056832_ram_word_w(space, offset*2, data, mem_mask);
 	else
-		k056832_ram_word_w(k056832, (offset - 0x1000 / 2) * 2 + 1, data, mem_mask);
+		K056832_ram_word_w(space, (offset-0x1000/2)*2+1, data, mem_mask);
 }
 
 
@@ -182,21 +177,19 @@ static WRITE16_HANDLER( gp2_vram_mirror_w )
 
 static READ16_HANDLER( sndram_r )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
 	if (ACCESSING_BITS_0_7)
-		return state->m_sndram[offset];
+			return sndram[offset];
 
 	return 0;
 }
 
 static WRITE16_HANDLER( sndram_w )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		state->m_sndram[offset] = data & 0xff;
+		sndram[offset] = data & 0xff;
 		if (offset >= 0x40000)
-			state->m_sndram[offset+0xc00000-0x900000] = data & 0xff;
+			sndram[offset+0xc00000-0x900000] = data & 0xff;
 	}
 }
 
@@ -238,20 +231,19 @@ static WRITE16_DEVICE_HANDLER( ide_alt_w )
 
 static READ16_HANDLER( gp2_ide_std_r )
 {
-	qdrmfgp_state *state = space->machine().driver_data<qdrmfgp_state>();
-	device_t *device = space->machine().device("ide");
+	const device_config *device = devtag_get_device(space->machine, "ide");
 	if (offset & 0x01)
 	{
 		if (offset == 0x07)
 		{
-			switch (cpu_get_previouspc(&space->device()))
+			switch (cpu_get_previouspc(space->cpu))
 			{
 				case 0xdb4c:
-					if ((state->m_workram[0x5fa4/2] - cpu_get_reg(&space->device(), M68K_D0)) <= 0x10)
-						state->m_gp2_irq_control = 1;
+					if ((workram[0x5fa4/2] - cpu_get_reg(space->cpu, M68K_D0)) <= 0x10)
+						gp2_irq_control = 1;
 					break;
 				case 0xdec2:
-					state->m_gp2_irq_control = 1;
+					gp2_irq_control = 1;
 				default:
 					break;
 			}
@@ -269,30 +261,31 @@ static READ16_HANDLER( gp2_ide_std_r )
  *
  *************************************/
 
-static TIMER_DEVICE_CALLBACK(qdrmfgp_interrupt)
+static INTERRUPT_GEN(qdrmfgp_interrupt)
 {
-	qdrmfgp_state *state = timer.machine().driver_data<qdrmfgp_state>();
-	int scanline = param;
+	switch (cpu_getiloops(device))
+	{
+		case 0:
+			if (control & 0x0001)
+				cpu_set_input_line(device, 1, HOLD_LINE);
+			break;
 
-	if(scanline == 0)
-		if (state->m_control & 0x0001)
-			device_set_input_line(state->m_maincpu, 1, HOLD_LINE);
-
-	/* trigger V-blank interrupt */
-	if(scanline == 240)
-		if (state->m_control & 0x0004)
-			device_set_input_line(state->m_maincpu, 3, HOLD_LINE);
+		case 1:
+			/* trigger V-blank interrupt */
+			if (control & 0x0004)
+				cpu_set_input_line(device, 3, HOLD_LINE);
+			break;
+	}
 }
 
-static void ide_interrupt(device_t *device, int state)
+static void ide_interrupt(const device_config *device, int state)
 {
-	qdrmfgp_state *drvstate = device->machine().driver_data<qdrmfgp_state>();
-	if (drvstate->m_control & 0x0008)
+	if (control & 0x0008)
 	{
 		if (state != CLEAR_LINE)
-			cputag_set_input_line(device->machine(), "maincpu", 4, HOLD_LINE);
+			cputag_set_input_line(device->machine, "maincpu", 4, HOLD_LINE);
 		else
-			cputag_set_input_line(device->machine(), "maincpu", 4, CLEAR_LINE);
+			cputag_set_input_line(device->machine, "maincpu", 4, CLEAR_LINE);
 	}
 }
 
@@ -300,34 +293,31 @@ static void ide_interrupt(device_t *device, int state)
 
 static TIMER_CALLBACK( gp2_timer_callback )
 {
-	qdrmfgp_state *state = machine.driver_data<qdrmfgp_state>();
-	if (state->m_control & 0x0004)
+	if (control & 0x0004)
 		cputag_set_input_line(machine, "maincpu", 3, HOLD_LINE);
 }
 
 static INTERRUPT_GEN(qdrmfgp2_interrupt)
 {
-	qdrmfgp_state *state = device->machine().driver_data<qdrmfgp_state>();
 	/* trigger V-blank interrupt */
-	if (state->m_control & 0x0008)
-		device_set_input_line(device, 4, HOLD_LINE);
+	if (control & 0x0008)
+		cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
-static void gp2_ide_interrupt(device_t *device, int state)
+static void gp2_ide_interrupt(const device_config *device, int state)
 {
-	qdrmfgp_state *drvstate = device->machine().driver_data<qdrmfgp_state>();
-	if (drvstate->m_control & 0x0010)
+	if (control & 0x0010)
 	{
 		if (state != CLEAR_LINE)
 		{
-			if (drvstate->m_gp2_irq_control)
-				drvstate->m_gp2_irq_control = 0;
+			if (gp2_irq_control)
+				gp2_irq_control = 0;
 			else
-				cputag_set_input_line(device->machine(), "maincpu", 5, HOLD_LINE);
+				cputag_set_input_line(device->machine, "maincpu", 5, HOLD_LINE);
 		}
 		else
 		{
-			cputag_set_input_line(device->machine(), "maincpu", 5, CLEAR_LINE);
+			cputag_set_input_line(device->machine, "maincpu", 5, CLEAR_LINE);
 		}
 	}
 }
@@ -339,36 +329,36 @@ static void gp2_ide_interrupt(device_t *device, int state)
  *
  *************************************/
 
-static ADDRESS_MAP_START( qdrmfgp_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( qdrmfgp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE_MEMBER(qdrmfgp_state, m_workram)										/* work ram */
-	AM_RANGE(0x180000, 0x183fff) AM_RAM AM_SHARE("nvram")	/* backup ram */
-	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x300000, 0x30003f) AM_DEVWRITE("k056832", k056832_word_w)										/* video reg */
-	AM_RANGE(0x320000, 0x32001f) AM_DEVREADWRITE8("k053252", k053252_r, k053252_w,0x00ff)					/* ccu */
+	AM_RANGE(0x100000, 0x10ffff) AM_RAM AM_BASE(&workram) 										/* work ram */
+	AM_RANGE(0x180000, 0x183fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)	/* backup ram */
+	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x30003f) AM_WRITE(K056832_word_w)										/* video reg */
+	AM_RANGE(0x320000, 0x32001f) AM_READWRITE(K053252_word_r,K053252_word_w)					/* ccu */
 	AM_RANGE(0x330000, 0x330001) AM_READ_PORT("SENSOR")											/* battery power & service sw */
 	AM_RANGE(0x340000, 0x340001) AM_READ_PORT("340000")											/* inputport */
 	AM_RANGE(0x350000, 0x350001) AM_WRITENOP													/* unknown */
 	AM_RANGE(0x360000, 0x360001) AM_WRITENOP													/* unknown */
 	AM_RANGE(0x370000, 0x370001) AM_WRITE(gp_control_w)											/* control reg */
 	AM_RANGE(0x380000, 0x380001) AM_WRITENOP													/* Watchdog */
-	AM_RANGE(0x800000, 0x80045f) AM_DEVREADWRITE8("konami", k054539_r, k054539_w, 0x00ff)		/* sound regs */
-	AM_RANGE(0x880000, 0x881fff) AM_DEVREADWRITE("k056832", k056832_ram_word_r, k056832_ram_word_w)			/* vram */
-	AM_RANGE(0x882000, 0x883fff) AM_DEVREADWRITE("k056832", k056832_ram_word_r, k056832_ram_word_w)			/* vram (mirror) */
+	AM_RANGE(0x800000, 0x80045f) AM_DEVREADWRITE8("konami", k054539_r,k054539_w, 0x00ff)		/* sound regs */
+	AM_RANGE(0x880000, 0x881fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)			/* vram */
+	AM_RANGE(0x882000, 0x883fff) AM_READWRITE(K056832_ram_word_r,K056832_ram_word_w)			/* vram (mirror) */
 	AM_RANGE(0x900000, 0x901fff) AM_READ(v_rom_r)												/* gfxrom through */
 	AM_RANGE(0xa00000, 0xa0000f) AM_DEVREADWRITE("ide", ide_std_r,ide_std_w)					/* IDE control regs */
 	AM_RANGE(0xa4000c, 0xa4000f) AM_DEVREADWRITE("ide", ide_alt_r,ide_alt_w)					/* IDE status control reg */
-	AM_RANGE(0xc00000, 0xcbffff) AM_READWRITE(sndram_r, sndram_w)								/* sound ram */
+	AM_RANGE(0xc00000, 0xcbffff) AM_READWRITE(sndram_r,sndram_w)								/* sound ram */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( qdrmfgp2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( qdrmfgp2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x110fff) AM_RAM AM_BASE_MEMBER(qdrmfgp_state, m_workram)										/* work ram */
-	AM_RANGE(0x180000, 0x183fff) AM_RAM AM_SHARE("nvram")	/* backup ram */
-	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x300000, 0x30003f) AM_DEVWRITE("k056832", k056832_word_w)										/* video reg */
-	AM_RANGE(0x320000, 0x32001f) AM_DEVREADWRITE8("k053252", k053252_r, k053252_w,0xff00)					/* ccu */
+	AM_RANGE(0x100000, 0x110fff) AM_RAM AM_BASE(&workram)										/* work ram */
+	AM_RANGE(0x180000, 0x183fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)	/* backup ram */
+	AM_RANGE(0x280000, 0x280fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x300000, 0x30003f) AM_WRITE(K056832_word_w)										/* video reg */
+	AM_RANGE(0x320000, 0x32001f) AM_READWRITE(K053252_word_r,K053252_word_w)					/* ccu */
 	AM_RANGE(0x330000, 0x330001) AM_READ_PORT("SENSOR")											/* battery power & service */
 	AM_RANGE(0x340000, 0x340001) AM_READ_PORT("340000")											/* inputport */
 	AM_RANGE(0x350000, 0x350001) AM_WRITENOP													/* unknown */
@@ -376,10 +366,10 @@ static ADDRESS_MAP_START( qdrmfgp2_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x370000, 0x370001) AM_WRITE(gp2_control_w)										/* control reg */
 	AM_RANGE(0x380000, 0x380001) AM_WRITENOP													/* Watchdog */
 	AM_RANGE(0x800000, 0x80045f) AM_DEVREADWRITE8("konami", k054539_r,k054539_w, 0x00ff)		/* sound regs */
-	AM_RANGE(0x880000, 0x881fff) AM_READWRITE(gp2_vram_r, gp2_vram_w)							/* vram */
-	AM_RANGE(0x89f000, 0x8a0fff) AM_READWRITE(gp2_vram_mirror_r, gp2_vram_mirror_w)				/* vram (mirror) */
+	AM_RANGE(0x880000, 0x881fff) AM_READWRITE(gp2_vram_r,gp2_vram_w)							/* vram */
+	AM_RANGE(0x89f000, 0x8a0fff) AM_READWRITE(gp2_vram_mirror_r,gp2_vram_mirror_w)				/* vram (mirror) */
 	AM_RANGE(0x900000, 0x901fff) AM_READ(v_rom_r)												/* gfxrom through */
-	AM_RANGE(0xa00000, 0xa0000f) AM_READ(gp2_ide_std_r) AM_DEVWRITE("ide", ide_std_w)			/* IDE control regs */
+	AM_RANGE(0xa00000, 0xa0000f) AM_READ(gp2_ide_std_r)	AM_DEVWRITE("ide", ide_std_w)			/* IDE control regs */
 	AM_RANGE(0xa4000c, 0xa4000f) AM_DEVREADWRITE("ide", ide_alt_r,ide_alt_w)					/* IDE status control reg */
 	AM_RANGE(0xc00000, 0xcbffff) AM_READWRITE(sndram_r,sndram_w)								/* sound ram */
 ADDRESS_MAP_END
@@ -571,11 +561,10 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static void sound_irq(device_t *device)
+static void sound_irq(const device_config *device)
 {
-	qdrmfgp_state *state = device->machine().driver_data<qdrmfgp_state>();
-	if (state->m_control & 0x0001)
-		cputag_set_input_line(device->machine(), "maincpu", 1, HOLD_LINE);
+	if (control & 0x0001)
+		cputag_set_input_line(device->machine, "maincpu", 1, HOLD_LINE);
 }
 
 static const k054539_interface k054539_config =
@@ -592,77 +581,31 @@ static const k054539_interface k054539_config =
  *
  *************************************/
 
-static const k056832_interface qdrmfgp_k056832_intf =
-{
-	"gfx1", 0,
-	K056832_BPP_4dj,
-	1, 0,
-	KONAMI_ROM_DEINTERLEAVE_NONE,
-	qdrmfgp_tile_callback, "none"
-};
-
-static const k056832_interface qdrmfgp2_k056832_intf =
-{
-	"gfx1", 0,
-	K056832_BPP_4dj,
-	1, 0,
-	KONAMI_ROM_DEINTERLEAVE_NONE,
-	qdrmfgp2_tile_callback, "none"
-};
-
-static WRITE_LINE_DEVICE_HANDLER( qdrmfgp_irq3_ack_w )
-{
-//  cputag_set_input_line(device->machine(), "maincpu", M68K_IRQ_3, CLEAR_LINE);
-}
-
-static WRITE_LINE_DEVICE_HANDLER( qdrmfgp_irq4_ack_w )
-{
-//  cputag_set_input_line(device->machine(), "maincpu", M68K_IRQ_4, CLEAR_LINE);
-}
-
-static const k053252_interface qdrmfgp_k053252_intf =
-{
-	"screen",
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_LINE(qdrmfgp_irq3_ack_w),
-	DEVCB_NULL,
-	40, 16
-};
-
-static const k053252_interface qdrmfgp2_k053252_intf =
-{
-	"screen",
-	DEVCB_NULL,
-	DEVCB_NULL,
-	DEVCB_LINE(qdrmfgp_irq4_ack_w),
-	DEVCB_LINE(qdrmfgp_irq3_ack_w),
-	40, 16
-};
-
 static MACHINE_START( qdrmfgp )
 {
-	qdrmfgp_state *state = machine.driver_data<qdrmfgp_state>();
-	state_save_register_global(machine, state->m_control);
-	state_save_register_global(machine, state->m_pal);
-	state_save_register_global(machine, state->m_gp2_irq_control);
-}
-
-static MACHINE_START( qdrmfgp2 )
-{
-	/* sound irq (CCU? 240Hz) */
-	machine.scheduler().timer_pulse(attotime::from_hz(18432000/76800), FUNC(gp2_timer_callback));
-
-	MACHINE_START_CALL( qdrmfgp );
+	state_save_register_global(machine, control);
+	state_save_register_global(machine, qdrmfgp_pal);
+	state_save_register_global(machine, gp2_irq_control);
 }
 
 static MACHINE_RESET( qdrmfgp )
 {
-	qdrmfgp_state *state = machine.driver_data<qdrmfgp_state>();
-	state->m_sndram = machine.region("konami")->base() + 0x100000;
+	sndram = memory_region(machine, "konami") + 0x100000;
 
 	/* reset the IDE controller */
-	state->m_gp2_irq_control = 0;
+	gp2_irq_control = 0;
+	devtag_reset(machine, "ide");
+}
+
+static MACHINE_RESET( qdrmfgp2 )
+{
+	sndram = memory_region(machine, "konami") + 0x100000;
+
+	/* sound irq (CCU? 240Hz) */
+	timer_pulse(machine, ATTOTIME_IN_HZ(18432000/76800), NULL, 0, gp2_timer_callback);
+
+	/* reset the IDE controller */
+	gp2_irq_control = 0;
 	devtag_reset(machine, "ide");
 }
 
@@ -673,78 +616,74 @@ static MACHINE_RESET( qdrmfgp )
  *
  *************************************/
 
-static MACHINE_CONFIG_START( qdrmfgp, qdrmfgp_state )
+static MACHINE_DRIVER_START( qdrmfgp )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 32000000/2)	/*  16.000 MHz */
-	MCFG_CPU_PROGRAM_MAP(qdrmfgp_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", qdrmfgp_interrupt, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", M68000, 32000000/2)	/*  16.000 MHz */
+	MDRV_CPU_PROGRAM_MAP(qdrmfgp_map)
+	MDRV_CPU_VBLANK_INT_HACK(qdrmfgp_interrupt, 2)
 
-	MCFG_MACHINE_START(qdrmfgp)
-	MCFG_MACHINE_RESET(qdrmfgp)
-	MCFG_NVRAM_ADD_1FILL("nvram")
+	MDRV_MACHINE_START(qdrmfgp)
+	MDRV_MACHINE_RESET(qdrmfgp)
+	MDRV_NVRAM_HANDLER(generic_1fill)
 
-	MCFG_IDE_CONTROLLER_ADD("ide", ide_interrupt)
+	MDRV_IDE_CONTROLLER_ADD("ide", ide_interrupt)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
-	MCFG_SCREEN_UPDATE_STATIC(qdrmfgp)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
 
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(qdrmfgp)
-
-	MCFG_K056832_ADD("k056832", qdrmfgp_k056832_intf)
-	MCFG_K053252_ADD("k053252", 32000000/4, qdrmfgp_k053252_intf)
+	MDRV_VIDEO_START(qdrmfgp)
+	MDRV_VIDEO_UPDATE(qdrmfgp)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("konami", K054539, 18432000/384)
-	MCFG_SOUND_CONFIG(k054539_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("konami", K054539, 18432000/384)
+	MDRV_SOUND_CONFIG(k054539_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( qdrmfgp2, qdrmfgp_state )
+static MACHINE_DRIVER_START( qdrmfgp2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 32000000/2)	/*  16.000 MHz */
-	MCFG_CPU_PROGRAM_MAP(qdrmfgp2_map)
-	MCFG_CPU_VBLANK_INT("screen", qdrmfgp2_interrupt)
+	MDRV_CPU_ADD("maincpu", M68000, 32000000/2)	/*  16.000 MHz */
+	MDRV_CPU_PROGRAM_MAP(qdrmfgp2_map)
+	MDRV_CPU_VBLANK_INT("screen", qdrmfgp2_interrupt)
 
-	MCFG_MACHINE_START(qdrmfgp2)
-	MCFG_MACHINE_RESET(qdrmfgp)
-	MCFG_NVRAM_ADD_1FILL("nvram")
+	MDRV_MACHINE_START(qdrmfgp)
+	MDRV_MACHINE_RESET(qdrmfgp2)
+	MDRV_NVRAM_HANDLER(generic_1fill)
 
-	MCFG_IDE_CONTROLLER_ADD("ide", gp2_ide_interrupt)
+	MDRV_IDE_CONTROLLER_ADD("ide", gp2_ide_interrupt)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
-	MCFG_SCREEN_UPDATE_STATIC(qdrmfgp)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
 
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(qdrmfgp2)
-
-	MCFG_K056832_ADD("k056832", qdrmfgp2_k056832_intf)
-	MCFG_K053252_ADD("k053252", 32000000/4, qdrmfgp2_k053252_intf)
+	MDRV_VIDEO_START(qdrmfgp2)
+	MDRV_VIDEO_UPDATE(qdrmfgp)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("konami", K054539, 18432000/384)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("konami", K054539, 18432000/384)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 /*************************************
@@ -796,4 +735,4 @@ ROM_END
 
 /*     year  rom       clone     machine   inputs    init */
 GAME(  1994, qdrmfgp,  0,        qdrmfgp,  qdrmfgp,  0,        ROT0, "Konami", "Quiz Do Re Mi Fa Grand Prix (Japan)", 0 )
-GAME(  1995, qdrmfgp2, 0,        qdrmfgp2, qdrmfgp2, 0,        ROT0, "Konami", "Quiz Do Re Mi Fa Grand Prix 2 - Shin-Kyoku Nyuukadayo (Japan)", 0 )
+GAME(  1995, qdrmfgp2, 0,        qdrmfgp2, qdrmfgp2, 0,        ROT0, "Konami", "Quiz Do Re Mi Fa Grand Prix2 - Shin-Kyoku Nyuukadayo (Japan)", 0 )

@@ -6,9 +6,11 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/yiear.h"
+#include "driver.h"
 
+int yiear_nmi_enable;
+
+static tilemap *bg_tilemap;
 
 /***************************************************************************
 
@@ -27,14 +29,14 @@
   bit 0 -- 1  kohm resistor  -- RED
 
 ***************************************************************************/
-
 PALETTE_INIT( yiear )
 {
 	int i;
 
-	for (i = 0; i < machine.total_colors(); i++)
+
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
-		int bit0, bit1, bit2, r, g, b;
+		int bit0,bit1,bit2,r,g,b;
 
 		/* red component */
 		bit0 = (*color_prom >> 0) & 0x01;
@@ -54,45 +56,46 @@ PALETTE_INIT( yiear )
 		bit2 = (*color_prom >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		palette_set_color(machine, i, MAKE_RGB(r,g,b));
+		palette_set_color(machine,i,MAKE_RGB(r,g,b));
 		color_prom++;
 	}
 }
 
 WRITE8_HANDLER( yiear_videoram_w )
 {
-	yiear_state *state = space->machine().driver_data<yiear_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
 }
 
 WRITE8_HANDLER( yiear_control_w )
 {
-	yiear_state *state = space->machine().driver_data<yiear_state>();
 	/* bit 0 flips screen */
-	if (flip_screen_get(space->machine()) != (data & 0x01))
+
+	if (flip_screen_get(space->machine) != (data & 0x01))
 	{
-		flip_screen_set(space->machine(), data & 0x01);
-		space->machine().tilemap().mark_all_dirty();
+		flip_screen_set(space->machine, data & 0x01);
+		tilemap_mark_all_tiles_dirty_all(space->machine);
 	}
 
 	/* bit 1 is NMI enable */
-	state->m_yiear_nmi_enable = data & 0x02;
+
+	yiear_nmi_enable = data & 0x02;
 
 	/* bit 2 is IRQ enable */
-	state->m_yiear_irq_enable = data & 0x04;
+
+	interrupt_enable_w(space, 0, data & 0x04);
 
 	/* bits 3 and 4 are coin counters */
-	coin_counter_w(space->machine(), 0, data & 0x08);
-	coin_counter_w(space->machine(), 1, data & 0x10);
+
+	coin_counter_w(0, data & 0x08);
+	coin_counter_w(1, data & 0x10);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	yiear_state *state = machine.driver_data<yiear_state>();
 	int offs = tile_index * 2;
-	int attr = state->m_videoram[offs];
-	int code = state->m_videoram[offs + 1] | ((attr & 0x10) << 4);
+	int attr = videoram[offs];
+	int code = videoram[offs + 1] | ((attr & 0x10) << 4);
 //  int color = (attr & 0xf0) >> 4;
 	int flags = ((attr & 0x80) ? TILE_FLIPX : 0) | ((attr & 0x40) ? TILE_FLIPY : 0);
 
@@ -101,18 +104,15 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( yiear )
 {
-	yiear_state *state = machine.driver_data<yiear_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+		 8, 8, 32, 32);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	yiear_state *state = machine.driver_data<yiear_state>();
-	UINT8 *spriteram = state->m_spriteram;
-	UINT8 *spriteram_2 = state->m_spriteram2;
 	int offs;
 
-	for (offs = state->m_spriteram_size - 2; offs >= 0; offs -= 2)
+	for (offs = spriteram_size - 2;offs >= 0;offs -= 2)
 	{
 		int attr = spriteram[offs];
 		int code = spriteram_2[offs + 1] + 256 * (attr & 0x01);
@@ -134,18 +134,16 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 		}
 
 		drawgfx_transpen(bitmap, cliprect,
-			machine.gfx[1],
+			machine->gfx[1],
 			code, color,
 			flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-SCREEN_UPDATE_IND16( yiear )
+VIDEO_UPDATE( yiear )
 {
-	yiear_state *state = screen.machine().driver_data<yiear_state>();
-
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

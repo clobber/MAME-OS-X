@@ -3,7 +3,10 @@
       sound emulation by R. Belmont, Tomasz Slanina, and David Haywood
 ************************************/
 
-#include "emu.h"
+#include <math.h>
+#include "sndintrf.h"
+#include "streams.h"
+#include "cpuintrf.h"
 #include "st0016.h"
 
 #define VERBOSE (0)
@@ -18,11 +21,13 @@ struct _st0016_state
 	UINT8 regs[0x100];
 };
 
-INLINE st0016_state *get_safe_token(device_t *device)
+INLINE st0016_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == ST0016);
-	return (st0016_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_ST0016);
+	return (st0016_state *)device->token;
 }
 
 
@@ -137,12 +142,12 @@ static STREAM_UPDATE( st0016_update )
 
 static DEVICE_START( st0016 )
 {
-	const st0016_interface *intf = (const st0016_interface *)device->static_config();
+	const st0016_interface *intf = (const st0016_interface *)device->static_config;
 	st0016_state *info = get_safe_token(device);
 
 	info->sound_ram = intf->p_soundram;
 
-	info->stream = device->machine().sound().stream_alloc(*device, 0, 2, 44100, info, st0016_update);
+	info->stream = stream_create(device, 0, 2, 44100, info, st0016_update);
 }
 
 
@@ -172,5 +177,3 @@ DEVICE_GET_INFO( st0016 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(ST0016, st0016);

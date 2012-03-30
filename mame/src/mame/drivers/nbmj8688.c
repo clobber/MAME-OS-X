@@ -30,16 +30,15 @@ TODO:
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "includes/nb1413m3.h"
+#include "nb1413m3.h"
 #include "sound/dac.h"
 #include "sound/ay8910.h"
 #include "sound/3812intf.h"
 #include "rendlay.h"
 #include "nbmj8688.lh"
 #include "includes/nbmj8688.h"
-#include "machine/nvram.h"
 
 
 #define SIGNED_DAC	0		// 0:unsigned DAC, 1:signed DAC
@@ -67,8 +66,8 @@ static DRIVER_INIT( otonano )
 
 static DRIVER_INIT( mjcamera )
 {
-	UINT8 *rom = machine.region("voice")->base() + 0x20000;
-	UINT8 *prot = machine.region("user1")->base();
+	UINT8 *rom = memory_region(machine, "voice") + 0x20000;
+	UINT8 *prot = memory_region(machine, "user1");
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -87,7 +86,7 @@ static DRIVER_INIT( mjcamera )
 static DRIVER_INIT( kanatuen )
 {
 	/* uses the same protection data as mjcamer, but a different check */
-	UINT8 *rom = machine.region("voice")->base() + 0x30000;
+	UINT8 *rom = memory_region(machine, "voice") + 0x30000;
 
 	rom[0x0004] = 0x09;
 	rom[0x0103] = 0x0e;
@@ -101,7 +100,7 @@ static DRIVER_INIT( kyuhito )
 {
 #if 1
 	/* uses the same protection data as ????, but a different check */
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 
 	rom[0x0149] = 0x00;
 	rom[0x014a] = 0x00;
@@ -113,8 +112,8 @@ static DRIVER_INIT( kyuhito )
 
 static DRIVER_INIT( idhimitu )
 {
-	UINT8 *rom = machine.region("voice")->base() + 0x20000;
-	UINT8 *prot = machine.region("user1")->base();
+	UINT8 *rom = memory_region(machine, "voice") + 0x20000;
+	UINT8 *prot = memory_region(machine, "user1");
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -138,8 +137,8 @@ static DRIVER_INIT( kaguya )
 
 static DRIVER_INIT( kaguya2 )
 {
-	UINT8 *rom = machine.region("voice")->base() + 0x20000;
-	UINT8 *prot = machine.region("user1")->base();
+	UINT8 *rom = memory_region(machine, "voice") + 0x20000;
+	UINT8 *prot = memory_region(machine, "user1");
 	int i;
 
 	/* this is one possible way to rearrange the protection ROM data to get the
@@ -280,19 +279,19 @@ static DRIVER_INIT( barline )
 	nb1413m3_type = NB1413M3_BARLINE;
 }
 
-static ADDRESS_MAP_START( mjsikaku_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mjsikaku_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xf7ff) AM_ROM
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( secolove_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( secolove_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ojousan_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ojousan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
-	AM_RANGE(0x7000, 0x7fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x7000, 0x7fff) AM_RAM AM_BASE(&nb1413m3_nvram) AM_SIZE(&nb1413m3_nvram_size)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -304,7 +303,7 @@ static READ8_HANDLER( ff_r )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( secolove_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( secolove_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -325,11 +324,11 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( barline_output_w )
 {
-	coin_lockout_w(space->machine(), 0,~data & 0x80);
-	coin_counter_w(space->machine(), 0,data & 0x02);
+	coin_lockout_w(0,~data & 0x80);
+	coin_counter_w(0,data & 0x02);
 }
 
-static ADDRESS_MAP_START( barline_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( barline_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_sndrombank1_w)
@@ -343,11 +342,11 @@ static ADDRESS_MAP_START( barline_io_map, AS_IO, 8 )
 	AM_RANGE(0xd0, 0xd0) AM_READ(ff_r)	// irq ack? watchdog?
 //  AM_RANGE(0xd0, 0xd0) AM_DEVWRITE("dac", DAC_WRITE) //not used
 	AM_RANGE(0xe0, 0xe0) AM_WRITE(secolove_romsel_w)
-	AM_RANGE(0xf0, 0xf0) AM_READ(nb1413m3_dipsw1_r) AM_WRITE(mjsikaku_scrolly_w)
+ 	AM_RANGE(0xf0, 0xf0) AM_READ(nb1413m3_dipsw1_r) AM_WRITE(mjsikaku_scrolly_w)
 	AM_RANGE(0xf1, 0xf1) AM_READ(nb1413m3_dipsw2_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( crystalg_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( crystalg_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -367,7 +366,7 @@ static ADDRESS_MAP_START( crystalg_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( otonano_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( otonano_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -386,7 +385,7 @@ static ADDRESS_MAP_START( otonano_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( kaguya_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( kaguya_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -406,7 +405,7 @@ static ADDRESS_MAP_START( kaguya_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( iemoto_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( iemoto_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -428,7 +427,7 @@ static ADDRESS_MAP_START( iemoto_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( seiha_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( seiha_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -449,7 +448,7 @@ static ADDRESS_MAP_START( seiha_io_map, AS_IO, 8 )
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(mjsikaku_scrolly_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mjgaiden_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mjgaiden_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -469,7 +468,7 @@ static ADDRESS_MAP_START( mjgaiden_io_map, AS_IO, 8 )
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(mjsikaku_scrolly_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( p16bit_LCD_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( p16bit_LCD_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -495,7 +494,7 @@ static ADDRESS_MAP_START( p16bit_LCD_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mjsikaku_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mjsikaku_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -516,7 +515,7 @@ static ADDRESS_MAP_START( mjsikaku_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mmsikaku_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mmsikaku_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x7f) AM_READ(nb1413m3_sndrom_r)
 	AM_RANGE(0x00, 0x00) AM_WRITE(nb1413m3_nmi_clock_w)
@@ -1240,15 +1239,15 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( barline )
 	PORT_START("DSWA")
-	PORT_DIPNAME( 0x07, 0x07, "Game Rate" )
-	PORT_DIPSETTING(    0x00, "58%" )
-	PORT_DIPSETTING(    0x01, "64%" )
-	PORT_DIPSETTING(    0x02, "70%" )
-	PORT_DIPSETTING(    0x03, "74%" )
-	PORT_DIPSETTING(    0x04, "78%" )
-	PORT_DIPSETTING(    0x05, "80%" )
-	PORT_DIPSETTING(    0x06, "88%" )
-	PORT_DIPSETTING(    0x07, "95%" )
+	PORT_DIPNAME( 0x01, 0x01, "DIPSW 1-1" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "DIPSW 1-2" )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, "DIPSW 1-3" )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x08, 0x08, "DIPSW 1-4" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1275,14 +1274,15 @@ static INPUT_PORTS_START( barline )
 	PORT_DIPNAME( 0x04, 0x04, "DIPSW 2-3" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DIPSW 2-4" ) // auto stop reels?
+	PORT_DIPNAME( 0x08, 0x08, "DIPSW 2-4" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x30, 0x30, "Music" )
-	PORT_DIPSETTING(    0x00, "Type 1" )
-	PORT_DIPSETTING(    0x10, "Type 2" )
-	PORT_DIPSETTING(    0x20, "Type 3" )
-	PORT_DIPSETTING(    0x30, DEF_STR( Off ) )
+	PORT_DIPNAME( 0x10, 0x10, "DIPSW 2-5" )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "DIPSW 2-6" )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x40, "DIPSW 2-7" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -1297,7 +1297,7 @@ static INPUT_PORTS_START( barline )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE2 )		// ANALYZER
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )					// TEST
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )			// COIN1
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hopper Key") PORT_CODE(KEYCODE_H)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Credit Clear") PORT_CODE(KEYCODE_4) // CREDIT CLEAR
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )		// SERVICE
 
 	PORT_START("KEY0")
@@ -2916,244 +2916,273 @@ static const ay8910_interface ay8910_config =
 
 
 
-static MACHINE_CONFIG_START( NBMJDRV_4096, nbmj8688_state )
+static MACHINE_DRIVER_START( NBMJDRV_4096 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
-	MCFG_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
+	MDRV_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
+	MDRV_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
 
-	MCFG_MACHINE_RESET(nb1413m3)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_RESET(nb1413m3)
+	MDRV_NVRAM_HANDLER(nb1413m3)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
-	MCFG_SCREEN_UPDATE_STATIC(mbmj8688)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
 
-	MCFG_PALETTE_LENGTH(4096)
+	MDRV_PALETTE_LENGTH(4096)
 
-	MCFG_PALETTE_INIT(mbmj8688_12bit)
-	MCFG_VIDEO_START(mbmj8688_pure_12bit)
+	MDRV_PALETTE_INIT(mbmj8688_12bit)
+	MDRV_VIDEO_START(mbmj8688_pure_12bit)
+	MDRV_VIDEO_UPDATE(mbmj8688)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("psg", AY8910, 1250000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+	MDRV_SOUND_ADD("psg", AY8910, 1250000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( NBMJDRV_256, NBMJDRV_4096 )
-
-	/* basic machine hardware */
-
-	/* video hardware */
-	MCFG_PALETTE_LENGTH(256)
-
-	MCFG_PALETTE_INIT(mbmj8688_8bit)
-	MCFG_VIDEO_START(mbmj8688_8bit)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( NBMJDRV_65536, NBMJDRV_4096 )
+static MACHINE_DRIVER_START( NBMJDRV_256 )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
 
 	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_PALETTE_LENGTH(65536)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(mbmj8688_16bit)
-	MCFG_VIDEO_START(mbmj8688_hybrid_16bit)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_INIT(mbmj8688_8bit)
+	MDRV_VIDEO_START(mbmj8688_8bit)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( NBMJDRV_65536 )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+
+	/* video hardware */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_PALETTE_LENGTH(65536)
+
+	MDRV_PALETTE_INIT(mbmj8688_16bit)
+	MDRV_VIDEO_START(mbmj8688_hybrid_16bit)
+MACHINE_DRIVER_END
 
 
 // --------------------------------------------------------------------------------
 
-static MACHINE_CONFIG_DERIVED( crystalg, NBMJDRV_256 )
+static MACHINE_DRIVER_START( crystalg )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(crystalg_io_map)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(NBMJDRV_256)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(crystalg_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 96) // nmiclock = 2f
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( apparel, NBMJDRV_256 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(secolove_io_map)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( mbmj_h12bit, NBMJDRV_4096 )
+static MACHINE_DRIVER_START( apparel )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(secolove_io_map)
+	MDRV_IMPORT_FROM(NBMJDRV_256)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(secolove_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( mbmj_h12bit )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(secolove_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
 
 	/* video hardware */
-	MCFG_VIDEO_START(mbmj8688_hybrid_12bit)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(mbmj8688_hybrid_12bit)
+MACHINE_DRIVER_END
 
 /*Same as h12bit HW with different sound HW + NMI enable bit*/
-static MACHINE_CONFIG_DERIVED( barline, mbmj_h12bit )
+static MACHINE_DRIVER_START( barline )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(barline_io_map)
+	MDRV_IMPORT_FROM(mbmj_h12bit)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_IO_MAP(barline_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
 
-	MCFG_SOUND_REPLACE("psg", YM3812, 20000000/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+	MDRV_SOUND_REPLACE("psg", YM3812, 20000000/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
-	MCFG_DEVICE_REMOVE("dac")
-MACHINE_CONFIG_END
+	MDRV_DEVICE_REMOVE("dac")
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( mbmj_p16bit, NBMJDRV_65536 )
+static MACHINE_DRIVER_START( mbmj_p16bit )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(secolove_io_map)
+	MDRV_IMPORT_FROM(NBMJDRV_65536)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(secolove_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60/40
 
 	/* video hardware */
-	MCFG_VIDEO_START(mbmj8688_pure_16bit)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(mbmj8688_pure_16bit)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( mbmj_p16bit_LCD, nbmj8688_state )
+static MACHINE_DRIVER_START( mbmj_p16bit_LCD )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
-	MCFG_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(secolove_io_map)
-	MCFG_CPU_IO_MAP(p16bit_LCD_io_map)
+	MDRV_CPU_ADD("maincpu", Z80, 5000000)	/* 5.00 MHz */
+	MDRV_CPU_VBLANK_INT("screen", nb1413m3_interrupt)
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(secolove_io_map)
+	MDRV_CPU_IO_MAP(p16bit_LCD_io_map)
 
-	MCFG_MACHINE_RESET(nb1413m3)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_RESET(nb1413m3)
+	MDRV_NVRAM_HANDLER(nb1413m3)
 
 	/* video hardware */
-	MCFG_PALETTE_LENGTH(65536)
-	MCFG_PALETTE_INIT(mbmj8688_16bit)
-	MCFG_DEFAULT_LAYOUT(layout_nbmj8688)
+	MDRV_PALETTE_LENGTH(65536)
+	MDRV_PALETTE_INIT(mbmj8688_16bit)
+	MDRV_DEFAULT_LAYOUT(layout_nbmj8688)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
-	MCFG_SCREEN_UPDATE_STATIC(mbmj8688)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 16, 240-1)
 
-	MCFG_SCREEN_ADD("lcd0", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(480, 64)
-	MCFG_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
-	MCFG_SCREEN_UPDATE_STATIC(mbmj8688_lcd0)
+	MDRV_SCREEN_ADD("lcd0", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(480, 64)
+	MDRV_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
 
-	MCFG_SCREEN_ADD("lcd1", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(480, 64)
-	MCFG_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
-	MCFG_SCREEN_UPDATE_STATIC(mbmj8688_lcd1)
+	MDRV_SCREEN_ADD("lcd1", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(480, 64)
+	MDRV_SCREEN_VISIBLE_AREA(0, 480-1, 0, 64-1)
 
-	MCFG_VIDEO_START(mbmj8688_pure_16bit_LCD)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("psg", AY8910, 1250000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
-
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( seiha, NBMJDRV_65536 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(seiha_io_map)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( mjgaiden, NBMJDRV_4096 )
-
-	/* basic machine hardware */
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(ojousan_map)
-	MCFG_CPU_IO_MAP(mjgaiden_io_map)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( iemoto, NBMJDRV_65536 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(iemoto_io_map)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( ojousan, NBMJDRV_65536 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(ojousan_map)
-	MCFG_CPU_IO_MAP(iemoto_io_map)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( mbmj_p12bit, NBMJDRV_4096 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(mjsikaku_map)
-	MCFG_CPU_IO_MAP(kaguya_io_map)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( mjsikaku, NBMJDRV_4096 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(mjsikaku_map)
-	MCFG_CPU_IO_MAP(mjsikaku_io_map)
+	MDRV_VIDEO_START(mbmj8688_pure_16bit_LCD)
+	MDRV_VIDEO_UPDATE(mbmj8688_LCD)
 
 	/* sound hardware */
-	MCFG_SOUND_REPLACE("psg", YM3812, 20000000/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+
+	MDRV_SOUND_ADD("psg", AY8910, 1250000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( mmsikaku, NBMJDRV_4096 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(secolove_map)
-	MCFG_CPU_IO_MAP(mmsikaku_io_map)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( otonano, mjsikaku )
+static MACHINE_DRIVER_START( seiha )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_IO_MAP(otonano_io_map)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(NBMJDRV_65536)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(seiha_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
+MACHINE_DRIVER_END
+
+static MACHINE_DRIVER_START( mjgaiden )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(ojousan_map)
+	MDRV_CPU_IO_MAP(mjgaiden_io_map)
+MACHINE_DRIVER_END
+
+static MACHINE_DRIVER_START( iemoto )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_65536)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(iemoto_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( ojousan )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_65536)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(ojousan_map)
+	MDRV_CPU_IO_MAP(iemoto_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)    // nmiclock = 60
+MACHINE_DRIVER_END
+
+static MACHINE_DRIVER_START( mbmj_p12bit )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(mjsikaku_map)
+	MDRV_CPU_IO_MAP(kaguya_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( mjsikaku )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(mjsikaku_map)
+	MDRV_CPU_IO_MAP(mjsikaku_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 144)    // nmiclock = 70
+
+	/* sound hardware */
+	MDRV_SOUND_REPLACE("psg", YM3812, 20000000/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( mmsikaku )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(NBMJDRV_4096)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(secolove_map)
+	MDRV_CPU_IO_MAP(mmsikaku_io_map)
+//  MDRV_CPU_VBLANK_INT_HACK(nb1413m3_interrupt, 128)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( otonano )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(mjsikaku)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_IO_MAP(otonano_io_map)
+MACHINE_DRIVER_END
 
 
 
@@ -3436,6 +3465,7 @@ Subboard
 
 dumped by sayu
 --- Team Japump!!! ---
+http://japump.i.am/
 
 */
 
@@ -4045,19 +4075,19 @@ GAME( 1986, apparel,  0,        apparel,         apparel,  apparel,  ROT0, "Cent
 GAME( 1986, citylove, 0,        mbmj_h12bit,     citylove, citylove, ROT0, "Nichibutsu", "City Love (Japan 860908)", 0 )
 GAME( 1986, mcitylov, citylove, mbmj_h12bit,     mcitylov, mcitylov, ROT0, "Nichibutsu", "City Love [BET] (Japan 860904)", 0 )
 GAME( 1986, secolove, 0,        mbmj_h12bit,     secolove, secolove, ROT0, "Nichibutsu", "Second Love (Japan 861201)", 0 )
-GAME( 1988, barline,  0,    	barline,		 barline,  barline,  ROT180, "Nichibutsu", "Barline (Japan?)",  GAME_IMPERFECT_SOUND )
+GAME( 1986?,barline,  0,    	barline, 	 	 barline,  barline,  ROT180, "Nichibutsu", "Barline (Japan?)",  GAME_IMPERFECT_SOUND )
 
 /* hybrid 16-bit palette */
-GAME( 1987, seiha,    0,        seiha,           seiha,    seiha,    ROT0, "Nichibutsu",	 "Seiha (Japan 870725)", 0 )
-GAME( 1987, seiham,   seiha,    seiha,           seiham,   seiham,   ROT0, "Nichibutsu",	 "Seiha [BET] (Japan 870723)", 0 )
+GAME( 1987, seiha,    0,        seiha,           seiha,    seiha,    ROT0, "Nichibutsu", 	 "Seiha (Japan 870725)", 0 )
+GAME( 1987, seiham,   seiha,    seiha,           seiham,   seiham,   ROT0, "Nichibutsu", 	 "Seiha [BET] (Japan 870723)", 0 )
 GAME( 1987, mjgaiden, 0,        mjgaiden,        ojousan,  ojousan,  ROT0, "Central Denshi", "Mahjong Gaiden [BET] (Japan 870803)", 0 )
-GAME( 1987, iemoto,   0,        iemoto,          iemoto,   iemoto,   ROT0, "Nichibutsu",	 "Iemoto (Japan 871020)", 0 )
-GAME( 1987, iemotom,  iemoto,   ojousan,         iemotom,  iemotom,  ROT0, "Nichibutsu",	 "Iemoto [BET] (Japan 871118)", 0 )
+GAME( 1987, iemoto,   0,        iemoto,          iemoto,   iemoto,   ROT0, "Nichibutsu", 	 "Iemoto (Japan 871020)", 0 )
+GAME( 1987, iemotom,  iemoto,   ojousan,         iemotom,  iemotom,  ROT0, "Nichibutsu", 	 "Iemoto [BET] (Japan 871118)", 0 )
 GAME( 1987, ryuuha,   iemoto,   ojousan,         ryuuha,   ryuuha,   ROT0, "Central Denshi", "Ryuuha [BET] (Japan 871027)", 0 )
-GAME( 1987, ojousan,  0,        ojousan,         ojousan,  ojousan,  ROT0, "Nichibutsu",	 "Ojousan (Japan 871204)", 0 )
-GAME( 1987, ojousanm, ojousan,  ojousan,         ojousanm, ojousanm, ROT0, "Nichibutsu",	 "Ojousan [BET] (Japan 870108)", 0 )
-GAME( 1988, korinai,  0,        ojousan,         korinai,  korinai,  ROT0, "Nichibutsu",	 "Mahjong-zukino Korinai Menmen (Japan 880425)", 0 )
-GAME( 1988, korinaim, korinai,  ojousan,         korinaim, korinaim, ROT0, "Nichibutsu",	 "Mahjong-zukino Korinai Menmen [BET] (Japan 880920)", 0 )
+GAME( 1987, ojousan,  0,        ojousan,         ojousan,  ojousan,  ROT0, "Nichibutsu", 	 "Ojousan (Japan 871204)", 0 )
+GAME( 1987, ojousanm, ojousan,  ojousan,         ojousanm, ojousanm, ROT0, "Nichibutsu", 	 "Ojousan [BET] (Japan 870108)", 0 )
+GAME( 1988, korinai,  0,        ojousan,         korinai,  korinai,  ROT0, "Nichibutsu", 	 "Mahjong-zukino Korinai Menmen (Japan 880425)", 0 )
+GAME( 1988, korinaim, korinai,  ojousan,         korinaim, korinaim, ROT0, "Nichibutsu", 	 "Mahjong-zukino Korinai Menmen [BET] (Japan 880920)", 0 )
 
 /* pure 16-bit palette (+ LCD in some) */
 GAME( 1987, housemnq, 0,        mbmj_p16bit_LCD, housemnq, housemnq, ROT0, "Nichibutsu", "House Mannequin (Japan 870217)", 0 )
@@ -4070,11 +4100,11 @@ GAME( 1988, orangeci, orangec,  mbmj_p16bit,     orangeci, orangeci, ROT0, "Daii
 GAME( 1988, vipclub,  orangec,  mbmj_p16bit,     vipclub,  vipclub,  ROT0, "Daiichi Denshi", "Vip Club - Maru-hi Ippatsu Kaihou [BET] (Japan 880310)", GAME_IMPERFECT_GRAPHICS )
 
 /* pure 12-bit palette */
-GAME( 1988, kaguya,   0,        mbmj_p12bit,     kaguya,   kaguya,   ROT0, "Miki Syouji", "Mahjong Kaguyahime [BET] (Japan 880521)", 0 )
-GAME( 1989, kaguya2,  0,        mbmj_p12bit,     kaguya2,  kaguya2,  ROT0, "Miki Syouji", "Mahjong Kaguyahime Sono2 [BET] (Japan 890829)", 0 )
-GAME( 1989, kaguya2f, kaguya2,  mbmj_p12bit,     kaguya2,  kaguya2,  ROT0, "Miki Syouji", "Mahjong Kaguyahime Sono2 Fukkokuban [BET] (Japan 010808)", 0 )
+GAME( 1988, kaguya,   0,        mbmj_p12bit,     kaguya,   kaguya,   ROT0, "MIKI SYOUJI", "Mahjong Kaguyahime [BET] (Japan 880521)", 0 )
+GAME( 1989, kaguya2,  0,        mbmj_p12bit,     kaguya2,  kaguya2,  ROT0, "MIKI SYOUJI", "Mahjong Kaguyahime Sono2 [BET] (Japan 890829)", 0 )
+GAME( 1989, kaguya2f, kaguya2,  mbmj_p12bit,     kaguya2,  kaguya2,  ROT0, "MIKI SYOUJI", "Mahjong Kaguyahime Sono2 Fukkokuban [BET] (Japan 010808)", 0 )
 GAME( 1988, kanatuen, 0,        mbmj_p12bit,     kanatuen, kanatuen, ROT0, "Panac", "Kanatsuen no Onna [BET] (Japan 880905)", 0 )
-GAME( 1988, kyuhito,  kanatuen, mbmj_p12bit,     kyuhito,  kyuhito,  ROT0, "Roller Tron", "Kyukyoku no Hito [BET] (Japan 880824)", 0 )
+GAME( 1988, kyuhito,  kanatuen, mbmj_p12bit,     kyuhito,  kyuhito,  ROT0, "ROLLER TRON", "Kyukyoku no Hito [BET] (Japan 880824)", 0 )
 GAME( 1989, idhimitu, 0,        mbmj_p12bit,     idhimitu, idhimitu, ROT0, "Digital Soft", "Idol no Himitsu [BET] (Japan 890304)", 0 )
 
 /* pure 12-bit palette + YM3812 instead of AY-3-8910 */
@@ -4084,7 +4114,7 @@ GAME( 1988, mjsikakc, mjsikaku, mjsikaku,        mjsikaku, mjsikaku, ROT0, "Nich
 GAME( 1988, mjsikakd, mjsikaku, mjsikaku,        mjsikaku, mjsikaku, ROT0, "Nichibutsu", "Mahjong Shikaku (Japan 880802)", 0 )
 GAME( 1988, mmsikaku, mjsikaku, mmsikaku,        mmsikaku, mmsikaku, ROT0, "Nichibutsu", "Mahjong Shikaku [BET] (Japan 880929)", 0 )
 GAME( 1988, otonano,  0,        otonano,         otonano,  otonano,  ROT0, "Apple", "Otona no Mahjong (Japan 880628)", 0 )
-GAME( 1988, mjcamera, 0,        otonano,         mjcamera, mjcamera, ROT0, "Miki Syouji", "Mahjong Camera Kozou (set 1) (Japan 881109)", 0 )
+GAME( 1988, mjcamera, 0,        otonano,         mjcamera, mjcamera, ROT0, "MIKI SYOUJI", "Mahjong Camera Kozou (set 1) (Japan 881109)", 0 )
 
 
 /*

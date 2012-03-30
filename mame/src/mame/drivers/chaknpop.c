@@ -1,116 +1,15 @@
 /*
+ *  Chack'n Pop
+ *  (C) 1983 TAITO Corp.
+ *
+ * driver by BUT
+ */
 
-Chack'n Pop driver by BUT
-
-Note: The 68705 MCU isn't dumped, because it's protected, however we simulate
-      it using data extracted with a trojan. See machine/chaknpop.c
-
-Chack'n Pop
-Taito 1983
-
-PCB Layout
-----------
-
-Top board
-
-J1000045A
-K1000220A
- |------------------------|
- |                        |
- |             AO4_06.IC27|
- |                        |
- |                        |
- |                        |
- |                        |
- |                        |
- |                        |
- |                        |
- |                        |
-|-|                       |
-| |              Z80A     |
-| |                       |
-| | AO4_05.IC3   MSM2128  |
-| |                       |
-| |                       |
-| |                       |
-|-|                       |
- |                        |
- |------------------------|
-Notes:
-      AO4_06.IC23 - Motorola MC68705P5 Micro-controller. Clock 3.000MHz [18/6]
-          MSM2128 - 2k x8 SRAM
-              Z80 - Clock 3.000MHz [18/6]
-
-
-Middle Board
-
-J1000043A
-K1000218A
-M4200367A (sticker)
-|-----------------------------------------------------|
-| VOL  MB3731                                         |
-|             MC14584                416  416        |-|
-|                                    416  416        | |
-|                    NE555           416  416        | |
-|                                    416  416        | |
-|    TD62003                         416  416        | |
-|                                    416  416        | |
-|2                                   416  416        | |
-|2                                   416  416        |-|
-|W                                                    |
-|A                                                   |-|
-|Y                                                   | |
-|                        AO4_01.28                   | |
-|    LM3900                                          | |
-|         AY3-8910       AO4_02.27                   | |
-|                    S                               | |
-|         AY3-8910       AO4_03.26                   | |
-|                                                    |-|
-|DSWC  DSWA  DSWB        AO4_04.25                    |
-|-----------------------------------------------------|
-Notes:
-           S - Flat cable connector joining to top PCB
-         416 - NEC uPC416C 16k x1 DRAM
-    AY3-8910 - Clock 1.500MHz [18/12]
-       HSync - 15.1430kHz
-       VSync - 59.1828Hz
-
-
-Bottom Board
-
-J1000044A
-K1000219A
-|-----------------------------------------------------|
-|  AO4_07.IC15                                        |
-|                                                    |-|
-|  AO4_08.IC14                      2114             | |
-|                 2114              2114             | |
-|                                         AO4_09.IC98| |
-|                 2114                               | |
-|1                                        AO4_10.IC97| |
-|8                                                   | |
-|W                                        AO4-11.IC96|-|
-|A                                        AO4-12.IC95 |
-|Y                                                   |-|
-|                                               18MHz| |
-|                                                    | |
-|                                                    | |
-| HM2510     HM2510                                  | |
-| HM2510     HM2510                                  | |
-| HM2510     HM2510                                  | |
-| HM2510     HM2510                                  |-|
-| HM2510     HM2510                                   |
-|-----------------------------------------------------|
-Notes:
-      HM2510 - Hitachi HM2510 1k x1 SRAM
-        2114 - 1k x4 SRAM
-
-*/
-
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "includes/chaknpop.h"
+
 
 /***************************************************************************
 
@@ -120,17 +19,17 @@ Notes:
 
 static WRITE8_DEVICE_HANDLER ( unknown_port_1_w )
 {
-	//logerror("%s: write to unknow port 1: 0x%02x\n", device->machine().describe_context(), data);
+	//logerror("%s: write to unknow port 1: 0x%02x\n", cpuexec_describe_context(device->machine), data);
 }
 
 static WRITE8_DEVICE_HANDLER ( unknown_port_2_w )
 {
-	//logerror("%s: write to unknow port 2: 0x%02x\n", device->machine().describe_context(), data);
+	//logerror("%s: write to unknow port 2: 0x%02x\n", cpuexec_describe_context(device->machine), data);
 }
 
 static WRITE8_HANDLER ( coinlock_w )
 {
-	logerror("%04x: coin lock %sable\n", cpu_get_pc(&space->device()), data ? "dis" : "en");
+	logerror("%04x: coin lock %sable\n", cpu_get_pc(space->cpu), data ? "dis" : "en");
 }
 
 
@@ -140,12 +39,12 @@ static WRITE8_HANDLER ( coinlock_w )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( chaknpop_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( chaknpop_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(chaknpop_state, m_mcu_ram)
-	AM_RANGE(0x8800, 0x8800) AM_READWRITE(chaknpop_mcu_port_a_r, chaknpop_mcu_port_a_w)
-	AM_RANGE(0x8801, 0x8801) AM_READWRITE(chaknpop_mcu_port_b_r, chaknpop_mcu_port_b_w)
-	AM_RANGE(0x8802, 0x8802) AM_READWRITE(chaknpop_mcu_port_c_r, chaknpop_mcu_port_c_w)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&chaknpop_ram)
+	AM_RANGE(0x8800, 0x8800) AM_READWRITE(chaknpop_mcu_portA_r, chaknpop_mcu_portA_w)
+	AM_RANGE(0x8801, 0x8801) AM_READWRITE(chaknpop_mcu_portB_r, chaknpop_mcu_portB_w)
+	AM_RANGE(0x8802, 0x8802) AM_READWRITE(chaknpop_mcu_portC_r, chaknpop_mcu_portC_w)
 	AM_RANGE(0x8804, 0x8805) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_address_data_w)
 	AM_RANGE(0x8806, 0x8807) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_address_data_w)
 	AM_RANGE(0x8808, 0x8808) AM_READ_PORT("DSWC")
@@ -154,11 +53,11 @@ static ADDRESS_MAP_START( chaknpop_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x880b, 0x880b) AM_READ_PORT("P2")
 	AM_RANGE(0x880c, 0x880c) AM_READWRITE(chaknpop_gfxmode_r, chaknpop_gfxmode_w)
 	AM_RANGE(0x880d, 0x880d) AM_WRITE(coinlock_w)												// coin lock out
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(chaknpop_txram_w) AM_BASE_MEMBER(chaknpop_state, m_tx_ram)			// TX tilemap
-	AM_RANGE(0x9800, 0x983f) AM_RAM_WRITE(chaknpop_attrram_w) AM_BASE_MEMBER(chaknpop_state, m_attr_ram)		// Color attribute
-	AM_RANGE(0x9840, 0x98ff) AM_RAM AM_BASE_SIZE_MEMBER(chaknpop_state, m_spr_ram, m_spr_ram_size)	// sprite
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(chaknpop_txram_w) AM_BASE(&chaknpop_txram) 			// TX tilemap
+	AM_RANGE(0x9800, 0x983f) AM_RAM_WRITE(chaknpop_attrram_w) AM_BASE(&chaknpop_attrram) 		// Color attribute
+	AM_RANGE(0x9840, 0x98ff) AM_RAM AM_BASE(&chaknpop_sprram) AM_SIZE(&chaknpop_sprram_size)	// sprite
 	AM_RANGE(0xa000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xffff) AM_RAMBANK("bank1")														// bitmap plane 1-4
+	AM_RANGE(0xc000, 0xffff) AM_RAMBANK(1)														// bitmap plane 1-4
 ADDRESS_MAP_END
 
 static const ay8910_interface ay8910_interface_1 =
@@ -220,57 +119,57 @@ static INPUT_PORTS_START( chaknpop )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSWC")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Language ) )		PORT_DIPLOCATION("SWC:1")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Language ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Japanese ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SWC:2")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "Super Chack'n" )		PORT_DIPLOCATION("SWC:3")
+	PORT_DIPNAME( 0x04, 0x04, "Super Chack'n" )
 	PORT_DIPSETTING(    0x04, "pi" )
 	PORT_DIPSETTING(    0x00, "1st Chance" )
-	PORT_DIPNAME( 0x08, 0x08, "Endless (Cheat)")		PORT_DIPLOCATION("SWC:4")
+	PORT_DIPNAME( 0x08, 0x08, "Endless (Cheat)")
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "Credit Info" )		PORT_DIPLOCATION("SWC:5")
+	PORT_DIPNAME( 0x10, 0x10, "Credit Info" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Show Year" )			PORT_DIPLOCATION("SWC:6")
+	PORT_DIPNAME( 0x20, 0x20, "Show Year" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "Infinite (Cheat)")		PORT_DIPLOCATION("SWC:7")
+	PORT_DIPNAME( 0x40, 0x40, "Infinite (Cheat)")
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Coinage ) )		PORT_DIPLOCATION("SWC:8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, "1 Way" )
 	PORT_DIPSETTING(    0x80, "2 Way" )
 
 	PORT_START("DSWB")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SWB:1,2")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Bonus_Life ) )
 	PORT_DIPSETTING(    0x00, "80k and every 100k" )
 	PORT_DIPSETTING(    0x01, "60k and every 100k" )
 	PORT_DIPSETTING(    0x02, "40k and every 100k" )
 	PORT_DIPSETTING(    0x03, "20k and every 100k" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Free_Play ) )	PORT_DIPLOCATION("SWB:3")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x18, 0x08, DEF_STR( Lives ) )		PORT_DIPLOCATION("SWB:4,5")
+	PORT_DIPNAME( 0x18, 0x08, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "6" )
 	PORT_DIPSETTING(    0x08, "3" )
 	PORT_DIPSETTING(    0x10, "2" )
 	PORT_DIPSETTING(    0x18, "1" )
-	PORT_DIPNAME( 0x20, 0x00, "Training/Difficulty" )	PORT_DIPLOCATION("SWB:6")
+	PORT_DIPNAME( 0x20, 0x00, "Training/Difficulty" )
 	PORT_DIPSETTING(    0x20, "Off/Every 10 Min." )
 	PORT_DIPSETTING(    0x00, "On/Every 7 Min." )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SWB:7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) )		PORT_DIPLOCATION("SWB:8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Cocktail ) )
 
 	PORT_START("DSWA")
-	PORT_DIPNAME(0x0f,  0x00, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SWA:1,2,3,4")
+	PORT_DIPNAME(0x0f,  0x00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x0f, DEF_STR( 9C_1C ) )
 	PORT_DIPSETTING(    0x0e, DEF_STR( 8C_1C ) )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 7C_1C ) )
@@ -287,7 +186,7 @@ static INPUT_PORTS_START( chaknpop )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( 1C_7C ) )
 	PORT_DIPSETTING(    0x07, DEF_STR( 1C_8C ) )
-	PORT_DIPNAME(0xf0,  0x00, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SWA:5,6,7,8")
+	PORT_DIPNAME(0xf0,  0x00, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(    0xf0, DEF_STR( 9C_1C ) )
 	PORT_DIPSETTING(    0xe0, DEF_STR( 8C_1C ) )
 	PORT_DIPSETTING(    0xd0, DEF_STR( 7C_1C ) )
@@ -342,71 +241,44 @@ static GFXDECODE_START( chaknpop )
 	GFXDECODE_ENTRY( "gfx2", 0, charlayout,   32, 8 )
 GFXDECODE_END
 
-
-static MACHINE_START( chaknpop )
-{
-	chaknpop_state *state = machine.driver_data<chaknpop_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
-
-	state->save_item(NAME(state->m_gfxmode));
-	state->save_item(NAME(state->m_flip_x));
-	state->save_item(NAME(state->m_flip_y));
-
-	state->save_item(NAME(state->m_mcu_seed));
-	state->save_item(NAME(state->m_mcu_result));
-	state->save_item(NAME(state->m_mcu_select));
-}
-
-static MACHINE_RESET( chaknpop )
-{
-	chaknpop_state *state = machine.driver_data<chaknpop_state>();
-
-	state->m_gfxmode = 0;
-	state->m_flip_x = 0;
-	state->m_flip_y = 0;
-
-	state->m_mcu_seed = MCU_INITIAL_SEED;
-	state->m_mcu_result = 0;
-	state->m_mcu_select = 0;
-}
-
-static MACHINE_CONFIG_START( chaknpop, chaknpop_state )
+static MACHINE_DRIVER_START( chaknpop )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_18MHz / 6)	/* Verified on PCB */
-	MCFG_CPU_PROGRAM_MAP(chaknpop_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	/* the real board is 3.072MHz, but it is faster for MAME */
+	//MDRV_CPU_ADD("maincpu", Z80, 18432000 / 6)   /* 3.072 MHz */
+	MDRV_CPU_ADD("maincpu", Z80, 2350000)
+	//MDRV_CPU_ADD("maincpu", Z80, 2760000)
+	MDRV_CPU_PROGRAM_MAP(chaknpop_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_START(chaknpop)
-	MCFG_MACHINE_RESET(chaknpop)
+	MDRV_MACHINE_RESET(chaknpop)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.1828)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(chaknpop)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60.606060)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(chaknpop)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(chaknpop)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_PALETTE_INIT(chaknpop)
-	MCFG_VIDEO_START(chaknpop)
+	MDRV_PALETTE_INIT(chaknpop)
+	MDRV_VIDEO_START(chaknpop)
+	MDRV_VIDEO_UPDATE(chaknpop)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, XTAL_18MHz / 12)	/* Verified on PCB */
-	MCFG_SOUND_CONFIG(ay8910_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay1", AY8910, 18432000 / 12)
+	MDRV_SOUND_CONFIG(ay8910_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay2", AY8910, XTAL_18MHz / 12)	/* Verified on PCB */
-	MCFG_SOUND_CONFIG(ay8910_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 18432000 / 12)
+	MDRV_SOUND_CONFIG(ay8910_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -417,28 +289,30 @@ MACHINE_CONFIG_END
 
 ROM_START( chaknpop )
 	ROM_REGION( 0x18000, "maincpu", 0 )			/* Main CPU */
-	ROM_LOAD( "ao4_01.ic28", 0x00000, 0x2000, CRC(386fe1c8) SHA1(cca24abfb8a7f439251e7936036475c694002561) )
-	ROM_LOAD( "ao4_02.ic27", 0x02000, 0x2000, CRC(5562a6a7) SHA1(0c5d81f9aaf858f88007a6bca7f83dc3ef59c5b5) )
-	ROM_LOAD( "ao4_03.ic26", 0x04000, 0x2000, CRC(3e2f0a9c) SHA1(f1cf87a4cb07f77104d4a4d369807dac522e052c) )
-	ROM_LOAD( "ao4_04.ic25", 0x06000, 0x2000, CRC(5209c7d4) SHA1(dcba785a697df55d84d65735de38365869a1da9d) )
-	ROM_LOAD( "ao4_05.ic3",  0x0a000, 0x2000, CRC(8720e024) SHA1(99e445c117d1501a245f9eb8d014abc4712b4963) )
+	ROM_LOAD( "a04-01.28",    0x00000, 0x2000, CRC(386fe1c8) SHA1(cca24abfb8a7f439251e7936036475c694002561) )
+	ROM_LOAD( "a04-02.27",    0x02000, 0x2000, CRC(5562a6a7) SHA1(0c5d81f9aaf858f88007a6bca7f83dc3ef59c5b5) )
+	ROM_LOAD( "a04-03.26",    0x04000, 0x2000, CRC(3e2f0a9c) SHA1(f1cf87a4cb07f77104d4a4d369807dac522e052c) )
+	ROM_LOAD( "a04-04.25",    0x06000, 0x2000, CRC(5209c7d4) SHA1(dcba785a697df55d84d65735de38365869a1da9d) )
+	ROM_LOAD( "a04-05.3",     0x0a000, 0x2000, CRC(8720e024) SHA1(99e445c117d1501a245f9eb8d014abc4712b4963) )
 
-	ROM_REGION( 0x0800, "mcu", 0 )	/* 2k for the Motorola MC68705P5 Micro-controller */
-	ROM_LOAD( "ao4_06.ic23", 0x0000, 0x0800, NO_DUMP )
+	ROM_REGION( 0x0800, "cpu1", 0 )	/* 2k for the microcontroller */
+	/* MCU isn't dumped (its protected) however we simulate it using data
+       extracted with a trojan, see machine/chaknpop.c */
+	ROM_LOAD( "68705.mcu",   0x0000, 0x0800, NO_DUMP )
 
 	ROM_REGION( 0x4000, "gfx1", 0 )	/* Sprite */
-	ROM_LOAD( "ao4_08.ic14", 0x0000, 0x2000, CRC(5575a021) SHA1(c2fad53fe6a12c19cec69d27c13fce6aea2502f2) )
-	ROM_LOAD( "ao4_07.ic15", 0x2000, 0x2000, CRC(ae687c18) SHA1(65b25263da88d30cbc0dad94511869596e5c975a) )
+	ROM_LOAD( "a04-08.14",     0x0000, 0x2000, CRC(5575a021) SHA1(c2fad53fe6a12c19cec69d27c13fce6aea2502f2) )
+	ROM_LOAD( "a04-07.15",     0x2000, 0x2000, CRC(ae687c18) SHA1(65b25263da88d30cbc0dad94511869596e5c975a) )
 
 	ROM_REGION( 0x4000, "gfx2", 0 )	/* Text */
-	ROM_LOAD( "ao4_09.ic98", 0x0000, 0x2000, CRC(757a723a) SHA1(62ab84d2aaa9bc1ea5aa9df8155aa3b5a1e93889) )
-	ROM_LOAD( "ao4_10.ic97", 0x2000, 0x2000, CRC(3e3fd608) SHA1(053a8fbdb35bf1c142349f78a63e8cd1adb41ef6) )
+	ROM_LOAD( "a04-09.98",     0x0000, 0x2000, CRC(757a723a) SHA1(62ab84d2aaa9bc1ea5aa9df8155aa3b5a1e93889) )
+	ROM_LOAD( "a04-10.97",     0x2000, 0x2000, CRC(3e3fd608) SHA1(053a8fbdb35bf1c142349f78a63e8cd1adb41ef6) )
 
 	ROM_REGION( 0x0800, "proms", 0 )			/* Palette */
-	ROM_LOAD( "ao4-11.ic96", 0x0000, 0x0400, CRC(9bf0e85f) SHA1(44f0a4712c99a715dec54060afb0b27dc48998b4) )
-	ROM_LOAD( "ao4-12.ic95", 0x0400, 0x0400, CRC(954ce8fc) SHA1(e187f9e2cb754264d149c2896ca949dea3bcf2eb) )
+	ROM_LOAD( "a04-11.bin",    0x0000, 0x0400, CRC(9bf0e85f) SHA1(44f0a4712c99a715dec54060afb0b27dc48998b4) )
+	ROM_LOAD( "a04-12.bin",    0x0400, 0x0400, CRC(954ce8fc) SHA1(e187f9e2cb754264d149c2896ca949dea3bcf2eb) )
 ROM_END
 
 
 /*  ( YEAR  NAME      PARENT    MACHINE   INPUT     INIT      MONITOR  COMPANY              FULLNAME ) */
-GAME( 1983, chaknpop, 0,        chaknpop, chaknpop, 0,        ROT0,    "Taito Corporation", "Chack'n Pop", 0 )
+GAME( 1983, chaknpop, 0,        chaknpop, chaknpop, chaknpop, ROT0,    "Taito Corporation", "Chack'n Pop", 0)

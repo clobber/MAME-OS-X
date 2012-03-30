@@ -6,7 +6,6 @@ thanks to Angelo Salese for some precious advice
 TO DO:
 - check palette
 - check blitter command 0x00
-- screen orientation is wrong (should clearly be ROT90 or 270 with blitter mods)
 
 Has 36 pin Cherry master looking edge connector
 
@@ -45,42 +44,19 @@ reg[2] -> width (number of pixel to draw)
 with a write in reg[2] the command is executed
 
 not handled commands with reg[3] & 0xc0 == 0x00
-
-
-Stephh's notes (based on the game Z80 code and some tests) :
-
-  - "Reset" Dip Switch :
-      * OFF : no effect if NVRAM isn't corrupted
-      * ON  : reset (at least) credits, bets and last numbers (clear NVRAM)
-  - When "Coin Assistance" Dip Switch is ON, you can reset the number of credits
-    by pressing BOTH "Service" (IN0 bit 2) and "Clear Credits" (IN1 bit 6).
-  - When in "Service Mode", press "Add Fiche" (IN1 bit 0) to increase value displayed in green after "R".
-  - When in "Service Mode", press RIGHT (IN1 bit 1) to clear statistics (only possible when "R00" is displayed).
-  - You need at least 5 credits for outside bets
-
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "roul.lh"
-#include "machine/nvram.h"
-
-
-class roul_state : public driver_device
-{
-public:
-	roul_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_reg[0x10];
-	UINT8 *m_videobuf;
-	UINT8 m_lamp_old;
-};
-
 
 #define VIDEOBUF_SIZE 256*256
 
+static UINT8 reg[0x10];
+static UINT8 *videobuf;
+
+static UINT8 lamp_old = 0;
 
 static PALETTE_INIT( roul )
 {
@@ -115,47 +91,46 @@ bit 7 -> blitter ready
 bit 6 -> ??? (after unknown blitter command : [80][80][08][02])
 */
 //  return 0x80; // blitter ready
-//  logerror("Read unknown port $f5 at %04x\n",cpu_get_pc(&space->device()));
-	return space->machine().rand() & 0x00c0;
+//  logerror("Read unknown port $f5 at %04x\n",cpu_get_pc(space->cpu));
+	return mame_rand(space->machine) & 0x00c0;
 }
 
 static WRITE8_HANDLER( blitter_cmd_w )
 {
-	roul_state *state = space->machine().driver_data<roul_state>();
-	state->m_reg[offset] = data;
+	reg[offset] = data;
 	if (offset==2)
 	{
 		int i,j;
-		int width	= state->m_reg[2];
-		int y		= state->m_reg[0];
-		int x		= state->m_reg[1];
-		int color	= state->m_reg[3] & 0x0f;
+		int width	= reg[2];
+		int y		= reg[0];
+		int x		= reg[1];
+		int color	= reg[3] & 0x0f;
 		int xdirection = 1, ydirection = 1;
 
-		if (state->m_reg[3] & 0x10) ydirection = -1;
-		if (state->m_reg[3] & 0x20) xdirection = -1;
+		if (reg[3] & 0x10) ydirection = -1;
+		if (reg[3] & 0x20) xdirection = -1;
 
 		if (width == 0x00) width = 0x100;
 
-		switch(state->m_reg[3] & 0xc0)
+		switch(reg[3] & 0xc0)
 		{
-			case 0x00: // state->m_reg[4] used?
+			case 0x00: // reg[4] used?
 				for (i = - width / 2; i < width / 2; i++)
 					for (j = - width / 2; j < width / 2; j++)
-						state->m_videobuf[(y + j) * 256 + x + i] = color;
-				logerror("Blitter command 0 : [%02x][%02x][%02x][%02x][%02x]\n",state->m_reg[0],state->m_reg[1],state->m_reg[2],state->m_reg[3],state->m_reg[4]);
+						videobuf[(y + j) * 256 + x + i] = color;
+				logerror("Blitter command 0 : [%02x][%02x][%02x][%02x][%02x]\n",reg[0],reg[1],reg[2],reg[3],reg[4]);
 				break;
-			case 0x40: // vertical line - state->m_reg[4] not used
+			case 0x40: // vertical line - reg[4] not used
 				for (i = 0; i < width; i++ )
-					state->m_videobuf[(y + i * ydirection) * 256 + x] = color;
+					videobuf[(y + i * ydirection) * 256 + x] = color;
 				break;
-			case 0x80: // horizontal line - state->m_reg[4] not used
+			case 0x80: // horizontal line - reg[4] not used
 				for (i = 0; i < width; i++ )
-					state->m_videobuf[y * 256 + x + i * xdirection] = color;
+					videobuf[y * 256 + x + i * xdirection] = color;
 				break;
-			case 0xc0: // diagonal line - state->m_reg[4] not used
+			case 0xc0: // diagonal line - reg[4] not used
 				for (i = 0; i < width; i++ )
-					state->m_videobuf[(y + i * ydirection) * 256 + x + i * xdirection] = color;
+					videobuf[(y + i * ydirection) * 256 + x + i * xdirection] = color;
 		}
 	}
 
@@ -163,26 +138,25 @@ static WRITE8_HANDLER( blitter_cmd_w )
 
 static WRITE8_HANDLER( sound_latch_w )
 {
-	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine(), "soundcpu", 0, HOLD_LINE);
+ 	soundlatch_w(space, 0, data & 0xff);
+ 	cputag_set_input_line(space->machine, "soundcpu", 0, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( ball_w )
 {
-	roul_state *state = space->machine().driver_data<roul_state>();
 	int lamp = data;
 
 	output_set_lamp_value(data, 1);
-	output_set_lamp_value(state->m_lamp_old, 0);
-	state->m_lamp_old = lamp;
+	output_set_lamp_value(lamp_old, 0);
+	lamp_old = lamp;
 }
 
-static ADDRESS_MAP_START( roul_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( roul_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x8000, 0x8fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( roul_cpu_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( roul_cpu_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xf0, 0xf4) AM_WRITE(blitter_cmd_w)
 	AM_RANGE(0xf5, 0xf5) AM_READ(blitter_status_r)
@@ -193,63 +167,56 @@ static ADDRESS_MAP_START( roul_cpu_io_map, AS_IO, 8 )
 	AM_RANGE(0xfe, 0xfe) AM_WRITE(sound_latch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x13ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_cpu_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_cpu_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ(soundlatch_r)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
 ADDRESS_MAP_END
 
 static VIDEO_START(roul)
 {
-	roul_state *state = machine.driver_data<roul_state>();
-	state->m_videobuf = auto_alloc_array_clear(machine, UINT8, VIDEOBUF_SIZE);
+	videobuf = auto_alloc_array_clear(machine, UINT8, VIDEOBUF_SIZE);
 }
 
-static SCREEN_UPDATE_IND16(roul)
+static VIDEO_UPDATE(roul)
 {
-	roul_state *state = screen.machine().driver_data<roul_state>();
 	int i,j;
 	for (i = 0; i < 256; i++)
 		for (j = 0; j < 256; j++)
-			bitmap.pix16(j, i) = state->m_videobuf[j * 256 + 255 - i];
+			*BITMAP_ADDR16(bitmap, j, i) = videobuf[j * 256 + 255 - i];
 	return 0;
 }
 
-
-/* verified from Z80 code */
 static INPUT_PORTS_START( roul )
 	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1   ) PORT_NAME("Coin 1")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1  )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Service") PORT_CODE(KEYCODE_X)
-	PORT_SERVICE( 0x08, IP_ACTIVE_LOW )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Service") PORT_CODE(KEYCODE_X)
+	PORT_SERVICE( 0x08, IP_ACTIVE_LOW)
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Payout") PORT_CODE(KEYCODE_Z)
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Payout") PORT_CODE(KEYCODE_Z)
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Add Fiche")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1  ) PORT_NAME("Add fiche")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN  )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT  )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP    )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Remove Fiche")
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Clear Credits") PORT_CODE(KEYCODE_C)    /* see notes */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Remove fiche")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")
-    /* single - split - street - square / double street / dozen - column - 1 to 18 - 19 to 36 - red - black - odd - even */
-	PORT_DIPNAME( 0x81, 0x00, "Max Bet" )
-	PORT_DIPSETTING(    0x00, "10 / 30 / 30" )
-	PORT_DIPSETTING(    0x80, "20 / 40 / 50" )
-	PORT_DIPSETTING(    0x01, "30 / 50 / 70" )
-	PORT_DIPSETTING(    0x81, "40 / 60 / 90" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0e, 0x0e, "Percentage Payout" )
 	PORT_DIPSETTING(    0x00, "94%" )
 	PORT_DIPSETTING(    0x02, "88%" )
@@ -259,48 +226,52 @@ static INPUT_PORTS_START( roul )
 	PORT_DIPSETTING(    0x0a, "62%" )
 	PORT_DIPSETTING(    0x0c, "56%" )
 	PORT_DIPSETTING(    0x0e, "50%" )
-	PORT_DIPNAME( 0x10, 0x10, "Reset Machine" )
-	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x20, 0x20, "Doubble Odds" )
 	PORT_DIPSETTING(    0x20, "With" )
 	PORT_DIPSETTING(    0x00, "Without" )
-	PORT_DIPNAME( 0x40, 0x40, "Coin Assistance" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
-static MACHINE_CONFIG_START( roul, roul_state )
+static MACHINE_DRIVER_START( roul )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(roul_map)
-	MCFG_CPU_IO_MAP(roul_cpu_io_map)
-	MCFG_CPU_VBLANK_INT("screen",nmi_line_pulse)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(roul_map)
+	MDRV_CPU_IO_MAP(roul_cpu_io_map)
+	MDRV_CPU_VBLANK_INT("screen",nmi_line_pulse)
 
-	MCFG_CPU_ADD("soundcpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_cpu_io_map)
+	MDRV_CPU_ADD("soundcpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_cpu_io_map)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_PALETTE_INIT(roul)
+	MDRV_PALETTE_INIT(roul)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(roul)
+ 	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_PALETTE_LENGTH(0x100)
+	MDRV_PALETTE_LENGTH(0x100)
 
-	MCFG_VIDEO_START(roul)
+	MDRV_VIDEO_START(roul)
+	MDRV_VIDEO_UPDATE(roul)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, 1000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, 1000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 ROM_START(roul)
 	ROM_REGION( 0x10000, "maincpu", 0 )

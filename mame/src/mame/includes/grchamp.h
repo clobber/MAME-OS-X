@@ -6,39 +6,36 @@
 
 #include "sound/discrete.h"
 
-class grchamp_state : public driver_device
+typedef struct _grchamp_state grchamp_state;
+struct _grchamp_state
 {
-public:
-	grchamp_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+	UINT8		cpu0_out[16];
+	UINT8		cpu1_out[16];
 
-	UINT8		m_cpu0_out[16];
-	UINT8		m_cpu1_out[16];
+	UINT8		comm_latch;
+	UINT8		comm_latch2[4];
 
-	UINT8		m_comm_latch;
-	UINT8		m_comm_latch2[4];
+	UINT16		ledlatch;
+	UINT8		ledaddr;
+	UINT16		ledram[8];
 
-	UINT16		m_ledlatch;
-	UINT8		m_ledaddr;
-	UINT16		m_ledram[8];
+	UINT16		collide;
+	UINT8		collmode;
 
-	UINT16		m_collide;
-	UINT8		m_collmode;
+	UINT8 *		radarram;
+	UINT8 *		videoram;
+	UINT8 *		leftram;
+	UINT8 *		centerram;
+	UINT8 *		rightram;
+	UINT8 *		spriteram;
 
-	UINT8 *		m_radarram;
-	UINT8 *		m_videoram;
-	UINT8 *		m_leftram;
-	UINT8 *		m_centerram;
-	UINT8 *		m_rightram;
-	UINT8 *		m_spriteram;
+	bitmap_t *	work_bitmap;
+	tilemap *	text_tilemap;
+	tilemap *	left_tilemap;
+	tilemap *	center_tilemap;
+	tilemap *	right_tilemap;
 
-	bitmap_ind16 m_work_bitmap;
-	tilemap_t *	m_text_tilemap;
-	tilemap_t *	m_left_tilemap;
-	tilemap_t *	m_center_tilemap;
-	tilemap_t *	m_right_tilemap;
-
-	rgb_t		m_bgcolor[0x20];
+	rgb_t		bgcolor[0x20];
 };
 
 /* Discrete Sound Input Nodes */
@@ -60,7 +57,7 @@ DISCRETE_SOUND_EXTERN( grchamp );
 
 PALETTE_INIT( grchamp );
 VIDEO_START( grchamp );
-SCREEN_UPDATE_RGB32( grchamp );
+VIDEO_UPDATE( grchamp );
 WRITE8_HANDLER( grchamp_left_w );
 WRITE8_HANDLER( grchamp_center_w );
 WRITE8_HANDLER( grchamp_right_w );

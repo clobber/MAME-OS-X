@@ -3,6 +3,7 @@
 #ifndef __I960_H__
 #define __I960_H__
 
+#include "cpuintrf.h"
 
 enum
 {
@@ -60,9 +61,10 @@ enum
   I960_IRQ3 = 3
 };
 
-DECLARE_LEGACY_CPU_DEVICE(I960, i960);
+CPU_GET_INFO( i960 );
+#define CPU_I960 CPU_GET_INFO_NAME( i960 )
 
-void i960_noburst(device_t *device);
-void i960_stall(device_t *device);
+void i960_noburst(const device_config *device);
+void i960_stall(const device_config *device);
 
 #endif /* __I960_H__ */

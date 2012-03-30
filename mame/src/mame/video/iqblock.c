@@ -1,5 +1,14 @@
-#include "emu.h"
-#include "includes/iqblock.h"
+#include "driver.h"
+#include "iqblock.h"
+
+
+UINT8 *iqblock_bgvideoram;
+//UINT8 *iqblock_fgscroll;
+UINT8 *iqblock_fgvideoram;
+int iqblock_videoenable;
+int iqblock_video_type;
+
+static tilemap *bg_tilemap,*fg_tilemap;
 
 
 /***************************************************************************
@@ -10,19 +19,17 @@
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	iqblock_state *state = machine.driver_data<iqblock_state>();
-	int code = state->m_bgvideoram[tile_index] + (state->m_bgvideoram[tile_index + 0x800] << 8);
+	int code = iqblock_bgvideoram[tile_index] + (iqblock_bgvideoram[tile_index + 0x800] << 8);
 	SET_TILE_INFO(
 			0,
-			code &(state->m_video_type ? 0x1fff : 0x3fff),
-			state->m_video_type? (2*(code >> 13)+1) : (4*(code >> 14)+3),
+			code &(iqblock_video_type ? 0x1fff : 0x3fff),
+			iqblock_video_type? (2*(code >> 13)+1) : (4*(code >> 14)+3),
 			0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	iqblock_state *state = machine.driver_data<iqblock_state>();
-	int code = state->m_fgvideoram[tile_index];
+	int code = iqblock_fgvideoram[tile_index];
 	SET_TILE_INFO(
 			1,
 			code & 0x7f,
@@ -40,12 +47,11 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 VIDEO_START( iqblock )
 {
-	iqblock_state *state = machine.driver_data<iqblock_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,     8, 8,64,32);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,32,64, 8);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,     8, 8,64,32);
+	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,32,64, 8);
 
-	state->m_bg_tilemap->set_transparent_pen(0);
-	state->m_fg_tilemap->set_scroll_cols(64);
+	tilemap_set_transparent_pen(bg_tilemap,0);
+	tilemap_set_scroll_cols(fg_tilemap,64);
 }
 
 
@@ -58,28 +64,24 @@ VIDEO_START( iqblock )
 
 WRITE8_HANDLER( iqblock_fgvideoram_w )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-	state->m_fgvideoram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset);
+	iqblock_fgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap,offset);
 }
 
 WRITE8_HANDLER( iqblock_bgvideoram_w )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-	state->m_bgvideoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset & 0x7ff);
+	iqblock_bgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x7ff);
 }
 
 READ8_HANDLER( iqblock_bgvideoram_r )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-	return state->m_bgvideoram[offset];
+	return iqblock_bgvideoram[offset];
 }
 
 WRITE8_HANDLER( iqblock_fgscroll_w )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-	state->m_fg_tilemap->set_scrolly(offset,data);
+	tilemap_set_scrolly(fg_tilemap,offset,data);
 }
 
 
@@ -90,12 +92,11 @@ WRITE8_HANDLER( iqblock_fgscroll_w )
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( iqblock )
+VIDEO_UPDATE( iqblock )
 {
-	iqblock_state *state = screen.machine().driver_data<iqblock_state>();
-	if (!state->m_videoenable) return 0;
-	state->m_fg_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
+	if (!iqblock_videoenable) return 0;
+	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
 
 	return 0;
 }

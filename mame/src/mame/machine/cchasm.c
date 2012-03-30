@@ -4,9 +4,9 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/vector.h"
-#include "includes/cchasm.h"
+#include "cchasm.h"
 
 WRITE16_HANDLER( cchasm_led_w )
 {

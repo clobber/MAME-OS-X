@@ -9,7 +9,7 @@ Driver's Eyes works,
     DIP4 ON for Screen on the right
     should not toggle on both
 
-    -The left, center and right screens have separate programs and boards, each would work independently.
+    -The left, center and right screens have separate programs and boards, each would work independantly.
     About projection angles of left and right screen, the angle is correct on "DRIVER'S EYES" title screen, however in the tracks of demo mode it doesn't seem correct.
 
     -On demo screen, should fog effects be turned off?
@@ -288,44 +288,85 @@ CPU68 PCB:
   JP2          /D-ST           /VBL
   JP3
 */
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/m6805/m6805.h"
-#include "includes/namcos2.h"
+#include "deprecat.h"
+#include "namcos2.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/tms32025/tms32025.h"
-#include "includes/namcoic.h"
+#include "namcoic.h"
 #include "sound/2151intf.h"
 #include "sound/c140.h"
-#include "includes/namcos21.h"
-#include "machine/nvram.h"
+#include "namcos21.h"
 
 #define PTRAM_SIZE 0x20000
+
+static UINT16 *winrun_dspbios;
+static UINT16 *winrun_dspcomram;
+#define WINRUN_MAX_POLY_PARAM (1+256*3)
+static UINT16 winrun_poly_buf[WINRUN_MAX_POLY_PARAM];
+static int winrun_poly_index;
+static UINT32 winrun_pointrom_addr;
+static UINT16 *winrun_polydata;
+static int winrun_dsp_alive;
+static UINT16 *winrun_gpucomram;
+static UINT16 winrun_dspcomram_control[8];
+static UINT16 namcos21_video_enable;
+
+static UINT8 *pointram;
+static int pointram_idx;
+
+static UINT16 *namcos21_dspram16;
+//UINT16 *namcos21_spritepos;
+
+/* private data */
+static UINT16 *mpDataROM;
+static UINT16 *mpSharedRAM1;
+static UINT8	*mpDualPortRAM;
+static UINT16 pointram_control;
+
 
 #define ENABLE_LOGGING		0
 
 
-static INT32
-ReadPointROMData( running_machine &machine, unsigned offset )
+#define DSP_BUF_MAX (4096*12)
+typedef struct _dsp_state dsp_state;
+struct _dsp_state
 {
-	const INT32 *pPointData = (INT32 *)machine.region( "user2" )->base();
+	unsigned masterSourceAddr;
+	UINT16 slaveInputBuffer[DSP_BUF_MAX];
+	unsigned slaveBytesAvailable;
+	unsigned slaveBytesAdvertised;
+	unsigned slaveInputStart;
+	UINT16 slaveOutputBuffer[DSP_BUF_MAX];
+	unsigned slaveOutputSize;
+	UINT16 masterDirectDrawBuffer[256];
+	unsigned masterDirectDrawSize;
+	int masterFinished;
+	int slaveActive;
+};
+static dsp_state *mpDspState;
+
+static INT32
+ReadPointROMData( running_machine *machine, unsigned offset )
+{
+	const INT32 *pPointData = (INT32 *)memory_region( machine, "user2" );
 	INT32 result = pPointData[offset];
 	return result;
 }
 
 static READ16_HANDLER(namcos21_video_enable_r)
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_video_enable;
+	return namcos21_video_enable;
 }
 
 static WRITE16_HANDLER(namcos21_video_enable_w)
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_video_enable ); /* 0x40 = enable */
-	if( state->m_video_enable!=0 && state->m_video_enable!=0x40 )
+	COMBINE_DATA( &namcos21_video_enable ); /* 0x40 = enable */
+	if( namcos21_video_enable!=0 && namcos21_video_enable!=0x40 )
 	{
-		logerror( "unexpected namcos21_video_enable_w=0x%x\n", state->m_video_enable );
+		logerror( "unexpected namcos21_video_enable_w=0x%x\n", namcos21_video_enable );
 	}
 }
 
@@ -340,20 +381,20 @@ static READ16_HANDLER(dspcuskey_r)
 	UINT16 result = 0;
 	if( namcos2_gametype == NAMCOS21_SOLVALOU )
 	{
-		switch( cpu_get_pc(&space->device()) )
+		switch( cpu_get_pc(space->cpu) )
 		{
 		case 0x805e: result = 0x0000; break;
 		case 0x805f: result = 0xfeba; break;
 		case 0x8067: result = 0xffff; break;
 		case 0x806e: result = 0x0145; break;
 		default:
-			logerror( "unk cuskey_r; pc=0x%x\n", cpu_get_pc(&space->device()) );
+			logerror( "unk cuskey_r; pc=0x%x\n", cpu_get_pc(space->cpu) );
 			break;
 		}
 	}
 	else if( namcos2_gametype == NAMCOS21_CYBERSLED )
 	{
-		switch( cpu_get_pc(&space->device()) )
+		switch( cpu_get_pc(space->cpu) )
 		{
 		case 0x8061: result = 0xfe95; break;
 		case 0x8069: result = 0xffff; break;
@@ -364,7 +405,7 @@ static READ16_HANDLER(dspcuskey_r)
 	}
 	else if( namcos2_gametype == NAMCOS21_AIRCOMBAT )
 	{
-		switch( cpu_get_pc(&space->device()) )
+		switch( cpu_get_pc(space->cpu) )
 		{
 		case 0x8062: result = 0xfeb9; break;
 		case 0x806a: result = 0xffff; break;
@@ -377,13 +418,13 @@ static READ16_HANDLER(dspcuskey_r)
 }
 
 static void
-TransmitWordToSlave( namcos21_state *state, UINT16 data )
+TransmitWordToSlave( UINT16 data )
 {
-	unsigned offs = state->m_mpDspState->slaveInputStart+state->m_mpDspState->slaveBytesAvailable++;
-	state->m_mpDspState->slaveInputBuffer[offs%DSP_BUF_MAX] = data;
-	if (ENABLE_LOGGING) logerror( "+%04x(#%04x)\n", data, state->m_mpDspState->slaveBytesAvailable );
-	state->m_mpDspState->slaveActive = 1;
-	if( state->m_mpDspState->slaveBytesAvailable >= DSP_BUF_MAX )
+	unsigned offs = mpDspState->slaveInputStart+mpDspState->slaveBytesAvailable++;
+	mpDspState->slaveInputBuffer[offs%DSP_BUF_MAX] = data;
+	if (ENABLE_LOGGING) logerror( "+%04x(#%04x)\n", data, mpDspState->slaveBytesAvailable );
+	mpDspState->slaveActive = 1;
+	if( mpDspState->slaveBytesAvailable >= DSP_BUF_MAX )
 	{
 		logerror( "IDC overflow\n" );
 		exit(1);
@@ -391,10 +432,9 @@ TransmitWordToSlave( namcos21_state *state, UINT16 data )
 } /* TransmitWordToSlave */
 
 static void
-TransferDspData( running_machine &machine )
+TransferDspData( running_machine *machine )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	UINT16 addr = state->m_mpDspState->masterSourceAddr;
+	UINT16 addr = mpDspState->masterSourceAddr;
 	int mode = addr&0x8000;
 	addr&=0x7fff;
 	if( addr )
@@ -403,13 +443,13 @@ TransferDspData( running_machine &machine )
 		{
 			int i;
 			UINT16 old = addr;
-			UINT16 code = state->m_dspram16[addr++];
+			UINT16 code = namcos21_dspram16[addr++];
 			if( code == 0xffff )
 			{
 				if( mode )
 				{
-					addr = state->m_dspram16[addr];
-					state->m_mpDspState->masterSourceAddr = addr;
+					addr = namcos21_dspram16[addr];
+					mpDspState->masterSourceAddr = addr;
 					if (ENABLE_LOGGING) logerror( "LOOP:0x%04x\n", addr );
 					addr&=0x7fff;
 					if( old==addr )
@@ -419,28 +459,28 @@ TransferDspData( running_machine &machine )
 				}
 				else
 				{
-					state->m_mpDspState->masterSourceAddr = 0;
+					mpDspState->masterSourceAddr = 0;
 					return;
 				}
 			}
 			else if( mode==0 )
 			{ /* direct data transfer */
 				if (ENABLE_LOGGING) logerror( "DATA TFR(0x%x)\n", code );
-				TransmitWordToSlave( state, code );
+				TransmitWordToSlave( code );
 				for( i=0; i<code; i++ )
 				{
-					UINT16 data = state->m_dspram16[addr++];
-					TransmitWordToSlave( state, data );
+					UINT16 data = namcos21_dspram16[addr++];
+					TransmitWordToSlave( data );
 				}
 			}
 			else if( code==0x18 || code==0x1a )
 			{
 				if (ENABLE_LOGGING) logerror( "HEADER TFR(0x%x)\n", code );
-				TransmitWordToSlave( state, code+1 );
+				TransmitWordToSlave( code+1 );
 				for( i=0; i<code; i++ )
 				{
-					UINT16 data = state->m_dspram16[addr++];
-					TransmitWordToSlave( state, data );
+					UINT16 data = namcos21_dspram16[addr++];
+					TransmitWordToSlave( data );
 				}
 			}
 			else
@@ -448,7 +488,7 @@ TransferDspData( running_machine &machine )
 				INT32 masterAddr = ReadPointROMData(machine, code);
 				if (ENABLE_LOGGING) logerror( "OBJ TFR(0x%x)\n", code );
 				{
-					UINT16 len = state->m_dspram16[addr++];
+					UINT16 len = namcos21_dspram16[addr++];
 					for(;;)
 					{
 						int subAddr = ReadPointROMData(machine, masterAddr++);
@@ -461,17 +501,17 @@ TransferDspData( running_machine &machine )
 							int primWords = (UINT16)ReadPointROMData(machine, subAddr++);
 							if( primWords>2 )
 							{
-								TransmitWordToSlave( state, 0 ); /* pad1 */
-								TransmitWordToSlave( state, len+1 );
+								TransmitWordToSlave( 0 ); /* pad1 */
+								TransmitWordToSlave( len+1 );
 								for( i=0; i<len; i++ )
 								{ /* transform */
-									TransmitWordToSlave( state, state->m_dspram16[addr+i] );
+									TransmitWordToSlave( namcos21_dspram16[addr+i] );
 								}
-								TransmitWordToSlave( state, 0 ); /* pad2 */
-								TransmitWordToSlave( state, primWords+1 );
+								TransmitWordToSlave( 0 ); /* pad2 */
+								TransmitWordToSlave( primWords+1 );
 								for( i=0; i<primWords; i++ )
 								{
-									TransmitWordToSlave( state, (UINT16)ReadPointROMData(machine, subAddr+i) );
+									TransmitWordToSlave( (UINT16)ReadPointROMData(machine, subAddr+i) );
 								}
 							}
 							else
@@ -487,98 +527,95 @@ TransferDspData( running_machine &machine )
 	}
 } /* TransferDspData */
 
+static int mbNeedsKickstart;
 
+static UINT16 *master_dsp_code;
 
 void
-namcos21_kickstart( running_machine &machine, int internal )
+namcos21_kickstart( running_machine *machine, int internal )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
 	/* patch dsp watchdog */
 	switch( namcos2_gametype )
 	{
 	case NAMCOS21_AIRCOMBAT:
-		state->m_master_dsp_code[0x008e] = 0x808f;
+		master_dsp_code[0x008e] = 0x808f;
 		break;
 	case NAMCOS21_SOLVALOU:
-		state->m_master_dsp_code[0x008b] = 0x808c;
+		master_dsp_code[0x008b] = 0x808c;
 		break;
 	default:
 		break;
 	}
 	if( internal )
 	{
-		if( state->m_mbNeedsKickstart==0 ) return;
-		state->m_mbNeedsKickstart--;
-		if( state->m_mbNeedsKickstart ) return;
+		if( mbNeedsKickstart==0 ) return;
+		mbNeedsKickstart--;
+		if( mbNeedsKickstart ) return;
 	}
 
-	namcos21_ClearPolyFrameBuffer(machine);
-	state->m_mpDspState->masterSourceAddr = 0;
-	state->m_mpDspState->slaveOutputSize = 0;
-	state->m_mpDspState->masterFinished = 0;
-	state->m_mpDspState->slaveActive = 0;
+	namcos21_ClearPolyFrameBuffer();
+	mpDspState->masterSourceAddr = 0;
+	mpDspState->slaveOutputSize = 0;
+	mpDspState->masterFinished = 0;
+	mpDspState->slaveActive = 0;
 	cputag_set_input_line(machine, "dspmaster", 0, HOLD_LINE);
 	cputag_set_input_line(machine, "dspslave", INPUT_LINE_RESET, PULSE_LINE);
 }
 
 static UINT16
-ReadWordFromSlaveInput( address_space *space )
+ReadWordFromSlaveInput( const address_space *space )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	UINT16 data = 0;
-	if( state->m_mpDspState->slaveBytesAvailable>0 )
+	if( mpDspState->slaveBytesAvailable>0 )
 	{
-		data = state->m_mpDspState->slaveInputBuffer[state->m_mpDspState->slaveInputStart++];
-		state->m_mpDspState->slaveInputStart %= DSP_BUF_MAX;
-		state->m_mpDspState->slaveBytesAvailable--;
-		if( state->m_mpDspState->slaveBytesAdvertised>0 )
+		data = mpDspState->slaveInputBuffer[mpDspState->slaveInputStart++];
+		mpDspState->slaveInputStart %= DSP_BUF_MAX;
+		mpDspState->slaveBytesAvailable--;
+		if( mpDspState->slaveBytesAdvertised>0 )
 		{
-			state->m_mpDspState->slaveBytesAdvertised--;
+			mpDspState->slaveBytesAdvertised--;
 		}
-		if (ENABLE_LOGGING) logerror( "%s:-%04x(0x%04x)\n", space->machine().describe_context(), data, state->m_mpDspState->slaveBytesAvailable );
+		if (ENABLE_LOGGING) logerror( "%s:-%04x(0x%04x)\n", cpuexec_describe_context(space->machine), data, mpDspState->slaveBytesAvailable );
 	}
 	return data;
 } /* ReadWordFromSlaveInput */
 
 static size_t
-GetInputBytesAdvertisedForSlave( running_machine &machine )
+GetInputBytesAdvertisedForSlave( running_machine *machine )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	if( state->m_mpDspState->slaveBytesAdvertised < state->m_mpDspState->slaveBytesAvailable )
+	if( mpDspState->slaveBytesAdvertised < mpDspState->slaveBytesAvailable )
 	{
-		state->m_mpDspState->slaveBytesAdvertised++;
+		mpDspState->slaveBytesAdvertised++;
 	}
-	else if( state->m_mpDspState->slaveActive && state->m_mpDspState->masterFinished && state->m_mpDspState->masterSourceAddr )
+	else if( mpDspState->slaveActive && mpDspState->masterFinished && mpDspState->masterSourceAddr )
 	{
 		namcos21_kickstart(machine, 0);
 	}
-	return state->m_mpDspState->slaveBytesAdvertised;
+	return mpDspState->slaveBytesAdvertised;
 } /* GetInputBytesAdvertisedForSlave */
 
 static READ16_HANDLER( dspram16_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_dspram16[offset];
+	return namcos21_dspram16[offset];
 } /* dspram16_r */
 
 static WRITE16_HANDLER( dspram16_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_dspram16[offset] );
+	COMBINE_DATA( &namcos21_dspram16[offset] );
 
 	if( namcos2_gametype != NAMCOS21_WINRUN91 )
 	{
-		if( state->m_mpDspState->masterSourceAddr &&
-			offset == 1+(state->m_mpDspState->masterSourceAddr&0x7fff) )
+		if( mpDspState->masterSourceAddr &&
+			offset == 1+(mpDspState->masterSourceAddr&0x7fff) )
 		{
 			if (ENABLE_LOGGING) logerror( "IDC-CONTINUE\n" );
-			TransferDspData(space->machine());
+			TransferDspData(space->machine);
 		}
 		else if (namcos2_gametype == NAMCOS21_SOLVALOU &&
 					offset == 0x103 &&
-					&space->device() == space->machine().device("maincpu"))
+					space->cpu == cputag_get_cpu(space->machine, "maincpu"))
 		{ /* hack; synchronization for solvalou */
-			device_yield(&space->device());
+			cpu_yield(space->cpu);
 		}
 	}
 } /* dspram16_w */
@@ -586,10 +623,9 @@ static WRITE16_HANDLER( dspram16_w )
 /************************************************************************************/
 
 static int
-InitDSP( running_machine &machine )
+InitDSP( running_machine *machine )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	UINT16 *pMem = (UINT16 *)machine.region("dspmaster")->base();
+	UINT16 *pMem = (UINT16 *)memory_region(machine, "dspmaster");
 	/**
      * DSP BIOS tests "CPU ID" on startup
      * "JAPAN (C)1990 NAMCO LTD. by H.F "
@@ -598,21 +634,23 @@ InitDSP( running_machine &machine )
 	pMem[0x8000] = 0xFF80;
 	pMem[0x8001] = 0x0000;
 
-	state->m_mpDspState = auto_alloc_clear(machine, dsp_state);
+	mpDspState = auto_alloc_clear(machine, dsp_state);
 
 	return 0;
 }
 
 /***********************************************************/
 
+static UINT32 pointrom_idx;
 
+static UINT8 mPointRomMSB;
+static int mbPointRomDataAvailable;
 
 static READ16_HANDLER( dsp_port0_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	INT32 data = ReadPointROMData(space->machine(), state->m_pointrom_idx++);
-	state->m_mPointRomMSB = (UINT8)(data>>16);
-	state->m_mbPointRomDataAvailable = 1;
+	INT32 data = ReadPointROMData(space->machine, pointrom_idx++);
+	mPointRomMSB = (UINT8)(data>>16);
+	mbPointRomDataAvailable = 1;
 	return (UINT16)data;
 } /* dsp_port0_r */
 
@@ -623,11 +661,10 @@ static WRITE16_HANDLER( dsp_port0_w )
 
 static READ16_HANDLER( dsp_port1_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	if( state->m_mbPointRomDataAvailable )
+	if( mbPointRomDataAvailable )
 	{
-		state->m_mbPointRomDataAvailable = 0;
-		return state->m_mPointRomMSB;
+		mbPointRomDataAvailable = 0;
+		return mPointRomMSB;
 	}
 	return 0x8000; /* IDC ack? */
 } /* dsp_port1_r */
@@ -644,10 +681,9 @@ static READ16_HANDLER( dsp_port2_r )
 
 static WRITE16_HANDLER( dsp_port2_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	if (ENABLE_LOGGING) logerror( "IDC ADDR INIT(0x%04x)\n", data );
-	state->m_mpDspState->masterSourceAddr = data;
-	TransferDspData(space->machine());
+	mpDspState->masterSourceAddr = data;
+	TransferDspData(space->machine);
 } /* dsp_port2_w */
 
 static READ16_HANDLER( dsp_port3_idc_rcv_enable_r )
@@ -656,10 +692,9 @@ static READ16_HANDLER( dsp_port3_idc_rcv_enable_r )
 } /* dsp_port3_idc_rcv_enable_r */
 
 static WRITE16_HANDLER( dsp_port3_w )
-{
-	namcos21_state *state = space->machine().driver_data<namcos21_state>(); /* same address space as state->m_pointram? */
-	state->m_pointrom_idx<<=16;
-	state->m_pointrom_idx|=data;
+{ /* same address space as pointram? */
+	pointrom_idx<<=16;
+	pointrom_idx|=data;
 } /* dsp_port3_w */
 
 static WRITE16_HANDLER( dsp_port4_w )
@@ -671,16 +706,16 @@ static READ16_HANDLER( dsp_port8_r )
 	return 1;
 } /* dsp_port8_r */
 
+static int namcos21_irq_enable;
 
 static WRITE16_HANDLER( dsp_port8_w )
-{
-	namcos21_state *state = space->machine().driver_data<namcos21_state>(); /* IRQ-enable? */
+{ /* IRQ-enable? */
 	if (ENABLE_LOGGING) logerror( "port8_w(%d)\n", data );
 	if( data )
 	{
-		state->m_mpDspState->masterFinished = 1;
+		mpDspState->masterFinished = 1;
 	}
-	state->m_irq_enable = data;
+	namcos21_irq_enable = data;
 } /* dsp_port8_w */
 
 static READ16_HANDLER( dsp_port9_r )
@@ -709,45 +744,43 @@ static READ16_HANDLER(dsp_portb_r)
 } /* dsp_portb_r */
 
 static WRITE16_HANDLER(dsp_portb_w)
-{
-	namcos21_state *state = space->machine().driver_data<namcos21_state>(); /* render-device trigger */
+{ /* render-device trigger */
 	if( data==0 )
 	{ /* only 0->1 transition triggers */
 		return;
 	}
-	if( state->m_mpDspState->masterDirectDrawSize == 13 )
+	if( mpDspState->masterDirectDrawSize == 13 )
 	{
 		int i;
 		int sx[4], sy[4], zcode[4];
-		int color  = state->m_mpDspState->masterDirectDrawBuffer[0];
+		int color  = mpDspState->masterDirectDrawBuffer[0];
 		for( i=0; i<4; i++ )
 		{
-			sx[i] = NAMCOS21_POLY_FRAME_WIDTH/2 + (INT16)state->m_mpDspState->masterDirectDrawBuffer[i*3+1];
-			sy[i] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)state->m_mpDspState->masterDirectDrawBuffer[i*3+2];
-			zcode[i] = state->m_mpDspState->masterDirectDrawBuffer[i*3+3];
+			sx[i] = NAMCOS21_POLY_FRAME_WIDTH/2 + (INT16)mpDspState->masterDirectDrawBuffer[i*3+1];
+			sy[i] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)mpDspState->masterDirectDrawBuffer[i*3+2];
+			zcode[i] = mpDspState->masterDirectDrawBuffer[i*3+3];
 		}
 		if( color&0x8000 )
 		{
-			namcos21_DrawQuad( space->machine(), sx, sy, zcode, color );
+			namcos21_DrawQuad( sx, sy, zcode, color );
 		}
 		else
 		{
 			logerror( "indirection used w/ direct draw?\n" );
 		}
 	}
-	else if( state->m_mpDspState->masterDirectDrawSize )
+	else if( mpDspState->masterDirectDrawSize )
 	{
-		logerror( "unexpected masterDirectDrawSize=%d!\n",state->m_mpDspState->masterDirectDrawSize );
+		logerror( "unexpected masterDirectDrawSize=%d!\n",mpDspState->masterDirectDrawSize );
 	}
-	state->m_mpDspState->masterDirectDrawSize = 0;
+	mpDspState->masterDirectDrawSize = 0;
 } /* dsp_portb_w */
 
 static WRITE16_HANDLER(dsp_portc_w)
-{
-	namcos21_state *state = space->machine().driver_data<namcos21_state>(); /* enqueue data for direct-drawn poly */
-	if( state->m_mpDspState->masterDirectDrawSize < DSP_BUF_MAX )
+{ /* enqueue data for direct-drawn poly */
+	if( mpDspState->masterDirectDrawSize < DSP_BUF_MAX )
 	{
-		state->m_mpDspState->masterDirectDrawBuffer[state->m_mpDspState->masterDirectDrawSize++] = data;
+		mpDspState->masterDirectDrawBuffer[mpDspState->masterDirectDrawSize++] = data;
 	}
 	else
 	{
@@ -765,17 +798,17 @@ static WRITE16_HANDLER( dsp_xf_w )
 	if (ENABLE_LOGGING) logerror("xf(%d)\n",data);
 }
 
-static ADDRESS_MAP_START( master_dsp_program, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( master_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM /* BIOS */
-	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE_MEMBER(namcos21_state, m_master_dsp_code)
+	AM_RANGE(0x8000, 0xbfff) AM_RAM AM_BASE(&master_dsp_code)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_dsp_data, AS_DATA, 16 )
+static ADDRESS_MAP_START( master_dsp_data, ADDRESS_SPACE_DATA, 16 )
 	AM_RANGE(0x2000, 0x200f) AM_READWRITE(dspcuskey_r,dspcuskey_w)
 	AM_RANGE(0x8000, 0xffff) AM_READWRITE(dspram16_r,dspram16_w) /* 0x8000 words */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_dsp_io, AS_IO, 16 )
+static ADDRESS_MAP_START( master_dsp_io, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x00,0x00) AM_READWRITE(dsp_port0_r,dsp_port0_w)
 	AM_RANGE(0x01,0x01) AM_READWRITE(dsp_port1_r,dsp_port1_w)
 	AM_RANGE(0x02,0x02) AM_READWRITE(dsp_port2_r,dsp_port2_w)
@@ -795,23 +828,22 @@ ADDRESS_MAP_END
 /************************************************************************************/
 
 static void
-RenderSlaveOutput( running_machine &machine, UINT16 data )
+RenderSlaveOutput( UINT16 data )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	if( state->m_mpDspState->slaveOutputSize >= 4096 )
+	if( mpDspState->slaveOutputSize >= 4096 )
 	{
-		logerror( "FATAL ERROR: SLAVE OVERFLOW (0x%x)\n",state->m_mpDspState->slaveOutputBuffer[0]  );
+		logerror( "FATAL ERROR: SLAVE OVERFLOW (0x%x)\n",mpDspState->slaveOutputBuffer[0]  );
 		exit(1);
 		return;
 	}
 
 	/* append word to slave output buffer */
-	state->m_mpDspState->slaveOutputBuffer[state->m_mpDspState->slaveOutputSize++] = data;
+	mpDspState->slaveOutputBuffer[mpDspState->slaveOutputSize++] = data;
 
 	{
-		UINT16 *pSource = state->m_mpDspState->slaveOutputBuffer;
+		UINT16 *pSource = mpDspState->slaveOutputBuffer;
 		UINT16 count = *pSource++;
-		if( count && state->m_mpDspState->slaveOutputSize > count )
+		if( count && mpDspState->slaveOutputSize > count )
 		{
 			UINT16 color = *pSource++;
 			int sx[4], sy[4],zcode[4];
@@ -825,30 +857,30 @@ RenderSlaveOutput( running_machine &machine, UINT16 data )
 					sy[j] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)pSource[3*j+1];
 					zcode[j] = pSource[3*j+2];
 				}
-				namcos21_DrawQuad( machine, sx, sy, zcode, color&0x7fff );
+				namcos21_DrawQuad( sx, sy, zcode, color&0x7fff );
 			}
 			else
 			{
 				int quad_idx = color*6;
 				for(;;)
 				{
-					UINT8 code = state->m_pointram[quad_idx++];
-					color = state->m_pointram[quad_idx++]|(code<<8);
+					UINT8 code = pointram[quad_idx++];
+					color = pointram[quad_idx++]|(code<<8);
 					for( j=0; j<4; j++ )
 					{
-						UINT8 vi = state->m_pointram[quad_idx++];
+						UINT8 vi = pointram[quad_idx++];
 						sx[j] = NAMCOS21_POLY_FRAME_WIDTH/2  + (INT16)pSource[vi*3+0];
 						sy[j] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)pSource[vi*3+1];
 						zcode[j] = pSource[vi*3+2];
 					}
-					namcos21_DrawQuad( machine, sx, sy, zcode, color&0x7fff );
+					namcos21_DrawQuad( sx, sy, zcode, color&0x7fff );
 					if( code&0x80 )
 					{ /* end-of-quadlist marker */
 						break;
 					}
 				}
 			}
-			state->m_mpDspState->slaveOutputSize = 0;
+			mpDspState->slaveOutputSize = 0;
 		}
 		else if( count==0 )
 		{
@@ -865,12 +897,12 @@ static READ16_HANDLER(slave_port0_r)
 
 static WRITE16_HANDLER(slave_port0_w)
 {
-	RenderSlaveOutput( space->machine(), data );
+	RenderSlaveOutput( data );
 }
 
 static READ16_HANDLER(slave_port2_r)
 {
-	return GetInputBytesAdvertisedForSlave(space->machine());
+	return GetInputBytesAdvertisedForSlave(space->machine);
 } /* slave_port2_r */
 
 static READ16_HANDLER(slave_port3_r)
@@ -887,7 +919,7 @@ static WRITE16_HANDLER(slave_port3_w)
 
 static WRITE16_HANDLER( slave_XF_output_w )
 {
-	if (ENABLE_LOGGING) logerror( "0x%x:slaveXF(%d)\n", cpu_get_pc(&space->device()), data );
+	if (ENABLE_LOGGING) logerror( "0x%x:slaveXF(%d)\n", cpu_get_pc(space->cpu), data );
 } /* slave_XF_output_w */
 
 static READ16_HANDLER( slave_portf_r )
@@ -895,16 +927,16 @@ static READ16_HANDLER( slave_portf_r )
 	return 1;
 }
 
-static ADDRESS_MAP_START( slave_dsp_program, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( slave_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM /* BIOS */
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_dsp_data, AS_DATA, 16 )
+static ADDRESS_MAP_START( slave_dsp_data, ADDRESS_SPACE_DATA, 16 )
 	/* no external data memory */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_dsp_io, AS_IO, 16 )
+static ADDRESS_MAP_START( slave_dsp_io, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x00,0x00) AM_READWRITE(slave_port0_r,slave_port0_w)
 	AM_RANGE(0x02,0x02) AM_READ(slave_port2_r)
 	AM_RANGE(0x03,0x03) AM_READWRITE(slave_port3_r,slave_port3_w)
@@ -935,72 +967,68 @@ ADDRESS_MAP_END
  */
 static WRITE16_HANDLER( pointram_control_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-//  UINT16 prev = state->m_pointram_control;
-	COMBINE_DATA( &state->m_pointram_control );
+//  UINT16 prev = pointram_control;
+	COMBINE_DATA( &pointram_control );
 
-	/* state->m_pointram_control&0x20 : bank for depthcue data */
-#if 0
-	logerror( "dsp_control_w:'%s':%x[%x]:=%04x ",
-		space->cpu->tag,
-		cpu_get_pc(space->cpu),
-		offset,
-		state->m_pointram_control );
+	/* pointram_control&0x20 : bank for depthcue data */
+/*
+    logerror( "dsp_control_w:'%s':%x[%x]:=%04x ",
+            space->cpu->tag,
+            cpu_get_pc(space->cpu),
+            offset,
+            pointram_control );
 
-	UINT16 delta = (prev^state->m_pointram_control)&state->m_pointram_control;
-	if( delta&0x10 )
-	{
-		logerror( " [reset]" );
-	}
-	if( delta&2 )
-	{
-		logerror( " send(A)%x", state->m_pointram_control&1 );
-	}
-	if( delta&4 )
-	{
-		logerror( " send(B)%x", state->m_pointram_control&1 );
-	}
-	if( delta&8 )
-	{
-		logerror( " send(C)%x", state->m_pointram_control&1 );
-	}
-	logerror( "\n" );
-#endif
-	state->m_pointram_idx = 0; /* HACK */
+    UINT16 delta = (prev^pointram_control)&pointram_control;
+    if( delta&0x10 )
+    {
+        logerror( " [reset]" );
+    }
+    if( delta&2 )
+    {
+        logerror( " send(A)%x", pointram_control&1 );
+    }
+    if( delta&4 )
+    {
+        logerror( " send(B)%x", pointram_control&1 );
+    }
+    if( delta&8 )
+    {
+        logerror( " send(C)%x", pointram_control&1 );
+    }
+    logerror( "\n" );
+*/
+	pointram_idx = 0; /* HACK */
 } /* pointram_control_w */
 
 static READ16_HANDLER( pointram_data_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_pointram[state->m_pointram_idx];
+	return pointram[pointram_idx];
 } /* pointram_data_r */
 
 static WRITE16_HANDLER( pointram_data_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	if( ACCESSING_BITS_0_7 )
 	{
-//      if( (state->m_pointram_idx%6)==0 ) logerror("\n" );
+//      if( (pointram_idx%6)==0 ) logerror("\n" );
 //      logerror( " %02x", data );
-		state->m_pointram[state->m_pointram_idx++] = data;
-		state->m_pointram_idx &= (PTRAM_SIZE-1);
+		pointram[pointram_idx++] = data;
+		pointram_idx &= (PTRAM_SIZE-1);
 	}
 } /* pointram_data_w */
 
+static UINT8 namcos21_depthcue[2][0x400]; /* 0x800 nybbles */
 
 static READ16_HANDLER( namcos21_depthcue_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	int bank = (state->m_pointram_control&0x20)?1:0;
-	return state->m_depthcue[bank][offset];
+	int bank = (pointram_control&0x20)?1:0;
+	return namcos21_depthcue[bank][offset];
 }
 static WRITE16_HANDLER( namcos21_depthcue_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	if( ACCESSING_BITS_0_7 )
 	{
-		int bank = (state->m_pointram_control&0x20)?1:0;
-		state->m_depthcue[bank][offset] = data;
+		int bank = (pointram_control&0x20)?1:0;
+		namcos21_depthcue[bank][offset] = data;
 //      if( (offset&0xf)==0 ) logerror( "\n depthcue: " );
 //      logerror( " %02x", data );
 	}
@@ -1010,69 +1038,61 @@ static WRITE16_HANDLER( namcos21_depthcue_w )
 
 static READ16_HANDLER( namcos2_68k_dualportram_word_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_mpDualPortRAM[offset];
+	return mpDualPortRAM[offset];
 }
 
 static WRITE16_HANDLER( namcos2_68k_dualportram_word_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	if( ACCESSING_BITS_0_7 )
 	{
-		state->m_mpDualPortRAM[offset] = data&0xff;
+		mpDualPortRAM[offset] = data&0xff;
 	}
 }
 
 static READ8_HANDLER( namcos2_dualportram_byte_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_mpDualPortRAM[offset];
+	return mpDualPortRAM[offset];
 }
 
 static WRITE8_HANDLER( namcos2_dualportram_byte_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	state->m_mpDualPortRAM[offset] = data;
+	mpDualPortRAM[offset] = data;
 }
 
 /* shared RAM memory handlers */
 
 static READ16_HANDLER( shareram1_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_mpSharedRAM1[offset];
+	return mpSharedRAM1[offset];
 }
 
 static WRITE16_HANDLER( shareram1_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_mpSharedRAM1[offset] );
+	COMBINE_DATA( &mpSharedRAM1[offset] );
 }
 
 /* some games have read-only areas where more ROMs are mapped */
 
 static READ16_HANDLER( datarom_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_mpDataROM[offset];
+	return mpDataROM[offset];
 }
 
 static READ16_HANDLER( data2_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_mpDataROM[0x100000/2+offset];
+	return mpDataROM[0x100000/2+offset];
 }
 
 /* palette memory handlers */
 
 static READ16_HANDLER( paletteram16_r )
 {
-	return space->machine().generic.paletteram.u16[offset];
+	return paletteram16[offset];
 }
 
 static WRITE16_HANDLER( paletteram16_w )
 {
-	COMBINE_DATA(&space->machine().generic.paletteram.u16[offset]);
+	COMBINE_DATA(&paletteram16[offset]);
 }
 
 /******************************************************************************/
@@ -1088,7 +1108,7 @@ static READ16_HANDLER( NAMCO_C139_SCI_register_r ){ return 0; }
 /*************************************************************/
 
 #define NAMCO21_68K_COMMON \
-	AM_RANGE(0x200000, 0x20ffff) AM_READWRITE(dspram16_r,dspram16_w) AM_BASE_MEMBER(namcos21_state, m_dspram16) \
+	AM_RANGE(0x200000, 0x20ffff) AM_READWRITE(dspram16_r,dspram16_w) AM_BASE(&namcos21_dspram16) \
 	AM_RANGE(0x280000, 0x280001) AM_WRITENOP /* written once on startup */ \
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(pointram_control_w) \
 	AM_RANGE(0x440000, 0x440001) AM_READWRITE(pointram_data_r,pointram_data_w) \
@@ -1096,17 +1116,17 @@ static READ16_HANDLER( NAMCO_C139_SCI_register_r ){ return 0; }
 	AM_RANGE(0x480000, 0x4807ff) AM_READWRITE(namcos21_depthcue_r,namcos21_depthcue_w) /* Air Combat */ \
 	AM_RANGE(0x700000, 0x71ffff) AM_READWRITE(namco_obj16_r,namco_obj16_w) \
 	AM_RANGE(0x720000, 0x720007) AM_READWRITE(namco_spritepos16_r,namco_spritepos16_w) \
-	AM_RANGE(0x740000, 0x75ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE_GENERIC(paletteram) \
+	AM_RANGE(0x740000, 0x75ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE(&paletteram16) \
 	AM_RANGE(0x760000, 0x760001) AM_READWRITE(namcos21_video_enable_r,namcos21_video_enable_w) \
 	AM_RANGE(0x800000, 0x8fffff) AM_READ(datarom_r) \
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE_MEMBER(namcos21_state, m_mpSharedRAM1) \
+	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE(&mpSharedRAM1) \
 	AM_RANGE(0xa00000, 0xa00fff) AM_READWRITE(namcos2_68k_dualportram_word_r,namcos2_68k_dualportram_word_w) \
 	AM_RANGE(0xb00000, 0xb03fff) AM_READWRITE(NAMCO_C139_SCI_buffer_r,NAMCO_C139_SCI_buffer_w) \
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w) \
 	AM_RANGE(0xc00000, 0xcfffff) AM_READ(data2_r) /* Cyber Sled */ \
 	AM_RANGE(0xd00000, 0xdfffff) AM_READ(data2_r) \
 
-static ADDRESS_MAP_START( namcos21_68k_master, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcos21_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
@@ -1114,7 +1134,7 @@ static ADDRESS_MAP_START( namcos21_68k_master, AS_PROGRAM, 16 )
 	NAMCO21_68K_COMMON
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( namcos21_68k_slave, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcos21_68k_slave, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x13ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_slave_C148_r,namcos2_68k_slave_C148_w)
@@ -1127,22 +1147,20 @@ ADDRESS_MAP_END
  *************************************************************/
 static READ16_HANDLER( winrun_dspcomram_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	int bank = 1-(state->m_winrun_dspcomram_control[0x4/2]&1);
-	UINT16 *mem = &state->m_winrun_dspcomram[0x1000*bank];
+	int bank = 1-(winrun_dspcomram_control[0x4/2]&1);
+	UINT16 *mem = &winrun_dspcomram[0x1000*bank];
 	return mem[offset];
 }
 static WRITE16_HANDLER( winrun_dspcomram_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	int bank = 1-(state->m_winrun_dspcomram_control[0x4/2]&1);
-	UINT16 *mem = &state->m_winrun_dspcomram[0x1000*bank];
+	int bank = 1-(winrun_dspcomram_control[0x4/2]&1);
+	UINT16 *mem = &winrun_dspcomram[0x1000*bank];
 	COMBINE_DATA( &mem[offset] );
 }
 
 static READ16_HANDLER( winrun_cuskey_r )
 {
-	int pc = cpu_get_pc(&space->device());
+	int pc = cpu_get_pc(space->cpu);
 	switch( pc )
 	{
 	case 0x0064: /* winrun91 */
@@ -1166,12 +1184,11 @@ static WRITE16_HANDLER( winrun_cuskey_w )
 } /* winrun_cuskey_w */
 
 static void
-winrun_flushpoly( running_machine &machine )
+winrun_flushpoly( void )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	if( state->m_winrun_poly_index>0 )
+	if( winrun_poly_index>0 )
 	{
-		const UINT16 *pSource = state->m_winrun_poly_buf;
+		const UINT16 *pSource = winrun_poly_buf;
 		UINT16 color;
 		int sx[4], sy[4], zcode[4];
 		int j;
@@ -1184,45 +1201,44 @@ winrun_flushpoly( running_machine &machine )
 				sy[j] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)*pSource++;
 				zcode[j] = *pSource++;
 			}
-			namcos21_DrawQuad( machine, sx, sy, zcode, color&0x7fff );
+			namcos21_DrawQuad( sx, sy, zcode, color&0x7fff );
 		}
 		else
 		{
 			int quad_idx = color*6;
 			for(;;)
 			{
-				UINT8 code = state->m_pointram[quad_idx++];
-				color = state->m_pointram[quad_idx++];
+				UINT8 code = pointram[quad_idx++];
+				color = pointram[quad_idx++];
 				for( j=0; j<4; j++ )
 				{
-					UINT8 vi = state->m_pointram[quad_idx++];
+					UINT8 vi = pointram[quad_idx++];
 					sx[j] = NAMCOS21_POLY_FRAME_WIDTH/2  + (INT16)pSource[vi*3+0];
 					sy[j] = NAMCOS21_POLY_FRAME_HEIGHT/2 + (INT16)pSource[vi*3+1];
 					zcode[j] = pSource[vi*3+2];
 				}
-				namcos21_DrawQuad( machine, sx, sy, zcode, color&0x7fff );
+				namcos21_DrawQuad( sx, sy, zcode, color&0x7fff );
 				if( code&0x80 )
 				{ /* end-of-quadlist marker */
 					break;
 				}
 			}
 		}
-		state->m_winrun_poly_index = 0;
+		winrun_poly_index = 0;
 	}
 } /* winrun_flushpoly */
 
 static READ16_HANDLER( winrun_poly_reset_r )
 {
-	winrun_flushpoly(space->machine());
+	winrun_flushpoly();
 	return 0;
 }
 
 static WRITE16_HANDLER( winrun_dsp_render_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	if( state->m_winrun_poly_index<WINRUN_MAX_POLY_PARAM )
+	if( winrun_poly_index<WINRUN_MAX_POLY_PARAM )
 	{
-		state->m_winrun_poly_buf[state->m_winrun_poly_index++] = data;
+		winrun_poly_buf[winrun_poly_index++] = data;
 	}
 	else
 	{
@@ -1232,51 +1248,48 @@ static WRITE16_HANDLER( winrun_dsp_render_w )
 
 static WRITE16_HANDLER( winrun_dsp_pointrom_addr_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
 	if( offset==0 )
 	{ /* port 8 */
-		state->m_winrun_pointrom_addr = data;
+		winrun_pointrom_addr = data;
 	}
 	else
 	{ /* port 9 */
-		state->m_winrun_pointrom_addr |= (data<<16);
+		winrun_pointrom_addr |= (data<<16);
 	}
 }
 
 static READ16_HANDLER( winrun_dsp_pointrom_data_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	UINT16 *ptrom = (UINT16 *)space->machine().region("user2")->base();
-	return ptrom[state->m_winrun_pointrom_addr++];
+	UINT16 *ptrom = (UINT16 *)memory_region(space->machine, "user2");
+	return ptrom[winrun_pointrom_addr++];
 } /* winrun_dsp_pointrom_data_r */
 
 static WRITE16_HANDLER( winrun_dsp_complete_w )
 {
 	if( data )
 	{
-		winrun_flushpoly(space->machine());
-		cputag_set_input_line(space->machine(), "dsp", INPUT_LINE_RESET, PULSE_LINE);
-		namcos21_ClearPolyFrameBuffer(space->machine());
+		winrun_flushpoly();
+		cputag_set_input_line(space->machine, "dsp", INPUT_LINE_RESET, PULSE_LINE);
+		namcos21_ClearPolyFrameBuffer();
 	}
 }
 
 static READ16_HANDLER( winrun_table_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_winrun_polydata[offset];
+	return winrun_polydata[offset];
 }
 
-static ADDRESS_MAP_START( winrun_dsp_program, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( winrun_dsp_program, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( winrun_dsp_data, AS_DATA, 16 )
+static ADDRESS_MAP_START( winrun_dsp_data, ADDRESS_SPACE_DATA, 16 )
 	AM_RANGE( 0x2000, 0x200f ) AM_READWRITE(winrun_cuskey_r,winrun_cuskey_w)
 	AM_RANGE( 0x4000, 0x4fff ) AM_READWRITE(winrun_dspcomram_r,winrun_dspcomram_w)
 	AM_RANGE( 0x8000, 0xffff ) AM_READ(winrun_table_r )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( winrun_dsp_io, AS_IO, 16 )
+static ADDRESS_MAP_START( winrun_dsp_io, ADDRESS_SPACE_IO, 16 )
 	AM_RANGE(0x08,0x09) AM_READWRITE(winrun_dsp_pointrom_data_r,winrun_dsp_pointrom_addr_w)
 	AM_RANGE(0x0a,0x0a) AM_WRITE(winrun_dsp_render_w)
 	AM_RANGE(0x0b,0x0b) AM_WRITENOP
@@ -1289,30 +1302,27 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( gpu_data_r )
 {
-	const UINT16 *pSrc = (UINT16 *)space->machine().region( "user3" )->base();
+	const UINT16 *pSrc = (UINT16 *)memory_region( space->machine, "user3" );
 	return pSrc[offset];
 }
 
 static READ16_HANDLER( winrun_gpucomram_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_winrun_gpucomram[offset];
+	return winrun_gpucomram[offset];
 }
 static WRITE16_HANDLER( winrun_gpucomram_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_winrun_gpucomram[offset] );
+	COMBINE_DATA( &winrun_gpucomram[offset] );
 }
 
 static WRITE16_HANDLER( winrun_dspbios_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_winrun_dspbios[offset] );
+	COMBINE_DATA( &winrun_dspbios[offset] );
 	if( offset==0xfff )
 	{
-		UINT16 *mem = (UINT16 *)space->machine().region("dsp")->base();
-		memcpy( mem, state->m_winrun_dspbios, 0x2000 );
-		state->m_winrun_dsp_alive = 1;
+		UINT16 *mem = (UINT16 *)memory_region(space->machine, "dsp");
+		memcpy( mem, winrun_dspbios, 0x2000 );
+		winrun_dsp_alive = 1;
 	}
 } /* winrun_dspbios_w */
 
@@ -1323,53 +1333,49 @@ static WRITE16_HANDLER( winrun_dspbios_w )
 
 static READ16_HANDLER( winrun_68k_dspcomram_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	int bank = state->m_winrun_dspcomram_control[0x4/2]&1;
-	UINT16 *mem = &state->m_winrun_dspcomram[0x1000*bank];
+	int bank = winrun_dspcomram_control[0x4/2]&1;
+	UINT16 *mem = &winrun_dspcomram[0x1000*bank];
 	return mem[offset];
 }
 
 static WRITE16_HANDLER( winrun_68k_dspcomram_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	int bank = state->m_winrun_dspcomram_control[0x4/2]&1;
-	UINT16 *mem = &state->m_winrun_dspcomram[0x1000*bank];
+	int bank = winrun_dspcomram_control[0x4/2]&1;
+	UINT16 *mem = &winrun_dspcomram[0x1000*bank];
 	COMBINE_DATA( &mem[offset] );
 }
 
 static READ16_HANDLER( winrun_dspcomram_control_r )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	return state->m_winrun_dspcomram_control[offset];
+	return winrun_dspcomram_control[offset];
 }
 
 static WRITE16_HANDLER( winrun_dspcomram_control_w )
 {
-	namcos21_state *state = space->machine().driver_data<namcos21_state>();
-	COMBINE_DATA( &state->m_winrun_dspcomram_control[offset] );
+	COMBINE_DATA( &winrun_dspcomram_control[offset] );
 }
 
-static ADDRESS_MAP_START( am_master_winrun, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_master_winrun, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_master_C148_r,namcos2_68k_master_C148_w)
-	AM_RANGE(0x250000, 0x25ffff) AM_RAM AM_BASE_MEMBER(namcos21_state, m_winrun_polydata )
+	AM_RANGE(0x250000, 0x25ffff) AM_RAM AM_BASE( &winrun_polydata )
 	AM_RANGE(0x260000, 0x26ffff) AM_RAM /* unused? */
-	AM_RANGE(0x280000, 0x281fff) AM_WRITE(winrun_dspbios_w) AM_BASE_MEMBER(namcos21_state, m_winrun_dspbios)
+	AM_RANGE(0x280000, 0x281fff) AM_WRITE(winrun_dspbios_w) AM_BASE(&winrun_dspbios)
 	AM_RANGE(0x380000, 0x38000f) AM_READWRITE(winrun_dspcomram_control_r,winrun_dspcomram_control_w)
 	AM_RANGE(0x3c0000, 0x3c1fff) AM_READWRITE(winrun_68k_dspcomram_r,winrun_68k_dspcomram_w)
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(pointram_control_w)
 	AM_RANGE(0x440000, 0x440001) AM_READWRITE(pointram_data_r,pointram_data_w)
 	AM_RANGE(0x600000, 0x60ffff) AM_READWRITE(winrun_gpucomram_r,winrun_gpucomram_w)
 	AM_RANGE(0x800000, 0x87ffff) AM_READ(datarom_r)
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE_MEMBER(namcos21_state, m_mpSharedRAM1)
+	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE(&mpSharedRAM1)
 	AM_RANGE(0xa00000, 0xa00fff) AM_READWRITE(namcos2_68k_dualportram_word_r,namcos2_68k_dualportram_word_w)
 	AM_RANGE(0xb00000, 0xb03fff) AM_READWRITE(NAMCO_C139_SCI_buffer_r,NAMCO_C139_SCI_buffer_w)
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( am_slave_winrun, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_slave_winrun, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x13ffff) AM_RAM
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_slave_C148_r,namcos2_68k_slave_C148_w)
@@ -1381,13 +1387,13 @@ static ADDRESS_MAP_START( am_slave_winrun, AS_PROGRAM, 16 )
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( am_gpu_winrun, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( am_gpu_winrun, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READWRITE(winrun_gpu_color_r,winrun_gpu_color_w) /* ? */
 	AM_RANGE(0x180000, 0x19ffff) AM_RAM /* work RAM */
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_gpu_C148_r,namcos2_68k_gpu_C148_w)
-	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE_MEMBER(namcos21_state, m_winrun_gpucomram )
-	AM_RANGE(0x400000, 0x41ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE_GENERIC( paletteram )
+	AM_RANGE(0x200000, 0x20ffff) AM_RAM AM_BASE( &winrun_gpucomram )
+	AM_RANGE(0x400000, 0x41ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE( &paletteram16 )
 	AM_RANGE(0x600000, 0x6fffff) AM_READ(gpu_data_r)
 	AM_RANGE(0xc00000, 0xcfffff) AM_READWRITE(winrun_gpu_videoram_r,winrun_gpu_videoram_w)
 	AM_RANGE(0xd00000, 0xd0000f) AM_READWRITE(winrun_gpu_register_r,winrun_gpu_register_w)
@@ -1399,12 +1405,12 @@ ADDRESS_MAP_END
 /* SOUND 6809 CPU Memory declarations                        */
 /*************************************************************/
 
-static ADDRESS_MAP_START( am_sound_winrun, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank6") /* banked */
+static ADDRESS_MAP_START( am_sound_winrun, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK(6) /* banked */
 	AM_RANGE(0x3000, 0x3003) AM_WRITENOP /* ? */
-	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
+	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)
 	AM_RANGE(0x5000, 0x6fff) AM_DEVREADWRITE("c140", c140_r,c140_w)
-	AM_RANGE(0x7000, 0x77ff) AM_READWRITE(namcos2_dualportram_byte_r,namcos2_dualportram_byte_w) AM_BASE_MEMBER(namcos21_state, m_mpDualPortRAM)
+	AM_RANGE(0x7000, 0x77ff) AM_READWRITE(namcos2_dualportram_byte_r,namcos2_dualportram_byte_w) AM_BASE(&mpDualPortRAM)
 	AM_RANGE(0x7800, 0x7fff) AM_READWRITE(namcos2_dualportram_byte_r,namcos2_dualportram_byte_w) /* mirror */
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xbfff) AM_WRITENOP /* amplifier enable on 1st write */
@@ -1419,7 +1425,7 @@ ADDRESS_MAP_END
 /* I/O HD63705 MCU Memory declarations                       */
 /*************************************************************/
 
-static ADDRESS_MAP_START( am_mcu_winrun, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( am_mcu_winrun, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_READNOP
 	AM_RANGE(0x0001, 0x0001) AM_READ_PORT("PORTB")			/* p1,p2 start */
 	AM_RANGE(0x0002, 0x0002) AM_READ_PORT("PORTC")			/* coins */
@@ -1435,7 +1441,7 @@ static ADDRESS_MAP_START( am_mcu_winrun, AS_PROGRAM, 8 )
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("DIAL1")
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("DIAL2")
 	AM_RANGE(0x3003, 0x3003) AM_READ_PORT("DIAL3")
-	AM_RANGE(0x5000, 0x57ff) AM_READWRITE(namcos2_dualportram_byte_r,namcos2_dualportram_byte_w) AM_BASE_MEMBER(namcos21_state, m_mpDualPortRAM)
+	AM_RANGE(0x5000, 0x57ff) AM_READWRITE(namcos2_dualportram_byte_r,namcos2_dualportram_byte_w) AM_BASE(&mpDualPortRAM)
 	AM_RANGE(0x6000, 0x6fff) AM_READNOP				/* watchdog */
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -1449,22 +1455,22 @@ ADDRESS_MAP_END
 #define DRIVEYES_68K_COMMON \
 	AM_RANGE(0x700000, 0x71ffff) AM_READWRITE(namco_obj16_r,namco_obj16_w) \
 	AM_RANGE(0x720000, 0x720007) AM_READWRITE(namco_spritepos16_r,namco_spritepos16_w) \
-	AM_RANGE(0x740000, 0x75ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE_GENERIC(paletteram) \
+	AM_RANGE(0x740000, 0x75ffff) AM_READWRITE(paletteram16_r,paletteram16_w) AM_BASE(&paletteram16) \
 	AM_RANGE(0x760000, 0x760001) AM_READWRITE(namcos21_video_enable_r,namcos21_video_enable_w) \
 	AM_RANGE(0x800000, 0x8fffff) AM_READ(datarom_r) \
-	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE_MEMBER(namcos21_state, m_mpSharedRAM1) \
+	AM_RANGE(0x900000, 0x90ffff) AM_READWRITE(shareram1_r,shareram1_w) AM_BASE(&mpSharedRAM1) \
 	AM_RANGE(0xa00000, 0xa00fff) AM_READWRITE(namcos2_68k_dualportram_word_r,namcos2_68k_dualportram_word_w) \
 	AM_RANGE(0xb00000, 0xb03fff) AM_READWRITE(NAMCO_C139_SCI_buffer_r,NAMCO_C139_SCI_buffer_w) \
 	AM_RANGE(0xb80000, 0xb8000f) AM_READWRITE(NAMCO_C139_SCI_register_r,NAMCO_C139_SCI_register_w) \
 
 
-static ADDRESS_MAP_START( driveyes_68k_master, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( driveyes_68k_master, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x180000, 0x183fff) AM_READWRITE(NAMCOS2_68K_eeprom_R,NAMCOS2_68K_eeprom_W)// AM_BASE(&namcos2_eeprom) AM_SIZE(&namcos2_eeprom_size)
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READWRITE(namcos2_68k_master_C148_r,namcos2_68k_master_C148_w)
-	AM_RANGE(0x250000, 0x25ffff) AM_RAM AM_BASE_MEMBER(namcos21_state, m_winrun_polydata )
-	AM_RANGE(0x280000, 0x281fff) AM_WRITE(winrun_dspbios_w) AM_BASE_MEMBER(namcos21_state, m_winrun_dspbios)
+	AM_RANGE(0x250000, 0x25ffff) AM_RAM AM_BASE( &winrun_polydata )
+	AM_RANGE(0x280000, 0x281fff) AM_WRITE(winrun_dspbios_w) AM_BASE(&winrun_dspbios)
 	AM_RANGE(0x380000, 0x38000f) AM_READWRITE(winrun_dspcomram_control_r,winrun_dspcomram_control_w)
 	AM_RANGE(0x3c0000, 0x3c1fff) AM_READWRITE(winrun_68k_dspcomram_r,winrun_68k_dspcomram_w)
 	AM_RANGE(0x400000, 0x400001) AM_WRITE(pointram_control_w)
@@ -1472,7 +1478,7 @@ static ADDRESS_MAP_START( driveyes_68k_master, AS_PROGRAM, 16 )
 	DRIVEYES_68K_COMMON
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( driveyes_68k_slave, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( driveyes_68k_slave, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM /* private work RAM */
 	AM_RANGE(0x1c0000, 0x1fffff) AM_READ(namcos2_68k_slave_C148_r) AM_WRITE(namcos2_68k_slave_C148_w)
@@ -1517,200 +1523,199 @@ static const c140_interface C140_interface_typeB =
 	C140_TYPE_SYSTEM21_B
 };
 
-static MACHINE_START( namcos21 )
-{
-	MACHINE_START_CALL( namcos2 );
-	namcos2_kickstart = namcos21_kickstart;
-}
+static MACHINE_DRIVER_START( s21base )
+	MDRV_CPU_ADD("maincpu", M68000,12288000) /* Master */
+	MDRV_CPU_PROGRAM_MAP(namcos21_68k_master)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
 
-static MACHINE_CONFIG_START( s21base, namcos21_state )
-	MCFG_CPU_ADD("maincpu", M68000,12288000) /* Master */
-	MCFG_CPU_PROGRAM_MAP(namcos21_68k_master)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
+	MDRV_CPU_ADD("slave", M68000,12288000) /* Slave */
+	MDRV_CPU_PROGRAM_MAP(namcos21_68k_slave)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
 
-	MCFG_CPU_ADD("slave", M68000,12288000) /* Slave */
-	MCFG_CPU_PROGRAM_MAP(namcos21_68k_slave)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
+	MDRV_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
+	MDRV_CPU_PROGRAM_MAP(am_sound_winrun)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MDRV_CPU_PERIODIC_INT(irq1_line_hold,120)
 
-	MCFG_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
-	MCFG_CPU_PROGRAM_MAP(am_sound_winrun)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
-	MCFG_CPU_PERIODIC_INT(irq1_line_hold,120)
+	MDRV_CPU_ADD("mcu", HD63705,2048000) /* IO */
+	MDRV_CPU_PROGRAM_MAP(am_mcu_winrun)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("mcu", HD63705,2048000) /* IO */
-	MCFG_CPU_PROGRAM_MAP(am_mcu_winrun)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("dspmaster", TMS32025,24000000) /* 24 MHz? overclocked */
+	MDRV_CPU_PROGRAM_MAP(master_dsp_program)
+	MDRV_CPU_DATA_MAP(master_dsp_data)
+	MDRV_CPU_IO_MAP(master_dsp_io)
 
-	MCFG_CPU_ADD("dspmaster", TMS32025,24000000) /* 24 MHz? overclocked */
-	MCFG_CPU_PROGRAM_MAP(master_dsp_program)
-	MCFG_CPU_DATA_MAP(master_dsp_data)
-	MCFG_CPU_IO_MAP(master_dsp_io)
+	MDRV_CPU_ADD("dspslave", TMS32025,24000000*4) /* 24 MHz?; overclocked */
+	MDRV_CPU_PROGRAM_MAP(slave_dsp_program)
+	MDRV_CPU_DATA_MAP(slave_dsp_data)
+	MDRV_CPU_IO_MAP(slave_dsp_io)
 
-	MCFG_CPU_ADD("dspslave", TMS32025,24000000*4) /* 24 MHz?; overclocked */
-	MCFG_CPU_PROGRAM_MAP(slave_dsp_program)
-	MCFG_CPU_DATA_MAP(slave_dsp_data)
-	MCFG_CPU_IO_MAP(slave_dsp_io)
+	MDRV_QUANTUM_TIME(HZ(12000))
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(12000))
-
-	MCFG_MACHINE_START(namcos21)
-	MCFG_MACHINE_RESET(namcos2)
-	MCFG_NVRAM_ADD_1FILL("nvram")
+	MDRV_MACHINE_START(namcos2)
+	MDRV_MACHINE_RESET(namcos2)
+	MDRV_NVRAM_HANDLER(namcos2)
 
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
-	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
-	MCFG_SCREEN_UPDATE_STATIC(namcos21)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
+	MDRV_SCREEN_VISIBLE_AREA(0,495,0,479)
 
-	MCFG_GFXDECODE(namcos21)
-	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
+	MDRV_GFXDECODE(namcos21)
+	MDRV_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
-	MCFG_VIDEO_START(namcos21)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(namcos21)
+	MDRV_VIDEO_UPDATE(namcos21)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( poly_c140_typeA, s21base )
+static MACHINE_DRIVER_START( poly_c140_typeA )
+	MDRV_IMPORT_FROM(s21base)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("c140", C140, 8000000/374)
-	MCFG_SOUND_CONFIG(C140_interface_typeA)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("c140", C140, 8000000/374)
+	MDRV_SOUND_CONFIG(C140_interface_typeA)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.30)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2151, 3579580)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.30)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.30)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( poly_c140_typeB, s21base )
+static MACHINE_DRIVER_START( poly_c140_typeB )
+	MDRV_IMPORT_FROM(s21base)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("c140", C140, 8000000/374)
-	MCFG_SOUND_CONFIG(C140_interface_typeB)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("c140", C140, 8000000/374)
+	MDRV_SOUND_CONFIG(C140_interface_typeB)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.30)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2151, 3579580)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.30)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.30)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( driveyes, namcos21_state )
-	MCFG_CPU_ADD("maincpu", M68000,12288000) /* Master */
-	MCFG_CPU_PROGRAM_MAP(driveyes_68k_master)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
+static MACHINE_DRIVER_START( driveyes )
+	MDRV_CPU_ADD("maincpu", M68000,12288000) /* Master */
+	MDRV_CPU_PROGRAM_MAP(driveyes_68k_master)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
 
-	MCFG_CPU_ADD("slave", M68000,12288000) /* Slave */
-	MCFG_CPU_PROGRAM_MAP(driveyes_68k_slave)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
+	MDRV_CPU_ADD("slave", M68000,12288000) /* Slave */
+	MDRV_CPU_PROGRAM_MAP(driveyes_68k_slave)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
 
-	MCFG_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
-	MCFG_CPU_PROGRAM_MAP(am_sound_winrun)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
-	MCFG_CPU_PERIODIC_INT(irq1_line_hold,120)
+	MDRV_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
+	MDRV_CPU_PROGRAM_MAP(am_sound_winrun)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MDRV_CPU_PERIODIC_INT(irq1_line_hold,120)
 
-	MCFG_CPU_ADD("mcu", HD63705,2048000) /* IO */
-	MCFG_CPU_PROGRAM_MAP(am_mcu_winrun)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("mcu", HD63705,2048000) /* IO */
+	MDRV_CPU_PROGRAM_MAP(am_mcu_winrun)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("dsp", TMS32025,24000000*2) /* 24 MHz? overclocked */
-	MCFG_CPU_PROGRAM_MAP(winrun_dsp_program)
-	MCFG_CPU_DATA_MAP(winrun_dsp_data)
-	MCFG_CPU_IO_MAP(winrun_dsp_io)
+	MDRV_CPU_ADD("dsp", TMS32025,24000000*2) /* 24 MHz? overclocked */
+	MDRV_CPU_PROGRAM_MAP(winrun_dsp_program)
+	MDRV_CPU_DATA_MAP(winrun_dsp_data)
+	MDRV_CPU_IO_MAP(winrun_dsp_io)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
+	MDRV_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
 
-	MCFG_MACHINE_START(namcos21)
-	MCFG_MACHINE_RESET(namcos2)
-	MCFG_NVRAM_ADD_1FILL("nvram")
-
-
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
-	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
-	MCFG_SCREEN_UPDATE_STATIC(namcos21)
-
-	MCFG_GFXDECODE(namcos21)
-	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
-
-	MCFG_VIDEO_START(namcos21)
-
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("c140", C140, 8000000/374)
-	MCFG_SOUND_CONFIG(C140_interface_typeA)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
-
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.30)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.30)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_START( winrun_c140_typeB, namcos21_state )
-	MCFG_CPU_ADD("maincpu", M68000,12288000) /* Master */
-	MCFG_CPU_PROGRAM_MAP(am_master_winrun)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
-
-	MCFG_CPU_ADD("slave", M68000,12288000) /* Slave */
-	MCFG_CPU_PROGRAM_MAP(am_slave_winrun)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
-
-	MCFG_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
-	MCFG_CPU_PROGRAM_MAP(am_sound_winrun)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
-	MCFG_CPU_PERIODIC_INT(irq1_line_hold,120)
-
-	MCFG_CPU_ADD("mcu", HD63705,2048000) /* IO */
-	MCFG_CPU_PROGRAM_MAP(am_mcu_winrun)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-
-	MCFG_CPU_ADD("dsp", TMS32025,24000000) /* 24 MHz? overclocked */
-	MCFG_CPU_PROGRAM_MAP(winrun_dsp_program)
-	MCFG_CPU_DATA_MAP(winrun_dsp_data)
-	MCFG_CPU_IO_MAP(winrun_dsp_io)
-
-	MCFG_CPU_ADD("gpu", M68000,12288000) /* graphics coprocessor */
-	MCFG_CPU_PROGRAM_MAP(am_gpu_winrun)
-	MCFG_CPU_VBLANK_INT("screen", namcos2_68k_gpu_vblank)
-
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
-
-	MCFG_MACHINE_START(namcos21)
-	MCFG_MACHINE_RESET(namcos2)
-	MCFG_NVRAM_ADD_1FILL("nvram")
+	MDRV_MACHINE_START(namcos2)
+	MDRV_MACHINE_RESET(namcos2)
+	MDRV_NVRAM_HANDLER(namcos2)
 
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
-	MCFG_SCREEN_VISIBLE_AREA(0,495,0,479)
-	MCFG_SCREEN_UPDATE_STATIC(namcos21)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
+	MDRV_SCREEN_VISIBLE_AREA(0,495,0,479)
 
-	MCFG_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
+	MDRV_GFXDECODE(namcos21)
+	MDRV_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
 
-	MCFG_VIDEO_START(namcos21)
+	MDRV_VIDEO_START(namcos21)
+	MDRV_VIDEO_UPDATE(namcos21)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("c140", C140, 8000000/374)
-	MCFG_SOUND_CONFIG(C140_interface_typeB)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("c140", C140, 8000000/374)
+	MDRV_SOUND_CONFIG(C140_interface_typeA)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579580)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.30)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2151, 3579580)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.30)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.30)
+MACHINE_DRIVER_END
 
-ROM_START( aircomb )
+static MACHINE_DRIVER_START( winrun_c140_typeB )
+	MDRV_CPU_ADD("maincpu", M68000,12288000) /* Master */
+	MDRV_CPU_PROGRAM_MAP(am_master_winrun)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_master_vblank)
+
+	MDRV_CPU_ADD("slave", M68000,12288000) /* Slave */
+	MDRV_CPU_PROGRAM_MAP(am_slave_winrun)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_slave_vblank)
+
+	MDRV_CPU_ADD("audiocpu", M6809,3072000) /* Sound */
+	MDRV_CPU_PROGRAM_MAP(am_sound_winrun)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)
+	MDRV_CPU_PERIODIC_INT(irq1_line_hold,120)
+
+	MDRV_CPU_ADD("mcu", HD63705,2048000) /* IO */
+	MDRV_CPU_PROGRAM_MAP(am_mcu_winrun)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MDRV_CPU_ADD("dsp", TMS32025,24000000) /* 24 MHz? overclocked */
+	MDRV_CPU_PROGRAM_MAP(winrun_dsp_program)
+	MDRV_CPU_DATA_MAP(winrun_dsp_data)
+	MDRV_CPU_IO_MAP(winrun_dsp_io)
+
+	MDRV_CPU_ADD("gpu", M68000,12288000) /* graphics coprocessor */
+	MDRV_CPU_PROGRAM_MAP(am_gpu_winrun)
+	MDRV_CPU_VBLANK_INT("screen", namcos2_68k_gpu_vblank)
+
+	MDRV_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
+
+	MDRV_MACHINE_START(namcos2)
+	MDRV_MACHINE_RESET(namcos2)
+	MDRV_NVRAM_HANDLER(namcos2)
+
+
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(NAMCOS21_POLY_FRAME_WIDTH,NAMCOS21_POLY_FRAME_HEIGHT)
+	MDRV_SCREEN_VISIBLE_AREA(0,495,0,479)
+
+	MDRV_PALETTE_LENGTH(NAMCOS21_NUM_COLORS)
+
+	MDRV_VIDEO_START(namcos21)
+	MDRV_VIDEO_UPDATE(namcos21)
+
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MDRV_SOUND_ADD("c140", C140, 8000000/374)
+	MDRV_SOUND_CONFIG(C140_interface_typeB)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
+
+	MDRV_SOUND_ADD("ym", YM2151, 3579580)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.30)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.30)
+MACHINE_DRIVER_END
+
+ROM_START( aircombu )
 	ROM_REGION( 0x100000, "maincpu", 0 ) /* Master */
 	ROM_LOAD16_BYTE( "ac2-mpr-u.3j",  0x000000, 0x80000, CRC(a7133f85) SHA1(9f1c99dd503f1fc81096170fd272e33ae8a7de2f) )
 	ROM_LOAD16_BYTE( "ac2-mpr-l.1j",  0x000001, 0x80000, CRC(520a52e6) SHA1(74306e02abfe08aa1afbf325b74dbc0840c3ad3a) )
@@ -1760,10 +1765,10 @@ ROM_START( aircomb )
 	ROM_LOAD("ac1-voi2.12d",0x100000,0x80000,CRC(1fcb51ba) SHA1(80fc815e5fad76d20c3795ab1d89b57d9abc3efd) )
 	ROM_LOAD("ac1-voi3.12e",0x180000,0x80000,CRC(cd202e06) SHA1(72a18f5ba402caefef14b8d1304f337eaaa3eb1d) )
 
-	ROM_REGION( 0x0600, "plds", 0 )
-	ROM_LOAD( "gal16v8a-3pdsp5.17d", 0x0000, 0x0117, CRC(799c1f26) SHA1(d28ed1b9fa78180c5a0b01a7198a2870137c7349) )
-	ROM_LOAD( "plhs18p8-3pobj3.17n", 0x0200, 0x0149, CRC(9625f469) SHA1(29158a3d37485fb0714d0a60bcd07abd26a3f56e) )
-	ROM_LOAD( "plhs18p8-3pobj4.17n", 0x0400, 0x0149, CRC(1b7c90c1) SHA1(ae65aab7a191cdf1af488e144af22b9d8669c903) )
+//  ROM_REGION( 0x0600, "plds", 0 )
+//  ROM_LOAD( "gal16v8a-3pdsp5.17d", 0x0000, 0x0117, CRC(799c1f26) SHA1(d28ed1b9fa78180c5a0b01a7198a2870137c7349) )
+//  ROM_LOAD( "plhs18p8-3pobj3.17n", 0x0200, 0x0149, CRC(9625f469) SHA1(29158a3d37485fb0714d0a60bcd07abd26a3f56e) )
+//  ROM_LOAD( "plhs18p8-3pobj4.17n", 0x0400, 0x0149, CRC(1b7c90c1) SHA1(ae65aab7a191cdf1af488e144af22b9d8669c903) )
 ROM_END
 
 ROM_START( aircombj )
@@ -1874,9 +1879,6 @@ ROM_START( cybsled )
 	ROM_LOAD("cy1-voi1.12c",0x080000,0x80000,CRC(2b335f06) SHA1(2b2cd407c34388b56496f84a414daa153780b098) )
 	ROM_LOAD("cy1-voi2.12d",0x100000,0x80000,CRC(10cd15f0) SHA1(9b721654ed97a13287373c1b2854ac9aeddc271f) )
 	ROM_LOAD("cy1-voi3.12e",0x180000,0x80000,CRC(c902b4a4) SHA1(816357ec1a02a7ebf817ac1182e9c50ce5ca71f6) )
-
-	ROM_REGION( 0x2000, "nvram", 0 ) /* default settings, including calibration */
-	ROM_LOAD( "cybsled.nv",  0x000000, 0x2000, CRC(aa18bf9e) SHA1(3712d4d20e5f5f1c920e3f1f6a00101e874662d0) )
 ROM_END
 
 ROM_START( cybsledj )
@@ -1931,9 +1933,6 @@ ROM_START( cybsledj )
 	ROM_LOAD("cy1-voi1.12c",0x080000,0x80000,CRC(2b335f06) SHA1(2b2cd407c34388b56496f84a414daa153780b098) )
 	ROM_LOAD("cy1-voi2.12d",0x100000,0x80000,CRC(10cd15f0) SHA1(9b721654ed97a13287373c1b2854ac9aeddc271f) )
 	ROM_LOAD("cy1-voi3.12e",0x180000,0x80000,CRC(c902b4a4) SHA1(816357ec1a02a7ebf817ac1182e9c50ce5ca71f6) )
-
-	ROM_REGION( 0x2000, "nvram", 0 ) /* default settings, including calibration */
-	ROM_LOAD( "cybsledj.nv",  0x000000, 0x2000, CRC(a73bb03e) SHA1(e074bfeae14178c867070e06f6690ed13115f5fa) )
 ROM_END
 
 ROM_START( driveyes )
@@ -1947,7 +1946,7 @@ ROM_START( driveyes )
 
 	ROM_REGION( 0x30000, "audiocpu", 0 ) /* Sound */
 /*
-There are 3 separate complete boards used for this 3 screen version....
+There are 3 seperate complete boards used for this 3 screen version....
 "Set2" (center screen board?) has de1_snd0 while the other 2 sets have de1_snd0r (rear speakers??)
 Only "Set2" has voice roms present/dumped?
 We load the "r" set, then load set2's sound CPU code over it to keep the "r" rom in the set
@@ -2040,9 +2039,6 @@ ROM_START( starblad )
 	ROM_LOAD("st1-voi1.bin",0x080000,0x80000,CRC(413e6181) SHA1(e827ec11f5755606affd2635718512aeac9354da) )
 	ROM_LOAD("st1-voi2.bin",0x100000,0x80000,CRC(067d0720) SHA1(a853b2d43027a46c5e707fc677afdaae00f450c7) )
 	ROM_LOAD("st1-voi3.bin",0x180000,0x80000,CRC(8b5aa45f) SHA1(e1214e639200758ad2045bde0368a2d500c1b84a) )
-
-	ROM_REGION( 0x2000, "nvram", ROMREGION_ERASE00)
-	// starblad needs default NVRAM to be all 0
 ROM_END
 
 ROM_START( solvalou )
@@ -2192,35 +2188,33 @@ ROM_START( winrun91 )
 	ROM_LOAD("avo3.11e",0x180000,0x80000,CRC(76e22f92) SHA1(0e1b8d35a5b9c20cc3192d935f0c9da1e69679d2) )
 ROM_END
 
-static void namcos21_init( running_machine &machine, int game_type )
+static void namcos21_init( running_machine *machine, int game_type )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
 	namcos2_gametype = game_type;
-	state->m_pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
-	state->m_mpDataROM = (UINT16 *)machine.region( "user1" )->base();
+	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
+	mpDataROM = (UINT16 *)memory_region( machine, "user1" );
 	InitDSP(machine);
-	state->m_mbNeedsKickstart = 20;
+	mbNeedsKickstart = 20;
 	if( game_type==NAMCOS21_CYBERSLED )
 	{
-		state->m_mbNeedsKickstart = 200;
+		mbNeedsKickstart = 200;
 	}
 } /* namcos21_init */
 
 static DRIVER_INIT( winrun )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	UINT16 *pMem = (UINT16 *)machine.region("dsp")->base();
+	UINT16 *pMem = (UINT16 *)memory_region(machine, "dsp");
 	int pc = 0;
 	pMem[pc++] = 0xff80; /* b */
 	pMem[pc++] = 0;
 
-	state->m_winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
+	winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
 
 	namcos2_gametype = NAMCOS21_WINRUN91;
-	state->m_mpDataROM = (UINT16 *)machine.region( "user1" )->base();
-	state->m_pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
-	state->m_pointram_idx = 0;
-	state->m_mbNeedsKickstart = 0;
+	mpDataROM = (UINT16 *)memory_region( machine, "user1" );
+	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
+	pointram_idx = 0;
+	mbNeedsKickstart = 0;
 }
 
 static DRIVER_INIT( aircombt )
@@ -2241,7 +2235,7 @@ static DRIVER_INIT( cybsled )
 
 static DRIVER_INIT( solvalou )
 {
-	UINT16 *mem = (UINT16 *)machine.region("maincpu")->base();
+	UINT16 *mem = (UINT16 *)memory_region(machine, "maincpu");
 	mem[0x20ce4/2+1] = 0x0000; // $200128
 	mem[0x20cf4/2+0] = 0x4e71; // 2nd ptr_booting
 	mem[0x20cf4/2+1] = 0x4e71;
@@ -2252,17 +2246,16 @@ static DRIVER_INIT( solvalou )
 
 static DRIVER_INIT( driveyes )
 {
-	namcos21_state *state = machine.driver_data<namcos21_state>();
-	UINT16 *pMem = (UINT16 *)machine.region("dsp")->base();
+	UINT16 *pMem = (UINT16 *)memory_region(machine, "dsp");
 	int pc = 0;
 	pMem[pc++] = 0xff80; /* b */
 	pMem[pc++] = 0;
-	state->m_winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
+	winrun_dspcomram = auto_alloc_array(machine, UINT16, 0x1000*2);
 	namcos2_gametype = NAMCOS21_DRIVERS_EYES;
-	state->m_mpDataROM = (UINT16 *)machine.region( "user1" )->base();
-	state->m_pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
-	state->m_pointram_idx = 0;
-	state->m_mbNeedsKickstart = 0;
+	mpDataROM = (UINT16 *)memory_region( machine, "user1" );
+	pointram = auto_alloc_array(machine, UINT8, PTRAM_SIZE);
+	pointram_idx = 0;
+	mbNeedsKickstart = 0;
 }
 
 /*************************************************************/
@@ -2281,8 +2274,10 @@ static INPUT_PORTS_START( s21default )
 	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Service Button") PORT_CODE(KEYCODE_0) PORT_TOGGLE // alt test mode switch
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_DIPNAME( 0x40, 0x40, "Test Switch")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN3 )
 
 	PORT_START("AN0")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -2311,7 +2306,9 @@ static INPUT_PORTS_START( s21default )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("DSW")		/* 63B05Z0 - $2000 DIP SW */
-	PORT_SERVICE( 0x01, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x01, 0x01, "DSW1 (Test Mode)")
+	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x02, "DSW2")
 	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
@@ -2346,32 +2343,41 @@ INPUT_PORTS_END
 
 /* "SCI - ? */
 static INPUT_PORTS_START( winrun )
-	PORT_INCLUDE(s21default)
-
-	PORT_MODIFY("PORTB")		/* 63B05Z0 - PORT B */
+	PORT_START("PORTB")		/* 63B05Z0 - PORT B */
+	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START2 ) /* ? */
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 ) /* ? */
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED ) /* ? */
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED ) /* ? */
 
-	PORT_MODIFY("AN0")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
+	PORT_START("PORTC")		/* 63B05Z0 - PORT C & SCI */
+	/* $a00004? */
+	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_DIPNAME( 0x40, 0x40, "Test Switch")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE ) // advances through tests
+
+	PORT_START("AN0")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN1")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
+	PORT_START("AN1")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(15) PORT_KEYDELTA(10) /* gas */
-	PORT_MODIFY("AN2")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
+	PORT_START("AN2")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(15) PORT_KEYDELTA(10) /* steering */
-	PORT_MODIFY("AN3")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
+	PORT_START("AN3")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Z ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(15) PORT_KEYDELTA(10) /* break */
-	PORT_MODIFY("AN4")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
+	PORT_START("AN4")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN5")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
+	PORT_START("AN5")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN6")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
+	PORT_START("AN6")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN7")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
+	PORT_START("AN7")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_MODIFY("PORTH")		/* 63B05Z0 - PORT H */
+	PORT_START("PORTH")		/* 63B05Z0 - PORT H */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -2379,33 +2385,77 @@ static INPUT_PORTS_START( winrun )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) /* shift up */
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("DSW")		/* 63B05Z0 - $2000 DIP SW */
+	/* $a00026.l */
+	PORT_DIPNAME( 0x01, 0x01, "DIP1 (Test Mode)")
+	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "DIP2")
+	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, "DIP3")
+	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, "DIP4")
+	PORT_DIPSETTING(	0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, "DIP5")
+	PORT_DIPSETTING(	0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "DIP6")
+	PORT_DIPSETTING(	0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, "DIP7")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "DIP8")
+	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+
+	PORT_START("DIAL0")		/* 63B05Z0 - $3000 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL1")		/* 63B05Z0 - $3001 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL2")		/* 63B05Z0 - $3002 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL3")		/* 63B05Z0 - $3003 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-// the default inc/dec analog keys have been chosen to map 'tank' style inputs found on Assault.
-// this makes the game easier to use with the keyboard, providing a familiar left/right stick mapping
-// ports are limited to 10/ef because otherwise, even when calibrated, the game will act as if the
-// inputs wrap around when they hit the maximum, causing undesired movement
 static INPUT_PORTS_START( cybsled )
-	PORT_INCLUDE(s21default)
+	PORT_START("PORTB")		/* 63B05Z0 - PORT B */
+	PORT_BIT( 0x3f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
 
-	PORT_MODIFY("AN0")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
-	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x10,0xef) /* using 0x00 / 0xff causes controls to malfunction */ PORT_CODE_DEC(KEYCODE_I) PORT_CODE_INC(KEYCODE_K) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(2) /* right joystick: vertical */
-	PORT_MODIFY("AN1")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
-	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x10,0xef) /* using 0x00 / 0xff causes controls to malfunction */ PORT_CODE_DEC(KEYCODE_E) PORT_CODE_INC(KEYCODE_D) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(1) /* left joystick: vertical */
-	PORT_MODIFY("AN2")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
-	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x10,0xef) /* using 0x00 / 0xff causes controls to malfunction */ PORT_CODE_DEC(KEYCODE_J) PORT_CODE_INC(KEYCODE_L) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(2) /* right joystick: horizontal */
-	PORT_MODIFY("AN3")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
-	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x10,0xef) /* using 0x00 / 0xff causes controls to malfunction */ PORT_CODE_DEC(KEYCODE_S) PORT_CODE_INC(KEYCODE_F) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(1) /* left joystick: horizontal */
-	PORT_MODIFY("AN4")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
+	PORT_START("PORTC")		/* 63B05Z0 - PORT C & SCI */
+	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_DIPNAME( 0x40, 0x40, "Test Switch")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN3 )
+
+	PORT_START("AN0")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(2) /* right joystick: vertical */
+	PORT_START("AN1")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_Y ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(1) /* left joystick: vertical */
+	PORT_START("AN2")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(2) /* right joystick: horizontal */
+	PORT_START("AN3")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
+	PORT_BIT( 0xff, 0x7f, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_PLAYER(1) /* left joystick: horizontal */
+	PORT_START("AN4")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN5")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
+	PORT_START("AN5")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN6")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
+	PORT_START("AN6")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN7")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
+	PORT_START("AN7")		/* 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_MODIFY("PORTH")		/* 63B05Z0 - PORT H */
+	PORT_START("PORTH")		/* 63B05Z0 - PORT H */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON4 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -2413,34 +2463,76 @@ static INPUT_PORTS_START( cybsled )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("DSW")		/* 63B05Z0 - $2000 DIP SW */
+	PORT_DIPNAME( 0x01, 0x01, "DSW1 (Test Mode)")
+	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "DSW2")
+	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, "DSW3")
+	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, "DSW4")
+	PORT_DIPSETTING(	0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, "DSW5")
+	PORT_DIPSETTING(	0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "DSW6")
+	PORT_DIPSETTING(	0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, "DSW7")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "DSW8")
+	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+
+	PORT_START("DIAL0")		/* 63B05Z0 - $3000 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL1")		/* 63B05Z0 - $3001 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL2")		/* 63B05Z0 - $3002 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL3")		/* 63B05Z0 - $3003 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( aircombt )
-	PORT_INCLUDE(s21default)
+	PORT_START("PORTB")		/* IN#0: 63B05Z0 - PORT B */
+	PORT_BIT( 0x3f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
 
-	PORT_MODIFY("AN0")		/* IN#2: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN1")		/* IN#3: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
-	PORT_MODIFY("AN2")		/* IN#4: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
-	PORT_MODIFY("AN3")		/* IN#5: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4) PORT_PLAYER(2)
-	PORT_MODIFY("AN4")		/* IN#6: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN5")		/* IN#7: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN6")		/* IN#8: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_MODIFY("AN7")		/* IN#9: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_MODIFY("DSW")		/* 63B05Z0 - $2000 DIP SW */
-	PORT_DIPNAME( 0x01, 0x01, "DSW1") // not test mode on this gamef
-	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
+	PORT_START("PORTC")		/* IN#1: 63B05Z0 - PORT C & SCI */
+	PORT_BIT( 0x0f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_DIPNAME( 0x40, 0x40, "Test Switch")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN3 )
 
-	PORT_MODIFY("PORTH")		/* IN#10: 63B05Z0 - PORT H */
+	PORT_START("AN0")		/* IN#2: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 0 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("AN1")		/* IN#3: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 1 */
+	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
+	PORT_START("AN2")		/* IN#4: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 2 */
+	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4)
+	PORT_START("AN3")		/* IN#5: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 3 */
+	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_MINMAX(0x00,0xff) PORT_SENSITIVITY(100) PORT_KEYDELTA(4) PORT_PLAYER(2)
+	PORT_START("AN4")		/* IN#6: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 4 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("AN5")		/* IN#7: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 5 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("AN6")		/* IN#8: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 6 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("AN7")		/* IN#9: 63B05Z0 - 8 CHANNEL ANALOG - CHANNEL 7 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("PORTH")		/* IN#10: 63B05Z0 - PORT H */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON4 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON3 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON6 ) ///???
@@ -2448,11 +2540,46 @@ static INPUT_PORTS_START( aircombt )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON5 ) // ???next color
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("DSW")		/* IN#11: 63B05Z0 - $2000 DIP SW */
+	PORT_DIPNAME( 0x01, 0x01, "DSW1 (Test Mode)")
+	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "DSW2")
+	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, "DSW3")
+	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, "DSW4")
+	PORT_DIPSETTING(	0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, "DSW5")
+	PORT_DIPSETTING(	0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "DSW6")
+	PORT_DIPSETTING(	0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, "DSW7")
+	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "DSW8")
+	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+
+	PORT_START("DIAL0")		/* IN#12: 63B05Z0 - $3000 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL1")		/* IN#13: 63B05Z0 - $3001 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL2")		/* IN#14: 63B05Z0 - $3002 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("DIAL3")		/* IN#15: 63B05Z0 - $3003 */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 /*    YEAR, NAME,     PARENT,  MACHINE,           INPUT,        INIT,     MONITOR,  COMPANY,   FULLNAME,                       FLAGS */
-GAME( 1992, aircomb,  0,       poly_c140_typeB,   aircombt,     aircombt, ROT0,    "Namco", "Air Combat (US)",	             GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, aircombj, aircomb, poly_c140_typeB,   aircombt,     aircombt, ROT0,    "Namco", "Air Combat (Japan)",            GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, aircombj, 0,       poly_c140_typeB,   aircombt,     aircombt, ROT0,    "Namco", "Air Combat (Japan)",            GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, aircombu, aircombj,poly_c140_typeB,   aircombt,     aircombt, ROT0,    "Namco", "Air Combat (US)",	             GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1993, cybsled,  0,       poly_c140_typeA,   cybsled,      cybsled,  ROT0,    "Namco", "Cyber Sled (US)",               GAME_IMPERFECT_GRAPHICS )
 GAME( 1993, cybsledj, cybsled, poly_c140_typeA,   cybsled,      cybsled,  ROT0,    "Namco", "Cyber Sled (Japan)",            GAME_IMPERFECT_GRAPHICS )
 /* 1992, ShimDrive */

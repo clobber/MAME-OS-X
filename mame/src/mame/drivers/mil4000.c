@@ -1,6 +1,6 @@
 /*******************************************************************************************
 
-Millennium Nuovo 4000 / Nuovo Millennium 4000 (c) 2000 Sure Milano
+Millenium Nuovo 4000 / Nuovo Millenium 4000 (c) 2000 Sure Milano
 
 driver by David Haywood and Angelo Salese
 
@@ -84,38 +84,20 @@ Changes (2008-12-10, Roberto Fresca):
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
-#include "machine/nvram.h"
 #include "mil4000.lh"
 
 
-class mil4000_state : public driver_device
-{
-public:
-	mil4000_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 *m_sc0_vram;
-	UINT16 *m_sc1_vram;
-	UINT16 *m_sc2_vram;
-	UINT16 *m_sc3_vram;
-	tilemap_t *m_sc0_tilemap;
-	tilemap_t *m_sc1_tilemap;
-	tilemap_t *m_sc2_tilemap;
-	tilemap_t *m_sc3_tilemap;
-	UINT16 m_vblank;
-	UINT16 m_hblank;
-};
-
+static UINT16 *sc0_vram,*sc1_vram,*sc2_vram,*sc3_vram;
+static tilemap *sc0_tilemap,*sc1_tilemap,*sc2_tilemap,*sc3_tilemap;
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc0_vram[tile_index*2]<<16) | state->m_sc0_vram[tile_index*2+1];
+	UINT32 data = (sc0_vram[tile_index*2]<<16) | sc0_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc0_vram[tile_index*2+1] & 0x1f)+0;
+	int color = (sc0_vram[tile_index*2+1] & 0x1f)+0;
 
 	SET_TILE_INFO(
 			0,
@@ -126,10 +108,9 @@ static TILE_GET_INFO( get_sc0_tile_info )
 
 static TILE_GET_INFO( get_sc1_tile_info )
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc1_vram[tile_index*2]<<16) | state->m_sc1_vram[tile_index*2+1];
+	UINT32 data = (sc1_vram[tile_index*2]<<16) | sc1_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc1_vram[tile_index*2+1] & 0x1f)+0x10;
+	int color = (sc1_vram[tile_index*2+1] & 0x1f)+0x10;
 
 	SET_TILE_INFO(
 			0,
@@ -140,10 +121,9 @@ static TILE_GET_INFO( get_sc1_tile_info )
 
 static TILE_GET_INFO( get_sc2_tile_info )
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc2_vram[tile_index*2]<<16) | state->m_sc2_vram[tile_index*2+1];
+	UINT32 data = (sc2_vram[tile_index*2]<<16) | sc2_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc2_vram[tile_index*2+1] & 0x1f)+0x20;
+	int color = (sc2_vram[tile_index*2+1] & 0x1f)+0x20;
 
 	SET_TILE_INFO(
 			0,
@@ -154,10 +134,9 @@ static TILE_GET_INFO( get_sc2_tile_info )
 
 static TILE_GET_INFO( get_sc3_tile_info )
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	UINT32 data = (state->m_sc3_vram[tile_index*2]<<16) | state->m_sc3_vram[tile_index*2+1];
+	UINT32 data = (sc3_vram[tile_index*2]<<16) | sc3_vram[tile_index*2+1];
 	int tile = data >> 14;
-	int color = (state->m_sc3_vram[tile_index*2+1] & 0x1f)+0x30;
+	int color = (sc3_vram[tile_index*2+1] & 0x1f)+0x30;
 
 	SET_TILE_INFO(
 			0,
@@ -168,44 +147,49 @@ static TILE_GET_INFO( get_sc3_tile_info )
 
 static VIDEO_START(mil4000)
 {
-	mil4000_state *state = machine.driver_data<mil4000_state>();
-	state->m_sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc2_tilemap = tilemap_create(machine, get_sc2_tile_info,tilemap_scan_rows,8,8,64,64);
-	state->m_sc3_tilemap = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_rows,8,8,64,64);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	int i;
 
-	state->m_sc1_tilemap->set_transparent_pen(0);
-	state->m_sc2_tilemap->set_transparent_pen(0);
-	state->m_sc3_tilemap->set_transparent_pen(0);
+	// game doesn't clear the palette, so to avoid seeing mame defaults we clear it
+	for (i=0;i<0x800;i++)
+		palette_set_color(space->machine, i, MAKE_RGB(0, 0, 0));
+
+	sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,64,64);
+	sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,64,64);
+	sc2_tilemap = tilemap_create(machine, get_sc2_tile_info,tilemap_scan_rows,8,8,64,64);
+	sc3_tilemap = tilemap_create(machine, get_sc3_tile_info,tilemap_scan_rows,8,8,64,64);
+
+	tilemap_set_transparent_pen(sc1_tilemap,0);
+	tilemap_set_transparent_pen(sc2_tilemap,0);
+	tilemap_set_transparent_pen(sc3_tilemap,0);
 }
 
-static SCREEN_UPDATE_IND16(mil4000)
+static VIDEO_UPDATE(mil4000)
 {
-	mil4000_state *state = screen.machine().driver_data<mil4000_state>();
-	state->m_sc0_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_sc1_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_sc2_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_sc3_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,sc0_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,sc1_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,sc2_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,sc3_tilemap,0,0);
 	return 0;
 }
 
 /*TODO*/
 static READ16_HANDLER( hvretrace_r )
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	UINT16 res;
+	static UINT16 res;
+	static UINT16 vblank = 0,hblank = 0;
 
 	res = 0;
 
-	state->m_vblank^=1;
-	state->m_hblank^=1;
+	vblank^=1;
+	hblank^=1;
 
 	/*V-Blank*/
-	if (state->m_vblank)
+	if (vblank)
 		res|= 0x80;
 
 	/*H-Blank*/
-	if (state->m_hblank)
+	if (hblank)
 		res|= 0x40;
 
 	return res;
@@ -214,30 +198,26 @@ static READ16_HANDLER( hvretrace_r )
 
 static WRITE16_HANDLER( sc0_vram_w )
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc0_vram[offset] = data;
-	state->m_sc0_tilemap->mark_tile_dirty(offset/2);
+	sc0_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc0_tilemap,offset/2);
 }
 
 static WRITE16_HANDLER( sc1_vram_w )
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc1_vram[offset] = data;
-	state->m_sc1_tilemap->mark_tile_dirty(offset/2);
+	sc1_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc1_tilemap,offset/2);
 }
 
 static WRITE16_HANDLER( sc2_vram_w )
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc2_vram[offset] = data;
-	state->m_sc2_tilemap->mark_tile_dirty(offset/2);
+	sc2_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc2_tilemap,offset/2);
 }
 
 static WRITE16_HANDLER( sc3_vram_w )
 {
-	mil4000_state *state = space->machine().driver_data<mil4000_state>();
-	state->m_sc3_vram[offset] = data;
-	state->m_sc3_tilemap->mark_tile_dirty(offset/2);
+	sc3_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc3_tilemap,offset/2);
 }
 
 /*end of video stuff*/
@@ -254,10 +234,10 @@ static WRITE16_HANDLER( sc3_vram_w )
 */
 static WRITE16_HANDLER( output_w )
 {
-	int i;
+	static int i;
 
 	for(i=0;i<3;i++)
-		coin_counter_w(space->machine(), i, data & 0x2000);
+		coin_counter_w(i, data & 0x2000);
 
 	output_set_lamp_value(0, (data) & 1);		/* HOLD1 */
 	output_set_lamp_value(1, (data >> 1) & 1);	/* HOLD2 */
@@ -270,12 +250,12 @@ static WRITE16_HANDLER( output_w )
 //  popmessage("%04x\n",data);
 }
 
-static ADDRESS_MAP_START( mil4000_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( mil4000_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc0_vram)	// CY62256L-70, U77
-	AM_RANGE(0x504000, 0x507fff) AM_RAM_WRITE(sc1_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc1_vram)	// CY62256L-70, U77
-	AM_RANGE(0x508000, 0x50bfff) AM_RAM_WRITE(sc2_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc2_vram)	// CY62256L-70, U78
-	AM_RANGE(0x50c000, 0x50ffff) AM_RAM_WRITE(sc3_vram_w) AM_BASE_MEMBER(mil4000_state, m_sc3_vram)	// CY62256L-70, U78
+	AM_RANGE(0x500000, 0x503fff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&sc0_vram)	// CY62256L-70, U77
+	AM_RANGE(0x504000, 0x507fff) AM_RAM_WRITE(sc1_vram_w) AM_BASE(&sc1_vram)	// CY62256L-70, U77
+	AM_RANGE(0x508000, 0x50bfff) AM_RAM_WRITE(sc2_vram_w) AM_BASE(&sc2_vram)	// CY62256L-70, U78
+	AM_RANGE(0x50c000, 0x50ffff) AM_RAM_WRITE(sc3_vram_w) AM_BASE(&sc3_vram)	// CY62256L-70, U78
 
 	AM_RANGE(0x708000, 0x708001) AM_READ_PORT("IN0")
 	AM_RANGE(0x708002, 0x708003) AM_READ_PORT("IN1")
@@ -283,10 +263,10 @@ static ADDRESS_MAP_START( mil4000_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x708006, 0x708007) AM_READ_PORT("IN2")
 	AM_RANGE(0x708008, 0x708009) AM_WRITE(output_w)
 	AM_RANGE(0x708010, 0x708011) AM_NOP //touch screen
-	AM_RANGE(0x70801e, 0x70801f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x70801e, 0x70801f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 
-	AM_RANGE(0x780000, 0x780fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xff0000, 0xffffff) AM_RAM AM_SHARE("nvram") // 2x CY62256L-70 (U7 & U8).
+	AM_RANGE(0x780000, 0x780fff) AM_RAM_WRITE(paletteram16_RRRRRGGGGGBBBBBx_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0xff0000, 0xffffff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size) // 2x CY62256L-70 (U7 & U8).
 
 ADDRESS_MAP_END
 
@@ -363,31 +343,31 @@ static GFXDECODE_START( mil4000 )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( mil4000, mil4000_state )
-	MCFG_CPU_ADD("maincpu", M68000, 12000000 )	// ?
-	MCFG_CPU_PROGRAM_MAP(mil4000_map)
+static MACHINE_DRIVER_START( mil4000 )
+	MDRV_CPU_ADD("maincpu", M68000, 12000000 )	// ?
+	MDRV_CPU_PROGRAM_MAP(mil4000_map)
 	// irq 2/4/5 point to the same place, others invalid
-	MCFG_CPU_VBLANK_INT("screen", irq5_line_hold)
+	MDRV_CPU_VBLANK_INT("screen", irq5_line_hold)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(320, 240)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 240-1)
-	MCFG_SCREEN_UPDATE_STATIC(mil4000)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(320, 240)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 0, 240-1)
 
-	MCFG_PALETTE_LENGTH(0x800)
-	MCFG_PALETTE_INIT(all_black)
+	MDRV_PALETTE_LENGTH(0x800)
+	MDRV_GFXDECODE(mil4000)
+	MDRV_VIDEO_START(mil4000)
+	MDRV_VIDEO_UPDATE(mil4000)
 
-	MCFG_GFXDECODE(mil4000)
-	MCFG_VIDEO_START(mil4000)
-
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // frequency from 1000 kHz resonator. pin 7 high not verified.
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("oki", OKIM6295, 1000000) // frequency from 1000 kHz resonator. pin 7 high not verified.
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 

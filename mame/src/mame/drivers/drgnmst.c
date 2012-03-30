@@ -34,58 +34,67 @@ Notes:
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/pic16c5x/pic16c5x.h"
 #include "sound/okim6295.h"
 #include "includes/drgnmst.h"
 
 
+static UINT16 drgnmst_snd_command;
+static UINT16 drgnmst_snd_flag;
+static UINT8 drgnmst_oki_control;
+static UINT8 drgnmst_oki_command;
+static UINT8 pic16c5x_port0;
+static UINT8 drgnmst_oki0_bank;
+static UINT8 drgnmst_oki1_bank;
+
+UINT16 *drgnmst_vidregs;
+UINT16 *drgnmst_rowscrollram;
+UINT16 *drgnmst_fg_videoram;
+UINT16 *drgnmst_bg_videoram;
+UINT16 *drgnmst_md_videoram;
+UINT16 *drgnmst_vidregs2;
+
+
 static WRITE16_HANDLER( drgnmst_coin_w )
 {
-	coin_counter_w(space->machine(), 0, data & 0x100);
-	coin_lockout_w(space->machine(), 0, ~data & 0x400);
-	coin_lockout_w(space->machine(), 1, ~data & 0x800);
+	coin_counter_w(0,data & 0x100);
+	coin_lockout_w(0,~data & 0x400);
+	coin_lockout_w(1,~data & 0x800);
 }
 
 static WRITE16_HANDLER( drgnmst_snd_command_w )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
-
-	if (ACCESSING_BITS_0_7)
-	{
-		state->m_snd_command = (data & 0xff);
-		device_yield(&space->device());
+	if (ACCESSING_BITS_0_7) {
+		drgnmst_snd_command = (data & 0xff);
+		cpu_yield(space->cpu);
 	}
 }
 
 static WRITE16_HANDLER( drgnmst_snd_flag_w )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
-
 	/* Enables the following 68K write operation to latch through to the PIC */
 	if (ACCESSING_BITS_0_7)
-		state->m_snd_flag = 1;
+		drgnmst_snd_flag = 1;
 }
 
 
 static READ8_HANDLER( pic16c5x_port0_r )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
-	return state->m_pic16c5x_port0;
+	return pic16c5x_port0;
 }
 
 static READ8_HANDLER( drgnmst_snd_command_r )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
 	int data = 0;
 
-	switch (state->m_oki_control & 0x1f)
+	switch (drgnmst_oki_control & 0x1f)
 	{
-		case 0x12:	data = (state->m_oki_2->read(*space, 0) & 0x0f); break;
-		case 0x16:	data = (state->m_oki_1->read(*space, 0) & 0x0f); break;
+		case 0x12:	data = (okim6295_r(devtag_get_device(space->machine, "oki2"), 0) & 0x0f); break;
+		case 0x16:	data = (okim6295_r(devtag_get_device(space->machine, "oki1"), 0) & 0x0f); break;
 		case 0x0b:
-		case 0x0f:	data = state->m_snd_command; break;
+		case 0x0f:	data = drgnmst_snd_command; break;
 		default:	break;
 	}
 
@@ -94,10 +103,8 @@ static READ8_HANDLER( drgnmst_snd_command_r )
 
 static READ8_HANDLER( drgnmst_snd_flag_r )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
-	if (state->m_snd_flag)
-	{
-		state->m_snd_flag = 0;
+	if (drgnmst_snd_flag) {
+		drgnmst_snd_flag = 0;
 		return 0x40;
 	}
 
@@ -106,19 +113,17 @@ static READ8_HANDLER( drgnmst_snd_flag_r )
 
 static WRITE8_HANDLER( drgnmst_pcm_banksel_w )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
 	/*  This is a 4 bit port.
         Each pair of bits is used in part of the OKI PCM ROM bank selectors.
         See the Port 2 write handler below (drgnmst_snd_control_w) for details.
     */
 
-	state->m_pic16c5x_port0 = data;
+	pic16c5x_port0 = data;
 }
 
 static WRITE8_HANDLER( drgnmst_oki_w )
 {
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
-	state->m_oki_command = data;
+	drgnmst_oki_command = data;
 }
 
 static WRITE8_HANDLER( drgnmst_snd_control_w )
@@ -146,38 +151,33 @@ static WRITE8_HANDLER( drgnmst_snd_control_w )
         The OKI0 banks are pre-configured below in the driver init.
     */
 
-	drgnmst_state *state = space->machine().driver_data<drgnmst_state>();
 	int oki_new_bank;
-	state->m_oki_control = data;
+	drgnmst_oki_control = data;
 
 
-	oki_new_bank = ((state->m_pic16c5x_port0 & 0xc) >> 2) | ((state->m_oki_control & 0x80) >> 5);
-	if (oki_new_bank != state->m_oki0_bank)
-	{
-		state->m_oki0_bank = oki_new_bank;
-		if (state->m_oki0_bank)
-			oki_new_bank--;
-		state->m_oki_1->set_bank_base(oki_new_bank * 0x40000);
+	oki_new_bank = ((pic16c5x_port0 & 0xc) >> 2) | ((drgnmst_oki_control & 0x80) >> 5);
+	if (oki_new_bank != drgnmst_oki0_bank) {
+		drgnmst_oki0_bank = oki_new_bank;
+		if (drgnmst_oki0_bank) oki_new_bank--;
+		okim6295_set_bank_base(devtag_get_device(space->machine, "oki1"), (oki_new_bank * 0x40000));
+	}
+	oki_new_bank = ((pic16c5x_port0 & 0x3) >> 0) | ((drgnmst_oki_control & 0x20) >> 3);
+	if (oki_new_bank != drgnmst_oki1_bank) {
+		drgnmst_oki1_bank = oki_new_bank;
+		okim6295_set_bank_base(devtag_get_device(space->machine, "oki2"), (oki_new_bank * 0x40000));
 	}
 
-	oki_new_bank = ((state->m_pic16c5x_port0 & 0x3) >> 0) | ((state->m_oki_control & 0x20) >> 3);
-	if (oki_new_bank != state->m_oki1_bank)
-	{
-		state->m_oki1_bank = oki_new_bank;
-		state->m_oki_2->set_bank_base(oki_new_bank * 0x40000);
-	}
-
-	switch (state->m_oki_control & 0x1f)
+	switch(drgnmst_oki_control & 0x1f)
 	{
 		case 0x11:
-//                  logerror("Writing %02x to OKI1", state->m_oki_command);
-//                  logerror(", PortC=%02x, Code=%02x, Bank0=%01x, Bank1=%01x\n", state->m_oki_control, state->m_snd_command, state->m_oki0_bank, state->m_oki1_bank);
-					state->m_oki_2->write(*space, 0, state->m_oki_command);
+//                  logerror("Writing %02x to OKI1",drgnmst_oki_command);
+//                  logerror(", PortC=%02x, Code=%02x, Bank0=%01x, Bank1=%01x\n",drgnmst_oki_control,drgnmst_snd_command,drgnmst_oki0_bank,drgnmst_oki1_bank);
+					okim6295_w(devtag_get_device(space->machine, "oki2"), 0, drgnmst_oki_command);
 					break;
 		case 0x15:
-//                  logerror("Writing %02x to OKI0", state->m_oki_command);
-//                  logerror(", PortC=%02x, Code=%02x, Bank0=%01x, Bank1=%01x\n", state->m_oki_control, state->m_snd_command, state->m_oki0_bank, state->m_oki1_bank);
-					state->m_oki_1->write(*space, 0, state->m_oki_command);
+//                  logerror("Writing %02x to OKI0",drgnmst_oki_command);
+//                  logerror(", PortC=%02x, Code=%02x, Bank0=%01x, Bank1=%01x\n",drgnmst_oki_control,drgnmst_snd_command,drgnmst_oki0_bank,drgnmst_oki1_bank);
+					okim6295_w(devtag_get_device(space->machine, "oki1"), 0, drgnmst_oki_command);
 					break;
 		default:	break;
 	}
@@ -192,27 +192,27 @@ static READ8_HANDLER( PIC16C5X_T0_clk_r )
 
 /***************************** 68000 Memory Map *****************************/
 
-static ADDRESS_MAP_START( drgnmst_main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( drgnmst_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x800018, 0x800019) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x80001a, 0x80001b) AM_READ_PORT("DSW1")
 	AM_RANGE(0x80001c, 0x80001d) AM_READ_PORT("DSW2")
 	AM_RANGE(0x800030, 0x800031) AM_WRITE(drgnmst_coin_w)
-	AM_RANGE(0x800100, 0x80011f) AM_WRITEONLY AM_BASE_MEMBER(drgnmst_state, m_vidregs)
+	AM_RANGE(0x800100, 0x80011f) AM_WRITE(SMH_RAM) AM_BASE(&drgnmst_vidregs)
 	AM_RANGE(0x800120, 0x800121) AM_WRITENOP
 	AM_RANGE(0x80014a, 0x80014b) AM_WRITENOP
-	AM_RANGE(0x800154, 0x800155) AM_WRITEONLY AM_BASE_MEMBER(drgnmst_state, m_vidregs2) // seems to be priority control
+	AM_RANGE(0x800154, 0x800155) AM_WRITE(SMH_RAM) AM_BASE(&drgnmst_vidregs2) // seems to be priority control
 	AM_RANGE(0x800176, 0x800177) AM_READ_PORT("EXTRA")
 	AM_RANGE(0x800180, 0x800181) AM_WRITE(drgnmst_snd_command_w)
 	AM_RANGE(0x800188, 0x800189) AM_WRITE(drgnmst_snd_flag_w)
 	AM_RANGE(0x8001e0, 0x8001e1) AM_WRITENOP
-	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x904000, 0x907fff) AM_RAM_WRITE(drgnmst_md_videoram_w) AM_BASE_MEMBER(drgnmst_state, m_md_videoram)
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(drgnmst_bg_videoram_w) AM_BASE_MEMBER(drgnmst_state, m_bg_videoram)
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(drgnmst_fg_videoram_w) AM_BASE_MEMBER(drgnmst_state, m_fg_videoram)
-	AM_RANGE(0x920000, 0x923fff) AM_RAM AM_BASE_MEMBER(drgnmst_state, m_rowscrollram) // rowscroll ram
-	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE_SIZE_MEMBER(drgnmst_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xxxxRRRRGGGGBBBB_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x904000, 0x907fff) AM_RAM_WRITE(drgnmst_md_videoram_w) AM_BASE(&drgnmst_md_videoram)
+	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(drgnmst_bg_videoram_w) AM_BASE(&drgnmst_bg_videoram)
+	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(drgnmst_fg_videoram_w) AM_BASE(&drgnmst_fg_videoram)
+	AM_RANGE(0x920000, 0x923fff) AM_RAM AM_BASE(&drgnmst_rowscrollram) // rowscroll ram
+	AM_RANGE(0x930000, 0x9307ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Sprites
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
@@ -223,12 +223,13 @@ ADDRESS_MAP_END
 	/* $000 - 1FF  PIC16C55 Internal Program ROM. Note: code is 12bits wide */
 	/* $000 - 01F  PIC16C55 Internal Data RAM */
 
-static ADDRESS_MAP_START( drgnmst_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( drgnmst_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READWRITE(pic16c5x_port0_r, drgnmst_pcm_banksel_w)	/* 4 bit port */
 	AM_RANGE(0x01, 0x01) AM_READWRITE(drgnmst_snd_command_r, drgnmst_oki_w)
 	AM_RANGE(0x02, 0x02) AM_READWRITE(drgnmst_snd_flag_r, drgnmst_snd_control_w)
 	AM_RANGE(PIC16C5x_T0, PIC16C5x_T0) AM_READ(PIC16C5X_T0_clk_r)
 ADDRESS_MAP_END
+
 
 
 
@@ -299,7 +300,7 @@ static INPUT_PORTS_START( drgnmst )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
 	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Language ) )		PORT_DIPLOCATION("SW2:4")
 	PORT_DIPSETTING(      0x0800, DEF_STR( English ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Korean ) )
+	PORT_DIPSETTING(      0x0000, "Korean" )
 	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Game_Time ) )		PORT_DIPLOCATION("SW2:5")
 	PORT_DIPSETTING(      0x1000, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x0000, "Short" )
@@ -356,15 +357,15 @@ static const gfx_layout drgnmst_char32x32_layout =
 	RGN_FRAC(1,2),
 	4,
 	{ 24,8, 16,0 },
-	{	RGN_FRAC(1,2)+0,RGN_FRAC(1,2)+1,RGN_FRAC(1,2)+2,RGN_FRAC(1,2)+3,RGN_FRAC(1,2)+4,RGN_FRAC(1,2)+5,RGN_FRAC(1,2)+6,RGN_FRAC(1,2)+7,
+	{ 	RGN_FRAC(1,2)+0,RGN_FRAC(1,2)+1,RGN_FRAC(1,2)+2,RGN_FRAC(1,2)+3,RGN_FRAC(1,2)+4,RGN_FRAC(1,2)+5,RGN_FRAC(1,2)+6,RGN_FRAC(1,2)+7,
 		0,1,2,3,4,5,6,7,
 	    RGN_FRAC(1,2)+32,RGN_FRAC(1,2)+33,RGN_FRAC(1,2)+34,RGN_FRAC(1,2)+35,RGN_FRAC(1,2)+36,RGN_FRAC(1,2)+37,RGN_FRAC(1,2)+38,RGN_FRAC(1,2)+39,
 		32,33,34,35,36,37,38,39 },
 
 	{	 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,
 		 8*64, 9*64,10*64,11*64,12*64,13*64,14*64,15*64,
-		16*64,17*64,18*64,19*64,20*64,21*64,22*64,23*64,
-		24*64,25*64,26*64,27*64,28*64,29*64,30*64,31*64 },
+	 	16*64,17*64,18*64,19*64,20*64,21*64,22*64,23*64,
+	 	24*64,25*64,26*64,27*64,28*64,29*64,30*64,31*64 },
 	32*64
 };
 
@@ -377,69 +378,43 @@ static GFXDECODE_START( drgnmst )
 GFXDECODE_END
 
 
-static MACHINE_START( drgnmst )
-{
-	drgnmst_state *state = machine.driver_data<drgnmst_state>();
+static MACHINE_DRIVER_START( drgnmst )
+	MDRV_CPU_ADD("maincpu", M68000, 12000000) /* Confirmed */
+	MDRV_CPU_PROGRAM_MAP(drgnmst_main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	state->save_item(NAME(state->m_snd_flag));
-	state->save_item(NAME(state->m_snd_command));
-	state->save_item(NAME(state->m_oki_control));
-	state->save_item(NAME(state->m_oki_command));
-	state->save_item(NAME(state->m_pic16c5x_port0));
-	state->save_item(NAME(state->m_oki1_bank));
-	state->save_item(NAME(state->m_oki0_bank));
-}
-
-static MACHINE_RESET( drgnmst )
-{
-	drgnmst_state *state = machine.driver_data<drgnmst_state>();
-
-	state->m_snd_flag = 0;
-	state->m_snd_command = 0;
-	state->m_oki_control = 0;
-	state->m_oki_command = 0;
-	state->m_pic16c5x_port0 = 0;
-	state->m_oki1_bank = 0;
-	state->m_oki0_bank = 0;
-}
-
-static MACHINE_CONFIG_START( drgnmst, drgnmst_state )
-
-	MCFG_CPU_ADD("maincpu", M68000, 12000000) /* Confirmed */
-	MCFG_CPU_PROGRAM_MAP(drgnmst_main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
-
-	MCFG_CPU_ADD("audiocpu", PIC16C55, 32000000/8)	/* Confirmed */
+	MDRV_CPU_ADD("audiocpu", PIC16C55, 32000000/8)	/* Confirmed */
 	/* Program and Data Maps are internal to the MCU */
-	MCFG_CPU_IO_MAP(drgnmst_sound_io_map)
+	MDRV_CPU_IO_MAP(drgnmst_sound_io_map)
 
-	MCFG_MACHINE_START(drgnmst)
-	MCFG_MACHINE_RESET(drgnmst)
+	MDRV_GFXDECODE(drgnmst)
 
-	MCFG_GFXDECODE(drgnmst)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(8*8, 56*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(drgnmst)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(8*8, 56*8-1, 2*8, 30*8-1)
 
-	MCFG_PALETTE_LENGTH(0x2000)
+	MDRV_PALETTE_LENGTH(0x2000)
 
-	MCFG_VIDEO_START(drgnmst)
+	MDRV_VIDEO_START(drgnmst)
+	MDRV_VIDEO_UPDATE(drgnmst)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_OKIM6295_ADD("oki1", 32000000/32, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("oki1", OKIM6295, 32000000/32)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
-	MCFG_OKIM6295_ADD("oki2", 32000000/32, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki2", OKIM6295, 32000000/32)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
 
 ROM_START( drgnmst )
@@ -480,7 +455,7 @@ ROM_START( drgnmst )
 ROM_END
 
 
-static UINT8 drgnmst_asciitohex( UINT8 data )
+static UINT8 drgnmst_asciitohex(UINT8 data)
 {
 	/* Convert ASCII data to HEX */
 
@@ -494,13 +469,16 @@ static UINT8 drgnmst_asciitohex( UINT8 data )
 
 static DRIVER_INIT( drgnmst )
 {
-	UINT8 *drgnmst_PICROM_HEX = machine.region("user1")->base();
-	UINT16 *drgnmst_PICROM = (UINT16 *)machine.region("audiocpu")->base();
-	UINT8 *drgnmst_PCM = machine.region("oki1")->base();
+	UINT8 *drgnmst_PICROM_HEX = memory_region(machine, "user1");
+	UINT16 *drgnmst_PICROM = (UINT16 *)memory_region(machine, "audiocpu");
+	UINT8 *drgnmst_PCM = memory_region(machine, "oki1");
 	INT32   offs, data;
 	UINT16  src_pos = 0;
 	UINT16  dst_pos = 0;
 	UINT8   data_hi, data_lo;
+
+
+	drgnmst_snd_flag = 0;
 
 	/* Configure the OKI-0 PCM data into a MAME friendly bank format */
 	/* $00000-1ffff is the same through all banks */
@@ -524,7 +502,7 @@ static DRIVER_INIT( drgnmst )
 		if ((drgnmst_PICROM_HEX[src_pos + 0] == ':') &&
 			(drgnmst_PICROM_HEX[src_pos + 1] == '1') &&
 			(drgnmst_PICROM_HEX[src_pos + 2] == '0'))
-		{
+			{
 			src_pos += 9;
 
 			for (offs = 0; offs < 32; offs += 4)
@@ -552,7 +530,7 @@ static DRIVER_INIT( drgnmst )
 			(drgnmst_PICROM_HEX[src_pos + 1] == '0') &&
 			(drgnmst_PICROM_HEX[src_pos + 2] == '2') &&
 			(drgnmst_PICROM_HEX[src_pos + 3] == '1'))
-		{
+			{
 			src_pos += 9;
 
 			data_hi = drgnmst_asciitohex((drgnmst_PICROM_HEX[src_pos + 0]));
@@ -562,7 +540,7 @@ static DRIVER_INIT( drgnmst )
 			data_lo = drgnmst_asciitohex((drgnmst_PICROM_HEX[src_pos + 3]));
 			data |= (data_hi << 12) | (data_lo << 8);
 
-			pic16c5x_set_config(machine.device("audiocpu"), data);
+			pic16c5x_set_config(cputag_get_cpu(machine, "audiocpu"), data);
 
 			src_pos = 0x7fff;		/* Force Exit */
 		}
@@ -571,4 +549,4 @@ static DRIVER_INIT( drgnmst )
 }
 
 
-GAME( 1994, drgnmst, 0, drgnmst,  drgnmst, drgnmst, ROT0, "Unico", "Dragon Master", GAME_SUPPORTS_SAVE )
+GAME( 1994, drgnmst, 0, drgnmst,  drgnmst, drgnmst, ROT0, "Unico", "Dragon Master", 0 )

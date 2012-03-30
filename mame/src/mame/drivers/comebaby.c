@@ -1,9 +1,6 @@
 /* Come On Baby
   (c) 2000 ExPotato Co. Ltd (Excellent Potato)
 
-TODO:
-can't be emulated without proper mb bios
-
   There also appears to be a sequel which may be running on the same hardware
   Come On Baby - Ballympic Heroes!  (c) 2001
 
@@ -59,42 +56,19 @@ can't be emulated without proper mb bios
   Easy enough to fix a broken game if you have the controls to plug into it.
 */
 
-#define ADDRESS_MAP_MODERN
-
-#include "emu.h"
+#include "driver.h"
 #include "cpu/i386/i386.h"
 
-
-class comebaby_state : public driver_device
-{
-public:
-	comebaby_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu")
-	{ }
-
-	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-
-protected:
-
-	// devices
-	required_device<cpu_device> m_maincpu;
-
-	// driver_device overrides
-	virtual void video_start();
-};
-
-
-void comebaby_state::video_start()
+static VIDEO_START(comebaby)
 {
 }
 
-UINT32 comebaby_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static VIDEO_UPDATE(comebaby)
 {
 	return 0;
 }
 
-static ADDRESS_MAP_START( comebaby_map, AS_PROGRAM, 32, comebaby_state )
+static ADDRESS_MAP_START( comebaby_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0001ffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -102,21 +76,24 @@ static INPUT_PORTS_START( comebaby )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( comebaby, comebaby_state )
+static MACHINE_DRIVER_START( comebaby )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", PENTIUM, 2000000000) /* Probably a Pentium .. ?? Mhz*/
-	MCFG_CPU_PROGRAM_MAP(comebaby_map)
+	MDRV_CPU_ADD("maincpu", PENTIUM, 2000000000) /* Probably a Pentium .. ?? Mhz*/
+	MDRV_CPU_PROGRAM_MAP(comebaby_map)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_UPDATE_DRIVER(comebaby_state, screen_update)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
+ 	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_PALETTE_LENGTH(0x100)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_LENGTH(0x100)
+
+	MDRV_VIDEO_START(comebaby)
+	MDRV_VIDEO_UPDATE(comebaby)
+MACHINE_DRIVER_END
 
 
 ROM_START(comebaby)
@@ -128,4 +105,4 @@ ROM_START(comebaby)
 ROM_END
 
 
-GAME( 2000, comebaby,  0,   comebaby,  comebaby,  0,  ROT0,  "ExPotato",    "Come On Baby",   GAME_NOT_WORKING|GAME_NO_SOUND )
+GAME( 2000, comebaby,  0,   comebaby, comebaby, 0, ROT0, "ExPotato", "Come On Baby", GAME_NOT_WORKING|GAME_NO_SOUND )

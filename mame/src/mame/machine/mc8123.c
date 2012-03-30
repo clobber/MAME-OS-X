@@ -71,7 +71,7 @@ CPU #    Game                      Notes              Seed   Upper Limit
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "mc8123.h"
 
 
@@ -375,17 +375,17 @@ static UINT8 mc8123_decrypt(offs_t addr,UINT8 val,const UINT8 *key,int opcode)
 }
 
 
-void mc8123_decrypt_rom(running_machine &machine, const char *cpu, const char *keyrgn, const char *bankname, int numbanks)
+void mc8123_decrypt_rom(running_machine *machine, const char *cpu, const char *keyrgn, int banknum, int numbanks)
 {
-	address_space *space = machine.device(cpu)->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, cpu, ADDRESS_SPACE_PROGRAM);
 	int fixed_length = numbanks == 1 ? 0xc000 : 0x8000;
 	UINT8 *decrypted1 = auto_alloc_array(machine, UINT8, fixed_length);
 	UINT8 *decrypted2 = numbanks > 1 ? auto_alloc_array(machine, UINT8, 0x4000 * numbanks) : 0;
-	UINT8 *rom = machine.region(cpu)->base();
-	UINT8 *key = machine.region(keyrgn)->base();
+	UINT8 *rom = memory_region(machine, cpu);
+	UINT8 *key = memory_region(machine, keyrgn);
 	int A, bank;
 
-	space->set_decrypted_region(0x0000, fixed_length-1, decrypted1);
+	memory_set_decrypted_region(space, 0x0000, fixed_length-1, decrypted1);
 
 	for (A = 0x0000;A < fixed_length;A++)
 	{
@@ -398,9 +398,9 @@ void mc8123_decrypt_rom(running_machine &machine, const char *cpu, const char *k
 		rom[A] = mc8123_decrypt(A,src,key,0);
 	}
 
-	if (bankname != NULL)
+	if (numbanks > 1)
 	{
-		memory_configure_bank_decrypted(machine, bankname, 0, numbanks, decrypted2, 0x4000);
+		memory_configure_bank_decrypted(machine, banknum, 0, numbanks, decrypted2, 0x4000);
 
 		for (bank = 0; bank < numbanks; ++bank)
 		{

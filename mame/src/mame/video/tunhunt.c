@@ -4,9 +4,10 @@
 
 *************************************************************************/
 
-#include "emu.h"
-#include "includes/tunhunt.h"
+#include "driver.h"
 
+extern UINT8 tunhunt_control;
+extern UINT8 *tunhunt_ram;
 
 /****************************************************************************************/
 
@@ -44,22 +45,19 @@
 #define MOBSC0	0x1080	// SCAN ROM START FOR MOBJ (unused?)
 #define MOBSC1	0x1081	// (unused?)
 
-
+static tilemap *fg_tilemap;
 
 /****************************************************************************************/
 
 WRITE8_HANDLER( tunhunt_videoram_w )
 {
-	tunhunt_state *state = space->machine().driver_data<tunhunt_state>();
-
-	state->m_videoram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	tunhunt_state *state = machine.driver_data<tunhunt_state>();
-	int attr = state->m_videoram[tile_index];
+	int attr = videoram[tile_index];
 	int code = attr & 0x3f;
 	int color = attr >> 6;
 	int flags = color ? TILE_FORCE_LAYER0 : 0;
@@ -74,14 +72,12 @@ VIDEO_START( tunhunt )
     We keep track of dirty lines and cache the expanded bitmap.
     With max RLE expansion, bitmap size is 256x64.
     */
-	tunhunt_state *state = machine.driver_data<tunhunt_state>();
+	tmpbitmap = auto_bitmap_alloc(machine, 256, 64, video_screen_get_format(machine->primary_screen));
 
-	state->m_tmpbitmap.allocate(256, 64, machine.primary_screen->format());
+	fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_cols, 8, 8, 32, 32);
 
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_cols, 8, 8, 32, 32);
-
-	state->m_fg_tilemap->set_transparent_pen(0);
-	state->m_fg_tilemap->set_scrollx(0, 64);
+	tilemap_set_transparent_pen(fg_tilemap, 0);
+	tilemap_set_scrollx(fg_tilemap, 0, 64);
 }
 
 PALETTE_INIT( tunhunt )
@@ -94,11 +90,11 @@ PALETTE_INIT( tunhunt )
      */
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x10);
+	machine->colortable = colortable_alloc(machine, 0x10);
 
 	/* motion objects/box */
 	for (i = 0; i < 0x10; i++)
-		colortable_entry_set_value(machine.colortable, i, i);
+		colortable_entry_set_value(machine->colortable, i, i);
 
 	/* AlphaNumerics (1bpp)
      *  2 bits of hilite select from 4 different background colors
@@ -107,26 +103,26 @@ PALETTE_INIT( tunhunt )
      */
 
 	/* alpha hilite#0 */
-	colortable_entry_set_value(machine.colortable, 0x10, 0x0); /* background color#0 (transparent) */
-	colortable_entry_set_value(machine.colortable, 0x11, 0x4); /* foreground color */
+	colortable_entry_set_value(machine->colortable, 0x10, 0x0); /* background color#0 (transparent) */
+	colortable_entry_set_value(machine->colortable, 0x11, 0x4); /* foreground color */
 
 	/* alpha hilite#1 */
-	colortable_entry_set_value(machine.colortable, 0x12, 0x5); /* background color#1 */
-	colortable_entry_set_value(machine.colortable, 0x13, 0x4); /* foreground color */
+	colortable_entry_set_value(machine->colortable, 0x12, 0x5); /* background color#1 */
+	colortable_entry_set_value(machine->colortable, 0x13, 0x4); /* foreground color */
 
 	/* alpha hilite#2 */
-	colortable_entry_set_value(machine.colortable, 0x14, 0x6); /* background color#2 */
-	colortable_entry_set_value(machine.colortable, 0x15, 0x4); /* foreground color */
+	colortable_entry_set_value(machine->colortable, 0x14, 0x6); /* background color#2 */
+	colortable_entry_set_value(machine->colortable, 0x15, 0x4); /* foreground color */
 
 	/* alpha hilite#3 */
-	colortable_entry_set_value(machine.colortable, 0x16, 0xf); /* background color#3 */
-	colortable_entry_set_value(machine.colortable, 0x17, 0x4); /* foreground color */
+	colortable_entry_set_value(machine->colortable, 0x16, 0xf); /* background color#3 */
+	colortable_entry_set_value(machine->colortable, 0x17, 0x4); /* foreground color */
 
 	/* shell graphics; these are either 1bpp (2 banks) or 2bpp.  It isn't clear which.
      * In any event, the following pens are associated with the shell graphics:
      */
-	colortable_entry_set_value(machine.colortable, 0x18, 0);
-	colortable_entry_set_value(machine.colortable, 0x19, 4);//1;
+	colortable_entry_set_value(machine->colortable, 0x18, 0);
+	colortable_entry_set_value(machine->colortable, 0x19, 4);//1;
 }
 
 /*
@@ -142,8 +138,9 @@ Color Array Ram Assignments:
         8-E             Lines (as normal) background
         F               Hilight 3
 */
-static void set_pens(running_machine &machine)
+static void set_pens(colortable_t *colortable)
 {
+//  const UINT8 *color_prom = memory_region( machine, "proms" );
 /*
     The actual contents of the color proms (unused by this driver)
     are as follows:
@@ -156,7 +153,6 @@ static void set_pens(running_machine &machine)
     0020:   00 f0 f0 f0 b0 b0 00 f0
             00 f0 f0 00 b0 00 f0 f0
 */
-	//const UINT8 *color_prom = machine.region( "proms" )->base();
 	int color;
 	int shade;
 	int i;
@@ -164,7 +160,7 @@ static void set_pens(running_machine &machine)
 
 	for( i=0; i<16; i++ )
 	{
-		color = machine.generic.paletteram.u8[i];
+		color = paletteram[i];
 		shade = 0xf^(color>>4);
 
 		color &= 0xf; /* hue select */
@@ -196,11 +192,11 @@ static void set_pens(running_machine &machine)
 		green	= APPLY_SHADE(green,shade);
 		blue	= APPLY_SHADE(blue,shade);
 
-		colortable_palette_set_color( machine.colortable,i,MAKE_RGB(red,green,blue) );
+		colortable_palette_set_color( colortable,i,MAKE_RGB(red,green,blue) );
 	}
 }
 
-static void draw_motion_object(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_motion_object(bitmap_t *bitmap, const rectangle *cliprect)
 {
 /*
  *      VSTRLO  0x1202
@@ -212,12 +208,7 @@ static void draw_motion_object(running_machine &machine, bitmap_ind16 &bitmap, c
  *      MOBSC1  0x1081
  *          always 0x00?
  */
-
-	tunhunt_state *state = machine.driver_data<tunhunt_state>();
-	bitmap_ind16 &tmpbitmap = state->m_tmpbitmap;
-	UINT8 *spriteram = state->m_spriteram;
-	UINT8 *tunhunt_ram = state->m_workram;
-	//int skip = tunhunt_ram[MOBST];
+//  int skip = tunhunt_ram[MOBST];
 	int x0 = 255-tunhunt_ram[MOBJV];
 	int y0 = 255-tunhunt_ram[MOBJH];
 	int scalex,scaley;
@@ -238,10 +229,10 @@ static void draw_motion_object(running_machine &machine, bitmap_ind16 &bitmap, c
 			color = ((span_data>>6)&0x3)^0x3;
 			count = (span_data&0x1f)+1;
 			while( count-- && x < 256 )
-				tmpbitmap.pix16(line, x++) = color;
+				*BITMAP_ADDR16(tmpbitmap, line, x++) = color;
 		}
 		while( x<256 )
-			tmpbitmap.pix16(line, x++) = 0;
+			*BITMAP_ADDR16(tmpbitmap, line, x++) = 0;
 	} /* next line */
 
 	switch( tunhunt_ram[VSTRLO] )
@@ -272,7 +263,7 @@ static void draw_motion_object(running_machine &machine, bitmap_ind16 &bitmap, c
 	);
 }
 
-static void draw_box(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_box(bitmap_t *bitmap, const rectangle *cliprect)
 {
 /*
     This is unnecessarily slow, but the box priorities aren't completely understood,
@@ -292,8 +283,6 @@ static void draw_box(running_machine &machine, bitmap_ind16 &bitmap, const recta
         1280: 07 03 00      01  07 06 04 05 02 07 03 00     09 0a   0b 0c       palette select
         ->hue 06 02 ff      60  06 05 03 04 01 06 02 ff     d2 00   c2 ff
 */
-	tunhunt_state *state = machine.driver_data<tunhunt_state>();
-	UINT8 *tunhunt_ram = state->m_workram;
 	int span,x,y;
 	int color;
 //  rectangle bbox;
@@ -302,7 +291,7 @@ static void draw_box(running_machine &machine, bitmap_ind16 &bitmap, const recta
 
 	for( y=0; y<256; y++ )
 	{
-		if (0xff-y >= cliprect.min_y && 0xff-y <= cliprect.max_y)
+		if (0xff-y >= cliprect->min_y && 0xff-y <= cliprect->max_y)
 			for( x=0; x<256; x++ )
 			{
 				color = 0;
@@ -319,16 +308,16 @@ static void draw_box(running_machine &machine, bitmap_ind16 &bitmap, const recta
 						z = x0; /* give priority to rightmost spans */
 					}
 				}
-				if (x >= cliprect.min_x && x <= cliprect.max_x)
-					bitmap.pix16(0xff-y, x) = color;
+				if (x >= cliprect->min_x && x <= cliprect->max_x)
+					*BITMAP_ADDR16(bitmap, 0xff-y, x) = color;
 			}
 	}
 }
 
 /* "shell" graphics are 16x16 pixel tiles used for player shots and targeting cursor */
-static void draw_shell(running_machine &machine,
-		bitmap_ind16 &bitmap,
-		const rectangle &cliprect,
+static void draw_shell(running_machine *machine,
+		bitmap_t *bitmap,
+		const rectangle *cliprect,
 		int picture_code,
 		int hposition,
 		int vstart,
@@ -344,7 +333,7 @@ static void draw_shell(running_machine &machine,
 			for( sy=0; sy<256; sy+=16 )
 			{
 				drawgfx_transpen( bitmap, cliprect,
-					machine.gfx[1],
+					machine->gfx[1],
 					picture_code,
 					0, /* color */
 					0,0, /* flip */
@@ -369,38 +358,37 @@ static void draw_shell(running_machine &machine,
 
     */
 	drawgfx_transpen( bitmap, cliprect,
-			machine.gfx[1],
+			machine->gfx[1],
 			picture_code,
 			0, /* color */
 			0,0, /* flip */
 			255-hposition-16,vstart-32,0 );
 }
 
-SCREEN_UPDATE_IND16( tunhunt )
+VIDEO_UPDATE( tunhunt )
 {
-	tunhunt_state *state = screen.machine().driver_data<tunhunt_state>();
-	set_pens(screen.machine());
+	set_pens(screen->machine->colortable);
 
-	draw_box(screen.machine(), bitmap, cliprect);
+	draw_box(bitmap, cliprect);
 
-	draw_motion_object(screen.machine(), bitmap, cliprect);
+	draw_motion_object(bitmap, cliprect);
 
-	draw_shell(screen.machine(), bitmap, cliprect,
-		state->m_workram[SHL0PC],	/* picture code */
-		state->m_workram[SHEL0H],	/* hposition */
-		state->m_workram[SHL0V],	/* vstart */
-		state->m_workram[SHL0VS],	/* vstop */
-		state->m_workram[SHL0ST],	/* vstretch */
-		state->m_control&0x08 ); /* hstretch */
+	draw_shell(screen->machine, bitmap, cliprect,
+		tunhunt_ram[SHL0PC],	/* picture code */
+		tunhunt_ram[SHEL0H],	/* hposition */
+		tunhunt_ram[SHL0V],	/* vstart */
+		tunhunt_ram[SHL0VS],	/* vstop */
+		tunhunt_ram[SHL0ST],	/* vstretch */
+		tunhunt_control&0x08 ); /* hstretch */
 
-	draw_shell(screen.machine(), bitmap, cliprect,
-		state->m_workram[SHL1PC],	/* picture code */
-		state->m_workram[SHEL1H],	/* hposition */
-		state->m_workram[SHL1V],	/* vstart */
-		state->m_workram[SHL1VS],	/* vstop */
-		state->m_workram[SHL1ST],	/* vstretch */
-		state->m_control&0x10 ); /* hstretch */
+	draw_shell(screen->machine, bitmap, cliprect,
+		tunhunt_ram[SHL1PC],	/* picture code */
+		tunhunt_ram[SHEL1H],	/* hposition */
+		tunhunt_ram[SHL1V],	/* vstart */
+		tunhunt_ram[SHL1VS],	/* vstop */
+		tunhunt_ram[SHL1ST],	/* vstretch */
+		tunhunt_control&0x10 ); /* hstretch */
 
-	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
 	return 0;
 }

@@ -30,13 +30,25 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/clshroad.h"
+#include "driver.h"
+
+/* Variables only used here: */
+
+static tilemap *tilemap_0a, *tilemap_0b, *tilemap_1;
+
+/* Variables & functions needed by drivers: */
+
+UINT8 *clshroad_vram_0, *clshroad_vram_1;
+UINT8 *clshroad_vregs;
+
+WRITE8_HANDLER( clshroad_vram_0_w );
+WRITE8_HANDLER( clshroad_vram_1_w );
+WRITE8_HANDLER( clshroad_flipscreen_w );
 
 
 WRITE8_HANDLER( clshroad_flipscreen_w )
 {
-	flip_screen_set(space->machine(),  data & 1 );
+	flip_screen_set(space->machine,  data & 1 );
 }
 
 
@@ -54,7 +66,7 @@ PALETTE_INIT( firebatl )
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x100);
+	machine->colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -63,20 +75,20 @@ PALETTE_INIT( firebatl )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
 	color_prom += 0x300;
 
 	for (i = 0; i < 0x200; i++)
-		colortable_entry_set_value(machine.colortable, i, i & 0xff);
+		colortable_entry_set_value(machine->colortable, i, i & 0xff);
 
 	for (i = 0x200; i < 0x300; i++)
 	{
 		UINT8 ctabentry = ((color_prom[(i - 0x200) + 0x000] & 0x0f) << 4) |
 						   (color_prom[(i - 0x200) + 0x100] & 0x0f);
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 }
 
@@ -104,11 +116,10 @@ Offset:
 
 static TILE_GET_INFO( get_tile_info_0a )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
 	UINT8 code;
 	tile_index = (tile_index & 0x1f) + (tile_index & ~0x1f)*2;
-	code	=	state->m_vram_0[ tile_index * 2 + 0x40 ];
-//  color   =   state->m_vram_0[ tile_index * 2 + 0x41 ];
+	code	=	clshroad_vram_0[ tile_index * 2 + 0x40 ];
+//  color   =   clshroad_vram_0[ tile_index * 2 + 0x41 ];
 	SET_TILE_INFO(
 			1,
 			code,
@@ -118,11 +129,10 @@ static TILE_GET_INFO( get_tile_info_0a )
 
 static TILE_GET_INFO( get_tile_info_0b )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
 	UINT8 code;
 	tile_index = (tile_index & 0x1f) + (tile_index & ~0x1f)*2;
-	code	=	state->m_vram_0[ tile_index * 2 + 0x00 ];
-//  color   =   state->m_vram_0[ tile_index * 2 + 0x01 ];
+	code	=	clshroad_vram_0[ tile_index * 2 + 0x00 ];
+//  color   =   clshroad_vram_0[ tile_index * 2 + 0x01 ];
 	SET_TILE_INFO(
 			1,
 			code,
@@ -132,12 +142,11 @@ static TILE_GET_INFO( get_tile_info_0b )
 
 WRITE8_HANDLER( clshroad_vram_0_w )
 {
-	clshroad_state *state = space->machine().driver_data<clshroad_state>();
 	int tile_index = offset / 2;
 	int tile = (tile_index & 0x1f) + (tile_index & ~0x3f)/2;
-	state->m_vram_0[offset] = data;
-	if (tile_index & 0x20)	state->m_tilemap_0a->mark_tile_dirty(tile);
-	else					state->m_tilemap_0b->mark_tile_dirty(tile);
+	clshroad_vram_0[offset] = data;
+	if (tile_index & 0x20)	tilemap_mark_tile_dirty(tilemap_0a, tile);
+	else					tilemap_mark_tile_dirty(tilemap_0b, tile);
 }
 
 /***************************************************************************
@@ -177,10 +186,9 @@ static TILEMAP_MAPPER( tilemap_scan_rows_extra )
 
 static TILE_GET_INFO( get_tile_info_fb1 )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
-	UINT8 code	=	state->m_vram_1[ tile_index + 0x000 ];
-	UINT8 color	=	state->m_vram_1[ tile_index + 0x400 ] & 0x3f;
-	tileinfo.group = color;
+	UINT8 code	=	clshroad_vram_1[ tile_index + 0x000 ];
+	UINT8 color	=	clshroad_vram_1[ tile_index + 0x400 ] & 0x3f;
+	tileinfo->group = color;
 	SET_TILE_INFO(
 			2,
 			code,
@@ -190,9 +198,8 @@ static TILE_GET_INFO( get_tile_info_fb1 )
 
 static TILE_GET_INFO( get_tile_info_1 )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
-	UINT8 code	=	state->m_vram_1[ tile_index + 0x000 ];
-	UINT8 color	=	state->m_vram_1[ tile_index + 0x400 ];
+	UINT8 code	=	clshroad_vram_1[ tile_index + 0x000 ];
+	UINT8 color	=	clshroad_vram_1[ tile_index + 0x400 ];
 	SET_TILE_INFO(
 			2,
 			code + ((color & 0xf0)<<4),
@@ -202,58 +209,55 @@ static TILE_GET_INFO( get_tile_info_1 )
 
 WRITE8_HANDLER( clshroad_vram_1_w )
 {
-	clshroad_state *state = space->machine().driver_data<clshroad_state>();
-	state->m_vram_1[offset] = data;
-	state->m_tilemap_1->mark_tile_dirty(offset % 0x400);
+	clshroad_vram_1[offset] = data;
+	tilemap_mark_tile_dirty(tilemap_1, offset % 0x400);
 }
 
 
 VIDEO_START( firebatl )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
 	/* These 2 use the graphics and scroll value */
-	state->m_tilemap_0a = tilemap_create(machine, get_tile_info_0a,tilemap_scan_rows,16,16,0x20,0x10);
-	state->m_tilemap_0b = tilemap_create(machine, get_tile_info_0b,tilemap_scan_rows,16,16,0x20,0x10);
+	tilemap_0a = tilemap_create(machine, get_tile_info_0a,tilemap_scan_rows,16,16,0x20,0x10);
+	tilemap_0b = tilemap_create(machine, get_tile_info_0b,tilemap_scan_rows,16,16,0x20,0x10);
 	/* Text (No scrolling) */
-	state->m_tilemap_1  = tilemap_create(machine, get_tile_info_fb1,tilemap_scan_rows_extra,8,8,0x24,0x20);
+	tilemap_1  = tilemap_create(machine, get_tile_info_fb1,tilemap_scan_rows_extra,8,8,0x24,0x20);
 
-	state->m_tilemap_0a->set_scroll_rows(1);
-	state->m_tilemap_0b->set_scroll_rows(1);
-	state->m_tilemap_1->set_scroll_rows(1);
+	tilemap_set_scroll_rows( tilemap_0a, 1);
+	tilemap_set_scroll_rows( tilemap_0b, 1);
+	tilemap_set_scroll_rows( tilemap_1,  1);
 
-	state->m_tilemap_0a->set_scroll_cols(1);
-	state->m_tilemap_0b->set_scroll_cols(1);
-	state->m_tilemap_1->set_scroll_cols(1);
+	tilemap_set_scroll_cols( tilemap_0a, 1);
+	tilemap_set_scroll_cols( tilemap_0b, 1);
+	tilemap_set_scroll_cols( tilemap_1,  1);
 
-	state->m_tilemap_0a->set_scrolldx(-0x30, -0xb5);
-	state->m_tilemap_0b->set_scrolldx(-0x30, -0xb5);
+	tilemap_set_scrolldx( tilemap_0a, -0x30, -0xb5);
+	tilemap_set_scrolldx( tilemap_0b, -0x30, -0xb5);
 
-	state->m_tilemap_0b->set_transparent_pen(0 );
-	colortable_configure_tilemap_groups(machine.colortable, state->m_tilemap_1, machine.gfx[2], 0x0f);
+	tilemap_set_transparent_pen( tilemap_0b, 0 );
+	colortable_configure_tilemap_groups(machine->colortable, tilemap_1, machine->gfx[2], 0x0f);
 }
 
 VIDEO_START( clshroad )
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
 	/* These 2 use the graphics and scroll value */
-	state->m_tilemap_0a = tilemap_create(machine, get_tile_info_0a,tilemap_scan_rows,16,16,0x20,0x10);
-	state->m_tilemap_0b = tilemap_create(machine, get_tile_info_0b,tilemap_scan_rows,16,16,0x20,0x10);
+	tilemap_0a = tilemap_create(machine, get_tile_info_0a,tilemap_scan_rows,16,16,0x20,0x10);
+	tilemap_0b = tilemap_create(machine, get_tile_info_0b,tilemap_scan_rows,16,16,0x20,0x10);
 	/* Text (No scrolling) */
-	state->m_tilemap_1  = tilemap_create(machine, get_tile_info_1,tilemap_scan_rows_extra,8,8,0x24,0x20);
+	tilemap_1  = tilemap_create(machine, get_tile_info_1,tilemap_scan_rows_extra,8,8,0x24,0x20);
 
-	state->m_tilemap_0a->set_scroll_rows(1);
-	state->m_tilemap_0b->set_scroll_rows(1);
-	state->m_tilemap_1->set_scroll_rows(1);
+	tilemap_set_scroll_rows( tilemap_0a, 1);
+	tilemap_set_scroll_rows( tilemap_0b, 1);
+	tilemap_set_scroll_rows( tilemap_1,  1);
 
-	state->m_tilemap_0a->set_scroll_cols(1);
-	state->m_tilemap_0b->set_scroll_cols(1);
-	state->m_tilemap_1->set_scroll_cols(1);
+	tilemap_set_scroll_cols( tilemap_0a, 1);
+	tilemap_set_scroll_cols( tilemap_0b, 1);
+	tilemap_set_scroll_cols( tilemap_1,  1);
 
-	state->m_tilemap_0a->set_scrolldx(-0x30, -0xb5);
-	state->m_tilemap_0b->set_scrolldx(-0x30, -0xb5);
+	tilemap_set_scrolldx( tilemap_0a, -0x30, -0xb5);
+	tilemap_set_scrolldx( tilemap_0b, -0x30, -0xb5);
 
-	state->m_tilemap_0b->set_transparent_pen(0x0f );
-	state->m_tilemap_1->set_transparent_pen(0x0f );
+	tilemap_set_transparent_pen( tilemap_0b, 0x0f );
+	tilemap_set_transparent_pen( tilemap_1,  0x0f );
 }
 
 
@@ -286,13 +290,11 @@ Offset:     Format:     Value:
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	clshroad_state *state = machine.driver_data<clshroad_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int i;
 
-	for (i = 0; i < state->m_spriteram_size ; i += 8)
+	for (i = 0; i < spriteram_size ; i += 8)
 	{
 		int y		=	 240 - spriteram[i+1];
 		int code	=	(spriteram[i+3] & 0x3f) + (spriteram[i+2] << 6);
@@ -310,7 +312,7 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
 				code,
 				attr & 0x0f,
 				flipx,flipy,
@@ -327,19 +329,18 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( clshroad )
+VIDEO_UPDATE( clshroad )
 {
-	clshroad_state *state = screen.machine().driver_data<clshroad_state>();
-	int scrollx  = state->m_vregs[ 0 ] + (state->m_vregs[ 1 ] << 8);
-//  int priority = state->m_vregs[ 2 ];
+	int scrollx  = clshroad_vregs[ 0 ] + (clshroad_vregs[ 1 ] << 8);
+//  int priority = clshroad_vregs[ 2 ];
 
 	/* Only horizontal scrolling (these 2 layers use the same value) */
-	state->m_tilemap_0a->set_scrollx(0, scrollx);
-	state->m_tilemap_0b->set_scrollx(0, scrollx);
+	tilemap_set_scrollx(tilemap_0a, 0, scrollx);
+	tilemap_set_scrollx(tilemap_0b, 0, scrollx);
 
-	state->m_tilemap_0a->draw(bitmap, cliprect, 0,0);	// Opaque
-	state->m_tilemap_0b->draw(bitmap, cliprect, 0,0);
-	draw_sprites(screen.machine(),bitmap,cliprect);
-	state->m_tilemap_1->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,tilemap_0a,0,0);	// Opaque
+	tilemap_draw(bitmap,cliprect,tilemap_0b,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,tilemap_1,0,0);
 	return 0;
 }

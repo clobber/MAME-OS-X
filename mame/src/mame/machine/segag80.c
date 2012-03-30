@@ -4,8 +4,10 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "machine/segag80.h"
+#include "driver.h"
+#include "segag80r.h"
+
+UINT8 (*sega_decrypt)(offs_t,UINT8);
 
 
 /****************************************************************************/
@@ -314,24 +316,31 @@ static UINT8 sega_decrypt0(offs_t pc, UINT8 lo)
 /****************************************************************************/
 /* MB 971025 - Set the security chip to be used                             */
 /****************************************************************************/
-segag80_decrypt_func segag80_security(int chip)
+void sega_security(int chip)
 {
 	switch (chip)
 	{
 		case 62:
-			return sega_decrypt62;
+			sega_decrypt=sega_decrypt62;
+			break;
 		case 63:
-			return sega_decrypt63;
+			sega_decrypt=sega_decrypt63;
+			break;
 		case 64:
-			return sega_decrypt64;
+			sega_decrypt=sega_decrypt64;
+			break;
 		case 70:
-			return sega_decrypt70;
+			sega_decrypt=sega_decrypt70;
+			break;
 		case 76:
-			return sega_decrypt76;
+			sega_decrypt=sega_decrypt76;
+			break;
 		case 82:
-			return sega_decrypt82;
+			sega_decrypt=sega_decrypt82;
+			break;
 		default:
-			return sega_decrypt0;
+			sega_decrypt=sega_decrypt0;
+			break;
 	}
 }
 

@@ -26,8 +26,7 @@
 #ifndef __NES_APU_H__
 #define __NES_APU_H__
 
-#include "devlegcy.h"
-
+#include "sndintrf.h"
 
 /* AN EXPLANATION
  *
@@ -46,6 +45,7 @@ struct _nes_interface
 READ8_DEVICE_HANDLER( nes_psg_r );
 WRITE8_DEVICE_HANDLER( nes_psg_w );
 
-DECLARE_LEGACY_SOUND_DEVICE(NES, nesapu);
+DEVICE_GET_INFO( nesapu );
+#define SOUND_NES DEVICE_GET_INFO_NAME( nesapu )
 
 #endif /* __NES_APU_H__ */

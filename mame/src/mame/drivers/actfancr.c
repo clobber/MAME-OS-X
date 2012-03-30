@@ -22,34 +22,45 @@
 
 *******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/h6280/h6280.h"
 #include "sound/2203intf.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
-#include "includes/actfancr.h"
-#include "video/decbac06.h"
-#include "video/decmxc06.h"
+
+VIDEO_UPDATE( actfancr );
+VIDEO_UPDATE( triothep );
+WRITE8_HANDLER( actfancr_pf1_data_w );
+READ8_HANDLER( actfancr_pf1_data_r );
+WRITE8_HANDLER( actfancr_pf1_control_w );
+WRITE8_HANDLER( actfancr_pf2_data_w );
+READ8_HANDLER( actfancr_pf2_data_r );
+WRITE8_HANDLER( actfancr_pf2_control_w );
+VIDEO_START( actfancr );
+VIDEO_START( triothep );
+
+extern UINT8 *actfancr_pf1_data,*actfancr_pf2_data,*actfancr_pf1_rowscroll_data;
+static UINT8 *actfancr_ram;
 
 /******************************************************************************/
 
+static int trio_control_select;
+
 static WRITE8_HANDLER( triothep_control_select_w )
 {
-	actfancr_state *state = space->machine().driver_data<actfancr_state>();
-	state->m_trio_control_select = data;
+	trio_control_select=data;
 }
 
 static READ8_HANDLER( triothep_control_r )
 {
-	actfancr_state *state = space->machine().driver_data<actfancr_state>();
-	switch (state->m_trio_control_select)
+	switch (trio_control_select)
 	{
-		case 0: return input_port_read(space->machine(), "P1");
-		case 1: return input_port_read(space->machine(), "P2");
-		case 2: return input_port_read(space->machine(), "DSW1");
-		case 3: return input_port_read(space->machine(), "DSW2");
-		case 4: return input_port_read(space->machine(), "SYSTEM");	/* VBL */
+		case 0: return input_port_read(space->machine, "P1");
+		case 1: return input_port_read(space->machine, "P2");
+		case 2: return input_port_read(space->machine, "DSW1");
+		case 3: return input_port_read(space->machine, "DSW2");
+		case 4: return input_port_read(space->machine, "SYSTEM");	/* VBL */
 	}
 
 	return 0xff;
@@ -57,75 +68,56 @@ static READ8_HANDLER( triothep_control_r )
 
 static WRITE8_HANDLER( actfancr_sound_w )
 {
-	actfancr_state *state = space->machine().driver_data<actfancr_state>();
-	soundlatch_w(space, 0, data & 0xff);
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	soundlatch_w(space,0,data & 0xff);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 /******************************************************************************/
 
-static WRITE8_HANDLER( actfancr_buffer_spriteram_w)
-{
-	actfancr_state *state = space->machine().driver_data<actfancr_state>();
-
-	UINT8* buffered_spriteram = space->machine().generic.buffered_spriteram.u8;
-	// make a buffered copy
-	memcpy(buffered_spriteram, space->machine().generic.spriteram.u8, 0x800);
-	// copy to a 16-bit region for our sprite draw code too
-	for (int i=0;i<0x800/2;i++)
-	{
-		state->m_spriteram16[i] = buffered_spriteram[i*2] | (buffered_spriteram[(i*2)+1] <<8);
-	}
-}
-
-static ADDRESS_MAP_START( actfan_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( actfan_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x02ffff) AM_ROM
-	AM_RANGE(0x060000, 0x060007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control0_8bit_w)
-	AM_RANGE(0x060010, 0x06001f) AM_DEVWRITE("tilegen1", deco_bac06_pf_control1_8bit_swap_w)
-	AM_RANGE(0x062000, 0x063fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_8bit_swap_r, deco_bac06_pf_data_8bit_swap_w)
-	AM_RANGE(0x070000, 0x070007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control0_8bit_w)
-	AM_RANGE(0x070010, 0x07001f) AM_DEVWRITE("tilegen2", deco_bac06_pf_control1_8bit_swap_w)
-	AM_RANGE(0x072000, 0x0727ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_8bit_swap_r, deco_bac06_pf_data_8bit_swap_w)
-	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x110000, 0x110001) AM_WRITE(actfancr_buffer_spriteram_w)
-	AM_RANGE(0x120000, 0x1205ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x060000, 0x06001f) AM_WRITE(actfancr_pf1_control_w)
+	AM_RANGE(0x062000, 0x063fff) AM_READWRITE(actfancr_pf1_data_r, actfancr_pf1_data_w) AM_BASE(&actfancr_pf1_data)
+	AM_RANGE(0x070000, 0x07001f) AM_WRITE(actfancr_pf2_control_w)
+	AM_RANGE(0x072000, 0x0727ff) AM_READWRITE(actfancr_pf2_data_r, actfancr_pf2_data_w) AM_BASE(&actfancr_pf2_data)
+	AM_RANGE(0x100000, 0x1007ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x110000, 0x110001) AM_WRITE(buffer_spriteram_w)
+	AM_RANGE(0x120000, 0x1205ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram)
 	AM_RANGE(0x130000, 0x130000) AM_READ_PORT("P1")
 	AM_RANGE(0x130001, 0x130001) AM_READ_PORT("P2")
 	AM_RANGE(0x130002, 0x130002) AM_READ_PORT("DSW1")
 	AM_RANGE(0x130003, 0x130003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x140000, 0x140001) AM_READ_PORT("SYSTEM")	/* VBL */
 	AM_RANGE(0x150000, 0x150001) AM_WRITE(actfancr_sound_w)
-	AM_RANGE(0x1f0000, 0x1f3fff) AM_RAM AM_BASE_MEMBER(actfancr_state, m_main_ram) /* Main ram */
+	AM_RANGE(0x1f0000, 0x1f3fff) AM_RAM AM_BASE(&actfancr_ram) /* Main ram */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( triothep_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( triothep_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x040007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control0_8bit_w)
-	AM_RANGE(0x040010, 0x04001f) AM_DEVWRITE("tilegen2", deco_bac06_pf_control1_8bit_swap_w)
-	AM_RANGE(0x044000, 0x045fff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_8bit_swap_r, deco_bac06_pf_data_8bit_swap_w)
-	AM_RANGE(0x046400, 0x0467ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_rowscroll_8bit_swap_r, deco_bac06_pf_rowscroll_8bit_swap_w)
-	AM_RANGE(0x060000, 0x060007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control0_8bit_w)
-	AM_RANGE(0x060010, 0x06001f) AM_DEVWRITE("tilegen1", deco_bac06_pf_control1_8bit_swap_w)
-	AM_RANGE(0x064000, 0x0647ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_8bit_swap_r, deco_bac06_pf_data_8bit_swap_w)
-	AM_RANGE(0x066400, 0x0667ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_8bit_swap_r, deco_bac06_pf_rowscroll_8bit_swap_w)
+	AM_RANGE(0x040000, 0x04001f) AM_WRITE(actfancr_pf2_control_w)
+	AM_RANGE(0x044000, 0x045fff) AM_READWRITE(actfancr_pf2_data_r, actfancr_pf2_data_w) AM_BASE(&actfancr_pf2_data)
+	AM_RANGE(0x046400, 0x0467ff) AM_WRITENOP /* Pf2 rowscroll - is it used? */
+	AM_RANGE(0x060000, 0x06001f) AM_WRITE(actfancr_pf1_control_w)
+	AM_RANGE(0x064000, 0x0647ff) AM_READWRITE(actfancr_pf1_data_r, actfancr_pf1_data_w) AM_BASE(&actfancr_pf1_data)
+	AM_RANGE(0x066400, 0x0667ff) AM_WRITEONLY AM_BASE(&actfancr_pf1_rowscroll_data)
 	AM_RANGE(0x100000, 0x100001) AM_WRITE(actfancr_sound_w)
-	AM_RANGE(0x110000, 0x110001) AM_WRITE(actfancr_buffer_spriteram_w)
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x130000, 0x1305ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x110000, 0x110001) AM_WRITE(buffer_spriteram_w)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x130000, 0x1305ff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram)
 	AM_RANGE(0x140000, 0x140001) AM_READNOP /* Value doesn't matter */
-	AM_RANGE(0x1f0000, 0x1f3fff) AM_RAM AM_BASE_MEMBER(actfancr_state, m_main_ram) /* Main ram */
+	AM_RANGE(0x1f0000, 0x1f3fff) AM_RAM AM_BASE(&actfancr_ram) /* Main ram */
 	AM_RANGE(0x1ff000, 0x1ff001) AM_READWRITE(triothep_control_r, triothep_control_select_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
 
 /******************************************************************************/
 
-static ADDRESS_MAP_START( dec0_s_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( dec0_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r)
-	AM_RANGE(0x3800, 0x3800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x3800, 0x3800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -282,10 +274,9 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq(device_t *device, int linestate)
+static void sound_irq(const device_config *device, int linestate)
 {
-	actfancr_state *state = device->machine().driver_data<actfancr_state>();
-	device_set_input_line(state->m_audiocpu, 0, linestate); /* IRQ */
+	cputag_set_input_line(device->machine, "audiocpu", 0, linestate); /* IRQ */
 }
 
 static const ym3812_interface ym3812_config =
@@ -295,144 +286,100 @@ static const ym3812_interface ym3812_config =
 
 /******************************************************************************/
 
-static MACHINE_START( actfancr )
-{
-	actfancr_state *state = machine.driver_data<actfancr_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-}
-
 static MACHINE_START( triothep )
 {
-	actfancr_state *state = machine.driver_data<actfancr_state>();
-
-	MACHINE_START_CALL(actfancr);
-
-	state->save_item(NAME(state->m_trio_control_select));
-}
-
-static MACHINE_RESET( actfancr )
-{
-	actfancr_state *state = machine.driver_data<actfancr_state>();
-	state->m_flipscreen = 0;
-}
-
-static MACHINE_RESET( triothep )
-{
-	actfancr_state *state = machine.driver_data<actfancr_state>();
-
-	MACHINE_RESET_CALL(actfancr);
-	state->m_trio_control_select = 0;
+    state_save_register_global(machine, trio_control_select);
 }
 
 /******************************************************************************/
 
-static MACHINE_CONFIG_START( actfancr, actfancr_state )
+static MACHINE_DRIVER_START( actfancr )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",H6280,21477200/3) /* Should be accurate */
-	MCFG_CPU_PROGRAM_MAP(actfan_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold) /* VBL */
+	MDRV_CPU_ADD("maincpu",H6280,21477200/3) /* Should be accurate */
+	MDRV_CPU_PROGRAM_MAP(actfan_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold) /* VBL */
 
-	MCFG_CPU_ADD("audiocpu",M6502, 1500000) /* Should be accurate */
-	MCFG_CPU_PROGRAM_MAP(dec0_s_map)
-
-	MCFG_MACHINE_START(actfancr)
-	MCFG_MACHINE_RESET(actfancr)
+	MDRV_CPU_ADD("audiocpu",M6502, 1500000) /* Should be accurate */
+	MDRV_CPU_PROGRAM_MAP(dec0_s_map)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(actfancr)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MDRV_GFXDECODE(actfan)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_GFXDECODE(actfan)
-	MCFG_PALETTE_LENGTH(768)
-
-	MCFG_DEVICE_ADD("tilegen1", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 2,2,2);
-	MCFG_DEVICE_ADD("tilegen2", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,0,0);
-
-	MCFG_DEVICE_ADD("spritegen", DECO_MXC06, 0)
-	deco_mxc06_device::set_gfx_region(*device, 1);
-
-	MCFG_VIDEO_START(actfancr)
+	MDRV_VIDEO_START(actfancr)
+	MDRV_VIDEO_UPDATE(actfancr)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 1500000)
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+	MDRV_SOUND_ADD("ym1", YM2203, 1500000)
+	MDRV_SOUND_ROUTE(0, "mono", 0.90)
+	MDRV_SOUND_ROUTE(1, "mono", 0.90)
+	MDRV_SOUND_ROUTE(2, "mono", 0.90)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ym2", YM3812, 3000000)
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
+	MDRV_SOUND_ADD("ym2", YM3812, 3000000)
+	MDRV_SOUND_CONFIG(ym3812_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MCFG_OKIM6295_ADD("oki", 1024188, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1024188)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( triothep, actfancr_state )
+static MACHINE_DRIVER_START( triothep )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",H6280,XTAL_21_4772MHz/3) /* XIN=21.4772Mhz, verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(triothep_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold) /* VBL */
+	MDRV_CPU_ADD("maincpu",H6280,XTAL_21_4772MHz/3) /* XIN=21.4772Mhz, verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(triothep_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold) /* VBL */
 
-	MCFG_CPU_ADD("audiocpu",M6502, XTAL_12MHz/8) /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(dec0_s_map)
+	MDRV_CPU_ADD("audiocpu",M6502, XTAL_12MHz/8) /* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(dec0_s_map)
 
-	MCFG_MACHINE_START(triothep)
-	MCFG_MACHINE_RESET(triothep)
+    MDRV_MACHINE_START(triothep)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(actfancr)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
+	MDRV_GFXDECODE(triothep)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_GFXDECODE(triothep)
-	MCFG_PALETTE_LENGTH(768)
-
-	MCFG_DEVICE_ADD("tilegen1", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 2,2,0);
-	MCFG_DEVICE_ADD("tilegen2", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,0,0);
-
-	MCFG_DEVICE_ADD("spritegen", DECO_MXC06, 0)
-	deco_mxc06_device::set_gfx_region(*device, 1);
-
-	MCFG_VIDEO_START(actfancr)
+	MDRV_VIDEO_START(triothep)
+	MDRV_VIDEO_UPDATE(triothep)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8) /* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.90)
-	MCFG_SOUND_ROUTE(1, "mono", 0.90)
-	MCFG_SOUND_ROUTE(2, "mono", 0.90)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+	MDRV_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8) /* verified on pcb */
+	MDRV_SOUND_ROUTE(0, "mono", 0.90)
+	MDRV_SOUND_ROUTE(1, "mono", 0.90)
+	MDRV_SOUND_ROUTE(2, "mono", 0.90)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ym2", YM3812, XTAL_12MHz/4) /* verified on pcb */
-	MCFG_SOUND_CONFIG(ym3812_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
+	MDRV_SOUND_ADD("ym2", YM3812, XTAL_12MHz/4) /* verified on pcb */
+	MDRV_SOUND_CONFIG(ym3812_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MCFG_OKIM6295_ADD("oki", XTAL_1_056MHz, OKIM6295_PIN7_HIGH) /* verified on pcb */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_1_056MHz) /* verified on pcb */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
+MACHINE_DRIVER_END
 
 /******************************************************************************/
 
@@ -604,8 +551,50 @@ ROM_END
 
 /******************************************************************************/
 
-GAME( 1989, actfancr, 0,        actfancr, actfancr, 0, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (World revision 2)", GAME_SUPPORTS_SAVE )
-GAME( 1989, actfancr1,actfancr, actfancr, actfancr, 0, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (World revision 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, actfancrj,actfancr, actfancr, actfancr, 0, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (Japan revision 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, triothep, 0,        triothep, triothep, 0, ROT0, "Data East Corporation", "Trio The Punch - Never Forget Me... (World)", GAME_SUPPORTS_SAVE )
-GAME( 1989, triothepj,triothep, triothep, triothep, 0, ROT0, "Data East Corporation", "Trio The Punch - Never Forget Me... (Japan)", GAME_SUPPORTS_SAVE )
+static READ8_HANDLER( cycle_r )
+{
+	int pc=cpu_get_pc(space->cpu);
+	int ret=actfancr_ram[0x26];
+
+	if (offset==1) return actfancr_ram[0x27];
+
+	if (pc==0xe29a && ret==0) {
+		cpu_spinuntil_int(space->cpu);
+		return 1;
+	}
+
+	return ret;
+}
+
+static READ8_HANDLER( cyclej_r )
+{
+	int pc=cpu_get_pc(space->cpu);
+	int ret=actfancr_ram[0x26];
+
+	if (offset==1) return actfancr_ram[0x27];
+
+	if (pc==0xe2b1 && ret==0) {
+		cpu_spinuntil_int(space->cpu);
+		return 1;
+	}
+
+	return ret;
+}
+
+static DRIVER_INIT( actfancr )
+{
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f0026, 0x1f0027, 0, 0, cycle_r);
+}
+
+static DRIVER_INIT( actfancj )
+{
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x1f0026, 0x1f0027, 0, 0, cyclej_r);
+}
+
+
+
+GAME( 1989, actfancr, 0,        actfancr, actfancr, actfancr, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (World revision 2)", GAME_SUPPORTS_SAVE )
+GAME( 1989, actfancr1,actfancr, actfancr, actfancr, actfancr, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (World revision 1)", GAME_SUPPORTS_SAVE )
+GAME( 1989, actfancrj,actfancr, actfancr, actfancr, actfancj, ROT0, "Data East Corporation", "Act-Fancer Cybernetick Hyper Weapon (Japan revision 1)", GAME_SUPPORTS_SAVE )
+GAME( 1989, triothep, 0,        triothep, triothep, 0,        ROT0, "Data East Corporation", "Trio The Punch - Never Forget Me... (World)", GAME_SUPPORTS_SAVE )
+GAME( 1989, triothepj,triothep, triothep, triothep, 0,        ROT0, "Data East Corporation", "Trio The Punch - Never Forget Me... (Japan)", GAME_SUPPORTS_SAVE )

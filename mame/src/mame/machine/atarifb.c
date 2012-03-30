@@ -4,74 +4,77 @@
 
 *************************************************************************/
 
-#include "emu.h"
-#include "includes/atarifb.h"
+#include "driver.h"
+#include "deprecat.h"
+#include "atarifb.h"
 #include "sound/discrete.h"
+
+static int CTRLD;
+static int sign_x_1, sign_y_1;
+static int sign_x_2, sign_y_2;
+static int sign_x_3, sign_y_3;
+static int sign_x_4, sign_y_4;
 
 
 WRITE8_HANDLER( atarifb_out1_w )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
-	state->m_CTRLD = data;
+	CTRLD = data;
 
-	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN, data & 0x01);		// Whistle
-	discrete_sound_w(discrete, ATARIFB_HIT_EN, data & 0x02);			// Hit
+	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN,  data & 0x01);		// Whistle
+	discrete_sound_w(discrete, ATARIFB_HIT_EN,  data & 0x02);			// Hit
 	discrete_sound_w(discrete, ATARIFB_ATTRACT_EN, data & 0x10);		// Attract
-	discrete_sound_w(discrete, ATARIFB_NOISE_EN, data & 0x04);			// Noise Enable / Kicker
+	discrete_sound_w(discrete, ATARIFB_NOISE_EN,  data & 0x04);		// Noise Enable / Kicker
 }
 
 
 WRITE8_HANDLER( atarifb4_out1_w )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
-	state->m_CTRLD = data;
+	CTRLD = data;
 
-	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN, data & 0x01);		// Whistle
-	discrete_sound_w(discrete, ATARIFB_HIT_EN, data & 0x02);			// Hit
+	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN,  data & 0x01);		// Whistle
+	discrete_sound_w(discrete, ATARIFB_HIT_EN,  data & 0x02);			// Hit
 	discrete_sound_w(discrete, ATARIFB_ATTRACT_EN, data & 0x10);		// Attract
-	discrete_sound_w(discrete, ATARIFB_NOISE_EN, data & 0x04);			// Noise Enable / Kicker
+	discrete_sound_w(discrete, ATARIFB_NOISE_EN,  data & 0x04);		// Noise Enable / Kicker
 
-	coin_counter_w(space->machine(), 1, data & 0x80);
+	coin_counter_w (1, data & 0x80);
 }
 
 
 WRITE8_HANDLER( abaseb_out1_w )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
-	state->m_CTRLD = data;
+	CTRLD = data;
 
-	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN, data & 0x01);		// Whistle
-	discrete_sound_w(discrete, ATARIFB_HIT_EN, data & 0x02);			// Hit
+	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN,  data & 0x01);		// Whistle
+	discrete_sound_w(discrete, ATARIFB_HIT_EN,  data & 0x02);			// Hit
 	discrete_sound_w(discrete, ATARIFB_ATTRACT_EN, data & 0x10);		// Attract
-	discrete_sound_w(discrete, ATARIFB_NOISE_EN, data & 0x04);			// Noise Enable / Kicker
+	discrete_sound_w(discrete, ATARIFB_NOISE_EN,  data & 0x04);		// Noise Enable / Kicker
 
 	if (data & 0x80)
 	{
 		/* Invert video */
-		palette_set_color(space->machine(), 1, MAKE_RGB(0x00,0x00,0x00)); /* black  */
-		palette_set_color(space->machine(), 0, MAKE_RGB(0xff,0xff,0xff)); /* white  */
+		palette_set_color(space->machine,1,MAKE_RGB(0x00,0x00,0x00)); /* black  */
+		palette_set_color(space->machine,0,MAKE_RGB(0xff,0xff,0xff)); /* white  */
 	}
 	else
 	{
 		/* Regular video */
-		palette_set_color(space->machine(), 0, MAKE_RGB(0x00,0x00,0x00)); /* black  */
-		palette_set_color(space->machine(), 1, MAKE_RGB(0xff,0xff,0xff)); /* white  */
+		palette_set_color(space->machine,0,MAKE_RGB(0x00,0x00,0x00)); /* black  */
+		palette_set_color(space->machine,1,MAKE_RGB(0xff,0xff,0xff)); /* white  */
 	}
 }
 
 
 WRITE8_HANDLER( soccer_out1_w )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
-	state->m_CTRLD = data;
+	CTRLD = data;
 
 	/* bit 0 = whistle */
 	/* bit 1 = hit */
@@ -81,35 +84,35 @@ WRITE8_HANDLER( soccer_out1_w )
 	/* bit 5-6 = trackball CTRL bits */
 	/* bit 7 = Rule LED */
 
-	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN, data & 0x01);		// Whistle
-	discrete_sound_w(discrete, ATARIFB_HIT_EN, data & 0x02);			// Hit
+	discrete_sound_w(discrete, ATARIFB_WHISTLE_EN,  data & 0x01);		// Whistle
+	discrete_sound_w(discrete, ATARIFB_HIT_EN,  data & 0x02);			// Hit
 	discrete_sound_w(discrete, ATARIFB_ATTRACT_EN, data & 0x10);		// Attract
-	discrete_sound_w(discrete, ATARIFB_NOISE_EN, data & 0x04);			// Noise Enable / Kicker
+	discrete_sound_w(discrete, ATARIFB_NOISE_EN,  data & 0x04);		// Noise Enable / Kicker
 
-//  set_led_status(space->machine(), 0, data & 0x10);  // !!!!!!!!!! Is this correct????
-	set_led_status(space->machine(), 1, data & 0x80);
+//  set_led_status(0,data & 0x10);  // !!!!!!!!!! Is this correct????
+	set_led_status(1,data & 0x80);
 }
 
 
 WRITE8_HANDLER( atarifb_out2_w )
 {
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
 	discrete_sound_w(discrete, ATARIFB_CROWD_DATA, data & 0x0f);	// Crowd
 
-	coin_counter_w (space->machine(), 0, data & 0x10);
+	coin_counter_w (0, data & 0x10);
 }
 
 
 WRITE8_HANDLER( soccer_out2_w )
 {
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 
 	discrete_sound_w(discrete, ATARIFB_CROWD_DATA, data & 0x0f);	// Crowd
 
-	coin_counter_w (space->machine(), 0, data & 0x10);
-	coin_counter_w (space->machine(), 1, data & 0x20);
-	coin_counter_w (space->machine(), 2, data & 0x40);
+	coin_counter_w (0, data & 0x10);
+	coin_counter_w (1, data & 0x20);
+	coin_counter_w (2, data & 0x40);
 }
 
 
@@ -120,11 +123,9 @@ WRITE8_HANDLER( soccer_out2_w )
  *
  *************************************/
 
-/* FIXME: almost surely not tied with screen vertical position */
 WRITE8_HANDLER( atarifb_out3_w )
 {
-	//atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	int loop = space->machine().primary_screen->vpos() >= 123;
+	int loop = cpu_getiloops(cputag_get_cpu(space->machine, "maincpu"));
 
 	switch (loop)
 	{
@@ -137,12 +138,16 @@ WRITE8_HANDLER( atarifb_out3_w )
 			output_set_value("ledleft4", (data >> 4) & 1);
 			break;
 		case 0x01:
+			break;
+		case 0x02:
 			/* Player 2 play select lamp */
 			output_set_value("ledright0", (data >> 0) & 1);
 			output_set_value("ledright1", (data >> 1) & 1);
 			output_set_value("ledright2", (data >> 2) & 1);
 			output_set_value("ledright3", (data >> 3) & 1);
 			output_set_value("ledright4", (data >> 4) & 1);
+			break;
+		case 0x03:
 			break;
 	}
 //  logerror("out3_w, %02x:%02x\n", loop, data);
@@ -151,135 +156,134 @@ WRITE8_HANDLER( atarifb_out3_w )
 
 READ8_HANDLER( atarifb_in0_r )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-	if ((state->m_CTRLD & 0x20) == 0x00)
+	if ((CTRLD & 0x20) == 0x00)
 	{
 		int val;
 
-		val = (state->m_sign_y_2 >> 7) |
-			  (state->m_sign_x_2 >> 6) |
-			  (state->m_sign_y_1 >> 5) |
-			  (state->m_sign_x_1 >> 4) |
-			  input_port_read(space->machine(), "IN0");
+		val = (sign_y_2 >> 7) |
+			  (sign_x_2 >> 6) |
+			  (sign_y_1 >> 5) |
+			  (sign_x_1 >> 4) |
+			  input_port_read(space->machine, "IN0");
 		return val;
 	}
 	else
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 1 trackball */
-		new_x = input_port_read(space->machine(), "IN3");
-		if (new_x != state->m_counter_x_in0)
+		new_x = input_port_read(space->machine, "IN3");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_1 = (new_x - state->m_counter_x_in0) & 0x80;
-			state->m_counter_x_in0 = new_x;
+			sign_x_1 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN2");
-		if (new_y != state->m_counter_y_in0)
+		new_y = input_port_read(space->machine, "IN2");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_1 = (new_y - state->m_counter_y_in0) & 0x80;
-			state->m_counter_y_in0 = new_y;
+			sign_y_1 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in0 & 0x0f) << 4) | (state->m_counter_x_in0 & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
 }
 
 
 READ8_HANDLER( atarifb_in2_r )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-
-	if ((state->m_CTRLD & 0x20) == 0x00)
+	if ((CTRLD & 0x20) == 0x00)
 	{
-		return input_port_read(space->machine(), "IN1");
+		return input_port_read(space->machine, "IN1");
 	}
 	else
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 2 trackball */
-		new_x = input_port_read(space->machine(), "IN5");
-		if (new_x != state->m_counter_x_in2)
+		new_x = input_port_read(space->machine, "IN5");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_2 = (new_x - state->m_counter_x_in2) & 0x80;
-			state->m_counter_x_in2 = new_x;
+			sign_x_2 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN4");
-		if (new_y != state->m_counter_y_in2)
+		new_y = input_port_read(space->machine, "IN4");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_2 = (new_y - state->m_counter_y_in2) & 0x80;
-			state->m_counter_y_in2 = new_y;
+			sign_y_2 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in2 & 0x0f) << 4) | (state->m_counter_x_in2 & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
 }
 
 READ8_HANDLER( atarifb4_in0_r )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-
 	/* LD1 and LD2 low, return sign bits */
-	if ((state->m_CTRLD & 0x60) == 0x00)
+	if ((CTRLD & 0x60) == 0x00)
 	{
 		int val;
 
-		val = (state->m_sign_x_4 >> 7) |
-			  (state->m_sign_y_4 >> 6) |
-			  (state->m_sign_x_2 >> 5) |
-			  (state->m_sign_y_2 >> 4) |
-			  (state->m_sign_x_3 >> 3) |
-			  (state->m_sign_y_3 >> 2) |
-			  (state->m_sign_x_1 >> 1) |
-			  (state->m_sign_y_1 >> 0);
+		val = (sign_x_4 >> 7) |
+			  (sign_y_4 >> 6) |
+			  (sign_x_2 >> 5) |
+			  (sign_y_2 >> 4) |
+			  (sign_x_3 >> 3) |
+			  (sign_y_3 >> 2) |
+			  (sign_x_1 >> 1) |
+			  (sign_y_1 >> 0);
 		return val;
 	}
-	else if ((state->m_CTRLD & 0x60) == 0x60)
+	else if ((CTRLD & 0x60) == 0x60)
 	/* LD1 and LD2 both high, return Team 1 right player (player 1) */
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 1 trackball */
-		new_x = input_port_read(space->machine(), "IN3");
-		if (new_x != state->m_counter_x_in0)
+		new_x = input_port_read(space->machine, "IN3");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_1 = (new_x - state->m_counter_x_in0) & 0x80;
-			state->m_counter_x_in0 = new_x;
+			sign_x_1 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN2");
-		if (new_y != state->m_counter_y_in0)
+		new_y = input_port_read(space->machine, "IN2");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_1 = (new_y - state->m_counter_y_in0) & 0x80;
-			state->m_counter_y_in0 = new_y;
+			sign_y_1 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in0 & 0x0f) << 4) | (state->m_counter_x_in0 & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
-	else if ((state->m_CTRLD & 0x60) == 0x40)
+	else if ((CTRLD & 0x60) == 0x40)
 	/* LD1 high, LD2 low, return Team 1 left player (player 2) */
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 2 trackball */
-		new_x = input_port_read(space->machine(), "IN5");
-		if (new_x != state->m_counter_x_in0b)
+		new_x = input_port_read(space->machine, "IN5");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_2 = (new_x - state->m_counter_x_in0b) & 0x80;
-			state->m_counter_x_in0b = new_x;
+			sign_x_2 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN4");
-		if (new_y != state->m_counter_y_in0b)
+		new_y = input_port_read(space->machine, "IN4");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_2 = (new_y - state->m_counter_y_in0b) & 0x80;
-			state->m_counter_y_in0b = new_y;
+			sign_y_2 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in0b & 0x0f) << 4) | (state->m_counter_x_in0b & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
 
 	else return 0;
@@ -288,56 +292,58 @@ READ8_HANDLER( atarifb4_in0_r )
 
 READ8_HANDLER( atarifb4_in2_r )
 {
-	atarifb_state *state = space->machine().driver_data<atarifb_state>();
-
-	if ((state->m_CTRLD & 0x40) == 0x00)
+	if ((CTRLD & 0x40) == 0x00)
 	{
-		return input_port_read(space->machine(), "IN1");
+		return input_port_read(space->machine, "IN1");
 	}
-	else if ((state->m_CTRLD & 0x60) == 0x60)
+	else if ((CTRLD & 0x60) == 0x60)
 	/* LD1 and LD2 both high, return Team 2 right player (player 3) */
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 3 trackball */
-		new_x = input_port_read(space->machine(), "IN7");
-		if (new_x != state->m_counter_x_in2)
+		new_x = input_port_read(space->machine, "IN7");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_3 = (new_x - state->m_counter_x_in2) & 0x80;
-			state->m_counter_x_in2 = new_x;
+			sign_x_3 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN6");
-		if (new_y != state->m_counter_y_in2)
+		new_y = input_port_read(space->machine, "IN6");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_3 = (new_y - state->m_counter_y_in2) & 0x80;
-			state->m_counter_y_in2 = new_y;
+			sign_y_3 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in2 & 0x0f) << 4) | (state->m_counter_x_in2 & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
-	else if ((state->m_CTRLD & 0x60) == 0x40)
+	else if ((CTRLD & 0x60) == 0x40)
 	/* LD1 high, LD2 low, return Team 2 left player (player 4) */
 	{
-		int new_x, new_y;
+		static int counter_x,counter_y;
+		int new_x,new_y;
 
 		/* Read player 4 trackball */
-		new_x = input_port_read(space->machine(), "IN9");
-		if (new_x != state->m_counter_x_in2b)
+		new_x = input_port_read(space->machine, "IN9");
+		if (new_x != counter_x)
 		{
-			state->m_sign_x_4 = (new_x - state->m_counter_x_in2b) & 0x80;
-			state->m_counter_x_in2b = new_x;
+			sign_x_4 = (new_x - counter_x) & 0x80;
+			counter_x = new_x;
 		}
 
-		new_y = input_port_read(space->machine(), "IN8");
-		if (new_y != state->m_counter_y_in2b)
+		new_y = input_port_read(space->machine, "IN8");
+		if (new_y != counter_y)
 		{
-			state->m_sign_y_4 = (new_y - state->m_counter_y_in2b) & 0x80;
-			state->m_counter_y_in2b = new_y;
+			sign_y_4 = (new_y - counter_y) & 0x80;
+			counter_y = new_y;
 		}
 
-		return (((state->m_counter_y_in2b & 0x0f) << 4) | (state->m_counter_x_in2b & 0x0f));
+		return (((counter_y & 0x0f) << 4) | (counter_x & 0x0f));
 	}
 
 	else return 0;
 }
+
+

@@ -1,85 +1,72 @@
-/*******************************************************************************************
+/****************************************************************************************
 
-    Competition Golf Final Round (c) 1986 / 1985 Data East
+Competition Golf Final Round (c) 1986 / 1985 Data East
 
-    Driver by Angelo Salese, Bryan McPhail and Pierpaolo Prazzoli
-    Thanks to David Haywood for the bg roms expansion
+Driver by Angelo Salese, Bryan McPhail and Pierpaolo Prazzoli
+Thanks to David Haywood for the bg roms expansion
 
-    Nb:  The black border around the player sprite in attract mode happens on the real pcb
-    as well.
+Nb:  The black border around the player sprite in attract mode happens on the real pcb
+as well.
 
-*******************************************************************************************/
+****************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2203intf.h"
-#include "includes/compgolf.h"
 
+extern UINT8 *compgolf_bg_ram;
+extern int compgolf_scrollx_lo, compgolf_scrolly_lo, compgolf_scrollx_hi, compgolf_scrolly_hi;
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+extern WRITE8_HANDLER( compgolf_video_w );
+extern WRITE8_HANDLER( compgolf_back_w );
+extern PALETTE_INIT ( compgolf );
+extern VIDEO_START  ( compgolf );
+extern VIDEO_UPDATE ( compgolf );
+
+static int bank;
 
 static WRITE8_DEVICE_HANDLER( compgolf_scrollx_lo_w )
 {
-	compgolf_state *state = device->machine().driver_data<compgolf_state>();
-	state->m_scrollx_lo = data;
+	compgolf_scrollx_lo = data;
 }
 
 static WRITE8_DEVICE_HANDLER( compgolf_scrolly_lo_w )
 {
-	compgolf_state *state = device->machine().driver_data<compgolf_state>();
-	state->m_scrolly_lo = data;
+	compgolf_scrolly_lo = data;
 }
 
 static WRITE8_HANDLER( compgolf_ctrl_w )
 {
-	compgolf_state *state = space->machine().driver_data<compgolf_state>();
-
 	/* bit 4 and 6 are always set */
 
 	int new_bank = (data & 4) >> 2;
 
-	if (state->m_bank != new_bank)
+	if( bank != new_bank )
 	{
-		state->m_bank = new_bank;
-		memory_set_bank(space->machine(), "bank1", state->m_bank);
+		bank = new_bank;
+		memory_set_bankptr(space->machine, 1, memory_region(space->machine, "user1") + 0x4000 * bank);
 	}
 
-	state->m_scrollx_hi = (data & 1) << 8;
-	state->m_scrolly_hi = (data & 2) << 7;
+	compgolf_scrollx_hi = (data & 1) << 8;
+	compgolf_scrolly_hi = (data & 2) << 7;
 }
 
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( compgolf_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( compgolf_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(compgolf_video_w) AM_BASE_MEMBER(compgolf_state, m_videoram)
-	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(compgolf_back_w) AM_BASE_MEMBER(compgolf_state, m_bg_ram)
-	AM_RANGE(0x2000, 0x2060) AM_RAM AM_BASE_MEMBER(compgolf_state, m_spriteram)
+	AM_RANGE(0x1000, 0x17ff) AM_RAM_WRITE(compgolf_video_w) AM_BASE(&videoram)
+	AM_RANGE(0x1800, 0x1fff) AM_RAM_WRITE(compgolf_back_w) AM_BASE(&compgolf_bg_ram)
+	AM_RANGE(0x2000, 0x2060) AM_RAM AM_BASE(&spriteram)
 	AM_RANGE(0x2061, 0x2061) AM_WRITENOP
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("P1")
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("P2") AM_WRITE(compgolf_ctrl_w)
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("DSW1")
 	AM_RANGE(0x3003, 0x3003) AM_READ_PORT("DSW2")
-	AM_RANGE(0x3800, 0x3801) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x3800, 0x3801) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
+/***************************************************************************/
 
 static INPUT_PORTS_START( compgolf )
 	PORT_START("P1")
@@ -147,12 +134,7 @@ static INPUT_PORTS_START( compgolf )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 INPUT_PORTS_END
 
-
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
+/***************************************************************************/
 
 static const gfx_layout spritelayout =
 {
@@ -183,7 +165,7 @@ static const gfx_layout tilelayout8 =
 	8,8,
 	RGN_FRAC(1,2),
 	3,
-	{ RGN_FRAC(1,2)+4, 0, 4 },
+ 	{ RGN_FRAC(1,2)+4, 0, 4 },
 	{ 0, 1, 2, 3, 8*8+0, 8*8+1, 8*8+2, 8*8+3 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	16*8
@@ -195,15 +177,11 @@ static GFXDECODE_START( compgolf )
 	GFXDECODE_ENTRY( "gfx3", 0, tilelayout8,  0, 0x10 )
 GFXDECODE_END
 
-/*************************************
- *
- *  Sound interface
- *
- *************************************/
+/***************************************************************************/
 
-static void sound_irq(device_t *device, int linestate)
+static void sound_irq(const device_config *device, int linestate)
 {
-	cputag_set_input_line(device->machine(), "maincpu", 0, linestate);
+	cputag_set_input_line(device->machine, "maincpu", 0, linestate);
 }
 
 static const ym2203_interface ym2203_config =
@@ -219,72 +197,34 @@ static const ym2203_interface ym2203_config =
 	sound_irq
 };
 
-
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( compgolf )
-{
-	compgolf_state *state = machine.driver_data<compgolf_state>();
-
-	state->save_item(NAME(state->m_bank));
-	state->save_item(NAME(state->m_scrollx_lo));
-	state->save_item(NAME(state->m_scrollx_hi));
-	state->save_item(NAME(state->m_scrolly_lo));
-	state->save_item(NAME(state->m_scrolly_hi));
-}
-
-static MACHINE_RESET( compgolf )
-{
-	compgolf_state *state = machine.driver_data<compgolf_state>();
-
-	state->m_bank = -1;
-	state->m_scrollx_lo = 0;
-	state->m_scrollx_hi = 0;
-	state->m_scrolly_lo = 0;
-	state->m_scrolly_hi = 0;
-}
-
-static MACHINE_CONFIG_START( compgolf, compgolf_state )
-
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, 2000000)
-	MCFG_CPU_PROGRAM_MAP(compgolf_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
-
-	MCFG_MACHINE_START(compgolf)
-	MCFG_MACHINE_RESET(compgolf)
+static MACHINE_DRIVER_START( compgolf )
+	MDRV_CPU_ADD("maincpu", M6809, 2000000)
+	MDRV_CPU_PROGRAM_MAP(compgolf_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(compgolf)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 32*8-1, 1*8, 31*8-1)
 
-	MCFG_PALETTE_LENGTH(0x100)
-	MCFG_PALETTE_INIT(compgolf)
-	MCFG_GFXDECODE(compgolf)
+	MDRV_PALETTE_LENGTH(0x100)
+	MDRV_PALETTE_INIT(compgolf)
+	MDRV_GFXDECODE(compgolf)
 
-	MCFG_VIDEO_START(compgolf)
+	MDRV_VIDEO_START(compgolf)
+	MDRV_VIDEO_UPDATE(compgolf)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2203, 1500000)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2203, 1500000)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+/***************************************************************************/
 
 ROM_START( compgolf )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -338,39 +278,25 @@ ROM_START( compgolfo )
 	ROM_LOAD( "cv08-1.bpr",   0x00000, 0x0100, CRC(b7c43db9) SHA1(418b11e4c8a9bce6873b0624ac53a5011c5807d0) )
 ROM_END
 
-
-/*************************************
- *
- *  Driver initialization
- *
- *************************************/
-
-static void compgolf_expand_bg(running_machine &machine)
+static void compgolf_expand_bg(running_machine *machine)
 {
-	UINT8 *GFXDST = machine.region("gfx2")->base();
-	UINT8 *GFXSRC = machine.region("gfx4")->base();
+	UINT8 *GFXDST = memory_region(machine, "gfx2");
+	UINT8 *GFXSRC = memory_region(machine, "gfx4");
 
 	int x;
 
 	for (x = 0; x < 0x4000; x++)
 	{
-		GFXDST[0x8000 + x]  = (GFXSRC[x] & 0x0f) << 4;
-		GFXDST[0xc000 + x]  = (GFXSRC[x] & 0xf0);
+		GFXDST[0x8000+x]  = (GFXSRC[x] & 0x0f) << 4;
+		GFXDST[0xc000+x]  = (GFXSRC[x] & 0xf0);
 	}
 }
 
 static DRIVER_INIT( compgolf )
 {
-	memory_configure_bank(machine, "bank1", 0, 2, machine.region("user1")->base(), 0x4000);
+	bank = -1;
 	compgolf_expand_bg(machine);
 }
 
-
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
-GAME( 1986, compgolf, 0,        compgolf, compgolf, compgolf, ROT0, "Data East", "Competition Golf Final Round (revision 3)", GAME_SUPPORTS_SAVE )
-GAME( 1985, compgolfo,compgolf, compgolf, compgolf, compgolf, ROT0, "Data East", "Competition Golf Final Round (old version)", GAME_SUPPORTS_SAVE )
+GAME( 1986, compgolf, 0,		compgolf, compgolf, compgolf, ROT0, "Data East", "Competition Golf Final Round (revision 3)", 0 )
+GAME( 1985, compgolfo,compgolf, compgolf, compgolf, compgolf, ROT0, "Data East", "Competition Golf Final Round (old version)", 0 )

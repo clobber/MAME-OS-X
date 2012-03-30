@@ -63,8 +63,12 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
+#include "cpuintrf.h"
+#include "cpuexec.h"
 #include "saa1099.h"
+#include <math.h>
 
 
 #define LEFT	0x00
@@ -99,7 +103,7 @@ struct saa1099_noise
 typedef struct _saa1099_state saa1099_state;
 struct _saa1099_state
 {
-	device_t *device;
+	const device_config *device;
 	sound_stream * stream;			/* our stream */
 	int noise_params[2];			/* noise generators parameters */
 	int env_enable[2];				/* envelope generators enable */
@@ -167,11 +171,13 @@ static const UINT8 envelope[8][64] = {
 };
 
 
-INLINE saa1099_state *get_safe_token(device_t *device)
+INLINE saa1099_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == SAA1099);
-	return (saa1099_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_SAA1099);
+	return (saa1099_state *)device->token;
 }
 
 
@@ -324,10 +330,10 @@ static DEVICE_START( saa1099 )
 
 	/* copy global parameters */
 	saa->device = device;
-	saa->sample_rate = device->clock() / 256;
+	saa->sample_rate = device->clock / 256;
 
 	/* for each chip allocate one stream */
-	saa->stream = device->machine().sound().stream_alloc(*device, 0, 2, saa->sample_rate, saa, saa1099_update);
+	saa->stream = stream_create(device, 0, 2, saa->sample_rate, saa, saa1099_update);
 }
 
 WRITE8_DEVICE_HANDLER( saa1099_control_w )
@@ -337,7 +343,7 @@ WRITE8_DEVICE_HANDLER( saa1099_control_w )
 	if ((data & 0xff) > 0x1c)
 	{
 		/* Error! */
-                logerror("%s: (SAA1099 '%s') Unknown register selected\n",device->machine().describe_context(), device->tag());
+                logerror("%s: (SAA1099 '%s') Unknown register selected\n",cpuexec_describe_context(device->machine), device->tag);
 	}
 
 	saa->selected_reg = data & 0x1f;
@@ -359,7 +365,7 @@ WRITE8_DEVICE_HANDLER( saa1099_data_w )
 	int ch;
 
 	/* first update the stream to this point in time */
-	saa->stream->update();
+	stream_update(saa->stream);
 
 	switch (reg)
 	{
@@ -423,7 +429,7 @@ WRITE8_DEVICE_HANDLER( saa1099_data_w )
 			int i;
 
 			/* Synch & Reset generators */
-			logerror("%s: (SAA1099 '%s') -reg 0x1c- Chip reset\n",device->machine().describe_context(), device->tag());
+			logerror("%s: (SAA1099 '%s') -reg 0x1c- Chip reset\n",cpuexec_describe_context(device->machine), device->tag);
 			for (i = 0; i < 6; i++)
 			{
                 saa->channels[i].level = 0;
@@ -432,7 +438,7 @@ WRITE8_DEVICE_HANDLER( saa1099_data_w )
 		}
 		break;
 	default:	/* Error! */
-		logerror("%s: (SAA1099 '%s') Unknown operation (reg:%02x, data:%02x)\n",device->machine().describe_context(), device->tag(), reg, data);
+		logerror("%s: (SAA1099 '%s') Unknown operation (reg:%02x, data:%02x)\n",cpuexec_describe_context(device->machine), device->tag, reg, data);
 	}
 }
 
@@ -462,5 +468,3 @@ DEVICE_GET_INFO( saa1099 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(SAA1099, saa1099);

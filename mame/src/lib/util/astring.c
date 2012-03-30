@@ -44,107 +44,140 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <new>
+
+
+
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
+
+struct _astring
+{
+	char *			text;
+	int				alloclen;
+	char			smallbuf[256 - sizeof(int) - sizeof(char *)];
+};
+
 
 
 /***************************************************************************
     GLOBAL VARIABLES
 ***************************************************************************/
 
-static const astring dummy_astring;
+static const char dummy_text[2] = { 0 };
+static const astring dummy_astring = { (char *)dummy_text, 1, { 0 } };
 
 
 
-//**************************************************************************
-//  INLINE FUNCTIONS
-//**************************************************************************
+/***************************************************************************
+    INLINE FUNCTIONS
+***************************************************************************/
 
-//-------------------------------------------------
-//  ensure_room - ensure we have room for a
-//  given string, or else reallocate our buffer
-//-------------------------------------------------
+/*-------------------------------------------------
+    ensure_room - ensure we have room for a
+    given string, or else reallocate our buffer
+-------------------------------------------------*/
 
-bool astring::ensure_room(int length)
+INLINE int ensure_room(astring *str, int length)
 {
-	// always fail to expand the dummy
-	if (this == &dummy_astring)
-		return false;
+	char *newbuf, *oldbuf;
+	int alloclen;
 
-	// if we have the room, do nothing
-	if (m_alloclen >= length + 1)
-		return true;
+	/* always fail to expand the dummy */
+	if (str == &dummy_astring)
+		return FALSE;
 
-	// allocate a new buffer with some slop
-	int alloclen = length + 256;
-	char *newbuf = new char[alloclen];
+	/* if we have the room, do nothing */
+	if (str->alloclen >= length + 1)
+		return TRUE;
 
-	// swap in the new buffer and free the old one
-	char *oldbuf = (m_text == m_smallbuf) ? NULL : m_text;
-	m_text = strcpy(newbuf, m_text);
-	m_alloclen = alloclen;
-	delete[] oldbuf;
+	/* allocate a new buffer with some slop */
+	alloclen = length + 256;
+	newbuf = (char *)malloc(alloclen);
+	if (newbuf == NULL)
+		return FALSE;
 
-	return true;
+	/* swap in the new buffer and free the old one */
+	oldbuf = (str->text == str->smallbuf) ? NULL : str->text;
+	str->text = strcpy(newbuf, str->text);
+	str->alloclen = alloclen;
+	if (oldbuf != NULL)
+		free(oldbuf);
+
+	return TRUE;
 }
 
 
-//-------------------------------------------------
-//  safe_string_base - return a "safe" string
-//  base for a given start index
-//-------------------------------------------------
+/*-------------------------------------------------
+    safe_string_base - return a "safe" string
+    base for a given start index
+-------------------------------------------------*/
 
-inline char *astring::safe_string_base(int start) const
+INLINE char *safe_string_base(char *base, int start)
 {
-	int max = len();
-	return (start >= 0 && start < max) ? m_text + start : m_text + max;
+	int max = strlen(base);
+	return (start >= 0 && start < max) ? base + start : base + max;
 }
 
 
-//-------------------------------------------------
-//  normalize_substr - normalize substr parameters
-//-------------------------------------------------
+/*-------------------------------------------------
+    normalize_substr - normalize substr parameters
+-------------------------------------------------*/
 
-inline void astring::normalize_substr(int &start, int &count, int length) const
+INLINE void normalize_substr(int *start, int *count, int length)
 {
-	// limit start
-	if (start < 0)
-		start = 0;
-	else if (start > length)
-		start = length;
+	/* limit start */
+	if (*start < 0)
+		*start = 0;
+	else if (*start > length)
+		*start = length;
 
-	// update count
-	if (count == -1 || start + count > length)
-		count = length - start;
+	/* update count */
+	if (*count == -1 || *start + *count > length)
+		*count = length - *start;
 }
 
 
 
-//**************************************************************************
-//  ASTRING ALLOCATION
-//**************************************************************************
+/***************************************************************************
+    ASTRING ALLOCATION
+***************************************************************************/
 
-//-------------------------------------------------
-//  init - constructor helper
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_alloc - allocate a new astring
+-------------------------------------------------*/
 
-astring &astring::init()
+astring *astring_alloc(void)
 {
-	// initialize ourselves to point to the internal buffer
-	m_text = m_smallbuf;
-	m_alloclen = ARRAY_LENGTH(m_smallbuf);
-	m_smallbuf[0] = 0;
-	return *this;
+	astring *str;
+
+	/* allocate memory; if we fail, return the dummy */
+	str = (astring *)malloc(sizeof(*str));
+	if (str == NULL)
+		return (astring *)&dummy_astring;
+	memset(str, 0, sizeof(*str));
+
+	/*  initialize the small buffer */
+	str->text = str->smallbuf;
+	str->alloclen = ARRAY_LENGTH(str->smallbuf);
+	return str;
 }
 
 
-//-------------------------------------------------
-//  ~astring - destructor
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_free - free an astring
+-------------------------------------------------*/
 
-astring::~astring()
+void astring_free(astring *str)
 {
-	if (m_text != m_smallbuf)
-		delete[] m_text;
+	/* ignore attempts to free the dummy */
+	if (str == &dummy_astring)
+		return;
+
+	/* if we allocated additional memory, free that */
+	if (str->text != str->smallbuf)
+		free(str->text);
+	free(str);
 }
 
 
@@ -153,146 +186,238 @@ astring::~astring()
     INLINE ASTRING CHANGES
 ***************************************************************************/
 
-//-------------------------------------------------
-//  cpy - copy a character array into an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cpy - copy one astring into another
+-------------------------------------------------*/
 
-astring &astring::cpy(const char *src, int count)
+astring *astring_cpy(astring *dst, const astring *src)
 {
-	// make room; if we fail or if we are the dummy, do nothing
-	if (!ensure_room(count))
-		return *this;
-
-	// copy the raw data and NULL-terminate
-	if (count > 0 && m_text != src)
-		memcpy(m_text, src, count);
-	m_text[count] = 0;
-	return *this;
+	return astring_cpyc(dst, src->text);
 }
 
 
-//-------------------------------------------------
-//  cpysubstr - copy a substring of one string to
-//  another
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cpyc - copy a C string into an astring
+-------------------------------------------------*/
 
-astring &astring::cpysubstr(const astring &src, int start, int count)
+astring *astring_cpyc(astring *dst, const char *src)
 {
-	normalize_substr(start, count, strlen(src.m_text));
-	return cpy(src.m_text + start, count);
+	return astring_cpych(dst, src, strlen(src));
 }
 
 
-//-------------------------------------------------
-//  ins - insert a character array into an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cpych - copy a character array into
+    an astring
+-------------------------------------------------*/
 
-astring &astring::ins(int insbefore, const char *src, int count)
+astring *astring_cpych(astring *dst, const char *src, int count)
 {
-	// make room; if we fail or if we are the dummy, do nothing
-	int dstlength = len();
-	if (!ensure_room(dstlength + count))
-		return *this;
+	/* make room; if we fail or if dst is the dummy, do nothing */
+	if (!ensure_room(dst, count))
+		return dst;
 
-	// adjust insbefore to be logical
+	/* copy the raw data and NULL-terminate */
+	if (count > 0)
+		memcpy(dst->text, src, count);
+	dst->text[count] = 0;
+	return dst;
+}
+
+
+/*-------------------------------------------------
+    astring_cpysubstr - copy a substring of one
+    string to another
+-------------------------------------------------*/
+
+astring *astring_cpysubstr(astring *dst, const astring *src, int start, int count)
+{
+	normalize_substr(&start, &count, strlen(src->text));
+	return astring_cpych(dst, src->text + start, count);
+}
+
+
+/*-------------------------------------------------
+    astring_ins - insert one astring into another
+-------------------------------------------------*/
+
+astring *astring_ins(astring *dst, int insbefore, const astring *src)
+{
+	return astring_insc(dst, insbefore, src->text);
+}
+
+
+/*-------------------------------------------------
+    astring_insc - insert a C string into an
+    astring
+-------------------------------------------------*/
+
+astring *astring_insc(astring *dst, int insbefore, const char *src)
+{
+	return astring_insch(dst, insbefore, src, strlen(src));
+}
+
+
+/*-------------------------------------------------
+    astring_insch - insert a character array
+    into an astring
+-------------------------------------------------*/
+
+astring *astring_insch(astring *dst, int insbefore, const char *src, int count)
+{
+	int dstlength = strlen(dst->text);
+
+	/* make room; if we fail or if dst is the dummy, do nothing */
+	if (!ensure_room(dst, dstlength + count))
+		return dst;
+
+	/* adjust insbefore to be logical */
 	if (insbefore < 0 || insbefore > dstlength)
 		insbefore = dstlength;
 
-	// copy the data an NULL-terminate
+	/* copy the data an NULL-terminate */
 	if (insbefore < dstlength)
-		memmove(m_text + insbefore + count, m_text + insbefore, dstlength - insbefore);
-	memcpy(m_text + insbefore, src, count);
-	m_text[dstlength + count] = 0;
-	return *this;
+		memmove(dst->text + insbefore + count, dst->text + insbefore, dstlength - insbefore);
+	memcpy(dst->text + insbefore, src, count);
+	dst->text[dstlength + count] = 0;
+	return dst;
 }
 
 
-//-------------------------------------------------
-//  inssubstr - insert a substring of one string
-//  into another
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_inssubstr - insert a substring of
+    one string to another
+-------------------------------------------------*/
 
-astring &astring::inssubstr(int insbefore, const astring &src, int start, int count)
+astring *astring_inssubstr(astring *dst, int insbefore, const astring *src, int start, int count)
 {
-	normalize_substr(start, count, strlen(src.m_text));
-	return ins(insbefore, src.m_text + start, count);
+	normalize_substr(&start, &count, strlen(src->text));
+	return astring_insch(dst, insbefore, src->text + start, count);
 }
 
 
-//-------------------------------------------------
-//  substr - extract a substring of ourself,
-//  removing everything else
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_substr - extract a substring of
+    ourself, removing everything else
+-------------------------------------------------*/
 
-astring &astring::substr(int start, int count)
+astring *astring_substr(astring *str, int start, int count)
 {
-	// ignore attempts to do this on the dummy
-	if (this == &dummy_astring)
-		return *this;
+	/* ignore attempts to do this on the dummy */
+	if (str == &dummy_astring)
+		return str;
 
-	// normalize parameters
-	normalize_substr(start, count, strlen(m_text));
+	/* normalize parameters */
+	normalize_substr(&start, &count, strlen(str->text));
 
-	// move the data and NULL-terminate
+	/* move the data and NULL-terminate */
 	if (count > 0 && start > 0)
-		memmove(m_text, m_text + start, count);
-	m_text[count] = 0;
-	return *this;
+		memmove(str->text, str->text + start, count);
+	str->text[count] = 0;
+	return str;
 }
 
 
-//-------------------------------------------------
-//  del - delete a substring of ourself, keeping
-//  everything else
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_del - delete a substring of
+    ourself, keeping everything else
+-------------------------------------------------*/
 
-astring &astring::del(int start, int count)
+astring *astring_del(astring *str, int start, int count)
 {
-	// ignore attempts to do this on the dummy
-	if (this == &dummy_astring)
-		return *this;
+	int strlength = strlen(str->text);
 
-	// normalize parameters
-	int strlength = strlen(m_text);
-	normalize_substr(start, count, strlength);
+	/* ignore attempts to do this on the dummy */
+	if (str == &dummy_astring)
+		return str;
 
-	// move the data and NULL-terminate
+	/* normalize parameters */
+	normalize_substr(&start, &count, strlength);
+
+	/* move the data and NULL-terminate */
 	if (count > 0)
-		memmove(m_text + start, m_text + start + count, strlength - (start + count));
-	m_text[strlength - count] = 0;
-	return *this;
+		memmove(str->text + start, str->text + start + count, strlength - (start + count));
+	str->text[strlength - count] = 0;
+	return str;
 }
 
 
-//-------------------------------------------------
-//  vprintf - vprintf text into an astring
-//-------------------------------------------------*/
+/*-------------------------------------------------
+    astring_printf - printf text into an astring
+-------------------------------------------------*/
 
-int astring::vprintf(const char *format, va_list args)
+int astring_printf(astring *dst, const char *format, ...)
 {
-	// sprintf into the temporary buffer
 	char tempbuf[4096];
-	int result = vsprintf(tempbuf, format, args);
+	va_list args;
+	int result;
 
-	// set the result
-	cpy(tempbuf);
+	/* sprintf into the temporary buffer */
+	va_start(args, format);
+	result = vsprintf(tempbuf, format, args);
+	va_end(args);
+
+	/* set the result */
+	astring_cpyc(dst, tempbuf);
 	return result;
 }
 
 
-//-------------------------------------------------
-//  catprintf - formatted vprintf to the end of
-//  an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_vprintf - vprintf text into an astring
+-------------------------------------------------*/
 
-int astring::catvprintf(const char *format, va_list args)
+int astring_vprintf(astring *dst, const char *format, va_list args)
 {
-	// sprintf into the temporary buffer
 	char tempbuf[4096];
-	int result = vsprintf(tempbuf, format, args);
+	int result;
 
-	// append the result
-	cat(tempbuf);
+	/* sprintf into the temporary buffer */
+	result = vsprintf(tempbuf, format, args);
+
+	/* set the result */
+	astring_cpyc(dst, tempbuf);
+	return result;
+}
+
+
+/*-------------------------------------------------
+    astring_catprintf - formatted printf to
+    the end of an astring
+-------------------------------------------------*/
+
+int astring_catprintf(astring *dst, const char *format, ...)
+{
+	char tempbuf[4096];
+	va_list args;
+	int result;
+
+	/* sprintf into the temporary buffer */
+	va_start(args, format);
+	result = vsprintf(tempbuf, format, args);
+	va_end(args);
+
+	/* append the result */
+	astring_catc(dst, tempbuf);
+	return result;
+}
+
+
+/*-------------------------------------------------
+    astring_catprintf - formatted vprintf to
+    the end of an astring
+-------------------------------------------------*/
+
+int astring_catvprintf(astring *dst, const char *format, va_list args)
+{
+	char tempbuf[4096];
+	int result;
+
+	/* sprintf into the temporary buffer */
+	result = vsprintf(tempbuf, format, args);
+
+	/* append the result */
+	astring_catc(dst, tempbuf);
 	return result;
 }
 
@@ -302,203 +427,316 @@ int astring::catvprintf(const char *format, va_list args)
     ASTRING QUERIES
 ***************************************************************************/
 
-//-------------------------------------------------
-//  cmp - compare a character array to an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_c - return a pointer to a C string
+    from an astring
+-------------------------------------------------*/
 
-int astring::cmp(const char *str2, int count) const
+const char *astring_c(const astring *str)
 {
-	// loop while equal until we hit the end of strings
-	int index;
-	for (index = 0; index < count; index++)
-		if (m_text[index] == 0 || m_text[index] != str2[index])
-			break;
-
-	// determine the final result
-	if (index < count)
-		return m_text[index] - str2[index];
-	if (m_text[index] == 0)
-		return 0;
-	return 1;
+	return str->text;
 }
 
 
-//-------------------------------------------------
-//  cmpsubstr - compare a substring to an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_len - return the length of an astring
+-------------------------------------------------*/
 
-int astring::cmpsubstr(const astring &str2, int start, int count) const
+int astring_len(const astring *str)
 {
-	normalize_substr(start, count, strlen(str2.m_text));
-	return cmp(str2.m_text + start, count);
+	return strlen(str->text);
 }
 
 
-//-------------------------------------------------
-//  icmp - compare a character array to an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cmp - compare one astring to another
+-------------------------------------------------*/
 
-int astring::icmp(const char *str2, int count) const
+int astring_cmp(const astring *str1, const astring *str2)
 {
-	// loop while equal until we hit the end of strings
-	int index;
-	for (index = 0; index < count; index++)
-		if (m_text[index] == 0 || tolower(m_text[index]) != tolower(str2[index]))
-			break;
-
-	// determine the final result
-	if (index < count)
-		return tolower(m_text[index]) - tolower(str2[index]);
-	if (m_text[index] == 0)
-		return 0;
-	return 1;
+	return astring_cmpc(str1, str2->text);
 }
 
 
-//-------------------------------------------------
-//  icmpsubstr - compare a substring to an astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cmpc - compare a C string to an astring
+-------------------------------------------------*/
 
-int astring::icmpsubstr(const astring &str2, int start, int count) const
+int astring_cmpc(const astring *str1, const char *str2)
 {
-	normalize_substr(start, count, strlen(str2.m_text));
-	return icmp(str2.m_text + start, count);
+	const char *s1 = str1->text;
+
+	/* loop while equal until we hit the end of strings */
+	while (*s1 != 0 && *str2 != 0 && *s1 == *str2)
+		s1++, str2++;
+	return *s1 - *str2;
 }
 
 
-//-------------------------------------------------
-//  chr - return the index of a character in an
-//  astring
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cmpch - compare a character array to
+    an astring
+-------------------------------------------------*/
 
-int astring::chr(int start, int ch) const
+int astring_cmpch(const astring *str1, const char *str2, int count)
 {
-	char *result = strchr(safe_string_base(start), ch);
-	return (result != NULL) ? (result - m_text) : -1;
+	const char *s1 = str1->text;
+	int result;
+
+	/* loop while equal until we hit the end of strings */
+	while (count-- > 0 && *s1 != 0 && *str2 != 0 && *s1 == *str2)
+		s1++, str2++;
+	result = (count == -1) ? 0 : *s1 - *str2;
+	if (result == 0 && *s1 != 0)
+		result = 1;
+	return result;
 }
 
 
-//-------------------------------------------------
-//  rchr - return the index of a character in an
-//  astring, searching from the end
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_cmpsubstr - compare a substring to
+    an astring
+-------------------------------------------------*/
 
-int astring::rchr(int start, int ch) const
+int astring_cmpsubstr(const astring *str1, const astring *str2, int start, int count)
 {
-	char *result = strrchr(safe_string_base(start), ch);
-	return (result != NULL) ? (result - m_text) : -1;
+	normalize_substr(&start, &count, strlen(str2->text));
+	return astring_cmpch(str1, str2->text + start, count);
 }
 
 
-//-------------------------------------------------
-//  find - find a C string in an astring
-//-------------------------------------------------*/
+/*-------------------------------------------------
+    astring_icmp - case-insenstive compare one
+    astring to another
+-------------------------------------------------*/
 
-int astring::find(int start, const char *search) const
+int astring_icmp(const astring *str1, const astring *str2)
 {
-	char *result = strstr(safe_string_base(start), search);
-	return (result != NULL) ? (result - m_text) : -1;
+	return astring_icmpc(str1, str2->text);
 }
 
 
-//-------------------------------------------------
-//  replacec - search in an astring for a C string,
-//  replacing all instances with another C string
-//  and returning the number of matches
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_icmpc - case-insenstive compare a C
+    string to an astring
+-------------------------------------------------*/
 
-int astring::replace(int start, const char *search, const char *replace)
+int astring_icmpc(const astring *str1, const char *str2)
+{
+	const char *s1 = str1->text;
+
+	/* loop while equal until we hit the end of strings */
+	while (*s1 != 0 && *str2 != 0 && tolower((UINT8)*s1) == tolower((UINT8)*str2))
+		s1++, str2++;
+	return tolower((UINT8)*s1) - tolower((UINT8)*str2);
+}
+
+
+/*-------------------------------------------------
+    astring_icmpch - case-insenstive compare a
+    character array to an astring
+-------------------------------------------------*/
+
+int astring_icmpch(const astring *str1, const char *str2, int count)
+{
+	const char *s1 = str1->text;
+	int result;
+
+	/* loop while equal until we hit the end of strings */
+	while (count-- > 0 && *s1 != 0 && *str2 != 0 && tolower((UINT8)*s1) == tolower((UINT8)*str2))
+		s1++, str2++;
+	result = (count == -1) ? 0 : tolower((UINT8)*s1) - tolower((UINT8)*str2);
+	if (result == 0 && *s1 != 0)
+		result = 1;
+	return result;
+}
+
+
+/*-------------------------------------------------
+    astring_icmpsubstr - case-insenstive compare a
+    substring to an astring
+-------------------------------------------------*/
+
+int astring_icmpsubstr(const astring *str1, const astring *str2, int start, int count)
+{
+	normalize_substr(&start, &count, strlen(str2->text));
+	return astring_icmpch(str1, str2->text + start, count);
+}
+
+
+/*-------------------------------------------------
+    astring_chr - return the index of a character
+    in an astring
+-------------------------------------------------*/
+
+int astring_chr(const astring *str, int start, int ch)
+{
+	char *result = strchr(safe_string_base(str->text, start), ch);
+	return (result != NULL) ? (result - str->text) : -1;
+}
+
+
+/*-------------------------------------------------
+    astring_rchr - return the index of a character
+    in an astring, searching from the end
+-------------------------------------------------*/
+
+int astring_rchr(const astring *str, int start, int ch)
+{
+	char *result = strrchr(safe_string_base(str->text, start), ch);
+	return (result != NULL) ? (result - str->text) : -1;
+}
+
+
+/*-------------------------------------------------
+    astring_find - find one astring in another
+-------------------------------------------------*/
+
+int astring_find(const astring *str, int start, const astring *search)
+{
+	return astring_findc(str, start, search->text);
+}
+
+
+/*-------------------------------------------------
+    astring_findc - find a C string in an astring
+-------------------------------------------------*/
+
+int astring_findc(const astring *str, int start, const char *search)
+{
+	char *result = strstr(safe_string_base(str->text, start), search);
+	return (result != NULL) ? (result - str->text) : -1;
+}
+
+
+/*-------------------------------------------------
+    astring_replace - search in an astring for
+    another astring, replacing all instances with
+    a third and returning the number of matches
+-------------------------------------------------*/
+
+int astring_replace(astring *str, int start, const astring *search, const astring *replace)
+{
+	return astring_replacec(str, start, search->text, replace->text);
+}
+
+
+/*-------------------------------------------------
+    astring_replacec - search in an astring for a
+    C string, replacing all instances with another
+    C string and returning the number of matches
+-------------------------------------------------*/
+
+int astring_replacec(astring *str, int start, const char *search, const char *replace)
 {
 	int searchlen = strlen(search);
 	int replacelen = strlen(replace);
 	int matches = 0;
+	int curindex;
 
-	for (int curindex = find(start, search); curindex != -1; curindex = find(curindex + replacelen, search))
+	for (curindex = astring_findc(str, start, search); curindex != -1; curindex = astring_findc(str, curindex + replacelen, search))
 	{
 		matches++;
-		del(curindex, searchlen).ins(curindex, replace);
+		astring_del(str, curindex, searchlen);
+		astring_insc(str, curindex, replace);
 	}
 	return matches;
 }
 
 
 
-//**************************************************************************
-//  ASTRING UTILITIES
-//**************************************************************************
+/***************************************************************************
+    ASTRING UTILITIES
+***************************************************************************/
 
-//-------------------------------------------------
-//  delchr - delete all instances of 'ch'
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_delchr - delete all instances of
+    'ch'
+-------------------------------------------------*/
 
-astring &astring::delchr(int ch)
+astring *astring_delchr(astring *str, int ch)
 {
-	// simple deletion
-	char *dst = m_text;
-	for (char *src = m_text; *src != 0; src++)
+	char *src, *dst;
+
+	/* simple deletion */
+	for (src = dst = str->text; *src != 0; src++)
 		if (*src != ch)
 			*dst++ = *src;
 	*dst = 0;
-	return *this;
+
+	return str;
 }
 
 
-//-------------------------------------------------
-//  replacechr - replace all instances of 'ch'
-//  with 'newch'
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_replacechr - replace all instances of
+    'ch' with 'newch'
+-------------------------------------------------*/
 
-astring &astring::replacechr(int ch, int newch)
+astring *astring_replacechr(astring *str, int ch, int newch)
 {
-	// simple replacement
-	for (char *text = m_text; *text != 0; text++)
+	char *text;
+
+	/* simple replacement */
+	for (text = str->text; *text != 0; text++)
 		if (*text == ch)
 			*text = newch;
-	return *this;
+
+	return str;
 }
 
 
-//-------------------------------------------------
-//  makeupper - convert string to all upper-case
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_toupper - convert string to all
+    upper-case
+-------------------------------------------------*/
 
-astring &astring::makeupper()
+astring *astring_toupper(astring *str)
 {
-	// just makeupper() on all characters
-	for (char *text = m_text; *text != 0; text++)
+	char *text;
+
+	/* just toupper() on all characters */
+	for (text = str->text; *text != 0; text++)
 		*text = toupper((UINT8)*text);
-	return *this;
+
+	return str;
 }
 
 
-//-------------------------------------------------
-//  makelower - convert string to all lower-case
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_tolower - convert string to all
+    lower-case
+-------------------------------------------------*/
 
-astring &astring::makelower()
+astring *astring_tolower(astring *str)
 {
-	// just tolower() on all characters
-	for (char *text = m_text; *text != 0; text++)
+	char *text;
+
+	/* just tolower() on all characters */
+	for (text = str->text; *text != 0; text++)
 		*text = tolower((UINT8)*text);
-	return *this;
+
+	return str;
 }
 
 
-//-------------------------------------------------
-//  trimspace - remove all space characters from
-//  beginning/end
-//-------------------------------------------------
+/*-------------------------------------------------
+    astring_trimspace - remove all space
+    characters from beginning/end
+-------------------------------------------------*/
 
-astring &astring::trimspace()
+astring *astring_trimspace(astring *str)
 {
-	// first remove stuff from the end
-	for (char *ptr = m_text + strlen(m_text) - 1; ptr >= m_text && (!(*ptr & 0x80) && isspace(UINT8(*ptr))); ptr--)
+	char *ptr;
+
+	/* first remove stuff from the end */
+	for (ptr = str->text + strlen(str->text) - 1; ptr >= str->text && (!(*ptr & 0x80) && isspace((UINT8)*ptr)); ptr--)
 		*ptr = 0;
 
-	// then count how much to remove from the beginning
-	char *ptr;
-	for (ptr = m_text; *ptr != 0 && (!(*ptr & 0x80) && isspace(UINT8(*ptr))); ptr++) ;
-	if (ptr > m_text)
-		substr(ptr - m_text);
-	return *this;
+	/* then count how much to remove from the beginning */
+	for (ptr = str->text; *ptr != 0 && (!(*ptr & 0x80) && isspace((UINT8)*ptr)); ptr++) ;
+	if (ptr > str->text)
+		astring_substr(str, ptr - str->text, -1);
+
+	return str;
 }

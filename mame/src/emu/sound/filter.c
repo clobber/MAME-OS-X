@@ -1,13 +1,13 @@
-#include "emu.h"
+#include "sndintrf.h"
 #include "filter.h"
 
 static filter* filter_alloc(void) {
-	filter* f = global_alloc(filter);
+	filter* f = alloc_or_die(filter);
 	return f;
 }
 
 void filter_free(filter* f) {
-	global_free(f);
+	free(f);
 }
 
 void filter_state_reset(filter* f, filter_state* s) {
@@ -20,7 +20,7 @@ void filter_state_reset(filter* f, filter_state* s) {
 
 filter_state* filter_state_alloc(void) {
 	int i;
-        filter_state* s = global_alloc(filter_state);
+        filter_state* s = alloc_or_die(filter_state);
 	s->prev_mac = 0;
 	for(i=0;i<FILTER_ORDER_MAX;++i)
 		s->xprev[i] = 0;
@@ -28,7 +28,7 @@ filter_state* filter_state_alloc(void) {
 }
 
 void filter_state_free(filter_state* s) {
-	global_free(s);
+	free(s);
 }
 
 /****************************************************************************/
@@ -131,10 +131,10 @@ filter* filter_lp_fir_alloc(double freq, int order) {
 }
 
 
-void filter2_setup(device_t *device, int type, double fc, double d, double gain,
+void filter2_setup(const device_config *device, int type, double fc, double d, double gain,
 					filter2_context *filter2)
 {
-	int sample_rate = device->machine().sample_rate();
+	int sample_rate = device->machine->sample_rate;
 	double w;	/* cutoff freq, in radians/sec */
 	double w_squared;
 	double den;	/* temp variable */
@@ -202,7 +202,7 @@ void filter2_step(filter2_context *filter2)
 
 
 /* Setup a filter2 structure based on an op-amp multipole bandpass circuit. */
-void filter_opamp_m_bandpass_setup(device_t *device, double r1, double r2, double r3, double c1, double c2,
+void filter_opamp_m_bandpass_setup(const device_config *device, double r1, double r2, double r3, double c1, double c2,
 					filter2_context *filter2)
 {
 	double	r_in, fc, d, gain;

@@ -18,73 +18,51 @@
 
 **********************************************************************/
 
-#pragma once
-
 #ifndef __CDP1863__
 #define __CDP1863__
 
-#include "emu.h"
+/***************************************************************************
+    MACROS / CONSTANTS
+***************************************************************************/
 
+#define CDP1863 DEVICE_GET_INFO_NAME(cdp1863)
+#define SOUND_CDP1863 CDP1863
 
+#define MDRV_CDP1863_ADD(_tag, _clock1, _clock2) \
+	MDRV_DEVICE_ADD(_tag, SOUND, _clock1) \
+	MDRV_DEVICE_CONFIG_DATAPTR(cdp1863_config, type, SOUND_CDP1863) \
+	MDRV_DEVICE_CONFIG_DATA32(cdp1863_config, clock2, _clock2)
 
-//**************************************************************************
-//  INTERFACE CONFIGURATION MACROS
-//**************************************************************************
+#define CDP1863_INTERFACE(name) \
+	const cdp1863_interface (name) =
 
-#define MCFG_CDP1863_ADD(_tag, _clock, _clock2) \
-	MCFG_DEVICE_ADD(_tag, CDP1863, _clock) \
-	cdp1863_device::static_set_config(*device, _clock2);
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-
-
-//**************************************************************************
-//  TYPE DEFINITIONS
-//**************************************************************************
-
-// ======================> cdp1863_device
-
-class cdp1863_device :	public device_t,
-						public device_sound_interface
+typedef struct _cdp1863_config cdp1863_config;
+struct _cdp1863_config
 {
-public:
-    // construction/destruction
-    cdp1863_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+	const sound_config *type;
 
-	// inline configuration helpers
-	static void static_set_config(device_t &device, int clock2);
-
-	DECLARE_WRITE8_MEMBER( str_w );
-	void str_w(UINT8 data);
-
-	DECLARE_WRITE_LINE_MEMBER( oe_w );
-
-	void set_clk1(int clock);
-	void set_clk2(int clock);
-
-protected:
-    // device-level overrides
-    virtual void device_start();
-
-	// internal callbacks
-	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
-
-private:
-	sound_stream *m_stream;
-
-	int m_clock1;					// clock 1
-	int m_clock2;					// clock 2
-
-	// sound state
-	int m_oe;						// output enable
-	int m_latch;					// sound latch
-	INT16 m_signal;					// current signal
-	int m_incr;						// initial wave state
+	int clock2;				/* the clock 2 (pin 2) of the chip */
 };
 
+/***************************************************************************
+    PROTOTYPES
+***************************************************************************/
 
-// device type definition
-extern const device_type CDP1863;
+/* device interface */
+DEVICE_GET_INFO( cdp1863 );
 
+/* load tone latch */
+WRITE8_DEVICE_HANDLER( cdp1863_str_w );
 
+/* output enable */
+WRITE_LINE_DEVICE_HANDLER( cdp1863_oe_w );
+
+/* clock setters */
+void cdp1863_set_clk1(const device_config *device, int frequency) ATTR_NONNULL(1);
+void cdp1863_set_clk2(const device_config *device, int frequency) ATTR_NONNULL(1);
 
 #endif

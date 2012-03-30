@@ -179,9 +179,7 @@
 #define RD_IDX		EA_IDX; tmp = RDMEM(EAD)
 #define RD_IDY		EA_IDY; tmp = RDMEM(EAD)
 #define RD_IDZ		EA_IDZ; tmp = RDMEM(EAD)
-#define RD_IDZ_DISCARD		EA_IDZ; RDMEM(EAD)
 #define RD_INSY		EA_INSY; tmp = RDMEM(EAD)
-#define RD_INSY_DISCARD		EA_INSY; RDMEM(EAD)
 #define RD_ZPG		EA_ZPG; tmp = RDMEM(EAD)
 #define RD_ZPG_WORD	EA_ZPG; RDMEM_WORD(EAD, tmp)
 #define RD_ZPX		EA_ZPX; tmp = RDMEM(EAD)
@@ -443,7 +441,7 @@
  *  DEA Decrement accumulator
  ***************************************************************/
 #define DEA										\
-	A = (UINT8)(A - 1);									\
+	A = (UINT8)--A;									\
 	SET_NZ(A)
 
 /* 65ce02 ******************************************************
@@ -457,7 +455,7 @@
  *  DEW Decrement memory word
  ***************************************************************/
 #define DEW										\
-	tmp.w.l -= 1;								\
+	tmp.w.l = --tmp.w.l;								\
 	SET_NZ_WORD(tmp)
 
 /* 65ce02 ******************************************************
@@ -492,7 +490,7 @@
  *  INA Increment accumulator
  ***************************************************************/
 #define INA										\
-	A = (UINT8)(A + 1);									\
+	A = (UINT8)++A;									\
 	SET_NZ(A)
 
 /* 65ce02 ******************************************************
@@ -506,7 +504,7 @@
  *  INW Increment memory word
  ***************************************************************/
 #define INW										\
-	tmp.w.l += 1;								\
+	tmp.w.l = ++tmp.w.l;								\
 	SET_NZ_WORD(tmp)
 
 /* 65ce02 ******************************************************
@@ -678,7 +676,7 @@
 		PULL(temp);								\
 		P=(P&F_E)|F_B|(temp&~F_E);						\
 		if( IRQ_STATE != CLEAR_LINE && !(P & F_I) ) {			\
-			LOG(("M65ce02 '%s' PLP sets after_cli\n", cpustate->device->tag()));	\
+			LOG(("M65ce02 '%s' PLP sets after_cli\n", cpustate->device->tag));	\
 			AFTER_CLI = 1;						\
 		}									\
 	} else {									\
@@ -758,7 +756,7 @@
 	PULL(PCH);									\
 	if( IRQ_STATE != CLEAR_LINE && !(P & F_I) )				\
 	{										\
-		LOG(("M65ce02 '%s' RTI sets after_cli\n", cpustate->device->tag()));		\
+		LOG(("M65ce02 '%s' RTI sets after_cli\n", cpustate->device->tag));		\
 		AFTER_CLI = 1;							\
 	}
 
@@ -789,7 +787,7 @@
 	PULL(PCL);									\
 	PULL(PCH);									\
 	if( IRQ_STATE != CLEAR_LINE && !(P & F_I) ) {				\
-	LOG(("M65ce02 '%s' RTI sets after_cli\n", cpustate->device->tag()));			\
+	LOG(("M65ce02 '%s' RTI sets after_cli\n", cpustate->device->tag));			\
 		AFTER_CLI = 1;							\
 	}
 

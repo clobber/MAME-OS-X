@@ -1,6 +1,10 @@
-#include "emu.h"
-#include "includes/scotrsht.h"
+#include "driver.h"
 
+UINT8 *scotrsht_scroll;
+
+static tilemap *bg_tilemap;
+static int scotrsht_charbank = 0;
+static int scotrsht_palette_bank = 0;
 
 /* Similar as Iron Horse */
 PALETTE_INIT( scotrsht )
@@ -8,7 +12,7 @@ PALETTE_INIT( scotrsht )
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x100);
+	machine->colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -17,7 +21,7 @@ PALETTE_INIT( scotrsht )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -31,35 +35,29 @@ PALETTE_INIT( scotrsht )
 		for (j = 0; j < 8; j++)
 		{
 			UINT8 ctabentry = ((~i & 0x100) >> 1) | (j << 4) | (color_prom[i] & 0x0f);
-			colortable_entry_set_value(machine.colortable, ((i & 0x100) << 3) | (j << 8) | (i & 0xff), ctabentry);
+			colortable_entry_set_value(machine->colortable, ((i & 0x100) << 3) | (j << 8) | (i & 0xff), ctabentry);
 		}
 	}
 }
 
 WRITE8_HANDLER( scotrsht_videoram_w )
 {
-	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
-
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( scotrsht_colorram_w )
 {
-	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
-
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( scotrsht_charbank_w )
 {
-	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
-
-	if (state->m_charbank != (data & 0x01))
+	if (scotrsht_charbank != (data & 0x01))
 	{
-		state->m_charbank = data & 0x01;
-		state->m_bg_tilemap->mark_all_dirty();
+		scotrsht_charbank = data & 0x01;
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 
 	/* other bits unknown */
@@ -67,16 +65,14 @@ WRITE8_HANDLER( scotrsht_charbank_w )
 
 WRITE8_HANDLER( scotrsht_palettebank_w )
 {
-	scotrsht_state *state = space->machine().driver_data<scotrsht_state>();
-
-	if (state->m_palette_bank != ((data & 0x70) >> 4))
+	if(scotrsht_palette_bank != ((data & 0x70) >> 4))
 	{
-		state->m_palette_bank = ((data & 0x70) >> 4);
-		state->m_bg_tilemap->mark_all_dirty();
+		scotrsht_palette_bank = ((data & 0x70) >> 4);
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 
-	coin_counter_w(space->machine(), 0, data & 1);
-	coin_counter_w(space->machine(), 1, data & 2);
+	coin_counter_w(0, data & 1);
+	coin_counter_w(1, data & 2);
 
 	// data & 4 unknown
 }
@@ -84,10 +80,9 @@ WRITE8_HANDLER( scotrsht_palettebank_w )
 
 static TILE_GET_INFO( scotrsht_get_bg_tile_info )
 {
-	scotrsht_state *state = machine.driver_data<scotrsht_state>();
-	int attr = state->m_colorram[tile_index];
-	int code = state->m_videoram[tile_index] + (state->m_charbank << 9) + ((attr & 0x40) << 2);
-	int color = (attr & 0x0f) + state->m_palette_bank * 16;
+	int attr = colorram[tile_index];
+	int code = videoram[tile_index] + (scotrsht_charbank << 9) + ((attr & 0x40) << 2);
+	int color = (attr & 0x0f) + scotrsht_palette_bank * 16;
 	int flag = 0;
 
 	if(attr & 0x10)	flag |= TILE_FLIPX;
@@ -99,17 +94,15 @@ static TILE_GET_INFO( scotrsht_get_bg_tile_info )
 }
 
 /* Same as Jailbreak + palette bank */
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	scotrsht_state *state = machine.driver_data<scotrsht_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int i;
 
-	for (i = 0; i < state->m_spriteram_size; i += 4)
+	for (i = 0; i < spriteram_size; i += 4)
 	{
 		int attr = spriteram[i + 1];	// attributes = ?tyxcccc
 		int code = spriteram[i] + ((attr & 0x40) << 2);
-		int color = (attr & 0x0f) + state->m_palette_bank * 16;
+		int color = (attr & 0x0f) + scotrsht_palette_bank * 16;
 		int flipx = attr & 0x10;
 		int flipy = attr & 0x20;
 		int sx = spriteram[i + 2] - ((attr & 0x80) << 1);
@@ -123,30 +116,27 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			flipy = !flipy;
 		}
 
-		drawgfx_transmask(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy,
+		drawgfx_transmask(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy,
 			sx, sy,
-			colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, state->m_palette_bank * 16));
+			colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, scotrsht_palette_bank * 16));
 	}
 }
 
 VIDEO_START( scotrsht )
 {
-	scotrsht_state *state = machine.driver_data<scotrsht_state>();
+	bg_tilemap = tilemap_create(machine, scotrsht_get_bg_tile_info, tilemap_scan_rows,  8, 8, 64, 32);
 
-	state->m_bg_tilemap = tilemap_create(machine, scotrsht_get_bg_tile_info, tilemap_scan_rows,  8, 8, 64, 32);
-
-	state->m_bg_tilemap->set_scroll_cols(64);
+	tilemap_set_scroll_cols(bg_tilemap, 64);
 }
 
-SCREEN_UPDATE_IND16( scotrsht )
+VIDEO_UPDATE( scotrsht )
 {
-	scotrsht_state *state = screen.machine().driver_data<scotrsht_state>();
 	int col;
 
 	for (col = 0; col < 32; col++)
-		state->m_bg_tilemap->set_scrolly(col, state->m_scroll[col]);
+		tilemap_set_scrolly(bg_tilemap, col, scotrsht_scroll[col]);
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

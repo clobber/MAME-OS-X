@@ -193,15 +193,16 @@ VBlank duration: 1/VSYNC * (16/256) = 1017.6 us
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/i86/i86.h"
 #include "machine/6532riot.h"
+#include "machine/laserdsc.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
 #include "sound/samples.h"
 #include "sound/sp0250.h"
-#include "machine/nvram.h"
-#include "includes/gottlieb.h"
+#include "streams.h"
+#include "gottlieb.h"
 
 
 #define LOG_AUDIO_DECODE	(0)
@@ -212,6 +213,33 @@ VBlank duration: 1/VSYNC * (16/256) = 1017.6 us
 #define LASERDISC_CLOCK		PERIOD_OF_555_ASTABLE(16000, 10000, 0.001e-6)
 
 #define AUDIORAM_SIZE		0x400
+
+
+
+/*************************************
+ *
+ *  Globals
+ *
+ *************************************/
+
+static UINT8 joystick_select;
+static UINT8 track[2];
+
+static const device_config *laserdisc;
+static emu_timer *laserdisc_bit_timer;
+static emu_timer *laserdisc_philips_timer;
+static UINT8 laserdisc_select;
+static UINT8 laserdisc_status;
+static UINT16 laserdisc_philips_code;
+
+static UINT8 *laserdisc_audio_buffer;
+static UINT16 laserdisc_audio_address;
+static INT16 laserdisc_last_samples[2];
+static attotime laserdisc_last_time;
+static attotime laserdisc_last_clock;
+static UINT8 laserdisc_zero_seen;
+static UINT8 laserdisc_audio_bits;
+static UINT8 laserdisc_audio_bit_count;
 
 
 
@@ -237,50 +265,51 @@ static WRITE8_HANDLER( laserdisc_command_w );
 
 static MACHINE_START( gottlieb )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
 	/* register for save states */
-	state_save_register_global(machine, state->m_joystick_select);
-	state_save_register_global_array(machine, state->m_track);
+	state_save_register_global(machine, joystick_select);
+	state_save_register_global_array(machine, track);
 
 	/* see if we have a laserdisc */
-	if (state->m_laserdisc != NULL)
+	laserdisc = device_list_first(machine->config->devicelist, LASERDISC);
+	if (laserdisc != NULL)
 	{
 		/* attach to the I/O ports */
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x05805, 0x05807, 0, 0x07f8, FUNC(laserdisc_status_r));
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x05805, 0x05805, 0, 0x07f8, FUNC(laserdisc_command_w));	/* command for the player */
-		machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x05806, 0x05806, 0, 0x07f8, FUNC(laserdisc_select_w));
+		memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x05805, 0x05807, 0, 0x07f8, laserdisc_status_r);
+		memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x05805, 0x05805, 0, 0x07f8, laserdisc_command_w);	/* command for the player */
+		memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x05806, 0x05806, 0, 0x07f8, laserdisc_select_w);
 
 		/* allocate a timer for serial transmission, and one for philips code processing */
-		state->m_laserdisc_bit_timer = machine.scheduler().timer_alloc(FUNC(laserdisc_bit_callback));
-		state->m_laserdisc_philips_timer = machine.scheduler().timer_alloc(FUNC(laserdisc_philips_callback));
+		laserdisc_bit_timer = timer_alloc(machine, laserdisc_bit_callback, NULL);
+		laserdisc_philips_timer = timer_alloc(machine, laserdisc_philips_callback, NULL);
 
 		/* create some audio RAM */
-		state->m_laserdisc_audio_buffer = auto_alloc_array(machine, UINT8, AUDIORAM_SIZE);
-		state->m_laserdisc_status = 0x38;
+		laserdisc_audio_buffer = auto_alloc_array(machine, UINT8, AUDIORAM_SIZE);
+		laserdisc_status = 0x38;
 
 		/* more save state registration */
-		state_save_register_global(machine, state->m_laserdisc_select);
-		state_save_register_global(machine, state->m_laserdisc_status);
-		state_save_register_global(machine, state->m_laserdisc_philips_code);
+		state_save_register_global(machine, laserdisc_select);
+		state_save_register_global(machine, laserdisc_status);
+		state_save_register_global(machine, laserdisc_philips_code);
 
-		state_save_register_global_pointer(machine, state->m_laserdisc_audio_buffer, AUDIORAM_SIZE);
-		state_save_register_global(machine, state->m_laserdisc_audio_address);
-		state_save_register_global_array(machine, state->m_laserdisc_last_samples);
-		state_save_register_global(machine, state->m_laserdisc_last_time);
-		state_save_register_global(machine, state->m_laserdisc_last_clock);
-		state_save_register_global(machine, state->m_laserdisc_zero_seen);
-		state_save_register_global(machine, state->m_laserdisc_audio_bits);
-		state_save_register_global(machine, state->m_laserdisc_audio_bit_count);
+		state_save_register_global_pointer(machine, laserdisc_audio_buffer, AUDIORAM_SIZE);
+		state_save_register_global(machine, laserdisc_audio_address);
+		state_save_register_global_array(machine, laserdisc_last_samples);
+		state_save_register_global(machine, laserdisc_last_time.seconds);
+		state_save_register_global(machine, laserdisc_last_time.attoseconds);
+		state_save_register_global(machine, laserdisc_last_clock.seconds);
+		state_save_register_global(machine, laserdisc_last_clock.attoseconds);
+		state_save_register_global(machine, laserdisc_zero_seen);
+		state_save_register_global(machine, laserdisc_audio_bits);
+		state_save_register_global(machine, laserdisc_audio_bit_count);
 	}
 }
 
 
 static MACHINE_RESET( gottlieb )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
 	/* if we have a laserdisc, reset our philips code callback for the next line 17 */
-	if (state->m_laserdisc != NULL)
-		state->m_laserdisc_philips_timer->adjust(machine.primary_screen->time_until_pos(17), 17);
+	if (laserdisc != NULL)
+		timer_adjust_oneshot(laserdisc_philips_timer, video_screen_get_time_until_pos(machine->primary_screen, 17, 0), 17);
 }
 
 
@@ -293,28 +322,25 @@ static MACHINE_RESET( gottlieb )
 
 static CUSTOM_INPUT( analog_delta_r )
 {
-	gottlieb_state *state = field.machine().driver_data<gottlieb_state>();
 	const char *string = (const char *)param;
 	int which = string[0] - '0';
 
-	return input_port_read(field.machine(), &string[1]) - state->m_track[which];
+	return input_port_read(field->port->machine, &string[1]) - track[which];
 }
 
 
 static WRITE8_HANDLER( gottlieb_analog_reset_w )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	/* reset the trackball counters */
-	state->m_track[0] = input_port_read_safe(space->machine(), "TRACKX", 0);
-	state->m_track[1] = input_port_read_safe(space->machine(), "TRACKY", 0);
+	track[0] = input_port_read_safe(space->machine, "TRACKX", 0);
+	track[1] = input_port_read_safe(space->machine, "TRACKY", 0);
 }
 
 
 static CUSTOM_INPUT( stooges_joystick_r )
 {
-	gottlieb_state *state = field.machine().driver_data<gottlieb_state>();
-	static const char *const joyport[] = { "P2JOY", "P3JOY", "P1JOY", NULL };
-	return (joyport[state->m_joystick_select & 3] != NULL) ? input_port_read(field.machine(), joyport[state->m_joystick_select & 3]) : 0xff;
+	static const char *const joyport[] = { "P1JOY", "P2JOY", "P3JOY", NULL };
+	return (joyport[joystick_select & 3] != NULL) ? input_port_read(field->port->machine, joyport[joystick_select & 3]) : 0xff;
 }
 
 
@@ -327,15 +353,14 @@ static CUSTOM_INPUT( stooges_joystick_r )
 
 static WRITE8_HANDLER( general_output_w )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	/* bits 0-3 control video features, and are different for laserdisc games */
-	if (state->m_laserdisc == NULL)
+	if (laserdisc == NULL)
 		gottlieb_video_control_w(space, offset, data);
 	else
 		gottlieb_laserdisc_video_control_w(space, offset, data);
 
 	/* bit 4 controls the coin meter */
-	coin_counter_w(space->machine(), 0, data & 0x10);
+	coin_counter_w(0, data & 0x10);
 
 	/* bit 5 controls the knocker */
 	output_set_value("knocker0", (data >> 5) & 1);
@@ -349,17 +374,16 @@ static WRITE8_HANDLER( general_output_w )
 static WRITE8_HANDLER( reactor_output_w )
 {
 	general_output_w(space, offset, data & ~0xe0);
-	set_led_status(space->machine(), 0, data & 0x20);
-	set_led_status(space->machine(), 1, data & 0x40);
-	set_led_status(space->machine(), 2, data & 0x80);
+	set_led_status(0, data & 0x20);
+	set_led_status(1, data & 0x40);
+	set_led_status(2, data & 0x80);
 }
 
 
 static WRITE8_HANDLER( stooges_output_w )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	general_output_w(space, offset, data & ~0x60);
-	state->m_joystick_select = (data >> 5) & 0x03;
+	joystick_select = (data >> 5) & 0x03;
 }
 
 
@@ -372,17 +396,16 @@ static WRITE8_HANDLER( stooges_output_w )
 
 static READ8_HANDLER( laserdisc_status_r )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	/* IP5 reads low 8 bits of philips code */
 	if (offset == 0)
-		return state->m_laserdisc_philips_code;
+		return laserdisc_philips_code;
 
 	/* IP6 reads middle 8 bits of philips code */
 	if (offset == 1)
-		return state->m_laserdisc_philips_code >> 8;
+		return laserdisc_philips_code >> 8;
 
 	/* IP7 reads either status or audio detect, depending on the select */
-	if (state->m_laserdisc_select)
+	if (laserdisc_select)
 	{
 		/* bits 0-2 frame number MSN */
 		/* bit 3 audio buffer ready */
@@ -390,12 +413,12 @@ static READ8_HANDLER( laserdisc_status_r )
 		/* bit 5 disc ready */
 		/* bit 6 break in audio trasmission */
 		/* bit 7 missing audio clock */
-		return state->m_laserdisc_status;
+		return laserdisc_status;
 	}
 	else
 	{
-		UINT8 result = state->m_laserdisc_audio_buffer[state->m_laserdisc_audio_address++];
-		state->m_laserdisc_audio_address %= AUDIORAM_SIZE;
+		UINT8 result = laserdisc_audio_buffer[laserdisc_audio_address++];
+		laserdisc_audio_address %= AUDIORAM_SIZE;
 		return result;
 	}
 	return 0;
@@ -404,23 +427,21 @@ static READ8_HANDLER( laserdisc_status_r )
 
 static WRITE8_HANDLER( laserdisc_select_w )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	/* selects between reading audio data and reading status */
-	state->m_laserdisc_select = data & 1;
+	laserdisc_select = data & 1;
 }
 
 
 static WRITE8_HANDLER( laserdisc_command_w )
 {
-	gottlieb_state *state = space->machine().driver_data<gottlieb_state>();
 	/* a write here latches data into a 8-bit register and starts
        a sequence of events that sends serial data to the player */
 
 	/* set a timer to clock the bits through; a total of 12 bits are clocked */
-	state->m_laserdisc_bit_timer->adjust(LASERDISC_CLOCK * 10, (12 << 16) | data);
+	timer_adjust_oneshot(laserdisc_bit_timer, attotime_mul(LASERDISC_CLOCK, 10), (12 << 16) | data);
 
 	/* it also clears bit 4 of the status (will be set when transmission is complete) */
-	state->m_laserdisc_status &= ~0x10;
+	laserdisc_status &= ~0x10;
 }
 
 
@@ -433,8 +454,7 @@ static WRITE8_HANDLER( laserdisc_command_w )
 
 static TIMER_CALLBACK( laserdisc_philips_callback )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
-	UINT32 newcode = state->m_laserdisc->get_field_code((param == 17) ? LASERDISC_CODE_LINE17 : LASERDISC_CODE_LINE18, TRUE);
+	int newcode = laserdisc_get_field_code(laserdisc, (param == 17) ? LASERDISC_CODE_LINE17 : LASERDISC_CODE_LINE18, TRUE);
 
 	/* the PR8210 sends line 17/18 data on each frame; the laserdisc interface
        board receives notification and latches the most recent frame number */
@@ -442,48 +462,46 @@ static TIMER_CALLBACK( laserdisc_philips_callback )
 	/* the logic detects a valid code when the top 4 bits are all 1s */
 	if ((newcode & 0xf00000) == 0xf00000)
 	{
-		state->m_laserdisc_philips_code = newcode;
-		state->m_laserdisc_status = (state->m_laserdisc_status & ~0x07) | ((newcode >> 16) & 7);
+		laserdisc_philips_code = newcode;
+		laserdisc_status = (laserdisc_status & ~0x07) | ((newcode >> 16) & 7);
 	}
 
 	/* toggle to the next one */
 	param = (param == 17) ? 18 : 17;
-	state->m_laserdisc_philips_timer->adjust(machine.primary_screen->time_until_pos(param * 2), param);
+	timer_adjust_oneshot(laserdisc_philips_timer, video_screen_get_time_until_pos(machine->primary_screen, param * 2, 0), param);
 }
 
 
 static TIMER_CALLBACK( laserdisc_bit_off_callback )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
 	/* deassert the control line */
-	state->m_laserdisc->control_w(CLEAR_LINE);
+	laserdisc_line_w(laserdisc, LASERDISC_LINE_CONTROL, CLEAR_LINE);
 }
 
 
 static TIMER_CALLBACK( laserdisc_bit_callback )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
 	UINT8 bitsleft = param >> 16;
 	UINT8 data = param;
 	attotime duration;
 
 	/* assert the line and set a timer for deassertion */
-	state->m_laserdisc->control_w(ASSERT_LINE);
-	machine.scheduler().timer_set(LASERDISC_CLOCK * 10, FUNC(laserdisc_bit_off_callback));
+   	laserdisc_line_w(laserdisc, LASERDISC_LINE_CONTROL, ASSERT_LINE);
+	timer_set(machine, attotime_mul(LASERDISC_CLOCK, 10), NULL, 0, laserdisc_bit_off_callback);
 
 	/* determine how long for the next command; there is a 555 timer with a
        variable resistor controlling the timing of the pulses. Nominally, the
        555 runs at 40083Hz, is divided by 10, and then is divided by 4 for a
        0 bit or 8 for a 1 bit. This gives 998usec per 0 pulse or 1996usec
        per 1 pulse. */
-	duration = LASERDISC_CLOCK * (10 * ((data & 0x80) ? 8 : 4));
+	duration = attotime_mul(LASERDISC_CLOCK, 10 * ((data & 0x80) ? 8 : 4));
 	data <<= 1;
 
 	/* if we're not out of bits, set a timer for the next one; else set the ready bit */
 	if (bitsleft-- != 0)
-		state->m_laserdisc_bit_timer->adjust(duration, (bitsleft << 16) | data);
+		timer_adjust_oneshot(laserdisc_bit_timer, duration, (bitsleft << 16) | data);
 	else
-		state->m_laserdisc_status |= 0x10;
+		laserdisc_status |= 0x10;
 }
 
 
@@ -494,91 +512,91 @@ static TIMER_CALLBACK( laserdisc_bit_callback )
  *
  *************************************/
 
-INLINE void audio_end_state(gottlieb_state *state)
+INLINE void audio_end_state(void)
 {
 	/* this occurs either when the "break in transmission" condition is hit (no zero crossings
        for 400usec) or when the entire audio buffer is full */
-	state->m_laserdisc_status |= 0x08;
-	state->m_laserdisc_audio_bit_count = 0;
-	state->m_laserdisc_audio_address = 0;
-	if (state->m_laserdisc_audio_address != 0)
-		printf("Got %d bytes\n", state->m_laserdisc_audio_address);
+	laserdisc_status |= 0x08;
+	laserdisc_audio_bit_count = 0;
+	laserdisc_audio_address = 0;
+	if (laserdisc_audio_address != 0)
+		printf("Got %d bytes\n", laserdisc_audio_address);
 }
 
 
-static void audio_process_clock(gottlieb_state *state, int logit)
+static void audio_process_clock(int logit)
 {
 	/* clock the bit through the shift register */
-	state->m_laserdisc_audio_bits >>= 1;
-	if (state->m_laserdisc_zero_seen)
-		state->m_laserdisc_audio_bits |= 0x80;
-	state->m_laserdisc_zero_seen = 0;
+	laserdisc_audio_bits >>= 1;
+	if (laserdisc_zero_seen)
+		laserdisc_audio_bits |= 0x80;
+	laserdisc_zero_seen = 0;
 
 	/* if the buffer ready flag is set, then we are looking for the magic $67 pattern */
-	if (state->m_laserdisc_status & 0x08)
+	if (laserdisc_status & 0x08)
 	{
-		if (state->m_laserdisc_audio_bits == 0x67)
+		if (laserdisc_audio_bits == 0x67)
 		{
 			if (logit)
 				logerror(" -- got 0x67");
-			state->m_laserdisc_status &= ~0x08;
-			state->m_laserdisc_audio_address = 0;
+			laserdisc_status &= ~0x08;
+			laserdisc_audio_address = 0;
 		}
 	}
 
 	/* otherwise, we keep clocking bytes into the audio buffer */
 	else
 	{
-		state->m_laserdisc_audio_bit_count++;
+		laserdisc_audio_bit_count++;
 
 		/* if we collect 8 bits, add to the buffer */
-		if (state->m_laserdisc_audio_bit_count == 8)
+		if (laserdisc_audio_bit_count == 8)
 		{
 			if (logit)
-				logerror(" -- got new byte %02X", state->m_laserdisc_audio_bits);
-			state->m_laserdisc_audio_bit_count = 0;
-			state->m_laserdisc_audio_buffer[state->m_laserdisc_audio_address++] = state->m_laserdisc_audio_bits;
+				logerror(" -- got new byte %02X", laserdisc_audio_bits);
+			laserdisc_audio_bit_count = 0;
+			laserdisc_audio_buffer[laserdisc_audio_address++] = laserdisc_audio_bits;
 
 			/* if we collect a full buffer, signal */
-			if (state->m_laserdisc_audio_address >= AUDIORAM_SIZE)
-				audio_end_state(state);
+			if (laserdisc_audio_address >= AUDIORAM_SIZE)
+				audio_end_state();
 		}
 	}
 }
 
 
-static void audio_handle_zero_crossing(gottlieb_state *state, attotime zerotime, int logit)
+static void audio_handle_zero_crossing(attotime zerotime, int logit)
 {
 	/* compute time from last clock */
-	attotime deltaclock = zerotime - state->m_laserdisc_last_clock;
+	attotime deltaclock = attotime_sub(zerotime, laserdisc_last_clock);
 	if (logit)
-		logerror(" -- zero @ %s (delta=%s)", zerotime.as_string(6), deltaclock.as_string(6));
+		logerror(" -- zero @ %s (delta=%s)", attotime_string(zerotime, 6), attotime_string(deltaclock, 6));
 
 	/* if we are within 150usec, we count as a bit */
-	if (deltaclock < attotime::from_usec(150))
+	if (attotime_compare(deltaclock, ATTOTIME_IN_USEC(150)) < 0)
 	{
 		if (logit)
 			logerror(" -- count as bit");
-		state->m_laserdisc_zero_seen++;
+		laserdisc_zero_seen++;
 		return;
 	}
 
 	/* if we are within 215usec, we count as a clock */
-	else if (deltaclock < attotime::from_usec(215))
+	else if (attotime_compare(deltaclock, ATTOTIME_IN_USEC(215)) < 0)
 	{
 		if (logit)
-			logerror(" -- clock, bit=%d", state->m_laserdisc_zero_seen);
-		state->m_laserdisc_last_clock = zerotime;
+			logerror(" -- clock, bit=%d", laserdisc_zero_seen);
+		laserdisc_last_clock = zerotime;
 	}
 
 	/* if we are outside of 215usec, we are technically a missing clock
        however, due to sampling errors, it is best to assume this is just
        an out-of-skew clock, so we correct it if we are within 75usec */
-	else if (deltaclock < attotime::from_usec(275))
+	else if (attotime_compare(deltaclock, ATTOTIME_IN_USEC(275)) < 0)
 	{
 		if (logit)
 			logerror(" -- skewed clock, correcting");
-		state->m_laserdisc_last_clock += attotime::from_usec(200);
+		laserdisc_last_clock = attotime_add(laserdisc_last_clock, ATTOTIME_IN_USEC(200));
 	}
 
 	/* we'll count anything more than 275us as an actual missing clock */
@@ -586,20 +604,19 @@ static void audio_handle_zero_crossing(gottlieb_state *state, attotime zerotime,
 	{
 		if (logit)
 			logerror(" -- missing clock");
-		state->m_laserdisc_last_clock = zerotime;
+		laserdisc_last_clock = zerotime;
 	}
 
 	/* we have a clock, process it */
-	audio_process_clock(state, logit);
+	audio_process_clock(logit);
 }
 
 
-static void laserdisc_audio_process(device_t *dummy, laserdisc_device &device, int samplerate, int samples, const INT16 *ch0, const INT16 *ch1)
+static void laserdisc_audio_process(const device_config *device, int samplerate, int samples, const INT16 *ch0, const INT16 *ch1)
 {
-	gottlieb_state *state = device.machine().driver_data<gottlieb_state>();
-	int logit = LOG_AUDIO_DECODE && device.machine().input().code_pressed(KEYCODE_L);
-	attotime time_per_sample = attotime::from_hz(samplerate);
-	attotime curtime = state->m_laserdisc_last_time;
+	int logit = LOG_AUDIO_DECODE && input_code_pressed(device->machine, KEYCODE_L);
+	attotime time_per_sample = ATTOTIME_IN_HZ(samplerate);
+	attotime curtime = laserdisc_last_time;
 	int cursamp;
 
 	if (logit)
@@ -608,7 +625,7 @@ static void laserdisc_audio_process(device_t *dummy, laserdisc_device &device, i
 	/* if no data, reset it all */
 	if (ch1 == NULL)
 	{
-		state->m_laserdisc_last_time = curtime + time_per_sample * samples;
+		laserdisc_last_time = attotime_add(curtime, attotime_mul(time_per_sample, samples));
 		return;
 	}
 
@@ -619,39 +636,39 @@ static void laserdisc_audio_process(device_t *dummy, laserdisc_device &device, i
 
 		/* start by logging the current sample and time */
 		if (logit)
-			logerror("%s: %d", (curtime + time_per_sample + time_per_sample).as_string(6), sample);
+			logerror("%s: %d", attotime_string(attotime_add(attotime_add(curtime, time_per_sample), time_per_sample), 6), sample);
 
 		/* if we are past the "break in transmission" time, reset everything */
-		if ((curtime - state->m_laserdisc_last_clock) > attotime::from_usec(400))
-			audio_end_state(state);
+		if (attotime_compare(attotime_sub(curtime, laserdisc_last_clock), ATTOTIME_IN_USEC(400)) > 0)
+			audio_end_state();
 
 		/* if this sample reinforces that the previous one ended a zero crossing, count it */
-		if ((sample >= 256 && state->m_laserdisc_last_samples[1] >= 0 && state->m_laserdisc_last_samples[0] < 0) ||
-			(sample <= -256 && state->m_laserdisc_last_samples[1] <= 0 && state->m_laserdisc_last_samples[0] > 0))
+		if ((sample >= 256 && laserdisc_last_samples[1] >= 0 && laserdisc_last_samples[0] < 0) ||
+			(sample <= -256 && laserdisc_last_samples[1] <= 0 && laserdisc_last_samples[0] > 0))
 		{
 			attotime zerotime;
 			int fractime;
 
 			/* compute the fractional position of the 0-crossing, between the two samples involved */
-			fractime = (-state->m_laserdisc_last_samples[0] * 1000) / (state->m_laserdisc_last_samples[1] - state->m_laserdisc_last_samples[0]);
+			fractime = (-laserdisc_last_samples[0] * 1000) / (laserdisc_last_samples[1] - laserdisc_last_samples[0]);
 
 			/* use this fraction to compute the approximate actual zero crossing time */
-			zerotime = curtime + time_per_sample * fractime / 1000;
+			zerotime = attotime_add(curtime, attotime_div(attotime_mul(time_per_sample, fractime), 1000));
 
 			/* determine if this is a clock; if it is, process */
-			audio_handle_zero_crossing(state, zerotime, logit);
+			audio_handle_zero_crossing(zerotime, logit);
 		}
 		if (logit)
 			logerror(" \n");
 
 		/* update our sample tracking and advance time */
-		state->m_laserdisc_last_samples[0] = state->m_laserdisc_last_samples[1];
-		state->m_laserdisc_last_samples[1] = sample;
-		curtime += time_per_sample;
+		laserdisc_last_samples[0] = laserdisc_last_samples[1];
+		laserdisc_last_samples[1] = sample;
+		curtime = attotime_add(curtime, time_per_sample);
 	}
 
 	/* remember the last time */
-	state->m_laserdisc_last_time = curtime;
+	laserdisc_last_time = curtime;
 }
 
 
@@ -670,19 +687,20 @@ static TIMER_CALLBACK( nmi_clear )
 
 static INTERRUPT_GEN( gottlieb_interrupt )
 {
-	gottlieb_state *state = device->machine().driver_data<gottlieb_state>();
 	/* assert the NMI and set a timer to clear it at the first visible line */
-	device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
-	device->machine().scheduler().timer_set(device->machine().primary_screen->time_until_pos(0), FUNC(nmi_clear));
+	cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
+	timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, 0, 0), NULL, 0, nmi_clear);
 
 	/* if we have a laserdisc, update it */
-	if (state->m_laserdisc != NULL)
+	if (laserdisc != NULL)
 	{
+		bitmap_t *dummy;
+
 		/* set the "disc ready" bit, which basically indicates whether or not we have a proper video frame */
-		if (!state->m_laserdisc->video_active())
-			state->m_laserdisc_status &= ~0x20;
+		if (!laserdisc_get_video(laserdisc, &dummy))
+			laserdisc_status &= ~0x20;
 		else
-			state->m_laserdisc_status |= 0x20;
+			laserdisc_status |= 0x20;
 	}
 }
 
@@ -694,14 +712,14 @@ static INTERRUPT_GEN( gottlieb_interrupt )
  *
  *************************************/
 
-static ADDRESS_MAP_START( reactor_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( reactor_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xffff)
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
-	AM_RANGE(0x2000, 0x20ff) AM_MIRROR(0x0f00) AM_WRITEONLY AM_BASE_MEMBER(gottlieb_state, m_spriteram)							/* FRSEL */
-	AM_RANGE(0x3000, 0x33ff) AM_MIRROR(0x0c00) AM_RAM_WRITE(gottlieb_videoram_w) AM_BASE_MEMBER(gottlieb_state, m_videoram)		/* BRSEL */
-	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(gottlieb_charram_w) AM_BASE_MEMBER(gottlieb_state, m_charram)				/* BOJRSEL1 */
+	AM_RANGE(0x2000, 0x20ff) AM_MIRROR(0x0f00) AM_WRITEONLY AM_BASE(&spriteram)							/* FRSEL */
+	AM_RANGE(0x3000, 0x33ff) AM_MIRROR(0x0c00) AM_RAM_WRITE(gottlieb_videoram_w) AM_BASE(&videoram)		/* BRSEL */
+	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(gottlieb_charram_w) AM_BASE(&gottlieb_charram)				/* BOJRSEL1 */
 /*  AM_RANGE(0x5000, 0x5fff) AM_WRITE() */																/* BOJRSEL2 */
-	AM_RANGE(0x6000, 0x601f) AM_MIRROR(0x0fe0) AM_WRITE(gottlieb_paletteram_w) AM_BASE_GENERIC(paletteram)		/* COLSEL */
+	AM_RANGE(0x6000, 0x601f) AM_MIRROR(0x0fe0) AM_WRITE(gottlieb_paletteram_w) AM_BASE(&paletteram)		/* COLSEL */
 	AM_RANGE(0x7000, 0x7000) AM_MIRROR(0x0ff8) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x7001, 0x7001) AM_MIRROR(0x0ff8) AM_WRITE(gottlieb_analog_reset_w)						/* A1J2 interface */
 	AM_RANGE(0x7002, 0x7002) AM_MIRROR(0x0ff8) AM_WRITE(gottlieb_sh_w)									/* trackball H */
@@ -715,15 +733,15 @@ static ADDRESS_MAP_START( reactor_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( gottlieb_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( gottlieb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xffff)
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0x1000, 0x1fff) AM_RAM AM_REGION("maincpu", 0x1000)	/* or ROM */
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_REGION("maincpu", 0x2000)	/* or ROM */
-	AM_RANGE(0x3000, 0x30ff) AM_MIRROR(0x0700) AM_WRITEONLY AM_BASE_MEMBER(gottlieb_state, m_spriteram)							/* FRSEL */
-	AM_RANGE(0x3800, 0x3bff) AM_MIRROR(0x0400) AM_RAM_WRITE(gottlieb_videoram_w) AM_BASE_MEMBER(gottlieb_state, m_videoram)		/* BRSEL */
-	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(gottlieb_charram_w) AM_BASE_MEMBER(gottlieb_state, m_charram)				/* BOJRSEL1 */
-	AM_RANGE(0x5000, 0x501f) AM_MIRROR(0x07e0) AM_WRITE(gottlieb_paletteram_w) AM_BASE_GENERIC(paletteram)		/* COLSEL */
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_REGION("maincpu", 0x2000) 	/* or ROM */
+	AM_RANGE(0x3000, 0x30ff) AM_MIRROR(0x0700) AM_WRITEONLY AM_BASE(&spriteram)							/* FRSEL */
+	AM_RANGE(0x3800, 0x3bff) AM_MIRROR(0x0400) AM_RAM_WRITE(gottlieb_videoram_w) AM_BASE(&videoram)		/* BRSEL */
+	AM_RANGE(0x4000, 0x4fff) AM_RAM_WRITE(gottlieb_charram_w) AM_BASE(&gottlieb_charram)				/* BOJRSEL1 */
+	AM_RANGE(0x5000, 0x501f) AM_MIRROR(0x07e0) AM_WRITE(gottlieb_paletteram_w) AM_BASE(&paletteram)		/* COLSEL */
 	AM_RANGE(0x5800, 0x5800) AM_MIRROR(0x07f8) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x5801, 0x5801) AM_MIRROR(0x07f8) AM_WRITE(gottlieb_analog_reset_w)						/* A1J2 interface */
 	AM_RANGE(0x5802, 0x5802) AM_MIRROR(0x07f8) AM_WRITE(gottlieb_sh_w)									/* OP20-27 */
@@ -747,25 +765,25 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( reactor )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x01, "Sound with Logos" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Bounce Chambers Points" )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x02, "Bounce Chambers Points" )
 	PORT_DIPSETTING(    0x00, "10" )
 	PORT_DIPSETTING(    0x02, "15" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Free_Play ) )		PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "Sound with Instructions" )		PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x08, "Sound with Instructions" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("DSW:!3")
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!7,!8")
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Bonus_Life ) )
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x40, "12000" )
 	PORT_DIPSETTING(    0xc0, "15000" )
@@ -803,24 +821,30 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( qbert )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Kicker" )				PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x02, "Kicker" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
-	PORT_DIPNAME( 0x08, 0x00, "Demo Mode (Unlim Lives, Start=Adv (Cheat)")	PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, "Auto Round Advance (Cheat)")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Free_Play ) )		PORT_DIPLOCATION("DSW:!3")
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "DSW:!5" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "DSW:!7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "DSW:!8" )
+	PORT_DIPNAME( 0x20, 0x00, "SW5" )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, "SW7" )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x00, "SW8" )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 	/* 0x40 must be connected to the IP16 line */
 
 	PORT_START("IN1")
@@ -839,15 +863,15 @@ static INPUT_PORTS_START( qbert )
 	PORT_START("IN3")	/* trackball V not used */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN4")      /* joystick - actually 4-Way but assigned as 8-Way to allow diagonal mapping */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
+	PORT_START("IN4")      /* joystick */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL
 
 	PORT_INCLUDE(gottlieb1_sound)
 INPUT_PORTS_END
@@ -855,33 +879,33 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( insector )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!2")
-	PORT_DIPSETTING(    0x00, "25k 75k and every 50k" )
-	PORT_DIPSETTING(    0x01, "30k 90k and every 60k" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x00, "25000" )
+	PORT_DIPSETTING(    0x01, "30000" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, "Demo Mode (Unlim Lives, Start 2=Adv. (Cheat)" )	PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x04, 0x00, "Demo mode" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x08, "3" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0x50, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!3,!7")
+	PORT_DIPNAME( 0x50, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x50, DEF_STR( 2C_2C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Free_Play ) )		PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) )			PORT_DIPLOCATION("DSW:!8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Cabinet ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Cocktail ) )
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 )			PORT_NAME("P1 Start/Button 1")
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 )			PORT_NAME("P2 Start/Button 2")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN2 )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_COCKTAIL
@@ -911,23 +935,24 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( tylz )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:1")
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x11, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:2,3")
+	PORT_DIPNAME( 0x11, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x11, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:4")
-	PORT_DIPSETTING(    0x00, "3" )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x04, "5" )
-	PORT_DIPNAME( 0x22, 0x00, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:5,6")
-	PORT_DIPSETTING(    0x00, "15k 35k and every 20k" )
-	PORT_DIPSETTING(    0x20, "15k 45k and every 30k" )
-	PORT_DIPSETTING(    0x02, "20k 55k and every 35k" )
-	PORT_DIPSETTING(    0x22, "20k 60k and every 40k" )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:7,8")
+	PORT_DIPSETTING(    0x00, "3" )
+	PORT_DIPNAME( 0x22, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x00, "15000 / 20000" )
+	PORT_DIPSETTING(    0x20, "15000 / 30000" )
+	PORT_DIPSETTING(    0x02, "20000 / 35000" )
+	PORT_DIPSETTING(    0x22, "20000 / 40000" )
+
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x40, "Normal Easy" )
 	PORT_DIPSETTING(    0x80, "Normal Hard" )
@@ -938,7 +963,18 @@ static INPUT_PORTS_START( tylz )
 	PORT_BIT(0x02, IP_ACTIVE_HIGH, IPT_SERVICE ) PORT_NAME("Select in Service Mode") PORT_CODE(KEYCODE_F1) // cycle through test options, hold to do test
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )
-	PORT_BIT( 0xf0, IP_ACTIVE_HIGH, IPT_UNUSED )	// probably nothing else here
+	PORT_DIPNAME( 0x10, 0x10, "1" )  // probably nothing else here
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("IN2")	/* trackball H not used */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -964,26 +1000,28 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( argusg )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x22, 0x02, "Bonus Human Every" )			PORT_DIPLOCATION("DSW:!5,!6")
+	PORT_DIPNAME( 0x22, 0x02, "Bonus Human" )
 	PORT_DIPSETTING(    0x00, "15000" )
 	PORT_DIPSETTING(    0x02, "20000" )
 	PORT_DIPSETTING(    0x20, "25000" )
 	PORT_DIPSETTING(    0x22, "30000" )
-	PORT_DIPNAME( 0x14, 0x10, "Initial Humans" )			PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x10, "Initial Humans" )
 	PORT_DIPSETTING(    0x00, "4" )
 	PORT_DIPSETTING(    0x10, "6" )
 	PORT_DIPSETTING(    0x04, "8" )
 	PORT_DIPSETTING(    0x14, "10" )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Free_Play ) )		PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Hard )  )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "DSW:8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("IN1")
 	PORT_SERVICE( 0x01, IP_ACTIVE_LOW )
@@ -1004,8 +1042,8 @@ static INPUT_PORTS_START( argusg )
 /* NOTE: Buttons are shared for both players; are mirrored to each side of the controller */
 	PORT_START("IN4")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON2 )
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON1 )			PORT_NAME("P1 Start/Button 1")
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2)PORT_NAME("P2 Start/Button 2")
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON1 )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2)
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0xf0, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
@@ -1021,28 +1059,28 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( mplanets )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!6")
-	PORT_DIPSETTING(    0x00, "Every 10000" )
-	PORT_DIPSETTING(    0x02, "Every 12000" )
-	PORT_DIPNAME( 0x08, 0x00, "Allow Round Select" )		PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x00, "10000" )
+	PORT_DIPSETTING(    0x02, "12000" )
+	PORT_DIPNAME( 0x08, 0x00, "Allow Round Select" )
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x14, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x20, "5" )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!7,!8")
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Standard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( Very_Hard ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( Hardest ) )
 
 	PORT_START("IN1")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_COIN1 )
@@ -1076,28 +1114,28 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( krull )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x08, "5" )
-	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x14, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x20, 0x00, "Hexagon" )				PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, "Hexagon" )
 	PORT_DIPSETTING(    0x00, "Roving" )
 	PORT_DIPSETTING(    0x20, "Stationary" )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!7,!8")
-	PORT_DIPSETTING(    0x40, "30k 60k and every 30k" )
-	PORT_DIPSETTING(    0x00, "30k 80k and every 50k" )
-	PORT_DIPSETTING(    0x80, "40k 90k and every 50k" )
-	PORT_DIPSETTING(    0xc0, "50k 125k and every 75k" )
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x40, "30000 30000" )
+	PORT_DIPSETTING(    0x00, "30000 50000" )
+	PORT_DIPSETTING(    0x80, "40000 50000" )
+	PORT_DIPSETTING(    0xc0, "50000 75000" )
 
 	PORT_START("IN1")
 	PORT_SERVICE( 0x01, IP_ACTIVE_LOW )
@@ -1131,19 +1169,29 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( kngtmare )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x11, 0x11, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!1,!5")
+	PORT_DIPNAME( 0x11, 0x11, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x11, DEF_STR( 1C_1C ) )
 //  PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPUNKNOWN_DIPLOC( 0x02, 0x02, "DSW:!2" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x04, 0x04, "DSW:!3" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "DSW:!4" )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x20, "5" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x40, 0x40, "DSW:!7" )
-	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x80, "DSW:!8" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("IN1")	/* ? */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN )
@@ -1177,10 +1225,10 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( qbertqub )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x35, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!2,!3,!4,!5")
+	PORT_DIPNAME( 0x35, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x24, "A 2/1 B 2/1" )
 	PORT_DIPSETTING(    0x14, "A 1/1 B 4/1" )
 	PORT_DIPSETTING(    0x30, "A 1/1 B 3/1" )
@@ -1197,13 +1245,13 @@ static INPUT_PORTS_START( qbertqub )
 /* 0x25 DEF_STR( 2C_1C )
    0x01 DEF_STR( 1C_1C )
    0x34 DEF_STR( Free_Play ) */
-	PORT_DIPNAME( 0x02, 0x00, "Bonus Life at" )			PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x00, "1st Bonus Life" )
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x02, "15000" )
-	PORT_DIPNAME( 0x40, 0x00, "Additional Bonus Life Every" )	PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x40, 0x00, "Additional Bonus Life" )
 	PORT_DIPSETTING(    0x00, "20000" )
 	PORT_DIPSETTING(    0x40, "25000" )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
 
@@ -1223,11 +1271,11 @@ static INPUT_PORTS_START( qbertqub )
 	PORT_START("IN3")	/* trackball V not used */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN4")      /* joystick - actually 4-Way but assigned as 8-Way to allow diagonal mapping */
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_8WAY
+	PORT_START("IN4")      /* joystick */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICK_DOWN ) PORT_4WAY
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
@@ -1239,32 +1287,37 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( curvebal )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x08, 0x00, "2 Players Game" )			PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, "2 Players Game" )
 	PORT_DIPSETTING(    0x08, "1 Credit" )
 	PORT_DIPSETTING(    0x00, "2 Credits" )
-	PORT_DIPNAME( 0x11, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!2,!3")
+	PORT_DIPNAME( 0x11, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x11, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPSETTING(    0x11, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x00, "Coins" )					PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, "Coins" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( French ) )
-	PORT_DIPNAME( 0xc2, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!6,!7,!8")
-	PORT_DIPSETTING(    0x42, "A 3/1 B 1/2" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x20)
-	PORT_DIPSETTING(    0x42, "A 4/1 B 1/1" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x00)
-	PORT_DIPSETTING(    0x82, "A 1/5 B 1/2" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x20)
-	PORT_DIPSETTING(    0x82, "A 3/1 B 1/1" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x00)
-	PORT_DIPSETTING(    0x02, "A 2/1 B 2/3" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x20)
-	PORT_DIPSETTING(    0x02, "A 2/1 B 1/1" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x00)
+	/* TODO: coinage is different when French is selected */
+/* PORT_DIPNAME( 0xc2, 0x00, "French Coinage" )
+PORT_DIPSETTING(    0x42, "A 3/1 B 1/2" )
+PORT_DIPSETTING(    0x82, "A 1/5 B 1/2" )
+PORT_DIPSETTING(    0x02, "A 2/1 B 2/3" )
+PORT_DIPSETTING(    0xc0, "A 2/1 B 2/1" )
+PORT_DIPSETTING(    0x80, "A 1/1 B 1/2" )
+PORT_DIPSETTING(    0x40, "A 1/1 B 1/3" )
+PORT_DIPSETTING(    0x00, "A 1/1 B 1/1" )
+PORT_DIPSETTING(    0xc2, DEF_STR( Free_Play ) ) */
+	PORT_DIPNAME( 0xc2, 0x00, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(    0x42, "A 4/1 B 1/1" )
+	PORT_DIPSETTING(    0x82, "A 3/1 B 1/1" )
+	PORT_DIPSETTING(    0x02, "A 2/1 B 1/1" )
 	PORT_DIPSETTING(    0xc0, "A 2/1 B 2/1" )
-	PORT_DIPSETTING(    0x80, "A 1/1 B 1/2" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x20)
-	PORT_DIPSETTING(    0x80, "A 2/1 B 1/2" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x00)
-	PORT_DIPSETTING(    0x40, "A 1/1 B 1/3" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x20)
-	PORT_DIPSETTING(    0x40, "A 2/1 B 1/3" )	PORT_CONDITION("DSW",0x20,PORTCOND_EQUALS,0x00)
+	PORT_DIPSETTING(    0x80, "A 2/1 B 1/2" )
+	PORT_DIPSETTING(    0x40, "A 2/1 B 1/3" )
 	PORT_DIPSETTING(    0x00, "A 1/1 B 1/1" )
 	PORT_DIPSETTING(    0xc2, DEF_STR( Free_Play ) )
 
@@ -1300,27 +1353,27 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( screwloo )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, "Demo mode" )				PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x02, 0x00, "Demo mode" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, "1st Bonus Atom at" )			PORT_DIPLOCATION("DSW:!3")
+	PORT_DIPNAME( 0x04, 0x00, "1st Bonus Atom at" )
 	PORT_DIPSETTING(    0x00, "5000" )
 	PORT_DIPSETTING(    0x04, "20000" )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Free_Play ) )		PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x50, 0x40, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!5,!6")
+	PORT_DIPNAME( 0x50, 0x40, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_2C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x50, DEF_STR( 1C_2C ) )
-	PORT_DIPNAME( 0x20, 0x00, "1st Bonus Hand at" )			PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x20, 0x00, "1st Bonus Hand at" )
 	PORT_DIPSETTING(    0x00, "25000" )
 	PORT_DIPSETTING(    0x20, "50000" )
-	PORT_DIPNAME( 0x80, 0x00, "Hands" )					PORT_DIPLOCATION("DSW:!8")
+	PORT_DIPNAME( 0x80, 0x00, "Hands" )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x80, "5" )
 
@@ -1345,8 +1398,8 @@ static INPUT_PORTS_START( screwloo )
 	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_LEFT ) PORT_8WAY
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_DOWN ) PORT_8WAY
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_JOYSTICKRIGHT_UP ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("Start 2P") PORT_PLAYER(1)
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("Start 1P") PORT_PLAYER(1)
+	PORT_BIT(0x10, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_NAME("Start 2P") PORT_PLAYER(1)
+	PORT_BIT(0x20, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_NAME("Start 1P") PORT_PLAYER(1)
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 
@@ -1357,26 +1410,26 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( mach3 )
 	PORT_START("DSW")
 	/* TODO: values are different for 5 lives */
-	PORT_DIPNAME( 0x09, 0x08, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!1,!2")
+	PORT_DIPNAME( 0x09, 0x08, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x09, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!3")
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x10, "5" )
-	PORT_DIPNAME( 0x24, 0x00, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!4,!5")
+	PORT_DIPNAME( 0x24, 0x00, DEF_STR( Bonus_Life ) )
 	PORT_DIPSETTING(    0x00, "10000 10000" )
 	PORT_DIPSETTING(    0x04, "10000 20000" )
 	PORT_DIPSETTING(    0x20, "10000 40000" )
 	PORT_DIPSETTING(    0x24, "20000 60000" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "Infinite Lives (Cheat)")		PORT_DIPLOCATION("DSW:!8")
+	PORT_DIPNAME( 0x80, 0x00, "Infinite Lives (Cheat)")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
@@ -1411,27 +1464,27 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( cobram3 )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x08, "5" )
-	PORT_DIPNAME( 0x14, 0x00, "1st Bonus / 2nd Bonus" )		PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x00, "1st Bonus / 2nd Bonus" )
 	PORT_DIPSETTING(    0x00, "20000 / None" )
 	PORT_DIPSETTING(    0x10, "15000 / 30000" )
 	PORT_DIPSETTING(    0x04, "20000 / 40000" )
 	PORT_DIPSETTING(    0x14, "30000 / 50000" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Difficult ) )
-	PORT_DIPNAME( 0x40, 0x00, "Random 1st Level")			PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x40, 0x00, "Random 1st Level")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "Self Test")				PORT_DIPLOCATION("DSW:!8")
+	PORT_DIPNAME( 0x80, 0x00, "Self Test")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
@@ -1468,19 +1521,29 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( usvsthem )
 	PORT_START("DSW")
 	/* TODO: values are different for 5 lives */
-	PORT_DIPNAME( 0x09, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!1,!2")
+	PORT_DIPNAME( 0x09, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Free_Play ) )
 /*  PORT_DIPSETTING(    0x09, DEF_STR( Free_Play ) ) */
-	PORT_DIPUNUSED_DIPLOC( 0x02, 0x00, "DSW:!3" )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
-	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "DSW:!5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "DSW:!6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x00, "DSW:!7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "DSW:!8" )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	PORT_START("IN1")
 	PORT_SERVICE( 0x01, IP_ACTIVE_LOW )
@@ -1514,26 +1577,29 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( 3stooges )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!2")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING (   0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING (   0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING (   0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING (   0x02, DEF_STR( Hard ) )
-	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!1")
+	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING (   0x00, "3" )
 	PORT_DIPSETTING (   0x08, "5" )
-	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING (   0x04, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING (   0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING (   0x10, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING (   0x14, DEF_STR( Free_Play ) )
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x00, "DSW:5" )
-	PORT_DIPNAME( 0xc0, 0xc0, "1st Bonus Life at" )			PORT_DIPLOCATION("DSW:!7,!8")
-	PORT_DIPSETTING (   0xc0, "10k 20k and every 10k")
-	PORT_DIPSETTING (   0x00, "20k 40k and every 20k")
-	PORT_DIPSETTING (   0x40, "10k 30k and every 20k")
-	PORT_DIPSETTING (   0x80, "20k 30k and every 10k")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, "1st Bonus Life at" )
+	PORT_DIPSETTING (   0x40, "10000" )
+	PORT_DIPSETTING (   0x00, "20000" )
+	PORT_DIPNAME( 0x80, 0x00, "And Bonus Life Every" )
+	PORT_DIPSETTING (   0x80, "10000" )
+	PORT_DIPSETTING (   0x00, "20000" )
 
 	PORT_START("IN1")
 	PORT_SERVICE( 0x01, IP_ACTIVE_LOW )
@@ -1582,26 +1648,28 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( vidvince )
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x09, 0x01, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!1,!2")
+	PORT_DIPNAME( 0x09, 0x01, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x09, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x02, "5" )
-	PORT_DIPNAME( 0x14, 0x04, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("DSW:!3,!4")
+	PORT_DIPNAME( 0x14, 0x04, DEF_STR( Bonus_Life ) )
 	PORT_DIPSETTING(    0x00, "10000" )
 	PORT_DIPSETTING(    0x04, "20000" )
 	PORT_DIPSETTING(    0x10, "30000" )
 	PORT_DIPSETTING(    0x14, "40000" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard )  )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!7")
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x00, "DSW:!8" )
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("IN1")	/* ? */
 	PORT_SERVICE( 0x01, IP_ACTIVE_HIGH )
@@ -1636,22 +1704,29 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( wizwarz )
 /* TODO: Bonus Life and Bonus Mine values are dependent upon each other */
 	PORT_START("DSW")
-	PORT_DIPNAME( 0x09, 0x00, "Bonuses" )				PORT_DIPLOCATION("DSW:!1,!2")
-	PORT_DIPSETTING(    0x00, "Life 20k,50k every 30k / Mine 10k,25k every 15k" )
-	PORT_DIPSETTING(    0x08, "Life 20k,55k every 35k / Mine 10k,30k every 20k" )
-	PORT_DIPSETTING(    0x01, "Life 25k,60k every 35k / Mine 15k,35k every 20k" )
-	PORT_DIPSETTING(    0x09, "Life 30k,40k every 40k / Mine 15k,40k every 25k" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("DSW:!6")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x00, "20000, 30000" )
+	PORT_DIPSETTING(    0x01, "25000, 35000" )
+//  PORT_DIPSETTING(    0x00, "20000, 35000" )
+//  PORT_DIPSETTING(    0x01, "30000, 40000" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("DSW:!4")
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
-	PORT_DIPUNUSED_DIPLOC( 0x10, 0x00, "DSW:!3" )
-	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )			PORT_DIPLOCATION("DSW:!5")
+	PORT_DIPNAME( 0x08, 0x08, "Bonus Mine" )
+	PORT_DIPSETTING(    0x00, "15000, 20000" )
+	PORT_DIPSETTING(    0x08, "15000, 25000" )
+//  PORT_DIPSETTING(    0x00, "10000, 15000" )
+//  PORT_DIPSETTING(    0x08, "10000, 20000" )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x00, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "3" )
 	PORT_DIPSETTING(    0x20, "5" )
-	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coinage ) )			PORT_DIPLOCATION("DSW:!7,!8")
+	PORT_DIPNAME( 0xc0, 0x00, DEF_STR( Coinage ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
@@ -1746,83 +1821,83 @@ GFXDECODE_END
 static const char *const reactor_sample_names[] =
 {
 	"*reactor",
-	"fx_53", /* "8 left" */
-	"fx_54", /* "16 left" */
-	"fx_55", /* "24 left" */
-	"fx_56", /* "32 left" */
-	"fx_57", /* "40 left" */
-	"fx_58", /* "warning, core unstable" */
-	"fx_59", /* "bonus" */
-	"fx_31", /* "chamber activated" */
-	"fx_39a", /* "2000" */
-	"fx_39b", /* "5000" */
-	"fx_39c", /* "10000" */
-	"fx_39d", /* "15000" */
-	"fx_39e", /* "20000" */
-	"fx_39f", /* "25000" */
-	"fx_39g", /* "30000" */
-	"fx_39h", /* "35000" */
-	"fx_39i", /* "40000" */
-	"fx_39j", /* "45000" */
-	"fx_39k", /* "50000" */
-	"fx_39l", /* "55000" */
+	"fx_53.wav", /* "8 left" */
+	"fx_54.wav", /* "16 left" */
+	"fx_55.wav", /* "24 left" */
+	"fx_56.wav", /* "32 left" */
+	"fx_57.wav", /* "40 left" */
+	"fx_58.wav", /* "warning, core unstable" */
+	"fx_59.wav", /* "bonus" */
+	"fx_31.wav", /* "chamber activated" */
+	"fx_39a.wav", /* "2000" */
+	"fx_39b.wav", /* "5000" */
+	"fx_39c.wav", /* "10000" */
+	"fx_39d.wav", /* "15000" */
+	"fx_39e.wav", /* "20000" */
+	"fx_39f.wav", /* "25000" */
+	"fx_39g.wav", /* "30000" */
+	"fx_39h.wav", /* "35000" */
+	"fx_39i.wav", /* "40000" */
+	"fx_39j.wav", /* "45000" */
+	"fx_39k.wav", /* "50000" */
+	"fx_39l.wav", /* "55000" */
      0	/* end of array */
 };
 
 static const char *const qbert_sample_names[] =
 {
 	"*qbert",
-	"fx_17a", /* random speech, voice clock 255 */
-	"fx_17b", /* random speech, voice clock 255 */
-	"fx_17c", /* random speech, voice clock 255 */
-	"fx_17d", /* random speech, voice clock 255 */
-	"fx_17e", /* random speech, voice clock 255 */
-	"fx_17f", /* random speech, voice clock 255 */
-	"fx_17g", /* random speech, voice clock 255 */
-	"fx_17h", /* random speech, voice clock 255 */
-	"fx_18a", /* random speech, voice clock 176 */
-	"fx_18b", /* random speech, voice clock 176 */
-	"fx_18c", /* random speech, voice clock 176 */
-	"fx_18d", /* random speech, voice clock 176 */
-	"fx_18e", /* random speech, voice clock 176 */
-	"fx_18f", /* random speech, voice clock 176 */
-	"fx_18g", /* random speech, voice clock 176 */
-	"fx_18h", /* random speech, voice clock 176 */
-	"fx_19a", /* random speech, voice clock 128 */
-	"fx_19b", /* random speech, voice clock 128 */
-	"fx_19c", /* random speech, voice clock 128 */
-	"fx_19d", /* random speech, voice clock 128 */
-	"fx_19e", /* random speech, voice clock 128 */
-	"fx_19f", /* random speech, voice clock 128 */
-	"fx_19g", /* random speech, voice clock 128 */
-	"fx_19h", /* random speech, voice clock 128 */
-	"fx_20a", /* random speech, voice clock 96 */
-	"fx_20b", /* random speech, voice clock 96 */
-	"fx_20c", /* random speech, voice clock 96 */
-	"fx_20d", /* random speech, voice clock 96 */
-	"fx_20e", /* random speech, voice clock 96 */
-	"fx_20f", /* random speech, voice clock 96 */
-	"fx_20g", /* random speech, voice clock 96 */
-	"fx_20h", /* random speech, voice clock 96 */
-	"fx_21a", /* random speech, voice clock 62 */
-	"fx_21b", /* random speech, voice clock 62 */
-	"fx_21c", /* random speech, voice clock 62 */
-	"fx_21d", /* random speech, voice clock 62 */
-	"fx_21e", /* random speech, voice clock 62 */
-	"fx_21f", /* random speech, voice clock 62 */
-	"fx_21g", /* random speech, voice clock 62 */
-	"fx_21h", /* random speech, voice clock 62 */
-	"fx_22", /* EH2 with decreasing voice clock */
-	"fx_23", /* O1 with varying voice clock */
-	"fx_28",
-	"fx_36",
-	"knocker",
+	"fx_17a.wav", /* random speech, voice clock 255 */
+	"fx_17b.wav", /* random speech, voice clock 255 */
+	"fx_17c.wav", /* random speech, voice clock 255 */
+	"fx_17d.wav", /* random speech, voice clock 255 */
+	"fx_17e.wav", /* random speech, voice clock 255 */
+	"fx_17f.wav", /* random speech, voice clock 255 */
+	"fx_17g.wav", /* random speech, voice clock 255 */
+	"fx_17h.wav", /* random speech, voice clock 255 */
+	"fx_18a.wav", /* random speech, voice clock 176 */
+	"fx_18b.wav", /* random speech, voice clock 176 */
+	"fx_18c.wav", /* random speech, voice clock 176 */
+	"fx_18d.wav", /* random speech, voice clock 176 */
+	"fx_18e.wav", /* random speech, voice clock 176 */
+	"fx_18f.wav", /* random speech, voice clock 176 */
+	"fx_18g.wav", /* random speech, voice clock 176 */
+	"fx_18h.wav", /* random speech, voice clock 176 */
+	"fx_19a.wav", /* random speech, voice clock 128 */
+	"fx_19b.wav", /* random speech, voice clock 128 */
+	"fx_19c.wav", /* random speech, voice clock 128 */
+	"fx_19d.wav", /* random speech, voice clock 128 */
+	"fx_19e.wav", /* random speech, voice clock 128 */
+	"fx_19f.wav", /* random speech, voice clock 128 */
+	"fx_19g.wav", /* random speech, voice clock 128 */
+	"fx_19h.wav", /* random speech, voice clock 128 */
+	"fx_20a.wav", /* random speech, voice clock 96 */
+	"fx_20b.wav", /* random speech, voice clock 96 */
+	"fx_20c.wav", /* random speech, voice clock 96 */
+	"fx_20d.wav", /* random speech, voice clock 96 */
+	"fx_20e.wav", /* random speech, voice clock 96 */
+	"fx_20f.wav", /* random speech, voice clock 96 */
+	"fx_20g.wav", /* random speech, voice clock 96 */
+	"fx_20h.wav", /* random speech, voice clock 96 */
+	"fx_21a.wav", /* random speech, voice clock 62 */
+	"fx_21b.wav", /* random speech, voice clock 62 */
+	"fx_21c.wav", /* random speech, voice clock 62 */
+	"fx_21d.wav", /* random speech, voice clock 62 */
+	"fx_21e.wav", /* random speech, voice clock 62 */
+	"fx_21f.wav", /* random speech, voice clock 62 */
+	"fx_21g.wav", /* random speech, voice clock 62 */
+	"fx_21h.wav", /* random speech, voice clock 62 */
+	"fx_22.wav", /* EH2 with decreasing voice clock */
+	"fx_23.wav", /* O1 with varying voice clock */
+	"fx_28.wav",
+	"fx_36.wav",
+	"knocker.wav",
 	0	/* end of array */
 };
 
 static const samples_interface qbert_samples_interface =
 {
-	1,	/* one channel */
+ 	1,	/* one channel */
 	qbert_sample_names
 };
 
@@ -1840,56 +1915,63 @@ static const samples_interface reactor_samples_interface =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( gottlieb_core, gottlieb_state )
+static MACHINE_DRIVER_START( gottlieb_core )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I8088, CPU_CLOCK/3)
-	MCFG_CPU_PROGRAM_MAP(gottlieb_map)
-	MCFG_CPU_VBLANK_INT("screen", gottlieb_interrupt)
+	MDRV_CPU_ADD("maincpu", I8088, CPU_CLOCK/3)
+	MDRV_CPU_PROGRAM_MAP(gottlieb_map)
+	MDRV_CPU_VBLANK_INT("screen", gottlieb_interrupt)
 
-	MCFG_MACHINE_START(gottlieb)
-	MCFG_MACHINE_RESET(gottlieb)
-	MCFG_NVRAM_ADD_1FILL("nvram")
-	MCFG_WATCHDOG_VBLANK_INIT(16)
+	MDRV_MACHINE_START(gottlieb)
+	MDRV_MACHINE_RESET(gottlieb)
+	MDRV_NVRAM_HANDLER(generic_1fill)
+	MDRV_WATCHDOG_VBLANK_INIT(16)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(SYSTEM_CLOCK/4, GOTTLIEB_VIDEO_HCOUNT, 0, GOTTLIEB_VIDEO_HBLANK, GOTTLIEB_VIDEO_VCOUNT, 0, GOTTLIEB_VIDEO_VBLANK)
-	MCFG_SCREEN_UPDATE_STATIC(gottlieb)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(SYSTEM_CLOCK/4, GOTTLIEB_VIDEO_HCOUNT, 0, GOTTLIEB_VIDEO_HBLANK, GOTTLIEB_VIDEO_VCOUNT, 0, GOTTLIEB_VIDEO_VBLANK)
 
-	MCFG_GFXDECODE(gfxdecode)
-	MCFG_PALETTE_LENGTH(16)
+	MDRV_GFXDECODE(gfxdecode)
+	MDRV_PALETTE_LENGTH(16)
 
-	MCFG_VIDEO_START(gottlieb)
+	MDRV_VIDEO_START(gottlieb)
+	MDRV_VIDEO_UPDATE(gottlieb)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( gottlieb1, gottlieb_core )
-	MCFG_FRAGMENT_ADD(gottlieb_soundrev1)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( gottlieb1 )
+	MDRV_IMPORT_FROM(gottlieb_core)
+	MDRV_IMPORT_FROM(gottlieb_soundrev1)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( gottlieb2, gottlieb_core )
-	MCFG_FRAGMENT_ADD(gottlieb_soundrev2)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( gottlieb2 )
+	MDRV_IMPORT_FROM(gottlieb_core)
+	MDRV_IMPORT_FROM(gottlieb_soundrev2)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( g2laser, gottlieb_core )
-	MCFG_FRAGMENT_ADD(gottlieb_soundrev2)
+static MACHINE_DRIVER_START( g2laser )
+	MDRV_IMPORT_FROM(gottlieb_core)
+	MDRV_IMPORT_FROM(gottlieb_soundrev2)
 
-	MCFG_LASERDISC_PR8210_ADD("laserdisc")
-	MCFG_LASERDISC_AUDIO(laserdisc_audio_delegate(FUNC(laserdisc_audio_process), device))
-	MCFG_LASERDISC_OVERLAY_STATIC(GOTTLIEB_VIDEO_HCOUNT, GOTTLIEB_VIDEO_VCOUNT, gottlieb)
-	MCFG_LASERDISC_OVERLAY_CLIP(0, GOTTLIEB_VIDEO_HBLANK-1, 0, GOTTLIEB_VIDEO_VBLANK-8)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)
+	MDRV_LASERDISC_ADD("laserdisc", PIONEER_PR8210, "screen", "ldsound")
+	MDRV_LASERDISC_AUDIO(laserdisc_audio_process)
+	MDRV_LASERDISC_OVERLAY(gottlieb, GOTTLIEB_VIDEO_HCOUNT, GOTTLIEB_VIDEO_VCOUNT, BITMAP_FORMAT_INDEXED16)
+	MDRV_LASERDISC_OVERLAY_CLIP(0, GOTTLIEB_VIDEO_HBLANK-1, 0, GOTTLIEB_VIDEO_VBLANK-8)
+
+	MDRV_DEVICE_REMOVE("screen")
+	MDRV_LASERDISC_SCREEN_ADD_NTSC("screen", BITMAP_FORMAT_INDEXED16)
+
+	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
+	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	/* right channel is processed as data */
+MACHINE_DRIVER_END
 
-	MCFG_DEVICE_REMOVE("screen")
-	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
-MACHINE_CONFIG_END
 
 
 /*************************************
@@ -1898,53 +1980,48 @@ MACHINE_CONFIG_END
  *
  *************************************/
 
-static MACHINE_CONFIG_DERIVED( reactor, gottlieb1 )
+static MACHINE_DRIVER_START( reactor )
+	MDRV_IMPORT_FROM(gottlieb1)
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(reactor_map)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(reactor_map)
 
-	MCFG_DEVICE_REMOVE("nvram")
+	MDRV_NVRAM_HANDLER(0)
 
 	/* sound hardware */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(reactor_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(reactor_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( qbert, gottlieb1 )
+static MACHINE_DRIVER_START( qbert )
+	MDRV_IMPORT_FROM(gottlieb1)
 
 	/* video hardware */
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(qbert_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(qbert_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( screwloo, gottlieb2 )
+static MACHINE_DRIVER_START( screwloo )
+	MDRV_IMPORT_FROM(gottlieb2)
 
-	MCFG_VIDEO_START(screwloo)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(screwloo)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( cobram3, gottlieb_core )
-	MCFG_FRAGMENT_ADD(gottlieb_cobram3_soundrev2)
 
-	MCFG_LASERDISC_PR8210_ADD("laserdisc")
-	MCFG_LASERDISC_AUDIO(laserdisc_audio_delegate(FUNC(laserdisc_audio_process), device))
-	MCFG_LASERDISC_OVERLAY_STATIC(GOTTLIEB_VIDEO_HCOUNT, GOTTLIEB_VIDEO_VCOUNT, gottlieb)
-	MCFG_LASERDISC_OVERLAY_CLIP(0, GOTTLIEB_VIDEO_HBLANK-1, 0, GOTTLIEB_VIDEO_VBLANK-8)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)
-	/* right channel is processed as data */
-
-	MCFG_DEVICE_REMOVE("screen")
-	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
+static MACHINE_DRIVER_START( cobram3 )
+	MDRV_IMPORT_FROM(g2laser)
 
 	/* sound hardware */
-	MCFG_SOUND_MODIFY("dac1")
-	MCFG_SOUND_ROUTES_RESET()
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_CONFIG_END
+	MDRV_SOUND_MODIFY("dac1")
+	MDRV_SOUND_ROUTES_RESET()
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
+MACHINE_DRIVER_END
+
 
 
 /*************************************
@@ -2542,38 +2619,34 @@ ROM_END
 
 static DRIVER_INIT( ramtiles )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
-	state->m_gfxcharlo = state->m_gfxcharhi = 0;
+	gottlieb_gfxcharlo = gottlieb_gfxcharhi = 0;
 }
 
 
 static DRIVER_INIT( romtiles )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
-	state->m_gfxcharlo = state->m_gfxcharhi = 1;
+	gottlieb_gfxcharlo = gottlieb_gfxcharhi = 1;
 }
 
 
 static DRIVER_INIT( stooges )
 {
 	DRIVER_INIT_CALL(ramtiles);
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x05803, 0x05803, 0, 0x07f8, FUNC(stooges_output_w));
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x05803, 0x05803, 0, 0x07f8, stooges_output_w);
 }
 
 
 static DRIVER_INIT( screwloo )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
-	state->m_gfxcharlo = 0;
-	state->m_gfxcharhi = 1;
+	gottlieb_gfxcharlo = 0;
+	gottlieb_gfxcharhi = 1;
 }
 
 
 static DRIVER_INIT( vidvince )
 {
-	gottlieb_state *state = machine.driver_data<gottlieb_state>();
-	state->m_gfxcharlo = 1;
-	state->m_gfxcharhi = 0;
+	gottlieb_gfxcharlo = 1;
+	gottlieb_gfxcharhi = 0;
 }
 
 

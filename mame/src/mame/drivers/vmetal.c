@@ -59,11 +59,13 @@ Notes:
 
 *****
 i should fully merge video with metro.c, it uses the same imagetek chip (although with 16x16 tiles)
-this should fix most of the remaining gfx glitches - looks very similar to 'taidoa' (stephh)
+this should fix most of the remaining gfx glitches
 *****
 
 
 It has Sega and Taito logos in the roms ?!
+
+whats going on with the dipswitches
 
 ES8712 sound may not be quite right. Samples are currently looped, but
 whether they should and how, is unknown.
@@ -73,100 +75,95 @@ cleanup
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/es8712.h"
-#include "includes/metro.h"
 
-class vmetal_state : public metro_state
-{
-public:
-	vmetal_state(const machine_config &mconfig, device_type type, const char *tag)
-		: metro_state(mconfig, type, tag) { }
+static UINT16 *vmetal_texttileram;
+static UINT16 *vmetal_mid1tileram;
+static UINT16 *vmetal_mid2tileram;
+static UINT16 *vmetal_tlookup;
+static UINT16 *vmetal_videoregs;
 
-	UINT16 *m_texttileram;
-	UINT16 *m_mid1tileram;
-	UINT16 *m_mid2tileram;
-	UINT16 *m_tlookup;
-	UINT16 *m_vmetal_videoregs;
 
-	tilemap_t *m_texttilemap;
-	tilemap_t *m_mid1tilemap;
-	tilemap_t *m_mid2tilemap;
-};
+static tilemap *vmetal_texttilemap;
+static tilemap *vmetal_mid1tilemap;
+static tilemap *vmetal_mid2tilemap;
 
+/* video/metro.c */
+extern UINT16 *metro_videoregs;
+void metro_draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
 
 static READ16_HANDLER ( varia_crom_read )
 {
 	/* game reads the cgrom, result is 7772, verified to be correct on the real board */
 
-	vmetal_state *state = space->machine().driver_data<vmetal_state>();
-	UINT8 *cgrom = space->machine().region("gfx1")->base();
+	UINT8 *cgrom = memory_region(space->machine, "gfx1");
 	UINT16 retdat;
-
 	offset = offset << 1;
-	offset |= (state->m_vmetal_videoregs[0x0ab / 2] & 0x7f) << 16;
-	retdat = ((cgrom[offset] << 8) | (cgrom[offset + 1]));
-	// popmessage("varia romread offset %06x data %04x", offset, retdat);
+	offset |= (vmetal_videoregs[0x0ab/2]&0x7f) << 16;
+	retdat = ((cgrom[offset] <<8)| (cgrom[offset+1]));
+//  popmessage("varia romread offset %06x data %04x",offset, retdat);
 
 	return retdat;
 }
 
 
-static void get_vmetal_tlookup(running_machine &machine, UINT16 data, UINT16 *tileno, UINT16 *color)
+static READ16_HANDLER ( varia_random )
 {
-	vmetal_state *state = machine.driver_data<vmetal_state>();
-	int idx = ((data & 0x7fff) >> 4) * 2;
-	UINT32 lookup = (state->m_tlookup[idx] << 16) | state->m_tlookup[idx + 1];
+	return 0xffff;
+}
 
-	*tileno = (data & 0xf) | ((lookup >> 2) & 0xfff0);
-	*color = (lookup >> 20) & 0xff;
+
+
+static void get_vmetal_tlookup(UINT16 data, UINT16 *tileno, UINT16 *color)
+{
+	int idx = ((data & 0x7fff) >> 4)*2;
+	UINT32 lookup = (vmetal_tlookup[idx]<<16) | vmetal_tlookup[idx+1];
+	*tileno = (data & 0xf) | ((lookup>>2) & 0xfff0);
+	*color = (lookup>>20) & 0xff;
 }
 
 
 static WRITE16_HANDLER( vmetal_texttileram_w )
 {
-	vmetal_state *state = space->machine().driver_data<vmetal_state>();
-	COMBINE_DATA(&state->m_texttileram[offset]);
-	state->m_texttilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&vmetal_texttileram[offset]);
+	tilemap_mark_tile_dirty(vmetal_texttilemap,offset);
 }
 
 static WRITE16_HANDLER( vmetal_mid1tileram_w )
 {
-	vmetal_state *state = space->machine().driver_data<vmetal_state>();
-	COMBINE_DATA(&state->m_mid1tileram[offset]);
-	state->m_mid1tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&vmetal_mid1tileram[offset]);
+	tilemap_mark_tile_dirty(vmetal_mid1tilemap,offset);
 }
-
 static WRITE16_HANDLER( vmetal_mid2tileram_w )
 {
-	vmetal_state *state = space->machine().driver_data<vmetal_state>();
-	COMBINE_DATA(&state->m_mid2tileram[offset]);
-	state->m_mid2tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&vmetal_mid2tileram[offset]);
+	tilemap_mark_tile_dirty(vmetal_mid2tilemap,offset);
 }
 
 
-static READ16_HANDLER ( varia_dips_bit8_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x80) << 0) | ((input_port_read(space->machine(), "DSW1") & 0x80) >> 1); }
-static READ16_HANDLER ( varia_dips_bit7_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x40) << 1) | ((input_port_read(space->machine(), "DSW1") & 0x40) >> 0); }
-static READ16_HANDLER ( varia_dips_bit6_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x20) << 2) | ((input_port_read(space->machine(), "DSW1") & 0x20) << 1); }
-static READ16_HANDLER ( varia_dips_bit5_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x10) << 3) | ((input_port_read(space->machine(), "DSW1") & 0x10) << 2); }
-static READ16_HANDLER ( varia_dips_bit4_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x08) << 4) | ((input_port_read(space->machine(), "DSW1") & 0x08) << 3); }
-static READ16_HANDLER ( varia_dips_bit3_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x04) << 5) | ((input_port_read(space->machine(), "DSW1") & 0x04) << 4); }
-static READ16_HANDLER ( varia_dips_bit2_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x02) << 6) | ((input_port_read(space->machine(), "DSW1") & 0x02) << 5); }
-static READ16_HANDLER ( varia_dips_bit1_r ) { return ((input_port_read(space->machine(), "DSW2") & 0x01) << 7) | ((input_port_read(space->machine(), "DSW1") & 0x01) << 6); }
+static READ16_HANDLER ( varia_dips_bit8_r ) { return ((input_port_read(space->machine, "DSW2") & 0x80) << 0) | ((input_port_read(space->machine, "DSW1") & 0x80) >> 1); }
+static READ16_HANDLER ( varia_dips_bit7_r ) { return ((input_port_read(space->machine, "DSW2") & 0x40) << 1) | ((input_port_read(space->machine, "DSW1") & 0x40) >> 0); }
+static READ16_HANDLER ( varia_dips_bit6_r ) { return ((input_port_read(space->machine, "DSW2") & 0x20) << 2) | ((input_port_read(space->machine, "DSW1") & 0x20) << 1); }
+static READ16_HANDLER ( varia_dips_bit5_r ) { return ((input_port_read(space->machine, "DSW2") & 0x10) << 3) | ((input_port_read(space->machine, "DSW1") & 0x10) << 2); }
+static READ16_HANDLER ( varia_dips_bit4_r ) { return ((input_port_read(space->machine, "DSW2") & 0x08) << 4) | ((input_port_read(space->machine, "DSW1") & 0x08) << 3); }
+static READ16_HANDLER ( varia_dips_bit3_r ) { return ((input_port_read(space->machine, "DSW2") & 0x04) << 5) | ((input_port_read(space->machine, "DSW1") & 0x04) << 4); }
+static READ16_HANDLER ( varia_dips_bit2_r ) { return ((input_port_read(space->machine, "DSW2") & 0x02) << 6) | ((input_port_read(space->machine, "DSW1") & 0x02) << 5); }
+static READ16_HANDLER ( varia_dips_bit1_r ) { return ((input_port_read(space->machine, "DSW2") & 0x01) << 7) | ((input_port_read(space->machine, "DSW1") & 0x01) << 6); }
 
 static WRITE8_DEVICE_HANDLER( vmetal_control_w )
 {
 	/* Lower nibble is the coin control bits shown in
        service mode, but in game mode they're different */
-	coin_counter_w(device->machine(), 0, data & 0x04);
-	coin_counter_w(device->machine(), 1, data & 0x08);	/* 2nd coin schute activates coin 0 counter in game mode?? */
-//  coin_lockout_w(device->machine(), 0, data & 0x01);  /* always on in game mode?? */
-	coin_lockout_w(device->machine(), 1, data & 0x02);	/* never activated in game mode?? */
+	coin_counter_w(0,data & 0x04);
+	coin_counter_w(1,data & 0x08);	/* 2nd coin schute activates coin 0 counter in game mode?? */
+//  coin_lockout_w(0,data & 0x01);  /* always on in game mode?? */
+	coin_lockout_w(1,data & 0x02);	/* never activated in game mode?? */
 
 	if ((data & 0x40) == 0)
-		device->reset();
+		device_reset(device);
 	else
 		es8712_play(device);
 
@@ -176,7 +173,7 @@ static WRITE8_DEVICE_HANDLER( vmetal_control_w )
 		es8712_set_bank_base(device, 0x000000);
 
 	if (data & 0xa0)
-		logerror("%s:Writing unknown bits %04x to $200000\n",device->machine().describe_context(),data);
+		logerror("%s:Writing unknown bits %04x to $200000\n",cpuexec_describe_context(device->machine),data);
 }
 
 static WRITE8_DEVICE_HANDLER( vmetal_es8712_w )
@@ -212,85 +209,85 @@ static WRITE8_DEVICE_HANDLER( vmetal_es8712_w )
     */
 
 	es8712_w(device, offset, data);
-	logerror("%s:Writing %04x to ES8712 offset %02x\n", device->machine().describe_context(), data, offset);
+	logerror("%s:Writing %04x to ES8712 offset %02x\n",cpuexec_describe_context(device->machine),data,offset);
 }
 
 
-static ADDRESS_MAP_START( varia_program_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( varia_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x11ffff) AM_RAM_WRITE(vmetal_texttileram_w) AM_BASE_MEMBER(vmetal_state, m_texttileram)
-	AM_RANGE(0x120000, 0x13ffff) AM_RAM_WRITE(vmetal_mid1tileram_w) AM_BASE_MEMBER(vmetal_state, m_mid1tileram)
-	AM_RANGE(0x140000, 0x15ffff) AM_RAM_WRITE(vmetal_mid2tileram_w) AM_BASE_MEMBER(vmetal_state, m_mid2tileram)
+	AM_RANGE(0x100000, 0x11ffff) AM_RAM_WRITE(vmetal_texttileram_w) AM_BASE(&vmetal_texttileram)
+	AM_RANGE(0x120000, 0x13ffff) AM_RAM_WRITE(vmetal_mid1tileram_w) AM_BASE(&vmetal_mid1tileram)
+	AM_RANGE(0x140000, 0x15ffff) AM_RAM_WRITE(vmetal_mid2tileram_w) AM_BASE(&vmetal_mid2tileram)
 
 	AM_RANGE(0x160000, 0x16ffff) AM_READ(varia_crom_read) // cgrom read window ..
 
-	AM_RANGE(0x170000, 0x173fff) AM_RAM_WRITE(paletteram16_GGGGGRRRRRBBBBBx_word_w) AM_BASE_GENERIC(paletteram)	// Palette
-	AM_RANGE(0x174000, 0x174fff) AM_RAM AM_BASE_SIZE_MEMBER(vmetal_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x170000, 0x173fff) AM_READWRITE(SMH_RAM,paletteram16_GGGGGRRRRRBBBBBx_word_w) AM_BASE(&paletteram16	)	// Palette
+	AM_RANGE(0x174000, 0x174fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x175000, 0x177fff) AM_RAM
-	AM_RANGE(0x178000, 0x1787ff) AM_RAM AM_BASE_MEMBER(vmetal_state, m_tlookup)
-	AM_RANGE(0x178800, 0x1796ff) AM_RAM AM_BASE_MEMBER(vmetal_state, m_vmetal_videoregs)
-	AM_RANGE(0x179700, 0x179713) AM_WRITEONLY AM_BASE_MEMBER(vmetal_state, m_videoregs)	// Metro sprite chip Video Registers
+	AM_RANGE(0x178000, 0x1787ff) AM_RAM AM_BASE(&vmetal_tlookup)
+	AM_RANGE(0x178800, 0x1796ff) AM_RAM AM_BASE(&vmetal_videoregs)
+	AM_RANGE(0x179700, 0x179713) AM_WRITE(SMH_RAM) AM_BASE(&metro_videoregs	)	// Video Registers
 
-	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1_P2") AM_DEVWRITE8("essnd", vmetal_control_w, 0x00ff)
+	AM_RANGE(0x200000, 0x200001) AM_READ_PORT("P1_P2") AM_DEVWRITE8("es", vmetal_control_w, 0x00ff)
 	AM_RANGE(0x200002, 0x200003) AM_READ_PORT("SYSTEM")
 
-	/* same weird way to read Dip Switches as in many games in metro.c driver - use balcube_dsw_r read handler once the driver is merged */
-	AM_RANGE(0x30fffe, 0x30ffff) AM_READNOP					// 0x40 = dip1-16 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x317ffe, 0x317fff) AM_READNOP					// 0x40 = dip1-15 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31bffe, 0x31bfff) AM_READNOP					// 0x40 = dip1-14 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31dffe, 0x31dfff) AM_READNOP					// 0x40 = dip1-13 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31effe, 0x31efff) AM_READNOP					// 0x40 = dip1-12 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31f7fe, 0x31f7ff) AM_READNOP					// 0x40 = dip1-11 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31fbfe, 0x31fbff) AM_READNOP					// 0x40 = dip1-10 -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31fdfe, 0x31fdff) AM_READNOP					// 0x40 = dip1-9  -> 0xff0086 (doesn't exist in this game : address is NEVER read back)
-	AM_RANGE(0x31fefe, 0x31feff) AM_READ(varia_dips_bit8_r)	// 0x40 = dip1-8  -> 0xff0085 , 0x80 = dip2-8 -> 0xff0084
-	AM_RANGE(0x31ff7e, 0x31ff7f) AM_READ(varia_dips_bit7_r)	// 0x40 = dip1-7  -> 0xff0085 , 0x80 = dip2-7 -> 0xff0084
-	AM_RANGE(0x31ffbe, 0x31ffbf) AM_READ(varia_dips_bit6_r)	// 0x40 = dip1-6  -> 0xff0085 , 0x80 = dip2-6 -> 0xff0084
-	AM_RANGE(0x31ffde, 0x31ffdf) AM_READ(varia_dips_bit5_r)	// 0x40 = dip1-5  -> 0xff0085 , 0x80 = dip2-5 -> 0xff0084
-	AM_RANGE(0x31ffee, 0x31ffef) AM_READ(varia_dips_bit4_r)	// 0x40 = dip1-4  -> 0xff0085 , 0x80 = dip2-4 -> 0xff0084
-	AM_RANGE(0x31fff6, 0x31fff7) AM_READ(varia_dips_bit3_r)	// 0x40 = dip1-3  -> 0xff0085 , 0x80 = dip2-3 -> 0xff0084
-	AM_RANGE(0x31fffa, 0x31fffb) AM_READ(varia_dips_bit2_r)	// 0x40 = dip1-2  -> 0xff0085 , 0x80 = dip2-2 -> 0xff0084
-	AM_RANGE(0x31fffc, 0x31fffd) AM_READ(varia_dips_bit1_r)	// 0x40 = dip1-1  -> 0xff0085 , 0x80 = dip2-1 -> 0xff0084
+	/* i have no idea whats meant to be going on here .. it seems to read one bit of the dips from some of them, protection ??? */
+	AM_RANGE(0x30fffe, 0x30ffff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x317ffe, 0x317fff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31bffe, 0x31bfff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31dffe, 0x31dfff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31effe, 0x31efff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31f7fe, 0x31f7ff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31fbfe, 0x31fbff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31fdfe, 0x31fdff) AM_READ(varia_random )  // nothing?
+	AM_RANGE(0x31fefe, 0x31feff) AM_READ(varia_dips_bit8_r )  // 0x40 = dip1-8 , 0x80 = dip2-8
+	AM_RANGE(0x31ff7e, 0x31ff7f) AM_READ(varia_dips_bit7_r )  // 0x40 = dip1-7 , 0x80 = dip2-7
+	AM_RANGE(0x31ffbe, 0x31ffbf) AM_READ(varia_dips_bit6_r )  // 0x40 = dip1-6 , 0x80 = dip2-6
+	AM_RANGE(0x31ffde, 0x31ffdf) AM_READ(varia_dips_bit5_r )  // 0x40 = dip1-5 , 0x80 = dip2-5
+	AM_RANGE(0x31ffee, 0x31ffef) AM_READ(varia_dips_bit4_r )  // 0x40 = dip1-4 , 0x80 = dip2-4
+	AM_RANGE(0x31fff6, 0x31fff7) AM_READ(varia_dips_bit3_r )  // 0x40 = dip1-3 , 0x80 = dip2-3
+	AM_RANGE(0x31fffa, 0x31fffb) AM_READ(varia_dips_bit2_r )  // 0x40 = dip1-2 , 0x80 = dip2-2
+	AM_RANGE(0x31fffc, 0x31fffd) AM_READ(varia_dips_bit1_r )  // 0x40 = dip1-1 , 0x80 = dip2-1
+	AM_RANGE(0x31fffe, 0x31ffff) AM_READ(varia_random )  // nothing?
 
-	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff )
-	AM_RANGE(0x400002, 0x400003) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0x00ff)	// Volume/channel info
-	AM_RANGE(0x500000, 0x50000d) AM_DEVWRITE8("essnd", vmetal_es8712_w, 0x00ff)
+	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff )
+	AM_RANGE(0x400002, 0x400003) AM_DEVWRITE8("oki", okim6295_w, 0x00ff)	// Volume/channel info
+	AM_RANGE(0x500000, 0x50000d) AM_DEVWRITE8("es", vmetal_es8712_w, 0x00ff)
 
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
 
-/* verified from M68000 code */
+
 static INPUT_PORTS_START( varia )
-	PORT_START("P1_P2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_8WAY PORT_PLAYER(2)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_8WAY PORT_PLAYER(2)
+	PORT_START("P1_P2")	/* IN0 */
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_8WAY PORT_PLAYER(1)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_8WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2  )
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(1)
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_START1 )
 
-	PORT_START("SYSTEM")
+	PORT_START("SYSTEM")	/* IN1 */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_TILT )             /* 'Tilt' only in "test mode" - no effect ingame */
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_SERVICE1 )         /* same coinage as COIN1 and COIN2 */
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SERVICE2 )         /* 'Test' only in "test mode" - no effect ingame */
-	PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_TILT )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_SERVICE2 ) // 'Test'
+	PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNKNOWN ) // unused?
 
-	/* stored to 0xff0085.b (cpl'ed) */
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coinage ) )
+	PORT_START("DSW1")	/* Dips 1 */
+	PORT_DIPNAME( 0x0007, 0x0007, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x0005, DEF_STR( 3C_1C )  )
 	PORT_DIPSETTING(      0x0006, DEF_STR( 2C_1C )  )
 	PORT_DIPSETTING(      0x0007, DEF_STR( 1C_1C )  )
@@ -299,33 +296,43 @@ static INPUT_PORTS_START( varia )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_4C )  )
 	PORT_DIPSETTING(      0x0001, DEF_STR( 1C_5C )  )
 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C )  )
-	PORT_DIPUNUSED( 0x0008, IP_ACTIVE_LOW )                 /* 0x01 (OFF) or 0x02 (ON) written to 0xff0112.b but NEVER read back - old credits for 2 players game ? */
-	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Flip_Screen ) )  /* 0x07c1 written to 0x1788ac.w (screen control ?) at first (code at 0x0001b8) */
-	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )          /* 0x07c1 written to 0xff0114.w (then 0x1788ac.w) during initialisation (code at 0x000436) */
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )           /* 0x07c0 written to 0xff0114.w (then 0x1788ac.w) during initialisation (code at 0x000436) */
+	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0020, DEF_STR( On ) )
-	PORT_DIPUNUSED( 0x0040, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x0080, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
-	/* stored to 0xff0084.b (cpl'ed) */
-	PORT_START("DSW2")
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
-	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
-	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
+	PORT_START("DSW2")	/* Dips 2 */
+	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unknown ))
+	PORT_DIPSETTING(      0x0001, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0002, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Lives ) )
-	PORT_DIPSETTING(      0x0008, "1"  )
-	PORT_DIPSETTING(      0x0004, "2"  )
-	PORT_DIPSETTING(      0x000c, "3"  )
-	PORT_DIPSETTING(      0x0000, "4"  )
-	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Bonus_Life ) )   /* code at 0x0004a4 */
-	PORT_DIPSETTING(      0x0010, "Every 30000" )
-	PORT_DIPSETTING(      0x0000, "Every 60000" )
-	PORT_DIPUNUSED( 0x0020, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x0040, IP_ACTIVE_LOW )
+	PORT_DIPSETTING(      0x0008, "0"  )
+	PORT_DIPSETTING(      0x0004, "1"  )
+	PORT_DIPSETTING(      0x000c, "2"  )
+	PORT_DIPSETTING(      0x0000, "3"  )
+	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 	PORT_SERVICE( 0x0080, IP_ACTIVE_LOW )
 INPUT_PORTS_END
 
@@ -361,115 +368,92 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_vmetal_texttilemap_tile_info )
 {
-	vmetal_state *state = machine.driver_data<vmetal_state>();
 	UINT32 tile;
-	UINT16 color, data = state->m_texttileram[tile_index];
-	int idx = ((data & 0x7fff) >> 4) * 2;
-	UINT32 lookup = (state->m_tlookup[idx] << 16) | state->m_tlookup[idx + 1];
-
+	UINT16 color, data = vmetal_texttileram[tile_index];
+	int idx = ((data & 0x7fff) >> 4)*2;
+	UINT32 lookup = (vmetal_tlookup[idx]<<16) | vmetal_tlookup[idx+1];
 	tile = (data & 0xf) | (lookup & 0x7fff0);
-	color = ((lookup >> 20) & 0x1f) + 0xe0;
-
-	if (data & 0x8000)
-		tile = 0;
-
+	color = ((lookup>>20) & 0x1f)+0xe0;
+	if (data & 0x8000) tile = 0;
 	SET_TILE_INFO(1, tile, color, TILE_FLIPYX(0x0));
 }
 
 
 static TILE_GET_INFO( get_vmetal_mid1tilemap_tile_info )
 {
-	vmetal_state *state = machine.driver_data<vmetal_state>();
-	UINT16 tile, color, data = state->m_mid1tileram[tile_index];
-
-	get_vmetal_tlookup(machine, data, &tile, &color);
-
-	if (data & 0x8000)
-		tile = 0;
-
+	UINT16 tile, color, data = vmetal_mid1tileram[tile_index];
+	get_vmetal_tlookup(data, &tile, &color);
+	if (data & 0x8000) tile = 0;
 	SET_TILE_INFO(0, tile, color, TILE_FLIPYX(0x0));
 }
-
 static TILE_GET_INFO( get_vmetal_mid2tilemap_tile_info )
 {
-	vmetal_state *state = machine.driver_data<vmetal_state>();
-	UINT16 tile, color, data = state->m_mid2tileram[tile_index];
-
-	get_vmetal_tlookup(machine, data, &tile, &color);
-
-	if (data & 0x8000)
-		tile = 0;
-
+	UINT16 tile, color, data = vmetal_mid2tileram[tile_index];
+	get_vmetal_tlookup(data, &tile, &color);
+	if (data & 0x8000) tile = 0;
 	SET_TILE_INFO(0, tile, color, TILE_FLIPYX(0x0));
 }
 
 static VIDEO_START(varia)
 {
-	vmetal_state *state = machine.driver_data<vmetal_state>();
-
-	state->m_texttilemap = tilemap_create(machine, get_vmetal_texttilemap_tile_info, tilemap_scan_rows,  8,  8, 256, 256);
-	state->m_mid1tilemap = tilemap_create(machine, get_vmetal_mid1tilemap_tile_info, tilemap_scan_rows, 16, 16, 256, 256);
-	state->m_mid2tilemap = tilemap_create(machine, get_vmetal_mid2tilemap_tile_info, tilemap_scan_rows, 16, 16, 256, 256);
-
-	state->m_texttilemap->set_transparent_pen(15);
-	state->m_mid1tilemap->set_transparent_pen(15);
-	state->m_mid2tilemap->set_transparent_pen(15);
+	vmetal_texttilemap = tilemap_create(machine, get_vmetal_texttilemap_tile_info,tilemap_scan_rows, 8, 8, 256,256);
+	vmetal_mid1tilemap = tilemap_create(machine, get_vmetal_mid1tilemap_tile_info,tilemap_scan_rows,16,16, 256,256);
+	vmetal_mid2tilemap = tilemap_create(machine, get_vmetal_mid2tilemap_tile_info,tilemap_scan_rows,16,16, 256,256);
+	tilemap_set_transparent_pen(vmetal_texttilemap,15);
+	tilemap_set_transparent_pen(vmetal_mid1tilemap,15);
+	tilemap_set_transparent_pen(vmetal_mid2tilemap,15);
 }
 
-static SCREEN_UPDATE_IND16(varia)
+static VIDEO_UPDATE(varia)
 {
-	vmetal_state *state = screen.machine().driver_data<vmetal_state>();
+	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	bitmap.fill(get_black_pen(screen.machine()), cliprect);
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	tilemap_set_scrollx(vmetal_mid2tilemap,0, vmetal_videoregs[0x06a/2]-64 /*+ vmetal_videoregs[0x066/2]*/);
+	tilemap_set_scrollx(vmetal_mid1tilemap,0, vmetal_videoregs[0x07a/2]-64 /*+ vmetal_videoregs[0x076/2]*/);
+	tilemap_set_scrollx(vmetal_texttilemap,0, -64 /*+ vmetal_videoregs[0x076/2]*/);
 
-	state->m_mid2tilemap->set_scrollx(0, state->m_vmetal_videoregs[0x06a/2]-64 /*+ state->m_vmetal_videoregs[0x066/2]*/);
-	state->m_mid1tilemap->set_scrollx(0, state->m_vmetal_videoregs[0x07a/2]-64 /*+ state->m_vmetal_videoregs[0x076/2]*/);
-	state->m_texttilemap->set_scrollx(0, -64 /*+ state->m_vmetal_videoregs[0x076/2]*/);
+	tilemap_set_scrolly(vmetal_mid2tilemap,0, -64 );
+	tilemap_set_scrolly(vmetal_mid1tilemap,0, -64 );
+	tilemap_set_scrolly(vmetal_texttilemap,0, -64 );
 
-	state->m_mid2tilemap->set_scrolly(0, -64);
-	state->m_mid1tilemap->set_scrolly(0, -64);
-	state->m_texttilemap->set_scrolly(0, -64);
-
-	state->m_mid1tilemap->draw(bitmap, cliprect, 0, 0);
-	state->m_mid2tilemap->draw(bitmap, cliprect, 0, 0);
-	metro_draw_sprites(screen.machine(), bitmap, cliprect);
-	state->m_texttilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,vmetal_mid1tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,vmetal_mid2tilemap,0,0);
+	metro_draw_sprites(screen->machine, bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,vmetal_texttilemap,0,0);
 	return 0;
 }
 
+static MACHINE_DRIVER_START( varia )
+	MDRV_CPU_ADD("maincpu", M68000, 16000000)
+	MDRV_CPU_PROGRAM_MAP(varia_program_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold) // also level 3
 
-static MACHINE_CONFIG_START( varia, vmetal_state )
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)
-	MCFG_CPU_PROGRAM_MAP(varia_program_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold) // also level 3
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(2048, 2048)
+	MDRV_SCREEN_VISIBLE_AREA(0+64, 319+64, 0+64, 223+64)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(2048, 2048)
-	MCFG_SCREEN_VISIBLE_AREA(0+64, 319+64, 0+64, 223+64)
-	MCFG_SCREEN_UPDATE_STATIC(varia)
+	MDRV_GFXDECODE(vmetal)
+	MDRV_PALETTE_LENGTH(0x4000)
 
-	MCFG_GFXDECODE(vmetal)
-	MCFG_PALETTE_LENGTH(0x4000)
+	MDRV_VIDEO_START(varia)
+	MDRV_VIDEO_UPDATE(varia)
 
-	MCFG_VIDEO_START(varia)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SOUND_ADD("oki", OKIM6295, 1320000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MCFG_OKIM6295_ADD("oki", 1320000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
-
-	MCFG_SOUND_ADD("essnd", ES8712, 12000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("es", ES8712, 12000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
 
 ROM_START( vmetal )
@@ -487,7 +471,7 @@ ROM_START( vmetal )
 	/* Second half is junk */
 	ROM_LOAD( "8.u9", 0x00000, 0x80000, CRC(c14c001c) SHA1(bad96b5cd40d1c34ef8b702262168ecab8192fb6) )
 
-	ROM_REGION( 0x200000, "essnd", 0 ) /* Samples */
+	ROM_REGION( 0x200000, "es", 0 ) /* Samples */
 	ROM_LOAD( "7.u12", 0x00000, 0x200000, CRC(a88c52f1) SHA1(d74a5a11f84ba6b1042b33a2c156a1071b6fbfe1) )
 ROM_END
 
@@ -506,10 +490,9 @@ ROM_START( vmetaln )
 	/* Second half is junk */
 	ROM_LOAD( "8.u9", 0x00000, 0x80000, CRC(c14c001c) SHA1(bad96b5cd40d1c34ef8b702262168ecab8192fb6) )
 
-	ROM_REGION( 0x200000, "essnd", 0 ) /* Samples */
+	ROM_REGION( 0x200000, "es", 0 ) /* Samples */
 	ROM_LOAD( "7.u12", 0x00000, 0x200000, CRC(a88c52f1) SHA1(d74a5a11f84ba6b1042b33a2c156a1071b6fbfe1) )
 ROM_END
 
-
-GAME( 1995, vmetal,  0,      varia, varia, 0, ROT270, "Excellent System",                                "Varia Metal",                        GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1995, vmetaln, vmetal, varia, varia, 0, ROT270, "Excellent System (New Ways Trading Co. license)", "Varia Metal (New Ways Trading Co.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1995, vmetal,  0,      varia, varia, 0, ROT270, "Excellent Systems",                        "Varia Metal",                        GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, vmetaln, vmetal, varia, varia, 0, ROT270, "[Excellent Systems] New Ways Trading Co.", "Varia Metal (New Ways Trading Co.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

@@ -1,4 +1,4 @@
-#include "emu.h"
+#include "driver.h"
 #include "cpu/mcs48/mcs48.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/nes_apu.h"
@@ -6,7 +6,6 @@
 #include "machine/latch8.h"
 
 #include "sound/tms5110.h"
-#include "machine/tms6100.h"
 
 #include "includes/dkong.h"
 
@@ -21,8 +20,10 @@
 /* Set to 1 to use faster custom mixer */
 #define		DK_USE_CUSTOM	(1)
 
+#define USE_LS629	(0)		/* set to use new LS624 code */
+
 /* Issue surrounded by this define need to be analyzed and
- * reviewed at a later time.
+ * reviewed at a lator time.
  * Currently, the following issues exist:
  * - although not present on schematics, a 10K resistor is needed
  *   as RF in the mixer stage. Without this resistor, the DAC
@@ -99,8 +100,8 @@
 
 /* Resistors */
 
-#define DK_R1		RES_K(47)
-#define DK_R2		RES_K(47)
+#define DK_R1 		RES_K(47)
+#define DK_R2 		RES_K(47)
 #define DK_R3		RES_K(5.1)
 #define DK_R4		RES_K(2)
 #define DK_R5		750
@@ -108,8 +109,8 @@
 #define DK_R7		RES_K(10)
 #define DK_R8		RES_K(100)
 #define DK_R9		RES_K(10)
-#define DK_R10		RES_K(10)
-#define DK_R14		RES_K(47)
+#define DK_R10 		RES_K(10)
+#define DK_R14 		RES_K(47)
 
 #define DK_R15		RES_K(5.6)
 #define DK_R16		RES_K(5.6)
@@ -118,15 +119,15 @@
 #define DK_R20		RES_K(10)
 #define DK_R21		RES_K(5.6)
 #define DK_R22		RES_K(5.6)
-#define DK_R24		RES_K(47)
+#define DK_R24 		RES_K(47)
 #define DK_R25		RES_K(5.1)
 #define DK_R26		RES_K(2)
 #define DK_R27		150
 #define DK_R28		RES_K(4.7)
 #define DK_R29		RES_K(10)
 #define DK_R30		RES_K(100)
-#define DK_R31		RES_K(10)
-#define DK_R32		RES_K(10)
+#define DK_R31 		RES_K(10)
+#define DK_R32 		RES_K(10)
 #define DK_R35		RES_K(1)
 #define DK_R36		RES_K(1)
 #define DK_R38		RES_K(18)
@@ -237,16 +238,16 @@ static const discrete_555_desc dkong_555_vco_desc =
 	DK_SUP_V - 0.5
 };
 
-static const discrete_dss_inverter_osc_node::description dkong_inverter_osc_desc_jump =
+static const discrete_inverter_osc_desc dkong_inverter_osc_desc_jump =
 {
 	DEFAULT_CD40XX_VALUES(DK_SUP_V),
-	discrete_dss_inverter_osc_node::IS_TYPE1
+	DISC_OSC_INVERTER_IS_TYPE1
 };
 
-static const discrete_dss_inverter_osc_node::description dkong_inverter_osc_desc_walk =
+static const discrete_inverter_osc_desc dkong_inverter_osc_desc_walk =
 {
 	DEFAULT_CD40XX_VALUES(DK_SUP_V),
-	discrete_dss_inverter_osc_node::IS_TYPE2
+	DISC_OSC_INVERTER_IS_TYPE2
 };
 
 static const discrete_op_amp_filt_info dkong_sallen_key_info =
@@ -294,51 +295,59 @@ static const discrete_op_amp_filt_info dkong_sallen_key_info =
 #define DKONG_CUSTOM_C			DISCRETE_INPUT(6)
 #define DKONG_CUSTOM_V			DISCRETE_INPUT(7)
 
-DISCRETE_CLASS_STEP_RESET(dkong_custom_mixer, 1,
-	double m_i_in1[2];
-	double m_r_in[2];
-	double m_r_total[2];
-	double m_exp[2];
-	double m_out_v;
-);
-
-DISCRETE_STEP( dkong_custom_mixer )
+struct dkong_custom_mixer_context
 {
+	double i_in1[2];
+	double r_in[2];
+	double r_total[2];
+	double exp[2];
+};
+
+static DISCRETE_STEP( dkong_custom_mixer )
+{
+	struct dkong_custom_mixer_context *context = (struct dkong_custom_mixer_context *)node->context;
+
 	int		in_1    = (int)DKONG_CUSTOM_IN1;
 
 	/* start of with 555 current */
 	double	i_total = DKONG_CUSTOM_V / RES_K(5);
 	/* add in current from In1 */
-	i_total += m_i_in1[in_1];
+	i_total += context->i_in1[in_1];
 	/* add in current from In2 */
 	i_total += DKONG_CUSTOM_IN2 / DKONG_CUSTOM_R3;
 	/* charge cap */
-	/* node->output is cap voltage, (i_total * m_r_total[in_1]) is current charge voltage */
-	m_out_v += (i_total * m_r_total[in_1] - m_out_v) * m_exp[in_1];
-	set_output(0, m_out_v);
+	/* node->output is cap voltage, (i_total * context->r_total[in_1]) is current charge voltage */
+	node->output[0] += (i_total * context->r_total[in_1] - node->output[0]) * context->exp[in_1];
 }
 
 #define	NE555_CV_R		RES_2_PARALLEL(RES_K(5), RES_K(10))
 
-DISCRETE_RESET( dkong_custom_mixer )
+static DISCRETE_RESET( dkong_custom_mixer )
 {
+	struct dkong_custom_mixer_context *context = (struct dkong_custom_mixer_context *)node->context;
+
 	/* everything is based on the input to the O.C. inverter */
 	/* precalculate current from In1 */
-	m_i_in1[0] = DKONG_CUSTOM_V / (DKONG_CUSTOM_R1 + DKONG_CUSTOM_R2);
-	m_i_in1[1] = 0;
+	context->i_in1[0] = DKONG_CUSTOM_V / (DKONG_CUSTOM_R1 + DKONG_CUSTOM_R2);
+	context->i_in1[1] = 0;
 	/* precalculate total resistance for input circuit */
-	m_r_in[0] = RES_2_PARALLEL((DKONG_CUSTOM_R1 + DKONG_CUSTOM_R2), DKONG_CUSTOM_R3);
-	m_r_in[1] = RES_2_PARALLEL(DKONG_CUSTOM_R2, DKONG_CUSTOM_R3);
+	context->r_in[0] = RES_2_PARALLEL((DKONG_CUSTOM_R1 + DKONG_CUSTOM_R2), DKONG_CUSTOM_R3);
+	context->r_in[1] = RES_2_PARALLEL(DKONG_CUSTOM_R2, DKONG_CUSTOM_R3);
 	/* precalculate total charging resistance */
-	m_r_total[0] = RES_2_PARALLEL(m_r_in[0] + DKONG_CUSTOM_R4, NE555_CV_R);
-	m_r_total[1] = RES_2_PARALLEL((m_r_in[1] + DKONG_CUSTOM_R4), NE555_CV_R);
+	context->r_total[0] = RES_2_PARALLEL(context->r_in[0] + DKONG_CUSTOM_R4, NE555_CV_R);
+	context->r_total[1] = RES_2_PARALLEL((context->r_in[1] + DKONG_CUSTOM_R4), NE555_CV_R);
 	/* precalculate charging exponents */
-	m_exp[0] = RC_CHARGE_EXP(m_r_total[0] * DKONG_CUSTOM_C);
-	m_exp[1] = RC_CHARGE_EXP(m_r_total[1] * DKONG_CUSTOM_C);
+	context->exp[0] = RC_CHARGE_EXP(context->r_total[0] * DKONG_CUSTOM_C);
+	context->exp[1] = RC_CHARGE_EXP(context->r_total[1] * DKONG_CUSTOM_C);
 
-	m_out_v = 0;
+	node->output[0] = 0;
 }
 
+static const discrete_custom_info dkong_custom_mixer_info =
+{
+	DISCRETE_CUSTOM_MODULE( dkong_custom_mixer, struct dkong_custom_mixer_context),
+	NULL
+};
 #endif
 
 static DISCRETE_SOUND_START(dkong2b)
@@ -386,11 +395,11 @@ static DISCRETE_SOUND_START(dkong2b)
 
 #if DK_USE_CUSTOM
 	/* custom mixer for 555 CV voltage */
-	DISCRETE_CUSTOM8(NODE_28, dkong_custom_mixer, DS_SOUND1_INV, NODE_25,
-				DK_R32, DK_R50, DK_R51, DK_R49, DK_C24, DK_SUP_V, NULL)
+	DISCRETE_CUSTOM8(NODE_28, DS_SOUND1_INV, NODE_25,
+				DK_R32, DK_R50, DK_R51, DK_R49, DK_C24, DK_SUP_V, &dkong_custom_mixer_info)
 #else
-	DISCRETE_LOGIC_INVERT(DS_SOUND1,DS_SOUND1_INV)
-	DISCRETE_MULTIPLY(NODE_24,DS_SOUND1,DK_SUP_V)
+	DISCRETE_LOGIC_INVERT(DS_SOUND1,1,DS_SOUND1_INV)
+	DISCRETE_MULTIPLY(NODE_24,1,DS_SOUND1,DK_SUP_V)
 	DISCRETE_TRANSFORM3(NODE_26,DS_SOUND1,DK_R32,DK_R49+DK_R50,"01*2+")
 	DISCRETE_MIXER4(NODE_28, 1, NODE_24, NODE_25, DK_SUP_V, 0,&dkong_rc_jump_desc)
 #endif
@@ -418,11 +427,11 @@ static DISCRETE_SOUND_START(dkong2b)
 
 #if DK_USE_CUSTOM
 	/* custom mixer for 555 CV voltage */
-	DISCRETE_CUSTOM8(NODE_54, dkong_custom_mixer, DS_SOUND0_INV, NODE_51,
-				DK_R36, DK_R45, DK_R46, DK_R44, DK_C29, DK_SUP_V, NULL)
+	DISCRETE_CUSTOM8(NODE_54, DS_SOUND0_INV, NODE_51,
+				DK_R36, DK_R45, DK_R46, DK_R44, DK_C29, DK_SUP_V, &dkong_custom_mixer_info)
 #else
-	DISCRETE_LOGIC_INVERT(DS_SOUND0,DS_SOUND0_INV)
-	DISCRETE_MULTIPLY(NODE_50,DS_SOUND0,DK_SUP_V)
+	DISCRETE_LOGIC_INVERT(DS_SOUND0,1,DS_SOUND0_INV)
+	DISCRETE_MULTIPLY(NODE_50,1,DS_SOUND0,DK_SUP_V)
 	DISCRETE_TRANSFORM3(NODE_52,DS_SOUND0,DK_R46,R_SERIES(DK_R44,DK_R45),"01*2+")
 	DISCRETE_MIXER4(NODE_54, 1, NODE_50, NODE_51, DK_SUP_V, 0,&dkong_rc_walk_desc)
 #endif
@@ -442,7 +451,7 @@ static DISCRETE_SOUND_START(dkong2b)
 
 	DISCRETE_TASK_START(1)
 	/* Mixing - DAC */
-	DISCRETE_ADJUSTMENT(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
+	DISCRETE_ADJUSTMENT_TAG(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
 
 	/* Buffer DAC first to input stream 0 */
 	DISCRETE_INPUT_BUFFER(DS_DAC, 0)
@@ -609,14 +618,14 @@ static const discrete_mixer_desc radarscp_mixer_desc_7 =
 
 #define radarscp_555_vco_desc  dkong_555_vco_desc
 
-static const discrete_dss_inverter_osc_node::description radarscp_inverter_osc_desc_0 =
+static const discrete_inverter_osc_desc radarscp_inverter_osc_desc_0 =
 	{DEFAULT_CD40XX_VALUES(DK_SUP_V),
-	discrete_dss_inverter_osc_node::IS_TYPE2
+	DISC_OSC_INVERTER_IS_TYPE2
 	};
 
-static const discrete_dss_inverter_osc_node::description radarscp_inverter_osc_desc_7 =
+static const discrete_inverter_osc_desc radarscp_inverter_osc_desc_7 =
 	{DEFAULT_CD40XX_VALUES(DK_SUP_V),
-	discrete_dss_inverter_osc_node::IS_TYPE3
+	DISC_OSC_INVERTER_IS_TYPE3
 	};
 
 static DISCRETE_SOUND_START(radarscp)
@@ -638,7 +647,7 @@ static DISCRETE_SOUND_START(radarscp)
 	//DISCRETE_INPUT_DATA(DS_DAC)
 
 	/* Mixing - DAC */
-	DISCRETE_ADJUSTMENT(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
+	DISCRETE_ADJUSTMENT_TAG(DS_ADJ_DAC, 0, 1, DISC_LINADJ, "VR2")
 
 	/************************************************/
 	/* SIGNALS                                      */
@@ -778,16 +787,13 @@ DISCRETE_SOUND_END
 #define JR_R25		RES_K(47)
 #define JR_R27		RES_K(10)
 #define JR_R28		RES_K(100)
-#define JR_R33		RES_K(1)
-#define JR_R34		RES_K(1)
-#define JR_R35		RES_K(1)
 
 
 #define JR_C13		CAP_U(4.7)
 #define JR_C14		CAP_U(4.7)
 #define JR_C15		CAP_U(22)
 #define JR_C16		CAP_U(3.3)
-#define JR_C17		CAP_U(3.3)
+#define JR_C17		CAP_U(3.3) /* ??? illegible */
 #define JR_C18		CAP_N(22)
 #define JR_C19		CAP_N(4.7)
 #define JR_C20		CAP_U(0.12)
@@ -818,22 +824,36 @@ DISCRETE_SOUND_END
 #define DISCRETE_LS123_INV(_N, _T, _R, _C) \
 	DISCRETE_ONESHOTR(_N, 0, _T, TTL_HIGH, (0.25 * (_R) * (_C) * (1.0+700./(_R))), DISC_ONESHOT_RETRIG | DISC_ONESHOT_REDGE | DISC_OUT_ACTIVE_LOW)
 
+#define DISCRETE_ENERGY_NAND(_N, _N1, _N2) DISCRETE_TRANSFORM3(_N, _N1, _N2, 1, "201*-")
+
 static const discrete_mixer_desc dkongjr_mixer_desc =
 	{DISC_MIXER_IS_RESISTOR,
 		{JR_R5, JR_R3, JR_R6, JR_R4, JR_R25},
 		{0,0,0,0,0},	/* no variable resistors */
-		{0,0,0,0,0},	/* no node capacitors */
+		{0,0,0,0,0},  /* no node capacitors */
 		0, 0,
-		JR_C155,		/* cF */
-		JR_C161,		/* cAmp */
+		JR_C155,
+		JR_C161,
 		0, 1};
 
+#if (USE_LS629)
 static const discrete_mixer_desc dkongjr_s1_mixer_desc =
 {
 	DISC_MIXER_IS_RESISTOR,
 	{JR_R13, JR_R12},
 	{0}, {0}, 0, 0, JR_C24, 0, 0, 1		/* r_node{}, c{}, rI, rF, cF, cAmp, vRef, gain */
 };
+#else
+static const discrete_mixer_desc dkongjr_s1_mixer_desc =
+	{DISC_MIXER_IS_RESISTOR,
+		{JR_R13, JR_R12},
+		{0,0},	/* no variable resistors */
+		{0,0},  /* no node capacitors */
+		0, RES_K(90), /* Internal LS624 resistors ... */
+		JR_C24,
+		0,
+		0, 1};
+#endif
 
 static const discrete_lfsr_desc dkongjr_lfsr =
 {
@@ -850,8 +870,6 @@ static const discrete_lfsr_desc dkongjr_lfsr =
 	0			          /* Output bit */
 };
 
-#define DS_SOUND9_EN	DS_SOUND9_INV
-
 static DISCRETE_SOUND_START(dkongjr)
 
 	/************************************************/
@@ -859,103 +877,74 @@ static DISCRETE_SOUND_START(dkongjr)
 	/************************************************/
 
 	/* DISCRETE_INPUT_DATA */
-	DISCRETE_INPUT_NOT(DS_SOUND0_INV)		/* IC 6J, pin 2 */
-	DISCRETE_INPUT_NOT(DS_SOUND1_INV)		/* IC 6J, pin 12 */
-	DISCRETE_INPUT_NOT(DS_SOUND2_INV)		/* IC 6J, pin 4 */
-	DISCRETE_INPUT_NOT(DS_SOUND6_INV)		/* unused */
-	DISCRETE_INPUT_NOT(DS_SOUND7_INV)		/* IC 5J, pin 12 */
-	DISCRETE_INPUT_LOGIC(DS_SOUND9_EN)		/* IC 7N pin 10 from IC 5J, pin 4 */
-	DISCRETE_INPUT_NOT(DS_DISCHARGE_INV)	/* IC 7H, pin 38 */
+	DISCRETE_INPUT_NOT(DS_SOUND0_INV)
+	DISCRETE_INPUT_NOT(DS_SOUND1_INV)
+	DISCRETE_INPUT_NOT(DS_SOUND2_INV)
+	DISCRETE_INPUT_NOT(DS_SOUND6_INV)
+	DISCRETE_INPUT_NOT(DS_SOUND7_INV)
+	DISCRETE_INPUTX_NOT(DS_SOUND9_INV, TTL_HIGH, 0, 0)
+	DISCRETE_INPUT_NOT(DS_DISCHARGE_INV)
+	//DISCRETE_INPUT_DATA(DS_DAC)
 
 	/************************************************
-     * SOUND0 - walking
+     * SOUND0 / SOUND7  -
      ************************************************/
 
 DISCRETE_TASK_START(1)
-	DISCRETE_COUNTER(NODE_100,					/* IC 6L */
-		1, 0,									/* ENAB; RESET */
-		NODE_118,								/* CLK - IC 6L, pin 10 */
-		0, 0x3FFF, DISC_COUNT_UP, 0, DISC_CLK_BY_COUNT | DISC_OUT_HAS_XTIME)
+	DISCRETE_LOGIC_INVERT(DS_SOUND7,DS_SOUND7_INV)
+	DISCRETE_COUNTER(NODE_100, 1, 0, NODE_118, 0, 0xFFFF, DISC_COUNT_UP, 0, DISC_CLK_BY_COUNT)
 
-	DISCRETE_BIT_DECODE(NODE_101,				/* IC 6L, pin 6 */
-		NODE_100,  6, 0)						/* output x_time logic */
-	DISCRETE_BIT_DECODE(NODE_102,				/* IC 6L, pin 7 */
-		NODE_100,  3, 0)						/* output x_time logic */
-	DISCRETE_BIT_DECODE(NODE_103,				/* IC 6L, pin 2 */
-		NODE_100, 12, 0)						/* output x_time logic */
-	DISCRETE_BIT_DECODE(NODE_104,				/* IC 6L, pin 1 */
-		NODE_100, 11, 0)						/* output x_time logic */
+	DISCRETE_BIT_DECODE(NODE_101, NODE_100,  6, 1) 	/*LS157 2A */
+	DISCRETE_BIT_DECODE(NODE_102, NODE_100,  3, 1) 	/*LS157 2B */
+	DISCRETE_BIT_DECODE(NODE_103, NODE_100, 12, 1)  /*LS157 3A */
+	DISCRETE_BIT_DECODE(NODE_104, NODE_100, 11, 1)  /*LS157 3B */
 
-	/* LS157 Switches - IC 6K */
-	DISCRETE_SWITCH(NODE_106,						/* IC 6K, pin 7 */
-		1, DS_SOUND7_INV,							/* ENAB; IC 6K, pin 1 */
-		NODE_101, NODE_102)							/* IC 6K, pin 5; pin 6 */
-	DISCRETE_SWITCH(NODE_107,						/* IC 6K, pin 9 */
-		1, DS_SOUND7_INV,							/* ENAB; IC 6K, pin 1 */
-		NODE_103, NODE_104)							/* IC 6K, pin 11; pin 10 */
+	/* LS157 Switches */
+	DISCRETE_SWITCH(NODE_105, 1, DS_SOUND7_INV, GND, NODE_113) /* Switch 1 from LS624 */
+	DISCRETE_SWITCH(NODE_106, 1, DS_SOUND7_INV, NODE_101, NODE_102) /* Switch 2 */
+	DISCRETE_SWITCH(NODE_107, 1, DS_SOUND7_INV, NODE_103, NODE_104) /* Switch 3 */
 
-	DISCRETE_LS123(NODE_110,						/* IC 4K, pin 5 */
-		DS_SOUND0_INV,								/* IC 4K, pin 10 */
-		JR_R8, JR_C14)
-	DISCRETE_SWITCH(NODE_111,						/* IC 4F, pin 10 (inverter) */
-		1, NODE_110,								/* ENAB; IC 4F, pin 11 */
-		4.14, 0.151)								/* INP0; INP1 (measured) */
-
-	/* Breadboarded measurements IC 5K, pin 7
-       D.R. Oct 2010
-        V       Hz
-        0.151   3139
-        0.25    2883
-        0.5     2820
-        0.75    3336
-        1       3805
-        2       6498
-        3       9796
-        4       13440
-        4.14    13980
-    */
-
-	DISCRETE_74LS624(NODE_113,						/* IC 5K, pin 7 */
+	DISCRETE_LS123(NODE_110, DS_SOUND0_INV, JR_R8, JR_C14)
+	DISCRETE_SWITCH(NODE_111,						/* invert voltage */
+		1, NODE_110,								/* ENAB, SWITCH */
+		TTL_HIGH, 0)								/* INP0, INP1 */
+	DISCRETE_RCFILTER(NODE_112, NODE_111, JR_R10, JR_C17)
+#if (USE_LS629)
+	DISCRETE_74LS629(NODE_113,						/* IC 5K, pin 7 */
 		1,											/* ENAB */
-		NODE_111, DK_SUP_V,							/* VMOD - IC 5K, pin 2; VRNG */
-		JR_C18, JR_R10,	JR_C17, JR_R33,				/* C; R_FREQ_IN; C_FREQ_IN; R_RNG_IN */
-		DISC_LS624_OUT_LOGIC_X)
-	DISCRETE_SWITCH(NODE_105,						/* IC 6K, pin 4 */
+		NODE_112, DK_SUP_V,							/* VMOD, VRNG */
+		JR_C18, JR_R10,								/* C, R_FREQ_IN */
+		DISC_LS624_OUT_ENERGY)
+#else
+	DISCRETE_74LS624(NODE_113, NODE_112, DK_SUP_V, JR_C18, DISC_LS624_OUT_ENERGY)
+#endif
+
+	DISCRETE_LOGIC_XOR(NODE_115, NODE_105, NODE_106)
+
+	DISCRETE_SWITCH(NODE_116,						/* invert with TTL voltage */
+		1, NODE_107,								/* ENAB, SWITCH */
+		TTL_HIGH, 0)								/* INP0, INP1 */
+	DISCRETE_RCFILTER(NODE_117, NODE_116, JR_R11, JR_C16)
+#if (0 && USE_LS629)
+	DISCRETE_74LS629(NODE_118,						/* IC 5K, pin 7 */
 		1,											/* ENAB */
-		DS_SOUND7_INV,								/* SWITCH, IC 6K, pin 1 */
-		GND, NODE_113)								/* IC 6K, pin 2; pin 3 */
+		NODE_117, DK_SUP_V,							/* VMOD, VRNG */
+		JR_C19, JR_R11,								/* C, R_FREQ_IN */
+		DISC_LS624_OUT_COUNT_F)
+#else
+	DISCRETE_74LS624(NODE_118, NODE_117, DK_SUP_V, JR_C19, DISC_LS624_OUT_COUNT_F)
+#endif
 
-	DISCRETE_XTIME_XOR(NODE_115,					/* IC 6N, pin 3 */
-		NODE_105, NODE_106,							/* IC 6N, pin 1; pin 2 */
-		0, 0)										/* use x_time logic */
+//DISCRETE_74LS629(NODE_30,                     /* IC 5K, pin 7 */
+//      1,                                          /* ENAB */
+//      NODE_117, DK_SUP_V,                         /* VMOD, VRNG */
+//      JR_C19, JR_R11,                             /* C, R_FREQ_IN */
+//      DISC_LS624_OUT_COUNT_F)
+//DISCRETE_74LS624(NODE_31, NODE_117, DK_SUP_V, JR_C19, DISC_LS624_OUT_COUNT_F)
+//DISCRETE_WAVELOG2(NODE_30, 1000,NODE_31, 1000)
 
-	DISCRETE_XTIME_INVERTER(NODE_116,				/* IC 5J, pin 8 */
-		NODE_107,									/* IC 5J, pin 9 */
-		0.135, 4.15)								/* measured Low/High */
-
-	/* Breadboarded measurements IC 5K, pin 10
-       D.R. Oct 2010
-        V       Hz
-        0.135   14450 - measured 74LS04 low
-        0.25    13320
-        0.5     12980
-        0.75    15150
-        1       17270
-        2       28230
-        3       41910
-        4       56950
-        4.15    59400 - measured 74LS04 high
-    */
-
-	DISCRETE_74LS624(NODE_118,						/* IC 5K, pin 10 */
-		1,											/* ENAB */
-		NODE_116, DK_SUP_V,							/* VMOD - IC 5K, pin 1; VRNG */
-		JR_C19, JR_R11, JR_C16, JR_R33,				/* C; R_FREQ_IN; C_FREQ_IN; R_RNG_IN */
-		DISC_LS624_OUT_COUNT_F_X)
-	DISCRETE_SWITCH(NODE_119, 1, NODE_110, 0, 1)	/* convert from voltage to x_time logic */
-	DISCRETE_XTIME_NAND(DS_OUT_SOUND0,				/* IC 5N, pin 11 */
-		NODE_119, NODE_115,							/* IC 5N, pin 13; pin 12 */
-		0.2, 4.9)									/* LOW; HIGH (1k pullup to 5V) */
+	DISCRETE_LOGIC_NAND(NODE_120, NODE_115, NODE_110)
+	DISCRETE_MULTIPLY(DS_OUT_SOUND0, NODE_120, TTL_HIGH)
 DISCRETE_TASK_END()
 
 	/************************************************
@@ -964,51 +953,32 @@ DISCRETE_TASK_END()
 
 DISCRETE_TASK_START(2)
 	/* needs NODE_104 from TASK(1) ready */
-	DISCRETE_LS123(NODE_10,							/* IC 4K, pin 13 */
-		DS_SOUND1_INV,								/* IC 4K, pin 8 */
-		JR_R9, JR_C15)
-	DISCRETE_SWITCH(NODE_11,						/* IC 7N, pin 6 */
-		1, NODE_10,									/* ENAB; SWITCH - IC 7N, pin 5 */
-		0.151, 4.14)								/* measured Low/High */
-	DISCRETE_XTIME_INVERTER(NODE_12,				/* IC 7N, pin 4 */
-		NODE_104,									/* IC 7N, pin 3 */
-		0.151, 4.14)								/* measured Low/High */
-	DISCRETE_MIXER2(NODE_13, 1, NODE_11, NODE_12, &dkongjr_s1_mixer_desc)
-
-	/* Breadboarded measurements IC 8L, pin 10
-       D.R. Oct 2010
-        V       Hz
-        0.151   313
-        0.25    288
-        0.5     275
-        0.75    324
-        1       370
-        2       635
-        3       965
-        4       1325
-        4.14    1378
-    */
-
-	DISCRETE_74LS624(NODE_14,						/* IC 8L, pin 10 */
+	DISCRETE_LS123(NODE_10, DS_SOUND1_INV, JR_R9, JR_C15)
+	DISCRETE_SWITCH(NODE_11,						/* invert with TTL voltage */
+		1, NODE_104,								/* ENAB, SWITCH */
+		TTL_HIGH, 0)								/* INP0, INP1 */
+	DISCRETE_LOGIC_INVERT(NODE_12, NODE_10)
+	DISCRETE_MIXER2(NODE_13, 1, NODE_10, NODE_11, &dkongjr_s1_mixer_desc)
+#if (USE_LS629)
+	DISCRETE_74LS629(NODE_14,						/* IC 8L, pin 10 */
 		1,											/* ENAB */
-		NODE_13, DK_SUP_V,							/* VMOD - IC 8L, pin 1, VRNG */
-		/* C_FREQ_IN is taken care of by the NODE_13 mixer */
-		JR_C22, RES_2_PARALLEL(JR_R13, JR_R12), 0, JR_R35,	/* C; R_FREQ_IN; C_FREQ_IN; R_RNG_IN */
+		NODE_13, DK_SUP_V,							/* VMOD, VRNG */
+		JR_C22, RES_2_PARALLEL(JR_R12, JR_R13),		/* C, R_FREQ_IN */
 		DISC_LS624_OUT_ENERGY)
-
-	DISCRETE_LOGIC_INVERT(NODE_15, NODE_10)			/* fake invert for NODE_16 */
-	DISCRETE_RCDISC_MODULATED(NODE_16,				/* Q3, collector */
-		NODE_15, NODE_14, 120, JR_R27, RES_K(0.001), JR_R28, JR_C28, DK_SUP_V)
+#else
+	DISCRETE_74LS624( NODE_14, NODE_13, 0.98*DK_SUP_V, JR_C22, DISC_LS624_OUT_ENERGY)
+#endif
+	DISCRETE_RCDISC_MODULATED(NODE_15, NODE_12, NODE_14, 120, JR_R27, RES_K(0.001), JR_R28, JR_C28, DK_SUP_V)
 	/* The following circuit does not match 100%, however works.
      * To be exact, we need a C-R-C-R circuit, we actually do not have.
      */
-	DISCRETE_CRFILTER_VREF(NODE_17, NODE_16, JR_R4, JR_C23, 2.5)
-	DISCRETE_RCFILTER(DS_OUT_SOUND1, NODE_17, JR_R19, JR_C21)
+	DISCRETE_CRFILTER_VREF(NODE_16, NODE_15, JR_R4, JR_C23, 2.5)
+	DISCRETE_RCFILTER(DS_OUT_SOUND1, NODE_16, JR_R19, JR_C21)
 DISCRETE_TASK_END()
 
-	/************************************************
-     * SOUND2 - climbing
-     ************************************************/
+	/************************************************/
+	/* SOUND2                                       */
+	/************************************************/
 
 DISCRETE_TASK_START(1)
 	/* the noise source clock is a 74LS629 IC 7P, pin 10.
@@ -1017,12 +987,9 @@ DISCRETE_TASK_START(1)
      * So for speed, I breadboarded and measured the frequency.
      * Oct 2009, D.R.
      */
-	DISCRETE_LFSR_NOISE(NODE_21, 1, 1, 710, 1.0, 0, 0.5, &dkongjr_lfsr)		/* IC 3J & 4J */
-	DISCRETE_LS123_INV(NODE_25,						/* IC 8N, pin 13 (fake inverted for use by NODE_26) */
-		DS_SOUND2_INV,								/* IC 8N, pin 8 */
-		JR_R17, JR_C27)
-	DISCRETE_RCDISC_MODULATED(NODE_26,				/* Q2, collector */
-		NODE_25, NODE_21, 120, JR_R24, RES_K(0.001), JR_R18, JR_C29, DK_SUP_V)
+	DISCRETE_LFSR_NOISE(NODE_21, 1, 1, 710, 1.0, 0, 0.5, &dkongjr_lfsr)
+	DISCRETE_LS123_INV(NODE_25, DS_SOUND2_INV, JR_R17, JR_C27)
+	DISCRETE_RCDISC_MODULATED(NODE_26, NODE_25, NODE_21, 120, JR_R24, RES_K(0.001), JR_R18, JR_C29, DK_SUP_V)
 	/* The following circuit does not match 100%, however works.
      * To be exact, we need a C-R-C-R circuit, we actually do not have.
      */
@@ -1035,37 +1002,26 @@ DISCRETE_TASK_END()
      ************************************************/
 
 DISCRETE_TASK_START(1)
-	DISCRETE_XTIME_INVERTER(NODE_90,		/* IC 7N, pin 8 */
-		DS_SOUND9_EN,						/* IC 7N, pin 9 */
-		0.134, 4.16)						/* measured Low/High */
-
-	/* Breadboarded measurements IC 7P, pin 7
-       D.R. Oct 2010
-        V       Hz
-        0.134   570
-        0.25    538
-        0.5     489
-        0.75    560
-        1       636
-        2       1003
-        3       1484
-        4       2016
-        4.16    2111
-    */
-	DISCRETE_74LS624(NODE_91,				/* IC 7P, pin 7 */
+#if (USE_LS629)
+	DISCRETE_RCFILTER(NODE_90, DS_SOUND9_INV, JR_R14, JR_C26)
+	DISCRETE_74LS629(NODE_91,				/* IC 7P, pin 7 */
 		1,									/* ENAB */
-		NODE_90, DK_SUP_V,					/* VMOD - IC 7P, pin 2, VRNG */
-		JR_C37, JR_R14, JR_C26, JR_R34,		/* C; R_FREQ_IN; C_FREQ_IN; R_RNG_IN */
-		DISC_LS624_OUT_LOGIC_X)
-	DISCRETE_XTIME_NAND(DS_OUT_SOUND9,		/* IC 5N, pin 8 */
-		DS_SOUND9_EN,						/* IC 5N, pin 9 */
-		NODE_91,							/* IC 5N, pin 10 */
-		0.2, 4.9)							/* LOW, HIGH (1k pullup to 5V) */
+		NODE_90, DK_SUP_V,					/* VMOD, VRNG */
+		JR_C37, JR_R14,						/* C, R_FREQ_IN */
+		DISC_LS624_OUT_ENERGY)
+	DISCRETE_SWITCH(DS_OUT_SOUND9, 1, DS_SOUND9_INV, NODE_91, 0)
+#else
+	DISCRETE_LOGIC_INVERT(DS_SOUND9, DS_SOUND9_INV)
+	DISCRETE_RCFILTER(NODE_90, DS_SOUND9_INV, JR_R14, JR_C26)
+	DISCRETE_74LS624( NODE_92, NODE_90, DK_SUP_V, JR_C37, DISC_LS624_OUT_ENERGY)
+	DISCRETE_ENERGY_NAND(NODE_93, NODE_92, DS_SOUND9)
+	DISCRETE_MULTIPLY(DS_OUT_SOUND9, NODE_93, TTL_HIGH)
+#endif
 DISCRETE_TASK_END()
 
-	/************************************************
-     * DAC
-     ************************************************/
+	/************************************************/
+	/* DAC                                          */
+	/************************************************/
 
 DISCRETE_TASK_START(1)
 	DISCRETE_INPUT_BUFFER(DS_DAC, 0)
@@ -1085,9 +1041,9 @@ DISCRETE_TASK_START(1)
 	DISCRETE_SALLEN_KEY_FILTER(DS_OUT_DAC, 1, NODE_171, DISC_SALLEN_KEY_LOW_PASS, &dkong_sallen_key_info)
 DISCRETE_TASK_END()
 
-	/************************************************
-     * Amplifier
-     ************************************************/
+	/************************************************/
+	/* Amplifier                                    */
+	/************************************************/
 
 DISCRETE_TASK_START(3)
 	DISCRETE_MIXER5(NODE_288, 1, DS_OUT_SOUND9, DS_OUT_SOUND0, DS_OUT_SOUND2, DS_OUT_SOUND1, DS_OUT_DAC, &dkongjr_mixer_desc)
@@ -1095,13 +1051,8 @@ DISCRETE_TASK_START(3)
 	/* Amplifier: internal amplifier
      * Just a 1:n amplifier without filters - just the output filter
      */
-	DISCRETE_CRFILTER(NODE_295, NODE_288, 1000, JR_C13)
-	/* approx -1.805V to 2.0V when playing, but turn on sound peaks at 2.36V */
-	/* we will set the full wav range to 1.18V which will cause clipping on the turn on
-     * sound and explosions.  The real game would do this when the volume is turned up too.
-     * Reducing MAME's master volume to 50% will provide full unclipped volume.
-     */
-	DISCRETE_OUTPUT(NODE_295, 32767.0/1.18)
+	DISCRETE_CRFILTER(NODE_295,NODE_288, 1000, JR_C13)
+	DISCRETE_OUTPUT(NODE_295, 32767.0/5.0 * 10)
 DISCRETE_TASK_END()
 
 DISCRETE_SOUND_END
@@ -1114,9 +1065,10 @@ DISCRETE_SOUND_END
 
 static SOUND_START( dkong)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 
-	state->m_snd_rom = machine.region("soundcpu")->base();
+	state->snd_rom = memory_region(machine, "soundcpu");
+	state->dev_vp2 = devtag_get_device(machine, "virtual_p2");
 }
 
 
@@ -1189,25 +1141,25 @@ Addresses found at @0x510, cpu2
         { 0x0000, 0x007a, 0x018b, 0x0320, 0x036c, 0x03c4, 0x041c, 0x0520, 0x063e }
     and related samples interface
 
-    static const char *const radarscp1_sample_names[] =
+    static const char *const radarsc1_sample_names[] =
     {
-        "*radarscp1",
-        "10",
-        "12",
-        "14",
-        "16",
-        "18",
-        "1A",
-        "1C",
-        "1E",
-        "20",
+        "*radarsc1",
+        "10.wav",
+        "12.wav",
+        "14.wav",
+        "16.wav",
+        "18.wav",
+        "1A.wav",
+        "1C.wav",
+        "1E.wav",
+        "20.wav",
         0
     };
 
-    static const samples_interface radarscp1_samples_interface =
+    static const samples_interface radarsc1_samples_interface =
     {
         8,
-        radarscp1_sample_names
+        radarsc1_sample_names
     };
 
 */
@@ -1215,7 +1167,7 @@ Addresses found at @0x510, cpu2
 static WRITE8_DEVICE_HANDLER( M58817_command_w )
 {
 	tms5110_ctl_w(device, 0, data & 0x0f);
-	tms5110_pdc_w(device, (data>>4) & 0x01);
+	tms5110_pdc_w(device, 0, (data>>4) & 0x01);
 	/* FIXME 0x20 is CS */
 }
 
@@ -1244,17 +1196,17 @@ static READ8_DEVICE_HANDLER( dkong_voice_status_r )
 
 static READ8_DEVICE_HANDLER( dkong_tune_r )
 {
-	dkong_state *state = device->machine().driver_data<dkong_state>();
-	UINT8 page = latch8_r(state->m_dev_vp2, 0) & 0x47;
+	dkong_state *state = (dkong_state *)device->machine->driver_data;
+	UINT8 page = latch8_r(state->dev_vp2,0) & 0x47;
 
 	if ( page & 0x40 )
 	{
-		return (latch8_r(device, 0) & 0x0F) | (dkong_voice_status_r(device, 0) << 4);
+		return (latch8_r(device, 0) & 0x0F) | (dkong_voice_status_r(device,0)<<4);
 	}
 	else
 	{
-		/* printf("%s:rom access\n",device->machine().describe_context()); */
-		return (state->m_snd_rom[0x1000 + (page & 7) * 256 + offset]);
+		/* printf("%s:rom access\n",cpuexec_describe_context(device->machine)); */
+		return (state->snd_rom[0x1000+(page & 7)*256+offset]);
 	}
 }
 
@@ -1273,9 +1225,9 @@ static WRITE8_DEVICE_HANDLER( dkong_p1_w )
 WRITE8_HANDLER( dkong_audio_irq_w )
 {
 	if (data)
-		cputag_set_input_line(space->machine(), "soundcpu", 0, ASSERT_LINE);
+		cputag_set_input_line(space->machine, "soundcpu", 0, ASSERT_LINE);
 	else
-		cputag_set_input_line(space->machine(), "soundcpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "soundcpu", 0, CLEAR_LINE);
 }
 
 
@@ -1285,11 +1237,11 @@ WRITE8_HANDLER( dkong_audio_irq_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( dkong_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( dkong_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dkong_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( dkong_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0xFF) AM_DEVREAD("ls175.3d", dkong_tune_r)
 						 AM_WRITE(dkong_voice_w)
 	AM_RANGE(MCS48_PORT_BUS, MCS48_PORT_BUS) AM_DEVREAD("ls175.3d", dkong_tune_r)
@@ -1300,7 +1252,7 @@ static ADDRESS_MAP_START( dkong_sound_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_LATCH8_READBIT("ls259.6h", 4)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dkongjr_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( dkongjr_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0xff) AM_LATCH8_READ("ls174.3d")
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_DEVWRITE("discrete", dkong_p1_w) /* only write to dac */
 	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_LATCH8_READWRITE("virtual_p2")
@@ -1308,7 +1260,7 @@ static ADDRESS_MAP_START( dkongjr_sound_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_LATCH8_READBIT("ls259.6h", 4)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( radarscp1_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( radarsc1_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0xff) AM_DEVREAD("ls175.3d", latch8_r)
 	AM_RANGE(0x00, 0xff) AM_DEVWRITE("discrete", dkong_p1_w) /* DAC here */
 	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_LATCH8_READ("virtual_p1")
@@ -1318,7 +1270,7 @@ static ADDRESS_MAP_START( radarscp1_sound_io_map, AS_IO, 8 )
 	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_LATCH8_READBIT("ls259.6h", 4)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dkong3_sound1_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( dkong3_sound1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x4016, 0x4016) AM_LATCH8_READ("latch1")		/* overwrite default */
 	AM_RANGE(0x4017, 0x4017) AM_LATCH8_READ("latch2")
@@ -1327,7 +1279,7 @@ static ADDRESS_MAP_START( dkong3_sound1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dkong3_sound2_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( dkong3_sound2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x01ff) AM_RAM
 	AM_RANGE(0x4016, 0x4016) AM_LATCH8_READ("latch3")		/* overwrite default */
 	AM_RANGE(0x4000, 0x4017) AM_DEVREAD("nes2", nes_psg_r)
@@ -1344,15 +1296,6 @@ ADDRESS_MAP_END
 static const nes_interface nes_interface_1 = { "n2a03a" };
 static const nes_interface nes_interface_2 = { "n2a03b" };
 
-const tms5110_interface tms_interface = {
-	NULL,
-	NULL,
-	DEVCB_DEVICE_LINE("m58819", tms6100_m0_w),
-	DEVCB_DEVICE_LINE("m58819", tms6100_m1_w),
-	DEVCB_DEVICE_HANDLER("m58819", tms6100_addr_w),
-	DEVCB_DEVICE_LINE("m58819", tms6100_data_r),
-	DEVCB_DEVICE_LINE("m58819", tms6100_romclock_w)
-};
 
 /*************************************
  *
@@ -1360,131 +1303,134 @@ const tms5110_interface tms_interface = {
  *
  *************************************/
 
-MACHINE_CONFIG_FRAGMENT( dkong2b_audio )
+MACHINE_DRIVER_START( dkong2b_audio )
 
-	MCFG_SOUND_START( dkong )
+	MDRV_SOUND_START( dkong )
 
 	/* sound latches */
 
-	MCFG_LATCH8_ADD("ls175.3d") /* sound cmd latch */
-	MCFG_LATCH8_MASKOUT(0xf0)
-	MCFG_LATCH8_INVERT(0x0F)
+	MDRV_LATCH8_ADD("ls175.3d") /* sound cmd latch */
+	MDRV_LATCH8_MASKOUT(0xf0)
+	MDRV_LATCH8_INVERT(0x0F)
 
-	MCFG_LATCH8_ADD("ls259.6h")
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 0, DS_SOUND0_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND1_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 2, DS_SOUND2_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 6, DS_SOUND6_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 7, DS_SOUND7_INP)
+	MDRV_LATCH8_ADD("ls259.6h")
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 0, DS_SOUND0_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND1_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 2, DS_SOUND2_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 6, DS_SOUND6_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 7, DS_SOUND7_INP)
 
 	/*   If P2.Bit7 -> is apparently an external signal decay or other output control
-     *   If P2.Bit6 -> activates the external compressed sample ROM (not radarscp1)
-     *   If P2.Bit5 -> Signal ANSN ==> Grid enable (radarscp1)
+     *   If P2.Bit6 -> activates the external compressed sample ROM (not radarsc1)
+     *   If P2.Bit5 -> Signal ANSN ==> Grid enable (radarsc1)
      *   If P2.Bit4 -> status code to main cpu
      *   P2.Bit2-0  -> select the 256 byte bank for external ROM
      */
 
-	MCFG_LATCH8_ADD( "virtual_p2" )	/* virtual latch for port B */
-	MCFG_LATCH8_INVERT( 0x20 )		/* signal is inverted       */
-	MCFG_LATCH8_DEVREAD(5, "ls259.6h", latch8_r, 3)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 7, DS_DISCHARGE_INV)
+	MDRV_LATCH8_ADD( "virtual_p2" )	/* virtual latch for port B */
+	MDRV_LATCH8_INVERT( 0x20 )		/* signal is inverted       */
+	MDRV_LATCH8_DEVREAD(5, "ls259.6h", latch8_r, 3)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 7, DS_DISCHARGE_INV)
 
-	MCFG_CPU_ADD("soundcpu", MB8884, I8035_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(dkong_sound_map)
-	MCFG_CPU_IO_MAP(dkong_sound_io_map)
+	MDRV_CPU_ADD("soundcpu", MB8884, I8035_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(dkong_sound_map)
+	MDRV_CPU_IO_MAP(dkong_sound_io_map)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_DISCRETE_ADD("discrete", 0, dkong2b)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(dkong2b)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-MACHINE_CONFIG_DERIVED( radarscp_audio, dkong2b_audio )
-	MCFG_DISCRETE_REPLACE("discrete", 0, radarscp)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.7)
+MACHINE_DRIVER_START( radarscp_audio )
 
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM( dkong2b_audio )
+	MDRV_SOUND_MODIFY("discrete")
+	MDRV_SOUND_CONFIG_DISCRETE(radarscp)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.7)
+
+MACHINE_DRIVER_END
 
 
-MACHINE_CONFIG_DERIVED( radarscp1_audio, radarscp_audio )
-	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_IO_MAP(radarscp1_sound_io_map)
+MACHINE_DRIVER_START( radarsc1_audio )
+
+	MDRV_IMPORT_FROM( radarscp_audio )
+	MDRV_CPU_MODIFY("soundcpu")
+	MDRV_CPU_IO_MAP(radarsc1_sound_io_map)
 
 	/* virtual_p2 is not read -see memory map-, all bits are output bits */
-	MCFG_LATCH8_ADD( "virtual_p1" )	/* virtual latch for port A */
-	MCFG_LATCH8_INVERT( 0x80 )		/* signal is inverted       */
-	MCFG_LATCH8_DEVREAD(7, "ls259.6h", latch8_r, 3)
-	MCFG_LATCH8_DEVREAD(6, "tms", m58817_status_r, 0)
+	MDRV_LATCH8_ADD( "virtual_p1" )	/* virtual latch for port A */
+	MDRV_LATCH8_INVERT( 0x80 )		/* signal is inverted       */
+	MDRV_LATCH8_DEVREAD(7, "ls259.6h", latch8_r, 3)
+	MDRV_LATCH8_DEVREAD(6, "tms", m58817_status_r, 0)
 
-	/* tms memory controller */
-	MCFG_DEVICE_ADD("m58819", M58819, 0)
+	MDRV_SOUND_ADD("tms", M58817, XTAL_640kHz)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("tms", M58817, XTAL_640kHz)
-	MCFG_DEVICE_CONFIG(tms_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-MACHINE_CONFIG_END
-
-MACHINE_CONFIG_FRAGMENT( dkongjr_audio )
+MACHINE_DRIVER_START( dkongjr_audio )
 
 	/* sound latches */
 
-	MCFG_LATCH8_ADD("ls174.3d")
-	MCFG_LATCH8_MASKOUT(0xE0)
+	MDRV_LATCH8_ADD("ls174.3d")
+	MDRV_LATCH8_MASKOUT(0xE0)
 
-	MCFG_LATCH8_ADD( "ls259.6h")
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 0, DS_SOUND0_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND1_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 2, DS_SOUND2_INP)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 7, DS_SOUND7_INP)
+	MDRV_LATCH8_ADD( "ls259.6h")
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 0, DS_SOUND0_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND1_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 2, DS_SOUND2_INP)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 7, DS_SOUND7_INP)
 
-	MCFG_LATCH8_ADD( "ls259.5h")
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND9_INP)
+	MDRV_LATCH8_ADD( "ls259.5h")
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 1, DS_SOUND9_INP)
 
-	MCFG_LATCH8_ADD( "ls259.4h")
+	MDRV_LATCH8_ADD( "ls259.4h")
 
-	MCFG_LATCH8_ADD( "virtual_p2" )	/* virtual latch for port B */
-	MCFG_LATCH8_INVERT( 0x70 )		/* all signals are inverted */
-	MCFG_LATCH8_DEVREAD(6, "ls259.4h", latch8_r, 1)
-	MCFG_LATCH8_DEVREAD(5, "ls259.6h", latch8_r, 3)
-	MCFG_LATCH8_DEVREAD(4, "ls259.6h", latch8_r, 6)
-	MCFG_LATCH8_DISCRETE_NODE("discrete", 7, DS_DISCHARGE_INV)
+	MDRV_LATCH8_ADD( "virtual_p2" )	/* virtual latch for port B */
+	MDRV_LATCH8_INVERT( 0x70 )		/* all signals are inverted */
+	MDRV_LATCH8_DEVREAD(6, "ls259.4h", latch8_r, 1)
+	MDRV_LATCH8_DEVREAD(5, "ls259.6h", latch8_r, 3)
+	MDRV_LATCH8_DEVREAD(4, "ls259.6h", latch8_r, 6)
+	MDRV_LATCH8_DISCRETE_NODE("discrete", 7, DS_DISCHARGE_INV)
 
-	MCFG_CPU_ADD("soundcpu", MB8884, I8035_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(dkong_sound_map)
-	MCFG_CPU_IO_MAP(dkongjr_sound_io_map)
+	MDRV_CPU_ADD("soundcpu", MB8884, I8035_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(dkong_sound_map)
+	MDRV_CPU_IO_MAP(dkongjr_sound_io_map)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_DISCRETE_ADD("discrete", 0, dkongjr)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(dkongjr)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-MACHINE_CONFIG_FRAGMENT( dkong3_audio )
+MACHINE_DRIVER_START( dkong3_audio )
 
-	MCFG_CPU_ADD("n2a03a", N2A03,N2A03_DEFAULTCLOCK)
-	MCFG_CPU_PROGRAM_MAP(dkong3_sound1_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("n2a03a", N2A03,N2A03_DEFAULTCLOCK)
+	MDRV_CPU_PROGRAM_MAP(dkong3_sound1_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_CPU_ADD("n2a03b", N2A03,N2A03_DEFAULTCLOCK)
-	MCFG_CPU_PROGRAM_MAP(dkong3_sound2_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("n2a03b", N2A03,N2A03_DEFAULTCLOCK)
+	MDRV_CPU_PROGRAM_MAP(dkong3_sound2_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
 	/* sound latches */
-	MCFG_LATCH8_ADD( "latch1")
-	MCFG_LATCH8_ADD( "latch2")
-	MCFG_LATCH8_ADD( "latch3")
+	MDRV_LATCH8_ADD( "latch1")
+	MDRV_LATCH8_ADD( "latch2")
+	MDRV_LATCH8_ADD( "latch3")
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("nes1", NES, N2A03_DEFAULTCLOCK)
-	MCFG_SOUND_CONFIG(nes_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("nes1", NES, N2A03_DEFAULTCLOCK)
+	MDRV_SOUND_CONFIG(nes_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("nes2", NES, N2A03_DEFAULTCLOCK)
-	MCFG_SOUND_CONFIG(nes_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("nes2", NES, N2A03_DEFAULTCLOCK)
+	MDRV_SOUND_CONFIG(nes_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 

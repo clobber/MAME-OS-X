@@ -17,6 +17,8 @@
 #define __TMS32010_H__
 
 
+#include "cpuintrf.h"
+
 
 
 /****************************************************************************
@@ -31,6 +33,11 @@
 #define TMS32010_INT_PENDING	0x80000000
 #define TMS32010_INT_NONE		0
 
+#define  TMS32010_ADDR_MASK  0x0fff		/* TMS32010 can only address 0x0fff */
+										/* however other TMS3201x devices   */
+										/* can address up to 0xffff (incase */
+										/* their support is ever added).    */
+
 
 enum
 {
@@ -44,9 +51,8 @@ enum
  *  Public Functions
  */
 
-DECLARE_LEGACY_CPU_DEVICE(TMS32010, tms32010);
-DECLARE_LEGACY_CPU_DEVICE(TMS32015, tms32015);
-DECLARE_LEGACY_CPU_DEVICE(TMS32016, tms32016);
+CPU_GET_INFO( tms32010 );
+#define CPU_TMS32010 CPU_GET_INFO_NAME( tms32010 )
 
 
 CPU_DISASSEMBLE( tms32010 );

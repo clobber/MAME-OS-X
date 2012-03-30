@@ -3,8 +3,8 @@
     audio\bsktball.c
 
 *************************************************************************/
-#include "emu.h"
-#include "includes/bsktball.h"
+#include "driver.h"
+#include "bsktball.h"
 #include "sound/discrete.h"
 
 /***************************************************************************

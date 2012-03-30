@@ -12,52 +12,51 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "includes/madmotor.h"
-#include "video/decbac06.h"
-#include "video/decmxc06.h"
+
+VIDEO_START( madmotor );
+VIDEO_UPDATE( madmotor );
+
+WRITE16_HANDLER( madmotor_pf1_data_w );
+WRITE16_HANDLER( madmotor_pf2_data_w );
+WRITE16_HANDLER( madmotor_pf3_data_w );
+extern UINT16 *madmotor_pf1_rowscroll;
+extern UINT16 *madmotor_pf1_data,*madmotor_pf2_data,*madmotor_pf3_data;
+extern UINT16 *madmotor_pf1_control,*madmotor_pf2_control,*madmotor_pf3_control;
 
 /******************************************************************************/
 
 static WRITE16_HANDLER( madmotor_sound_w )
 {
-	madmotor_state *state = space->machine().driver_data<madmotor_state>();
-
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data & 0xff);
-		device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
 	}
 }
 
 
 /******************************************************************************/
 
-
-static ADDRESS_MAP_START( madmotor_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( madmotor_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x180000, 0x180007) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_0_w)							/* text layer */
-	AM_RANGE(0x180010, 0x180017) AM_DEVWRITE("tilegen1", deco_bac06_pf_control_1_w)
-	AM_RANGE(0x184000, 0x18407f) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_colscroll_r, deco_bac06_pf_colscroll_w)
-	AM_RANGE(0x184080, 0x1843ff) AM_RAM
-	AM_RANGE(0x184400, 0x1847ff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_rowscroll_r, deco_bac06_pf_rowscroll_w)
-	AM_RANGE(0x188000, 0x189fff) AM_DEVREADWRITE("tilegen1", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x180000, 0x18001f) AM_WRITEONLY AM_BASE(&madmotor_pf1_control)
+	AM_RANGE(0x184000, 0x1847ff) AM_RAM AM_BASE(&madmotor_pf1_rowscroll)
+	AM_RANGE(0x188000, 0x189fff) AM_RAM_WRITE(madmotor_pf1_data_w) AM_BASE(&madmotor_pf1_data)
 	AM_RANGE(0x18c000, 0x18c001) AM_NOP
-	AM_RANGE(0x190000, 0x190007) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_0_w)							/* text layer */
-	AM_RANGE(0x190010, 0x190017) AM_DEVWRITE("tilegen2", deco_bac06_pf_control_1_w)
-	AM_RANGE(0x198000, 0x1987ff) AM_DEVREADWRITE("tilegen2", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x190000, 0x19001f) AM_WRITEONLY AM_BASE(&madmotor_pf2_control)
+	AM_RANGE(0x198000, 0x1987ff) AM_RAM_WRITE(madmotor_pf2_data_w) AM_BASE(&madmotor_pf2_data)
 	AM_RANGE(0x19c000, 0x19c001) AM_READNOP
-	AM_RANGE(0x1a0000, 0x1a0007) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_0_w)							/* text layer */
-	AM_RANGE(0x1a0010, 0x1a0017) AM_DEVWRITE("tilegen3", deco_bac06_pf_control_1_w)
-	AM_RANGE(0x1a4000, 0x1a4fff) AM_DEVREADWRITE("tilegen3", deco_bac06_pf_data_r, deco_bac06_pf_data_w)
+	AM_RANGE(0x1a0000, 0x1a001f) AM_WRITEONLY AM_BASE(&madmotor_pf3_control)
+	AM_RANGE(0x1a4000, 0x1a4fff) AM_RAM_WRITE(madmotor_pf3_data_w) AM_BASE(&madmotor_pf3_data)
 	AM_RANGE(0x3e0000, 0x3e3fff) AM_RAM
-	AM_RANGE(0x3e8000, 0x3e87ff) AM_RAM AM_BASE_SIZE_MEMBER(madmotor_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x3f0000, 0x3f07ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3e8000, 0x3e87ff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x3f0000, 0x3f07ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
 	AM_RANGE(0x3f8002, 0x3f8003) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x3f8004, 0x3f8005) AM_READ_PORT("DSW")
 	AM_RANGE(0x3f8006, 0x3f8007) AM_READ_PORT("SYSTEM")
@@ -67,14 +66,14 @@ ADDRESS_MAP_END
 /******************************************************************************/
 
 /* Physical memory map (21 bits) */
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r,ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r,ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r,okim6295_w)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r,okim6295_w)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
-	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
+	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK(8)
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
 	AM_RANGE(0x1ff400, 0x1ff403) AM_WRITE(h6280_irq_status_w)
 ADDRESS_MAP_END
@@ -220,10 +219,9 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq(device_t *device, int state)
+static void sound_irq(const device_config *device, int state)
 {
-	madmotor_state *driver_state = device->machine().driver_data<madmotor_state>();
-	device_set_input_line(driver_state->m_audiocpu, 1, state); /* IRQ 2 */
+	cputag_set_input_line(device->machine, "audiocpu", 1, state); /* IRQ 2 */
 }
 
 static const ym2151_interface ym2151_config =
@@ -231,79 +229,51 @@ static const ym2151_interface ym2151_config =
 	sound_irq
 };
 
-static MACHINE_START( madmotor )
-{
-	madmotor_state *state = machine.driver_data<madmotor_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_flipscreen));
-}
-
-static MACHINE_RESET( madmotor )
-{
-	madmotor_state *state = machine.driver_data<madmotor_state>();
-
-	state->m_flipscreen = 0;
-}
-
-static MACHINE_CONFIG_START( madmotor, madmotor_state )
+static MACHINE_DRIVER_START( madmotor )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 12000000) /* Custom chip 59, 24 MHz crystal */
-	MCFG_CPU_PROGRAM_MAP(madmotor_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)/* VBL */
+	MDRV_CPU_ADD("maincpu", M68000, 12000000) /* Custom chip 59, 24 MHz crystal */
+	MDRV_CPU_PROGRAM_MAP(madmotor_map)
+	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)/* VBL */
 
-	MCFG_CPU_ADD("audiocpu", H6280, 8053000/2) /* Custom chip 45, Crystal near CPU is 8.053 MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-
-	MCFG_MACHINE_START(madmotor)
-	MCFG_MACHINE_RESET(madmotor)
+	MDRV_CPU_ADD("audiocpu", H6280, 8053000/2) /* Custom chip 45, Crystal near CPU is 8.053 MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(58)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */ /* frames per second, vblank duration taken from Burger Time */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(madmotor)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(58)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */ /* frames per second, vblank duration taken from Burger Time */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
 
-	MCFG_GFXDECODE(madmotor)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(madmotor)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_DEVICE_ADD("tilegen1", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,0,0);
-	MCFG_DEVICE_ADD("tilegen2", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,1,0);
-	MCFG_DEVICE_ADD("tilegen3", DECO_BAC06, 0)
-	deco_bac06_device::set_gfx_region_wide(*device, 0,2,1);
-
-	MCFG_DEVICE_ADD("spritegen", DECO_MXC06, 0)
-	deco_mxc06_device::set_gfx_region(*device, 3);
-
-
-	MCFG_VIDEO_START(madmotor)
+	MDRV_VIDEO_START(madmotor)
+	MDRV_VIDEO_UPDATE(madmotor)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 21470000/6)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ADD("ym1", YM2203, 21470000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MCFG_SOUND_ADD("ym2", YM2151, 21470000/6)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.45)
-	MCFG_SOUND_ROUTE(1, "mono", 0.45)
+	MDRV_SOUND_ADD("ym2", YM2151, 21470000/6)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.45)
+	MDRV_SOUND_ROUTE(1, "mono", 0.45)
 
-	MCFG_OKIM6295_ADD("oki1", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("oki1", OKIM6295, 1023924)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_OKIM6295_ADD("oki2", 2047848, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki2", OKIM6295, 2047848)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 /******************************************************************************/
 
@@ -352,7 +322,7 @@ ROM_END
 
 static DRIVER_INIT( madmotor )
 {
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 	int i;
 
 	for (i = 0x00000;i < 0x80000;i++)
@@ -364,4 +334,4 @@ static DRIVER_INIT( madmotor )
 
 
  /* The title screen is undated, but it's (c) 1989 Data East at 0xefa0 */
-GAME( 1989, madmotor, 0, madmotor, madmotor, madmotor, ROT0, "Mitchell", "Mad Motor", GAME_SUPPORTS_SAVE )
+GAME( 1989, madmotor, 0, madmotor, madmotor, madmotor, ROT0, "Mitchell", "Mad Motor", 0 )

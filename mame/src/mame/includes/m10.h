@@ -27,39 +27,23 @@
 #define IREMM15_VBSTART			(240)
 #define IREMM15_VBEND			(16)
 
-class m10_state : public driver_device
+typedef struct _m10_state m10_state;
+struct _m10_state
 {
-public:
-	m10_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
 	/* memory pointers */
-	UINT8 *             m_chargen;
-	UINT8 *             m_memory;
-	UINT8 *             m_rom;
-	UINT8 *             m_videoram;
-	UINT8 *             m_colorram;
-	size_t              m_videoram_size;
+	UINT8 *			chargen;
+	UINT8 *			memory;
+	UINT8 *			rom;
 
-	/* video-related */
-	tilemap_t *           m_tx_tilemap;
-	gfx_element *       m_back_gfx;
+	/* machine states */
 
-	/* this is currently unused, because it is needed by gfx_layout (which has no machine) */
-	UINT32              extyoffs[32 * 8];
+	/* sound state */
 
 	/* video state */
-	UINT8	              m_bottomline;
-	UINT8               m_flip;
+	UINT8			bottomline;
+	UINT8 			flip;
 
-	/* misc */
-	int                 m_last;
-
-	/* devices */
-	device_t *m_maincpu;
-	device_t *m_ic8j1;
-	device_t *m_ic8j2;
-	device_t *m_samples;
+	/* Specific states */
 };
 
 
@@ -70,8 +54,9 @@ WRITE8_HANDLER( m10_colorram_w );
 WRITE8_HANDLER( m10_chargen_w );
 WRITE8_HANDLER( m15_chargen_w );
 
-SCREEN_UPDATE_IND16( m10 );
-SCREEN_UPDATE_IND16( m15 );
+VIDEO_UPDATE( m10 );
+VIDEO_UPDATE( m15 );
 
 VIDEO_START( m10 );
 VIDEO_START( m15 );
+

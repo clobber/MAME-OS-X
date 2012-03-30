@@ -1,184 +1,176 @@
-/******************************************************************************************
+/********************************************************************
 
-    Bionic Commando
-
-
-    PCB is a 3 board stack:
-        Main CPU board: 86612-A-2
-    Graphics ROM board: 86612-B-2
-     Program ROM board: 86612-C-2
-
-      Main CPU: 68000CP10
-     Sound CPU: Z80A
-           MCU: Intel C8751H-88
-    Sound Chip: YM2151 & YM3012
-           OSC: 24.000 MHz (on the 86612-B-2 PCB)
-        Custom: CAPCOM DL-010D-103 (on the 86612-B-2 PCB)
+              Bionic Commando
 
 
-    Note: Euro rom labels (IE: "TSE") had a blue stripe, while those labeled
-          as USA (TSU) had an red stripe on the sticker.  The intermixing
-          of TSE and TSU roms in the parent set is correct and verified.
-    Note: Euro set simply states the game cannot be operated in Japan....
-    Note: These issues have been verified on a real PCB and are not emulation bugs:
-          - misplaced sprites ( see beginning of level 1 or 2 for example )
-          - sprite / sprite priority ( see level 2 the reflectors )
-          - sprite / background priority ( see level 1: birds walk through
-            branches of different trees )
-          - see the beginning of level 3: background screwed
-          - gray tiles around the title in Top Secret
+PCB is a 3 board stack:
+    Main CPU board: 86612-A-2
+Graphics ROM board: 86612-B-2
+ Program ROM board: 86612-C-2
 
-    ToDo:
-    - get rid of input port hack
-
-        Controls appear to be mapped at 0xFE4000, alongside dip switches, but there
-        is something strange going on that I can't (yet) figure out.
-        Player controls and coin inputs are supposed to magically appear at
-        0xFFFFFB (coin/start)
-        0xFFFFFD (player 2)
-        0xFFFFFF (player 1)
-
-        This is probably done by the Intel C8751H MCU on the board (whose interal ROM
-        is not yet available).
-
-        The MCU also takes care of the commands for the sound CPU, which are stored
-        at FFFFF9.
-
-        IRQ4 seems to be control related.
-        On each interrupt, it reads 0xFE4000 (coin/start), shift the bits around
-        and move the resulting byte into a dword RAM location. The dword RAM location
-        is rotated by 8 bits each time this happens.
-        This is probably done to be pedantic about coin insertions (might be protection
-        related). In fact, currently coin insertions are not consistently recognized.
+  Main CPU: 68000CP10
+ Sound CPU: Z80A
+       MCU: Intel C8751H-88
+Sound Chip: YM2151 & YM3012
+       OSC: 24.000 MHz (on the 86612-B-2 PCB)
+    Custom: CAPCOM DL-010D-103 (on the 86612-B-2 PCB)
 
 
-******************************************************************************************/
+Note: Euro rom labels (IE: "TSE") had a blue stripe, while those labeled
+      as USA (TSU) had an red stripe on the sticker.  The intermixing
+      of TSE and TSU roms in the parent set is correct and verified.
+Note: Euro set simply states the game cannot be operated in Japan....
+Note: These issues have been verified on a real PCB and are not emulation bugs:
+      - misplaced sprites ( see beginning of level 1 or 2 for example )
+      - sprite / sprite priority ( see level 2 the reflectors )
+      - sprite / background priority ( see level 1: birds walk through
+        branches of different trees )
+      - see the beginning of level 3: background screwed
+      - gray tiles around the title in Top Secret
 
-#include "emu.h"
+ToDo:
+- get rid of input port hack
+
+    Controls appear to be mapped at 0xFE4000, alongside dip switches, but there
+    is something strange going on that I can't (yet) figure out.
+    Player controls and coin inputs are supposed to magically appear at
+    0xFFFFFB (coin/start)
+    0xFFFFFD (player 2)
+    0xFFFFFF (player 1)
+
+    This is probably done by the Intel C8751H MCU on the board (whose interal ROM
+    is not yet available).
+
+    The MCU also takes care of the commands for the sound CPU, which are stored
+    at FFFFF9.
+
+    IRQ4 seems to be control related.
+    On each interrupt, it reads 0xFE4000 (coin/start), shift the bits around
+    and move the resulting byte into a dword RAM location. The dword RAM location
+    is rotated by 8 bits each time this happens.
+    This is probably done to be pedantic about coin insertions (might be protection
+    related). In fact, currently coin insertions are not consistently recognized.
+
+
+********************************************************************/
+
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
+#include "deprecat.h"
 #include "sound/2151intf.h"
-#include "includes/bionicc.h"
 
-#define MASTER_CLOCK       XTAL_24MHz
-#define EXO3_F0_CLK        XTAL_14_31818MHz
+#define MASTER_CLOCK		XTAL_24MHz
+#define EXO3_F0_CLK			XTAL_14_31818MHz
+
+WRITE16_HANDLER( bionicc_fgvideoram_w );
+WRITE16_HANDLER( bionicc_bgvideoram_w );
+WRITE16_HANDLER( bionicc_txvideoram_w );
+WRITE16_HANDLER( bionicc_paletteram_w );
+WRITE16_HANDLER( bionicc_scroll_w );
+WRITE16_HANDLER( bionicc_gfxctrl_w );
+
+extern UINT16 *bionicc_bgvideoram;
+extern UINT16 *bionicc_fgvideoram;
+extern UINT16 *bionicc_txvideoram;
+
+VIDEO_START( bionicc );
+VIDEO_UPDATE( bionicc );
+VIDEO_EOF( bionicc );
 
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+
+static UINT16 bionicc_inp[3];
 
 static WRITE16_HANDLER( hacked_controls_w )
 {
-	bionicc_state *state = space->machine().driver_data<bionicc_state>();
-
-	logerror("%06x: hacked_controls_w %04x %02x\n", cpu_get_pc(&space->device()), offset, data);
-	COMBINE_DATA(&state->m_inp[offset]);
+logerror("%06x: hacked_controls_w %04x %02x\n",cpu_get_pc(space->cpu),offset,data);
+	COMBINE_DATA(&bionicc_inp[offset]);
 }
 
 static READ16_HANDLER( hacked_controls_r )
 {
-	bionicc_state *state = space->machine().driver_data<bionicc_state>();
-
-	logerror("%06x: hacked_controls_r %04x %04x\n", cpu_get_pc(&space->device()), offset, state->m_inp[offset]);
-	return state->m_inp[offset];
+logerror("%06x: hacked_controls_r %04x %04x\n",cpu_get_pc(space->cpu),offset,bionicc_inp[offset]);
+	return bionicc_inp[offset];
 }
 
 static WRITE16_HANDLER( bionicc_mpu_trigger_w )
 {
-	bionicc_state *state = space->machine().driver_data<bionicc_state>();
+	data = input_port_read(space->machine, "SYSTEM") >> 12;
+	bionicc_inp[0] = data ^ 0x0f;
 
-	data = input_port_read(space->machine(), "SYSTEM") >> 12;
-	state->m_inp[0] = data ^ 0x0f;
+	data = input_port_read(space->machine, "P2");
+	bionicc_inp[1] = data ^ 0xff;
 
-	data = input_port_read(space->machine(), "P2");
-	state->m_inp[1] = data ^ 0xff;
-
-	data = input_port_read(space->machine(), "P1");
-	state->m_inp[2] = data ^ 0xff;
+	data = input_port_read(space->machine, "P1");
+	bionicc_inp[2] = data ^ 0xff;
 }
 
 
+static UINT16 soundcommand;
+
 static WRITE16_HANDLER( hacked_soundcommand_w )
 {
-	bionicc_state *state = space->machine().driver_data<bionicc_state>();
-
-	COMBINE_DATA(&state->m_soundcommand);
-	soundlatch_w(space, 0, state->m_soundcommand & 0xff);
+	COMBINE_DATA(&soundcommand);
+	soundlatch_w(space,0,soundcommand & 0xff);
 }
 
 static READ16_HANDLER( hacked_soundcommand_r )
 {
-	bionicc_state *state = space->machine().driver_data<bionicc_state>();
-
-	return state->m_soundcommand;
+	return soundcommand;
 }
 
 
 /********************************************************************
 
-  Interrupt
+  INTERRUPT
 
   The game runs on 2 interrupts.
 
   IRQ 2 drives the game
   IRQ 4 processes the input ports
 
+  The game is very picky about timing. The following is the only
+  way I have found it to work.
+
 ********************************************************************/
 
-static TIMER_DEVICE_CALLBACK( bionicc_scanline )
+static INTERRUPT_GEN( bionicc_interrupt )
 {
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line(timer.machine(), "maincpu", 2, HOLD_LINE);
-
-	if(scanline == 0) // vblank-in or i8751 related irq
-		cputag_set_input_line(timer.machine(), "maincpu", 4, HOLD_LINE);
+	if (cpu_getiloops(device) == 0)
+		cpu_set_input_line(device, 2, HOLD_LINE);
+	else
+		cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0xfe0000, 0xfe07ff) AM_RAM	/* RAM? */
-	AM_RANGE(0xfe0800, 0xfe0cff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0xfe0800, 0xfe0cff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xfe0d00, 0xfe3fff) AM_RAM              /* RAM? */
 	AM_RANGE(0xfe4000, 0xfe4001) AM_WRITE(bionicc_gfxctrl_w)	/* + coin counters */
 	AM_RANGE(0xfe4000, 0xfe4001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xfe4002, 0xfe4003) AM_READ_PORT("DSW")
 	AM_RANGE(0xfe8010, 0xfe8017) AM_WRITE(bionicc_scroll_w)
 	AM_RANGE(0xfe801a, 0xfe801b) AM_WRITE(bionicc_mpu_trigger_w)	/* ??? not sure, but looks like it */
-	AM_RANGE(0xfec000, 0xfecfff) AM_RAM_WRITE(bionicc_txvideoram_w) AM_BASE_MEMBER(bionicc_state, m_txvideoram)
-	AM_RANGE(0xff0000, 0xff3fff) AM_RAM_WRITE(bionicc_fgvideoram_w) AM_BASE_MEMBER(bionicc_state, m_fgvideoram)
-	AM_RANGE(0xff4000, 0xff7fff) AM_RAM_WRITE(bionicc_bgvideoram_w) AM_BASE_MEMBER(bionicc_state, m_bgvideoram)
-	AM_RANGE(0xff8000, 0xff87ff) AM_RAM_WRITE(bionicc_paletteram_w) AM_BASE_MEMBER(bionicc_state, m_paletteram)
+	AM_RANGE(0xfec000, 0xfecfff) AM_RAM_WRITE(bionicc_txvideoram_w) AM_BASE(&bionicc_txvideoram)
+	AM_RANGE(0xff0000, 0xff3fff) AM_RAM_WRITE(bionicc_fgvideoram_w) AM_BASE(&bionicc_fgvideoram)
+	AM_RANGE(0xff4000, 0xff7fff) AM_RAM_WRITE(bionicc_bgvideoram_w) AM_BASE(&bionicc_bgvideoram)
+	AM_RANGE(0xff8000, 0xff87ff) AM_RAM_WRITE(bionicc_paletteram_w) AM_BASE(&paletteram16)
 	AM_RANGE(0xffc000, 0xfffff7) AM_RAM	/* working RAM */
 	AM_RANGE(0xfffff8, 0xfffff9) AM_READWRITE(hacked_soundcommand_r, hacked_soundcommand_w)      /* hack */
 	AM_RANGE(0xfffffa, 0xffffff) AM_READWRITE(hacked_controls_r, hacked_controls_w)	/* hack */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x8000, 0x8001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 ADDRESS_MAP_END
 
 
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( bionicc )
 	PORT_START("SYSTEM")
@@ -255,11 +247,13 @@ static INPUT_PORTS_START( bionicc )
 INPUT_PORTS_END
 
 
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
+
+/********************************************************************
+
+  GRAPHICS
+
+********************************************************************/
+
 
 static const gfx_layout spritelayout_bionicc=
 {
@@ -327,83 +321,45 @@ static GFXDECODE_START( bionicc )
 GFXDECODE_END
 
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( bionicc )
-{
-	bionicc_state *state = machine.driver_data<bionicc_state>();
-
-	state->save_item(NAME(state->m_soundcommand));
-	state->save_item(NAME(state->m_inp));
-	state->save_item(NAME(state->m_scroll));
-}
-
-static MACHINE_RESET( bionicc )
-{
-	bionicc_state *state = machine.driver_data<bionicc_state>();
-
-	state->m_inp[0] = 0;
-	state->m_inp[1] = 0;
-	state->m_inp[2] = 0;
-	state->m_scroll[0] = 0;
-	state->m_scroll[1] = 0;
-	state->m_scroll[2] = 0;
-	state->m_scroll[3] = 0;
-	state->m_soundcommand = 0;
-}
-
-static MACHINE_CONFIG_START( bionicc, bionicc_state )
+static MACHINE_DRIVER_START( bionicc )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2) /* 12 MHz - verified in schematics */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", bionicc_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2) /* 12 MHz - verified in schematics */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT_HACK(bionicc_interrupt,8)
 
-	MCFG_CPU_ADD("audiocpu", Z80, EXO3_F0_CLK / 4)   /* EXO3 C,B=GND, A=5V ==> Divisor 2^2 */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, EXO3_F0_CLK / 4)   /* EXO3 C,B=GND, A=5V ==> Divisor 2^2 */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 	/* FIXME: interrupt timing
      * schematics indicate that nmi_line is set on  M680000 access with AB1=1
      * and IOCS=0 (active low), see pages A-1/10, A-4/10 in schematics
      */
-	MCFG_CPU_PERIODIC_INT(nmi_line_pulse,4*60)
-
-	MCFG_MACHINE_START(bionicc)
-	MCFG_MACHINE_RESET(bionicc)
+	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,4)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(bionicc)
-	MCFG_SCREEN_VBLANK_STATIC(bionicc)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(bionicc)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_GFXDECODE(bionicc)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_VIDEO_START(bionicc)
+	MDRV_VIDEO_EOF(bionicc)
+	MDRV_VIDEO_UPDATE(bionicc)
 
-	MCFG_VIDEO_START(bionicc)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_ROUTE(0, "mono", 0.60)
-	MCFG_SOUND_ROUTE(1, "mono", 0.60)
-MACHINE_CONFIG_END
-
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ROUTE(0, "mono", 0.60)
+	MDRV_SOUND_ROUTE(1, "mono", 0.60)
+MACHINE_DRIVER_END
 
 
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
 
 ROM_START( bionicc ) /* "Not for use in Japan" */
 	ROM_REGION( 0x40000, "maincpu", 0 )      /* 68000 code */
@@ -582,14 +538,8 @@ ROM_START( topsecrt ) /* "Not for use in any other country but Japan" */
 ROM_END
 
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
 
-GAME( 1987, bionicc,  0,       bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (Euro)", GAME_SUPPORTS_SAVE )
-GAME( 1987, bionicc1, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (US set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, bionicc2, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (US set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1987, topsecrt, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Top Secret (Japan, old revision)", GAME_SUPPORTS_SAVE )
-// there's also an undumped JP new revision on which there are no extra lives after 1 million points, plus other bug-fixes / changes
+GAME( 1987, bionicc,  0,       bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (Euro)", 0 )
+GAME( 1987, bionicc1, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (US set 1)", 0 )
+GAME( 1987, bionicc2, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Bionic Commando (US set 2)", 0 )
+GAME( 1987, topsecrt, bionicc, bionicc, bionicc, 0, ROT0, "Capcom", "Top Secret (Japan)", 0 )

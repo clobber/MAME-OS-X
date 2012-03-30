@@ -1,4 +1,5 @@
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "flt_vol.h"
 
 
@@ -9,11 +10,13 @@ struct _filter_volume_state
 	int				gain;
 };
 
-INLINE filter_volume_state *get_safe_token(device_t *device)
+INLINE filter_volume_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == FILTER_VOLUME);
-	return (filter_volume_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_FILTER_VOLUME);
+	return (filter_volume_state *)device->token;
 }
 
 
@@ -34,11 +37,11 @@ static DEVICE_START( filter_volume )
 	filter_volume_state *info = get_safe_token(device);
 
 	info->gain = 0x100;
-	info->stream = device->machine().sound().stream_alloc(*device, 1, 1, device->machine().sample_rate(), info, filter_volume_update);
+	info->stream = stream_create(device, 1, 1, device->machine->sample_rate, info, filter_volume_update);
 }
 
 
-void flt_volume_set_volume(device_t *device, float volume)
+void flt_volume_set_volume(const device_config *device, float volume)
 {
 	filter_volume_state *info = get_safe_token(device);
 	info->gain = (int)(volume * 256);
@@ -71,5 +74,3 @@ DEVICE_GET_INFO( filter_volume )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(FILTER_VOLUME, filter_volume);

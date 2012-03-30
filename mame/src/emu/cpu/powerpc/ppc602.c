@@ -217,8 +217,9 @@ static CPU_EXECUTE( ppc602 )
 {
 	int exception_type;
 	UINT32 opcode;
-	ppc_tb_base_icount = ppc_icount;
-	ppc_dec_base_icount = ppc_icount;
+	ppc_icount = cycles;
+	ppc_tb_base_icount = cycles;
+	ppc_dec_base_icount = cycles;
 
 	// check if decrementer exception occurs during execution
 	if ((UINT32)(DEC - ppc_icount) > (UINT32)(DEC))
@@ -275,5 +276,8 @@ static CPU_EXECUTE( ppc602 )
 
 	// update decrementer
 	DEC -= ((ppc_dec_base_icount - ppc_icount) / (bus_freq_multiplier * 2));
+
+
+	return cycles - ppc_icount;
 }
 #endif	// PPC_DRC

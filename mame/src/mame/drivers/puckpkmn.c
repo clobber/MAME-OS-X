@@ -42,13 +42,13 @@ Notes:
                   TV16B 0010 ME251271 (QFP160)
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/sn76496.h"
 #include "sound/2612intf.h"
 
-#include "includes/megadriv.h"
+#include "megadriv.h"
 
 
 /* Puckman Pockimon Input Ports */
@@ -126,15 +126,15 @@ static INPUT_PORTS_START( puckpkmn )
 INPUT_PORTS_END
 
 
-static ADDRESS_MAP_START( puckpkmn_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( puckpkmn_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM								/* Main 68k Program Roms */
 	AM_RANGE(0x700010, 0x700011) AM_READ_PORT("P2")
 	AM_RANGE(0x700012, 0x700013) AM_READ_PORT("P1")
 	AM_RANGE(0x700014, 0x700015) AM_READ_PORT("UNK")
 	AM_RANGE(0x700016, 0x700017) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700018, 0x700019) AM_READ_PORT("DSW2")
-	AM_RANGE(0x700022, 0x700023) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
-	AM_RANGE(0xa04000, 0xa04003) AM_DEVREADWRITE8("ymsnd", megadriv_68k_YM2612_read, megadriv_68k_YM2612_write, 0xffff)
+	AM_RANGE(0x700022, 0x700023) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0xa04000, 0xa04003) AM_DEVREADWRITE8("ym", megadriv_68k_YM2612_read, megadriv_68k_YM2612_write, 0xffff)
 	AM_RANGE(0xc00000, 0xc0001f) AM_READWRITE(megadriv_vdp_r, megadriv_vdp_w)
 	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM AM_MIRROR(0x1f0000) AM_BASE(&megadrive_ram)
 
@@ -148,41 +148,20 @@ static ADDRESS_MAP_START( puckpkmn_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xa11200, 0xa11201) AM_WRITENOP							/* ? */
 ADDRESS_MAP_END
 
-static READ16_HANDLER(puckpkmna_70001c_r)
-{
-	return 0x0e;
-}
 
-static READ16_HANDLER(puckpkmna_4b2476_r)
-{
-	return 0x3400;
-}
+static MACHINE_DRIVER_START( puckpkmn )
+	MDRV_IMPORT_FROM( megadriv )
 
-static ADDRESS_MAP_START( puckpkmna_map, AS_PROGRAM, 16 )
-	AM_IMPORT_FROM( puckpkmn_map )
-	AM_RANGE(0x4b2476, 0x4b2477) AM_READ(puckpkmna_4b2476_r)
-	AM_RANGE(0x70001c, 0x70001d) AM_READ(puckpkmna_70001c_r)
-ADDRESS_MAP_END
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(puckpkmn_map)
 
-static MACHINE_CONFIG_START( puckpkmn, md_boot_state )
-	MCFG_FRAGMENT_ADD(md_ntsc)
+	MDRV_DEVICE_REMOVE("genesis_snd_z80")
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(puckpkmn_map)
-
-	MCFG_DEVICE_REMOVE("genesis_snd_z80")
-
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker",0.25)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( puckpkmna, puckpkmn )
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(puckpkmna_map)
-
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker",0.25)
+MACHINE_DRIVER_END
 
 /* Genie's Hardware (contains no real sega parts) */
 
@@ -253,15 +232,15 @@ PUCKPOKE.U8 27C4001---/
 ROM sockets U63 & U64 empty
 
 Hi-res PCB scan available on request.
-Screenshots available on my site at http://guru.mameworld.info/oldnews2001.html (under PCB Shop Raid #2)
+Screenshots available on my site at http://unemulated.emuunlim.com (under PCB Shop Raid #2)
 
 
 ****************************************************************************/
 
 static DRIVER_INIT( puckpkmn )
 {
-	UINT8 *rom = machine.region("maincpu")->base();
-	size_t len = machine.region("maincpu")->bytes();
+	UINT8 *rom	=	memory_region(machine, "maincpu");
+	size_t len		=	memory_region_length(machine, "maincpu");
 	int i;
 
 	for (i = 0; i < len; i++)
@@ -281,62 +260,5 @@ ROM_START( puckpkmn ) /* Puckman Pockimon  (c)2000 Genie */
 	ROM_LOAD( "puckpoke.u3", 0x00000, 0x40000, CRC(7b066bac) SHA1(429616e21c672b07e0705bc63234249cac3af56f) )
 ROM_END
 
-/*
-Puckman Pokimon (alt.)
-
-
-PCB Layout
-----------
-
-|------------------------------------------------|
-|UPC1241                      4.000MHz     6264  |
-|    VOL             6295           555          |
-|                                                |
-|                                                |
-|  LM324                                TV16B    |
-|                    A.U3                        |
-|                                                |
-|                                                |
-|J                                               |
-|A                                   59.693175MHz|
-|M                                               |
-|M      DSW2(8)                                  |
-|A                                               |
-|                    62256    62256              |
-|       DSW1(8)      PAL      PAL                |
-|                                                |
-|                         B.U59          TA-06S  |
-|  PAL               TK-20K   PAL                |
-|                             PAL       MB81461  |
-|  PAL     PAL                          MB81461  |
-|------------------------------------------------|
-Notes:
-      TV16B  - custom graphics chip (QFP160)
-      TA-06S - custom chip (QFP128)
-      TK-20K - custom chip, probably the CPU (QFP100). Clock unknown.
-      M6295  - clock 1.000MHz [4/4]
-
-      4x 1Mx8 flashROMs (B*.U59) are mounted onto a DIP42 carrier board to make a
-      32MBit EPROM equivalent. It appears to contain graphics plus the main program.
-      ROM A.U3 contains samples for the M6295.
-
-*/
-
-ROM_START( puckpkmna ) /* Puckman Pockimon  (c)2000 IBS Co. Ltd */
-	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "b2.u59", 0x000000, 0x080000, CRC(3fbea2c7) SHA1(89f3770ae92c62714f0795ddd2f311a9532eb25a) ) // FIRST AND SECOND HALF IDENTICAL
-	ROM_IGNORE(0x080000)
-	ROM_LOAD16_BYTE( "b1.u59", 0x000001, 0x080000, CRC(dc7b4254) SHA1(8ba5c5e8123e62e9af091971d0d0401d2df49350) ) // FIRST AND SECOND HALF IDENTICAL
-	ROM_IGNORE(0x080000)
-	ROM_LOAD16_BYTE( "b4.u59", 0x100000, 0x080000, CRC(375c9f80) SHA1(9b0eb729e95c22355e4117eec596f90e10282492) ) // FIRST AND SECOND HALF IDENTICAL
-	ROM_IGNORE(0x080000)
-	ROM_LOAD16_BYTE( "b3.u59", 0x100001, 0x080000, CRC(d5487df6) SHA1(d1d3d717e184a4e8e067665bbbe94e7cf45db478) ) // FIRST AND SECOND HALF IDENTICAL
-	ROM_IGNORE(0x080000)
-
-	ROM_REGION( 0x80000, "oki", 0 )
-	ROM_LOAD( "a.u3", 0x00000, 0x80000, CRC(77891c9b) SHA1(66f28b418a480a89ddb3fae3a7c2fe702c62364c) )
-ROM_END
-
 /* Genie Hardware (uses Genesis VDP) also has 'Sun Mixing Co' put into tile ram */
-GAME( 2000, puckpkmn, 0,        puckpkmn,  puckpkmn, puckpkmn, ROT0, "Genie",                  "Puckman Pockimon (set 1)", 0 )
-GAME( 2000, puckpkmna,puckpkmn, puckpkmna, puckpkmn, puckpkmn, ROT0, "IBS",                    "Puckman Pockimon (set 2)", 0 )
+GAME( 2000, puckpkmn, 0,        puckpkmn, puckpkmn, puckpkmn, ROT0, "Genie",                  "Puckman Pockimon", 0 )

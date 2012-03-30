@@ -24,8 +24,6 @@ To do :
  - unknown R/W
  - 13th bit in color defs (priority? bit is set for all colors in spot1,
                            for 3/4 screen cols in spot2 etc)
- - handle coin counters and coin lockout
-
 Notes :
 
  $d000 - MCU data read/write
@@ -131,105 +129,63 @@ RAM :
 
 Stephh's additional notes (based on the game Z80 code and some tests) :
 
-1) 'nycaptor' and clones
-
-1a) 'nycaptor'
-
   - You need to press SERVICE1 while resetting the game to enter the "test mode".
     Note that the grid is always displayed, so it's IMPOSSIBLE to see what's in it 8(
+
   - When "Infinite Bullets" is set to ON, there is no timer to reload the bullets.
   - When "No Hit" Dip Switch is ON, damage is still incremented, but there are
     no test made if it reaches the limit (0x0a).
-  - DSWC bit 2 also determines the precision of a shot
+
+  - Bit 2 of 0xd802 also determines the precision of a shot
     (= range around a bullet where the enemies can be killed) :
-      * 0 : small range (0x0a or 0x10)
-      * 1 : high  range (0x0c or 0x12)
-  - Even when "Coin Slots" is set to "1", pressing COIN2 will be based on "Coin B" settings.
-
-1b) 'colt'
-
-  - Due to patched code at 0x9fd, lives (BCD coded) settings are different than in 'nycaptor'.
-    Display at start will be lives-1, but it will also display "0" when you select 100 lives.
-  - The game is much harder than 'nycaptor' :
-      * Due to the 4 'nop' instructions at 0x0b03, you can't get any extra life.
-      * Due to patched code from 0x0bea to 0x0bf4, you lose a life as soon as you get hit
-        by en enemy or when you shoot at an innocent.
-        Furthermore, shooting birds kills you instead of recovering 3 "steps" of damage !
-  - I can't tell if it's an ingame bug of this bootleg, but the game hangs after bonus stage
-    (level 4) instead of looping back to level 1 with higher difficulty.
-    The game also frezees sometimes for some unknown reasons.
-
-2) 'cyclshtg' and clones
-
-2a) 'cyclshtg'
-
-  - Lives (BCD coded) settings are not read from MCU, but from table at 0x0fee.
-  - Even if it isn't mentionned in the manual, DSWB bit 7 allows you to reset damage to 0
-    at the end of a level (check code at 0x328d).
-  - When "Infinite Bullets" is set to ON, there is no timer to reload the bullets.
-    However, it's hard to notice as you don't see an indicator as in 'nycaptor'.
-  - There is a leftover from 'nycaptor' in CPU1 which reads DSWA bits 0 and 1 to determine
-    "Bonus Lives" settings (code at 0x009b). These values are overwritten via code in CPU 0.
-
-2b) 'bronx'
-
-  - Lives (BCD coded) settings are different than in 'cyclshtg' (table at 0x0fea).
-  - The game is much harder than 'cyclshtg' :
-      * You start with less lives with default settings (2 instead of 3).
-      * Due to the 'add  a,$00' instruction at 0x1131, you can't get any extra life
-        (when you get enough points, or even when you hit the "1UP" bonus).
-      * Due to extra code at 0x3062, you start the game as if you had already sustained
-        8 "steps" of damage. However, when you end a level, if "Damage Reset" Dip Switch
-        is ON, your damage will be reset to 0.
-        Furthermore, the game starts as if you had completed the 6 stages 8 times.
-      * Due to the 'ld   (ix+$0e),$08' instruction at 0x32b1, you also start the
-        other lives as if you had already sustained 8 "steps" of damage. However, again,
-        when you end a level, if "Damage Reset" Dip Switch is ON, your damage will be reset to 0.
+      * 0 : small range (0x0a)
+      * 1 : high  range (0x0c)
 
 ***************************************************************************/
 
 //#define USE_MCU
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
-#include "includes/taitoipt.h"
 #include "sound/ay8910.h"
 #include "sound/msm5232.h"
 #include "includes/nycaptor.h"
 
+UINT8 *nycaptor_sharedram;
+static int generic_control_reg = 0;
+static int sound_nmi_enable=0,pending_nmi=0;
+int nyc_gametype=0;
 
 static WRITE8_HANDLER( sub_cpu_halt_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	device_set_input_line(state->m_subcpu, INPUT_LINE_HALT, (data) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine, "sub", INPUT_LINE_HALT, (data) ? ASSERT_LINE : CLEAR_LINE);
 }
+
+static UINT8 snd_data;
 
 static READ8_HANDLER( from_snd_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	return state->m_snd_data;
+	return snd_data;
 }
 
 static WRITE8_HANDLER( to_main_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_snd_data = data;
+	snd_data = data;
 }
 
 
 static READ8_HANDLER(nycaptor_sharedram_r)
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	return state->m_sharedram[offset];
+	return nycaptor_sharedram[offset];
 }
 
 static WRITE8_HANDLER(nycaptor_sharedram_w)
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_sharedram[offset] = data;
+	nycaptor_sharedram[offset]=data;
 }
+
 
 static READ8_HANDLER( nycaptor_b_r )
 {
@@ -238,41 +194,37 @@ static READ8_HANDLER( nycaptor_b_r )
 
 static READ8_HANDLER( nycaptor_by_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	int port = input_port_read(space->machine(), "LIGHTY");
-
-	if (state->m_gametype == 1)
+	int port=input_port_read(space->machine, "LIGHTY");
+	if(nyc_gametype == 1)
 		port = 255 - port;
-
 	return port - 8;
 }
 
 static READ8_HANDLER( nycaptor_bx_r )
 {
-	return (input_port_read(space->machine(), "LIGHTX") + 0x27) | 1;
+	return (input_port_read(space->machine, "LIGHTX") + 0x27) | 1;
 }
 
 
 static WRITE8_HANDLER( sound_cpu_reset_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_RESET, (data&1 )? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, (data&1 )? ASSERT_LINE : CLEAR_LINE);
 }
 
+static int vol_ctrl[16];
 
 static MACHINE_RESET( ta7630 )
 {
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
 	int i;
+
 	double db			= 0.0;
 	double db_step		= 0.50;	/* 0.50 dB step (at least, maybe more) */
 	double db_step_inc	= 0.275;
-
-	for (i = 0; i < 16; i++)
+	for (i=0; i<16; i++)
 	{
 		double max = 100.0 / pow(10.0, db/20.0 );
-		state->m_vol_ctrl[15 - i] = max;
-		/*logerror("vol_ctrl[%x] = %i (%f dB)\n", 15 - i, state->m_vol_ctrl[15 - i], db);*/
+		vol_ctrl[ 15-i ] = max;
+		/*logerror("vol_ctrl[%x] = %i (%f dB)\n",15-i,vol_ctrl[ 15-i ],db);*/
 		db += db_step;
 		db_step += db_step_inc;
 	}
@@ -280,34 +232,28 @@ static MACHINE_RESET( ta7630 )
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
-	if (state->m_sound_nmi_enable)
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-	else
-		state->m_pending_nmi = 1;
+	if (sound_nmi_enable) cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	else pending_nmi = 1;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
-	soundlatch_w(space, 0, data);
-	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
+	soundlatch_w(space,0,data);
+	timer_call_after_resynch(space->machine, NULL, data,nmi_callback);
 }
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_sound_nmi_enable = 0;
+	sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_sound_nmi_enable = 1;
-
-	if (state->m_pending_nmi)
+	sound_nmi_enable = 1;
+	if (pending_nmi)
 	{
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-		state->m_pending_nmi = 0;
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		pending_nmi = 0;
 	}
 }
 
@@ -334,63 +280,61 @@ static const msm5232_interface msm5232_config =
 
 static READ8_HANDLER ( nycaptor_generic_control_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	return state->m_generic_control_reg;
+	return generic_control_reg;
 }
 
 static WRITE8_HANDLER( nycaptor_generic_control_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_generic_control_reg = data;
-	memory_set_bankptr(space->machine(), "bank1", space->machine().region("maincpu")->base() + 0x10000 + ((data&0x08)>>3)*0x4000 );
+	generic_control_reg = data;
+	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "maincpu") + 0x10000 + ((data&0x08)>>3)*0x4000 );
 }
 
-static ADDRESS_MAP_START( nycaptor_master_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nycaptor_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xc7ff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
-	AM_RANGE(0xd000, 0xd000) AM_READWRITE(nycaptor_mcu_r, nycaptor_mcu_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xc000, 0xc7ff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xd000, 0xd000) AM_READ(nycaptor_mcu_r) AM_WRITE(nycaptor_mcu_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(sub_cpu_halt_w)
-	AM_RANGE(0xd002, 0xd002) AM_READWRITE(nycaptor_generic_control_r, nycaptor_generic_control_w)	/* bit 3 - memory bank at 0x8000-0xbfff */
-	AM_RANGE(0xd400, 0xd400) AM_READWRITE(from_snd_r, sound_command_w)
+	AM_RANGE(0xd002, 0xd002) AM_READ(nycaptor_generic_control_r) AM_WRITE(nycaptor_generic_control_w)	/* bit 3 - memory bank at 0x8000-0xbfff */
+	AM_RANGE(0xd400, 0xd400) AM_READ(from_snd_r) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd401, 0xd401) AM_READNOP
 	AM_RANGE(0xd403, 0xd403) AM_WRITE(sound_cpu_reset_w)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
 	AM_RANGE(0xd805, 0xd805) AM_READ(nycaptor_mcu_status_r1)
 	AM_RANGE(0xd806, 0xd806) AM_READNOP /* unknown ?sound? */
 	AM_RANGE(0xd807, 0xd807) AM_READ(nycaptor_mcu_status_r2)
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_READWRITE(nycaptor_scrlram_r, nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_READ(nycaptor_scrlram_r) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
 	AM_RANGE(0xdce1, 0xdce1) AM_WRITENOP
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
-	AM_RANGE(0xdf03, 0xdf03) AM_READWRITE(nycaptor_gfxctrl_r, nycaptor_gfxctrl_w)
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w) AM_BASE_MEMBER(nycaptor_state, m_sharedram)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
+	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r) AM_WRITE(nycaptor_gfxctrl_w)
+	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r)  AM_WRITE(nycaptor_sharedram_w) AM_BASE(&nycaptor_sharedram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nycaptor_slave_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nycaptor_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+	AM_RANGE(0xc000, 0xc7ff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
 
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
 	AM_RANGE(0xdf00, 0xdf00) AM_READ(nycaptor_bx_r)
 	AM_RANGE(0xdf01, 0xdf01) AM_READ(nycaptor_by_r)
 	AM_RANGE(0xdf02, 0xdf02) AM_READ(nycaptor_b_r)
 	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r) AM_WRITENOP/* ? gfx control ? */
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w)
+	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r) AM_WRITE(nycaptor_sharedram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nycaptor_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nycaptor_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc801) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -399,21 +343,21 @@ static ADDRESS_MAP_START( nycaptor_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xca00, 0xca00) AM_WRITENOP
 	AM_RANGE(0xcb00, 0xcb00) AM_WRITENOP
 	AM_RANGE(0xcc00, 0xcc00) AM_WRITENOP
-	AM_RANGE(0xd000, 0xd000) AM_READWRITE(soundlatch_r, to_main_w)
+	AM_RANGE(0xd000, 0xd000) AM_READ(soundlatch_r) AM_WRITE(to_main_w)
 	AM_RANGE(0xd200, 0xd200) AM_READNOP AM_WRITE(nmi_enable_w)
 	AM_RANGE(0xd400, 0xd400) AM_WRITE(nmi_disable_w)
 	AM_RANGE(0xd600, 0xd600) AM_WRITENOP
 	AM_RANGE(0xe000, 0xefff) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nycaptor_m68705_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nycaptor_m68705_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(nycaptor_68705_port_a_r, nycaptor_68705_port_a_w)
-	AM_RANGE(0x0001, 0x0001) AM_READWRITE(nycaptor_68705_port_b_r, nycaptor_68705_port_b_w)
-	AM_RANGE(0x0002, 0x0002) AM_READWRITE(nycaptor_68705_port_c_r, nycaptor_68705_port_c_w)
-	AM_RANGE(0x0004, 0x0004) AM_WRITE(nycaptor_68705_ddr_a_w)
-	AM_RANGE(0x0005, 0x0005) AM_WRITE(nycaptor_68705_ddr_b_w)
-	AM_RANGE(0x0006, 0x0006) AM_WRITE(nycaptor_68705_ddr_c_w)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(nycaptor_68705_portA_r,nycaptor_68705_portA_w)
+	AM_RANGE(0x0001, 0x0001) AM_READWRITE(nycaptor_68705_portB_r,nycaptor_68705_portB_w)
+	AM_RANGE(0x0002, 0x0002) AM_READWRITE(nycaptor_68705_portC_r,nycaptor_68705_portC_w)
+	AM_RANGE(0x0004, 0x0004) AM_WRITE(nycaptor_68705_ddrA_w)
+	AM_RANGE(0x0005, 0x0005) AM_WRITE(nycaptor_68705_ddrB_w)
+	AM_RANGE(0x0006, 0x0006) AM_WRITE(nycaptor_68705_ddrC_w)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
@@ -424,12 +368,12 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER(cyclshtg_mcu_status_r)
 {
-	return 0xff;
+  return 0xff;
 }
 
 static READ8_HANDLER(cyclshtg_mcu_r)
 {
-	return 7;
+  return 7;
 }
 
 static WRITE8_HANDLER(cyclshtg_mcu_w)
@@ -439,289 +383,158 @@ static WRITE8_HANDLER(cyclshtg_mcu_w)
 
 static READ8_HANDLER(cyclshtg_mcu_status_r1)
 {
-	return space->machine().rand();
+  return mame_rand(space->machine);
 }
 
 static WRITE8_HANDLER( cyclshtg_generic_control_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	int bank = (data >> 2) & 3;
-
-	state->m_generic_control_reg = data;
-	memory_set_bankptr(space->machine(), "bank1", space->machine().region("maincpu")->base() + 0x10000 + bank*0x4000 );
+	int bank=(data>>2)&3;
+	generic_control_reg = data;
+	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "maincpu") + 0x10000 + bank*0x4000 );
 }
 
 
-static ADDRESS_MAP_START( cyclshtg_master_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( cyclshtg_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
-	AM_RANGE(0xd000, 0xd000) AM_READWRITE(cyclshtg_mcu_r, cyclshtg_mcu_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xc000, 0xcfff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xd000, 0xd000) AM_READ(cyclshtg_mcu_r) AM_WRITE(cyclshtg_mcu_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(sub_cpu_halt_w)
-	AM_RANGE(0xd002, 0xd002) AM_READWRITE(nycaptor_generic_control_r, cyclshtg_generic_control_w)
-	AM_RANGE(0xd400, 0xd400) AM_READWRITE(from_snd_r, sound_command_w)
+	AM_RANGE(0xd002, 0xd002) AM_READ(nycaptor_generic_control_r) AM_WRITE(cyclshtg_generic_control_w)
+	AM_RANGE(0xd400, 0xd400) AM_READ(from_snd_r) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd403, 0xd403) AM_WRITE(sound_cpu_reset_w)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
 	AM_RANGE(0xd805, 0xd805) AM_READ(cyclshtg_mcu_status_r)
 	AM_RANGE(0xd806, 0xd806) AM_READNOP
 	AM_RANGE(0xd807, 0xd807) AM_READ(cyclshtg_mcu_status_r)
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_READWRITE(nycaptor_scrlram_r, nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_READ(nycaptor_scrlram_r) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
 	AM_RANGE(0xdce1, 0xdce1) AM_WRITENOP
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
-	AM_RANGE(0xdf03, 0xdf03) AM_READWRITE(nycaptor_gfxctrl_r, nycaptor_gfxctrl_w)
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w) AM_BASE_MEMBER(nycaptor_state, m_sharedram)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
+	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r) AM_WRITE(nycaptor_gfxctrl_w)
+	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r) AM_WRITE(nycaptor_sharedram_w) AM_BASE(&nycaptor_sharedram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cyclshtg_slave_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( cyclshtg_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+	AM_RANGE(0xc000, 0xcfff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
 	AM_RANGE(0xdf00, 0xdf00) AM_READ(nycaptor_bx_r)
 	AM_RANGE(0xdf01, 0xdf01) AM_READ(nycaptor_by_r)
 	AM_RANGE(0xdf02, 0xdf02) AM_READ(nycaptor_b_r)
 	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r)
 	AM_RANGE(0xdf03, 0xdf03) AM_WRITENOP
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w)
+	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r) AM_WRITE(nycaptor_sharedram_w)
 ADDRESS_MAP_END
 
-static READ8_HANDLER( unk_r )
+static READ8_HANDLER(unk_r)
 {
-	return space->machine().rand();
+  return mame_rand(space->machine);
 }
 
-static ADDRESS_MAP_START( bronx_master_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( bronx_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xc000, 0xcfff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
 	AM_RANGE(0xd000, 0xd000) AM_READ(cyclshtg_mcu_r) AM_WRITENOP
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(sub_cpu_halt_w)
-	AM_RANGE(0xd002, 0xd002) AM_READWRITE(nycaptor_generic_control_r, cyclshtg_generic_control_w)
-	AM_RANGE(0xd400, 0xd400) AM_READWRITE(from_snd_r, sound_command_w)
+	AM_RANGE(0xd002, 0xd002) AM_READ(nycaptor_generic_control_r) AM_WRITE(cyclshtg_generic_control_w)
+	AM_RANGE(0xd400, 0xd400) AM_READ(from_snd_r) AM_WRITE(sound_command_w)
 	AM_RANGE(0xd401, 0xd401) AM_READ(unk_r)
 	AM_RANGE(0xd403, 0xd403) AM_WRITE(sound_cpu_reset_w)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
 	AM_RANGE(0xd805, 0xd805) AM_READ(cyclshtg_mcu_status_r)
 	AM_RANGE(0xd806, 0xd806) AM_READNOP
 	AM_RANGE(0xd807, 0xd807) AM_READ(cyclshtg_mcu_status_r)
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_READWRITE(nycaptor_scrlram_r, nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
-	AM_RANGE(0xdf03, 0xdf03) AM_READWRITE(nycaptor_gfxctrl_r, nycaptor_gfxctrl_w)
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w) AM_BASE_MEMBER(nycaptor_state, m_sharedram)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_READ(nycaptor_scrlram_r) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
+	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r) AM_WRITE(nycaptor_gfxctrl_w)
+	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r) AM_WRITE(nycaptor_sharedram_w) AM_BASE(&nycaptor_sharedram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bronx_slave_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(nycaptor_videoram_r, nycaptor_videoram_w) AM_BASE_SIZE_MEMBER(nycaptor_state, m_videoram, m_videoram_size)
-	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSWA")
-	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSWB")
-	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSWC")
+static ADDRESS_MAP_START( bronx_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+ 	AM_RANGE(0x0000, 0x7fff) AM_ROM
+ 	AM_RANGE(0xc000, 0xcfff) AM_READ(nycaptor_videoram_r) AM_WRITE(nycaptor_videoram_w) AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("DSW0")
+	AM_RANGE(0xd801, 0xd801) AM_READ_PORT("DSW1")
+	AM_RANGE(0xd802, 0xd802) AM_READ_PORT("DSW2")
 	AM_RANGE(0xd803, 0xd803) AM_READ_PORT("IN0")
 	AM_RANGE(0xd804, 0xd804) AM_READ_PORT("IN1")
 	AM_RANGE(0xd805, 0xd805) AM_READ(cyclshtg_mcu_status_r1)
 	AM_RANGE(0xd807, 0xd807) AM_READ(cyclshtg_mcu_status_r)
-	AM_RANGE(0xdc00, 0xdc9f) AM_READWRITE(nycaptor_spriteram_r, nycaptor_spriteram_w)
-	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE_MEMBER(nycaptor_state, m_scrlram)
-	AM_RANGE(0xdd00, 0xdeff) AM_READWRITE(nycaptor_palette_r, nycaptor_palette_w)
+	AM_RANGE(0xdc00, 0xdc9f) AM_READ(nycaptor_spriteram_r) AM_WRITE(nycaptor_spriteram_w)
+	AM_RANGE(0xdca0, 0xdcbf) AM_WRITE(nycaptor_scrlram_w) AM_BASE(&nycaptor_scrlram)
+	AM_RANGE(0xdd00, 0xdeff) AM_READ(nycaptor_palette_r) AM_WRITE(nycaptor_palette_w)
 	AM_RANGE(0xdf00, 0xdf00) AM_READ(nycaptor_bx_r)
 	AM_RANGE(0xdf01, 0xdf01) AM_READ(nycaptor_by_r)
 	AM_RANGE(0xdf02, 0xdf02) AM_READ(nycaptor_b_r)
-	AM_RANGE(0xdf03, 0xdf03) AM_READWRITE(nycaptor_gfxctrl_r, nycaptor_gfxctrl_w)
-	AM_RANGE(0xe000, 0xffff) AM_READWRITE(nycaptor_sharedram_r, nycaptor_sharedram_w)
+	AM_RANGE(0xdf03, 0xdf03) AM_READ(nycaptor_gfxctrl_r) AM_WRITE(nycaptor_gfxctrl_w)
+ 	AM_RANGE(0xe000, 0xffff) AM_READ(nycaptor_sharedram_r) AM_WRITE(nycaptor_sharedram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bronx_slave_io_map, AS_IO, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_ROM AM_REGION("user1", 0)
+static ADDRESS_MAP_START( bronx_slave_io_map, ADDRESS_SPACE_IO, 8 )
+ 	AM_RANGE(0x0000, 0x7fff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
 
-/* verified from Z80 code */
-static INPUT_PORTS_START( nycaptor )
-	PORT_START("DSWA")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Bonus_Life ) )       /* table at 0x00e5 in CPU1 - see notes for 'colt' */
-	PORT_DIPSETTING(	0x02, "20k 80k 80k+" )
-	PORT_DIPSETTING(	0x03, "50k 150k 200k+" )
-	PORT_DIPSETTING(	0x01, "100k 300k 300k+" )
-	PORT_DIPSETTING(	0x00, "150k 300k 300k+" )
-	PORT_DIPNAME( 0x04, 0x04, "Infinite Bullets")           /* see notes */
-	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Lives ) )            /* values are read from the MCU */
-	PORT_DIPSETTING(	0x08, "1" )
-	PORT_DIPSETTING(	0x00, "2" )
-	PORT_DIPSETTING(	0x18, "3" )
-	PORT_DIPSETTING(	0x10, "5" )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Free_Play ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( On ) )
+/* Cycle Shooting */
 
-	PORT_START("DSWB")
-	PORT_DIPNAME( 0x0f, 0x00, DEF_STR( Coin_A ) )
-	PORT_DIPSETTING(	0x0f, DEF_STR( 9C_1C ) )
-	PORT_DIPSETTING(	0x0e, DEF_STR( 8C_1C ) )
-	PORT_DIPSETTING(	0x0d, DEF_STR( 7C_1C ) )
-	PORT_DIPSETTING(	0x0c, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(	0x0b, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(	0x0a, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(	0x09, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(	0x08, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0x01, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(	0x02, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(	0x03, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(	0x04, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(	0x05, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(	0x06, DEF_STR( 1C_7C ) )
-	PORT_DIPSETTING(	0x07, DEF_STR( 1C_8C ) )
-	PORT_DIPNAME( 0xf0, 0x00, DEF_STR( Coin_B ) )
-	PORT_DIPSETTING(	0xf0, DEF_STR( 9C_1C ) )
-	PORT_DIPSETTING(	0xe0, DEF_STR( 8C_1C ) )
-	PORT_DIPSETTING(	0xd0, DEF_STR( 7C_1C ) )
-	PORT_DIPSETTING(	0xc0, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(	0xb0, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(	0xa0, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(	0x90, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(	0x80, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(	0x20, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(	0x30, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(	0x50, DEF_STR( 1C_6C ) )
-	PORT_DIPSETTING(	0x60, DEF_STR( 1C_7C ) )
-	PORT_DIPSETTING(	0x70, DEF_STR( 1C_8C ) )
-
-	PORT_START("DSWC")
-	PORT_DIPNAME( 0x01, 0x01, "Freeze" )
-	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "Training Spot" )
-	PORT_DIPSETTING(	0x00, DEF_STR( No ) )
-	PORT_DIPSETTING(	0x02, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(	0x0c, DEF_STR( Easy ) )
-	PORT_DIPSETTING(	0x04, DEF_STR( Normal ) )
-	PORT_DIPSETTING(	0x08, DEF_STR( Hard ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x10, 0x10, "Coinage Display" )
-	PORT_DIPSETTING(	0x00, DEF_STR( No ) )
-	PORT_DIPSETTING(	0x10, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x20, 0x20, "Reset Damage" )
-	PORT_DIPSETTING(	0x20, "Every Stage" )
-	PORT_DIPSETTING(	0x00, "Every 4 Stages" )
-	PORT_DIPNAME( 0x40, 0x40, "No Hit (Cheat)")
-	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Coin Slots" )
-	PORT_DIPSETTING(	0x00, "1" )
-	PORT_DIPSETTING(	0x80, "2" )
-
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )            /* IPT_START2 is some similar Taito games (eg: 'flstory') */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )            /* "I/O ERROR" if active - code at 0x083d */
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )            /* "I/O ERROR" if active - code at 0x083d */
-
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("LIGHTX")
-	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
-
-	PORT_START("LIGHTY")
-	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
-INPUT_PORTS_END
-
-/* verified from Z80 code */
-static INPUT_PORTS_START( colt )
-	PORT_INCLUDE( nycaptor )
-
-	PORT_MODIFY("DSWA")
-	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Lives ) )            /* see notes */
-	PORT_DIPSETTING(	0x08, "1" )
-	PORT_DIPSETTING(	0x10, "2" )
-	PORT_DIPSETTING(	0x18, "3" )
-	PORT_DIPSETTING(	0x00, "100" )
-INPUT_PORTS_END
-
-
-/* verified from Z80 code */
 static INPUT_PORTS_START( cyclshtg )
-	PORT_START("DSWA")
-	PORT_DIPUNUSED( 0x01, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x02, IP_ACTIVE_LOW )
-	TAITO_DSWA_BITS_2_TO_3
-	TAITO_COINAGE_JAPAN_OLD                                 /* coinage B isn't mentionned in the manual */
+	PORT_START("DSW0")
+	PORT_DIPNAME( 0x04, 0x04, "Test Mode" )
+	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
+ 	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
 
-	PORT_START("DSWB")
-	TAITO_DIFFICULTY
-	PORT_DIPNAME( 0x0c, 0x08, DEF_STR( Bonus_Life ) )       /* table at 0x100f - see notes for 'bronx' */
-	PORT_DIPSETTING(	0x0c, "150k 350k 200k+" )
-	PORT_DIPSETTING(	0x08, "200k 500k 300k+" )
-	PORT_DIPSETTING(	0x04, "300k 700k 400k+" )
-	PORT_DIPSETTING(	0x00, "400k 900k 500k+" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) )            /* see notes */
-	PORT_DIPSETTING(	0x00, "1" )
-	PORT_DIPSETTING(	0x30, "3" )
-	PORT_DIPSETTING(	0x10, "4" )
-	PORT_DIPSETTING(	0x20, "5" )
-	PORT_DIPUNUSED( 0x40, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x80, 0x80, "Reset Damage (Cheat)" )      /* see notes */
-	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coin_A ) )
+ 	PORT_DIPSETTING( 	0x10, DEF_STR( 2C_1C ) )
+ 	PORT_DIPSETTING( 	0x30, DEF_STR( 1C_1C ) )
+ 	PORT_DIPSETTING( 	0x00, DEF_STR( 2C_3C ) )
+ 	PORT_DIPSETTING( 	0x20, DEF_STR( 1C_2C ) )
 
-	PORT_START("DSWC")
-	PORT_DIPUNUSED( 0x01, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x02, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x04, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x08, IP_ACTIVE_LOW )
-	PORT_DIPNAME( 0x10, 0x10, "Infinite Bullets" )          /* see notes */
-	PORT_DIPSETTING(	0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPUNUSED( 0x20, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x40, IP_ACTIVE_LOW )
-	PORT_DIPUNUSED( 0x80, IP_ACTIVE_LOW )
+ 	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coin_B ) )
+ 	PORT_DIPSETTING( 	0x40, DEF_STR( 2C_1C ) )
+ 	PORT_DIPSETTING( 	0xc0, DEF_STR( 1C_1C ) )
+ 	PORT_DIPSETTING( 	0x00, DEF_STR( 2C_3C ) )
+ 	PORT_DIPSETTING( 	0x80, DEF_STR( 1C_2C ) )
 
-	PORT_START("IN0")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )            /* IPT_START2 is some similar Taito games (eg: 'flstory') */
+ 	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Demo_Sounds ) )
+ 	PORT_DIPSETTING(  	0x00, DEF_STR( Off ) )
+ 	PORT_DIPSETTING(  	0x08, DEF_STR( On ) )
+
+ 	PORT_START("DSW1")
+
+	PORT_START("DSW2")
+
+ 	PORT_START("IN0")
+ 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START2 )//?
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_TILT )
-	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN1 )
+ 	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Tilt ) )
+	PORT_DIPSETTING( 	0x08, DEF_STR( No ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( Yes ) )
+ 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_COIN2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
+
+ 	PORT_START("IN1")
+ 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )
 
 	PORT_START("LIGHTX")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
@@ -730,18 +543,113 @@ static INPUT_PORTS_START( cyclshtg )
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_CROSSHAIR(Y, -1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
 INPUT_PORTS_END
 
-/* verified from Z80 code */
-static INPUT_PORTS_START( bronx )
-	PORT_INCLUDE( cyclshtg )
 
-	PORT_MODIFY("DSWB")
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) )            /* see notes */
-	PORT_DIPSETTING(	0x00, "1" )
-	PORT_DIPSETTING(	0x30, "2" )
-	PORT_DIPSETTING(	0x10, "4" )
-	PORT_DIPSETTING(	0x20, "5" )
+static INPUT_PORTS_START( nycaptor )
+	PORT_START("DSW0")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING( 	0x02, "20k, 80k then every 80k" )
+	PORT_DIPSETTING( 	0x03, "50k, 150k then every 200k" )
+	PORT_DIPSETTING( 	0x01, "100k, 300k then every 300k" )
+	PORT_DIPSETTING( 	0x00, "150k, 300k then every 300k" )
+	PORT_DIPNAME( 0x04, 0x04, "Infinite Bullets (Cheat)")
+	PORT_DIPSETTING( 	0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Lives ) )
+	PORT_DIPSETTING( 	0x08, "1" )
+	PORT_DIPSETTING( 	0x00, "2" )
+	PORT_DIPSETTING( 	0x18, "3" )
+	PORT_DIPSETTING( 	0x10, "5" )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Free_Play ) )
+	PORT_DIPSETTING( 	0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) )
+	PORT_DIPSETTING( 	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x80, DEF_STR( On ) )
+
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x0f, 0x00, DEF_STR( Coin_A ) )
+	PORT_DIPSETTING( 	0x0f, DEF_STR( 9C_1C ) )
+	PORT_DIPSETTING( 	0x0e, DEF_STR( 8C_1C ) )
+	PORT_DIPSETTING( 	0x0d, DEF_STR( 7C_1C ) )
+	PORT_DIPSETTING( 	0x0c, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING( 	0x0b, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING( 	0x0a, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING( 	0x09, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING( 	0x08, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING( 	0x01, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING( 	0x02, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING( 	0x03, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING( 	0x04, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING( 	0x05, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING( 	0x06, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING( 	0x07, DEF_STR( 1C_8C ) )
+	PORT_DIPNAME( 0xf0, 0x00, DEF_STR( Coin_B ) )
+	PORT_DIPSETTING( 	0xf0, DEF_STR( 9C_1C ) )
+	PORT_DIPSETTING( 	0xe0, DEF_STR( 8C_1C ) )
+	PORT_DIPSETTING( 	0xd0, DEF_STR( 7C_1C ) )
+	PORT_DIPSETTING( 	0xc0, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING( 	0xb0, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING( 	0xa0, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING( 	0x90, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING( 	0x80, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING( 	0x10, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING( 	0x20, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING( 	0x30, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING( 	0x40, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING( 	0x50, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING( 	0x60, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING( 	0x70, DEF_STR( 1C_8C ) )
+
+	PORT_START("DSW2")
+	PORT_DIPNAME( 0x01, 0x01, "Freeze" )
+	PORT_DIPSETTING( 	0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "Training Spot" )
+	PORT_DIPSETTING( 	0x00, DEF_STR( No ) )
+	PORT_DIPSETTING( 	0x02, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING( 	0x0c, DEF_STR( Easy ) )
+	PORT_DIPSETTING( 	0x04, DEF_STR( Normal ) )
+	PORT_DIPSETTING( 	0x08, DEF_STR( Hard ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x10, 0x10, "Coinage Display" )
+	PORT_DIPSETTING( 	0x00, DEF_STR( No ) )
+	PORT_DIPSETTING( 	0x10, DEF_STR( Yes ) )
+	PORT_DIPNAME( 0x20, 0x20, "Reset Damage" )
+	PORT_DIPSETTING( 	0x20, "Every Stage" )
+	PORT_DIPSETTING( 	0x00, "Every 4 Stages" )
+	PORT_DIPNAME( 0x40, 0x40, "No Hit (Cheat)")
+	PORT_DIPSETTING( 	0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING( 	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Coin Slots" )
+	PORT_DIPSETTING( 	0x00, "1" )
+	PORT_DIPSETTING( 	0x80, "2" )
+
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* IPT_START2 is some similar Taito games (eg: 'flstory') */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_TILT )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* "I/O ERROR" if active */
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* "I/O ERROR" if active */
+
+	PORT_START("IN1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0xfe, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+	PORT_START("LIGHTX")
+	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
+
+	PORT_START("LIGHTY")
+	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
 INPUT_PORTS_END
-
 
 static const gfx_layout charlayout =
 {
@@ -775,250 +683,181 @@ GFXDECODE_END
 
 
 
-static MACHINE_START( nycaptor )
-{
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_subcpu = machine.device("sub");
-	state->m_mcu = machine.device("mcu");
-
-	state->save_item(NAME(state->m_generic_control_reg));
-	state->save_item(NAME(state->m_sound_nmi_enable));
-	state->save_item(NAME(state->m_pending_nmi));
-	state->save_item(NAME(state->m_snd_data));
-	state->save_item(NAME(state->m_vol_ctrl));
-
-	state->save_item(NAME(state->m_char_bank));
-	state->save_item(NAME(state->m_palette_bank));
-	state->save_item(NAME(state->m_gfxctrl));
-
-	state->save_item(NAME(state->m_port_a_in));
-	state->save_item(NAME(state->m_port_a_out));
-	state->save_item(NAME(state->m_ddr_a));
-	state->save_item(NAME(state->m_port_b_in));
-	state->save_item(NAME(state->m_port_b_out));
-	state->save_item(NAME(state->m_ddr_b));
-	state->save_item(NAME(state->m_port_c_in));
-	state->save_item(NAME(state->m_port_c_out));
-	state->save_item(NAME(state->m_ddr_c));
-	state->save_item(NAME(state->m_mcu_sent));
-	state->save_item(NAME(state->m_main_sent));
-	state->save_item(NAME(state->m_from_main));
-	state->save_item(NAME(state->m_from_mcu));
-}
-
-static MACHINE_RESET( nycaptor )
-{
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
-
-	MACHINE_RESET_CALL(ta7630);
-
-	state->m_generic_control_reg = 0;
-	state->m_sound_nmi_enable = 0;
-	state->m_pending_nmi = 0;
-	state->m_snd_data = 0;
-
-	state->m_char_bank = 0;
-	state->m_palette_bank = 0;
-	state->m_gfxctrl = 0;
-
-	state->m_port_a_in = 0;
-	state->m_port_a_out = 0;
-	state->m_ddr_a = 0;
-	state->m_port_b_in = 0;
-	state->m_port_b_out = 0;
-	state->m_ddr_b = 0;
-	state->m_port_c_in = 0;
-	state->m_port_c_out = 0;
-	state->m_ddr_c = 0;
-	state->m_mcu_sent = 0;
-	state->m_main_sent = 0;
-	state->m_from_main = 0;
-	state->m_from_mcu = 0;
-
-	memset(state->m_vol_ctrl, 0, ARRAY_LENGTH(state->m_vol_ctrl));
-}
-
-static MACHINE_CONFIG_START( nycaptor, nycaptor_state )
-
+static MACHINE_DRIVER_START( nycaptor )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,8000000/2)		/* ??? */
-	MCFG_CPU_PROGRAM_MAP(nycaptor_master_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,8000000/2)		/* ??? */
+	MDRV_CPU_PROGRAM_MAP(nycaptor_master_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_slave_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)	/* IRQ generated by ??? */
+	MDRV_CPU_ADD("sub", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_slave_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* IRQ generated by ??? */
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)	/* IRQ generated by ??? */
+	MDRV_CPU_ADD("audiocpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_sound_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,2*60)	/* IRQ generated by ??? */
 
-	MCFG_CPU_ADD("mcu", M68705,2000000)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_m68705_map)
+	MDRV_CPU_ADD("mcu", M68705,2000000)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_m68705_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* 100 CPU slices per frame - an high value to ensure proper synchronization of the CPUs */
+	MDRV_QUANTUM_TIME(HZ(6000))	/* 100 CPU slices per frame - an high value to ensure proper synchronization of the CPUs */
 
-	MCFG_MACHINE_START(nycaptor)
-	MCFG_MACHINE_RESET(nycaptor)
+	MDRV_MACHINE_RESET(ta7630)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(nycaptor)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(nycaptor)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_GFXDECODE(nycaptor)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(nycaptor)
+	MDRV_VIDEO_START(nycaptor)
+	MDRV_VIDEO_UPDATE(nycaptor)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay1", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay2", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("msm", MSM5232, 2000000)
-	MCFG_SOUND_CONFIG(msm5232_config)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
-	MCFG_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
-	MCFG_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
-	MCFG_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
-	MCFG_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
-	MCFG_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
-	MCFG_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
+	MDRV_SOUND_ADD("msm", MSM5232, 2000000)
+	MDRV_SOUND_CONFIG(msm5232_config)
+	MDRV_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
+	MDRV_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
+	MDRV_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
+	MDRV_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
+	MDRV_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
+	MDRV_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
+	MDRV_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
 	// pin 1 SOLO  8'       not mapped
 	// pin 2 SOLO 16'       not mapped
 	// pin 22 Noise Output  not mapped
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( cyclshtg, nycaptor_state )
+static MACHINE_DRIVER_START( cyclshtg )
+	MDRV_CPU_ADD("maincpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(cyclshtg_master_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("maincpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(cyclshtg_master_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("sub", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(cyclshtg_slave_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(cyclshtg_slave_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
+	MDRV_CPU_ADD("audiocpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_sound_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,2*60)
 
 #ifdef USE_MCU
-	MCFG_CPU_ADD("mcu", M68705,2000000)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_m68705_map)
+	MDRV_CPU_ADD("mcu", M68705,2000000)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_m68705_map)
 #endif
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(60))
-	MCFG_MACHINE_START(nycaptor)
-	MCFG_MACHINE_RESET(nycaptor)
+	MDRV_QUANTUM_TIME(HZ(60))
+	MDRV_MACHINE_RESET(ta7630)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(nycaptor)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(nycaptor)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_GFXDECODE(nycaptor)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(nycaptor)
+	MDRV_VIDEO_START(nycaptor)
+	MDRV_VIDEO_UPDATE(nycaptor)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay1", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay2", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("msm", MSM5232, 2000000)
-	MCFG_SOUND_CONFIG(msm5232_config)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
-	MCFG_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
-	MCFG_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
-	MCFG_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
-	MCFG_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
-	MCFG_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
-	MCFG_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
+	MDRV_SOUND_ADD("msm", MSM5232, 2000000)
+	MDRV_SOUND_CONFIG(msm5232_config)
+	MDRV_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
+	MDRV_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
+	MDRV_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
+	MDRV_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
+	MDRV_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
+	MDRV_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
+	MDRV_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
 	// pin 1 SOLO  8'       not mapped
 	// pin 2 SOLO 16'       not mapped
 	// pin 22 Noise Output  not mapped
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( bronx, nycaptor_state )
+static MACHINE_DRIVER_START( bronx )
+	MDRV_CPU_ADD("maincpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(bronx_master_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("maincpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(bronx_master_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("sub", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(bronx_slave_map)
+	MDRV_CPU_IO_MAP(bronx_slave_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(bronx_slave_map)
-	MCFG_CPU_IO_MAP(bronx_slave_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("audiocpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(nycaptor_sound_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,2*60)
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(nycaptor_sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,2*60)
+	MDRV_QUANTUM_TIME(HZ(120))
+	MDRV_MACHINE_RESET(ta7630)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(120))
-	MCFG_MACHINE_START(nycaptor)
-	MCFG_MACHINE_RESET(nycaptor)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(nycaptor)
+	MDRV_GFXDECODE(nycaptor)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_GFXDECODE(nycaptor)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_VIDEO_START(nycaptor)
+	MDRV_VIDEO_UPDATE(nycaptor)
 
-	MCFG_VIDEO_START(nycaptor)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay1", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay1", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay2", AY8910, 8000000/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 8000000/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
-
-	MCFG_SOUND_ADD("msm", MSM5232, 2000000)
-	MCFG_SOUND_CONFIG(msm5232_config)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
-	MCFG_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
-	MCFG_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
-	MCFG_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
-	MCFG_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
-	MCFG_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
-	MCFG_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
+	MDRV_SOUND_ADD("msm", MSM5232, 2000000)
+	MDRV_SOUND_CONFIG(msm5232_config)
+	MDRV_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
+	MDRV_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
+	MDRV_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
+	MDRV_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
+	MDRV_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
+	MDRV_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
+	MDRV_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
 	// pin 1 SOLO  8'       not mapped
 	// pin 2 SOLO 16'       not mapped
 	// pin 22 Noise Output  not mapped
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 
@@ -1209,7 +1048,7 @@ ROM_START( bronx )
 	ROM_LOAD( "a80_11.u11",   0x00000, 0x4000, CRC(29e1293b) SHA1(106204ec46fae5d3b5e4a4d423bc0e886a637c61) )
 	ROM_LOAD( "a80_10.u10",   0x04000, 0x4000, CRC(345f576c) SHA1(fee5b2167bcd0fdc21c0a7b22ffdf7506a24baee) )
 	ROM_LOAD( "a80_09.u9",    0x08000, 0x4000, CRC(3ef06dff) SHA1(99bbd32ae89a6becac9e1bb8a34a834d81890444) )
-	ROM_LOAD( "8.bin",  		0x0c000, 0x4000, CRC(2b778d24) SHA1(caca7a18743a4bb657a7c5691d93de0ccb867003) )
+	ROM_LOAD( "8.bin",    		0x0c000, 0x4000, CRC(2b778d24) SHA1(caca7a18743a4bb657a7c5691d93de0ccb867003) )
 
 	ROM_LOAD( "a80_15.u39",   0x10000, 0x4000, CRC(2cefb47d) SHA1(3bef20c9c0c4f9237a327da3cbc9a7bbf63771ea) )
 	ROM_LOAD( "a80_14.u34",   0x14000, 0x4000, CRC(91642de8) SHA1(531974fc147d25e9feada89bc82d5df62ec9d446) )
@@ -1350,44 +1189,36 @@ ROM_START( colt )
 	ROM_LOAD( "a50_14",   0x1c000, 0x4000, CRC(24b2f1bf) SHA1(4757aec2e4b99ce33d993ce1e19ee46a4eb76e86) )
 ROM_END
 
-static DRIVER_INIT( nycaptor )
+static DRIVER_INIT(bronx)
 {
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
-	state->m_gametype = 0;
-}
-
-static DRIVER_INIT( cyclshtg )
-{
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
-	state->m_gametype = 1;
-}
-
-static DRIVER_INIT( bronx )
-{
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
-
-	for (i = 0; i < 0x20000; i++)
-		rom[i] = BITSWAP8(rom[i], 0, 1, 2, 3, 4, 5, 6, 7);
-
-	state->m_gametype = 1;
+	UINT8 *rom = memory_region(machine, "maincpu");
+	for(i=0;i<0x20000;i++)
+		rom[i]=BITSWAP8(rom[i],0,1,2,3,4,5,6,7);
+	nyc_gametype=1;
 }
 
-static DRIVER_INIT( colt )
+static DRIVER_INIT(colt)
 {
-	nycaptor_state *state = machine.driver_data<nycaptor_state>();
 	int i;
-	UINT8 *rom = machine.region("maincpu")->base();
-
-	for (i = 0; i < 0x20000; i++)
-		rom[i] = BITSWAP8(rom[i], 0, 1, 2, 3, 4, 5, 6, 7);
-
-	state->m_gametype = 2;
+	UINT8 *rom = memory_region(machine, "maincpu");
+	for(i=0;i<0x20000;i++)
+		rom[i]=BITSWAP8(rom[i],0,1,2,3,4,5,6,7);
+	nyc_gametype=2;
 }
 
-GAME( 1985, nycaptor, 0,        nycaptor, nycaptor, nycaptor, ROT0,  "Taito",   "N.Y. Captor", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1986, cyclshtg, 0,        cyclshtg, cyclshtg, cyclshtg, ROT90, "Taito",   "Cycle Shooting", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+static DRIVER_INIT(nycaptor)
+{
+	nyc_gametype=0;
+}
+
+static DRIVER_INIT(cyclshtg)
+{
+	nyc_gametype=1;
+}
+
+GAME( 1985, nycaptor, 0,       nycaptor,  nycaptor, nycaptor, ROT0,  "Taito", "N.Y. Captor", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, cyclshtg, 0,       cyclshtg,  cyclshtg, cyclshtg, ROT90, "Taito", "Cycle Shooting", GAME_NOT_WORKING)
 /* bootlegs */
-GAME( 1986, bronx,    cyclshtg, bronx,    bronx,    bronx,    ROT90, "bootleg", "Bronx", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1986, colt,     nycaptor, bronx,    colt,     colt,     ROT0,  "bootleg", "Colt", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1986, bronx, cyclshtg,       bronx,  cyclshtg, bronx, ROT90, "bootleg", "Bronx",GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND)
+GAME( 1986, colt , nycaptor,       bronx,  nycaptor, colt, ROT0, "bootleg", "Colt",GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND|GAME_WRONG_COLORS)

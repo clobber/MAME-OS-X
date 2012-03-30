@@ -13,10 +13,19 @@ pf: but some gameplay bugs - sprite positioning is incorrect, no enemies, jump a
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
-#include "includes/thoop2.h"
+
+extern UINT16 *thoop2_vregs;
+extern UINT16 *thoop2_videoram;
+extern UINT16 *thoop2_spriteram;
+
+/* from video/thoop2.c */
+WRITE16_HANDLER( thoop2_vram_w );
+VIDEO_START( thoop2 );
+VIDEO_UPDATE( thoop2 );
+
 
 static const gfx_layout thoop2_tilelayout =
 {
@@ -51,7 +60,7 @@ GFXDECODE_END
 
 static WRITE16_HANDLER( OKIM6295_bankswitch_w )
 {
-	UINT8 *RAM = space->machine().region("oki")->base();
+	UINT8 *RAM = memory_region(space->machine, "oki");
 
 	if (ACCESSING_BITS_0_7){
 		memcpy(&RAM[0x30000], &RAM[0x40000 + (data & 0x0f)*0x10000], 0x10000);
@@ -64,11 +73,11 @@ static WRITE16_HANDLER( thoop2_coin_w )
 		switch ((offset >> 3)){
 			case 0x00:	/* Coin Lockouts */
 			case 0x01:
-				coin_lockout_w(space->machine(), (offset >> 3) & 0x01, ~data & 0x01);
+				coin_lockout_w((offset >> 3) & 0x01, ~data & 0x01);
 				break;
 			case 0x02:	/* Coin Counters */
 			case 0x03:
-				coin_counter_w(space->machine(), (offset >> 3) & 0x01, data & 0x01);
+				coin_counter_w((offset >> 3) & 0x01, data & 0x01);
 				break;
 		}
 	}
@@ -84,20 +93,20 @@ static READ16_HANDLER( DS5002FP_R )
     return 0x55aa;
 }
 
-static ADDRESS_MAP_START( thoop2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( thoop2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM													/* ROM */
-	AM_RANGE(0x100000, 0x101fff) AM_RAM_WRITE(thoop2_vram_w) AM_BASE_MEMBER(thoop2_state, m_videoram)	/* Video RAM */
-	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE_MEMBER(thoop2_state, m_vregs)					/* Video Registers */
+	AM_RANGE(0x100000, 0x101fff) AM_RAM_WRITE(thoop2_vram_w) AM_BASE(&thoop2_videoram)	/* Video RAM */
+	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE(&thoop2_vregs)					/* Video Registers */
 	AM_RANGE(0x10800c, 0x10800d) AM_WRITE(watchdog_reset16_w)							/* INT 6 ACK/Watchdog timer */
-	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)/* Palette */
-	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(thoop2_state, m_spriteram)						/* Sprite RAM */
+	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)/* Palette */
+	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE(&thoop2_spriteram)						/* Sprite RAM */
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSW2")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700004, 0x700005) AM_READ_PORT("P1")
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("P2")
 	AM_RANGE(0x700008, 0x700009) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x70000c, 0x70000d) AM_WRITE(OKIM6295_bankswitch_w)						/* OKI6295 bankswitch */
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)					/* OKI6295 data register */
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)					/* OKI6295 data register */
 	AM_RANGE(0x70000a, 0x70005b) AM_WRITE(thoop2_coin_w)								/* Coin Counters + Coin Lockout */
 	AM_RANGE(0xfeff00, 0xfeff01) AM_READ(DS5002FP_R)
 	AM_RANGE(0xfeff02, 0xfeff03) AM_WRITENOP  /* pf: 0xfeff02 and 0xfeff03 need to remain zero always */
@@ -186,32 +195,34 @@ static INPUT_PORTS_START( thoop2 )
 INPUT_PORTS_END
 
 
-static MACHINE_CONFIG_START( thoop2, thoop2_state )
+static MACHINE_DRIVER_START( thoop2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,24000000/2)			/* 12 MHz */
-	MCFG_CPU_PROGRAM_MAP(thoop2_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000,24000000/2)			/* 12 MHz */
+	MDRV_CPU_PROGRAM_MAP(thoop2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*16, 32*16)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(thoop2)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*16, 32*16)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1)
 
-	MCFG_GFXDECODE(thoop2)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(thoop2)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(thoop2)
+	MDRV_VIDEO_START(thoop2)
+	MDRV_VIDEO_UPDATE(thoop2)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( thoop2 )

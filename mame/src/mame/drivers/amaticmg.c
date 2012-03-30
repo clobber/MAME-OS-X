@@ -381,21 +381,12 @@
 #define CRTC_CLOCK		MASTER_CLOCK/8	/* guess */
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "video/mc6845.h"
 #include "machine/8255ppi.h"
 #include "sound/3812intf.h"
 #include "sound/dac.h"
-
-
-class amaticmg_state : public driver_device
-{
-public:
-	amaticmg_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-};
 
 
 /************************************
@@ -406,52 +397,15 @@ static VIDEO_START( amaticmg )
 {
 }
 
-static SCREEN_UPDATE_IND16( amaticmg )
+static VIDEO_UPDATE( amaticmg )
 {
 	return 0;
 }
 
 static PALETTE_INIT( amaticmg )
 {
-	int	bit0, bit1, bit2 , r, g, b;
-	int	i;
-
-	for (i = 0; i < 0x200; ++i)
-	{
-		bit0 = 0;
-		bit1 = (color_prom[0] >> 6) & 0x01;
-		bit2 = (color_prom[0] >> 7) & 0x01;
-		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
-		bit0 = (color_prom[0] >> 3) & 0x01;
-		bit1 = (color_prom[0] >> 4) & 0x01;
-		bit2 = (color_prom[0] >> 5) & 0x01;
-		g = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
-		bit0 = (color_prom[0] >> 0) & 0x01;
-		bit1 = (color_prom[0] >> 1) & 0x01;
-		bit2 = (color_prom[0] >> 2) & 0x01;
-		r = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
-
-		palette_set_color(machine, i, MAKE_RGB(r, g, b));
-		color_prom++;
-	}
 }
 
-
-static PALETTE_INIT( amaticmg3 )
-{
-	int	r, g, b;
-	int	i;
-
-	for (i = 0; i < 0x20000; i+=2)
-	{
-		b = ((color_prom[1] & 0xf8) >> 3);
-		g = ((color_prom[0] & 0xc0) >> 6) | ((color_prom[1] & 0x7) << 2);
-		r = ((color_prom[0] & 0x3e) >> 1);
-
-		palette_set_color_rgb(machine, i >> 1, pal5bit(r), pal5bit(g), pal5bit(b));
-		color_prom+=2;
-	}
-}
 
 /************************************
 *       Read/Write Handlers         *
@@ -463,21 +417,21 @@ static PALETTE_INIT( amaticmg3 )
 *      Memory Map Information       *
 ************************************/
 
-static ADDRESS_MAP_START( amaticmg_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( amaticmg_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
-//  AM_RANGE(0x0000, 0x0000) AM_RAM // AM_SHARE("nvram")
+//  AM_RANGE(0x0000, 0x0000) AM_RAM // AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 //  AM_RANGE(0x0000, 0x0000) AM_DEVWRITE("crtc", mc6845_address_w)
 //  AM_RANGE(0x0000, 0x0000) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
-//  AM_RANGE(0x0000, 0x0000) AM_RAM_WRITE(amaticmg_videoram_w) AM_BASE(&amaticmg_videoram)
-//  AM_RANGE(0x0000, 0x0000) AM_RAM_WRITE(amaticmg_colorram_w) AM_BASE(&amaticmg_colorram)
+//  AM_RANGE(0x0000, 0x0000) AM_RAM_WRITE(amaticmg_videoram_w) AM_BASE(&videoram)
+//  AM_RANGE(0x0000, 0x0000) AM_RAM_WRITE(amaticmg_colorram_w) AM_BASE(&colorram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( amaticmg_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( amaticmg_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 //  AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)
-//  AM_RANGE(0x00, 0x00) AM_DEVWRITE("ymsnd", ym3812_w)
+//  AM_RANGE(0x00, 0x00) AM_DEVWRITE("ym", ym3812_w)
 //  AM_RANGE(0x00, 0x00) AM_DEVWRITE("dac1", dac_signed_w)
 //  AM_RANGE(0x00, 0x00) AM_DEVWRITE("dac2", dac_signed_w)
 
@@ -568,23 +522,14 @@ INPUT_PORTS_END
 *         Graphics Layouts          *
 ************************************/
 
-static const gfx_layout charlayout_4bpp =
+static const gfx_layout charlayout =
 {
+/* Only 2 planes are hooked. This need to be fixed */
+
 	4,8,
 	RGN_FRAC(1,2),
-	4,
-	{ RGN_FRAC(0,2) + 0, RGN_FRAC(0,2) + 4, RGN_FRAC(1,2) + 0, RGN_FRAC(1,2) + 4 }, //TODO: rom order is unknown
-	{ 3, 2, 1, 0 },	/* tiles are x-flipped */
-	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
-	8*4*2
-};
-
-static const gfx_layout charlayout_6bpp =
-{
-	4,8,
-	RGN_FRAC(1,3),
-	6,
-	{ RGN_FRAC(0,3) + 0, RGN_FRAC(0,3) + 4, RGN_FRAC(1,3) + 0, RGN_FRAC(1,3) + 4,RGN_FRAC(2,3) + 0, RGN_FRAC(2,3) + 4, }, //TODO: rom order is unknown
+	2,
+	{ RGN_FRAC(0,2), RGN_FRAC(0,2) + 4 },
 	{ 3, 2, 1, 0 },	/* tiles are x-flipped */
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
 	8*4*2
@@ -596,12 +541,9 @@ static const gfx_layout charlayout_6bpp =
 ************************************/
 
 static GFXDECODE_START( amaticmg )
-	GFXDECODE_ENTRY( "gfx1", 0x0000, charlayout_4bpp, 0, 0x20 )
+	GFXDECODE_ENTRY( "gfx1", 0x0000, charlayout, 0, 16 )
 GFXDECODE_END
 
-static GFXDECODE_START( amaticmg3 )
-	GFXDECODE_ENTRY( "gfx1", 0x0000, charlayout_6bpp, 0, 0x20 )
-GFXDECODE_END
 
 /************************************
 *          Sound Interface          *
@@ -668,54 +610,49 @@ GFXDECODE_END
 *          Machine Drivers          *
 ************************************/
 
-static MACHINE_CONFIG_START( amaticmg, amaticmg_state )
+static MACHINE_DRIVER_START( amaticmg )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK)		/* WRONG! */
-	MCFG_CPU_PROGRAM_MAP(amaticmg_map)
-	MCFG_CPU_IO_MAP(amaticmg_portmap)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, CPU_CLOCK)		/* WRONG! */
+	MDRV_CPU_PROGRAM_MAP(amaticmg_map)
+	MDRV_CPU_IO_MAP(amaticmg_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-//  MCFG_NVRAM_ADD_0FILL("nvram")
+//  MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* 3x 8255 */
-//  MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-//  MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
-//  MCFG_PPI8255_ADD( "ppi8255_2", ppi8255_intf[2] )
+//  MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+//  MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+//  MDRV_PPI8255_ADD( "ppi8255_2", ppi8255_intf[2] )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(amaticmg)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
 
-//  MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
+//  MDRV_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
-	MCFG_GFXDECODE(amaticmg)
+	MDRV_GFXDECODE(amaticmg)
 
-	MCFG_PALETTE_INIT(amaticmg)
-	MCFG_PALETTE_LENGTH(0x200)
-	MCFG_VIDEO_START(amaticmg)
+	MDRV_PALETTE_INIT(amaticmg)
+	MDRV_PALETTE_LENGTH(0x100)
+	MDRV_VIDEO_START(amaticmg)
+	MDRV_VIDEO_UPDATE(amaticmg)
 
 	/* sound hardware */
-//  MCFG_SPEAKER_STANDARD_MONO("mono")
+//  MDRV_SPEAKER_STANDARD_MONO("mono")
 
-//  MCFG_SOUND_ADD("ymsnd", YM3812, SND_CLOCK)
-//  MCFG_SOUND_CONFIG(ym3812_config)
-//  MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+//  MDRV_SOUND_ADD("ym", YM3812, SND_CLOCK)
+//  MDRV_SOUND_CONFIG(ym3812_config)
+//  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-//  MCFG_SOUND_ADD("dac", DAC, 0)   /* Y3014B */
-//  MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+//  MDRV_SOUND_ADD("dac", DAC, 0)   /* Y3014B */
+//  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( amaticmg3, amaticmg )
-
-	MCFG_GFXDECODE(amaticmg3)
-	MCFG_PALETTE_INIT(amaticmg3)
-	MCFG_PALETTE_LENGTH(0x10000)
-MACHINE_CONFIG_END
 
 /************************************
 *             Rom Load              *
@@ -725,9 +662,9 @@ ROM_START( am_uslot )
 	ROM_REGION( 0x40000, "maincpu", 0 )	/* encrypted program ROM...*/
 	ROM_LOAD( "u3.bin",  0x00000, 0x20000, CRC(29bf4a95) SHA1(a73873f7cd1fdf5accc3e79f4619949f261400b8) )
 
-	ROM_REGION( 0x30000, "gfx1", 0 )
+	ROM_REGION( 0x20000, "gfx1", 0 )	/* There are only slots tiles. No chars inside */
 	ROM_LOAD( "u9.bin",  0x00000, 0x10000, CRC(823a736a) SHA1(a5227e3080367736aac1198d9dbb55efc4114624) )
-	ROM_LOAD( "u10.bin", 0x10000, 0x10000, CRC(6a811c81) SHA1(af01cd9b1ce6aca92df71febb05fe216b18cf42a) )
+	ROM_LOAD( "u10.bin", 0x00000, 0x10000, CRC(6a811c81) SHA1(af01cd9b1ce6aca92df71febb05fe216b18cf42a) )
 
 	ROM_REGION( 0x0200, "proms", 0 )
 	ROM_LOAD( "n82s147a.bin", 0x0000, 0x0200, CRC(dfeabd11) SHA1(21e8bbcf4aba5e4d672e5585890baf8c5bc77c98) )
@@ -743,7 +680,7 @@ ROM_START( am_mg24 )
 	ROM_LOAD( "multi_2.4_zg2.i18.bin", 0x080000, 0x80000, CRC(b504e1b8) SHA1(ffa17a2c212eb2fffb89b131868e69430cb41203) )
 	ROM_LOAD( "multi_2.4_zg3.i33.bin", 0x100000, 0x80000, CRC(9b66bb4d) SHA1(64035d2028a9b68164c87475a1ec9754453ad572) )
 
-	ROM_REGION( 0x20000/*0x0400*/, "proms", 0 )
+	ROM_REGION( 0x0400, "proms", 0 )
 	ROM_LOAD( "n82s147a_1.bin", 0x0000, 0x0200, NO_DUMP )
 	ROM_LOAD( "n82s147a_2.bin", 0x0200, 0x0200, NO_DUMP )
 ROM_END
@@ -757,7 +694,7 @@ ROM_START( am_mg3 )
 	ROM_LOAD( "mg_iii_51_zg2.bin", 0x080000, 0x80000, CRC(4425e535) SHA1(726c322c5d0b391b82e49dd1797ebf0abfa4a65a) )
 	ROM_LOAD( "mg_iii_51_zg3.bin", 0x100000, 0x80000, CRC(36d4c0fa) SHA1(20352dbbb2ce2233be0f4f694ddf49b8f5d6a64f) )
 
-	ROM_REGION( 0x20000, "proms", 0 )
+	ROM_REGION( 0x20000, "other", 0 )
 	ROM_LOAD( "v.bin", 0x00000, 0x20000, CRC(524767e2) SHA1(03a108494f42365c820fdfbcba9496bda86f3081) )
 ROM_END
 
@@ -777,6 +714,6 @@ static DRIVER_INIT( amaticmg )
 ************************************/
 
 /*    YEAR  NAME      PARENT  MACHINE   INPUT     INIT      ROT    COMPANY                FULLNAME                     FLAGS  */
-GAME( 1996, am_uslot, 0,      amaticmg, amaticmg, amaticmg, ROT0, "Amatic Trading GmbH", "Amatic Unknown Slots Game",  GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000, am_mg24,  0,      amaticmg3, amaticmg, amaticmg, ROT0, "Amatic Trading GmbH", "Multi Game I (V.Ger 2.4)",   GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000, am_mg3,   0,      amaticmg3, amaticmg, amaticmg, ROT0, "Amatic Trading GmbH", "Multi Game III (V.Ger 3.5)", GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 1996, am_uslot, 0,      amaticmg, amaticmg, amaticmg, ROT0, "Amatic Trading GMBH", "Amatic Unknown Slots Game",  GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2000, am_mg24,  0,      amaticmg, amaticmg, amaticmg, ROT0, "Amatic Trading GMBH", "Multi Game I (V.Ger 2.4)",   GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2000, am_mg3,   0,      amaticmg, amaticmg, amaticmg, ROT0, "Amatic Trading GMBH", "Multi Game III (V.Ger 3.5)", GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_UNEMULATED_PROTECTION | GAME_NO_SOUND | GAME_NOT_WORKING )

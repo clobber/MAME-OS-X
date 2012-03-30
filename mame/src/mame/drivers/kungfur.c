@@ -22,37 +22,20 @@ KR2-KR6 : VOICE
 
 50pin cable to 7seg&lamp control board.
 
-Information:
-http://www.wshin.com/games/review/ka/kung-fu-roushi.htm
-http://www.youtube.com/watch?v=ssEfw-RbSjs
-
-
+flyer.gif from
+http://www.hoizinger.com/ed/EM.HTML
 ----------------------------------------------------------------
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/msm5205.h"
 #include "machine/8255ppi.h"
 
-
-class kungfur_state : public driver_device
-{
-public:
-	kungfur_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_led[0x10];
-	UINT8 m_mux_data;
-	UINT32 m_adpcm_pos[2];
-	UINT8 m_adpcm_idle[2];
-	UINT8 m_trigger1;
-	UINT8 m_adpcm_data1;
-	UINT8 m_trigger2;
-	UINT8 m_adpcm_data2;
-};
-
+//static UINT8 io_data[6];
+static UINT8 led[0x10]; //not the right size,TODO
+static UINT8 mux_data;
 
 static VIDEO_START( kungfur )
 {
@@ -81,61 +64,59 @@ g & 40
 #define LED_ON		0x0001
 #define LED_OFF		0x0000
 
-static void draw_led(bitmap_ind16 &bitmap, int x, int y,UINT8 value)
+static void draw_led(bitmap_t *bitmap, int x, int y,UINT8 value)
 {
-	bitmap.plot_box(x, y, 6, 10, 0x00000000);
+	plot_box(bitmap, x, y, 6, 10, 0x00000000);
 
 	/*a*/
-	bitmap.pix16(y+0, x+1) = ((value & 0x01) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+0, x+2) = ((value & 0x01) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+0, x+3) = ((value & 0x01) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+0, x+1) = ((value & 0x01) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+0, x+2) = ((value & 0x01) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+0, x+3) = ((value & 0x01) ? LED_ON : LED_OFF);
 	/*b*/
-	bitmap.pix16(y+1, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+2, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+3, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+1, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+2, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+3, x+4) = ((value & 0x02) ? LED_ON : LED_OFF);
 	/*c*/
-	bitmap.pix16(y+5, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+6, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+7, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+5, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+6, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+7, x+4) = ((value & 0x04) ? LED_ON : LED_OFF);
 	/*d*/
-	bitmap.pix16(y+8, x+1) = ((value & 0x08) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+8, x+2) = ((value & 0x08) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+8, x+3) = ((value & 0x08) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+8, x+1) = ((value & 0x08) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+8, x+2) = ((value & 0x08) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+8, x+3) = ((value & 0x08) ? LED_ON : LED_OFF);
 	/*e*/
-	bitmap.pix16(y+5, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+6, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+7, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+5, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+6, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+7, x+0) = ((value & 0x10) ? LED_ON : LED_OFF);
 	/*f*/
-	bitmap.pix16(y+1, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+2, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+3, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+1, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+2, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+3, x+0) = ((value & 0x20) ? LED_ON : LED_OFF);
 	/*g*/
-	bitmap.pix16(y+4, x+1) = ((value & 0x40) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+4, x+2) = ((value & 0x40) ? LED_ON : LED_OFF);
-	bitmap.pix16(y+4, x+3) = ((value & 0x40) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+4, x+1) = ((value & 0x40) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+4, x+2) = ((value & 0x40) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+4, x+3) = ((value & 0x40) ? LED_ON : LED_OFF);
 	/*"point" (just for debugging)*/
-	bitmap.pix16(y+9, x+4) = ((value & 0x80) ? LED_ON : LED_OFF);
+	*BITMAP_ADDR16(bitmap, y+9, x+4) = ((value & 0x80) ? LED_ON : LED_OFF);
 }
 
 /* actually debugging purpose, it will be converted to the artwork system at some point. */
-static SCREEN_UPDATE_IND16( kungfur )
+static VIDEO_UPDATE( kungfur )
 {
-	kungfur_state *state = screen.machine().driver_data<kungfur_state>();
 //  popmessage("%02x %02x %02x %02x %02x %02x",io_data[0],io_data[1],io_data[2],io_data[3],io_data[4],io_data[5]);
 	int i;
 
 	for(i=0;i<16;i++)
-		draw_led(bitmap,  (i*8)+2, 100, state->m_led[i]);
+		draw_led(bitmap,  (i*8)+2, 100, led[i]);
 
 	return 0;
 }
 
 static WRITE8_DEVICE_HANDLER( test0_w )
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
-	state->m_mux_data = data & 7;	/* multiplexer selector? (00-06) */
+	mux_data = data & 7;	/* multiplexer selector? (00-06) */
 
-	state->m_mux_data|= (data & 0x10)>>1;
+	mux_data|= (data & 0x10)>>1;
 //  printf("%02x MUX W\n",data);
 }
 
@@ -147,9 +128,8 @@ static WRITE8_DEVICE_HANDLER( test1_w )
 
 static WRITE8_DEVICE_HANDLER( test2_w )
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
 //  io_data[2] = data;  /* lower nibble should be NULL */
-	state->m_led[state->m_mux_data] = data;
+	led[mux_data] = data;
 //  printf("%02x Unk 2 W\n",data);
 }
 
@@ -162,9 +142,8 @@ static WRITE8_DEVICE_HANDLER( test3_w )
 /*mux is always 0*/
 static WRITE8_DEVICE_HANDLER( test4_w )
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
 //  io_data[4] = data;
-	state->m_led[state->m_mux_data] = data;
+	led[mux_data] = data;
 }
 
 /* this looks like lamps. */
@@ -174,21 +153,21 @@ static WRITE8_DEVICE_HANDLER( test5_w )
 //  printf("%02x Unk 5 W\n",data);
 }
 
+static UINT32 adpcm_pos[2];
+static UINT8 adpcm_idle[2];
 
 static WRITE8_DEVICE_HANDLER( kungfur_adpcm1_w )
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
-	state->m_adpcm_pos[0] = 0x40000+(data & 0xff) * 0x100;
-	state->m_adpcm_idle[0] = 0;
-	msm5205_reset_w(device->machine().device("adpcm1"),0);
+	adpcm_pos[0] = 0x40000+(data & 0xff) * 0x100;
+	adpcm_idle[0] = 0;
+	msm5205_reset_w(devtag_get_device(device->machine, "adpcm1"),0);
 }
 
 static WRITE8_DEVICE_HANDLER( kungfur_adpcm2_w )
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
-	state->m_adpcm_pos[1] = (data & 0xff) * 0x400;
-	state->m_adpcm_idle[1] = 0;
-	msm5205_reset_w(device->machine().device("adpcm2"),0);
+	adpcm_pos[1] = (data & 0xff) * 0x400;
+	adpcm_idle[1] = 0;
+	msm5205_reset_w(devtag_get_device(device->machine, "adpcm2"),0);
 }
 
 /*
@@ -201,7 +180,7 @@ static WRITE8_DEVICE_HANDLER( kungfur_adpcm2_w )
   C000-FFFF  ; R  ; ROM space.
 
 */
-static ADDRESS_MAP_START( kungfur_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( kungfur_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("adpcm1", kungfur_adpcm1_w)
 	AM_RANGE(0x4004, 0x4004) AM_DEVWRITE("adpcm2", kungfur_adpcm2_w)
@@ -277,53 +256,53 @@ static const ppi8255_interface ppi8255_intf[2] =
 	}
 };
 
-static void kfr_adpcm1_int(device_t *device)
+static void kfr_adpcm1_int(const device_config *device)
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
+	static UINT8 trigger,adpcm_data;
 
-	if (state->m_adpcm_pos[0] >= 0x40000 || state->m_adpcm_idle[0])
+	if (adpcm_pos[0] >= 0x40000 || adpcm_idle[0])
 	{
-		msm5205_reset_w(device->machine().device("adpcm1"),1);
-		state->m_trigger1 = 0;
+		msm5205_reset_w(devtag_get_device(device->machine, "adpcm1"),1);
+		trigger = 0;
 	}
 	else
 	{
-		UINT8 *ROM = device->machine().region("adpcm1")->base();
+		UINT8 *ROM = memory_region(device->machine, "adpcm1");
 
-		state->m_adpcm_data1 = ((state->m_trigger1 ? (ROM[state->m_adpcm_pos[0]] & 0x0f) : (ROM[state->m_adpcm_pos[0]] & 0xf0)>>4) );
-		msm5205_data_w(device->machine().device("adpcm1"), state->m_adpcm_data1 & 0xf);
-		state->m_trigger1 ^= 1;
-		if(state->m_trigger1 == 0)
+		adpcm_data = ((trigger ? (ROM[adpcm_pos[0]] & 0x0f) : (ROM[adpcm_pos[0]] & 0xf0)>>4) );
+		msm5205_data_w(devtag_get_device(device->machine, "adpcm1"),adpcm_data & 0xf);
+		trigger^=1;
+		if(trigger == 0)
 		{
-			state->m_adpcm_pos[0]++;
-			if((ROM[state->m_adpcm_pos[0]] & 0xff) == 0xff)
-				state->m_adpcm_idle[0] = 1;
+			adpcm_pos[0]++;
+			if((ROM[adpcm_pos[0]] & 0xff) == 0xff)
+				adpcm_idle[0] = 1;
 		}
 	}
 }
 
 
-static void kfr_adpcm2_int(device_t *device)
+static void kfr_adpcm2_int(const device_config *device)
 {
-	kungfur_state *state = device->machine().driver_data<kungfur_state>();
+	static UINT8 trigger,adpcm_data;
 
-	if (state->m_adpcm_pos[1] >= 0x10000 || state->m_adpcm_idle[1])
+	if (adpcm_pos[1] >= 0x10000 || adpcm_idle[1])
 	{
-		msm5205_reset_w(device->machine().device("adpcm2"),1);
-		state->m_trigger2 = 0;
+		msm5205_reset_w(devtag_get_device(device->machine, "adpcm2"),1);
+		trigger = 0;
 	}
 	else
 	{
-		UINT8 *ROM = device->machine().region("adpcm2")->base();
+		UINT8 *ROM = memory_region(device->machine, "adpcm2");
 
-		state->m_adpcm_data2 = ((state->m_trigger2 ? (ROM[state->m_adpcm_pos[1]] & 0x0f) : (ROM[state->m_adpcm_pos[1]] & 0xf0)>>4) );
-		msm5205_data_w(device->machine().device("adpcm2"), state->m_adpcm_data2 & 0xf);
-		state->m_trigger2 ^= 1;
-		if(state->m_trigger2 == 0)
+		adpcm_data = ((trigger ? (ROM[adpcm_pos[1]] & 0x0f) : (ROM[adpcm_pos[1]] & 0xf0)>>4) );
+		msm5205_data_w(devtag_get_device(device->machine, "adpcm2"),adpcm_data & 0xf);
+		trigger^=1;
+		if(trigger == 0)
 		{
-			state->m_adpcm_pos[1]++;
-			if((ROM[state->m_adpcm_pos[1]] & 0xff) == 0xff)
-				state->m_adpcm_idle[1] = 1;
+			adpcm_pos[1]++;
+			if((ROM[adpcm_pos[1]] & 0xff) == 0xff)
+				adpcm_idle[1] = 1;
 		}
 	}
 }
@@ -342,49 +321,49 @@ static const msm5205_interface msm5205_config_2 =
 
 static MACHINE_RESET( kungfur )
 {
-	kungfur_state *state = machine.driver_data<kungfur_state>();
-	state->m_adpcm_pos[0] =	state->m_adpcm_pos[1] = 0;
-	state->m_adpcm_idle[0] = state->m_adpcm_idle[1] = 1;
+	adpcm_pos[0] = 	adpcm_pos[1] = 0;
+	adpcm_idle[0] = adpcm_idle[1] = 1;
 }
 
 static INTERRUPT_GEN( kungfur_irq )
 {
-	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, HOLD_LINE);
 }
 
-static MACHINE_CONFIG_START( kungfur, kungfur_state )
+static MACHINE_DRIVER_START( kungfur )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",M6809,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(kungfur_map)
-	MCFG_CPU_VBLANK_INT("screen",kungfur_irq)
+	MDRV_CPU_ADD("maincpu",M6809,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(kungfur_map)
+	MDRV_CPU_VBLANK_INT("screen",kungfur_irq)
 
-	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
-	MCFG_MACHINE_RESET( kungfur )
+	MDRV_MACHINE_RESET( kungfur )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(kungfur)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(kungfur)
+	MDRV_VIDEO_START(kungfur)
+	MDRV_VIDEO_UPDATE(kungfur)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("adpcm1", MSM5205, 400000)
-	MCFG_SOUND_CONFIG(msm5205_config_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("adpcm1", MSM5205, 400000)
+	MDRV_SOUND_CONFIG(msm5205_config_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("adpcm2", MSM5205, 400000)
-	MCFG_SOUND_CONFIG(msm5205_config_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("adpcm2", MSM5205, 400000)
+	MDRV_SOUND_CONFIG(msm5205_config_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -406,4 +385,4 @@ ROM_START( kungfur )
 	ROM_LOAD( "kr6.bin",   0x00000, 0x10000, CRC(9ea75d4a) SHA1(57445ccb961acb11a25cdac81f2e543d92bcb7f9) )
 ROM_END
 
-GAME( 1987, kungfur,  0,       kungfur,  kungfur,  0, ROT0, "Namco", "Kung Fu Roushi", GAME_NOT_WORKING | GAME_MECHANICAL)
+GAME( 1987, kungfur,  0,       kungfur,  kungfur,  0, ROT0, "Namco", "Kung Fu Roushi", GAME_NOT_WORKING )

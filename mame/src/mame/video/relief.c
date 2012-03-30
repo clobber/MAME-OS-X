@@ -4,10 +4,9 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "machine/atarigen.h"
-#include "video/atarimo.h"
-#include "includes/relief.h"
+#include "relief.h"
 
 
 
@@ -19,9 +18,8 @@
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	relief_state *state = machine.driver_data<relief_state>();
-	UINT16 data1 = state->m_playfield[tile_index];
-	UINT16 data2 = state->m_playfield_upper[tile_index] & 0xff;
+	UINT16 data1 = atarigen_playfield[tile_index];
+	UINT16 data2 = atarigen_playfield_upper[tile_index] & 0xff;
 	int code = data1 & 0x7fff;
 	int color = 0x20 + (data2 & 0x0f);
 	SET_TILE_INFO(0, code, color, (data1 >> 15) & 1);
@@ -30,9 +28,8 @@ static TILE_GET_INFO( get_playfield_tile_info )
 
 static TILE_GET_INFO( get_playfield2_tile_info )
 {
-	relief_state *state = machine.driver_data<relief_state>();
-	UINT16 data1 = state->m_playfield2[tile_index];
-	UINT16 data2 = state->m_playfield_upper[tile_index] >> 8;
+	UINT16 data1 = atarigen_playfield2[tile_index];
+	UINT16 data2 = atarigen_playfield_upper[tile_index] >> 8;
 	int code = data1 & 0x7fff;
 	int color = data2 & 0x0f;
 	SET_TILE_INFO(0, code, color, (data1 >> 15) & 1);
@@ -84,17 +81,16 @@ VIDEO_START( relief )
 		0,					/* resulting value to indicate "special" */
 		0					/* callback routine for special entries */
 	};
-	relief_state *state = machine.driver_data<relief_state>();
 
 	/* MOs are 5bpp but with a 4-bit color granularity */
-	machine.gfx[1]->color_granularity = 16;
+	machine->gfx[1]->color_granularity = 16;
 
 	/* initialize the playfield */
-	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the second playfield */
-	state->m_playfield2_tilemap = tilemap_create(machine, get_playfield2_tile_info, tilemap_scan_cols,  8,8, 64,64);
-	state->m_playfield2_tilemap->set_transparent_pen(0);
+	atarigen_playfield2_tilemap = tilemap_create(machine, get_playfield2_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	tilemap_set_transparent_pen(atarigen_playfield2_tilemap, 0);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
@@ -108,27 +104,26 @@ VIDEO_START( relief )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( relief )
+VIDEO_UPDATE( relief )
 {
-	relief_state *state = screen.machine().driver_data<relief_state>();
-	bitmap_ind8 &priority_bitmap = screen.machine().priority_bitmap;
+	bitmap_t *priority_bitmap = screen->machine->priority_bitmap;
 	atarimo_rect_list rectlist;
-	bitmap_ind16 *mobitmap;
+	bitmap_t *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	priority_bitmap.fill(0, cliprect);
-	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0);
-	state->m_playfield2_tilemap->draw(bitmap, cliprect, 0, 1);
+	bitmap_fill(priority_bitmap, cliprect, 0);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield2_tilemap, 0, 1);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = &mobitmap->pix16(y);
-			UINT16 *pf = &bitmap.pix16(y);
-			UINT8 *pri = &priority_bitmap.pix8(y);
+			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
+			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT8 *pri = (UINT8 *)priority_bitmap->base + priority_bitmap->rowpixels * y;
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{

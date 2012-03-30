@@ -1,38 +1,42 @@
 /* video/stlforce.c - see main driver for other notes */
 
-#include "emu.h"
-#include "includes/stlforce.h"
+#include "driver.h"
+
+static tilemap *stlforce_bg_tilemap, *stlforce_mlow_tilemap, *stlforce_mhigh_tilemap, *stlforce_tx_tilemap;
+
+extern UINT16 *stlforce_bg_videoram, *stlforce_mlow_videoram, *stlforce_mhigh_videoram, *stlforce_tx_videoram;
+extern UINT16 *stlforce_bg_scrollram, *stlforce_mlow_scrollram, *stlforce_mhigh_scrollram, *stlforce_vidattrram;
+
+extern UINT16 *stlforce_spriteram;
+
+int stlforce_sprxoffs;
 
 /* background, appears to be the bottom layer */
 
 static TILE_GET_INFO( get_stlforce_bg_tile_info )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
 	int tileno,colour;
 
-	tileno = state->m_bg_videoram[tile_index] & 0x0fff;
-	colour = state->m_bg_videoram[tile_index] & 0xe000;
+	tileno = stlforce_bg_videoram[tile_index] & 0x0fff;
+	colour = stlforce_bg_videoram[tile_index] & 0xe000;
 	colour = colour >> 13;
 	SET_TILE_INFO(0,tileno,colour,0);
 }
 
 WRITE16_HANDLER( stlforce_bg_videoram_w )
 {
-	stlforce_state *state = space->machine().driver_data<stlforce_state>();
-
-	state->m_bg_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	stlforce_bg_videoram[offset] = data;
+	tilemap_mark_tile_dirty(stlforce_bg_tilemap,offset);
 }
 
 /* middle layer, low */
 
 static TILE_GET_INFO( get_stlforce_mlow_tile_info )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
 	int tileno,colour;
 
-	tileno = state->m_mlow_videoram[tile_index] & 0x0fff;
-	colour = state->m_mlow_videoram[tile_index] & 0xe000;
+	tileno = stlforce_mlow_videoram[tile_index] & 0x0fff;
+	colour = stlforce_mlow_videoram[tile_index] & 0xe000;
 	colour = colour >> 13;
 	colour += 8;
 	tileno += 0x1000;
@@ -42,21 +46,18 @@ static TILE_GET_INFO( get_stlforce_mlow_tile_info )
 
 WRITE16_HANDLER( stlforce_mlow_videoram_w )
 {
-	stlforce_state *state = space->machine().driver_data<stlforce_state>();
-
-	state->m_mlow_videoram[offset] = data;
-	state->m_mlow_tilemap->mark_tile_dirty(offset);
+	stlforce_mlow_videoram[offset] = data;
+	tilemap_mark_tile_dirty(stlforce_mlow_tilemap,offset);
 }
 
 /* middle layer, high */
 
 static TILE_GET_INFO( get_stlforce_mhigh_tile_info )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
 	int tileno,colour;
 
-	tileno = state->m_mhigh_videoram[tile_index] & 0x0fff;
-	colour = state->m_mhigh_videoram[tile_index] & 0xe000;
+	tileno = stlforce_mhigh_videoram[tile_index] & 0x0fff;
+	colour = stlforce_mhigh_videoram[tile_index] & 0xe000;
 	colour = colour >> 13;
 	colour += 16;
 	tileno += 0x2000;
@@ -66,21 +67,18 @@ static TILE_GET_INFO( get_stlforce_mhigh_tile_info )
 
 WRITE16_HANDLER( stlforce_mhigh_videoram_w )
 {
-	stlforce_state *state = space->machine().driver_data<stlforce_state>();
-
-	state->m_mhigh_videoram[offset] = data;
-	state->m_mhigh_tilemap->mark_tile_dirty(offset);
+	stlforce_mhigh_videoram[offset] = data;
+	tilemap_mark_tile_dirty(stlforce_mhigh_tilemap,offset);
 }
 
 /* text layer, appears to be the top layer */
 
 static TILE_GET_INFO( get_stlforce_tx_tile_info )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
 	int tileno,colour;
 
-	tileno = state->m_tx_videoram[tile_index] & 0x0fff;
-	colour = state->m_tx_videoram[tile_index] & 0xe000;
+	tileno = stlforce_tx_videoram[tile_index] & 0x0fff;
+	colour = stlforce_tx_videoram[tile_index] & 0xe000;
 	colour = colour >> 13;
 
 	tileno += 0xc000;
@@ -91,25 +89,23 @@ static TILE_GET_INFO( get_stlforce_tx_tile_info )
 
 WRITE16_HANDLER( stlforce_tx_videoram_w )
 {
-	stlforce_state *state = space->machine().driver_data<stlforce_state>();
-
-	state->m_tx_videoram[offset] = data;
-	state->m_tx_tilemap->mark_tile_dirty(offset);
+	stlforce_tx_videoram[offset] = data;
+	tilemap_mark_tile_dirty(stlforce_tx_tilemap,offset);
 }
 
 /* sprites - quite a bit still needs doing .. */
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
-	const UINT16 *source = state->m_spriteram+0x0;
-	const UINT16 *finish = state->m_spriteram+0x800;
-	const gfx_element *gfx = machine.gfx[2];
+
+	const UINT16 *source = stlforce_spriteram+0x0;
+	const UINT16 *finish = stlforce_spriteram+0x800;
+	const gfx_element *gfx = machine->gfx[2];
 	int ypos, xpos, attr, num;
 
-	while (source<finish)
+	while( source<finish )
 	{
-		if (source[0] & 0x0800)
+		if(source[0] & 0x0800)
 		{
 			ypos = source[0]& 0x01ff;
 			attr = source[1]& 0x000f;
@@ -124,80 +120,76 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 					 num,
 					 64+attr,
 					 0,0,
-					 xpos+state->m_sprxoffs,ypos,0 );
+					 xpos+stlforce_sprxoffs,ypos,0 );
 		}
 
 		source += 0x4;
 	}
 }
 
-SCREEN_UPDATE_IND16( stlforce )
+VIDEO_UPDATE( stlforce )
 {
-	stlforce_state *state = screen.machine().driver_data<stlforce_state>();
 	int i;
-
-	if (state->m_vidattrram[6] & 1)
+	if(stlforce_vidattrram[6] & 1)
 	{
 		for(i=0;i<256;i++)
-			state->m_bg_tilemap->set_scrollx(i, state->m_bg_scrollram[i]+9); //+9 for twinbrat
+			tilemap_set_scrollx(stlforce_bg_tilemap, i, stlforce_bg_scrollram[i]+9); //+9 for twinbrat
 	}
 	else
 	{
 		for(i=0;i<256;i++)
-			state->m_bg_tilemap->set_scrollx(i, state->m_bg_scrollram[0]+9); //+9 for twinbrat
+			tilemap_set_scrollx(stlforce_bg_tilemap, i, stlforce_bg_scrollram[0]+9); //+9 for twinbrat
 	}
 
-	if (state->m_vidattrram[6] & 4)
+	if(stlforce_vidattrram[6] & 4)
 	{
 		for(i=0;i<256;i++)
-			state->m_mlow_tilemap->set_scrollx(i, state->m_mlow_scrollram[i]+8);
+			tilemap_set_scrollx(stlforce_mlow_tilemap, i, stlforce_mlow_scrollram[i]+8);
 	}
 	else
 	{
 		for(i=0;i<256;i++)
-			state->m_mlow_tilemap->set_scrollx(i, state->m_mlow_scrollram[0]+8);
+			tilemap_set_scrollx(stlforce_mlow_tilemap, i, stlforce_mlow_scrollram[0]+8);
 	}
 
-	if (state->m_vidattrram[6] & 0x10)
+	if(stlforce_vidattrram[6] & 0x10)
 	{
 		for(i=0;i<256;i++)
-			state->m_mhigh_tilemap->set_scrollx(i, state->m_mhigh_scrollram[i]+8);
+			tilemap_set_scrollx(stlforce_mhigh_tilemap, i, stlforce_mhigh_scrollram[i]+8);
 	}
 	else
 	{
 		for(i=0;i<256;i++)
-			state->m_mhigh_tilemap->set_scrollx(i, state->m_mhigh_scrollram[0]+8);
+			tilemap_set_scrollx(stlforce_mhigh_tilemap, i, stlforce_mhigh_scrollram[0]+8);
 	}
 
-	state->m_bg_tilemap->set_scrolly(0, state->m_vidattrram[1]);
-	state->m_mlow_tilemap->set_scrolly(0, state->m_vidattrram[2]);
-	state->m_mhigh_tilemap->set_scrolly(0, state->m_vidattrram[3]);
+	tilemap_set_scrolly(stlforce_bg_tilemap, 0, stlforce_vidattrram[1]);
+	tilemap_set_scrolly(stlforce_mlow_tilemap, 0, stlforce_vidattrram[2]);
+	tilemap_set_scrolly(stlforce_mhigh_tilemap, 0, stlforce_vidattrram[3]);
 
-	state->m_tx_tilemap->set_scrollx(0, state->m_vidattrram[0]+8);
-	state->m_tx_tilemap->set_scrolly(0,state->m_vidattrram[4]);
+	tilemap_set_scrollx(stlforce_tx_tilemap, 0, stlforce_vidattrram[0]+8);
+	tilemap_set_scrolly(stlforce_tx_tilemap, 0, stlforce_vidattrram[4]);
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_mlow_tilemap->draw(bitmap, cliprect, 0,0);
-	state->m_mhigh_tilemap->draw(bitmap, cliprect, 0,0);
-	draw_sprites(screen.machine(), bitmap,cliprect);
-	state->m_tx_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,stlforce_bg_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,stlforce_mlow_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,stlforce_mhigh_tilemap,0,0);
+	draw_sprites(screen->machine, bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,stlforce_tx_tilemap,0,0);
 	return 0;
 }
 
 VIDEO_START( stlforce )
 {
-	stlforce_state *state = machine.driver_data<stlforce_state>();
+	stlforce_bg_tilemap    = tilemap_create(machine, get_stlforce_bg_tile_info,   tilemap_scan_cols,      16,16,64,16);
+	stlforce_mlow_tilemap  = tilemap_create(machine, get_stlforce_mlow_tile_info, tilemap_scan_cols, 16,16,64,16);
+	stlforce_mhigh_tilemap = tilemap_create(machine, get_stlforce_mhigh_tile_info,tilemap_scan_cols, 16,16,64,16);
+	stlforce_tx_tilemap    = tilemap_create(machine, get_stlforce_tx_tile_info,   tilemap_scan_rows,  8, 8,64,32);
 
-	state->m_bg_tilemap    = tilemap_create(machine, get_stlforce_bg_tile_info,   tilemap_scan_cols,      16,16,64,16);
-	state->m_mlow_tilemap  = tilemap_create(machine, get_stlforce_mlow_tile_info, tilemap_scan_cols, 16,16,64,16);
-	state->m_mhigh_tilemap = tilemap_create(machine, get_stlforce_mhigh_tile_info,tilemap_scan_cols, 16,16,64,16);
-	state->m_tx_tilemap    = tilemap_create(machine, get_stlforce_tx_tile_info,   tilemap_scan_rows,  8, 8,64,32);
+	tilemap_set_transparent_pen(stlforce_mlow_tilemap,0);
+	tilemap_set_transparent_pen(stlforce_mhigh_tilemap,0);
+	tilemap_set_transparent_pen(stlforce_tx_tilemap,0);
 
-	state->m_mlow_tilemap->set_transparent_pen(0);
-	state->m_mhigh_tilemap->set_transparent_pen(0);
-	state->m_tx_tilemap->set_transparent_pen(0);
-
-	state->m_bg_tilemap->set_scroll_rows(256);
-	state->m_mlow_tilemap->set_scroll_rows(256);
-	state->m_mhigh_tilemap->set_scroll_rows(256);
+	tilemap_set_scroll_rows(stlforce_bg_tilemap, 256);
+	tilemap_set_scroll_rows(stlforce_mlow_tilemap, 256);
+	tilemap_set_scroll_rows(stlforce_mhigh_tilemap, 256);
 }

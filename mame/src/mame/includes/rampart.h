@@ -4,20 +4,12 @@
 
 *************************************************************************/
 
-#include "machine/atarigen.h"
-
-class rampart_state : public atarigen_state
-{
-public:
-	rampart_state(const machine_config &mconfig, device_type type, const char *tag)
-		: atarigen_state(mconfig, type, tag) { }
-
-	UINT16 *		m_bitmap;
-	UINT8			m_has_mo;
-};
-
 
 /*----------- defined in video/rampart.c -----------*/
 
 VIDEO_START( rampart );
-SCREEN_UPDATE_IND16( rampart );
+VIDEO_UPDATE( rampart );
+
+void rampart_bitmap_render(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect);
+
+extern UINT16 *rampart_bitmap;

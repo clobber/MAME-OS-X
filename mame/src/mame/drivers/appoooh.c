@@ -1,235 +1,112 @@
 /***************************************************************************
 
-    Appoooh memory map (preliminary)
-    Similar to Bank Panic
+Appoooh memory map (preliminary)
+Similar to Bank Panic
 
-    driver by Tatsuyuki Satoh
-
-
-    0000-9fff ROM
-    a000-dfff BANKED ROM
-    e000-e7ff RAM
-    e800-efff RAM??
-
-    write:
-    f000-f01f Sprite RAM #1
-    f020-f3ff Video  RAM #1
-    f420-f7ff Color  RAM #1
-    f800-f81f Sprite RAM #2
-    f820-fbff Video  RAM #2
-    fc20-ffff Color  RAM #2
-
-    I/O
-
-    read:
-    00  IN0
-    01  IN1
-    03  DSW
-    04  IN2
-
-    write:
-    00  SN76496 #1
-    01  SN76496 #2
-    02  SN76496 #3
-    03  MSM5205 address write
-    04  bit 0   = NMI enable
-        bit 1   = flipscreen
-        bit 2-3 = ?
-        bit 4-5 = priority
-        bit 6   = bank rom select
-        bit 7   = ?
-    05  horizontal scroll ??
-
-    Credits:
-    - Tatsuyuki Satoh: MAME driver
-
-    16.08.2004 - TS - Added 'Robo Wres 2001' (see details below)
-
-****************************************************************************
-
-    Robo Wres 2001
-    Sega, (198x, possibly 1986?)
-
-    Top Board
-    =========
-    PCB No: 834-5990 SEGA 1986
-    CPU   : NEC D315-5179 (Z80?)
-    SOUND : OKI MSM5205 + Resonator 384kHz, SN76489 (x3)
-    RAM   : MB8128 (x1)
-    OTHER : Volume Pot (x2, labelled VOICE and SOUND)
-    PALs  : (x1, near EPR-7542.15D, labelled 315-5056)
-    PROMs : (x1, near EPR-7543.12B, labelled PR7571)
-    DIPSW : 8 position (x1)
-    DIPSW Info:
-
-                    1   2   3   4   5   6   7   8
------------------------------------------------------------------------------------
-Coin1
-    1Coin 1Credit   OFF OFF OFF
-    2Coin 1Credit   ON  OFF OFF
-    3Coin 1Credit   OFF ON  OFF
-    4Coin 1Credit   ON  ON  OFF
-    1Coin 2Credit   OFF OFF ON
-    1Coin 3Credit   ON  OFF ON
-    1Coin 4Credit   OFF ON  ON
-    2Coin 3Credit   ON  ON  ON
------------------------------------------------------------------------------------
-Coin2
-    1Coin 1Credit               OFF OFF
-    1Coin 2Credit               ON  OFF
-    2Coin 1Credit               OFF ON
-    3Coin 1Credit               ON  ON
------------------------------------------------------------------------------------
-Demo Sound
-    Off                                 OFF
-    On                                  ON
------------------------------------------------------------------------------------
-Not Used                                    OFF
------------------------------------------------------------------------------------
-Language
-    Japanese                                    OFF
-    English                                     ON
------------------------------------------------------------------------------------
+driver by Tatsuyuki Satoh
 
 
-    PCB Edge Connector Pinout
-    -------------------------
+0000-9fff ROM
+a000-dfff BANKED ROM
+e000-e7ff RAM
+e800-efff RAM??
 
-    Parts               Solder
-    Side                Side
-    --------------------------------
-    GND         A  1    GND
-    GND         B  2    GND
-    COIN 2      C  3    -
-    1P HOLD     D  4    2P HOLD
-    1P PUNCH    E  5    2P PUNCH
-    -           F  6    -
-    1P START    H  7    2P START
-    1P KICK     J  8    2P KICK
-    1P UP       K  9    2P UP
-    1P DOWN     L  10   2P DOWN
-    1P LEFT     M  11   2P LEFT
-    1P RIGHT    N  12   2P RIGHT
-    COUNTER 1   P  13   COIN 1
-    COUNTER 2   R  14   SERVICE
-    RED         S  15   GREEN
-    BLUE        T  16   SYNC
-    -           U  17   -
-    +5          V  18   +5
-    +5          W  19   +5
-    +12         X  20   +12
-    SPEAKER 1   Y  21   SPEAKER 2
-    SPEAKER GND Z  22   SPEAKER GND
+write:
+f000-f01f Sprite RAM #1
+f020-f3ff Video  RAM #1
+f420-f7ff Color  RAM #1
+f800-f81f Sprite RAM #2
+f820-fbff Video  RAM #2
+fc20-ffff Color  RAM #2
 
+I/O
 
-    Controls via 8-way Joystick and 3 buttons (Punch, Hold, Kick)
+read:
+00  IN0
+01  IN1
+03  DSW
+04  IN2
 
+write:
+00  SN76496 #1
+01  SN76496 #2
+02  SN76496 #3
+03  MSM5205 address write
+04  bit 0   = NMI enable
+    bit 1   = flipscreen
+    bit 2-3 = ?
+    bit 4-5 = priority
+    bit 6   = bank rom select
+    bit 7   = ?
+05  horizontal scroll ??
 
+Credits:
+- Tatsuyuki Satoh: MAME driver
 
-                    Byte
-    ROMs  :         C'sum (for Mike ;-)
-    ----------------------------------------
-    EPR-7540.13D    27C256  6A13h
-    EPR-7541.14D      " 2723h
-    EPR-7542.15D      " 01E7h
-    EPR-7543.12B      " 6558h
-
-    PR7571.10A      82s123  0A9Fh
-
-
-    Lower Board
-    ===========
-
-    PCB No: 837-5992
-    XTAL  : 18.432MHz
-    RAM   : MB8128 (x2), SONY CXK5813D-55 (x2)
-    PALs  : (x3, labelled 315-5054, 315-5053, 315-5203)
-    PROMs : (x2, one near EPR-7547.7D labelled PR7572, one near EPR-7544.7H labelled PR7573)
-
-                        Byte
-    ROMs  :             C'Sum
-    -------------------------------------
-    EPR-7544.7H    27C256  \    ED1Ah
-    EPR-7545.6H      "      |   E6CAh
-    EPR-7546.5H      "      |   55EAh
-    EPR-7547.7D      "      | Gfx   EA3Fh
-    EPR-7548.6D      "      |   5D1Fh
-    EPR-7549.5D      "     /    16D1h
-
-    PR7572.7F      82s129       06F1h  \ Both have
-    PR7573.7G      82s129       06F1h  / identical contents
+16.08.2004 - TS - Added 'Robo Wres 2001'
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "includes/appoooh.h"
-#include "machine/segacrp2.h"
+#include "appoooh.h"
+#include "machine/segacrpt.h"
 #include "sound/msm5205.h"
 #include "sound/sn76496.h"
 
+static UINT32 appoooh_adpcm_data;
+static UINT32 appoooh_adpcm_address;
 
-static void appoooh_adpcm_int(device_t *device)
+static void appoooh_adpcm_int(const device_config *device)
 {
-	appoooh_state *state = device->machine().driver_data<appoooh_state>();
-
-	if (state->m_adpcm_address != 0xffffffff)
+	if(appoooh_adpcm_address != 0xffffffff)
 	{
-		if (state->m_adpcm_data == 0xffffffff)
+		if(appoooh_adpcm_data == 0xffffffff)
 		{
-			UINT8 *RAM = device->machine().region("adpcm")->base();
-
-			state->m_adpcm_data = RAM[state->m_adpcm_address++];
-			msm5205_data_w(device, state->m_adpcm_data >> 4);
-
-			if (state->m_adpcm_data == 0x70)
+            UINT8 *RAM = memory_region(device->machine, "adpcm");
+            appoooh_adpcm_data = RAM[appoooh_adpcm_address++];
+			msm5205_data_w(device, appoooh_adpcm_data >> 4);
+			if(appoooh_adpcm_data == 0x70)
 			{
-				state->m_adpcm_address = 0xffffffff;
-				msm5205_reset_w(device, 1);
+                appoooh_adpcm_address = 0xffffffff;
+				msm5205_reset_w(device,1);
 			}
 		}
-		else
-		{
-			msm5205_data_w(device, state->m_adpcm_data & 0x0f );
-			state->m_adpcm_data = -1;
+        else
+        {
+			msm5205_data_w(device,appoooh_adpcm_data & 0x0f );
+			appoooh_adpcm_data = -1;
 		}
 	}
 }
-
 /* adpcm address write */
 static WRITE8_HANDLER( appoooh_adpcm_w )
 {
-	appoooh_state *state = space->machine().driver_data<appoooh_state>();
-
-	state->m_adpcm_address = data << 8;
-	msm5205_reset_w(state->m_adpcm, 0);
-	state->m_adpcm_data = 0xffffffff;
+	const device_config *adpcm = devtag_get_device(space->machine, "msm");
+    appoooh_adpcm_address = data << 8;
+	msm5205_reset_w(adpcm,0);
+	appoooh_adpcm_data = 0xffffffff;
 }
 
 
-/*************************************
- *
- *  Address maps
- *
- *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_ROM
-	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK(1)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 	AM_RANGE(0xe800, 0xefff) AM_RAM /* RAM ? */
 
-	AM_RANGE(0xf000, 0xf01f) AM_BASE_MEMBER(appoooh_state, m_spriteram)
-	AM_RANGE(0xf020, 0xf3ff) AM_WRITE(appoooh_fg_videoram_w) AM_BASE_MEMBER(appoooh_state, m_fg_videoram)
-	AM_RANGE(0xf420, 0xf7ff) AM_WRITE(appoooh_fg_colorram_w) AM_BASE_MEMBER(appoooh_state, m_fg_colorram)
-	AM_RANGE(0xf800, 0xf81f) AM_BASE_MEMBER(appoooh_state, m_spriteram_2)
-	AM_RANGE(0xf820, 0xfbff) AM_WRITE(appoooh_bg_videoram_w) AM_BASE_MEMBER(appoooh_state, m_bg_videoram)
-	AM_RANGE(0xfc20, 0xffff) AM_WRITE(appoooh_bg_colorram_w) AM_BASE_MEMBER(appoooh_state, m_bg_colorram)
+	AM_RANGE(0xf000, 0xf01f) AM_BASE(&spriteram)
+	AM_RANGE(0xf020, 0xf3ff) AM_WRITE(appoooh_fg_videoram_w) AM_BASE(&appoooh_fg_videoram)
+	AM_RANGE(0xf420, 0xf7ff) AM_WRITE(appoooh_fg_colorram_w) AM_BASE(&appoooh_fg_colorram)
+	AM_RANGE(0xf800, 0xf81f) AM_BASE(&spriteram_2)
+	AM_RANGE(0xf820, 0xfbff) AM_WRITE(appoooh_bg_videoram_w) AM_BASE(&appoooh_bg_videoram)
+	AM_RANGE(0xfc20, 0xffff) AM_WRITE(appoooh_bg_colorram_w) AM_BASE(&appoooh_bg_colorram)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_DEVWRITE("sn2", sn76496_w)
@@ -240,11 +117,6 @@ static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( appoooh )
 	PORT_START("P1")
@@ -299,22 +171,7 @@ static INPUT_PORTS_START( appoooh )
 	PORT_DIPSETTING(    0x80, DEF_STR( Hard ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( robowres )
-	PORT_INCLUDE( appoooh )
 
-	PORT_MODIFY("DSW1")
-	PORT_DIPUNUSED_DIPLOC(0x40,0x40, "SW1:7" )			/* Listed as "Unused" */
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Language ) )		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(    0x00, DEF_STR( Japanese ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( English ) )
-INPUT_PORTS_END
-
-
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
 
 static const gfx_layout charlayout =
 {
@@ -348,6 +205,196 @@ static GFXDECODE_START( appoooh )
 GFXDECODE_END
 
 
+
+static const msm5205_interface msm5205_config =
+{
+	appoooh_adpcm_int,/* interrupt function */
+	MSM5205_S64_4B	/* 6KHz               */
+};
+
+
+
+static MACHINE_START( appoooh )
+{
+	appoooh_adpcm_address = 0xffffffff;
+	state_save_register_global(machine, appoooh_adpcm_data);
+	state_save_register_global(machine, appoooh_adpcm_address);
+}
+
+
+
+static MACHINE_DRIVER_START( appoooh )
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* ??? the main xtal is 18.432 MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+
+    MDRV_MACHINE_START(appoooh)
+
+	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(appoooh)
+	MDRV_PALETTE_LENGTH(32*8+32*8)
+
+	MDRV_PALETTE_INIT(appoooh)
+	MDRV_VIDEO_START(appoooh)
+	MDRV_VIDEO_UPDATE(appoooh)
+
+	/* sound hardware */
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+
+	MDRV_SOUND_ADD("sn1", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+
+	MDRV_SOUND_ADD("sn2", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+
+	MDRV_SOUND_ADD("sn3", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+
+	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
+
+/*
+
+Robo Wres 2001
+Sega, (198x, possibly 1986?)
+
+Top Board
+---------
+PCB No: 834-5990 SEGA 1986
+CPU   : NEC D315-5179 (Z80?)
+SOUND : OKI MSM5205 + Resonator 384kHz, SN76489 (x3)
+RAM   : MB8128 (x1)
+OTHER : Volume Pot (x2, labelled VOICE and SOUND)
+PALs  : (x1, near EPR-7542.15D, labelled 315-5056)
+PROMs : (x1, near EPR-7543.12B, labelled PR7571)
+DIPSW : 8 position (x1)
+DIPSW Info:
+
+                    1   2   3   4   5   6   7   8
+-----------------------------------------------------------------------------------
+Coin1
+    1Coin 1Credit   OFF OFF OFF
+    2Coin 1Credit   ON  OFF OFF
+    3Coin 1Credit   OFF ON  OFF
+    4Coin 1Credit   ON  ON  OFF
+    1Coin 2Credit   OFF OFF ON
+    1Coin 3Credit   ON  OFF ON
+    1Coin 4Credit   OFF ON  ON
+    2Coin 3Credit   ON  ON  ON
+-----------------------------------------------------------------------------------
+Coin2
+    1Coin 1Credit               OFF OFF
+    1Coin 2Credit               ON  OFF
+    2Coin 1Credit               OFF ON
+    3Coin 1Credit               ON  ON
+-----------------------------------------------------------------------------------
+Demo Sound
+    Off                                 OFF
+    On                                  ON
+-----------------------------------------------------------------------------------
+Not Used                                    OFF
+-----------------------------------------------------------------------------------
+Language
+    Japanese                                    OFF
+    English                                     ON
+-----------------------------------------------------------------------------------
+
+
+
+
+PCB Edge Connector Pinout
+-------------------------
+
+Parts               Solder
+Side                Side
+--------------------------------
+GND         A  1    GND
+GND         B  2    GND
+COIN 2      C  3    -
+1P HOLD     D  4    2P HOLD
+1P PUNCH    E  5    2P PUNCH
+-           F  6    -
+1P START    H  7    2P START
+1P KICK     J  8    2P KICK
+1P UP       K  9    2P UP
+1P DOWN     L  10   2P DOWN
+1P LEFT     M  11   2P LEFT
+1P RIGHT    N  12   2P RIGHT
+COUNTER 1   P  13   COIN 1
+COUNTER 2   R  14   SERVICE
+RED         S  15   GREEN
+BLUE        T  16   SYNC
+-           U  17   -
++5          V  18   +5
++5          W  19   +5
++12         X  20   +12
+SPEAKER 1   Y  21   SPEAKER 2
+SPEAKER GND Z  22   SPEAKER GND
+
+
+
+Controls via 8-way Joystick and 3 buttons (Punch, Hold, Kick)
+
+
+
+            Byte
+ROMs  :         C'sum (for Mike ;-)
+----------------------------------------
+EPR-7540.13D    27C256  6A13h
+EPR-7541.14D      " 2723h
+EPR-7542.15D      " 01E7h
+EPR-7543.12B      " 6558h
+
+PR7571.10A      82s123  0A9Fh
+
+
+
+
+Lower Board
+-----------
+
+PCB No: 837-5992
+XTAL  : 18.432MHz
+RAM   : MB8128 (x2), SONY CXK5813D-55 (x2)
+PALs  : (x3, labelled 315-5054, 315-5053, 315-5203)
+PROMs : (x2, one near EPR-7547.7D labelled PR7572, one near EPR-7544.7H labelled PR7573)
+
+                Byte
+ROMs  :             C'Sum
+-------------------------------------
+EPR-7544.7H    27C256  \    ED1Ah
+EPR-7545.6H      "      |   E6CAh
+EPR-7546.5H      "      |   55EAh
+EPR-7547.7D      "      | Gfx   EA3Fh
+EPR-7548.6D      "      |   5D1Fh
+EPR-7549.5D      "     /    16D1h
+
+PR7572.7F      82s129       06F1h  \ Both have
+PR7573.7G      82s129       06F1h  / identical contents
+
+*/
+
+static INPUT_PORTS_START( robowres )
+	PORT_INCLUDE( appoooh )
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPUNUSED_DIPLOC(0x40,0x40, "SW1:7" )			/* Listed as "Unused" */
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Language ) )		PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Japanese ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( English ) )
+INPUT_PORTS_END
+
 static const gfx_layout robowres_charlayout =
 {
 	8,8,
@@ -375,129 +422,57 @@ static const gfx_layout robowres_spritelayout =
 
 static GFXDECODE_START( robowres )
 	GFXDECODE_ENTRY( "gfx1", 0, robowres_charlayout,        0, 32 )
-	GFXDECODE_ENTRY( "gfx2", 0, robowres_charlayout,    	 0, 32 )
+	GFXDECODE_ENTRY( "gfx2", 0, robowres_charlayout,     	 0, 32 )
 	GFXDECODE_ENTRY( "gfx1", 0, robowres_spritelayout,      0, 32 )
-	GFXDECODE_ENTRY( "gfx2", 0, robowres_spritelayout,  	 0, 32 )
+	GFXDECODE_ENTRY( "gfx2", 0, robowres_spritelayout,   	 0, 32 )
 GFXDECODE_END
 
-
-/*************************************
- *
- *  Sound interface
- *
- *************************************/
-
-static const msm5205_interface msm5205_config =
-{
-	appoooh_adpcm_int,/* interrupt function */
-	MSM5205_S64_4B	/* 6KHz               */
-};
-
-
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( appoooh )
-{
-	appoooh_state *state = machine.driver_data<appoooh_state>();
-
-	state->m_adpcm = machine.device("msm");
-
-	state->save_item(NAME(state->m_adpcm_data));
-	state->save_item(NAME(state->m_adpcm_address));
-}
-
-
-static MACHINE_RESET( appoooh )
-{
-	appoooh_state *state = machine.driver_data<appoooh_state>();
-
-	state->m_adpcm_address = 0xffffffff;
-	state->m_adpcm_data = 0;
-	state->m_scroll_x = 0;
-	state->m_priority = 0;
-}
-
-static INTERRUPT_GEN( vblank_irq )
-{
-	appoooh_state *state = device->machine().driver_data<appoooh_state>();
-
-	if(state->m_nmi_mask)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-}
-
-static MACHINE_CONFIG_START( appoooh_common, appoooh_state )
+static MACHINE_DRIVER_START( robowres )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,18432000/6)	/* ??? the main xtal is 18.432 MHz */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* ??? the main xtal is 18.432 MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_MACHINE_START(appoooh)
-	MCFG_MACHINE_RESET(appoooh)
+    MDRV_MACHINE_START(appoooh)
+
+	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(robowres)
+	MDRV_PALETTE_LENGTH(32*8+32*8)
+
+	MDRV_PALETTE_INIT(robowres)
+	MDRV_VIDEO_START(appoooh)
+	MDRV_VIDEO_UPDATE(robowres)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76489, 18432000/6)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MDRV_SOUND_ADD("sn1", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MCFG_SOUND_ADD("sn2", SN76489, 18432000/6)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MDRV_SOUND_ADD("sn2", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MCFG_SOUND_ADD("sn3", SN76489, 18432000/6)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MDRV_SOUND_ADD("sn3", SN76489, 18432000/6)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MCFG_SOUND_ADD("msm", MSM5205, 384000)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
+/***************************************************************************
 
-static MACHINE_CONFIG_DERIVED( appoooh, appoooh_common )
+  Game driver(s)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(appoooh)
-
-	MCFG_GFXDECODE(appoooh)
-	MCFG_PALETTE_LENGTH(32*8+32*8)
-
-	MCFG_PALETTE_INIT(appoooh)
-	MCFG_VIDEO_START(appoooh)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( robowres, appoooh_common )
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(robowres)
-
-	MCFG_GFXDECODE(robowres)
-	MCFG_PALETTE_LENGTH(32*8+32*8)
-
-	MCFG_PALETTE_INIT(robowres)
-	MCFG_VIDEO_START(appoooh)
-MACHINE_CONFIG_END
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+***************************************************************************/
 
 ROM_START( appoooh )
 	ROM_REGION( 0x14000, "maincpu", 0 )	/* 64k for code + 16k bank */
@@ -591,30 +566,16 @@ ROM_END
 
 
 
-/*************************************
- *
- *  Driver initialization
- *
- *************************************/
-
-static DRIVER_INIT(robowres)
-{
-	sega_315_5179_decode(machine, "maincpu");
+static DRIVER_INIT(robowres){
+	robowres_decode(machine, "maincpu");
 }
 
-static DRIVER_INIT(robowresb)
-{
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x1c000);
+static DRIVER_INIT(robowrb){
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x1c000);
 }
 
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
-GAME( 1984, appoooh,   0,        appoooh,  appoooh,  0,        ROT0, "Sanritsu / Sega", "Appoooh", GAME_SUPPORTS_SAVE )
-GAME( 1986, robowres,  0,        robowres, robowres, robowres, ROT0, "Sanritsu / Sega", "Robo Wres 2001", GAME_SUPPORTS_SAVE )
-GAME( 1986, robowresb, robowres, robowres, robowres, robowresb,ROT0, "bootleg",         "Robo Wres 2001 (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1984, appoooh,  0,        appoooh,  appoooh,  0,        ROT0, "[Sanritsu] Sega", "Appoooh", GAME_SUPPORTS_SAVE )
+GAME( 1986, robowres, 0,        robowres, robowres, robowres, ROT0, "Sega", "Robo Wres 2001", GAME_SUPPORTS_SAVE )
+GAME( 1986, robowresb,robowres, robowres, robowres, robowrb,  ROT0, "bootleg", "Robo Wres 2001 (bootleg)", GAME_SUPPORTS_SAVE )

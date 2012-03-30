@@ -19,17 +19,6 @@ Year + Game
 96  Gyakuten!! Puzzle Bancho
 ---------------------------------------------------------------------------
 
-Do NOT trust the Service Mode for dipswitch settings for Go Go! Mile Smile:
-  Service Mode shows Coin A as SW2:3-5 & Coin B as SW2:6-8, but the game ignores the
-  setting of Coin B and only uses the settings for Coin A, except for Coin B "Free Play"
-  The game says Press 1 or 2, and will start the game, but jumps right to the Game Over
-  and "Continue" countdown.
-The Service Mode is WAY off on effects of dipswitches for the Japanese set!!! It reports
-  the effects of MAME's SW1:3-8 have been moved to SW1:2-7 and Demo Sound has moved to
-  SW2:7. What MAME shows as settings are according to actual game effect and reflect what
-  the manual states.
-
-
 To Do:
 
 - Raster effects (level 5 interrupt is used for that). In pbancho
@@ -45,14 +34,30 @@ To Do:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2203intf.h"
 #include "sound/3812intf.h"
 #include "sound/okim6295.h"
-#include "includes/fuukifg2.h"
 
+static emu_timer *raster_interrupt_timer;
+
+/* Variables defined in video: */
+
+extern UINT16 *fuuki16_vram_0, *fuuki16_vram_1;
+extern UINT16 *fuuki16_vram_2, *fuuki16_vram_3;
+extern UINT16 *fuuki16_vregs,  *fuuki16_priority, *fuuki16_unknown;
+
+/* Functions defined in video: */
+
+WRITE16_HANDLER( fuuki16_vram_0_w );
+WRITE16_HANDLER( fuuki16_vram_1_w );
+WRITE16_HANDLER( fuuki16_vram_2_w );
+WRITE16_HANDLER( fuuki16_vram_3_w );
+
+VIDEO_START( fuuki16 );
+VIDEO_UPDATE( fuuki16 );
 
 /***************************************************************************
 
@@ -64,45 +69,43 @@ To Do:
 
 static WRITE16_HANDLER( fuuki16_vregs_w )
 {
-	fuuki16_state *state = space->machine().driver_data<fuuki16_state>();
-	UINT16 old_data = state->m_vregs[offset];
-	UINT16 new_data = COMBINE_DATA(&state->m_vregs[offset]);
+	UINT16 old_data	=	fuuki16_vregs[offset];
+	UINT16 new_data	=	COMBINE_DATA(&fuuki16_vregs[offset]);
 	if ((offset == 0x1c/2) && old_data != new_data)
 	{
-		const rectangle &visarea = space->machine().primary_screen->visible_area();
-		attotime period = space->machine().primary_screen->frame_period();
-		state->m_raster_interrupt_timer->adjust(space->machine().primary_screen->time_until_pos(new_data, visarea.max_x + 1), 0, period);
+		const rectangle *visarea = video_screen_get_visible_area(space->machine->primary_screen);
+		attotime period = video_screen_get_frame_period(space->machine->primary_screen);
+		timer_adjust_periodic(raster_interrupt_timer, video_screen_get_time_until_pos(space->machine->primary_screen, new_data, visarea->max_x + 1), 0, period);
 	}
 }
 
 static WRITE16_HANDLER( fuuki16_sound_command_w )
 {
-	fuuki16_state *state = space->machine().driver_data<fuuki16_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space,0,data & 0xff);
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-//      device_spin_until_time(&space->device(), attotime::from_usec(50));   // Allow the other CPU to reply
-		space->machine().scheduler().boost_interleave(attotime::zero, attotime::from_usec(50)); // Fixes glitching in rasters
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+//      cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(50));   // Allow the other CPU to reply
+		cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(50)); // Fixes glitching in rasters
 	}
 }
 
-static ADDRESS_MAP_START( fuuki16_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( fuuki16_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM																		// ROM
 	AM_RANGE(0x400000, 0x40ffff) AM_RAM																		// RAM
-	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki16_vram_0_w) AM_BASE_MEMBER(fuuki16_state, m_vram[0])					// Layers
-	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki16_vram_1_w) AM_BASE_MEMBER(fuuki16_state, m_vram[1])					//
-	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki16_vram_2_w) AM_BASE_MEMBER(fuuki16_state, m_vram[2])					//
-	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki16_vram_3_w) AM_BASE_MEMBER(fuuki16_state, m_vram[3])					//
-	AM_RANGE(0x600000, 0x601fff) AM_MIRROR(0x008000) AM_RAM AM_BASE_SIZE_MEMBER(fuuki16_state, m_spriteram, m_spriteram_size)	// Sprites, mirrored?
-	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
+	AM_RANGE(0x500000, 0x501fff) AM_RAM_WRITE(fuuki16_vram_0_w) AM_BASE(&fuuki16_vram_0)					// Layers
+	AM_RANGE(0x502000, 0x503fff) AM_RAM_WRITE(fuuki16_vram_1_w) AM_BASE(&fuuki16_vram_1)					//
+	AM_RANGE(0x504000, 0x505fff) AM_RAM_WRITE(fuuki16_vram_2_w) AM_BASE(&fuuki16_vram_2)					//
+	AM_RANGE(0x506000, 0x507fff) AM_RAM_WRITE(fuuki16_vram_3_w) AM_BASE(&fuuki16_vram_3)					//
+	AM_RANGE(0x600000, 0x601fff) AM_MIRROR(0x008000) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)	// Sprites, mirrored?
+	AM_RANGE(0x700000, 0x703fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)	// Palette
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x810000, 0x810001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x880000, 0x880001) AM_READ_PORT("DSW")
 	AM_RANGE(0x8a0000, 0x8a0001) AM_WRITE(fuuki16_sound_command_w)											// To Sound CPU
-	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki16_vregs_w) AM_BASE_MEMBER(fuuki16_state, m_vregs )						// Video Registers
-	AM_RANGE(0x8d0000, 0x8d0003) AM_RAM AM_BASE_MEMBER(fuuki16_state, m_unknown)											//
-	AM_RANGE(0x8e0000, 0x8e0001) AM_RAM AM_BASE_MEMBER(fuuki16_state, m_priority)											//
+	AM_RANGE(0x8c0000, 0x8c001f) AM_RAM_WRITE(fuuki16_vregs_w) AM_BASE(&fuuki16_vregs )						// Video Registers
+/**/AM_RANGE(0x8d0000, 0x8d0003) AM_RAM AM_BASE(&fuuki16_unknown)											//
+/**/AM_RANGE(0x8e0000, 0x8e0001) AM_RAM AM_BASE(&fuuki16_priority)											//
 ADDRESS_MAP_END
 
 
@@ -117,9 +120,9 @@ ADDRESS_MAP_END
 static WRITE8_HANDLER( fuuki16_sound_rombank_w )
 {
 	if (data <= 2)
-		memory_set_bank(space->machine(), "bank1", data);
+		memory_set_bankptr(space->machine, 1, memory_region(space->machine, "audiocpu") + 0x8000 * data + 0x10000);
 	else
-		logerror("CPU #1 - PC %04X: unknown bank bits: %02X\n", cpu_get_pc(&space->device()), data);
+	 	logerror("CPU #1 - PC %04X: unknown bank bits: %02X\n",cpu_get_pc(space->cpu),data);
 }
 
 static WRITE8_DEVICE_HANDLER( fuuki16_oki_banking_w )
@@ -129,26 +132,25 @@ static WRITE8_DEVICE_HANDLER( fuuki16_oki_banking_w )
         data & 0x10 is always set
     */
 
-	okim6295_device *oki = downcast<okim6295_device *>(device);
-	oki->set_bank_base(((data & 6) >> 1) * 0x40000);
+	okim6295_set_bank_base(device, ((data & 6) >> 1) * 0x40000);
 }
 
-static ADDRESS_MAP_START( fuuki16_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( fuuki16_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM			// ROM
 	AM_RANGE(0x6000, 0x7fff) AM_RAM			// RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")	// Banked ROM
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)	// Banked ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( fuuki16_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( fuuki16_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(fuuki16_sound_rombank_w)	// ROM Bank
-	AM_RANGE(0x11, 0x11) AM_READ(soundlatch_r) AM_WRITENOP	// From Main CPU / ? To Main CPU ?
-	AM_RANGE(0x20, 0x20) AM_DEVWRITE("oki", fuuki16_oki_banking_w)	// Oki Banking
-	AM_RANGE(0x30, 0x30) AM_WRITENOP	// ? In the NMI routine
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ym1", ym2203_w)
-	AM_RANGE(0x50, 0x51) AM_DEVREADWRITE("ym2", ym3812_r, ym3812_w)
-	AM_RANGE(0x60, 0x60) AM_DEVREAD_MODERN("oki", okim6295_device, read)	// M6295
-	AM_RANGE(0x61, 0x61) AM_DEVWRITE_MODERN("oki", okim6295_device, write)	// M6295
+	AM_RANGE(0x00, 0x00) AM_WRITE(fuuki16_sound_rombank_w 	)	// ROM Bank
+	AM_RANGE(0x11, 0x11) AM_READWRITE(soundlatch_r, SMH_NOP	)	// From Main CPU / ? To Main CPU ?
+	AM_RANGE(0x20, 0x20) AM_DEVWRITE("oki", fuuki16_oki_banking_w		)	// Oki Banking
+	AM_RANGE(0x30, 0x30) AM_WRITE(SMH_NOP					)	// ? In the NMI routine
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ym1", ym2203_w	)
+	AM_RANGE(0x50, 0x51) AM_DEVREADWRITE("ym2", ym3812_r, ym3812_w		)
+	AM_RANGE(0x60, 0x60) AM_DEVREAD("oki", okim6295_r)	// M6295
+	AM_RANGE(0x61, 0x61) AM_DEVWRITE("oki", okim6295_w)	// M6295
 ADDRESS_MAP_END
 
 
@@ -193,31 +195,31 @@ static INPUT_PORTS_START( gogomile )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW")		// $880000.w
-	PORT_SERVICE_DIPLOC(  0x0001, IP_ACTIVE_LOW, "SW1:1" )
-	PORT_DIPNAME( 0x0002, 0x0002, "Demo Music" )		PORT_DIPLOCATION("SW1:2") /* Game play sounds still play, only effects Music */
+	PORT_SERVICE( 0x0001, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x0002, 0x0002, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( On ) )
-	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPNAME( 0x000c, 0x000c, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x000c, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( Hard ) )
 	PORT_DIPSETTING(      0x0004, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x0030, 0x0020, DEF_STR( Language ) )	PORT_DIPLOCATION("SW1:5,6") /* Default Language: English */
-	PORT_DIPSETTING(      0x0010, DEF_STR( Chinese ) )
-	PORT_DIPSETTING(      0x0030, DEF_STR( Japanese ) )	/* Only setting to give a "For use only in...." Copyright Notice */
-	PORT_DIPSETTING(      0x0000, DEF_STR( Korean ) )
+	PORT_DIPNAME( 0x0030, 0x0020, DEF_STR( Language ) )	/* Default Language: English */
+	PORT_DIPSETTING(      0x0010, "Chinese" )
+	PORT_DIPSETTING(      0x0030, DEF_STR( Japanese ) ) /* Only setting to give a "For use only in...." Copyright Notice */
+	PORT_DIPSETTING(      0x0000, "Korean" )
 	PORT_DIPSETTING(      0x0020, DEF_STR( English ) )
-	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Lives ) )	PORT_DIPLOCATION("SW1:7,8")
+	PORT_DIPNAME( 0x00c0, 0x00c0, DEF_STR( Lives ) )
 	PORT_DIPSETTING(      0x0000, "2" )
 	PORT_DIPSETTING(      0x00c0, "3" )
 	PORT_DIPSETTING(      0x0080, "4" )
 	PORT_DIPSETTING(      0x0040, "5" )
 
-	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW2:1")
+	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x0200, 0x0200, "SW2:2" )	/* Manual states this dip is "Unused" */
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coinage ) )	PORT_DIPLOCATION("SW2:3,4,5")
+	PORT_DIPUNUSED( 0x0200, 0x0200 ) /* Manual states this dip is "Unused" */
+	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x1400, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0c00, DEF_STR( 2C_1C ) )
@@ -226,34 +228,29 @@ static INPUT_PORTS_START( gogomile )
 	PORT_DIPSETTING(      0x0800, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPUNUSED_DIPLOC( 0x2000, 0x2000, "SW2:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x4000, 0x4000, "SW2:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x8000, 0x8000, "SW2:8" )
-/*
-    PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )   PORT_DIPLOCATION("SW2:6,7,8")
-    PORT_DIPSETTING(      0x2000, DEF_STR( 4C_1C ) )
-    PORT_DIPSETTING(      0xa000, DEF_STR( 3C_1C ) )
-    PORT_DIPSETTING(      0x6000, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0xe000, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0xc000, DEF_STR( 1C_2C ) )
-    PORT_DIPSETTING(      0x4000, DEF_STR( 1C_3C ) )
-    PORT_DIPSETTING(      0x8000, DEF_STR( 1C_4C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-*/
+	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(      0xa000, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(      0x6000, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(      0xe000, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(      0xc000, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(      0x4000, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(      0x8000, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
 INPUT_PORTS_END
 
 /* Same as gogomile, but the default country is different and the coinage settings too. */
-static INPUT_PORTS_START( gogomilej )
+static INPUT_PORTS_START( gogomilj )
 	PORT_INCLUDE( gogomile )
 
 	PORT_MODIFY("DSW")		// $880000.w
-	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Language ) ) 	PORT_DIPLOCATION("SW1:5,6") /* Default Language: Japanese */
-	PORT_DIPSETTING(      0x0010, DEF_STR( Chinese ) )
-	PORT_DIPSETTING(      0x0030, DEF_STR( Japanese ) )	/* Only setting to give a "For use only in...." Copyright Notice */
-	PORT_DIPSETTING(      0x0000, DEF_STR( Korean ) )
+	PORT_DIPNAME( 0x0030, 0x0030, DEF_STR( Language ) )	/* Default Language: Japanese */
+	PORT_DIPSETTING(      0x0010, "Chinese" )
+	PORT_DIPSETTING(      0x0030, DEF_STR( Japanese ) ) /* Only setting to give a "For use only in...." Copyright Notice */
+	PORT_DIPSETTING(      0x0000, "Korean" )
 	PORT_DIPSETTING(      0x0020, DEF_STR( English ) )
 
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW2:3,4,5")
+	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x1800, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x1400, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( 2C_1C ) )
@@ -262,17 +259,15 @@ static INPUT_PORTS_START( gogomilej )
 	PORT_DIPSETTING(      0x0800, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(      0x0c00, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-/*
-    PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )   PORT_DIPLOCATION("SW2:6,7,8")
-    PORT_DIPSETTING(      0xc000, DEF_STR( 4C_1C ) )
-    PORT_DIPSETTING(      0xa000, DEF_STR( 3C_1C ) )
-    PORT_DIPSETTING(      0x8000, DEF_STR( 2C_1C ) )
-    PORT_DIPSETTING(      0xe000, DEF_STR( 1C_1C ) )
-    PORT_DIPSETTING(      0x2000, DEF_STR( 1C_2C ) )
-    PORT_DIPSETTING(      0x4000, DEF_STR( 1C_3C ) )
-    PORT_DIPSETTING(      0x6000, DEF_STR( 1C_4C ) )
-    PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-*/
+	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) ) /* Manual states these dips (6-8) are "Unused" */
+	PORT_DIPSETTING(      0xc000, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(      0xa000, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(      0x8000, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(      0xe000, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(      0x4000, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(      0x6000, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( pbancho )
@@ -283,7 +278,7 @@ static INPUT_PORTS_START( pbancho )
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_SERVICE1 )
 
 	PORT_MODIFY("DSW")		// $880000.w
-	PORT_DIPNAME( 0x001c, 0x001c, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:3,4,5")
+	PORT_DIPNAME( 0x001c, 0x001c, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(      0x0008, DEF_STR( Easiest ) )	// 1
 	PORT_DIPSETTING(      0x0010, DEF_STR( Easy )    )	// 2
 	PORT_DIPSETTING(      0x001c, DEF_STR( Normal )  )	// 3
@@ -292,22 +287,22 @@ static INPUT_PORTS_START( pbancho )
 //  PORT_DIPSETTING(      0x0000, DEF_STR( Normal )  )  // 3
 //  PORT_DIPSETTING(      0x000c, DEF_STR( Normal )  )  // 3
 //  PORT_DIPSETTING(      0x0014, DEF_STR( Normal )  )  // 3
-	PORT_DIPNAME( 0x0060, 0x0060, "Lives (Vs Mode)" )	PORT_DIPLOCATION("SW1:6,7")
+	PORT_DIPNAME( 0x0060, 0x0060, "Lives (Vs Mode)" )
 	PORT_DIPSETTING(      0x0000, "1" )	// 1 1
 	PORT_DIPSETTING(      0x0060, "2" )	// 2 3
 //  PORT_DIPSETTING(      0x0020, "2" ) // 2 3
 	PORT_DIPSETTING(      0x0040, "3" )	// 3 5
-	PORT_DIPNAME( 0x0080, 0x0080, "? Senin Mode ?" )	PORT_DIPLOCATION("SW1:8")
+	PORT_DIPNAME( 0x0080, 0x0080, "? Senin Mode ?" )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
-	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW2:1")
+	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, "Allow Versus Mode" )	PORT_DIPLOCATION("SW2:2") // "unused" in the manual?
-	PORT_DIPSETTING(      0x0000, DEF_STR( No ) )
+	PORT_DIPNAME( 0x0200, 0x0200, "Allow Game Selection" )	// "unused" in the manual?
 	PORT_DIPSETTING(      0x0200, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW2:3,4,5")
+//  PORT_DIPSETTING(      0x0000, DEF_STR( No ) )   // Why cripple the game!?
+	PORT_DIPNAME( 0x1c00, 0x1c00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x0c00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0x1400, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 2C_1C ) )
@@ -316,7 +311,7 @@ static INPUT_PORTS_START( pbancho )
 	PORT_DIPSETTING(      0x0800, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW2:6,7,8")
+	PORT_DIPNAME( 0xe000, 0xe000, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(      0x6000, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(      0xa000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x2000, DEF_STR( 2C_1C ) )
@@ -392,10 +387,9 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static void soundirq( device_t *device, int state )
+static void soundirq(const device_config *device, int state)
 {
-	fuuki16_state *fuuki16 = device->machine().driver_data<fuuki16_state>();
-	device_set_input_line(fuuki16->m_audiocpu, 0, state);
+	cputag_set_input_line(device->machine, "audiocpu", 0, state);
 }
 
 static const ym3812_interface fuuki16_ym3812_intf =
@@ -417,95 +411,85 @@ static const ym3812_interface fuuki16_ym3812_intf =
 
 static TIMER_CALLBACK( level_1_interrupt_callback )
 {
-	fuuki16_state *state = machine.driver_data<fuuki16_state>();
-	device_set_input_line(state->m_maincpu, 1, HOLD_LINE);
-	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
+	cputag_set_input_line(machine, "maincpu", 1, HOLD_LINE);
+	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 248, 0), NULL, 0, level_1_interrupt_callback);
 }
 
 
 static TIMER_CALLBACK( vblank_interrupt_callback )
 {
-	fuuki16_state *state = machine.driver_data<fuuki16_state>();
-	device_set_input_line(state->m_maincpu, 3, HOLD_LINE);	// VBlank IRQ
-	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
+	cputag_set_input_line(machine, "maincpu", 3, HOLD_LINE);	// VBlank IRQ
+	timer_set(machine, video_screen_get_time_until_vblank_start(machine->primary_screen), NULL, 0, vblank_interrupt_callback);
 }
 
 
 static TIMER_CALLBACK( raster_interrupt_callback )
 {
-	fuuki16_state *state = machine.driver_data<fuuki16_state>();
-	device_set_input_line(state->m_maincpu, 5, HOLD_LINE);	// Raster Line IRQ
-	machine.primary_screen->update_partial(machine.primary_screen->vpos());
-	state->m_raster_interrupt_timer->adjust(machine.primary_screen->frame_period());
+	cputag_set_input_line(machine, "maincpu", 5, HOLD_LINE);	// Raster Line IRQ
+	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+	timer_adjust_oneshot(raster_interrupt_timer, video_screen_get_frame_period(machine->primary_screen), 0);
 }
 
 
 static MACHINE_START( fuuki16 )
 {
-	fuuki16_state *state = machine.driver_data<fuuki16_state>();
-	UINT8 *ROM = machine.region("audiocpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x10000], 0x8000);
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->m_raster_interrupt_timer = machine.scheduler().timer_alloc(FUNC(raster_interrupt_callback));
+	raster_interrupt_timer = timer_alloc(machine, raster_interrupt_callback, NULL);
 }
 
 
 static MACHINE_RESET( fuuki16 )
 {
-	fuuki16_state *state = machine.driver_data<fuuki16_state>();
-	const rectangle &visarea = machine.primary_screen->visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
-	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(248), FUNC(level_1_interrupt_callback));
-	machine.scheduler().timer_set(machine.primary_screen->time_until_vblank_start(), FUNC(vblank_interrupt_callback));
-	state->m_raster_interrupt_timer->adjust(machine.primary_screen->time_until_pos(0, visarea.max_x + 1));
+	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 248, 0), NULL, 0, level_1_interrupt_callback);
+	timer_set(machine, video_screen_get_time_until_vblank_start(machine->primary_screen), NULL, 0, vblank_interrupt_callback);
+	timer_adjust_oneshot(raster_interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, visarea->max_x + 1), 0);
 }
 
 
-static MACHINE_CONFIG_START( fuuki16, fuuki16_state )
+static MACHINE_DRIVER_START( fuuki16 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)
-	MCFG_CPU_PROGRAM_MAP(fuuki16_map)
+	MDRV_CPU_ADD("maincpu", M68000, 16000000)
+	MDRV_CPU_PROGRAM_MAP(fuuki16_map)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3000000)	/* ? */
-	MCFG_CPU_PROGRAM_MAP(fuuki16_sound_map)
-	MCFG_CPU_IO_MAP(fuuki16_sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80, 3000000)	/* ? */
+	MDRV_CPU_PROGRAM_MAP(fuuki16_sound_map)
+	MDRV_CPU_IO_MAP(fuuki16_sound_io_map)
 
-	MCFG_MACHINE_START(fuuki16)
-	MCFG_MACHINE_RESET(fuuki16)
+	MDRV_MACHINE_START(fuuki16)
+	MDRV_MACHINE_RESET(fuuki16)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(320, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-16-1)
-	MCFG_SCREEN_UPDATE_STATIC(fuuki16)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(320, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-16-1)
 
-	MCFG_GFXDECODE(fuuki16)
-	MCFG_PALETTE_LENGTH(0x800*4)
+	MDRV_GFXDECODE(fuuki16)
+	MDRV_PALETTE_LENGTH(0x800*4)
 
-	MCFG_VIDEO_START(fuuki16)
+	MDRV_VIDEO_START(fuuki16)
+	MDRV_VIDEO_UPDATE(fuuki16)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.15)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.15)
+	MDRV_SOUND_ADD("ym1", YM2203, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.15)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.15)
 
-	MCFG_SOUND_ADD("ym2", YM3812, 4000000)
-	MCFG_SOUND_CONFIG(fuuki16_ym3812_intf)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
+	MDRV_SOUND_ADD("ym2", YM3812, 4000000)
+	MDRV_SOUND_CONFIG(fuuki16_ym3812_intf)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.85)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.85)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.85)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.85)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -682,5 +666,6 @@ ROM_END
 ***************************************************************************/
 
 GAME( 1995, gogomile, 0,        fuuki16, gogomile, 0, ROT0, "Fuuki", "Go Go! Mile Smile", GAME_IMPERFECT_SOUND )
-GAME( 1995, gogomilej,gogomile, fuuki16, gogomilej,0, ROT0, "Fuuki", "Susume! Mile Smile (Japan)", GAME_IMPERFECT_SOUND )
+GAME( 1995, gogomilej,gogomile, fuuki16, gogomilj, 0, ROT0, "Fuuki", "Susume! Mile Smile (Japan)", GAME_IMPERFECT_SOUND )
 GAME( 1996, pbancho,  0,        fuuki16, pbancho,  0, ROT0, "Fuuki", "Gyakuten!! Puzzle Bancho (Japan)", 0)
+

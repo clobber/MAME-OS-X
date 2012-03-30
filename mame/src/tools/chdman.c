@@ -45,11 +45,9 @@
 #include "sha1.h"
 #include "vbiparse.h"
 #include <stdarg.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <ctype.h>
-#include <new>
 
 
 /***************************************************************************
@@ -184,11 +182,11 @@ static int usage(void)
 	printf("   or: chdman -createhd inputhd.raw output.chd [ident.bin] [inputoffs [cylinders heads sectors [sectorsize [hunksize]]]]\n");
 	printf("   or: chdman -createuncomphd inputhd.raw output.chd [ident.bin] [inputoffs [cylinders heads sectors [sectorsize [hunksize]]]]\n");
 	printf("   or: chdman -createblankhd output.chd cylinders heads sectors [sectorsize [hunksize]]\n");
-	printf("   or: chdman -createcd input.(toc/cue/nrg/gdi) output.chd\n");
+	printf("   or: chdman -createcd input.toc output.chd\n");
 	printf("   or: chdman -createav input.avi output.chd [firstframe [numframes]]\n");
 	printf("   or: chdman -copydata input.chd output.chd\n");
 	printf("   or: chdman -extract input.chd output.raw\n");
-	printf("   or: chdman -extractcd input.chd output.(toc/cue) output.bin (if toc, no extension if cue)\n");
+	printf("   or: chdman -extractcd input.chd output.toc output.bin\n");
 	printf("   or: chdman -extractav input.chd output.avi [firstframe [numframes]]\n");
 	printf("   or: chdman -verify input.chd\n");
 	printf("   or: chdman -verifyfix input.chd\n");
@@ -451,7 +449,7 @@ cleanup:
 	if (err != CHDERR_NONE)
 		osd_rmfile(outputfile);
 	if (identdata != NULL)
-		osd_free(identdata);
+		free(identdata);
 	return (err != CHDERR_NONE);
 }
 
@@ -593,7 +591,7 @@ cleanup:
 	if (err != CHDERR_NONE)
 		osd_rmfile(outputfile);
 	if (identdata != NULL)
-		osd_free(identdata);
+		free(identdata);
 	return (err != CHDERR_NONE);
 }
 
@@ -690,9 +688,6 @@ static int do_createcd(int argc, char *argv[], int param)
 	inputfile = argv[2];
 	outputfile = argv[3];
 
-	/* clear the TOC */
-	memset(&toc, 0, sizeof(toc));
-
 	/* allocate a cache */
 	cache = (UINT8 *)malloc(hunksize);
 	if (cache == NULL)
@@ -717,7 +712,6 @@ static int do_createcd(int argc, char *argv[], int param)
 		toc.tracks[i].extraframes = hunks * CD_FRAMES_PER_HUNK - toc.tracks[i].frames;
 	}
 
-
 	/* count up the total number of frames */
 	origtotalsectors = totalsectors = 0;
 	for (i = 0; i < toc.numtrks; i++)
@@ -728,8 +722,7 @@ static int do_createcd(int argc, char *argv[], int param)
 	printf("\nCD-ROM %s has %d tracks and %d total frames\n", inputfile, toc.numtrks, origtotalsectors);
 
 	/* create the new CHD file */
-	if (param) err = chd_create(outputfile, (UINT64)totalsectors * (UINT64)sectorsize, hunksize, CHDCOMPRESSION_ZLIB_PLUS_WITH_FLAC, NULL);
-	else err = chd_create(outputfile, (UINT64)totalsectors * (UINT64)sectorsize, hunksize, CHDCOMPRESSION_ZLIB_PLUS, NULL);
+	err = chd_create(outputfile, (UINT64)totalsectors * (UINT64)sectorsize, hunksize, CHDCOMPRESSION_ZLIB_PLUS, NULL);
 	if (err != CHDERR_NONE)
 	{
 		fprintf(stderr, "Error creating CHD file: %s\n", chd_error_string(err));
@@ -779,7 +772,7 @@ static int do_createcd(int argc, char *argv[], int param)
 			goto cleanup;
 		}
 
-		printf("Track %02d/%02d (%s:%d,%d frames,%d hunks,swap %d,pregap %d,postgap %d)\n", i+1, toc.numtrks, track_info.fname[i], track_info.offset[i], toc.tracks[i].frames, trackhunks, track_info.swap[i], toc.tracks[i].pregap, toc.tracks[i].postgap);
+		printf("Track %d/%d (%s:%d,%d frames,%d hunks,swap %d)\n", i+1, toc.numtrks, track_info.fname[i], track_info.offset[i], toc.tracks[i].frames, trackhunks, track_info.swap[i]);
 
 		/* loop over hunks */
 		for (curhunk = 0; curhunk < trackhunks; curhunk++, totalhunks++)
@@ -818,14 +811,8 @@ static int do_createcd(int argc, char *argv[], int param)
 				frames++;
 			}
 
-			int is_half_hunk = 0;
-			if ((curhunk == trackhunks-1) && (toc.tracks[i].extraframes>3))
-				is_half_hunk = 1;
-
-
 			/* compress the current hunk */
-
-			err = chd_compress_hunk(chd, cache, &ratio, is_half_hunk);
+			err = chd_compress_hunk(chd, cache, &ratio);
 			if (err != CHDERR_NONE)
 			{
 				fprintf(stderr, "Error during compression: %s\n", chd_error_string(err));
@@ -862,7 +849,7 @@ cleanup:
     read_avi_frame - read an AVI frame
 -------------------------------------------------*/
 
-static avi_error read_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sample, bitmap_yuy16 &fullbitmap, int interlaced, av_codec_compress_config *avconfig)
+static avi_error read_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sample, bitmap_t *fullbitmap, int interlaced, av_codec_compress_config *avconfig)
 {
 	const avi_movie_info *info = avi_get_movie_info(avi);
 	int interlace_factor = interlaced ? 2 : 1;
@@ -881,16 +868,19 @@ static avi_error read_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sam
 	/* read the video data when we hit a new frame */
 	if (framenum % interlace_factor == 0)
 	{
-		avierr = avi_read_video_frame(avi, framenum / interlace_factor, fullbitmap);
+		avierr = avi_read_video_frame_yuy16(avi, framenum / interlace_factor, fullbitmap);
 		if (avierr != AVIERR_NONE)
 			goto cleanup;
 	}
 
 	/* build the fake bitmap */
-	if (!interlaced)
-		avconfig->video.wrap(fullbitmap, fullbitmap.cliprect());
-	else
-		avconfig->video.wrap(&fullbitmap.pix16(framenum % interlace_factor), fullbitmap.width(), fullbitmap.height() / 2, fullbitmap.rowpixels() * 2);
+	*avconfig->video = *fullbitmap;
+	if (interlaced)
+	{
+		avconfig->video->base = BITMAP_ADDR16(avconfig->video, framenum % interlace_factor, 0);
+		avconfig->video->rowpixels *= 2;
+		avconfig->video->height /= 2;
+	}
 
 cleanup:
 	return avierr;
@@ -901,7 +891,7 @@ cleanup:
     fake_avi_frame - fake an AVI frame
 -------------------------------------------------*/
 
-static avi_error fake_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sample, bitmap_yuy16 &fullbitmap, int interlaced, av_codec_compress_config *avconfig)
+static avi_error fake_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sample, bitmap_t *fullbitmap, int interlaced, av_codec_compress_config *avconfig)
 {
 	static int framecounter = 0;
 	int leftsamp = (framenum % 200 < 10) ? 10000 : 0;
@@ -954,27 +944,30 @@ static avi_error fake_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sam
 	}
 
 	/* build the fake bitmap */
-	if (!interlaced)
-		avconfig->video.wrap(fullbitmap, fullbitmap.cliprect());
-	else
-		avconfig->video.wrap(&fullbitmap.pix16(framenum % interlace_factor), fullbitmap.width(), fullbitmap.height() / 2, fullbitmap.rowpixels() * 2);
+	*avconfig->video = *fullbitmap;
+	if (interlaced)
+	{
+		avconfig->video->base = BITMAP_ADDR16(avconfig->video, framenum % interlace_factor, 0);
+		avconfig->video->rowpixels *= 2;
+		avconfig->video->height /= 2;
+	}
 
 	/* loop over the data and copy it to the cache */
-	for (y = 0; y < avconfig->video.height(); y++)
+	for (y = 0; y < avconfig->video->height; y++)
 	{
-		UINT16 *dest = &avconfig->video.pix16(y);
+		UINT16 *dest = BITMAP_ADDR16(avconfig->video, y, 0);
 
 		/* white flag? */
 		if (y == 11 && whiteflag)
 		{
 			for (x = 0; x < AVI_FAKE_WIDTH; x++)
-				*dest++ = (x > 10 && x < avconfig->video.width() - 10) ? 0xff80 : 0x0080;
+				*dest++ = (x > 10 && x < avconfig->video->width - 10) ? 0xff80 : 0x0080;
 		}
 
 		/* line 17/18 */
 		else if ((y == 17 || y == 18) && line1718 != 0)
 		{
-			for (x = 0; x < avconfig->video.width(); x++)
+			for (x = 0; x < avconfig->video->width; x++)
 			{
 				UINT16 pixel = 0x0080;
 				if (x >= 20)
@@ -994,14 +987,14 @@ static avi_error fake_avi_frame(avi_file *avi, UINT32 framenum, UINT32 first_sam
 		/* anything else in VBI-land */
 		else if (y < 22)
 		{
-			for (x = 0; x < avconfig->video.width(); x++)
+			for (x = 0; x < avconfig->video->width; x++)
 				*dest++ = 0x0080;
 		}
 
 		/* everything else */
 		else
 		{
-			for (x = 0; x < avconfig->video.width(); x++)
+			for (x = 0; x < avconfig->video->width; x++)
 				*dest++ = framenum;
 		}
 	}
@@ -1019,13 +1012,15 @@ static int do_createav(int argc, char *argv[], int param)
 {
 	UINT32 fps_times_1million, width, height, interlaced, channels, rate, totalframes;
 	UINT32 max_samples_per_frame, bytes_per_frame, firstframe, numframes;
-	av_codec_compress_config avconfig;
+	av_codec_compress_config avconfig = { 0 };
 	const char *inputfile, *outputfile;
+	bitmap_t *fullbitmap = NULL;
 	const avi_movie_info *info;
 	UINT8 *ldframedata = NULL;
 	const chd_header *header;
 	chd_file *chd = NULL;
 	avi_file *avi = NULL;
+	bitmap_t fakebitmap;
 	double ratio = 1.0;
 	char metadata[256];
 	avi_error avierr;
@@ -1083,7 +1078,7 @@ static int do_createav(int argc, char *argv[], int param)
 		rate = info->audio_samplerate;
 		totalframes = info->video_numsamples;
 	}
-	numframes = MIN(totalframes - firstframe, numframes);
+  	numframes = MIN(totalframes - firstframe, numframes);
 
 	/* print some of it */
 	printf("Use frames:   %d-%d\n", firstframe, firstframe + numframes - 1);
@@ -1123,114 +1118,118 @@ static int do_createav(int argc, char *argv[], int param)
 	bytes_per_frame = 12 + channels * max_samples_per_frame * 2 + width * height * 2;
 
 	/* allocate a video buffer */
+	fullbitmap = bitmap_alloc(width, height * (interlaced ? 2 : 1), BITMAP_FORMAT_YUY16);
+	if (fullbitmap == NULL)
 	{
-		bitmap_yuy16 fullbitmap(width, height * (interlaced ? 2 : 1));
-		avconfig.video.wrap(fullbitmap, fullbitmap.cliprect());
+		fprintf(stderr, "Out of memory allocating temporary bitmap\n");
+		err = CHDERR_OUT_OF_MEMORY;
+		goto cleanup;
+	}
+	avconfig.video = &fakebitmap;
 
-		/* allocate audio buffers */
-		avconfig.channels = channels;
-		for (chnum = 0; chnum < channels; chnum++)
+	/* allocate audio buffers */
+	avconfig.channels = channels;
+	for (chnum = 0; chnum < channels; chnum++)
+	{
+		avconfig.audio[chnum] = (INT16 *)malloc(max_samples_per_frame * 2);
+		if (avconfig.audio[chnum] == NULL)
 		{
-			avconfig.audio[chnum] = (INT16 *)malloc(max_samples_per_frame * 2);
-			if (avconfig.audio[chnum] == NULL)
-			{
-				fprintf(stderr, "Out of memory allocating temporary audio buffer\n");
-				err = CHDERR_OUT_OF_MEMORY;
-				goto cleanup;
-			}
-		}
-
-		/* create the new CHD */
-		err = chd_create(outputfile, (UINT64)numframes * (UINT64)bytes_per_frame, bytes_per_frame, CHDCOMPRESSION_AV, NULL);
-		if (err != CHDERR_NONE)
-		{
-			fprintf(stderr, "Error creating CHD file: %s\n", chd_error_string(err));
+			fprintf(stderr, "Out of memory allocating temporary audio buffer\n");
+			err = CHDERR_OUT_OF_MEMORY;
 			goto cleanup;
 		}
+	}
 
-		/* open the new CHD */
-		err = chd_open(outputfile, CHD_OPEN_READWRITE, NULL, &chd);
-		if (err != CHDERR_NONE)
+	/* create the new CHD */
+	err = chd_create(outputfile, (UINT64)numframes * (UINT64)bytes_per_frame, bytes_per_frame, CHDCOMPRESSION_AV, NULL);
+	if (err != CHDERR_NONE)
+	{
+		fprintf(stderr, "Error creating CHD file: %s\n", chd_error_string(err));
+		goto cleanup;
+	}
+
+	/* open the new CHD */
+	err = chd_open(outputfile, CHD_OPEN_READWRITE, NULL, &chd);
+	if (err != CHDERR_NONE)
+	{
+		fprintf(stderr, "Error opening new CHD file: %s\n", chd_error_string(err));
+		goto cleanup;
+	}
+	header = chd_get_header(chd);
+
+	/* write the metadata */
+	sprintf(metadata, AV_METADATA_FORMAT, fps_times_1million / 1000000, fps_times_1million % 1000000, width, height, interlaced, channels, rate);
+	err = chd_set_metadata(chd, AV_METADATA_TAG, 0, metadata, strlen(metadata) + 1, CHD_MDFLAGS_CHECKSUM);
+	if (err != CHDERR_NONE)
+	{
+		fprintf(stderr, "Error adding AV metadata: %s\n", chd_error_string(err));
+		goto cleanup;
+	}
+
+	/* begin compressing */
+	err = chd_compress_begin(chd);
+	if (err != CHDERR_NONE)
+		goto cleanup;
+
+	/* loop over source hunks until we run out */
+	for (framenum = 0; framenum < numframes; framenum++)
+	{
+		int effframe = firstframe + framenum;
+		UINT32 first_sample;
+
+		/* progress */
+		progress(framenum == 0, "Compressing hunk %d/%d... (ratio=%d%%)  \r", framenum, header->totalhunks, (int)(100.0 * ratio));
+
+		/* compute the number of samples in this frame */
+		first_sample = ((UINT64)rate * (UINT64)effframe * (UINT64)1000000 + fps_times_1million - 1) / (UINT64)fps_times_1million;
+		avconfig.samples = ((UINT64)rate * (UINT64)(effframe + 1) * (UINT64)1000000 + fps_times_1million - 1) / (UINT64)fps_times_1million - first_sample;
+
+		/* read the frame into its proper format in the cache */
+		if (IS_FAKE_AVI_FILE(avi))
+			avierr = fake_avi_frame(avi, effframe, first_sample, fullbitmap, interlaced, &avconfig);
+		else
+			avierr = read_avi_frame(avi, effframe, first_sample, fullbitmap, interlaced, &avconfig);
+		if (avierr != AVIERR_NONE)
 		{
-			fprintf(stderr, "Error opening new CHD file: %s\n", chd_error_string(err));
-			goto cleanup;
-		}
-		header = chd_get_header(chd);
-
-		/* write the metadata */
-		sprintf(metadata, AV_METADATA_FORMAT, fps_times_1million / 1000000, fps_times_1million % 1000000, width, height, interlaced, channels, rate);
-		err = chd_set_metadata(chd, AV_METADATA_TAG, 0, metadata, strlen(metadata) + 1, CHD_MDFLAGS_CHECKSUM);
-		if (err != CHDERR_NONE)
-		{
-			fprintf(stderr, "Error adding AV metadata: %s\n", chd_error_string(err));
-			goto cleanup;
-		}
-
-		/* begin compressing */
-		err = chd_compress_begin(chd);
-		if (err != CHDERR_NONE)
-			goto cleanup;
-
-		/* loop over source hunks until we run out */
-		for (framenum = 0; framenum < numframes; framenum++)
-		{
-			int effframe = firstframe + framenum;
-			UINT32 first_sample;
-
-			/* progress */
-			progress(framenum == 0, "Compressing hunk %d/%d... (ratio=%d%%)  \r", framenum, header->totalhunks, (int)(100.0 * ratio));
-
-			/* compute the number of samples in this frame */
-			first_sample = ((UINT64)rate * (UINT64)effframe * (UINT64)1000000 + fps_times_1million - 1) / (UINT64)fps_times_1million;
-			avconfig.samples = ((UINT64)rate * (UINT64)(effframe + 1) * (UINT64)1000000 + fps_times_1million - 1) / (UINT64)fps_times_1million - first_sample;
-
-			/* read the frame into its proper format in the cache */
-			if (IS_FAKE_AVI_FILE(avi))
-				avierr = fake_avi_frame(avi, effframe, first_sample, fullbitmap, interlaced, &avconfig);
-			else
-				avierr = read_avi_frame(avi, effframe, first_sample, fullbitmap, interlaced, &avconfig);
-			if (avierr != AVIERR_NONE)
-			{
-				fprintf(stderr, "Error reading frame %d from AVI file: %s\n", effframe, avi_error_string(avierr));
-				err = CHDERR_COMPRESSION_ERROR;
-			}
-
-			/* update metadata for this frame */
-			if (ldframedata != NULL)
-			{
-				/* parse the data and pack it */
-				vbi_metadata vbi;
-				vbi_parse_all(&avconfig.video.pix16(0), avconfig.video.rowpixels(), avconfig.video.width(), 8, &vbi);
-				vbi_metadata_pack(&ldframedata[framenum * VBI_PACKED_BYTES], framenum, &vbi);
-			}
-
-			/* configure the compressor for this frame */
-			chd_codec_config(chd, AV_CODEC_COMPRESS_CONFIG, &avconfig);
-
-			/* append the data */
-			err = chd_compress_hunk(chd, NULL, &ratio);
-			if (err != CHDERR_NONE)
-				goto cleanup;
+			fprintf(stderr, "Error reading frame %d from AVI file: %s\n", effframe, avi_error_string(avierr));
+			err = CHDERR_COMPRESSION_ERROR;
 		}
 
-		/* write the final metadata */
+		/* update metadata for this frame */
 		if (ldframedata != NULL)
 		{
-			err = chd_set_metadata(chd, AV_LD_METADATA_TAG, 0, ldframedata, numframes * VBI_PACKED_BYTES, CHD_MDFLAGS_CHECKSUM);
-			if (err != CHDERR_NONE)
-			{
-				fprintf(stderr, "Error adding AVLD metadata: %s\n", chd_error_string(err));
-				goto cleanup;
-			}
+			/* parse the data and pack it */
+			vbi_metadata vbi;
+			vbi_parse_all((const UINT16 *)avconfig.video->base, avconfig.video->rowpixels, avconfig.video->width, 8, &vbi);
+			vbi_metadata_pack(&ldframedata[framenum * VBI_PACKED_BYTES], framenum, &vbi);
 		}
 
-		/* finish compression */
-		err = chd_compress_finish(chd, TRUE);
+		/* configure the compressor for this frame */
+		chd_codec_config(chd, AV_CODEC_COMPRESS_CONFIG, &avconfig);
+
+		/* append the data */
+		err = chd_compress_hunk(chd, NULL, &ratio);
 		if (err != CHDERR_NONE)
 			goto cleanup;
-		else
-			progress(TRUE, "Compression complete ... final ratio = %d%%            \n", (int)(100.0 * ratio));
 	}
+
+	/* write the final metadata */
+	if (ldframedata != NULL)
+	{
+		err = chd_set_metadata(chd, AV_LD_METADATA_TAG, 0, ldframedata, numframes * VBI_PACKED_BYTES, CHD_MDFLAGS_CHECKSUM);
+		if (err != CHDERR_NONE)
+		{
+			fprintf(stderr, "Error adding AVLD metadata: %s\n", chd_error_string(err));
+			goto cleanup;
+		}
+	}
+
+	/* finish compression */
+	err = chd_compress_finish(chd, TRUE);
+	if (err != CHDERR_NONE)
+		goto cleanup;
+	else
+		progress(TRUE, "Compression complete ... final ratio = %d%%            \n", (int)(100.0 * ratio));
 
 cleanup:
 	/* close everything down */
@@ -1241,6 +1240,8 @@ cleanup:
 	for (chnum = 0; chnum < ARRAY_LENGTH(avconfig.audio); chnum++)
 		if (avconfig.audio[chnum] != NULL)
 			free(avconfig.audio[chnum]);
+	if (fullbitmap != NULL)
+		bitmap_free(fullbitmap);
 	if (ldframedata != NULL)
 		free(ldframedata);
 	if (err != CHDERR_NONE)
@@ -1483,7 +1484,7 @@ static int do_extract(int argc, char *argv[], int param)
 		}
 
 		/* write the hunk to the file */
-		bytes_to_write = MIN(bytesremaining, header->hunkbytes);
+ 		bytes_to_write = MIN(bytesremaining, header->hunkbytes);
 		core_fseek(outfile, (UINT64)hunknum * (UINT64)header->hunkbytes, SEEK_SET);
 		byteswritten = core_fwrite(outfile, hunk, bytes_to_write);
 		if (byteswritten != bytes_to_write)
@@ -1512,7 +1513,7 @@ cleanup:
 
 /*-------------------------------------------------
     do_extractcd - extract a CDRDAO .toc/.bin
-    or CDRWIN .cue/.bin file from a CHD-CD image
+    file from a CHD-CD image
 -------------------------------------------------*/
 
 static int do_extractcd(int argc, char *argv[], int param)
@@ -1523,10 +1524,10 @@ static int do_extractcd(int argc, char *argv[], int param)
 	cdrom_file *cdrom = NULL;
 	FILE *outfile = NULL;
 	const cdrom_toc *toc;
-	UINT64 out2offs, discoffs;
+	UINT64 out2offs;
 	file_error filerr;
 	chd_error err;
-	int track, cuemode;
+	int track;
 
 	/* require 5 args total */
 	if (argc != 5)
@@ -1539,7 +1540,7 @@ static int do_extractcd(int argc, char *argv[], int param)
 
 	/* print some info */
 	printf("Input file:   %s\n", inputfile);
-	printf("Output files:  %s and %s\n", outputfile, outputfile2);
+	printf("Output files:  %s (toc) and %s (bin)\n", outputfile, outputfile2);
 
 	/* get the header */
 	err = chd_open(inputfile, CHD_OPEN_READ, NULL, &inputchd);
@@ -1558,13 +1559,6 @@ static int do_extractcd(int argc, char *argv[], int param)
 		goto cleanup;
 	}
 
-	/* check for CDRWIN format */
-	cuemode = 0;
-	if (strstr(outputfile, ".cue"))
-	{
-		cuemode = 1;
-	}
-
 	/* get the TOC data */
 	toc = cdrom_get_toc(cdrom);
 
@@ -1576,11 +1570,7 @@ static int do_extractcd(int argc, char *argv[], int param)
 		err = CHDERR_CANT_CREATE_FILE;
 		goto cleanup;
 	}
-
-	if (!cuemode)
-	{
-		fprintf(outfile, "CD_ROM\n\n\n");
-	}
+	fprintf(outfile, "CD_ROM\n\n\n");
 
 	filerr = core_fopen(outputfile2, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &outfile2);
 	if (filerr != FILERR_NONE)
@@ -1592,137 +1582,55 @@ static int do_extractcd(int argc, char *argv[], int param)
 
 	/* process away */
 	out2offs = 0;
-	discoffs = 0;
 	for (track = 0; track < toc->numtrks; track++)
 	{
 		UINT32 m, s, f, frame, trackframes;
 
 		progress(TRUE, "Extracting track %d...   \r", track+1);
 
-		trackframes = toc->tracks[track].frames;
+		fprintf(outfile, "// Track %d\n", track+1);
 
-		if (cuemode)
-		{
-			char modestr[16];
-
-			if (track == 0)
-			{
-				fprintf(outfile, "FILE \"%s\" BINARY\n", outputfile2);
-			}
-
-			switch (toc->tracks[track].trktype)
-			{
-				case CD_TRACK_MODE1:
-				case CD_TRACK_MODE1_RAW:
-					sprintf(modestr, "MODE1/%04d", toc->tracks[track].datasize);
-					break;
-
-				case CD_TRACK_MODE2:
-				case CD_TRACK_MODE2_FORM1:
-				case CD_TRACK_MODE2_FORM2:
-				case CD_TRACK_MODE2_FORM_MIX:
-				case CD_TRACK_MODE2_RAW:
-					sprintf(modestr, "MODE2/%04d", toc->tracks[track].datasize);
-					break;
-
-				case CD_TRACK_AUDIO:
-					strcpy(modestr, "AUDIO");
-					break;
-			}
-
-			fprintf(outfile, "  TRACK %02d %s\n", track+1, modestr);
-
-			if (toc->tracks[track].pregap > 0)
-			{
-				f = toc->tracks[track].pregap;
-				s = f / 75;
-				f %= 75;
-				m = s / 60;
-				s %= 60;
-				fprintf(outfile, "    PREGAP %02d:%02d:%02d\n", m, s, f);
-			}
-
-			f = discoffs;
-			s = f / 75;
-			f %= 75;
-			m = s / 60;
-			s %= 60;
-			fprintf(outfile, "    INDEX 01 %02d:%02d:%02d\n", m, s, f);
-
-			if (toc->tracks[track].postgap > 0)
-			{
-				f = toc->tracks[track].postgap;
-				s = f / 75;
-				f %= 75;
-				m = s / 60;
-				s %= 60;
-				fprintf(outfile, "    POSTGAP %02d:%02d:%02d\n", m, s, f);
-			}
-		}
+		/* write out the track type */
+		if (toc->tracks[track].subtype != CD_SUB_NONE)
+			fprintf(outfile, "TRACK %s %s\n", cdrom_get_type_string(&toc->tracks[track]), cdrom_get_subtype_string(&toc->tracks[track]));
 		else
+			fprintf(outfile, "TRACK %s\n", cdrom_get_type_string(&toc->tracks[track]));
+
+		/* write out the attributes */
+		fprintf(outfile, "NO COPY\n");
+		if (toc->tracks[track].trktype == CD_TRACK_AUDIO)
 		{
-			char modesubmode[64];
+			fprintf(outfile, "NO PRE_EMPHASIS\n");
+			fprintf(outfile, "TWO_CHANNEL_AUDIO\n");
 
-			fprintf(outfile, "// Track %d\n", track+1);
-
-			/* write out the track type */
-			if (toc->tracks[track].subtype != CD_SUB_NONE)
+			/* the first audio track on a mixed-track disc always has a 2 second pad */
+			if (track == 1)
 			{
-				sprintf(modesubmode, "%s %s", cdrom_get_type_string(toc->tracks[track].trktype), cdrom_get_subtype_string(toc->tracks[track].subtype));
+				if (toc->tracks[track].subtype != CD_SUB_NONE)
+					fprintf(outfile, "ZERO AUDIO %s 00:02:00\n", cdrom_get_subtype_string(&toc->tracks[track]));
+				else
+					fprintf(outfile, "ZERO AUDIO 00:02:00\n");
 			}
-			else
-			{
-				sprintf(modesubmode, "%s", cdrom_get_type_string(toc->tracks[track].trktype));
-			}
-
-			fprintf(outfile, "TRACK %s\n", modesubmode);
-
-			/* write out the attributes */
-			fprintf(outfile, "NO COPY\n");
-			if (toc->tracks[track].trktype == CD_TRACK_AUDIO)
-			{
-				fprintf(outfile, "NO PRE_EMPHASIS\n");
-				fprintf(outfile, "TWO_CHANNEL_AUDIO\n");
-			}
-
-			if (toc->tracks[track].pregap > 0)
-			{
-				f = toc->tracks[track].pregap;
-				s = f / 75;
-				f %= 75;
-				m = s / 60;
-				s %= 60;
-
-				fprintf(outfile, "ZERO %s %02d:%02d:%02d\n", modesubmode, m, s, f);
-			}
-
-			/* convert to minutes/seconds/frames */
-			f = trackframes;
-			s = f / 75;
-			f %= 75;
-			m = s / 60;
-			s %= 60;
-
-			/* all tracks but the first one have a file offset */
-			if (track > 0)
-				fprintf(outfile, "DATAFILE \"%s\" #%d %02d:%02d:%02d // length in bytes: %d\n", outputfile2, (UINT32)out2offs, m, s, f, trackframes*(toc->tracks[track].datasize+toc->tracks[track].subsize));
-			else
-				fprintf(outfile, "DATAFILE \"%s\" %02d:%02d:%02d // length in bytes: %d\n", outputfile2, m, s, f, trackframes*(toc->tracks[track].datasize+toc->tracks[track].subsize));
-
-			/* tracks with pregaps get a START marker too */
-			if (toc->tracks[track].pregap > 0)
-			{
-				f = toc->tracks[track].pregap;
-				s = f / 75;
-				f %= 75;
-				m = s / 60;
-				s %= 60;
-
-				fprintf(outfile, "START %02d:%02d:%02d\n", m, s, f);
-			}
-
-			fprintf(outfile, "\n\n");
 		}
+
+		/* convert to minutes/seconds/frames */
+		trackframes = toc->tracks[track].frames;
+		f = trackframes;
+		s = f / 75;
+		f %= 75;
+		m = s / 60;
+		s %= 60;
+
+		/* all tracks but the first one have a file offset */
+		if (track > 0)
+			fprintf(outfile, "DATAFILE \"%s\" #%d %02d:%02d:%02d // length in bytes: %d\n", outputfile2, (UINT32)out2offs, m, s, f, trackframes*(toc->tracks[track].datasize+toc->tracks[track].subsize));
+		else
+			fprintf(outfile, "DATAFILE \"%s\" %02d:%02d:%02d // length in bytes: %d\n", outputfile2, m, s, f, trackframes*(toc->tracks[track].datasize+toc->tracks[track].subsize));
+
+		if ((toc->tracks[track].trktype == CD_TRACK_AUDIO) && (track == 1))
+			fprintf(outfile, "START 00:02:00\n");
+
+		fprintf(outfile, "\n\n");
 
 		/* now write the actual data */
 		for (frame = 0; frame < trackframes; frame++)
@@ -1735,19 +1643,6 @@ static int do_extractcd(int argc, char *argv[], int param)
 			/* read the raw data */
 			cdrom_read_data(cdrom, cdrom_get_track_start(cdrom, track) + frame, sector, toc->tracks[track].trktype);
 
-			/* for CDRWin, audio tracks must be reversed */
-			if ((cuemode) && (toc->tracks[track].trktype == CD_TRACK_AUDIO))
-			{
-				int swapindex;
-
-				for (swapindex = 0; swapindex < toc->tracks[track].datasize; swapindex += 2)
-				{
-					UINT8 swaptemp = sector[swapindex];
-					sector[swapindex] = sector[swapindex+1];
-					sector[swapindex + 1] = swaptemp;
-				}
-			}
-
 			/* write it out */
 			core_fseek(outfile2, out2offs, SEEK_SET);
 			byteswritten = core_fwrite(outfile2, sector, toc->tracks[track].datasize);
@@ -1758,24 +1653,20 @@ static int do_extractcd(int argc, char *argv[], int param)
 				goto cleanup;
 			}
 			out2offs += toc->tracks[track].datasize;
-			discoffs++;
 
 			/* read the subcode data */
-			if (toc->tracks[track].subtype != CD_SUB_NONE)
-			{
-				cdrom_read_subcode(cdrom, cdrom_get_track_start(cdrom, track) + frame, sector);
+			cdrom_read_subcode(cdrom, cdrom_get_track_start(cdrom, track) + frame, sector);
 
-				/* write it out */
-				core_fseek(outfile2, out2offs, SEEK_SET);
-				byteswritten = core_fwrite(outfile2, sector, toc->tracks[track].subsize);
-				if (byteswritten != toc->tracks[track].subsize)
-				{
-					fprintf(stderr, "Error writing frame %d to output file: %s\n", frame, chd_error_string(CHDERR_WRITE_ERROR));
-					err = CHDERR_WRITE_ERROR;
-					goto cleanup;
-				}
-				out2offs += toc->tracks[track].subsize;
+			/* write it out */
+			core_fseek(outfile2, out2offs, SEEK_SET);
+			byteswritten = core_fwrite(outfile2, sector, toc->tracks[track].subsize);
+			if (byteswritten != toc->tracks[track].subsize)
+			{
+				fprintf(stderr, "Error writing frame %d to output file: %s\n", frame, chd_error_string(CHDERR_WRITE_ERROR));
+				err = CHDERR_WRITE_ERROR;
+				goto cleanup;
 			}
+			out2offs += toc->tracks[track].subsize;
 		}
 		progress(TRUE, "Extracting track %d... complete         \n", track+1);
 	}
@@ -1805,14 +1696,16 @@ cleanup:
 static int do_extractav(int argc, char *argv[], int param)
 {
 	int fps, fpsfrac, width, height, interlaced, channels, rate, totalframes;
-	av_codec_decompress_config avconfig;
+	av_codec_decompress_config avconfig = { 0 };
 	const char *inputfile, *outputfile;
 	UINT32 firstframe, numframes;
+	bitmap_t *fullbitmap = NULL;
 	UINT32 framenum, numsamples;
 	UINT32 fps_times_1million;
 	const chd_header *header;
 	chd_file *chd = NULL;
 	avi_file *avi = NULL;
+	bitmap_t fakebitmap;
 	avi_movie_info info;
 	char metadata[256];
 	avi_error avierr;
@@ -1871,104 +1764,111 @@ static int do_extractav(int argc, char *argv[], int param)
 	numframes = MIN(totalframes - firstframe, numframes);
 
 	/* allocate a video buffer */
+	fullbitmap = bitmap_alloc(width, height, BITMAP_FORMAT_YUY16);
+	if (fullbitmap ==  NULL)
 	{
-		bitmap_yuy16 fullbitmap(width, height);
-		avconfig.video.wrap(fullbitmap, fullbitmap.cliprect());
+		fprintf(stderr, "Out of memory allocating temporary bitmap\n");
+		err = CHDERR_OUT_OF_MEMORY;
+		goto cleanup;
+	}
+	avconfig.video = &fakebitmap;
 
-		/* allocate audio buffers */
-		avconfig.maxsamples = ((UINT64)rate * 1000000 + fps_times_1million - 1) / fps_times_1million;
-		avconfig.actsamples = &numsamples;
-		for (chnum = 0; chnum < channels; chnum++)
+	/* allocate audio buffers */
+	avconfig.maxsamples = ((UINT64)rate * 1000000 + fps_times_1million - 1) / fps_times_1million;
+	avconfig.actsamples = &numsamples;
+	for (chnum = 0; chnum < channels; chnum++)
+	{
+		avconfig.audio[chnum] = (INT16 *)malloc(avconfig.maxsamples * 2);
+		if (avconfig.audio[chnum] == NULL)
 		{
-			avconfig.audio[chnum] = (INT16 *)malloc(avconfig.maxsamples * 2);
-			if (avconfig.audio[chnum] == NULL)
-			{
-				fprintf(stderr, "Out of memory allocating temporary audio buffer\n");
-				err = CHDERR_OUT_OF_MEMORY;
-				goto cleanup;
-			}
+			fprintf(stderr, "Out of memory allocating temporary audio buffer\n");
+			err = CHDERR_OUT_OF_MEMORY;
+			goto cleanup;
+		}
+	}
+
+	/* print some of it */
+	printf("Use frames:   %d-%d\n", firstframe, firstframe + numframes - 1);
+	printf("Frame rate:   %d.%06d\n", fps_times_1million / 1000000, fps_times_1million % 1000000);
+	printf("Frame size:   %d x %d %s\n", width, height, interlaced ? "interlaced" : "non-interlaced");
+	printf("Audio:        %d channels at %d Hz\n", channels, rate);
+	printf("Total frames: %d (%02d:%02d:%02d)\n", totalframes,
+			(UINT32)((UINT64)totalframes * 1000000 / fps_times_1million / 60 / 60),
+			(UINT32)(((UINT64)totalframes * 1000000 / fps_times_1million / 60) % 60),
+			(UINT32)(((UINT64)totalframes * 1000000 / fps_times_1million) % 60));
+
+	/* build up the movie info */
+	info.video_format = FORMAT_YUY2;
+	info.video_timescale = fps_times_1million;
+	info.video_sampletime = 1000000;
+	info.video_width = width;
+	info.video_height = height;
+	info.video_depth = 16;
+	info.audio_format = 0;
+	info.audio_timescale = rate;
+	info.audio_sampletime = 1;
+	info.audio_channels = channels;
+	info.audio_samplebits = 16;
+	info.audio_samplerate = rate;
+
+	/* create the output file */
+	avierr = avi_create(outputfile, &info, &avi);
+	if (avierr != AVIERR_NONE)
+	{
+		fprintf(stderr, "Error opening output file '%s': %s\n", outputfile, avi_error_string(avierr));
+		err = CHDERR_CANT_CREATE_FILE;
+		goto cleanup;
+	}
+
+	/* loop over hunks, reading and writing */
+	for (framenum = 0; framenum < numframes; framenum++)
+	{
+		/* progress */
+		progress(framenum == 0, "Extracting hunk %d/%d...  \r", framenum, numframes);
+
+		/* set up the fake bitmap for this frame */
+		*avconfig.video = *fullbitmap;
+		if (interlaced)
+		{
+			avconfig.video->base = BITMAP_ADDR16(avconfig.video, framenum % 2, 0);
+			avconfig.video->rowpixels *= 2;
+			avconfig.video->height /= 2;
 		}
 
-		/* print some of it */
-		printf("Use frames:   %d-%d\n", firstframe, firstframe + numframes - 1);
-		printf("Frame rate:   %d.%06d\n", fps_times_1million / 1000000, fps_times_1million % 1000000);
-		printf("Frame size:   %d x %d %s\n", width, height, interlaced ? "interlaced" : "non-interlaced");
-		printf("Audio:        %d channels at %d Hz\n", channels, rate);
-		printf("Total frames: %d (%02d:%02d:%02d)\n", totalframes,
-				(UINT32)((UINT64)totalframes * 1000000 / fps_times_1million / 60 / 60),
-				(UINT32)(((UINT64)totalframes * 1000000 / fps_times_1million / 60) % 60),
-				(UINT32)(((UINT64)totalframes * 1000000 / fps_times_1million) % 60));
+		/* configure the decompressor for this frame */
+		chd_codec_config(chd, AV_CODEC_DECOMPRESS_CONFIG, &avconfig);
 
-		/* build up the movie info */
-		info.video_format = FORMAT_YUY2;
-		info.video_timescale = fps_times_1million;
-		info.video_sampletime = 1000000;
-		info.video_width = width;
-		info.video_height = height;
-		info.video_depth = 16;
-		info.audio_format = 0;
-		info.audio_timescale = rate;
-		info.audio_sampletime = 1;
-		info.audio_channels = channels;
-		info.audio_samplebits = 16;
-		info.audio_samplerate = rate;
-
-		/* create the output file */
-		avierr = avi_create(outputfile, &info, &avi);
-		if (avierr != AVIERR_NONE)
+		/* read the hunk into the buffers */
+		err = chd_read(chd, firstframe + framenum, NULL);
+		if (err != CHDERR_NONE)
 		{
-			fprintf(stderr, "Error opening output file '%s': %s\n", outputfile, avi_error_string(avierr));
-			err = CHDERR_CANT_CREATE_FILE;
+			fprintf(stderr, "Error reading hunk %d from CHD file: %s\n", firstframe + framenum, chd_error_string(err));
 			goto cleanup;
 		}
 
-		/* loop over hunks, reading and writing */
-		for (framenum = 0; framenum < numframes; framenum++)
+		/* write audio */
+		for (chnum = 0; chnum < channels; chnum++)
 		{
-			/* progress */
-			progress(framenum == 0, "Extracting hunk %d/%d...  \r", framenum, numframes);
-
-			/* set up the fake bitmap for this frame */
-			if (!interlaced)
-				avconfig.video.wrap(fullbitmap, fullbitmap.cliprect());
-			else
-				avconfig.video.wrap(&fullbitmap.pix16(framenum % 2), fullbitmap.width(), fullbitmap.height() / 2, fullbitmap.rowpixels() * 2);
-
-			/* configure the decompressor for this frame */
-			chd_codec_config(chd, AV_CODEC_DECOMPRESS_CONFIG, &avconfig);
-
-			/* read the hunk into the buffers */
-			err = chd_read(chd, firstframe + framenum, NULL);
-			if (err != CHDERR_NONE)
+			avierr = avi_append_sound_samples(avi, chnum, avconfig.audio[chnum], numsamples, 0);
+			if (avierr != AVIERR_NONE)
 			{
-				fprintf(stderr, "Error reading hunk %d from CHD file: %s\n", firstframe + framenum, chd_error_string(err));
+				fprintf(stderr, "Error writing samples for hunk %d to AVI file: %s\n", firstframe + framenum, avi_error_string(avierr));
 				goto cleanup;
 			}
+		}
 
-			/* write audio */
-			for (chnum = 0; chnum < channels; chnum++)
+		/* write video */
+		if (!interlaced || (firstframe + framenum) % 2 == 1)
+		{
+			avierr = avi_append_video_frame_yuy16(avi, fullbitmap);
+			if (avierr != AVIERR_NONE)
 			{
-				avierr = avi_append_sound_samples(avi, chnum, avconfig.audio[chnum], numsamples, 0);
-				if (avierr != AVIERR_NONE)
-				{
-					fprintf(stderr, "Error writing samples for hunk %d to AVI file: %s\n", firstframe + framenum, avi_error_string(avierr));
-					goto cleanup;
-				}
-			}
-
-			/* write video */
-			if (!interlaced || (firstframe + framenum) % 2 == 1)
-			{
-				avierr = avi_append_video_frame(avi, fullbitmap);
-				if (avierr != AVIERR_NONE)
-				{
-					fprintf(stderr, "Error writing video for hunk %d to AVI file: %s\n", firstframe + framenum, avi_error_string(avierr));
-					goto cleanup;
-				}
+				fprintf(stderr, "Error writing video for hunk %d to AVI file: %s\n", firstframe + framenum, avi_error_string(avierr));
+				goto cleanup;
 			}
 		}
-		progress(TRUE, "Extraction complete!                    \n");
 	}
+	progress(TRUE, "Extraction complete!                    \n");
 
 cleanup:
 	/* clean up our mess */
@@ -1977,6 +1877,8 @@ cleanup:
 	for (chnum = 0; chnum < ARRAY_LENGTH(avconfig.audio); chnum++)
 		if (avconfig.audio[chnum] != NULL)
 			free(avconfig.audio[chnum]);
+	if (fullbitmap != NULL)
+		bitmap_free(fullbitmap);
 	if (chd != NULL)
 		chd_close(chd);
 	if (err != CHDERR_NONE)
@@ -2153,12 +2055,13 @@ cleanup:
 static int do_fixavdata(int argc, char *argv[], int param)
 {
 	int fps, fpsfrac, width, height, interlaced, channels, rate;
-	av_codec_decompress_config avconfig;
+	av_codec_decompress_config avconfig = { 0 };
+	bitmap_t *fullbitmap = NULL;
 	const char *inputfile;
 	UINT8 *vbidata = NULL;
 	int writeable = FALSE;
 	chd_file *chd = NULL;
-	bitmap_yuy16 fakebitmap;
+	bitmap_t fakebitmap;
 	char metadata[256];
 	chd_header header;
 	UINT32 actlength;
@@ -2211,153 +2114,159 @@ static int do_fixavdata(int argc, char *argv[], int param)
 	}
 
 	/* allocate a video buffer */
+	fullbitmap = bitmap_alloc(width, height, BITMAP_FORMAT_YUY16);
+	if (fullbitmap ==  NULL)
 	{
-		bitmap_yuy16 fullbitmap(width, height);
-		avconfig.video.wrap(fullbitmap, fullbitmap.cliprect());
+		fprintf(stderr, "Out of memory allocating temporary bitmap\n");
+		err = CHDERR_OUT_OF_MEMORY;
+		goto cleanup;
+	}
+	avconfig.video = &fakebitmap;
 
-		/* allocate memory for VBI data */
-		vbidata = (UINT8 *)malloc(header.totalhunks * VBI_PACKED_BYTES);
-		if (vbidata == NULL)
+	/* allocate memory for VBI data */
+	vbidata = (UINT8 *)malloc(header.totalhunks * VBI_PACKED_BYTES);
+	if (vbidata == NULL)
+	{
+		fprintf(stderr, "Out of memory allocating VBI data\n");
+		err = CHDERR_OUT_OF_MEMORY;
+		goto cleanup;
+	}
+
+	/* read the metadata */
+	err = chd_get_metadata(chd, AV_LD_METADATA_TAG, 0, vbidata, header.totalhunks * VBI_PACKED_BYTES, &actlength, NULL, NULL);
+	if (err != CHDERR_NONE)
+	{
+		fprintf(stderr, "Error getting VBI metadata: %s\n", chd_error_string(err));
+		memset(vbidata, 0, header.totalhunks * VBI_PACKED_BYTES);
+		fixes++;
+	}
+	if (actlength != header.totalhunks * VBI_PACKED_BYTES)
+	{
+		fprintf(stderr, "VBI metadata incorrect size\n");
+		memset(vbidata, 0, header.totalhunks * VBI_PACKED_BYTES);
+		fixes++;
+	}
+
+	/* loop over hunks, reading */
+	for (framenum = 0; framenum < header.totalhunks; framenum++)
+	{
+		vbi_metadata origvbi;
+		vbi_metadata vbi;
+		UINT32 vbiframe;
+
+		/* progress */
+		progress(framenum == 0, "Processing hunk %d/%d...  \r", framenum, header.totalhunks);
+
+		/* set up the fake bitmap for this frame */
+		*avconfig.video = *fullbitmap;
+
+		/* configure the decompressor for this frame */
+		chd_codec_config(chd, AV_CODEC_DECOMPRESS_CONFIG, &avconfig);
+
+		/* read the hunk into the buffers */
+		err = chd_read(chd, framenum, NULL);
+		if (err != CHDERR_NONE)
 		{
-			fprintf(stderr, "Out of memory allocating VBI data\n");
-			err = CHDERR_OUT_OF_MEMORY;
+			fprintf(stderr, "Error reading hunk %d from CHD file: %s\n", framenum, chd_error_string(err));
 			goto cleanup;
 		}
 
-		/* read the metadata */
-		err = chd_get_metadata(chd, AV_LD_METADATA_TAG, 0, vbidata, header.totalhunks * VBI_PACKED_BYTES, &actlength, NULL, NULL);
+		/* unpack the current data for this frame */
+		vbi_metadata_unpack(&origvbi, &vbiframe, &vbidata[framenum * VBI_PACKED_BYTES]);
+
+		/* parse the video data */
+		vbi_parse_all((const UINT16 *)avconfig.video->base, avconfig.video->rowpixels, avconfig.video->width, 8, &vbi);
+
+		/* verify the data */
+		if (vbiframe != 0 || origvbi.white != 0 || origvbi.line16 != 0 || origvbi.line17 != 0 || origvbi.line18 != 0 || origvbi.line1718 != 0)
+		{
+			int errors = 0;
+
+			if (vbiframe != framenum)
+			{
+				fprintf(stderr, "%d:Frame mismatch in VBI data (%d, should be %d)\n", framenum, vbiframe, framenum);
+				errors++;
+			}
+			if (vbi.white != origvbi.white)
+			{
+				fprintf(stderr, "%d:White flag mismatch in VBI data (%d, should be %d)\n", framenum, origvbi.white, vbi.white);
+				errors++;
+			}
+			if (vbi.line16 != origvbi.line16)
+			{
+				fprintf(stderr, "%d:Line 16 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line16, vbi.line16);
+				errors++;
+			}
+			if (vbi.line17 != origvbi.line17)
+			{
+				fprintf(stderr, "%d:Line 17 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line17, vbi.line17);
+				errors++;
+			}
+			if (vbi.line18 != origvbi.line18)
+			{
+				fprintf(stderr, "%d:Line 18 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line18, vbi.line18);
+				errors++;
+			}
+			if (vbi.line1718 != origvbi.line1718)
+			{
+				fprintf(stderr, "%d:Line 17/18 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line1718, vbi.line1718);
+				errors++;
+			}
+			fixes += errors;
+			fixframes += (errors != 0);
+		}
+
+		/* pack the new data */
+		vbi_metadata_pack(&vbidata[framenum * VBI_PACKED_BYTES], framenum, &vbi);
+	}
+	progress(TRUE, "Processing complete!                                     \n");
+
+	/* print final results */
+	if (fixes == 0)
+		printf("\nNo fixes required\n");
+	else
+		printf("\nFound %d errors on %d frames\n", fixes, fixframes);
+
+	/* close the drive */
+	chd_close(chd);
+	chd = NULL;
+
+	/* apply fixes */
+	if (fixes > 0)
+	{
+		/* mark the CHD writeable */
+		header.flags |= CHDFLAGS_IS_WRITEABLE;
+		err = chd_set_header(inputfile, &header);
+		if (err != CHDERR_NONE)
+			fprintf(stderr, "Error writing new header: %s\n", chd_error_string(err));
+		header.flags &= ~CHDFLAGS_IS_WRITEABLE;
+		writeable = TRUE;
+
+		/* open the file */
+		err = chd_open(inputfile, CHD_OPEN_READWRITE, NULL, &chd);
 		if (err != CHDERR_NONE)
 		{
-			fprintf(stderr, "Error getting VBI metadata: %s\n", chd_error_string(err));
-			memset(vbidata, 0, header.totalhunks * VBI_PACKED_BYTES);
-			fixes++;
+			fprintf(stderr, "Error opening CHD file '%s': %s\n", inputfile, chd_error_string(err));
+			goto cleanup;
 		}
-		if (actlength != header.totalhunks * VBI_PACKED_BYTES)
+
+		/* write new metadata */
+		err = chd_set_metadata(chd, AV_LD_METADATA_TAG, 0, vbidata, header.totalhunks * VBI_PACKED_BYTES, CHD_MDFLAGS_CHECKSUM);
+		if (err != CHDERR_NONE)
 		{
-			fprintf(stderr, "VBI metadata incorrect size\n");
-			memset(vbidata, 0, header.totalhunks * VBI_PACKED_BYTES);
-			fixes++;
+			fprintf(stderr, "Error adding AVLD metadata: %s\n", chd_error_string(err));
+			goto cleanup;
 		}
-
-		/* loop over hunks, reading */
-		for (framenum = 0; framenum < header.totalhunks; framenum++)
-		{
-			vbi_metadata origvbi;
-			vbi_metadata vbi;
-			UINT32 vbiframe;
-
-			/* progress */
-			progress(framenum == 0, "Processing hunk %d/%d...  \r", framenum, header.totalhunks);
-
-			/* set up the fake bitmap for this frame */
-			avconfig.video.wrap(fullbitmap, fullbitmap.cliprect());
-
-			/* configure the decompressor for this frame */
-			chd_codec_config(chd, AV_CODEC_DECOMPRESS_CONFIG, &avconfig);
-
-			/* read the hunk into the buffers */
-			err = chd_read(chd, framenum, NULL);
-			if (err != CHDERR_NONE)
-			{
-				fprintf(stderr, "Error reading hunk %d from CHD file: %s\n", framenum, chd_error_string(err));
-				goto cleanup;
-			}
-
-			/* unpack the current data for this frame */
-			vbi_metadata_unpack(&origvbi, &vbiframe, &vbidata[framenum * VBI_PACKED_BYTES]);
-
-			/* parse the video data */
-			vbi_parse_all(&avconfig.video.pix16(0), avconfig.video.rowpixels(), avconfig.video.width(), 8, &vbi);
-
-			/* verify the data */
-			if (vbiframe != 0 || origvbi.white != 0 || origvbi.line16 != 0 || origvbi.line17 != 0 || origvbi.line18 != 0 || origvbi.line1718 != 0)
-			{
-				int errors = 0;
-
-				if (vbiframe != framenum)
-				{
-					fprintf(stderr, "%d:Frame mismatch in VBI data (%d, should be %d)\n", framenum, vbiframe, framenum);
-					errors++;
-				}
-				if (vbi.white != origvbi.white)
-				{
-					fprintf(stderr, "%d:White flag mismatch in VBI data (%d, should be %d)\n", framenum, origvbi.white, vbi.white);
-					errors++;
-				}
-				if (vbi.line16 != origvbi.line16)
-				{
-					fprintf(stderr, "%d:Line 16 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line16, vbi.line16);
-					errors++;
-				}
-				if (vbi.line17 != origvbi.line17)
-				{
-					fprintf(stderr, "%d:Line 17 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line17, vbi.line17);
-					errors++;
-				}
-				if (vbi.line18 != origvbi.line18)
-				{
-					fprintf(stderr, "%d:Line 18 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line18, vbi.line18);
-					errors++;
-				}
-				if (vbi.line1718 != origvbi.line1718)
-				{
-					fprintf(stderr, "%d:Line 17/18 mismatch in VBI data (%06X, should be %06X)\n", framenum, origvbi.line1718, vbi.line1718);
-					errors++;
-				}
-				fixes += errors;
-				fixframes += (errors != 0);
-			}
-
-			/* pack the new data */
-			vbi_metadata_pack(&vbidata[framenum * VBI_PACKED_BYTES], framenum, &vbi);
-		}
-		progress(TRUE, "Processing complete!                                     \n");
-
-		/* print final results */
-		if (fixes == 0)
-			printf("\nNo fixes required\n");
 		else
-			printf("\nFound %d errors on %d frames\n", fixes, fixframes);
+			printf("Updated metadata written successfully\n");
 
-		/* close the drive */
-		chd_close(chd);
-		chd = NULL;
-
-		/* apply fixes */
-		if (fixes > 0)
-		{
-			/* mark the CHD writeable */
-			header.flags |= CHDFLAGS_IS_WRITEABLE;
-			err = chd_set_header(inputfile, &header);
-			if (err != CHDERR_NONE)
-				fprintf(stderr, "Error writing new header: %s\n", chd_error_string(err));
-			header.flags &= ~CHDFLAGS_IS_WRITEABLE;
-			writeable = TRUE;
-
-			/* open the file */
-			err = chd_open(inputfile, CHD_OPEN_READWRITE, NULL, &chd);
-			if (err != CHDERR_NONE)
-			{
-				fprintf(stderr, "Error opening CHD file '%s': %s\n", inputfile, chd_error_string(err));
-				goto cleanup;
-			}
-
-			/* write new metadata */
-			err = chd_set_metadata(chd, AV_LD_METADATA_TAG, 0, vbidata, header.totalhunks * VBI_PACKED_BYTES, CHD_MDFLAGS_CHECKSUM);
-			if (err != CHDERR_NONE)
-			{
-				fprintf(stderr, "Error adding AVLD metadata: %s\n", chd_error_string(err));
-				goto cleanup;
-			}
-			else
-				printf("Updated metadata written successfully\n");
-
-			/* allow cleanup code to close the file and revert the header */
-		}
+		/* allow cleanup code to close the file and revert the header */
 	}
 
 cleanup:
 	/* clean up our mess */
+	if (fullbitmap != NULL)
+		bitmap_free(fullbitmap);
 	if (vbidata != NULL)
 		free(vbidata);
 	if (chd != NULL)
@@ -3061,7 +2970,7 @@ static int do_addmeta(int argc, char *argv[], int param)
 
 cleanup:
 	if (metadata != NULL)
-		osd_free(metadata);
+		free(metadata);
 	if (chd != NULL)
 		chd_close(chd);
 	if (err != CHDERR_NONE && was_readonly)
@@ -3338,7 +3247,7 @@ static chd_error chdman_clone_metadata(chd_file *source, chd_file *dest)
 		{
 			if (metatag == HARD_DISK_METADATA_TAG || metatag == CDROM_OLD_METADATA_TAG ||
 			    metatag == CDROM_TRACK_METADATA_TAG || metatag == AV_METADATA_TAG ||
-			    metatag == CDROM_TRACK_METADATA2_TAG || metatag == AV_LD_METADATA_TAG)
+			    metatag == AV_LD_METADATA_TAG)
 			{
 				metaflags |= CHD_MDFLAGS_CHECKSUM;
 			}
@@ -3397,7 +3306,7 @@ static chd_error chdman_clone_metadata(chd_file *source, chd_file *dest)
     main - entry point
 -------------------------------------------------*/
 
-int CLIB_DECL main(int argc, char *argv[])
+int CLIB_DECL main(int argc, char **argv)
 {
 	static const struct
 	{
@@ -3407,10 +3316,9 @@ int CLIB_DECL main(int argc, char *argv[])
 	} option_list[] =
 	{
 		{ "-createhd",		do_createhd, 0 },
-		{ "-createuncomphd",	do_createhd_uncomp, 0 },
+		{ "-createuncomphd", 	do_createhd_uncomp, 0 },
 		{ "-createraw",		do_createraw, 0 },
 		{ "-createcd",		do_createcd, 0 },
-//      { "-createcdflac",  do_createcd, 1 },
 		{ "-createblankhd",	do_createblankhd, 0 },
 		{ "-createav",		do_createav, 0 },
 		{ "-copydata",		do_copydata, 0 },

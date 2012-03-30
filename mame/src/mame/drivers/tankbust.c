@@ -16,39 +16,53 @@ To do:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/tankbust.h"
+
+
+VIDEO_START( tankbust );
+VIDEO_UPDATE( tankbust );
+
+extern UINT8 *tankbust_txtram;
+
+WRITE8_HANDLER( tankbust_background_videoram_w );
+READ8_HANDLER ( tankbust_background_videoram_r );
+WRITE8_HANDLER( tankbust_background_colorram_w );
+READ8_HANDLER ( tankbust_background_colorram_r );
+WRITE8_HANDLER( tankbust_txtram_w );
+READ8_HANDLER ( tankbust_txtram_r );
+
+WRITE8_HANDLER( tankbust_xscroll_w );
+WRITE8_HANDLER( tankbust_yscroll_w );
 
 
 //port A of ay8910#0
+static int latch;
 
 static TIMER_CALLBACK( soundlatch_callback )
 {
-	tankbust_state *state = machine.driver_data<tankbust_state>();
-	state->m_latch = param;
+	latch = param;
 }
 
 static WRITE8_HANDLER( tankbust_soundlatch_w )
 {
-	space->machine().scheduler().synchronize(FUNC(soundlatch_callback), data);
+	timer_call_after_resynch(space->machine, NULL, data,soundlatch_callback);
 }
 
 static READ8_DEVICE_HANDLER( tankbust_soundlatch_r )
 {
-	tankbust_state *state = device->machine().driver_data<tankbust_state>();
-	return state->m_latch;
+	return latch;
 }
 
 //port B of ay8910#0
+static UINT32 timer1 = 0;
 static READ8_DEVICE_HANDLER( tankbust_soundtimer_r )
 {
-	tankbust_state *state = device->machine().driver_data<tankbust_state>();
 	int ret;
 
-	state->m_timer1++;
-	ret = state->m_timer1;
+	timer1++;
+	ret = timer1;
 	return ret;
 }
 
@@ -61,33 +75,33 @@ static TIMER_CALLBACK( soundirqline_callback )
 }
 
 
+static int e0xx_data[8] = { 0,0,0,0, 0,0,0,0 };
 
 static WRITE8_HANDLER( tankbust_e0xx_w )
 {
-	tankbust_state *state = space->machine().driver_data<tankbust_state>();
-	state->m_e0xx_data[offset] = data;
+	e0xx_data[offset] = data;
 
 #if 0
 	popmessage("e0: %x %x (%x cnt) %x %x %x %x",
-		state->m_e0xx_data[0], state->m_e0xx_data[1],
-		state->m_e0xx_data[2], state->m_e0xx_data[3],
-		state->m_e0xx_data[4], state->m_e0xx_data[5],
-		state->m_e0xx_data[6] );
+		e0xx_data[0], e0xx_data[1],
+		e0xx_data[2], e0xx_data[3],
+		e0xx_data[4], e0xx_data[5],
+		e0xx_data[6] );
 #endif
 
 	switch (offset)
 	{
 	case 0:	/* 0xe000 interrupt enable */
-		state->m_irq_mask = data & 1;
-		break;
+		interrupt_enable_w(space, 0, data);
+	break;
 
 	case 1:	/* 0xe001 (value 0 then 1) written right after the soundlatch_w */
-		space->machine().scheduler().synchronize(FUNC(soundirqline_callback), data);
-		break;
+		timer_call_after_resynch(space->machine, NULL, data,soundirqline_callback);
+	break;
 
 	case 2:	/* 0xe002 coin counter */
-		coin_counter_w(space->machine(), 0, data&1);
-		break;
+		coin_counter_w(0, data&1);
+	break;
 
 	case 6:	/* 0xe006 screen disable ?? or disable screen update */
 		/* program sets this to 0,
@@ -95,21 +109,20 @@ static WRITE8_HANDLER( tankbust_e0xx_w )
            and sets this to 1 */
 
 		/* ???? */
-		break;
+	break;
 
 	case 7: /* 0xe007 bankswitch */
 		/* bank 1 at 0x6000-9fff = from 0x10000 when bit0=0 else from 0x14000 */
 		/* bank 2 at 0xa000-bfff = from 0x18000 when bit0=0 else from 0x1a000 */
-		memory_set_bankptr(space->machine(),  "bank1", space->machine().region("maincpu")->base() + 0x10000 + ((data&1) * 0x4000) );
-		memory_set_bankptr(space->machine(),  "bank2", space->machine().region("maincpu")->base() + 0x18000 + ((data&1) * 0x2000) ); /* verified (the game will reset after the "game over" otherwise) */
-		break;
+		memory_set_bankptr(space->machine,  1, memory_region(space->machine, "maincpu") + 0x10000 + ((data&1) * 0x4000) );
+		memory_set_bankptr(space->machine,  2, memory_region(space->machine, "maincpu") + 0x18000 + ((data&1) * 0x2000) ); /* verified (the game will reset after the "game over" otherwise) */
+	break;
 	}
 }
 
 static READ8_HANDLER( debug_output_area_r )
 {
-	tankbust_state *state = space->machine().driver_data<tankbust_state>();
-	return state->m_e0xx_data[offset];
+	return e0xx_data[offset];
 }
 
 
@@ -142,6 +155,7 @@ static PALETTE_INIT( tankbust )
 //rr    g g g   r b b - bad but still close
 
 
+#if 1 //close one
 		/* blue component */
 		bit0 = (color_prom[i] >> 0) & 0x01;
 		bit1 = (color_prom[i] >> 1) & 0x01;
@@ -158,6 +172,7 @@ static PALETTE_INIT( tankbust )
 		bit0 = (color_prom[i] >> 6) & 0x01;
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		r = 0x55 * bit0 + 0xaa * bit1;
+#endif
 
 		palette_set_color(machine,i,MAKE_RGB(r,g,b));
 	}
@@ -170,21 +185,21 @@ static READ8_HANDLER( read_from_unmapped_memory )
 }
 #endif
 
+static UINT8 variable_data;
 static READ8_HANDLER( some_changing_input )
 {
-	tankbust_state *state = space->machine().driver_data<tankbust_state>();
-	state->m_variable_data += 8;
-	return state->m_variable_data;
+	variable_data += 8;
+	return variable_data;
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x9fff) AM_ROMBANK("bank1")
-	AM_RANGE(0xa000, 0xbfff) AM_ROMBANK("bank2")
-	AM_RANGE(0xc000, 0xc7ff) AM_READWRITE(tankbust_background_videoram_r, tankbust_background_videoram_w) AM_BASE_MEMBER(tankbust_state, m_videoram)
-	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(tankbust_background_colorram_r, tankbust_background_colorram_w) AM_BASE_MEMBER(tankbust_state, m_colorram)
-	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(tankbust_txtram_r, tankbust_txtram_w) AM_BASE_MEMBER(tankbust_state, m_txtram)
-	AM_RANGE(0xd800, 0xd8ff) AM_RAM AM_BASE_SIZE_MEMBER(tankbust_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x6000, 0x9fff) AM_READWRITE(SMH_BANK(1), SMH_ROM)
+	AM_RANGE(0xa000, 0xbfff) AM_READWRITE(SMH_BANK(2), SMH_ROM)
+	AM_RANGE(0xc000, 0xc7ff) AM_READWRITE(tankbust_background_videoram_r, tankbust_background_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xc800, 0xcfff) AM_READWRITE(tankbust_background_colorram_r, tankbust_background_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd000, 0xd7ff) AM_READWRITE(tankbust_txtram_r, tankbust_txtram_w) AM_BASE(&tankbust_txtram)
+	AM_RANGE(0xd800, 0xd8ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xe000, 0xe007) AM_READWRITE(debug_output_area_r, tankbust_e0xx_w)
 	AM_RANGE(0xe800, 0xe800) AM_READ_PORT("INPUTS") AM_WRITE(tankbust_yscroll_w)
 	AM_RANGE(0xe801, 0xe801) AM_READ_PORT("SYSTEM")
@@ -196,7 +211,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	//AM_RANGE(0xf800, 0xffff) AM_READ(read_from_unmapped_memory)   /* a bug in game code ? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( port_map_cpu2, AS_IO, 8 )
+static ADDRESS_MAP_START( port_map_cpu2, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ay2", ay8910_data_w)
 	AM_RANGE(0x30, 0x30) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_address_w)
@@ -205,13 +220,14 @@ static ADDRESS_MAP_START( port_map_cpu2, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( map_cpu2, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_ROM
+static ADDRESS_MAP_START( map_cpu2, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READ(SMH_ROM)
+	AM_RANGE(0x0000, 0x1fff) AM_WRITE(SMH_ROM)
 	AM_RANGE(0x2000, 0x3fff) AM_WRITENOP	/* garbage, written in initialization loop */
 	//0x4000 and 0x4040-0x4045 seem to be used (referenced in the code)
 	AM_RANGE(0x4000, 0x7fff) AM_WRITENOP	/* garbage, written in initialization loop */
-	AM_RANGE(0x8000, 0x87ff) AM_READONLY
-	AM_RANGE(0x8000, 0x87ff) AM_WRITEONLY
+	AM_RANGE(0x8000, 0x87ff) AM_READ(SMH_RAM)
+	AM_RANGE(0x8000, 0x87ff) AM_WRITE(SMH_RAM)
 ADDRESS_MAP_END
 
 
@@ -318,60 +334,52 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_RESET( tankbust )
 {
-	tankbust_state *state = machine.driver_data<tankbust_state>();
-	state->m_variable_data = 0x11;
+	variable_data = 0x11;
 }
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	tankbust_state *state = device->machine().driver_data<tankbust_state>();
 
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-}
-
-static MACHINE_CONFIG_START( tankbust, tankbust_state )
+static MACHINE_DRIVER_START( tankbust )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_14_31818MHz/2)	/* Verified on PCB */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)		/* 4 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80, XTAL_14_31818MHz/4)		/* Verified on PCB */
-//  MCFG_CPU_ADD("sub", Z80, XTAL_14_31818MHz/3)        /* Accurate to audio recording, but apparently incorrect clock */
-	MCFG_CPU_PROGRAM_MAP(map_cpu2)
-	MCFG_CPU_IO_MAP(port_map_cpu2)
+	MDRV_CPU_ADD("sub", Z80, 4000000)		/* 3.072 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(map_cpu2)
+	MDRV_CPU_IO_MAP(port_map_cpu2)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_MACHINE_RESET( tankbust )
+	MDRV_MACHINE_RESET( tankbust )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE   ( 64*8, 32*8 )
-	MCFG_SCREEN_VISIBLE_AREA  ( 16*8, 56*8-1, 1*8, 31*8-1 )
-//  MCFG_SCREEN_VISIBLE_AREA  (  0*8, 64*8-1, 1*8, 31*8-1 )
-	MCFG_SCREEN_UPDATE_STATIC  ( tankbust )
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE   ( 64*8, 32*8 )
+	MDRV_SCREEN_VISIBLE_AREA  ( 16*8, 56*8-1, 1*8, 31*8-1 )
+//  MDRV_SCREEN_VISIBLE_AREA  (  0*8, 64*8-1, 1*8, 31*8-1 )
 
-	MCFG_GFXDECODE( tankbust )
+	MDRV_GFXDECODE( tankbust )
 
-	MCFG_PALETTE_LENGTH( 128 )
-	MCFG_PALETTE_INIT  ( tankbust )
+	MDRV_PALETTE_LENGTH( 128 )
+	MDRV_PALETTE_INIT  ( tankbust )
 
-	MCFG_VIDEO_START   ( tankbust )
+	MDRV_VIDEO_START   ( tankbust )
+	MDRV_VIDEO_UPDATE  ( tankbust )
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, XTAL_14_31818MHz/16)	/* Verified on PCB */
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+	MDRV_SOUND_ADD("ay1", AY8910, 2000000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("ay2", AY8910, XTAL_14_31818MHz/16)	/* Verified on PCB */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************

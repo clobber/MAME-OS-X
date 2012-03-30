@@ -1,24 +1,26 @@
-#include "emu.h"
+#include "driver.h"
 #include "sound/sn76477.h"
 #include "sound/tms3615.h"
-#include "includes/laserbat.h"
+
+static int csound1;
+static int ksound1, ksound2, ksound3;
+static int degr, filt, a, us, bit14;
 
 WRITE8_HANDLER( laserbat_csound1_w )
 {
-	laserbat_state *state = space->machine().driver_data<laserbat_state>();
-	state->m_csound1 = data;
+	csound1 = data;
 }
 
 WRITE8_HANDLER( laserbat_csound2_w )
 {
-	laserbat_state *state = space->machine().driver_data<laserbat_state>();
+	const device_config *sn = devtag_get_device(space->machine, "sn");
 	int ksound = 0;
 
 	if (data & 0x01)
 	{
 		int noise_filter_res = 0, vco_res = 0;
 
-		switch(state->m_csound1 & 0x07)
+		switch(csound1 & 0x07)
 		{
 		case 0x00:
 			noise_filter_res = RES_K(270);
@@ -54,53 +56,53 @@ WRITE8_HANDLER( laserbat_csound2_w )
 			break;
 		}
 
-		sn76477_noise_filter_res_w(state->m_sn, noise_filter_res);
-		sn76477_vco_res_w(state->m_sn, vco_res);
+		sn76477_noise_filter_res_w(sn, noise_filter_res);
+		sn76477_vco_res_w(sn, vco_res);
 
-		sn76477_enable_w(state->m_sn, (state->m_csound1 & 0x08) ? 1 : 0); // AB SOUND
-		sn76477_mixer_b_w(state->m_sn, (state->m_csound1 & 0x10) ? 1 : 0); // _VCO/NOISE
+		sn76477_enable_w(sn, (csound1 & 0x08) ? 1 : 0); // AB SOUND
+		sn76477_mixer_b_w(sn, (csound1 & 0x10) ? 1 : 0); // _VCO/NOISE
 
-		state->m_degr = (state->m_csound1 & 0x20) ? 1 : 0;
-		state->m_filt = (state->m_csound1 & 0x40) ? 1 : 0;
-		state->m_a = (state->m_csound1 & 0x80) ? 1 : 0;
-		state->m_us = 0; // sn76477 pin 12
+		degr = (csound1 & 0x20) ? 1 : 0;
+		filt = (csound1 & 0x40) ? 1 : 0;
+		a = (csound1 & 0x80) ? 1 : 0;
+		us = 0; // sn76477 pin 12
 	}
 
-	sn76477_vco_w(state->m_sn, (data & 0x40) ? 0 : 1);
+	sn76477_vco_w(sn, (data & 0x40) ? 0 : 1);
 
 	switch((data & 0x1c) >> 2)
 	{
 	case 0x00:
-		sn76477_slf_res_w(state->m_sn, RES_K(27));
+		sn76477_slf_res_w(sn, RES_K(27));
 		break;
 	case 0x01:
-		sn76477_slf_res_w(state->m_sn, RES_K(22));
+		sn76477_slf_res_w(sn, RES_K(22));
 		break;
 	case 0x02:
-		sn76477_slf_res_w(state->m_sn, RES_K(22));
+		sn76477_slf_res_w(sn, RES_K(22));
 		break;
 	case 0x03:
-		sn76477_slf_res_w(state->m_sn, RES_K(12));
+		sn76477_slf_res_w(sn, RES_K(12));
 		break;
 	case 0x04: // not connected
 		break;
 	case 0x05: // SL1
-		state->m_ksound1 = state->m_csound1;
+		ksound1 = csound1;
 		break;
 	case 0x06: // SL2
-		state->m_ksound2 = state->m_csound1;
+		ksound2 = csound1;
 		break;
 	case 0x07: // SL3
-		state->m_ksound3 = state->m_csound1;
+		ksound3 = csound1;
 		break;
 	}
 
-	ksound = ((data & 0x02) << 23) + (state->m_ksound3 << 16) + (state->m_ksound2 << 8) + state->m_ksound1;
+	ksound = ((data & 0x02) << 23) + (ksound3 << 16) + (ksound2 << 8) + ksound1;
 
-	tms3615_enable_w(state->m_tms1, ksound & 0x1fff);
-	tms3615_enable_w(state->m_tms2, (ksound >> 13) << 1);
+	tms3615_enable_w(devtag_get_device(space->machine, "tms1"), ksound & 0x1fff);
+	tms3615_enable_w(devtag_get_device(space->machine, "tms2"), (ksound >> 13) << 1);
 
-	state->m_bit14 = (data & 0x20) ? 1 : 0;
+	bit14 = (data & 0x20) ? 1 : 0;
 
 	// (data & 0x80) = reset
 }

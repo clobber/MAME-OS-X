@@ -4,12 +4,23 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/resnet.h"
-#include "includes/cloak.h"
+#include "cloak.h"
 
 
 #define NUM_PENS	(0x40)
+
+static UINT8 bitmap_videoram_selected;
+static UINT8 bitmap_videoram_address_x;
+static UINT8 bitmap_videoram_address_y;
+static UINT8 *bitmap_videoram1;
+static UINT8 *bitmap_videoram2;
+static UINT8 *current_bitmap_videoram_accessed;
+static UINT8 *current_bitmap_videoram_displayed;
+static UINT16 *palette_ram;
+
+static tilemap *bg_tilemap;
 
 /***************************************************************************
 
@@ -40,15 +51,12 @@
 
 WRITE8_HANDLER( cloak_paletteram_w )
 {
-	cloak_state *state = space->machine().driver_data<cloak_state>();
-	state->m_palette_ram[offset & 0x3f] = ((offset & 0x40) << 2) | data;
+	palette_ram[offset & 0x3f] = ((offset & 0x40) << 2) | data;
 }
 
 
-static void set_pens(running_machine &machine)
+static void set_pens(running_machine *machine)
 {
-	cloak_state *state = machine.driver_data<cloak_state>();
-	UINT16 *palette_ram = state->m_palette_ram;
 	static const int resistances[3] = { 10000, 4700, 2200 };
 	double weights[3];
 	int i;
@@ -87,129 +95,119 @@ static void set_pens(running_machine &machine)
 }
 
 
-static void set_current_bitmap_videoram_pointer(cloak_state *state)
+static void set_current_bitmap_videoram_pointer(void)
 {
-	state->m_current_bitmap_videoram_accessed  = state->m_bitmap_videoram_selected ? state->m_bitmap_videoram1 : state->m_bitmap_videoram2;
-	state->m_current_bitmap_videoram_displayed = state->m_bitmap_videoram_selected ? state->m_bitmap_videoram2 : state->m_bitmap_videoram1;
+	current_bitmap_videoram_accessed  = bitmap_videoram_selected ? bitmap_videoram1 : bitmap_videoram2;
+	current_bitmap_videoram_displayed = bitmap_videoram_selected ? bitmap_videoram2 : bitmap_videoram1;
 }
 
 WRITE8_HANDLER( cloak_clearbmp_w )
 {
-	cloak_state *state = space->machine().driver_data<cloak_state>();
-
-	space->machine().primary_screen->update_now();
-	state->m_bitmap_videoram_selected = data & 0x01;
-	set_current_bitmap_videoram_pointer(state);
+	video_screen_update_now(space->machine->primary_screen);
+	bitmap_videoram_selected = data & 0x01;
+	set_current_bitmap_videoram_pointer();
 
 	if (data & 0x02)	/* clear */
-		memset(state->m_current_bitmap_videoram_accessed, 0, 256*256);
+		memset(current_bitmap_videoram_accessed, 0, 256*256);
 }
 
-static void adjust_xy(cloak_state *state, int offset)
+static void adjust_xy(int offset)
 {
 	switch (offset)
 	{
-		case 0x00:  state->m_bitmap_videoram_address_x--; state->m_bitmap_videoram_address_y++; break;
-		case 0x01:								 state->m_bitmap_videoram_address_y--; break;
-		case 0x02:  state->m_bitmap_videoram_address_x--;							  break;
-		case 0x04:  state->m_bitmap_videoram_address_x++; state->m_bitmap_videoram_address_y++; break;
-		case 0x05:								 state->m_bitmap_videoram_address_y++; break;
-		case 0x06:  state->m_bitmap_videoram_address_x++;							  break;
+		case 0x00:  bitmap_videoram_address_x--; bitmap_videoram_address_y++; break;
+		case 0x01:								 bitmap_videoram_address_y--; break;
+		case 0x02:  bitmap_videoram_address_x--;							  break;
+		case 0x04:  bitmap_videoram_address_x++; bitmap_videoram_address_y++; break;
+		case 0x05:								 bitmap_videoram_address_y++; break;
+		case 0x06:  bitmap_videoram_address_x++;							  break;
 	}
 }
 
 READ8_HANDLER( graph_processor_r )
 {
-	cloak_state *state = space->machine().driver_data<cloak_state>();
-	UINT8 ret = state->m_current_bitmap_videoram_displayed[(state->m_bitmap_videoram_address_y << 8) | state->m_bitmap_videoram_address_x];
+	UINT8 ret = current_bitmap_videoram_displayed[(bitmap_videoram_address_y << 8) | bitmap_videoram_address_x];
 
-	adjust_xy(state, offset);
+	adjust_xy(offset);
 
 	return ret;
 }
 
 WRITE8_HANDLER( graph_processor_w )
 {
-	cloak_state *state = space->machine().driver_data<cloak_state>();
-
 	switch (offset)
 	{
-		case 0x03: state->m_bitmap_videoram_address_x = data; break;
-		case 0x07: state->m_bitmap_videoram_address_y = data; break;
+		case 0x03: bitmap_videoram_address_x = data; break;
+		case 0x07: bitmap_videoram_address_y = data; break;
 		default:
-			state->m_current_bitmap_videoram_accessed[(state->m_bitmap_videoram_address_y << 8) | state->m_bitmap_videoram_address_x] = data & 0x0f;
+			current_bitmap_videoram_accessed[(bitmap_videoram_address_y << 8) | bitmap_videoram_address_x] = data & 0x0f;
 
-			adjust_xy(state, offset);
+			adjust_xy(offset);
 			break;
-	}
+		}
 }
 
 WRITE8_HANDLER( cloak_videoram_w )
 {
-	cloak_state *state = space->machine().driver_data<cloak_state>();
-	UINT8 *videoram = state->m_videoram;
-
 	videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( cloak_flipscreen_w )
 {
-	flip_screen_set(space->machine(), data & 0x80);
+	flip_screen_set(space->machine, data & 0x80);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	cloak_state *state = machine.driver_data<cloak_state>();
-	UINT8 *videoram = state->m_videoram;
 	int code = videoram[tile_index];
 
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
-VIDEO_START( cloak )
+static STATE_POSTLOAD( cloak_postload )
 {
-	cloak_state *state = machine.driver_data<cloak_state>();
-
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-
-	state->m_bitmap_videoram1 = auto_alloc_array(machine, UINT8, 256*256);
-	state->m_bitmap_videoram2 = auto_alloc_array(machine, UINT8, 256*256);
-	state->m_palette_ram = auto_alloc_array(machine, UINT16, NUM_PENS);
-
-	set_current_bitmap_videoram_pointer(state);
-
-	state->save_item(NAME(state->m_bitmap_videoram_address_x));
-	state->save_item(NAME(state->m_bitmap_videoram_address_y));
-	state->save_item(NAME(state->m_bitmap_videoram_selected));
-	state->save_pointer(NAME(state->m_bitmap_videoram1), 256*256);
-	state->save_pointer(NAME(state->m_bitmap_videoram2), 256*256);
-	state->save_pointer(NAME(state->m_palette_ram), NUM_PENS);
-	machine.save().register_postload(save_prepost_delegate(FUNC(set_current_bitmap_videoram_pointer), state));
+	set_current_bitmap_videoram_pointer();
 }
 
-static void draw_bitmap(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+VIDEO_START( cloak )
 {
-	cloak_state *state = machine.driver_data<cloak_state>();
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+
+	bitmap_videoram1 = auto_alloc_array(machine, UINT8, 256*256);
+	bitmap_videoram2 = auto_alloc_array(machine, UINT8, 256*256);
+	palette_ram = auto_alloc_array(machine, UINT16, NUM_PENS);
+
+	set_current_bitmap_videoram_pointer();
+
+	state_save_register_global(machine, bitmap_videoram_address_x);
+	state_save_register_global(machine, bitmap_videoram_address_y);
+	state_save_register_global(machine, bitmap_videoram_selected);
+	state_save_register_global_pointer(machine, bitmap_videoram1, 256*256);
+	state_save_register_global_pointer(machine, bitmap_videoram2, 256*256);
+	state_save_register_global_pointer(machine, palette_ram, NUM_PENS);
+	state_save_register_postload(machine, cloak_postload, NULL);
+}
+
+static void draw_bitmap(bitmap_t *bitmap, const rectangle *cliprect)
+{
 	int x, y;
 
-	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
-		for (x = cliprect.min_x; x <= cliprect.max_x; x++)
+	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
+		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 		{
-			pen_t pen = state->m_current_bitmap_videoram_displayed[(y << 8) | x] & 0x07;
+			pen_t pen = current_bitmap_videoram_displayed[(y << 8) | x] & 0x07;
 
 			if (pen)
-				bitmap.pix16(y, (x - 6) & 0xff) = 0x10 | ((x & 0x80) >> 4) | pen;
+				*BITMAP_ADDR16(bitmap, y, (x - 6) & 0xff) = 0x10 | ((x & 0x80) >> 4) | pen;
 		}
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	cloak_state *state = machine.driver_data<cloak_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = (0x100 / 4) - 1; offs >= 0; offs--)
+	for (offs = (spriteram_size / 4) - 1; offs >= 0; offs--)
 	{
 		int code = spriteram[offs + 64] & 0x7f;
 		int flipx = spriteram[offs + 64] & 0x80;
@@ -225,16 +223,15 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, 0, flipx, flipy,	sx, sy, 0);
+		drawgfx_transpen(bitmap, cliprect, machine->gfx[1], code, 0, flipx, flipy,	sx, sy, 0);
 	}
 }
 
-SCREEN_UPDATE_IND16( cloak )
+VIDEO_UPDATE( cloak )
 {
-	cloak_state *state = screen.machine().driver_data<cloak_state>();
-	set_pens(screen.machine());
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_bitmap(screen.machine(), bitmap, cliprect);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	set_pens(screen->machine);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_bitmap(bitmap, cliprect);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

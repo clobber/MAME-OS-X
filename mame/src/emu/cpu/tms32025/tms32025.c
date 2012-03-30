@@ -116,7 +116,6 @@ Table 3-2.  TMS32025/26 Memory Blocks
 */
 
 
-#include "emu.h"
 #include "debugger.h"
 #include "tms32025.h"
 
@@ -127,13 +126,13 @@ Table 3-2.  TMS32025/26 Memory Blocks
 
 #define SET_PC(x)	do { cpustate->PC = (x); } while (0)
 
-#define P_IN(A)			(cpustate->io->read_word((A)<<1))
-#define P_OUT(A,V)		(cpustate->io->write_word(((A)<<1),(V)))
-#define S_IN(A)			(cpustate->io->read_word((A)<<1))
-#define S_OUT(A,V)		(cpustate->io->write_word(((A)<<1),(V)))
+#define P_IN(A)			(memory_read_word_16be(cpustate->io, (A)<<1))
+#define P_OUT(A,V)		(memory_write_word_16be(cpustate->io, ((A)<<1),(V)))
+#define S_IN(A)			(memory_read_word_16be(cpustate->io, (A)<<1))
+#define S_OUT(A,V)		(memory_write_word_16be(cpustate->io, ((A)<<1),(V)))
 
-#define M_RDOP(A)		((cpustate->pgmmap[(A) >> 7]) ? (cpustate->pgmmap[(A) >> 7][(A) & 0x7f]) : cpustate->direct->read_decrypted_word((A)<<1))
-#define M_RDOP_ARG(A)	((cpustate->pgmmap[(A) >> 7]) ? (cpustate->pgmmap[(A) >> 7][(A) & 0x7f]) : cpustate->direct->read_decrypted_word((A)<<1))
+#define M_RDOP(A)		((cpustate->pgmmap[(A) >> 7]) ? (cpustate->pgmmap[(A) >> 7][(A) & 0x7f]) : memory_decrypted_read_word(cpustate->program, (A)<<1))
+#define M_RDOP_ARG(A)	((cpustate->pgmmap[(A) >> 7]) ? (cpustate->pgmmap[(A) >> 7][(A) & 0x7f]) : memory_decrypted_read_word(cpustate->program, (A)<<1))
 
 
 
@@ -165,7 +164,7 @@ struct _tms32025_state
 	int		init_load_addr;			/* 0=No, 1=Yes, 2=Once for repeat mode */
 	int		tms32025_irq_cycles;
 	int		tms32025_dec_cycles;
-	device_irq_callback irq_callback;
+	cpu_irq_callback irq_callback;
 
 	PAIR	oldacc;
 	UINT32	memaccess;
@@ -173,22 +172,23 @@ struct _tms32025_state
 	int		mHackIgnoreARP;			 /* special handling for lst, lst1 instructions */
 	int		waiting_for_serial_frame;
 
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
-	address_space *data;
-	address_space *io;
+	const device_config *device;
+	const address_space *program;
+	const address_space *data;
+	const address_space *io;
 
 	UINT16 *pgmmap[0x200];
 	UINT16 *datamap[0x200];
 };
 
-INLINE tms32025_state *get_safe_token(device_t *device)
+INLINE tms32025_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == TMS32025 ||
-		   device->type() == TMS32026);
-	return (tms32025_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_TMS32025 ||
+		   cpu_get_type(device) == CPU_TMS32026);
+	return (tms32025_state *)device->token;
 }
 
 /* opcode table entry */
@@ -196,21 +196,21 @@ typedef struct _tms32025_opcode tms32025_opcode;
 struct _tms32025_opcode
 {
 	UINT8	cycles;
-	void	(*function)(tms32025_state *);
+	void 	(*function)(tms32025_state *);
 };
 /* opcode table entry (Opcode CE has sub-opcodes) */
 typedef struct _tms32025_opcode_CE tms32025_opcode_CE;
 struct _tms32025_opcode_CE
 {
 	UINT8	cycles;
-	void	(*function)(tms32025_state *);
+	void 	(*function)(tms32025_state *);
 };
 /* opcode table entry (Opcode Dx has sub-opcodes) */
 typedef struct _tms32025_opcode_Dx tms32025_opcode_Dx;
 struct _tms32025_opcode_Dx
 {
 	UINT8	cycles;
-	void	(*function)(tms32025_state *);
+	void 	(*function)(tms32025_state *);
 };
 
 
@@ -325,7 +325,7 @@ INLINE UINT16 M_RDROM(tms32025_state *cpustate, offs_t addr)
 	addr &= 0xffff;
 	ram = cpustate->pgmmap[addr >> 7];
 	if (ram) return ram[addr & 0x7f];
-	return cpustate->program->read_word(addr << 1);
+	return memory_read_word_16be(cpustate->program, addr << 1);
 }
 
 INLINE void M_WRTROM(tms32025_state *cpustate, offs_t addr, UINT16 data)
@@ -334,7 +334,7 @@ INLINE void M_WRTROM(tms32025_state *cpustate, offs_t addr, UINT16 data)
 	addr &= 0xffff;
 	ram = cpustate->pgmmap[addr >> 7];
 	if (ram) { ram[addr & 0x7f] = data; }
-	else cpustate->program->write_word(addr << 1, data);
+	else memory_write_word_16be(cpustate->program, addr << 1, data);
 }
 
 INLINE UINT16 M_RDRAM(tms32025_state *cpustate, offs_t addr)
@@ -343,7 +343,7 @@ INLINE UINT16 M_RDRAM(tms32025_state *cpustate, offs_t addr)
 	addr &= 0xffff;
 	ram = cpustate->datamap[addr >> 7];
 	if (ram) return ram[addr & 0x7f];
-	return cpustate->data->read_word(addr << 1);
+	return memory_read_word_16be(cpustate->data, addr << 1);
 }
 
 INLINE void M_WRTRAM(tms32025_state *cpustate, offs_t addr, UINT16 data)
@@ -360,7 +360,7 @@ INLINE void M_WRTRAM(tms32025_state *cpustate, offs_t addr, UINT16 data)
 				cpustate->IFR |= 0x20;
 		}
 	}
-	else cpustate->data->write_word(addr << 1, data);
+	else memory_write_word_16be(cpustate->data, addr << 1, data);
 }
 
 
@@ -454,7 +454,9 @@ INLINE void CALCULATE_ADD_OVERFLOW(tms32025_state *cpustate, INT32 addval)
 		SET0(cpustate, OV_FLAG);
 		if (OVM)
 		{
-			cpustate->ACC.d = ((INT32)cpustate->oldacc.d < 0) ? 0x80000000 : 0x7fffffff;
+		// Stroff:HACK! support for overflow capping as implemented results in bad DSP floating point math in many
+		// System22 games - for example, the score display in Prop Cycle.
+		//  cpustate->ACC.d = ((INT32)cpustate->oldacc.d < 0) ? 0x80000000 : 0x7fffffff;
 		}
 	}
 }
@@ -618,7 +620,7 @@ static void addh(tms32025_state *cpustate)
 	if ( ((INT16)(cpustate->oldacc.w.h) < 0) && ((INT16)(cpustate->ACC.w.h) >= 0) ) {
 		SET1(cpustate, C_FLAG);
 	}
-	/* Carry flag is not cleared, if no carry occurred */
+	/* Carry flag is not cleared, if no carry occured */
 }
 static void addk(tms32025_state *cpustate)
 {
@@ -1491,25 +1493,37 @@ static void subb(tms32025_state *cpustate)
 	CALCULATE_SUB_OVERFLOW(cpustate, cpustate->ALU.d);
 	CALCULATE_SUB_CARRY(cpustate);
 }
+
+
 static void subc(tms32025_state *cpustate)
 {
-	PAIR temp_alu;
-	cpustate->oldacc.d = cpustate->ACC.d;
+	/**
+    * conditional subtraction, which may be used for division
+    * execute 16 times for 16-bit division
+    *
+    * input:   32 bit numerator in accumulator
+    *          16 bit denominator in data memory
+    *
+    * output:  remainder in upper 16 bits
+    *          quotient in lower 16 bits
+    */
 	GETDATA(cpustate, 15, SXM);
-	cpustate->ACC.d -= cpustate->ALU.d;		/* Temporary switch to ACC. Actual calculation is done as (ACC)-[mem] -> ALU, will be preserved later on. */
-	temp_alu.d = cpustate->ACC.d;
-	if ((INT32)((cpustate->oldacc.d ^ cpustate->ALU.d) & (cpustate->oldacc.d ^ cpustate->ACC.d)) < 0) {
-		SET0(cpustate, OV_FLAG);			/* Not affected by OVM */
-	}
-	CALCULATE_SUB_CARRY(cpustate);
-	if( cpustate->oldacc.d >= cpustate->ALU.d ) {
-		cpustate->ACC.d = (cpustate->oldacc.d - cpustate->ALU.d)*2+1;
+	if( cpustate->ACC.d >= cpustate->ALU.d ) {
+		cpustate->ACC.d = (cpustate->ACC.d - cpustate->ALU.d)*2+1;
 	}
 	else {
-		cpustate->ACC.d = cpustate->oldacc.d*2;
+		cpustate->ACC.d = cpustate->ACC.d*2;
 	}
-	cpustate->ALU.d = temp_alu.d;
+// Stroff: HACK! support for overflow capping as implemented results in bad DSP floating point math in many
+// System22 games - for example, the score display in Prop Cycle.
+//  cpustate->ACC.d = ((INT32)cpustate->oldacc.d < 0) ? 0x80000000 : 0x7fffffff;
+
+//  if ((INT32)((cpustate->oldacc.d ^ subval ) & (cpustate->oldacc.d ^ cpustate->ALU.d)) < 0) {
+//      SET0(cpustate, OV_FLAG);
+//  }
+//  CALCULATE_SUB_CARRY(cpustate);
 }
+
 static void subh(tms32025_state *cpustate)
 {
 	cpustate->oldacc.d = cpustate->ACC.d;
@@ -1523,7 +1537,7 @@ static void subh(tms32025_state *cpustate)
 	if ( ((INT16)(cpustate->oldacc.w.h) >= 0) && ((INT16)(cpustate->ACC.w.h) < 0) ) {
 		CLR1(cpustate, C_FLAG);
 	}
-	/* Carry flag is not affected, if no borrow occurred */
+	/* Carry flag is not affected, if no borrow occured */
 }
 static void subk(tms32025_state *cpustate)
 {
@@ -1705,53 +1719,52 @@ static CPU_INIT( tms32025 )
 {
 	tms32025_state *cpustate = get_safe_token(device);
 
-	cpustate->intRAM = auto_alloc_array(device->machine(), UINT16, 0x800);
+	cpustate->intRAM = auto_alloc_array(device->machine, UINT16, 0x800);
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
-	cpustate->data = device->space(AS_DATA);
-	cpustate->io = device->space(AS_IO);
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
+	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
 
-	device->save_item(NAME(cpustate->PC));
-	device->save_item(NAME(cpustate->STR0));
-	device->save_item(NAME(cpustate->STR1));
-	device->save_item(NAME(cpustate->PFC));
-	device->save_item(NAME(cpustate->IFR));
-	device->save_item(NAME(cpustate->RPTC));
-	device->save_item(NAME(cpustate->ACC.d));
-	device->save_item(NAME(cpustate->ALU.d));
-	device->save_item(NAME(cpustate->Preg.d));
-	device->save_item(NAME(cpustate->Treg));
-	device->save_item(NAME(cpustate->AR[0]));
-	device->save_item(NAME(cpustate->AR[1]));
-	device->save_item(NAME(cpustate->AR[2]));
-	device->save_item(NAME(cpustate->AR[3]));
-	device->save_item(NAME(cpustate->AR[4]));
-	device->save_item(NAME(cpustate->AR[5]));
-	device->save_item(NAME(cpustate->AR[6]));
-	device->save_item(NAME(cpustate->AR[7]));
-	device->save_item(NAME(cpustate->STACK[0]));
-	device->save_item(NAME(cpustate->STACK[1]));
-	device->save_item(NAME(cpustate->STACK[2]));
-	device->save_item(NAME(cpustate->STACK[3]));
-	device->save_item(NAME(cpustate->STACK[4]));
-	device->save_item(NAME(cpustate->STACK[5]));
-	device->save_item(NAME(cpustate->STACK[6]));
-	device->save_item(NAME(cpustate->STACK[7]));
+	state_save_register_device_item(device, 0, cpustate->PC);
+	state_save_register_device_item(device, 0, cpustate->STR0);
+	state_save_register_device_item(device, 0, cpustate->STR1);
+	state_save_register_device_item(device, 0, cpustate->PFC);
+	state_save_register_device_item(device, 0, cpustate->IFR);
+	state_save_register_device_item(device, 0, cpustate->RPTC);
+	state_save_register_device_item(device, 0, cpustate->ACC.d);
+	state_save_register_device_item(device, 0, cpustate->ALU.d);
+	state_save_register_device_item(device, 0, cpustate->Preg.d);
+	state_save_register_device_item(device, 0, cpustate->Treg);
+	state_save_register_device_item(device, 0, cpustate->AR[0]);
+	state_save_register_device_item(device, 0, cpustate->AR[1]);
+	state_save_register_device_item(device, 0, cpustate->AR[2]);
+	state_save_register_device_item(device, 0, cpustate->AR[3]);
+	state_save_register_device_item(device, 0, cpustate->AR[4]);
+	state_save_register_device_item(device, 0, cpustate->AR[5]);
+	state_save_register_device_item(device, 0, cpustate->AR[6]);
+	state_save_register_device_item(device, 0, cpustate->AR[7]);
+	state_save_register_device_item(device, 0, cpustate->STACK[0]);
+	state_save_register_device_item(device, 0, cpustate->STACK[1]);
+	state_save_register_device_item(device, 0, cpustate->STACK[2]);
+	state_save_register_device_item(device, 0, cpustate->STACK[3]);
+	state_save_register_device_item(device, 0, cpustate->STACK[4]);
+	state_save_register_device_item(device, 0, cpustate->STACK[5]);
+	state_save_register_device_item(device, 0, cpustate->STACK[6]);
+	state_save_register_device_item(device, 0, cpustate->STACK[7]);
 
-	device->save_item(NAME(cpustate->oldacc));
-	device->save_item(NAME(cpustate->memaccess));
-	device->save_item(NAME(cpustate->icount));
-	device->save_item(NAME(cpustate->mHackIgnoreARP));
+	state_save_register_device_item(device, 0, cpustate->oldacc);
+	state_save_register_device_item(device, 0, cpustate->memaccess);
+	state_save_register_device_item(device, 0, cpustate->icount);
+	state_save_register_device_item(device, 0, cpustate->mHackIgnoreARP);
 
-	device->save_item(NAME(cpustate->idle));
-	device->save_item(NAME(cpustate->hold));
-	device->save_item(NAME(cpustate->external_mem_access));
-	device->save_item(NAME(cpustate->init_load_addr));
-	device->save_item(NAME(cpustate->PREVPC));
+	state_save_register_device_item(device, 0, cpustate->idle);
+	state_save_register_device_item(device, 0, cpustate->hold);
+	state_save_register_device_item(device, 0, cpustate->external_mem_access);
+	state_save_register_device_item(device, 0, cpustate->init_load_addr);
+	state_save_register_device_item(device, 0, cpustate->PREVPC);
 
-//  device->save_pointer(NAME(cpustate->intRAM), 0x800*2);
+//  state_save_register_device_item_pointer(device, 0, cpustate->intRAM, 0x800*2);
 }
 
 /****************************************************************************
@@ -1881,7 +1894,7 @@ static int process_IRQs(tms32025_state *cpustate)
 			return cpustate->tms32025_irq_cycles;
 		}
 		if ((cpustate->IFR & 0x10) && (IMR & 0x10)) {		/* Serial port receive IRQ (internal) */
-//          logerror("TMS32025:  Active RINT (Serial receive)\n");
+//          logerror("TMS32025:  Active RINT (Serial recieve)\n");
 			DRR = S_IN(TMS32025_DR);
 			SET_PC(0x001A);
 			cpustate->idle = 0;
@@ -1954,6 +1967,7 @@ again:
 static CPU_EXECUTE( tms32025 )
 {
 	tms32025_state *cpustate = get_safe_token(device);
+	cpustate->icount = cycles;
 
 
 	/**** Respond to external hold signal */
@@ -2085,6 +2099,8 @@ static CPU_EXECUTE( tms32025 )
 			}
 		}
 	}
+
+	return (cycles - cpustate->icount);
 }
 
 
@@ -2141,20 +2157,19 @@ static CPU_READ( tms32025 )
 
 	switch (space)
 	{
-		case AS_PROGRAM:
+		case ADDRESS_SPACE_PROGRAM:
 			ptr = cpustate->pgmmap[offset >> 8];
 			if (!ptr)
 				return 0;
 			break;
 
-		case AS_DATA:
+		case ADDRESS_SPACE_DATA:
 			ptr = cpustate->datamap[offset >> 8];
 			if (!ptr)
 				return 0;
 			break;
 
-		default:
-		case AS_IO:
+		case ADDRESS_SPACE_IO:
 			return 0;
 	}
 
@@ -2194,20 +2209,19 @@ static CPU_WRITE( tms32025 )
 
 	switch (space)
 	{
-		case AS_PROGRAM:
+		case ADDRESS_SPACE_PROGRAM:
 			ptr = cpustate->pgmmap[offset >> 8];
 			if (!ptr)
 				return 0;
 			break;
 
-		case AS_DATA:
+		case ADDRESS_SPACE_DATA:
 			ptr = cpustate->datamap[offset >> 8];
 			if (!ptr)
 				return 0;
 			break;
 
-		default:
-		case AS_IO:
+		case ADDRESS_SPACE_IO:
 			return 0;
 	}
 
@@ -2256,29 +2270,29 @@ static CPU_SET_INFO( tms32025 )
 		case CPUINFO_INT_REGISTER + TMS32025_PC:		cpustate->PC = info->i;							break;
 		/* This is actually not a stack pointer, but the stack contents */
 		case CPUINFO_INT_SP:
-		case CPUINFO_INT_REGISTER + TMS32025_STK7:		cpustate->STACK[7] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK6:		cpustate->STACK[6] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK5:		cpustate->STACK[5] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK4:		cpustate->STACK[4] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK3:		cpustate->STACK[3] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK2:		cpustate->STACK[2] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK1:		cpustate->STACK[1] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STK0:		cpustate->STACK[0] = info->i;					break;
-		case CPUINFO_INT_REGISTER + TMS32025_STR0:		cpustate->STR0 = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_STR1:		cpustate->STR1 = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_IFR:		cpustate->IFR = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_RPTC:		cpustate->RPTC = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_ACC:		cpustate->ACC.d = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_PREG:		cpustate->Preg.d = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_TREG:		cpustate->Treg = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR0:		cpustate->AR[0] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR1:		cpustate->AR[1] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR2:		cpustate->AR[2] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR3:		cpustate->AR[3] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR4:		cpustate->AR[4] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR5:		cpustate->AR[5] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR6:		cpustate->AR[6] = info->i;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR7:		cpustate->AR[7] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK7: 		cpustate->STACK[7] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK6: 		cpustate->STACK[6] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK5: 		cpustate->STACK[5] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK4: 		cpustate->STACK[4] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK3: 		cpustate->STACK[3] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK2: 		cpustate->STACK[2] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK1: 		cpustate->STACK[1] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STK0: 		cpustate->STACK[0] = info->i;					break;
+		case CPUINFO_INT_REGISTER + TMS32025_STR0: 		cpustate->STR0 = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_STR1: 		cpustate->STR1 = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_IFR:  		cpustate->IFR = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_RPTC: 		cpustate->RPTC = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_ACC:  		cpustate->ACC.d = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_PREG: 		cpustate->Preg.d = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_TREG: 		cpustate->Treg = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR0:  		cpustate->AR[0] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR1:  		cpustate->AR[1] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR2:  		cpustate->AR[2] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR3:  		cpustate->AR[3] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR4:  		cpustate->AR[4] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR5:  		cpustate->AR[5] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR6:  		cpustate->AR[6] = info->i;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR7:  		cpustate->AR[7] = info->i;						break;
 		case CPUINFO_INT_REGISTER + TMS32025_DRR:		M_WRTRAM(cpustate, 0,info->i);					break;
 		case CPUINFO_INT_REGISTER + TMS32025_DXR:		M_WRTRAM(cpustate, 1,info->i);					break;
 		case CPUINFO_INT_REGISTER + TMS32025_TIM:		M_WRTRAM(cpustate, 2,info->i);					break;
@@ -2296,7 +2310,7 @@ static CPU_SET_INFO( tms32025 )
 
 CPU_GET_INFO( tms32025 )
 {
-	tms32025_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	tms32025_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -2312,15 +2326,15 @@ CPU_GET_INFO( tms32025 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1*CLK;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 5*CLK;						break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -1;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = -1;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 17;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = -1;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -1;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = -1;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 17;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = -1;					break;
 
 		case CPUINFO_INT_INPUT_STATE + TMS32025_INT0:		info->i = (cpustate->IFR & 0x01) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + TMS32025_INT1:		info->i = (cpustate->IFR & 0x02) ? ASSERT_LINE : CLEAR_LINE; break;
@@ -2345,24 +2359,24 @@ CPU_GET_INFO( tms32025 )
 		case CPUINFO_INT_REGISTER + TMS32025_STK0:		info->i = cpustate->STACK[0];					break;
 		case CPUINFO_INT_REGISTER + TMS32025_STR0:		info->i = cpustate->STR0;						break;
 		case CPUINFO_INT_REGISTER + TMS32025_STR1:		info->i = cpustate->STR1;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_IFR:		info->i = cpustate->IFR;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_IFR: 		info->i = cpustate->IFR;						break;
 		case CPUINFO_INT_REGISTER + TMS32025_RPTC:		info->i = cpustate->RPTC;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_ACC:		info->i = cpustate->ACC.d;						break;
+		case CPUINFO_INT_REGISTER + TMS32025_ACC: 		info->i = cpustate->ACC.d;						break;
 		case CPUINFO_INT_REGISTER + TMS32025_PREG:		info->i = cpustate->Preg.d;						break;
 		case CPUINFO_INT_REGISTER + TMS32025_TREG:		info->i = cpustate->Treg;						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR0:		info->i = cpustate->AR[0];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR1:		info->i = cpustate->AR[1];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR2:		info->i = cpustate->AR[2];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR3:		info->i = cpustate->AR[3];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR4:		info->i = cpustate->AR[4];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR5:		info->i = cpustate->AR[5];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR6:		info->i = cpustate->AR[6];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_AR7:		info->i = cpustate->AR[7];						break;
-		case CPUINFO_INT_REGISTER + TMS32025_DRR:		info->i = M_RDRAM(cpustate, 0);					break;
-		case CPUINFO_INT_REGISTER + TMS32025_DXR:		info->i = M_RDRAM(cpustate, 1);					break;
-		case CPUINFO_INT_REGISTER + TMS32025_TIM:		info->i = M_RDRAM(cpustate, 2);					break;
-		case CPUINFO_INT_REGISTER + TMS32025_PRD:		info->i = M_RDRAM(cpustate, 3);					break;
-		case CPUINFO_INT_REGISTER + TMS32025_IMR:		info->i = M_RDRAM(cpustate, 4);					break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR0: 		info->i = cpustate->AR[0];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR1: 		info->i = cpustate->AR[1];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR2: 		info->i = cpustate->AR[2];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR3: 		info->i = cpustate->AR[3];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR4: 		info->i = cpustate->AR[4];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR5: 		info->i = cpustate->AR[5];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR6: 		info->i = cpustate->AR[6];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_AR7: 		info->i = cpustate->AR[7];						break;
+		case CPUINFO_INT_REGISTER + TMS32025_DRR: 		info->i = M_RDRAM(cpustate, 0);					break;
+		case CPUINFO_INT_REGISTER + TMS32025_DXR: 		info->i = M_RDRAM(cpustate, 1);					break;
+		case CPUINFO_INT_REGISTER + TMS32025_TIM: 		info->i = M_RDRAM(cpustate, 2);					break;
+		case CPUINFO_INT_REGISTER + TMS32025_PRD: 		info->i = M_RDRAM(cpustate, 3);					break;
+		case CPUINFO_INT_REGISTER + TMS32025_IMR: 		info->i = M_RDRAM(cpustate, 4);					break;
 		case CPUINFO_INT_REGISTER + TMS32025_GREG:		info->i = M_RDRAM(cpustate, 5);					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
@@ -2460,6 +2474,3 @@ CPU_GET_INFO( tms32026 )
 		default:										CPU_GET_INFO_CALL(tms32025);			break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(TMS32025, tms32025);
-DEFINE_LEGACY_CPU_DEVICE(TMS32026, tms32026);

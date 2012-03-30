@@ -32,94 +32,126 @@ MR_01-.3A    [a0b758aa]
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
-#include "includes/decocrpt.h"
-#include "includes/decoprot.h"
-#include "video/deco16ic.h"
+#include "decocrpt.h"
+#include "decoprot.h"
+#include "deco16ic.h"
 #include "sound/okim6295.h"
-#include "video/decospr.h"
 
-class mirage_state : public driver_device
+#include "deco16ic.h"
+
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect, int pri)
 {
-public:
-	mirage_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_deco_tilegen1(*this, "tilegen1"),
-		  m_oki_sfx(*this, "oki_sfx"),
-		  m_oki_bgm(*this, "oki_bgm") { }
+	int offs;
 
-	/* memory pointers */
-	UINT16 *  m_pf1_rowscroll;
-	UINT16 *  m_pf2_rowscroll;
-//  UINT16 *  m_spriteram;
-//  UINT16 *  m_paletteram;    // currently this uses generic palette handling (in decocomn.c)
-//  size_t    m_spriteram_size;
+	for (offs = 0;offs < 0x400;offs += 4)
+	{
+		int x,y,sprite,colour,multi,fx,fy,inc,flash,mult;
 
-	/* misc */
-	UINT8 m_mux_data;
+		sprite = spriteram16[offs+1];
+		if (!sprite) continue;
 
-	/* devices */
-	required_device<m68000_device> m_maincpu;
-	required_device<deco16ic_device> m_deco_tilegen1;
-	required_device<okim6295_device> m_oki_sfx;
-	required_device<okim6295_device> m_oki_bgm;
-};
+		y = spriteram16[offs];
+		flash=y&0x1000;
 
-static VIDEO_START( mirage )
-{
-	machine.device<decospr_device>("spritegen")->alloc_sprite_bitmap();
+		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+
+		if (pri != ((y & 0x8000)>>15)) continue;
+
+		x = spriteram16[offs+2];
+		colour = (x >>9) & 0x1f;
+
+		fx = y & 0x2000;
+		fy = y & 0x4000;
+
+		multi = (1 << ((y & 0x0600) >> 9)) - 1;	/* 1x, 2x, 4x, 8x height */
+
+		x = x & 0x01ff;
+		y = y & 0x01ff;
+		if (x >= 320) x -= 512;
+		if (y >= 256) y -= 512;
+		y = 240 - y;
+        x = 304 - x;
+
+		if (x>320) continue;
+
+		sprite &= ~multi;
+		if (fy)
+			inc = -1;
+		else
+		{
+			sprite += multi;
+			inc = 1;
+		}
+
+		if (flip_screen_get(machine))
+		{
+			y=240-y;
+			x=304-x;
+			if (fx) fx=0; else fx=1;
+			if (fy) fy=0; else fy=1;
+			mult=16;
+		}
+		else mult=-16;
+
+		while (multi >= 0)
+		{
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
+					sprite - multi * inc,
+					colour,
+					fx,fy,
+					x,y + mult * multi,0);
+
+			multi--;
+		}
+	}
 }
 
-static SCREEN_UPDATE_RGB32( mirage )
+static int mirage_bank_callback(const int bank)
 {
-	mirage_state *state = screen.machine().driver_data<mirage_state>();
-	UINT16 flip = deco16ic_pf_control_r(state->m_deco_tilegen1, 0, 0xffff);
+	return ((bank>>4)&0x7) * 0x1000;
+}
 
-	flip_screen_set(screen.machine(), BIT(flip, 7));
+static VIDEO_START(mirage)
+{
+	deco16_1_video_init(machine);
 
-	screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, screen.machine().generic.buffered_spriteram.u16, 0x400);
+	deco16_set_tilemap_bank_callback(0, mirage_bank_callback);
+	deco16_set_tilemap_bank_callback(1, mirage_bank_callback);
+}
 
-	deco16ic_pf_update(state->m_deco_tilegen1, state->m_pf1_rowscroll, state->m_pf2_rowscroll);
+static VIDEO_UPDATE(mirage)
+{
+	flip_screen_set(screen->machine,  deco16_pf12_control[0]&0x80 );
+	deco16_pf12_update(deco16_pf1_rowscroll,deco16_pf2_rowscroll);
 
-	bitmap.fill(256, cliprect); /* not verified */
+	bitmap_fill(bitmap,cliprect,256); /* not verified */
 
-	deco16ic_tilemap_2_draw(state->m_deco_tilegen1, bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
-	screen.machine().device<decospr_device>("spritegen")->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0800, 0x0800, 0x200, 0x1ff);
-	deco16ic_tilemap_1_draw(state->m_deco_tilegen1, bitmap, cliprect, 0, 0);
-	screen.machine().device<decospr_device>("spritegen")->inefficient_copy_sprite_bitmap(bitmap, cliprect, 0x0000, 0x0800, 0x200, 0x1ff);
+	deco16_tilemap_2_draw(screen,bitmap,cliprect,TILEMAP_DRAW_OPAQUE,0);
+	draw_sprites(screen->machine,bitmap,cliprect,1);
+	deco16_tilemap_1_draw(screen,bitmap,cliprect,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect,0);
 
 	return 0;
 }
 
-static SCREEN_VBLANK( mirage )
-{
-	// rising edge
-	if (vblank_on)
-	{
-		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
-		buffer_spriteram16_w(space,0,0,0xffff);
-	}
-}
-
+static UINT32 mux_data;
 
 static WRITE16_HANDLER( mirage_mux_w )
 {
-	mirage_state *state = space->machine().driver_data<mirage_state>();
-	state->m_mux_data = data & 0x1f;
+	mux_data = data & 0x1f;
 }
 
 static READ16_HANDLER( mirage_input_r )
 {
-	mirage_state *state = space->machine().driver_data<mirage_state>();
-	switch (state->m_mux_data & 0x1f)
+	switch(mux_data & 0x1f)
 	{
-		case 0x01: return input_port_read(space->machine(), "KEY0");
-		case 0x02: return input_port_read(space->machine(), "KEY1");
-		case 0x04: return input_port_read(space->machine(), "KEY2");
-		case 0x08: return input_port_read(space->machine(), "KEY3");
-		case 0x10: return input_port_read(space->machine(), "KEY4");
+		case 0x01: return input_port_read(space->machine, "KEY0");
+		case 0x02: return input_port_read(space->machine, "KEY1");
+		case 0x04: return input_port_read(space->machine, "KEY2");
+		case 0x08: return input_port_read(space->machine, "KEY3");
+		case 0x10: return input_port_read(space->machine, "KEY4");
 	}
 
 	return 0xffff;
@@ -127,34 +159,32 @@ static READ16_HANDLER( mirage_input_r )
 
 static WRITE16_HANDLER( okim1_rombank_w )
 {
-	mirage_state *state = space->machine().driver_data<mirage_state>();
-	state->m_oki_sfx->set_bank_base(0x40000 * (data & 0x3));
+	okim6295_set_bank_base(devtag_get_device(space->machine, "oki_sfx"), 0x40000 * (data & 0x3));
 }
 
 static WRITE16_HANDLER( okim0_rombank_w )
 {
-	mirage_state *state = space->machine().driver_data<mirage_state>();
-
 	/*bits 4-6 used on POST? */
-	state->m_oki_bgm->set_bank_base(0x40000 * (data & 0x7));
+
+	okim6295_set_bank_base(devtag_get_device(space->machine, "oki_bgm"), 0x40000 * (data & 0x7));
 }
 
-static ADDRESS_MAP_START( mirage_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( mirage_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	/* tilemaps */
-	AM_RANGE(0x100000, 0x101fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf1_data_r, deco16ic_pf1_data_w) // 0x100000 - 0x101fff tested
-	AM_RANGE(0x102000, 0x103fff) AM_DEVREADWRITE("tilegen1", deco16ic_pf2_data_r, deco16ic_pf2_data_w) // 0x102000 - 0x102fff tested
+	AM_RANGE(0x100000, 0x101fff) AM_RAM_WRITE(deco16_pf1_data_w) AM_BASE(&deco16_pf1_data) // 0x100000 - 0x101fff tested
+	AM_RANGE(0x102000, 0x103fff) AM_RAM_WRITE(deco16_pf2_data_w) AM_BASE(&deco16_pf2_data) // 0x102000 - 0x102fff tested
 	/* linescroll */
-	AM_RANGE(0x110000, 0x110bff) AM_RAM AM_BASE_MEMBER(mirage_state, m_pf1_rowscroll)
-	AM_RANGE(0x112000, 0x112bff) AM_RAM AM_BASE_MEMBER(mirage_state, m_pf2_rowscroll)
-	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x130000, 0x1307ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x140000, 0x14000f) AM_DEVREADWRITE8_MODERN("oki_sfx", okim6295_device, read, write, 0x00ff)
-	AM_RANGE(0x150000, 0x15000f) AM_DEVREADWRITE8_MODERN("oki_bgm", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x110000, 0x110bff) AM_RAM AM_BASE(&deco16_pf1_rowscroll)
+	AM_RANGE(0x112000, 0x112bff) AM_RAM AM_BASE(&deco16_pf2_rowscroll)
+	AM_RANGE(0x120000, 0x1207ff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x130000, 0x1307ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x140000, 0x14000f) AM_DEVREADWRITE8("oki_sfx", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x150000, 0x15000f) AM_DEVREADWRITE8("oki_bgm", okim6295_r, okim6295_w, 0x00ff)
 //  AM_RANGE(0x140006, 0x140007) AM_READ(random_readers)
 //  AM_RANGE(0x150006, 0x150007) AM_READNOP
 	AM_RANGE(0x160000, 0x160001) AM_WRITENOP
-	AM_RANGE(0x168000, 0x16800f) AM_DEVWRITE("tilegen1", deco16ic_pf_control_w)
+	AM_RANGE(0x168000, 0x16800f) AM_WRITEONLY AM_BASE(&deco16_pf12_control)
 	AM_RANGE(0x16a000, 0x16a001) AM_WRITENOP
 	AM_RANGE(0x16c000, 0x16c001) AM_WRITE(okim1_rombank_w)
 	AM_RANGE(0x16c002, 0x16c003) AM_WRITE(okim0_rombank_w)
@@ -174,74 +204,74 @@ static INPUT_PORTS_START( mirage )
 	PORT_SERVICE( 0x0008, IP_ACTIVE_LOW )
 	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_VBLANK )
 	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Flip_Screen ) )
-	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0040, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0400, 0x0400, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+    PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+    PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+    PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
 	PORT_START("KEY0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_A )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_E )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_I )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_M )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_KAN )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0xffc0, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_A )
+    PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_E )
+    PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_I )
+    PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_M )
+    PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_KAN )
+    PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_START1 )
+    PORT_BIT( 0xffc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("KEY1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_C )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_G )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_K )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_CHI )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_RON )
-	PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_C )
+    PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_G )
+    PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_K )
+    PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_CHI )
+    PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_RON )
+    PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("KEY2")
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_FLIP_FLOP )
-	PORT_BIT( 0xfff7, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_BIT( 0xfff7, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("KEY3")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_B )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_F )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_J )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_N )
+    PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_B )
+    PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_F )
+    PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_J )
+    PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_N )
 	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_REACH )
-	PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_BIT( 0xffe0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("KEY4")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_D )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_H )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_L )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_PON )
-	PORT_BIT( 0xfff0, IP_ACTIVE_LOW, IPT_UNUSED )
+    PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_D )
+    PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_H )
+    PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_L )
+    PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_PON )
+    PORT_BIT( 0xfff0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -286,77 +316,39 @@ static GFXDECODE_START( mirage )
 GFXDECODE_END
 
 
-static int mirage_bank_callback( const int bank )
-{
-	return ((bank >> 4) & 0x7) * 0x1000;
-}
 
-static const deco16ic_interface mirage_deco16ic_tilegen1_intf =
-{
-	"screen",
-	0, 1,
-	0x0f, 0x0f,	/* trans masks (default values) */
-	0, 16, /* color base (default values) */
-	0x0f, 0x0f,	/* color masks (default values) */
-	mirage_bank_callback,
-	mirage_bank_callback,
-	0,1,
-};
-
-
-static MACHINE_START( mirage )
-{
-	mirage_state *state = machine.driver_data<mirage_state>();
-
-	state->save_item(NAME(state->m_mux_data));
-}
-
-static MACHINE_RESET( mirage )
-{
-	mirage_state *state = machine.driver_data<mirage_state>();
-
-	state->m_mux_data = 0;
-}
-
-static MACHINE_CONFIG_START( mirage, mirage_state )
+static MACHINE_DRIVER_START( mirage )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 28000000/2)
-	MCFG_CPU_PROGRAM_MAP(mirage_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
-
-	MCFG_MACHINE_START(mirage)
-	MCFG_MACHINE_RESET(mirage)
+	MDRV_CPU_ADD("maincpu", M68000, 28000000/2)
+	MDRV_CPU_PROGRAM_MAP(mirage_map)
+	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(58)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(40*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(58)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(529))
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mirage)
-	MCFG_SCREEN_VBLANK_STATIC(mirage)
+	MDRV_GFXDECODE(mirage)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(mirage)
-
-	MCFG_GFXDECODE(mirage)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_DECO16IC_ADD("tilegen1", mirage_deco16ic_tilegen1_intf)
-	MCFG_DEVICE_ADD("spritegen", DECO_SPRITE, 0)
-	decospr_device::set_gfx_region(*device, 2);
+	MDRV_VIDEO_START(mirage)
+	MDRV_VIDEO_UPDATE(mirage)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki_bgm", 2000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MDRV_SOUND_ADD("oki_bgm", OKIM6295, 2000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MCFG_OKIM6295_ADD("oki_sfx", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki_sfx", OKIM6295, 1000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+MACHINE_DRIVER_END
 
 
 ROM_START( mirage )
@@ -368,7 +360,7 @@ ROM_START( mirage )
 	ROM_LOAD( "mbl-00.7a", 0x000000, 0x100000, CRC(2e258b7b) SHA1(2dbd7d16a1eda97ae3de149b67e80e511aa9d0ba) )
 
 	ROM_REGION( 0x400000, "gfx2", 0 ) /* Sprites */
-	ROM_LOAD16_BYTE( "mbl-01.11a", 0x000001, 0x200000, CRC(895be69a) SHA1(541d8f37fb4cf99312b80a0eb0d729fbbeab5f4f) )
+  	ROM_LOAD16_BYTE( "mbl-01.11a", 0x000001, 0x200000, CRC(895be69a) SHA1(541d8f37fb4cf99312b80a0eb0d729fbbeab5f4f) )
 	ROM_LOAD16_BYTE( "mbl-02.12a", 0x000000, 0x200000, CRC(474f6104) SHA1(ff81b32b90192c3d5f27c436a9246aa6caaeeeee) )
 
 	ROM_REGION( 0x200000, "oki_bgm_data", 0 )
@@ -389,4 +381,4 @@ static DRIVER_INIT( mirage )
 	deco56_decrypt_gfx(machine, "gfx1");
 }
 
-GAME( 1994, mirage, 0,     mirage, mirage, mirage, ROT0, "Mitchell", "Mirage Youjuu Mahjongden (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1994, mirage, 0,        mirage, mirage, mirage, ROT0, "Mitchell", "Mirage Youjuu Mahjongden (Japan)", 0 )

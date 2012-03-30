@@ -4,8 +4,17 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/gladiatr.h"
+#include "driver.h"
+
+UINT8 *gladiatr_videoram, *gladiatr_colorram, *gladiatr_textram;
+
+static int video_attributes;
+static int fg_scrollx, fg_scrolly, bg_scrollx, bg_scrolly;
+static int sprite_bank, sprite_buffer;
+
+
+static tilemap *fg_tilemap, *bg_tilemap;
+static int fg_tile_bank, bg_tile_bank;
 
 
 /***************************************************************************
@@ -16,22 +25,20 @@
 
 static TILE_GET_INFO( bg_get_tile_info )
 {
-	gladiatr_state *state = machine.driver_data<gladiatr_state>();
-	UINT8 attr = state->m_colorram[tile_index];
+	UINT8 attr = gladiatr_colorram[tile_index];
 
 	SET_TILE_INFO(
 			1,
-			state->m_videoram[tile_index] + ((attr & 0x07) << 8) + (state->m_bg_tile_bank << 11),
+			gladiatr_videoram[tile_index] + ((attr & 0x07) << 8) + (bg_tile_bank << 11),
 			(attr >> 3) ^ 0x1f,
 			0);
 }
 
 static TILE_GET_INFO( fg_get_tile_info )
 {
-	gladiatr_state *state = machine.driver_data<gladiatr_state>();
 	SET_TILE_INFO(
 			0,
-			state->m_textram[tile_index] + (state->m_fg_tile_bank << 8),
+			gladiatr_textram[tile_index] + (fg_tile_bank << 8),
 			0,
 			0);
 }
@@ -46,29 +53,27 @@ static TILE_GET_INFO( fg_get_tile_info )
 
 VIDEO_START( ppking )
 {
-	gladiatr_state *state = machine.driver_data<gladiatr_state>();
-	state->m_bg_tilemap = tilemap_create(machine, bg_get_tile_info,tilemap_scan_rows,8,8,32,64);
-	state->m_fg_tilemap = tilemap_create(machine, fg_get_tile_info,tilemap_scan_rows,8,8,32,64);
+	bg_tilemap = tilemap_create(machine, bg_get_tile_info,tilemap_scan_rows,8,8,32,64);
+	fg_tilemap = tilemap_create(machine, fg_get_tile_info,tilemap_scan_rows,8,8,32,64);
 
-	state->m_fg_tilemap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(fg_tilemap,0);
 
-	state->m_bg_tilemap->set_scroll_cols(0x10);
+	tilemap_set_scroll_cols(bg_tilemap, 0x10);
 
-	state->m_sprite_bank = 1;
+	sprite_bank = 1;
 }
 
 VIDEO_START( gladiatr )
 {
-	gladiatr_state *state = machine.driver_data<gladiatr_state>();
-	state->m_bg_tilemap = tilemap_create(machine, bg_get_tile_info,tilemap_scan_rows,8,8,64,32);
-	state->m_fg_tilemap = tilemap_create(machine, fg_get_tile_info,tilemap_scan_rows,8,8,64,32);
+	bg_tilemap = tilemap_create(machine, bg_get_tile_info,tilemap_scan_rows,8,8,64,32);
+	fg_tilemap = tilemap_create(machine, fg_get_tile_info,tilemap_scan_rows,8,8,64,32);
 
-	state->m_fg_tilemap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(fg_tilemap,0);
 
-	state->m_bg_tilemap->set_scrolldx(-0x30, 0x12f);
-	state->m_fg_tilemap->set_scrolldx(-0x30, 0x12f);
+	tilemap_set_scrolldx(bg_tilemap, -0x30, 0x12f);
+	tilemap_set_scrolldx(fg_tilemap, -0x30, 0x12f);
 
-	state->m_sprite_bank = 2;
+	sprite_bank = 2;
 }
 
 
@@ -81,113 +86,106 @@ VIDEO_START( gladiatr )
 
 WRITE8_HANDLER( gladiatr_videoram_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	gladiatr_videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset);
 }
 
 WRITE8_HANDLER( gladiatr_colorram_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	gladiatr_colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset);
 }
 
 WRITE8_HANDLER( gladiatr_textram_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
-	state->m_textram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset);
+	gladiatr_textram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap,offset);
 }
 
 WRITE8_HANDLER( gladiatr_paletteram_w )
 {
 	int r,g,b;
 
-	space->machine().generic.paletteram.u8[offset] = data;
+	paletteram[offset] = data;
 	offset &= 0x3ff;
 
-	r = (space->machine().generic.paletteram.u8[offset] >> 0) & 0x0f;
-	g = (space->machine().generic.paletteram.u8[offset] >> 4) & 0x0f;
-	b = (space->machine().generic.paletteram.u8[offset + 0x400] >> 0) & 0x0f;
+	r = (paletteram[offset] >> 0) & 0x0f;
+	g = (paletteram[offset] >> 4) & 0x0f;
+	b = (paletteram[offset + 0x400] >> 0) & 0x0f;
 
-	r = (r << 1) + ((space->machine().generic.paletteram.u8[offset + 0x400] >> 4) & 0x01);
-	g = (g << 1) + ((space->machine().generic.paletteram.u8[offset + 0x400] >> 5) & 0x01);
-	b = (b << 1) + ((space->machine().generic.paletteram.u8[offset + 0x400] >> 6) & 0x01);
+	r = (r << 1) + ((paletteram[offset + 0x400] >> 4) & 0x01);
+	g = (g << 1) + ((paletteram[offset + 0x400] >> 5) & 0x01);
+	b = (b << 1) + ((paletteram[offset + 0x400] >> 6) & 0x01);
 
-	palette_set_color_rgb(space->machine(),offset,pal5bit(r),pal5bit(g),pal5bit(b));
+	palette_set_color_rgb(space->machine,offset,pal5bit(r),pal5bit(g),pal5bit(b));
 }
 
 
 WRITE8_HANDLER( gladiatr_spritebuffer_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
-	state->m_sprite_buffer = data & 1;
+	sprite_buffer = data & 1;
 }
 
 WRITE8_HANDLER( gladiatr_spritebank_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
-	state->m_sprite_bank = (data & 1) ? 4 : 2;
+	sprite_bank = (data & 1) ? 4 : 2;
 }
 
 
 WRITE8_HANDLER( ppking_video_registers_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	switch (offset & 0x300)
 	{
 		case 0x000:
-			state->m_bg_tilemap->set_scrolly(offset & 0x0f, 0x100-data);
+			tilemap_set_scrolly(bg_tilemap, offset & 0x0f, 0x100-data);
 			break;
 		case 0x200:
 			if (data & 0x80)
-				state->m_fg_scrolly = data + 0x100;
+				fg_scrolly = data + 0x100;
 			else
-				state->m_fg_scrolly = data;
+				fg_scrolly = data;
 			break;
 		case 0x300:
-			if (state->m_fg_tile_bank != (data & 0x03))
+			if (fg_tile_bank != (data & 0x03))
 			{
-				state->m_fg_tile_bank = data & 0x03;
-				state->m_fg_tilemap->mark_all_dirty();
+				fg_tile_bank = data & 0x03;
+				tilemap_mark_all_tiles_dirty(fg_tilemap);
 			}
-			state->m_video_attributes = data;
+			video_attributes = data;
 			break;
 	}
 
-//popmessage("%02x %02x",state->m_fg_scrolly, state->m_video_attributes);
+//popmessage("%02x %02x",fg_scrolly, video_attributes);
 }
 
 WRITE8_HANDLER( gladiatr_video_registers_w )
 {
-	gladiatr_state *state = space->machine().driver_data<gladiatr_state>();
 	switch (offset)
 	{
 		case 0x000:
-			state->m_fg_scrolly = data;
+			fg_scrolly = data;
 			break;
 		case 0x080:
-			if (state->m_fg_tile_bank != (data & 0x03))
+			if (fg_tile_bank != (data & 0x03))
 			{
-				state->m_fg_tile_bank = data & 0x03;
-				state->m_fg_tilemap->mark_all_dirty();
+				fg_tile_bank = data & 0x03;
+				tilemap_mark_all_tiles_dirty(fg_tilemap);
 			}
-			if (state->m_bg_tile_bank != ((data & 0x10) >> 4))
+			if (bg_tile_bank != ((data & 0x10) >> 4))
 			{
-				state->m_bg_tile_bank = (data & 0x10) >> 4;
-				state->m_bg_tilemap->mark_all_dirty();
+				bg_tile_bank = (data & 0x10) >> 4;
+				tilemap_mark_all_tiles_dirty(bg_tilemap);
 			}
-			state->m_video_attributes = data;
+			video_attributes = data;
 			break;
 		case 0x100:
-			state->m_fg_scrollx = data;
+			fg_scrollx = data;
 			break;
 		case 0x200:
-			state->m_bg_scrolly = data;
+			bg_scrolly = data;
 			break;
 		case 0x300:
-			state->m_bg_scrollx = data;
+			bg_scrollx = data;
 			break;
 	}
 }
@@ -200,9 +198,8 @@ WRITE8_HANDLER( gladiatr_video_registers_w )
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	gladiatr_state *state = machine.driver_data<gladiatr_state>();
 	int offs;
 
 	for (offs = 0;offs < 0x80;offs += 2)
@@ -212,10 +209,10 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			{0x0,0x1},
 			{0x2,0x3},
 		};
-		UINT8 *src = &state->m_spriteram[offs + (state->m_sprite_buffer << 7)];
+		UINT8 *src = &spriteram[offs + (sprite_buffer << 7)];
 		int attributes = src[0x800];
 		int size = (attributes & 0x10) >> 4;
-		int bank = (attributes & 0x01) + ((attributes & 0x02) ? state->m_sprite_bank : 0);
+		int bank = (attributes & 0x01) + ((attributes & 0x02) ? sprite_bank : 0);
 		int tile_number = (src[0]+256*bank);
 		int sx = src[0x400+1] + 256*(src[0x801]&1) - 0x38;
 		int sy = 240 - src[0x400] - (size ? 16 : 0);
@@ -239,7 +236,7 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 
 				int t = tile_offset[ey][ex] + tile_number;
 
-				drawgfx_transpen(bitmap,cliprect,machine.gfx[2],
+				drawgfx_transpen(bitmap,cliprect,machine->gfx[2],
 						t,
 						color,
 						xflip, yflip,
@@ -251,29 +248,29 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 
 
 
-SCREEN_UPDATE_IND16( ppking )
+VIDEO_UPDATE( ppking )
 {
-	gladiatr_state *state = screen.machine().driver_data<gladiatr_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
-	draw_sprites(screen.machine(), bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	draw_sprites(screen->machine, bitmap,cliprect);
 
 	/* the fg layer just selects the upper palette bank on underlying pixels */
 	{
-		int sx = cliprect.min_x;
-		int sy = cliprect.min_y;
+		bitmap_t *flagsbitmap;
+		int sx = cliprect->min_x;
+		int sy = cliprect->min_y;
 
-		state->m_fg_tilemap ->pixmap();
-		bitmap_ind8 &flagsbitmap = state->m_fg_tilemap ->flagsmap();
+		tilemap_get_pixmap( fg_tilemap );
+		flagsbitmap = tilemap_get_flagsmap( fg_tilemap );
 
-		while( sy <= cliprect.max_y )
+		while( sy <= cliprect->max_y )
 		{
 			int x = sx;
-			int y = (sy + state->m_fg_scrolly) & 0x1ff;
+			int y = (sy + fg_scrolly) & 0x1ff;
 
-			UINT16 *dest = &bitmap.pix16(sy, sx);
-			while( x <= cliprect.max_x )
+			UINT16 *dest = BITMAP_ADDR16(bitmap, sy, sx);
+			while( x <= cliprect->max_x )
 			{
-				if( flagsbitmap.pix8(y, x)&TILEMAP_PIXEL_LAYER0 )
+				if( *BITMAP_ADDR8(flagsbitmap, y, x)&TILEMAP_PIXEL_LAYER0 )
 				{
 					*dest += 512;
 				}
@@ -286,27 +283,26 @@ SCREEN_UPDATE_IND16( ppking )
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( gladiatr )
+VIDEO_UPDATE( gladiatr )
 {
-	gladiatr_state *state = screen.machine().driver_data<gladiatr_state>();
-	if (state->m_video_attributes & 0x20)
+	if (video_attributes & 0x20)
 	{
 		int scroll;
 
-		scroll = state->m_bg_scrollx + ((state->m_video_attributes & 0x04) << 6);
-		state->m_bg_tilemap->set_scrollx(0, scroll ^ (flip_screen_get(screen.machine()) ? 0x0f : 0));
-		scroll = state->m_fg_scrollx + ((state->m_video_attributes & 0x08) << 5);
-		state->m_fg_tilemap->set_scrollx(0, scroll ^ (flip_screen_get(screen.machine()) ? 0x0f : 0));
+		scroll = bg_scrollx + ((video_attributes & 0x04) << 6);
+		tilemap_set_scrollx(bg_tilemap, 0, scroll ^ (flip_screen_get(screen->machine) ? 0x0f : 0));
+		scroll = fg_scrollx + ((video_attributes & 0x08) << 5);
+		tilemap_set_scrollx(fg_tilemap, 0, scroll ^ (flip_screen_get(screen->machine) ? 0x0f : 0));
 
 		// always 0 anyway
-		state->m_bg_tilemap->set_scrolly(0, state->m_bg_scrolly);
-		state->m_fg_tilemap->set_scrolly(0, state->m_fg_scrolly);
+		tilemap_set_scrolly(bg_tilemap, 0, bg_scrolly);
+		tilemap_set_scrolly(fg_tilemap, 0, fg_scrolly);
 
-		state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
-		draw_sprites(screen.machine(), bitmap,cliprect);
-		state->m_fg_tilemap->draw(bitmap, cliprect, 0,0);
+		tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+		draw_sprites(screen->machine, bitmap,cliprect);
+		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
 	}
 	else
-		bitmap.fill(get_black_pen(screen.machine()), cliprect );
+		bitmap_fill( bitmap, cliprect , get_black_pen(screen->machine));
 	return 0;
 }

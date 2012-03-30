@@ -49,30 +49,19 @@ Notes:
             S1 - Macronix MX27C2000 (OKI samples)
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
-#include "cpu/mcs51/mcs51.h"
 #include "sound/okim6295.h"
-#include "sound/2151intf.h"
 #include "machine/eeprom.h"
 
+static UINT16 *gms_vidram;
+static UINT16 *gms_vidram2;
 
-class rbmk_state : public driver_device
-{
-public:
-	rbmk_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 *m_gms_vidram;
-	UINT16 *m_gms_vidram2;
-	UINT16 m_tilebank;
-	UINT8 m_mux_data;
-};
-
+static UINT16 tilebank=0;
 
 static READ16_HANDLER( gms_read )
 {
-	return space->machine().rand();
+	return mame_rand(space->machine);
 }
 
 
@@ -83,8 +72,7 @@ static WRITE16_HANDLER( gms_write1 )
 
 static WRITE16_HANDLER( gms_write2 )
 {
-	rbmk_state *state = space->machine().driver_data<rbmk_state>();
-	state->m_tilebank=data;
+	tilebank=data;
 }
 
 static WRITE16_HANDLER( gms_write3 )
@@ -92,29 +80,28 @@ static WRITE16_HANDLER( gms_write3 )
 
 }
 
-static WRITE16_DEVICE_HANDLER( eeprom_w )
+static WRITE16_HANDLER( eeprom_w )
 {
 	//bad ?
 	if( ACCESSING_BITS_0_7 )
 	{
-		eeprom_device *eeprom = downcast<eeprom_device *>(device);
-		eeprom->write_bit(data & 0x04);
-		eeprom->set_cs_line((data & 0x01) ? CLEAR_LINE:ASSERT_LINE );
+		eeprom_write_bit(data & 0x04);
+		eeprom_set_cs_line((data & 0x01) ? CLEAR_LINE:ASSERT_LINE );
 
-		eeprom->set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
 
-static ADDRESS_MAP_START( rbmk_mem, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( rbmk_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x500000, 0x50ffff) AM_RAM
-	AM_RANGE(0x940000, 0x940fff) AM_RAM AM_BASE_MEMBER(rbmk_state, m_gms_vidram2)
+	AM_RANGE(0x940000, 0x940fff) AM_RAM AM_BASE(&gms_vidram2)
 	AM_RANGE(0x980300, 0x983fff) AM_RAM // 0x2048  words ???, byte access
-	AM_RANGE(0x900000, 0x900fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x9c0000, 0x9c0fff) AM_RAM AM_BASE_MEMBER(rbmk_state, m_gms_vidram)
-	AM_RANGE(0xb00000, 0xb00001) AM_DEVWRITE("eeprom", eeprom_w)
+	AM_RANGE(0x900000, 0x900fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x9c0000, 0x9c0fff) AM_RAM AM_BASE(&gms_vidram)
+	AM_RANGE(0xb00000, 0xb00001) AM_WRITE(eeprom_w)
 	AM_RANGE(0xC00000, 0xC00001) AM_READ_PORT("IN0") AM_WRITE(gms_write1)
 	AM_RANGE(0xC08000, 0xC08001) AM_READ_PORT("IN1") AM_WRITE(gms_write2)
 	AM_RANGE(0xC10000, 0xC10001) AM_READ_PORT("IN3")
@@ -123,54 +110,6 @@ static ADDRESS_MAP_START( rbmk_mem, AS_PROGRAM, 16 )
 	AM_RANGE(0xC28000, 0xC28001) AM_WRITE(gms_write3)
 ADDRESS_MAP_END
 
-
-static ADDRESS_MAP_START( rbmk_mcu_mem, AS_PROGRAM, 8 )
-//  AM_RANGE(0x0000, 0x0fff) AM_ROM
-ADDRESS_MAP_END
-
-static READ8_HANDLER( rbmk_mcu_io_r )
-{
-	rbmk_state *state = space->machine().driver_data<rbmk_state>();
-	if(state->m_mux_data & 8)
-	{
-		return ym2151_r(space->machine().device("ymsnd"), offset & 1);
-	}
-	else if(state->m_mux_data & 4)
-	{
-		//printf("%02x R\n",offset);
-		// ...
-		return 0xff;
-	}
-	else
-		printf("Warning: mux data R = %02x",state->m_mux_data);
-
-	return 0xff;
-}
-
-static WRITE8_HANDLER( rbmk_mcu_io_w )
-{
-	rbmk_state *state = space->machine().driver_data<rbmk_state>();
-	if(state->m_mux_data & 8) { ym2151_w(space->machine().device("ymsnd"), offset & 1, data); }
-	else if(state->m_mux_data & 4)
-	{
-		//printf("%02x %02x W\n",offset,data);
-		// ...
-	}
-	else
-		printf("Warning: mux data W = %02x",state->m_mux_data);
-}
-
-static WRITE8_HANDLER( mcu_io_mux_w )
-{
-	rbmk_state *state = space->machine().driver_data<rbmk_state>();
-	state->m_mux_data = ~data;
-}
-
-static ADDRESS_MAP_START( rbmk_mcu_io, AS_IO, 8 )
-	AM_RANGE(0x0ff00, 0x0ffff) AM_READWRITE( rbmk_mcu_io_r, rbmk_mcu_io_w )
-
-	AM_RANGE(MCS51_PORT_P3, MCS51_PORT_P3) AM_WRITE( mcu_io_mux_w )
-ADDRESS_MAP_END
 
 static INPUT_PORTS_START( rbmk )
 	PORT_START("IN0")
@@ -354,7 +293,7 @@ static INPUT_PORTS_START( rbmk )
 	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_BIT( 0x8000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
+	PORT_BIT( 0x8000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
 
 	PORT_START("IN4")	/* 16bit */
 	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Unknown ) )
@@ -491,9 +430,8 @@ static VIDEO_START(rbmk)
 {
 }
 
-static SCREEN_UPDATE_IND16(rbmk)
+static VIDEO_UPDATE(rbmk)
 {
-	rbmk_state *state = screen.machine().driver_data<rbmk_state>();
 	int x,y;
 	int count = 0;
 
@@ -501,8 +439,8 @@ static SCREEN_UPDATE_IND16(rbmk)
 	{
 		for (x=0;x<64;x++)
 		{
-			int tile = state->m_gms_vidram2[count+0x600];
-			drawgfx_opaque(bitmap,cliprect,screen.machine().gfx[0],(tile&0xfff)+((state->m_tilebank&0x10)>>4)*0x1000,tile>>12,0,0,x*8,y*32);
+			int tile = gms_vidram2[count+0x600];
+			drawgfx_opaque(bitmap,cliprect,screen->machine->gfx[0],(tile&0xfff)+((tilebank&0x10)>>4)*0x1000,tile>>12,0,0,x*8,y*32);
 			count++;
 		}
 	}
@@ -513,64 +451,71 @@ static SCREEN_UPDATE_IND16(rbmk)
 	{
 		for (x=0;x<64;x++)
 		{
-			int tile = state->m_gms_vidram[count];
-			drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[1],(tile&0xfff)+((state->m_tilebank>>1)&3)*0x1000,tile>>12,0,0,x*8,y*8,0);
+			int tile = gms_vidram[count];
+			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[1],(tile&0xfff)+((tilebank>>1)&3)*0x1000,tile>>12,0,0,x*8,y*8,0);
 			count++;
 		}
 	}
 	return 0;
 }
 
-static INTERRUPT_GEN( mcu_irq )
+static NVRAM_HANDLER( syf )
 {
-	cputag_set_input_line(device->machine(), "mcu", INPUT_LINE_NMI, PULSE_LINE);
+	if (read_or_write)
+		eeprom_save(file);
+	else
+	{
+		eeprom_init(machine, &eeprom_interface_93C46);
+		if (file)
+		{
+			eeprom_load(file);
+		}
+		else
+		{
+			eeprom_set_data(memory_region(machine, "user2"),128);
+		}
+	}
 }
 
-static MACHINE_CONFIG_START( rbmk, rbmk_state )
-	MCFG_CPU_ADD("maincpu", M68000, 22000000 /2)
-	MCFG_CPU_PROGRAM_MAP(rbmk_mem)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
-
-	MCFG_CPU_ADD("mcu", AT89C4051, 22000000 / 4) // frequency isn't right
-	MCFG_CPU_PROGRAM_MAP(rbmk_mcu_mem)
-	MCFG_CPU_IO_MAP(rbmk_mcu_io)
-	MCFG_CPU_VBLANK_INT("screen", mcu_irq)
-
-	MCFG_GFXDECODE(rbmk)
 
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(58)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(rbmk)
+static MACHINE_DRIVER_START( rbmk )
+	MDRV_CPU_ADD("maincpu", M68000, 22000000 /2)
+	MDRV_CPU_PROGRAM_MAP(rbmk_mem)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_PALETTE_LENGTH(0x800)
-
-	MCFG_VIDEO_START(rbmk)
-
-	MCFG_EEPROM_93C46_ADD("eeprom")
+	MDRV_GFXDECODE(rbmk)
 
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(58)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_OKIM6295_ADD("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
+	MDRV_PALETTE_LENGTH(0x800)
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 22000000 / 8)
-//  MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(rbmk)
+	MDRV_VIDEO_UPDATE(rbmk)
+
+	MDRV_NVRAM_HANDLER(syf)
+
+
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MDRV_SOUND_ADD("oki", OKIM6295, 1122000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
+MACHINE_DRIVER_END
 
 ROM_START( rbmk )
 	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 Code */
 	ROM_LOAD( "p1.u64", 0x00000, 0x80000, CRC(83b3c505) SHA1(b943d7312dacdf46d4a55f9dc3cf92e291c40ce7) )
 
-	ROM_REGION( 0x1000, "mcu", 0 ) /* protected MCU? */
-	ROM_LOAD( "89c51.bin", 0x0, 0x1000, CRC(c6d58031) SHA1(5c61ce4eef1ef29bd870d0678bdba24e5aa43eae) )
+	ROM_REGION( 0x2, "cpu1", 0 ) /* protected MCU? */
+	ROM_LOAD( "89c51.mcu", 0x0, 0x2, NO_DUMP ) // unless it has external rom only?
 
 	ROM_REGION( 0x20000, "user1", 0 ) /* ??? mcu data / code */
 	ROM_LOAD( "b1.u72", 0x00000, 0x20000,  CRC(1a4991ac) SHA1(523b58caa21b4a073c664c076d2d7bb07a4253cd) )
@@ -584,9 +529,9 @@ ROM_START( rbmk )
 	ROM_REGION( 0x80000, "gfx2", 0 ) /* 8x8 tiles? cards etc */
 	ROM_LOAD( "t1.u39", 0x00000, 0x80000, CRC(adf67429) SHA1(ab03c7f68403545f9e86a069581dc3fc3fa6b9c4) )
 
-	ROM_REGION16_BE( 0x80, "eeprom", 0 ) /* eeprom */
+	ROM_REGION( 0x80, "user2", 0 ) /* eeprom */
 	ROM_LOAD16_WORD_SWAP( "93c46.u51", 0x00, 0x080, CRC(4ca6ff01) SHA1(66c456eac5b0d1176ef9130baf2e746efdf30152) )
 ROM_END
 
 
-GAME( 1998, rbmk, 0, rbmk, rbmk,0, ROT0,  "GMS", "Real Battle Mahjong King", GAME_NOT_WORKING )
+GAME( 1995, rbmk, 0, rbmk, rbmk,0, ROT0,  "GMS", "Real Battle Mahjong King", GAME_NOT_WORKING )

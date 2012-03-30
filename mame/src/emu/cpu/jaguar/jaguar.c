@@ -6,8 +6,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
+#include "cpuexec.h"
 #include "jaguar.h"
 
 CPU_DISASSEMBLE( jaguargpu );
@@ -51,7 +51,7 @@ CPU_DISASSEMBLE( jaguardsp );
 #define SET_N(J,r)				((J)->FLAGS |= (((UINT32)(r) >> 29) & 4))
 #define SET_ZN(J,r)				SET_N(J,r); SET_Z(J,r)
 #define SET_ZNC_ADD(J,a,b,r)	SET_N(J,r); SET_Z(J,r); SET_C_ADD(J,a,b)
-#define SET_ZNC_SUB(J,a,b,r)	SET_N(J,r); SET_Z(J,r); SET_C_SUB(J,a,b)
+#define SET_ZNC_SUB(J,a,b,r) 	SET_N(J,r); SET_Z(J,r); SET_C_SUB(J,a,b)
 
 
 
@@ -64,13 +64,13 @@ CPU_DISASSEMBLE( jaguardsp );
 
 #define CONDITION(x)		condition_table[(x) + ((jaguar->FLAGS & 7) << 5)]
 
-#define READBYTE(J,a)		(J)->program->read_byte(a)
-#define READWORD(J,a)		(J)->program->read_word(a)
-#define READLONG(J,a)		(J)->program->read_dword(a)
+#define READBYTE(J,a)		memory_read_byte_32be((J)->program, a)
+#define READWORD(J,a)		memory_read_word_32be((J)->program, a)
+#define READLONG(J,a)		memory_read_dword_32be((J)->program, a)
 
-#define WRITEBYTE(J,a,v)	(J)->program->write_byte(a, v)
-#define WRITEWORD(J,a,v)	(J)->program->write_word(a, v)
-#define WRITELONG(J,a,v)	(J)->program->write_dword(a, v)
+#define WRITEBYTE(J,a,v)	memory_write_byte_32be((J)->program, a, v)
+#define WRITEWORD(J,a,v)	memory_write_word_32be((J)->program, a, v)
+#define WRITELONG(J,a,v)	memory_write_dword_32be((J)->program, a, v)
 
 
 
@@ -97,12 +97,11 @@ struct _jaguar_state
 	int			isdsp;
 	int			icount;
 	int			bankswitch_icount;
-	void		(*const *table)(jaguar_state *jaguar, UINT16 op);
-	device_irq_callback irq_callback;
+	void 		(*const *table)(jaguar_state *jaguar, UINT16 op);
+	cpu_irq_callback irq_callback;
 	jaguar_int_func cpu_interrupt;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
+	const device_config *device;
+	const address_space *program;
 };
 
 
@@ -241,7 +240,7 @@ static void (*const dsp_op_table[64])(jaguar_state *jaguar, UINT16 op) =
     MEMORY ACCESSORS
 ***************************************************************************/
 
-#define ROPCODE(J,pc)		((J)->direct->read_decrypted_word(pc, WORD_XOR_BE(0)))
+#define ROPCODE(J,pc)		(memory_decrypted_read_word((J)->program, WORD_XOR_BE((UINT32)(pc))))
 
 
 
@@ -249,12 +248,14 @@ static void (*const dsp_op_table[64])(jaguar_state *jaguar, UINT16 op) =
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE jaguar_state *get_safe_token(device_t *device)
+INLINE jaguar_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == JAGUARGPU ||
-		   device->type() == JAGUARDSP);
-	return (jaguar_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_JAGUARGPU ||
+		   cpu_get_type(device) == CPU_JAGUARDSP);
+	return (jaguar_state *)device->token;
 }
 
 INLINE void update_register_banks(jaguar_state *jaguar)
@@ -369,7 +370,7 @@ static void init_tables(void)
 	}
 
 	/* fill in the mirror table */
-	mirror_table = global_alloc_array(UINT16, 65536);
+	mirror_table = alloc_array_or_die(UINT16, 65536);
 	for (i = 0; i < 65536; i++)
 		mirror_table[i] = ((i >> 15) & 0x0001) | ((i >> 13) & 0x0002) |
 		                  ((i >> 11) & 0x0004) | ((i >> 9)  & 0x0008) |
@@ -381,7 +382,7 @@ static void init_tables(void)
 		                  ((i << 13) & 0x4000) | ((i << 15) & 0x8000);
 
 	/* fill in the condition table */
-	condition_table = global_alloc_array(UINT8, 32 * 8);
+	condition_table = alloc_array_or_die(UINT8, 32 * 8);
 	for (i = 0; i < 8; i++)
 		for (j = 0; j < 32; j++)
 		{
@@ -399,16 +400,19 @@ static void init_tables(void)
 }
 
 
-static void jaguar_postload(jaguar_state *jaguar)
+static STATE_POSTLOAD( jaguar_postload )
 {
+	const device_config *device = (const device_config *)param;
+	jaguar_state *jaguar = get_safe_token(device);
+
 	update_register_banks(jaguar);
 	check_irqs(jaguar);
 }
 
 
-static void init_common(int isdsp, legacy_cpu_device *device, device_irq_callback irqcallback)
+static void init_common(int isdsp, const device_config *device, cpu_irq_callback irqcallback)
 {
-	const jaguar_cpu_config *configdata = (const jaguar_cpu_config *)device->static_config();
+	const jaguar_cpu_config *configdata = (const jaguar_cpu_config *)device->static_config;
 	jaguar_state *jaguar = get_safe_token(device);
 
 	init_tables();
@@ -418,16 +422,15 @@ static void init_common(int isdsp, legacy_cpu_device *device, device_irq_callbac
 
 	jaguar->irq_callback = irqcallback;
 	jaguar->device = device;
-	jaguar->program = device->space(AS_PROGRAM);
-	jaguar->direct = &jaguar->program->direct();
+	jaguar->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 	if (configdata != NULL)
 		jaguar->cpu_interrupt = configdata->cpu_int_callback;
 
-	device->save_item(NAME(jaguar->r));
-	device->save_item(NAME(jaguar->a));
-	device->save_item(NAME(jaguar->ctrl));
-	device->save_item(NAME(jaguar->ppc));
-	device->machine().save().register_postload(save_prepost_delegate(FUNC(jaguar_postload), jaguar));
+	state_save_register_device_item_array(device, 0, jaguar->r);
+	state_save_register_device_item_array(device, 0, jaguar->a);
+	state_save_register_device_item_array(device, 0, jaguar->ctrl);
+	state_save_register_device_item(device, 0, jaguar->ppc);
+	state_save_register_postload(device->machine, jaguar_postload, (void *)device);
 }
 
 
@@ -458,11 +461,11 @@ static CPU_EXIT( jaguar )
 		return;
 
 	if (mirror_table != NULL)
-		global_free(mirror_table);
+		free(mirror_table);
 	mirror_table = NULL;
 
 	if (condition_table != NULL)
-		global_free(condition_table);
+		free(condition_table);
 	condition_table = NULL;
 }
 
@@ -479,9 +482,8 @@ static CPU_EXECUTE( jaguargpu )
 	/* if we're halted, we shouldn't be here */
 	if (!(jaguar->ctrl[G_CTRL] & 1))
 	{
-		//device_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
-		jaguar->icount = 0;
-		return;
+		cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
+		return cycles;
 	}
 
 	/* check for IRQs */
@@ -489,6 +491,7 @@ static CPU_EXECUTE( jaguargpu )
 
 	/* count cycles and interrupt cycles */
 	jaguar->bankswitch_icount = -1000;
+	jaguar->icount = cycles;
 
 	/* core execution loop */
 	do
@@ -509,6 +512,8 @@ static CPU_EXECUTE( jaguargpu )
 		jaguar->icount--;
 
 	} while (jaguar->icount > 0 || jaguar->icount == jaguar->bankswitch_icount);
+
+	return cycles - jaguar->icount;
 }
 
 static CPU_EXECUTE( jaguardsp )
@@ -518,9 +523,8 @@ static CPU_EXECUTE( jaguardsp )
 	/* if we're halted, we shouldn't be here */
 	if (!(jaguar->ctrl[G_CTRL] & 1))
 	{
-		//device_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
-		jaguar->icount = 0;
-		return;
+		cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
+		return cycles;
 	}
 
 	/* check for IRQs */
@@ -528,6 +532,7 @@ static CPU_EXECUTE( jaguardsp )
 
 	/* count cycles and interrupt cycles */
 	jaguar->bankswitch_icount = -1000;
+	jaguar->icount = cycles;
 
 	/* core execution loop */
 	do
@@ -548,6 +553,8 @@ static CPU_EXECUTE( jaguardsp )
 		jaguar->icount--;
 
 	} while (jaguar->icount > 0 || jaguar->icount == jaguar->bankswitch_icount);
+
+	return cycles - jaguar->icount;
 }
 
 
@@ -1234,7 +1241,7 @@ void xor_rn_rn(jaguar_state *jaguar, UINT16 op)
     I/O HANDLING
 ***************************************************************************/
 
-UINT32 jaguargpu_ctrl_r(device_t *device, offs_t offset)
+UINT32 jaguargpu_ctrl_r(const device_config *device, offs_t offset)
 {
 	jaguar_state *jaguar = get_safe_token(device);
 
@@ -1244,7 +1251,7 @@ UINT32 jaguargpu_ctrl_r(device_t *device, offs_t offset)
 }
 
 
-void jaguargpu_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_mask)
+void jaguargpu_ctrl_w(const device_config *device, offs_t offset, UINT32 data, UINT32 mem_mask)
 {
 	jaguar_state *jaguar = get_safe_token(device);
 	UINT32 oldval, newval;
@@ -1296,8 +1303,8 @@ void jaguargpu_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_m
 			jaguar->ctrl[offset] = newval;
 			if ((oldval ^ newval) & 0x01)
 			{
-				device_set_input_line(device, INPUT_LINE_HALT, (newval & 1) ? CLEAR_LINE : ASSERT_LINE);
-				device_yield(device);
+				cpu_set_input_line(device, INPUT_LINE_HALT, (newval & 1) ? CLEAR_LINE : ASSERT_LINE);
+				cpu_yield(device);
 			}
 			if (newval & 0x02)
 			{
@@ -1330,7 +1337,7 @@ void jaguargpu_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_m
     I/O HANDLING
 ***************************************************************************/
 
-UINT32 jaguardsp_ctrl_r(device_t *device, offs_t offset)
+UINT32 jaguardsp_ctrl_r(const device_config *device, offs_t offset)
 {
 	jaguar_state *jaguar = get_safe_token(device);
 
@@ -1342,7 +1349,7 @@ UINT32 jaguardsp_ctrl_r(device_t *device, offs_t offset)
 }
 
 
-void jaguardsp_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_mask)
+void jaguardsp_ctrl_w(const device_config *device, offs_t offset, UINT32 data, UINT32 mem_mask)
 {
 	jaguar_state *jaguar = get_safe_token(device);
 	UINT32 oldval, newval;
@@ -1395,8 +1402,8 @@ void jaguardsp_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_m
 			jaguar->ctrl[offset] = newval;
 			if ((oldval ^ newval) & 0x01)
 			{
-				device_set_input_line(device, INPUT_LINE_HALT, (newval & 1) ? CLEAR_LINE : ASSERT_LINE);
-				device_yield(device);
+				cpu_set_input_line(device, INPUT_LINE_HALT, (newval & 1) ? CLEAR_LINE : ASSERT_LINE);
+				cpu_yield(device);
 			}
 			if (newval & 0x02)
 			{
@@ -1477,7 +1484,7 @@ static CPU_SET_INFO( jaguargpu )
 		case CPUINFO_INT_REGISTER + JAGUAR_R29:			jaguar->r[29] = info->i;							break;
 		case CPUINFO_INT_REGISTER + JAGUAR_R30:			jaguar->r[30] = info->i;							break;
 		case CPUINFO_INT_REGISTER + JAGUAR_R31:			jaguar->r[31] = info->i;							break;
-		case CPUINFO_INT_SP:							jaguar->b0[31] = info->i;							break;
+		case CPUINFO_INT_SP:							jaguar->b0[31] = info->i; 							break;
 	}
 }
 
@@ -1489,7 +1496,7 @@ static CPU_SET_INFO( jaguargpu )
 
 CPU_GET_INFO( jaguargpu )
 {
-	jaguar_state *jaguar = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	jaguar_state *jaguar = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -1504,9 +1511,9 @@ CPU_GET_INFO( jaguargpu )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;										break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;										break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;								break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 24;								break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;								break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;								break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 24;								break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;								break;
 
 		case CPUINFO_INT_INPUT_STATE + JAGUAR_IRQ0:		info->i = (jaguar->ctrl[G_CTRL] & 0x40) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + JAGUAR_IRQ1:		info->i = (jaguar->ctrl[G_CTRL] & 0x80) ? ASSERT_LINE : CLEAR_LINE; break;
@@ -1569,7 +1576,7 @@ CPU_GET_INFO( jaguargpu )
 		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Atari Jaguar");					break;
 		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");								break;
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);							break;
-		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Aaron Giles");			break;
+		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Aaron Giles"); 			break;
 
 		case CPUINFO_STR_FLAGS:							sprintf(info->s, "%c%c%c%c%c%c%c%c%c%c%c",
 															jaguar->FLAGS & 0x8000 ? 'D':'.',
@@ -1582,10 +1589,10 @@ CPU_GET_INFO( jaguargpu )
 															jaguar->FLAGS & 0x0008 ? 'I':'.',
 															jaguar->FLAGS & 0x0004 ? 'N':'.',
 															jaguar->FLAGS & 0x0002 ? 'C':'.',
-															jaguar->FLAGS & 0x0001 ? 'Z':'.');				break;
+															jaguar->FLAGS & 0x0001 ? 'Z':'.'); 				break;
 
-		case CPUINFO_STR_REGISTER + JAGUAR_PC:  		sprintf(info->s, "PC: %08X", jaguar->PC);			break;
-		case CPUINFO_STR_REGISTER + JAGUAR_FLAGS:		sprintf(info->s, "FLAGS: %08X", jaguar->FLAGS); 	break;
+		case CPUINFO_STR_REGISTER + JAGUAR_PC:  		sprintf(info->s, "PC: %08X", jaguar->PC); 			break;
+		case CPUINFO_STR_REGISTER + JAGUAR_FLAGS:  		sprintf(info->s, "FLAGS: %08X", jaguar->FLAGS); 	break;
 		case CPUINFO_STR_REGISTER + JAGUAR_R0:			sprintf(info->s, "R0: %08X", jaguar->r[0]); 		break;
 		case CPUINFO_STR_REGISTER + JAGUAR_R1:			sprintf(info->s, "R1: %08X", jaguar->r[1]); 		break;
 		case CPUINFO_STR_REGISTER + JAGUAR_R2:			sprintf(info->s, "R2: %08X", jaguar->r[2]); 		break;
@@ -1596,28 +1603,28 @@ CPU_GET_INFO( jaguargpu )
 		case CPUINFO_STR_REGISTER + JAGUAR_R7:			sprintf(info->s, "R7: %08X", jaguar->r[7]); 		break;
 		case CPUINFO_STR_REGISTER + JAGUAR_R8:			sprintf(info->s, "R8: %08X", jaguar->r[8]); 		break;
 		case CPUINFO_STR_REGISTER + JAGUAR_R9:			sprintf(info->s, "R9: %08X", jaguar->r[9]); 		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R10:			sprintf(info->s, "R10:%08X", jaguar->r[10]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R11:			sprintf(info->s, "R11:%08X", jaguar->r[11]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R12:			sprintf(info->s, "R12:%08X", jaguar->r[12]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R13:			sprintf(info->s, "R13:%08X", jaguar->r[13]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R14:			sprintf(info->s, "R14:%08X", jaguar->r[14]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R15:			sprintf(info->s, "R15:%08X", jaguar->r[15]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R16:			sprintf(info->s, "R16:%08X", jaguar->r[16]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R17:			sprintf(info->s, "R17:%08X", jaguar->r[17]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R18:			sprintf(info->s, "R18:%08X", jaguar->r[18]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R19:			sprintf(info->s, "R19:%08X", jaguar->r[19]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R20:			sprintf(info->s, "R20:%08X", jaguar->r[20]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R21:			sprintf(info->s, "R21:%08X", jaguar->r[21]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R22:			sprintf(info->s, "R22:%08X", jaguar->r[22]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R23:			sprintf(info->s, "R23:%08X", jaguar->r[23]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R24:			sprintf(info->s, "R24:%08X", jaguar->r[24]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R25:			sprintf(info->s, "R25:%08X", jaguar->r[25]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R26:			sprintf(info->s, "R26:%08X", jaguar->r[26]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R27:			sprintf(info->s, "R27:%08X", jaguar->r[27]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R28:			sprintf(info->s, "R28:%08X", jaguar->r[28]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R29:			sprintf(info->s, "R29:%08X", jaguar->r[29]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R30:			sprintf(info->s, "R30:%08X", jaguar->r[30]);		break;
-		case CPUINFO_STR_REGISTER + JAGUAR_R31:			sprintf(info->s, "R31:%08X", jaguar->r[31]);		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R10:			sprintf(info->s, "R10:%08X", jaguar->r[10]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R11:			sprintf(info->s, "R11:%08X", jaguar->r[11]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R12:			sprintf(info->s, "R12:%08X", jaguar->r[12]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R13:			sprintf(info->s, "R13:%08X", jaguar->r[13]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R14:			sprintf(info->s, "R14:%08X", jaguar->r[14]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R15:			sprintf(info->s, "R15:%08X", jaguar->r[15]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R16:			sprintf(info->s, "R16:%08X", jaguar->r[16]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R17:			sprintf(info->s, "R17:%08X", jaguar->r[17]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R18:			sprintf(info->s, "R18:%08X", jaguar->r[18]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R19:			sprintf(info->s, "R19:%08X", jaguar->r[19]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R20:			sprintf(info->s, "R20:%08X", jaguar->r[20]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R21:			sprintf(info->s, "R21:%08X", jaguar->r[21]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R22:			sprintf(info->s, "R22:%08X", jaguar->r[22]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R23:			sprintf(info->s, "R23:%08X", jaguar->r[23]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R24:			sprintf(info->s, "R24:%08X", jaguar->r[24]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R25:			sprintf(info->s, "R25:%08X", jaguar->r[25]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R26:			sprintf(info->s, "R26:%08X", jaguar->r[26]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R27:			sprintf(info->s, "R27:%08X", jaguar->r[27]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R28:			sprintf(info->s, "R28:%08X", jaguar->r[28]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R29:			sprintf(info->s, "R29:%08X", jaguar->r[29]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R30:			sprintf(info->s, "R30:%08X", jaguar->r[30]); 		break;
+		case CPUINFO_STR_REGISTER + JAGUAR_R31:			sprintf(info->s, "R31:%08X", jaguar->r[31]); 		break;
 	}
 }
 
@@ -1642,7 +1649,7 @@ static CPU_SET_INFO( jaguardsp )
 
 CPU_GET_INFO( jaguardsp )
 {
-	jaguar_state *jaguar = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	jaguar_state *jaguar = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -1661,6 +1668,3 @@ CPU_GET_INFO( jaguardsp )
 		default:										CPU_GET_INFO_CALL(jaguargpu);						break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(JAGUARGPU, jaguargpu);
-DEFINE_LEGACY_CPU_DEVICE(JAGUARDSP, jaguardsp);

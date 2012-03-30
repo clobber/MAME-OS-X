@@ -12,29 +12,42 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "audio/seibu.h"
-#include "includes/dcon.h"
+
+WRITE16_HANDLER( dcon_gfxbank_w );
+WRITE16_HANDLER( dcon_background_w );
+WRITE16_HANDLER( dcon_foreground_w );
+WRITE16_HANDLER( dcon_midground_w );
+WRITE16_HANDLER( dcon_text_w );
+WRITE16_HANDLER( dcon_control_w );
+READ16_HANDLER( dcon_control_r );
+
+VIDEO_START( dcon );
+VIDEO_UPDATE( dcon );
+VIDEO_UPDATE( sdgndmps );
+
+extern UINT16 *dcon_back_data,*dcon_fore_data,*dcon_mid_data,*dcon_scroll_ram,*dcon_textram;
 
 /***************************************************************************/
 
-static ADDRESS_MAP_START( dcon_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( dcon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x7ffff) AM_ROM
 	AM_RANGE(0x80000, 0x8bfff) AM_RAM
 
-	AM_RANGE(0x8c000, 0x8c7ff) AM_RAM_WRITE(dcon_background_w) AM_BASE_MEMBER(dcon_state, m_back_data)
-	AM_RANGE(0x8c800, 0x8cfff) AM_RAM_WRITE(dcon_foreground_w) AM_BASE_MEMBER(dcon_state, m_fore_data)
-	AM_RANGE(0x8d000, 0x8d7ff) AM_RAM_WRITE(dcon_midground_w) AM_BASE_MEMBER(dcon_state, m_mid_data)
-	AM_RANGE(0x8d800, 0x8e7ff) AM_RAM_WRITE(dcon_text_w) AM_BASE_MEMBER(dcon_state, m_textram)
-	AM_RANGE(0x8e800, 0x8f7ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x8f800, 0x8ffff) AM_RAM AM_BASE_SIZE_MEMBER(dcon_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x8c000, 0x8c7ff) AM_RAM_WRITE(dcon_background_w) AM_BASE(&dcon_back_data)
+	AM_RANGE(0x8c800, 0x8cfff) AM_RAM_WRITE(dcon_foreground_w) AM_BASE(&dcon_fore_data)
+	AM_RANGE(0x8d000, 0x8d7ff) AM_RAM_WRITE(dcon_midground_w) AM_BASE(&dcon_mid_data)
+	AM_RANGE(0x8d800, 0x8e7ff) AM_RAM_WRITE(dcon_text_w) AM_BASE(&dcon_textram)
+	AM_RANGE(0x8e800, 0x8f7ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x8f800, 0x8ffff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x9d000, 0x9d7ff) AM_WRITE(dcon_gfxbank_w)
 
 	AM_RANGE(0xa0000, 0xa000d) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
 	AM_RANGE(0xc001c, 0xc001d) AM_READWRITE(dcon_control_r, dcon_control_w)
-	AM_RANGE(0xc0020, 0xc002f) AM_WRITEONLY AM_BASE_MEMBER(dcon_state, m_scroll_ram)
+	AM_RANGE(0xc0020, 0xc002f) AM_WRITE(SMH_RAM) AM_BASE(&dcon_scroll_ram)
 	AM_RANGE(0xc0080, 0xc0081) AM_WRITENOP
 	AM_RANGE(0xc00c0, 0xc00c1) AM_WRITENOP
 	AM_RANGE(0xe0000, 0xe0001) AM_READ_PORT("DSW")
@@ -243,61 +256,63 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static MACHINE_CONFIG_START( dcon, dcon_state )
+static MACHINE_DRIVER_START( dcon )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 10000000)
-	MCFG_CPU_PROGRAM_MAP(dcon_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 10000000)
+	MDRV_CPU_PROGRAM_MAP(dcon_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
 	SEIBU_SOUND_SYSTEM_CPU(4000000) /* Perhaps 14318180/4? */
 
-	MCFG_MACHINE_RESET(seibu_sound)
+	MDRV_MACHINE_RESET(seibu_sound)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(dcon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(40*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(dcon)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(dcon)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(dcon)
+	MDRV_VIDEO_START(dcon)
+	MDRV_VIDEO_UPDATE(dcon)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM3812_INTERFACE(4000000,1320000)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( sdgndmps, dcon_state )
+static MACHINE_DRIVER_START( sdgndmps )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 10000000)
-	MCFG_CPU_PROGRAM_MAP(dcon_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 10000000)
+	MDRV_CPU_PROGRAM_MAP(dcon_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
 	SEIBU2_SOUND_SYSTEM_CPU(14318180/4)
 
-	MCFG_MACHINE_RESET(seibu_sound)
+	MDRV_MACHINE_RESET(seibu_sound)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(sdgndmps)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(40*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(dcon)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(dcon)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(dcon)
+	MDRV_VIDEO_START(dcon)
+	MDRV_VIDEO_UPDATE(sdgndmps)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM2151_INTERFACE(14318180/4,1320000)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /***************************************************************************/
 
@@ -309,7 +324,7 @@ ROM_START( dcon )
 	ROM_LOAD16_BYTE("p1-1",   0x040001, 0x20000, CRC(4b8de320) SHA1(14a3ab347fc468869355951294c3e3a8f9211b6a) )
 
 	ROM_REGION( 0x20000, "audiocpu", 0 )	 /* 64k code for sound Z80 */
-	ROM_LOAD( "fmsnd",           0x000000, 0x08000, CRC(50450faa) SHA1(d4add7d357951b51d53ed7f143ece7f3bde7f4cb) )
+	ROM_LOAD( "fm",           0x000000, 0x08000, CRC(50450faa) SHA1(d4add7d357951b51d53ed7f143ece7f3bde7f4cb) )
 	ROM_CONTINUE(             0x010000, 0x08000 )
 	ROM_COPY( "audiocpu", 0, 0x018000, 0x08000 )
 
@@ -375,7 +390,7 @@ ROM_END
 /***************************************************************************/
 static DRIVER_INIT( sdgndmps )
 {
-	UINT16 *RAM = (UINT16 *)machine.region("maincpu")->base();
+	UINT16 *RAM = (UINT16 *)memory_region(machine, "maincpu");
 	RAM[0x1356/2] = 0x4e71; /* beq -> nop */
 	RAM[0x1358/2] = 0x4e71;
 

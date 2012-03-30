@@ -41,53 +41,13 @@ LOIPOIO-B
 
 ****************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
-#include "sound/mos6560.h"
+#include "includes/attckufo.h"
 
 
-class attckufo_state : public driver_device
-{
-public:
-	attckufo_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		  m_maincpu(*this, "maincpu"),
-		  m_mos6560(*this, "mos6560") { }
-
-	/* memory pointers */
-	UINT8 *      m_mainram;
-	UINT8 *      m_tileram;
-
-	/* devices */
-	required_device<cpu_device> m_maincpu;
-	required_device<mos6560_device> m_mos6560;
-};
-
-
-
-static const rgb_t attckufo_palette[] =
-{
-/* ripped from vice, a very excellent emulator */
-	MAKE_RGB(0x00, 0x00, 0x00),
-	MAKE_RGB(0xff, 0xff, 0xff),
-	MAKE_RGB(0xf0, 0x00, 0x00),
-	MAKE_RGB(0x00, 0xf0, 0xf0),
-
-	MAKE_RGB(0x60, 0x00, 0x60),
-	MAKE_RGB(0x00, 0xa0, 0x00),
-	MAKE_RGB(0x00, 0x00, 0xf0),
-	MAKE_RGB(0xd0, 0xd0, 0x00),
-
-	MAKE_RGB(0xc0, 0xa0, 0x00),
-	MAKE_RGB(0xff, 0xa0, 0x00),
-	MAKE_RGB(0xf0, 0x80, 0x80),
-	MAKE_RGB(0x00, 0xff, 0xff),
-
-	MAKE_RGB(0xff, 0x00, 0xff),
-	MAKE_RGB(0x00, 0xff, 0x00),
-	MAKE_RGB(0x00, 0xa0, 0xff),
-	MAKE_RGB(0xff, 0xff, 0x00)
-};
+static UINT8 *mainram;
+static UINT8 *tileram;
 
 static PALETTE_INIT( attckufo )
 {
@@ -99,8 +59,8 @@ static READ8_HANDLER(attckufo_io_r)
 {
 	switch(offset)
 	{
-		case 0: return input_port_read(space->machine(), "DSW");
-		case 2: return input_port_read(space->machine(), "INPUT");
+		case 0: return input_port_read(space->machine, "DSW");
+		case 2: return input_port_read(space->machine, "INPUT");
 	}
 	return 0xff;
 }
@@ -117,12 +77,12 @@ static WRITE8_HANDLER(attckufo_io_w)
     */
 }
 
-static ADDRESS_MAP_START( cpu_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE_MEMBER(attckufo_state, m_mainram)
-	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("mos6560", mos6560_port_r, mos6560_port_w)
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&mainram)
+	AM_RANGE(0x1000, 0x100f) AM_READWRITE(attckufo_port_r, attckufo_port_w)
 	AM_RANGE(0x1400, 0x1403) AM_READWRITE(attckufo_io_r, attckufo_io_w)
-	AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE_MEMBER(attckufo_state, m_tileram)
+	AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE(&tileram)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -154,64 +114,30 @@ static INPUT_PORTS_START( attckufo )
 INPUT_PORTS_END
 
 
-static INTERRUPT_GEN( attckufo_raster_interrupt )
-{
-	attckufo_state *state = device->machine().driver_data<attckufo_state>();
-	mos6560_raster_interrupt_gen(state->m_mos6560);
-}
+static MACHINE_DRIVER_START( attckufo )
+	MDRV_CPU_ADD("maincpu", M6502, 14318181/14)
+	MDRV_CPU_PROGRAM_MAP(cpu_map)
+	MDRV_CPU_PERIODIC_INT(attckufo_raster_interrupt, 15625)
 
-static SCREEN_UPDATE_IND16( attckufo )
-{
-	attckufo_state *state = screen.machine().driver_data<attckufo_state>();
-	mos6560_video_update(state->m_mos6560, bitmap, cliprect);
-	return 0;
-}
+  /* video hardware */
 
-static int attckufo_dma_read( running_machine &machine, int offset )
-{
-	attckufo_state *state = machine.driver_data<attckufo_state>();
-	return state->m_maincpu->space(AS_PROGRAM)->read_byte(offset);
-}
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 23*8-1, 0, 22*8-1)
 
-static int attckufo_dma_read_color( running_machine &machine, int offset )
-{
-	attckufo_state *state = machine.driver_data<attckufo_state>();
-	return state->m_maincpu->space(AS_PROGRAM)->read_byte(offset + 0x400);
-}
+	MDRV_PALETTE_LENGTH(ARRAY_LENGTH(attckufo_palette))
+	MDRV_PALETTE_INIT( attckufo )
 
-static const mos6560_interface attckufo_6560_intf =
-{
-	"screen",	/* screen */
-	MOS6560_ATTACKUFO,
-	NULL, NULL, NULL,	/* lightgun cb */
-	NULL, NULL,		/* paddle cb */
-	attckufo_dma_read, attckufo_dma_read_color	/* DMA */
-};
-
-
-static MACHINE_CONFIG_START( attckufo, attckufo_state )
-
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, 14318181/14)
-	MCFG_CPU_PROGRAM_MAP(cpu_map)
-	MCFG_CPU_PERIODIC_INT(attckufo_raster_interrupt, MOS656X_HRETRACERATE)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(MOS6560_VRETRACERATE)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_SIZE((MOS6560_XSIZE + 7) & ~7, MOS6560_YSIZE)
-	MCFG_SCREEN_VISIBLE_AREA(0, 23*8 - 1, 0, 22*8 - 1)
-	MCFG_SCREEN_UPDATE_STATIC(attckufo)
-
-	MCFG_PALETTE_LENGTH(ARRAY_LENGTH(attckufo_palette))
-	MCFG_PALETTE_INIT(attckufo)
+	MDRV_VIDEO_UPDATE( attckufo )
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_MOS656X_ADD("mos6560", attckufo_6560_intf)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("attckufo", ATTCKUFO, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 ROM_START( attckufo )
 	ROM_REGION( 0x4000, "maincpu", 0 )
@@ -228,4 +154,4 @@ ROM_START( attckufo )
 	ROM_COPY( "maincpu", 0x02000, 0x00000, 0x400)
 ROM_END
 
-GAME( 1980, attckufo, 0,      attckufo, attckufo, 0, ROT270, "Ryoto Electric Co.", "Attack Ufo", GAME_SUPPORTS_SAVE )
+GAME( 1980, attckufo, 0,        attckufo, attckufo, 0, ROT270, "Ryoto Electric Co.", "Attack Ufo", 0)

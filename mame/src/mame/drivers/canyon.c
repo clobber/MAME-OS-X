@@ -36,10 +36,12 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
-#include "includes/canyon.h"
+#include "canyon.h"
 #include "sound/discrete.h"
+
+
 
 
 /*************************************
@@ -67,11 +69,14 @@ static READ8_HANDLER( canyon_switches_r )
 {
 	UINT8 val = 0;
 
-	if ((input_port_read(space->machine(), "IN2") >> (offset & 7)) & 1)
+	if ((input_port_read(space->machine, "IN2") >> (offset & 7)) & 1)
+	{
 		val |= 0x80;
-
-	if ((input_port_read(space->machine(), "IN1") >> (offset & 3)) & 1)
+	}
+	if ((input_port_read(space->machine, "IN1") >> (offset & 3)) & 1)
+	{
 		val |= 0x01;
+	}
 
 	return val;
 }
@@ -79,7 +84,7 @@ static READ8_HANDLER( canyon_switches_r )
 
 static READ8_HANDLER( canyon_options_r )
 {
-	return (input_port_read(space->machine(), "DSW") >> (2 * (~offset & 3))) & 3;
+	return (input_port_read(space->machine, "DSW") >> (2 * (~offset & 3))) & 3;
 }
 
 
@@ -93,7 +98,7 @@ static READ8_HANDLER( canyon_options_r )
 
 static WRITE8_HANDLER( canyon_led_w )
 {
-	set_led_status(space->machine(), offset & 0x01, offset & 0x02);
+	set_led_status(offset & 0x01, offset & 0x02);
 }
 
 
@@ -105,7 +110,7 @@ static WRITE8_HANDLER( canyon_led_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x00ff) AM_MIRROR(0x100) AM_RAM
 	AM_RANGE(0x0400, 0x0401) AM_DEVWRITE("discrete", canyon_motor_w)
@@ -114,8 +119,8 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0600, 0x0603) AM_DEVWRITE("discrete", canyon_whistle_w)
 	AM_RANGE(0x0680, 0x0683) AM_WRITE(canyon_led_w)
 	AM_RANGE(0x0700, 0x0703) AM_DEVWRITE("discrete", canyon_attract_w)
-	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(canyon_videoram_w) AM_BASE_MEMBER(canyon_state, m_videoram)
-	AM_RANGE(0x1000, 0x17ff) AM_READ(canyon_switches_r) AM_WRITENOP  /* sloppy code writes here */
+	AM_RANGE(0x0800, 0x0bff) AM_RAM_WRITE(canyon_videoram_w) AM_BASE(&canyon_videoram)
+	AM_RANGE(0x1000, 0x17ff) AM_READWRITE(canyon_switches_r, SMH_NOP)  /* sloppy code writes here */
 	AM_RANGE(0x1800, 0x1fff) AM_READ(canyon_options_r)
 	AM_RANGE(0x2000, 0x3fff) AM_ROM
 ADDRESS_MAP_END
@@ -188,10 +193,10 @@ INPUT_PORTS_END
 static const gfx_layout tile_layout =
 {
 	8, 8,
-	64,
-	1,
-	{ 0 },
-	{
+    64,
+    1,
+    { 0 },
+    {
 		0x4, 0x5, 0x6, 0x7, 0xC, 0xD, 0xE, 0xF
 	},
 	{
@@ -234,36 +239,37 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( canyon, canyon_state )
+static MACHINE_DRIVER_START( canyon )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, XTAL_12_096MHz / 16)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
-	MCFG_WATCHDOG_VBLANK_INIT(8)
+	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 16)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_WATCHDOG_VBLANK_INIT(8)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(22 * 1000000 / 15750))
-	MCFG_SCREEN_SIZE(256, 240)
-	MCFG_SCREEN_VISIBLE_AREA(0, 255, 0, 239)
-	MCFG_SCREEN_UPDATE_STATIC(canyon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(22 * 1000000 / 15750))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 240)
+	MDRV_SCREEN_VISIBLE_AREA(0, 255, 0, 239)
 
-	MCFG_GFXDECODE(canyon)
-	MCFG_PALETTE_LENGTH(4)
+	MDRV_GFXDECODE(canyon)
+	MDRV_PALETTE_LENGTH(4)
 
-	MCFG_PALETTE_INIT(canyon)
-	MCFG_VIDEO_START(canyon)
+	MDRV_PALETTE_INIT(canyon)
+	MDRV_VIDEO_START(canyon)
+	MDRV_VIDEO_UPDATE(canyon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(canyon)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(canyon)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -317,5 +323,5 @@ ROM_END
  *
  *************************************/
 
-GAME( 1977, canyon,  0,      canyon, canyon, 0, ROT0, "Atari", "Canyon Bomber", GAME_SUPPORTS_SAVE )
-GAME( 1977, canyonp, canyon, canyon, canyon, 0, ROT0, "Atari", "Canyon Bomber (prototype)", GAME_SUPPORTS_SAVE )
+GAME( 1977, canyon,  0,      canyon, canyon, 0, ROT0, "Atari", "Canyon Bomber", 0 )
+GAME( 1977, canyonp, canyon, canyon, canyon, 0, ROT0, "Atari", "Canyon Bomber (prototype)", 0 )

@@ -2,15 +2,15 @@
 
     Bellfruit system85 driver, (under heavy construction !!!)
 
+    A.G.E Code Copyright J. Wallace and the AGEMAME Development Team.
+    Visit http://www.mameworld.net/agemame/ for more information.
+
     M.A.M.E Core Copyright Nicola Salmoria and the MAME Team,
     used under license from http://mamedev.org
 
-  ******************************************************************************************
 
+******************************************************************************************
 
-
-
-     04-2011: J Wallace: Fixed lamping code.
   19-08-2005: Re-Animator
 
 Standard system85 memorymap
@@ -57,7 +57,7 @@ ___________________________________________________________________________
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "video/awpvid.h"
 #include "machine/6850acia.h"
@@ -65,33 +65,6 @@ ___________________________________________________________________________
 #include "machine/roc10937.h"  // vfd
 #include "machine/steppers.h" // stepper motor
 #include "sound/ay8910.h"
-#include "machine/nvram.h"
-#include "machine/bfm_comn.h"
-
-class bfmsys85_state : public driver_device
-{
-public:
-	bfmsys85_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_mmtr_latch;
-	int m_triac_latch;
-	int m_vfd_latch;
-	int m_irq_status;
-	int m_optic_pattern;
-	int m_locked;
-	int m_is_timer_enabled;
-	int m_reel_changed;
-	int m_coin_inhibits;
-	int m_mux_output_strobe;
-	int m_mux_input_strobe;
-	int m_mux_input;
-	UINT8 m_Inputs[64];
-	UINT8 m_codec_data[256];
-	UINT8 m_sys85_data_line_r;
-	UINT8 m_sys85_data_line_t;
-};
-
 
 #define VFD_RESET  0x20
 #define VFD_CLOCK1 0x80
@@ -99,21 +72,44 @@ public:
 
 #define MASTER_CLOCK	(XTAL_4MHz)
 
+// local prototypes ///////////////////////////////////////////////////////
+
+
+// local vars /////////////////////////////////////////////////////////////
+
+static int mmtr_latch;		  // mechanical meter latch
+static int triac_latch;		  // payslide triac latch
+static int vfd_latch;		  // vfd latch
+static int irq_status;		  // custom chip IRQ status
+static int optic_pattern;     // reel optics
+static int locked;			  // hardware lock/unlock status (0=unlocked)
+static int is_timer_enabled;
+static int reel_changed;
+static int coin_inhibits;
+static int mux_output_strobe;
+static int mux_input_strobe;
+static int mux_input;
+
+// user interface stuff ///////////////////////////////////////////////////
+
+static UINT8 Lamps[128];		  // 128 multiplexed lamps
+static UINT8 Inputs[64];		  // ??  multiplexed inputs
+
 ///////////////////////////////////////////////////////////////////////////
 // Serial Communications (Where does this go?) ////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
+static UINT8 sys85_data_line_r;
+static UINT8 sys85_data_line_t;
 
 static READ_LINE_DEVICE_HANDLER( sys85_data_r )
 {
-	bfmsys85_state *state = device->machine().driver_data<bfmsys85_state>();
-	return state->m_sys85_data_line_r;
+	return sys85_data_line_r;
 }
 
 static WRITE_LINE_DEVICE_HANDLER( sys85_data_w )
 {
-	bfmsys85_state *drvstate = device->machine().driver_data<bfmsys85_state>();
-	drvstate->m_sys85_data_line_t = state;
+	sys85_data_line_t = state;
 }
 
 static ACIA6850_INTERFACE( m6809_acia_if )
@@ -131,16 +127,15 @@ static ACIA6850_INTERFACE( m6809_acia_if )
 
 static MACHINE_RESET( bfm_sys85 )
 {
-	bfmsys85_state *state = machine.driver_data<bfmsys85_state>();
-	state->m_vfd_latch         = 0;
-	state->m_mmtr_latch        = 0;
-	state->m_triac_latch       = 0;
-	state->m_irq_status        = 0;
-	state->m_is_timer_enabled  = 1;
-	state->m_coin_inhibits     = 0;
-	state->m_mux_output_strobe = 0;
-	state->m_mux_input_strobe  = 0;
-	state->m_mux_input         = 0;
+	vfd_latch         = 0;
+	mmtr_latch        = 0;
+	triac_latch       = 0;
+	irq_status        = 0;
+	is_timer_enabled  = 1;
+	coin_inhibits     = 0;
+	mux_output_strobe = 0;
+	mux_input_strobe  = 0;
+	mux_input         = 0;
 
 	ROC10937_reset(0);	// reset display1
 
@@ -153,9 +148,9 @@ static MACHINE_RESET( bfm_sys85 )
 			stepper_reset_position(i);
 			if ( stepper_optic_state(i) ) pattern |= 1<<i;
 		}
-	state->m_optic_pattern = pattern;
+	optic_pattern = pattern;
 	}
-	state->m_locked		  = 0x00; // hardware is open
+	locked		  = 0x00; // hardware is NOT locked
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -168,10 +163,9 @@ static WRITE8_HANDLER( watchdog_w )
 
 static INTERRUPT_GEN( timer_irq )
 {
-	bfmsys85_state *state = device->machine().driver_data<bfmsys85_state>();
-	if ( state->m_is_timer_enabled )
+	if ( is_timer_enabled )
 	{
-		state->m_irq_status = 0x01 |0x02; //0xff;
+		irq_status = 0x01 |0x02; //0xff;
 		generic_pulse_irq_line(device, M6809_IRQ_LINE);
 	}
 }
@@ -180,10 +174,9 @@ static INTERRUPT_GEN( timer_irq )
 
 static READ8_HANDLER( irqlatch_r )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	int result = state->m_irq_status | 0x02;
+	int result = irq_status | 0x02;
 
-	state->m_irq_status = 0;
+	irq_status = 0;
 
 	return result;
 }
@@ -192,14 +185,13 @@ static READ8_HANDLER( irqlatch_r )
 
 static WRITE8_HANDLER( reel12_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	if ( stepper_update(0, (data>>4)&0x0f) ) state->m_reel_changed |= 0x01;
-	if ( stepper_update(1, data&0x0f   ) ) state->m_reel_changed |= 0x02;
+	if ( stepper_update(0, data>>4) ) reel_changed |= 0x01;
+	if ( stepper_update(1, data   ) ) reel_changed |= 0x02;
 
-	if ( stepper_optic_state(0) ) state->m_optic_pattern |=  0x01;
-	else                          state->m_optic_pattern &= ~0x01;
-	if ( stepper_optic_state(1) ) state->m_optic_pattern |=  0x02;
-	else                          state->m_optic_pattern &= ~0x02;
+	if ( stepper_optic_state(0) ) optic_pattern |=  0x01;
+	else                          optic_pattern &= ~0x01;
+	if ( stepper_optic_state(1) ) optic_pattern |=  0x02;
+	else                          optic_pattern &= ~0x02;
 	awp_draw_reel(0);
 	awp_draw_reel(1);
 }
@@ -208,14 +200,13 @@ static WRITE8_HANDLER( reel12_w )
 
 static WRITE8_HANDLER( reel34_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	if ( stepper_update(2, (data>>4)&0x0f) ) state->m_reel_changed |= 0x04;
-	if ( stepper_update(3, data&0x0f   ) ) state->m_reel_changed |= 0x08;
+	if ( stepper_update(2, data>>4) ) reel_changed |= 0x04;
+	if ( stepper_update(3, data   ) ) reel_changed |= 0x08;
 
-	if ( stepper_optic_state(2) ) state->m_optic_pattern |=  0x04;
-	else                          state->m_optic_pattern &= ~0x04;
-	if ( stepper_optic_state(3) ) state->m_optic_pattern |=  0x08;
-	else                          state->m_optic_pattern &= ~0x08;
+	if ( stepper_optic_state(2) ) optic_pattern |=  0x04;
+	else                          optic_pattern &= ~0x04;
+	if ( stepper_optic_state(3) ) optic_pattern |=  0x08;
+	else                          optic_pattern &= ~0x08;
 	awp_draw_reel(2);
 	awp_draw_reel(3);
 }
@@ -226,32 +217,30 @@ static WRITE8_HANDLER( reel34_w )
 
 static WRITE8_HANDLER( mmtr_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	int i;
-	int  changed = state->m_mmtr_latch ^ data;
+	int  changed = mmtr_latch ^ data;
+	UINT64 cycles  = cpu_get_total_cycles(space->cpu);
 
-	state->m_mmtr_latch = data;
+	mmtr_latch = data;
 
 	for (i=0; i<8; i++)
-	if ( changed & (1 << i) )	MechMtr_update(i, data & (1 << i) );
+	if ( changed & (1 << i) )	Mechmtr_update(i, cycles, data & (1 << i) );
 
-	if ( data ) generic_pulse_irq_line(space->machine().device("maincpu"), M6809_FIRQ_LINE);
+	if ( data ) generic_pulse_irq_line(cputag_get_cpu(space->machine, "maincpu"), M6809_FIRQ_LINE);
 }
 ///////////////////////////////////////////////////////////////////////////
 
 static READ8_HANDLER( mmtr_r )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	return state->m_mmtr_latch;
+	return mmtr_latch;
 }
 ///////////////////////////////////////////////////////////////////////////
 
 static WRITE8_HANDLER( vfd_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	int changed = state->m_vfd_latch ^ data;
+	int changed = vfd_latch ^ data;
 
-	state->m_vfd_latch = data;
+	vfd_latch = data;
 
 	if ( changed )
 	{
@@ -279,10 +268,32 @@ static WRITE8_HANDLER( vfd_w )
 //////////////////////////////////////////////////////////////////////////////////
 // input / output multiplexers ///////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////
+// conversion table BFM strobe data to internal lamp numbers
+static const UINT8 BFM_strcnv85[] =
+{
+	0x00,0x01,0x02,0x03,0x04,0x05,0x06,0x07, 0x08,0x09,0x0A,0x0B,0x0C,0x0D,0x0E,0x0F,
+	0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17, 0x18,0x19,0x1A,0x1B,0x1C,0x1D,0x1E,0x1F,
+	0x20,0x21,0x22,0x23,0x24,0x25,0x26,0x27, 0x28,0x29,0x2A,0x2B,0x2C,0x2D,0x2E,0x2F,
+	0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37, 0x38,0x39,0x3A,0x3B,0x3C,0x3D,0x3E,0x3F,
+	0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47, 0x48,0x49,0x4A,0x4B,0x4C,0x4D,0x4E,0x4F,
+	0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57, 0x58,0x59,0x5A,0x5B,0x5C,0x5D,0x5E,0x5F,
+	0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67, 0x68,0x69,0x6A,0x6B,0x6C,0x6D,0x6E,0x6F,
+	0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77, 0x78,0x79,0x7A,0x7B,0x7C,0x7D,0x7E,0x7F,
+
+	0x80,0x81,0x82,0x83,0x84,0x85,0x86,0x87, 0x88,0x89,0x8A,0x8B,0x8C,0x8D,0x8E,0x8F,
+	0x90,0x91,0x92,0x93,0x94,0x95,0x96,0x97, 0x98,0x99,0x9A,0x9B,0x9C,0x9D,0x9E,0x9F,
+	0xA0,0xA1,0xA2,0xA3,0xA4,0xA5,0xA6,0xA7, 0xA8,0xA9,0xAA,0xAB,0xAC,0xAD,0xAE,0xAF,
+	0xB0,0xB1,0xB2,0xB3,0xB4,0xB5,0xB6,0xB7, 0xB8,0xB9,0xBA,0xBB,0xBC,0xBD,0xBE,0xBF,
+	0xC0,0xC1,0xC2,0xC3,0xC4,0xC5,0xC6,0xC7, 0xC8,0xC9,0xCA,0xCB,0xCC,0xCD,0xCE,0xCF,
+	0xD0,0xD1,0xD2,0xD3,0xD4,0xD5,0xD6,0xD7, 0xD8,0xD9,0xDA,0xDB,0xDC,0xDD,0xDE,0xDF,
+	0xE0,0xE1,0xE2,0xE3,0xE4,0xE5,0xE6,0xE7, 0xE8,0xE9,0xEA,0xEB,0xEC,0xED,0xEE,0xEF,
+	0xF0,0xF1,0xF2,0xF3,0xF4,0xF5,0xF6,0xF7, 0xF8,0xF9,0xFA,0xFB,0xFC,0xFD,0xFE,0xFF
+};
+
+///////////////////////////////////////////////////////////////////////////////////
 
 static WRITE8_HANDLER( mux_ctrl_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	switch ( data & 0xF0 )
 	{
 		case 0x10:
@@ -295,15 +306,15 @@ static WRITE8_HANDLER( mux_ctrl_w )
 
 		case 0x40:
 		//logerror(" sys85 mux: read strobe");
-		state->m_mux_input_strobe = data & 0x07;
+		mux_input_strobe = data & 0x07;
 
-		if ( state->m_mux_input_strobe == 5 ) state->m_Inputs[5] = 0xFF ^ state->m_optic_pattern;
+		if ( mux_input_strobe == 5 ) Inputs[5] = 0xFF ^ optic_pattern;
 
-		state->m_mux_input = ~state->m_Inputs[state->m_mux_input_strobe];
+		mux_input = ~Inputs[mux_input_strobe];
 		break;
 
 		case 0x80:
-		state->m_mux_output_strobe = data & 0x0F;
+		mux_output_strobe = data & 0x0F;
 		break;
 
 		case 0xC0:
@@ -313,7 +324,7 @@ static WRITE8_HANDLER( mux_ctrl_w )
 		case 0xE0:	  // End of interrupt
 		break;
 
-	}
+  }
 }
 
 static READ8_HANDLER( mux_ctrl_r )
@@ -325,22 +336,28 @@ static READ8_HANDLER( mux_ctrl_r )
 
 static WRITE8_HANDLER( mux_data_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
 	int pattern = 0x01, i,
-	off = state->m_mux_output_strobe<<4;
+	off = mux_output_strobe<<4;
 
 	for ( i = 0; i < 8; i++ )
 	{
-		output_set_lamp_value(off, (data & pattern ? 1 : 0));
+		Lamps[BFM_strcnv85[off]] = data & pattern ? 1 : 0;
 		pattern <<= 1;
 		off++;
+	}
+
+	if (mux_output_strobe == 0)
+	{
+		for ( i = 0; i < 128; i++ )
+		{
+			output_set_lamp_value(i, Lamps[i]);
+		}
 	}
 }
 
 static READ8_HANDLER( mux_data_r )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	return state->m_mux_input;
+	return mux_input;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -355,16 +372,14 @@ static WRITE8_HANDLER( mux_enable_w )
 
 static WRITE8_HANDLER( triac_w )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	state->m_triac_latch = data;
+	triac_latch = data;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 static READ8_HANDLER( triac_r )
 {
-	bfmsys85_state *state = space->machine().driver_data<bfmsys85_state>();
-	return state->m_triac_latch;
+	return triac_latch;
 }
 
 // machine start (called only once) ////////////////////////////////////////
@@ -384,9 +399,9 @@ static MACHINE_START( bfm_sys85 )
 
 // memory map for bellfruit system85 board ////////////////////////////////
 
-static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("nvram") //8k RAM
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) //8k RAM
 	AM_RANGE(0x2000, 0x21FF) AM_WRITE(reel34_w)			// reel 3+4 latch
 	AM_RANGE(0x2200, 0x23FF) AM_WRITE(reel12_w)			// reel 1+2 latch
 	AM_RANGE(0x2400, 0x25FF) AM_WRITE(vfd_w)			// vfd latch
@@ -399,15 +414,15 @@ static ADDRESS_MAP_START( memmap, AS_PROGRAM, 8 )
 	AM_RANGE(0x2A01, 0x2A01) AM_READWRITE(mux_ctrl_r,mux_ctrl_w)// mux status register
 	AM_RANGE(0x2E00, 0x2E00) AM_READ(irqlatch_r)		// irq latch ( MC6850 / timer )
 
-	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x3000, 0x3000) AM_DEVWRITE("ay", ay8910_data_w)
 	AM_RANGE(0x3001, 0x3001) AM_READNOP //sound latch
-	AM_RANGE(0x3200, 0x3200) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x3200, 0x3200) AM_DEVWRITE("ay", ay8910_address_w)
 
-	AM_RANGE(0x3402, 0x3402) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, control_write)
-	AM_RANGE(0x3403, 0x3403) AM_DEVWRITE_MODERN("acia6850_0", acia6850_device, data_write)
+	AM_RANGE(0x3402, 0x3402) AM_DEVWRITE("acia6850_0", acia6850_ctrl_w)
+	AM_RANGE(0x3403, 0x3403) AM_DEVWRITE("acia6850_0", acia6850_data_w)
 
-	AM_RANGE(0x3406, 0x3406) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, status_read)
-	AM_RANGE(0x3407, 0x3407) AM_DEVREAD_MODERN("acia6850_0", acia6850_device, data_read)
+	AM_RANGE(0x3406, 0x3406) AM_DEVREAD("acia6850_0", acia6850_stat_r)
+	AM_RANGE(0x3407, 0x3407) AM_DEVREAD("acia6850_0", acia6850_data_r)
 
 	AM_RANGE(0x3600, 0x3600) AM_WRITE(mux_enable_w)		// mux enable
 
@@ -418,23 +433,23 @@ ADDRESS_MAP_END
 
 // machine driver for system85 board //////////////////////////////////////
 
-static MACHINE_CONFIG_START( bfmsys85, bfmsys85_state )
-	MCFG_MACHINE_START(bfm_sys85)						// main system85 board initialisation
-	MCFG_MACHINE_RESET(bfm_sys85)
-	MCFG_CPU_ADD("maincpu", M6809, MASTER_CLOCK/4)			// 6809 CPU at 1 Mhz
-	MCFG_CPU_PROGRAM_MAP(memmap)						// setup read and write memorymap
-	MCFG_CPU_PERIODIC_INT(timer_irq, 1000 )				// generate 1000 IRQ's per second
+static MACHINE_DRIVER_START( bfmsys85 )
+	MDRV_MACHINE_START(bfm_sys85)						// main system85 board initialisation
+	MDRV_MACHINE_RESET(bfm_sys85)
+	MDRV_CPU_ADD("maincpu", M6809, MASTER_CLOCK/4)			// 6809 CPU at 1 Mhz
+	MDRV_CPU_PROGRAM_MAP(memmap)						// setup read and write memorymap
+	MDRV_CPU_PERIODIC_INT(timer_irq, 1000 )				// generate 1000 IRQ's per second
 
-	MCFG_ACIA6850_ADD("acia6850_0", m6809_acia_if)
+	MDRV_ACIA6850_ADD("acia6850_0", m6809_acia_if)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd",AY8912, MASTER_CLOCK/4)			// add AY8912 soundchip
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay",AY8912, MASTER_CLOCK/4)			// add AY8912 soundchip
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")						// load/save nv RAM
+	MDRV_NVRAM_HANDLER(generic_0fill)					// load/save nv RAM
 
-	MCFG_DEFAULT_LAYOUT(layout_awpvid16)
-MACHINE_CONFIG_END
+	MDRV_DEFAULT_LAYOUT(layout_awpvid16)
+MACHINE_DRIVER_END
 
 // input ports for system85 board /////////////////////////////////////////
 
@@ -463,233 +478,10 @@ INPUT_PORTS_END
 
 // ROM definition /////////////////////////////////////////////////////////
 
-ROM_START( b85scard )
+ROM_START( m_supcrd )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "sc271.bin",  0x8000, 0x8000,  CRC(58e9c9df) SHA1(345c5aa279327d7142edc6823aad0cfd40cbeb73))
 ROM_END
 
-
-
-
-ROM_START( b85cexpl ) // 350-190 B2LNCE21
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "2pceic1.bin", 0x8000, 0x008000, CRC(f90bebe0) SHA1(164b4b9c6fcf493933771d6fa29cbb654bfa3812) )
-	ROM_LOAD( "2pceic2.bin", 0x6000, 0x002000, CRC(935e1910) SHA1(8ecdfdccbc77534a68e4c7338882391751243a3a) )
-ROM_END
-
-ROM_START( b85royal ) // LNRY11350-128 BE
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "bigdeal1.bin", 0x6000, 0x002000, CRC(bded44d2) SHA1(9983d9645aa2d205e07ff7245afc2d0253e7a861) )
-	ROM_LOAD( "bigdeal2.bin", 0x8000, 0x008000, CRC(d759641a) SHA1(1992ed59eef02bdb68db5fdaa179f37ed885882c) )
-ROM_END
-
-
-
-ROM_START( b85bdclb )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "39350055 5p 60.bin", 0x8000, 0x008000, CRC(252b6b25) SHA1(1dea905ff366e9519a38251127209964d388b67a) )
-	ROM_LOAD( "95715639 5p 60.bin", 0x6000, 0x002000, CRC(57734397) SHA1(3a51b902f93a2bec510029131887b50d0fe3f405) )
-ROM_END
-
-
-ROM_START( b85bdclba )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "15632 5p 75.bin", 0x6000, 0x002000, CRC(6e00c17b) SHA1(43ec1ba1c90d2faf0874f7b43c246db639d85ac8) )
-	ROM_LOAD( "50045 5p 75.bin", 0x8000, 0x008000, CRC(2c6ce8f6) SHA1(21c1f078e6199ccf373b8db90dac87e2b28a5697) )
-ROM_END
-
-ROM_START( b85bdclbb )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "15634 20p 150.bin", 0x6000, 0x002000, CRC(e84e9716) SHA1(1e1383eb7ad251a720547225ac9e2204ba8d2dab) )
-	ROM_LOAD( "50047 20p 150.bin", 0x8000, 0x008000, CRC(bef6e8c0) SHA1(d7323ad745a5168a53809eb846d9b64a0f2d5702) )
-ROM_END
-
-ROM_START( b85cblit ) // 351-091 BELPCZ22
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "cash blitz 39350091 protocol.bin", 0x6000, 0x002000, CRC(d6b99ee5) SHA1(7b70716fb8b592657fc9ce0a22aa12ab75690c79) )
-	ROM_LOAD( "cash blitz 39351091protocol.bin", 0x8000, 0x008000, CRC(41e87617) SHA1(ab3565939c296074ddcb3fb46fb364df8cbc47e0) )
-ROM_END
-
-ROM_START( b85cblita ) // 350-091 BELNCZ22
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "cash blitz 39350091 protocol.bin", 0x6000, 0x002000, CRC(d6b99ee5) SHA1(7b70716fb8b592657fc9ce0a22aa12ab75690c79) ) // is this correct here?
-	ROM_LOAD( "39350091.bin", 0x8000, 0x008000, CRC(33eed09e) SHA1(a34861323c7256b7720613989a787049517c716f) )
-ROM_END
-
-ROM_START( b85cblitb ) // 350-102 BELNCZ23
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "95715670.bin", 0x6000, 0x002000, CRC(d6b99ee5) SHA1(7b70716fb8b592657fc9ce0a22aa12ab75690c79) )  // is this correct here?
-	ROM_LOAD( "cash blitz 95717034 p1.bin", 0x8000, 0x008000, CRC(3208ba1d) SHA1(2913eeb09b3699871aedbff92c570affcef5bfcc) )
-ROM_END
-
-ROM_START( b85clbpm ) // 350-187 BILNCP11
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "club premier 39350187 a.bin", 0x8000, 0x008000, CRC(eafe52c5) SHA1(7aa9550e3adacd6864adf2928734b687ab5b55c6) )
-	ROM_LOAD( "club premier 95715167 b.bin", 0x6000, 0x002000, CRC(5cb13935) SHA1(cb79df5c7f57facc33682f582a8d34be6445927d) )
-ROM_END
-
-ROM_START( b85dbldl )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "d dealer 95717891a.bin", 0x8000, 0x008000, CRC(6adb9552) SHA1(bb586f85f89de6018427c4aceae30f6702cd147a) )
-	ROM_LOAD( "d dealer 95715153b.bin", 0x6000, 0x002000, CRC(ace28302) SHA1(887b13a12faf3913dca837c105c21d7fd6e274bd) )
-ROM_END
-
-ROM_START( b85dbldla )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "d dealer 95717910.bin", 0x8000, 0x008000, CRC(863710ce) SHA1(22463bfd1f2188c6de6ebf1ba89590359a6099f0) )
-	ROM_LOAD( "d dealer 95715161.bin", 0x6000, 0x002000, CRC(90517a9b) SHA1(958ccf624e00ed040f8da2cbaf614cc2ce3c9885) )
-ROM_END
-
-ROM_START( b85hilo )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "95715636 b.bin", 0x6000, 0x002000, CRC(4a4ee7d8) SHA1(a1e74d063d1a4be28548f70b4786ffb6417382dd) )
-	ROM_LOAD( "95717737 a.bin", 0x8000, 0x008000, CRC(75437be0) SHA1(f77e292b5835ab55a1f712dd516490e16b7d5b79) )
-
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	ROM_LOAD( "hilosil-bfm-95717737-p1.bin", 0x6000, 0x002000, CRC(3f9570e8) SHA1(cf9dfeb2d75833a1002b75b7348f6998124fbb70) ) // this doesn't seem to work with anything..
-	ROM_LOAD( "95718737 protocol a.bin", 0x8000, 0x008000, CRC(03fb44bc) SHA1(7054b404f1a35e434525ee19eca203c24b7cc60c) ) // alt 95717737
-ROM_END
-
-ROM_START( b85hiloa )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "95715122 b.bin", 0x6000, 0x002000, CRC(31eb023d) SHA1(1e4c4d3d7f9734a3b7956a8f3ffc2a88fce699b7) )
-	ROM_LOAD( "876 2p.bin", 0x8000, 0x008000, CRC(a68bf5f3) SHA1(33953f76f8199083131271290866ec5bb4dc51ba) )
-ROM_END
-
-ROM_START( b85ritz )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ritz 5p 95715117.bin", 0x6000, 0x002000, CRC(ba8efd16) SHA1(bdd00209e2d86e18930c100d4ae3d9d042a7afa6) )
-	ROM_LOAD( "ritz 5p 95717828.bin", 0x8000, 0x008000, CRC(09110c89) SHA1(3659f567aaab6c2d83a3ed94875843ccd43c0a27) )
-ROM_END
-
-ROM_START( b85ritza )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ritz 20p 95715118 2x1.bin", 0x6000, 0x002000, CRC(e24e4bb2) SHA1(6c189220866f057fa35801abc39880bf199c4646) )
-	ROM_LOAD( "ritz 20p 95717830 2x1.bin", 0x8000, 0x008000, CRC(b3d84f6c) SHA1(561172b5f729b64aa57b56078ef265de1172df38) )
-ROM_END
-
-ROM_START( b85ritzb )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ritz 20p 95715116.bin", 0x6000, 0x002000, CRC(96cee69e) SHA1(60bbd48c6da1a5921206340788d9abbf59c10569) )
-	ROM_LOAD( "ritz 20p 95717827.bin", 0x8000, 0x008000, CRC(bf31303c) SHA1(820befceeef315e6cf6f43fe17404ab88bbd7926) )
-ROM_END
-
-ROM_START( b85ritzc )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ritz 10p 95715119 2x1.bin", 0x6000, 0x002000, CRC(a558a02e) SHA1(bd1c2bf2f1eff10cc56abc3db3160576bd8351dc) )
-	ROM_LOAD( "ritz 10p 95717831 2x1.bin", 0x8000, 0x008000, CRC(6a8fbf83) SHA1(19c87e40541973e7fc59c76f2c96f0cf52ee74c1) )
-ROM_END
-
-ROM_START( b85ritzd )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ritz 10p 95715662.bin", 0x6000, 0x002000, CRC(3b7fcc40) SHA1(ba60f91974cd02240822051dcdf1d13cbdaf3455) )
-	ROM_LOAD( "ritz 10p 95715798.bin", 0x8000, 0x008000, CRC(597088ac) SHA1(1c1c2a66494c64ba0ced129e044b87538d9d9a38) )
-ROM_END
-
-ROM_START( b85jpclb )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "jkpot2.bin", 0x6000, 0x002000, CRC(1cd88c27) SHA1(126cc0eba69cce6bd3abad9d2eeff64de3ab2477) )
-	ROM_LOAD( "jkpot1.bin", 0x8000, 0x008000, CRC(bd63aaa9) SHA1(697d914c1d3a267ef69cfe854e028fdeb8136519) )
-
-	ROM_REGION( 0x10000, "altrevs", 0 )
-	// sets below don't boot.. check why
-	ROM_LOAD( "5p b.bin", 0x6000, 0x002000, CRC(d39b2517) SHA1(e21b702779aff900f528c2a3002f1df77990e7fe) )
-	ROM_LOAD( "5p a.bin", 0x8000, 0x008000, CRC(23b4f619) SHA1(03bdb736b260d96435fe1eab028b4e03c5e733f7) )
-	ROM_LOAD( "95715692 jpot 100.bin", 0x6000, 0x002000, CRC(1cd88c27) SHA1(126cc0eba69cce6bd3abad9d2eeff64de3ab2477) )
-	ROM_LOAD( "39350115 jpot 100.bin", 0x8000, 0x008000, CRC(dfb05807) SHA1(2375f30e37c7350ccfeb0483e74b51f4c2a090a0) )
-
-	ROM_END
-
-ROM_START( b85jpclba )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "95715690 20p.bin", 0x6000, 0x002000, CRC(84595df8) SHA1(42315df92c7e98655036e5314638e468a26699d0) )
-	ROM_LOAD( "39350112 20p.bin", 0x8000, 0x008000, CRC(59eb8649) SHA1(b42999d34fbf863e92098d08164d4624c576ab06) )
-ROM_END
-
-ROM_START( b85jpclbb )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "95715121 2x10p.bin", 0x6000, 0x002000, CRC(c63280a0) SHA1(db812676d64eb6fbffb80d0af457eb958b5bfc54) )
-	ROM_LOAD( "39350141 2x10p.bin", 0x8000, 0x008000, CRC(1088d262) SHA1(02da1bacb90d4e06f1fc97b5bcb9b2b90263d657) )
-ROM_END
-
-ROM_START( b85jpclbc )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "9715120 2x20p.bin", 0x6000, 0x002000, CRC(5a901360) SHA1(d134151f366a3a64e74fc3d350ec64548cb172b5) )
-	ROM_LOAD( "95717832 2x20p.bin", 0x8000, 0x008000, CRC(11622bc8) SHA1(6167238a00e738ea07b46cbf3f3dd5408731d248) )
-ROM_END
-
-ROM_START( b85jkwld )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "jw345.bin", 0x8000, 0x008000, CRC(d32de80f) SHA1(0afac559ee5a0f0144b3cb449a7b18a8a26a7573) )
-ROM_END
-
-ROM_START( b85lucky )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "lucky.bin", 0x0000, 0x010000, CRC(00673dc3) SHA1(2d9b839fa0c96dde728d10017dfa809497744453) )
-ROM_END
-
-ROM_START( b85luckd )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "luckydice.bin", 0x8000, 0x008000, CRC(6cb54fe5) SHA1(ccdf32813ce8a8f1ef65ca65ce2cf9fe654e473e) )
-ROM_END
-
-
-ROM_START( b85sngam )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "supernudgegambler.bin", 0x8000, 0x008000, CRC(c7344abc) SHA1(c1417d9011d4ed94dd25b57bae2fb84a0129fdaf) )
-ROM_END
-
-ROM_START( b85cops )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "cop215.bin", 0x8000, 0x008000, CRC(5600047c) SHA1(8d6ce9f75c45519838def8686586e55a913a0885) )
-ROM_END
-
-
-ROM_START( b85koc )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "king of clubs 39340026.bin", 0x8000, 0x008000, CRC(d3b0746e) SHA1(2847cec108a99747a7e3e31a0f7bcf766cdc1546) )
-ROM_END
-
-
-ROM_START( b85koca )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "king of clubs 39340002.bin", 0x8000, 0x008000, CRC(028708bf) SHA1(9e6942f6a25b260faa4c14c4d61a373be1518f40) )
-ROM_END
-
-
-DRIVER_INIT( decode )
-{
-	bfmsys85_state *state = machine.driver_data<bfmsys85_state>();
-	bfm_decode_mainrom(machine,"maincpu", state->m_codec_data);
-}
-
-GAME( 1989, b85scard	, 0			, bfmsys85, bfmsys85,		0		,	  0,       "BFM/ELAM",   "Supercards (Dutch, Game Card 39-340-271?) (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1989, b85cexpl	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Cash Explosion (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85royal	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Royal (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK ) // 'The Royal' ?? hack of the Ritz or Big Deal Club?
-GAME( 1987, b85bdclb	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Big Deal Club (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85bdclba	, b85bdclb	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Big Deal Club (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85bdclbb	, b85bdclb	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Big Deal Club (System 85, set 3)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85cblit	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Cash Blitz (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85cblita	, b85cblit	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Cash Blitz (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85cblitb	, b85cblit	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Cash Blitz (System 85, set 3)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1989, b85clbpm	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Club Premier (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1989, b85dbldl	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Double Dealer (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1985, b85dbldla	, b85dbldl	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Double Dealer (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85hilo		, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Hi Lo Silver (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85hiloa	, b85hilo	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Hi Lo Silver (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85ritz		, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Ritz (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK ) // alt version of Big Deal Club?
-GAME( 1988, b85ritza	, b85ritz	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Ritz (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85ritzb	, b85ritz	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Ritz (System 85, set 3)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85ritzc	, b85ritz	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Ritz (System 85, set 4)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85ritzd	, b85ritz	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "The Ritz (System 85, set 5)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85jpclb	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Jackpot Club (System 85, set 1)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1987, b85jpclba	, b85jpclb	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Jackpot Club (System 85, set 2)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85jpclbb	, b85jpclb	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Jackpot Club (System 85, set 3)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85jpclbc	, b85jpclb	, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Jackpot Club (System 85, set 4)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1992, b85jkwld	, 0			, bfmsys85, bfmsys85,		0		,	  0,       "BFM/ELAM",   "Jokers Wild (Dutch) (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1986, b85lucky	, 0			, bfmsys85, bfmsys85,		0		,	  0,       "BFM/ELAM",   "Lucky Cards (Dutch) (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1992, b85luckd	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM/ELAM",   "Lucky Dice (Dutch) (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 1988, b85sngam	, 0			, bfmsys85, bfmsys85,		decode	,	  0,       "BFM",   "Super Nudge Gambler (System 85)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )
-GAME( 199?, b85cops		, 0			, bfmsys85, bfmsys85,       0		,	  0,	   "BFM",   "Cops 'n' Robbers (Bellfruit) (Dutch) (System 85)", GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING|GAME_MECHANICAL)
-GAME( 199?, b85koc		, 0			, bfmsys85, bfmsys85,		decode	,	  0,	   "BFM",   "King of Clubs (Bellfruit) (System 85, set 1)", GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING|GAME_MECHANICAL) // this has valid strings in it BEFORE the bfm decode, but decodes to valid code, does it use some funky mapping, or did they just fill unused space with valid looking data?
-GAME( 199?, b85koca		, b85koc	, bfmsys85, bfmsys85,		decode	,	  0,	   "BFM",   "King of Clubs (Bellfruit) (System 85, set 2)", GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK|GAME_NOT_WORKING|GAME_MECHANICAL) // this has valid strings in it BEFORE the bfm decode, but decodes to valid code, does it use some funky mapping, or did they just fill unused space with valid looking data?
+//    year,name,     parent, machine,  input,           init, monitor,     company,     fullname,            flags
+GAME( 1985,m_supcrd, 0, 	bfmsys85, bfmsys85,  		0,	  0,       "BFM/ELAM",   "Supercards (Dutch, Game Card 39-340-271?)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )

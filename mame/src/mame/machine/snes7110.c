@@ -57,7 +57,7 @@ static const UINT8 spc7110_evolution_table[53][4] =
 	{ 0x05, 31, 34, 0 },
 	{ 0x04, 33, 35, 0 },
 	{ 0x04, 33, 36, 0 },
-	{ 0x03, 34, 37, 0 },
+  	{ 0x03, 34, 37, 0 },
 	{ 0x02, 35, 38, 0 },
 	{ 0x02, 36,  5, 0 },
 
@@ -120,9 +120,7 @@ static const UINT8 spc7110_mode2_context_table[32][2] =
 
 typedef struct
 {
-	running_machine &machine() const { assert(m_machine != NULL); return *m_machine; }
-
-	running_machine *m_machine;
+	running_machine *machine;
 
 	UINT32 decomp_mode;
 	UINT32 decomp_offset;
@@ -140,13 +138,11 @@ typedef struct
 
 	UINT32 morton16[2][256];
 	UINT32 morton32[4][256];
-
-	UINT32 rom_size;
 } SPC7110Decomp;
 
-static SPC7110Decomp* SPC7110Decomp_ctor(running_machine &machine, UINT32 size);
+static SPC7110Decomp* SPC7110Decomp_ctor(running_machine *machine);
 static void SPC7110Decomp_reset(SPC7110Decomp *thisptr);
-static void SPC7110Decomp_init(SPC7110Decomp *thisptr, running_machine &machine, UINT32 mode, UINT32 offset, UINT32 index);
+static void SPC7110Decomp_init(SPC7110Decomp *thisptr, running_machine *machine, UINT32 mode, UINT32 offset, UINT32 index);
 static UINT8 SPC7110Decomp_read(SPC7110Decomp *thisptr);
 static void SPC7110Decomp_write(SPC7110Decomp *thisptr, UINT8 data);
 static UINT8 SPC7110Decomp_dataread(SPC7110Decomp *thisptr);
@@ -160,7 +156,7 @@ static UINT8 SPC7110Decomp_toggle_invert(SPC7110Decomp *thisptr, UINT32 n);
 static UINT32 SPC7110Decomp_morton_2x8(SPC7110Decomp *thisptr, UINT32 data);
 static UINT32 SPC7110Decomp_morton_4x8(SPC7110Decomp *thisptr, UINT32 data);
 
-static SPC7110Decomp* SPC7110Decomp_ctor(running_machine &machine, UINT32 size)
+static SPC7110Decomp* SPC7110Decomp_ctor(running_machine *machine)
 {
 	UINT32 i;
 	SPC7110Decomp* newclass = (SPC7110Decomp*)auto_alloc_array(machine, UINT8, sizeof(SPC7110Decomp));
@@ -171,7 +167,7 @@ static SPC7110Decomp* SPC7110Decomp_ctor(running_machine &machine, UINT32 size)
 	{
 		#define map(x, y) (((i >> x) & 1) << y)
 		//2x8-bit
-		newclass->morton16[1][i] = map(7, 15) + map(6,  7) + map(5, 14) + map(4,  6)
+ 		newclass->morton16[1][i] = map(7, 15) + map(6,  7) + map(5, 14) + map(4,  6)
                                  + map(3, 13) + map(2,  5) + map(1, 12) + map(0,  4);
 		newclass->morton16[0][i] = map(7, 11) + map(6,  3) + map(5, 10) + map(4,  2)
                                  + map(3,  9) + map(2,  1) + map(1,  8) + map(0,  0);
@@ -187,8 +183,6 @@ static SPC7110Decomp* SPC7110Decomp_ctor(running_machine &machine, UINT32 size)
 		#undef map
 	}
 
-	newclass->rom_size = size;
-
 	return newclass;
 }
 
@@ -203,11 +197,11 @@ static void SPC7110Decomp_reset(SPC7110Decomp *thisptr)
 	thisptr->decomp_buffer_length   = 0;
 }
 
-static void SPC7110Decomp_init(SPC7110Decomp *thisptr, running_machine &machine, UINT32 mode, UINT32 offset, UINT32 index)
+static void SPC7110Decomp_init(SPC7110Decomp *thisptr, running_machine *machine, UINT32 mode, UINT32 offset, UINT32 index)
 {
 	UINT32 i;
 
-	thisptr->m_machine = &machine;
+	thisptr->machine = machine;
 
 	thisptr->decomp_mode = mode;
 	thisptr->decomp_offset = offset;
@@ -276,8 +270,8 @@ static void SPC7110Decomp_write(SPC7110Decomp *thisptr, UINT8 data)
 
 static UINT8 SPC7110Decomp_dataread(SPC7110Decomp *thisptr)
 {
-	UINT8 *ROM = thisptr->machine().region("cart")->base();
-	UINT32 size = thisptr->rom_size - 0x100000;
+	UINT8 *ROM = memory_region(thisptr->machine, "cart");
+	UINT32 size = snes_rom_size - 0x100000;
 	while(thisptr->decomp_offset >= size)
 	{
 		thisptr->decomp_offset -= size;
@@ -768,9 +762,8 @@ static UINT32 SPC7110Decomp_morton_4x8(SPC7110Decomp *thisptr, UINT32 data)
        + thisptr->morton32[2][(data >> 16) & 255] + thisptr->morton32[3][(data >> 24) & 255];
 }
 
-static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data);
-static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr);
-static void spc7110_update_time(running_machine &machine, UINT8 offset);
+static void spc7110_mmio_write(running_machine *machine, UINT32 addr, UINT8 data);
+static UINT8 spc7110_mmio_read(running_machine *machine, UINT32 addr);
 
 enum RTC_State
 {
@@ -853,7 +846,7 @@ typedef struct
 
 	UINT32 dx_offset;
 	UINT32 ex_offset;
-	UINT32 fx_offset;
+  	UINT32 fx_offset;
 
 	//====================
 	//real-time clock unit
@@ -866,19 +859,12 @@ typedef struct
 	UINT32 rtc_mode;
 	UINT32 rtc_index;
 
-	UINT64 rtc_offset;
-
-	UINT8 rtc_ram[16];	// 0-12 secs, min, hrs, etc.; 13-14-15 control registers
-
-	UINT32 size;
 } _snes_spc7110_t;
 
 static _snes_spc7110_t snes_spc7110;
 
-static void spc7110_init(running_machine& machine)
+static void spc7110_init(running_machine* machine)
 {
-	snes_state *state = machine.driver_data<snes_state>();
-
 	snes_spc7110.r4801 = 0x00;
 	snes_spc7110.r4802 = 0x00;
 	snes_spc7110.r4803 = 0x00;
@@ -897,7 +883,7 @@ static void spc7110_init(running_machine& machine)
 	snes_spc7110.r4813 = 0x00;
 	snes_spc7110.r4814 = 0x00;
 	snes_spc7110.r4815 = 0x00;
-	snes_spc7110.r4816 = 0x00;
+  	snes_spc7110.r4816 = 0x00;
 	snes_spc7110.r4817 = 0x00;
 	snes_spc7110.r4818 = 0x00;
 
@@ -932,27 +918,12 @@ static void spc7110_init(running_machine& machine)
 	snes_spc7110.r4841 = 0x00;
 	snes_spc7110.r4842 = 0x00;
 
-	snes_spc7110.size = state->m_cart_size;
-
-	snes_spc7110.decomp = SPC7110Decomp_ctor(machine, snes_spc7110.size);
-}
-
-static void spc7110rtc_init(running_machine& machine)
-{
-	spc7110_init(machine);
-
-	snes_spc7110.rtc_state = RTCS_Inactive;
-	snes_spc7110.rtc_mode  = RTCM_Linear;
-	snes_spc7110.rtc_index = 0;
-
-	snes_spc7110.rtc_offset = 0;
-
-	spc7110_update_time(machine, 0);
+	snes_spc7110.decomp = SPC7110Decomp_ctor(machine);
 }
 
 static UINT32 spc7110_datarom_addr(UINT32 addr)
 {
-	UINT32 size = snes_spc7110.size - 0x100000;
+	UINT32 size = snes_rom_size - 0x100000;
 	while(addr >= size)
 	{
 		addr -= size;
@@ -988,100 +959,19 @@ static void spc7110_set_data_adjust(UINT32 addr)
 	snes_spc7110.r4815 = addr >> 8;
 }
 
-// FIXME: SPC7110 RTC is capable of rounding/adding/zero-ing seconds, so
-// we should probably keep track internally of the time rather than updating
-// to the system time at each call with a "offset" tracking as we do now...
-// (and indeed current code fails to pass Tengai Makyou Zero tests)
-static void spc7110_update_time(running_machine &machine, UINT8 offset)
+static UINT8 spc7110_mmio_read(running_machine *machine, UINT32 addr)
 {
-	system_time curtime, *systime = &curtime;
-	machine.current_datetime(curtime);
-	int update = 1;
-
-	snes_spc7110.rtc_offset += offset;
-
-	// TEST: can we go beyond 24hrs of rounding?!? I doubt it will ever go beyond 3600, but I could be wrong...
-	assert(snes_spc7110.rtc_offset < 86400);
-
-	/* do not update if CR0 or CR2 timer disable flags are set */
-	if ((snes_spc7110.rtc_ram[13] & 0x01) || (snes_spc7110.rtc_ram[15] & 0x03))
-		update = 0;
-
-	if (update)
-	{
-		/* update time with offset, assuming offset < 3600s */
-		UINT8 second = systime->local_time.second;
-		UINT8 minute = systime->local_time.minute;
-		UINT8 hour = systime->local_time.hour;
-		UINT8 mday = systime->local_time.mday;
-
-		while (snes_spc7110.rtc_offset >= 3600)
-		{
-			snes_spc7110.rtc_offset -= 3600;
-			hour++;
-
-			if (hour == 24)
-			{
-				mday++;
-				hour = 0;
-			}
-		}
-
-		while (snes_spc7110.rtc_offset >= 60)
-		{
-			snes_spc7110.rtc_offset -= 60;
-			minute++;
-
-			if (minute == 60)
-			{
-				hour++;
-				minute = 0;
-			}
-		}
-
-		while (snes_spc7110.rtc_offset)
-		{
-			snes_spc7110.rtc_offset -= 1;
-			second++;
-
-			if (second == 60)
-			{
-				minute++;
-				second = 0;
-			}
-		}
-
-		snes_spc7110.rtc_ram[0] = second % 10;
-		snes_spc7110.rtc_ram[1] = second / 10;
-		snes_spc7110.rtc_ram[2] = minute % 10;
-		snes_spc7110.rtc_ram[3] = minute / 10;
-		snes_spc7110.rtc_ram[4] = hour % 10;
-		snes_spc7110.rtc_ram[5] = hour / 10;
-		snes_spc7110.rtc_ram[6] = mday % 10;
-		snes_spc7110.rtc_ram[7] = mday / 10;
-		snes_spc7110.rtc_ram[8] = systime->local_time.month % 10;
-		snes_spc7110.rtc_ram[9] = systime->local_time.month / 10;
-		snes_spc7110.rtc_ram[8] = systime->local_time.month;
-		snes_spc7110.rtc_ram[10] = (systime->local_time.year - 1900) % 10;
-		snes_spc7110.rtc_ram[11] = ((systime->local_time.year - 1900) / 10) % 10;
-		snes_spc7110.rtc_ram[12] = systime->local_time.weekday % 7;
-	}
-}
-
-static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr)
-{
-	running_machine &machine = space->machine();
-	UINT8 *ROM = machine.region("cart")->base();
+	UINT8 *ROM = memory_region(machine, "cart");
 
 	addr &= 0xffff;
 
 	switch(addr)
 	{
-	//==================
-	//decompression unit
-	//==================
+		//==================
+		//decompression unit
+		//==================
 
-	case 0x4800:
+		case 0x4800:
 		{
 			UINT16 counter = (snes_spc7110.r4809 + (snes_spc7110.r480a << 8));
 			counter--;
@@ -1089,43 +979,43 @@ static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr)
 			snes_spc7110.r480a = counter >> 8;
 			return SPC7110Decomp_read(snes_spc7110.decomp);
 		}
-	case 0x4801: return snes_spc7110.r4801;
-	case 0x4802: return snes_spc7110.r4802;
-	case 0x4803: return snes_spc7110.r4803;
-	case 0x4804: return snes_spc7110.r4804;
-	case 0x4805: return snes_spc7110.r4805;
-	case 0x4806: return snes_spc7110.r4806;
-	case 0x4807: return snes_spc7110.r4807;
-	case 0x4808: return snes_spc7110.r4808;
-	case 0x4809: return snes_spc7110.r4809;
-	case 0x480a: return snes_spc7110.r480a;
-	case 0x480b: return snes_spc7110.r480b;
-	case 0x480c:
+		case 0x4801: return snes_spc7110.r4801;
+		case 0x4802: return snes_spc7110.r4802;
+		case 0x4803: return snes_spc7110.r4803;
+		case 0x4804: return snes_spc7110.r4804;
+		case 0x4805: return snes_spc7110.r4805;
+		case 0x4806: return snes_spc7110.r4806;
+		case 0x4807: return snes_spc7110.r4807;
+		case 0x4808: return snes_spc7110.r4808;
+		case 0x4809: return snes_spc7110.r4809;
+		case 0x480a: return snes_spc7110.r480a;
+		case 0x480b: return snes_spc7110.r480b;
+		case 0x480c:
 		{
 			UINT8 status = snes_spc7110.r480c;
 			snes_spc7110.r480c &= 0x7f;
 			return status;
 		}
 
-	//==============
-	//data port unit
-	//==============
+		//==============
+		//data port unit
+		//==============
 
-	case 0x4810:
+		case 0x4810:
 		{
 			UINT8 data;
-			UINT32 address, adjust, adjustaddr;
+			UINT32 addr, adjust, adjustaddr;
 
 			if(snes_spc7110.r481x != 0x07) return 0x00;
 
-			address = spc7110_data_pointer();
+			addr = spc7110_data_pointer();
 			adjust = spc7110_data_adjust();
 			if(snes_spc7110.r4818 & 8)
 			{
 				adjust = (INT16)adjust;  //16-bit sign extend
 			}
 
-			adjustaddr = address;
+			adjustaddr = addr;
 			if(snes_spc7110.r4818 & 2)
 			{
 				adjustaddr += adjust;
@@ -1143,7 +1033,7 @@ static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr)
 
 				if((snes_spc7110.r4818 & 16) == 0)
 				{
-					spc7110_set_data_pointer(address + increment);
+					spc7110_set_data_pointer(addr + increment);
 				}
 				else
 				{
@@ -1153,36 +1043,36 @@ static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr)
 
 			return data;
 		}
-	case 0x4811: return snes_spc7110.r4811;
-	case 0x4812: return snes_spc7110.r4812;
-	case 0x4813: return snes_spc7110.r4813;
-	case 0x4814: return snes_spc7110.r4814;
-	case 0x4815: return snes_spc7110.r4815;
-	case 0x4816: return snes_spc7110.r4816;
-	case 0x4817: return snes_spc7110.r4817;
-	case 0x4818: return snes_spc7110.r4818;
-	case 0x481a:
+		case 0x4811: return snes_spc7110.r4811;
+		case 0x4812: return snes_spc7110.r4812;
+		case 0x4813: return snes_spc7110.r4813;
+		case 0x4814: return snes_spc7110.r4814;
+		case 0x4815: return snes_spc7110.r4815;
+		case 0x4816: return snes_spc7110.r4816;
+		case 0x4817: return snes_spc7110.r4817;
+		case 0x4818: return snes_spc7110.r4818;
+		case 0x481a:
 		{
 			UINT8 data;
-			UINT32 address, adjust;
+			UINT32 addr, adjust;
 			if(snes_spc7110.r481x != 0x07)
 			{
 				return 0x00;
 			}
 
-			address = spc7110_data_pointer();
+			addr = spc7110_data_pointer();
 			adjust = spc7110_data_adjust();
 			if(snes_spc7110.r4818 & 8)
 			{
 				adjust = (INT16)adjust;  //16-bit sign extend
 			}
 
-			data = ROM[spc7110_datarom_addr(address + adjust)];
+			data = ROM[spc7110_datarom_addr(addr + adjust)];
 			if((snes_spc7110.r4818 & 0x60) == 0x60)
 			{
 				if((snes_spc7110.r4818 & 16) == 0)
 				{
-					spc7110_set_data_pointer(address + adjust);
+					spc7110_set_data_pointer(addr + adjust);
 				}
 				else
 				{
@@ -1193,118 +1083,96 @@ static UINT8 spc7110_mmio_read(address_space *space, UINT32 addr)
 			return data;
 		}
 
-	//=========
-	//math unit
-	//=========
+		//=========
+		//math unit
+		//=========
 
-	case 0x4820: return snes_spc7110.r4820;
-	case 0x4821: return snes_spc7110.r4821;
-	case 0x4822: return snes_spc7110.r4822;
-	case 0x4823: return snes_spc7110.r4823;
-	case 0x4824: return snes_spc7110.r4824;
-	case 0x4825: return snes_spc7110.r4825;
-	case 0x4826: return snes_spc7110.r4826;
-	case 0x4827: return snes_spc7110.r4827;
-	case 0x4828: return snes_spc7110.r4828;
-	case 0x4829: return snes_spc7110.r4829;
-	case 0x482a: return snes_spc7110.r482a;
-	case 0x482b: return snes_spc7110.r482b;
-	case 0x482c: return snes_spc7110.r482c;
-	case 0x482d: return snes_spc7110.r482d;
-	case 0x482e: return snes_spc7110.r482e;
-	case 0x482f:
-		{
+		case 0x4820: return snes_spc7110.r4820;
+		case 0x4821: return snes_spc7110.r4821;
+		case 0x4822: return snes_spc7110.r4822;
+		case 0x4823: return snes_spc7110.r4823;
+		case 0x4824: return snes_spc7110.r4824;
+		case 0x4825: return snes_spc7110.r4825;
+	    case 0x4826: return snes_spc7110.r4826;
+    	case 0x4827: return snes_spc7110.r4827;
+    	case 0x4828: return snes_spc7110.r4828;
+    	case 0x4829: return snes_spc7110.r4829;
+    	case 0x482a: return snes_spc7110.r482a;
+    	case 0x482b: return snes_spc7110.r482b;
+    	case 0x482c: return snes_spc7110.r482c;
+    	case 0x482d: return snes_spc7110.r482d;
+    	case 0x482e: return snes_spc7110.r482e;
+    	case 0x482f:
+    	{
 			UINT8 status = snes_spc7110.r482f;
 			snes_spc7110.r482f &= 0x7f;
 			return status;
 		}
 
-	//===================
-	//memory mapping unit
-	//===================
+		//===================
+		//memory mapping unit
+		//===================
 
-	case 0x4830: return snes_spc7110.r4830;
-	case 0x4831: return snes_spc7110.r4831;
-	case 0x4832: return snes_spc7110.r4832;
-	case 0x4833: return snes_spc7110.r4833;
-	case 0x4834: return snes_spc7110.r4834;
+		case 0x4830: return snes_spc7110.r4830;
+		case 0x4831: return snes_spc7110.r4831;
+		case 0x4832: return snes_spc7110.r4832;
+		case 0x4833: return snes_spc7110.r4833;
+		case 0x4834: return snes_spc7110.r4834;
 
-	//====================
-	//real-time clock unit
-	//====================
-	case 0x4840: return snes_spc7110.r4840;
-	case 0x4841:
-		{
-			UINT8 data = 0;
-			if (snes_spc7110.rtc_state == RTCS_Inactive || snes_spc7110.rtc_state == RTCS_ModeSelect)
-				return 0x00;
-
-			snes_spc7110.r4842 = 0x80;
-			data = snes_spc7110.rtc_ram[snes_spc7110.rtc_index];
-			snes_spc7110.rtc_index = (snes_spc7110.rtc_index + 1) & 15;
-			return data;
-		}
-	case 0x4842:
-		{
-			UINT8 status = snes_spc7110.r4842;
-			snes_spc7110.r4842 &= 0x7f;
-			return status;
-		}
 	}
 
-	return snes_open_bus_r(space, 0);
+	return 0xff;
 }
 
-static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data)
+static void spc7110_mmio_write(running_machine *machine, UINT32 addr, UINT8 data)
 {
-	UINT8 *ROM = machine.region("cart")->base();
+	UINT8 *ROM = memory_region(machine, "cart");
 
 	addr &= 0xffff;
 
 	switch(addr)
 	{
-	//==================
-	//decompression unit
-	//==================
+		//==================
+		//decompression unit
+		//==================
 
-	case 0x4801: snes_spc7110.r4801 = data; break;
-	case 0x4802: snes_spc7110.r4802 = data; break;
-	case 0x4803: snes_spc7110.r4803 = data; break;
-	case 0x4804: snes_spc7110.r4804 = data; break;
-	case 0x4805: snes_spc7110.r4805 = data; break;
-	case 0x4806:
+		case 0x4801: snes_spc7110.r4801 = data; break;
+		case 0x4802: snes_spc7110.r4802 = data; break;
+		case 0x4803: snes_spc7110.r4803 = data; break;
+		case 0x4804: snes_spc7110.r4804 = data; break;
+		case 0x4805: snes_spc7110.r4805 = data; break;
+		case 0x4806:
 		{
-			UINT32 table, index, address, mode, offset;
+			UINT32 table, index, length, addr, mode, offset;
 			snes_spc7110.r4806 = data;
 
 			table   = (snes_spc7110.r4801 + (snes_spc7110.r4802 << 8) + (snes_spc7110.r4803 << 16));
 			index   = (snes_spc7110.r4804 << 2);
-			//length  = (snes_spc7110.r4809 + (snes_spc7110.r480a << 8));
-			address = spc7110_datarom_addr(table + index);
-			mode    = (ROM[address + 0]);
-			offset  = (ROM[address + 1] << 16)
-                    + (ROM[address + 2] <<  8)
-                    + (ROM[address + 3] <<  0);
+			length  = (snes_spc7110.r4809 + (snes_spc7110.r480a << 8));
+			addr    = spc7110_datarom_addr(table + index);
+			mode    = (ROM[addr + 0]);
+			offset  = (ROM[addr + 1] << 16)
+                    + (ROM[addr + 2] <<  8)
+                    + (ROM[addr + 3] <<  0);
 
 			SPC7110Decomp_init(snes_spc7110.decomp, machine, mode, offset, (snes_spc7110.r4805 + (snes_spc7110.r4806 << 8)) << mode);
 			snes_spc7110.r480c = 0x80;
-		}
-		break;
+		} break;
 
-	case 0x4807: snes_spc7110.r4807 = data; break;
-	case 0x4808: snes_spc7110.r4808 = data; break;
-	case 0x4809: snes_spc7110.r4809 = data; break;
-	case 0x480a: snes_spc7110.r480a = data; break;
-	case 0x480b: snes_spc7110.r480b = data; break;
+		case 0x4807: snes_spc7110.r4807 = data; break;
+		case 0x4808: snes_spc7110.r4808 = data; break;
+		case 0x4809: snes_spc7110.r4809 = data; break;
+		case 0x480a: snes_spc7110.r480a = data; break;
+		case 0x480b: snes_spc7110.r480b = data; break;
 
-	//==============
-	//data port unit
-	//==============
+		//==============
+		//data port unit
+		//==============
 
-	case 0x4811: snes_spc7110.r4811 = data; snes_spc7110.r481x |= 0x01; break;
-	case 0x4812: snes_spc7110.r4812 = data; snes_spc7110.r481x |= 0x02; break;
-	case 0x4813: snes_spc7110.r4813 = data; snes_spc7110.r481x |= 0x04; break;
-	case 0x4814:
+		case 0x4811: snes_spc7110.r4811 = data; snes_spc7110.r481x |= 0x01; break;
+		case 0x4812: snes_spc7110.r4812 = data; snes_spc7110.r481x |= 0x02; break;
+		case 0x4813: snes_spc7110.r4813 = data; snes_spc7110.r481x |= 0x04; break;
+		case 0x4814:
 		{
 			snes_spc7110.r4814 = data;
 			snes_spc7110.r4814_latch = 1;
@@ -1342,7 +1210,7 @@ static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data
 			break;
 		}
 
-	case 0x4815:
+		case 0x4815:
 		{
 			snes_spc7110.r4815 = data;
 			snes_spc7110.r4815_latch = 1;
@@ -1380,62 +1248,58 @@ static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data
 			break;
 		}
 
-	case 0x4816: snes_spc7110.r4816 = data; break;
-	case 0x4817: snes_spc7110.r4817 = data; break;
-	case 0x4818:
+		case 0x4816: snes_spc7110.r4816 = data; break;
+		case 0x4817: snes_spc7110.r4817 = data; break;
+		case 0x4818:
 		{
-    			if(snes_spc7110.r481x != 0x07)
-				break;
+      		if(snes_spc7110.r481x != 0x07) break;
 
-	    		snes_spc7110.r4818 = data;
-    			snes_spc7110.r4814_latch = snes_spc7110.r4815_latch = 0;
-    			break;
-    		}
+      		snes_spc7110.r4818 = data;
+      		snes_spc7110.r4814_latch = snes_spc7110.r4815_latch = 0;
+      		break;
+      	}
 
-	//=========
-	//math unit
-	//=========
+		//=========
+		//math unit
+		//=========
 
-	case 0x4820: snes_spc7110.r4820 = data; break;
-	case 0x4821: snes_spc7110.r4821 = data; break;
-	case 0x4822: snes_spc7110.r4822 = data; break;
-	case 0x4823: snes_spc7110.r4823 = data; break;
-	case 0x4824: snes_spc7110.r4824 = data; break;
-	case 0x4825:
+		case 0x4820: snes_spc7110.r4820 = data; break;
+		case 0x4821: snes_spc7110.r4821 = data; break;
+		case 0x4822: snes_spc7110.r4822 = data; break;
+		case 0x4823: snes_spc7110.r4823 = data; break;
+		case 0x4824: snes_spc7110.r4824 = data; break;
+		case 0x4825:
 		{
-	    		snes_spc7110.r4825 = data;
+      		snes_spc7110.r4825 = data;
 
-    			if(snes_spc7110.r482e & 1)
-			{
-    				//signed 16-bit x 16-bit multiplication
-    				INT16 r0 = (INT16)(snes_spc7110.r4824 + (snes_spc7110.r4825 << 8));
-    				INT16 r1 = (INT16)(snes_spc7110.r4820 + (snes_spc7110.r4821 << 8));
+      		if(snes_spc7110.r482e & 1) {
+      			//signed 16-bit x 16-bit multiplication
+      			INT16 r0 = (INT16)(snes_spc7110.r4824 + (snes_spc7110.r4825 << 8));
+      			INT16 r1 = (INT16)(snes_spc7110.r4820 + (snes_spc7110.r4821 << 8));
 
-	    			INT32 result = r0 * r1;
-	    			snes_spc7110.r4828 = result;
-	    			snes_spc7110.r4829 = result >> 8;
-	    			snes_spc7110.r482a = result >> 16;
-	    			snes_spc7110.r482b = result >> 24;
-			}
-			else
-			{
-	    			//unsigned 16-bit x 16-bit multiplication
-	    			UINT16 r0 = (UINT16)(snes_spc7110.r4824 + (snes_spc7110.r4825 << 8));
-	    			UINT16 r1 = (UINT16)(snes_spc7110.r4820 + (snes_spc7110.r4821 << 8));
+      			INT32 result = r0 * r1;
+      			snes_spc7110.r4828 = result;
+      			snes_spc7110.r4829 = result >> 8;
+      			snes_spc7110.r482a = result >> 16;
+      			snes_spc7110.r482b = result >> 24;
+			} else {
+      			//unsigned 16-bit x 16-bit multiplication
+      			UINT16 r0 = (UINT16)(snes_spc7110.r4824 + (snes_spc7110.r4825 << 8));
+      			UINT16 r1 = (UINT16)(snes_spc7110.r4820 + (snes_spc7110.r4821 << 8));
 
-	    			UINT32 result = r0 * r1;
-    				snes_spc7110.r4828 = result;
-    				snes_spc7110.r4829 = result >> 8;
-    				snes_spc7110.r482a = result >> 16;
-    				snes_spc7110.r482b = result >> 24;
+      			UINT32 result = r0 * r1;
+      			snes_spc7110.r4828 = result;
+      			snes_spc7110.r4829 = result >> 8;
+      			snes_spc7110.r482a = result >> 16;
+      			snes_spc7110.r482b = result >> 24;
 			}
 
 			snes_spc7110.r482f = 0x80;
 			break;
 		}
 
-	case 0x4826: snes_spc7110.r4826 = data; break;
-	case 0x4827:
+		case 0x4826: snes_spc7110.r4826 = data; break;
+		case 0x4827:
 		{
 			snes_spc7110.r4827 = data;
 
@@ -1502,7 +1366,7 @@ static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data
 			break;
 		}
 
-	case 0x482e:
+		case 0x482e:
 		{
 			//reset math unit
 			snes_spc7110.r4820 = snes_spc7110.r4821 = snes_spc7110.r4822 = snes_spc7110.r4823 = 0;
@@ -1514,148 +1378,33 @@ static void spc7110_mmio_write(running_machine &machine, UINT32 addr, UINT8 data
 			break;
 		}
 
-	//===================
-	//memory mapping unit
-	//===================
+		//===================
+		//memory mapping unit
+		//===================
 
-	case 0x4830: snes_spc7110.r4830 = data; break;
+		case 0x4830: snes_spc7110.r4830 = data; break;
 
-	case 0x4831:
+		case 0x4831:
 		{
 			snes_spc7110.r4831 = data;
-			snes_spc7110.dx_offset = spc7110_datarom_addr(data * 0x100000);
+			snes_spc7110.dx_offset = spc7110_datarom_addr((data & 7) * 0x100000);
 			break;
-		}
+ 		}
 
-	case 0x4832:
+		case 0x4832:
 		{
 			snes_spc7110.r4832 = data;
-			snes_spc7110.ex_offset = spc7110_datarom_addr(data * 0x100000);
+			snes_spc7110.ex_offset = spc7110_datarom_addr((data & 7) * 0x100000);
 			break;
 		}
 
-	case 0x4833:
+		case 0x4833:
 		{
 			snes_spc7110.r4833 = data;
-			snes_spc7110.fx_offset = spc7110_datarom_addr(data * 0x100000);
+			snes_spc7110.fx_offset = spc7110_datarom_addr((data & 7) * 0x100000);
 			break;
 		}
 
-	case 0x4834: snes_spc7110.r4834 = data; break;
-
-	//====================
-	//real-time clock unit
-	//====================
-
-	case 0x4840:
-		{
-			snes_spc7110.r4840 = data;
-
-			if (!(snes_spc7110.r4840 & 1))
-			{
-				//disable RTC
-				snes_spc7110.rtc_state = RTCS_Inactive;
-				spc7110_update_time(machine, 0);
-			}
-			else
-			{
-				//enable RTC
-				snes_spc7110.r4842 = 0x80;
-				snes_spc7110.rtc_state = RTCS_ModeSelect;
-			}
-		}
-		break;
-
-	case 0x4841:
-		{
-			snes_spc7110.r4841 = data;
-
-			switch (snes_spc7110.rtc_state)
-			{
-			case RTCS_ModeSelect:
-				if (data == RTCM_Linear || data == RTCM_Indexed)
-				{
-					snes_spc7110.r4842 = 0x80;
-					snes_spc7110.rtc_state = RTCS_IndexSelect;
-					snes_spc7110.rtc_mode = (RTC_Mode)data;
-					snes_spc7110.rtc_index = 0;
-				}
-				break;
-
-			case RTCS_IndexSelect:
-				snes_spc7110.r4842 = 0x80;
-				snes_spc7110.rtc_index = data & 15;
-				if (snes_spc7110.rtc_mode == RTCM_Linear)
-					snes_spc7110.rtc_state = RTCS_Write;
-				break;
-
-			case RTCS_Write:
-				snes_spc7110.r4842 = 0x80;
-
-				//control register 0
-				if (snes_spc7110.rtc_index == 13)
-				{
-					//increment second counter
-					if (data & 2)
-						spc7110_update_time(machine, 1);
-
-					//round minute counter
-					if (data & 8)
-					{
-						spc7110_update_time(machine, 0);
-
-						UINT8 second = snes_spc7110.rtc_ram[0] + snes_spc7110.rtc_ram[1] * 10;
-						//clear seconds
-						snes_spc7110.rtc_ram[0] = 0;
-						snes_spc7110.rtc_ram[1] = 0;
-
-						if (second >= 30)
-							spc7110_update_time(machine, 60);
-					}
-				}
-
-				//control register 2
-				if (snes_spc7110.rtc_index == 15)
-				{
-					//disable timer and clear second counter
-					if ((data & 1) && !(snes_spc7110.rtc_ram[15]  & 1))
-					{
-						spc7110_update_time(machine, 0);
-
-						//clear seconds
-						snes_spc7110.rtc_ram[0] = 0;
-						snes_spc7110.rtc_ram[1] = 0;
-					}
-
-					//disable timer
-					if((data & 2) && !(snes_spc7110.rtc_ram[15] & 2))
-						spc7110_update_time(machine, 0);
-				}
-
-				snes_spc7110.rtc_ram[snes_spc7110.rtc_index] = data & 15;
-				snes_spc7110.rtc_index = (snes_spc7110.rtc_index + 1) & 15;
-				break;
-			}
-		}
-		break;
+		case 0x4834: snes_spc7110.r4834 = data; break;
 	}
-}
-
-static UINT8 spc7110_bank7_read(address_space *space, UINT32 offset)
-{
-	UINT8 *ROM = space->machine().region("cart")->base();
-	UINT32 addr = offset & 0x0fffff;
-
-	switch (offset & 0xf00000)
-	{
-	case 0x100000:
-		return ROM[snes_spc7110.dx_offset + addr];
-	case 0x200000:
-		return ROM[snes_spc7110.ex_offset + addr];
-	case 0x300000:
-		return ROM[snes_spc7110.fx_offset + addr];
-	default:
-		break;
-	}
-	return snes_open_bus_r(space, 0);
 }

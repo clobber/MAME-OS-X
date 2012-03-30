@@ -37,8 +37,6 @@
 
 ***************************************************************************/
 
-#include <stdlib.h>
-
 #include "aviio.h"
 
 
@@ -177,7 +175,7 @@ struct _avi_stream
 struct _avi_file
 {
 	/* shared data */
-	osd_file *			file;					/* pointer to open file */
+	osd_file *		 	file;					/* pointer to open file */
 	int					type;					/* type of access (read/create) */
 	avi_movie_info		info;					/* movie info structure */
 	UINT8 *				tempbuffer;				/* temporary buffer */
@@ -250,15 +248,15 @@ static avi_error soundbuf_write_chunk(avi_file *file, UINT32 framenum);
 static avi_error soundbuf_flush(avi_file *file, int only_flush_full);
 
 /* RGB helpers */
-static avi_error rgb32_compress_to_rgb(avi_stream *stream, const bitmap_rgb32 &bitmap, UINT8 *data, UINT32 numbytes);
+static avi_error rgb32_compress_to_rgb(avi_stream *stream, const bitmap_t *bitmap, UINT8 *data, UINT32 numbytes);
 
 /* YUY helpers */
-static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_yuy16 &bitmap);
-static avi_error yuy16_compress_to_yuy(avi_stream *stream, const bitmap_yuy16 &bitmap, UINT8 *data, UINT32 numbytes);
+static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_t *bitmap);
+static avi_error yuy16_compress_to_yuy(avi_stream *stream, const bitmap_t *bitmap, UINT8 *data, UINT32 numbytes);
 
 /* HuffYUV helpers */
 static avi_error huffyuv_extract_tables(avi_stream *stream, const UINT8 *chunkdata, UINT32 size);
-static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_yuy16 &bitmap);
+static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_t *bitmap);
 
 /* debugging */
 static void printf_chunk_recursive(avi_file *file, avi_chunk *chunk, int indent);
@@ -788,12 +786,12 @@ UINT32 avi_first_sample_in_frame(avi_file *file, UINT32 framenum)
 
 
 /*-------------------------------------------------
-    avi_read_video_frame - read video data
+    avi_read_video_frame_yuy16 - read video data
     for a particular frame from the AVI file,
     converting to YUY16 format
 -------------------------------------------------*/
 
-avi_error avi_read_video_frame(avi_file *file, UINT32 framenum, bitmap_yuy16 &bitmap)
+avi_error avi_read_video_frame_yuy16(avi_file *file, UINT32 framenum, bitmap_t *bitmap)
 {
 	avi_error avierr = AVIERR_NONE;
 	UINT32 bytes_read, chunkid;
@@ -814,7 +812,7 @@ avi_error avi_read_video_frame(avi_file *file, UINT32 framenum, bitmap_yuy16 &bi
 		return AVIERR_INVALID_FRAME;
 
 	/* we only support YUY-style bitmaps (16bpp) */
-	if (bitmap.width() < stream->width || bitmap.height() < stream->height)
+	if (bitmap->format != BITMAP_FORMAT_YUY16 || bitmap->width < stream->width || bitmap->height < stream->height)
 		return AVIERR_INVALID_BITMAP;
 
 	/* expand the tempbuffer to hold the data if necessary */
@@ -957,7 +955,7 @@ avi_error avi_read_sound_samples(avi_file *file, int channel, UINT32 firstsample
     of video in YUY16 format
 -------------------------------------------------*/
 
-avi_error avi_append_video_frame(avi_file *file, bitmap_yuy16 &bitmap)
+avi_error avi_append_video_frame_yuy16(avi_file *file, const bitmap_t *bitmap)
 {
 	avi_stream *stream = get_video_stream(file);
 	avi_error avierr;
@@ -966,6 +964,10 @@ avi_error avi_append_video_frame(avi_file *file, bitmap_yuy16 &bitmap)
 	/* validate our ability to handle the data */
 	if (stream->format != FORMAT_UYVY && stream->format != FORMAT_VYUY && stream->format != FORMAT_YUY2 && stream->format != FORMAT_HFYU)
 		return AVIERR_UNSUPPORTED_VIDEO_FORMAT;
+
+	/* double check bitmap format */
+	if (bitmap->format != BITMAP_FORMAT_YUY16)
+		return AVIERR_INVALID_BITMAP;
 
 	/* write out any sound data first */
 	avierr = soundbuf_write_chunk(file, stream->chunks);
@@ -999,7 +1001,7 @@ avi_error avi_append_video_frame(avi_file *file, bitmap_yuy16 &bitmap)
     of video in RGB32 format
 -------------------------------------------------*/
 
-avi_error avi_append_video_frame(avi_file *file, bitmap_rgb32 &bitmap)
+avi_error avi_append_video_frame_rgb32(avi_file *file, const bitmap_t *bitmap)
 {
 	avi_stream *stream = get_video_stream(file);
 	avi_error avierr;
@@ -1012,6 +1014,10 @@ avi_error avi_append_video_frame(avi_file *file, bitmap_rgb32 &bitmap)
 	/* depth must be 24 */
 	if (stream->depth != 24)
 		return AVIERR_UNSUPPORTED_VIDEO_FORMAT;
+
+	/* double check bitmap format */
+	if (bitmap->format != BITMAP_FORMAT_RGB32)
+		return AVIERR_INVALID_BITMAP;
 
 	/* write out any sound data first */
 	avierr = soundbuf_write_chunk(file, stream->chunks);
@@ -1341,7 +1347,7 @@ error:
 
 static avi_error extract_movie_info(avi_file *file)
 {
-	//avi_stream *audiostream;
+	avi_stream *audiostream;
 	avi_stream *stream;
 
 	/* get the video stream */
@@ -1372,7 +1378,7 @@ static avi_error extract_movie_info(avi_file *file)
 	}
 
 	/* now make sure all other audio streams are valid */
-	//audiostream = stream;
+	audiostream = stream;
 	while (1)
 	{
 		/* get the stream info */
@@ -1505,10 +1511,10 @@ error:
 
 static avi_error parse_indx_chunk(avi_file *file, avi_stream *stream, avi_chunk *strf)
 {
-	UINT32 entries, entry;
+	UINT32 entries, entry, id;
 	UINT8 *chunkdata = NULL;
 	UINT16 longs_per_entry;
-	UINT8 type;
+	UINT8 subtype, type;
 	UINT64 baseoffset;
 	avi_error avierr;
 
@@ -1519,10 +1525,10 @@ static avi_error parse_indx_chunk(avi_file *file, avi_stream *stream, avi_chunk 
 
 	/* extract the data */
 	longs_per_entry = fetch_16bits(&chunkdata[0]);
-	//subtype = chunkdata[2];
+	subtype = chunkdata[2];
 	type = chunkdata[3];
 	entries = fetch_32bits(&chunkdata[4]);
-	//id = fetch_32bits(&chunkdata[8]);
+	id = fetch_32bits(&chunkdata[8]);
 	baseoffset = fetch_64bits(&chunkdata[12]);
 
 	/* if this is a superindex, loop over entries and call ourselves recursively */
@@ -1950,7 +1956,7 @@ static avi_error write_strh_chunk(avi_file *file, avi_stream *stream, int initia
 	/* video-stream specific data */
 	if (stream->type == STREAMTYPE_VIDS)
 	{
-		put_32bits(&buffer[4],							/* fccHandler */
+		put_32bits(&buffer[4], 							/* fccHandler */
 					(stream->format == FORMAT_HFYU) ? HANDLER_HFYU : HANDLER_DIB);
 		put_32bits(&buffer[36],							/* dwSuggestedBufferSize */
 					stream->width * stream->height * 4);
@@ -2011,7 +2017,7 @@ static avi_error write_strf_chunk(avi_file *file, avi_stream *stream)
 		put_16bits(&buffer[0], 1);						/* wFormatTag */
 		put_16bits(&buffer[2], stream->channels);		/* nChannels */
 		put_32bits(&buffer[4], stream->samplerate);		/* nSamplesPerSec */
-		put_32bits(&buffer[8],							/* nAvgBytesPerSec */
+		put_32bits(&buffer[8], 							/* nAvgBytesPerSec */
 					stream->samplerate * stream->channels * (stream->samplebits / 8));
 		put_16bits(&buffer[12],							/* nBlockAlign */
 					stream->channels * (stream->samplebits / 8));
@@ -2300,9 +2306,7 @@ static avi_error soundbuf_flush(avi_file *file, int only_flush_full)
 			return avierr;
 
 		/* add up the samples */
-		if (channelsamples > chunksamples)
-			file->info.audio_numsamples = stream->samples += chunksamples;
-		else if (channelsamples > 0)
+		if (channelsamples > 0)
 			file->info.audio_numsamples = stream->samples += channelsamples;
 
 		/* advance past those */
@@ -2335,17 +2339,17 @@ static avi_error soundbuf_flush(avi_file *file, int only_flush_full)
     bitmap to an RGB encoded frame
 -------------------------------------------------*/
 
-static avi_error rgb32_compress_to_rgb(avi_stream *stream, const bitmap_rgb32 &bitmap, UINT8 *data, UINT32 numbytes)
+static avi_error rgb32_compress_to_rgb(avi_stream *stream, const bitmap_t *bitmap, UINT8 *data, UINT32 numbytes)
 {
-	int height = MIN(stream->height, bitmap.height());
-	int width = MIN(stream->width, bitmap.width());
+	int height = MIN(stream->height, bitmap->height);
+	int width = MIN(stream->width, bitmap->width);
 	UINT8 *dataend = data + numbytes;
 	int x, y;
 
 	/* compressed video */
 	for (y = 0; y < height; y++)
 	{
-		const UINT32 *source = &bitmap.pix32(y);
+		const UINT32 *source = (UINT32 *)bitmap->base + y * bitmap->rowpixels;
 		UINT8 *dest = data + (stream->height - 1 - y) * stream->width * 3;
 
 		for (x = 0; x < width && dest < dataend; x++)
@@ -2386,7 +2390,7 @@ static avi_error rgb32_compress_to_rgb(avi_stream *stream, const bitmap_rgb32 &b
     encoded frame to a YUY16 bitmap
 -------------------------------------------------*/
 
-static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_yuy16 &bitmap)
+static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_t *bitmap)
 {
 	const UINT16 *dataend = (const UINT16 *)(data + numbytes);
 	int x, y;
@@ -2395,7 +2399,7 @@ static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, 
 	for (y = 0; y < stream->height; y++)
 	{
 		const UINT16 *source = (const UINT16 *)data + y * stream->width;
-		UINT16 *dest = &bitmap.pix16(y);
+		UINT16 *dest = (UINT16 *)bitmap->base + y * bitmap->rowpixels;
 
 		/* switch off the compression */
 		switch (stream->format)
@@ -2425,7 +2429,7 @@ static avi_error yuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, 
     bitmap to a YUV encoded frame
 -------------------------------------------------*/
 
-static avi_error yuy16_compress_to_yuy(avi_stream *stream, const bitmap_yuy16 &bitmap, UINT8 *data, UINT32 numbytes)
+static avi_error yuy16_compress_to_yuy(avi_stream *stream, const bitmap_t *bitmap, UINT8 *data, UINT32 numbytes)
 {
 	const UINT16 *dataend = (const UINT16 *)(data + numbytes);
 	int x, y;
@@ -2433,7 +2437,7 @@ static avi_error yuy16_compress_to_yuy(avi_stream *stream, const bitmap_yuy16 &b
 	/* compressed video */
 	for (y = 0; y < stream->height; y++)
 	{
-		const UINT16 *source = &bitmap.pix16(y);
+		const UINT16 *source = (UINT16 *)bitmap->base + y * bitmap->rowpixels;
 		UINT16 *dest = (UINT16 *)data + y * stream->width;
 
 		/* switch off the compression */
@@ -2603,7 +2607,7 @@ error:
     HuffYUV-encoded frame to a YUY16 bitmap
 -------------------------------------------------*/
 
-static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_yuy16 &bitmap)
+static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *data, UINT32 numbytes, bitmap_t *bitmap)
 {
 	huffyuv_data *huffyuv = stream->huffyuv;
 	int prevlines = (stream->height > 288) ? 2 : 1;
@@ -2617,7 +2621,7 @@ static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *da
 	/* compressed video */
 	for (y = 0; y < stream->height; y++)
 	{
-		UINT16 *dest = &bitmap.pix16(y);
+		UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
 
 		/* handle the first four bytes independently */
 		x = 0;
@@ -2705,8 +2709,8 @@ static avi_error huffyuv_decompress_to_yuy16(avi_stream *stream, const UINT8 *da
 	lastprevy = lastprevcb = lastprevcr = 0;
 	for (y = 0; y < stream->height; y++)
 	{
-		UINT16 *prevrow = &bitmap.pix16(y - prevlines);
-		UINT16 *dest = &bitmap.pix16(y);
+		UINT16 *prevrow = BITMAP_ADDR16(bitmap, y - prevlines, 0);
+		UINT16 *dest = BITMAP_ADDR16(bitmap, y, 0);
 
 		/* handle the first four bytes independently */
 		x = 0;

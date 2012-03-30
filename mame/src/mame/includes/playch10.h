@@ -1,53 +1,3 @@
-typedef struct
-{
-	int writable;	// 1 for RAM, 0 for ROM
-	UINT8* chr;		// direct access to the memory
-} chr_bank;
-
-class playch10_state : public driver_device
-{
-public:
-	playch10_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_videoram;
-	UINT8 *m_ram_8w;
-	UINT8 *m_work_ram;
-	int m_up_8w;
-	UINT8 *m_timedata;
-	int m_pc10_nmi_enable;
-	int m_pc10_dog_di;
-	int m_pc10_sdcs;
-	int m_pc10_dispmask;
-	int m_pc10_int_detect;
-	int m_pc10_game_mode;
-	int m_pc10_dispmask_old;
-	int m_pc10_gun_controller;
-	int m_cart_sel;
-	int m_cntrl_mask;
-	int m_input_latch[2];
-	int m_mirroring;
-	int m_MMC2_bank[4];
-	int m_MMC2_bank_latch[2];
-	UINT8* m_vrom;
-	UINT8* m_vram;
-	UINT8* m_nametable[4];
-	UINT8* m_nt_ram;
-	chr_bank m_chr_page[8];
-	int m_mmc1_shiftreg;
-	int m_mmc1_shiftcount;
-	int m_mmc1_rom_mask;
-	int m_gboard_scanline_counter;
-	int m_gboard_scanline_latch;
-	int m_gboard_banks[2];
-	int m_gboard_4screen;
-	int m_gboard_last_bank;
-	int m_gboard_command;
-	int m_pc10_bios;
-	tilemap_t *m_bg_tilemap;
-};
-
-
 /*----------- defined in machine/playch10.c -----------*/
 
 MACHINE_RESET( pc10 );
@@ -87,6 +37,13 @@ WRITE8_HANDLER( pc10_prot_w );
 WRITE8_HANDLER( pc10_CARTSEL_w );
 WRITE8_HANDLER( pc10_in0_w );
 
+extern int pc10_nmi_enable;
+extern int pc10_dog_di;
+extern int pc10_sdcs;			/* ShareD Chip Select */
+extern int pc10_dispmask;		/* Display Mask */
+extern int pc10_int_detect;
+extern int pc10_game_mode;
+extern int pc10_dispmask_old;
 
 
 /*----------- defined in video/playch10.c -----------*/
@@ -98,5 +55,4 @@ WRITE8_HANDLER( playch10_videoram_w );
 PALETTE_INIT( playch10 );
 VIDEO_START( playch10 );
 VIDEO_START( playch10_hboard );
-SCREEN_UPDATE_IND16( playch10_top );
-SCREEN_UPDATE_IND16( playch10_bottom );
+VIDEO_UPDATE( playch10 );

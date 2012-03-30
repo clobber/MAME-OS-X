@@ -7,12 +7,14 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/z80/z80.h"
 #include "cpu/konami/konami.h"
-#include "video/konicdev.h"
+#include "video/konamiic.h"
 #include "includes/ajax.h"
+
+static int firq_enable;
 
 /*  ajax_bankswitch_w:
     Handled by the LS273 Octal +ve edge trigger D-type Flip-flop with Reset at H11:
@@ -33,23 +35,22 @@
 
 static WRITE8_HANDLER( ajax_bankswitch_w )
 {
-	ajax_state *state = space->machine().driver_data<ajax_state>();
-	int bank = 0;
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	int bankaddress = 0;
 
 	/* rom select */
-	if (!(data & 0x80))
-		bank += 4;
+	if (!(data & 0x80))	bankaddress += 0x8000;
 
 	/* coin counters */
-	coin_counter_w(space->machine(), 0, data & 0x20);
-	coin_counter_w(space->machine(), 1, data & 0x40);
+	coin_counter_w(0,data & 0x20);
+	coin_counter_w(1,data & 0x40);
 
 	/* priority */
-	state->m_priority = data & 0x08;
+	ajax_priority = data & 0x08;
 
 	/* bank # (ROMS N11 and N12) */
-	bank += (data & 0x07);
-	memory_set_bank(space->machine(), "bank2", bank);
+	bankaddress += 0x10000 + (data & 0x07)*0x2000;
+	memory_set_bankptr(space->machine, 2,&RAM[bankaddress]);
 }
 
 /*  ajax_lamps_w:
@@ -78,14 +79,14 @@ static WRITE8_HANDLER( ajax_bankswitch_w )
 
 static WRITE8_HANDLER( ajax_lamps_w )
 {
-	set_led_status(space->machine(), 1, data & 0x02);	/* super weapon lamp */
-	set_led_status(space->machine(), 2, data & 0x04);	/* power up lamps */
-	set_led_status(space->machine(), 5, data & 0x04);	/* power up lamps */
-	set_led_status(space->machine(), 0, data & 0x20);	/* start lamp */
-	set_led_status(space->machine(), 3, data & 0x40);	/* game over lamps */
-	set_led_status(space->machine(), 6, data & 0x40);	/* game over lamps */
-	set_led_status(space->machine(), 4, data & 0x80);	/* game over lamps */
-	set_led_status(space->machine(), 7, data & 0x80);	/* game over lamps */
+	set_led_status(1,data & 0x02);	/* super weapon lamp */
+	set_led_status(2,data & 0x04);	/* power up lamps */
+	set_led_status(5,data & 0x04);	/* power up lamps */
+	set_led_status(0,data & 0x20);	/* start lamp */
+	set_led_status(3,data & 0x40);	/* game over lamps */
+	set_led_status(6,data & 0x40);	/* game over lamps */
+	set_led_status(4,data & 0x80);	/* game over lamps */
+	set_led_status(7,data & 0x80);	/* game over lamps */
 }
 
 /*  ajax_ls138_f10:
@@ -113,21 +114,21 @@ READ8_HANDLER( ajax_ls138_f10_r )
 	switch ((offset & 0x01c0) >> 6)
 	{
 		case 0x00:	/* ??? */
-			data = space->machine().rand();
+			data = mame_rand(space->machine);
 			break;
 		case 0x04:	/* 2P inputs */
-			data = input_port_read(space->machine(), "P2");
+			data = input_port_read(space->machine, "P2");
 			break;
 		case 0x06:	/* 1P inputs + DIPSW #1 & #2 */
 			index = offset & 0x01;
-			data = input_port_read(space->machine(), (offset & 0x02) ? portnames[2 + index] : portnames[index]);
+			data = input_port_read(space->machine, (offset & 0x02) ? portnames[2 + index] : portnames[index]);
 			break;
 		case 0x07:	/* DIPSW #3 */
-			data = input_port_read(space->machine(), "DSW3");
+			data = input_port_read(space->machine, "DSW3");
 			break;
 
 		default:
-			logerror("%04x: (ls138_f10) read from an unknown address %02x\n",cpu_get_pc(&space->device()), offset);
+			logerror("%04x: (ls138_f10) read from an unknown address %02x\n",cpu_get_pc(space->cpu), offset);
 	}
 
 	return data;
@@ -135,23 +136,20 @@ READ8_HANDLER( ajax_ls138_f10_r )
 
 WRITE8_HANDLER( ajax_ls138_f10_w )
 {
-	ajax_state *state = space->machine().driver_data<ajax_state>();
-
-	switch ((offset & 0x01c0) >> 6)
-	{
+	switch ((offset & 0x01c0) >> 6){
 		case 0x00:	/* NSFIRQ + AFR */
 			if (offset)
 				watchdog_reset_w(space, 0, data);
 			else{
-				if (state->m_firq_enable)	/* Cause interrupt on slave CPU */
-					device_set_input_line(state->m_subcpu, M6809_FIRQ_LINE, HOLD_LINE);
+				if (firq_enable)	/* Cause interrupt on slave CPU */
+					cputag_set_input_line(space->machine, "sub", M6809_FIRQ_LINE, HOLD_LINE);
 			}
 			break;
 		case 0x01:	/* Cause interrupt on audio CPU */
-			device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
+			cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
 			break;
 		case 0x02:	/* Sound command number */
-			soundlatch_w(space, offset, data);
+			soundlatch_w(space,offset,data);
 			break;
 		case 0x03:	/* Bankswitch + coin counters + priority*/
 			ajax_bankswitch_w(space, 0, data);
@@ -161,7 +159,7 @@ WRITE8_HANDLER( ajax_ls138_f10_w )
 			break;
 
 		default:
-			logerror("%04x: (ls138_f10) write %02x to an unknown address %02x\n", cpu_get_pc(&space->device()), data, offset);
+			logerror("%04x: (ls138_f10) write %02x to an unknown address %02x\n",cpu_get_pc(space->cpu), data, offset);
 	}
 }
 
@@ -182,58 +180,37 @@ WRITE8_HANDLER( ajax_ls138_f10_w )
 
 WRITE8_HANDLER( ajax_bankswitch_2_w )
 {
-	ajax_state *state = space->machine().driver_data<ajax_state>();
+	UINT8 *RAM = memory_region(space->machine, "sub");
+	int bankaddress;
 
 	/* enable char ROM reading through the video RAM */
-	k052109_set_rmrd_line(state->m_k052109, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
+	K052109_set_RMRD_line((data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* bit 5 enables 051316 wraparound */
-	k051316_wraparound_enable(state->m_k051316, data & 0x20);
+	K051316_wraparound_enable(0, data & 0x20);
 
 	/* FIRQ control */
-	state->m_firq_enable = data & 0x10;
+	firq_enable = data & 0x10;
 
 	/* bank # (ROMS G16 and I16) */
-	memory_set_bank(space->machine(), "bank1", data & 0x0f);
+	bankaddress = 0x10000 + (data & 0x0f)*0x2000;
+	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
 }
 
 MACHINE_START( ajax )
 {
-	ajax_state *state = machine.driver_data<ajax_state>();
-	UINT8 *MAIN = machine.region("maincpu")->base();
-	UINT8 *SUB  = machine.region("sub")->base();
-
-	memory_configure_bank(machine, "bank1", 0,  9,  &SUB[0x10000], 0x2000);
-	memory_configure_bank(machine, "bank2", 0, 12, &MAIN[0x10000], 0x2000);
-
-	memory_set_bank(machine, "bank1", 0);
-	memory_set_bank(machine, "bank2", 0);
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_subcpu = machine.device("sub");
-	state->m_k007232_1 = machine.device("k007232_1");
-	state->m_k007232_2 = machine.device("k007232_2");
-	state->m_k052109 = machine.device("k052109");
-	state->m_k051960 = machine.device("k051960");
-	state->m_k051316 = machine.device("k051316");
-
-	state->save_item(NAME(state->m_priority));
-	state->save_item(NAME(state->m_firq_enable));
+    state_save_register_global(machine, firq_enable);
 }
 
 MACHINE_RESET( ajax )
 {
-	ajax_state *state = machine.driver_data<ajax_state>();
-
-	state->m_priority = 0;
-	state->m_firq_enable = 0;
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	ajax_bankswitch_w(space, 0, 0);
+	ajax_bankswitch_2_w(space, 0, 0);
 }
 
 INTERRUPT_GEN( ajax_interrupt )
 {
-	ajax_state *state = device->machine().driver_data<ajax_state>();
-
-	if (k051960_is_irq_enabled(state->m_k051960))
-		device_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
+	if (K051960_is_IRQ_enabled())
+		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }

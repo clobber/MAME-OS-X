@@ -4,6 +4,7 @@
 
 /*#define BIGCASE*/
 
+#include "cpuintrf.h"
 
 typedef UINT8 BOOLEAN;
 

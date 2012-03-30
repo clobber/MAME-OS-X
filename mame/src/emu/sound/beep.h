@@ -3,14 +3,11 @@
 #ifndef __BEEP_H__
 #define __BEEP_H__
 
-#include "devlegcy.h"
+void beep_set_state(const device_config *device, int on);
+void beep_set_frequency(const device_config *device, int frequency);
+void beep_set_volume(const device_config *device, int volume);
 
-#define BEEPER_TAG		"beeper"
-
-void beep_set_state(device_t *device, int on);
-void beep_set_frequency(device_t *device, int frequency);
-void beep_set_volume(device_t *device, int volume);
-
-DECLARE_LEGACY_SOUND_DEVICE(BEEP, beep);
+DEVICE_GET_INFO( beep );
+#define SOUND_BEEP DEVICE_GET_INFO_NAME( beep )
 
 #endif /* __BEEP_H__ */

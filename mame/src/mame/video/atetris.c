@@ -4,8 +4,11 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/atetris.h"
+#include "driver.h"
+#include "atetris.h"
+
+
+static tilemap *bg_tilemap;
 
 
 /*************************************
@@ -16,8 +19,6 @@
 
 static TILE_GET_INFO( get_tile_info )
 {
-	atetris_state *state = machine.driver_data<atetris_state>();
-	UINT8 *videoram = state->m_videoram;
 	int code = videoram[tile_index * 2] | ((videoram[tile_index * 2 + 1] & 7) << 8);
 	int color = (videoram[tile_index * 2 + 1] & 0xf0) >> 4;
 
@@ -34,11 +35,8 @@ static TILE_GET_INFO( get_tile_info )
 
 WRITE8_HANDLER( atetris_videoram_w )
 {
-	atetris_state *state = space->machine().driver_data<atetris_state>();
-	UINT8 *videoram = state->m_videoram;
-
 	videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
+	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
 }
 
 
@@ -51,9 +49,7 @@ WRITE8_HANDLER( atetris_videoram_w )
 
 VIDEO_START( atetris )
 {
-	atetris_state *state = machine.driver_data<atetris_state>();
-
-	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows,  8,8, 64,32);
 }
 
 
@@ -64,10 +60,8 @@ VIDEO_START( atetris )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( atetris )
+VIDEO_UPDATE( atetris )
 {
-	atetris_state *state = screen.machine().driver_data<atetris_state>();
-
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0,0);
 	return 0;
 }

@@ -20,49 +20,35 @@
 #define MASTER_CLOCK	20000000
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
 #include "sound/sn76496.h"
-#include "machine/ldv1000.h"
+#include "machine/laserdsc.h"
 #include "video/resnet.h"
 
-class superdq_state : public driver_device
-{
-public:
-	superdq_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		  m_laserdisc(*this, "laserdisc") { }
+static const device_config *laserdisc;
+static UINT8 superdq_ld_in_latch;
+static UINT8 superdq_ld_out_latch;
 
-	required_device<pioneer_ldv1000_device> m_laserdisc;
-	UINT8 m_ld_in_latch;
-	UINT8 m_ld_out_latch;
-
-	UINT8 *m_videoram;
-	tilemap_t *m_tilemap;
-	int m_color_bank;
-};
+static tilemap *superdq_tilemap;
+static int superdq_color_bank = 0;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	superdq_state *state = machine.driver_data<superdq_state>();
-	int tile = state->m_videoram[tile_index];
+	int tile = videoram[tile_index];
 
-	SET_TILE_INFO(0, tile, state->m_color_bank, 0);
+	SET_TILE_INFO(0,tile,superdq_color_bank,0);
 }
 
 static VIDEO_START( superdq )
 {
-	superdq_state *state = machine.driver_data<superdq_state>();
-
-	state->m_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	superdq_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static SCREEN_UPDATE_IND16( superdq )
+static VIDEO_UPDATE( superdq )
 {
-	superdq_state *state = screen.machine().driver_data<superdq_state>();
-
-	state->m_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,superdq_tilemap,0,0);
 
 	return 0;
 }
@@ -88,7 +74,7 @@ static PALETTE_INIT( superdq )
 			2,	&resistances[1], bweights, 220, 0);
 
 	/* initialize the palette with these colors */
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine->config->total_colors; i++)
 	{
 		int bit0, bit1, bit2;
 		int r, g, b;
@@ -116,58 +102,51 @@ static PALETTE_INIT( superdq )
 
 static MACHINE_RESET( superdq )
 {
-	superdq_state *state = machine.driver_data<superdq_state>();
-
-	state->m_ld_in_latch = 0;
-	state->m_ld_out_latch = 0xff;
-	state->m_color_bank = 0;
+	superdq_ld_in_latch = 0;
+	superdq_ld_out_latch = 0xff;
+	superdq_color_bank = 0;
 }
 
 static INTERRUPT_GEN( superdq_vblank )
 {
-	superdq_state *state = device->machine().driver_data<superdq_state>();
-
 	/* status is read when the STATUS line from the laserdisc
        toggles (600usec after the vblank). We could set up a
        timer to do that, but this works as well */
-	state->m_ld_in_latch = state->m_laserdisc->status_r();
+	superdq_ld_in_latch = laserdisc_data_r(laserdisc);
 
 	/* command is written when the COMMAND line from the laserdisc
        toggles (680usec after the vblank). We could set up a
        timer to do that, but this works as well */
-	state->m_laserdisc->data_w(state->m_ld_out_latch);
-	device_set_input_line(device, 0, ASSERT_LINE);
+	laserdisc_data_w(laserdisc, superdq_ld_out_latch);
+	cpu_set_input_line(device, 0, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( superdq_videoram_w )
 {
-	superdq_state *state = space->machine().driver_data<superdq_state>();
-
-	state->m_videoram[offset] = data;
-	state->m_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(superdq_tilemap,offset);
 }
 
 static WRITE8_HANDLER( superdq_io_w )
 {
-	superdq_state *state = space->machine().driver_data<superdq_state>();
 	int 			i;
 	static const UINT8 black_color_entries[] = {7,15,16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
 	if ( data & 0x40 ) /* bit 6 = irqack */
-		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 
-	coin_counter_w( space->machine(), 0, data & 0x08 );
-	coin_counter_w( space->machine(), 1, data & 0x04 );
+	coin_counter_w( 0, data & 0x08 );
+	coin_counter_w( 1, data & 0x04 );
 
-	state->m_color_bank = ( data & 2 ) ? 1 : 0;
+	superdq_color_bank = ( data & 2 ) ? 1 : 0;
 
 	for( i = 0; i < ARRAY_LENGTH( black_color_entries ); i++ )
 	{
 		int index = black_color_entries[i];
 		if (data & 0x80)
-			palette_set_color(space->machine(), index, palette_get_color(space->machine(), index) & MAKE_ARGB(0,255,255,255));
+			palette_set_color(space->machine, index, palette_get_color(space->machine, index) & MAKE_ARGB(0,255,255,255));
 		else
-			palette_set_color(space->machine(), index, palette_get_color(space->machine(), index) | MAKE_ARGB(255,0,0,0));
+			palette_set_color(space->machine, index, palette_get_color(space->machine, index) | MAKE_ARGB(255,0,0,0));
 	}
 
 	/*
@@ -179,16 +158,12 @@ static WRITE8_HANDLER( superdq_io_w )
 
 static READ8_HANDLER( superdq_ld_r )
 {
-	superdq_state *state = space->machine().driver_data<superdq_state>();
-
-	return state->m_ld_in_latch;
+	return superdq_ld_in_latch;
 }
 
 static WRITE8_HANDLER( superdq_ld_w )
 {
-	superdq_state *state = space->machine().driver_data<superdq_state>();
-
-	state->m_ld_out_latch = data;
+	superdq_ld_out_latch = data;
 }
 
 
@@ -199,19 +174,19 @@ static WRITE8_HANDLER( superdq_ld_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( superdq_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( superdq_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
-	AM_RANGE(0x5c00, 0x5fff) AM_RAM_WRITE(superdq_videoram_w) AM_BASE_MEMBER(superdq_state,m_videoram)
+	AM_RANGE(0x5c00, 0x5fff) AM_RAM_WRITE(superdq_videoram_w) AM_BASE(&videoram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( superdq_io, AS_IO, 8 )
+static ADDRESS_MAP_START( superdq_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0") AM_WRITE(superdq_ld_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("DSW1")
 	AM_RANGE(0x03, 0x03) AM_READ_PORT("DSW2")
-	AM_RANGE(0x04, 0x04) AM_READ(superdq_ld_r) AM_DEVWRITE("snsnd", sn76496_w)
+	AM_RANGE(0x04, 0x04) AM_READ(superdq_ld_r) AM_DEVWRITE("sn", sn76496_w)
 	AM_RANGE(0x08, 0x08) AM_WRITE(superdq_io_w)
 	AM_RANGE(0x0c, 0x0d) AM_NOP /* HD46505S */
 ADDRESS_MAP_END
@@ -317,42 +292,43 @@ GFXDECODE_END
 
 static MACHINE_START( superdq )
 {
+	laserdisc = devtag_get_device(machine, "laserdisc");
 }
 
 
-static MACHINE_CONFIG_START( superdq, superdq_state )
+static MACHINE_DRIVER_START( superdq )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/8)
-	MCFG_CPU_PROGRAM_MAP(superdq_map)
-	MCFG_CPU_IO_MAP(superdq_io)
-	MCFG_CPU_VBLANK_INT("screen", superdq_vblank)
+	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/8)
+	MDRV_CPU_PROGRAM_MAP(superdq_map)
+	MDRV_CPU_IO_MAP(superdq_io)
+	MDRV_CPU_VBLANK_INT("screen", superdq_vblank)
 
-	MCFG_MACHINE_START(superdq)
-	MCFG_MACHINE_RESET(superdq)
+	MDRV_MACHINE_START(superdq)
+	MDRV_MACHINE_RESET(superdq)
 
-	MCFG_LASERDISC_LDV1000_ADD("laserdisc")
-	MCFG_LASERDISC_OVERLAY_STATIC(256, 256, superdq)
+	MDRV_LASERDISC_ADD("laserdisc", PIONEER_LDV1000, "screen", "ldsound")
+	MDRV_LASERDISC_OVERLAY(superdq, 256, 256, BITMAP_FORMAT_INDEXED16)
 
 	/* video hardware */
-	MCFG_LASERDISC_SCREEN_ADD_NTSC("screen", "laserdisc")
+	MDRV_LASERDISC_SCREEN_ADD_NTSC("screen", BITMAP_FORMAT_INDEXED16)
 
-	MCFG_GFXDECODE(superdq)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(superdq)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_PALETTE_INIT(superdq)
-	MCFG_VIDEO_START(superdq)
+	MDRV_PALETTE_INIT(superdq)
+	MDRV_VIDEO_START(superdq)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("snsnd", SN76496, MASTER_CLOCK/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.8)
+	MDRV_SOUND_ADD("sn", SN76496, MASTER_CLOCK/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.8)
 
-	MCFG_SOUND_MODIFY("laserdisc")
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 

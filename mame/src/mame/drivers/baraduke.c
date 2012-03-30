@@ -100,50 +100,63 @@ TODO:
 
 DIP locations verified for:
 --------------------------
-- baraduke (manual JP)
-- metrocrs (manual US, JP)
+- metrocrs (manual)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/namco.h"
-#include "includes/baraduke.h"
 
+extern UINT8 *baraduke_textram, *baraduke_videoram, *baraduke_spriteram;
+
+/* from video/baraduke.c */
+VIDEO_START( baraduke );
+VIDEO_UPDATE( baraduke );
+VIDEO_EOF( baraduke );
+READ8_HANDLER( baraduke_videoram_r );
+WRITE8_HANDLER( baraduke_videoram_w );
+READ8_HANDLER( baraduke_textram_r );
+WRITE8_HANDLER( baraduke_textram_w );
+WRITE8_HANDLER( baraduke_scroll0_w );
+WRITE8_HANDLER( baraduke_scroll1_w );
+READ8_HANDLER( baraduke_spriteram_r );
+WRITE8_HANDLER( baraduke_spriteram_w );
+PALETTE_INIT( baraduke );
+
+static int inputport_selected;
 
 static WRITE8_HANDLER( inputport_select_w )
 {
-	baraduke_state *state = space->machine().driver_data<baraduke_state>();
 	if ((data & 0xe0) == 0x60)
-		state->m_inputport_selected = data & 0x07;
+		inputport_selected = data & 0x07;
 	else if ((data & 0xe0) == 0xc0)
 	{
-		coin_lockout_global_w(space->machine(), ~data & 1);
-		coin_counter_w(space->machine(), 0,data & 2);
-		coin_counter_w(space->machine(), 1,data & 4);
+		coin_lockout_global_w(~data & 1);
+		coin_counter_w(0,data & 2);
+		coin_counter_w(1,data & 4);
 	}
 }
 
 static READ8_HANDLER( inputport_r )
 {
-	baraduke_state *state = space->machine().driver_data<baraduke_state>();
-	switch (state->m_inputport_selected)
+	switch (inputport_selected)
 	{
 		case 0x00:	/* DSW A (bits 0-4) */
-			return (input_port_read(space->machine(), "DSWA") & 0xf8) >> 3;
+			return (input_port_read(space->machine, "DSWA") & 0xf8) >> 3;
 		case 0x01:	/* DSW A (bits 5-7), DSW B (bits 0-1) */
-			return ((input_port_read(space->machine(), "DSWA") & 0x07) << 2) | ((input_port_read(space->machine(), "DSWB") & 0xc0) >> 6);
+			return ((input_port_read(space->machine, "DSWA") & 0x07) << 2) | ((input_port_read(space->machine, "DSWB") & 0xc0) >> 6);
 		case 0x02:	/* DSW B (bits 2-6) */
-			return (input_port_read(space->machine(), "DSWB") & 0x3e) >> 1;
+			return (input_port_read(space->machine, "DSWB") & 0x3e) >> 1;
 		case 0x03:	/* DSW B (bit 7), DSW C (bits 0-3) */
-			return ((input_port_read(space->machine(), "DSWB") & 0x01) << 4) | (input_port_read(space->machine(), "EDGE") & 0x0f);
+			return ((input_port_read(space->machine, "DSWB") & 0x01) << 4) | (input_port_read(space->machine, "EDGE") & 0x0f);
 		case 0x04:	/* coins, start */
-			return input_port_read(space->machine(), "IN0");
+			return input_port_read(space->machine, "IN0");
 		case 0x05:	/* 2P controls */
-			return input_port_read(space->machine(), "IN2");
+			return input_port_read(space->machine, "IN2");
 		case 0x06:	/* 1P controls */
-			return input_port_read(space->machine(), "IN1");
+			return input_port_read(space->machine, "IN1");
 		default:
 			return 0xff;
 	}
@@ -151,22 +164,22 @@ static READ8_HANDLER( inputport_r )
 
 static WRITE8_HANDLER( baraduke_lamps_w )
 {
-	set_led_status(space->machine(), 0,data & 0x08);
-	set_led_status(space->machine(), 1,data & 0x10);
+	set_led_status(0,data & 0x08);
+	set_led_status(1,data & 0x10);
 }
 
 static WRITE8_HANDLER( baraduke_irq_ack_w )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 
 
-static ADDRESS_MAP_START( baraduke_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(baraduke_spriteram_r,baraduke_spriteram_w) AM_BASE_MEMBER(baraduke_state, m_spriteram)	/* Sprite RAM */
-	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(baraduke_videoram_r,baraduke_videoram_w) AM_BASE_MEMBER(baraduke_state, m_videoram)	/* Video RAM */
+static ADDRESS_MAP_START( baraduke_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(baraduke_spriteram_r,baraduke_spriteram_w) AM_BASE(&baraduke_spriteram)	/* Sprite RAM */
+	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(baraduke_videoram_r,baraduke_videoram_w) AM_BASE(&baraduke_videoram)	/* Video RAM */
 	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w)		/* PSG device, shared RAM */
-	AM_RANGE(0x4800, 0x4fff) AM_READWRITE(baraduke_textram_r,baraduke_textram_w) AM_BASE_MEMBER(baraduke_state, m_textram)/* video RAM (text layer) */
+	AM_RANGE(0x4800, 0x4fff) AM_READWRITE(baraduke_textram_r,baraduke_textram_w) AM_BASE(&baraduke_textram)/* video RAM (text layer) */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(watchdog_reset_w)			/* watchdog reset */
 	AM_RANGE(0x8800, 0x8800) AM_WRITE(baraduke_irq_ack_w)		/* irq acknowledge */
 	AM_RANGE(0xb000, 0xb002) AM_WRITE(baraduke_scroll0_w)		/* scroll (layer 0) */
@@ -176,16 +189,16 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( soundkludge_r )
 {
-	baraduke_state *state = space->machine().driver_data<baraduke_state>();
+	static int counter;
 
-	return ((state->m_counter++) >> 4) & 0xff;
+	return ((counter++) >> 4) & 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x001f) AM_READWRITE(m6801_io_r,m6801_io_w)/* internal registers */
+static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r,hd63701_internal_registers_w)/* internal registers */
 	AM_RANGE(0x0080, 0x00ff) AM_RAM								/* built in RAM */
 	AM_RANGE(0x1105, 0x1105) AM_READ(soundkludge_r)				/* cures speech */
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) AM_BASE(&namco_wavedata)/* PSG device, shared RAM */
 	AM_RANGE(0x8000, 0xbfff) AM_ROM								/* MCU external ROM */
 	AM_RANGE(0x8000, 0x8000) AM_WRITENOP						/* watchdog reset? */
 	AM_RANGE(0x8800, 0x8800) AM_WRITENOP						/* irq acknoledge? */
@@ -199,11 +212,11 @@ static READ8_HANDLER( readFF )
 	return 0xff;
 }
 
-static ADDRESS_MAP_START( mcu_port_map, AS_IO, 8 )
-	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_READ(inputport_r)			/* input ports read */
-	AM_RANGE(M6801_PORT1, M6801_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
-	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
-	AM_RANGE(M6801_PORT2, M6801_PORT2) AM_WRITE(baraduke_lamps_w)		/* lamps */
+static ADDRESS_MAP_START( mcu_port_map, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_READ(inputport_r)			/* input ports read */
+	AM_RANGE(HD63701_PORT1, HD63701_PORT1) AM_WRITE(inputport_select_w)	/* input port select */
+	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_READ(readFF)	/* leds won't work otherwise */
+	AM_RANGE(HD63701_PORT2, HD63701_PORT2) AM_WRITE(baraduke_lamps_w)		/* lamps */
 ADDRESS_MAP_END
 
 
@@ -232,15 +245,15 @@ static INPUT_PORTS_START( baraduke )
 
 	PORT_START("DSWB")
 	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SWB:1,2")
-	PORT_DIPSETTING(    0x80, "Every 10k" )				// "B"
-	PORT_DIPSETTING(    0xc0, "10k And Every 20k" )		// "A" (default)
-	PORT_DIPSETTING(    0x40, "Every 20k" )				// "C"
-	PORT_DIPSETTING(    0x00, DEF_STR( None ) )			// "D"
+	PORT_DIPSETTING(    0x80, "Every 10k" )
+	PORT_DIPSETTING(    0xc0, "10k And Every 20k" )
+	PORT_DIPSETTING(    0x40, "Every 20k" )
+	PORT_DIPSETTING(    0x00, DEF_STR( None ) )
 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SWB:3,4")
-	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )			// "B"
-	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )		// "A" (default)
-	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )			// "C"
-	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )	// "D"
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
 	/*  To advance rounds: set SWB:5 to ON, coin up game and push 1P start.
         Use joystick to select round 1 - 48. Set SWB:5 to OFF to play selected round. */
 	PORT_DIPNAME( 0x08, 0x08, "Round Select" )			PORT_DIPLOCATION("SWB:5")
@@ -298,11 +311,11 @@ static INPUT_PORTS_START( metrocrs )
 	PORT_DIPSETTING(    0x60, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( 1C_2C ) )
 	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SWA:4,5")
-	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )			// "B"
-	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )		// "A" (default)
-	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )			// "C"
-	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )	// "D"
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SWA:6") // metrocrs: after round 8, metrocrsa: after round 4
+	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Allow_Continue ) ) PORT_DIPLOCATION("SWA:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Yes ) )
 
@@ -377,42 +390,42 @@ static const namco_interface namco_config =
 
 
 
-static MACHINE_CONFIG_START( baraduke, baraduke_state )
+static MACHINE_DRIVER_START( baraduke )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809,49152000/32)
-	MCFG_CPU_PROGRAM_MAP(baraduke_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MDRV_CPU_ADD("maincpu", M6809,49152000/32)
+	MDRV_CPU_PROGRAM_MAP(baraduke_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_CPU_ADD("mcu", HD63701,49152000/8)
-	MCFG_CPU_PROGRAM_MAP(mcu_map)
-	MCFG_CPU_IO_MAP(mcu_port_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("mcu", HD63701,49152000/8)
+	MDRV_CPU_PROGRAM_MAP(mcu_map)
+	MDRV_CPU_IO_MAP(mcu_port_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))		/* we need heavy synch */
+	MDRV_QUANTUM_TIME(HZ(6000))		/* we need heavy synch */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60.606060)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(baraduke)
-	MCFG_SCREEN_VBLANK_STATIC(baraduke)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60.606060)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(baraduke)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_GFXDECODE(baraduke)
-	MCFG_PALETTE_LENGTH(2048)
-
-	MCFG_PALETTE_INIT(baraduke)
-	MCFG_VIDEO_START(baraduke)
+	MDRV_PALETTE_INIT(baraduke)
+	MDRV_VIDEO_START(baraduke)
+	MDRV_VIDEO_UPDATE(baraduke)
+	MDRV_VIDEO_EOF(baraduke)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
-	MCFG_SOUND_CONFIG(namco_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
+	MDRV_SOUND_CONFIG(namco_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -539,7 +552,7 @@ static DRIVER_INIT( baraduke )
 	int i;
 
 	/* unpack the third tile ROM */
-	rom = machine.region("gfx2")->base() + 0x8000;
+	rom = memory_region(machine, "gfx2") + 0x8000;
 	for (i = 0x2000;i < 0x4000;i++)
 	{
 		rom[i + 0x2000] = rom[i];

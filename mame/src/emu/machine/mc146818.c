@@ -5,7 +5,7 @@
     Implementation of the MC146818 chip
 
     Real time clock chip with battery buffered ram (or CMOS)
-    Used in IBM PC/AT, several PC clones, Amstrad NC200, Apollo workstations
+    Used in IBM PC/AT, several PC clones, Amstrad NC200
 
     Nathan Woods  (npwoods@mess.org)
     Peter Trauner (peter.trauner@jk.uni-linz.ac.at)
@@ -71,151 +71,70 @@
 
 *********************************************************************/
 
-#include "emu.h"
-#include "coreutil.h"
+#include "driver.h"
+#include "memconv.h"
 #include "machine/mc146818.h"
 
 
-//**************************************************************************
-//  DEBUGGING
-//**************************************************************************
 
 #define LOG_MC146818		0
+#define MC146818_DATA_SIZE	0x80
 
-
-
-//**************************************************************************
-//  MACROS
-//**************************************************************************
-
-#define USE_UTC		1
-
-#define HOURS_24	(m_data[0xb]&2)
-#define BCD_MODE	!(m_data[0xb]&4) // book has other description!
-#define CENTURY		m_data[100]
-#define YEAR		m_data[9]
-#define MONTH		m_data[8]
-#define DAY			m_data[7]
-#define WEEK_DAY	m_data[6]
-
-
-
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-// device type definition
-const device_type MC146818 = &device_creator<mc146818_device>;
-
-//-------------------------------------------------
-//  mc146818_device - constructor
-//-------------------------------------------------
-
-mc146818_device::mc146818_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, MC146818, "NVRAM", tag, owner, clock),
-	  device_rtc_interface(mconfig, *this),
-	  device_nvram_interface(mconfig, *this),
-	  m_type(MC146818_STANDARD),
-	  m_index(0),
-	  m_eindex(0),
-	  m_updated(false),
-	  m_last_refresh(attotime::zero)
+struct mc146818_chip
 {
-}
+	MC146818_TYPE type;
+
+	UINT8 index;
+	UINT8 data[MC146818_DATA_SIZE];
+
+	UINT16 eindex;
+	UINT8 edata[0x2000];
+
+	int updated;  /* update ended interrupt flag */
+
+	attotime last_refresh;
+};
+
+static struct mc146818_chip *mc146818;
 
 
-//-------------------------------------------------
-//  static_set_interface - configuration helper
-//  to set the interface
-//-------------------------------------------------
 
-void mc146818_device::static_set_type(device_t &device, mc146818_type type)
+#define HOURS_24	(mc146818->data[0xb]&2)
+#define BCD_MODE	!(mc146818->data[0xb]&4) // book has other description!
+#define CENTURY		mc146818->data[50]
+#define YEAR		mc146818->data[9]
+#define MONTH		mc146818->data[8]
+#define DAY			mc146818->data[7]
+#define WEEK_DAY	mc146818->data[6]
+
+
+
+static void mc146818_set_base_datetime(running_machine *machine);
+
+static TIMER_CALLBACK( mc146818_timer )
 {
-	downcast<mc146818_device &>(device).m_type = type;
-}
-
-
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void mc146818_device::device_start()
-{
-	m_last_refresh = machine().time();
-	m_clock_timer = timer_alloc(TIMER_CLOCK);
-	m_periodic_timer = timer_alloc(TIMER_PERIODIC);
-
-	memset(m_data, 0, sizeof(m_data));
-
-	if (m_type == MC146818_UTC) {
-		// hack: for apollo we increase the update frequency to stay in sync with real time
-		m_clock_timer->adjust(attotime::from_hz(2), 0, attotime::from_hz(2));
-	} else {
-		m_clock_timer->adjust(attotime::from_hz(1), 0, attotime::from_hz(1));
-	}
-
-	m_periodic_timer->adjust(attotime::never);
-	m_period = attotime::never;
-
-	set_base_datetime();
-
-	m_out_irq_func.resolve(m_out_irq_cb, *this);
-}
-
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void mc146818_device::device_config_complete()
-{
-	// inherit a copy of the static data
-	const mc146818_interface *intf = reinterpret_cast<const mc146818_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<mc146818_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
-	}
-}
-
-//-------------------------------------------------
-//  device_timer - handler timer events
-//-------------------------------------------------
-
-void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
-{
-	int year/*, month*/;
-
-	if (id == TIMER_PERIODIC) {
-		m_data[0x0c] |= 0xc0;
-		if (!m_out_irq_func.isnull()) m_out_irq_func(CLEAR_LINE);
-		return;
-	}
+	int year, month;
 
 	if (BCD_MODE)
 	{
-		m_data[0]=bcd_adjust(m_data[0]+1);
-		if (m_data[0]>=0x60)
+		mc146818->data[0]=bcd_adjust(mc146818->data[0]+1);
+		if (mc146818->data[0]>=0x60)
 		{
-			m_data[0]=0;
-			m_data[2]=bcd_adjust(m_data[2]+1);
-			if (m_data[2]>=0x60)
+			mc146818->data[0]=0;
+			mc146818->data[2]=bcd_adjust(mc146818->data[2]+1);
+			if (mc146818->data[2]>=0x60)
 			{
-				m_data[2]=0;
-				m_data[4]=bcd_adjust(m_data[4]+1);
+				mc146818->data[2]=0;
+				mc146818->data[4]=bcd_adjust(mc146818->data[4]+1);
 				// different handling of hours
-				if (m_data[4]>=0x24)
+				if (mc146818->data[4]>=0x24)
 				{
-					m_data[4]=0;
+					mc146818->data[4]=0;
 					WEEK_DAY=bcd_adjust(WEEK_DAY+1)%7;
 					DAY=bcd_adjust(DAY+1);
-					//month=bcd_2_dec(MONTH);
+					month=bcd_2_dec(MONTH);
 					year=bcd_2_dec(YEAR);
-					if (m_type!=MC146818_IGNORE_CENTURY) year+=bcd_2_dec(CENTURY)*100;
+					if (mc146818->type!=MC146818_IGNORE_CENTURY) year+=bcd_2_dec(CENTURY)*100;
 					else year+=2000; // save for julian_days_in_month calculation
 					DAY=bcd_adjust(DAY+1);
 					if (DAY>gregorian_days_in_month(MONTH, year))
@@ -226,7 +145,7 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 						{
 							MONTH=1;
 							YEAR=year=bcd_adjust(YEAR+1);
-							if (m_type!=MC146818_IGNORE_CENTURY)
+							if (mc146818->type!=MC146818_IGNORE_CENTURY)
 							{
 								if (year>=0x100)
 								{
@@ -241,274 +160,249 @@ void mc146818_device::device_timer(emu_timer &timer, device_timer_id id, int par
 	}
 	else
 	{
-		m_data[0]=m_data[0]+1;
-		if (m_data[0]>=60)
+		mc146818->data[0]=mc146818->data[0]+1;
+		if (mc146818->data[0]>=60)
 		{
-			m_data[0]=0;
-			m_data[2]=m_data[2]+1;
-			if (m_data[2]>=60) {
-				m_data[2]=0;
-				m_data[4]=m_data[4]+1;
+			mc146818->data[0]=0;
+			mc146818->data[2]=mc146818->data[2]+1;
+			if (mc146818->data[2]>=60) {
+				mc146818->data[2]=0;
+				mc146818->data[4]=mc146818->data[4]+1;
 				// different handling of hours //?
-				if (m_data[4]>=24) {
-					m_data[4]=0;
+				if (mc146818->data[4]>=24) {
+					mc146818->data[4]=0;
 					WEEK_DAY=(WEEK_DAY+1)%7;
 					year=YEAR;
-					if (m_type!=MC146818_IGNORE_CENTURY) year+=CENTURY*100;
+					if (mc146818->type!=MC146818_IGNORE_CENTURY) year+=CENTURY*100;
 					else year+=2000; // save for julian_days_in_month calculation
 					if (++DAY>gregorian_days_in_month(MONTH, year)) {
 						DAY=1;
 						if (++MONTH>12) {
 							MONTH=1;
 							YEAR++;
-							if (m_type!=MC146818_IGNORE_CENTURY) {
+							if (mc146818->type!=MC146818_IGNORE_CENTURY) {
 								if (YEAR>=100) { CENTURY++;YEAR=0; }
 							} else {
 								YEAR%=100;
 							}
-						}
+                       }
 					}
 				}
 			}
 		}
 	}
+	mc146818->updated = 1;  /* clock has been updated */
+	mc146818->last_refresh = timer_get_time(machine);
+}
 
-	if (m_data[1] == m_data[0] && //
-		m_data[3] == m_data[2] && //
-		m_data[5] == m_data[4]) {
-		// set the alarm interrupt flag AF
-		m_data[0x0c] |= 0x20;
-	} else {
-		// clear the alarm interrupt flag AF
-		m_data[0x0c] &= ~0x20;
-		if ((m_data[0x0c] & 0x70) == 0) {
-			// clear IRQF
-			m_data[0x0c] &= ~0x80;
-		}
+
+
+void mc146818_init(running_machine *machine, MC146818_TYPE type)
+{
+	mc146818 = auto_alloc_clear(machine, struct mc146818_chip);
+	mc146818->type = type;
+	mc146818->last_refresh = timer_get_time(machine);
+    timer_pulse(machine, ATTOTIME_IN_HZ(1), NULL, 0, mc146818_timer);
+	mc146818_set_base_datetime(machine);
+}
+
+
+
+void mc146818_load(running_machine *machine)
+{
+	mame_file *file;
+
+	file = nvram_fopen(machine, OPEN_FLAG_READ);
+	if (file)
+	{
+		mc146818_load_stream(file);
+		mame_fclose(file);
 	}
-
-	// set the update-ended interrupt Flag UF
-	m_data[0x0c] |=  0x10;
-
-	// set the interrupt request flag IRQF
-	// FIXME: should throw IRQ line as well
-	if ((m_data[0x0b] & m_data[0x0c] & 0x30) != 0) {
-		m_data[0x0c] |=  0x80;
-	}
-
-	// IRQ line is active low
-	if (!m_out_irq_func.isnull()) m_out_irq_func((m_data[0x0c] & 0x80) ? CLEAR_LINE : ASSERT_LINE);
-
-	m_updated = true;  /* clock has been updated */
-	m_last_refresh = machine().time();
 }
 
 
-//-------------------------------------------------
-//  rtc_set_time - called to initialize the RTC to
-//  a known state
-//-------------------------------------------------
 
-void mc146818_device::rtc_set_time(int year, int month, int day, int day_of_week, int hour, int minute, int second)
+void mc146818_load_stream(mame_file *file)
 {
-	YEAR = year;
-	MONTH = month;
-	DAY = day;
-	WEEK_DAY = day_of_week;
-	m_data[4] = hour;
-	m_data[2] = minute;
-	m_data[0] = second;
+	mame_fread(file, mc146818->data, sizeof(mc146818->data));
 }
 
 
-//-------------------------------------------------
-//  nvram_default - called to initialize NVRAM to
-//  its default state
-//-------------------------------------------------
 
-void mc146818_device::nvram_default()
-{
-	set_base_datetime();
-}
-
-
-//-------------------------------------------------
-//  nvram_read - called to read NVRAM from the
-//  .nv file
-//-------------------------------------------------
-
-void mc146818_device::nvram_read(emu_file &file)
-{
-	file.read(m_data, sizeof(m_data));
-	set_base_datetime();
-}
-
-
-//-------------------------------------------------
-//  nvram_write - called to write NVRAM to the
-//  .nv file
-//-------------------------------------------------
-
-void mc146818_device::nvram_write(emu_file &file)
-{
-	file.write(m_data, sizeof(m_data));
-}
-
-
-//-------------------------------------------------
-//  dec_2_local - convert from decimal to BCD if
-//  necessary
-//-------------------------------------------------
-
-inline int mc146818_device::dec_2_local(int a)
+static int dec_2_local(int a)
 {
 	return BCD_MODE ? dec_2_bcd(a) : a;
 }
 
 
-//-------------------------------------------------
-//  dec_2_local - convert from decimal to BCD if
-//  necessary
-//-------------------------------------------------
 
-void mc146818_device::set_base_datetime()
+static void mc146818_set_base_datetime(running_machine *machine)
 {
-	system_time systime;
-	system_time::full_time current_time;
+	mame_system_time systime;
 
-	machine().base_datetime(systime);
+	mame_get_base_datetime(machine, &systime);
 
-	current_time = (m_type == MC146818_UTC) ? systime.utc_time: systime.local_time;
-
-//  logerror("mc146818_set_base_datetime %02d/%02d/%02d %02d:%02d:%02d\n",
-//          current_time.year % 100, current_time.month + 1, current_time.mday,
-//          current_time.hour,current_time.minute, current_time.second);
-
-	if (HOURS_24 || (current_time.hour < 12))
-		m_data[4] = dec_2_local(current_time.hour);
+	if (HOURS_24 || (systime.local_time.hour < 12))
+		mc146818->data[4] = dec_2_local(systime.local_time.hour);
 	else
-		m_data[4] = dec_2_local(current_time.hour - 12) | 0x80;
+		mc146818->data[4] = dec_2_local(systime.local_time.hour - 12) | 0x80;
 
-	if (m_type != MC146818_IGNORE_CENTURY)
-		CENTURY = dec_2_local(current_time.year /100);
+	if (mc146818->type != MC146818_IGNORE_CENTURY)
+		CENTURY = dec_2_local(systime.local_time.year /100);
 
-	m_data[0]	= dec_2_local(current_time.second);
-	m_data[2]	= dec_2_local(current_time.minute);
-	DAY					= dec_2_local(current_time.mday);
-	MONTH				= dec_2_local(current_time.month + 1);
-	YEAR				= dec_2_local(current_time.year % 100);
+	mc146818->data[0]	= dec_2_local(systime.local_time.second);
+	mc146818->data[2]	= dec_2_local(systime.local_time.minute);
+	DAY					= dec_2_local(systime.local_time.day);
+	MONTH				= dec_2_local(systime.local_time.month + 1);
+	YEAR				= dec_2_local(systime.local_time.year % 100);
 
-	WEEK_DAY = current_time.weekday;
-	if (current_time.is_dst)
-		m_data[0xb] |= 1;
+	WEEK_DAY = systime.local_time.weekday;
+	if (systime.local_time.is_dst)
+		mc146818->data[0xb] |= 1;
 	else
-		m_data[0xb] &= ~1;
+		mc146818->data[0xb] &= ~1;
 }
 
 
-//-------------------------------------------------
-//  read - I/O handler for reading
-//-------------------------------------------------
 
-READ8_MEMBER( mc146818_device::read )
+void mc146818_save(running_machine *machine)
+{
+	mame_file *file;
+
+	file = nvram_fopen(machine, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS);
+	if (file)
+	{
+		mame_fwrite(file, mc146818->data, sizeof(mc146818->data));
+		mame_fclose(file);
+	}
+}
+
+
+
+void mc146818_save_stream(mame_file *file)
+{
+	mame_fwrite(file, mc146818->data, sizeof(mc146818->data));
+}
+
+
+
+NVRAM_HANDLER( mc146818 )
+{
+	if (file == NULL)
+	{
+		mc146818_set_base_datetime(machine);
+		// init only
+	}
+	else if (read_or_write)
+	{
+		mc146818_save_stream(file);
+	}
+	else
+	{
+		mc146818_load_stream(file);
+	}
+}
+
+
+
+READ8_HANDLER(mc146818_port_r)
 {
 	UINT8 data = 0;
 	switch (offset) {
 	case 0:
-		data = m_index;
+		data = mc146818->index;
 		break;
 
 	case 1:
-		switch (m_index % MC146818_DATA_SIZE) {
+		switch (mc146818->index % MC146818_DATA_SIZE) {
 		case 0xa:
-			data = m_data[m_index  % MC146818_DATA_SIZE];
-			if ((space.machine().time() - m_last_refresh) < attotime::from_hz(32768))
+			data = mc146818->data[mc146818->index  % MC146818_DATA_SIZE];
+			if (attotime_compare(attotime_sub(timer_get_time(space->machine), mc146818->last_refresh), ATTOTIME_IN_HZ(32768)) < 0)
 				data |= 0x80;
 #if 0
 			/* for pc1512 bios realtime clock test */
-			m_data[m_index % MC146818_DATA_SIZE] ^= 0x80; /* 0x80 update in progress */
+			mc146818->data[mc146818->index % MC146818_DATA_SIZE] ^= 0x80; /* 0x80 update in progress */
 #endif
 			break;
 
 		case 0xc:
-//          if(m_updated) /* the clock has been updated */
-//              data = 0x10;
-//          else
-//              data = 0x00;
-			// the unused bits b0 ... b3 are always read as 0
-			data = m_data[m_index % MC146818_DATA_SIZE] & 0xf0;
-			// read 0x0c will clear all IRQ flags in register 0x0c
-			m_data[m_index % MC146818_DATA_SIZE] &= 0x0f;
-			if (!m_out_irq_func.isnull()) m_out_irq_func(ASSERT_LINE);
+			if(mc146818->updated != 0) /* the clock has been updated */
+				data = 0x10;
+			else
+				data = 0x00;
 			break;
 		case 0xd:
 			/* battery ok */
-			data = m_data[m_index % MC146818_DATA_SIZE] | 0x80;
+			data = mc146818->data[mc146818->index % MC146818_DATA_SIZE] | 0x80;
 			break;
 
 		default:
-			data = m_data[m_index % MC146818_DATA_SIZE];
+			data = mc146818->data[mc146818->index % MC146818_DATA_SIZE];
 			break;
 		}
 		break;
 	}
 
 	if (LOG_MC146818)
-		logerror("mc146818_port_r(): index=0x%02x data=0x%02x\n", m_index, data);
+		logerror("mc146818_port_r(): index=0x%02x data=0x%02x\n", mc146818->index, data);
 	return data;
 }
 
 
-//-------------------------------------------------
-//  write - I/O handler for writing
-//-------------------------------------------------
 
-WRITE8_MEMBER( mc146818_device::write )
+WRITE8_HANDLER(mc146818_port_w)
 {
-	attotime rate;
 	if (LOG_MC146818)
-		logerror("mc146818_port_w(): index=0x%02x data=0x%02x\n", m_index, data);
+		logerror("mc146818_port_w(): index=0x%02x data=0x%02x\n", mc146818->index, data);
 
 	switch (offset) {
 	case 0:
-		m_index = data;
+		mc146818->index = data;
 		break;
 
 	case 1:
-		switch(m_index % MC146818_DATA_SIZE)
+		switch(mc146818->index % MC146818_DATA_SIZE)
 		{
-		case 0x0a:
-			// fixme: allow different time base
-			data &= 0x0f;
-			if (m_data[0x0b] & 0x40) {
-				if (data > 2)
-					m_period = attotime::from_hz(32768 >> (data - 1));
-				else if (data > 0)
-					m_period = attotime::from_hz(32768 >> (data + 6));
-				else m_period = attotime::never;
-				rate = attotime::zero;
-			} else rate = attotime::never;
-			m_periodic_timer->adjust(rate, 0, m_period);
-			data |= m_data[m_index % MC146818_DATA_SIZE] & 0xf0;
-			m_data[m_index % MC146818_DATA_SIZE] = data;
-			break;
 		case 0x0b:
 			if(data & 0x80)
-				m_updated = false;
-			// this probably isn't right but otherwise
-			// you'll be making a lot of unnecessary callbacks
-			if (data & 0x40)
-				m_periodic_timer->adjust(attotime::zero, 0, m_period);
-			else
-				m_periodic_timer->adjust(attotime::never);
-			m_data[m_index % MC146818_DATA_SIZE] = data;
-			break;
-		case 0x0c:
-			// register 0x0c is readonly
+				mc146818->updated = 0;
+			mc146818->data[mc146818->index % MC146818_DATA_SIZE] = data;
 			break;
 		default:
-			m_data[m_index % MC146818_DATA_SIZE] = data;
+			mc146818->data[mc146818->index % MC146818_DATA_SIZE] = data;
 		}
 		break;
 	}
+}
+
+
+
+READ16_HANDLER(mc146818_port16le_r)
+{
+	return read16le_with_read8_handler(mc146818_port_r, space, offset, mem_mask);
+}
+
+WRITE16_HANDLER(mc146818_port16le_w)
+{
+	write16le_with_write8_handler(mc146818_port_w, space, offset, data, mem_mask);
+}
+
+READ32_HANDLER(mc146818_port32le_r)
+{
+	return read32le_with_read8_handler(mc146818_port_r, space, offset, mem_mask);
+}
+
+WRITE32_HANDLER(mc146818_port32le_w)
+{
+	write32le_with_write8_handler(mc146818_port_w, space, offset, data, mem_mask);
+}
+
+READ64_HANDLER(mc146818_port64be_r)
+{
+	return read64be_with_read8_handler(mc146818_port_r, space, offset, mem_mask);
+}
+
+WRITE64_HANDLER(mc146818_port64be_w)
+{
+	write64be_with_write8_handler(mc146818_port_w, space, offset, data, mem_mask);
 }

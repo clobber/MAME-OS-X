@@ -23,7 +23,7 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_adc_ald8),          /* 0x14 */
 	 PREFIX86(_adc_axd16),         /* 0x15 */
 	 PREFIX86(_push_ss),           /* 0x16 */
-	 PREFIX186(_pop_ss),           /* 0x17 */
+	 PREFIX86(_pop_ss),            /* 0x17 */
 	 PREFIX86(_sbb_br8),           /* 0x18 */
 	 PREFIX86(_sbb_wr16),          /* 0x19 */
 	 PREFIX86(_sbb_r8b),           /* 0x1a */
@@ -38,7 +38,7 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_and_r16w),          /* 0x23 */
 	 PREFIX86(_and_ald8),          /* 0x24 */
 	 PREFIX86(_and_axd16),         /* 0x25 */
-	 PREFIX186(_es),               /* 0x26 */
+	 PREFIX86(_es),                /* 0x26 */
 	 PREFIX86(_daa),               /* 0x27 */
 	 PREFIX86(_sub_br8),           /* 0x28 */
 	 PREFIX86(_sub_wr16),          /* 0x29 */
@@ -46,24 +46,24 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_sub_r16w),          /* 0x2b */
 	 PREFIX86(_sub_ald8),          /* 0x2c */
 	 PREFIX86(_sub_axd16),         /* 0x2d */
-	 PREFIX186(_cs),               /* 0x2e */
-	 PREFIX86(_das),			   /* 0x2f */
+	 PREFIX86(_cs),                /* 0x2e */
+	 PREFIX86(_das), 		/* 0x2f */
 	 PREFIX86(_xor_br8),           /* 0x30 */
 	 PREFIX86(_xor_wr16),          /* 0x31 */
 	 PREFIX86(_xor_r8b),           /* 0x32 */
 	 PREFIX86(_xor_r16w),          /* 0x33 */
 	 PREFIX86(_xor_ald8),          /* 0x34 */
 	 PREFIX86(_xor_axd16),         /* 0x35 */
-	 PREFIX186(_ss),               /* 0x36 */
-	 PREFIX86(_aaa),			   /* 0x37 */
+	 PREFIX86(_ss),                /* 0x36 */
+	 PREFIX86(_aaa), 		/* 0x37 */
 	 PREFIX86(_cmp_br8),           /* 0x38 */
 	 PREFIX86(_cmp_wr16),          /* 0x39 */
 	 PREFIX86(_cmp_r8b),           /* 0x3a */
 	 PREFIX86(_cmp_r16w),          /* 0x3b */
 	 PREFIX86(_cmp_ald8),          /* 0x3c */
 	 PREFIX86(_cmp_axd16),         /* 0x3d */
-	 PREFIX186(_ds),                /* 0x3e */
-	 PREFIX86(_aas),			   /* 0x3f */
+	 PREFIX86(_ds),                /* 0x3e */
+	 PREFIX86(_aas), 		/* 0x3f */
 	 PREFIX86(_inc_ax),            /* 0x40 */
 	 PREFIX86(_inc_cx),            /* 0x41 */
 	 PREFIX86(_inc_dx),            /* 0x42 */
@@ -130,7 +130,7 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_jnle),              /* 0x7f */
 	 PREFIX86(_80pre),             /* 0x80 */
 	 PREFIX86(_81pre),             /* 0x81 */
-	 PREFIX86(_82pre),			/* 0x82 */
+	 PREFIX86(_82pre), 			/* 0x82 */
 	 PREFIX86(_83pre),             /* 0x83 */
 	 PREFIX86(_test_br8),          /* 0x84 */
 	 PREFIX86(_test_wr16),         /* 0x85 */
@@ -142,7 +142,7 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_mov_r16w),          /* 0x8b */
 	 PREFIX86(_mov_wsreg),         /* 0x8c */
 	 PREFIX86(_lea),               /* 0x8d */
-	 PREFIX186(_mov_sregw),        /* 0x8e */
+	 PREFIX86(_mov_sregw),         /* 0x8e */
 	 PREFIX86(_popw),              /* 0x8f */
 	 PREFIX86(_nop),               /* 0x90 */
 	 PREFIX86(_xchg_axcx),         /* 0x91 */
@@ -210,8 +210,8 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_iret),              /* 0xcf */
 	 PREFIX86(_rotshft_b),         /* 0xd0 */
 	 PREFIX86(_rotshft_w),         /* 0xd1 */
-	 PREFIX186(_rotshft_bcl),       /* 0xd2 */
-	 PREFIX186(_rotshft_wcl),       /* 0xd3 */
+	 PREFIX86(_rotshft_bcl),       /* 0xd2 */
+	 PREFIX86(_rotshft_wcl),       /* 0xd3 */
 	 PREFIX86(_aam),               /* 0xd4 */
 	 PREFIX86(_aad),               /* 0xd5 */
 	 PREFIX86(_invalid),
@@ -244,14 +244,14 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	 PREFIX86(_invalid),           /* 0xf1 */
 	 PREFIX186(_repne),             /* 0xf2 */
 	 PREFIX186(_repe),              /* 0xf3 */
-	 PREFIX86(_hlt),		/* 0xf4 */
+	 PREFIX86(_hlt), 		/* 0xf4 */
 	 PREFIX86(_cmc),               /* 0xf5 */
 	 PREFIX86(_f6pre),             /* 0xf6 */
 	 PREFIX86(_f7pre),             /* 0xf7 */
 	 PREFIX86(_clc),               /* 0xf8 */
 	 PREFIX86(_stc),               /* 0xf9 */
 	 PREFIX86(_cli),               /* 0xfa */
-	 PREFIX186(_sti),              /* 0xfb */
+	 PREFIX86(_sti),               /* 0xfb */
 	 PREFIX86(_cld),               /* 0xfc */
 	 PREFIX86(_std),               /* 0xfd */
 	 PREFIX86(_fepre),             /* 0xfe */
@@ -473,8 +473,8 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	case 0xcf:    PREFIX86(_iret)(cpustate); break;\
 		  case 0xd0:    PREFIX86(_rotshft_b)(cpustate); break;\
 		  case 0xd1:    PREFIX86(_rotshft_w)(cpustate); break;\
-		  case 0xd2:    PREFIX186(_rotshft_bcl)(cpustate); break;\
-		  case 0xd3:    PREFIX186(_rotshft_wcl)(cpustate); break;\
+		  case 0xd2:    PREFIX86(_rotshft_bcl)(cpustate); break;\
+		  case 0xd3:    PREFIX86(_rotshft_wcl)(cpustate); break;\
 	case 0xd4:    PREFIX86(_aam)(cpustate); break;\
 	case 0xd5:    PREFIX86(_aad)(cpustate); break;\
 	case 0xd6:    PREFIX86(_invalid)(cpustate); break;\
@@ -514,7 +514,7 @@ static void (*const PREFIX186(_instruction)[256])(i8086_state *cpustate) =
 	case 0xf8:    PREFIX86(_clc)(cpustate); break;\
 	case 0xf9:    PREFIX86(_stc)(cpustate); break;\
 	case 0xfa:    PREFIX86(_cli)(cpustate); break;\
-	case 0xfb:    PREFIX186(_sti)(cpustate); break;\
+	case 0xfb:    PREFIX86(_sti)(cpustate); break;\
 	case 0xfc:    PREFIX86(_cld)(cpustate); break;\
 	case 0xfd:    PREFIX86(_std)(cpustate); break;\
 	case 0xfe:    PREFIX86(_fepre)(cpustate); break;\

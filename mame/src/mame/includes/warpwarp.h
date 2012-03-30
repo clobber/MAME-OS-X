@@ -1,26 +1,11 @@
-#include "devlegcy.h"
-
-class warpwarp_state : public driver_device
-{
-public:
-	warpwarp_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_geebee_videoram;
-	UINT8 *m_videoram;
-	int m_geebee_bgw;
-	int m_ball_on;
-	int m_ball_h;
-	int m_ball_v;
-	int m_ball_pen;
-	int m_ball_sizex;
-	int m_ball_sizey;
-	int m_handle_joystick;
-	tilemap_t *m_bg_tilemap;
-};
-
-
 /*----------- defined in video/warpwarp.c -----------*/
+
+extern UINT8 *geebee_videoram,*warpwarp_videoram;
+extern int geebee_bgw;
+extern int warpwarp_ball_on;
+extern int warpwarp_ball_h, warpwarp_ball_v;
+extern int warpwarp_ball_sizex, warpwarp_ball_sizey;
+extern int geebee_handleoverlay;
 
 PALETTE_INIT( geebee );
 PALETTE_INIT( navarone );
@@ -28,22 +13,24 @@ PALETTE_INIT( warpwarp );
 VIDEO_START( geebee );
 VIDEO_START( navarone );
 VIDEO_START( warpwarp );
-SCREEN_UPDATE_IND16( geebee );
+VIDEO_UPDATE( geebee );
+VIDEO_UPDATE( navarone );
+VIDEO_UPDATE( warpwarp );
 WRITE8_HANDLER( warpwarp_videoram_w );
 WRITE8_HANDLER( geebee_videoram_w );
 
 
 /*----------- defined in audio/geebee.c -----------*/
 
-WRITE8_DEVICE_HANDLER( geebee_sound_w );
-
-DECLARE_LEGACY_SOUND_DEVICE(GEEBEE, geebee_sound);
+WRITE8_HANDLER( geebee_sound_w );
+DEVICE_GET_INFO( geebee_sound );
+#define SOUND_GEEBEE DEVICE_GET_INFO_NAME(geebee_sound)
 
 
 /*----------- defined in audio/warpwarp.c -----------*/
 
-WRITE8_DEVICE_HANDLER( warpwarp_sound_w );
-WRITE8_DEVICE_HANDLER( warpwarp_music1_w );
-WRITE8_DEVICE_HANDLER( warpwarp_music2_w );
-
-DECLARE_LEGACY_SOUND_DEVICE(WARPWARP, warpwarp_sound);
+WRITE8_HANDLER( warpwarp_sound_w );
+WRITE8_HANDLER( warpwarp_music1_w );
+WRITE8_HANDLER( warpwarp_music2_w );
+DEVICE_GET_INFO( warpwarp_sound );
+#define SOUND_WARPWARP DEVICE_GET_INFO_NAME(warpwarp_sound)

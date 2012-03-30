@@ -11,24 +11,37 @@ TODO:
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
+#include "video/system1.h"
 #include "cpu/z80/z80.h"
 #include "machine/segacrpt.h"
 #include "sound/sn76496.h"
-#include "includes/suprloco.h"
+
+extern UINT8 *suprloco_videoram;
+extern UINT8 *suprloco_scrollram;
+
+PALETTE_INIT( suprloco );
+VIDEO_START( suprloco );
+VIDEO_UPDATE( suprloco );
+WRITE8_HANDLER( suprloco_videoram_w );
+WRITE8_HANDLER( suprloco_scrollram_w );
+WRITE8_HANDLER( suprloco_control_w );
+READ8_HANDLER( suprloco_control_r );
+
 
 static WRITE8_HANDLER( suprloco_soundport_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	/* spin for a while to let the Z80 read the command (fixes hanging sound in Regulus) */
-	device_spin_until_time(&space->device(), attotime::from_usec(50));
+	cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(50));
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc1ff) AM_RAM AM_BASE_SIZE_MEMBER(suprloco_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xc000, 0xc1ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xc800, 0xc800) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("P1")
 	AM_RANGE(0xd800, 0xd800) AM_READ_PORT("P2")
@@ -36,13 +49,13 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("DSW2")
 	AM_RANGE(0xe800, 0xe800) AM_WRITE(suprloco_soundport_w)
 	AM_RANGE(0xe801, 0xe801) AM_READWRITE(suprloco_control_r, suprloco_control_w)
-	AM_RANGE(0xf000, 0xf6ff) AM_RAM_WRITE(suprloco_videoram_w) AM_BASE_MEMBER(suprloco_state, m_videoram)
+	AM_RANGE(0xf000, 0xf6ff) AM_RAM_WRITE(suprloco_videoram_w) AM_BASE(&suprloco_videoram)
 	AM_RANGE(0xf700, 0xf7df) AM_RAM /* unused */
-	AM_RANGE(0xf7e0, 0xf7ff) AM_RAM_WRITE(suprloco_scrollram_w) AM_BASE_MEMBER(suprloco_state, m_scrollram)
+	AM_RANGE(0xf7e0, 0xf7ff) AM_RAM_WRITE(suprloco_scrollram_w) AM_BASE(&suprloco_scrollram)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xa000, 0xa003) AM_DEVWRITE("sn1", sn76496_w)
@@ -151,40 +164,41 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( suprloco, suprloco_state )
+static MACHINE_DRIVER_START( suprloco )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)			/* NMIs are caused by the main CPU */
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)			/* NMIs are caused by the main CPU */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(suprloco)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(suprloco)
-	MCFG_PALETTE_LENGTH(512+256)
+	MDRV_GFXDECODE(suprloco)
+	MDRV_PALETTE_LENGTH(512+256)
 
-	MCFG_PALETTE_INIT(suprloco)
-	MCFG_VIDEO_START(suprloco)
+	MDRV_PALETTE_INIT(suprloco)
+	MDRV_VIDEO_START(suprloco)
+	MDRV_VIDEO_UPDATE(suprloco)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76496, 4000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn1", SN76496, 4000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn2", SN76496, 2000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn2", SN76496, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -258,9 +272,9 @@ static DRIVER_INIT( suprloco )
 	int i, j, k, color_source, color_dest;
 	UINT8 *source, *dest, *lookup;
 
-	source = machine.region("gfx1")->base();
+	source = memory_region(machine, "gfx1");
 	dest   = source + 0x6000;
-	lookup = machine.region("proms")->base() + 0x0200;
+	lookup = memory_region(machine, "proms") + 0x0200;
 
 	for (i = 0; i < 0x80; i++, lookup += 8)
 	{

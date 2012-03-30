@@ -8,8 +8,8 @@
             Walter Fath
 
     Currently Supported Games:
-        Namco Classic Vol #1
-        Namco Classic Vol #2
+        Namco Classics Vol #1
+        Namco Classics Vol #2
 
 PCB Layout
 ----------
@@ -41,9 +41,8 @@ PCB Layout
 |                  NC1_SUB.1C    62256   |
 |----------------------------------------|
 Notes:
-      68000 clock  : 12.288MHz (49.152 / 4)
+      68000 clock  : 12.288MHz (49.152 / 2)
       H8/3002 clock: 16.384MHz (49.152 / 3)
-      C352 clock:    24.576MHz (49.152 / 2)
       VSync        : 60Hz
 
       POT1    : Master volume
@@ -66,19 +65,19 @@ Notes:
 
  *************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "video/ygv608.h"
 #include "cpu/h83002/h8.h"
-#include "includes/namcond1.h"
+#include "namcond1.h"
 #include "sound/c352.h"
 #include "machine/at28c16.h"
 
 /*************************************************************/
 
-static ADDRESS_MAP_START( namcond1_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( namcond1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(namcond1_shared_ram_r,namcond1_shared_ram_w) AM_BASE_MEMBER(namcond1_state, m_shared_ram)
+	AM_RANGE(0x400000, 0x40ffff) AM_READWRITE(namcond1_shared_ram_r,namcond1_shared_ram_w) AM_BASE(&namcond1_shared_ram)
 	AM_RANGE(0x800000, 0x80000f) AM_READWRITE(ygv608_r,ygv608_w)
 	AM_RANGE(0xa00000, 0xa00fff) AM_DEVREADWRITE8("at28c16", at28c16_r, at28c16_w, 0xff00)
 #ifdef MAME_DEBUG
@@ -223,16 +222,15 @@ GFXDECODE_END
 
 static WRITE16_HANDLER( sharedram_sub_w )
 {
-	namcond1_state *state = space->machine().driver_data<namcond1_state>();
-	COMBINE_DATA(&state->m_shared_ram[offset]);
+	COMBINE_DATA(&namcond1_shared_ram[offset]);
 }
 
 static READ16_HANDLER( sharedram_sub_r )
 {
-	namcond1_state *state = space->machine().driver_data<namcond1_state>();
-	return state->m_shared_ram[offset];
+	return namcond1_shared_ram[offset];
 }
 
+static int p8;
 
 static READ8_HANDLER( mcu_p7_read )
 {
@@ -246,15 +244,14 @@ static READ8_HANDLER( mcu_pa_read )
 
 static WRITE8_HANDLER( mcu_pa_write )
 {
-	namcond1_state *state = space->machine().driver_data<namcond1_state>();
-	state->m_p8 = data;
+	p8 = data;
 }
 
 /* H8/3002 MCU stuff */
-static ADDRESS_MAP_START( nd1h8rwmap, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x07ffff) AM_ROM
+static ADDRESS_MAP_START( nd1h8rwmap, ADDRESS_SPACE_PROGRAM, 16 )
+	AM_RANGE(0x000000, 0x07ffff) AM_READ(SMH_ROM)
 	AM_RANGE(0x200000, 0x20ffff) AM_READWRITE( sharedram_sub_r, sharedram_sub_w )
-	AM_RANGE(0xa00000, 0xa07fff) AM_DEVREADWRITE_MODERN("c352", c352_device, read, write)
+	AM_RANGE(0xa00000, 0xa07fff) AM_DEVREADWRITE( "c352", c352_r, c352_w )
 	AM_RANGE(0xc00000, 0xc00001) AM_READ_PORT("DSW")
 	AM_RANGE(0xc00002, 0xc00003) AM_READ_PORT("P1_P2")
 	AM_RANGE(0xc00010, 0xc00011) AM_NOP
@@ -262,7 +259,7 @@ static ADDRESS_MAP_START( nd1h8rwmap, AS_PROGRAM, 16 )
 	AM_RANGE(0xc00040, 0xc00041) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( nd1h8iomap, AS_IO, 8 )
+static ADDRESS_MAP_START( nd1h8iomap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(H8_PORT_7, H8_PORT_7) AM_READ( mcu_p7_read )
 	AM_RANGE(H8_PORT_A, H8_PORT_A) AM_READWRITE( mcu_pa_read, mcu_pa_write )
 	AM_RANGE(H8_ADC_0_L, H8_ADC_3_H) AM_NOP // MCU reads these, but the games have no analog controls
@@ -270,68 +267,63 @@ ADDRESS_MAP_END
 
 static INTERRUPT_GEN( mcu_interrupt )
 {
-	namcond1_state *state = device->machine().driver_data<namcond1_state>();
-	if( state->m_h8_irq5_enabled )
-	{
-		generic_pulse_irq_line(device, H8_IRQ5);
-	}
+    if( namcond1_h8_irq5_enabled )
+    {
+    	generic_pulse_irq_line(device, H8_IRQ5);
+    }
 }
 
 /******************************************
   ND-1 Master clock = 49.152MHz
   - 680000  = 12288000 (CLK/4)
+  - H8/3002 = 16666667 (CLK/3) ??? huh?
   - H8/3002 = 16384000 (CLK/3)
   - The level 1 interrupt to the 68k has been measured at 60Hz.
 *******************************************/
 
-static MACHINE_CONFIG_START( namcond1, namcond1_state )
+static MACHINE_DRIVER_START( namcond1 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, XTAL_49_152MHz/4)
-	MCFG_CPU_PROGRAM_MAP(namcond1_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 12288000)
+	MDRV_CPU_PROGRAM_MAP(namcond1_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_PERIODIC_INT(ygv608_timed_interrupt, 1000)
 
-	// I've disabled this for now, I don't think it's correct, it breaks ncv2 'game options' in test
-	// mode (and could also be responsible for the random resets?)
-	// also, if you log the timing of it and the scanlines on which the interrupt fires, it doesn't
-	// seem correct for the intended purpose?
-	//MCFG_CPU_PERIODIC_INT(ygv608_timed_interrupt, 1000)
+	MDRV_CPU_ADD("mcu", H83002, 16384000 )
+	MDRV_CPU_PROGRAM_MAP( nd1h8rwmap)
+	MDRV_CPU_IO_MAP( nd1h8iomap)
+	MDRV_CPU_VBLANK_INT("screen", mcu_interrupt)
 
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_CPU_ADD("mcu", H83002, XTAL_49_152MHz/3 )
-	MCFG_CPU_PROGRAM_MAP( nd1h8rwmap)
-	MCFG_CPU_IO_MAP( nd1h8iomap)
-	MCFG_CPU_VBLANK_INT("screen", mcu_interrupt)
-
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
-
-	MCFG_MACHINE_START(namcond1)
-	MCFG_MACHINE_RESET(namcond1)
+	MDRV_MACHINE_START(namcond1)
+	MDRV_MACHINE_RESET(namcond1)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60.0)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(288, 224)   // maximum display resolution (512x512 in theory)
-	MCFG_SCREEN_VISIBLE_AREA(0, 287, 0, 223)   // default visible area
-	MCFG_SCREEN_UPDATE_STATIC(ygv608)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60.0)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(288, 224)   // maximum display resolution (512x512 in theory)
+	MDRV_SCREEN_VISIBLE_AREA(0, 287, 0, 223)   // default visible area
 
-	MCFG_GFXDECODE(namcond1)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(namcond1)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_START(ygv608)
+	MDRV_VIDEO_START(ygv608)
+	MDRV_VIDEO_UPDATE(ygv608)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_C352_ADD("c352", XTAL_49_152MHz/2)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(1, "lspeaker", 1.00)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(3, "lspeaker", 1.00)
+	MDRV_SOUND_ADD("c352", C352, 16384000)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(1, "lspeaker", 1.00)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(3, "lspeaker", 1.00)
 
-	MCFG_AT28C16_ADD( "at28c16", NULL )
-MACHINE_CONFIG_END
+	MDRV_AT28C16_ADD( "at28c16", NULL )
+MACHINE_DRIVER_END
 
 ROM_START( ncv1 )
 	ROM_REGION( 0x100000,"maincpu", 0 )		/* 16MB for Main CPU */
@@ -344,7 +336,7 @@ ROM_START( ncv1 )
 	ROM_REGION( 0x200000,"gfx1", 0 )	/* 2MB character generator */
 	ROM_LOAD( "nc1cg0.10c",         0x000000, 0x200000, CRC(355e7f29) SHA1(47d92c4e28c3610a620d3c9b3be558199477f6d8) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000,"c352", 0 ) 	/* 2MB sound data */
     ROM_LOAD( "nc1voice.7b",     0x000000, 0x200000, CRC(91c85bd6) SHA1(c2af8b1518b2b601f2b14c3f327e7e3eae9e29fc) )
 ROM_END
 
@@ -359,7 +351,7 @@ ROM_START( ncv1j )
 	ROM_REGION( 0x200000,"gfx1", 0 )	/* 2MB character generator */
 	ROM_LOAD( "nc1cg0.10c",         0x000000, 0x200000, CRC(355e7f29) SHA1(47d92c4e28c3610a620d3c9b3be558199477f6d8) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000,"c352", 0 ) 	/* 2MB sound data */
     ROM_LOAD( "nc1voice.7b",     0x000000, 0x200000, CRC(91c85bd6) SHA1(c2af8b1518b2b601f2b14c3f327e7e3eae9e29fc) )
 ROM_END
 
@@ -374,7 +366,7 @@ ROM_START( ncv1j2 )
 	ROM_REGION( 0x200000,"gfx1", 0 )	/* 2MB character generator */
 	ROM_LOAD( "nc1cg0.10c",         0x000000, 0x200000, CRC(355e7f29) SHA1(47d92c4e28c3610a620d3c9b3be558199477f6d8) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000,"c352", 0 ) 	/* 2MB sound data */
     ROM_LOAD( "nc1voice.7b",     0x000000, 0x200000, CRC(91c85bd6) SHA1(c2af8b1518b2b601f2b14c3f327e7e3eae9e29fc) )
 ROM_END
 
@@ -390,7 +382,7 @@ ROM_START( ncv2 )
 	ROM_LOAD( "ncs1cg0.10e",         0x000000, 0x200000, CRC(fdd24dbe) SHA1(4dceaae3d853075f58a7408be879afc91d80292e) )
 	ROM_LOAD( "ncs1cg1.10e",         0x200000, 0x200000, CRC(007b19de) SHA1(d3c093543511ec1dd2f8be6db45f33820123cabc) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000,"c352", 0 ) 	/* 2MB sound data */
     ROM_LOAD( "ncs1voic.7c",     0x000000, 0x200000, CRC(ed05fd88) SHA1(ad88632c89a9946708fc6b4c9247e1bae9b2944b) )
 ROM_END
 
@@ -406,12 +398,12 @@ ROM_START( ncv2j )
 	ROM_LOAD( "ncs1cg0.10e",         0x000000, 0x200000, CRC(fdd24dbe) SHA1(4dceaae3d853075f58a7408be879afc91d80292e) )
 	ROM_LOAD( "ncs1cg1.10e",         0x200000, 0x200000, CRC(007b19de) SHA1(d3c093543511ec1dd2f8be6db45f33820123cabc) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000,"c352", 0 ) 	/* 2MB sound data */
     ROM_LOAD( "ncs1voic.7c",     0x000000, 0x200000, CRC(ed05fd88) SHA1(ad88632c89a9946708fc6b4c9247e1bae9b2944b) )
 ROM_END
 
-GAME( 1995, ncv1,      0, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classic Collection Vol.1", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1995, ncv1j,  ncv1, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classic Collection Vol.1 (Japan, v1.00)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1995, ncv1j2, ncv1, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classic Collection Vol.1 (Japan, v1.03)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1996, ncv2,      0, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classic Collection Vol.2", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
-GAME( 1996, ncv2j,  ncv2, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classic Collection Vol.2 (Japan)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
+GAME( 1995, ncv1,      0, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classics Collection Vol.1", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, ncv1j,  ncv1, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classics Collection Vol.1 (Japan, v1.00)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, ncv1j2, ncv1, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classics Collection Vol.1 (Japan, v1.03)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, ncv2,      0, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classics Collection Vol.2", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
+GAME( 1996, ncv2j,  ncv2, namcond1, namcond1, 0, ROT90, "Namco", "Namco Classics Collection Vol.2 (Japan)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )

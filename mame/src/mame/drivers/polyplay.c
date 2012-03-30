@@ -78,7 +78,7 @@ emulated now. ;)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/samples.h"
 #include "includes/polyplay.h"
@@ -87,8 +87,17 @@ emulated now. ;)
 /* I/O Port handling */
 static READ8_HANDLER( polyplay_random_read );
 
+/* sound handling */
+static int prescale1;
+static int prescale2;
+static int channel1_active;
+static int channel1_const;
+static int channel2_active;
+static int channel2_const;
+
 /* timer handling */
-static TIMER_DEVICE_CALLBACK( polyplay_timer_callback );
+static TIMER_CALLBACK( polyplay_timer_callback );
+static emu_timer* polyplay_timer;
 static WRITE8_HANDLER( polyplay_start_timer2 );
 static WRITE8_HANDLER( polyplay_sound_channel );
 
@@ -104,56 +113,55 @@ static const samples_interface polyplay_samples_interface =
 
 static MACHINE_RESET( polyplay )
 {
-	polyplay_state *state = machine.driver_data<polyplay_state>();
-	state->m_channel1_active = 0;
-	state->m_channel1_const = 0;
-	state->m_channel2_active = 0;
-	state->m_channel2_const = 0;
+	channel1_active = 0;
+	channel1_const = 0;
+	channel2_active = 0;
+	channel2_const = 0;
 
-	polyplay_set_channel1(machine, 0);
+	polyplay_set_channel1(0);
 	polyplay_play_channel1(machine, 0);
-	polyplay_set_channel2(machine, 0);
+	polyplay_set_channel2(0);
 	polyplay_play_channel2(machine, 0);
 
-	state->m_timer = machine.device<timer_device>("timer");
+	polyplay_timer = timer_alloc(machine, polyplay_timer_callback, NULL);
 }
 
 
 static INTERRUPT_GEN( periodic_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x4e);
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x4e);
 }
 
 
 static INTERRUPT_GEN( coin_interrupt )
 {
-	polyplay_state *state = device->machine().driver_data<polyplay_state>();
+	static int last = 0;
 
-	if (input_port_read(device->machine(), "INPUT") & 0x80)
-		state->m_last = 0;
+	if (input_port_read(device->machine, "INPUT") & 0x80)
+		last = 0;
 	else
 	{
-		if (state->m_last == 0)    /* coin inserted */
-			device_set_input_line_and_vector(device, 0, HOLD_LINE, 0x50);
+		if (last == 0)    /* coin inserted */
+			cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x50);
 
-		state->m_last = 1;
+		last = 1;
 	}
 }
 
 
 /* memory mapping */
-static ADDRESS_MAP_START( polyplay_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( polyplay_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x0c00, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x8fff) AM_ROM
 	AM_RANGE(0xe800, 0xebff) AM_ROM AM_REGION("gfx1", 0)
-	AM_RANGE(0xec00, 0xf7ff) AM_RAM_WRITE(polyplay_characterram_w) AM_BASE_MEMBER(polyplay_state, m_characterram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE_MEMBER(polyplay_state, m_videoram)
+	AM_RANGE(0xec00, 0xf7ff) AM_RAM_WRITE(polyplay_characterram_w) AM_BASE(&polyplay_characterram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 ADDRESS_MAP_END
 
 
 /* port mapping */
-static ADDRESS_MAP_START( polyplay_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( polyplay_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x80, 0x81) AM_WRITE(polyplay_sound_channel)
 	AM_RANGE(0x82, 0x82) AM_WRITE(polyplay_start_timer2)
@@ -177,47 +185,46 @@ INPUT_PORTS_END
 
 static WRITE8_HANDLER( polyplay_sound_channel )
 {
-	polyplay_state *state = space->machine().driver_data<polyplay_state>();
 	switch(offset) {
 	case 0x00:
-		if (state->m_channel1_const) {
+		if (channel1_const) {
 			if (data <= 1) {
-				polyplay_set_channel1(space->machine(), 0);
+				polyplay_set_channel1(0);
 			}
-			state->m_channel1_const = 0;
-			polyplay_play_channel1(space->machine(), data*state->m_prescale1);
+			channel1_const = 0;
+			polyplay_play_channel1(space->machine, data*prescale1);
 
 		}
 		else {
-			state->m_prescale1 = (data & 0x20) ? 16 : 1;
+			prescale1 = (data & 0x20) ? 16 : 1;
 			if (data & 0x04) {
-				polyplay_set_channel1(space->machine(), 1);
-				state->m_channel1_const = 1;
+				polyplay_set_channel1(1);
+				channel1_const = 1;
 			}
 			if ((data == 0x41) || (data == 0x65) || (data == 0x45)) {
-				polyplay_set_channel1(space->machine(), 0);
-				polyplay_play_channel1(space->machine(), 0);
+				polyplay_set_channel1(0);
+				polyplay_play_channel1(space->machine, 0);
 			}
 		}
 		break;
 	case 0x01:
-		if (state->m_channel2_const) {
+		if (channel2_const) {
 			if (data <= 1) {
-				polyplay_set_channel2(space->machine(), 0);
+				polyplay_set_channel2(0);
 			}
-			state->m_channel2_const = 0;
-			polyplay_play_channel2(space->machine(), data*state->m_prescale2);
+			channel2_const = 0;
+			polyplay_play_channel2(space->machine, data*prescale2);
 
 		}
 		else {
-			state->m_prescale2 = (data & 0x20) ? 16 : 1;
+			prescale2 = (data & 0x20) ? 16 : 1;
 			if (data & 0x04) {
-				polyplay_set_channel2(space->machine(), 1);
-				state->m_channel2_const = 1;
+				polyplay_set_channel2(1);
+				channel2_const = 1;
 			}
 			if ((data == 0x41) || (data == 0x65) || (data == 0x45)) {
-				polyplay_set_channel2(space->machine(), 0);
-				polyplay_play_channel2(space->machine(), 0);
+				polyplay_set_channel2(0);
+				polyplay_play_channel2(space->machine, 0);
 			}
 		}
 		break;
@@ -226,17 +233,16 @@ static WRITE8_HANDLER( polyplay_sound_channel )
 
 static WRITE8_HANDLER( polyplay_start_timer2 )
 {
-	polyplay_state *state = space->machine().driver_data<polyplay_state>();
 	if (data == 0x03)
-		state->m_timer->reset();
+		timer_adjust_oneshot(polyplay_timer, attotime_never, 0);
 
 	if (data == 0xb5)
-		state->m_timer->adjust(attotime::from_hz(40), 0, attotime::from_hz(40));
+		timer_adjust_periodic(polyplay_timer, ATTOTIME_IN_HZ(40), 0, ATTOTIME_IN_HZ(40));
 }
 
 static READ8_HANDLER( polyplay_random_read )
 {
-	return space->machine().rand() & 0xff;
+	return mame_rand(space->machine) & 0xff;
 }
 
 /* graphic structures */
@@ -270,40 +276,38 @@ GFXDECODE_END
 
 /* the machine driver */
 
-static MACHINE_CONFIG_START( polyplay, polyplay_state )
+static MACHINE_DRIVER_START( polyplay )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 9830400/4)
-	MCFG_CPU_PROGRAM_MAP(polyplay_map)
-	MCFG_CPU_IO_MAP(polyplay_io_map)
-	MCFG_CPU_PERIODIC_INT(periodic_interrupt,75)
-	MCFG_CPU_VBLANK_INT("screen", coin_interrupt)
+	MDRV_CPU_ADD("maincpu", Z80, 9830400/4)
+	MDRV_CPU_PROGRAM_MAP(polyplay_map)
+	MDRV_CPU_IO_MAP(polyplay_io_map)
+	MDRV_CPU_PERIODIC_INT(periodic_interrupt,75)
+	MDRV_CPU_VBLANK_INT("screen", coin_interrupt)
 
-	MCFG_MACHINE_RESET(polyplay)
-
-	MCFG_TIMER_ADD("timer", polyplay_timer_callback)
-
+	MDRV_MACHINE_RESET(polyplay)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(polyplay)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(50)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(polyplay)
-	MCFG_PALETTE_LENGTH(10)
+	MDRV_GFXDECODE(polyplay)
+	MDRV_PALETTE_LENGTH(10)
 
-	MCFG_PALETTE_INIT(polyplay)
-	MCFG_VIDEO_START(polyplay)
+	MDRV_PALETTE_INIT(polyplay)
+	MDRV_VIDEO_START(polyplay)
+	MDRV_VIDEO_UPDATE(polyplay)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(polyplay_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(polyplay_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 /* ROM loading and mapping */
@@ -350,9 +354,9 @@ ROM_START( polyplay )
 ROM_END
 
 
-static TIMER_DEVICE_CALLBACK( polyplay_timer_callback )
+static TIMER_CALLBACK( polyplay_timer_callback )
 {
-	cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0x4c);
+	cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, 0x4c);
 }
 
 /* game driver */

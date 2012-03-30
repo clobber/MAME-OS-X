@@ -28,24 +28,27 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
-#include "includes/epos.h"
+#include "epos.h"
+
+static int counter;
+static MACHINE_RESET( dealer );
 
 static WRITE8_HANDLER( dealer_decrypt_rom )
 {
-	epos_state *state = space->machine().driver_data<epos_state>();
+	UINT8 *rom = memory_region(space->machine, "maincpu");
 
 	if (offset & 0x04)
-		state->m_counter = (state->m_counter + 1) & 0x03;
+		counter = (counter + 1) & 0x03;
 	else
-		state->m_counter = (state->m_counter - 1) & 0x03;
+		counter = (counter - 1) & 0x03;
 
-//  logerror("PC %08x: ctr=%04x\n",cpu_get_pc(&space->device()), state->m_counter);
+//  logerror("PC %08x: ctr=%04x\n",cpu_get_pc(space->cpu),counter);
 
-	memory_set_bank(space->machine(), "bank1", state->m_counter);
+	memory_set_bankptr(space->machine, 1, rom + 0x10000 * counter);
 
 	// is the 2nd bank changed by the counter or it always uses the 1st key?
 }
@@ -57,18 +60,18 @@ static WRITE8_HANDLER( dealer_decrypt_rom )
  *
  *************************************/
 
-static ADDRESS_MAP_START( epos_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( epos_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(epos_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( dealer_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x5fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK("bank2")
+static ADDRESS_MAP_START( dealer_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x5fff) AM_ROMBANK(1)
+	AM_RANGE(0x6000, 0x6fff) AM_ROMBANK(2)
 	AM_RANGE(0x7000, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE_SIZE_MEMBER(epos_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x8000, 0xffff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 ADDRESS_MAP_END
 
 /*************************************
@@ -77,16 +80,16 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("DSW") AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("SYSTEM") AM_WRITE(epos_port_1_w)
-	AM_RANGE(0x02, 0x02) AM_READ_PORT("INPUTS") AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x02, 0x02) AM_READ_PORT("INPUTS") AM_DEVWRITE("ay", ay8910_data_w)
 	AM_RANGE(0x03, 0x03) AM_READ_PORT("UNK")
-	AM_RANGE(0x06, 0x06) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x06, 0x06) AM_DEVWRITE("ay", ay8910_address_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( dealer_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( dealer_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x13) AM_DEVREADWRITE("ppi8255", ppi8255_r, ppi8255_w)
 	AM_RANGE(0x20, 0x24) AM_WRITE(dealer_decrypt_rom)
@@ -102,7 +105,8 @@ ADDRESS_MAP_END
 */
 static WRITE8_DEVICE_HANDLER( write_prtc )
 {
-	memory_set_bank(device->machine(), "bank2", data & 0x01);
+	UINT8 *rom = memory_region(device->machine, "maincpu");
+	memory_set_bankptr(device->machine, 2, rom + 0x6000 + (0x1000 * (data & 1)));
 }
 
 static const ppi8255_interface ppi8255_intf =
@@ -363,87 +367,57 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_START( epos )
-{
-	epos_state *state = machine.driver_data<epos_state>();
-
-	state->save_item(NAME(state->m_palette));
-	state->save_item(NAME(state->m_counter));
-}
-
-static MACHINE_RESET( epos )
-{
-	epos_state *state = machine.driver_data<epos_state>();
-
-	state->m_palette = 0;
-	state->m_counter = 0;
-}
-
-
-static MACHINE_START( dealer )
-{
-	UINT8 *ROM = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x0000], 0x10000);
-	memory_configure_bank(machine, "bank2", 0, 2, &ROM[0x6000], 0x1000);
-
-	memory_set_bank(machine, "bank1", 0);
-	memory_set_bank(machine, "bank2", 0);
-
-	MACHINE_START_CALL(epos);
-}
-
-static MACHINE_CONFIG_START( epos, epos_state )
+static MACHINE_DRIVER_START( epos )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 11000000/4)	/* 2.75 MHz (see notes) */
-	MCFG_CPU_PROGRAM_MAP(epos_map)
-	MCFG_CPU_IO_MAP(io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-
-	MCFG_MACHINE_RESET(epos)
-	MCFG_MACHINE_RESET(epos)
+	MDRV_CPU_ADD("maincpu", Z80, 11000000/4)	/* 2.75 MHz (see notes) */
+	MDRV_CPU_PROGRAM_MAP(epos_map)
+	MDRV_CPU_IO_MAP(io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(272, 241)
-	MCFG_SCREEN_VISIBLE_AREA(0, 271, 0, 235)
-	MCFG_SCREEN_UPDATE_STATIC(epos)
+	MDRV_VIDEO_UPDATE(epos)
+
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(272, 241)
+	MDRV_SCREEN_VISIBLE_AREA(0, 271, 0, 235)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, 11000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, 11000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( dealer, epos_state )
-
+static MACHINE_DRIVER_START( dealer )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 11000000/4)	/* 2.75 MHz (see notes) */
-	MCFG_CPU_PROGRAM_MAP(dealer_map)
-	MCFG_CPU_IO_MAP(dealer_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 11000000/4)	/* 2.75 MHz (see notes) */
+	MDRV_CPU_PROGRAM_MAP(dealer_map)
+	MDRV_CPU_IO_MAP(dealer_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_PPI8255_ADD( "ppi8255", ppi8255_intf )
-
-	MCFG_MACHINE_START(dealer)
-	MCFG_MACHINE_RESET(epos)
+	MDRV_PPI8255_ADD( "ppi8255", ppi8255_intf )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(272, 241)
-	MCFG_SCREEN_VISIBLE_AREA(0, 271, 0, 235)
-	MCFG_SCREEN_UPDATE_STATIC(epos)
+	MDRV_VIDEO_UPDATE(epos)
+
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(272, 241)
+	MDRV_SCREEN_VISIBLE_AREA(0, 271, 0, 235)
+
+	MDRV_MACHINE_RESET(dealer)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, 11000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, 11000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /*************************************
@@ -606,25 +580,33 @@ ROM_START( revenger )
 	ROM_LOAD( "82s123.u66",		0x0000, 0x0020, NO_DUMP )	/* missing */
 ROM_END
 
+static MACHINE_RESET( dealer )
+{
+	UINT8 *rom = memory_region(machine, "maincpu");
+	counter = 0;
+	memory_set_bankptr(machine, 1, rom);
+	memory_set_bankptr(machine, 2, rom + 0x6000);
+}
+
 static DRIVER_INIT( dealer )
 {
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 	int A;
 
 	/* Key 0 */
-	for (A = 0; A < 0x8000; A++)
+	for (A = 0;A < 0x8000;A++)
 		rom[A] = BITSWAP8(rom[A] ^ 0xbd, 2,6,4,0,5,7,1,3 );
 
 	/* Key 1 */
-	for (A = 0; A < 0x8000; A++)
+	for (A = 0;A < 0x8000;A++)
 		rom[A + 0x10000] = BITSWAP8(rom[A], 7,5,4,6,3,2,1,0 );
 
 	/* Key 2 */
-	for (A = 0; A < 0x8000; A++)
+	for (A = 0;A < 0x8000;A++)
 		rom[A + 0x20000] = BITSWAP8(rom[A] ^ 1, 7,6,5,4,3,0,2,1 );
 
 	/* Key 3 */
-	for (A = 0; A < 0x8000; A++)
+	for (A = 0;A < 0x8000;A++)
 		rom[A + 0x30000] = BITSWAP8(rom[A] ^ 1, 7,5,4,6,3,0,2,1 );
 
 	/*
@@ -653,12 +635,13 @@ static DRIVER_INIT( dealer )
  *
  *************************************/
 
-GAME( 1982, megadon,  0,        epos,   megadon,  0,	      ROT270, "Epos Corporation (Photar Industries license)", "Megadon", GAME_SUPPORTS_SAVE )
-GAME( 1982, catapult, 0,        epos,   catapult, 0,	      ROT270, "Epos Corporation", "Catapult", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE ) /* bad rom, hold f2 for test mode */
-GAME( 1983, suprglob, 0,        epos,   suprglob, 0,	      ROT270, "Epos Corporation", "Super Glob", GAME_SUPPORTS_SAVE )
-GAME( 1983, theglob,  suprglob, epos,   suprglob, 0,	      ROT270, "Epos Corporation", "The Glob", GAME_SUPPORTS_SAVE )
-GAME( 1983, theglob2, suprglob, epos,   suprglob, 0,	      ROT270, "Epos Corporation", "The Glob (earlier)", GAME_SUPPORTS_SAVE )
-GAME( 1983, theglob3, suprglob, epos,   suprglob, 0,	      ROT270, "Epos Corporation", "The Glob (set 3)", GAME_SUPPORTS_SAVE )
-GAME( 1984, igmo,     0,        epos,   igmo,     0,	      ROT270, "Epos Corporation", "IGMO", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1984, dealer,   0,        dealer, dealer,   dealer,   ROT270, "Epos Corporation", "The Dealer", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1984, revenger, 0,        dealer, dealer,   dealer,   ROT270, "Epos Corporation", "Revenger", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1982, megadon,  0,        epos,   megadon,  0,	     ROT270, "Epos Corporation (Photar Industries license)", "Megadon", 0 )
+GAME( 1982, catapult, 0,        epos,   catapult, 0,	     ROT270, "Epos Corporation", "Catapult", GAME_NOT_WORKING) /* bad rom, hold f2 for test mode */
+GAME( 1983, suprglob, 0,        epos,   suprglob, 0,	     ROT270, "Epos Corporation", "Super Glob", 0 )
+GAME( 1983, theglob,  suprglob, epos,   suprglob, 0,	     ROT270, "Epos Corporation", "The Glob", 0 )
+GAME( 1983, theglob2, suprglob, epos,   suprglob, 0,	     ROT270, "Epos Corporation", "The Glob (earlier)", 0 )
+GAME( 1983, theglob3, suprglob, epos,   suprglob, 0,	     ROT270, "Epos Corporation", "The Glob (set 3)", 0 )
+GAME( 1984, igmo,     0,        epos,   igmo,     0,	     ROT270, "Epos Corporation", "IGMO", GAME_WRONG_COLORS )
+GAME( 1984, dealer,   0,        dealer, dealer,   dealer,   ROT270, "Epos Corporation", "The Dealer", GAME_WRONG_COLORS )
+GAME( 1984, revenger, 0,        dealer, dealer,   dealer,   ROT270, "Epos Corporation", "Revenger", GAME_NOT_WORKING )
+

@@ -8,12 +8,21 @@
 ****************************************************************************/
 
 
-#include "emu.h"
-#include "video/atarimo.h"
-#include "includes/arcadecl.h"
+#include "driver.h"
+#include "machine/atarigen.h"
+#include "arcadecl.h"
 
 
-static void arcadecl_bitmap_render(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect);
+
+/*************************************
+ *
+ *  Statics
+ *
+ *************************************/
+
+static UINT8 has_mo;
+
+
 
 /*************************************
  *
@@ -59,15 +68,14 @@ VIDEO_START( arcadecl )
 		0,					/* resulting value to indicate "special" */
 		0,					/* callback routine for special entries */
 	};
-	arcadecl_state *state = machine.driver_data<arcadecl_state>();
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* set the intial scroll offset */
-	atarimo_set_xscroll(0, -12);
+	atarimo_set_xscroll(0, -4);
 	atarimo_set_yscroll(0, 0x110);
-	state->m_has_mo = (machine.gfx[0]->total_elements > 10);
+	has_mo = (machine->gfx[0]->total_elements > 10);
 }
 
 
@@ -78,26 +86,24 @@ VIDEO_START( arcadecl )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( arcadecl )
+VIDEO_UPDATE( arcadecl )
 {
-	arcadecl_state *state = screen.machine().driver_data<arcadecl_state>();
-
 	/* draw the playfield */
-	arcadecl_bitmap_render(screen.machine(), bitmap, cliprect);
+	rampart_bitmap_render(screen->machine, bitmap, cliprect);
 
 	/* draw and merge the MO */
-	if (state->m_has_mo)
+	if (has_mo)
 	{
 		atarimo_rect_list rectlist;
-		bitmap_ind16 *mobitmap;
+		bitmap_t *mobitmap;
 		int x, y, r;
 
 		mobitmap = atarimo_render(0, cliprect, &rectlist);
 		for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 			for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 			{
-				UINT16 *mo = &mobitmap->pix16(y);
-				UINT16 *pf = &bitmap.pix16(y);
+				UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
+				UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
 				for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 					if (mo[x])
 					{
@@ -111,33 +117,4 @@ SCREEN_UPDATE_IND16( arcadecl )
 			}
 	}
 	return 0;
-}
-
-
-
-/*************************************
- *
- *  Bitmap rendering
- *
- *************************************/
-
-static void arcadecl_bitmap_render(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
-{
-	arcadecl_state *state = machine.driver_data<arcadecl_state>();
-	int x, y;
-
-	/* update any dirty scanlines */
-	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
-	{
-		const UINT16 *src = &state->m_bitmap[256 * y];
-		UINT16 *dst = &bitmap.pix16(y);
-
-		/* regenerate the line */
-		for (x = cliprect.min_x & ~1; x <= cliprect.max_x; x += 2)
-		{
-			int bits = src[(x - 8) / 2];
-			dst[x + 0] = bits >> 8;
-			dst[x + 1] = bits & 0xff;
-		}
-	}
 }

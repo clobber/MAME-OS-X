@@ -16,7 +16,6 @@
 /* Include MMX/SSE intrinsics headers */
 
 #ifdef __SSE2__
-#include <stdlib.h>
 #include <mmintrin.h>	/* MMX */
 #include <xmmintrin.h>	/* SSE */
 #include <emmintrin.h>	/* SSE2 */

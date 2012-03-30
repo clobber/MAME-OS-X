@@ -20,38 +20,64 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2203intf.h"
-#include "includes/gng.h"
+
+
+
+extern UINT8 *gng_fgvideoram;
+extern UINT8 *gng_bgvideoram;
+WRITE8_HANDLER( gng_fgvideoram_w );
+WRITE8_HANDLER( gng_bgvideoram_w );
+WRITE8_HANDLER( gng_bgscrollx_w );
+WRITE8_HANDLER( gng_bgscrolly_w );
+WRITE8_HANDLER( gng_flipscreen_w );
+VIDEO_START( gng );
+VIDEO_UPDATE( gng );
+VIDEO_EOF( gng );
+
 
 
 static WRITE8_HANDLER( gng_bankswitch_w )
 {
 	if (data == 4)
-		memory_set_bank(space->machine(), "bank1", 4);
+	{
+		memory_set_bank(space->machine, 1,4);
+	}
 	else
-		memory_set_bank(space->machine(), "bank1", (data & 0x03));
+	{
+		memory_set_bank(space->machine, 1,(data & 0x03));
+	}
 }
 
 static WRITE8_HANDLER( gng_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset, data);
+	coin_counter_w(offset,data);
 }
 
-static ADDRESS_MAP_START( gng_map, AS_PROGRAM, 8 )
+static MACHINE_START( gng )
+{
+	/* configure ROM banking */
+	UINT8 *rombase = memory_region(machine, "maincpu");
+	memory_configure_bank(machine, 1,0,4,&rombase[0x10000],0x2000);
+	memory_configure_bank(machine, 1,4,1,&rombase[0x4000],0x2000);
+}
+
+static ADDRESS_MAP_START( gng_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1dff) AM_RAM
-	AM_RANGE(0x1e00, 0x1fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(gng_fgvideoram_w) AM_BASE_MEMBER(gng_state, m_fgvideoram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(gng_bgvideoram_w) AM_BASE_MEMBER(gng_state, m_bgvideoram)
+	AM_RANGE(0x1e00, 0x1fff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(gng_fgvideoram_w) AM_BASE(&gng_fgvideoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(gng_bgvideoram_w) AM_BASE(&gng_bgvideoram)
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("P1")
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("P2")
 	AM_RANGE(0x3003, 0x3003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x3004, 0x3004) AM_READ_PORT("DSW2")
-	AM_RANGE(0x3800, 0x38ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split2_w) AM_BASE_GENERIC(paletteram2)
-	AM_RANGE(0x3900, 0x39ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split1_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x3800, 0x38ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x3900, 0x39ff) AM_WRITE(paletteram_RRRRGGGGBBBBxxxx_split1_w) AM_BASE(&paletteram)
 	AM_RANGE(0x3a00, 0x3a00) AM_WRITE(soundlatch_w)
 	AM_RANGE(0x3b08, 0x3b09) AM_WRITE(gng_bgscrollx_w)
 	AM_RANGE(0x3b0a, 0x3b0b) AM_WRITE(gng_bgscrolly_w)
@@ -60,13 +86,13 @@ static ADDRESS_MAP_START( gng_map, AS_PROGRAM, 8 )
 //  { 0x3d01, 0x3d01, reset sound cpu?
 	AM_RANGE(0x3d02, 0x3d03) AM_WRITE(gng_coin_counter_w)
 	AM_RANGE(0x3e00, 0x3e00) AM_WRITE(gng_bankswitch_w)
-	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x4000, 0x5fff) AM_ROMBANK(1)
 	AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc800) AM_READ(soundlatch_r)
@@ -300,91 +326,51 @@ GFXDECODE_END
 
 
 
-static MACHINE_START( gng )
-{
-	gng_state *state = machine.driver_data<gng_state>();
-
-	UINT8 *rombase = machine.region("maincpu")->base();
-	memory_configure_bank(machine, "bank1", 0, 4, &rombase[0x10000], 0x2000);
-	memory_configure_bank(machine, "bank1", 4, 1, &rombase[0x4000], 0x2000);
-
-	state->save_item(NAME(state->m_scrollx));
-	state->save_item(NAME(state->m_scrolly));
-}
-
-static MACHINE_RESET( gng )
-{
-	gng_state *state = machine.driver_data<gng_state>();
-
-	state->m_scrollx[0] = 0;
-	state->m_scrollx[1] = 0;
-	state->m_scrolly[0] = 0;
-	state->m_scrolly[1] = 0;
-
-	{
-		int i;
-
-		/* TODO: PCB reference clearly shows that the POST has random/filled data on the paletteram.
-                 For now let's fill everything with white colors until we have better info about it */
-		for(i=0;i<0x100;i+=4)
-		{
-			machine.generic.paletteram.u8[i] = machine.generic.paletteram2.u8[i] = 0x00;
-			machine.generic.paletteram.u8[i+1] = machine.generic.paletteram2.u8[i+1] = 0x55;
-			machine.generic.paletteram.u8[i+2] = machine.generic.paletteram2.u8[i+2] = 0xaa;
-			machine.generic.paletteram.u8[i+3] = machine.generic.paletteram2.u8[i+3] = 0xff;
-			palette_set_color_rgb(machine,i+0,0x00,0x00,0x00);
-			palette_set_color_rgb(machine,i+1,0x55,0x55,0x55);
-			palette_set_color_rgb(machine,i+2,0xaa,0xaa,0xaa);
-			palette_set_color_rgb(machine,i+3,0xff,0xff,0xff);
-		}
-	}
-}
-
-static MACHINE_CONFIG_START( gng, gng_state )
+static MACHINE_DRIVER_START( gng )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, XTAL_12MHz/8)		/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(gng_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", M6809, XTAL_12MHz/8)		/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(gng_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_12MHz/4)		/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_12MHz/4)		/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)
 
-	MCFG_MACHINE_START(gng)
-	MCFG_MACHINE_RESET(gng)
+	MDRV_MACHINE_START(gng)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.59)    /* verified on pcb */
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(gng)
-	MCFG_SCREEN_VBLANK_STATIC(gng)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(59.59)    /* verified on pcb */
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(gng)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(gng)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_START(gng)
+	MDRV_VIDEO_START(gng)
+	MDRV_VIDEO_EOF(gng)
+	MDRV_VIDEO_UPDATE(gng)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)		/* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.40)
-	MCFG_SOUND_ROUTE(1, "mono", 0.40)
-	MCFG_SOUND_ROUTE(2, "mono", 0.40)
-	MCFG_SOUND_ROUTE(3, "mono", 0.20)
+	MDRV_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)		/* verified on pcb */
+	MDRV_SOUND_ROUTE(0, "mono", 0.40)
+	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MDRV_SOUND_ROUTE(2, "mono", 0.40)
+	MDRV_SOUND_ROUTE(3, "mono", 0.20)
 
-	MCFG_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)		/* verified on pcb */
-	MCFG_SOUND_ROUTE(0, "mono", 0.40)
-	MCFG_SOUND_ROUTE(1, "mono", 0.40)
-	MCFG_SOUND_ROUTE(2, "mono", 0.40)
-	MCFG_SOUND_ROUTE(3, "mono", 0.20)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)		/* verified on pcb */
+	MDRV_SOUND_ROUTE(0, "mono", 0.40)
+	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MDRV_SOUND_ROUTE(2, "mono", 0.40)
+	MDRV_SOUND_ROUTE(3, "mono", 0.20)
+MACHINE_DRIVER_END
 
 
 
@@ -531,40 +517,6 @@ ROM_START( gngblita )
 	ROM_REGION( 0x0100, "plds", 0 )
 	ROM_LOAD( "gg-pal10l8.bin",  0x0000, 0x002c, CRC(87f1b7e0) SHA1(b719c3be7bd4a02660bb0887f752e9769cbd37d2) )
 ROM_END
-
-ROM_START( gngc )
-	ROM_REGION( 0x18000, "maincpu", 0 )
-	ROM_LOAD( "mm_c_04",    0x04000, 0x4000, CRC(4f94130f) SHA1(6863fee3c97c76ba314ccbada7efacb6783e7d32) )
-	ROM_LOAD( "mm_c_03",    0x08000, 0x8000, CRC(1def138a) SHA1(d29e12082c4d5c06a9910b3500ef66242cdec905) )
-	ROM_LOAD( "mm_c_05",    0x10000, 0x8000, CRC(ed28e86e) SHA1(064871918547a56be330c6994d4db2c9932e14db) )
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "gg2.bin",      0x0000, 0x8000, CRC(615f5b6f) SHA1(7ef9ec5c2072e21c787a6bbf700033f50c759c1d) )
-
-	ROM_REGION( 0x04000, "gfx1", 0 )
-	ROM_LOAD( "gg1.bin",      0x00000, 0x4000, CRC(ecfccf07) SHA1(0a1518e19a2e0a4cc3dde4b9568202ea911b5ece) ) /* characters */
-
-	ROM_REGION( 0x18000, "gfx2", 0 )
-	ROM_LOAD( "gg11.bin",     0x00000, 0x4000, CRC(ddd56fa9) SHA1(f9d77eee5e2738b7e83ba02fcc55dd480391479f) ) /* tiles 0-1 Plane 1*/
-	ROM_LOAD( "gg10.bin",     0x04000, 0x4000, CRC(7302529d) SHA1(8434c994cc55d2586641f3b90b6b15fd65dfb67c) ) /* tiles 2-3 Plane 1*/
-	ROM_LOAD( "gg9.bin",      0x08000, 0x4000, CRC(20035bda) SHA1(bbb1fba0eb19471f66d29526fa8423ccb047bd63) ) /* tiles 0-1 Plane 2*/
-	ROM_LOAD( "gg8.bin",      0x0c000, 0x4000, CRC(f12ba271) SHA1(1c42fa02cb27b35d10c3f7f036005e747f9f6b79) ) /* tiles 2-3 Plane 2*/
-	ROM_LOAD( "gg7.bin",      0x10000, 0x4000, CRC(e525207d) SHA1(1947f159189b3a53f1251d8653b6e7c65c91fc3c) ) /* tiles 0-1 Plane 3*/
-	ROM_LOAD( "gg6.bin",      0x14000, 0x4000, CRC(2d77e9b2) SHA1(944da1ce29a18bf0fc8deff78bceacba0bf23a07) ) /* tiles 2-3 Plane 3*/
-
-	ROM_REGION( 0x20000, "gfx3", ROMREGION_ERASEFF )
-	ROM_LOAD( "gg17.bin",     0x00000, 0x4000, CRC(93e50a8f) SHA1(42d367f57bb2fdf60a0445ac1533da99cfeaa617) ) /* sprites 0 Plane 1-2 */
-	ROM_LOAD( "gg16.bin",     0x04000, 0x4000, CRC(06d7e5ca) SHA1(9e06012bcd82f98fad43de666ef9a75979d940ab) ) /* sprites 1 Plane 1-2 */
-	ROM_LOAD( "gg15.bin",     0x08000, 0x4000, CRC(bc1fe02d) SHA1(e3a1421d465b87148ffa94f5673b2307f0246afe) ) /* sprites 2 Plane 1-2 */
-	ROM_LOAD( "gg14.bin",     0x10000, 0x4000, CRC(6aaf12f9) SHA1(207a7407288182a4f3eddaea634c6a6452131182) ) /* sprites 0 Plane 3-4 */
-	ROM_LOAD( "gg13.bin",     0x14000, 0x4000, CRC(e80c3fca) SHA1(cb641c25bb04b970b2cbeca41adb792bbe142fb5) ) /* sprites 1 Plane 3-4 */
-	ROM_LOAD( "gg12.bin",     0x18000, 0x4000, CRC(7780a925) SHA1(3f129ca6d695548b659955fe538584bd9ac2ff17) ) /* sprites 2 Plane 3-4 */
-
-	ROM_REGION( 0x0200, "proms", 0 )
-	ROM_LOAD( "tbp24s10.14k", 0x0000, 0x0100, CRC(0eaf5158) SHA1(bafd4108708f66cd7b280e47152b108f3e254fc9) )  /* video timing (not used) */
-	ROM_LOAD( "63s141.2e",    0x0100, 0x0100, CRC(4a1285a4) SHA1(5018c3950b675af58db499e2883ecbc55419b491) )  /* priority (not used) */
-ROM_END
-
 
 ROM_START( gngt )
 	ROM_REGION( 0x18000, "maincpu", 0 )
@@ -737,16 +689,15 @@ static READ8_HANDLER( diamond_hack_r )
 
 static DRIVER_INIT( diamond )
 {
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x6000, 0x6000, FUNC(diamond_hack_r));
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x6000, 0x6000, 0, 0, diamond_hack_r);
 }
 
 
 
 GAME( 1985, gng,       0,   gng, gng,      0,       ROT0, "Capcom", "Ghosts'n Goblins (World? set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1985, gnga,      gng, gng, gng,      0,       ROT0, "Capcom", "Ghosts'n Goblins (World? set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1985, gngbl,     gng, gng, gng,      0,       ROT0, "bootleg", "Ghosts'n Goblins (bootleg with Cross)", GAME_SUPPORTS_SAVE )
-GAME( 1985, gngblita,  gng, gng, gng,      0,       ROT0, "bootleg", "Ghosts'n Goblins (Italian bootleg, harder)", GAME_SUPPORTS_SAVE )
-GAME( 1985, gngc,      gng, gng, gng,      0,       ROT0, "Capcom", "Ghosts'n Goblins (World? set 3)", GAME_SUPPORTS_SAVE ) // rev c?
+GAME( 1985, gngbl,     gng, gng, gng,      0,       ROT0, "Capcom", "Ghosts'n Goblins (bootleg with Cross)", GAME_SUPPORTS_SAVE )
+GAME( 1985, gngblita,  gng, gng, gng,      0,       ROT0, "Capcom", "Ghosts'n Goblins (Italian bootleg, harder)", GAME_SUPPORTS_SAVE )
 GAME( 1985, gngt,      gng, gng, gng,      0,       ROT0, "Capcom (Taito America license)", "Ghosts'n Goblins (US)", GAME_SUPPORTS_SAVE )
 GAME( 1985, makaimur,  gng, gng, makaimur, 0,       ROT0, "Capcom", "Makai-Mura (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1985, makaimurc, gng, gng, makaimur, 0,       ROT0, "Capcom", "Makai-Mura (Japan Revision C)", GAME_SUPPORTS_SAVE )

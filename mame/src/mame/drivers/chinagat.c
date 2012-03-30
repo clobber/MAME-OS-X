@@ -24,7 +24,7 @@ OBVIOUS SPEED PROBLEMS...
 
 Port 0x2800 on the Sub CPU.
 - All those I/O looking ports on the main CPU (0x3exx and 0x3fxx)
-- One's scroll control. Probably other video control as well.
+- One's scroll control. Prolly other video control as well.
 - Location 0x1a2ec in cgate51.bin (The main CPU's ROM) is 88. This is
   copied to videoram, and causes that minor visual discrepancy on
   the title screen. But the CPU tests that part of the ROM and passes
@@ -69,7 +69,7 @@ Dip locations and factory settings verified with China Gate US manual.
 
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/hd6309/hd6309.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/z80/z80.h"
@@ -78,10 +78,36 @@ Dip locations and factory settings verified with China Gate US manual.
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
 #include "sound/msm5205.h"
-#include "includes/ddragon.h"
 
 #define MAIN_CLOCK		XTAL_12MHz
 #define PIXEL_CLOCK		MAIN_CLOCK / 2
+
+/**************** Video stuff ******************/
+
+WRITE8_HANDLER( ddragon_bgvideoram_w );
+WRITE8_HANDLER( ddragon_fgvideoram_w );
+
+VIDEO_START( chinagat );
+VIDEO_UPDATE( ddragon );
+
+extern UINT8 technos_video_hw;
+extern UINT16 ddragon_scrollx_hi, ddragon_scrolly_hi;
+extern UINT8 *ddragon_scrollx_lo;
+extern UINT8 *ddragon_scrolly_lo;
+extern UINT8 *ddragon_bgvideoram,*ddragon_fgvideoram;
+
+/**************** Machine stuff ******************/
+static int sprite_irq, sound_irq, adpcm_sound_irq;
+static int saiyugb1_adpcm_addr;
+static int saiyugb1_i8748_P1;
+static int saiyugb1_i8748_P2;
+static int saiyugb1_pcm_shift;
+static int saiyugb1_pcm_nibble;
+static int saiyugb1_mcu_command;
+#if 0
+static int saiyugb1_m5205_clk;
+#endif
+
 
 
 /*
@@ -99,7 +125,7 @@ Dip locations and factory settings verified with China Gate US manual.
     Since MAME's video timing is 0-based, we need to convert this.
 */
 /* based on ddragon.c driver */
-INLINE int scanline_to_vcount( int scanline )
+INLINE int scanline_to_vcount(int scanline)
 {
 	int vcount = scanline + 8;
 	if (vcount < 0x100)
@@ -110,54 +136,59 @@ INLINE int scanline_to_vcount( int scanline )
 
 static TIMER_DEVICE_CALLBACK( chinagat_scanline )
 {
-	ddragon_state *state = timer.machine().driver_data<ddragon_state>();
 	int scanline = param;
-	int screen_height = timer.machine().primary_screen->height();
+	int screen_height = video_screen_get_height(timer->machine->primary_screen);
 	int vcount_old = scanline_to_vcount((scanline == 0) ? screen_height - 1 : scanline - 1);
 	int vcount = scanline_to_vcount(scanline);
 
 	/* update to the current point */
 	if (scanline > 0)
-		timer.machine().primary_screen->update_partial(scanline - 1);
+	{
+		video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
+	}
 
 	/* on the rising edge of VBLK (vcount == F8), signal an NMI */
 	if (vcount == 0xf8)
-		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, ASSERT_LINE);
+	{
+		cputag_set_input_line(timer->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+	}
 
 	/* set 1ms signal on rising edge of vcount & 8 */
 	if (!(vcount_old & 8) && (vcount & 8))
-		device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, ASSERT_LINE);
+	{
+		cputag_set_input_line(timer->machine, "maincpu", M6809_FIRQ_LINE, ASSERT_LINE);
+	}
 
 	/* adjust for next scanline */
 	if (++scanline >= screen_height)
+	{
 		scanline = 0;
+	}
 }
 
 static WRITE8_HANDLER( chinagat_interrupt_w )
 {
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
-
 	switch (offset)
 	{
 		case 0: /* 3e00 - SND irq */
-			soundlatch_w(space, 0, data);
-			device_set_input_line(state->m_snd_cpu, state->m_sound_irq, (state->m_sound_irq == INPUT_LINE_NMI) ? PULSE_LINE : HOLD_LINE );
+			soundlatch_w( space, 0, data );
+			cputag_set_input_line(space->machine, "audiocpu", sound_irq, (sound_irq == INPUT_LINE_NMI) ? PULSE_LINE : HOLD_LINE );
 			break;
 
 		case 1: /* 3e01 - NMI ack */
-			device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, CLEAR_LINE);
+			cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 			break;
 
 		case 2: /* 3e02 - FIRQ ack */
-			device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, CLEAR_LINE);
+			cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE, CLEAR_LINE);
 			break;
 
 		case 3: /* 3e03 - IRQ ack */
-			device_set_input_line(state->m_maincpu, M6809_IRQ_LINE, CLEAR_LINE);
+			cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE, CLEAR_LINE);
 			break;
 
 		case 4: /* 3e04 - sub CPU IRQ ack */
-			device_set_input_line(state->m_sub_cpu, state->m_sprite_irq, (state->m_sprite_irq == INPUT_LINE_NMI) ? PULSE_LINE : HOLD_LINE );
+			cputag_set_input_line(space->machine, "sub", sprite_irq, (sprite_irq == INPUT_LINE_NMI) ? PULSE_LINE : HOLD_LINE );
 			break;
 	}
 }
@@ -170,151 +201,146 @@ static WRITE8_HANDLER( chinagat_video_ctrl_w )
     ---- -x--   Flip screen
     --x- ----   Enable video ???
     ****************************/
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
 
-	state->m_scrolly_hi = ((data & 0x02) >> 1);
-	state->m_scrollx_hi = data & 0x01;
+	ddragon_scrolly_hi = ( ( data & 0x02 ) << 7 );
+	ddragon_scrollx_hi = ( ( data & 0x01 ) << 8 );
 
-	flip_screen_set(space->machine(), ~data & 0x04);
+	flip_screen_set(space->machine, ~data & 0x04);
 }
 
 static WRITE8_HANDLER( chinagat_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 0x07);	// shall we check (data & 7) < 6 (# of banks)?
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	memory_set_bankptr(space->machine,  1,&RAM[ 0x10000 + (0x4000 * (data & 7)) ] );
 }
 
 static WRITE8_HANDLER( chinagat_sub_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank4", data & 0x07);	// shall we check (data & 7) < 6 (# of banks)?
+	UINT8 *RAM = memory_region( space->machine, "sub" );
+	memory_set_bankptr(space->machine,  4,&RAM[ 0x10000 + (0x4000 * (data & 7)) ] );
 }
 
-static READ8_HANDLER( saiyugoub1_mcu_command_r )
+static READ8_HANDLER( saiyugb1_mcu_command_r )
 {
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
 #if 0
-	if (state->m_mcu_command == 0x78)
+	if (saiyugb1_mcu_command == 0x78)
 	{
-		space->machine().device<cpu_device>("mcu")->suspend(SUSPEND_REASON_HALT, 1);	/* Suspend (speed up) */
+		cputag_suspend(space->machine, "mcu", SUSPEND_REASON_HALT, 1);	/* Suspend (speed up) */
 	}
 #endif
-	return state->m_mcu_command;
+	return saiyugb1_mcu_command;
 }
 
-static WRITE8_HANDLER( saiyugoub1_mcu_command_w )
+static WRITE8_HANDLER( saiyugb1_mcu_command_w )
 {
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
-	state->m_mcu_command = data;
+	saiyugb1_mcu_command = data;
 #if 0
 	if (data != 0x78)
 	{
-		space->machine().device<cpu_device>("mcu")->resume(SUSPEND_REASON_HALT);	/* Wake up */
+		cputag_resume(space->machine, "mcu", SUSPEND_REASON_HALT);	/* Wake up */
 	}
 #endif
 }
 
-static WRITE8_HANDLER( saiyugoub1_adpcm_rom_addr_w )
+static WRITE8_HANDLER( saiyugb1_adpcm_rom_addr_w )
 {
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
 	/* i8748 Port 1 write */
-	state->m_i8748_P1 = data;
+	saiyugb1_i8748_P1 = data;
 }
 
-static WRITE8_DEVICE_HANDLER( saiyugoub1_adpcm_control_w )
+static WRITE8_DEVICE_HANDLER( saiyugb1_adpcm_control_w )
 {
-	ddragon_state *state = device->machine().driver_data<ddragon_state>();
-
 	/* i8748 Port 2 write */
-	UINT8 *saiyugoub1_adpcm_rom = device->machine().region("adpcm")->base();
+
+	UINT8 *saiyugb1_adpcm_rom = memory_region(device->machine, "adpcm");
 
 	if (data & 0x80)	/* Reset m5205 and disable ADPCM ROM outputs */
 	{
 		logerror("ADPCM output disabled\n");
-		state->m_pcm_nibble = 0x0f;
-		msm5205_reset_w(device, 1);
+		saiyugb1_pcm_nibble = 0x0f;
+		msm5205_reset_w(device,1);
 	}
 	else
 	{
-		if ((state->m_i8748_P2 & 0xc) != (data & 0xc))
+		if ( (saiyugb1_i8748_P2 & 0xc) != (data & 0xc) )
 		{
-			if ((state->m_i8748_P2 & 0xc) == 0)	/* Latch MSB Address */
+			if ((saiyugb1_i8748_P2 & 0xc) == 0)	/* Latch MSB Address */
 			{
 ///             logerror("Latching MSB\n");
-				state->m_adpcm_addr = (state->m_adpcm_addr & 0x3807f) | (state->m_i8748_P1 << 7);
+				saiyugb1_adpcm_addr = (saiyugb1_adpcm_addr & 0x3807f) | (saiyugb1_i8748_P1 << 7);
 			}
-			if ((state->m_i8748_P2 & 0xc) == 4)	/* Latch LSB Address */
+			if ((saiyugb1_i8748_P2 & 0xc) == 4)	/* Latch LSB Address */
 			{
 ///             logerror("Latching LSB\n");
-				state->m_adpcm_addr = (state->m_adpcm_addr & 0x3ff80) | (state->m_i8748_P1 >> 1);
-				state->m_pcm_shift = (state->m_i8748_P1 & 1) * 4;
+				saiyugb1_adpcm_addr = (saiyugb1_adpcm_addr & 0x3ff80) | (saiyugb1_i8748_P1 >> 1);
+				saiyugb1_pcm_shift = (saiyugb1_i8748_P1 & 1) * 4;
 			}
 		}
 
-		state->m_adpcm_addr = ((state->m_adpcm_addr & 0x07fff) | (data & 0x70 << 11));
+		saiyugb1_adpcm_addr = ((saiyugb1_adpcm_addr & 0x07fff) | (data & 0x70 << 11));
 
-		state->m_pcm_nibble = saiyugoub1_adpcm_rom[state->m_adpcm_addr & 0x3ffff];
+		saiyugb1_pcm_nibble = saiyugb1_adpcm_rom[saiyugb1_adpcm_addr & 0x3ffff];
 
-		state->m_pcm_nibble = (state->m_pcm_nibble >> state->m_pcm_shift) & 0x0f;
+		saiyugb1_pcm_nibble = (saiyugb1_pcm_nibble >> saiyugb1_pcm_shift) & 0x0f;
 
-///     logerror("Writing %02x to m5205. $ROM=%08x  P1=%02x  P2=%02x  Prev_P2=%02x  Nibble=%08x\n", state->m_pcm_nibble, state->m_adpcm_addr, state->m_i8748_P1, data, state->m_i8748_P2, state->m_pcm_shift);
+///     logerror("Writing %02x to m5205. $ROM=%08x  P1=%02x  P2=%02x  Prev_P2=%02x  Nibble=%08x\n",saiyugb1_pcm_nibble,saiyugb1_adpcm_addr,saiyugb1_i8748_P1,data,saiyugb1_i8748_P2,saiyugb1_pcm_shift);
 
-		if (((state->m_i8748_P2 & 0xc) >= 8) && ((data & 0xc) == 4))
+		if ( ((saiyugb1_i8748_P2 & 0xc) >= 8) && ((data & 0xc) == 4) )
 		{
-			msm5205_data_w (device, state->m_pcm_nibble);
-			logerror("Writing %02x to m5205\n", state->m_pcm_nibble);
+			msm5205_data_w (device, saiyugb1_pcm_nibble);
+			logerror("Writing %02x to m5205\n",saiyugb1_pcm_nibble);
 		}
-		logerror("$ROM=%08x  P1=%02x  P2=%02x  Prev_P2=%02x  Nibble=%1x  PCM_data=%02x\n", state->m_adpcm_addr, state->m_i8748_P1, data, state->m_i8748_P2, state->m_pcm_shift, state->m_pcm_nibble);
+		logerror("$ROM=%08x  P1=%02x  P2=%02x  Prev_P2=%02x  Nibble=%1x  PCM_data=%02x\n",saiyugb1_adpcm_addr,saiyugb1_i8748_P1,data,saiyugb1_i8748_P2,saiyugb1_pcm_shift,saiyugb1_pcm_nibble);
 	}
-	state->m_i8748_P2 = data;
+	saiyugb1_i8748_P2 = data;
 }
 
-static WRITE8_DEVICE_HANDLER( saiyugoub1_m5205_clk_w )
+static WRITE8_DEVICE_HANDLER( saiyugb1_m5205_clk_w )
 {
 	/* i8748 T0 output clk mode */
 	/* This signal goes through a divide by 8 counter */
 	/* to the xtal pins of the MSM5205 */
 
 	/* Actually, T0 output clk mode is not supported by the i8048 core */
-#if 0
-	ddragon_state *state = device->machine().driver_data<ddragon_state>();
 
-	state->m_m5205_clk++;
-	if (state->m_m5205_clk == 8)
-	{
-		msm5205_vclk_w(device, 1);		/* ??? */
-		state->m_m5205_clk = 0;
+#if 0
+	saiyugb1_m5205_clk++;
+	if (saiyugb1_m5205_clk == 8)
+	}
+		msm5205_vclk_w (device, 1);		/* ??? */
+		saiyugb1_m5205_clk = 0;
 	}
 	else
-		msm5205_vclk_w(device, 0);		/* ??? */
+	}
+		msm5205_vclk_w (device, 0);		/* ??? */
+	}
 #endif
 }
 
-static READ8_HANDLER( saiyugoub1_m5205_irq_r )
+static READ8_HANDLER( saiyugb1_m5205_irq_r )
 {
-	ddragon_state *state = space->machine().driver_data<ddragon_state>();
-	if (state->m_adpcm_sound_irq)
+	if (adpcm_sound_irq)
 	{
-		state->m_adpcm_sound_irq = 0;
+		adpcm_sound_irq = 0;
 		return 1;
 	}
 	return 0;
 }
-
-static void saiyugoub1_m5205_irq_w( device_t *device )
+static void saiyugb1_m5205_irq_w(const device_config *device)
 {
-	ddragon_state *state = device->machine().driver_data<ddragon_state>();
-	state->m_adpcm_sound_irq = 1;
+	adpcm_sound_irq = 1;
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(ddragon_fgvideoram_w) AM_BASE_MEMBER(ddragon_state, m_fgvideoram)
-	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(ddragon_bgvideoram_w) AM_BASE_MEMBER(ddragon_state, m_bgvideoram)
-	AM_RANGE(0x3000, 0x317f) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x3400, 0x357f) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE_GENERIC(paletteram2)
-	AM_RANGE(0x3800, 0x397f) AM_WRITE_BANK("bank3") AM_BASE_SIZE_MEMBER(ddragon_state, m_spriteram, m_spriteram_size)
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM_WRITE(ddragon_fgvideoram_w) AM_BASE(&ddragon_fgvideoram)
+	AM_RANGE(0x2800, 0x2fff) AM_RAM_WRITE(ddragon_bgvideoram_w) AM_BASE(&ddragon_bgvideoram)
+	AM_RANGE(0x3000, 0x317f) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split1_w) AM_BASE(&paletteram)
+	AM_RANGE(0x3400, 0x357f) AM_WRITE(paletteram_xxxxBBBBGGGGRRRR_split2_w) AM_BASE(&paletteram_2)
+	AM_RANGE(0x3800, 0x397f) AM_WRITE(SMH_BANK(3)) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x3e00, 0x3e04) AM_WRITE(chinagat_interrupt_w)
-	AM_RANGE(0x3e06, 0x3e06) AM_WRITEONLY AM_BASE_MEMBER(ddragon_state, m_scrolly_lo)
-	AM_RANGE(0x3e07, 0x3e07) AM_WRITEONLY AM_BASE_MEMBER(ddragon_state, m_scrollx_lo)
+	AM_RANGE(0x3e06, 0x3e06) AM_WRITE(SMH_RAM) AM_BASE(&ddragon_scrolly_lo)
+	AM_RANGE(0x3e07, 0x3e07) AM_WRITE(SMH_RAM) AM_BASE(&ddragon_scrollx_lo)
 	AM_RANGE(0x3f00, 0x3f00) AM_WRITE(chinagat_video_ctrl_w)
 	AM_RANGE(0x3f01, 0x3f01) AM_WRITE(chinagat_bankswitch_w)
 	AM_RANGE(0x3f00, 0x3f00) AM_READ_PORT("SYSTEM")
@@ -322,65 +348,65 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x3f02, 0x3f02) AM_READ_PORT("DSW2")
 	AM_RANGE(0x3f03, 0x3f03) AM_READ_PORT("P1")
 	AM_RANGE(0x3f04, 0x3f04) AM_READ_PORT("P2")
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE("share1")
+static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(chinagat_sub_bankswitch_w)
-	AM_RANGE(0x2800, 0x2800) AM_WRITEONLY /* Called on CPU start and after return from jump table */
+	AM_RANGE(0x2800, 0x2800) AM_WRITE(SMH_RAM) /* Called on CPU start and after return from jump table */
 //  AM_RANGE(0x2a2b, 0x2a2b) AM_READNOP /* What lives here? */
 //  AM_RANGE(0x2a30, 0x2a30) AM_READNOP /* What lives here? */
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank4")
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(4)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xA000, 0xA000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( ym2203c_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ym2203c_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 // 8804 and/or 8805 make a gong sound when the coin goes in
 // but only on the title screen....
 
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
-//  AM_RANGE(0x8802, 0x8802) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
-//  AM_RANGE(0x8803, 0x8803) AM_DEVWRITE_MODERN("oki", okim6295_device, write)
+//  AM_RANGE(0x8802, 0x8802) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+//  AM_RANGE(0x8803, 0x8803) AM_DEVWRITE("oki", okim6295_w)
 	AM_RANGE(0x8804, 0x8805) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
-//  AM_RANGE(0x8804, 0x8804) AM_WRITEONLY
-//  AM_RANGE(0x8805, 0x8805) AM_WRITEONLY
+//  AM_RANGE(0x8804, 0x8804) AM_WRITE(SMH_RAM)
+//  AM_RANGE(0x8805, 0x8805) AM_WRITE(SMH_RAM)
 
-//  AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-//  AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+//  AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+//  AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xA000, 0xA000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( saiyugoub1_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( saiyugb1_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_WRITE(saiyugoub1_mcu_command_w)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x9800, 0x9800) AM_WRITE(saiyugb1_mcu_command_w)
 	AM_RANGE(0xA000, 0xA000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8748_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( i8748_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_ROM
 	AM_RANGE(0x0400, 0x07ff) AM_ROM		/* i8749 version */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( i8748_portmap, AS_IO, 8 )
-	AM_RANGE(MCS48_PORT_BUS, MCS48_PORT_BUS) AM_READ(saiyugoub1_mcu_command_r)
-	AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_DEVWRITE("adpcm", saiyugoub1_m5205_clk_w)		/* Drives the clock on the m5205 at 1/8 of this frequency */
-	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(saiyugoub1_m5205_irq_r)
-	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_WRITE(saiyugoub1_adpcm_rom_addr_w)
-	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_DEVWRITE("adpcm", saiyugoub1_adpcm_control_w)
+static ADDRESS_MAP_START( i8748_portmap, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(MCS48_PORT_BUS, MCS48_PORT_BUS) AM_READ(saiyugb1_mcu_command_r)
+	AM_RANGE(MCS48_PORT_T0, MCS48_PORT_T0) AM_DEVWRITE("adpcm", saiyugb1_m5205_clk_w) 		/* Drives the clock on the m5205 at 1/8 of this frequency */
+	AM_RANGE(MCS48_PORT_T1, MCS48_PORT_T1) AM_READ(saiyugb1_m5205_irq_r)
+	AM_RANGE(MCS48_PORT_P1, MCS48_PORT_P1) AM_WRITE(saiyugb1_adpcm_rom_addr_w)
+	AM_RANGE(MCS48_PORT_P2, MCS48_PORT_P2) AM_DEVWRITE("adpcm", saiyugb1_adpcm_control_w)
 ADDRESS_MAP_END
 
 
@@ -492,10 +518,9 @@ static GFXDECODE_START( chinagat )
 GFXDECODE_END
 
 
-static void chinagat_irq_handler( device_t *device, int irq )
+static void chinagat_irq_handler(const device_config *device, int irq)
 {
-	ddragon_state *state = device->machine().driver_data<ddragon_state>();
-	device_set_input_line(state->m_snd_cpu, 0, irq ? ASSERT_LINE : CLEAR_LINE );
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static const ym2151_interface ym2151_config =
@@ -506,7 +531,7 @@ static const ym2151_interface ym2151_config =
 /* This on the bootleg board, instead of the m6295 */
 static const msm5205_interface msm5205_config =
 {
-	saiyugoub1_m5205_irq_w,	/* Interrupt function */
+	saiyugb1_m5205_irq_w,	/* Interrupt function */
 	MSM5205_S64_4B			/* vclk input mode (6030Hz, 4-bit) */
 };
 
@@ -521,182 +546,130 @@ static const ym2203_interface ym2203_config =
 	chinagat_irq_handler
 };
 
-
-static MACHINE_START( chinagat )
-{
-	ddragon_state *state = machine.driver_data<ddragon_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_sub_cpu = machine.device("sub");
-	state->m_snd_cpu = machine.device("audiocpu");
-
-	/* configure banks */
-	memory_configure_bank(machine, "bank1", 0, 8, machine.region("maincpu")->base() + 0x10000, 0x4000);
-
-	/* register for save states */
-	state->save_item(NAME(state->m_scrollx_hi));
-	state->save_item(NAME(state->m_scrolly_hi));
-	state->save_item(NAME(state->m_adpcm_sound_irq));
-	state->save_item(NAME(state->m_adpcm_addr));
-	state->save_item(NAME(state->m_pcm_shift));
-	state->save_item(NAME(state->m_pcm_nibble));
-	state->save_item(NAME(state->m_i8748_P1));
-	state->save_item(NAME(state->m_i8748_P2));
-	state->save_item(NAME(state->m_mcu_command));
-#if 0
-	state->save_item(NAME(state->m_m5205_clk));
-#endif
-}
-
-
-static MACHINE_RESET( chinagat )
-{
-	ddragon_state *state = machine.driver_data<ddragon_state>();
-
-	state->m_scrollx_hi = 0;
-	state->m_scrolly_hi = 0;
-	state->m_adpcm_sound_irq = 0;
-	state->m_adpcm_addr = 0;
-	state->m_pcm_shift = 0;
-	state->m_pcm_nibble = 0;
-	state->m_i8748_P1 = 0;
-	state->m_i8748_P2 = 0;
-	state->m_mcu_command = 0;
-#if 0
-	state->m_m5205_clk = 0;
-#endif
-}
-
-
-static MACHINE_CONFIG_START( chinagat, ddragon_state )
+static MACHINE_DRIVER_START( chinagat )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", HD6309, MAIN_CLOCK / 2)		/* 1.5 MHz (12MHz oscillator / 4 internally) */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", HD6309, MAIN_CLOCK / 2)		/* 1.5 MHz (12MHz oscillator / 4 internally) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD("sub", HD6309, MAIN_CLOCK / 2)		/* 1.5 MHz (12MHz oscillator / 4 internally) */
-	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MDRV_CPU_ADD("sub", HD6309, MAIN_CLOCK / 2)		/* 1.5 MHz (12MHz oscillator / 4 internally) */
+	MDRV_CPU_PROGRAM_MAP(sub_map)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* heavy interleaving to sync up sprite<->main cpu's */
-
-	MCFG_MACHINE_START(chinagat)
-	MCFG_MACHINE_RESET(chinagat)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* heavy interleaving to sync up sprite<->main cpu's */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
-	MCFG_SCREEN_UPDATE_STATIC(ddragon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
 
-	MCFG_GFXDECODE(chinagat)
-	MCFG_PALETTE_LENGTH(384)
+	MDRV_GFXDECODE(chinagat)
+	MDRV_PALETTE_LENGTH(384)
 
-	MCFG_VIDEO_START(chinagat)
+	MDRV_VIDEO_START(chinagat)
+	MDRV_VIDEO_UPDATE(ddragon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.80)
-	MCFG_SOUND_ROUTE(1, "mono", 0.80)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.80)
+	MDRV_SOUND_ROUTE(1, "mono", 0.80)
 
-	MCFG_OKIM6295_ADD("oki", 1065000, OKIM6295_PIN7_HIGH) // pin 7 not verified, clock frequency estimated with recording
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1065000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // pin 7 not verified, clock frequency estimated with recording
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( saiyugoub1, ddragon_state )
+static MACHINE_DRIVER_START( saiyugb1 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, MAIN_CLOCK / 8)		/* 68B09EP 1.5 MHz (12MHz oscillator) */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", M6809, MAIN_CLOCK / 8)		/* 68B09EP 1.5 MHz (12MHz oscillator) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD("sub", M6809, MAIN_CLOCK / 8)		/* 68B09EP 1.5 MHz (12MHz oscillator) */
-	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MDRV_CPU_ADD("sub", M6809, MAIN_CLOCK / 8)		/* 68B09EP 1.5 MHz (12MHz oscillator) */
+	MDRV_CPU_PROGRAM_MAP(sub_map)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz oscillator */
-	MCFG_CPU_PROGRAM_MAP(saiyugoub1_sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz oscillator */
+	MDRV_CPU_PROGRAM_MAP(saiyugb1_sound_map)
 
-	MCFG_CPU_ADD("mcu", I8748, 9263750)		/* 9.263750 MHz oscillator, divided by 3*5 internally */
-	MCFG_CPU_PROGRAM_MAP(i8748_map)
-	MCFG_CPU_IO_MAP(i8748_portmap)
+	MDRV_CPU_ADD("mcu", I8748, 9263750)		/* 9.263750 MHz oscillator, divided by 3*5 internally */
+	MDRV_CPU_PROGRAM_MAP(i8748_map)
+	MDRV_CPU_IO_MAP(i8748_portmap)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* heavy interleaving to sync up sprite<->main cpu's */
-
-	MCFG_MACHINE_START(chinagat)
-	MCFG_MACHINE_RESET(chinagat)
+	MDRV_QUANTUM_TIME(HZ(6000))	/* heavy interleaving to sync up sprite<->main cpu's */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
-	MCFG_SCREEN_UPDATE_STATIC(ddragon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
 
-	MCFG_GFXDECODE(chinagat)
-	MCFG_PALETTE_LENGTH(384)
+	MDRV_GFXDECODE(chinagat)
+	MDRV_PALETTE_LENGTH(384)
 
-	MCFG_VIDEO_START(chinagat)
+	MDRV_VIDEO_START(chinagat)
+	MDRV_VIDEO_UPDATE(ddragon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.80)
-	MCFG_SOUND_ROUTE(1, "mono", 0.80)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.80)
+	MDRV_SOUND_ROUTE(1, "mono", 0.80)
 
-	MCFG_SOUND_ADD("adpcm", MSM5205, 9263750 / 24)
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("adpcm", MSM5205, 9263750 / 24)
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( saiyugoub2, ddragon_state )
+static MACHINE_DRIVER_START( saiyugb2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, MAIN_CLOCK / 8)		/* 1.5 MHz (12MHz oscillator) */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", M6809, MAIN_CLOCK / 8)		/* 1.5 MHz (12MHz oscillator) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_TIMER_ADD_SCANLINE("scantimer", chinagat_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD("sub", M6809, MAIN_CLOCK / 8)		/* 1.5 MHz (12MHz oscillator) */
-	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MDRV_CPU_ADD("sub", M6809, MAIN_CLOCK / 8)		/* 1.5 MHz (12MHz oscillator) */
+	MDRV_CPU_PROGRAM_MAP(sub_map)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz oscillator */
-	MCFG_CPU_PROGRAM_MAP(ym2203c_sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_3_579545MHz)		/* 3.579545 MHz oscillator */
+	MDRV_CPU_PROGRAM_MAP(ym2203c_sound_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* heavy interleaving to sync up sprite<->main cpu's */
-
-	MCFG_MACHINE_START(chinagat)
-	MCFG_MACHINE_RESET(chinagat)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* heavy interleaving to sync up sprite<->main cpu's */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
-	MCFG_SCREEN_UPDATE_STATIC(ddragon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 0, 240)	/* based on ddragon driver */
 
-	MCFG_GFXDECODE(chinagat)
-	MCFG_PALETTE_LENGTH(384)
+	MDRV_GFXDECODE(chinagat)
+	MDRV_PALETTE_LENGTH(384)
 
-	MCFG_VIDEO_START(chinagat)
+	MDRV_VIDEO_START(chinagat)
+	MDRV_VIDEO_UPDATE(ddragon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, 3579545)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.50)
-	MCFG_SOUND_ROUTE(1, "mono", 0.50)
-	MCFG_SOUND_ROUTE(2, "mono", 0.50)
-	MCFG_SOUND_ROUTE(3, "mono", 0.80)
+	MDRV_SOUND_ADD("ym1", YM2203, 3579545)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.50)
+	MDRV_SOUND_ROUTE(1, "mono", 0.50)
+	MDRV_SOUND_ROUTE(2, "mono", 0.50)
+	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
-	MCFG_SOUND_ADD("ym2", YM2203, 3579545)
-	MCFG_SOUND_ROUTE(0, "mono", 0.50)
-	MCFG_SOUND_ROUTE(1, "mono", 0.50)
-	MCFG_SOUND_ROUTE(2, "mono", 0.50)
-	MCFG_SOUND_ROUTE(3, "mono", 0.80)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, 3579545)
+	MDRV_SOUND_ROUTE(0, "mono", 0.50)
+	MDRV_SOUND_ROUTE(1, "mono", 0.50)
+	MDRV_SOUND_ROUTE(2, "mono", 0.50)
+	MDRV_SOUND_ROUTE(3, "mono", 0.80)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -727,10 +700,10 @@ ROM_START( chinagat )
 	ROM_LOAD( "23ja-0.100",  0x60000, 0x20000, CRC(f678594f) SHA1(4bdcf9407543925f4630a8c7f1f48b85f76343a9) )	/* 0,1 */
 
 	ROM_REGION(0x40000, "gfx3", 0 )	/* Background */
-	ROM_LOAD( "chinagat_a-13", 0x00000, 0x10000, NO_DUMP )		/* Where are    */
-	ROM_LOAD( "chinagat_a-12", 0x10000, 0x10000, NO_DUMP )		/* these on the */
-	ROM_LOAD( "chinagat_a-15", 0x20000, 0x10000, NO_DUMP )		/* real board ? */
-	ROM_LOAD( "chinagat_a-14", 0x30000, 0x10000, NO_DUMP )
+	ROM_LOAD( "a-13", 0x00000, 0x10000, NO_DUMP )		/* Where are    */
+	ROM_LOAD( "a-12", 0x10000, 0x10000, NO_DUMP )		/* these on the */
+	ROM_LOAD( "a-15", 0x20000, 0x10000, NO_DUMP )		/* real board ? */
+	ROM_LOAD( "a-14", 0x30000, 0x10000, NO_DUMP )
 
 	ROM_REGION(0x40000, "oki", 0 )	/* ADPCM */
 	ROM_LOAD( "23j1-0.53", 0x00000, 0x20000, CRC(f91f1001) SHA1(378402a3c966cabd61e9662ae5decd66672a228b) )
@@ -911,21 +884,14 @@ ROM_END
 
 static DRIVER_INIT( chinagat )
 {
-	ddragon_state *state = machine.driver_data<ddragon_state>();
-	UINT8 *MAIN = machine.region("maincpu")->base();
-	UINT8 *SUB = machine.region("sub")->base();
-
-	state->m_technos_video_hw = 1;
-	state->m_sprite_irq = M6809_IRQ_LINE;
-	state->m_sound_irq = INPUT_LINE_NMI;
-
-	memory_configure_bank(machine, "bank1", 0, 6, &MAIN[0x10000], 0x4000);
-	memory_configure_bank(machine, "bank4", 0, 6, &SUB[0x10000], 0x4000);
+	technos_video_hw = 1;
+	sprite_irq = M6809_IRQ_LINE;
+	sound_irq = INPUT_LINE_NMI;
 }
 
 
 /*   ( YEAR  NAME      PARENT    MACHINE   INPUT     INIT    MONITOR COMPANY    FULLNAME     FLAGS ) */
-GAME( 1988, chinagat,   0,        chinagat,   chinagat, chinagat, ROT0, "Technos Japan (Taito / Romstar license)", "China Gate (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1988, saiyugou,   chinagat, chinagat,   chinagat, chinagat, ROT0, "Technos Japan", "Sai Yu Gou Ma Roku (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1988, saiyugoub1, chinagat, saiyugoub1, chinagat, chinagat, ROT0, "bootleg", "Sai Yu Gou Ma Roku (Japan bootleg 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1988, saiyugoub2, chinagat, saiyugoub2, chinagat, chinagat, ROT0, "bootleg", "Sai Yu Gou Ma Roku (Japan bootleg 2)", GAME_SUPPORTS_SAVE )
+GAME( 1988, chinagat,   0,        chinagat, chinagat, chinagat, ROT0, "[Technos Japan] (Taito Romstar license)", "China Gate (US)", 0 )
+GAME( 1988, saiyugou,   chinagat, chinagat, chinagat, chinagat, ROT0, "Technos Japan", "Sai Yu Gou Ma Roku (Japan)", 0 )
+GAME( 1988, saiyugoub1, chinagat, saiyugb1, chinagat, chinagat, ROT0, "bootleg", "Sai Yu Gou Ma Roku (Japan bootleg 1)", GAME_IMPERFECT_SOUND )
+GAME( 1988, saiyugoub2, chinagat, saiyugb2, chinagat, chinagat, ROT0, "bootleg", "Sai Yu Gou Ma Roku (Japan bootleg 2)", 0 )

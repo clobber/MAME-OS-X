@@ -7,46 +7,26 @@ similar hardware.
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
-class drtomy_state : public driver_device
-{
-public:
-	drtomy_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT16 *  m_spriteram;
-	UINT16 *  m_videoram_bg;
-	UINT16 *  m_videoram_fg;
-//  UINT16 *  m_paletteram16; // currently this uses generic palette handling
-
-	/* video-related */
-	tilemap_t   *m_tilemap_bg;
-	tilemap_t   *m_tilemap_fg;
-
-	/* misc */
-	int       m_oki_bank;
-};
-
-
+static UINT16 *drtomy_spriteram;
+static UINT16 *drtomy_videoram_bg, *drtomy_videoram_fg;
+static tilemap *tilemap_bg, *tilemap_fg;
 
 static TILE_GET_INFO( get_tile_info_fg )
 {
-	drtomy_state *state = machine.driver_data<drtomy_state>();
-	int code  = state->m_videoram_fg[tile_index] & 0xfff;
-	int color = (state->m_videoram_fg[tile_index] & 0xf000) >> 12;
+	int code  = drtomy_videoram_fg[tile_index] & 0xfff;
+	int color = (drtomy_videoram_fg[tile_index] & 0xf000) >> 12;
 	SET_TILE_INFO(2, code, color, 0);
 }
 
 
 static TILE_GET_INFO( get_tile_info_bg )
 {
-	drtomy_state *state = machine.driver_data<drtomy_state>();
-	int code  = state->m_videoram_bg[tile_index] & 0xfff;
-	int color = (state->m_videoram_bg[tile_index] & 0xf000) >> 12;
+	int code  = drtomy_videoram_bg[tile_index] & 0xfff;
+	int color = (drtomy_videoram_bg[tile_index] & 0xf000) >> 12;
 	SET_TILE_INFO(1, code, color, 0);
 }
 
@@ -68,42 +48,38 @@ static TILE_GET_INFO( get_tile_info_bg )
       3  | xxxxxxxx xxxxxx-- | sprite code
 */
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	drtomy_state *state = machine.driver_data<drtomy_state>();
 	int i, x, y, ex, ey;
-	const gfx_element *gfx = machine.gfx[0];
+	const gfx_element *gfx = machine->gfx[0];
 
-	static const int x_offset[2] = {0x0, 0x2};
-	static const int y_offset[2] = {0x0, 0x1};
+	static const int x_offset[2] = {0x0,0x2};
+	static const int y_offset[2] = {0x0,0x1};
 
-	for (i = 3; i < 0x1000 / 2; i += 4)
-	{
-		int sx = state->m_spriteram[i + 2] & 0x01ff;
-		int sy = (240 - (state->m_spriteram[i] & 0x00ff)) & 0x00ff;
-		int number = state->m_spriteram[i + 3];
-		int color = (state->m_spriteram[i + 2] & 0x1e00) >> 9;
-		int attr = (state->m_spriteram[i] & 0xfe00) >> 9;
+	for (i = 3; i < 0x1000/2; i+=4){
+		int sx = drtomy_spriteram[i+2] & 0x01ff;
+		int sy = (240 - (drtomy_spriteram[i] & 0x00ff)) & 0x00ff;
+		int number = drtomy_spriteram[i+3];
+		int color = (drtomy_spriteram[i+2] & 0x1e00) >> 9;
+		int attr = (drtomy_spriteram[i] & 0xfe00) >> 9;
 
 		int xflip = attr & 0x20;
 		int yflip = attr & 0x40;
 		int spr_size;
 
-		if (attr & 0x04)
+		if (attr & 0x04){
 			spr_size = 1;
-		else
-		{
+		}
+		else{
 			spr_size = 2;
 			number &= (~3);
 		}
 
-		for (y = 0; y < spr_size; y++)
-		{
-			for (x = 0; x < spr_size; x++)
-			{
+		for (y = 0; y < spr_size; y++){
+			for (x = 0; x < spr_size; x++){
 
-				ex = xflip ? (spr_size - 1 - x) : x;
-				ey = yflip ? (spr_size - 1 - y) : y;
+				ex = xflip ? (spr_size-1-x) : x;
+				ey = yflip ? (spr_size-1-y) : y;
 
 				drawgfx_transpen(bitmap,cliprect,gfx,number + x_offset[ex] + y_offset[ey],
 						color,xflip,yflip,
@@ -115,63 +91,57 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 
 static VIDEO_START( drtomy )
 {
-	drtomy_state *state = machine.driver_data<drtomy_state>();
+	tilemap_bg = tilemap_create(machine, get_tile_info_bg,tilemap_scan_rows,16,16,32,32);
+	tilemap_fg = tilemap_create(machine, get_tile_info_fg,tilemap_scan_rows,16,16,32,32);
 
-	state->m_tilemap_bg = tilemap_create(machine, get_tile_info_bg, tilemap_scan_rows, 16, 16, 32, 32);
-	state->m_tilemap_fg = tilemap_create(machine, get_tile_info_fg, tilemap_scan_rows, 16, 16, 32, 32);
-
-	state->m_tilemap_fg->set_transparent_pen(0);
+	tilemap_set_transparent_pen(tilemap_fg,0);
 }
 
-static SCREEN_UPDATE_IND16( drtomy )
+static VIDEO_UPDATE( drtomy )
 {
-	drtomy_state *state = screen.machine().driver_data<drtomy_state>();
-
-	state->m_tilemap_bg->draw(bitmap, cliprect, 0, 0);
-	state->m_tilemap_fg->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap,cliprect,tilemap_bg,0,0);
+	tilemap_draw(bitmap,cliprect,tilemap_fg,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
 static WRITE16_HANDLER( drtomy_vram_fg_w )
 {
-	drtomy_state *state = space->machine().driver_data<drtomy_state>();
-	COMBINE_DATA(&state->m_videoram_fg[offset]);
-	state->m_tilemap_fg->mark_tile_dirty(offset);
+	COMBINE_DATA(&drtomy_videoram_fg[offset]);
+	tilemap_mark_tile_dirty(tilemap_fg,offset);
 }
 
 static WRITE16_HANDLER( drtomy_vram_bg_w )
 {
-	drtomy_state *state = space->machine().driver_data<drtomy_state>();
-	COMBINE_DATA(&state->m_videoram_bg[offset]);
-	state->m_tilemap_bg->mark_tile_dirty(offset);
+	COMBINE_DATA(&drtomy_videoram_bg[offset]);
+	tilemap_mark_tile_dirty(tilemap_bg,offset);
 }
 
 static WRITE16_DEVICE_HANDLER( drtomy_okibank_w )
 {
-	drtomy_state *state = device->machine().driver_data<drtomy_state>();
-	if (state->m_oki_bank != (data & 3))
+	static int oki_bank;
+
+	if(oki_bank != (data & 3))
 	{
-		state->m_oki_bank = data & 3;
-		okim6295_device *oki = downcast<okim6295_device *>(device);
-		oki->set_bank_base(state->m_oki_bank * 0x40000);
+		oki_bank = data & 3;
+		okim6295_set_bank_base(device, oki_bank * 0x40000);
 	}
 
 	/* unknown bit 2 -> (data & 4) */
 }
 
-static ADDRESS_MAP_START( drtomy_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( drtomy_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM	/* ROM */
-	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(drtomy_vram_fg_w) AM_BASE_MEMBER(drtomy_state, m_videoram_fg)	/* Video RAM FG */
-	AM_RANGE(0x101000, 0x101fff) AM_RAM_WRITE(drtomy_vram_bg_w) AM_BASE_MEMBER(drtomy_state, m_videoram_bg) /* Video RAM BG */
-	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram) /* Palette */
-	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(drtomy_state, m_spriteram) /* Sprite RAM */
+	AM_RANGE(0x100000, 0x100fff) AM_RAM_WRITE(drtomy_vram_fg_w) AM_BASE(&drtomy_videoram_fg)	/* Video RAM FG */
+	AM_RANGE(0x101000, 0x101fff) AM_RAM_WRITE(drtomy_vram_bg_w) AM_BASE(&drtomy_videoram_bg) /* Video RAM BG */
+	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16) /* Palette */
+	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE(&drtomy_spriteram) /* Sprite RAM */
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSW2")
 	AM_RANGE(0x700004, 0x700005) AM_READ_PORT("P1")
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("P2")
 	AM_RANGE(0x70000c, 0x70000d) AM_DEVWRITE("oki", drtomy_okibank_w) /* OKI banking */
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff) /* OKI 6295*/
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff) /* OKI 6295*/
 	AM_RANGE(0xffc000, 0xffffff) AM_RAM	/* Work RAM */
 ADDRESS_MAP_END
 
@@ -206,7 +176,7 @@ GFXDECODE_END
 
 static INPUT_PORTS_START( drtomy )
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:8,7,6,5")
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x0a, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x07, DEF_STR( 3C_2C ) )
 	PORT_DIPSETTING(    0x00, "5 Coins/4 Credits" )
@@ -218,7 +188,7 @@ static INPUT_PORTS_START( drtomy )
 	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:4,3,2,1")
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(    0xa0, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x70, DEF_STR( 3C_2C ) )
 	PORT_DIPSETTING(    0x00, "5 Coins/4 Credits" )
@@ -232,26 +202,26 @@ static INPUT_PORTS_START( drtomy )
 	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x01, 0x01, "Time" )			PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x01, 0x01, "Time" )
 	PORT_DIPSETTING(    0x00, "Less" )
 	PORT_DIPSETTING(    0x01, "More" )
-	PORT_DIPNAME( 0x02, 0x02, "Number of Virus" )		PORT_DIPLOCATION("SW2:7")
+	PORT_DIPNAME( 0x02, 0x02, "Number of Virus" )
 	PORT_DIPSETTING(    0x02, "Less" )
 	PORT_DIPSETTING(    0x00, "More" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW2:6")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_SERVICE_DIPLOC(  0x08, IP_ACTIVE_LOW, "SW2:5" )
-	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:4")
+	PORT_SERVICE( 0x08, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x10, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Language ) )		PORT_DIPLOCATION("SW2:3")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Language ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( English ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Italian ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) )	PORT_DIPLOCATION("SW2:2")
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Allow_Continue ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( No ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Yes ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW2:1")
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -277,49 +247,34 @@ static INPUT_PORTS_START( drtomy )
 INPUT_PORTS_END
 
 
-static MACHINE_START( drtomy )
-{
-	drtomy_state *state = machine.driver_data<drtomy_state>();
-
-	state->save_item(NAME(state->m_oki_bank));
-}
-
-static MACHINE_RESET( drtomy )
-{
-	drtomy_state *state = machine.driver_data<drtomy_state>();
-
-	state->m_oki_bank = 0;
-}
-
-static MACHINE_CONFIG_START( drtomy, drtomy_state )
+static MACHINE_DRIVER_START( drtomy )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,24000000/2)			/* ? MHz */
-	MCFG_CPU_PROGRAM_MAP(drtomy_map)
-	MCFG_CPU_VBLANK_INT("screen", irq6_line_hold)
-
-	MCFG_MACHINE_START(drtomy)
-	MCFG_MACHINE_RESET(drtomy)
+	MDRV_CPU_ADD("maincpu", M68000,24000000/2)			/* ? MHz */
+	MDRV_CPU_PROGRAM_MAP(drtomy_map)
+	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*16, 32*16)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(drtomy)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*16, 32*16)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 16, 256-1)
 
-	MCFG_GFXDECODE(drtomy)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(drtomy)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(drtomy)
+	MDRV_VIDEO_START(drtomy)
+	MDRV_VIDEO_UPDATE(drtomy)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", 26000000/16, OKIM6295_PIN7_LOW)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 26000000/16)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
+MACHINE_DRIVER_END
 
 
 ROM_START( drtomy )
@@ -348,4 +303,4 @@ ROM_START( drtomy )
 ROM_END
 
 
-GAME( 1993, drtomy, 0, drtomy, drtomy, 0, ROT0, "Playmark", "Dr. Tomy", GAME_SUPPORTS_SAVE )
+GAME( 1993, drtomy, 0, drtomy, drtomy, 0, ROT0, "Playmark", "Dr. Tomy", 0 )

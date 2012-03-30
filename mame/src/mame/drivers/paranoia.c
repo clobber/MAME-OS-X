@@ -33,23 +33,14 @@ HuC6280A (Hudson)
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
+#include "deprecat.h"
 #include "machine/pcecommn.h"
 #include "video/vdc.h"
 #include "cpu/h6280/h6280.h"
 #include "sound/c6280.h"
-
-
-class paranoia_state : public driver_device
-{
-public:
-	paranoia_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-};
-
 
 static INPUT_PORTS_START( paranoia )
     PORT_START( "JOY" )
@@ -63,7 +54,7 @@ static INPUT_PORTS_START( paranoia )
     PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
 INPUT_PORTS_END
 
-static ADDRESS_MAP_START( pce_mem , AS_PROGRAM, 8)
+static ADDRESS_MAP_START( pce_mem , ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE( 0x000000, 0x03FFFF) AM_ROM
 	AM_RANGE( 0x1F0000, 0x1F1FFF) AM_RAM AM_MIRROR(0x6000) AM_BASE( &pce_user_ram )
 	AM_RANGE( 0x1FE000, 0x1FE3FF) AM_READWRITE( vdc_0_r, vdc_0_w )
@@ -74,7 +65,7 @@ static ADDRESS_MAP_START( pce_mem , AS_PROGRAM, 8)
 	AM_RANGE( 0x1FF400, 0x1FF7FF) AM_READWRITE( h6280_irq_status_r, h6280_irq_status_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( pce_io , AS_IO, 8)
+static ADDRESS_MAP_START( pce_io , ADDRESS_SPACE_IO, 8)
 	AM_RANGE( 0x00, 0x03) AM_READWRITE( vdc_0_r, vdc_0_w )
 ADDRESS_MAP_END
 
@@ -96,7 +87,7 @@ static WRITE8_HANDLER( paranoia_8085_8155_w )
 	}
 }
 
-static ADDRESS_MAP_START(paranoia_8085_map, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(paranoia_8085_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE( 0x0000, 0x7fff) AM_ROM
 	AM_RANGE( 0x8000, 0x80ff) AM_RAM
 	AM_RANGE( 0x8100, 0x8105) AM_WRITE( paranoia_8085_8155_w )
@@ -104,10 +95,10 @@ static ADDRESS_MAP_START(paranoia_8085_map, AS_PROGRAM, 8)
 	AM_RANGE( 0xe000, 0xe1ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(paranoia_8085_io_map, AS_IO, 8)
+static ADDRESS_MAP_START(paranoia_8085_io_map, ADDRESS_SPACE_IO, 8)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START(paranoia_z80_map, AS_PROGRAM, 8)
+static ADDRESS_MAP_START(paranoia_z80_map, ADDRESS_SPACE_PROGRAM, 8)
 	AM_RANGE( 0x0000, 0x3fff) AM_ROM
 	AM_RANGE( 0x6000, 0x67ff) AM_RAM
 	AM_RANGE( 0x7000, 0x73ff) AM_RAM
@@ -131,7 +122,7 @@ static WRITE8_HANDLER(paranoia_z80_io_37_w)
 {
 }
 
-static ADDRESS_MAP_START(paranoia_z80_io_map, AS_IO, 8)
+static ADDRESS_MAP_START(paranoia_z80_io_map, ADDRESS_SPACE_IO, 8)
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x01, 0x01 ) AM_READ( paranoia_z80_io_01_r )
 	AM_RANGE( 0x02, 0x02 ) AM_READ( paranoia_z80_io_02_r )
@@ -144,42 +135,43 @@ static const c6280_interface c6280_config =
 	"maincpu"
 };
 
-static MACHINE_CONFIG_START( paranoia, paranoia_state )
+static MACHINE_DRIVER_START( paranoia )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", H6280, PCE_MAIN_CLOCK/3)
-	MCFG_CPU_PROGRAM_MAP(pce_mem)
-	MCFG_CPU_IO_MAP(pce_io)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", pce_interrupt, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", H6280, PCE_MAIN_CLOCK/3)
+	MDRV_CPU_PROGRAM_MAP(pce_mem)
+	MDRV_CPU_IO_MAP(pce_io)
+	MDRV_CPU_VBLANK_INT_HACK(pce_interrupt, VDC_LPF)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(60))
+	MDRV_QUANTUM_TIME(HZ(60))
 
-	MCFG_CPU_ADD("sub", I8085A, 18000000/3)
-	MCFG_CPU_PROGRAM_MAP(paranoia_8085_map)
-	MCFG_CPU_IO_MAP(paranoia_8085_io_map)
+	MDRV_CPU_ADD("sub", 8085A, 18000000/3)
+	MDRV_CPU_PROGRAM_MAP(paranoia_8085_map)
+	MDRV_CPU_IO_MAP(paranoia_8085_io_map)
 
-	MCFG_CPU_ADD("sub2", Z80, 18000000/6)
-	MCFG_CPU_PROGRAM_MAP(paranoia_z80_map)
-	MCFG_CPU_IO_MAP(paranoia_z80_io_map)
+	MDRV_CPU_ADD("sub2", Z80, 18000000/6)
+	MDRV_CPU_PROGRAM_MAP(paranoia_z80_map)
+	MDRV_CPU_IO_MAP(paranoia_z80_io_map)
 
     /* video hardware */
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PCE_MAIN_CLOCK/2, VDC_WPF, 70, 70 + 512 + 32, VDC_LPF, 14, 14+242)
-	MCFG_SCREEN_UPDATE_STATIC( pce )
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PCE_MAIN_CLOCK/2, VDC_WPF, 70, 70 + 512 + 32, VDC_LPF, 14, 14+242)
 
-	/* MCFG_GFXDECODE( pce_gfxdecodeinfo ) */
-	MCFG_PALETTE_LENGTH(1024)
-	MCFG_PALETTE_INIT( vce )
+	/* MDRV_GFXDECODE( pce_gfxdecodeinfo ) */
+	MDRV_PALETTE_LENGTH(1024)
+	MDRV_PALETTE_INIT( vce )
 
-	MCFG_VIDEO_START( pce )
+	MDRV_VIDEO_START( pce )
+	MDRV_VIDEO_UPDATE( pce )
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker","rspeaker")
-	MCFG_SOUND_ADD("c6280", C6280, PCE_MAIN_CLOCK/6)
-	MCFG_SOUND_CONFIG(c6280_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.00)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.00)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker","rspeaker")
+	MDRV_SOUND_ADD("c6280", C6280, PCE_MAIN_CLOCK/6)
+	MDRV_SOUND_CONFIG(c6280_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.00)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.00)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 ROM_START(paranoia)
 	ROM_REGION( 0x40000, "maincpu", 0 )

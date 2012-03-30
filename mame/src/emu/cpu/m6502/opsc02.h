@@ -127,7 +127,6 @@
  */
 #define RD_ABX_C02_P	EA_ABX_C02_P; tmp = RDMEM(EAD)
 #define RD_ABX_C02_NP	EA_ABX_C02_NP; tmp = RDMEM(EAD)
-#define RD_ABX_C02_NP_DISCARD	EA_ABX_C02_NP; RDMEM(EAD)
 #define RD_ABY_C02_P	EA_ABY_C02_P; tmp = RDMEM(EAD)
 #define RD_IDY_C02_P	EA_IDY_C02_P; tmp = RDMEM_ID(EAD); cpustate->icount -= 1
 
@@ -259,14 +258,14 @@
  *  DEA Decrement accumulator
  ***************************************************************/
 #define DEA 													\
-	A = (UINT8)(A - 1);											\
+	A = (UINT8)--A; 											\
 	SET_NZ(A)
 
 /* 65C02 *******************************************************
  *  INA Increment accumulator
  ***************************************************************/
 #define INA 													\
-	A = (UINT8)(A + 1);											\
+	A = (UINT8)++A; 											\
 	SET_NZ(A)
 
 /* 65C02 *******************************************************
@@ -334,7 +333,7 @@
  ***************************************************************/
 #undef BIT_IMM_C02
 #define BIT_IMM_C02												\
-	P &= ~(F_Z);												\
+	P &= ~(F_Z); 												\
 	if ((tmp & A) == 0) 										\
 		P |= F_Z
 

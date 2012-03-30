@@ -47,60 +47,65 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/hd6309/hd6309.h"
+#include "video/konamiic.h"
 #include "sound/2151intf.h"
 #include "sound/vlm5030.h"
-#include "video/konicdev.h"
-#include "includes/rockrage.h"
-#include "includes/konamipt.h"
 
+/* from video */
+VIDEO_START( rockrage );
+VIDEO_UPDATE( rockrage );
+WRITE8_HANDLER( rockrage_vreg_w );
+PALETTE_INIT( rockrage );
 
 static INTERRUPT_GEN( rockrage_interrupt )
 {
-	rockrage_state *state = device->machine().driver_data<rockrage_state>();
-	if (k007342_is_int_enabled(state->m_k007342))
-		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	if (K007342_is_INT_enabled())
+        cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( rockrage_bankswitch_w )
 {
+	int bankaddress;
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+
 	/* bits 4-6 = bank number */
-	memory_set_bank(space->machine(), "bank1", (data & 0x70) >> 4);
+	bankaddress = 0x10000 + ((data & 0x70) >> 4) * 0x2000;
+	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
 
 	/* bits 0 & 1 = coin counters */
-	coin_counter_w(space->machine(), 0,data & 0x01);
-	coin_counter_w(space->machine(), 1,data & 0x02);
+	coin_counter_w(0,data & 0x01);
+	coin_counter_w(1,data & 0x02);
 
 	/* other bits unknown */
 }
 
 static WRITE8_HANDLER( rockrage_sh_irqtrigger_w )
 {
-	rockrage_state *state = space->machine().driver_data<rockrage_state>();
 	soundlatch_w(space, offset, data);
-	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static READ8_DEVICE_HANDLER( rockrage_VLM5030_busy_r )
 {
-	return (vlm5030_bsy(device) ? 1 : 0);
+	return ( vlm5030_bsy(device) ? 1 : 0 );
 }
 
 static WRITE8_DEVICE_HANDLER( rockrage_speech_w )
 {
 	/* bit2 = data bus enable */
-	vlm5030_rst(device, (data >> 1) & 0x01);
-	vlm5030_st(device, (data >> 0) & 0x01);
+	vlm5030_rst( device, ( data >> 1 ) & 0x01 );
+	vlm5030_st( device, ( data >> 0 ) & 0x01 );
 }
 
-static ADDRESS_MAP_START( rockrage_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_DEVREADWRITE("k007342", k007342_r, k007342_w)					/* Color RAM + Video RAM */
-	AM_RANGE(0x2000, 0x21ff) AM_DEVREADWRITE("k007420", k007420_r, k007420_w)					/* Sprite RAM */
-	AM_RANGE(0x2200, 0x23ff) AM_DEVREADWRITE("k007342", k007342_scroll_r, k007342_scroll_w)	/* Scroll RAM */
-	AM_RANGE(0x2400, 0x247f) AM_RAM AM_BASE_MEMBER(rockrage_state, m_paletteram)						/* Palette */
-	AM_RANGE(0x2600, 0x2607) AM_DEVWRITE("k007342", k007342_vreg_w)							/* Video Registers */
+static ADDRESS_MAP_START( rockrage_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(K007342_r,K007342_w)					/* Color RAM + Video RAM */
+	AM_RANGE(0x2000, 0x21ff) AM_READWRITE(K007420_r,K007420_w)					/* Sprite RAM */
+	AM_RANGE(0x2200, 0x23ff) AM_READWRITE(K007342_scroll_r,K007342_scroll_w)	/* Scroll RAM */
+	AM_RANGE(0x2400, 0x247f) AM_RAM AM_BASE(&paletteram)						/* Palette */
+	AM_RANGE(0x2600, 0x2607) AM_WRITE(K007342_vreg_w)							/* Video Registers */
 	AM_RANGE(0x2e00, 0x2e00) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x2e01, 0x2e01) AM_READ_PORT("P1")
 	AM_RANGE(0x2e02, 0x2e02) AM_READ_PORT("P2")
@@ -111,16 +116,16 @@ static ADDRESS_MAP_START( rockrage_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x2f00, 0x2f00) AM_WRITE(rockrage_vreg_w)							/* ??? */
 	AM_RANGE(0x2f40, 0x2f40) AM_WRITE(rockrage_bankswitch_w)					/* bankswitch control */
 	AM_RANGE(0x4000, 0x5fff) AM_RAM												/* RAM */
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")										/* banked ROM */
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)										/* banked ROM */
 	AM_RANGE(0x8000, 0xffff) AM_ROM												/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( rockrage_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( rockrage_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_DEVWRITE("vlm", vlm5030_data_w) 				/* VLM5030 */
 	AM_RANGE(0x3000, 0x3000) AM_DEVREAD("vlm", rockrage_VLM5030_busy_r)			/* VLM5030 */
 	AM_RANGE(0x4000, 0x4000) AM_DEVWRITE("vlm", rockrage_speech_w)				/* VLM5030 */
 	AM_RANGE(0x5000, 0x5000) AM_READ(soundlatch_r)								/* soundlatch_r */
-	AM_RANGE(0x6000, 0x6001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)			/* YM 2151 */
+	AM_RANGE(0x6000, 0x6001) AM_DEVREADWRITE("ym", ym2151_r,ym2151_w)			/* YM 2151 */
 	AM_RANGE(0x7000, 0x77ff) AM_RAM												/* RAM */
 	AM_RANGE(0x8000, 0xffff) AM_ROM												/* ROM */
 ADDRESS_MAP_END
@@ -133,28 +138,63 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( rockrage )
 	PORT_START("DSW1")
-	KONAMI_COINAGE_LOC(DEF_STR( Free_Play ), "Invalid", SW1)
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 3C_4C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 2C_5C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x50, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( 3C_4C ) )
+	PORT_DIPSETTING(    0x70, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x60, DEF_STR( 2C_5C ) )
+	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x90, DEF_STR( 1C_7C ) )
+	PORT_DIPSETTING(    0x00, "Invalid" )
 	/* Invalid = both coin slots disabled */
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x03, "1" )
 	PORT_DIPSETTING(    0x02, "2" )
 	PORT_DIPSETTING(    0x01, "3" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SW2:3" )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW2:4")
-	PORT_DIPSETTING(    0x08, "30k & Every 70k" )
-	PORT_DIPSETTING(    0x00, "40k & Every 80k" )
-	PORT_DIPNAME( 0x10, 0x10, "Freeze Screen" )			PORT_DIPLOCATION("SW2:5")
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(    0x08, "30k and every 70k" )
+	PORT_DIPSETTING(    0x00, "40k and every 80k" )
+	PORT_DIPNAME( 0x10, 0x10, "Freeze Screen" )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:6,7")
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -164,11 +204,13 @@ static INPUT_PORTS_START( rockrage )
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SERVICE1 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_START1 )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_START2 )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW3:1")
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW3:2" )
-	PORT_SERVICE_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW3:3" )
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_SERVICE( 0x80, IP_ACTIVE_LOW )
 
 	PORT_START("P1")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
@@ -224,81 +266,41 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static const k007342_interface rockrage_k007342_intf =
-{
-	0,	rockrage_tile_callback
-};
-
-static const k007420_interface rockrage_k007420_intf =
-{
-	0x3ff, rockrage_sprite_callback
-};
-
-
-static MACHINE_START( rockrage )
-{
-	rockrage_state *state = machine.driver_data<rockrage_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
-
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_k007342 = machine.device("k007342");
-	state->m_k007420 = machine.device("k007420");
-
-	state->save_item(NAME(state->m_vreg));
-	state->save_item(NAME(state->m_layer_colorbase));
-}
-
-static MACHINE_RESET( rockrage )
-{
-	rockrage_state *state = machine.driver_data<rockrage_state>();
-
-	state->m_vreg = 0;
-	state->m_layer_colorbase[0] = 0x00;
-	state->m_layer_colorbase[1] = 0x10;
-}
-
-static MACHINE_CONFIG_START( rockrage, rockrage_state )
+static MACHINE_DRIVER_START( rockrage )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8 */
-	MCFG_CPU_PROGRAM_MAP(rockrage_map)
-	MCFG_CPU_VBLANK_INT("screen", rockrage_interrupt)
+	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8 */
+	MDRV_CPU_PROGRAM_MAP(rockrage_map)
+	MDRV_CPU_VBLANK_INT("screen", rockrage_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", M6809, 1500000)		/* 24MHz/16 */
-	MCFG_CPU_PROGRAM_MAP(rockrage_sound_map)
-
-	MCFG_MACHINE_START(rockrage)
-	MCFG_MACHINE_RESET(rockrage)
+	MDRV_CPU_ADD("audiocpu", M6809, 1500000)		/* 24MHz/16 */
+	MDRV_CPU_PROGRAM_MAP(rockrage_sound_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(rockrage)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_K007342_ADD("k007342", rockrage_k007342_intf)
-	MCFG_K007420_ADD("k007420", rockrage_k007420_intf)
+	MDRV_GFXDECODE(rockrage)
+	MDRV_PALETTE_LENGTH(64 + 2*16*16)
 
-	MCFG_GFXDECODE(rockrage)
-	MCFG_PALETTE_LENGTH(64 + 2*16*16)
-
-	MCFG_PALETTE_INIT(rockrage)
+	MDRV_PALETTE_INIT(rockrage)
+	MDRV_VIDEO_START(rockrage)
+	MDRV_VIDEO_UPDATE(rockrage)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_ROUTE(0, "mono", 0.60)
+	MDRV_SOUND_ROUTE(1, "mono", 0.60)
 
-	MCFG_SOUND_ADD("vlm", VLM5030, 3579545)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("vlm", VLM5030, 3579545)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -312,7 +314,7 @@ ROM_START( rockrage )
 	ROM_LOAD( "620q01.16c", 0x08000, 0x08000, CRC(0ddb5ef5) SHA1(71b38c9f957858371f0ac95720d3c6d07339e5c5) )	/* fixed ROM */
 	ROM_LOAD( "620q02.15c", 0x10000, 0x10000, CRC(b4f6e346) SHA1(43fded4484836ff315dd6e40991f909dad73f1ed) )	/* banked ROM */
 
-	ROM_REGION(  0x10000,  "audiocpu", 0 ) /* 64k for the sound CPU */
+	ROM_REGION(  0x10000 , "audiocpu", 0 ) /* 64k for the sound CPU */
 	ROM_LOAD( "620k03.11c", 0x08000, 0x08000, CRC(9fbefe82) SHA1(ab42b7e519a0dd08f2249dad0819edea0976f39a) )
 
 	ROM_REGION( 0x040000, "gfx1", 0 )
@@ -337,7 +339,7 @@ ROM_START( rockragea )
 	ROM_LOAD( "620n01.16c", 0x08000, 0x10000, CRC(f89f56ea) SHA1(64ba2575e09af257b242d913eab69130f7341894) )	/* fixed ROM */
 	ROM_LOAD( "620n02.15c", 0x10000, 0x10000, CRC(5bc1f1cf) SHA1(d5bb9971d778449e0c01495f9888c0da7ac617a7) )	/* banked ROM */
 
-	ROM_REGION(  0x10000,  "audiocpu", 0 ) /* 64k for the sound CPU */
+	ROM_REGION(  0x10000 , "audiocpu", 0 ) /* 64k for the sound CPU */
 	ROM_LOAD( "620k03.11c", 0x08000, 0x08000, CRC(9fbefe82) SHA1(ab42b7e519a0dd08f2249dad0819edea0976f39a) ) /* Same rom but labeled as ver "G" */
 
 	ROM_REGION( 0x040000, "gfx1", 0 )
@@ -366,7 +368,7 @@ ROM_START( rockragej )
 	ROM_LOAD( "620k01.16c", 0x08000, 0x08000, CRC(4f5171f7) SHA1(5bce9e3f9d01c113c697853763cd891b91297eb2) )	/* fixed ROM */
 	ROM_LOAD( "620k02.15c", 0x10000, 0x10000, CRC(04c4d8f7) SHA1(2a1a024fc38bb934c454092b0aed74d0f1d1c4af) )	/* banked ROM */
 
-	ROM_REGION(  0x10000,  "audiocpu", 0 ) /* 64k for the sound CPU */
+	ROM_REGION(  0x10000 , "audiocpu", 0 ) /* 64k for the sound CPU */
 	ROM_LOAD( "620k03.11c", 0x08000, 0x08000, CRC(9fbefe82) SHA1(ab42b7e519a0dd08f2249dad0819edea0976f39a) )
 
 	ROM_REGION( 0x040000, "gfx1", 0 )
@@ -392,7 +394,6 @@ ROM_END
 
 ***************************************************************************/
 
-//    YEAR, NAME,      PARENT,   MACHINE,  INPUT,    INIT,MONITOR,COMPANY,FULLNAME,FLAGS
-GAME( 1986, rockrage,  0,        rockrage, rockrage, 0,   ROT0,   "Konami", "Rock'n Rage (World)", GAME_SUPPORTS_SAVE )
-GAME( 1986, rockragea, rockrage, rockrage, rockrage, 0,   ROT0,   "Konami", "Rock'n Rage (prototype?)", GAME_SUPPORTS_SAVE )
-GAME( 1986, rockragej, rockrage, rockrage, rockrage, 0,   ROT0,   "Konami", "Koi no Hotrock (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1986, rockrage, 0,        rockrage, rockrage, 0, ROT0, "Konami", "Rock'n Rage (World)", 0 )
+GAME( 1986, rockragea,rockrage, rockrage, rockrage, 0, ROT0, "Konami", "Rock'n Rage (Prototype?)", 0 )
+GAME( 1986, rockragej,rockrage, rockrage, rockrage, 0, ROT0, "Konami", "Koi no Hotrock (Japan)", 0 )

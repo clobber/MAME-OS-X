@@ -62,7 +62,7 @@
 **
 */
 
-#include "emu.h"
+#include "sndintrf.h"
 #include "ymdeltat.h"
 
 #define YM_DELTAT_DELTA_MAX (24576)
@@ -337,7 +337,7 @@ value:   START, REC, MEMDAT, REPEAT, SPOFF, x,x,RESET   meaning:
 			if ( DELTAT->now_addr != (DELTAT->end<<1) )
 			{
 				DELTAT->memory[DELTAT->now_addr>>1] = v;
-				DELTAT->now_addr+=2; /* two nibbles at a time */
+			 	DELTAT->now_addr+=2; /* two nibbles at a time */
 
 				/* reset BRDY bit in status register, which means we are processing the write */
 				if(DELTAT->status_reset_handler)
@@ -453,16 +453,16 @@ void YM_DELTAT_postload(YM_DELTAT *DELTAT,UINT8 *regs)
 		DELTAT->now_data = *(DELTAT->memory + (DELTAT->now_addr>>1) );
 
 }
-void YM_DELTAT_savestate(device_t *device,YM_DELTAT *DELTAT)
+void YM_DELTAT_savestate(const device_config *device,YM_DELTAT *DELTAT)
 {
-#ifdef __SAVE_H__
-	device->save_item(NAME(DELTAT->portstate));
-	device->save_item(NAME(DELTAT->now_addr));
-	device->save_item(NAME(DELTAT->now_step));
-	device->save_item(NAME(DELTAT->acc));
-	device->save_item(NAME(DELTAT->prev_acc));
-	device->save_item(NAME(DELTAT->adpcmd));
-	device->save_item(NAME(DELTAT->adpcml));
+#ifdef __STATE_H__
+	state_save_register_device_item(device, 0, DELTAT->portstate);
+	state_save_register_device_item(device, 0, DELTAT->now_addr);
+	state_save_register_device_item(device, 0, DELTAT->now_step);
+	state_save_register_device_item(device, 0, DELTAT->acc);
+	state_save_register_device_item(device, 0, DELTAT->prev_acc);
+	state_save_register_device_item(device, 0, DELTAT->adpcmd);
+	state_save_register_device_item(device, 0, DELTAT->adpcml);
 #endif
 }
 

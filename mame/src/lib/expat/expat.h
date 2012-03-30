@@ -342,7 +342,7 @@ XML_SetEntityDeclHandler(XML_Parser parser,
                          XML_EntityDeclHandler handler);
 
 /* OBSOLETE -- OBSOLETE -- OBSOLETE
-   This handler has been superseded by the EntityDeclHandler above.
+   This handler has been superceded by the EntityDeclHandler above.
    It is provided here for backward compatibility.
 
    This is called for a declaration of an unparsed (NDATA) entity.
@@ -983,8 +983,7 @@ enum XML_FeatureEnum {
   XML_FEATURE_MIN_SIZE,
   XML_FEATURE_SIZEOF_XML_CHAR,
   XML_FEATURE_SIZEOF_XML_LCHAR,
-  XML_FEATURE_NS,
-  XML_FEATURE_LARGE_SIZE
+  XML_FEATURE_NS
   /* Additional features must be added to the end of this enum. */
 };
 
@@ -1005,7 +1004,7 @@ XML_GetFeatureList(void);
 */
 #define XML_MAJOR_VERSION 2
 #define XML_MINOR_VERSION 0
-#define XML_MICRO_VERSION 1
+#define XML_MICRO_VERSION 0
 
 #ifdef __cplusplus
 }

@@ -38,67 +38,58 @@ Notes:
     M6295 clocks : 1.000MHz (both), sample rate = 1000000 / 132
            VSync : 60Hz
 
+
+SAVE STATE (lee@lmservers.com):
+No code changes required to support save state
+1945kiii uses the 68000 and OKIM6295 which both support save state.
+The rationale for saving/not saving are as follows:
+
+static UINT16* k3_spriteram_1;  Saved via reference to AM_BASE
+static UINT16* k3_spriteram_2;  Saved via reference to AM_BASE
+static UINT16* k3_bgram;        Saved via reference to AM_BASE
+static tilemap *k3_bg_tilemap;  Saved due to tilemap supporting save
+
+There are no static local variables.
+
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
 #define MASTER_CLOCK	XTAL_16MHz
 
-
-class k3_state : public driver_device
-{
-public:
-	k3_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag),
-		  m_oki1(*this, "oki1"),
-		  m_oki2(*this, "oki2") { }
-
-	/* memory pointers */
-	UINT16 *  m_spriteram_1;
-	UINT16 *  m_spriteram_2;
-	UINT16 *  m_bgram;
-//  UINT16 *  m_paletteram16; // currently this uses generic palette handling
-
-	/* video-related */
-	tilemap_t  *m_bg_tilemap;
-
-	/* devices */
-	required_device<okim6295_device> m_oki1;
-	required_device<okim6295_device> m_oki2;
-};
-
+static UINT16* k3_spriteram_1;
+static UINT16* k3_spriteram_2;
+static UINT16* k3_bgram;
+static tilemap *k3_bg_tilemap;
 
 static WRITE16_HANDLER( k3_bgram_w )
 {
-	k3_state *state = space->machine().driver_data<k3_state>();
-	COMBINE_DATA(&state->m_bgram[offset]);
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&k3_bgram[offset]);
+	tilemap_mark_tile_dirty(k3_bg_tilemap,offset);
 }
 
 static TILE_GET_INFO( get_k3_bg_tile_info )
 {
-	k3_state *state = machine.driver_data<k3_state>();
-	int tileno = state->m_bgram[tile_index];
-	SET_TILE_INFO(1, tileno, 0, 0);
+	int tileno;
+	tileno = k3_bgram[tile_index];
+	SET_TILE_INFO(1,tileno,0,0);
 }
 
 static VIDEO_START(k3)
 {
-	k3_state *state = machine.driver_data<k3_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_k3_bg_tile_info, tilemap_scan_rows, 16, 16, 32, 64);
+	k3_bg_tilemap = tilemap_create(machine, get_k3_bg_tile_info,tilemap_scan_rows,16, 16, 32,64);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	k3_state *state = machine.driver_data<k3_state>();
-	const gfx_element *gfx = machine.gfx[0];
-	UINT16 *source = state->m_spriteram_1;
-	UINT16 *source2 = state->m_spriteram_2;
-	UINT16 *finish = source + 0x1000 / 2;
+	const gfx_element *gfx = machine->gfx[0];
+	UINT16 *source = k3_spriteram_1;
+	UINT16 *source2 = k3_spriteram_2;
+	UINT16 *finish = source + 0x1000/2;
 
-	while (source < finish)
+	while( source<finish )
 	{
 		int xpos, ypos;
 		int tileno;
@@ -106,62 +97,59 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 		ypos = (source[0] & 0x00ff) >> 0;
 		tileno = (source2[0] & 0x7ffe) >> 1;
 		xpos |=  (source2[0] & 0x0001) << 8;
-		drawgfx_transpen(bitmap, cliprect, gfx, tileno, 1, 0, 0, xpos, ypos, 0);
-		drawgfx_transpen(bitmap, cliprect, gfx, tileno, 1, 0, 0, xpos, ypos - 0x100, 0); // wrap
-		drawgfx_transpen(bitmap, cliprect, gfx, tileno, 1, 0, 0, xpos - 0x200, ypos, 0); // wrap
-		drawgfx_transpen(bitmap, cliprect, gfx, tileno, 1, 0, 0, xpos - 0x200, ypos - 0x100, 0); // wrap
+		drawgfx_transpen(bitmap,cliprect,gfx, tileno,1,0,0,xpos,ypos,0);
+		drawgfx_transpen(bitmap,cliprect,gfx, tileno,1,0,0,xpos,ypos-0x100,0); // wrap
+		drawgfx_transpen(bitmap,cliprect,gfx, tileno,1,0,0,xpos-0x200,ypos,0); // wrap
+		drawgfx_transpen(bitmap,cliprect,gfx, tileno,1,0,0,xpos-0x200,ypos-0x100,0); // wrap
 
-		source++;
-		source2++;
+		source++;source2++;
 	}
 }
 
-static SCREEN_UPDATE_IND16(k3)
+static VIDEO_UPDATE(k3)
 {
-	k3_state *state = screen.machine().driver_data<k3_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap,cliprect,k3_bg_tilemap,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
 
 static WRITE16_HANDLER( k3_scrollx_w )
 {
-	k3_state *state = space->machine().driver_data<k3_state>();
-	state->m_bg_tilemap->set_scrollx(0, data);
+	tilemap_set_scrollx( k3_bg_tilemap,0, data);
 }
 
 static WRITE16_HANDLER( k3_scrolly_w )
 {
-	k3_state *state = space->machine().driver_data<k3_state>();
-	state->m_bg_tilemap->set_scrolly(0, data);
+	tilemap_set_scrolly( k3_bg_tilemap,0, data);
 }
 
 static WRITE16_HANDLER( k3_soundbanks_w )
 {
-	k3_state *state = space->machine().driver_data<k3_state>();
-	state->m_oki1->set_bank_base((data & 4) ? 0x40000 : 0);
-	state->m_oki2->set_bank_base((data & 2) ? 0x40000 : 0);
+	okim6295_set_bank_base(devtag_get_device(space->machine, "oki1"), (data & 4) ? 0x40000 : 0);
+	okim6295_set_bank_base(devtag_get_device(space->machine, "oki2"), (data & 2) ? 0x40000 : 0);
 }
 
-static ADDRESS_MAP_START( k3_map, AS_PROGRAM, 16 )
+
+
+static ADDRESS_MAP_START( k3_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0009ce, 0x0009cf) AM_WRITENOP	// bug in code? (clean up log)
 	AM_RANGE(0x0009d2, 0x0009d3) AM_WRITENOP	// bug in code? (clean up log)
 
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM	// ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM	// Main Ram
-	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)	// palette
-	AM_RANGE(0x240000, 0x240fff) AM_RAM AM_BASE_MEMBER(k3_state, m_spriteram_1)
-	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_BASE_MEMBER(k3_state, m_spriteram_2)
-	AM_RANGE(0x2c0000, 0x2c0fff) AM_RAM_WRITE(k3_bgram_w) AM_BASE_MEMBER(k3_state, m_bgram)
+	AM_RANGE(0x200000, 0x200fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)	// palette
+	AM_RANGE(0x240000, 0x240fff) AM_RAM AM_BASE(&k3_spriteram_1)
+	AM_RANGE(0x280000, 0x280fff) AM_RAM AM_BASE(&k3_spriteram_2)
+	AM_RANGE(0x2c0000, 0x2c0fff) AM_RAM_WRITE(k3_bgram_w) AM_BASE(&k3_bgram)
 	AM_RANGE(0x340000, 0x340001) AM_WRITE(k3_scrollx_w)
 	AM_RANGE(0x380000, 0x380001) AM_WRITE(k3_scrolly_w)
 	AM_RANGE(0x3c0000, 0x3c0001) AM_WRITE(k3_soundbanks_w)
 	AM_RANGE(0x400000, 0x400001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x440000, 0x440001) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x480000, 0x480001) AM_READ_PORT("DSW")
-	AM_RANGE(0x4c0000, 0x4c0001) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0xff00)
-	AM_RANGE(0x500000, 0x500001) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0xff00)
+	AM_RANGE(0x4c0000, 0x4c0001) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0xff00)
+	AM_RANGE(0x500000, 0x500001) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0xff00)
 	AM_RANGE(0x8c0000, 0x8cffff) AM_RAM	// not used?
 ADDRESS_MAP_END
 
@@ -190,6 +178,7 @@ static INPUT_PORTS_START( k3 )
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0xfff0, IP_ACTIVE_LOW, IPT_UNKNOWN )	/* Are these used at all? */
+
 
 	PORT_START("DSW")
 	PORT_DIPNAME( 0x007,  0x0007, DEF_STR( Coin_A ) )			PORT_DIPLOCATION("SW1:1,2,3")
@@ -245,39 +234,35 @@ static GFXDECODE_START( 1945kiii )
 GFXDECODE_END
 
 
-static MACHINE_START( 1945kiii )
-{
-}
+static MACHINE_DRIVER_START( k3 )
+	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(k3_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-static MACHINE_CONFIG_START( k3, k3_state )
+	MDRV_GFXDECODE(1945kiii)
 
-	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(k3_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_MACHINE_START(1945kiii)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MDRV_PALETTE_LENGTH(0x800)
 
-	MCFG_GFXDECODE(1945kiii)
+	MDRV_VIDEO_START(k3)
+	MDRV_VIDEO_UPDATE(k3)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(k3)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_PALETTE_LENGTH(0x800)
+	MDRV_SOUND_ADD("oki1", OKIM6295, MASTER_CLOCK/16) /* dividers? */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_VIDEO_START(k3)
-
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_OKIM6295_ADD("oki1", MASTER_CLOCK/16, OKIM6295_PIN7_HIGH)  /* dividers? */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-
-	MCFG_OKIM6295_ADD("oki2", MASTER_CLOCK/16, OKIM6295_PIN7_HIGH) /* dividers? */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki2", OKIM6295, MASTER_CLOCK/16) /* dividers? */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -300,4 +285,4 @@ ROM_START( 1945kiii )
 	ROM_LOAD( "m16m-3.u61", 0x00000, 0x200000, CRC(32fc80dd) SHA1(bee32493a250e9f21997114bba26b9535b1b636c) )
 ROM_END
 
-GAME( 2000, 1945kiii, 0, k3, k3, 0, ROT270, "Oriental Soft", "1945k III", GAME_SUPPORTS_SAVE )
+GAME( 2000, 1945kiii, 0, k3, k3, 0, ROT270, "Oriental", "1945k III", GAME_SUPPORTS_SAVE )

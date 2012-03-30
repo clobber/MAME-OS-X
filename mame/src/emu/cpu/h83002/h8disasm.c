@@ -8,7 +8,6 @@
 
 ****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "h8.h"
 
@@ -136,106 +135,6 @@ static UINT32 h8disasm_0(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 		size = 2;
 		break;
 	case 0x1:
-		// 0140 = LDC/STC.W
-		if (opcode == 0x0140)
-		{
-			data16 = h8_mem_read16(2);
-			switch((data16>>8) & 0xff)
-			{
-				case 0x69:
-					// ERd
-					if (data16 & 0x80)
-					{
-						sprintf(buffer, "%4.4x stc.w ccr, @%s", opcode, reg_names32[(data16>>4)&7]);
-					}
-					else
-					{
-						sprintf(buffer, "%4.4x ldc.w @%s, ccr", opcode, reg_names32[(data16>>4)&7]);
-					}
-					size = 4;
-					break;
-
-				case 0x6f:
-					// @(disp, ERd)
-					sdata16 = h8_mem_read16(4);
-					if (data16 & 0x80)
-					{
-						sprintf(buffer, "%4.4x stc.w ccr, @(%x, %s)", opcode, sdata16, reg_names32[(data16>>4)&7]);
-					}
-					else
-					{
-						sprintf(buffer, "%4.4x ldc.w @(%x, %s), ccr", opcode, sdata16, reg_names32[(data16>>4)&7]);
-					}
-					size = 6;
-					break;
-
-				case 0x78:
-					// @(disp24, ERd)
-					size = 10;
-					ext16 = h8_mem_read16(4);
-					sdata32 = h8_mem_read32(6) & 0xffffff;
-					if (ext16 == 0x6b20)
-					{
-						sprintf(buffer, "%4.4x ldc.w @(%x, %s), ccr", opcode, sdata32, reg_names32[(data16>>4)&7]);
-					}
-					else if (ext16 == 0x6ba0)
-					{
-						sprintf(buffer, "%4.4x stc.w ccr, @(%x, %s)", opcode, sdata32, reg_names32[(data16>>4)&7]);
-					}
-					else
-					{
-						sprintf(buffer, "Unknown stc.w CCR form, prefix 0x78, format %x\n", ext16);
-					}
-					break;
-
-				case 0x6d:
-					// stc.w ccr,-@ERd / ldc @ERd+, ccr
-					if (data16 & 0x80)
-					{
-						sprintf(buffer, "%4.4x stc.w ccr, -@%s", opcode, reg_names32[(data16>>4)&7]);
-					}
-					else
-					{
-						sprintf(buffer, "%4.4x ldc.w @%s+, ccr", opcode, reg_names32[(data16>>4)&7]);
-					}
-					size = 4;
-					break;
-
-				case 0x6b:
-					// stc.w CCR,@abs
-					if ((data16&0xff) == 0x00)	// 16 bit absolute
-					{
-						ext16 = h8_mem_read16(4);
-						sprintf(buffer, "%4.4x ldc.w @%04x, ccr", opcode, ext16);
-						size = 6;
-					}
-					else if ((data16&0xff) == 0x20)	// 24 bit absolute
-					{
-						sdata32 = h8_mem_read32(4) & 0xffffff;
-						sprintf(buffer, "%4.4x ldc.w @%06x, ccr", opcode, sdata32);
-						size = 8;
-					}
-					else if ((data16&0xff) == 0x80)	// 16 bit absolute
-					{
-						ext16 = h8_mem_read16(4);
-						sprintf(buffer, "%4.4x stc.w ccr, @%04x", opcode, ext16);
-						size = 6;
-					}
-					else if ((data16&0xff) == 0xa0)	// 24 bit absolute
-					{
-						sdata32 = h8_mem_read32(4) & 0xffffff;
-						sprintf(buffer, "%4.4x stc.w ccr, @%06x", opcode, sdata32);
-						size = 8;
-					}
-					else
-					{
-						sprintf(buffer, "Unknown stc.w CCR form, prefix 0x6b, format %x\n", data16);
-					}
-					break;
-			}
-			break;
-		}
-
 		// 010x  where x should always be 0!
 		if((opcode & 0xf) != 0)
 		{
@@ -244,7 +143,7 @@ static UINT32 h8disasm_0(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 		}
 		switch((opcode>>4) & 0xf)
 		{
-		// 0100 mov.l prefix
+			// 0100 mov.l prefix
 		case 0:
 			data16 = h8_mem_read16(2);
 			switch((data16>>8) & 0xff)
@@ -334,45 +233,6 @@ static UINT32 h8disasm_0(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 				break;
 			}
 			break;
-			// ldm/stm.l (ERn-ERn+1), @-SP
-		case 0x1:
-			data16 = h8_mem_read16(2);
-			size = 4;
-			if ((data16&0xfff0) == 0x6df0)
-			{
-				sprintf(buffer, "%4.4x stm.l (%s-%s), @-SP", opcode, reg_names32[data16 & 0x7], reg_names32[(data16 & 0x7)+1]);
-			}
-			else if ((data16&0xfff0) == 0x6d70)
-			{
-				sprintf(buffer, "%4.4x ldm.l @SP+, (%s-%s)", opcode, reg_names32[(data16 & 0x7)-1], reg_names32[(data16 & 0x7)]);
-			}
-			break;
-			// ldm/stm.l (ERn-ERn+2), @-SP
-		case 0x2:
-			data16 = h8_mem_read16(2);
-			size = 4;
-			if ((data16&0xfff0) == 0x6df0)
-			{
-				sprintf(buffer, "%4.4x stm.l (%s-%s), @-SP", opcode, reg_names32[data16 & 0x7], reg_names32[(data16 & 0x7)+2]);
-			}
-			else if ((data16&0xfff0) == 0x6d70)
-			{
-				sprintf(buffer, "%4.4x ldm.l @SP+, (%s-%s)", opcode, reg_names32[(data16 & 0x7)-2], reg_names32[(data16 & 0x7)]);
-			}
-			break;
-			// ldm/stm.l (ERn-ERn+3), @-SP
-		case 0x3:
-			data16 = h8_mem_read16(2);
-			size = 4;
-			if ((data16&0xfff0) == 0x6df0)
-			{
-				sprintf(buffer, "%4.4x stm.l (%s-%s), @-SP", opcode, reg_names32[data16 & 0x7], reg_names32[(data16 & 0x7)+3]);
-			}
-			else if ((data16&0xfff0) == 0x6d70)
-			{
-				sprintf(buffer, "%4.4x ldm.l @SP+, (%s-%s)", opcode, reg_names32[(data16 & 0x7)-3], reg_names32[(data16 & 0x7)]);
-			}
-			break;
 			// ldc
 		case 0x4:
 			break;
@@ -383,37 +243,9 @@ static UINT32 h8disasm_0(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			break;
 			// mulxs
 		case 0xc:
-			data16 = h8_mem_read16(2);
-			size = 4;
-			if ((data16&0xff00) == 0x5000)
-			{
-				sprintf(buffer, "mulxs.b %s, %s", reg_names16[(data16>>4)&0xf], reg_names16[data16&0xf]);
-			}
-			else if ((data16&0xff00) == 0x5200)
-			{
-				sprintf(buffer, "mulxs.w %s, %s", reg_names16[(data16>>4)&0xf], reg_names16[data16&0xf]);
-			}
-			else
-			{
-				sprintf(buffer, "%04x %04x unknown\n", opcode, data16);
-			}
 			break;
 			// divxs
 		case 0xd:
-			data16 = h8_mem_read16(2);
-			size = 4;
-			if ((data16&0xff00) == 0x5100)
-			{
-				sprintf(buffer, "divxs.b %s, %s", reg_names16[(data16>>4)&0xf], reg_names16[data16&0xf]);
-			}
-			else if ((data16&0xff00) == 0x5300)
-			{
-				sprintf(buffer, "divxs.w %s, %s", reg_names16[(data16>>4)&0xf], reg_names16[data16&0xf]);
-			}
-			else
-			{
-				sprintf(buffer, "%04x %04x unknown\n", opcode, data16);
-			}
 			break;
 			// 01f0 and.l prefix
 		case 0xf:
@@ -622,21 +454,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			sprintf(buffer, "%4.4x shll.l %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
-			// shll.b #2, Rx
-		case 0x4:
-			sprintf(buffer, "%4.4x shll.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// shll.w Rx
-		case 0x5:
-			sprintf(buffer, "%4.4x shll.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// shll.l #2, Rx
-		case 0x7:
-			sprintf(buffer, "%4.4x shll.l #2, %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
 			// shal.b Rx
 		case 0x8:
 			sprintf(buffer, "%4.4x shal.b %s", opcode, reg_names8[opcode & 0xf]);
@@ -650,21 +467,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			// shal.l Rx
 		case 0xb:
 			sprintf(buffer, "%4.4x shal.l %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
-			// shal.b #2, Rx
-		case 0xc:
-			sprintf(buffer, "%4.4x shal.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// shal.w #2, Rx
-		case 0xd:
-			sprintf(buffer, "%4.4x shal.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// shal.l #2, Rx
-		case 0xf:
-			sprintf(buffer, "%4.4x shal.l #2, %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
 		default:
@@ -692,21 +494,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			sprintf(buffer, "%4.4x shlr.l %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
-			// shlr.b #2, rx
-		case 0x4:
-			sprintf(buffer, "%4.4x shlr.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// shlr.w #2, rx
-		case 0x5:
-			sprintf(buffer, "%4.4x shlr.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// shlr.l #2, rx
-		case 0x7:
-			sprintf(buffer, "%4.4x shlr.l #2, %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
 			// shar.b rx
 		case 0x8:
 			sprintf(buffer, "%4.4x shar.b %s", opcode, reg_names8[opcode & 0xf]);
@@ -720,21 +507,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			// shar.l rx
 		case 0xb:
 			sprintf(buffer, "%4.4x shar.l %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
-			// shar.b #2, rx
-		case 0xc:
-			sprintf(buffer, "%4.4x shar.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// shar.w #2, rx
-		case 0xd:
-			sprintf(buffer, "%4.4x shar.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// shar.l #2, rx
-		case 0xf:
-			sprintf(buffer, "%4.4x shar.l #2, %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
 		default:
@@ -776,21 +548,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			sprintf(buffer, "%4.4x rotl.l %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
-			// rotl.b #2, Rx
-		case 0xc:
-			sprintf(buffer, "%4.4x rotl.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// rotl.w #2, Rx
-		case 0xd:
-			sprintf(buffer, "%4.4x rotl.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// rotl.l #2, Rx
-		case 0xf:
-			sprintf(buffer, "%4.4x rotl.l #2, %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
 		default:
 			sprintf(buffer, "%4.4x  ? ", opcode);
 			size = 2;
@@ -828,21 +585,6 @@ static UINT32 h8disasm_1(UINT32 pc, UINT32 opcode, char *buffer, const UINT8 *op
 			// rotr.l Rx
 		case 0xb:
 			sprintf(buffer, "%4.4x rotr.l %s", opcode, reg_names32[opcode & 7]);
-			size = 2;
-			break;
-			// rotr.b #2, Rx
-		case 0xc:
-			sprintf(buffer, "%4.4x rotr.b #2, %s", opcode, reg_names8[opcode & 0xf]);
-			size = 2;
-			break;
-			// rotr.w #2, Rx
-		case 0xd:
-			sprintf(buffer, "%4.4x rotr.w #2, %s", opcode, reg_names16[opcode & 0xf]);
-			size = 2;
-			break;
-			// rotr.l #2, Rx
-		case 0xf:
-			sprintf(buffer, "%4.4x rotr.l #2, %s", opcode, reg_names32[opcode & 7]);
 			size = 2;
 			break;
 		default:
@@ -1272,38 +1014,6 @@ static UINT32 h8disasm_6(UINT32 address, UINT32 opcode, char *buffer, const UINT
 			sprintf(buffer, "%4.4x mov.b @%8.8x, %s", opcode, data32&addr_mask, reg_names8[opcode & 0xf]);
 			size = 6;
 			break;
-		case 0x3:	// bclr #imm, imm:32
-			data32=h8_mem_read32(2);
-			data16=h8_mem_read16(6);
-			switch ((data16 >> 8) & 0xff)
-			{
-				case 0x60 :
-					sprintf(buffer, "%4.4x bset %s, @%8.8x", opcode, reg_names16[(data16>>4)&0xf], data32&addr_mask);
-					break;
-				case 0x61 :
-					sprintf(buffer, "%4.4x bnot %s, @%8.8x", opcode, reg_names16[(data16>>4)&0xf], data32&addr_mask);
-					break;
-				case 0x62 :
-					sprintf(buffer, "%4.4x bclr %s, @%8.8x", opcode, reg_names16[(data16>>4)&0xf], data32&addr_mask);
-					break;
-				case 0x63:
-					sprintf(buffer, "%4.4x btst %s, @%8.8x", opcode, reg_names16[(data16>>4)&0xf], data32&addr_mask);
-					break;
-				case 0x70 :
-					sprintf(buffer, "%4.4x bset #%d, @%8.8x", opcode, (data16>>4)&7, data32&addr_mask);
-					break;
-				case 0x71 :
-					sprintf(buffer, "%4.4x bnot #%d, @%8.8x", opcode, (data16>>4)&7, data32&addr_mask);
-					break;
-				case 0x72 :
-					sprintf(buffer, "%4.4x bclr #%d, @%8.8x", opcode, (data16>>4)&7, data32&addr_mask);
-					break;
-				case 0x73 :
-					sprintf(buffer, "%4.4x btst #%d, @%8.8x", opcode, (data16>>4)&7, data32&addr_mask);
-					break;
-			}
-			size = 8;
-			break;
 		case 0x8:
 			data16=h8_mem_read16(2);
 			sprintf(buffer, "%4.4x mov.b %s, @%8.8x", opcode, reg_names8[opcode & 0xf], data16&addr_mask);
@@ -1382,7 +1092,7 @@ static UINT32 h8disasm_6(UINT32 address, UINT32 opcode, char *buffer, const UINT
 			sprintf(buffer, "%4.4x mov.b %s,@(%x, %s)", opcode, reg_names8[opcode &0xf], data16, reg_names32[(opcode>>4)&7]);
 		}
 		else
-		{
+			{
 			sprintf(buffer, "%4.4x mov.b @(%x, %s), %s", opcode, data16, reg_names32[(opcode>>4)&7], reg_names8[opcode &0xf]);
 		}
 		size = 4;

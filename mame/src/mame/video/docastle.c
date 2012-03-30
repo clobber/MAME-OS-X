@@ -8,8 +8,10 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/docastle.h"
+
+static tilemap *docastle_tilemap;
 
 /***************************************************************************
 
@@ -28,14 +30,13 @@
   bit 0 -- 390 ohm resistor  -- BLUE
 
 ***************************************************************************/
-
 PALETTE_INIT( docastle )
 {
 	int i;
 
-	for (i = 0; i < 256; i++)
+	for (i = 0;i < 256;i++)
 	{
-		int bit0, bit1, bit2, r, g, b;
+		int bit0,bit1,bit2,r,g,b;
 
 		/* red component */
 		bit0 = (*color_prom >> 5) & 0x01;
@@ -64,62 +65,54 @@ PALETTE_INIT( docastle )
 
 WRITE8_HANDLER( docastle_videoram_w )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	state->m_videoram[offset] = data;
-	state->m_do_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(docastle_tilemap, offset);
 }
 
 WRITE8_HANDLER( docastle_colorram_w )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	state->m_colorram[offset] = data;
-	state->m_do_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(docastle_tilemap, offset);
 }
 
 READ8_HANDLER( docastle_flipscreen_off_r )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	flip_screen_set(space->machine(), 0);
-	state->m_do_tilemap->mark_all_dirty();
+	flip_screen_set(space->machine, 0);
+	tilemap_mark_all_tiles_dirty(docastle_tilemap);
 	return 0;
 }
 
 READ8_HANDLER( docastle_flipscreen_on_r )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	flip_screen_set(space->machine(), 1);
-	state->m_do_tilemap->mark_all_dirty();
+	flip_screen_set(space->machine, 1);
+	tilemap_mark_all_tiles_dirty(docastle_tilemap);
 	return 1;
 }
 
 WRITE8_HANDLER( docastle_flipscreen_off_w )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	flip_screen_set(space->machine(), 0);
-	state->m_do_tilemap->mark_all_dirty();
+	flip_screen_set(space->machine, 0);
+	tilemap_mark_all_tiles_dirty(docastle_tilemap);
 }
 
 WRITE8_HANDLER( docastle_flipscreen_on_w )
 {
-	docastle_state *state = space->machine().driver_data<docastle_state>();
-	flip_screen_set(space->machine(), 1);
-	state->m_do_tilemap->mark_all_dirty();
+	flip_screen_set(space->machine, 1);
+	tilemap_mark_all_tiles_dirty(docastle_tilemap);
 }
 
 static TILE_GET_INFO( get_tile_info )
 {
-	docastle_state *state = machine.driver_data<docastle_state>();
-	int code = state->m_videoram[tile_index] + 8 * (state->m_colorram[tile_index] & 0x20);
-	int color = state->m_colorram[tile_index] & 0x1f;
+	int code = videoram[tile_index] + 8 * (colorram[tile_index] & 0x20);
+	int color = colorram[tile_index] & 0x1f;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
 
-static void video_start_common( running_machine &machine, UINT32 tile_transmask )
+static void video_start_common(running_machine *machine, UINT32 tile_transmask)
 {
-	docastle_state *state = machine.driver_data<docastle_state>();
-	state->m_do_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
-	state->m_do_tilemap->set_transmask(0, tile_transmask, 0x0000);
+	docastle_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+	tilemap_set_transmask(docastle_tilemap, 0, tile_transmask, 0x0000);
 }
 
 VIDEO_START( docastle )
@@ -132,18 +125,17 @@ VIDEO_START( dorunrun )
 	video_start_common(machine, 0xff00);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	docastle_state *state = machine.driver_data<docastle_state>();
 	int offs;
 
-	machine.priority_bitmap.fill(1);
+	bitmap_fill(machine->priority_bitmap,NULL,1);
 
-	for (offs = state->m_spriteram_size - 4; offs >= 0; offs -= 4)
+	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
 	{
-		int sx, sy, flipx, flipy, code, color;
+		int sx,sy,flipx,flipy,code,color;
 
-		if (machine.gfx[1]->total_elements > 256)
+		if (machine->gfx[1]->total_elements > 256)
 		{
 			/* spriteram
 
@@ -162,14 +154,14 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 
              */
 
-			code = state->m_spriteram[offs + 3];
-			color = state->m_spriteram[offs + 2] & 0x0f;
-			sx = ((state->m_spriteram[offs + 1] + 8) & 0xff) - 8;
-			sy = state->m_spriteram[offs];
-			flipx = state->m_spriteram[offs + 2] & 0x40;
+			code = spriteram[offs + 3];
+			color = spriteram[offs + 2] & 0x0f;
+			sx = ((spriteram[offs + 1] + 8) & 0xff) - 8;
+			sy = spriteram[offs];
+			flipx = spriteram[offs + 2] & 0x40;
 			flipy = 0;
-			if (state->m_spriteram[offs + 2] & 0x10) code += 0x100;
-			if (state->m_spriteram[offs + 2] & 0x80) code += 0x200;
+			if (spriteram[offs + 2] & 0x10) code += 0x100;
+			if (spriteram[offs + 2] & 0x80) code += 0x200;
 		}
 		else
 		{
@@ -188,12 +180,12 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 
              */
 
-			code = state->m_spriteram[offs + 3];
-			color = state->m_spriteram[offs + 2] & 0x1f;
-			sx = ((state->m_spriteram[offs + 1] + 8) & 0xff) - 8;
-			sy = state->m_spriteram[offs];
-			flipx = state->m_spriteram[offs + 2] & 0x40;
-			flipy = state->m_spriteram[offs + 2] & 0x80;
+			code = spriteram[offs + 3];
+			color = spriteram[offs + 2] & 0x1f;
+			sx = ((spriteram[offs + 1] + 8) & 0xff) - 8;
+			sy = spriteram[offs];
+			flipx = spriteram[offs + 2] & 0x40;
+			flipy = spriteram[offs + 2] & 0x80;
 		}
 
 		if (flip_screen_get(machine))
@@ -205,31 +197,29 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 		}
 
 		/* first draw the sprite, visible */
-		pdrawgfx_transmask(bitmap,cliprect,machine.gfx[1],
+		pdrawgfx_transmask(bitmap,cliprect,machine->gfx[1],
 				code,
 				color,
 				flipx,flipy,
 				sx,sy,
-				machine.priority_bitmap,
+				machine->priority_bitmap,
 				0x00,0x80ff);
 
 		/* then draw the mask, behind the background but obscuring following sprites */
-		pdrawgfx_transmask(bitmap,cliprect,machine.gfx[1],
+		pdrawgfx_transmask(bitmap,cliprect,machine->gfx[1],
 				code,
 				color,
 				flipx,flipy,
 				sx,sy,
-				machine.priority_bitmap,
+				machine->priority_bitmap,
 				0x02,0x7fff);
 	}
 }
 
-SCREEN_UPDATE_IND16( docastle )
+VIDEO_UPDATE( docastle )
 {
-	docastle_state *state = screen.machine().driver_data<docastle_state>();
-
-	state->m_do_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
-	state->m_do_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_LAYER0, 0);
+	tilemap_draw(bitmap, cliprect, docastle_tilemap, TILEMAP_DRAW_OPAQUE, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, docastle_tilemap, TILEMAP_DRAW_LAYER0, 0);
 	return 0;
 }

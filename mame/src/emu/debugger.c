@@ -9,15 +9,14 @@
 
 *********************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "debugger.h"
-#include "osdepend.h"
 #include "debug/debugcpu.h"
 #include "debug/debugcmd.h"
+#include "debug/debugcmt.h"
 #include "debug/debugcon.h"
 #include "debug/express.h"
 #include "debug/debugvw.h"
-#include "debugint/debugint.h"
 #include <ctype.h>
 
 
@@ -48,7 +47,7 @@ static int atexit_registered;
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void debugger_exit(running_machine &machine);
+static void debugger_exit(running_machine *machine);
 
 
 
@@ -60,27 +59,25 @@ static void debugger_exit(running_machine &machine);
     debugger_init - start up all subsections
 -------------------------------------------------*/
 
-void debugger_init(running_machine &machine)
+void debugger_init(running_machine *machine)
 {
 	/* only if debugging is enabled */
-	if (machine.debug_flags & DEBUG_FLAG_ENABLED)
+	if (machine->debug_flags & DEBUG_FLAG_ENABLED)
 	{
 		machine_entry *entry;
 
 		/* initialize the submodules */
-		machine.m_debug_view = auto_alloc(machine, debug_view_manager(machine));
 		debug_cpu_init(machine);
 		debug_command_init(machine);
 		debug_console_init(machine);
-
-		/* always initialize the internal render debugger */
-		debugint_init(machine);
+		debug_view_init(machine);
+		debug_comment_init(machine);
 
 		/* allocate a new entry for our global list */
-		machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(debugger_exit), &machine));
-		entry = global_alloc(machine_entry);
+		add_exit_callback(machine, debugger_exit);
+		entry = alloc_or_die(machine_entry);
 		entry->next = machine_list;
-		entry->machine = &machine;
+		entry->machine = machine;
 		machine_list = entry;
 
 		/* register an atexit handler if we haven't yet */
@@ -89,10 +86,7 @@ void debugger_init(running_machine &machine)
 		atexit_registered = TRUE;
 
 		/* listen in on the errorlog */
-		machine.add_logerror_callback(debug_errorlog_write_line);
-
-		/* initialize osd debugger features */
-		machine.osd().init_debugger();
+		add_logerror_callback(machine, debug_errorlog_write_line);
 	}
 }
 
@@ -102,9 +96,9 @@ void debugger_init(running_machine &machine)
     video display
 -------------------------------------------------*/
 
-void debugger_refresh_display(running_machine &machine)
+void debugger_refresh_display(running_machine *machine)
 {
-	machine.video().frame_update(true);
+	video_frame_update(machine, TRUE);
 }
 
 
@@ -113,17 +107,17 @@ void debugger_refresh_display(running_machine &machine)
     global list of active machines for cleanup
 -------------------------------------------------*/
 
-static void debugger_exit(running_machine &machine)
+static void debugger_exit(running_machine *machine)
 {
 	machine_entry **entryptr;
 
 	/* remove this machine from the list; it came down cleanly */
 	for (entryptr = &machine_list; *entryptr != NULL; entryptr = &(*entryptr)->next)
-		if ((*entryptr)->machine == &machine)
+		if ((*entryptr)->machine == machine)
 		{
 			machine_entry *deleteme = *entryptr;
 			*entryptr = deleteme->next;
-			global_free(deleteme);
+			free(deleteme);
 			break;
 		}
 }
@@ -141,8 +135,8 @@ void debugger_flush_all_traces_on_abnormal_exit(void)
 	while (machine_list != NULL)
 	{
 		machine_entry *deleteme = machine_list;
-		debug_cpu_flush_traces(*deleteme->machine);
+		debug_cpu_flush_traces(deleteme->machine);
 		machine_list = deleteme->next;
-		global_free(deleteme);
+		free(deleteme);
 	}
 }

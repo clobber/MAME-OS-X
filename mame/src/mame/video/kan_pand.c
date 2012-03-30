@@ -1,120 +1,79 @@
-/***********************************************************************
+/* kan_pand.c Kaneko Pandora Sprite Chip
+  GFX processor - PX79C480FP-3 (KANEKO, Pandora-Chip)
 
-    Kaneko Pandora Sprite Chip
-    GFX processor - PX79C480FP-3 (KANEKO, Pandora-Chip)
+  This emulates the Kaneko Pandora Sprite Chip
+   which is found on several Kaneko boards.
 
-    This emulates the Kaneko Pandora Sprite Chip
-    which is found on several Kaneko boards.
+   there several bootleg variants of this chip,
+   these are emulated in kan_panb.c instead.
 
-    there several bootleg variants of this chip,
-    these are emulated in kan_panb.c instead.
+   Original Games using this Chip
 
-    Original Games using this Chip
+   Snow Bros
+   Air Buster
+   DJ Boy
+   Heavy Unit
+   Sand Scorpian
+   Gals Panic (1st release)
 
-    Snow Bros
-    Air Buster
-    DJ Boy
-    Heavy Unit
-    Sand Scorpion
-    Gals Panic (1st release)
+   The SemiCom games are also using this because
+   their bootleg chip appears to function in an
+   identical way.
 
-    The SemiCom games are also using this because
-    their bootleg chip appears to function in an
-    identical way.
+   Rendering appears to be done to a framebuffer
+   and the video system can be instructed not to
+   clear this, allowing for 'sprite trail' effects
+   as used by Air Buster.
 
-    Rendering appears to be done to a framebuffer
-    and the video system can be instructed not to
-    clear this, allowing for 'sprite trail' effects
-    as used by Air Buster.
+   The chip appears to be an 8-bit chip, and
+   when used on 16-bit CPUs only the MSB or LSB
+   of the data lines are connected.  Address Lines
+   also appear to be swapped around on one of the
+   hookups.
 
-    The chip appears to be an 8-bit chip, and
-    when used on 16-bit CPUs only the MSB or LSB
-    of the data lines are connected.  Address Lines
-    also appear to be swapped around on one of the
-    hookups.
+   to use this in a driver you must hook functions to
+   VIDEO_START  (allocates ram used by chip)
+   VIDEO_UPDATE  (copies framebuffer to screen)
+   and
+   VIDEO_EOF  (renders the sprites to the framebuffer)
 
-    to use this in a driver you must hook functions to
-    VIDEO_UPDATE  (copies framebuffer to screen)
-    and
-    VIDEO_EOF  (renders the sprites to the framebuffer)
+   spriteram should be accessed only with the
+   pandora_spriteram_r / pandora_spriteram_w or
+   pandora_spriteram_LSB_r / pandora_spriteram_LSB_w
+   handlers, depending on the CPU being used with it.
 
-    also, you have to add the correspondent device in MACHINE_DRIVER
+*/
 
-    spriteram should be accessed only with the
-    pandora_spriteram_r / pandora_spriteram_w or
-    pandora_spriteram_LSB_r / pandora_spriteram_LSB_w
-    handlers, depending on the CPU being used with it.
+#include "driver.h"
+#include "kan_pand.h"
 
-***********************************************************************/
+static UINT8* pandora_spriteram;
+static UINT8 pandora_region;
+static bitmap_t *pandora_sprites_bitmap; /* bitmap to render sprites to, Pandora seems to be frame'buffered' */
+static int pandora_clear_bitmap;
+static int pandora_xoffset, pandora_yoffset;
 
-#include "emu.h"
-#include "video/kan_pand.h"
-
-typedef struct _kaneko_pandora_state  kaneko_pandora_state;
-struct _kaneko_pandora_state
+void pandora_set_clear_bitmap(int clear)
 {
-	screen_device *screen;
-	UINT8 *      spriteram;
-	bitmap_ind16     *sprites_bitmap; /* bitmap to render sprites to, Pandora seems to be frame'buffered' */
-	int          clear_bitmap;
-	UINT8        region;
-	int          xoffset, yoffset;
-	int			 bg_pen; // might work some other way..
-};
-
-/*****************************************************************************
-    INLINE FUNCTIONS
-*****************************************************************************/
-
-INLINE kaneko_pandora_state *get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == KANEKO_PANDORA);
-
-	return (kaneko_pandora_state *)downcast<legacy_device_base *>(device)->token();
+	pandora_clear_bitmap = clear;
 }
 
-INLINE const kaneko_pandora_interface *get_interface( device_t *device )
+void pandora_update(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	assert(device != NULL);
-	assert((device->type() == KANEKO_PANDORA));
-	return (const kaneko_pandora_interface *) device->static_config();
-}
-
-/*****************************************************************************
-    IMPLEMENTATION
-*****************************************************************************/
-
-void pandora_set_bg_pen( device_t *device, int pen )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	pandora->bg_pen = pen;
-}
-
-void pandora_set_clear_bitmap( device_t *device, int clear )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	pandora->clear_bitmap = clear;
-}
-
-void pandora_update( device_t *device, bitmap_ind16 &bitmap, const rectangle &cliprect )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->sprites_bitmap)
+	if (!pandora_sprites_bitmap)
 	{
 		printf("ERROR: pandora_update with no pandora_sprites_bitmap\n");
 		return;
 	}
 
-	copybitmap_trans(bitmap, *pandora->sprites_bitmap, 0, 0, 0, 0, cliprect, 0);
+	copybitmap_trans(bitmap,pandora_sprites_bitmap,0,0,0,0,cliprect,0);
 }
 
 
-static void pandora_draw( device_t *device, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void pandora_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	int sx = 0, sy = 0, x = 0, y = 0, offs;
+
+	int sx=0, sy=0, x=0, y=0, offs;
 
 
 	/*
@@ -136,20 +95,18 @@ static void pandora_draw( device_t *device, bitmap_ind16 &bitmap, const rectangl
      *  7   | .x...... | Flip Sprite X-Axis
      */
 
-	for (offs = 0; offs < 0x1000; offs += 8)
+	for (offs = 0;offs < 0x1000;offs += 8)
 	{
-		int dx = pandora->spriteram[offs + 4];
-		int dy = pandora->spriteram[offs + 5];
-		int tilecolour = pandora->spriteram[offs + 3];
-		int attr = pandora->spriteram[offs + 7];
+		int dx = pandora_spriteram[offs+4];
+		int dy = pandora_spriteram[offs+5];
+		int tilecolour = pandora_spriteram[offs+3];
+		int attr = pandora_spriteram[offs+7];
 		int flipx =   attr & 0x80;
 		int flipy =  (attr & 0x40) << 1;
-		int tile  = ((attr & 0x3f) << 8) + (pandora->spriteram[offs + 6] & 0xff);
+		int tile  = ((attr & 0x3f) << 8) + (pandora_spriteram[offs+6] & 0xff);
 
-		if (tilecolour & 1)
-			dx |= 0x100;
-		if (tilecolour & 2)
-			dy |= 0x100;
+		if (tilecolour & 1) dx |= 0x100;
+		if (tilecolour & 2) dy |= 0x100;
 
 		if (tilecolour & 4)
 		{
@@ -162,7 +119,7 @@ static void pandora_draw( device_t *device, bitmap_ind16 &bitmap, const rectangl
 			y = dy;
 		}
 
-		if (flip_screen_get(device->machine()))
+		if (flip_screen_get(machine))
 		{
 			sx = 240 - x;
 			sy = 240 - y;
@@ -176,18 +133,16 @@ static void pandora_draw( device_t *device, bitmap_ind16 &bitmap, const rectangl
 		}
 
 		/* global offset */
-		sx += pandora->xoffset;
-		sy += pandora->yoffset;
+		sx+=pandora_xoffset;
+		sy+=pandora_yoffset;
 
-		sx &= 0x1ff;
-		sy &= 0x1ff;
+		sx &=0x1ff;
+		sy &=0x1ff;
 
-		if (sx & 0x100)
-			sx -= 0x200;
-		if (sy & 0x100)
-			sy -= 0x200;
+		if (sx&0x100) sx-=0x200;
+		if (sy&0x100) sy-=0x200;
 
-		drawgfx_transpen(bitmap,cliprect,device->machine().gfx[pandora->region],
+		drawgfx_transpen(bitmap,cliprect,machine->gfx[pandora_region],
 				tile,
 				(tilecolour & 0xf0) >> 4,
 				flipx, flipy,
@@ -195,143 +150,100 @@ static void pandora_draw( device_t *device, bitmap_ind16 &bitmap, const rectangl
 	}
 }
 
-void pandora_eof( device_t *device )
+void pandora_eof(running_machine *machine)
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	assert(pandora->spriteram != NULL);
+	assert(pandora_spriteram != NULL);
 
 	// the games can disable the clearing of the sprite bitmap, to leave sprite trails
-	if (pandora->clear_bitmap)
-		pandora->sprites_bitmap->fill(pandora->bg_pen, pandora->screen->visible_area());
+	if (pandora_clear_bitmap) bitmap_fill(pandora_sprites_bitmap,video_screen_get_visible_area(machine->primary_screen),0);
 
-	pandora_draw(device, *pandora->sprites_bitmap, pandora->screen->visible_area());
+	pandora_draw(machine, pandora_sprites_bitmap, video_screen_get_visible_area(machine->primary_screen));
 }
 
-/*****************************************************************************
-    DEVICE HANDLERS
-*****************************************************************************/
-
-WRITE8_DEVICE_HANDLER ( pandora_spriteram_w )
+void pandora_start(running_machine *machine, UINT8 region, int x, int y)
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
+	pandora_region = region;
+	pandora_xoffset = x;
+	pandora_yoffset = y;
+	pandora_spriteram = auto_alloc_array(machine, UINT8, 0x1000);
+	memset(pandora_spriteram,0x00, 0x1000);
 
+	pandora_sprites_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	pandora_clear_bitmap = 1;
+
+    state_save_register_global(machine, pandora_clear_bitmap);
+    state_save_register_global_pointer(machine, pandora_spriteram, 0x1000);
+    state_save_register_global_bitmap(machine, pandora_sprites_bitmap);
+}
+
+
+WRITE8_HANDLER ( pandora_spriteram_w )
+{
 	// it's either hooked up oddly on this, or on the 16-bit games
 	// either way, we swap the address lines so that the spriteram is in the same format
 	offset = BITSWAP16(offset,  15,14,13,12, 11,   7,6,5,4,3,2,1,0,   10,9,8  );
 
-	if (!pandora->spriteram)
+	if (!pandora_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_w with no pandora_spriteram\n");
+		printf("ERROR: pandora_spriteram_w with no pandora_spriteram\n");
 		return;
 	}
 
-	if (offset >= 0x1000)
+	if (offset>=0x1000)
 	{
-		logerror("pandora->spriteram_w write past spriteram, offset %04x %02x\n", offset, data);
+		logerror("pandora_spriteram_w write past spriteram, offset %04x %02x\n",offset,data);
 		return;
 	}
-
-	pandora->spriteram[offset] = data;
+	pandora_spriteram[offset] = data;
 }
 
-READ8_DEVICE_HANDLER( pandora_spriteram_r )
+READ8_HANDLER( pandora_spriteram_r )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
 	// it's either hooked up oddly on this, or ont the 16-bit games
 	// either way, we swap the address lines so that the spriteram is in the same format
 	offset = BITSWAP16(offset,  15,14,13,12, 11,  7,6,5,4,3,2,1,0,  10,9,8  );
 
-	if (!pandora->spriteram)
+	if (!pandora_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_r with no pandora_spriteram\n");
+		printf("ERROR: pandora_spriteram_r with no pandora_spriteram\n");
 		return 0x00;
 	}
 
-	if (offset >= 0x1000)
+	if (offset>=0x1000)
 	{
-		logerror("pandora->spriteram_r read past spriteram, offset %04x\n", offset);
+		logerror("pandora_spriteram_r read past spriteram, offset %04x\n",offset );
 		return 0x00;
 	}
-	return pandora->spriteram[offset];
+	return pandora_spriteram[offset];
 }
 
 /* I don't know if this MSB/LSB mirroring is correct, or if there is twice as much ram, with half of it unused */
-WRITE16_DEVICE_HANDLER( pandora_spriteram_LSB_w )
+WRITE16_HANDLER( pandora_spriteram_LSB_w )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->spriteram)
+	if (!pandora_spriteram)
 	{
-		printf("ERROR: pandora->spriteram_LSB_w with no pandora_spriteram\n");
+		printf("ERROR: pandora_spriteram_LSB_w with no pandora_spriteram\n");
 		return;
 	}
 
 	if (ACCESSING_BITS_8_15)
 	{
-		pandora->spriteram[offset] = (data >> 8) & 0xff;
+		pandora_spriteram[offset] = (data>>8)&0xff;
 	}
 
 	if (ACCESSING_BITS_0_7)
 	{
-		pandora->spriteram[offset] = data & 0xff;
+		pandora_spriteram[offset] = data&0xff;
 	}
 }
 
-READ16_DEVICE_HANDLER( pandora_spriteram_LSB_r )
+READ16_HANDLER( pandora_spriteram_LSB_r )
 {
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	if (!pandora->spriteram)
+	if (!pandora_spriteram)
 	{
 		printf("ERROR: pandora_spriteram_LSB_r with no pandora_spriteram\n");
 		return 0x0000;
 	}
 
-	return pandora->spriteram[offset] | (pandora->spriteram[offset] << 8);
+	return pandora_spriteram[offset]|(pandora_spriteram[offset]<<8);
 }
-
-
-/*****************************************************************************
-    DEVICE INTERFACE
-*****************************************************************************/
-
-static DEVICE_START( kaneko_pandora )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-	const kaneko_pandora_interface *intf = get_interface(device);
-
-	pandora->screen = device->machine().device<screen_device>(intf->screen);
-	pandora->region = intf->gfx_region;
-	pandora->xoffset = intf->x;
-	pandora->yoffset = intf->y;
-	pandora->bg_pen = 0;
-
-	pandora->spriteram = auto_alloc_array(device->machine(), UINT8, 0x1000);
-
-	pandora->sprites_bitmap = auto_bitmap_ind16_alloc(device->machine(), pandora->screen->width(), pandora->screen->height());
-
-	device->save_item(NAME(pandora->clear_bitmap));
-	device->save_pointer(NAME(pandora->spriteram), 0x1000);
-	device->save_item(NAME(*pandora->sprites_bitmap));
-}
-
-static DEVICE_RESET( kaneko_pandora )
-{
-	kaneko_pandora_state *pandora = get_safe_token(device);
-
-	memset(pandora->spriteram, 0x00, 0x1000);
-
-	pandora->clear_bitmap = 1;
-}
-
-static const char DEVTEMPLATE_SOURCE[] = __FILE__;
-
-#define DEVTEMPLATE_ID( p, s )	p##kaneko_pandora##s
-#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
-#define DEVTEMPLATE_NAME		"Kaneko Pandora - PX79C480FP-3"
-#define DEVTEMPLATE_FAMILY		"Kaneko Video Chips"
-#include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(KANEKO_PANDORA, kaneko_pandora);

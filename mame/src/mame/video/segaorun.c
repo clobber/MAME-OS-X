@@ -4,9 +4,9 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/segaic16.h"
-#include "includes/segas16.h"
+#include "driver.h"
+#include "segaic16.h"
+#include "includes/system16.h"
 
 
 
@@ -24,6 +24,9 @@ VIDEO_START( shangon )
 	/* initialize the tile/text layers */
 	segaic16_tilemap_init(machine, 0, SEGAIC16_TILEMAP_16B_ALT, 0x000, 0, 2);
 
+	/* initialize the sprites */
+	segaic16_sprites_init(machine, 0, SEGAIC16_SPRITES_16B, 0x400, 0);
+
 	/* initialize the road */
 	segaic16_road_init(machine, 0, SEGAIC16_ROAD_OUTRUN, 0x7f6, 0x7c0, 0x7c0, 0);
 }
@@ -37,6 +40,9 @@ VIDEO_START( outrun )
 	/* initialize the tile/text layers */
 	segaic16_tilemap_init(machine, 0, SEGAIC16_TILEMAP_16B, 0x000, 0, 2);
 
+	/* initialize the sprites */
+	segaic16_sprites_init(machine, 0, SEGAIC16_SPRITES_OUTRUN, 0x800, 0);
+
 	/* initialize the road */
 	segaic16_road_init(machine, 0, SEGAIC16_ROAD_OUTRUN, 0x400, 0x420, 0x780, 0);
 }
@@ -49,10 +55,10 @@ VIDEO_START( outrun )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( shangon )
+VIDEO_UPDATE( shangon )
 {
 	/* reset priorities */
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* draw the low priority road layer */
 	segaic16_road_draw(0, bitmap, cliprect, SEGAIC16_ROAD_BACKGROUND);
@@ -80,17 +86,17 @@ SCREEN_UPDATE_IND16( shangon )
 }
 
 
-SCREEN_UPDATE_IND16( outrun )
+VIDEO_UPDATE( outrun )
 {
 	/* if no drawing is happening, fill with black and get out */
 	if (!segaic16_display_enable)
 	{
-		bitmap.fill(get_black_pen(screen.machine()), cliprect);
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 		return 0;
 	}
 
 	/* reset priorities */
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* draw the low priority road layer */
 	segaic16_road_draw(0, bitmap, cliprect, SEGAIC16_ROAD_BACKGROUND);

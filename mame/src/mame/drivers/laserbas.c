@@ -3,7 +3,7 @@
 
  IC marked as Z1 is probably protection device
  mapped in memory region f800-fbff
- (similar to the one used in Parallel Turn)
+ (simil. to the one used in Parallel Turn)
 
  Reads form this device depends on previous
  writes (adr, data), address and previous
@@ -14,319 +14,139 @@
 
  Tomasz Slanina analog [at] op.pl
 
-============================================
-
-DASM notes:
-
-0x100: check if test mode bit is active.
-0x3ae8: ?
-0x3aec: tests 0xfc00 work ram ONLY, resets if fails
-0x3afe: fill 0xfc00-0xffff to zero
-0x20dc: writes ROM 0x3146 to prot RAM 0xf800-0xfbff
-0x20e9: reads from 0xfa47, A = (n & 0x8) | 0x80 then HL = 0x0200 | A
-0x2cef: unknown, reads from 0x02** to 0x2d00, fancy ROM checksum?
-...
-0x0577
-
 ********************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "video/mc6845.h"
-#include "machine/pit8253.h"
+#include "deprecat.h"
 
-class laserbas_state : public driver_device
-{
-public:
-	laserbas_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* misc */
-	int      m_count;
-
-	/* video-related */
-	int      m_vrambank;
-	UINT8    m_vram1[0x8000];
-	UINT8    m_vram2[0x8000];
-	UINT8    *m_protram;
-};
-
+static UINT8 *vram1,*vram2;
+static int vrambank=0;
 
 static VIDEO_START(laserbas)
 {
-	laserbas_state *state = machine.driver_data<laserbas_state>();
-
-	state->save_item(NAME(state->m_vram1));
-	state->save_item(NAME(state->m_vram2));
+	vram1=auto_alloc_array(machine, UINT8, 0x8000);
+	vram2=auto_alloc_array(machine, UINT8, 0x8000);
 }
 
-static SCREEN_UPDATE_IND16(laserbas)
+static VIDEO_UPDATE(laserbas)
 {
-	laserbas_state *state = screen.machine().driver_data<laserbas_state>();
-	int x, y;
-
-	for (y = 0; y < 256; y++)
-		for(x = 0; x < 128; x++)
+	int x,y;
+ 	for(y=0;y<256;y++)
+		for(x=0;x<128;x++)
 		{
-			if (state->m_vram2[y * 128 + x] & 0xf)
-				bitmap.pix16(y, x * 2) = (state->m_vram2[y * 128 + x] & 0xf);
+			if (vram2[y*128+x]&0xf)
+				*BITMAP_ADDR16(bitmap, y, x*2) = (vram2[y*128+x]&0xf)+16;
 			else
-				bitmap.pix16(y, x * 2) = (state->m_vram1[y * 128 + x] & 0xf) + 16;
+				*BITMAP_ADDR16(bitmap, y, x*2) = (vram1[y*128+x]&0xf)+16;
 
-			if (state->m_vram2[y * 128 + x] >> 4)
-				bitmap.pix16(y, x * 2 + 1) = (state->m_vram2[y * 128 + x] >> 4);
+			if (vram2[y*128+x]>>4)
+				*BITMAP_ADDR16(bitmap, y, x*2+1) = (vram2[y*128+x]>>4)+16;
 			else
-				bitmap.pix16(y, x * 2 + 1) = (state->m_vram1[y * 128 + x] >> 4) + 16;
+				*BITMAP_ADDR16(bitmap, y, x*2+1) = (vram1[y*128+x]>>4)+16;
 		}
 	return 0;
 }
 
 static READ8_HANDLER(vram_r)
 {
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	if(!state->m_vrambank)
-		return state->m_vram1[offset];
+	if(!vrambank)
+		return vram1[offset];
 	else
-		return state->m_vram2[offset];
+		return vram2[offset];
 }
 
 static WRITE8_HANDLER(vram_w)
 {
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	if(!state->m_vrambank)
-		state->m_vram1[offset] = data;
+	if(!vrambank)
+		vram1[offset]=data;
 	else
-		state->m_vram2[offset] = data;
+		vram2[offset]=data;
 }
 
-#if 0
 static READ8_HANDLER( read_unk )
 {
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	state->m_count ^= 0x80;
-	return state->m_count | 0x7f;
+	static int count=0;
+	count ^= 0x80;
+	return count|0x7f;
 }
-#endif
+
+static WRITE8_HANDLER(palette_w)
+{
+	palette_set_color_rgb(space->machine,offset,pal3bit(data>>5),pal3bit(data>>2),pal2bit(data));
+}
 
 static WRITE8_HANDLER(vrambank_w)
 {
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	/* either bit 2 or 3 controls flip screen */
-
-	state->m_vrambank = data & 0x40;
+	if((offset&0xf1)==0x10)
+		vrambank=data&0x40;
 }
 
-static READ8_HANDLER( protram_r )
-{
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	return state->m_protram[offset];
-}
-
-static WRITE8_HANDLER( protram_w )
-{
-	laserbas_state *state = space->machine().driver_data<laserbas_state>();
-
-	state->m_protram[offset] = data;
-}
-
-static ADDRESS_MAP_START( laserbas_memory, AS_PROGRAM, 8 )
-	//ADDRESS_MAP_UNMAP_HIGH
+static ADDRESS_MAP_START( laserbas_memory, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0xbfff) AM_READWRITE(vram_r, vram_w)
+	AM_RANGE(0x4000, 0xbfff) AM_READ(vram_r) AM_WRITE(vram_w)
 	AM_RANGE(0xc000, 0xf7ff) AM_ROM
-	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(protram_r, protram_w) AM_BASE_MEMBER(laserbas_state,m_protram) /* protection device */
+	AM_RANGE(0xf800, 0xfbff) AM_RAM /* protection device */
 	AM_RANGE(0xfc00, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( laserbas_io, AS_IO, 8 )
+static ADDRESS_MAP_START( laserbas_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0x01, 0x01) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
-	AM_RANGE(0x10, 0x10) AM_WRITE(vrambank_w)
-	AM_RANGE(0x20, 0x20) AM_READ_PORT("IN1") // DSW + something else?
+	AM_RANGE(0x00, 0x1f) AM_WRITE(vrambank_w)
+	AM_RANGE(0x20, 0x20) AM_READ(read_unk) AM_WRITENOP//write = ram/rom bank ? at fc00-f800 ?
 	AM_RANGE(0x21, 0x21) AM_READ_PORT("IN0")
-	AM_RANGE(0x22, 0x22) AM_READ_PORT("IN2")
-//  AM_RANGE(0x23, 0x23) AM_WRITE(test_w) bit 2 presumably is a mux for 0x20?
-	AM_RANGE(0x40, 0x43) AM_DEVREADWRITE("pit0", pit8253_r, pit8253_w)
-	AM_RANGE(0x44, 0x47) AM_DEVREADWRITE("pit1", pit8253_r, pit8253_w)
-	AM_RANGE(0x80, 0x9f) AM_RAM_WRITE(paletteram_RRRGGGBB_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x80, 0x9f) AM_WRITE(palette_w)
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( laserbas )
 	PORT_START("IN0")
-	PORT_DIPNAME( 0x01, 0x01, "0-0" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "0-1" )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_DIPNAME( 0x10, 0x10, "0-3" ) // another coin chute
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Test Mode" )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
-
-	PORT_START("IN1") // DSW
-	PORT_DIPNAME( 0x01, 0x01, "IN1" )
+	PORT_DIPNAME( 0x01, 0x00, "0-0" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x02, 0x00, "0-1" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x04, 0x00, "0-2" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_START1 )
+	PORT_DIPNAME( 0x010, 0x10, "0-3" )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 1C_6C ) )
-
-	PORT_START("IN2")
-	PORT_DIPNAME( 0x01, 0x01, "IN2" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x010, DEF_STR( On ) )
+	PORT_DIPNAME( 0x020, 0x20, "Test Mode" )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPSETTING(    0x000, DEF_STR( On ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 INPUT_PORTS_END
 
-static MACHINE_START( laserbas )
+static INTERRUPT_GEN( laserbas_interrupt )
 {
-	laserbas_state *state = machine.driver_data<laserbas_state>();
-
-	state->save_item(NAME(state->m_vrambank));
-	state->save_item(NAME(state->m_count));
+	if(video_screen_get_vblank(device->machine->primary_screen))
+		 cpu_set_input_line(device, 0, HOLD_LINE);
+	else
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_RESET( laserbas )
-{
-	laserbas_state *state = machine.driver_data<laserbas_state>();
-
-	state->m_vrambank = 0;
-	state->m_count = 0;
-}
-
-static const mc6845_interface mc6845_intf =
-{
-	"screen",	/* screen we are acting on */
-	8,			/* number of pixels per video memory address */
-	NULL,		/* before pixel update callback */
-	NULL,		/* row update callback */
-	NULL,		/* after pixel update callback */
-	DEVCB_NULL,	/* callback for display state changes */
-	DEVCB_NULL,	/* callback for cursor state changes */
-	DEVCB_NULL,	/* HSYNC callback */
-	DEVCB_NULL,	/* VSYNC callback */
-	NULL		/* update address callback */
-};
+static MACHINE_DRIVER_START( laserbas )
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(laserbas_memory)
+	MDRV_CPU_IO_MAP(laserbas_io)
+	MDRV_CPU_VBLANK_INT_HACK(laserbas_interrupt,2)
 
 
-/* TODO: clocks aren't known */
-static const struct pit8253_config laserbas_pit8253_intf_0 =
-{
-	{
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		},
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		},
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		}
-	}
-};
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-static const struct pit8253_config laserbas_pit8253_intf_1 =
-{
-	{
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		},
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		},
-		{
-			31250,
-			DEVCB_NULL,
-			DEVCB_NULL
-		}
-	}
-};
+	MDRV_PALETTE_LENGTH(32)
+	MDRV_VIDEO_START(laserbas)
+	MDRV_VIDEO_UPDATE(laserbas)
 
-static MACHINE_CONFIG_START( laserbas, laserbas_state )
-
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(laserbas_memory)
-	MCFG_CPU_IO_MAP(laserbas_io)
-	MCFG_CPU_VBLANK_INT("screen",irq0_line_hold)
-
-	MCFG_PIT8253_ADD("pit0", laserbas_pit8253_intf_0)
-	MCFG_PIT8253_ADD("pit1", laserbas_pit8253_intf_1)
-
-	MCFG_MACHINE_START(laserbas)
-	MCFG_MACHINE_RESET(laserbas)
-
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(laserbas)
-
-	MCFG_MC6845_ADD("crtc", H46505, 3000000/4, mc6845_intf)	/* unknown clock, hand tuned to get ~60 fps */
-
-	MCFG_PALETTE_LENGTH(32)
-	MCFG_VIDEO_START(laserbas)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /*
 Amstar LaserBase 1981 (Hoei)
@@ -406,7 +226,7 @@ as a 2716 (FF.9), a 2532 like the others (FF.9A) and a 2732 (FF.9B).
 
 ROM_START( futflash )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ff.1",   	  0x0000, 0x1000, CRC(bcd6b998) SHA1(4a210c40ce6015e2b921558b7571b7f2a27e1815) )
+	ROM_LOAD( "ff.1",    	  0x0000, 0x1000, CRC(bcd6b998) SHA1(4a210c40ce6015e2b921558b7571b7f2a27e1815) )
 	ROM_LOAD( "ff.2",         0x1000, 0x1000, CRC(1b1f6953) SHA1(8cd7b7e2236700ce63c60b4d2286099c8091bdbd) )
 	ROM_LOAD( "ff.3",         0x2000, 0x1000, CRC(30008f04) SHA1(e03b2dbcb6d2615650cdd47ecf1d587906ce149b) )
 	ROM_LOAD( "ff.4",         0x3000, 0x1000, CRC(e559aa12) SHA1(0fecfb60b0147e8060c640f684f69503478200ff) )
@@ -416,6 +236,6 @@ ROM_START( futflash )
 	ROM_LOAD( "ff.8",         0xf000, 0x0800, CRC(623f558f) SHA1(be6c6565df658555f21c43a8c2459cf399794a84) )
 ROM_END
 
-GAME( 1981, laserbas, 0,        laserbas, laserbas, 0, ROT270, "Hoei (Amstar license)", "Laser Base (set 1)", GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1981, laserbasa,laserbas, laserbas, laserbas, 0, ROT270, "Hoei (Amstar license)", "Laser Base (set 2)", GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1981, futflash, laserbas, laserbas, laserbas, 0, ROT270, "Hoei",                  "Future Flash",       GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1981, laserbas, 0,        laserbas, laserbas, 0, ROT270, "Amstar/HOEI", "Laser Base (set 1)", GAME_NO_SOUND | GAME_NOT_WORKING)
+GAME( 1981, laserbasa,laserbas, laserbas, laserbas, 0, ROT270, "Amstar/HOEI", "Laser Base (set 2)", GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 1981, futflash, laserbas, laserbas, laserbas, 0, ROT270, "HOEI",        "Future Flash",       GAME_NO_SOUND | GAME_NOT_WORKING)

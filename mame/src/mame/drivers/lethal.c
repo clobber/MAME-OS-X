@@ -152,20 +152,25 @@ lethal enforcers has 2 sprite rendering chips working in parallel mixing
 data together to give 6bpp.. we cheat by using a custom function in
 konamiic.c and a fixed 6bpp decode.
 
-mirror not set up correctly
+japanese version scroll / mirror / guns not set up correctly
 
-maybe some sprite placement issues
+guns might be slightly off center
+
+'external' rowscroll not hooked up correctly (1st attract level, highscores)
+
+can't find the flip bits used for the tiles.. (p2 start screen, reload indicator)
+
+maybe some priority issues / sprite placement issues..
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/konicdev.h"
+#include "driver.h"
+#include "video/konamiic.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/hd6309/hd6309.h"
 #include "cpu/z80/z80.h"
 #include "machine/eeprom.h"
 #include "sound/k054539.h"
-#include "includes/lethal.h"
 
 #define MAIN_CLOCK		XTAL_24MHz
 #define SOUND_CLOCK		XTAL_18_432MHz
@@ -174,8 +179,23 @@ maybe some sprite placement issues
 static const char *const gunnames[] = { "LIGHT0_X", "LIGHT0_Y", "LIGHT1_X", "LIGHT1_Y" };
 
 /* a = 1, 2 = player # */
-#define GUNX( a ) (( ( input_port_read(space->machine(), gunnames[2 * (a - 1)]) * 287 ) / 0xff ) + 16)
-#define GUNY( a ) (( ( input_port_read(space->machine(), gunnames[2 * (a - 1) + 1]) * 223 ) / 0xff ) + 10)
+#define GUNX( a ) (( ( input_port_read(space->machine, gunnames[2 * (a - 1)]) * 287 ) / 0xff ) + 16)
+#define GUNY( a ) (( ( input_port_read(space->machine, gunnames[2 * (a - 1) + 1]) * 223 ) / 0xff ) + 10)
+
+VIDEO_START(lethalen);
+VIDEO_UPDATE(lethalen);
+WRITE8_HANDLER(lethalen_palette_control);
+
+static int init_eeprom_count;
+static UINT8 cur_control2;
+
+/* Default Eeprom for the parent.. otherwise it will always complain first boot */
+/* its easy to init but this saves me a bit of time.. */
+static const UINT8 lethalen_default_eeprom[48] = {
+	0x02, 0x1E, 0x00, 0x00, 0x39, 0x31, 0x39, 0x31, 0x55, 0x45, 0x77, 0x00, 0x00, 0x00, 0x00, 0x01,
+	0x02, 0x01, 0x00, 0x03, 0x05, 0x01, 0x01, 0x02, 0x28, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
 
 static const eeprom_interface eeprom_intf =
 {
@@ -188,6 +208,28 @@ static const eeprom_interface eeprom_intf =
 	"0100110000000" 	/* unlock command */
 };
 
+static NVRAM_HANDLER( lethalen )
+{
+	if (read_or_write)
+		eeprom_save(file);
+	else
+	{
+		eeprom_init(machine, &eeprom_intf);
+
+		if (file)
+		{
+			init_eeprom_count = 0;
+			eeprom_load(file);
+		}
+		else
+		{
+			init_eeprom_count = 10;
+			eeprom_set_data(lethalen_default_eeprom,48);
+
+		}
+	}
+}
+
 static WRITE8_HANDLER( control2_w )
 {
 	/* bit 0 is data */
@@ -197,19 +239,17 @@ static WRITE8_HANDLER( control2_w )
 	/* bit 4 bankswitches the 4800-4fff region: 0 = registers, 1 = RAM ("CBNK" on schematics) */
 	/* bit 6 is "SHD0" (some kind of shadow control) */
 	/* bit 7 is "SHD1" (ditto) */
-	lethal_state *state = space->machine().driver_data<lethal_state>();
 
-	state->m_cur_control2 = data;
+	cur_control2 = data;
 
-	input_port_write(space->machine(), "EEPROMOUT", state->m_cur_control2, 0xff);
+	eeprom_write_bit(cur_control2 & 0x01);
+	eeprom_set_cs_line((cur_control2 & 0x02) ? CLEAR_LINE : ASSERT_LINE);
+	eeprom_set_clock_line((cur_control2 & 0x04) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static INTERRUPT_GEN(lethalen_interrupt)
 {
-	lethal_state *state = device->machine().driver_data<lethal_state>();
-
-	if (k056832_is_irq_enabled(state->m_k056832, 0))
-		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
+	if (K056832_is_IRQ_enabled(0)) cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( sound_cmd_w )
@@ -219,8 +259,7 @@ static WRITE8_HANDLER( sound_cmd_w )
 
 static WRITE8_HANDLER( sound_irq_w )
 {
-	lethal_state *state = space->machine().driver_data<lethal_state>();
-	device_set_input_line(state->m_audiocpu, 0, HOLD_LINE);
+	cputag_set_input_line(space->machine, "soundcpu", 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( sound_status_r )
@@ -228,24 +267,23 @@ static READ8_HANDLER( sound_status_r )
 	return 0xf;
 }
 
-static void sound_nmi( device_t *device )
+static void sound_nmi(const device_config *device)
 {
-	lethal_state *state = device->machine().driver_data<lethal_state>();
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( le_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data);
+	UINT8 *prgrom = (UINT8 *)memory_region(space->machine, "maincpu")+0x10000;
+
+	memory_set_bankptr(space->machine, 1, &prgrom[data * 0x2000]);
 }
 
 static READ8_HANDLER( le_4800_r )
 {
-	lethal_state *state = space->machine().driver_data<lethal_state>();
-
-	if (state->m_cur_control2 & 0x10)	// RAM enable
+	if (cur_control2 & 0x10)	// RAM enable
 	{
-		return space->machine().generic.paletteram.u8[offset];
+		return paletteram[offset];
 	}
 	else
 	{
@@ -260,16 +298,7 @@ static READ8_HANDLER( le_4800_r )
 				case 0x44:
 				case 0x45:
 				case 0x46:
-				case 0x47:
-				case 0x48:
-				case 0x49:
-				case 0x4a:
-				case 0x4b:
-				case 0x4c:
-				case 0x4d:
-				case 0x4e:
-				case 0x4f:
-					return k053244_r(state->m_k053244, offset - 0x40);
+					return K053244_r(space,offset-0x40);
 
 				case 0x80:
 				case 0x81:
@@ -303,22 +332,22 @@ static READ8_HANDLER( le_4800_r )
 				case 0x9d:
 				case 0x9e:
 				case 0x9f:
-					return k054000_r(state->m_k054000, offset - 0x80);
+					return K054000_r(space,offset-0x80);
 
 				case 0xca:
-					return sound_status_r(space, 0);
+					return sound_status_r(space,0);
 			}
 		}
 		else if (offset < 0x1800)
-			return k053245_r(state->m_k053244, (offset - 0x0800) & 0x07ff);
+			return K053245_r(space,(offset - 0x0800) & 0x07ff);
 		else if (offset < 0x2000)
-			return k056832_ram_code_lo_r(state->m_k056832, offset - 0x1800);
+			return K056832_ram_code_lo_r(space,offset - 0x1800);
 		else if (offset < 0x2800)
-			return k056832_ram_code_hi_r(state->m_k056832, offset - 0x2000);
+			return K056832_ram_code_hi_r(space,offset - 0x2000);
 		else if (offset < 0x3000)
-			return k056832_ram_attr_lo_r(state->m_k056832, offset - 0x2800);
+			return K056832_ram_attr_lo_r(space,offset - 0x2800);
 		else // (offset < 0x3800)
-			return k056832_ram_attr_hi_r(state->m_k056832, offset - 0x3000);
+			return K056832_ram_attr_hi_r(space,offset - 0x3000);
 	}
 
 	return 0;
@@ -326,11 +355,9 @@ static READ8_HANDLER( le_4800_r )
 
 static WRITE8_HANDLER( le_4800_w )
 {
-	lethal_state *state = space->machine().driver_data<lethal_state>();
-
-	if (state->m_cur_control2 & 0x10)	// RAM enable
+	if (cur_control2 & 0x10)	// RAM enable
 	{
-		paletteram_xBBBBBGGGGGRRRRR_be_w(space, offset, data);
+		paletteram_xBBBBBGGGGGRRRRR_be_w(space,offset,data);
 	}
 	else
 	{
@@ -353,16 +380,7 @@ static WRITE8_HANDLER( le_4800_w )
 				case 0x44:
 				case 0x45:
 				case 0x46:
-				case 0x47:
-				case 0x48:
-				case 0x49:
-				case 0x4a:
-				case 0x4b:
-				case 0x4c:
-				case 0x4d:
-				case 0x4e:
-				case 0x4f:
-					k053244_w(state->m_k053244, offset - 0x40, data);
+					K053244_w(space, offset-0x40, data);
 					break;
 
 				case 0x80:
@@ -397,59 +415,62 @@ static WRITE8_HANDLER( le_4800_w )
 				case 0x9d:
 				case 0x9e:
 				case 0x9f:
-					k054000_w(state->m_k054000, offset - 0x80, data);
+					K054000_w(space, offset-0x80, data);
 					break;
 
 				default:
-					logerror("Unknown LE 48xx register write: %x to %x (PC=%x)\n", data, offset, cpu_get_pc(&space->device()));
+					logerror("Unknown LE 48xx register write: %x to %x (PC=%x)\n", data, offset, cpu_get_pc(space->cpu));
 					break;
 			}
 		}
 		else if (offset < 0x1800)
-			k053245_w(state->m_k053244, (offset - 0x0800) & 0x07ff, data);
+		{
+			K053245_w(space, (offset - 0x0800) & 0x07ff, data);
+
+		}
 		else if (offset < 0x2000)
-			k056832_ram_code_lo_w(state->m_k056832, offset - 0x1800, data);
+			K056832_ram_code_lo_w(space, offset - 0x1800, data);
 		else if (offset < 0x2800)
-			k056832_ram_code_hi_w(state->m_k056832, offset - 0x2000, data);
+			K056832_ram_code_hi_w(space, offset - 0x2000, data);
 		else if (offset < 0x3000)
-			k056832_ram_attr_lo_w(state->m_k056832, offset - 0x2800, data);
+			K056832_ram_attr_lo_w(space, offset - 0x2800, data);
 		else // (offset < 0x3800)
-			k056832_ram_attr_hi_w(state->m_k056832, offset - 0x3000, data);
+			K056832_ram_attr_hi_w(space, offset - 0x3000, data);
 	}
 }
 
 // use one more palette entry for the BG color
-static WRITE8_HANDLER( le_bgcolor_w )
+static WRITE8_HANDLER(le_bgcolor_w)
 {
-	paletteram_xBBBBBGGGGGRRRRR_be_w(space, 0x3800 + offset, data);
+	paletteram_xBBBBBGGGGGRRRRR_be_w(space,0x3800+offset, data);
 }
 
-static READ8_HANDLER( guns_r )
+static READ8_HANDLER(guns_r)
 {
 	switch (offset)
 	{
 		case 0:
-			return GUNX(1) >> 1;
+			return GUNX(1)>>1;
 		case 1:
-			if ((GUNY(1)<=0x0b) || (GUNY(1)>=0xe8))
+			if ((240-GUNY(1)) == 7)
 				return 0;
 			else
-				return (232 - GUNY(1));
+				return (240-GUNY(1));
 			break;
 		case 2:
-			return GUNX(2) >> 1;
+			return GUNX(2)>>1;
 		case 3:
-			if ((GUNY(2)<=0x0b) || (GUNY(2)>=0xe8))
+			if ((240-GUNY(2)) == 7)
 				return 0;
 			else
-				return (232 - GUNY(2));
+				return (240-GUNY(2));
 			break;
 	}
 
 	return 0;
 }
 
-static READ8_HANDLER( gunsaux_r )
+static READ8_HANDLER(gunsaux_r)
 {
 	int res = 0;
 
@@ -459,11 +480,11 @@ static READ8_HANDLER( gunsaux_r )
 	return res;
 }
 
-static ADDRESS_MAP_START( le_main, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_ROMBANK("bank1")
+static ADDRESS_MAP_START( le_main, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_READ(SMH_BANK(1)) AM_WRITE(SMH_ROM)
 	AM_RANGE(0x2000, 0x3fff) AM_RAM				// work RAM
-	AM_RANGE(0x4000, 0x403f) AM_DEVWRITE("k056832", k056832_w)
-	AM_RANGE(0x4040, 0x404f) AM_DEVWRITE("k056832", k056832_b_w)
+	AM_RANGE(0x4000, 0x403f) AM_WRITE(K056832_w)
+	AM_RANGE(0x4040, 0x404f) AM_WRITE(K056832_b_w)
 	AM_RANGE(0x4080, 0x4080) AM_READNOP		// watchdog
 	AM_RANGE(0x4090, 0x4090) AM_READNOP
 	AM_RANGE(0x40a0, 0x40a0) AM_READNOP
@@ -475,18 +496,20 @@ static ADDRESS_MAP_START( le_main, AS_PROGRAM, 8 )
 	AM_RANGE(0x40db, 0x40db) AM_READ(gunsaux_r)		// top X bit of guns
 	AM_RANGE(0x40dc, 0x40dc) AM_WRITE(le_bankswitch_w)
 	AM_RANGE(0x47fe, 0x47ff) AM_WRITE(le_bgcolor_w)		// BG color
-	AM_RANGE(0x4800, 0x7fff) AM_READWRITE(le_4800_r, le_4800_w) // bankswitched: RAM and registers
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank2")
+	AM_RANGE(0x4800, 0x7fff) AM_READWRITE(le_4800_r, le_4800_w)	AM_BASE(&paletteram) // bankswitched: RAM and registers
+	AM_RANGE(0x8000, 0xffff) AM_READ(SMH_BANK(2)) AM_WRITE(SMH_ROM)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( le_sound, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( le_sound, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xfa2f) AM_DEVREADWRITE("k054539", k054539_r, k054539_w)
+	AM_RANGE(0xf800, 0xfa2f) AM_DEVREADWRITE("konami", k054539_r, k054539_w)
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(soundlatch2_w)
 	AM_RANGE(0xfc02, 0xfc02) AM_READ(soundlatch_r)
 	AM_RANGE(0xfc03, 0xfc03) AM_READNOP
 ADDRESS_MAP_END
+
+/* sound */
 
 static INPUT_PORTS_START( lethalen )
 	PORT_START("INPUTS")
@@ -500,7 +523,7 @@ static INPUT_PORTS_START( lethalen )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START2 )
 
 	PORT_START("DSW")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SPECIAL )	/* it must be 1 ? */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -516,11 +539,6 @@ static INPUT_PORTS_START( lethalen )
 	PORT_DIPNAME( 0x0080, 0x0080, "Sound Output" )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Mono ) )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Stereo ) )
-
-	PORT_START( "EEPROMOUT" )
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, write_bit)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_cs_line)
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_OUTPUT ) PORT_WRITE_LINE_DEVICE_MEMBER("eeprom", eeprom_device, set_clock_line)
 
 	PORT_START("LIGHT0_X")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_X ) PORT_CROSSHAIR(X, 1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(1)
@@ -551,6 +569,27 @@ static INPUT_PORTS_START( lethalej )
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, -1.0, 0.0, 0) PORT_SENSITIVITY(25) PORT_KEYDELTA(15) PORT_PLAYER(2) PORT_REVERSE
 INPUT_PORTS_END
 
+static const k054539_interface k054539_config =
+{
+	NULL,
+	NULL,
+	sound_nmi
+};
+
+static MACHINE_START( lethalen )
+{
+	state_save_register_global(machine, cur_control2);
+}
+
+static MACHINE_RESET( lethalen )
+{
+	UINT8 *prgrom = (UINT8 *)memory_region(machine, "maincpu");
+
+	memory_set_bankptr(machine, 1, &prgrom[0x10000]);
+	memory_set_bankptr(machine, 2, &prgrom[0x48000]);
+	/* force reset again to read proper reset vector */
+	device_reset(cputag_get_cpu(machine, "maincpu"));
+}
 
 static const gfx_layout lethal_6bpp =
 {
@@ -570,136 +609,52 @@ static GFXDECODE_START( lethal )
 	GFXDECODE_ENTRY( "gfx2", 0, lethal_6bpp,   0x000/*0x400*/, 256  ) /* sprites tiles */
 GFXDECODE_END
 
-
-/* sound */
-
-static const k054539_interface k054539_config =
-{
-	NULL,
-	NULL,
-	sound_nmi
-};
-
-static MACHINE_START( lethalen )
-{
-	lethal_state *state = machine.driver_data<lethal_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 0x20, &ROM[0x10000], 0x2000);
-	memory_set_bank(machine, "bank1", 0);
-
-	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x3800 + 0x02);
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("soundcpu");
-	state->m_k054539 = machine.device("k054539");
-	state->m_k053244 = machine.device("k053244");
-	state->m_k056832 = machine.device("k056832");
-	state->m_k054000 = machine.device("k054000");
-
-	state->save_item(NAME(state->m_cur_control2));
-	state->save_item(NAME(state->m_sprite_colorbase));
-	state->save_item(NAME(state->m_layer_colorbase));
-
-	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x3800 + 0x02);
-}
-
-static MACHINE_RESET( lethalen )
-{
-	lethal_state *state = machine.driver_data<lethal_state>();
-	UINT8 *prgrom = (UINT8 *)machine.region("maincpu")->base();
-	int i;
-
-	memory_set_bankptr(machine, "bank2", &prgrom[0x48000]);
-	/* force reset again to read proper reset vector */
-	machine.device("maincpu")->reset();
-
-	for (i = 0; i < 4; i++)
-		state->m_layer_colorbase[i] = 0;
-
-	state->m_sprite_colorbase = 0;
-	state->m_cur_control2 = 0;
-}
-
-static const k056832_interface lethalen_k056832_intf =
-{
-	"gfx1", 1,
-	K056832_BPP_8LE,
-	1, 0,
-	KONAMI_ROM_DEINTERLEAVE_NONE,
-	lethalen_tile_callback, "none"
-};
-
-static const k05324x_interface lethalen_k05324x_intf =
-{
-	"gfx3", 2,
-	NORMAL_PLANE_ORDER,
-	95, 0,
-	KONAMI_ROM_DEINTERLEAVE_2,
-	lethalen_sprite_callback
-};
-
-static const k05324x_interface lethalej_k05324x_intf =
-{
-	"gfx3", 2,
-	NORMAL_PLANE_ORDER,
-	-105, 0,
-	KONAMI_ROM_DEINTERLEAVE_2,
-	lethalen_sprite_callback
-};
-
-static MACHINE_CONFIG_START( lethalen, lethal_state )
-
+static MACHINE_DRIVER_START( lethalen )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", HD6309, MAIN_CLOCK/2)    /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(le_main)
-	MCFG_CPU_VBLANK_INT("screen", lethalen_interrupt)
+	MDRV_CPU_ADD("maincpu", HD6309, MAIN_CLOCK/2)	// ???
+	MDRV_CPU_PROGRAM_MAP(le_main)
+	MDRV_CPU_VBLANK_INT("screen", lethalen_interrupt)
 
-	MCFG_CPU_ADD("soundcpu", Z80, MAIN_CLOCK/4)  /* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(le_sound)
+	MDRV_CPU_ADD("soundcpu", Z80, 8000000)
+	MDRV_CPU_PROGRAM_MAP(le_sound)
 
-	MCFG_MACHINE_START(lethalen)
-	MCFG_MACHINE_RESET(lethalen)
+	MDRV_MACHINE_START(lethalen)
+	MDRV_MACHINE_RESET(lethalen)
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_NVRAM_HANDLER(lethalen)
 
-	MCFG_GFXDECODE(lethal)
+	MDRV_GFXDECODE(lethal)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.62)  /* verified on pcb */
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(216, 504-1, 16, 240-1)
-	MCFG_SCREEN_UPDATE_STATIC(lethalen)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(216, 504-1, 16, 240-1)
 
-	MCFG_PALETTE_LENGTH(7168+1)
+	MDRV_PALETTE_LENGTH(7168+1)
 
-	MCFG_VIDEO_START(lethalen)
-
-	MCFG_K056832_ADD("k056832", lethalen_k056832_intf)
-	MCFG_K053244_ADD("k053244", lethalen_k05324x_intf)
-	MCFG_K054000_ADD("k054000")
+	MDRV_VIDEO_START(lethalen)
+	MDRV_VIDEO_UPDATE(lethalen)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("k054539", K054539, 48000)
-	MCFG_SOUND_CONFIG(k054539_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("konami", K054539, 48000)
+	MDRV_SOUND_CONFIG(k054539_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( lethalej, lethalen )
+static MACHINE_DRIVER_START( lethalej )
+	MDRV_IMPORT_FROM(lethalen)
 
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_VISIBLE_AREA(224, 512-1, 16, 240-1)
-
-	MCFG_DEVICE_REMOVE("k053244")
-	MCFG_K053244_ADD("k053244", lethalej_k05324x_intf)
-MACHINE_CONFIG_END
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(224, 512-1, 16, 240-1)
+MACHINE_DRIVER_END
 
 ROM_START( lethalen )	// US version UAE
 	ROM_REGION( 0x50000, "maincpu", 0 )
@@ -730,12 +685,9 @@ ROM_START( lethalen )	// US version UAE
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethalen.nv", 0x0000, 0x0080, CRC(6e7224e6) SHA1(86dea9262d55e58b573d397d0fea437c58728707) )
 ROM_END
 
 ROM_START( lethalenj )	// Japan version JAD
@@ -767,18 +719,15 @@ ROM_START( lethalenj )	// Japan version JAD
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethalenj.nv", 0x0000, 0x0080, CRC(20b28f2f) SHA1(53d212f2c006729a01dfdb49cb36b67b9425172e) )
 ROM_END
 
 ROM_START( lethalenux )	// US version ?, proto / hack?, very different to other sets
 	ROM_REGION( 0x50000, "maincpu", 0 )
 	/* main program */
-	ROM_LOAD( "191xxx01.u4",    0x10000,  0x40000, CRC(a3b9e790) SHA1(868b422850be129952c8b11c3c4aa730d8ea1544) ) // hacked? fails rom test, verified on multiple boards
+	ROM_LOAD( "191xxx01.u4",    0x10000,  0x40000, CRC(a3b9e790) SHA1(868b422850be129952c8b11c3c4aa730d8ea1544) ) // hacked? fails rom test
 
 	ROM_REGION( 0x020000, "soundcpu", 0 )
 	/* Z80 sound program */
@@ -804,12 +753,9 @@ ROM_START( lethalenux )	// US version ?, proto / hack?, very different to other 
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethalenux.nv", 0x0000, 0x0080, CRC(5d69c39d) SHA1(e468df829ee5094792289f9166d7e39b638ab70d) )
 ROM_END
 
 ROM_START( lethaleneab )	// Euro ver. EAB
@@ -841,12 +787,9 @@ ROM_START( lethaleneab )	// Euro ver. EAB
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethaleneab.nv", 0x0000, 0x0080, CRC(4e9bb34d) SHA1(9502583bc9f5f6fc5bba333869398b24bf154b73) )
 ROM_END
 
 ROM_START( lethaleneae )	// Euro ver. EAE
@@ -878,12 +821,9 @@ ROM_START( lethaleneae )	// Euro ver. EAE
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethaleneae.nv", 0x0000, 0x0080, CRC(eb369a67) SHA1(6c67294669614e96de5efb38372dbed435ee04d3) )
 ROM_END
 
 ROM_START( lethalenua )	// *might* be UAA (writes UA to Eeprom)
@@ -915,25 +855,24 @@ ROM_START( lethalenua )	// *might* be UAA (writes UA to Eeprom)
 	ROM_REGION( 0x200000, "gfx4", ROMREGION_ERASE00 )
 	ROM_COPY("gfx2",0x200000,0, 0x200000)
 
-	ROM_REGION( 0x200000, "k054539", 0 )
+	ROM_REGION( 0x200000, "konami", 0 )
 	/* K054539 samples */
 	ROM_LOAD( "191a03", 0x000000, 0x200000, CRC(9b13fbe8) SHA1(19b02dbd9d6da54045b0ba4dfe7b282c72745c9c))
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD( "lethalenua.nv", 0x0000, 0x0080, CRC(f71ad1c3) SHA1(04c7052d0895797af8a06183b8a877795bf2dbb3) )
 ROM_END
+
 
 
 static DRIVER_INIT( lethalen )
 {
-	konamid_rom_deinterleave_2_half(machine, "gfx2");
-	konamid_rom_deinterleave_2(machine, "gfx4");
+	konami_rom_deinterleave_2_half(machine, "gfx2");
+	konami_rom_deinterleave_2(machine, "gfx3");
+	konami_rom_deinterleave_2(machine, "gfx4");
 }
 
-GAME( 1992, lethalen,   0,        lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver UAE, 11/19/92 15:04)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // writes UE to eeprom
-GAME( 1992, lethalenua, lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver unknown, US, 08/17/92 21:38)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // UAA? (writes UA to eeprom)
-GAME( 1992, lethalenux, lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver unknown, US, 08/06/92 15:11, hacked/proto?)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // writes UA to eeprom but earlier than suspected UAA set, might be a proto, might be hacked, fails rom test, definitely a good dump, another identical set was found in Italy
-GAME( 1992, lethaleneab,lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver EAB, 10/14/92 19:53)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // writes EC to eeprom?!
-GAME( 1992, lethaleneae,lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver EAE, 11/19/92 16:24)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // writes EE to eeprom
-// different mirror / display setup
-GAME( 1992, lethalenj,  lethalen, lethalej, lethalej, lethalen, ORIENTATION_FLIP_X, "Konami", "Lethal Enforcers (ver JAD, 12/04/92 17:16)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // writes JC to eeprom?!
+GAME( 1992, lethalen,   0,        lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver UAE, 11/19/92 15:04)", GAME_IMPERFECT_GRAPHICS) // writes UE to eeprom
+GAME( 1992, lethalenua, lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver unknown, US, 08/17/92 21:38)", GAME_IMPERFECT_GRAPHICS) // UAA? (writes UA to eeprom)
+GAME( 1992, lethalenux, lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver unknown, US, 08/06/92 15:11, hacked/proto?)", GAME_IMPERFECT_GRAPHICS) // writes UA to eeprom but earlier than suspected UAA set, might be a proto, might be hacked, fails rom test
+GAME( 1992, lethaleneab,lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver EAB, 10/14/92 19:53)", GAME_IMPERFECT_GRAPHICS) // writes EC to eeprom?!
+GAME( 1992, lethaleneae,lethalen, lethalen, lethalen, lethalen, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers (ver EAE, 11/19/92 16:24)", GAME_IMPERFECT_GRAPHICS) // writes EE to eeprom
+// different mirror / display setup, shoot off the top of the screen to reload..
+GAME( 1992, lethalenj,  lethalen, lethalej, lethalej, lethalen, ORIENTATION_FLIP_X, "Konami", "Lethal Enforcers (ver JAD, 12/04/92 17:16)", GAME_IMPERFECT_GRAPHICS) // writes JC to eeprom?!

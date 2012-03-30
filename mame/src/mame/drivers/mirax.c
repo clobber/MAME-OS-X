@@ -8,7 +8,6 @@ Angelo Salese
 Olivier Galibert
 
 TODO:
-- sound ports are a mystery (PC=0x02e0)
 - sprite offsets?
 - score / credits display should stay above the sprites?
 
@@ -64,36 +63,25 @@ Parts          Solder
 22 +12         +12
 
 
+The End
+
 ************************************************
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/ay8910.h"
 
-
-class mirax_state : public driver_device
-{
-public:
-	mirax_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_spriteram;
-	UINT8 m_nAyCtrl;
-	UINT8 m_nmi_mask;
-	UINT8 *m_videoram;
-	UINT8 *m_colorram;
-};
-
+static UINT8 nAyCtrl, nAyData;
+static UINT8 nmi_mask;
 
 static VIDEO_START(mirax)
 {
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	mirax_state *state = machine.driver_data<mirax_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int count;
 
 	for(count=0;count<0x200;count+=4)
@@ -114,14 +102,13 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 		y = 0x100 - spriteram[count];
 		x = spriteram[count+3];
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],spr_offs,color,fx,fy,x,y-16,0);
+		drawgfx_transpen(bitmap,cliprect,machine->gfx[1],spr_offs,color,fx,fy,x,y-16,0);
 	}
 }
 
-static SCREEN_UPDATE_IND16(mirax)
+static VIDEO_UPDATE(mirax)
 {
-	mirax_state *state = screen.machine().driver_data<mirax_state>();
-	const gfx_element *gfx = screen.machine().gfx[0];
+	const gfx_element *gfx = screen->machine->gfx[0];
 	int count = 0x00000;
 	int y,x;
 
@@ -129,8 +116,8 @@ static SCREEN_UPDATE_IND16(mirax)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = state->m_videoram[count];
-			int color = (state->m_colorram[x*2]<<8) | (state->m_colorram[(x*2)+1]);
+			int tile = videoram[count];
+			int color = (colorram[x*2]<<8) | (colorram[(x*2)+1]);
 			int x_scroll = (color & 0xff00)>>8;
 			tile |= ((color & 0xe0)<<3);
 
@@ -142,7 +129,7 @@ static SCREEN_UPDATE_IND16(mirax)
 		}
 	}
 
-	draw_sprites(screen.machine(),bitmap,cliprect);
+	draw_sprites(screen->machine,bitmap,cliprect);
 
 	count = 0x00000;
 
@@ -151,8 +138,8 @@ static SCREEN_UPDATE_IND16(mirax)
 	{
 		for (x=0;x<32;x++)
 		{
-			int tile = state->m_videoram[count];
-			int color = (state->m_colorram[x*2]<<8) | (state->m_colorram[(x*2)+1]);
+			int tile = videoram[count];
+			int color = (colorram[x*2]<<8) | (colorram[(x*2)+1]);
 			int x_scroll = (color & 0xff00)>>8;
 			tile |= ((color & 0xe0)<<3);
 
@@ -173,24 +160,25 @@ static SCREEN_UPDATE_IND16(mirax)
 
 static SOUND_START(mirax)
 {
-	mirax_state *state = machine.driver_data<mirax_state>();
-	state->m_nAyCtrl = 0x00;
+	nAyCtrl = 0x00;
+	nAyData = 0x00;
 }
 
 static WRITE8_HANDLER(audio_w)
 {
-	mirax_state *state = space->machine().driver_data<mirax_state>();
-
-	state->m_nAyCtrl=offset;
+	if(cpu_get_previouspc(space->cpu)==0x2fd)
+	{
+		nAyCtrl=offset;
+		nAyData=data;
+	}
 }
 
 static WRITE8_DEVICE_HANDLER(ay_sel)
 {
-	mirax_state *state = device->machine().driver_data<mirax_state>();
-
+	if(cpu_get_previouspc(cputag_get_cpu(device->machine, "audiocpu"))==0x309)
 	{
-		ay8910_address_w(device,0,state->m_nAyCtrl);
-		ay8910_data_w(device,0,data);
+		ay8910_address_w(device,0,nAyCtrl);
+		ay8910_data_w(device,0,nAyData);
 	}
 }
 
@@ -201,8 +189,7 @@ static READ8_HANDLER( unk_r )
 
 static WRITE8_HANDLER( nmi_mask_w )
 {
-	mirax_state *state = space->machine().driver_data<mirax_state>();
-	state->m_nmi_mask = data & 1;
+	nmi_mask = data & 1;
 	if(data & 0xfe)
 		printf("Warning: %02x written at $f501\n",data);
 }
@@ -210,28 +197,21 @@ static WRITE8_HANDLER( nmi_mask_w )
 static WRITE8_HANDLER( mirax_sound_cmd_w )
 {
 	soundlatch_w(space, 0, data & 0xff);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-/* might be coin counter instead */
-static WRITE8_HANDLER( coin_lockout_w )
-{
-	coin_lockout_w(space->machine(), 0,data & 1);
-	coin_lockout_w(space->machine(), 1,data & 1);
-}
-
-static ADDRESS_MAP_START( mirax_main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mirax_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc800, 0xd7ff) AM_RAM
-	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE_MEMBER(mirax_state, m_videoram)
-	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE_MEMBER(mirax_state, m_spriteram)
-	AM_RANGE(0xea00, 0xea3f) AM_RAM AM_BASE_MEMBER(mirax_state, m_colorram) //per-column color + bank bits for the videoram
+	AM_RANGE(0xe000, 0xe3ff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0xe800, 0xe9ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0xea00, 0xea3f) AM_RAM AM_BASE(&colorram) //per-column color + bank bits for the videoram
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("P1")
 	AM_RANGE(0xf100, 0xf100) AM_READ_PORT("P2")
 	AM_RANGE(0xf200, 0xf200) AM_READ_PORT("DSW1")
 	AM_RANGE(0xf300, 0xf300) AM_READ(unk_r) //watchdog? value is always read then discarded
 	AM_RANGE(0xf400, 0xf400) AM_READ_PORT("DSW2")
-	AM_RANGE(0xf500, 0xf500) AM_WRITE(coin_lockout_w)
+//  AM_RANGE(0xf500, 0xf500) //coin counter
 	AM_RANGE(0xf501, 0xf501) AM_WRITE(nmi_mask_w)
 //  AM_RANGE(0xf506, 0xf506)
 //  AM_RANGE(0xf507, 0xf507)
@@ -239,18 +219,18 @@ static ADDRESS_MAP_START( mirax_main_map, AS_PROGRAM, 8 )
 //  AM_RANGE(0xf900, 0xf900) //sound cmd mirror? ack?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mirax_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mirax_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 
-	AM_RANGE(0xe000, 0xe000) AM_WRITENOP
+	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("ay1", ay_sel) //1st ay ?
 	AM_RANGE(0xe001, 0xe001) AM_WRITENOP
-	AM_RANGE(0xe003, 0xe003) AM_DEVWRITE("ay1", ay_sel) //1st ay ?
+	AM_RANGE(0xe003, 0xe003) AM_WRITENOP
 
-	AM_RANGE(0xe400, 0xe400) AM_WRITENOP
+	AM_RANGE(0xe400, 0xe400) AM_DEVWRITE("ay2", ay_sel) //2nd ay ?
 	AM_RANGE(0xe401, 0xe401) AM_WRITENOP
-	AM_RANGE(0xe403, 0xe403) AM_DEVWRITE("ay2", ay_sel) //2nd ay ?
+	AM_RANGE(0xe403, 0xe403) AM_WRITENOP
 
 	AM_RANGE(0xf900, 0xf9ff) AM_WRITE(audio_w)
 ADDRESS_MAP_END
@@ -363,7 +343,7 @@ static PALETTE_INIT( mirax )
 {
 	int i;
 
-	for (i = 0;i < machine.total_colors();i++)
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -388,41 +368,41 @@ static PALETTE_INIT( mirax )
 
 static INTERRUPT_GEN( mirax_vblank_irq )
 {
-	mirax_state *state = device->machine().driver_data<mirax_state>();
-	if(state->m_nmi_mask)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	if(nmi_mask)
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_CONFIG_START( mirax, mirax_state )
-	MCFG_CPU_ADD("maincpu", Z80, 12000000/4) // ceramic potted module, encrypted z80
-	MCFG_CPU_PROGRAM_MAP(mirax_main_map)
-	MCFG_CPU_VBLANK_INT("screen",mirax_vblank_irq)
+static MACHINE_DRIVER_START( mirax )
+	MDRV_CPU_ADD("maincpu", Z80, 12000000/4) // ceramic potted module, encrypted z80
+	MDRV_CPU_PROGRAM_MAP(mirax_main_map)
+	MDRV_CPU_VBLANK_INT("screen",mirax_vblank_irq)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 12000000/4)
-	MCFG_CPU_PROGRAM_MAP(mirax_sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
+	MDRV_CPU_ADD("audiocpu", Z80, 12000000/4)
+	MDRV_CPU_PROGRAM_MAP(mirax_sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mirax)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1)
 
-	MCFG_PALETTE_LENGTH(0x40)
-	MCFG_PALETTE_INIT(mirax)
-	MCFG_GFXDECODE(mirax)
-	MCFG_VIDEO_START(mirax)
+	MDRV_PALETTE_LENGTH(0x40)
+	MDRV_PALETTE_INIT(mirax)
+	MDRV_GFXDECODE(mirax)
+	MDRV_VIDEO_START(mirax)
+	MDRV_VIDEO_UPDATE(mirax)
 
-	MCFG_SOUND_START(mirax)
+	MDRV_SOUND_START(mirax)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("ay1", AY8910, 12000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-	MCFG_SOUND_ADD("ay2", AY8910, 12000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay1", AY8910, 12000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("ay2", AY8910, 12000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_DRIVER_END
 
 
 ROM_START( mirax )
@@ -482,13 +462,14 @@ ROM_START( miraxa )
 	ROM_REGION( 0x0060, "proms", 0 ) // data ? encrypted roms for cpu1 ?
 	ROM_LOAD( "mra3.prm",   0x0000, 0x0020, CRC(ae7e1a63) SHA1(f5596db77c1e352ef7845465db3e54e19cd5df9e) )
 	ROM_LOAD( "mrb3.prm",   0x0020, 0x0020, CRC(e3f3d0f5) SHA1(182b06c9db5bec1e3030f705247763bd2380ba83) )
+	ROM_LOAD( "mirax.prm",	0x0040, 0x0020, NO_DUMP )
 ROM_END
 
 
 static DRIVER_INIT( mirax )
 {
-	UINT8 *DATA = machine.region("data_code")->base();
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *DATA = memory_region(machine, "data_code");
+	UINT8 *ROM = memory_region(machine, "maincpu");
 	int i;
 
 	for(i=0x0000;i<0x4000;i++)

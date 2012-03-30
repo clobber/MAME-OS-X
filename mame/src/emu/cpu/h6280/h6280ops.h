@@ -27,7 +27,7 @@
 #define P	cpustate->p
 #define S	cpustate->sp.b.l
 
-#define TRANSLATED(addr)	((cpustate->mmr[(addr)>>13&7] << 13) | ((addr)&0x1fff))
+#define TRANSLATED(addr)	((cpustate->mmr[(addr)>>13] << 13) | ((addr)&0x1fff))
 #define H6280_CYCLES(cyc)											\
 	{																\
 		cpustate->ICount -= ((cyc) * cpustate->clocks_per_cycle);		\
@@ -80,7 +80,7 @@
 	PCH = RDMEM(cpustate, (vector+1));									\
 }
 
-#define CHECK_AND_TAKE_IRQ_LINES								\
+#define CHECK_AND_TAKE_IRQ_LINES 								\
 	if ( cpustate->nmi_state != CLEAR_LINE ) {						\
 		cpustate->nmi_state = CLEAR_LINE;							\
 		DO_INTERRUPT(H6280_NMI_VEC);							\
@@ -90,7 +90,7 @@
         if ( cpustate->irq_state[2] != CLEAR_LINE &&                \
 			 !(cpustate->irq_mask & 0x4) )							\
 		{														\
-			DO_INTERRUPT(H6280_TIMER_VEC);						\
+ 			DO_INTERRUPT(H6280_TIMER_VEC);						\
 		} else													\
 		if ( cpustate->irq_state[0] != CLEAR_LINE &&				\
 			 !(cpustate->irq_mask & 0x2) )							\
@@ -125,7 +125,7 @@
  ***************************************************************/
 INLINE UINT8 RDMEM(h6280_Regs* cpustate, offs_t addr) {
 	CHECK_VDC_VCE_PENALTY(addr);
-	return cpustate->program->read_byte(TRANSLATED(addr));
+	return memory_read_byte_8le(cpustate->program, TRANSLATED(addr));
 }
 
 /***************************************************************
@@ -133,60 +133,60 @@ INLINE UINT8 RDMEM(h6280_Regs* cpustate, offs_t addr) {
  ***************************************************************/
 INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	CHECK_VDC_VCE_PENALTY(addr);
-	cpustate->program->write_byte(TRANSLATED(addr),data);
+	memory_write_byte_8le(cpustate->program, TRANSLATED(addr),data);
 }
 
 /***************************************************************
  *  RDMEMZ   read memory - zero page
  ***************************************************************/
-#define RDMEMZ(addr)											\
-	cpustate->program->read_byte((cpustate->mmr[1] << 13) | ((addr)&0x1fff));
+#define RDMEMZ(addr) 											\
+	memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr)&0x1fff));
 
 /***************************************************************
  *  WRMEMZ   write memory - zero page
  ***************************************************************/
-#define WRMEMZ(addr,data)										\
-	cpustate->program->write_byte((cpustate->mmr[1] << 13) | ((addr)&0x1fff),data);
+#define WRMEMZ(addr,data) 										\
+	memory_write_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr)&0x1fff),data);
 
 /***************************************************************
  *  RDMEMW   read word from memory
  ***************************************************************/
 #define RDMEMW(addr)											\
-	cpustate->program->read_byte(TRANSLATED(addr)) \
-| ( cpustate->program->read_byte(TRANSLATED(addr+1)) << 8 )
+	memory_read_byte_8le(cpustate->program, TRANSLATED(addr)) \
+| ( memory_read_byte_8le(cpustate->program, TRANSLATED(addr+1)) << 8 )
 
 /***************************************************************
  *  RDZPWORD    read a word from a zero page address
  ***************************************************************/
 #define RDZPWORD(addr)											\
 	((addr&0xff)==0xff) ?										\
-		cpustate->program->read_byte((cpustate->mmr[1] << 13) | ((addr)&0x1fff))				\
-		+(cpustate->program->read_byte((cpustate->mmr[1] << 13) | ((addr-0xff)&0x1fff))<<8) : \
-		cpustate->program->read_byte((cpustate->mmr[1] << 13) | ((addr)&0x1fff))				\
-		+(cpustate->program->read_byte((cpustate->mmr[1] << 13) | ((addr+1)&0x1fff))<<8)
+		memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr)&0x1fff))				\
+		+(memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr-0xff)&0x1fff))<<8) : \
+		memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr)&0x1fff))				\
+		+(memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | ((addr+1)&0x1fff))<<8)
 
 
 /***************************************************************
  * push a register onto the stack
  ***************************************************************/
-#define PUSH(Rg) cpustate->program->write_byte((cpustate->mmr[1] << 13) | cpustate->sp.d,Rg); S--
+#define PUSH(Rg) memory_write_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | cpustate->sp.d,Rg); S--
 
 /***************************************************************
  * pull a register from the stack
  ***************************************************************/
-#define PULL(Rg) S++; Rg = cpustate->program->read_byte((cpustate->mmr[1] << 13) | cpustate->sp.d)
+#define PULL(Rg) S++; Rg = memory_read_byte_8le(cpustate->program, (cpustate->mmr[1] << 13) | cpustate->sp.d)
 
 /***************************************************************
  *  RDOP    read an opcode
  ***************************************************************/
 #define RDOP()													\
-	cpustate->direct->read_decrypted_byte(TRANSLATED(PCW))
+	memory_decrypted_read_byte(cpustate->program, TRANSLATED(PCW))
 
 /***************************************************************
  *  RDOPARG read an opcode argument
  ***************************************************************/
 #define RDOPARG()												\
-	cpustate->direct->read_raw_byte(TRANSLATED(PCW))
+	memory_raw_read_byte(cpustate->program, TRANSLATED(PCW))
 
 /***************************************************************
  *  BRA  branch relative
@@ -298,7 +298,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 #define EA_IND													\
 	EA_ABS; 													\
 	tmp = RDMEM(cpustate, EAD);									\
-	EAD++;														\
+	EAD++; 														\
 	EAH = RDMEM(cpustate, EAD);									\
 	EAL = tmp
 
@@ -309,7 +309,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	EA_ABS;														\
 	EAD+=X;														\
 	tmp = RDMEM(cpustate, EAD);											\
-	EAD++;														\
+	EAD++; 	 													\
 	EAH = RDMEM(cpustate, EAD);											\
 	EAL = tmp
 
@@ -374,7 +374,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 /* 6280 ********************************************************
  *  ADC Add with carry
  ***************************************************************/
-#define TADC													\
+#define TADC 													\
 	{															\
 		int tflagtemp;											\
 		CLEAR_T;												\
@@ -453,7 +453,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 /* 6280 ********************************************************
  *  AND Logical and
  ***************************************************************/
-#define TAND													\
+#define TAND 													\
 	{															\
 		int tflagtemp;											\
 		CLEAR_T;												\
@@ -562,7 +562,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	PUSH(PCL);													\
 	PUSH(P);													\
 	P = (P & ~_fD) | _fI;										\
-	PCL = RDMEM(cpustate, H6280_IRQ2_VEC);								\
+	PCL = RDMEM(cpustate, H6280_IRQ2_VEC); 								\
 	PCH = RDMEM(cpustate, H6280_IRQ2_VEC+1);								\
 
 /* 6280 ********************************************************
@@ -673,7 +673,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define DEA                                                     \
 	CLEAR_T;													\
-	A = (UINT8)(A - 1);											\
+	A = (UINT8)--A; 											\
     SET_NZ(A)
 
 /* 6280 ********************************************************
@@ -681,7 +681,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define DEC 													\
 	CLEAR_T;													\
-	tmp = (UINT8)(tmp-1);										\
+	tmp = (UINT8)(tmp-1); 										\
 	SET_NZ(tmp)
 
 /* 6280 ********************************************************
@@ -689,7 +689,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define DEX 													\
 	CLEAR_T;													\
-	X = (UINT8)(X - 1);											\
+	X = (UINT8)--X; 											\
 	SET_NZ(X)
 
 /* 6280 ********************************************************
@@ -697,13 +697,13 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define DEY 													\
 	CLEAR_T;													\
-	Y = (UINT8)(Y - 1);											\
+	Y = (UINT8)--Y; 											\
 	SET_NZ(Y)
 
 /* 6280 ********************************************************
  *  EOR Logical exclusive or
  ***************************************************************/
-#define TEOR													\
+#define TEOR 													\
 	{															\
 		int tflagtemp;											\
 		CLEAR_T;												\
@@ -727,7 +727,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define INA                                                     \
 	CLEAR_T;													\
-	A = (UINT8)(A + 1);											\
+	A = (UINT8)++A; 											\
     SET_NZ(A)
 
 /* 6280 ********************************************************
@@ -735,7 +735,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define INC 													\
 	CLEAR_T;													\
-	tmp = (UINT8)(tmp+1);										\
+	tmp = (UINT8)(tmp+1); 										\
 	SET_NZ(tmp)
 
 /* 6280 ********************************************************
@@ -743,7 +743,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define INX 													\
 	CLEAR_T;													\
-	X = (UINT8)(X + 1);											\
+	X = (UINT8)++X; 											\
 	SET_NZ(X)
 
 /* 6280 ********************************************************
@@ -751,7 +751,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define INY 													\
 	CLEAR_T;													\
-	Y = (UINT8)(Y + 1);											\
+	Y = (UINT8)++Y; 											\
 	SET_NZ(Y)
 
 /* 6280 ********************************************************
@@ -817,7 +817,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  *  ORA Logical inclusive or
  ***************************************************************/
 
-#define TORA													\
+#define TORA 													\
 	{															\
 		int tflagtemp;											\
 		CLEAR_T;												\
@@ -888,7 +888,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 #else
 
 #define PLP 													\
-	PULL(P);													\
+	PULL(P); 													\
 	P |= _fB;													\
 	CHECK_IRQ_LINES
 #endif
@@ -1096,7 +1096,8 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  *  SET Set t flag
  ***************************************************************/
 #define SET 													\
-	P |= _fT;
+	P |= _fT;													\
+	logerror("%04x: WARNING H6280 SET\n",PCW)
 
 /* 6280 ********************************************************
  *  SMB Set memory bit
@@ -1110,21 +1111,21 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
  ***************************************************************/
 #define ST0                                                     \
 	CLEAR_T;													\
-    cpustate->io->write_byte(0x0000,tmp)
+    memory_write_byte_8le(cpustate->io,0x0000,tmp)
 
 /* 6280 ********************************************************
  *  ST1 Store at hardware address 2
  ***************************************************************/
 #define ST1                                                     \
 	CLEAR_T;													\
-    cpustate->io->write_byte(0x0002,tmp)
+    memory_write_byte_8le(cpustate->io,0x0002,tmp)
 
 /* 6280 ********************************************************
  *  ST2 Store at hardware address 3
  ***************************************************************/
 #define ST2                                                     \
 	CLEAR_T;													\
-    cpustate->io->write_byte(0x0003,tmp)
+    memory_write_byte_8le(cpustate->io,0x0003,tmp)
 
 /* 6280 ********************************************************
  *  STA Store accumulator
@@ -1172,12 +1173,12 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	to  =RDMEMW(PCW+2);											\
 	length=RDMEMW(PCW+4);										\
 	PCW+=6; 													\
-	alternate=0;												\
+	alternate=0; 												\
 	if (!length) length = 0x10000;								\
 	H6280_CYCLES( ((6 * length) + 17) );						\
-	while ((length--) != 0) {									\
-		WRMEM(cpustate, to,RDMEM(cpustate, from+alternate));						\
-		to++;													\
+	while ((length--) != 0) { 									\
+		WRMEM(cpustate, to,RDMEM(cpustate, from+alternate)); 						\
+		to++; 													\
 		alternate ^= 1; 										\
 	}
 
@@ -1222,9 +1223,9 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	PCW+=6; 													\
 	if (!length) length = 0x10000;								\
 	H6280_CYCLES( ((6 * length) + 17) );						\
-	while ((length--) != 0) {									\
-		WRMEM(cpustate, to,RDMEM(cpustate, from));									\
-		to--;													\
+	while ((length--) != 0) { 									\
+		WRMEM(cpustate, to,RDMEM(cpustate, from)); 									\
+		to--; 													\
 		from--;													\
 	}
 
@@ -1237,10 +1238,10 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	to  =RDMEMW(PCW+2);											\
 	length=RDMEMW(PCW+4);										\
 	PCW+=6; 													\
-	alternate=0;												\
+	alternate=0; 												\
 	if (!length) length = 0x10000;								\
 	H6280_CYCLES( ((6 * length) + 17) );						\
-	while ((length--) != 0) {									\
+	while ((length--) != 0) { 									\
 		WRMEM(cpustate, to+alternate,RDMEM(cpustate, from));						\
 		from++; 												\
 		alternate ^= 1; 										\
@@ -1257,9 +1258,9 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	PCW+=6; 													\
 	if (!length) length = 0x10000;								\
 	H6280_CYCLES( ((6 * length) + 17) );						\
-	while ((length--) != 0) {									\
-		WRMEM(cpustate, to,RDMEM(cpustate, from));									\
-		to++;													\
+	while ((length--) != 0) { 									\
+		WRMEM(cpustate, to,RDMEM(cpustate, from)); 									\
+		to++; 													\
 		from++;													\
 	}
 
@@ -1274,8 +1275,8 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 	PCW+=6; 													\
 	if (!length) length = 0x10000;								\
 	H6280_CYCLES( ((6 * length) + 17) );						\
-	while ((length--) != 0) {									\
-		WRMEM(cpustate, to,RDMEM(cpustate, from));									\
+	while ((length--) != 0) { 									\
+		WRMEM(cpustate, to,RDMEM(cpustate, from)); 									\
 		from++;													\
 	}
 
@@ -1297,7 +1298,7 @@ INLINE void WRMEM(h6280_Regs* cpustate, offs_t addr, UINT8 data) {
 /* 6280 ********************************************************
  * TRB  Test and reset bits
  ***************************************************************/
-#define TRB                                                 	\
+#define TRB                                                   	\
 	CLEAR_T;													\
 	P = (P & ~(_fN|_fV|_fT|_fZ))								\
 		| ((tmp&0x80) ? _fN:0)									\

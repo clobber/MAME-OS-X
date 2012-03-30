@@ -1,6 +1,10 @@
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/vendetta.h"
+#include "driver.h"
+#include "video/konamiic.h"
+
+
+static int layer_colorbase[3],bg_colorbase,sprite_colorbase;
+static int layerpri[3];
+
 
 /***************************************************************************
 
@@ -8,18 +12,18 @@
 
 ***************************************************************************/
 
-void vendetta_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void vendetta_tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
 {
-	vendetta_state *state = machine.driver_data<vendetta_state>();
-	*code |= ((*color & 0x03) << 8) | ((*color & 0x30) << 6) | ((*color & 0x0c) << 10) | (bank << 14);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xc0) >> 6);
+	*code |= ((*color & 0x03) << 8) | ((*color & 0x30) << 6) |
+			((*color & 0x0c) << 10) | (bank << 14);
+	*color = layer_colorbase[layer] + ((*color & 0xc0) >> 6);
 }
 
-void esckids_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void esckids_tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
 {
-	vendetta_state *state = machine.driver_data<vendetta_state>();
-	*code |= ((*color & 0x03) << 8) | ((*color & 0x10) << 6) | ((*color & 0x0c) <<  9) | (bank << 13);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xe0) >>  5);
+	*code |= ((*color & 0x03) << 8) | ((*color & 0x10) << 6) |
+			((*color & 0x0c) <<  9) | (bank << 13);
+	*color = layer_colorbase[layer] + ((*color & 0xe0) >>  5);
 }
 
 
@@ -29,21 +33,41 @@ void esckids_tile_callback( running_machine &machine, int layer, int bank, int *
 
 ***************************************************************************/
 
-void vendetta_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
+static void sprite_callback(int *code,int *color,int *priority_mask)
 {
-	vendetta_state *state = machine.driver_data<vendetta_state>();
 	int pri = (*color & 0x03e0) >> 4;	/* ??????? */
-	if (pri <= state->m_layerpri[2])
-		*priority_mask = 0;
-	else if (pri > state->m_layerpri[2] && pri <= state->m_layerpri[1])
-		*priority_mask = 0xf0;
-	else if (pri > state->m_layerpri[1] && pri <= state->m_layerpri[0])
-		*priority_mask = 0xf0 | 0xcc;
-	else
-		*priority_mask = 0xf0 | 0xcc | 0xaa;
+	if (pri <= layerpri[2])								*priority_mask = 0;
+	else if (pri > layerpri[2] && pri <= layerpri[1])	*priority_mask = 0xf0;
+	else if (pri > layerpri[1] && pri <= layerpri[0])	*priority_mask = 0xf0|0xcc;
+	else 												*priority_mask = 0xf0|0xcc|0xaa;
 
-	*color = state->m_sprite_colorbase + (*color & 0x001f);
+	*color = sprite_colorbase + (*color & 0x001f);
 }
+
+
+
+/***************************************************************************
+
+    Start the video hardware emulation.
+
+***************************************************************************/
+
+VIDEO_START( vendetta )
+{
+	K053251_vh_start(machine);
+
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,vendetta_tile_callback);
+	K053247_vh_start(machine,"gfx2",53,6,NORMAL_PLANE_ORDER,sprite_callback);
+}
+
+VIDEO_START( esckids )
+{
+    K053251_vh_start(machine);
+
+    K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,esckids_tile_callback);
+	K053247_vh_start(machine,"gfx2",101,6,NORMAL_PLANE_ORDER,sprite_callback);
+}
+
 
 
 /***************************************************************************
@@ -52,32 +76,49 @@ void vendetta_sprite_callback( running_machine &machine, int *code, int *color, 
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( vendetta )
+/* useful function to sort the three tile layers by priority order */
+static void sortlayers(int *layer,int *pri)
 {
-	vendetta_state *state = screen.machine().driver_data<vendetta_state>();
+#define SWAP(a,b) \
+	if (pri[a] < pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
+
+	SWAP(0,1)
+	SWAP(0,2)
+	SWAP(1,2)
+}
+
+VIDEO_UPDATE( vendetta )
+{
 	int layer[3];
 
-	state->m_sprite_colorbase = k053251_get_palette_index(state->m_k053251, K053251_CI1);
-	state->m_layer_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI2);
-	state->m_layer_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI3);
-	state->m_layer_colorbase[2] = k053251_get_palette_index(state->m_k053251, K053251_CI4);
 
-	k052109_tilemap_update(state->m_k052109);
+	bg_colorbase       = K053251_get_palette_index(K053251_CI0);
+	sprite_colorbase   = K053251_get_palette_index(K053251_CI1);
+	layer_colorbase[0] = K053251_get_palette_index(K053251_CI2);
+	layer_colorbase[1] = K053251_get_palette_index(K053251_CI3);
+	layer_colorbase[2] = K053251_get_palette_index(K053251_CI4);
+
+	K052109_tilemap_update();
 
 	layer[0] = 0;
-	state->m_layerpri[0] = k053251_get_priority(state->m_k053251, K053251_CI2);
+	layerpri[0] = K053251_get_priority(K053251_CI2);
 	layer[1] = 1;
-	state->m_layerpri[1] = k053251_get_priority(state->m_k053251, K053251_CI3);
+	layerpri[1] = K053251_get_priority(K053251_CI3);
 	layer[2] = 2;
-	state->m_layerpri[2] = k053251_get_priority(state->m_k053251, K053251_CI4);
+	layerpri[2] = K053251_get_priority(K053251_CI4);
 
-	konami_sortlayers3(layer, state->m_layerpri);
+	sortlayers(layer,layerpri);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[1], 0, 2);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[2], 0, 4);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[0]],TILEMAP_DRAW_OPAQUE,1);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[1]],0,2);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[2]],0,4);
 
-	k053247_sprites_draw(state->m_k053246, bitmap, cliprect);
+	K053247_sprites_draw(screen->machine, bitmap,cliprect);
 	return 0;
 }

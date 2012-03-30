@@ -7,25 +7,30 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/nycaptor.h"
 
-READ8_HANDLER( nycaptor_68705_port_a_r )
+static UINT8 from_main,from_mcu;
+static int mcu_sent = 0,main_sent = 0;
+
+
+static UINT8 portA_in,portA_out,ddrA;
+
+READ8_HANDLER( nycaptor_68705_portA_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	return (state->m_port_a_out & state->m_ddr_a) | (state->m_port_a_in & ~state->m_ddr_a);
+
+	return (portA_out & ddrA) | (portA_in & ~ddrA);
 }
 
-WRITE8_HANDLER( nycaptor_68705_port_a_w )
+WRITE8_HANDLER( nycaptor_68705_portA_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_port_a_out = data;
+
+	portA_out = data;
 }
 
-WRITE8_HANDLER( nycaptor_68705_ddr_a_w )
+WRITE8_HANDLER( nycaptor_68705_ddrA_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_ddr_a = data;
+	ddrA = data;
 }
 
 /*
@@ -37,96 +42,87 @@ WRITE8_HANDLER( nycaptor_68705_ddr_a_w )
  *  2   W  when 0->1, copies port A to the latch for the main CPU
  */
 
-READ8_HANDLER( nycaptor_68705_port_b_r )
+static UINT8 portB_in,portB_out,ddrB;
+
+READ8_HANDLER( nycaptor_68705_portB_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	return (state->m_port_b_out & state->m_ddr_b) | (state->m_port_b_in & ~state->m_ddr_b);
+	return (portB_out & ddrB) | (portB_in & ~ddrB);
 }
 
-WRITE8_HANDLER( nycaptor_68705_port_b_w )
+WRITE8_HANDLER( nycaptor_68705_portB_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
 
-	if (BIT(state->m_ddr_b, 1) && BIT(~data, 1) && BIT(state->m_port_b_out, 1))
+
+	if ((ddrB & 0x02) && (~data & 0x02) && (portB_out & 0x02))
 	{
-		state->m_port_a_in = state->m_from_main;
-
-		if (state->m_main_sent)
-			device_set_input_line(state->m_mcu, 0, CLEAR_LINE);
-		state->m_main_sent = 0;
+		portA_in = from_main;
+		if (main_sent) cputag_set_input_line(space->machine, "mcu", 0, CLEAR_LINE);
+		main_sent = 0;
 
 	}
-
-	if (BIT(state->m_ddr_b, 2) && BIT(data, 2) && BIT(~state->m_port_b_out, 2))
+	if ((ddrB & 0x04) && (data & 0x04) && (~portB_out & 0x04))
 	{
-		state->m_from_mcu = state->m_port_a_out;
-		state->m_mcu_sent = 1;
+
+		from_mcu = portA_out;
+		mcu_sent = 1;
 	}
 
-	state->m_port_b_out = data;
+	portB_out = data;
 }
 
-WRITE8_HANDLER( nycaptor_68705_ddr_b_w )
+WRITE8_HANDLER( nycaptor_68705_ddrB_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_ddr_b = data;
+	ddrB = data;
 }
 
 
-READ8_HANDLER( nycaptor_68705_port_c_r )
+static UINT8 portC_in,portC_out,ddrC;
+
+READ8_HANDLER( nycaptor_68705_portC_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_port_c_in = 0;
+	portC_in = 0;
+	if (main_sent) portC_in |= 0x01;
+	if (!mcu_sent) portC_in |= 0x02;
 
-	if (state->m_main_sent)
-		state->m_port_c_in |= 0x01;
-	if (!state->m_mcu_sent)
-		state->m_port_c_in |= 0x02;
-
-	return (state->m_port_c_out & state->m_ddr_c) | (state->m_port_c_in & ~state->m_ddr_c);
+	return (portC_out & ddrC) | (portC_in & ~ddrC);
 }
 
-WRITE8_HANDLER( nycaptor_68705_port_c_w )
+WRITE8_HANDLER( nycaptor_68705_portC_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_port_c_out = data;
+
+	portC_out = data;
 }
 
-WRITE8_HANDLER( nycaptor_68705_ddr_c_w )
+WRITE8_HANDLER( nycaptor_68705_ddrC_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-	state->m_ddr_c = data;
+	ddrC = data;
 }
 
 WRITE8_HANDLER( nycaptor_mcu_w )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
 
-	state->m_from_main = data;
-	state->m_main_sent = 1;
-	device_set_input_line(state->m_mcu, 0, ASSERT_LINE);
+	from_main = data;
+	main_sent = 1;
+	cputag_set_input_line(space->machine, "mcu", 0, ASSERT_LINE);
 }
 
 READ8_HANDLER( nycaptor_mcu_r )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
 
-	state->m_mcu_sent = 0;
-	return state->m_from_mcu;
+	mcu_sent = 0;
+	return from_mcu;
 }
 
 READ8_HANDLER( nycaptor_mcu_status_r1 )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-
 	/* bit 1 = when 1, mcu has sent data to the main cpu */
-	return state->m_mcu_sent ? 2 : 0;
+
+	return mcu_sent?2:0;
 }
 
 READ8_HANDLER( nycaptor_mcu_status_r2 )
 {
-	nycaptor_state *state = space->machine().driver_data<nycaptor_state>();
-
 	/* bit 0 = when 1, mcu is ready to receive data from main cpu */
-	return state->m_main_sent ? 0 : 1;
+  return main_sent?0:1;
+
 }

@@ -16,54 +16,40 @@
 ***********************************/
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/mcs51/mcs51.h"
 #include "sound/okim6295.h"
 
 #include "cardline.lh"
 
+static int cardline_video;
 
-class cardline_state : public driver_device
-{
-public:
-	cardline_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_video;
-	UINT8 *m_videoram;
-	UINT8 *m_colorram;
-	int m_var;
-};
-
-
-
-#define DRAW_TILE(machine, offset, transparency) drawgfx_transpen(bitmap, cliprect, (machine).gfx[0],\
-					(state->m_videoram[index+offset] | (state->m_colorram[index+offset]<<8))&0x3fff,\
-					(state->m_colorram[index+offset]&0x80)>>7,\
+#define DRAW_TILE(offset, transparency) drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[0],\
+					(videoram[index+offset] | (colorram[index+offset]<<8))&0x3fff,\
+					(colorram[index+offset]&0x80)>>7,\
 					0,0,\
 					x<<3, y<<3,\
-					transparency?transparency:(UINT32)-1);
+					transparency?transparency:-1);
 
-static SCREEN_UPDATE_IND16( cardline )
+static VIDEO_UPDATE( cardline )
 {
-	cardline_state *state = screen.machine().driver_data<cardline_state>();
 	int x,y;
-	bitmap.fill(0, cliprect);
+	bitmap_fill(bitmap,cliprect,0);
 	for(y=0;y<32;y++)
 	{
 		for(x=0;x<64;x++)
 		{
 			int index=y*64+x;
-			if(state->m_video&1)
+			if(cardline_video&1)
 			{
-				DRAW_TILE(screen.machine(),0,0);
-				DRAW_TILE(screen.machine(),0x800,1);
+				DRAW_TILE(0,0);
+				DRAW_TILE(0x800,1);
 			}
 
-			if(state->m_video&2)
+			if(cardline_video&2)
 			{
-				DRAW_TILE(screen.machine(),0x1000,0);
-				DRAW_TILE(screen.machine(),0x1800,1);
+				DRAW_TILE(0x1000,0);
+				DRAW_TILE(0x1800,1);
 			}
 		}
 	}
@@ -72,30 +58,27 @@ static SCREEN_UPDATE_IND16( cardline )
 
 static WRITE8_HANDLER(vram_w)
 {
-	cardline_state *state = space->machine().driver_data<cardline_state>();
-	offset+=0x1000*((state->m_video&2)>>1);
-	state->m_videoram[offset]=data;
+	offset+=0x1000*((cardline_video&2)>>1);
+	videoram[offset]=data;
 }
 
 static WRITE8_HANDLER(attr_w)
 {
-	cardline_state *state = space->machine().driver_data<cardline_state>();
-	offset+=0x1000*((state->m_video&2)>>1);
-	state->m_colorram[offset]=data;
+	offset+=0x1000*((cardline_video&2)>>1);
+	colorram[offset]=data;
 }
 
 static WRITE8_HANDLER(video_w)
 {
-	cardline_state *state = space->machine().driver_data<cardline_state>();
-	state->m_video=data;
+	cardline_video=data;
 }
 
 static READ8_HANDLER(unk_r)
 {
-	cardline_state *state = space->machine().driver_data<cardline_state>();
-	state->m_var^=0x10;
-	//printf("var %d\n",state->m_var);
-	return state->m_var;
+	static int var=0;
+	var^=0x10;
+	//printf("var %d\n",var);
+	return var;
 }
 
 static WRITE8_HANDLER(lamps_w)
@@ -111,11 +94,11 @@ static WRITE8_HANDLER(lamps_w)
 	output_set_lamp_value(7,(data >> 7) & 1);
 }
 
-static ADDRESS_MAP_START( mem_prg, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mem_prg, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mem_io, AS_IO, 8 )
+static ADDRESS_MAP_START( mem_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_RAM
 	AM_RANGE(0x2003, 0x2003) AM_READ_PORT("IN0")
 	AM_RANGE(0x2005, 0x2005) AM_READ_PORT("IN1")
@@ -123,13 +106,13 @@ static ADDRESS_MAP_START( mem_io, AS_IO, 8 )
 	AM_RANGE(0x2007, 0x2007) AM_WRITE(lamps_w)
 	AM_RANGE(0x2008, 0x2008) AM_NOP
 	AM_RANGE(0x2080, 0x213f) AM_NOP
-	AM_RANGE(0x2400, 0x2400) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x2400, 0x2400) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x2800, 0x2801) AM_NOP
 	AM_RANGE(0x2840, 0x2840) AM_NOP
 	AM_RANGE(0x2880, 0x2880) AM_NOP
 	AM_RANGE(0x3003, 0x3003) AM_NOP
-	AM_RANGE(0xc000, 0xdfff) AM_WRITE(vram_w) AM_BASE_MEMBER(cardline_state, m_videoram)
-	AM_RANGE(0xe000, 0xffff) AM_WRITE(attr_w) AM_BASE_MEMBER(cardline_state, m_colorram)
+	AM_RANGE(0xc000, 0xdfff) AM_WRITE(vram_w) AM_BASE(&videoram)
+	AM_RANGE(0xe000, 0xffff) AM_WRITE(attr_w) AM_BASE(&colorram)
 	/* Ports */
 	AM_RANGE(MCS51_PORT_P1, MCS51_PORT_P1) AM_READWRITE(unk_r, video_w)
 ADDRESS_MAP_END
@@ -147,14 +130,14 @@ static INPUT_PORTS_START( cardline )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 ) PORT_NAME("Start")
 
 	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("Unknown1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("?")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Bookkeeping Info") PORT_CODE(KEYCODE_F1)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_CODE(KEYCODE_L) PORT_NAME("Payout 2")
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("Unknown2")
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("?")
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_CODE(KEYCODE_ENTER) PORT_NAME("Payout")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("Unknown3")
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("?")
 
 	PORT_START("DSW")
 	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Unknown ) )
@@ -185,7 +168,7 @@ static PALETTE_INIT(cardline)
 {
 	int i,r,g,b,data;
 	int bit0,bit1,bit2;
-	for (i = 0;i < machine.total_colors();i++)
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
 		data=color_prom[i];
 
@@ -207,36 +190,39 @@ static PALETTE_INIT(cardline)
 	}
 }
 
-static MACHINE_CONFIG_START( cardline, cardline_state )
+static MACHINE_DRIVER_START( cardline )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I80C32,12000000)
-	MCFG_CPU_PROGRAM_MAP(mem_prg)
-	MCFG_CPU_IO_MAP(mem_io)
-	//MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("maincpu", I80C32,12000000)
+	MDRV_CPU_PROGRAM_MAP(mem_prg)
+	MDRV_CPU_IO_MAP(mem_io)
+	//MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 35*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(cardline)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 35*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(cardline)
-	MCFG_PALETTE_LENGTH(512)
-	MCFG_PALETTE_INIT(cardline)
+	MDRV_GFXDECODE(cardline)
+	MDRV_PALETTE_LENGTH(512)
+	MDRV_PALETTE_INIT(cardline)
 
-	MCFG_DEFAULT_LAYOUT(layout_cardline)
+	MDRV_VIDEO_UPDATE(cardline)
+
+	MDRV_DEFAULT_LAYOUT(layout_cardline)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /***************************************************************************
 

@@ -1,12 +1,16 @@
-#include "emu.h"
-#include "includes/jailbrek.h"
+#include "driver.h"
+
+UINT8 *jailbrek_scroll_x;
+UINT8 *jailbrek_scroll_dir;
+
+static tilemap *bg_tilemap;
 
 PALETTE_INIT( jailbrek )
 {
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x20);
+	machine->colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -15,7 +19,7 @@ PALETTE_INIT( jailbrek )
 		int g = pal4bit(color_prom[i + 0x00] >> 4);
 		int b = pal4bit(color_prom[i + 0x20] >> 0);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -24,35 +28,32 @@ PALETTE_INIT( jailbrek )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = (color_prom[i] & 0x0f) | 0x10;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( jailbrek_videoram_w )
 {
-	jailbrek_state *state = space->machine().driver_data<jailbrek_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( jailbrek_colorram_w )
 {
-	jailbrek_state *state = space->machine().driver_data<jailbrek_state>();
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	jailbrek_state *state = machine.driver_data<jailbrek_state>();
-	int attr = state->m_colorram[tile_index];
-	int code = state->m_videoram[tile_index] + ((attr & 0xc0) << 2);
+	int attr = colorram[tile_index];
+	int code = videoram[tile_index] + ((attr & 0xc0) << 2);
 	int color = attr & 0x0f;
 
 	SET_TILE_INFO(0, code, color, 0);
@@ -60,18 +61,16 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( jailbrek )
 {
-	jailbrek_state *state = machine.driver_data<jailbrek_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
-	state->m_bg_tilemap->set_scrolldx(0, 396 - 256);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+		 8, 8, 64, 32);
+	tilemap_set_scrolldx(bg_tilemap, 0, 396 - 256);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	jailbrek_state *state = machine.driver_data<jailbrek_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int i;
 
-	for (i = 0; i < state->m_spriteram_size; i += 4)
+	for (i = 0; i < spriteram_size; i += 4)
 	{
 		int attr = spriteram[i + 1];	// attributes = ?tyxcccc
 		int code = spriteram[i] + ((attr & 0x40) << 2);
@@ -89,39 +88,38 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 			flipy = !flipy;
 		}
 
-		drawgfx_transmask(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy,
+		drawgfx_transmask(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy,
 			sx, sy,
-			colortable_get_transpen_mask(machine.colortable, machine.gfx[1], color, 0));
+			colortable_get_transpen_mask(machine->colortable, machine->gfx[1], color, 0));
 	}
 }
 
-SCREEN_UPDATE_IND16( jailbrek )
+VIDEO_UPDATE( jailbrek )
 {
-	jailbrek_state *state = screen.machine().driver_data<jailbrek_state>();
 	int i;
 
 	// added support for vertical scrolling (credits).  23/1/2002  -BR
 	// bit 2 appears to be horizontal/vertical scroll control
-	if (state->m_scroll_dir[0] & 0x04)
+	if (jailbrek_scroll_dir[0] & 0x04)
 	{
-		state->m_bg_tilemap->set_scroll_cols(32);
-		state->m_bg_tilemap->set_scroll_rows(1);
-		state->m_bg_tilemap->set_scrollx(0, 0);
+		tilemap_set_scroll_cols(bg_tilemap, 32);
+		tilemap_set_scroll_rows(bg_tilemap, 1);
+		tilemap_set_scrollx(bg_tilemap, 0, 0);
 
 		for (i = 0; i < 32; i++)
-			state->m_bg_tilemap->set_scrolly(i, ((state->m_scroll_x[i + 32] << 8) + state->m_scroll_x[i]));
+			tilemap_set_scrolly(bg_tilemap, i, ((jailbrek_scroll_x[i + 32] << 8) + jailbrek_scroll_x[i]));
 	}
 	else
 	{
-		state->m_bg_tilemap->set_scroll_rows(32);
-		state->m_bg_tilemap->set_scroll_cols(1);
-		state->m_bg_tilemap->set_scrolly(0, 0);
+		tilemap_set_scroll_rows(bg_tilemap, 32);
+		tilemap_set_scroll_cols(bg_tilemap, 1);
+		tilemap_set_scrolly(bg_tilemap, 0, 0);
 
 		for (i = 0; i < 32; i++)
-			state->m_bg_tilemap->set_scrollx(i, ((state->m_scroll_x[i + 32] << 8) + state->m_scroll_x[i]));
+			tilemap_set_scrollx(bg_tilemap, i, ((jailbrek_scroll_x[i + 32] << 8) + jailbrek_scroll_x[i]));
 	}
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

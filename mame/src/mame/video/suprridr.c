@@ -4,8 +4,18 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/suprridr.h"
+#include "driver.h"
+#include "suprridr.h"
+
+
+UINT8 *suprridr_bgram;
+UINT8 *suprridr_fgram;
+
+static tilemap *fg_tilemap;
+static tilemap *bg_tilemap;
+static tilemap *bg_tilemap_noscroll;
+static UINT8 flipx, flipy;
+
 
 
 /*************************************
@@ -16,16 +26,14 @@
 
 static TILE_GET_INFO( get_tile_info )
 {
-	suprridr_state *state = machine.driver_data<suprridr_state>();
-	UINT8 code = state->m_bgram[tile_index];
+	UINT8 code = suprridr_bgram[tile_index];
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
 
 static TILE_GET_INFO( get_tile_info2 )
 {
-	suprridr_state *state = machine.driver_data<suprridr_state>();
-	UINT8 code = state->m_fgram[tile_index];
+	UINT8 code = suprridr_fgram[tile_index];
 	SET_TILE_INFO(1, code, 0, 0);
 }
 
@@ -39,12 +47,11 @@ static TILE_GET_INFO( get_tile_info2 )
 
 VIDEO_START( suprridr )
 {
-	suprridr_state *state = machine.driver_data<suprridr_state>();
-	state->m_fg_tilemap          = tilemap_create(machine, get_tile_info2, tilemap_scan_rows,  8,8, 32,32);
-	state->m_bg_tilemap          = tilemap_create(machine, get_tile_info,  tilemap_scan_rows,       8,8, 32,32);
-	state->m_bg_tilemap_noscroll = tilemap_create(machine, get_tile_info,  tilemap_scan_rows,       8,8, 32,32);
+	fg_tilemap          = tilemap_create(machine, get_tile_info2, tilemap_scan_rows,  8,8, 32,32);
+	bg_tilemap          = tilemap_create(machine, get_tile_info,  tilemap_scan_rows,       8,8, 32,32);
+	bg_tilemap_noscroll = tilemap_create(machine, get_tile_info,  tilemap_scan_rows,       8,8, 32,32);
 
-	state->m_fg_tilemap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(fg_tilemap, 0);
 }
 
 
@@ -93,45 +100,39 @@ PALETTE_INIT( suprridr )
 
 WRITE8_HANDLER( suprridr_flipx_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_flipx = data & 1;
-	space->machine().tilemap().set_flip_all((state->m_flipx ? TILEMAP_FLIPX : 0) | (state->m_flipy ? TILEMAP_FLIPY : 0));
+	flipx = data & 1;
+	tilemap_set_flip_all(space->machine, (flipx ? TILEMAP_FLIPX : 0) | (flipy ? TILEMAP_FLIPY : 0));
 }
 
 
 WRITE8_HANDLER( suprridr_flipy_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_flipy = data & 1;
-	space->machine().tilemap().set_flip_all((state->m_flipx ? TILEMAP_FLIPX : 0) | (state->m_flipy ? TILEMAP_FLIPY : 0));
+	flipy = data & 1;
+	tilemap_set_flip_all(space->machine, (flipx ? TILEMAP_FLIPX : 0) | (flipy ? TILEMAP_FLIPY : 0));
 }
 
 
 WRITE8_HANDLER( suprridr_fgdisable_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_fg_tilemap->enable(~data & 1);
+	tilemap_set_enable(fg_tilemap, ~data & 1);
 }
 
 
 WRITE8_HANDLER( suprridr_fgscrolly_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_fg_tilemap->set_scrolly(0, data);
+	tilemap_set_scrolly(fg_tilemap, 0, data);
 }
 
 
 WRITE8_HANDLER( suprridr_bgscrolly_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_bg_tilemap->set_scrolly(0, data);
+	tilemap_set_scrolly(bg_tilemap, 0, data);
 }
 
 
-int suprridr_is_screen_flipped(running_machine &machine)
+int suprridr_is_screen_flipped(void)
 {
-	suprridr_state *state = machine.driver_data<suprridr_state>();
-	return state->m_flipx;  /* or is it flipy? */
+	return flipx;  /* or is it flipy? */
 }
 
 
@@ -144,18 +145,16 @@ int suprridr_is_screen_flipped(running_machine &machine)
 
 WRITE8_HANDLER( suprridr_bgram_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_bgram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
-	state->m_bg_tilemap_noscroll->mark_tile_dirty(offset);
+	suprridr_bgram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
+	tilemap_mark_tile_dirty(bg_tilemap_noscroll, offset);
 }
 
 
 WRITE8_HANDLER( suprridr_fgram_w )
 {
-	suprridr_state *state = space->machine().driver_data<suprridr_state>();
-	state->m_fgram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset);
+	suprridr_fgram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap, offset);
 }
 
 
@@ -166,35 +165,33 @@ WRITE8_HANDLER( suprridr_fgram_w )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( suprridr )
+VIDEO_UPDATE( suprridr )
 {
-	suprridr_state *state = screen.machine().driver_data<suprridr_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	rectangle subclip;
 	int i;
-	const rectangle &visarea = screen.visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(screen);
 
 	/* render left 4 columns with no scroll */
-	subclip = visarea;;
-	subclip.max_x = subclip.min_x + (state->m_flipx ? 1*8 : 4*8) - 1;
-	subclip &= cliprect;
-	state->m_bg_tilemap_noscroll->draw(bitmap, subclip, 0, 0);
+	subclip = *visarea;;
+	subclip.max_x = subclip.min_x + (flipx ? 1*8 : 4*8) - 1;
+	sect_rect(&subclip, cliprect);
+	tilemap_draw(bitmap, &subclip, bg_tilemap_noscroll, 0, 0);
 
 	/* render right 1 column with no scroll */
-	subclip = visarea;;
-	subclip.min_x = subclip.max_x - (state->m_flipx ? 4*8 : 1*8) + 1;
-	subclip &= cliprect;
-	state->m_bg_tilemap_noscroll->draw(bitmap, subclip, 0, 0);
+	subclip = *visarea;;
+	subclip.min_x = subclip.max_x - (flipx ? 4*8 : 1*8) + 1;
+	sect_rect(&subclip, cliprect);
+	tilemap_draw(bitmap, &subclip, bg_tilemap_noscroll, 0, 0);
 
 	/* render the middle columns normally */
-	subclip = visarea;;
-	subclip.min_x += state->m_flipx ? 1*8 : 4*8;
-	subclip.max_x -= state->m_flipx ? 4*8 : 1*8;
-	subclip &= cliprect;
-	state->m_bg_tilemap->draw(bitmap, subclip, 0, 0);
+	subclip = *visarea;;
+	subclip.min_x += flipx ? 1*8 : 4*8;
+	subclip.max_x -= flipx ? 4*8 : 1*8;
+	sect_rect(&subclip, cliprect);
+	tilemap_draw(bitmap, &subclip, bg_tilemap, 0, 0);
 
 	/* render the top layer */
-	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
 
 	/* draw the sprites */
 	for (i = 0; i < 48; i++)
@@ -206,17 +203,17 @@ SCREEN_UPDATE_IND16( suprridr )
 		int x = spriteram[i*4+3];
 		int y = 240 - spriteram[i*4+0];
 
-		if (state->m_flipx)
+		if (flipx)
 		{
 			fx = !fx;
 			x = 240 - x;
 		}
-		if (state->m_flipy)
+		if (flipy)
 		{
 			fy = !fy;
 			y = 240 - y;
 		}
-		drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[2], code, color, fx, fy, x, y, 0);
+		drawgfx_transpen(bitmap, cliprect, screen->machine->gfx[2], code, color, fx, fy, x, y, 0);
 	}
 	return 0;
 }

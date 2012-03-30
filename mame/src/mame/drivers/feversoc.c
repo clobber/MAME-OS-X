@@ -1,6 +1,6 @@
 /*******************************************************************************************
 
-Fever Soccer (c) 2004 Seibu Kaihatsu
+Fever Soccer (c) 2000 Seibu
 
 A down-grade of the Seibu SPI Hardware with SH-2 as main cpu.
 
@@ -16,7 +16,7 @@ Fever Soccer (JAMMA based Gambling Game)
 
 Seibu Kaihatsu Inc.
 
-PCB (c) 2004 SYS_SH2B + SYS_SH2B Rom Board
+PCB (c) 2000 SYS_SH2B + SYS_SH2B Rom Board
 
 Very simple PCB contains:
 
@@ -58,22 +58,10 @@ U0564 LH28F800SU OBJ4-1
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/sh2/sh2.h"
-#include "machine/seibuspi.h"
+#include "includes/seibuspi.h"
 #include "sound/okim6295.h"
-
-
-class feversoc_state : public driver_device
-{
-public:
-	feversoc_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 m_x;
-	UINT32 *m_spriteram;
-};
-
 
 #define MASTER_CLOCK XTAL_28_63636MHz
 
@@ -82,13 +70,11 @@ static VIDEO_START( feversoc )
 
 }
 
-static SCREEN_UPDATE_IND16( feversoc )
+static VIDEO_UPDATE( feversoc )
 {
-	feversoc_state *state = screen.machine().driver_data<feversoc_state>();
-	UINT32 *spriteram32 = state->m_spriteram;
 	int offs,spr_offs,colour,sx,sy,h,w,dx,dy;
 
-	bitmap.fill(screen.machine().pens[0], cliprect); //black pen
+	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]); //black pen
 
 	for(offs=(0x2000/4)-2;offs>-1;offs-=2)
 	{
@@ -106,7 +92,7 @@ static SCREEN_UPDATE_IND16( feversoc )
 
 		for(dx=0;dx<w;dx++)
 			for(dy=0;dy<h;dy++)
-				drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[0],spr_offs++,colour,0,0,(sx+dx*16),(sy+dy*16),0x3f);
+				drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[0],spr_offs++,colour,0,0,(sx+dx*16),(sy+dy*16),0x3f);
 	}
 
 	return 0;
@@ -115,27 +101,27 @@ static SCREEN_UPDATE_IND16( feversoc )
 static WRITE32_HANDLER( fs_paletteram_w )
 {
 	int r,g,b;
-	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
+	COMBINE_DATA(&paletteram32[offset]);
 
-	r = ((space->machine().generic.paletteram.u32[offset] & 0x001f0000)>>16) << 3;
-	g = ((space->machine().generic.paletteram.u32[offset] & 0x03e00000)>>16) >> 2;
-	b = ((space->machine().generic.paletteram.u32[offset] & 0x7c000000)>>16) >> 7;
+	r = ((paletteram32[offset] & 0x001f0000)>>16) << 3;
+	g = ((paletteram32[offset] & 0x03e00000)>>16) >> 2;
+	b = ((paletteram32[offset] & 0x7c000000)>>16) >> 7;
 
-	palette_set_color(space->machine(),offset*2+0,MAKE_RGB(r,g,b));
+	palette_set_color(space->machine,offset*2+0,MAKE_RGB(r,g,b));
 
-	r = (space->machine().generic.paletteram.u32[offset] & 0x001f) << 3;
-	g = (space->machine().generic.paletteram.u32[offset] & 0x03e0) >> 2;
-	b = (space->machine().generic.paletteram.u32[offset] & 0x7c00) >> 7;
+	r = (paletteram32[offset] & 0x001f) << 3;
+	g = (paletteram32[offset] & 0x03e0) >> 2;
+	b = (paletteram32[offset] & 0x7c00) >> 7;
 
-	palette_set_color(space->machine(),offset*2+1,MAKE_RGB(r,g,b));
+	palette_set_color(space->machine,offset*2+1,MAKE_RGB(r,g,b));
 }
 
 static READ32_HANDLER( in0_r )
 {
-	feversoc_state *state = space->machine().driver_data<feversoc_state>();
+	static UINT16 x;
 
-	state->m_x^=0x40; //vblank? eeprom read bit?
-	return (input_port_read(space->machine(), "IN0") | state->m_x) | (input_port_read(space->machine(), "IN1")<<16);
+	x^=0x40; //vblank? eeprom read bit?
+	return (input_port_read(space->machine, "IN0") | x) | (input_port_read(space->machine, "IN1")<<16);
 }
 
 static WRITE32_HANDLER( output_w )
@@ -143,33 +129,32 @@ static WRITE32_HANDLER( output_w )
 	if(ACCESSING_BITS_16_31)
 	{
 		/* probably eeprom stuff too */
-		coin_lockout_w(space->machine(), 0,~data>>16 & 0x40);
-		coin_lockout_w(space->machine(), 1,~data>>16 & 0x40);
-		coin_counter_w(space->machine(), 0,data>>16 & 1);
+		coin_lockout_w(0,~data>>16 & 0x40);
+		coin_lockout_w(1,~data>>16 & 0x40);
+		coin_counter_w(0,data>>16 & 1);
 		//data>>16 & 2 coin out
-		coin_counter_w(space->machine(), 1,data>>16 & 4);
+		coin_counter_w(1,data>>16 & 4);
 		//data>>16 & 8 coin hopper
-		okim6295_device *oki = space->machine().device<okim6295_device>("oki");
-		oki->set_bank_base(0x40000 * (((data>>16) & 0x20)>>5));
+		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), 0x40000 * (((data>>16) & 0x20)>>5));
 	}
 	if(ACCESSING_BITS_0_15)
 	{
 		/* -xxx xxxx lamps*/
-		coin_counter_w(space->machine(), 2,data & 0x2000); //key in
+		coin_counter_w(2,data & 0x2000); //key in
 		//data & 0x4000 key out
 	}
 }
 
-static ADDRESS_MAP_START( feversoc_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( feversoc_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x0003ffff) AM_ROM
 	AM_RANGE(0x02000000, 0x0203dfff) AM_RAM //work ram
-	AM_RANGE(0x0203e000, 0x0203ffff) AM_RAM AM_BASE_MEMBER(feversoc_state, m_spriteram)
+	AM_RANGE(0x0203e000, 0x0203ffff) AM_RAM AM_BASE(&spriteram32)
 	AM_RANGE(0x06000000, 0x06000003) AM_WRITE(output_w)
 	AM_RANGE(0x06000004, 0x06000007) AM_WRITENOP //???
 	AM_RANGE(0x06000008, 0x0600000b) AM_READ(in0_r)
-	AM_RANGE(0x0600000c, 0x0600000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff0000)
+	AM_RANGE(0x0600000c, 0x0600000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff0000)
 //  AM_RANGE(0x06010000, 0x06017fff) AM_RAM //contains RISE11 keys and other related stuff.
-	AM_RANGE(0x06018000, 0x06019fff) AM_RAM_WRITE(fs_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x06018000, 0x06019fff) AM_RAM_WRITE(fs_paletteram_w) AM_BASE(&paletteram32)
 ADDRESS_MAP_END
 
 static const gfx_layout spi_spritelayout =
@@ -244,34 +229,35 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( feversoc_irq )
 {
-	cputag_set_input_line(device->machine(), "maincpu", 8, HOLD_LINE );
+	cputag_set_input_line(device->machine, "maincpu", 8, HOLD_LINE );
 }
 
-static MACHINE_CONFIG_START( feversoc, feversoc_state )
+static MACHINE_DRIVER_START( feversoc )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",SH2,MASTER_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(feversoc_map)
-	MCFG_CPU_VBLANK_INT("screen",feversoc_irq)
+	MDRV_CPU_ADD("maincpu",SH2,MASTER_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(feversoc_map)
+	MDRV_CPU_VBLANK_INT("screen",feversoc_irq)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1) //dynamic resolution?
-	MCFG_SCREEN_UPDATE_STATIC(feversoc)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(40*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1) //dynamic resolution?
+	MDRV_GFXDECODE(feversoc)
+	MDRV_PALETTE_LENGTH(0x1000)
 
-	MCFG_GFXDECODE(feversoc)
-	MCFG_PALETTE_LENGTH(0x1000)
-
-	MCFG_VIDEO_START(feversoc)
+	MDRV_VIDEO_START(feversoc)
+	MDRV_VIDEO_UPDATE(feversoc)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_OKIM6295_ADD("oki", MASTER_CLOCK/16, OKIM6295_PIN7_LOW) //pin 7 & frequency not verified (clock should be 28,6363 / n)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.6)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("oki", OKIM6295, MASTER_CLOCK/16) //pin 7 & frequency not verified (clock should be 28,6363 / n)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.6)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -295,7 +281,7 @@ ROM_END
 
 static DRIVER_INIT( feversoc )
 {
-	seibuspi_rise11_sprite_decrypt_feversoc(machine.region("gfx1")->base(), 0x200000);
+	seibuspi_rise11_sprite_decrypt_feversoc(memory_region(machine, "gfx1"), 0x200000);
 }
 
-GAME( 2004, feversoc,  0,       feversoc,  feversoc,  feversoc, ROT0, "Seibu Kaihatsu", "Fever Soccer", 0 )
+GAME( 2004, feversoc,  0,       feversoc,  feversoc,  feversoc, ROT0, "Seibu", "Fever Soccer", 0 )

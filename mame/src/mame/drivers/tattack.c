@@ -18,28 +18,16 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 
 
-class tattack_state : public driver_device
-{
-public:
-	tattack_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_videoram;
-	UINT8 *m_colorram;
-	tilemap_t *m_tmap;
-};
-
-
+static tilemap *tmap;
 
 static TILE_GET_INFO( get_tile_info )
 {
-	tattack_state *state = machine.driver_data<tattack_state>();
-	int code = state->m_videoram[tile_index];
-	int color = state->m_colorram[tile_index];
+	int code = videoram[tile_index];
+	int color=colorram[tile_index];
 
 	if((color&1 ) || (color>15) )
 		logerror("COLOR %i\n",color);
@@ -53,25 +41,23 @@ static TILE_GET_INFO( get_tile_info )
 		0);
 }
 
-static SCREEN_UPDATE_IND16( tattack )
+static VIDEO_UPDATE( tattack )
 {
-	tattack_state *state = screen.machine().driver_data<tattack_state>();
-	state->m_tmap->mark_all_dirty();
-	state->m_tmap->draw(bitmap, cliprect, 0,0);
+	tilemap_mark_all_tiles_dirty(tmap);
+	tilemap_draw(bitmap,cliprect,tmap, 0,0);
 	return 0;
 }
 
 static VIDEO_START( tattack )
 {
-	tattack_state *state = machine.driver_data<tattack_state>();
-		state->m_tmap = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,32,32 );
+		tmap = tilemap_create( machine, get_tile_info,tilemap_scan_rows,8,8,32,32 );
 }
 
-static ADDRESS_MAP_START( mem, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 //  AM_RANGE(0x4000, 0x4000) AM_READNOP $315
-	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE_MEMBER(tattack_state, m_videoram)
-	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_BASE_MEMBER(tattack_state, m_colorram)	// color map ? something else .. only bits 1-3 are used
+	AM_RANGE(0x5000, 0x53ff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_BASE(&colorram)	// color map ? something else .. only bits 1-3 are used
 	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("DSW2")
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("DSW1")		// dsw ? something else ?
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("INPUTS") AM_WRITENOP
@@ -192,31 +178,32 @@ static PALETTE_INIT( tattack  )
 }
 
 
-static MACHINE_CONFIG_START( tattack, tattack_state )
+static MACHINE_DRIVER_START( tattack )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 8000000 / 2)	/* 4 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(mem)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 8000000 / 2)	/* 4 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(mem)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(tattack)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(tattack)
-	MCFG_PALETTE_LENGTH(16)
-	MCFG_PALETTE_INIT(tattack )
+	MDRV_GFXDECODE(tattack)
+	MDRV_PALETTE_LENGTH(16)
+	MDRV_PALETTE_INIT(tattack )
 
-	MCFG_VIDEO_START(tattack)
+	MDRV_VIDEO_UPDATE(tattack)
+	MDRV_VIDEO_START(tattack)
 
 	/* sound hardware */
 	/* Discrete ???? */
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -236,7 +223,7 @@ ROM_END
 static DRIVER_INIT(tattack)
 {
 
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 
 	rom[0x1b4]=0;
 	rom[0x1b5]=0;

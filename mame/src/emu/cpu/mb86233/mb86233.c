@@ -13,9 +13,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "debugger.h"
 #include "mb86233.h"
+#include "debugger.h"
 
 CPU_DISASSEMBLE( mb86233 );
 
@@ -50,9 +49,8 @@ struct _mb86233_state
 	UINT32			gpr[16];
 	UINT32			extport[0x30];
 
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
+	const device_config *device;
+	const address_space *program;
 	int icount;
 
 	/* FIFO */
@@ -66,11 +64,13 @@ struct _mb86233_state
 	UINT32			*Tables;
 };
 
-INLINE mb86233_state *get_safe_token(device_t *device)
+INLINE mb86233_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == MB86233);
-	return (mb86233_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_MB86233);
+	return (mb86233_state *)device->token;
 }
 
 /***************************************************************************
@@ -96,9 +96,9 @@ INLINE mb86233_state *get_safe_token(device_t *device)
 #define ALU(cs,a)			mb86233_alu(cs,a)
 #define GETREPCNT()			cpustate->repcnt
 
-#define ROPCODE(a)			cpustate->direct->read_decrypted_dword(a<<2)
-#define RDMEM(a)			cpustate->program->read_dword((a<<2))
-#define WRMEM(a,v)			cpustate->program->write_dword((a<<2), v)
+#define ROPCODE(a)			memory_decrypted_read_dword(cpustate->program, a<<2)
+#define RDMEM(a)			memory_read_dword_32le(cpustate->program, (a<<2))
+#define WRMEM(a,v)			memory_write_dword_32le(cpustate->program, (a<<2), v)
 
 /***************************************************************************
     Initialization and Shutdown
@@ -107,27 +107,26 @@ INLINE mb86233_state *get_safe_token(device_t *device)
 static CPU_INIT( mb86233 )
 {
 	mb86233_state *cpustate = get_safe_token(device);
-	mb86233_cpu_core * _config = (mb86233_cpu_core *)device->static_config();
+	mb86233_cpu_core * _config = (mb86233_cpu_core *)device->static_config;
 	(void)irqcallback;
 
 	memset(cpustate, 0, sizeof( *cpustate ) );
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 
 	if ( _config )
 	{
 		cpustate->fifo_read_cb = _config->fifo_read_cb;
 		cpustate->fifo_write_cb = _config->fifo_write_cb;
-		cpustate->Tables = (UINT32*) device->machine().region(_config->tablergn)->base();
 	}
 
-	cpustate->RAM = auto_alloc_array(device->machine(), UINT32, 2 * 0x200);		/* 2x 2KB */
+	cpustate->RAM = auto_alloc_array(device->machine, UINT32, 2 * 0x200);		/* 2x 2KB */
 	memset( cpustate->RAM, 0, 2 * 0x200 * sizeof(UINT32) );
 	cpustate->ARAM = &cpustate->RAM[0];
 	cpustate->BRAM = &cpustate->RAM[0x200];
+	cpustate->Tables = (UINT32*) memory_region(device->machine, _config->tablergn);
 
-	state_save_register_global_pointer(device->machine(), cpustate->RAM,2 * 0x200 * sizeof(UINT32));
+	state_save_register_global_pointer(device->machine, cpustate->RAM,2 * 0x200 * sizeof(UINT32));
 }
 
 static CPU_RESET( mb86233 )
@@ -942,6 +941,8 @@ static CPU_EXECUTE( mb86233 )
 {
 	mb86233_state *cpustate = get_safe_token(device);
 
+	cpustate->icount = cycles;
+
 	while( cpustate->icount > 0 )
 	{
 		UINT32		val;
@@ -1554,6 +1555,8 @@ static CPU_EXECUTE( mb86233 )
 			cpustate->icount = 0;
 		}
 	}
+
+	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
@@ -1567,7 +1570,7 @@ static CPU_SET_INFO( mb86233 )
 	switch (state)
 	{
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + MB86233_PC:			GETPC() = info->i;						break;
+		case CPUINFO_INT_REGISTER + MB86233_PC:			GETPC() = info->i; 						break;
 		case CPUINFO_INT_REGISTER + MB86233_A:			GETA().u = info->i;						break;
 		case CPUINFO_INT_REGISTER + MB86233_B:			GETB().u = info->i;						break;
 		case CPUINFO_INT_REGISTER + MB86233_P:			GETP().u = info->i;						break;
@@ -1603,7 +1606,7 @@ static CPU_SET_INFO( mb86233 )
 
 CPU_GET_INFO( mb86233 )
 {
-	mb86233_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	mb86233_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1619,15 +1622,15 @@ CPU_GET_INFO( mb86233 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 2;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = -2;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = -2;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_PREVIOUSPC:					/* not implemented */					break;
 
@@ -1642,7 +1645,7 @@ CPU_GET_INFO( mb86233 )
 		case CPUINFO_INT_REGISTER + MB86233_SP:			info->i = GETPCSP();					break;
 		case CPUINFO_INT_REGISTER + MB86233_EB:			info->i = GETEB();						break;
 		case CPUINFO_INT_REGISTER + MB86233_SHIFT:		info->i = GETSHIFT();					break;
-		case CPUINFO_INT_REGISTER + MB86233_FLAGS:		info->i = GETSR();						break;
+		case CPUINFO_INT_REGISTER + MB86233_FLAGS: 		info->i = GETSR();						break;
 		case CPUINFO_INT_REGISTER + MB86233_R0:			info->i = GETGPR(0);					break;
 		case CPUINFO_INT_REGISTER + MB86233_R1:			info->i = GETGPR(1);					break;
 		case CPUINFO_INT_REGISTER + MB86233_R2:			info->i = GETGPR(2);					break;
@@ -1712,5 +1715,3 @@ CPU_GET_INFO( mb86233 )
 		case CPUINFO_STR_REGISTER + MB86233_R15:		sprintf(info->s, "R15:%08X", GETGPR(15));				break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(MB86233, mb86233);

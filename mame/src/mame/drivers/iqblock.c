@@ -49,68 +49,60 @@ Grndtour:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z180/z180.h"
+#include "deprecat.h"
 #include "machine/8255ppi.h"
-#include "includes/iqblock.h"
+#include "iqblock.h"
 #include "sound/2413intf.h"
 
+static UINT8 *rambase;
 
 static WRITE8_HANDLER( iqblock_prot_w )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-    state->m_rambase[0xe26] = data;
-    state->m_rambase[0xe27] = data;
-    state->m_rambase[0xe1c] = data;
+    rambase[0xe26] = data;
+    rambase[0xe27] = data;
+    rambase[0xe1c] = data;
 }
 
 static WRITE8_HANDLER( grndtour_prot_w )
 {
-	iqblock_state *state = space->machine().driver_data<iqblock_state>();
-	state->m_rambase[0xe39] = data;
-    state->m_rambase[0xe3a] = data;
-    state->m_rambase[0xe2f] = data;
+	rambase[0xe39] = data;
+    rambase[0xe3a] = data;
+    rambase[0xe2f] = data;
 
 }
 
 
-static TIMER_DEVICE_CALLBACK( iqblock_irq )
+static INTERRUPT_GEN( iqblock_interrupt )
 {
-	iqblock_state *state = timer.machine().driver_data<iqblock_state>();
-	int scanline = param;
-
-	if((scanline % 16) != 0)
-		return;
-
-	if((scanline % 32) == 16)
-		device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
-	else if	((scanline % 32) == 0)
-		device_set_input_line(state->m_maincpu, INPUT_LINE_NMI, PULSE_LINE);
+	if (cpu_getiloops(device) & 1)
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);	/* ???? */
+	else
+		cpu_set_input_line(device, 0, ASSERT_LINE);			/* ???? */
 }
-
 
 static WRITE8_HANDLER( iqblock_irqack_w )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 static READ8_HANDLER( extrarom_r )
 {
-	return space->machine().region("user1")->base()[offset];
+	return memory_region(space->machine, "user1")[offset];
 }
 
 
 static WRITE8_DEVICE_HANDLER( port_C_w )
 {
-	iqblock_state *state = device->machine().driver_data<iqblock_state>();
 	/* bit 4 unknown; it is pulsed at the end of every NMI */
 
 	/* bit 5 seems to be 0 during screen redraw */
-	state->m_videoenable = data & 0x20;
+	iqblock_videoenable = data & 0x20;
 
 	/* bit 6 is coin counter */
-	coin_counter_w(device->machine(), 0,data & 0x40);
+	coin_counter_w(0,data & 0x40);
 
 	/* bit 7 could be a second coin counter, but coin 2 doesn't seem to work... */
 }
@@ -126,13 +118,13 @@ static const ppi8255_interface ppi8255_intf =
 };
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xefff) AM_ROM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_MEMBER(iqblock_state, m_rambase)
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&rambase)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2000, 0x23ff) AM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split1_w)
 	AM_RANGE(0x2800, 0x2bff) AM_WRITE(paletteram_xBBBBBGGGGGRRRRR_split2_w)
 	AM_RANGE(0x6000, 0x603f) AM_WRITE(iqblock_fgscroll_w)
@@ -142,7 +134,7 @@ static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
 	AM_RANGE(0x5080, 0x5083) AM_DEVREAD("ppi8255", ppi8255_r)
 	AM_RANGE(0x5090, 0x5090) AM_READ_PORT("SW0")
 	AM_RANGE(0x50a0, 0x50a0) AM_READ_PORT("SW1")
-	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ymsnd", ym2413_w) // UM3567_data_port_0_w
+	AM_RANGE(0x50b0, 0x50b1) AM_DEVWRITE("ym", ym2413_w) // UM3567_data_port_0_w
 	AM_RANGE(0x50c0, 0x50c0) AM_WRITE(iqblock_irqack_w)
 	AM_RANGE(0x7000, 0x7fff) AM_READ(iqblock_bgvideoram_r)
 	AM_RANGE(0x8000, 0xffff) AM_READ(extrarom_r)
@@ -273,35 +265,36 @@ GFXDECODE_END
 
 
 
-static MACHINE_CONFIG_START( iqblock, iqblock_state )
+static MACHINE_DRIVER_START( iqblock )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,12000000/2)	/* 6 MHz */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", iqblock_irq, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", Z80,12000000/2)	/* 6 MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT_HACK(iqblock_interrupt,16)
 
-	MCFG_PPI8255_ADD( "ppi8255", ppi8255_intf )
+	MDRV_PPI8255_ADD( "ppi8255", ppi8255_intf )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(iqblock)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 30*8-1)
 
-	MCFG_GFXDECODE(iqblock)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(iqblock)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(iqblock)
+	MDRV_VIDEO_START(iqblock)
+	MDRV_VIDEO_UPDATE(iqblock)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2413, 3579545)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2413, 3579545)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -432,8 +425,7 @@ ROM_END
 
 static DRIVER_INIT( iqblock )
 {
-	iqblock_state *state = machine.driver_data<iqblock_state>();
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 	int i;
 
 	/* decrypt the program ROM */
@@ -445,18 +437,17 @@ static DRIVER_INIT( iqblock )
 	}
 
 	/* initialize pointers for I/O mapped RAM */
-	machine.generic.paletteram.u8         = rom + 0x12000;
-	machine.generic.paletteram2.u8       = rom + 0x12800;
-	state->m_fgvideoram = rom + 0x16800;
-	state->m_bgvideoram = rom + 0x17000;
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xfe26, 0xfe26, FUNC(iqblock_prot_w));
-	state->m_video_type=1;
+	paletteram         = rom + 0x12000;
+	paletteram_2       = rom + 0x12800;
+	iqblock_fgvideoram = rom + 0x16800;
+	iqblock_bgvideoram = rom + 0x17000;
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xfe26, 0xfe26, 0, 0, iqblock_prot_w);
+	iqblock_video_type=1;
 }
 
 static DRIVER_INIT( grndtour )
 {
-	iqblock_state *state = machine.driver_data<iqblock_state>();
-	UINT8 *rom = machine.region("maincpu")->base();
+	UINT8 *rom = memory_region(machine, "maincpu");
 	int i;
 
 	/* decrypt the program ROM */
@@ -468,12 +459,12 @@ static DRIVER_INIT( grndtour )
 	}
 
 	/* initialize pointers for I/O mapped RAM */
-	machine.generic.paletteram.u8         = rom + 0x12000;
-	machine.generic.paletteram2.u8       = rom + 0x12800;
-	state->m_fgvideoram = rom + 0x16800;
-	state->m_bgvideoram = rom + 0x17000;
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0xfe39, 0xfe39, FUNC(grndtour_prot_w));
-	state->m_video_type=0;
+	paletteram         = rom + 0x12000;
+	paletteram_2       = rom + 0x12800;
+	iqblock_fgvideoram = rom + 0x16800;
+	iqblock_bgvideoram = rom + 0x17000;
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xfe39, 0xfe39, 0, 0, grndtour_prot_w);
+	iqblock_video_type=0;
 }
 
 

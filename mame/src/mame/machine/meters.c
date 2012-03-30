@@ -2,94 +2,88 @@
 //                                                                       //
 // Electro mechanical meters                                             //
 //                                                                       //
+// 23-07-2004: Re-Animator                                               //
+//                                                                       //
+// TODO: - meter ticks if the signal changes from high to low AND the    //
+//         signal was high for at least 'reacttime' cycles               //
+//         It should tick if the signal goes from low to high AND stays  //
+//         high for at least xxx milliseconds                            //
 //                                                                       //
 ///////////////////////////////////////////////////////////////////////////
 
-#include "emu.h"
+#include "driver.h"
 #include "meters.h"
 
 // local vars /////////////////////////////////////////////////////////////
 
 static struct
 {
-	long on,	// Activity of reel
-		reacttime,
-		count;		// mechmeter value
-	int  state;		// state 0/1
-	emu_timer *meter_timer;
+  long timestamp,	// time stamp in cycles after which timer will tick
+	   reacttime,
+	   count;		// mechmeter value
+  int  state;		// state 0/1
 } meter_info[MAXMECHMETERS];
+
 
 static int number_mtr;
 
 ///////////////////////////////////////////////////////////////////////////
-static TIMER_CALLBACK( meter_callback )
+
+void Mechmtr_init(int number)
 {
-	meter_info[param].count++;
-}
+  int i;
 
-void MechMtr_config(running_machine &machine, int number)
-{
-	int i;
+  if ( number > MAXMECHMETERS ) number = MAXMECHMETERS;
 
-	if ( number > MAXMECHMETERS ) number = MAXMECHMETERS;
-
-	for ( i = 0; i < number; i++ )
-	{
-		meter_info[i].reacttime = METERREACTTIME;
-		meter_info[i].state     = 0;
-		meter_info[i].count     = 0;
-		meter_info[i].on		= 0;
-		meter_info[i].meter_timer = machine.scheduler().timer_alloc(FUNC(meter_callback), (void*)(FPTR)i);
-		meter_info[i].meter_timer->reset();
-	}
-	number_mtr = number;
+  for ( i = 0; i < number; i++ )
+  {
+	meter_info[i].reacttime = METERREACTTIME;
+	meter_info[i].state     = 0;
+	meter_info[i].count     = 0;
+	meter_info[i].timestamp = 0;
+  }
+  number_mtr = number;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-int MechMtr_GetNumberMeters(void)
+int  MechMtr_GetNumberMeters(void)
 {
-	return number_mtr;
+  return number_mtr;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 void MechMtr_Setcount(int id, long count)
 {
-	if ( id >= number_mtr ) return;
+  if ( id >= number_mtr ) return;
 
-	meter_info[id].count = count;
+  meter_info[id].count = count;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 long MechMtr_Getcount(int id)
 {
-	long result = 0;
+  long result = 0;
 
-	if ( id < number_mtr ) result = meter_info[id].count;
+  if ( id < number_mtr ) result = meter_info[id].count;
 
-	return result;
+  return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
 void MechMtr_ReactTime(int id, long cycles)
 {
-	if ( id >= number_mtr ) return;
-	meter_info[id].reacttime = cycles;
+  if ( id >= number_mtr ) return;
+
+  meter_info[id].reacttime = cycles;
 }
 
 ///////////////////////////////////////////////////////////////////////////
 
-int MechMtr_GetActivity(int id)
-{
-	return meter_info[id].on;
-}
-
-///////////////////////////////////////////////////////////////////////////
-
-int MechMtr_update(int id, int state)
+int Mechmtr_update(int id, long cycles, int state)
 {
   int res = 0;
 
@@ -103,13 +97,15 @@ int MechMtr_update(int id, int state)
 
 	if ( state )
 	{
-		meter_info[id].on =1;
-		meter_info[id].meter_timer->adjust(attotime::from_seconds(meter_info[id].reacttime), id);
+	  meter_info[id].timestamp = cycles + meter_info[id].reacttime;
 	}
 	else
 	{
-		meter_info[id].on =0;
-		meter_info[id].meter_timer->adjust(attotime::never, id);
+	  if ( cycles > meter_info[id].timestamp )
+	  { // meter has been active long enough
+		res = 1;
+		meter_info[id].count++;
+	  }
 	}
   }
 

@@ -216,23 +216,12 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "machine/atari_vg.h"
 #include "sound/pokey.h"
-
-
-class bwidow_state : public driver_device
-{
-public:
-	bwidow_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_lastdata;
-};
-
 
 #define MASTER_CLOCK (12096000)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
@@ -270,9 +259,9 @@ static READ8_HANDLER( spacduel_IN3_r )
 	int res2;
 	int res3;
 
-	res1 = input_port_read(space->machine(), "IN3");
-	res2 = input_port_read(space->machine(), "IN4");
-	res3 = input_port_read_safe(space->machine(), "DSW2", 0);
+	res1 = input_port_read(space->machine, "IN3");
+	res2 = input_port_read(space->machine, "IN4");
+	res3 = input_port_read_safe(space->machine, "DSW2", 0);
 	res = 0x00;
 
 	switch (offset & 0x07)
@@ -316,7 +305,7 @@ static READ8_HANDLER( spacduel_IN3_r )
 
 static CUSTOM_INPUT( clock_r )
 {
-	return (field.machine().device<cpu_device>("maincpu")->total_cycles() & 0x100) ? 1 : 0;
+	return (cputag_get_total_cycles(field->port->machine, "maincpu") & 0x100) ? 1 : 0;
 }
 
 
@@ -328,20 +317,20 @@ static CUSTOM_INPUT( clock_r )
 
 static WRITE8_HANDLER( bwidow_misc_w )
 {
-	bwidow_state *state = space->machine().driver_data<bwidow_state>();
 	/*
         0x10 = p1 led
         0x20 = p2 led
         0x01 = coin counter 1
         0x02 = coin counter 2
     */
+	static int lastdata;
 
-	if (data == state->m_lastdata) return;
-	set_led_status(space->machine(), 0,~data & 0x10);
-	set_led_status(space->machine(), 1,~data & 0x20);
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
-	state->m_lastdata = data;
+	if (data == lastdata) return;
+	set_led_status(0,~data & 0x10);
+	set_led_status(1,~data & 0x20);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
+	lastdata = data;
 }
 
 /*************************************
@@ -352,7 +341,7 @@ static WRITE8_HANDLER( bwidow_misc_w )
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 
@@ -362,13 +351,13 @@ static WRITE8_HANDLER( irq_ack_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( bwidow_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( bwidow_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x2800, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x6800, 0x6fff) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x7000, 0x7000) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
+	AM_RANGE(0x7000, 0x7000) AM_DEVREAD("earom", atari_vg_earom_r)
 	AM_RANGE(0x7800, 0x7800) AM_READ_PORT("IN0")
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("IN3")
 	AM_RANGE(0x8800, 0x8800) AM_READ_PORT("IN4")
@@ -376,29 +365,29 @@ static ADDRESS_MAP_START( bwidow_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8840, 0x8840) AM_WRITE(avgdvg_go_w)
 	AM_RANGE(0x8880, 0x8880) AM_WRITE(avgdvg_reset_w)
 	AM_RANGE(0x88c0, 0x88c0) AM_WRITE(irq_ack_w) /* interrupt acknowledge */
-	AM_RANGE(0x8900, 0x8900) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
-	AM_RANGE(0x8940, 0x897f) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
+	AM_RANGE(0x8900, 0x8900) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x8940, 0x897f) AM_DEVWRITE("earom", atari_vg_earom_w)
 	AM_RANGE(0x8980, 0x89ed) AM_WRITENOP /* watchdog clear */
 	AM_RANGE(0x9000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spacduel_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( spacduel_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_RAM
 	AM_RANGE(0x0800, 0x0800) AM_READ_PORT("IN0")
 	AM_RANGE(0x0900, 0x0907) AM_READ(spacduel_IN3_r)	/* IN1 */
 	AM_RANGE(0x0905, 0x0906) AM_WRITENOP /* ignore? */
-	AM_RANGE(0x0a00, 0x0a00) AM_DEVREAD_MODERN("earom", atari_vg_earom_device, read)
+	AM_RANGE(0x0a00, 0x0a00) AM_DEVREAD("earom", atari_vg_earom_r)
 //  AM_RANGE(0x0c00, 0x0c00) AM_WRITE(coin_counter_w) /* coin out */
 	AM_RANGE(0x0c80, 0x0c80) AM_WRITE(avgdvg_go_w)
 	AM_RANGE(0x0d00, 0x0d00) AM_WRITENOP /* watchdog clear */
 	AM_RANGE(0x0d80, 0x0d80) AM_WRITE(avgdvg_reset_w)
 	AM_RANGE(0x0e00, 0x0e00) AM_WRITE(irq_ack_w) /* interrupt acknowledge */
-	AM_RANGE(0x0e80, 0x0e80) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, ctrl_w)
-	AM_RANGE(0x0f00, 0x0f3f) AM_DEVWRITE_MODERN("earom", atari_vg_earom_device, write)
+	AM_RANGE(0x0e80, 0x0e80) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
+	AM_RANGE(0x0f00, 0x0f3f) AM_DEVWRITE("earom", atari_vg_earom_w)
 	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x1400, 0x140f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x2800, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -418,7 +407,7 @@ static INPUT_PORTS_START( bwidow )
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Diagnostic Step") PORT_CODE(KEYCODE_F1)
-	/* bit 6 is the VG HALT bit. We set it to "low" */
+ 	/* bit 6 is the VG HALT bit. We set it to "low" */
 	/* per default (busy vector processor). */
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)
 	/* bit 7 is tied to a 3kHz clock */
@@ -497,7 +486,7 @@ static INPUT_PORTS_START( gravitar )
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Diagnostic Step") PORT_CODE(KEYCODE_F1)
-	/* bit 6 is the VG HALT bit. We set it to "low" */
+ 	/* bit 6 is the VG HALT bit. We set it to "low" */
 	/* per default (busy vector processor). */
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)
 	/* bit 7 is tied to a 3kHz clock */
@@ -571,7 +560,7 @@ static INPUT_PORTS_START( lunarbat )
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	/* bit 6 is the VG HALT bit. We set it to "low" */
+ 	/* bit 6 is the VG HALT bit. We set it to "low" */
 	/* per default (busy vector processor). */
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)
 	/* bit 7 is tied to a 3kHz clock */
@@ -605,7 +594,7 @@ static INPUT_PORTS_START( spacduel )
 	PORT_BIT( 0x0c, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Diagnostic Step") PORT_CODE(KEYCODE_F1)
-	/* bit 6 is the VG HALT bit. We set it to "low" */
+ 	/* bit 6 is the VG HALT bit. We set it to "low" */
 	/* per default (busy vector processor). */
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(avgdvg_done_r, NULL)
 	/* bit 7 is tied to a 3kHz clock */
@@ -720,71 +709,74 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( bwidow, bwidow_state )
+static MACHINE_DRIVER_START( bwidow )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
-	MCFG_CPU_PROGRAM_MAP(bwidow_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_assert, (double)MASTER_CLOCK / 4096 / 12)
+	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
+	MDRV_CPU_PROGRAM_MAP(bwidow_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_assert, (double)MASTER_CLOCK / 4096 / 12)
 
-	MCFG_ATARIVGEAROM_ADD("earom")
+	MDRV_ATARIVGEAROM_ADD("earom")
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", VECTOR)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(400, 300)
-	MCFG_SCREEN_VISIBLE_AREA(0, 480, 0, 440)
-	MCFG_SCREEN_UPDATE_STATIC(vector)
+	MDRV_SCREEN_ADD("screen", VECTOR)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_SIZE(400, 300)
+	MDRV_SCREEN_VISIBLE_AREA(0, 480, 0, 440)
 
-	MCFG_VIDEO_START(avg)
+	MDRV_VIDEO_START(avg)
+	MDRV_VIDEO_UPDATE(vector)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK / 8)
-	MCFG_SOUND_CONFIG(pokey_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK / 8)
+	MDRV_SOUND_CONFIG(pokey_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
-	MCFG_SOUND_CONFIG(pokey_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( gravitar, bwidow )
-
-	/* basic machine hardware */
-
-	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_VISIBLE_AREA(0, 420, 0, 400)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
+	MDRV_SOUND_CONFIG(pokey_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( lunarbat, gravitar )
+static MACHINE_DRIVER_START( gravitar )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(spacduel_map)
+	MDRV_IMPORT_FROM(bwidow)
 
 	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE(45)
-	MCFG_SCREEN_VISIBLE_AREA(0, 500, 0, 440)
-MACHINE_CONFIG_END
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(0, 420, 0, 400)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( spacduel, gravitar )
+static MACHINE_DRIVER_START( lunarbat )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(spacduel_map)
+	MDRV_IMPORT_FROM(gravitar)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(spacduel_map)
 
 	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_REFRESH_RATE(45)
-	MCFG_SCREEN_VISIBLE_AREA(0, 540, 0, 400)
-MACHINE_CONFIG_END
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_REFRESH_RATE(45)
+	MDRV_SCREEN_VISIBLE_AREA(0, 500, 0, 440)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( spacduel )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(gravitar)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(spacduel_map)
+
+	/* video hardware */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_REFRESH_RATE(45)
+	MDRV_SCREEN_VISIBLE_AREA(0, 540, 0, 400)
+MACHINE_DRIVER_END
 
 
 
@@ -797,21 +789,21 @@ MACHINE_CONFIG_END
 ROM_START( bwidow )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	/* Vector ROM */
-	ROM_LOAD( "136017-107.l7",   0x2800, 0x0800, CRC(97f6000c) SHA1(bbae93058228820ee67b05f23e45fb54ee0963ff) )
-	ROM_LOAD( "136017-108.mn7",  0x3000, 0x1000, CRC(3da354ed) SHA1(935295d66ad40ad702eb7a694296e836f53d22ec) )
-	ROM_LOAD( "136017-109.np7",  0x4000, 0x1000, CRC(2fc4ce79) SHA1(2b324877bf55151747eaacd9a58f846712bfbc14) )
-	ROM_LOAD( "136017-110.r7",   0x5000, 0x1000, CRC(0dd52987) SHA1(72aa1d24f20cc86701189df486488edc434b1be1) )
+	ROM_LOAD( "136017.107",   0x2800, 0x0800, CRC(97f6000c) SHA1(bbae93058228820ee67b05f23e45fb54ee0963ff) )
+	ROM_LOAD( "136017.108",   0x3000, 0x1000, CRC(3da354ed) SHA1(935295d66ad40ad702eb7a694296e836f53d22ec) )
+	ROM_LOAD( "136017.109",   0x4000, 0x1000, CRC(2fc4ce79) SHA1(2b324877bf55151747eaacd9a58f846712bfbc14) )
+	ROM_LOAD( "136017.110",   0x5000, 0x1000, CRC(0dd52987) SHA1(72aa1d24f20cc86701189df486488edc434b1be1) )
 	/* Program ROM */
-	ROM_LOAD( "136017-101.d1",   0x9000, 0x1000, CRC(fe3febb7) SHA1(b62f7622ca60248e1b8376ee135ae3d94d0b4437) )
-	ROM_LOAD( "136017-102.ef1",  0xa000, 0x1000, CRC(10ad0376) SHA1(614c74daa468a7430ed965a3a9d07b6ad846016c) )
-	ROM_LOAD( "136017-103.h1",   0xb000, 0x1000, CRC(8a1430ee) SHA1(3aa6c40721a4289c1cf01f37c89b6b0a96336c68) )
-	ROM_LOAD( "136017-104.j1",   0xc000, 0x1000, CRC(44f9943f) SHA1(e83d8242e4592149719be6a68cf3aba46116072f) )
-	ROM_LOAD( "136017-105.kl1",  0xd000, 0x1000, CRC(1fdf801c) SHA1(33da2ba3cefa3d0dddc8647f9b6caf5d5bfe9b3b) )
-	ROM_LOAD( "136017-106.m1",   0xe000, 0x1000, CRC(ccc9b26c) SHA1(f1398e3ff2b62af1509bc117028845b671ff1ca2) )
-	ROM_RELOAD(                  0xf000, 0x1000 )	/* for reset/interrupt vectors */
+	ROM_LOAD( "136017.101",   0x9000, 0x1000, CRC(fe3febb7) SHA1(b62f7622ca60248e1b8376ee135ae3d94d0b4437) )
+	ROM_LOAD( "136017.102",   0xa000, 0x1000, CRC(10ad0376) SHA1(614c74daa468a7430ed965a3a9d07b6ad846016c) )
+	ROM_LOAD( "136017.103",   0xb000, 0x1000, CRC(8a1430ee) SHA1(3aa6c40721a4289c1cf01f37c89b6b0a96336c68) )
+	ROM_LOAD( "136017.104",   0xc000, 0x1000, CRC(44f9943f) SHA1(e83d8242e4592149719be6a68cf3aba46116072f) )
+	ROM_LOAD( "136017.105",   0xd000, 0x1000, CRC(1fdf801c) SHA1(33da2ba3cefa3d0dddc8647f9b6caf5d5bfe9b3b) )
+	ROM_LOAD( "136017.106",   0xe000, 0x1000, CRC(ccc9b26c) SHA1(f1398e3ff2b62af1509bc117028845b671ff1ca2) )
+	ROM_RELOAD(               0xf000, 0x1000 )	/* for reset/interrupt vectors */
 	/* AVG PROM */
 	ROM_REGION( 0x100, "user1", 0 )
-	ROM_LOAD( "136002-125.n4",   0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
+	ROM_LOAD( "136002-125.n4",	 0x0000, 0x0100, CRC(5903af03) SHA1(24bc0366f394ad0ec486919212e38be0f08d0239) )
 ROM_END
 
 ROM_START( gravitar )

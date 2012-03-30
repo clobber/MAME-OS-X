@@ -9,19 +9,25 @@
 
 *********************************************************************/
 
-#include "emu.h"
-#include "emuopts.h"
+#include "driver.h"
+#include "osdepend.h"
 #include "video/vector.h"
 #include "machine/laserdsc.h"
 #include "profiler.h"
-#include "render.h"
 #include "cheat.h"
+#include "render.h"
 #include "rendfont.h"
 #include "ui.h"
 #include "uiinput.h"
 #include "uimenu.h"
-#include "uimain.h"
 #include "uigfx.h"
+
+#ifdef MESS
+#include "mess.h"
+#include "uimess.h"
+#include "inputx.h"
+#endif /* MESS */
+
 #include <ctype.h>
 
 
@@ -38,53 +44,6 @@ enum
 };
 
 
-/***************************************************************************
-    LOCAL VARIABLES
-***************************************************************************/
-
-/* list of natural keyboard keys that are not associated with UI_EVENT_CHARs */
-static const input_item_id non_char_keys[] =
-{
-	ITEM_ID_ESC,
-	ITEM_ID_F1,
-	ITEM_ID_F2,
-	ITEM_ID_F3,
-	ITEM_ID_F4,
-	ITEM_ID_F5,
-	ITEM_ID_F6,
-	ITEM_ID_F7,
-	ITEM_ID_F8,
-	ITEM_ID_F9,
-	ITEM_ID_F10,
-	ITEM_ID_F11,
-	ITEM_ID_F12,
-	ITEM_ID_NUMLOCK,
-	ITEM_ID_0_PAD,
-	ITEM_ID_1_PAD,
-	ITEM_ID_2_PAD,
-	ITEM_ID_3_PAD,
-	ITEM_ID_4_PAD,
-	ITEM_ID_5_PAD,
-	ITEM_ID_6_PAD,
-	ITEM_ID_7_PAD,
-	ITEM_ID_8_PAD,
-	ITEM_ID_9_PAD,
-	ITEM_ID_DEL_PAD,
-	ITEM_ID_PLUS_PAD,
-	ITEM_ID_MINUS_PAD,
-	ITEM_ID_INSERT,
-	ITEM_ID_DEL,
-	ITEM_ID_HOME,
-	ITEM_ID_END,
-	ITEM_ID_PGUP,
-	ITEM_ID_PGDN,
-	ITEM_ID_UP,
-	ITEM_ID_DOWN,
-	ITEM_ID_LEFT,
-	ITEM_ID_RIGHT,
-	ITEM_ID_PAUSE,
-	ITEM_ID_CANCEL
-};
 
 /***************************************************************************
     GLOBAL VARIABLES
@@ -94,7 +53,7 @@ static const input_item_id non_char_keys[] =
 static render_font *ui_font;
 
 /* current UI handler */
-static UINT32 (*ui_handler_callback)(running_machine &, render_container *, UINT32);
+static UINT32 (*ui_handler_callback)(running_machine *, UINT32);
 static UINT32 ui_handler_param;
 
 /* flag to track single stepping */
@@ -111,61 +70,58 @@ static int show_profiler;
 static osd_ticks_t popup_text_end;
 
 /* messagebox buffer */
-static astring messagebox_text;
+static astring *messagebox_text;
 static rgb_t messagebox_backcolor;
 
 /* slider info */
 static slider_state *slider_list;
 static slider_state *slider_current;
 
-/* natural keyboard info */
-static int ui_use_natural_keyboard;
-static UINT8 non_char_keys_down[(ARRAY_LENGTH(non_char_keys) + 7) / 8];
 
 
 /***************************************************************************
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void ui_exit(running_machine &machine);
+static void ui_exit(running_machine *machine);
 
 /* text generators */
-static astring &disclaimer_string(running_machine &machine, astring &buffer);
-static astring &warnings_string(running_machine &machine, astring &buffer);
+static astring *disclaimer_string(running_machine *machine, astring *buffer);
+static astring *warnings_string(running_machine *machine, astring *buffer);
 
 /* UI handlers */
-static UINT32 handler_messagebox(running_machine &machine, render_container *container, UINT32 state);
-static UINT32 handler_messagebox_ok(running_machine &machine, render_container *container, UINT32 state);
-static UINT32 handler_messagebox_anykey(running_machine &machine, render_container *container, UINT32 state);
-static UINT32 handler_ingame(running_machine &machine, render_container *container, UINT32 state);
-static UINT32 handler_load_save(running_machine &machine, render_container *container, UINT32 state);
-static UINT32 handler_confirm_quit(running_machine &machine, render_container *container, UINT32 state);
+static UINT32 handler_messagebox(running_machine *machine, UINT32 state);
+static UINT32 handler_messagebox_ok(running_machine *machine, UINT32 state);
+static UINT32 handler_messagebox_anykey(running_machine *machine, UINT32 state);
+static UINT32 handler_ingame(running_machine *machine, UINT32 state);
+static UINT32 handler_load_save(running_machine *machine, UINT32 state);
 
 /* slider controls */
-static slider_state *slider_alloc(running_machine &machine, const char *title, INT32 minval, INT32 defval, INT32 maxval, INT32 incval, slider_update update, void *arg);
-static slider_state *slider_init(running_machine &machine);
-static INT32 slider_volume(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_mixervol(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_adjuster(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_overclock(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_refresh(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_brightness(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_contrast(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_gamma(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_xscale(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_yscale(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_xoffset(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_yoffset(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_overxscale(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_overyscale(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_overxoffset(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_overyoffset(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_flicker(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_beam(running_machine &machine, void *arg, astring *string, INT32 newval);
-static char *slider_get_screen_desc(screen_device &screen);
+static slider_state *slider_alloc(running_machine *machine, const char *title, INT32 minval, INT32 defval, INT32 maxval, INT32 incval, slider_update update, void *arg);
+static slider_state *slider_init(running_machine *machine);
+static INT32 slider_volume(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_mixervol(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_adjuster(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_overclock(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_refresh(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_brightness(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_contrast(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_gamma(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_xscale(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_yscale(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_xoffset(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_yoffset(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_overxscale(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_overyscale(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_overxoffset(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_overyoffset(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_flicker(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_beam(running_machine *machine, void *arg, astring *string, INT32 newval);
+static char *slider_get_screen_desc(const device_config *screen);
+static char *slider_get_laserdisc_desc(const device_config *screen);
 #ifdef MAME_DEBUG
-static INT32 slider_crossscale(running_machine &machine, void *arg, astring *string, INT32 newval);
-static INT32 slider_crossoffset(running_machine &machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_crossscale(running_machine *machine, void *arg, astring *string, INT32 newval);
+static INT32 slider_crossoffset(running_machine *machine, void *arg, astring *string, INT32 newval);
 #endif
 
 
@@ -178,7 +134,7 @@ static INT32 slider_crossoffset(running_machine &machine, void *arg, astring *st
     pair for the current UI handler
 -------------------------------------------------*/
 
-INLINE UINT32 ui_set_handler(UINT32 (*callback)(running_machine &, render_container *, UINT32), UINT32 param)
+INLINE UINT32 ui_set_handler(UINT32 (*callback)(running_machine *, UINT32), UINT32 param)
 {
 	ui_handler_callback = callback;
 	ui_handler_param = param;
@@ -235,21 +191,22 @@ INLINE int is_breakable_char(unicode_char ch)
     ui_init - set up the user interface
 -------------------------------------------------*/
 
-int ui_init(running_machine &machine)
+int ui_init(running_machine *machine)
 {
 	/* make sure we clean up after ourselves */
-	machine.add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(FUNC(ui_exit), &machine));
+	add_exit_callback(machine, ui_exit);
+
+	/* allocate the font and messagebox string */
+	ui_font = render_font_alloc("ui.bdf");
+	messagebox_text = astring_alloc();
 
 	/* initialize the other UI bits */
-	ui_menu::init(machine);
+	ui_menu_init(machine);
 	ui_gfx_init(machine);
 
 	/* reset globals */
 	single_step = FALSE;
 	ui_set_handler(handler_messagebox, 0);
-	/* retrieve options */
-	ui_use_natural_keyboard = machine.options().natural_keyboard();
-
 	return 0;
 }
 
@@ -258,11 +215,17 @@ int ui_init(running_machine &machine)
     ui_exit - clean up ourselves on exit
 -------------------------------------------------*/
 
-static void ui_exit(running_machine &machine)
+static void ui_exit(running_machine *machine)
 {
 	/* free the font */
-	machine.render().font_free(ui_font);
+	if (ui_font != NULL)
+		render_font_free(ui_font);
 	ui_font = NULL;
+
+	/* free the messagebox string */
+	if (messagebox_text != NULL)
+		astring_free(messagebox_text);
+	messagebox_text = NULL;
 }
 
 
@@ -271,17 +234,21 @@ static void ui_exit(running_machine &machine)
     various startup screens
 -------------------------------------------------*/
 
-int ui_display_startup_screens(running_machine &machine, int first_time, int show_disclaimer)
+int ui_display_startup_screens(running_machine *machine, int first_time, int show_disclaimer)
 {
+#ifdef MESS
+	const int maxstate = 4;
+#else
 	const int maxstate = 3;
-	int str = machine.options().seconds_to_run();
-	int show_gameinfo = !machine.options().skip_gameinfo();
+#endif
+	int str = options_get_int(mame_options(), OPTION_SECONDS_TO_RUN);
+	int show_gameinfo = !options_get_bool(mame_options(), OPTION_SKIP_GAMEINFO);
 	int show_warnings = TRUE;
 	int state;
 
 	/* disable everything if we are using -str for 300 or fewer seconds, or if we're the empty driver,
        or if we are debugging */
-	if (!first_time || (str > 0 && str < 60*5) || &machine.system() == &GAME_NAME(___empty) || (machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if (!first_time || (str > 0 && str < 60*5) || machine->gamedrv == &GAME_NAME(empty) || (machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		show_gameinfo = show_warnings = show_disclaimer = FALSE;
 
 	/* initialize the on-screen display system */
@@ -289,7 +256,7 @@ int ui_display_startup_screens(running_machine &machine, int first_time, int sho
 
 	/* loop over states */
 	ui_set_handler(handler_ingame, 0);
-	for (state = 0; state < maxstate && !machine.scheduled_event_pending() && !ui_menu::stack_has_special_main_menu(); state++)
+	for (state = 0; state < maxstate && !mame_is_scheduled_event_pending(machine) && !ui_menu_is_force_game_select(); state++)
 	{
 		/* default to standard colors */
 		messagebox_backcolor = UI_BACKGROUND_COLOR;
@@ -298,43 +265,47 @@ int ui_display_startup_screens(running_machine &machine, int first_time, int sho
 		switch (state)
 		{
 			case 0:
-				if (show_disclaimer && disclaimer_string(machine, messagebox_text).len() > 0)
+				if (show_disclaimer && astring_len(disclaimer_string(machine, messagebox_text)) > 0)
 					ui_set_handler(handler_messagebox_ok, 0);
 				break;
 
 			case 1:
-				if (show_warnings && warnings_string(machine, messagebox_text).len() > 0)
+				if (show_warnings && astring_len(warnings_string(machine, messagebox_text)) > 0)
 				{
 					ui_set_handler(handler_messagebox_ok, 0);
-					if (machine.system().flags & (GAME_WRONG_COLORS | GAME_IMPERFECT_COLORS | GAME_REQUIRES_ARTWORK | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NO_SOUND))
+					if (machine->gamedrv->flags & (GAME_WRONG_COLORS | GAME_IMPERFECT_COLORS | GAME_REQUIRES_ARTWORK | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NO_SOUND))
 						messagebox_backcolor = UI_YELLOW_COLOR;
-					if (machine.system().flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL))
+					if (machine->gamedrv->flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION))
 						messagebox_backcolor = UI_RED_COLOR;
 				}
 				break;
 
 			case 2:
-				if (show_gameinfo && game_info_astring(machine, messagebox_text).len() > 0)
+				if (show_gameinfo && astring_len(game_info_astring(machine, messagebox_text)) > 0)
 					ui_set_handler(handler_messagebox_anykey, 0);
 				break;
+#ifdef MESS
+			case 3:
+				break;
+#endif
 		}
 
 		/* clear the input memory */
-		machine.input().reset_polling();
-		while (machine.input().poll_switches() != INPUT_CODE_INVALID) ;
+		input_code_poll_switches(machine, TRUE);
+		while (input_code_poll_switches(machine, FALSE) != INPUT_CODE_INVALID) ;
 
 		/* loop while we have a handler */
-		while (ui_handler_callback != handler_ingame && !machine.scheduled_event_pending() && !ui_menu::stack_has_special_main_menu())
-			machine.video().frame_update();
+		while (ui_handler_callback != handler_ingame && !mame_is_scheduled_event_pending(machine) && !ui_menu_is_force_game_select())
+			video_frame_update(machine, FALSE);
 
 		/* clear the handler and force an update */
 		ui_set_handler(handler_ingame, 0);
-		machine.video().frame_update();
+		video_frame_update(machine, FALSE);
 	}
 
 	/* if we're the empty driver, force the menus on */
-	if (ui_menu::stack_has_special_main_menu())
-		ui_set_handler(ui_menu::ui_handler, 0);
+	if (ui_menu_is_force_game_select())
+		ui_set_handler(ui_menu_ui_handler, 0);
 
 	return 0;
 }
@@ -345,20 +316,20 @@ int ui_display_startup_screens(running_machine &machine, int first_time, int sho
     at startup
 -------------------------------------------------*/
 
-void ui_set_startup_text(running_machine &machine, const char *text, int force)
+void ui_set_startup_text(running_machine *machine, const char *text, int force)
 {
 	static osd_ticks_t lastupdatetime = 0;
 	osd_ticks_t curtime = osd_ticks();
 
 	/* copy in the new text */
-	messagebox_text.cpy(text);
+	astring_cpyc(messagebox_text, text);
 	messagebox_backcolor = UI_BACKGROUND_COLOR;
 
 	/* don't update more than 4 times/second */
 	if (force || (curtime - lastupdatetime) > osd_ticks_per_second() / 4)
 	{
 		lastupdatetime = curtime;
-		machine.video().frame_update();
+		video_frame_update(machine, FALSE);
 	}
 }
 
@@ -368,34 +339,33 @@ void ui_set_startup_text(running_machine &machine, const char *text, int force)
     render it; called by video.c
 -------------------------------------------------*/
 
-void ui_update_and_render(running_machine &machine, render_container *container)
+void ui_update_and_render(running_machine *machine)
 {
 	/* always start clean */
-	container->empty();
+	render_container_empty(render_container_get_ui());
 
 	/* if we're paused, dim the whole screen */
-	if (machine.phase() >= MACHINE_PHASE_RESET && (single_step || machine.paused()))
+	if (mame_get_phase(machine) >= MAME_PHASE_RESET && (single_step || mame_is_paused(machine)))
 	{
-		int alpha = (1.0f - machine.options().pause_brightness()) * 255.0f;
-		if (ui_menu::stack_has_special_main_menu())
+		int alpha = (1.0f - options_get_float(mame_options(), OPTION_PAUSE_BRIGHTNESS)) * 255.0f;
+		if (ui_menu_is_force_game_select())
 			alpha = 255;
 		if (alpha > 255)
 			alpha = 255;
 		if (alpha >= 0)
-			container->add_rect(0.0f, 0.0f, 1.0f, 1.0f, MAKE_ARGB(alpha,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+			render_ui_add_rect(0.0f, 0.0f, 1.0f, 1.0f, MAKE_ARGB(alpha,0x00,0x00,0x00), PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
 	}
 
 	/* render any cheat stuff at the bottom */
-	if (machine.phase() >= MACHINE_PHASE_RESET)
-		machine.cheat().render_text(*container);
+	cheat_render_text(machine);
 
 	/* call the current UI handler */
 	assert(ui_handler_callback != NULL);
-	ui_handler_param = (*ui_handler_callback)(machine, container, ui_handler_param);
+	ui_handler_param = (*ui_handler_callback)(machine, ui_handler_param);
 
 	/* display any popup messages */
 	if (osd_ticks() < popup_text_end)
-		ui_draw_text_box(container, messagebox_text, JUSTIFY_CENTER, 0.5f, 0.9f, messagebox_backcolor);
+		ui_draw_text_box(astring_c(messagebox_text), JUSTIFY_CENTER, 0.5f, 0.9f, messagebox_backcolor);
 	else
 		popup_text_end = 0;
 
@@ -409,11 +379,8 @@ void ui_update_and_render(running_machine &machine, render_container *container)
     ui_get_font - return the UI font
 -------------------------------------------------*/
 
-render_font *ui_get_font(running_machine &machine)
+render_font *ui_get_font(void)
 {
-	/* allocate the font and messagebox string */
-	if (ui_font == NULL)
-		ui_font = machine.render().font_alloc(machine.options().ui_font());
 	return ui_font;
 }
 
@@ -423,13 +390,16 @@ render_font *ui_get_font(running_machine &machine)
     of a line
 -------------------------------------------------*/
 
-float ui_get_line_height(running_machine &machine)
+float ui_get_line_height(void)
 {
-	INT32 raw_font_pixel_height = ui_get_font(machine)->pixel_height();
-	render_target &ui_target = machine.render().ui_target();
-	INT32 target_pixel_height = ui_target.height();
+	INT32 raw_font_pixel_height = render_font_get_pixel_height(ui_font);
+	INT32 target_pixel_width, target_pixel_height;
 	float one_to_one_line_height;
+	float target_aspect;
 	float scale_factor;
+
+	/* get info about the UI target */
+	render_target_get_bounds(render_get_ui_target(), &target_pixel_width, &target_pixel_height, &target_aspect);
 
 	/* compute the font pixel height at the nominal size */
 	one_to_one_line_height = (float)raw_font_pixel_height / (float)target_pixel_height;
@@ -468,9 +438,9 @@ float ui_get_line_height(running_machine &machine)
     single character
 -------------------------------------------------*/
 
-float ui_get_char_width(running_machine &machine, unicode_char ch)
+float ui_get_char_width(unicode_char ch)
 {
-	return ui_get_font(machine)->char_width(ui_get_line_height(machine), machine.render().ui_aspect(), ch);
+	return render_font_get_char_width(ui_font, ui_get_line_height(), render_get_ui_aspect(), ch);
 }
 
 
@@ -479,9 +449,9 @@ float ui_get_char_width(running_machine &machine, unicode_char ch)
     character string
 -------------------------------------------------*/
 
-float ui_get_string_width(running_machine &machine, const char *s)
+float ui_get_string_width(const char *s)
 {
-	return ui_get_font(machine)->utf8string_width(ui_get_line_height(machine), machine.render().ui_aspect(), s);
+	return render_font_get_utf8string_width(ui_font, ui_get_line_height(), render_get_ui_aspect(), s);
 }
 
 
@@ -491,13 +461,13 @@ float ui_get_string_width(running_machine &machine, const char *s)
     color
 -------------------------------------------------*/
 
-void ui_draw_outlined_box(render_container *container, float x0, float y0, float x1, float y1, rgb_t backcolor)
+void ui_draw_outlined_box(float x0, float y0, float x1, float y1, rgb_t backcolor)
 {
-	container->add_rect(x0, y0, x1, y1, backcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
-	container->add_line(x0, y0, x1, y0, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
-	container->add_line(x1, y0, x1, y1, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
-	container->add_line(x1, y1, x0, y1, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
-	container->add_line(x0, y1, x0, y0, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+	render_ui_add_rect(x0, y0, x1, y1, backcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+	render_ui_add_line(x0, y0, x1, y0, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+	render_ui_add_line(x1, y0, x1, y1, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+	render_ui_add_line(x1, y1, x0, y1, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+	render_ui_add_line(x0, y1, x0, y0, UI_LINE_WIDTH, UI_BORDER_COLOR, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
 }
 
 
@@ -505,9 +475,9 @@ void ui_draw_outlined_box(render_container *container, float x0, float y0, float
     ui_draw_text - simple text renderer
 -------------------------------------------------*/
 
-void ui_draw_text(render_container *container, const char *buf, float x, float y)
+void ui_draw_text(const char *buf, float x, float y)
 {
-	ui_draw_text_full(container, buf, x, y, 1.0f - x, JUSTIFY_LEFT, WRAP_WORD, DRAW_NORMAL, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, NULL, NULL);
+	ui_draw_text_full(buf, x, y, 1.0f - x, JUSTIFY_LEFT, WRAP_WORD, DRAW_NORMAL, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, NULL, NULL);
 }
 
 
@@ -517,10 +487,9 @@ void ui_draw_text(render_container *container, const char *buf, float x, float y
     and full size computation
 -------------------------------------------------*/
 
-void ui_draw_text_full(render_container *container, const char *origs, float x, float y, float origwrapwidth, int justify, int wrap, int draw, rgb_t fgcolor, rgb_t bgcolor, float *totalwidth, float *totalheight)
+void ui_draw_text_full(const char *origs, float x, float y, float origwrapwidth, int justify, int wrap, int draw, rgb_t fgcolor, rgb_t bgcolor, float *totalwidth, float *totalheight)
 {
-	running_machine &machine = container->manager().machine();
-	float lineheight = ui_get_line_height(machine);
+	float lineheight = ui_get_line_height();
 	const char *ends = origs + strlen(origs);
 	float wrapwidth = origwrapwidth;
 	const char *s = origs;
@@ -575,7 +544,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 				break;
 
 			/* get the width of this character */
-			chwidth = ui_get_char_width(machine, schar);
+			chwidth = ui_get_char_width(schar);
 
 			/* if we hit a space, remember the location and width *without* the space */
 			if (schar == ' ')
@@ -619,7 +588,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 					if (scharcount == -1)
 						break;
 
-					curwidth -= ui_get_char_width(machine, schar);
+					curwidth -= ui_get_char_width(schar);
 				}
 			}
 
@@ -627,7 +596,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 			else if (wrap == WRAP_TRUNCATE)
 			{
 				/* add in the width of the ... */
-				curwidth += 3.0f * ui_get_char_width(machine, '.');
+				curwidth += 3.0f * ui_get_char_width('.');
 
 				/* while we are above the wrap width, back up one character */
 				while (curwidth > wrapwidth && s > linestart)
@@ -638,7 +607,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 					if (scharcount == -1)
 						break;
 
-					curwidth -= ui_get_char_width(machine, schar);
+					curwidth -= ui_get_char_width(schar);
 				}
 			}
 		}
@@ -655,7 +624,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 
 		/* if opaque, add a black box */
 		if (draw == DRAW_OPAQUE)
-			container->add_rect(curx, cury, curx + curwidth, cury + lineheight, bgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+			render_ui_add_rect(curx, cury, curx + curwidth, cury + lineheight, bgcolor, PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
 
 		/* loop from the line start and add the characters */
 		while (linestart < s)
@@ -668,8 +637,8 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 
 			if (draw != DRAW_NONE)
 			{
-				container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), linechar);
-				curx += ui_get_char_width(machine, linechar);
+				render_ui_add_char(curx, cury, lineheight, render_get_ui_aspect(), fgcolor, ui_font, linechar);
+				curx += ui_get_char_width(linechar);
 			}
 			linestart += linecharcount;
 		}
@@ -677,12 +646,12 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 		/* append ellipses if needed */
 		if (wrap == WRAP_TRUNCATE && *s != 0 && draw != DRAW_NONE)
 		{
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
-			curx += ui_get_char_width(machine, '.');
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
-			curx += ui_get_char_width(machine, '.');
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
-			curx += ui_get_char_width(machine, '.');
+			render_ui_add_char(curx, cury, lineheight, render_get_ui_aspect(), fgcolor, ui_font, '.');
+			curx += ui_get_char_width('.');
+			render_ui_add_char(curx, cury, lineheight, render_get_ui_aspect(), fgcolor, ui_font, '.');
+			curx += ui_get_char_width('.');
+			render_ui_add_char(curx, cury, lineheight, render_get_ui_aspect(), fgcolor, ui_font, '.');
+			curx += ui_get_char_width('.');
 		}
 
 		/* if we're not word-wrapping, we're done */
@@ -722,50 +691,37 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
     message with a box around it
 -------------------------------------------------*/
 
-void ui_draw_text_box(render_container *container, const char *text, int justify, float xpos, float ypos, rgb_t backcolor)
+void ui_draw_text_box(const char *text, int justify, float xpos, float ypos, rgb_t backcolor)
 {
-	float line_height = ui_get_line_height(container->manager().machine());
-	float max_width = 2.0f * ((xpos <= 0.5f) ? xpos : 1.0f - xpos) - 2.0f * UI_BOX_LR_BORDER;
-	float target_width = max_width;
-	float target_height = line_height;
-	float target_x = 0, target_y = 0;
-	float last_target_height = 0;
+	float target_width, target_height;
+	float target_x, target_y;
 
-	// limit this iteration to a finite number of passes
-	for (int pass = 0; pass < 5; pass++)
-	{
-		/* determine the target location */
-		target_x = xpos - 0.5f * target_width;
-		target_y = ypos - 0.5f * target_height;
+	/* compute the multi-line target width/height */
+	ui_draw_text_full(text, 0, 0, 1.0f - 2.0f * UI_BOX_LR_BORDER,
+				justify, WRAP_WORD, DRAW_NONE, ARGB_WHITE, ARGB_BLACK, &target_width, &target_height);
+	if (target_height > 1.0f - 2.0f * UI_BOX_TB_BORDER)
+		target_height = floor((1.0f - 2.0f * UI_BOX_TB_BORDER) / ui_get_line_height()) * ui_get_line_height();
 
-		/* make sure we stay on-screen */
-		if (target_x < UI_BOX_LR_BORDER)
-			target_x = UI_BOX_LR_BORDER;
-		if (target_x + target_width + UI_BOX_LR_BORDER > 1.0f)
-			target_x = 1.0f - UI_BOX_LR_BORDER - target_width;
-		if (target_y < UI_BOX_TB_BORDER)
-			target_y = UI_BOX_TB_BORDER;
-		if (target_y + target_height + UI_BOX_TB_BORDER > 1.0f)
-			target_y = 1.0f - UI_BOX_TB_BORDER - target_height;
+	/* determine the target location */
+	target_x = xpos - 0.5f * target_width;
+	target_y = ypos - 0.5f * target_height;
 
-		/* compute the multi-line target width/height */
-		ui_draw_text_full(container, text, target_x, target_y, target_width + 0.00001f,
-					justify, WRAP_WORD, DRAW_NONE, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, &target_width, &target_height);
-		if (target_height > 1.0f - 2.0f * UI_BOX_TB_BORDER)
-			target_height = floor((1.0f - 2.0f * UI_BOX_TB_BORDER) / line_height) * line_height;
-
-		/* if we match our last value, we're done */
-		if (target_height == last_target_height)
-			break;
-		last_target_height = target_height;
-	}
+	/* make sure we stay on-screen */
+	if (target_x < UI_BOX_LR_BORDER)
+		target_x = UI_BOX_LR_BORDER;
+	if (target_x + target_width + UI_BOX_LR_BORDER > 1.0f)
+		target_x = 1.0f - UI_BOX_LR_BORDER - target_width;
+	if (target_y < UI_BOX_TB_BORDER)
+		target_y = UI_BOX_TB_BORDER;
+	if (target_y + target_height + UI_BOX_TB_BORDER > 1.0f)
+		target_y = 1.0f - UI_BOX_TB_BORDER - target_height;
 
 	/* add a box around that */
-	ui_draw_outlined_box(container, target_x - UI_BOX_LR_BORDER,
+	ui_draw_outlined_box(target_x - UI_BOX_LR_BORDER,
 					 target_y - UI_BOX_TB_BORDER,
 					 target_x + target_width + UI_BOX_LR_BORDER,
 					 target_y + target_height + UI_BOX_TB_BORDER, backcolor);
-	ui_draw_text_full(container, text, target_x, target_y, target_width + 0.00001f,
+	ui_draw_text_full(text, target_x, target_y, target_width,
 				justify, WRAP_WORD, DRAW_NORMAL, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, NULL, NULL);
 }
 
@@ -781,7 +737,7 @@ void CLIB_DECL ui_popup_time(int seconds, const char *text, ...)
 
 	/* extract the text */
 	va_start(arg,text);
-	messagebox_text.vprintf(text, arg);
+	astring_vprintf(messagebox_text, text, arg);
 	messagebox_backcolor = UI_BACKGROUND_COLOR;
 	va_end(arg);
 
@@ -834,8 +790,16 @@ int ui_get_show_fps(void)
 
 void ui_set_show_profiler(int show)
 {
-	show_profiler = show;
-	g_profiler.enable(show);
+	if (show)
+	{
+		show_profiler = TRUE;
+		profiler_start();
+	}
+	else
+	{
+		show_profiler = FALSE;
+		profiler_stop();
+	}
 }
 
 
@@ -856,7 +820,7 @@ int ui_get_show_profiler(void)
 
 void ui_show_menu(void)
 {
-	ui_set_handler(ui_menu::ui_handler, 0);
+	ui_set_handler(ui_menu_ui_handler, 0);
 }
 
 
@@ -867,7 +831,7 @@ void ui_show_menu(void)
 
 int ui_is_menu_active(void)
 {
-	return (ui_handler_callback == ui_menu::ui_handler);
+	return (ui_handler_callback == ui_menu_ui_handler);
 }
 
 
@@ -881,11 +845,11 @@ int ui_is_menu_active(void)
     text to the given buffer
 -------------------------------------------------*/
 
-static astring &disclaimer_string(running_machine &machine, astring &string)
+static astring *disclaimer_string(running_machine *machine, astring *string)
 {
-	string.cpy("Usage of emulators in conjunction with ROMs you don't own is forbidden by copyright law.\n\n");
-	string.catprintf("IF YOU ARE NOT LEGALLY ENTITLED TO PLAY \"%s\" ON THIS EMULATOR, PRESS ESC.\n\n", machine.system().description);
-	string.cat("Otherwise, type OK or move the joystick left then right to continue");
+	astring_cpyc(string, "Usage of emulators in conjunction with ROMs you don't own is forbidden by copyright law.\n\n");
+	astring_catprintf(string, "IF YOU ARE NOT LEGALLY ENTITLED TO PLAY \"%s\" ON THIS EMULATOR, PRESS ESC.\n\n", machine->gamedrv->description);
+	astring_catc(string, "Otherwise, type OK or move the joystick left then right to continue");
 	return string;
 }
 
@@ -895,11 +859,10 @@ static astring &disclaimer_string(running_machine &machine, astring &string)
     text to the given buffer
 -------------------------------------------------*/
 
-static astring &warnings_string(running_machine &machine, astring &string)
+static astring *warnings_string(running_machine *machine, astring *string)
 {
 #define WARNING_FLAGS (	GAME_NOT_WORKING | \
 						GAME_UNEMULATED_PROTECTION | \
-						GAME_MECHANICAL | \
 						GAME_WRONG_COLORS | \
 						GAME_IMPERFECT_COLORS | \
 						GAME_REQUIRES_ARTWORK | \
@@ -907,106 +870,92 @@ static astring &warnings_string(running_machine &machine, astring &string)
 						GAME_IMPERFECT_SOUND |  \
 						GAME_IMPERFECT_GRAPHICS | \
 						GAME_NO_COCKTAIL)
+	int i;
 
-	string.reset();
+	astring_reset(string);
 
 	/* if no warnings, nothing to return */
-	if (rom_load_warnings(machine) == 0 && rom_load_knownbad(machine) == 0 && !(machine.system().flags & WARNING_FLAGS))
+	if (rom_load_warnings(machine) == 0 && !(machine->gamedrv->flags & WARNING_FLAGS))
 		return string;
 
 	/* add a warning if any ROMs were loaded with warnings */
 	if (rom_load_warnings(machine) > 0)
 	{
-		string.cat("One or more ROMs/CHDs for this game are incorrect. The ");
-		string.cat(emulator_info::get_gamenoun());
-		string.cat(" may not run correctly.\n");
-		if (machine.system().flags & WARNING_FLAGS)
-			string.cat("\n");
+		astring_catc(string, "One or more ROMs/CHDs for this game are incorrect. The " GAMENOUN " may not run correctly.\n");
+		if (machine->gamedrv->flags & WARNING_FLAGS)
+			astring_catc(string, "\n");
 	}
 
 	/* if we have at least one warning flag, print the general header */
-	if ((machine.system().flags & WARNING_FLAGS) || rom_load_knownbad(machine) > 0)
+	if (machine->gamedrv->flags & WARNING_FLAGS)
 	{
-		string.cat("There are known problems with this ");
-		string.cat(emulator_info::get_gamenoun());
-		string.cat("\n\n");
+		astring_catc(string, "There are known problems with this " GAMENOUN "\n\n");
 
-		/* add a warning if any ROMs are flagged BAD_DUMP/NO_DUMP */
-		if (rom_load_knownbad(machine) > 0) {
-			string.cat("One or more ROMs/CHDs for this ");
-			string.cat(emulator_info::get_gamenoun());
-			string.cat(" have not been correctly dumped.\n");
-		}
 		/* add one line per warning flag */
-		if (input_machine_has_keyboard(machine))
-			string.cat("The keyboard emulation may not be 100% accurate.\n");
-		if (machine.system().flags & GAME_IMPERFECT_COLORS)
-			string.cat("The colors aren't 100% accurate.\n");
-		if (machine.system().flags & GAME_WRONG_COLORS)
-			string.cat("The colors are completely wrong.\n");
-		if (machine.system().flags & GAME_IMPERFECT_GRAPHICS)
-			string.cat("The video emulation isn't 100% accurate.\n");
-		if (machine.system().flags & GAME_IMPERFECT_SOUND)
-			string.cat("The sound emulation isn't 100% accurate.\n");
-		if (machine.system().flags & GAME_NO_SOUND)
-			string.cat("The game lacks sound.\n");
-		if (machine.system().flags & GAME_NO_COCKTAIL)
-			string.cat("Screen flipping in cocktail mode is not supported.\n");
+#ifdef MESS
+		if (machine->gamedrv->flags & GAME_COMPUTER)
+			astring_catc(string, "The emulated system is a computer:\n\nThe keyboard emulation may not be 100% accurate.\n");
+#endif
+		if (machine->gamedrv->flags & GAME_IMPERFECT_COLORS)
+			astring_catc(string, "The colors aren't 100% accurate.\n");
+		if (machine->gamedrv->flags & GAME_WRONG_COLORS)
+			astring_catc(string, "The colors are completely wrong.\n");
+		if (machine->gamedrv->flags & GAME_IMPERFECT_GRAPHICS)
+			astring_catc(string, "The video emulation isn't 100% accurate.\n");
+		if (machine->gamedrv->flags & GAME_IMPERFECT_SOUND)
+			astring_catc(string, "The sound emulation isn't 100% accurate.\n");
+		if (machine->gamedrv->flags & GAME_NO_SOUND)
+			astring_catc(string, "The game lacks sound.\n");
+		if (machine->gamedrv->flags & GAME_NO_COCKTAIL)
+			astring_catc(string, "Screen flipping in cocktail mode is not supported.\n");
 
 		/* check if external artwork is present before displaying this warning? */
-		if (machine.system().flags & GAME_REQUIRES_ARTWORK)
-			string.cat("The game requires external artwork files\n");
+		if (machine->gamedrv->flags & GAME_REQUIRES_ARTWORK)
+			astring_catc(string, "The game requires external artwork files\n");
 
-		/* if there's a NOT WORKING, UNEMULATED PROTECTION or GAME MECHANICAL warning, make it stronger */
-		if (machine.system().flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL))
+		/* if there's a NOT WORKING or UNEMULATED PROTECTION warning, make it stronger */
+		if (machine->gamedrv->flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION))
 		{
+			const game_driver *maindrv;
+			const game_driver *clone_of;
+			int foundworking;
+
 			/* add the strings for these warnings */
-			if (machine.system().flags & GAME_UNEMULATED_PROTECTION)
-				string.cat("The game has protection which isn't fully emulated.\n");
-			if (machine.system().flags & GAME_NOT_WORKING) {
-				string.cat("\nTHIS ");
-				string.cat(emulator_info::get_capgamenoun());
-				string.cat(" DOESN'T WORK. The emulation for this game is not yet complete. "
-					 "There is nothing you can do to fix this problem except wait for the developers to improve the emulation.\n");
-			}
-			if (machine.system().flags & GAME_MECHANICAL) {
-				string.cat("\nCertain elements of this ");
-				string.cat(emulator_info::get_gamenoun());
-				string.cat(" cannot be emulated as it requires actual physical interaction or consists of mechanical devices. "
-					 "It is not possible to fully play this ");
-				string.cat(emulator_info::get_gamenoun());
-				string.cat(".\n");
-			}
+			if (machine->gamedrv->flags & GAME_UNEMULATED_PROTECTION)
+				astring_catc(string, "The game has protection which isn't fully emulated.\n");
+			if (machine->gamedrv->flags & GAME_NOT_WORKING)
+				astring_catc(string, "THIS " CAPGAMENOUN " DOESN'T WORK. The emulation for this game is not yet complete. "
+									 "There is nothing you can do to fix this problem except wait for the developers to improve the emulation.\n");
 
 			/* find the parent of this driver */
-			driver_enumerator drivlist(machine.options());
-			int maindrv = drivlist.find(machine.system());
-			int clone_of = drivlist.non_bios_clone(maindrv);
-			if (clone_of != -1)
-				maindrv = clone_of;
+			clone_of = driver_get_clone(machine->gamedrv);
+			if (clone_of != NULL && !(clone_of->flags & GAME_IS_BIOS_ROOT))
+ 				maindrv = clone_of;
+			else
+				maindrv = machine->gamedrv;
 
 			/* scan the driver list for any working clones and add them */
-			bool foundworking = false;
-			while (drivlist.next())
-				if (drivlist.current() == maindrv || drivlist.clone() == maindrv)
-					if ((drivlist.driver().flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION | GAME_MECHANICAL)) == 0)
+			foundworking = FALSE;
+			for (i = 0; drivers[i] != NULL; i++)
+				if (drivers[i] == maindrv || driver_get_clone(drivers[i]) == maindrv)
+					if ((drivers[i]->flags & (GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION)) == 0)
 					{
 						/* this one works, add a header and display the name of the clone */
 						if (!foundworking)
-							string.cat("\n\nThere are working clones of this game: ");
+							astring_catc(string, "\n\nThere are working clones of this game: ");
 						else
-							string.cat(", ");
-						string.cat(drivlist.driver().name);
-						foundworking = true;
+							astring_catc(string, ", ");
+						astring_catc(string, drivers[i]->name);
+						foundworking = TRUE;
 					}
 
 			if (foundworking)
-				string.cat("\n");
+				astring_catc(string, "\n");
 		}
 	}
 
 	/* add the 'press OK' string */
-	string.cat("\n\nType OK or move the joystick left then right to continue");
+	astring_catc(string, "\n\nType OK or move the joystick left then right to continue");
 	return string;
 }
 
@@ -1016,109 +965,104 @@ static astring &warnings_string(running_machine &machine, astring &string)
     string with the game info text
 -------------------------------------------------*/
 
-astring &game_info_astring(running_machine &machine, astring &string)
+astring *game_info_astring(running_machine *machine, astring *string)
 {
-	screen_device_iterator scriter(machine.root_device());
-	int scrcount = scriter.count();
+	int scrcount = video_screen_count(machine->config);
+	const device_config *scandevice;
+	const device_config *device;
 	int found_sound = FALSE;
+	int count;
 
 	/* print description, manufacturer, and CPU: */
-	string.printf("%s\n%s %s\n\nCPU:\n", machine.system().description, machine.system().year, machine.system().manufacturer);
+	astring_printf(string, "%s\n%s %s\n\nCPU:\n", machine->gamedrv->description, machine->gamedrv->year, machine->gamedrv->manufacturer);
 
 	/* loop over all CPUs */
-	execute_interface_iterator execiter(machine.root_device());
-	tagmap_t<UINT8> exectags;
-	for (device_execute_interface *exec = execiter.first(); exec != NULL; exec = execiter.next())
+	for (device = machine->firstcpu; device != NULL; device = scandevice)
 	{
-		if (exectags.add(exec->device().tag(), 1, FALSE) == TMERR_DUPLICATE)
-			continue;
 		/* get cpu specific clock that takes internal multiplier/dividers into account */
-		int clock = exec->device().clock();
+		int clock = cpu_get_clock(device);
 
 		/* count how many identical CPUs we have */
-		int count = 1;
-		execute_interface_iterator execinneriter(machine.root_device());
-		for (device_execute_interface *scan = execinneriter.first(); scan != NULL; scan = execinneriter.next())
+		count = 1;
+		for (scandevice = device->typenext; scandevice != NULL; scandevice = scandevice->typenext)
 		{
-			if (exec->device().type() == scan->device().type() && exec->device().clock() == scan->device().clock())
-				if (exectags.add(scan->device().tag(), 1, FALSE) != TMERR_DUPLICATE)
-					count++;
+			if (cpu_get_type(device) != cpu_get_type(scandevice) || device->clock != scandevice->clock)
+				break;
+			count++;
 		}
 
 		/* if more than one, prepend a #x in front of the CPU name */
 		if (count > 1)
-			string.catprintf("%d" UTF8_MULTIPLY, count);
-		string.cat(exec->device().name());
+			astring_catprintf(string, "%d" UTF8_MULTIPLY, count);
+		astring_catc(string, cpu_get_name(device));
 
 		/* display clock in kHz or MHz */
 		if (clock >= 1000000)
-			string.catprintf(" %d.%06d" UTF8_NBSP "MHz\n", clock / 1000000, clock % 1000000);
+			astring_catprintf(string, " %d.%06d" UTF8_NBSP "MHz\n", clock / 1000000, clock % 1000000);
 		else
-			string.catprintf(" %d.%03d" UTF8_NBSP "kHz\n", clock / 1000, clock % 1000);
+			astring_catprintf(string, " %d.%03d" UTF8_NBSP "kHz\n", clock / 1000, clock % 1000);
 	}
 
 	/* loop over all sound chips */
-	sound_interface_iterator snditer(machine.root_device());
-	tagmap_t<UINT8> soundtags;
-	for (device_sound_interface *sound = snditer.first(); sound != NULL; sound = snditer.next())
+	for (device = sound_first(machine->config); device != NULL; device = scandevice)
 	{
-		if (soundtags.add(sound->device().tag(), 1, FALSE) == TMERR_DUPLICATE)
-			continue;
-
 		/* append the Sound: string */
 		if (!found_sound)
-			string.cat("\nSound:\n");
+			astring_catc(string, "\nSound:\n");
 		found_sound = TRUE;
 
 		/* count how many identical sound chips we have */
-		int count = 1;
-		sound_interface_iterator sndinneriter(machine.root_device());
-		for (device_sound_interface *scan = sndinneriter.first(); scan != NULL; scan = sndinneriter.next())
+		count = 1;
+		for (scandevice = device->typenext; scandevice != NULL; scandevice = scandevice->typenext)
 		{
-			if (sound->device().type() == scan->device().type() && sound->device().clock() == scan->device().clock())
-				if (soundtags.add(scan->device().tag(), 1, FALSE) != TMERR_DUPLICATE)
-					count++;
+			if (sound_get_type(device) != sound_get_type(scandevice) || device->clock != scandevice->clock)
+				break;
+			count++;
 		}
+
 		/* if more than one, prepend a #x in front of the CPU name */
 		if (count > 1)
-			string.catprintf("%d" UTF8_MULTIPLY, count);
-		string.cat(sound->device().name());
+			astring_catprintf(string, "%d" UTF8_MULTIPLY, count);
+		astring_catc(string, device_get_name(device));
 
 		/* display clock in kHz or MHz */
-		int clock = sound->device().clock();
-		if (clock >= 1000000)
-			string.catprintf(" %d.%06d" UTF8_NBSP "MHz\n", clock / 1000000, clock % 1000000);
-		else if (clock != 0)
-			string.catprintf(" %d.%03d" UTF8_NBSP "kHz\n", clock / 1000, clock % 1000);
+		if (device->clock >= 1000000)
+			astring_catprintf(string, " %d.%06d" UTF8_NBSP "MHz\n", device->clock / 1000000, device->clock % 1000000);
+		else if (device->clock != 0)
+			astring_catprintf(string, " %d.%03d" UTF8_NBSP "kHz\n", device->clock / 1000, device->clock % 1000);
 		else
-			string.cat("\n");
+			astring_catc(string, "\n");
 	}
 
 	/* display screen information */
-	string.cat("\nVideo:\n");
+	astring_catc(string, "\nVideo:\n");
 	if (scrcount == 0)
-		string.cat("None\n");
+		astring_catc(string, "None\n");
 	else
 	{
-		screen_device_iterator iter(machine.root_device());
-		for (screen_device *screen = iter.first(); screen != NULL; screen = iter.next())
+		const device_config *screen;
+
+		for (screen = video_screen_first(machine->config); screen != NULL; screen = video_screen_next(screen))
 		{
+			const screen_config *scrconfig = (const screen_config *)screen->inline_config;
+
 			if (scrcount > 1)
 			{
-				string.cat(slider_get_screen_desc(*screen));
-				string.cat(": ");
+				astring_catc(string, slider_get_screen_desc(screen));
+				astring_catc(string, ": ");
 			}
 
-			if (screen->screen_type() == SCREEN_TYPE_VECTOR)
-				string.cat("Vector\n");
+			if (scrconfig->type == SCREEN_TYPE_VECTOR)
+				astring_catc(string, "Vector\n");
 			else
 			{
-				const rectangle &visarea = screen->visible_area();
+				const rectangle *visarea = video_screen_get_visible_area(screen);
 
-				string.catprintf("%d " UTF8_MULTIPLY " %d (%s) %f" UTF8_NBSP "Hz\n",
-						visarea.width(), visarea.height(),
-						(machine.system().flags & ORIENTATION_SWAP_XY) ? "V" : "H",
-						ATTOSECONDS_TO_HZ(screen->frame_period().attoseconds));
+				astring_catprintf(string, "%d " UTF8_MULTIPLY " %d (%s) %f" UTF8_NBSP "Hz\n",
+						visarea->max_x - visarea->min_x + 1,
+						visarea->max_y - visarea->min_y + 1,
+						(machine->gamedrv->flags & ORIENTATION_SWAP_XY) ? "V" : "H",
+						ATTOSECONDS_TO_HZ(video_screen_get_frame_period(screen).attoseconds));
 			}
 		}
 	}
@@ -1137,9 +1081,9 @@ astring &game_info_astring(running_machine &machine, astring &string)
     messagebox_text string but handles no input
 -------------------------------------------------*/
 
-static UINT32 handler_messagebox(running_machine &machine, render_container *container, UINT32 state)
+static UINT32 handler_messagebox(running_machine *machine, UINT32 state)
 {
-	ui_draw_text_box(container, messagebox_text, JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
+	ui_draw_text_box(astring_c(messagebox_text), JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
 	return 0;
 }
 
@@ -1149,23 +1093,23 @@ static UINT32 handler_messagebox(running_machine &machine, render_container *con
     messagebox_text string and waits for an OK
 -------------------------------------------------*/
 
-static UINT32 handler_messagebox_ok(running_machine &machine, render_container *container, UINT32 state)
+static UINT32 handler_messagebox_ok(running_machine *machine, UINT32 state)
 {
 	/* draw a standard message window */
-	ui_draw_text_box(container, messagebox_text, JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
+	ui_draw_text_box(astring_c(messagebox_text), JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
 
 	/* an 'O' or left joystick kicks us to the next state */
-	if (state == 0 && (machine.input().code_pressed_once(KEYCODE_O) || ui_input_pressed(machine, IPT_UI_LEFT)))
+	if (state == 0 && (input_code_pressed_once(machine, KEYCODE_O) || ui_input_pressed(machine, IPT_UI_LEFT)))
 		state++;
 
 	/* a 'K' or right joystick exits the state */
-	else if (state == 1 && (machine.input().code_pressed_once(KEYCODE_K) || ui_input_pressed(machine, IPT_UI_RIGHT)))
+	else if (state == 1 && (input_code_pressed_once(machine, KEYCODE_K) || ui_input_pressed(machine, IPT_UI_RIGHT)))
 		state = UI_HANDLER_CANCEL;
 
 	/* if the user cancels, exit out completely */
 	else if (ui_input_pressed(machine, IPT_UI_CANCEL))
 	{
-		machine.schedule_exit();
+		mame_schedule_exit(machine);
 		state = UI_HANDLER_CANCEL;
 	}
 
@@ -1179,127 +1123,39 @@ static UINT32 handler_messagebox_ok(running_machine &machine, render_container *
     any keypress
 -------------------------------------------------*/
 
-static UINT32 handler_messagebox_anykey(running_machine &machine, render_container *container, UINT32 state)
+static UINT32 handler_messagebox_anykey(running_machine *machine, UINT32 state)
 {
 	/* draw a standard message window */
-	ui_draw_text_box(container, messagebox_text, JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
+	ui_draw_text_box(astring_c(messagebox_text), JUSTIFY_LEFT, 0.5f, 0.5f, messagebox_backcolor);
 
 	/* if the user cancels, exit out completely */
 	if (ui_input_pressed(machine, IPT_UI_CANCEL))
 	{
-		machine.schedule_exit();
+		mame_schedule_exit(machine);
 		state = UI_HANDLER_CANCEL;
 	}
 
 	/* if any key is pressed, just exit */
-	else if (machine.input().poll_switches() != INPUT_CODE_INVALID)
+	else if (input_code_poll_switches(machine, FALSE) != INPUT_CODE_INVALID)
 		state = UI_HANDLER_CANCEL;
 
 	return state;
 }
 
-/*-------------------------------------------------
-    process_natural_keyboard - processes any
-    natural keyboard input
--------------------------------------------------*/
-
-static void process_natural_keyboard(running_machine &machine)
-{
-	ui_event event;
-	int i, pressed;
-	input_item_id itemid;
-	input_code code;
-	UINT8 *key_down_ptr;
-	UINT8 key_down_mask;
-
-	/* loop while we have interesting events */
-	while (ui_input_pop_event(machine, &event))
-	{
-		/* if this was a UI_EVENT_CHAR event, post it */
-		if (event.event_type == UI_EVENT_CHAR)
-			inputx_postc(machine, event.ch);
-	}
-
-	/* process natural keyboard keys that don't get UI_EVENT_CHARs */
-	for (i = 0; i < ARRAY_LENGTH(non_char_keys); i++)
-	{
-		/* identify this keycode */
-		itemid = non_char_keys[i];
-		code = machine.input().code_from_itemid(itemid);
-
-		/* ...and determine if it is pressed */
-		pressed = machine.input().code_pressed(code);
-
-		/* figure out whey we are in the key_down map */
-		key_down_ptr = &non_char_keys_down[i / 8];
-		key_down_mask = 1 << (i % 8);
-
-		if (pressed && !(*key_down_ptr & key_down_mask))
-		{
-			/* this key is now down */
-			*key_down_ptr |= key_down_mask;
-
-			/* post the key */
-			inputx_postc(machine, UCHAR_MAMEKEY_BEGIN + code.item_id());
-		}
-		else if (!pressed && (*key_down_ptr & key_down_mask))
-		{
-			/* this key is now up */
-			*key_down_ptr &= ~key_down_mask;
-		}
-	}
-}
-
-/*-------------------------------------------------
-    ui_paste - does a paste from the keyboard
--------------------------------------------------*/
-
-void ui_paste(running_machine &machine)
-{
-	/* retrieve the clipboard text */
-	char *text = osd_get_clipboard_text();
-
-	/* was a result returned? */
-	if (text != NULL)
-	{
-		/* post the text */
-		inputx_post_utf8(machine, text);
-
-		/* free the string */
-		osd_free(text);
-	}
-}
-
-/*-------------------------------------------------
-    ui_image_handler_ingame - execute display
-    callback function for each image device
--------------------------------------------------*/
-
-void ui_image_handler_ingame(running_machine &machine)
-{
-	/* run display routine for devices */
-	if (machine.phase() == MACHINE_PHASE_RUNNING)
-	{
-		image_interface_iterator iter(machine.root_device());
-		for (device_image_interface *image = iter.first(); image != NULL; image = iter.next())
-			image->call_display();
-	}
-}
 
 /*-------------------------------------------------
     handler_ingame - in-game handler takes care
     of the standard keypresses
 -------------------------------------------------*/
 
-static UINT32 handler_ingame(running_machine &machine, render_container *container, UINT32 state)
+static UINT32 handler_ingame(running_machine *machine, UINT32 state)
 {
-	bool is_paused = machine.paused();
+	int is_paused = mame_is_paused(machine);
 
 	/* first draw the FPS counter */
 	if (showfps || osd_ticks() < showfps_end)
 	{
-		astring tempstring;
-		ui_draw_text_full(container, machine.video().speed_text(tempstring), 0.0f, 0.0f, 1.0f,
+		ui_draw_text_full(video_get_speed_text(machine), 0.0f, 0.0f, 1.0f,
 					JUSTIFY_RIGHT, WRAP_WORD, DRAW_OPAQUE, ARGB_WHITE, ARGB_BLACK, NULL, NULL);
 	}
 	else
@@ -1308,147 +1164,95 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 	/* draw the profiler if visible */
 	if (show_profiler)
 	{
-		astring profilertext;
-		g_profiler.text(machine, profilertext);
-		ui_draw_text_full(container, profilertext, 0.0f, 0.0f, 1.0f, JUSTIFY_LEFT, WRAP_WORD, DRAW_OPAQUE, ARGB_WHITE, ARGB_BLACK, NULL, NULL);
+		astring *profilertext = profiler_get_text(machine, astring_alloc());
+		ui_draw_text_full(astring_c(profilertext), 0.0f, 0.0f, 1.0f, JUSTIFY_LEFT, WRAP_WORD, DRAW_OPAQUE, ARGB_WHITE, ARGB_BLACK, NULL, NULL);
+		astring_free(profilertext);
 	}
 
 	/* if we're single-stepping, pause now */
 	if (single_step)
 	{
-		machine.pause();
+		mame_pause(machine, TRUE);
 		single_step = FALSE;
 	}
 
-	/* determine if we should disable the rest of the UI */
-	int ui_disabled = (input_machine_has_keyboard(machine) && !machine.ui_active());
+#ifdef MESS
+	if (ui_mess_handler_ingame(machine))
+		return 0;
+#endif /* MESS */
 
-	/* is ScrLk UI toggling applicable here? */
-	if (input_machine_has_keyboard(machine))
-	{
-		/* are we toggling the UI with ScrLk? */
-		if (ui_input_pressed(machine, IPT_UI_TOGGLE_UI))
-		{
-			/* toggle the UI */
-			machine.set_ui_active(!machine.ui_active());
-
-			/* display a popup indicating the new status */
-			if (machine.ui_active())
-			{
-				ui_popup_time(2, "%s\n%s\n%s\n%s\n%s\n%s\n",
-					"Keyboard Emulation Status",
-					"-------------------------",
-					"Mode: PARTIAL Emulation",
-					"UI:   Enabled",
-					"-------------------------",
-					"**Use ScrLock to toggle**");
-			}
-			else
-			{
-				ui_popup_time(2, "%s\n%s\n%s\n%s\n%s\n%s\n",
-					"Keyboard Emulation Status",
-					"-------------------------",
-					"Mode: FULL Emulation",
-					"UI:   Disabled",
-					"-------------------------",
-					"**Use ScrLock to toggle**");
-			}
-		}
-	}
-
-	/* is the natural keyboard enabled? */
-	if (ui_get_use_natural_keyboard(machine) && (machine.phase() == MACHINE_PHASE_RUNNING))
-		process_natural_keyboard(machine);
-
-	if (!ui_disabled)
-	{
-		/* paste command */
-		if (ui_input_pressed(machine, IPT_UI_PASTE))
-			ui_paste(machine);
-	}
-
-	ui_image_handler_ingame(machine);
-
-	if (ui_disabled) return ui_disabled;
-
+	/* if the user pressed ESC, stop the emulation */
 	if (ui_input_pressed(machine, IPT_UI_CANCEL))
-	{
-		if (!machine.options().confirm_quit())
-			machine.schedule_exit();
-		else
-			return ui_set_handler(handler_confirm_quit, 0);
-	}
+		mame_schedule_exit(machine);
 
 	/* turn on menus if requested */
 	if (ui_input_pressed(machine, IPT_UI_CONFIGURE))
-		return ui_set_handler(ui_menu::ui_handler, 0);
+		return ui_set_handler(ui_menu_ui_handler, 0);
 
 	/* if the on-screen display isn't up and the user has toggled it, turn it on */
-	if ((machine.debug_flags & DEBUG_FLAG_ENABLED) == 0 && ui_input_pressed(machine, IPT_UI_ON_SCREEN_DISPLAY))
-		return ui_set_handler(ui_menu_sliders::ui_handler, 1);
+	if ((machine->debug_flags & DEBUG_FLAG_ENABLED) == 0 && ui_input_pressed(machine, IPT_UI_ON_SCREEN_DISPLAY))
+		return ui_set_handler(ui_slider_ui_handler, 1);
 
 	/* handle a reset request */
 	if (ui_input_pressed(machine, IPT_UI_RESET_MACHINE))
-		machine.schedule_hard_reset();
+		mame_schedule_hard_reset(machine);
 	if (ui_input_pressed(machine, IPT_UI_SOFT_RESET))
-		machine.schedule_soft_reset();
+		mame_schedule_soft_reset(machine);
 
 	/* handle a request to display graphics/palette */
 	if (ui_input_pressed(machine, IPT_UI_SHOW_GFX))
 	{
 		if (!is_paused)
-			machine.pause();
+			mame_pause(machine, TRUE);
 		return ui_set_handler(ui_gfx_ui_handler, is_paused);
 	}
 
 	/* handle a save state request */
 	if (ui_input_pressed(machine, IPT_UI_SAVE_STATE))
 	{
-		machine.pause();
+		mame_pause(machine, TRUE);
 		return ui_set_handler(handler_load_save, LOADSAVE_SAVE);
 	}
 
 	/* handle a load state request */
 	if (ui_input_pressed(machine, IPT_UI_LOAD_STATE))
 	{
-		machine.pause();
+		mame_pause(machine, TRUE);
 		return ui_set_handler(handler_load_save, LOADSAVE_LOAD);
 	}
 
 	/* handle a save snapshot request */
 	if (ui_input_pressed(machine, IPT_UI_SNAPSHOT))
-		machine.video().save_active_screen_snapshots();
+		video_save_active_screen_snapshots(machine);
 
 	/* toggle pause */
 	if (ui_input_pressed(machine, IPT_UI_PAUSE))
 	{
 		/* with a shift key, it is single step */
-		if (is_paused && (machine.input().code_pressed(KEYCODE_LSHIFT) || machine.input().code_pressed(KEYCODE_RSHIFT)))
+		if (is_paused && (input_code_pressed(machine, KEYCODE_LSHIFT) || input_code_pressed(machine, KEYCODE_RSHIFT)))
 		{
 			single_step = TRUE;
-			machine.resume();
+			mame_pause(machine, FALSE);
 		}
-		else if (machine.paused())
-			machine.resume();
 		else
-			machine.pause();
+			mame_pause(machine, !mame_is_paused(machine));
 	}
 
 	/* handle a toggle cheats request */
 	if (ui_input_pressed(machine, IPT_UI_TOGGLE_CHEAT))
-		machine.cheat().set_enable(!machine.cheat().enabled());
+		cheat_set_global_enable(machine, !cheat_get_global_enable(machine));
 
 	/* toggle movie recording */
 	if (ui_input_pressed(machine, IPT_UI_RECORD_MOVIE))
 	{
-		if (!machine.video().is_recording())
+		if (!video_mng_is_movie_active(machine))
 		{
-			machine.video().begin_recording(NULL, video_manager::MF_MNG);
+			video_mng_begin_recording(machine, NULL);
 			popmessage("REC START");
 		}
 		else
 		{
-			machine.video().end_recording();
+			video_mng_end_recording(machine);
 			popmessage("REC STOP");
 		}
 	}
@@ -1465,10 +1269,10 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 	if (ui_input_pressed(machine, IPT_UI_FRAMESKIP_INC))
 	{
 		/* get the current value and increment it */
-		int newframeskip = machine.video().frameskip() + 1;
+		int newframeskip = video_get_frameskip() + 1;
 		if (newframeskip > MAX_FRAMESKIP)
 			newframeskip = -1;
-		machine.video().set_frameskip(newframeskip);
+		video_set_frameskip(newframeskip);
 
 		/* display the FPS counter for 2 seconds */
 		ui_show_fps_temp(2.0);
@@ -1478,10 +1282,10 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 	if (ui_input_pressed(machine, IPT_UI_FRAMESKIP_DEC))
 	{
 		/* get the current value and decrement it */
-		int newframeskip = machine.video().frameskip() - 1;
+		int newframeskip = video_get_frameskip() - 1;
 		if (newframeskip < -1)
 			newframeskip = MAX_FRAMESKIP;
-		machine.video().set_frameskip(newframeskip);
+		video_set_frameskip(newframeskip);
 
 		/* display the FPS counter for 2 seconds */
 		ui_show_fps_temp(2.0);
@@ -1489,16 +1293,16 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
 
 	/* toggle throttle? */
 	if (ui_input_pressed(machine, IPT_UI_THROTTLE))
-		machine.video().set_throttled(!machine.video().throttled());
+		video_set_throttle(!video_get_throttle());
 
 	/* check for fast forward */
 	if (input_type_pressed(machine, IPT_UI_FAST_FORWARD, 0))
 	{
-		machine.video().set_fastforward(true);
+		video_set_fastforward(TRUE);
 		ui_show_fps_temp(0.5);
 	}
 	else
-		machine.video().set_fastforward(false);
+		video_set_fastforward(FALSE);
 
 	return 0;
 }
@@ -1509,7 +1313,7 @@ static UINT32 handler_ingame(running_machine &machine, render_container *contain
     specifying a game to save or load
 -------------------------------------------------*/
 
-static UINT32 handler_load_save(running_machine &machine, render_container *container, UINT32 state)
+static UINT32 handler_load_save(running_machine *machine, UINT32 state)
 {
 	char filename[20];
 	input_code code;
@@ -1521,9 +1325,9 @@ static UINT32 handler_load_save(running_machine &machine, render_container *cont
 
 	/* okay, we're waiting for a key to select a slot; display a message */
 	if (state == LOADSAVE_SAVE)
-		ui_draw_message_window(container, "Select position to save to");
+		ui_draw_message_window("Select position to save to");
 	else
-		ui_draw_message_window(container, "Select position to load from");
+		ui_draw_message_window("Select position to load from");
 
 	/* check for cancel key */
 	if (ui_input_pressed(machine, IPT_UI_CANCEL))
@@ -1535,22 +1339,22 @@ static UINT32 handler_load_save(running_machine &machine, render_container *cont
 			popmessage("Load cancelled");
 
 		/* reset the state */
-		machine.resume();
+		mame_pause(machine, FALSE);
 		return UI_HANDLER_CANCEL;
 	}
 
 	/* check for A-Z or 0-9 */
-	for (input_item_id id = ITEM_ID_A; id <= ITEM_ID_Z; id++)
-		if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
-			file = id - ITEM_ID_A + 'a';
+	for (code = KEYCODE_A; code <= (input_code)KEYCODE_Z; code++)
+		if (input_code_pressed_once(machine, code))
+			file = code - KEYCODE_A + 'a';
 	if (file == 0)
-		for (input_item_id id = ITEM_ID_0; id <= ITEM_ID_9; id++)
-			if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
-				file = id - ITEM_ID_0 + '0';
+		for (code = KEYCODE_0; code <= (input_code)KEYCODE_9; code++)
+			if (input_code_pressed_once(machine, code))
+				file = code - KEYCODE_0 + '0';
 	if (file == 0)
-		for (input_item_id id = ITEM_ID_0_PAD; id <= ITEM_ID_9_PAD; id++)
-			if (machine.input().code_pressed_once(input_code(DEVICE_CLASS_KEYBOARD, 0, ITEM_CLASS_SWITCH, ITEM_MODIFIER_NONE, id)))
-				file = id - ITEM_ID_0_PAD + '0';
+		for (code = KEYCODE_0_PAD; code <= (input_code)KEYCODE_9_PAD; code++)
+			if (input_code_pressed_once(machine, code))
+				file = code - KEYCODE_0_PAD + '0';
 	if (file == 0)
 		return state;
 
@@ -1559,47 +1363,19 @@ static UINT32 handler_load_save(running_machine &machine, render_container *cont
 	if (state == LOADSAVE_SAVE)
 	{
 		popmessage("Save to position %c", file);
-		machine.schedule_save(filename);
+		mame_schedule_save(machine, filename);
 	}
 	else
 	{
 		popmessage("Load from position %c", file);
-		machine.schedule_load(filename);
+		mame_schedule_load(machine, filename);
 	}
 
 	/* remove the pause and reset the state */
-	machine.resume();
+	mame_pause(machine, FALSE);
 	return UI_HANDLER_CANCEL;
 }
 
-
-/*-------------------------------------------------
- handler_confirm_quit - leads the user through
- confirming quit emulation
- -------------------------------------------------*/
-
-static UINT32 handler_confirm_quit(running_machine &machine, render_container *container, UINT32 state)
-{
-	astring quit_message("Are you sure you want to quit?\n\n");
-	quit_message.cat("Press ''UI Select'' (default: Enter) to quit,\n");
-	quit_message.cat("Press ''UI Cancel'' (default: Esc) to return to emulation.");
-
-	ui_draw_text_box(container, quit_message, JUSTIFY_CENTER, 0.5f, 0.5f, UI_RED_COLOR);
-	machine.pause();
-
-	/* if the user press ENTER, quit the game */
-	if (ui_input_pressed(machine, IPT_UI_SELECT))
-		machine.schedule_exit();
-
-	/* if the user press ESC, just continue */
-	else if (ui_input_pressed(machine, IPT_UI_CANCEL))
-	{
-		machine.resume();
-		state = UI_HANDLER_CANCEL;
-	}
-
-	return state;
-}
 
 
 /***************************************************************************
@@ -1620,7 +1396,7 @@ const slider_state *ui_get_slider_list(void)
     slider_alloc - allocate a new slider entry
 -------------------------------------------------*/
 
-static slider_state *slider_alloc(running_machine &machine, const char *title, INT32 minval, INT32 defval, INT32 maxval, INT32 incval, slider_update update, void *arg)
+static slider_state *slider_alloc(running_machine *machine, const char *title, INT32 minval, INT32 defval, INT32 maxval, INT32 incval, slider_update update, void *arg)
 {
 	int size = sizeof(slider_state) + strlen(title);
 	slider_state *state = (slider_state *)auto_alloc_array_clear(machine, UINT8, size);
@@ -1642,38 +1418,38 @@ static slider_state *slider_alloc(running_machine &machine, const char *title, I
     controls
 -------------------------------------------------*/
 
-static slider_state *slider_init(running_machine &machine)
+static slider_state *slider_init(running_machine *machine)
 {
-	input_field_config *field;
-	input_port_config *port;
+	const input_field_config *field;
+	const input_port_config *port;
+	const device_config *device;
 	slider_state *listhead = NULL;
 	slider_state **tailptr = &listhead;
-	astring string;
-	int item;
+	astring *string = astring_alloc();
+	int numitems, item;
 
 	/* add overall volume */
 	*tailptr = slider_alloc(machine, "Master Volume", -32, 0, 0, 1, slider_volume, NULL);
 	tailptr = &(*tailptr)->next;
 
 	/* add per-channel volume */
-	speaker_input info;
-	for (item = 0; machine.sound().indexed_speaker_input(item, info); item++)
+	numitems = sound_get_user_gain_count(machine);
+	for (item = 0; item < numitems; item++)
 	{
 		INT32 maxval = 2000;
-		INT32 defval = info.stream->initial_input_gain(info.inputnum) * 1000.0f + 0.5f;
+		INT32 defval = sound_get_default_gain(machine, item) * 1000.0f + 0.5f;
 
 		if (defval > 1000)
 			maxval = 2 * defval;
 
-		info.stream->input_name(info.inputnum, string);
-		string.cat(" Volume");
-		*tailptr = slider_alloc(machine, string, 0, defval, maxval, 20, slider_mixervol, (void *)(FPTR)item);
+		astring_printf(string, "%s Volume", sound_get_user_gain_name(machine, item));
+		*tailptr = slider_alloc(machine, astring_c(string), 0, defval, maxval, 20, slider_mixervol, (void *)(FPTR)item);
 		tailptr = &(*tailptr)->next;
 	}
 
 	/* add analog adjusters */
-	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist().first(); field != NULL; field = field->next())
+	for (port = machine->portconfig; port != NULL; port = port->next)
+		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->type == IPT_ADJUSTER)
 			{
 				void *param = (void *)field;
@@ -1682,91 +1458,92 @@ static slider_state *slider_init(running_machine &machine)
 			}
 
 	/* add CPU overclocking (cheat only) */
-	if (machine.options().cheat())
+	if (options_get_bool(mame_options(), OPTION_CHEAT))
 	{
-		execute_interface_iterator iter(machine.root_device());
-		for (device_execute_interface *exec = iter.first(); exec != NULL; exec = iter.next())
+		for (device = machine->firstcpu; device != NULL; device = cpu_next(device))
 		{
-			void *param = (void *)&exec->device();
-			string.printf("Overclock CPU %s", exec->device().tag());
-			*tailptr = slider_alloc(machine, string, 10, 1000, 2000, 1, slider_overclock, param);
+			void *param = (void *)device;
+			astring_printf(string, "Overclock CPU %s", device->tag);
+			*tailptr = slider_alloc(machine, astring_c(string), 10, 1000, 2000, 1, slider_overclock, param);
 			tailptr = &(*tailptr)->next;
 		}
 	}
 
 	/* add screen parameters */
-	screen_device_iterator scriter(machine.root_device());
-	for (screen_device *screen = scriter.first(); screen != NULL; screen = scriter.next())
+	for (device = video_screen_first(machine->config); device != NULL; device = video_screen_next(device))
 	{
-		int defxscale = floor(screen->xscale() * 1000.0f + 0.5f);
-		int defyscale = floor(screen->yscale() * 1000.0f + 0.5f);
-		int defxoffset = floor(screen->xoffset() * 1000.0f + 0.5f);
-		int defyoffset = floor(screen->yoffset() * 1000.0f + 0.5f);
-		void *param = (void *)screen;
+		const screen_config *scrconfig = (const screen_config *)device->inline_config;
+		int defxscale = floor(scrconfig->xscale * 1000.0f + 0.5f);
+		int defyscale = floor(scrconfig->yscale * 1000.0f + 0.5f);
+		int defxoffset = floor(scrconfig->xoffset * 1000.0f + 0.5f);
+		int defyoffset = floor(scrconfig->yoffset * 1000.0f + 0.5f);
+		void *param = (void *)device;
 
 		/* add refresh rate tweaker */
-		if (machine.options().cheat())
+		if (options_get_bool(mame_options(), OPTION_CHEAT))
 		{
-			string.printf("%s Refresh Rate", slider_get_screen_desc(*screen));
-			*tailptr = slider_alloc(machine, string, -10000, 0, 10000, 1000, slider_refresh, param);
+			astring_printf(string, "%s Refresh Rate", slider_get_screen_desc(device));
+			*tailptr = slider_alloc(machine, astring_c(string), -10000, 0, 10000, 1000, slider_refresh, param);
 			tailptr = &(*tailptr)->next;
 		}
 
 		/* add standard brightness/contrast/gamma controls per-screen */
-		string.printf("%s Brightness", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, 100, 1000, 2000, 10, slider_brightness, param);
+		astring_printf(string, "%s Brightness", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), 100, 1000, 2000, 10, slider_brightness, param);
 		tailptr = &(*tailptr)->next;
-		string.printf("%s Contrast", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, 100, 1000, 2000, 50, slider_contrast, param);
+		astring_printf(string, "%s Contrast", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), 100, 1000, 2000, 50, slider_contrast, param);
 		tailptr = &(*tailptr)->next;
-		string.printf("%s Gamma", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, 100, 1000, 3000, 50, slider_gamma, param);
+		astring_printf(string, "%s Gamma", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), 100, 1000, 3000, 50, slider_gamma, param);
 		tailptr = &(*tailptr)->next;
 
 		/* add scale and offset controls per-screen */
-		string.printf("%s Horiz Stretch", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, 500, defxscale, 1500, 2, slider_xscale, param);
+		astring_printf(string, "%s Horiz Stretch", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), 500, (defxscale == 0) ? 1000 : defxscale, 1500, 2, slider_xscale, param);
 		tailptr = &(*tailptr)->next;
-		string.printf("%s Horiz Position", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, -500, defxoffset, 500, 2, slider_xoffset, param);
+		astring_printf(string, "%s Horiz Position", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), -500, defxoffset, 500, 2, slider_xoffset, param);
 		tailptr = &(*tailptr)->next;
-		string.printf("%s Vert Stretch", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, 500, defyscale, 1500, 2, slider_yscale, param);
+		astring_printf(string, "%s Vert Stretch", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), 500, (defyscale == 0) ? 1000 : defyscale, 1500, 2, slider_yscale, param);
 		tailptr = &(*tailptr)->next;
-		string.printf("%s Vert Position", slider_get_screen_desc(*screen));
-		*tailptr = slider_alloc(machine, string, -500, defyoffset, 500, 2, slider_yoffset, param);
+		astring_printf(string, "%s Vert Position", slider_get_screen_desc(device));
+		*tailptr = slider_alloc(machine, astring_c(string), -500, defyoffset, 500, 2, slider_yoffset, param);
 		tailptr = &(*tailptr)->next;
 	}
 
-	laserdisc_device_iterator lditer(machine.root_device());
-	for (laserdisc_device *laserdisc = lditer.first(); laserdisc != NULL; laserdisc = lditer.next())
-		if (laserdisc->overlay_configured())
+	for (device = device_list_first(machine->config->devicelist, LASERDISC); device != NULL; device = device_list_next(device, LASERDISC))
+	{
+		const laserdisc_config *config = (const laserdisc_config *)device->inline_config;
+		if (config->overupdate != NULL)
 		{
-			laserdisc_overlay_config config;
-			laserdisc->get_overlay_config(config);
-			int defxscale = floor(config.m_overscalex * 1000.0f + 0.5f);
-			int defyscale = floor(config.m_overscaley * 1000.0f + 0.5f);
-			int defxoffset = floor(config.m_overposx * 1000.0f + 0.5f);
-			int defyoffset = floor(config.m_overposy * 1000.0f + 0.5f);
-			void *param = (void *)laserdisc;
+			int defxscale = floor(config->overscalex * 1000.0f + 0.5f);
+			int defyscale = floor(config->overscaley * 1000.0f + 0.5f);
+			int defxoffset = floor(config->overposx * 1000.0f + 0.5f);
+			int defyoffset = floor(config->overposy * 1000.0f + 0.5f);
+			void *param = (void *)device;
 
 			/* add scale and offset controls per-overlay */
-			string.printf("Laserdisc '%s' Horiz Stretch", laserdisc->tag());
-			*tailptr = slider_alloc(machine, string, 500, (defxscale == 0) ? 1000 : defxscale, 1500, 2, slider_overxscale, param);
+			astring_printf(string, "%s Horiz Stretch", slider_get_laserdisc_desc(device));
+			*tailptr = slider_alloc(machine, astring_c(string), 500, (defxscale == 0) ? 1000 : defxscale, 1500, 2, slider_overxscale, param);
 			tailptr = &(*tailptr)->next;
-			string.printf("Laserdisc '%s' Horiz Position", laserdisc->tag());
-			*tailptr = slider_alloc(machine, string, -500, defxoffset, 500, 2, slider_overxoffset, param);
+			astring_printf(string, "%s Horiz Position", slider_get_laserdisc_desc(device));
+			*tailptr = slider_alloc(machine, astring_c(string), -500, defxoffset, 500, 2, slider_overxoffset, param);
 			tailptr = &(*tailptr)->next;
-			string.printf("Laserdisc '%s' Vert Stretch", laserdisc->tag());
-			*tailptr = slider_alloc(machine, string, 500, (defyscale == 0) ? 1000 : defyscale, 1500, 2, slider_overyscale, param);
+			astring_printf(string, "%s Vert Stretch", slider_get_laserdisc_desc(device));
+			*tailptr = slider_alloc(machine, astring_c(string), 500, (defyscale == 0) ? 1000 : defyscale, 1500, 2, slider_overyscale, param);
 			tailptr = &(*tailptr)->next;
-			string.printf("Laserdisc '%s' Vert Position", laserdisc->tag());
-			*tailptr = slider_alloc(machine, string, -500, defyoffset, 500, 2, slider_overyoffset, param);
+			astring_printf(string, "%s Vert Position", slider_get_laserdisc_desc(device));
+			*tailptr = slider_alloc(machine, astring_c(string), -500, defyoffset, 500, 2, slider_overyoffset, param);
 			tailptr = &(*tailptr)->next;
 		}
+	}
 
-	for (screen_device *screen = scriter.first(); screen != NULL; screen = scriter.next())
-		if (screen->screen_type() == SCREEN_TYPE_VECTOR)
+	for (device = video_screen_first(machine->config); device != NULL; device = video_screen_next(device))
+	{
+		const screen_config *scrconfig = (const screen_config *)device->inline_config;
+		if (scrconfig->type == SCREEN_TYPE_VECTOR)
 		{
 			/* add flicker control */
 			*tailptr = slider_alloc(machine, "Vector Flicker", 0, 0, 1000, 10, slider_flicker, NULL);
@@ -1775,23 +1552,25 @@ static slider_state *slider_init(running_machine &machine)
 			tailptr = &(*tailptr)->next;
 			break;
 		}
+	}
 
 #ifdef MAME_DEBUG
 	/* add crosshair adjusters */
-	for (port = machine.m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist().first(); field != NULL; field = field->next())
+	for (port = machine->portconfig; port != NULL; port = port->next)
+		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->crossaxis != CROSSHAIR_AXIS_NONE && field->player == 0)
 			{
 				void *param = (void *)field;
-				string.printf("Crosshair Scale %s", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y");
-				*tailptr = slider_alloc(machine, string, -3000, 1000, 3000, 100, slider_crossscale, param);
+				astring_printf(string, "Crosshair Scale %s", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y");
+				*tailptr = slider_alloc(machine, astring_c(string), -3000, 1000, 3000, 100, slider_crossscale, param);
 				tailptr = &(*tailptr)->next;
-				string.printf("Crosshair Offset %s", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y");
-				*tailptr = slider_alloc(machine, string, -3000, 0, 3000, 100, slider_crossoffset, param);
+				astring_printf(string, "Crosshair Offset %s", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y");
+				*tailptr = slider_alloc(machine, astring_c(string), -3000, 0, 3000, 100, slider_crossoffset, param);
 				tailptr = &(*tailptr)->next;
 			}
 #endif
 
+	astring_free(string);
 	return listhead;
 }
 
@@ -1800,13 +1579,13 @@ static slider_state *slider_init(running_machine &machine)
     slider_volume - global volume slider callback
 -------------------------------------------------*/
 
-static INT32 slider_volume(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_volume(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	if (newval != SLIDER_NOCHANGE)
-		machine.sound().set_attenuation(newval);
+		sound_set_attenuation(machine, newval);
 	if (string != NULL)
-		string->printf("%3ddB", machine.sound().attenuation());
-	return machine.sound().attenuation();
+		astring_printf(string, "%3ddB", sound_get_attenuation(machine));
+	return sound_get_attenuation(machine);
 }
 
 
@@ -1815,20 +1594,14 @@ static INT32 slider_volume(running_machine &machine, void *arg, astring *string,
     slider callback
 -------------------------------------------------*/
 
-static INT32 slider_mixervol(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_mixervol(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	speaker_input info;
-	if (!machine.sound().indexed_speaker_input((FPTR)arg, info))
-		return 0;
+	int which = (FPTR)arg;
 	if (newval != SLIDER_NOCHANGE)
-	{
-		INT32 curval = floor(info.stream->input_gain(info.inputnum) * 1000.0f + 0.5f);
-		if (newval > curval && (newval - curval) <= 4) newval += 4; // round up on increment
-		info.stream->set_input_gain(info.inputnum, (float)newval * 0.001f);
-	}
+		sound_set_user_gain(machine, which, (float)newval * 0.001f);
 	if (string != NULL)
-		string->printf("%4.2f", info.stream->input_gain(info.inputnum));
-	return floor(info.stream->input_gain(info.inputnum) * 1000.0f + 0.5f);
+		astring_printf(string, "%4.2f", sound_get_user_gain(machine, which));
+	return floor(sound_get_user_gain(machine, which) * 1000.0f + 0.5f);
 }
 
 
@@ -1837,7 +1610,7 @@ static INT32 slider_mixervol(running_machine &machine, void *arg, astring *strin
     callback
 -------------------------------------------------*/
 
-static INT32 slider_adjuster(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_adjuster(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	const input_field_config *field = (const input_field_config *)arg;
 	input_field_user_settings settings;
@@ -1849,7 +1622,7 @@ static INT32 slider_adjuster(running_machine &machine, void *arg, astring *strin
 		input_field_set_user_settings(field, &settings);
 	}
 	if (string != NULL)
-		string->printf("%d%%", settings.value);
+		astring_printf(string, "%d%%", settings.value);
 	return settings.value;
 }
 
@@ -1859,14 +1632,14 @@ static INT32 slider_adjuster(running_machine &machine, void *arg, astring *strin
     callback
 -------------------------------------------------*/
 
-static INT32 slider_overclock(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_overclock(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	device_t *cpu = (device_t *)arg;
+	const device_config *cpu = (const device_config *)arg;
 	if (newval != SLIDER_NOCHANGE)
-		cpu->set_clock_scale((float)newval * 0.001f);
+		cpu_set_clockscale(cpu, (float)newval * 0.001f);
 	if (string != NULL)
-		string->printf("%3.0f%%", floor(cpu->clock_scale() * 100.0f + 0.5f));
-	return floor(cpu->clock_scale() * 1000.0f + 0.5f);
+		astring_printf(string, "%3.0f%%", floor(cpu_get_clockscale(cpu) * 100.0f + 0.5f));
+	return floor(cpu_get_clockscale(cpu) * 1000.0f + 0.5f);
 }
 
 
@@ -1874,22 +1647,24 @@ static INT32 slider_overclock(running_machine &machine, void *arg, astring *stri
     slider_refresh - refresh rate slider callback
 -------------------------------------------------*/
 
-static INT32 slider_refresh(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_refresh(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	double defrefresh = ATTOSECONDS_TO_HZ(screen->refresh_attoseconds());
+	const device_config *screen = (const device_config *)arg;
+	const screen_config *scrconfig = (const screen_config *)screen->inline_config;
+	double defrefresh = ATTOSECONDS_TO_HZ(scrconfig->refresh);
 	double refresh;
 
 	if (newval != SLIDER_NOCHANGE)
 	{
-		int width = screen->width();
-		int height = screen->height();
-		const rectangle &visarea = screen->visible_area();
-		screen->configure(width, height, visarea, HZ_TO_ATTOSECONDS(defrefresh + (double)newval * 0.001));
+		int width = video_screen_get_width(screen);
+		int height = video_screen_get_height(screen);
+		const rectangle *visarea = video_screen_get_visible_area(screen);
+
+		video_screen_configure(screen, width, height, visarea, HZ_TO_ATTOSECONDS(defrefresh + (double)newval * 0.001));
 	}
 	if (string != NULL)
-		string->printf("%.3ffps", ATTOSECONDS_TO_HZ(machine.primary_screen->frame_period().attoseconds));
-	refresh = ATTOSECONDS_TO_HZ(machine.primary_screen->frame_period().attoseconds);
+		astring_printf(string, "%.3ffps", ATTOSECONDS_TO_HZ(video_screen_get_frame_period(machine->primary_screen).attoseconds));
+	refresh = ATTOSECONDS_TO_HZ(video_screen_get_frame_period(machine->primary_screen).attoseconds);
 	return floor((refresh - defrefresh) * 1000.0f + 0.5f);
 }
 
@@ -1899,20 +1674,21 @@ static INT32 slider_refresh(running_machine &machine, void *arg, astring *string
     callback
 -------------------------------------------------*/
 
-static INT32 slider_brightness(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_brightness(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_brightness = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.brightness = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_brightness);
-	return floor(settings.m_brightness * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.brightness);
+	return floor(settings.brightness * 1000.0f + 0.5f);
 }
 
 
@@ -1921,20 +1697,21 @@ static INT32 slider_brightness(running_machine &machine, void *arg, astring *str
     callback
 -------------------------------------------------*/
 
-static INT32 slider_contrast(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_contrast(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_contrast = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.contrast = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_contrast);
-	return floor(settings.m_contrast * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.contrast);
+	return floor(settings.contrast * 1000.0f + 0.5f);
 }
 
 
@@ -1942,20 +1719,21 @@ static INT32 slider_contrast(running_machine &machine, void *arg, astring *strin
     slider_gamma - screen gamma slider callback
 -------------------------------------------------*/
 
-static INT32 slider_gamma(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_gamma(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_gamma = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.gamma = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_gamma);
-	return floor(settings.m_gamma * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.gamma);
+	return floor(settings.gamma * 1000.0f + 0.5f);
 }
 
 
@@ -1964,20 +1742,21 @@ static INT32 slider_gamma(running_machine &machine, void *arg, astring *string, 
     callback
 -------------------------------------------------*/
 
-static INT32 slider_xscale(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_xscale(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_xscale = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.xscale = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_xscale);
-	return floor(settings.m_xscale * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.xscale);
+	return floor(settings.xscale * 1000.0f + 0.5f);
 }
 
 
@@ -1986,20 +1765,21 @@ static INT32 slider_xscale(running_machine &machine, void *arg, astring *string,
     callback
 -------------------------------------------------*/
 
-static INT32 slider_yscale(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_yscale(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_yscale = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.yscale = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_yscale);
-	return floor(settings.m_yscale * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.yscale);
+	return floor(settings.yscale * 1000.0f + 0.5f);
 }
 
 
@@ -2008,20 +1788,21 @@ static INT32 slider_yscale(running_machine &machine, void *arg, astring *string,
     slider callback
 -------------------------------------------------*/
 
-static INT32 slider_xoffset(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_xoffset(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_xoffset = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.xoffset = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_xoffset);
-	return floor(settings.m_xoffset * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.xoffset);
+	return floor(settings.xoffset * 1000.0f + 0.5f);
 }
 
 
@@ -2030,20 +1811,21 @@ static INT32 slider_xoffset(running_machine &machine, void *arg, astring *string
     slider callback
 -------------------------------------------------*/
 
-static INT32 slider_yoffset(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_yoffset(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	screen_device *screen = reinterpret_cast<screen_device *>(arg);
-	render_container::user_settings settings;
+	const device_config *screen = (const device_config *)arg;
+	render_container *container = render_container_get_screen(screen);
+	render_container_user_settings settings;
 
-	screen->container().get_user_settings(settings);
+	render_container_get_user_settings(container, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_yoffset = (float)newval * 0.001f;
-		screen->container().set_user_settings(settings);
+		settings.yoffset = (float)newval * 0.001f;
+		render_container_set_user_settings(container, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_yoffset);
-	return floor(settings.m_yoffset * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.yoffset);
+	return floor(settings.yoffset * 1000.0f + 0.5f);
 }
 
 
@@ -2052,20 +1834,20 @@ static INT32 slider_yoffset(running_machine &machine, void *arg, astring *string
     callback
 -------------------------------------------------*/
 
-static INT32 slider_overxscale(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_overxscale(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	laserdisc_device *laserdisc = (laserdisc_device *)arg;
-	laserdisc_overlay_config settings;
+	const device_config *laserdisc = (const device_config *)arg;
+	laserdisc_config settings;
 
-	laserdisc->get_overlay_config(settings);
+	laserdisc_get_config(laserdisc, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_overscalex = (float)newval * 0.001f;
-		laserdisc->set_overlay_config(settings);
+		settings.overscalex = (float)newval * 0.001f;
+		laserdisc_set_config(laserdisc, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_overscalex);
-	return floor(settings.m_overscalex * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.overscalex);
+	return floor(settings.overscalex * 1000.0f + 0.5f);
 }
 
 
@@ -2074,20 +1856,20 @@ static INT32 slider_overxscale(running_machine &machine, void *arg, astring *str
     callback
 -------------------------------------------------*/
 
-static INT32 slider_overyscale(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_overyscale(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	laserdisc_device *laserdisc = (laserdisc_device *)arg;
-	laserdisc_overlay_config settings;
+	const device_config *laserdisc = (const device_config *)arg;
+	laserdisc_config settings;
 
-	laserdisc->get_overlay_config(settings);
+	laserdisc_get_config(laserdisc, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_overscaley = (float)newval * 0.001f;
-		laserdisc->set_overlay_config(settings);
+		settings.overscaley = (float)newval * 0.001f;
+		laserdisc_set_config(laserdisc, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_overscaley);
-	return floor(settings.m_overscaley * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.overscaley);
+	return floor(settings.overscaley * 1000.0f + 0.5f);
 }
 
 
@@ -2096,20 +1878,20 @@ static INT32 slider_overyscale(running_machine &machine, void *arg, astring *str
     slider callback
 -------------------------------------------------*/
 
-static INT32 slider_overxoffset(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_overxoffset(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	laserdisc_device *laserdisc = (laserdisc_device *)arg;
-	laserdisc_overlay_config settings;
+	const device_config *laserdisc = (const device_config *)arg;
+	laserdisc_config settings;
 
-	laserdisc->get_overlay_config(settings);
+	laserdisc_get_config(laserdisc, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_overposx = (float)newval * 0.001f;
-		laserdisc->set_overlay_config(settings);
+		settings.overposx = (float)newval * 0.001f;
+		laserdisc_set_config(laserdisc, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_overposx);
-	return floor(settings.m_overposx * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.overposx);
+	return floor(settings.overposx * 1000.0f + 0.5f);
 }
 
 
@@ -2118,20 +1900,20 @@ static INT32 slider_overxoffset(running_machine &machine, void *arg, astring *st
     slider callback
 -------------------------------------------------*/
 
-static INT32 slider_overyoffset(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_overyoffset(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
-	laserdisc_device *laserdisc = (laserdisc_device *)arg;
-	laserdisc_overlay_config settings;
+	const device_config *laserdisc = (const device_config *)arg;
+	laserdisc_config settings;
 
-	laserdisc->get_overlay_config(settings);
+	laserdisc_get_config(laserdisc, &settings);
 	if (newval != SLIDER_NOCHANGE)
 	{
-		settings.m_overposy = (float)newval * 0.001f;
-		laserdisc->set_overlay_config(settings);
+		settings.overposy = (float)newval * 0.001f;
+		laserdisc_set_config(laserdisc, &settings);
 	}
 	if (string != NULL)
-		string->printf("%.3f", settings.m_overposy);
-	return floor(settings.m_overposy * 1000.0f + 0.5f);
+		astring_printf(string, "%.3f", settings.overposy);
+	return floor(settings.overposy * 1000.0f + 0.5f);
 }
 
 
@@ -2140,12 +1922,12 @@ static INT32 slider_overyoffset(running_machine &machine, void *arg, astring *st
     callback
 -------------------------------------------------*/
 
-static INT32 slider_flicker(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_flicker(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	if (newval != SLIDER_NOCHANGE)
 		vector_set_flicker((float)newval * 0.1f);
 	if (string != NULL)
-		string->printf("%1.2f", vector_get_flicker());
+		astring_printf(string, "%1.2f", vector_get_flicker());
 	return floor(vector_get_flicker() * 10.0f + 0.5f);
 }
 
@@ -2155,12 +1937,12 @@ static INT32 slider_flicker(running_machine &machine, void *arg, astring *string
     callback
 -------------------------------------------------*/
 
-static INT32 slider_beam(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_beam(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	if (newval != SLIDER_NOCHANGE)
 		vector_set_beam((float)newval * 0.01f);
 	if (string != NULL)
-		string->printf("%1.2f", vector_get_beam());
+		astring_printf(string, "%1.2f", vector_get_beam());
 	return floor(vector_get_beam() * 100.0f + 0.5f);
 }
 
@@ -2170,19 +1952,38 @@ static INT32 slider_beam(running_machine &machine, void *arg, astring *string, I
     description for a given screen
 -------------------------------------------------*/
 
-static char *slider_get_screen_desc(screen_device &screen)
+static char *slider_get_screen_desc(const device_config *screen)
 {
-	screen_device_iterator iter(screen.machine().root_device());
-	int scrcount = iter.count();
+	int screen_count = video_screen_count(screen->machine->config);
 	static char descbuf[256];
 
-	if (scrcount > 1)
-		sprintf(descbuf, "Screen '%s'", screen.tag());
+	if (screen_count > 1)
+		sprintf(descbuf, "Screen '%s'", screen->tag);
 	else
 		strcpy(descbuf, "Screen");
 
 	return descbuf;
 }
+
+
+/*-------------------------------------------------
+    slider_get_laserdisc_desc - returns the
+    description for a given laseridsc
+-------------------------------------------------*/
+
+static char *slider_get_laserdisc_desc(const device_config *laserdisc)
+{
+	int ldcount = device_list_items(laserdisc->machine->config->devicelist, LASERDISC);
+	static char descbuf[256];
+
+	if (ldcount > 1)
+		sprintf(descbuf, "Laserdisc '%s'", laserdisc->tag);
+	else
+		strcpy(descbuf, "Laserdisc");
+
+	return descbuf;
+}
+
 
 /*-------------------------------------------------
     slider_crossscale - crosshair scale slider
@@ -2190,14 +1991,14 @@ static char *slider_get_screen_desc(screen_device &screen)
 -------------------------------------------------*/
 
 #ifdef MAME_DEBUG
-static INT32 slider_crossscale(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_crossscale(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	input_field_config *field = (input_field_config *)arg;
 
 	if (newval != SLIDER_NOCHANGE)
 		field->crossscale = (float)newval * 0.001f;
 	if (string != NULL)
-		string->printf("%s %s %1.3f", "Crosshair Scale", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y", (float)newval * 0.001f);
+		astring_printf(string, "%s %s %1.3f", "Crosshair Scale", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y", (float)newval * 0.001f);
 	return floor(field->crossscale * 1000.0f + 0.5f);
 }
 #endif
@@ -2209,41 +2010,14 @@ static INT32 slider_crossscale(running_machine &machine, void *arg, astring *str
 -------------------------------------------------*/
 
 #ifdef MAME_DEBUG
-static INT32 slider_crossoffset(running_machine &machine, void *arg, astring *string, INT32 newval)
+static INT32 slider_crossoffset(running_machine *machine, void *arg, astring *string, INT32 newval)
 {
 	input_field_config *field = (input_field_config *)arg;
 
 	if (newval != SLIDER_NOCHANGE)
 		field->crossoffset = (float)newval * 0.001f;
 	if (string != NULL)
-		string->printf("%s %s %1.3f", "Crosshair Offset", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y", (float)newval * 0.001f);
+		astring_printf(string, "%s %s %1.3f", "Crosshair Offset", (field->crossaxis == CROSSHAIR_AXIS_X) ? "X" : "Y", (float)newval * 0.001f);
 	return field->crossoffset;
 }
 #endif
-
-
-/*-------------------------------------------------
-    ui_get_use_natural_keyboard - returns
-    whether the natural keyboard is active
--------------------------------------------------*/
-
-int ui_get_use_natural_keyboard(running_machine &machine)
-{
-	return ui_use_natural_keyboard;
-}
-
-
-
-/*-------------------------------------------------
-    ui_set_use_natural_keyboard - specifies
-    whether the natural keyboard is active
--------------------------------------------------*/
-
-void ui_set_use_natural_keyboard(running_machine &machine, int use_natural_keyboard)
-{
-	ui_use_natural_keyboard = use_natural_keyboard;
-	astring error;
-	machine.options().set_value(OPTION_NATURAL_KEYBOARD, use_natural_keyboard, OPTION_PRIORITY_CMDLINE, error);
-	assert(!error);
-}
-

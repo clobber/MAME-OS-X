@@ -24,28 +24,9 @@
 #define SPACEFB_INT_TRIGGER_COUNT_2		(0x0f0)
 
 
-class spacefb_state : public driver_device
-{
-public:
-	spacefb_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_sound_latch;
-	emu_timer *m_interrupt_timer;
-	UINT8 *m_videoram;
-	size_t m_videoram_size;
-	UINT8 *m_object_present_map;
-	UINT8 m_port_0;
-	UINT8 m_port_2;
-	UINT32 m_star_shift_reg;
-	double m_color_weights_rg[3];
-	double m_color_weights_b[2];
-};
-
-
 /*----------- defined in audio/spacefb.c -----------*/
 
-MACHINE_CONFIG_EXTERN( spacefb_audio );
+MACHINE_DRIVER_EXTERN( spacefb_audio );
 
 READ8_HANDLER( spacefb_audio_p2_r );
 READ8_HANDLER( spacefb_audio_t0_r );
@@ -55,8 +36,11 @@ WRITE8_HANDLER( spacefb_port_1_w );
 
 /*----------- defined in video/spacefb.c -----------*/
 
+extern UINT8 *spacefb_videoram;
+extern size_t spacefb_videoram_size;
+
 VIDEO_START( spacefb );
-SCREEN_UPDATE_RGB32( spacefb );
+VIDEO_UPDATE( spacefb );
 
 WRITE8_HANDLER( spacefb_port_0_w );
 WRITE8_HANDLER( spacefb_port_2_w );

@@ -10,8 +10,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "vtlb.h"
+#include "mame.h"
 
 
 
@@ -30,8 +30,8 @@
 /* VTLB state */
 struct _vtlb_state
 {
-	cpu_device *		cpudevice;			/* CPU device */
-	address_spacenum	space;				/* address space */
+	const device_config *device;			/* CPU device */
+	int					space;				/* address space */
 	int 				dynamic;			/* number of dynamic entries */
 	int					fixed;				/* number of fixed entries */
 	int					dynindex;			/* index of next dynamic entry */
@@ -41,6 +41,7 @@ struct _vtlb_state
 	int *				fixedpages;			/* number of pages each fixed entry covers */
 	vtlb_entry *		table;				/* table of entries by address */
 	vtlb_entry *		save;				/* cache of live table entries for saving */
+	cpu_translate_func	translate;			/* translate function */
 };
 
 
@@ -54,40 +55,40 @@ struct _vtlb_state
     given CPU
 -------------------------------------------------*/
 
-vtlb_state *vtlb_alloc(device_t *cpu, address_spacenum space, int fixed_entries, int dynamic_entries)
+vtlb_state *vtlb_alloc(const device_config *cpu, int space, int fixed_entries, int dynamic_entries)
 {
 	vtlb_state *vtlb;
 
 	/* allocate memory for the core structure */
-	vtlb = auto_alloc_clear(cpu->machine(), vtlb_state);
+	vtlb = alloc_clear_or_die(vtlb_state);
 
 	/* fill in CPU information */
-	vtlb->cpudevice = downcast<cpu_device *>(cpu);
+	vtlb->device = cpu;
 	vtlb->space = space;
 	vtlb->dynamic = dynamic_entries;
 	vtlb->fixed = fixed_entries;
-	const address_space_config *spaceconfig = device_get_space_config(*cpu, space);
-	assert(spaceconfig != NULL);
-	vtlb->pageshift = spaceconfig->m_page_shift;
-	vtlb->addrwidth = spaceconfig->m_logaddr_width;
+	vtlb->pageshift = cpu_get_page_shift(cpu, space);
+	vtlb->addrwidth = cpu_get_logaddr_width(cpu, space);
+	vtlb->translate = (cpu_translate_func)device_get_info_fct(cpu, CPUINFO_FCT_TRANSLATE);
 
 	/* validate CPU information */
 	assert((1 << vtlb->pageshift) > VTLB_FLAGS_MASK);
+	assert(vtlb->translate != NULL);
 	assert(vtlb->addrwidth > vtlb->pageshift);
 
 	/* allocate the entry array */
-	vtlb->live = auto_alloc_array_clear(cpu->machine(), offs_t, fixed_entries + dynamic_entries);
-	cpu->save_pointer(NAME(vtlb->live), fixed_entries + dynamic_entries, space);
+	vtlb->live = alloc_array_clear_or_die(offs_t, fixed_entries + dynamic_entries);
+	state_save_register_device_item_pointer(cpu, space, vtlb->live, fixed_entries + dynamic_entries);
 
 	/* allocate the lookup table */
-	vtlb->table = auto_alloc_array_clear(cpu->machine(), vtlb_entry, (size_t) 1 << (vtlb->addrwidth - vtlb->pageshift));
-	cpu->save_pointer(NAME(vtlb->table), 1 << (vtlb->addrwidth - vtlb->pageshift), space);
+	vtlb->table = alloc_array_clear_or_die(vtlb_entry, (size_t) 1 << (vtlb->addrwidth - vtlb->pageshift));
+	state_save_register_device_item_pointer(cpu, space, vtlb->table, 1 << (vtlb->addrwidth - vtlb->pageshift));
 
 	/* allocate the fixed page count array */
 	if (fixed_entries > 0)
 	{
-		vtlb->fixedpages = auto_alloc_array_clear(cpu->machine(), int, fixed_entries);
-		cpu->save_pointer(NAME(vtlb->fixedpages), fixed_entries, space);
+		vtlb->fixedpages = alloc_array_clear_or_die(int, fixed_entries);
+		state_save_register_device_item_pointer(cpu, space, vtlb->fixedpages, fixed_entries);
 	}
 	return vtlb;
 }
@@ -101,16 +102,16 @@ void vtlb_free(vtlb_state *vtlb)
 {
 	/* free the fixed pages if allocated */
 	if (vtlb->fixedpages != NULL)
-		auto_free(vtlb->cpudevice->machine(), vtlb->fixedpages);
+		free(vtlb->fixedpages);
 
 	/* free the table and array if they exist */
 	if (vtlb->live != NULL)
-		auto_free(vtlb->cpudevice->machine(), vtlb->live);
+		free(vtlb->live);
 	if (vtlb->table != NULL)
-		auto_free(vtlb->cpudevice->machine(), vtlb->table);
+		free(vtlb->table);
 
 	/* and then the VTLB object itself */
-	auto_free(vtlb->cpudevice->machine(), vtlb);
+	free(vtlb);
 }
 
 
@@ -146,7 +147,7 @@ int vtlb_fill(vtlb_state *vtlb, offs_t address, int intention)
 
 	/* ask the CPU core to translate for us */
 	taddress = address;
-	if (!vtlb->cpudevice->translate(vtlb->space, intention, taddress))
+	if (!(*vtlb->translate)(vtlb->device, vtlb->space, intention, &taddress))
 	{
 		if (PRINTF_TLB)
 			printf("failed: no translation\n");
@@ -210,9 +211,8 @@ void vtlb_load(vtlb_state *vtlb, int entrynum, int numpages, offs_t address, vtl
 	if (vtlb->live[liveindex] != 0)
 	{
 		int pagecount = vtlb->fixedpages[entrynum];
-		int oldtableindex = vtlb->live[liveindex] - 1;
 		for (pagenum = 0; pagenum < pagecount; pagenum++)
-			vtlb->table[oldtableindex + pagenum] = 0;
+			vtlb->table[vtlb->live[liveindex] - 1 + pagenum] = 0;
 	}
 
 	/* claim this new entry */
@@ -220,7 +220,6 @@ void vtlb_load(vtlb_state *vtlb, int entrynum, int numpages, offs_t address, vtl
 
 	/* store the raw value, making sure the "fixed" flag is set */
 	value |= VTLB_FLAG_FIXED;
-	vtlb->fixedpages[entrynum] = numpages;
 	for (pagenum = 0; pagenum < numpages; pagenum++)
 		vtlb->table[tableindex + pagenum] = value + (pagenum << vtlb->pageshift);
 }

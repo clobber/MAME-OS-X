@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "upd4701.h"
 
 /***************************************************************************
@@ -45,11 +45,12 @@ struct _upd4701_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE upd4701_state *get_safe_token(device_t *device)
+INLINE upd4701_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert((device->type() == UPD4701));
-	return (upd4701_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert((device->type == UPD4701));
+	return (upd4701_state *)device->token;
 }
 
 
@@ -261,20 +262,20 @@ static DEVICE_START( upd4701 )
 	upd4701_state *upd4701 = get_safe_token(device);
 
 	/* register for state saving */
-	device->save_item(NAME(upd4701->cs));
-	device->save_item(NAME(upd4701->xy));
-	device->save_item(NAME(upd4701->ul));
-	device->save_item(NAME(upd4701->resetx));
-	device->save_item(NAME(upd4701->resety));
-	device->save_item(NAME(upd4701->latchx));
-	device->save_item(NAME(upd4701->latchy));
-	device->save_item(NAME(upd4701->startx));
-	device->save_item(NAME(upd4701->starty));
-	device->save_item(NAME(upd4701->x));
-	device->save_item(NAME(upd4701->y));
-	device->save_item(NAME(upd4701->switches));
-	device->save_item(NAME(upd4701->latchswitches));
-	device->save_item(NAME(upd4701->cf));
+	state_save_register_device_item(device, 0, upd4701->cs);
+	state_save_register_device_item(device, 0, upd4701->xy);
+	state_save_register_device_item(device, 0, upd4701->ul);
+	state_save_register_device_item(device, 0, upd4701->resetx);
+	state_save_register_device_item(device, 0, upd4701->resety);
+	state_save_register_device_item(device, 0, upd4701->latchx);
+	state_save_register_device_item(device, 0, upd4701->latchy);
+	state_save_register_device_item(device, 0, upd4701->startx);
+	state_save_register_device_item(device, 0, upd4701->starty);
+	state_save_register_device_item(device, 0, upd4701->x);
+	state_save_register_device_item(device, 0, upd4701->y);
+	state_save_register_device_item(device, 0, upd4701->switches);
+	state_save_register_device_item(device, 0, upd4701->latchswitches);
+	state_save_register_device_item(device, 0, upd4701->cf);
 }
 
 /*-------------------------------------------------
@@ -311,7 +312,5 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"NEC uPD4701 Encoder"
 #define DEVTEMPLATE_FAMILY		"NEC uPD4701 Encoder"
+#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
 #include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(UPD4701, upd4701);

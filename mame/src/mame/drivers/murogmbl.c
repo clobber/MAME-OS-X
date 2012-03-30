@@ -33,20 +33,11 @@ Funzionamento: Non Funzionante
 Dumped: 06/04/2009 f205v
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
 
-
-class murogmbl_state : public driver_device
-{
-public:
-	murogmbl_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8* m_video;
-};
-
+static UINT8* murogmbl_video;
 
 static PALETTE_INIT( murogmbl )
 {
@@ -73,11 +64,11 @@ static PALETTE_INIT( murogmbl )
 	}
 }
 
-static ADDRESS_MAP_START( murogmbl_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( murogmbl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fFf) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
 	AM_RANGE(0x4800, 0x4bff) AM_RAM
-	AM_RANGE(0x5800, 0x5bff) AM_RAM AM_BASE_MEMBER(murogmbl_state, m_video)
+	AM_RANGE(0x5800, 0x5bff) AM_RAM AM_BASE(&murogmbl_video)
 	AM_RANGE(0x5c00, 0x5fff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ_PORT("IN0")
 	AM_RANGE(0x6800, 0x6800) AM_READ_PORT("DSW")
@@ -90,10 +81,9 @@ static VIDEO_START(murogmbl)
 
 }
 
-static SCREEN_UPDATE_IND16(murogmbl)
+static VIDEO_UPDATE(murogmbl)
 {
-	murogmbl_state *state = screen.machine().driver_data<murogmbl_state>();
-	const gfx_element *gfx = screen.machine().gfx[0];
+	const gfx_element *gfx = screen->machine->gfx[0];
 	int count = 0;
 
 	int y, x;
@@ -102,7 +92,7 @@ static SCREEN_UPDATE_IND16(murogmbl)
 	{
 		for (x = 0; x < 32; x++)
 		{
-			int tile = state->m_video[count];
+			int tile = murogmbl_video[count];
 			drawgfx_opaque(bitmap, cliprect, gfx, tile, 0, 0, 0, x * 8, y * 8);
 
 			count++;
@@ -142,7 +132,7 @@ static INPUT_PORTS_START( murogmbl )
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Coin_B ) )
+	PORT_DIPNAME( 0x08, 0x08, "Coin 2" )
 	PORT_DIPSETTING(    0x08, "10 credits" )
 	PORT_DIPSETTING(    0x00, "5 credits" )
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
@@ -161,46 +151,47 @@ INPUT_PORTS_END
 
 static const gfx_layout layout8x8x2 =
 {
-	8,8,
-	RGN_FRAC(1,2),
-	2,
-	{
+ 	8,8,
+ 	RGN_FRAC(1,2),
+ 	2,
+ 	{
 		RGN_FRAC(0,2),RGN_FRAC(1,2)
-	},
-	{ STEP8(0,1) },
-	{ STEP8(0,8) },
-	8*8
+ 	},
+ 	{ STEP8(0,1) },
+ 	{ STEP8(0,8) },
+ 	8*8
 };
 
 static GFXDECODE_START( murogmbl )
 	GFXDECODE_ENTRY( "gfx1", 0, layout8x8x2,  0x0, 1 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( murogmbl, murogmbl_state )
+static MACHINE_DRIVER_START( murogmbl )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 1000000) /* Z80? */
-	MCFG_CPU_PROGRAM_MAP(murogmbl_map)
+	MDRV_CPU_ADD("maincpu", Z80, 1000000) /* Z80? */
+	MDRV_CPU_PROGRAM_MAP(murogmbl_map)
 
-	MCFG_GFXDECODE(murogmbl)
+	MDRV_GFXDECODE(murogmbl)
 
-	MCFG_PALETTE_INIT(murogmbl)
+	MDRV_PALETTE_INIT(murogmbl)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(murogmbl)
+ 	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_PALETTE_LENGTH(0x100)
+	MDRV_PALETTE_LENGTH(0x100)
 
-	MCFG_VIDEO_START(murogmbl)
+	MDRV_VIDEO_START(murogmbl)
+	MDRV_VIDEO_UPDATE(murogmbl)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("dac1", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("dac1", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 

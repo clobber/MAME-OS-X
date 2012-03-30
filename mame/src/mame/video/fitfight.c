@@ -1,19 +1,21 @@
 /* Fit of Fighting Video Hardware */
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/fitfight.h"
 
+static tilemap *fof_bak_tilemap;
+static tilemap *fof_mid_tilemap;
+static tilemap *fof_txt_tilemap;
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int layer )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int layer )
 {
-	fitfight_state *state = machine.driver_data<fitfight_state>();
-	const gfx_element *gfx = machine.gfx[3];
-	UINT16 *source = state->m_spriteram;
-	UINT16 *finish = source + 0x800 / 2;
+	const gfx_element *gfx = machine->gfx[3];
+	UINT16 *source = fitfight_spriteram;
+	UINT16 *finish = source + 0x800/2;
 
-	while (source < finish)
+	while( source<finish )
 	{
-		int xpos, ypos, number, xflip, yflip, end, colr, prio;
+		int xpos, ypos, number,xflip,yflip, end, colr, prio;
 
 		ypos = source[0];
 		xpos = source[3];
@@ -22,151 +24,137 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 		yflip = (source[1] & 0x0002);
 		prio = (source[1] & 0x0400) >> 10;
 		colr = (source[1] & 0x00fc) >> 2;
-
-		if (state->m_bbprot_kludge == 1)
-			colr = (source[1] & 0x00f8) >> 3;
-
+		if (bbprot_kludge==1) colr = (source[1] & 0x00f8) >> 3;
 		end = source[0] & 0x8000;
 
-		ypos = 0xff - ypos;
+		ypos = 0xff-ypos;
 
-		xpos -= 38;//48;
-		ypos -= 14;//16;
+		xpos -=38;//48;
+		ypos -=14;//16;
 
 		if (end) break;
 		if (prio == layer)
-			drawgfx_transpen(bitmap, cliprect, gfx, number, colr, xflip, yflip, xpos, ypos, 0);
+		  drawgfx_transpen(bitmap,cliprect,gfx,number,colr,xflip,yflip,xpos,ypos,0);
 
-		source += 4;
+		source+=4;
 	}
 }
 
 static TILE_GET_INFO( get_fof_bak_tile_info )
 {
-	fitfight_state *state = machine.driver_data<fitfight_state>();
-	int code = state->m_fof_bak_tileram[tile_index * 2 + 1];
-	int colr = state->m_fof_bak_tileram[tile_index * 2] & 0x1f;
-	int xflip = (state->m_fof_bak_tileram[tile_index * 2] & 0x0020) >> 5;
+	int code = fof_bak_tileram[tile_index*2+1];
+	int colr = fof_bak_tileram[tile_index*2] & 0x1f;
+	int xflip = (fof_bak_tileram[tile_index*2] & 0x0020)>>5;
 	xflip ^= 1;
 
-	SET_TILE_INFO(2, code, colr, TILE_FLIPYX(xflip));
+	SET_TILE_INFO(2,code,colr,TILE_FLIPYX(xflip));
 }
 
 WRITE16_HANDLER(  fof_bak_tileram_w )
 {
-	fitfight_state *state = space->machine().driver_data<fitfight_state>();
-
-	COMBINE_DATA(&state->m_fof_bak_tileram[offset]);
-	state->m_fof_bak_tilemap->mark_tile_dirty(offset / 2);
+	COMBINE_DATA(&fof_bak_tileram[offset]);
+	tilemap_mark_tile_dirty(fof_bak_tilemap,offset/2);
 }
 
 
 static TILE_GET_INFO( get_fof_mid_tile_info )
 {
-	fitfight_state *state = machine.driver_data<fitfight_state>();
-	int code = state->m_fof_mid_tileram[tile_index * 2 + 1];
-	int colr = state->m_fof_mid_tileram[tile_index * 2] & 0x1f;
-	int xflip = (state->m_fof_mid_tileram[tile_index * 2] & 0x0020) >> 5;
+	int code = fof_mid_tileram[tile_index*2+1];
+	int colr = fof_mid_tileram[tile_index*2] & 0x1f;
+	int xflip = (fof_mid_tileram[tile_index*2] & 0x0020)>>5;
 	xflip ^= 1;
 
-	SET_TILE_INFO(1, code, colr, TILE_FLIPYX(xflip));
+	SET_TILE_INFO(1,code,colr,TILE_FLIPYX(xflip));
 }
 
 WRITE16_HANDLER( fof_mid_tileram_w )
 {
-	fitfight_state *state = space->machine().driver_data<fitfight_state>();
+	COMBINE_DATA(&fof_mid_tileram[offset]);
 
-	COMBINE_DATA(&state->m_fof_mid_tileram[offset]);
-	state->m_fof_mid_tilemap->mark_tile_dirty(offset / 2);
+	tilemap_mark_tile_dirty(fof_mid_tilemap,offset/2);
 }
 
 static TILE_GET_INFO( get_fof_txt_tile_info )
 {
-	fitfight_state *state = machine.driver_data<fitfight_state>();
-	int code = state->m_fof_txt_tileram[tile_index * 2 + 1];
-	int colr = state->m_fof_txt_tileram[tile_index * 2] & 0x1f;
-	int xflip = (state->m_fof_txt_tileram[tile_index * 2] & 0x0020) >> 5;
+	int code = fof_txt_tileram[tile_index*2+1];
+	int colr = fof_txt_tileram[tile_index*2] & 0x1f;
+	int xflip = (fof_txt_tileram[tile_index*2] & 0x0020)>>5;
 	xflip ^= 1;
 
-	SET_TILE_INFO(0, code, colr, TILE_FLIPYX(xflip));
+	SET_TILE_INFO(0,code,colr,TILE_FLIPYX(xflip));
 }
 
 WRITE16_HANDLER( fof_txt_tileram_w )
 {
-	fitfight_state *state = space->machine().driver_data<fitfight_state>();
-
-	COMBINE_DATA(&state->m_fof_txt_tileram[offset]);
-	state->m_fof_txt_tilemap->mark_tile_dirty(offset / 2);
+	COMBINE_DATA(&fof_txt_tileram[offset]);
+	tilemap_mark_tile_dirty(fof_txt_tilemap,offset/2);
 }
 
 /* video start / update */
 
 VIDEO_START(fitfight)
 {
-	fitfight_state *state = machine.driver_data<fitfight_state>();
-	state->m_fof_bak_tilemap = tilemap_create(machine, get_fof_bak_tile_info, tilemap_scan_cols, 8, 8, 128, 32);
+	fof_bak_tilemap = tilemap_create(machine, get_fof_bak_tile_info,tilemap_scan_cols,8,8,128, 32);
 	/* opaque */
 
-	state->m_fof_mid_tilemap = tilemap_create(machine, get_fof_mid_tile_info, tilemap_scan_cols, 8, 8, 128, 32);
-	state->m_fof_mid_tilemap->set_transparent_pen(0);
+	fof_mid_tilemap = tilemap_create(machine, get_fof_mid_tile_info,tilemap_scan_cols,8,8,128, 32);
+	tilemap_set_transparent_pen(fof_mid_tilemap,0);
 
-	state->m_fof_txt_tilemap = tilemap_create(machine, get_fof_txt_tile_info, tilemap_scan_cols, 8, 8, 128, 32);
-	state->m_fof_txt_tilemap->set_transparent_pen(0);
+	fof_txt_tilemap = tilemap_create(machine, get_fof_txt_tile_info,tilemap_scan_cols,8,8,128, 32);
+	tilemap_set_transparent_pen(fof_txt_tilemap,0);
 }
 
-SCREEN_UPDATE_IND16(fitfight)
+VIDEO_UPDATE(fitfight)
 {
-	fitfight_state *state = screen.machine().driver_data<fitfight_state>();
-
 	/* scroll isn't right */
 
 	int vblank;
-	int scrollbak, scrollmid;
+	int scrollbak,scrollmid;
 
-	vblank = (state->m_fof_700000[0] & 0x8000);
+	vblank = (fof_700000[0] & 0x8000);
 
 	if (vblank > 0)
-		bitmap.fill(get_black_pen(screen.machine()), cliprect);
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 	else {
-//      if (screen.machine().input().code_pressed(KEYCODE_Q))
-//          scrollbak = ((state->m_fof_a00000[0] & 0xff00) >> 5) - ((state->m_fof_700000[0] & 0x0038) >> 3);
-//      else if (screen.machine().input().code_pressed(KEYCODE_W))
-//          scrollbak = ((state->m_fof_a00000[0] & 0xff00) >> 5) + ((state->m_fof_700000[0] & 0x01c0) >> 6);
-//      else if (screen.machine().input().code_pressed(KEYCODE_E))
-//          scrollbak = ((state->m_fof_a00000[0] & 0xff00) >> 5) - ((state->m_fof_700000[0] & 0x01c0) >> 6);
-//      else if (screen.machine().input().code_pressed(KEYCODE_R))
-//          scrollbak = ((state->m_fof_a00000[0] & 0xff00) >> 5) + ((state->m_fof_700000[0] & 0x0038) >> 3);
+//      if (input_code_pressed(screen->machine, KEYCODE_Q))
+//          scrollbak = ((fof_a00000[0]&0xff00) >> 5) - ((fof_700000[0] & 0x0038) >> 3);
+//      else if (input_code_pressed(screen->machine, KEYCODE_W))
+//          scrollbak = ((fof_a00000[0]&0xff00) >> 5) + ((fof_700000[0] & 0x01c0) >> 6);
+//      else if (input_code_pressed(screen->machine, KEYCODE_E))
+//          scrollbak = ((fof_a00000[0]&0xff00) >> 5) - ((fof_700000[0] & 0x01c0) >> 6);
+//      else if (input_code_pressed(screen->machine, KEYCODE_R))
+//          scrollbak = ((fof_a00000[0]&0xff00) >> 5) + ((fof_700000[0] & 0x0038) >> 3);
 //      else
-		scrollbak = ((state->m_fof_a00000[0] & 0xff00) >> 5);
-		state->m_fof_bak_tilemap->set_scrollx(0, scrollbak );
-		state->m_fof_bak_tilemap->set_scrolly(0, state->m_fof_a00000[0] & 0xff);
-		state->m_fof_bak_tilemap->draw(bitmap, cliprect, 0, 0);
+			scrollbak = ((fof_a00000[0]&0xff00) >> 5);
+		tilemap_set_scrollx(fof_bak_tilemap,0, scrollbak );
+		tilemap_set_scrolly(fof_bak_tilemap,0, fof_a00000[0]&0xff);
+		tilemap_draw(bitmap,cliprect,fof_bak_tilemap,0,0);
 
-		draw_sprites(screen.machine(), bitmap, cliprect, 0);
+		draw_sprites(screen->machine,bitmap,cliprect,0);
 
-//      if (screen.machine().input().code_pressed(KEYCODE_A))
-//          scrollmid = ((state->m_fof_900000[0] & 0xff00) >> 5) - ((state->m_fof_700000[0] & 0x01c0) >> 6);
-//      else if (screen.machine().input().code_pressed(KEYCODE_S))
-//          scrollmid = ((state->m_fof_900000[0] & 0xff00) >> 5) + ((state->m_fof_700000[0] & 0x0038) >> 3);
-//      else if (screen.machine().input().code_pressed(KEYCODE_D))
-//          scrollmid = ((state->m_fof_900000[0] & 0xff00) >> 5) - ((state->m_fof_700000[0] & 0x0038) >> 3);
-//      else if (screen.machine().input().code_pressed(KEYCODE_F))
-//          scrollmid = ((state->m_fof_900000[0] & 0xff00) >> 5) + ((state->m_fof_700000[0] & 0x01c0) >> 6);
+//      if (input_code_pressed(screen->machine, KEYCODE_A))
+//          scrollmid = ((fof_900000[0]&0xff00) >> 5) - ((fof_700000[0] & 0x01c0) >> 6);
+//      else if (input_code_pressed(screen->machine, KEYCODE_S))
+//          scrollmid = ((fof_900000[0]&0xff00) >> 5) + ((fof_700000[0] & 0x0038) >> 3);
+//      else if (input_code_pressed(screen->machine, KEYCODE_D))
+//          scrollmid = ((fof_900000[0]&0xff00) >> 5) - ((fof_700000[0] & 0x0038) >> 3);
+//      else if (input_code_pressed(screen->machine, KEYCODE_F))
+//          scrollmid = ((fof_900000[0]&0xff00) >> 5) + ((fof_700000[0] & 0x01c0) >> 6);
 //      else
-		scrollmid = ((state->m_fof_900000[0] & 0xff00) >> 5);
-		state->m_fof_mid_tilemap->set_scrollx(0, scrollmid );
-		state->m_fof_mid_tilemap->set_scrolly(0, state->m_fof_900000[0] & 0xff);
-//      if (!screen.machine().input().code_pressed(KEYCODE_F))
-		state->m_fof_mid_tilemap->draw(bitmap, cliprect, 0, 0);
+			scrollmid = ((fof_900000[0]&0xff00) >> 5);
+		tilemap_set_scrollx(fof_mid_tilemap,0, scrollmid );
+		tilemap_set_scrolly(fof_mid_tilemap,0, fof_900000[0]&0xff);
+//      if (!input_code_pressed(screen->machine, KEYCODE_F))
+			tilemap_draw(bitmap,cliprect,fof_mid_tilemap,0,0);
 
-		draw_sprites(screen.machine(), bitmap, cliprect, 1);
+		draw_sprites(screen->machine,bitmap,cliprect,1);
 
-		state->m_fof_txt_tilemap->draw(bitmap, cliprect, 0, 0);
+		tilemap_draw(bitmap,cliprect,fof_txt_tilemap,0,0);
 	}
 /*  popmessage ("Regs %04x %04x %04x %04x %04x %04x",
-            state->m_fof_100000[0], state->m_fof_600000[0], state->m_fof_700000[0],
-            state->m_fof_800000[0], state->m_fof_900000[0],
-            state->m_fof_a00000[0] );
+            fof_100000[0], fof_600000[0], fof_700000[0],
+            fof_800000[0], fof_900000[0],
+            fof_a00000[0] );
 */
 	return 0;
 }

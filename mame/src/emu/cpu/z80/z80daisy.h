@@ -11,77 +11,59 @@
 #ifndef __Z80DAISY_H__
 #define __Z80DAISY_H__
 
+#include "devintrf.h"
 
 
-//**************************************************************************
-//  CONSTANTS
-//**************************************************************************
+/***************************************************************************
+    CONSTANTS
+***************************************************************************/
 
-// these constants are returned from the irq_state function
-const UINT8 Z80_DAISY_INT = 0x01;		// interrupt request mask
-const UINT8 Z80_DAISY_IEO =	0x02;		// interrupt disable mask (IEO)
-
-
-
-//**************************************************************************
-//  TYPE DEFINITIONS
-//**************************************************************************
+/* these constants are returned from the irq_state function */
+#define Z80_DAISY_INT 	0x01		/* interrupt request mask */
+#define Z80_DAISY_IEO 	0x02		/* interrupt disable mask (IEO) */
 
 
-// ======================> z80_daisy_config
-
-struct z80_daisy_config
+enum
 {
-	const char *	devname;					// name of the device
+	DEVINFO_FCT_IRQ_STATE = DEVINFO_FCT_DEVICE_SPECIFIC,	/* R/O: z80_daisy_irq_state */
+	DEVINFO_FCT_IRQ_ACK,									/* R/O: z80_daisy_irq_ack */
+	DEVINFO_FCT_IRQ_RETI									/* R/O: z80_daisy_irq_reti */
 };
 
 
 
-// ======================> device_z80daisy_interface
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-class device_z80daisy_interface : public device_interface
+/* per-device callback functions */
+typedef int (*z80_daisy_irq_state)(const device_config *device);
+typedef int (*z80_daisy_irq_ack)(const device_config *device);
+typedef int (*z80_daisy_irq_reti)(const device_config *device);
+
+
+/* opaque internal daisy chain state */
+typedef struct _z80_daisy_state z80_daisy_state;
+
+
+/* daisy chain structure */
+typedef struct _z80_daisy_chain z80_daisy_chain;
+struct _z80_daisy_chain
 {
-public:
-	// construction/destruction
-	device_z80daisy_interface(const machine_config &mconfig, device_t &device);
-	virtual ~device_z80daisy_interface();
-
-	// required operation overrides
-	virtual int z80daisy_irq_state() = 0;
-	virtual int z80daisy_irq_ack() = 0;
-	virtual void z80daisy_irq_reti() = 0;
+	const char *	devname;					/* name of the device */
 };
 
 
 
-// ======================> z80_daisy_chain
+/***************************************************************************
+    FUNCTION PROTOTYPES
+***************************************************************************/
 
-class z80_daisy_chain
-{
-public:
-	z80_daisy_chain();
-	void init(device_t *cpudevice, const z80_daisy_config *daisy);
+z80_daisy_state *z80daisy_init(const device_config *cpudevice, const z80_daisy_chain *daisy);
 
-	bool present() const { return (m_daisy_list != NULL); }
-
-	void reset();
-	int update_irq_state();
-	int call_ack_device();
-	void call_reti_device();
-
-protected:
-	class daisy_entry
-	{
-	public:
-		daisy_entry(device_t *device);
-
-		daisy_entry *				m_next;			// next device
-		device_t *					m_device;		// associated device
-		device_z80daisy_interface *	m_interface;	// associated device's daisy interface
-	};
-
-	daisy_entry *			m_daisy_list;	// head of the daisy chain
-};
-
+void z80daisy_reset(z80_daisy_state *daisy);
+int z80daisy_update_irq_state(z80_daisy_state *chain);
+int z80daisy_call_ack_device(z80_daisy_state *chain);
+void z80daisy_call_reti_device(z80_daisy_state *chain);
 
 #endif

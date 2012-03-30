@@ -10,7 +10,7 @@
  *                                                                          *
  ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "tms34061.h"
 
 
@@ -35,7 +35,7 @@ struct tms34061_data
 	UINT8 *				shiftreg;
 	emu_timer *			timer;
 	struct tms34061_interface intf;
-	screen_device *screen;
+	const device_config *screen;
 };
 
 
@@ -75,12 +75,12 @@ static TIMER_CALLBACK( tms34061_interrupt );
  *
  *************************************/
 
-void tms34061_start(running_machine &machine, const struct tms34061_interface *interface)
+void tms34061_start(running_machine *machine, const struct tms34061_interface *interface)
 {
 	/* reset the data */
 	memset(&tms34061, 0, sizeof(tms34061));
 	tms34061.intf = *interface;
-	tms34061.screen = downcast<screen_device *>(machine.device(tms34061.intf.screen_tag));
+	tms34061.screen = devtag_get_device(machine, tms34061.intf.screen_tag);
 	tms34061.vrammask = tms34061.intf.vramsize - 1;
 
 	/* allocate memory for VRAM */
@@ -119,7 +119,7 @@ void tms34061_start(running_machine &machine, const struct tms34061_interface *i
 	tms34061.regs[TMS34061_VERCOUNTER]   = 0x0000;
 
 	/* start vertical interrupt timer */
-	tms34061.timer = machine.scheduler().timer_alloc(FUNC(tms34061_interrupt));
+	tms34061.timer = timer_alloc(machine, tms34061_interrupt, NULL);
 }
 
 
@@ -137,9 +137,9 @@ INLINE void update_interrupts(void)
 	{
 		/* if the status bit is set, and ints are enabled, turn it on */
 		if ((tms34061.regs[TMS34061_STATUS] & 0x0001) && (tms34061.regs[TMS34061_CONTROL1] & 0x0400))
-			(*tms34061.intf.interrupt)(tms34061.screen->machine(), ASSERT_LINE);
+			(*tms34061.intf.interrupt)(tms34061.screen->machine, ASSERT_LINE);
 		else
-			(*tms34061.intf.interrupt)(tms34061.screen->machine(), CLEAR_LINE);
+			(*tms34061.intf.interrupt)(tms34061.screen->machine, CLEAR_LINE);
 	}
 }
 
@@ -147,7 +147,7 @@ INLINE void update_interrupts(void)
 static TIMER_CALLBACK( tms34061_interrupt )
 {
 	/* set timer for next frame */
-	tms34061.timer->adjust(tms34061.screen->frame_period());
+	timer_adjust_oneshot(tms34061.timer, video_screen_get_frame_period(tms34061.screen), 0);
 
 	/* set the interrupt bit in the status reg */
 	tms34061.regs[TMS34061_STATUS] |= 1;
@@ -164,7 +164,7 @@ static TIMER_CALLBACK( tms34061_interrupt )
  *
  *************************************/
 
-static void register_w(address_space *space, offs_t offset, UINT8 data)
+static void register_w(const address_space *space, offs_t offset, UINT8 data)
 {
 	int scanline;
 	int regnum = offset >> 2;
@@ -172,7 +172,7 @@ static void register_w(address_space *space, offs_t offset, UINT8 data)
 	/* certain registers affect the display directly */
 	if ((regnum >= TMS34061_HORENDSYNC && regnum <= TMS34061_DISPSTART) ||
 		(regnum == TMS34061_CONTROL2))
-		tms34061.screen->update_partial(tms34061.screen->vpos());
+		video_screen_update_partial(tms34061.screen, video_screen_get_vpos(tms34061.screen));
 
 	/* store the hi/lo half */
 	if (regnum < ARRAY_LENGTH(tms34061.regs))
@@ -184,7 +184,7 @@ static void register_w(address_space *space, offs_t offset, UINT8 data)
 	}
 
 	/* log it */
-	if (VERBOSE) logerror("%s:tms34061 %s = %04x\n", space->machine().describe_context(), regnames[regnum], tms34061.regs[regnum]);
+	if (VERBOSE) logerror("%s:tms34061 %s = %04x\n", cpuexec_describe_context(space->machine), regnames[regnum], tms34061.regs[regnum]);
 
 	/* update the state of things */
 	switch (regnum)
@@ -196,7 +196,7 @@ static void register_w(address_space *space, offs_t offset, UINT8 data)
 			if (scanline < 0)
 				scanline += tms34061.regs[TMS34061_VERTOTAL];
 
-			tms34061.timer->adjust(tms34061.screen->time_until_pos(scanline, tms34061.regs[TMS34061_HORSTARTBLNK]));
+			timer_adjust_oneshot(tms34061.timer, video_screen_get_time_until_pos(tms34061.screen, scanline, tms34061.regs[TMS34061_HORSTARTBLNK]), 0);
 			break;
 
 		/* XY offset: set the X and Y masks */
@@ -235,7 +235,7 @@ static void register_w(address_space *space, offs_t offset, UINT8 data)
  *
  *************************************/
 
-static UINT8 register_r(address_space *space, offs_t offset)
+static UINT8 register_r(const address_space *space, offs_t offset)
 {
 	int regnum = offset >> 2;
 	UINT16 result;
@@ -257,12 +257,12 @@ static UINT8 register_r(address_space *space, offs_t offset)
 
 		/* vertical count register: return the current scanline */
 		case TMS34061_VERCOUNTER:
-			result = (tms34061.screen->vpos()+ tms34061.regs[TMS34061_VERENDBLNK]) % tms34061.regs[TMS34061_VERTOTAL];
+			result = (video_screen_get_vpos(tms34061.screen)+ tms34061.regs[TMS34061_VERENDBLNK]) % tms34061.regs[TMS34061_VERTOTAL];
 			break;
 	}
 
 	/* log it */
-	if (VERBOSE) logerror("%s:tms34061 %s read = %04X\n", space->machine().describe_context(), regnames[regnum], result);
+	if (VERBOSE) logerror("%s:tms34061 %s read = %04X\n", cpuexec_describe_context(space->machine), regnames[regnum], result);
 	return (offset & 0x02) ? (result >> 8) : result;
 }
 
@@ -357,7 +357,7 @@ INLINE void adjust_xyaddress(int offset)
 }
 
 
-static void xypixel_w(address_space *space, int offset, UINT8 data)
+static void xypixel_w(const address_space *space, int offset, UINT8 data)
 {
 	/* determine the offset, then adjust it */
 	offs_t pixeloffs = tms34061.regs[TMS34061_XYADDRESS];
@@ -369,7 +369,7 @@ static void xypixel_w(address_space *space, int offset, UINT8 data)
 
 	/* mask to the VRAM size */
 	pixeloffs &= tms34061.vrammask;
-	if (VERBOSE) logerror("%s:tms34061 xy (%04x) = %02x/%02x\n", space->machine().describe_context(), pixeloffs, data, tms34061.latchdata);
+	if (VERBOSE) logerror("%s:tms34061 xy (%04x) = %02x/%02x\n", cpuexec_describe_context(space->machine), pixeloffs, data, tms34061.latchdata);
 
 	/* set the pixel data */
 	tms34061.vram[pixeloffs] = data;
@@ -377,7 +377,7 @@ static void xypixel_w(address_space *space, int offset, UINT8 data)
 }
 
 
-static UINT8 xypixel_r(address_space *space, int offset)
+static UINT8 xypixel_r(const address_space *space, int offset)
 {
 	/* determine the offset, then adjust it */
 	offs_t pixeloffs = tms34061.regs[TMS34061_XYADDRESS];
@@ -402,7 +402,7 @@ static UINT8 xypixel_r(address_space *space, int offset)
  *
  *************************************/
 
-void tms34061_w(address_space *space, int col, int row, int func, UINT8 data)
+void tms34061_w(const address_space *space, int col, int row, int func, UINT8 data)
 {
 	offs_t offs;
 
@@ -425,7 +425,7 @@ void tms34061_w(address_space *space, int col, int row, int func, UINT8 data)
 			offs = ((row << tms34061.intf.rowshift) | col) & tms34061.vrammask;
 			if (tms34061.regs[TMS34061_CONTROL2] & 0x0040)
 				offs |= (tms34061.regs[TMS34061_CONTROL2] & 3) << 16;
-			if (VERBOSE) logerror("%s:tms34061 direct (%04x) = %02x/%02x\n", space->machine().describe_context(), offs, data, tms34061.latchdata);
+			if (VERBOSE) logerror("%s:tms34061 direct (%04x) = %02x/%02x\n", cpuexec_describe_context(space->machine), offs, data, tms34061.latchdata);
 			if (tms34061.vram[offs] != data || tms34061.latchram[offs] != tms34061.latchdata)
 			{
 				tms34061.vram[offs] = data;
@@ -439,7 +439,7 @@ void tms34061_w(address_space *space, int col, int row, int func, UINT8 data)
 			if (tms34061.regs[TMS34061_CONTROL2] & 0x0040)
 				offs |= (tms34061.regs[TMS34061_CONTROL2] & 3) << 16;
 			offs &= tms34061.vrammask;
-			if (VERBOSE) logerror("%s:tms34061 shiftreg write (%04x)\n", space->machine().describe_context(), offs);
+			if (VERBOSE) logerror("%s:tms34061 shiftreg write (%04x)\n", cpuexec_describe_context(space->machine), offs);
 
 			memcpy(&tms34061.vram[offs], tms34061.shiftreg, (size_t)1 << tms34061.intf.rowshift);
 			memset(&tms34061.latchram[offs], tms34061.latchdata, (size_t)1 << tms34061.intf.rowshift);
@@ -451,20 +451,20 @@ void tms34061_w(address_space *space, int col, int row, int func, UINT8 data)
 			if (tms34061.regs[TMS34061_CONTROL2] & 0x0040)
 				offs |= (tms34061.regs[TMS34061_CONTROL2] & 3) << 16;
 			offs &= tms34061.vrammask;
-			if (VERBOSE) logerror("%s:tms34061 shiftreg read (%04x)\n", space->machine().describe_context(), offs);
+			if (VERBOSE) logerror("%s:tms34061 shiftreg read (%04x)\n", cpuexec_describe_context(space->machine), offs);
 
 			tms34061.shiftreg = &tms34061.vram[offs];
 			break;
 
 		/* log anything else */
 		default:
-			logerror("%s:Unsupported TMS34061 function %d\n", space->machine().describe_context(), func);
+			logerror("%s:Unsupported TMS34061 function %d\n", cpuexec_describe_context(space->machine), func);
 			break;
 	}
 }
 
 
-UINT8 tms34061_r(address_space *space, int col, int row, int func)
+UINT8 tms34061_r(const address_space *space, int col, int row, int func)
 {
 	int result = 0;
 	offs_t offs;
@@ -512,7 +512,7 @@ UINT8 tms34061_r(address_space *space, int col, int row, int func)
 
 		/* log anything else */
 		default:
-			logerror("%s:Unsupported TMS34061 function %d\n", space->machine().describe_context(),
+			logerror("%s:Unsupported TMS34061 function %d\n", cpuexec_describe_context(space->machine),
 					func);
 			break;
 	}

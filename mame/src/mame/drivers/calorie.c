@@ -77,41 +77,21 @@ Notes:
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "machine/segacrp2.h"
+#include "machine/segacrpt.h"
 #include "sound/ay8910.h"
 
+static UINT8 *calorie_fg;
+static UINT8  calorie_bg;
+static UINT8 *calorie_sprites;
 
-class calorie_state : public driver_device
-{
-public:
-	calorie_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT8 *  m_fg_ram;
-	UINT8 *  m_sprites;
-//  UINT8 *  m_paletteram;    // currently this uses generic palette handling
-
-	/* video-related */
-	tilemap_t  *m_bg_tilemap;
-	tilemap_t  *m_fg_tilemap;
-	UINT8    m_bg_bank;
-};
-
-
-/*************************************
- *
- *  Video emulation
- *
- *************************************/
+static tilemap *bg_tilemap,*fg_tilemap;
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	calorie_state *state = machine.driver_data<calorie_state>();
-	UINT8 *src = machine.region("user1")->base();
-	int bg_base = (state->m_bg_bank & 0x0f) * 0x200;
+	UINT8 *src = memory_region(machine, "user1");
+	int bg_base = (calorie_bg & 0x0f) * 0x200;
 	int code  = src[bg_base + tile_index] | (((src[bg_base + tile_index + 0x100]) & 0x10) << 4);
 	int color = src[bg_base + tile_index + 0x100] & 0x0f;
 	int flag  = src[bg_base + tile_index + 0x100] & 0x40 ? TILE_FLIPX : 0;
@@ -121,37 +101,33 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	calorie_state *state = machine.driver_data<calorie_state>();
-	int code  = ((state->m_fg_ram[tile_index + 0x400] & 0x30) << 4) | state->m_fg_ram[tile_index];
-	int color = state->m_fg_ram[tile_index + 0x400] & 0x0f;
+	int code  = ((calorie_fg[tile_index + 0x400] & 0x30) << 4) | calorie_fg[tile_index];
+	int color = calorie_fg[tile_index + 0x400] & 0x0f;
 
-	SET_TILE_INFO(0, code, color, TILE_FLIPYX((state->m_fg_ram[tile_index + 0x400] & 0xc0) >> 6));
+	SET_TILE_INFO(0, code, color, TILE_FLIPYX((calorie_fg[tile_index + 0x400] & 0xc0) >> 6));
 }
 
 
 static VIDEO_START( calorie )
 {
-	calorie_state *state = machine.driver_data<calorie_state>();
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,16,16,16,16);
+	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8, 8,32,32);
 
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 16, 16);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-
-	state->m_fg_tilemap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(fg_tilemap,0);
 }
 
-static SCREEN_UPDATE_IND16( calorie )
+static VIDEO_UPDATE( calorie )
 {
-	calorie_state *state = screen.machine().driver_data<calorie_state>();
 	int x;
 
-	if (state->m_bg_bank & 0x10)
+	if (calorie_bg & 0x10)
 	{
-		state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+		tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+		tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
 	}
 	else
 	{
-		state->m_fg_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
+		tilemap_draw(bitmap,cliprect,fg_tilemap,TILEMAP_DRAW_OPAQUE,0);
 	}
 
 
@@ -159,16 +135,16 @@ static SCREEN_UPDATE_IND16( calorie )
 	{
 		int xpos, ypos, tileno, color, flipx, flipy;
 
-		tileno = state->m_sprites[x + 0];
-		color = state->m_sprites[x + 1] & 0x0f;
-		flipx = state->m_sprites[x + 1] & 0x40;
+		tileno = calorie_sprites[x+0];
+		color = calorie_sprites[x+1] & 0x0f;
+		flipx = calorie_sprites[x+1] & 0x40;
 		flipy = 0;
-		ypos = 0xff - state->m_sprites[x + 2];
-		xpos = state->m_sprites[x + 3];
+		ypos = 0xff - calorie_sprites[x+2];
+		xpos = calorie_sprites[x+3];
 
-		if (flip_screen_get(screen.machine()))
+		if(flip_screen_get(screen->machine))
 		{
-			if (state->m_sprites[x + 1] & 0x10)
+			if( calorie_sprites[x+1] & 0x10 )
 				ypos = 0xff - ypos + 32;
 			else
 				ypos = 0xff - ypos + 16;
@@ -178,51 +154,45 @@ static SCREEN_UPDATE_IND16( calorie )
 			flipy = !flipy;
 		}
 
-		if (state->m_sprites[x + 1] & 0x10)
+		if( calorie_sprites[x+1] & 0x10 )
 		{
 			 /* 32x32 sprites */
-			drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[3], tileno | 0x40, color, flipx, flipy, xpos, ypos - 31, 0);
+			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[3],tileno | 0x40,color,flipx,flipy,xpos,ypos - 31,0);
 		}
 		else
 		{
 			/* 16x16 sprites */
-			drawgfx_transpen(bitmap, cliprect, screen.machine().gfx[2], tileno, color, flipx, flipy, xpos, ypos - 15, 0);
+			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[2],tileno,color,flipx,flipy,xpos,ypos - 15,0);
 		}
 	}
 	return 0;
 }
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
-
-static WRITE8_HANDLER( fg_ram_w )
+static WRITE8_HANDLER( calorie_fg_w )
 {
-	calorie_state *state = space->machine().driver_data<calorie_state>();
-	state->m_fg_ram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset & 0x3ff);
+	calorie_fg[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap,offset & 0x3ff);
 }
 
-static WRITE8_HANDLER( bg_bank_w )
+static WRITE8_HANDLER( calorie_bg_w )
 {
-	calorie_state *state = space->machine().driver_data<calorie_state>();
-	if((state->m_bg_bank & ~0x10) != (data & ~0x10))
-		state->m_bg_tilemap->mark_all_dirty();
+	if((calorie_bg & ~0x10) != (data & ~0x10))
+	{
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
+	}
 
-	state->m_bg_bank = data;
+	calorie_bg = data;
 }
 
 static WRITE8_HANDLER( calorie_flipscreen_w )
 {
-	flip_screen_set(space->machine(), data & 1);
+	flip_screen_set(space->machine, data & 1);
 }
 
 static READ8_HANDLER( calorie_soundlatch_r )
 {
-	UINT8 latch = soundlatch_r(space, 0);
-	soundlatch_clear_w(space, 0, 0);
+	UINT8 latch = soundlatch_r(space,0);
+	soundlatch_clear_w(space,0,0);
 	return latch;
 }
 
@@ -231,20 +201,14 @@ static WRITE8_HANDLER( bogus_w )
 	popmessage("written to 3rd sound chip: data = %02X port = %02X", data, offset);
 }
 
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( calorie_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( calorie_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(fg_ram_w) AM_BASE_MEMBER(calorie_state, m_fg_ram)
-	AM_RANGE(0xd800, 0xdbff) AM_RAM AM_BASE_MEMBER(calorie_state, m_sprites)
-	AM_RANGE(0xdc00, 0xdcff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xde00, 0xde00) AM_WRITE(bg_bank_w)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(calorie_fg_w) AM_BASE(&calorie_fg)
+	AM_RANGE(0xd800, 0xdbff) AM_RAM AM_BASE(&calorie_sprites)
+	AM_RANGE(0xdc00, 0xdcff) AM_RAM_WRITE(paletteram_xxxxBBBBGGGGRRRR_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0xde00, 0xde00) AM_WRITE(calorie_bg_w)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("P1")
 	AM_RANGE(0xf001, 0xf001) AM_READ_PORT("P2")
 	AM_RANGE(0xf002, 0xf002) AM_READ_PORT("SYSTEM")
@@ -254,13 +218,13 @@ static ADDRESS_MAP_START( calorie_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( calorie_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( calorie_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0xc000, 0xc000) AM_READ(calorie_soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( calorie_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( calorie_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_address_data_w)
 	AM_RANGE(0x01, 0x01) AM_DEVREAD("ay1", ay8910_r)
@@ -269,13 +233,6 @@ static ADDRESS_MAP_START( calorie_sound_io_map, AS_IO, 8 )
 	// 3rd ?
 	AM_RANGE(0x00, 0xff) AM_WRITE(bogus_w)
 ADDRESS_MAP_END
-
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( calorie )
 	PORT_START("P1")
@@ -355,12 +312,6 @@ INPUT_PORTS_END
 
 
 
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
-
 static const gfx_layout tiles8x8_layout =
 {
 	8,8,
@@ -408,75 +359,44 @@ static GFXDECODE_START( calorie )
 	GFXDECODE_ENTRY( "gfx1", 0, tiles32x32_layout, 0, 16 )
 GFXDECODE_END
 
-
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( calorie )
-{
-	calorie_state *state = machine.driver_data<calorie_state>();
-
-	state->save_item(NAME(state->m_bg_bank));
-}
-
-static MACHINE_RESET( calorie )
-{
-	calorie_state *state = machine.driver_data<calorie_state>();
-
-	state->m_bg_bank = 0;
-}
-
-
-static MACHINE_CONFIG_START( calorie, calorie_state )
-
+static MACHINE_DRIVER_START( calorie )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,4000000)		 /* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(calorie_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(calorie_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,3000000)		 /* 3 MHz */
-	MCFG_CPU_PROGRAM_MAP(calorie_sound_map)
-	MCFG_CPU_IO_MAP(calorie_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold, 64)
-
-	MCFG_MACHINE_START(calorie)
-	MCFG_MACHINE_RESET(calorie)
+	MDRV_CPU_ADD("audiocpu", Z80,3000000)		 /* 3 MHz */
+	MDRV_CPU_PROGRAM_MAP(calorie_sound_map)
+	MDRV_CPU_IO_MAP(calorie_sound_io_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold, 64)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
-	MCFG_SCREEN_UPDATE_STATIC(calorie)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
 
-	MCFG_GFXDECODE(calorie)
-	MCFG_PALETTE_LENGTH(0x100)
+	MDRV_GFXDECODE(calorie)
+	MDRV_PALETTE_LENGTH(0x100)
 
-	MCFG_VIDEO_START(calorie)
+	MDRV_VIDEO_START(calorie)
+	MDRV_VIDEO_UPDATE(calorie)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
+	MDRV_SOUND_ADD("ay1", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
 
-	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
+	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
 
-	MCFG_SOUND_ADD("ay3", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay3", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
+MACHINE_DRIVER_END
 
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
 
 ROM_START( calorie )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -537,30 +457,18 @@ ROM_START( calorieb )
 ROM_END
 
 
-/*************************************
- *
- *  Driver initialization
- *
- *************************************/
-
 static DRIVER_INIT( calorie )
 {
-	sega_317_0004_decode(machine, "maincpu");
+	calorie_decode(machine, "maincpu");
 }
 
 static DRIVER_INIT( calorieb )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	space->set_decrypted_region(0x0000, 0x7fff, machine.region("maincpu")->base() + 0x10000);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
 }
 
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
 /* Note: the bootleg is identical to the original once decrypted */
-GAME( 1986, calorie,  0,       calorie, calorie, calorie,  ROT0, "Sega",    "Calorie Kun vs Moguranian", GAME_SUPPORTS_SAVE )
-GAME( 1986, calorieb, calorie, calorie, calorie, calorieb, ROT0, "bootleg", "Calorie Kun vs Moguranian (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1986, calorie,  0,       calorie, calorie, calorie,  ROT0, "Sega",    "Calorie Kun vs Moguranian", 0 )
+GAME( 1986, calorieb, calorie, calorie, calorie, calorieb, ROT0, "bootleg", "Calorie Kun vs Moguranian (bootleg)", 0 )

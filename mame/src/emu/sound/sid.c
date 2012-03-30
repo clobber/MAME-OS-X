@@ -12,7 +12,7 @@
   MOS-8580 R5 combined waveforms recorded by Dennis "Deadman" Lindroos.
 */
 
-#include "emu.h"
+#include "sndintrf.h"
 #include "sidvoice.h"
 #include "sidenvel.h"
 #include "sid.h"
@@ -53,7 +53,7 @@ static void MixerInit(int threeVoiceAmplify)
 }
 
 
-INLINE void syncEm(_SID6581 *This)
+INLINE void syncEm(SID6581 *This)
 {
 	int sync1 = (This->optr1.modulator->cycleLenCount <= 0);
 	int sync2 = (This->optr2.modulator->cycleLenCount <= 0);
@@ -96,7 +96,7 @@ INLINE void syncEm(_SID6581 *This)
 }
 
 
-void sidEmuFillBuffer(_SID6581 *This, stream_sample_t *buffer, UINT32 bufferLen )
+void sidEmuFillBuffer(SID6581 *This, stream_sample_t *buffer, UINT32 bufferLen )
 {
 //void* fill16bitMono( SID6581 *This, void* buffer, UINT32 numberOfSamples )
 
@@ -121,7 +121,7 @@ void sidEmuFillBuffer(_SID6581 *This, stream_sample_t *buffer, UINT32 bufferLen 
 
 /* Reset. */
 
-int sidEmuReset(_SID6581 *This)
+int sidEmuReset(SID6581 *This)
 {
 	sidClearOperator( &This->optr1 );
 	enveEmuResetOperator( &This->optr1 );
@@ -149,9 +149,9 @@ int sidEmuReset(_SID6581 *This)
 }
 
 
-static void filterTableInit(running_machine &machine)
+static void filterTableInit(running_machine *machine)
 {
-	int sample_rate = machine.sample_rate();
+	int sample_rate = machine->sample_rate;
 	UINT16 uk;
 	/* Parameter calculation has not been moved to a separate function */
 	/* by purpose. */
@@ -208,7 +208,7 @@ static void filterTableInit(running_machine &machine)
 	filterResTable[15] = resDyMax;
 }
 
-void sid6581_init (_SID6581 *This)
+void sid6581_init (SID6581 *This)
 {
 	This->optr1.sid=This;
 	This->optr2.sid=This;
@@ -233,8 +233,8 @@ void sid6581_init (_SID6581 *This)
 
 	This->filter.Enabled = TRUE;
 
-	sidInitMixerEngine(This->device->machine());
-	filterTableInit(This->device->machine());
+	sidInitMixerEngine(This->device->machine);
+	filterTableInit(This->device->machine);
 
 	sidInitWaveformTables(This->type);
 
@@ -245,7 +245,7 @@ void sid6581_init (_SID6581 *This)
 	sidEmuReset(This);
 }
 
-void sid6581_port_w (_SID6581 *This, int offset, int data)
+void sid6581_port_w (SID6581 *This, int offset, int data)
 {
 	offset &= 0x1f;
 
@@ -258,7 +258,7 @@ void sid6581_port_w (_SID6581 *This, int offset, int data)
 			break;
 		case 0x15: case 0x16: case 0x17:
 		case 0x18:
-			This->mixer_channel->update();
+			stream_update(This->mixer_channel);
 			This->reg[offset] = data;
 			This->masterVolume = ( This->reg[0x18] & 15 );
 			This->masterVolumeAmplIndex = This->masterVolume << 8;
@@ -300,7 +300,7 @@ void sid6581_port_w (_SID6581 *This, int offset, int data)
 			break;
 
 		default:
-			This->mixer_channel->update();
+			stream_update(This->mixer_channel);
 			This->reg[offset] = data;
 
 			if (offset<7) {
@@ -323,7 +323,7 @@ void sid6581_port_w (_SID6581 *This, int offset, int data)
 	}
 }
 
-int sid6581_port_r (running_machine &machine, _SID6581 *This, int offset)
+int sid6581_port_r (running_machine *machine, SID6581 *This, int offset)
 {
     int data;
 /* SIDPLAY reads last written at a sid address value */
@@ -348,11 +348,11 @@ int sid6581_port_r (running_machine &machine, _SID6581 *This, int offset)
 	    data=0;
 	break;
     case 0x1b:
-	This->mixer_channel->update();
+	stream_update(This->mixer_channel);
 	data = This->optr3.output;
 	break;
     case 0x1c:
-	This->mixer_channel->update();
+	stream_update(This->mixer_channel);
 	data = This->optr3.enveVol;
 	break;
     default:

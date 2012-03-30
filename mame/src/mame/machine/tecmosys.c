@@ -28,8 +28,8 @@
     You can get me at nuapete@hotmail.com
 */
 
-#include "emu.h"
-#include "includes/tecmosys.h"
+#include "driver.h"
+#include "tecmosys.h"
 
 enum DEV_STATUS
 {
@@ -50,6 +50,12 @@ struct prot_data
 	UINT8 checksums[4];
 };
 
+
+
+static UINT8 device_read_ptr;
+static UINT8 device_status;
+static const struct prot_data* device_data;
+static UINT8 device_value;
 
 // deroon prot data
 static const UINT8 deroon_passwd[] = {'L','U','N','A',0};
@@ -103,25 +109,23 @@ static const struct prot_data tkdensha_data =
 };
 
 
-static void tecmosys_prot_reset(running_machine &machine)
+static void tecmosys_prot_reset(running_machine *machine)
 {
-	tecmosys_state *state = machine.driver_data<tecmosys_state>();
-	state->m_device_read_ptr = 0;
-	state->m_device_status = DS_IDLE;
-	state->m_device_value = 0xff;
+	device_read_ptr = 0;
+	device_status = DS_IDLE;
+	device_value = 0xff;
 }
 
-void tecmosys_prot_init(running_machine &machine, int which)
+void tecmosys_prot_init(running_machine *machine, int which)
 {
-	tecmosys_state *state = machine.driver_data<tecmosys_state>();
 	switch (which)
 	{
-	case 0:	state->m_device_data = &deroon_data; break;
-	case 1: state->m_device_data = &tkdensho_data; break;
-	case 2: state->m_device_data = &tkdensha_data; break;
+	case 0:	device_data = &deroon_data; break;
+	case 1: device_data = &tkdensho_data; break;
+	case 2: device_data = &tkdensha_data; break;
 	}
 
-	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(tecmosys_prot_reset), &machine));
+	add_reset_callback(machine, tecmosys_prot_reset);
 }
 
 READ16_HANDLER(tecmosys_prot_status_r)
@@ -144,11 +148,10 @@ WRITE16_HANDLER(tecmosys_prot_status_w)
 
 READ16_HANDLER(tecmosys_prot_data_r)
 {
-	tecmosys_state *state = space->machine().driver_data<tecmosys_state>();
 	// prot appears to be read-ready for two consecutive reads
 	// but returns 0xff for subsequent reads.
-	UINT8 ret = state->m_device_value;
-	state->m_device_value = 0xff;
+	UINT8 ret = device_value;
+	device_value = 0xff;
 	//logerror("- prot_r = 0x%02x\n", ret );
 	return ret << 8;
 }
@@ -156,67 +159,66 @@ READ16_HANDLER(tecmosys_prot_data_r)
 
 WRITE16_HANDLER(tecmosys_prot_data_w)
 {
-	tecmosys_state *state = space->machine().driver_data<tecmosys_state>();
 	// Only LSB
 	data >>= 8;
 
 	//logerror("+ prot_w( 0x%02x )\n", data );
 
-	switch( state->m_device_status )
+	switch( device_status )
 	{
 		case DS_IDLE:
 			if( data == 0x13 )
 			{
-				state->m_device_status = DS_LOGIN;
-				state->m_device_value = state->m_device_data->passwd_len;
-				state->m_device_read_ptr = 0;
+				device_status = DS_LOGIN;
+				device_value = device_data->passwd_len;
+				device_read_ptr = 0;
 				break;
 			}
 			break;
 
 		case DS_LOGIN:
-			if( state->m_device_read_ptr >= state->m_device_data->passwd_len)
+			if( device_read_ptr >= device_data->passwd_len)
 			{
-				state->m_device_status = DS_SEND_CODE;
-				state->m_device_value = state->m_device_data->code[0];
-				state->m_device_read_ptr = 1;
+				device_status = DS_SEND_CODE;
+				device_value = device_data->code[0];
+				device_read_ptr = 1;
 			}
 			else
-				state->m_device_value = state->m_device_data->passwd[state->m_device_read_ptr++] == data ? 0 : 0xff;
+				device_value = device_data->passwd[device_read_ptr++] == data ? 0 : 0xff;
 			break;
 
 		case DS_SEND_CODE:
-			if( state->m_device_read_ptr >= state->m_device_data->code[0]+2 ) // + code_len + trailer
+			if( device_read_ptr >= device_data->code[0]+2 ) // + code_len + trailer
 			{
-				state->m_device_status = DS_SEND_ADRS;
-				state->m_device_value = state->m_device_data->checksum_ranges[0];
-				state->m_device_read_ptr = 1;
+				device_status = DS_SEND_ADRS;
+				device_value = device_data->checksum_ranges[0];
+				device_read_ptr = 1;
 			}
 			else
-				state->m_device_value = data == state->m_device_data->code[state->m_device_read_ptr-1] ? state->m_device_data->code[state->m_device_read_ptr++] : 0xff;
+				device_value = data == device_data->code[device_read_ptr-1] ? device_data->code[device_read_ptr++] : 0xff;
 			break;
 
 		case DS_SEND_ADRS:
-			if( state->m_device_read_ptr >= 16+1 ) //+ trailer
+			if( device_read_ptr >= 16+1 ) //+ trailer
 			{
-				state->m_device_status = DS_SEND_CHKSUMS;
-				state->m_device_value = 0;
-				state->m_device_read_ptr = 0;
+				device_status = DS_SEND_CHKSUMS;
+				device_value = 0;
+				device_read_ptr = 0;
 			}
 			else
 			{
-				state->m_device_value = data == state->m_device_data->checksum_ranges[state->m_device_read_ptr-1] ? state->m_device_data->checksum_ranges[state->m_device_read_ptr++] : 0xff;
+				device_value = data == device_data->checksum_ranges[device_read_ptr-1] ? device_data->checksum_ranges[device_read_ptr++] : 0xff;
 			}
 			break;
 
 		case DS_SEND_CHKSUMS:
-			if( state->m_device_read_ptr >= 5 )
+			if( device_read_ptr >= 5 )
 			{
-				state->m_device_status = DS_DONE;
-				state->m_device_value = 0;
+				device_status = DS_DONE;
+				device_value = 0;
 			}
 			else
-				state->m_device_value = data == state->m_device_data->checksums[state->m_device_read_ptr] ? state->m_device_data->checksums[state->m_device_read_ptr++] : 0xff;
+				device_value = data == device_data->checksums[device_read_ptr] ? device_data->checksums[device_read_ptr++] : 0xff;
 			break;
 
 		case DS_DONE:

@@ -15,7 +15,8 @@
         fixed volume table
 */
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "rf5c400.h"
 
 typedef struct _rf5c400_channel rf5c400_channel;
@@ -93,11 +94,13 @@ enum {
 };
 
 
-INLINE rf5c400_state *get_safe_token(device_t *device)
+INLINE rf5c400_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == RF5C400);
-	return (rf5c400_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_RF5C400);
+	return (rf5c400_state *)device->token;
 }
 
 
@@ -118,7 +121,7 @@ static STREAM_UPDATE( rf5c400_update )
 	int i, ch;
 	rf5c400_state *info = (rf5c400_state *)param;
 	INT16 *rom = info->rom;
-	UINT32 end, loop;
+	UINT32 start, end, loop;
 	UINT64 pos;
 	UINT8 vol, lvol, rvol, type;
 	UINT8 env_phase;
@@ -133,7 +136,7 @@ static STREAM_UPDATE( rf5c400_update )
 		stream_sample_t *buf0 = outputs[0];
 		stream_sample_t *buf1 = outputs[1];
 
-//      start = ((channel->startH & 0xFF00) << 8) | channel->startL;
+		start = ((channel->startH & 0xFF00) << 8) | channel->startL;
 		end = ((channel->endHloopH & 0xFF) << 16) | channel->endL;
 		loop = ((channel->endHloopH & 0xFF00) << 8) | channel->loopL;
 		pos = channel->pos;
@@ -237,12 +240,12 @@ static STREAM_UPDATE( rf5c400_update )
 	}
 }
 
-static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
+static void rf5c400_init_chip(const device_config *device, rf5c400_state *info)
 {
 	int i;
 
-	info->rom = *device->region();
-	info->rom_length = device->region()->bytes() / 2;
+	info->rom = (INT16*)device->region;
+	info->rom_length = device->regionbytes / 2;
 
 	// init volume table
 	{
@@ -264,7 +267,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		double r;
 
 		// attack
-		r = 1.0 / (ENV_AR_SPEED * device->machine().sample_rate());
+		r = 1.0 / (ENV_AR_SPEED * device->machine->sample_rate);
 		for (i = 0; i < ENV_MIN_AR; i++)
 		{
 			info->env_ar_table[i] = 1.0;
@@ -280,7 +283,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		}
 
 		// decay
-		r = -1.0 / (ENV_DR_SPEED * device->machine().sample_rate());
+		r = -1.0 / (ENV_DR_SPEED * device->machine->sample_rate);
 		for (i = 0; i < ENV_MIN_DR; i++)
 		{
 			info->env_dr_table[i] = r;
@@ -296,7 +299,7 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 		}
 
 		// release
-		r = -1.0 / (ENV_RR_SPEED * device->machine().sample_rate());
+		r = -1.0 / (ENV_RR_SPEED * device->machine->sample_rate);
 		for (i = 0; i < ENV_MIN_RR; i++)
 		{
 			info->env_rr_table[i] = r;
@@ -323,29 +326,29 @@ static void rf5c400_init_chip(device_t *device, rf5c400_state *info)
 
 	for (i = 0; i < ARRAY_LENGTH(info->channels); i++)
 	{
-		device->save_item(NAME(info->channels[i].startH), i);
-		device->save_item(NAME(info->channels[i].startL), i);
-		device->save_item(NAME(info->channels[i].freq), i);
-		device->save_item(NAME(info->channels[i].endL), i);
-		device->save_item(NAME(info->channels[i].endHloopH), i);
-		device->save_item(NAME(info->channels[i].loopL), i);
-		device->save_item(NAME(info->channels[i].pan), i);
-		device->save_item(NAME(info->channels[i].effect), i);
-		device->save_item(NAME(info->channels[i].volume), i);
-		device->save_item(NAME(info->channels[i].attack), i);
-		device->save_item(NAME(info->channels[i].decay), i);
-		device->save_item(NAME(info->channels[i].release), i);
-		device->save_item(NAME(info->channels[i].cutoff), i);
-		device->save_item(NAME(info->channels[i].pos), i);
-		device->save_item(NAME(info->channels[i].step), i);
-		device->save_item(NAME(info->channels[i].keyon), i);
-		device->save_item(NAME(info->channels[i].env_phase), i);
-		device->save_item(NAME(info->channels[i].env_level), i);
-		device->save_item(NAME(info->channels[i].env_step), i);
-		device->save_item(NAME(info->channels[i].env_scale), i);
+		state_save_register_device_item(device, i, info->channels[i].startH);
+		state_save_register_device_item(device, i, info->channels[i].startL);
+		state_save_register_device_item(device, i, info->channels[i].freq);
+		state_save_register_device_item(device, i, info->channels[i].endL);
+		state_save_register_device_item(device, i, info->channels[i].endHloopH);
+		state_save_register_device_item(device, i, info->channels[i].loopL);
+		state_save_register_device_item(device, i, info->channels[i].pan);
+		state_save_register_device_item(device, i, info->channels[i].effect);
+		state_save_register_device_item(device, i, info->channels[i].volume);
+		state_save_register_device_item(device, i, info->channels[i].attack);
+		state_save_register_device_item(device, i, info->channels[i].decay);
+		state_save_register_device_item(device, i, info->channels[i].release);
+		state_save_register_device_item(device, i, info->channels[i].cutoff);
+		state_save_register_device_item(device, i, info->channels[i].pos);
+		state_save_register_device_item(device, i, info->channels[i].step);
+		state_save_register_device_item(device, i, info->channels[i].keyon);
+		state_save_register_device_item(device, i, info->channels[i].env_phase);
+		state_save_register_device_item(device, i, info->channels[i].env_level);
+		state_save_register_device_item(device, i, info->channels[i].env_step);
+		state_save_register_device_item(device, i, info->channels[i].env_scale);
 	}
 
-	info->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/384, info, rf5c400_update);
+	info->stream = stream_create(device, 0, 2, device->clock/384, info, rf5c400_update);
 }
 
 
@@ -448,11 +451,11 @@ WRITE16_DEVICE_HANDLER( rf5c400_w )
 
 			default:
 			{
-				//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X\n", device->machine().describe_context(), data, offset, mem_mask);
+				//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X\n", cpuexec_describe_context(Machine), data, offset, mem_mask);
 				break;
 			}
 		}
-		//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X at %08X\n", device->machine().describe_context(), data, offset, mem_mask);
+		//mame_printf_debug("%s:rf5c400_w: %08X, %08X, %08X at %08X\n", cpuexec_describe_context(Machine), data, offset, mem_mask);
 	}
 	else
 	{
@@ -582,5 +585,3 @@ DEVICE_GET_INFO( rf5c400 )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team & hoot development team"); break;
 	}
 }
-
-DEFINE_LEGACY_SOUND_DEVICE(RF5C400, rf5c400);

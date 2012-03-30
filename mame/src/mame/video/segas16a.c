@@ -4,9 +4,9 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/segaic16.h"
-#include "includes/segas16.h"
+#include "driver.h"
+#include "segaic16.h"
+#include "includes/system16.h"
 
 
 
@@ -23,6 +23,9 @@ VIDEO_START( system16a )
 
 	/* initialize the tile/text layers */
 	segaic16_tilemap_init(machine, 0, SEGAIC16_TILEMAP_16A, 0x000, 0, 1);
+
+	/* initialize the sprites */
+	segaic16_sprites_init(machine, 0, SEGAIC16_SPRITES_16A, 0x400, 0);
 }
 
 
@@ -33,26 +36,25 @@ VIDEO_START( system16a )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( system16a )
+VIDEO_UPDATE( system16a )
 {
 	/* if no drawing is happening, fill with black and get out */
 	if (!segaic16_display_enable)
 	{
-		bitmap.fill(get_black_pen(screen.machine()), cliprect);
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 		return 0;
 	}
 
 	/* reset priorities */
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
 
 	/* draw background opaquely first, not setting any priorities */
 	segaic16_tilemap_draw(screen, bitmap, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 0 | TILEMAP_DRAW_OPAQUE, 0x00);
 	segaic16_tilemap_draw(screen, bitmap, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 1 | TILEMAP_DRAW_OPAQUE, 0x00);
 
 	/* draw background again, just to set the priorities on non-transparent pixels */
-	bitmap_ind16 dummy_bitmap;
-	segaic16_tilemap_draw(screen, dummy_bitmap, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 0, 0x01);
-	segaic16_tilemap_draw(screen, dummy_bitmap, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 1, 0x02);
+	segaic16_tilemap_draw(screen, NULL, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 0, 0x01);
+	segaic16_tilemap_draw(screen, NULL, cliprect, 0, SEGAIC16_TILEMAP_BACKGROUND, 1, 0x02);
 
 	/* draw foreground */
 	segaic16_tilemap_draw(screen, bitmap, cliprect, 0, SEGAIC16_TILEMAP_FOREGROUND, 0, 0x02);

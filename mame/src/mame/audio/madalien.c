@@ -3,8 +3,8 @@
  * Aug 2008, Derrick Renaud
  ************************************************************************/
 
-#include "emu.h"
-#include "includes/madalien.h"
+#include "driver.h"
+#include "madalien.h"
 #include "sound/discrete.h"
 
 

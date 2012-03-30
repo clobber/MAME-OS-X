@@ -6,13 +6,19 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/exedexes.h"
+#include "driver.h"
 
+UINT8 *exedexes_bg_scroll;
 
-#define TileMap(offs) (machine.region("gfx5")->base()[offs])
-#define BackTileMap(offs) (machine.region("gfx5")->base()[offs+0x4000])
+UINT8 *exedexes_nbg_yscroll;
+UINT8 *exedexes_nbg_xscroll;
 
+static int chon,objon,sc1on,sc2on;
+
+#define TileMap(offs) (memory_region(machine, "gfx5")[offs])
+#define BackTileMap(offs) (memory_region(machine, "gfx5")[offs+0x4000])
+
+static tilemap *bg_tilemap, *fg_tilemap, *tx_tilemap;
 
 /***************************************************************************
 
@@ -30,13 +36,12 @@
   bit 0 -- 2.2kohm resistor  -- RED/GREEN/BLUE
 
 ***************************************************************************/
-
 PALETTE_INIT( exedexes )
 {
 	int i;
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x100);
+	machine->colortable = colortable_alloc(machine, 0x100);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x100; i++)
@@ -45,7 +50,7 @@ PALETTE_INIT( exedexes )
 		int g = pal4bit(color_prom[i + 0x100]);
 		int b = pal4bit(color_prom[i + 0x200]);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -55,76 +60,68 @@ PALETTE_INIT( exedexes )
 	for (i = 0; i < 0x100; i++)
 	{
 		UINT8 ctabentry = color_prom[i] | 0xc0;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 
 	/* 32x32 tiles use colors 0-0x0f */
 	for (i = 0x100; i < 0x200; i++)
 	{
 		UINT8 ctabentry = color_prom[i];
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 
 	/* 16x16 tiles use colors 0x40-0x4f */
 	for (i = 0x200; i < 0x300; i++)
 	{
 		UINT8 ctabentry = color_prom[i] | 0x40;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 
 	/* sprites use colors 0x80-0xbf in four banks */
 	for (i = 0x300; i < 0x400; i++)
 	{
 		UINT8 ctabentry = color_prom[i] | (color_prom[i + 0x100] << 4) | 0x80;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( exedexes_videoram_w )
 {
-	exedexes_state *state = space->machine().driver_data<exedexes_state>();
-
-	state->m_videoram[offset] = data;
-	state->m_tx_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(tx_tilemap, offset);
 }
 
 WRITE8_HANDLER( exedexes_colorram_w )
 {
-	exedexes_state *state = space->machine().driver_data<exedexes_state>();
-
-	state->m_colorram[offset] = data;
-	state->m_tx_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(tx_tilemap, offset);
 }
 
 WRITE8_HANDLER( exedexes_c804_w )
 {
-	exedexes_state *state = space->machine().driver_data<exedexes_state>();
-
 	/* bits 0 and 1 are coin counters */
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
 
-	coin_lockout_w(space->machine(), 0, data & 0x04);
-	coin_lockout_w(space->machine(), 1, data & 0x08);
+	coin_lockout_w(0, data & 0x04);
+	coin_lockout_w(1, data & 0x08);
 
 	/* bit 7 is text enable */
-	state->m_chon = data & 0x80;
+	chon = data & 0x80;
 
 	/* other bits seem to be unused */
 }
 
 WRITE8_HANDLER( exedexes_gfxctrl_w )
 {
-	exedexes_state *state = space->machine().driver_data<exedexes_state>();
-
 	/* bit 4 is bg enable */
-	state->m_sc2on = data & 0x10;
+	sc2on = data & 0x10;
 
 	/* bit 5 is fg enable */
-	state->m_sc1on = data & 0x20;
+	sc1on = data & 0x20;
 
 	/* bit 6 is sprite enable */
-	state->m_objon = data & 0x40;
+	objon = data & 0x40;
 
 	/* other bits seem to be unused */
 }
@@ -132,7 +129,7 @@ WRITE8_HANDLER( exedexes_gfxctrl_w )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	UINT8 *tilerom = machine.region("gfx5")->base();
+	UINT8 *tilerom = memory_region(machine, "gfx5");
 
 	int attr = tilerom[tile_index];
 	int code = attr & 0x3f;
@@ -144,18 +141,17 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	int code = machine.region("gfx5")->base()[tile_index];
+	int code = memory_region(machine, "gfx5")[tile_index];
 
 	SET_TILE_INFO(2, code, 0, 0);
 }
 
 static TILE_GET_INFO( get_tx_tile_info )
 {
-	exedexes_state *state = machine.driver_data<exedexes_state>();
-	int code = state->m_videoram[tile_index] + 2 * (state->m_colorram[tile_index] & 0x80);
-	int color = state->m_colorram[tile_index] & 0x3f;
+	int code = videoram[tile_index] + 2 * (colorram[tile_index] & 0x80);
+	int color = colorram[tile_index] & 0x3f;
 
-	tileinfo.group = color;
+	tileinfo->group = color;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -174,32 +170,32 @@ static TILEMAP_MAPPER( exedexes_fg_tilemap_scan )
 
 VIDEO_START( exedexes )
 {
-	exedexes_state *state = machine.driver_data<exedexes_state>();
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, exedexes_bg_tilemap_scan,
+		 32, 32, 64, 64);
 
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, exedexes_bg_tilemap_scan, 32, 32, 64, 64);
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, exedexes_fg_tilemap_scan, 16, 16, 128, 128);
-	state->m_tx_tilemap = tilemap_create(machine, get_tx_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	fg_tilemap = tilemap_create(machine, get_fg_tile_info, exedexes_fg_tilemap_scan,
+		 16, 16, 128, 128);
 
-	state->m_fg_tilemap->set_transparent_pen(0);
-	colortable_configure_tilemap_groups(machine.colortable, state->m_tx_tilemap, machine.gfx[0], 0xcf);
+	tx_tilemap = tilemap_create(machine, get_tx_tile_info, tilemap_scan_rows,
+		 8, 8, 32, 32);
+
+	tilemap_set_transparent_pen(fg_tilemap, 0);
+	colortable_configure_tilemap_groups(machine->colortable, tx_tilemap, machine->gfx[0], 0xcf);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int priority )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int priority)
 {
-	exedexes_state *state = machine.driver_data<exedexes_state>();
-	UINT8 *buffered_spriteram = machine.generic.buffered_spriteram.u8;
 	int offs;
 
-	if (!state->m_objon)
-		return;
+	if (!objon) return;
 
 	priority = priority ? 0x40 : 0x00;
 
-	for (offs = machine.generic.spriteram_size - 32;offs >= 0;offs -= 32)
+	for (offs = spriteram_size - 32;offs >= 0;offs -= 32)
 	{
 		if ((buffered_spriteram[offs + 1] & 0x40) == priority)
 		{
-			int code, color, flipx, flipy, sx, sy;
+			int code,color,flipx,flipy,sx,sy;
 
 			code = buffered_spriteram[offs];
 			color = buffered_spriteram[offs + 1] & 0x0f;
@@ -208,7 +204,7 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 			sx = buffered_spriteram[offs + 3] - ((buffered_spriteram[offs + 1] & 0x80) << 1);
 			sy = buffered_spriteram[offs + 2];
 
-			drawgfx_transpen(bitmap,cliprect,machine.gfx[3],
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[3],
 					code,
 					color,
 					flipx,flipy,
@@ -217,41 +213,36 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 	}
 }
 
-SCREEN_UPDATE_IND16( exedexes )
+VIDEO_UPDATE( exedexes )
 {
-	exedexes_state *state = screen.machine().driver_data<exedexes_state>();
-	if (state->m_sc2on)
+	if (sc2on)
 	{
-		state->m_bg_tilemap->set_scrollx(0, ((state->m_bg_scroll[1]) << 8) + state->m_bg_scroll[0]);
-		state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+		tilemap_set_scrollx(bg_tilemap, 0, ((exedexes_bg_scroll[1]) << 8) + exedexes_bg_scroll[0]);
+		tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 	}
 	else
-		bitmap.fill(0, cliprect);
+		bitmap_fill(bitmap, cliprect, 0);
 
-	draw_sprites(screen.machine(), bitmap, cliprect, 1);
+	draw_sprites(screen->machine, bitmap, cliprect, 1);
 
-	if (state->m_sc1on)
+	if (sc1on)
 	{
-		state->m_fg_tilemap->set_scrollx(0, ((state->m_nbg_yscroll[1]) << 8) + state->m_nbg_yscroll[0]);
-		state->m_fg_tilemap->set_scrolly(0, ((state->m_nbg_xscroll[1]) << 8) + state->m_nbg_xscroll[0]);
-		state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+		tilemap_set_scrollx(fg_tilemap, 0, ((exedexes_nbg_yscroll[1]) << 8) + exedexes_nbg_yscroll[0]);
+		tilemap_set_scrolly(fg_tilemap, 0, ((exedexes_nbg_xscroll[1]) << 8) + exedexes_nbg_xscroll[0]);
+		tilemap_draw(bitmap, cliprect, fg_tilemap, 0, 0);
 	}
 
-	draw_sprites(screen.machine(), bitmap, cliprect, 0);
+	draw_sprites(screen->machine, bitmap, cliprect, 0);
 
-	if (state->m_chon)
-		state->m_tx_tilemap->draw(bitmap, cliprect, 0, 0);
+	if (chon)
+		tilemap_draw(bitmap, cliprect, tx_tilemap, 0, 0);
 
 	return 0;
 }
 
-SCREEN_VBLANK( exedexes )
+VIDEO_EOF( exedexes )
 {
-	// rising edge
-	if (vblank_on)
-	{
-		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
-		buffer_spriteram_w(space, 0, 0);
-	}
+	buffer_spriteram_w(space, 0, 0);
 }

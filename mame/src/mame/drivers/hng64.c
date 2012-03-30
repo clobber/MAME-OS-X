@@ -1,23 +1,21 @@
 /* Hyper NeoGeo 64
 
-Driver by David Haywood, ElSemi, Andrew Gardner and Angelo Salese
+Driver by David Haywood, ElSemi, and Andrew Gardner.
 Rasterizing code provided in part by Andrew Zaferakis.
 
 
 Notes:
   * The top board is likely identical for all revisions and all "versions" of the hardware.
     It contains the main MIPS CPU and a secondary communications KL5C80.
-
   * The bottom board is what changes between hardware "versions".  It has a Toshiba MCU with
     a protected internal ROM.  This MCU controls (at least) the inputs per game and communicates
     with the main board through dualport RAM.
-
   * I believe that this secondary board is used as a protection device.
     The "board type" code comes from it in dualport RAM, and each game reads its inputs differently through dualport.
     It's capable of changing the input ports dynamically (maybe explaining Roads Edge's "do not touch" quote below).
     It probably has a lot to do with the network (Roads Edge network connectors are on this board).
-
-  * The Toshiba CPU datasheet is here : http://kr.ic-on-line.cn/IOL/viewpdf/TMP87CH40N_1029113.htm
+    And since it can return any value at any time, it may be responsible for fatfurwa's missing palette.
+  * The Toshiba CPU datasheet is here : http://www.semicon.toshiba.co.jp/openb2b/websearch/productDetails.jsp?partKey=TMP87CH40N
 
   * From the Roads Edge manual : "The Network Check screen will be displayed for about 40 seconds whether
                                   the cabinet is connected for communication competition or not.  After this,
@@ -29,21 +27,21 @@ Notes:
   * The Japanese text on the Roads Edge network screen says : "waiting to connect network... please wait without touching machine"
 
 ToDo:
-  * Buriki One / Xrally and Roads Edge doesn't coin it up, irq issue?
-  * Sprite garbage in Beast Busters 2nd Nightmare, another irq issue?
-  * Samurai Shodown 64 2 puts "Press 1p & 2p button" msg in gameplay, known to be a MCU simulation issue, i/o port 4 doesn't
-    seem to be just an input port but controls program flow too.
-  * Work out the purpose of the interrupts and how many are needed.
-  * Correct game speed (seems too fast).
+  * clean up I/O / MCU communication
+  * work out the purpose of the interrupts and how many are needed
+  * correct game speed (seems too fast)
+  * figure out what 'network' Road Edge needs to boot, it should run as a standalone
+  * make ss64 boot (io return 3 then 4 not just 4) then work out where the palette is
 
   2d:
-  * Scroll (base registers?)
-  * ROZ (4th tilemap in fatal fury should be floor [in progress], background should zoom)
-  * Find registers to control tilemap mode (4bpp/8bpp, 8x8, 16x16)
-  * Fix zooming sprites (zoom registers not understood, center versus edge pivot)
-  * Priorities
-  * Is all the bitmap decoding right?
-  * Upgrade to modern video timing.
+  * scroll (base registers?)
+  * roz (4th tilemap in fatal fury should be floor [in progress], background should zoom)
+  * find registers to control tilemap mode (4bpp/8bpp, 8x8, 16x16)
+  * fix zooming sprites (zoom registers not understood, center versus edge pivot)
+  * priorities
+  * still some bad sprites/tiles (waterfall level 'splash' - health bar at 50% - intro top and bottom - fatfurwa test mode)
+  * is all the bitmap decoding right?
+  * upgrade to modern video timing.
 
   3d:
   * Find where the remainder of the 3d display list information is 'hiding'
@@ -54,11 +52,11 @@ ToDo:
 
   Other:
   * Translate KL5C80 docs and finish up the implementation
-  * Figure out what IO $54 & $72 are on the communications CPU
-  * Hook up CPU2 (v30 based?) no rom? (maybe its the 'sound driver' the game uploads?)
-  * Add sound
-  * Backup ram etc.
-  * Correct cpu speed
+  * figure out what IO $54 & $72 are on the communications CPU
+  * hook up CPU2 (v30 based?) no rom? (maybe its the 'sound driver' the game uploads?)
+  * add sound
+  * backup ram etc.
+  * correct cpu speed and find idle skips
   * What is ROM1?  Data for the KL5C80?  There's plenty of physical space to map it to.
 */
 
@@ -201,6 +199,7 @@ Notes:
 
 
 
+
 Hyper Neo Geo game cartridges
 -----------------------------
 
@@ -284,6 +283,7 @@ LVS-DG1
 
 Bottom
 ------
+
 LVS-DG1
 |----------------------------------------------------------------------------|
 |                         |----------------------|                           |
@@ -423,9 +423,15 @@ LVS-DG2
 
 info from Daemon
 
+(MACHINE CODE ERROR):
+Is given when you try to put a "RACING GAME" on a "FIGHTING" board.
+
 There are various types of neogeo64 boards:
-FIGHTING (revision 1 & 2), RACING, SHOOTING, and SAMURAI SHODOWN ONLY (Korean)
-(MACHINE CODE ERROR): Is given when you try to put a "RACING GAME" on a "FIGHTING" board.
+FIGHTING (revision 1 and 2)
+RACING
+SHOOTING
+and
+SAMURAI SHODOWN ONLY (Korean)
 
 FIGHTING boards will ONLY play fighting games.
 
@@ -439,24 +445,57 @@ And the Korean board only plays Samurai Shodown games (wont play Buriki One
 or Fatal Fury for example).
 */
 
-#define MASTER_CLOCK 50000000
-#include "emu.h"
+#define MASTER_CLOCK	50000000
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/nec/nec.h"
+#include "deprecat.h"
 #include "cpu/mips/mips3.h"
-#include "machine/nvram.h"
-#include "includes/hng64.h"
 
-/* TODO: NOT measured! */
-#define PIXEL_CLOCK			((MASTER_CLOCK*2)/4) // x 2 is due of the interlaced screen ...
+static int hng64_boothack = 0;
+static UINT32 *rombase;
+static UINT32 *hng_mainram;
+static UINT32 *hng_cart;
+static UINT32 *hng64_dualport;
+static UINT32 *hng64_sram;
+static UINT16 *hng64_soundram;
+static UINT32 *hng64_sysregs;
 
-#define HTOTAL				(0x200+0x100)
-#define HBEND				(0)
-#define HBSTART				(0x200)
+// Stuff from over in video...
+extern tilemap *hng64_tilemap0, *hng64_tilemap1, *hng64_tilemap2, *hng64_tilemap3 ;
+extern UINT32 *hng64_spriteram, *hng64_videoregs ;
+extern UINT32 *hng64_videoram ;
+extern UINT32 *hng64_tcram ;
 
-#define VTOTAL				(264*2)
-#define VBEND				(0)
-#define VBSTART				(224*2)
+extern UINT32 hng64_dls[2][0x81] ;
+
+VIDEO_START( hng64 ) ;
+VIDEO_UPDATE( hng64 ) ;
+
+static UINT32 activeBuffer ;
+
+
+static UINT32 no_machine_error_code;
+static int hng64_interrupt_level_request;
+static WRITE32_HANDLER( hng64_videoram_w );
+
+/* 3D stuff */
+static UINT32 *hng64_3d_1;
+static UINT32 *hng64_3d_2;
+static UINT32 *hng64_dl;
+//static UINT32 *hng64_q2;
+
+/* Communications stuff */
+static UINT32 *hng64_com_ram ;
+
+static UINT8 *hng64_com_virtual_mem;
+static UINT8 *hng64_com_op_base;
+
+static UINT8 *hng64_com_mmu_mem;
+
+/* Hacky stuff */
+//static char writeString[1024];
+extern UINT32 hng64_hackTilemap3, hng64_hackTm3Count, hng64_rowScrollOffset;
 
 
 #ifdef UNUSED_FUNCTION
@@ -464,45 +503,96 @@ WRITE32_HANDLER( trap_write )
 {
     logerror("Remapped write... %08x %08x\n",offset,data);
 }
+#endif
+
+
+static WRITE32_HANDLER( hng64_videoram_w )
+{
+	int realoff;
+	COMBINE_DATA(&hng64_videoram[offset]);
+
+	realoff = offset*4;
+
+	if ((realoff>=0) && (realoff<0x10000))
+	{
+		tilemap_mark_tile_dirty(hng64_tilemap0,offset&0x3fff);
+	}
+	else if ((realoff>=0x10000) && (realoff<0x20000))
+	{
+		tilemap_mark_tile_dirty(hng64_tilemap1,offset&0x3fff);
+	}
+	else if ((realoff>=0x20000) && (realoff<0x30000))
+	{
+		tilemap_mark_tile_dirty(hng64_tilemap2,offset&0x3fff);
+	}
+	else if ((realoff>=0x30000) && (realoff<0x40000))
+	{
+		tilemap_mark_tile_dirty(hng64_tilemap3,offset&0x3fff);
+	}
+
+//  if ((realoff>=0x40000)) mame_printf_debug("offsw %08x %08x\n",realoff,data);
+
+
+	///////////////////////////////////
+	// For the scrolling ground, yo  //
+	///////////////////////////////////
+
+	// First, get the offset we're working with
+	if ( (realoff&0x00000bf0) == 0xbf0)
+	{
+		hng64_hackTilemap3 = 1 ;
+		hng64_rowScrollOffset = realoff & 0x000ff000 ;
+	}
+
+	// Next count the number of lines to be drawn to the screen.
+	// This is probably really done per-scanline or something.
+	if (hng64_rowScrollOffset)
+	{
+		if ((realoff & hng64_rowScrollOffset) == hng64_rowScrollOffset)
+			hng64_hackTm3Count++ ;
+	}
+
+	/* 400000 - 7fffff is scroll regs etc. */
+}
+
 
 static READ32_HANDLER( hng64_random_read )
 {
-	return space->machine().rand()&0xffffffff;
+	return mame_rand(space->machine)&0xffffffff;
 }
-#endif
+
 
 static READ32_HANDLER( hng64_com_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	logerror("com read  (PC=%08x): %08x %08x = %08x\n", cpu_get_pc(&space->device()), (offset*4)+0xc0000000, mem_mask, state->m_com_ram[offset]);
-	return state->m_com_ram[offset];
+	logerror("com read  (PC=%08x): %08x %08x = %08x\n", cpu_get_pc(space->cpu), (offset*4)+0xc0000000, mem_mask, hng64_com_ram[offset]);
+	return hng64_com_ram[offset] ;
 }
+
 
 static WRITE32_HANDLER( hng64_com_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	logerror("com write (PC=%08x): %08x %08x = %08x\n", cpu_get_pc(&space->device()), (offset*4)+0xc0000000, mem_mask, data);
-	COMBINE_DATA(&state->m_com_ram[offset]);
+	logerror("com write (PC=%08x): %08x %08x = %08x\n", cpu_get_pc(space->cpu), (offset*4)+0xc0000000, mem_mask, data);
+	COMBINE_DATA(&hng64_com_ram[offset]);
 }
+
+
+static UINT32 hng64_com_shared_a;
+static UINT32 hng64_com_shared_b;
 
 static WRITE32_HANDLER( hng64_com_share_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
+	logerror("commw  (PC=%08x): %08x %08x %08x\n", cpu_get_pc(space->cpu), data, (offset*4)+0xc0001000, mem_mask);
 
-	logerror("commw  (PC=%08x): %08x %08x %08x\n", cpu_get_pc(&space->device()), data, (offset*4)+0xc0001000, mem_mask);
-
-	if (offset == 0x0) COMBINE_DATA(&state->m_com_shared_a);
-	if (offset == 0x1) COMBINE_DATA(&state->m_com_shared_b);
+	if (offset==0x0) COMBINE_DATA(&hng64_com_shared_a);
+	if (offset==0x1) COMBINE_DATA(&hng64_com_shared_b);
 }
 
 static READ32_HANDLER( hng64_com_share_r )
 {
-	logerror("commr  (PC=%08x): %08x %08x\n", cpu_get_pc(&space->device()), (offset*4)+0xc0001000, mem_mask);
+	logerror("commr  (PC=%08x): %08x %08x\n", cpu_get_pc(space->cpu), (offset*4)+0xc0001000, mem_mask);
 
-	//if(offset == 0x0) return state->m_com_shared_a;
-	//if(offset == 0x1) return state->m_com_shared_b;
+//  if(offset==0x0) return hng64_com_shared_a;
+//  if(offset==0x1) return hng64_com_shared_b;
 
 	if(offset==0x0) return 0x0000aaaa;
 	if(offset==0x1)	return 0x00030000;		// fatfurwa : at bfc06624 it wants a 01 : at bfc06650 it wants a 02
@@ -510,40 +600,45 @@ static READ32_HANDLER( hng64_com_share_r )
 	return 0x00;
 }
 
+
+
 static WRITE32_HANDLER( hng64_pal_w )
 {
-	UINT32 *paletteram = space->machine().generic.paletteram.u32;
-	int r, g, b/*, a*/;
+	int r,g,b,a;
+	COMBINE_DATA(&paletteram32[offset]);
 
-	COMBINE_DATA(&paletteram[offset]);
+	b = ((paletteram32[offset] & 0x000000ff) >>0);
+	g = ((paletteram32[offset] & 0x0000ff00) >>8);
+	r = ((paletteram32[offset] & 0x00ff0000) >>16);
+	a = ((paletteram32[offset] & 0xff000000) >>24);
 
-	b = ((paletteram[offset] & 0x000000ff) >>0);
-	g = ((paletteram[offset] & 0x0000ff00) >>8);
-	r = ((paletteram[offset] & 0x00ff0000) >>16);
-	//a = ((paletteram[offset] & 0xff000000) >>24);
-	palette_set_color(space->machine(),offset,MAKE_RGB(r,g,b));
+	// a sure ain't alpha.
+	// mame_printf_debug("Alpha : %d %d %d %d\n", a, b, g, r) ;
+
+	//if (a != 0)
+	//  popmessage("Alpha is not zero!") ;
+
+	// sams64 / sams64_2 never write a palette, why not?
+	if (hng64_boothack!=1)
+		palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
 
 static READ32_HANDLER( hng64_sysregs_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	system_time systime;
+	mame_system_time systime;
+	mame_get_base_datetime(space->machine, &systime);
 
-	space->machine().base_datetime(systime);
-
-#if 0
-	if((offset*4) != 0x1084)
-		printf("HNG64 port read (PC=%08x) 0x%08x\n", cpu_get_pc(&space->device()), offset*4);
-#endif
+	//if(((offset*4) & 0xff00) == 0x2100)
+	//  printf("HNG64 port read (PC=%08x) 0x%08x\n", cpu_get_pc(space->cpu),offset*4);
 
 	switch(offset*4)
 	{
-		case 0x001c: return space->machine().rand(); // hng64 hangs on start-up if zero.
+		case 0x001c: return mame_rand(space->machine); // hng64 hangs on start-up if zero.
 		//case 0x106c:
 		//case 0x107c:
-		case 0x1084: return 0x00000002; //MCU->MIPS latch port
+		case 0x1084: return 0x00000002; //???
 		//case 0x108c:
-		case 0x1104: return state->m_interrupt_level_request;
+		case 0x1104: return hng64_interrupt_level_request;
 		case 0x1254: return 0x00000000; //dma status, 0x800
 		/* 4-bit RTC */
 		case 0x2104: return (systime.local_time.second % 10);
@@ -560,33 +655,33 @@ static READ32_HANDLER( hng64_sysregs_r )
 		case 0x215c: return ((systime.local_time.year%100)/10);
 		case 0x2164: return (systime.local_time.weekday);
 
-		case 0x216c: return 0x00000010; //disables "system log reader"
+		case 0x216c: return 0x00000010; //enables "system log reader"
 
 		case 0x217c: return 0; //RTC status?
 	}
 
-//  printf("%08x\n",offset*4);
+	//printf("%08x\n",offset*4);
 
-//  return space->machine().rand()&0xffffffff;
-	return state->m_sysregs[offset];
+	//return mame_rand(space->machine)&0xffffffff;
+	return hng64_sysregs[offset];
 }
 
 /* preliminary dma code, dma is used to copy program code -> ram */
-static void hng64_do_dma(address_space *space)
+static INT32 hng_dma_start,hng_dma_dst,hng_dma_len;
+
+static void hng64_do_dma (const address_space *space)
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
+	printf("Performing DMA Start %08x Len %08x Dst %08x\n",hng_dma_start, hng_dma_len, hng_dma_dst);
 
-	//printf("Performing DMA Start %08x Len %08x Dst %08x\n", state->m_dma_start, state->m_dma_len, state->m_dma_dst);
-
-	while (state->m_dma_len >= 0)
+	while (hng_dma_len>=0)
 	{
 		UINT32 dat;
 
-		dat = space->read_dword(state->m_dma_start);
-		space->write_dword(state->m_dma_dst, dat);
-		state->m_dma_start += 4;
-		state->m_dma_dst += 4;
-		state->m_dma_len--;
+		dat = memory_read_dword(space,hng_dma_start);
+		memory_write_dword(space,hng_dma_dst,dat);
+		hng_dma_start+=4;
+		hng_dma_dst+=4;
+		hng_dma_len--;
 	}
 }
 
@@ -600,211 +695,84 @@ static void hng64_do_dma(address_space *space)
 //  AM_RANGE(0x1F70124C, 0x1F70124F) AM_WRITENOP        // dma related?
 //  AM_RANGE(0x1F70125C, 0x1F70125F) AM_WRITENOP        // dma related?
 //  AM_RANGE(0x1F7021C4, 0x1F7021C7) AM_WRITENOP        // ?? often
+
 */
 
 static WRITE32_HANDLER( hng64_sysregs_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	COMBINE_DATA (&state->m_sysregs[offset]);
-
-#if 0
-	if(((offset*4) & 0x1200) == 0x1200)
-		printf("HNG64 writing to SYSTEM Registers 0x%08x == 0x%08x. (PC=%08x)\n", offset*4, state->m_sysregs[offset], cpu_get_pc(&space->device()));
-#endif
-
+	COMBINE_DATA (&hng64_sysregs[offset]);
 	switch(offset*4)
 	{
-		//case 0x100c: *DOCUMENT*
-
-		case 0x1084: //MIPS->MCU latch port
-			state->m_mcu_en = (data & 0xff); //command-based, i.e. doesn't control halt line and such?
-			//printf("HNG64 writing to SYSTEM Registers 0x%08x == 0x%08x. (PC=%08x)\n", offset*4, state->m_sysregs[offset], cpu_get_pc(&space->device()));
-			break;
-		case 0x111c: /*irq ack */ break;
-		case 0x1204: state->m_dma_start = state->m_sysregs[offset]; break;
-		case 0x1214: state->m_dma_dst = state->m_sysregs[offset]; break;
+		case 0x111c: /* irq ack */ break;
+		case 0x1204: hng_dma_start = hng64_sysregs[offset]; break;
+		case 0x1214: hng_dma_dst = hng64_sysregs[offset]; break;
 		case 0x1224:
-			state->m_dma_len = state->m_sysregs[offset];
+			hng_dma_len = hng64_sysregs[offset];
 			hng64_do_dma(space);
 			break;
-		//default:
-			//printf("HNG64 writing to SYSTEM Registers 0x%08x == 0x%08x. (PC=%08x)\n", offset*4, state->m_sysregs[offset], cpu_get_pc(&space->device()));
+		default:
+			logerror("HNG64 writing to SYSTEM Registers 0x%08x == 0x%08x. (PC=%08x)\n", offset*4, hng64_sysregs[offset], cpu_get_pc(space->cpu));
 	}
 }
 
-/**************************************
-* MCU simulations
-**************************************/
-
-/* Fatal Fury Wild Ambition / Buriki One */
-static READ32_HANDLER( fight_io_r )
+static READ32_HANDLER( hng64_sram_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	switch (offset*4)
-	{
-		case 0x000: return 0x00000400;
-		case 0x004: return input_port_read(space->machine(), "SYSTEM");
-		case 0x008: return input_port_read(space->machine(), "P1_P2");
-		case 0x600: return state->m_no_machine_error_code;
-	}
-
-	return state->m_dualport[offset];
+	logerror("HNG64 reading from SRAM 0x%08x == 0x%08x. (PC=%08x)\n", offset*4, hng64_sram[offset], cpu_get_pc(space->cpu));
+	return hng64_sram[offset];
 }
 
-/* Samurai Shodown 64 / Samurai Shodown 64 2 */
-static READ32_HANDLER( samsho_io_r )
+static WRITE32_HANDLER( hng64_sram_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	switch (offset*4)
-	{
-        case 0x000:
-		{
-			/* this is used on post by the io mcu to signal that a init task is complete, zeroed otherwise. */
-			//popmessage("%04x", state->m_mcu_fake_time);
-
-			if(state->m_mcu_fake_time < 0x100)
-				state->m_mcu_fake_time++;
-
-			if(state->m_mcu_fake_time < 0x80) //i/o init 1
-				return 0x300;
-			else if(state->m_mcu_fake_time < 0x100)//i/o init 2
-				return 0x400;
-			else
-				return 0x000;
-		}
-		case 0x004: return input_port_read(space->machine(), "SYSTEM");
-		case 0x008: return input_port_read(space->machine(), "P1_P2");
-		case 0x600: return state->m_no_machine_error_code;
-	}
-
-	return state->m_dualport[offset];
+	logerror("HNG64 writing to SRAM 0x%08x == 0x%08x & 0x%08x. (PC=%08x)\n", offset*4, data, mem_mask, cpu_get_pc(space->cpu));
+	COMBINE_DATA (&hng64_sram[offset]);
 }
-
-/* Beast Busters 2 */
-/* FIXME: trigger input doesn't work? */
-static READ32_HANDLER( shoot_io_r )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	switch (offset*4)
-	{
-        case 0x000:
-        {
-			if(state->m_mcu_fake_time < 0x100)//i/o init
-			{
-				state->m_mcu_fake_time++;
-				return 0x400;
-			}
-			else
-				return 0x000;
-		}
-		case 0x010:
-		{
-			/* Quick kludge for use the input test items */
-			if(input_port_read(space->machine(), "D_IN") & 0x01000000)
-				state->m_p1_trig = space->machine().rand() & 0x01000000;
-
-			return (input_port_read(space->machine(), "D_IN") & ~0x01000000) | (state->m_p1_trig);
-		}
-		case 0x018:
-		{
-			UINT8 p1_x, p1_y, p2_x, p2_y;
-			p1_x = input_port_read(space->machine(), "LIGHT_P1_X") & 0xff;
-			p1_y = input_port_read(space->machine(), "LIGHT_P1_Y") & 0xff;
-			p2_x = input_port_read(space->machine(), "LIGHT_P2_X") & 0xff;
-			p2_y = input_port_read(space->machine(), "LIGHT_P2_Y") & 0xff;
-
-			return p1_x<<24 | p1_y<<16 | p2_x<<8 | p2_y;
-		}
-		case 0x01c:
-		{
-			UINT8 p3_x, p3_y;
-			p3_x = input_port_read(space->machine(), "LIGHT_P3_X") & 0xff;
-			p3_y = input_port_read(space->machine(), "LIGHT_P3_Y") & 0xff;
-
-			return p3_x<<24 | p3_y<<16 | p3_x<<8 | p3_y; //FIXME: see what's the right bank here when the trigger works
-		}
-		case 0x600: return state->m_no_machine_error_code;
-	}
-
-	return state->m_dualport[offset];
-}
-
-/* Roads Edge / Xtreme Rally */
-static READ32_HANDLER( racing_io_r )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	switch (offset*4)
-	{
-        case 0x000:
-        {
-			if(state->m_mcu_fake_time < 0x100)//i/o init
-			{
-				state->m_mcu_fake_time++;
-				return 0x400;
-			}
-			else
-				return 0x000;
-		}
-		case 0x004: return input_port_read(space->machine(), "SYSTEM");
-		case 0x008: return input_port_read(space->machine(), "P1_P2");
-		case 0x600: return state->m_no_machine_error_code;
-	}
-
-	return state->m_dualport[offset];
-}
-
-static READ32_HANDLER( hng64_dualport_r )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	//printf("dualport R %08x %08x (PC=%08x)\n", offset*4, hng64_dualport[offset], cpu_get_pc(&space->device()));
-
-	/*
-    command table:
-    0x0b = ? mode input polling (sams64, bbust2, sams64_2 & roadedge) (*)
-    0x0c = cut down connections, treats the dualport to be normal RAM
-    0x11 = ? mode input polling (fatfurwa, xrally, buriki) (*)
-    0x20 = asks for MCU machine code
-
-    (*) 0x11 is followed by 0x0b if the latter is used, JVS-esque indirect/direct mode?
-    */
-	if (state->m_mcu_en == 0x0c)
-		return state->m_dualport[offset];
-
-	switch (state->m_mcu_type)
-	{
-		case FIGHT_MCU:  return fight_io_r(space, offset,0xffffffff);
-		case SHOOT_MCU:  return shoot_io_r(space, offset,0xffffffff);
-		case RACING_MCU: return racing_io_r(space, offset,0xffffffff);
-		case SAMSHO_MCU: return samsho_io_r(space, offset,0xffffffff);
-	}
-
-	return state->m_dualport[offset];
-}
-
-/*
-Beast Busters 2 outputs (all at offset == 0x1c):
-0x00000001 start #1
-0x00000002 start #2
-0x00000004 start #3
-0x00001000 gun #1
-0x00002000 gun #2
-0x00004000 gun #3
-*/
 
 static WRITE32_HANDLER( hng64_dualport_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	//printf("dualport WRITE %08x %08x (PC=%08x)\n", offset*4, hng64_dualport[offset], cpu_get_pc(&space->device()));
-	COMBINE_DATA (&state->m_dualport[offset]);
+	logerror("dualport WRITE %08x %08x (PC=%08x)\n", offset*4, hng64_dualport[offset], cpu_get_pc(space->cpu));
+	COMBINE_DATA (&hng64_dualport[offset]);
 }
 
+
+static READ32_HANDLER( hng64_dualport_r )
+{
+	static int toggle = 0;
+
+	logerror("dualport R %08x %08x (PC=%08x)\n", offset*4, hng64_dualport[offset], cpu_get_pc(space->cpu));
+
+	// These hacks create some red marks for the boot-up sequence
+	switch (offset*4)
+	{
+		//SamSho64
+        case 0x00:
+		{
+
+			if (hng64_boothack == 1) // ss64
+			{
+				toggle^=1; if (toggle==1) {return 0x00000400;} else {return 0x00000300;};
+			}
+			else if (hng64_boothack == 2) // ffwa
+			{
+				return 0x00000400;
+			}
+
+			return mame_rand(space->machine);
+		}
+
+		//RoadsEdge
+//      case 0x00:  return input_port_read(space->machine, "IPT_TEST");
+
+
+		case 0x04:  return input_port_read(space->machine, "SYSTEM");
+		case 0x08:  return input_port_read(space->machine, "P1_P2");
+
+		// This takes care of the 'machine' error code
+		case 0x600: return no_machine_error_code;
+	}
+
+	return mame_rand(space->machine)&0xffffffff;
+	//return hng64_dualport[offset];
+}
 
 // Hardware calls these '3d buffers'
 //   They're only read during the startup check of fatfurwa.  Z-buffer memory?  Front buffer, back buffer?
@@ -814,9 +782,7 @@ static WRITE32_HANDLER( hng64_dualport_w )
 //   <ElSemi> 30140000-3015ffff is ZBuffer A
 static READ32_HANDLER( hng64_3d_1_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	return state->m_3d_1[offset];
+	return hng64_3d_1[offset] ;
 }
 
 #ifdef UNUSED_FUNCTION
@@ -828,211 +794,89 @@ WRITE32_HANDLER( hng64_3d_1_w )
 
 static READ32_HANDLER( hng64_3d_2_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	return state->m_3d_2[offset];
+	return hng64_3d_2[offset] ;
 }
 
 static WRITE32_HANDLER( hng64_3d_2_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	COMBINE_DATA (&state->m_3d_1[offset]);
-	COMBINE_DATA (&state->m_3d_2[offset]);
+	COMBINE_DATA (&hng64_3d_1[offset]) ;
+	COMBINE_DATA (&hng64_3d_2[offset]) ;
 }
 
+
+
 // The 3d 'display list'
+// is it a fifo?
+// sams64 / sams64_2 access it in a very different way to fatal fury...
 static WRITE32_HANDLER( dl_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	UINT32 *hng64_dl = state->m_dl;
-	int i;
-	UINT16 packet3d[16];
-
-	COMBINE_DATA(&hng64_dl[offset]);
-
-	if (offset == 0x08 || offset == 0x7f ||	// Special buggers.
-		offset == 0x10 || offset == 0x18 ||
-		offset == 0x20 || offset == 0x28 ||
-		offset == 0x30 || offset == 0x38 ||
-		offset == 0x40 || offset == 0x48 ||
-		offset == 0x50 || offset == 0x58 ||
-		offset == 0x60 || offset == 0x68 ||
-		offset == 0x70 || offset == 0x78)
-	{
-		// Create a 3d packet
-		UINT16 packetStart = offset - 0x08;
-		if (offset == 0x7f) packetStart += 1;
-
-		for (i = 0; i < 0x08; i++)
-		{
-			packet3d[i*2+0] = (hng64_dl[packetStart+i] & 0xffff0000) >> 16;
-			packet3d[i*2+1] = (hng64_dl[packetStart+i] & 0x0000ffff);
-		}
-
-		// Send it off to the 3d subsystem.
-		hng64_command3d(space->machine(), packet3d);
-	}
+	COMBINE_DATA (&hng64_dl[offset]) ;
 }
 
 #if 0
 static READ32_HANDLER( dl_r )
 {
-	//mame_printf_debug("dl R (%08x) : %x %x\n", cpu_get_pc(&space->device()), offset, hng64_dl[offset]);
-	//usrintf_showmessage("dl R (%08x) : %x %x", cpu_get_pc(&space->device()), offset, hng64_dl[offset]);
-	return hng64_dl[offset];
+
+
+//  mame_printf_debug("dl R (%08x) : %x %x\n", cpu_get_pc(space->cpu), offset, hng64_dl[offset]) ;
+//  usrintf_showmessage("dl R (%08x) : %x %x", cpu_get_pc(space->cpu), offset, hng64_dl[offset]) ;
+	return hng64_dl[offset] ;
 }
 #endif
+
+// A read at 0x20300217 ONLY happens if there are more display lists than what are readily available.
 
 // Some kind of buffering of the display lists, or 'render current buffer' write?
 static WRITE32_HANDLER( dl_control_w )
 {
-//  printf("\n");   // Debug - ajg
-	// TODO: put this back in.
-	/*
-    if (activeBuffer==0 || activeBuffer==1)
-        memcpy(&hng64_dls[activeBuffer][0],&hng64_dl[0],0x200);
+	if (activeBuffer==0 || activeBuffer==1)
+		memcpy(&hng64_dls[activeBuffer][0],&hng64_dl[0],0x200);
 
-    // Only if it's VALID (hack)
-    if (data & 1)
-        activeBuffer = 0;
-    if (data & 2)
-        activeBuffer = 1;
-    */
+	// Only if it's VALID (hack)
+	if (data == 1 || data == 2)
+		activeBuffer = data - 1;
+
 }
+
+
 
 #ifdef UNUSED_FUNCTION
 WRITE32_HANDLER( activate_3d_buffer )
 {
-    COMBINE_DATA (&active_3d_buffer[offset]);
-    mame_printf_debug("COMBINED %d\n", active_3d_buffer[offset]);
+    COMBINE_DATA (&active_3d_buffer[offset]) ;
+    mame_printf_debug("COMBINED %d\n", active_3d_buffer[offset]) ;
 }
 #endif
 
 // Transition Control memory.
 static WRITE32_HANDLER( tcram_w )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	UINT32 *hng64_tcram = state->m_tcram;
+	COMBINE_DATA (&hng64_tcram[offset]) ;
+//  mame_printf_debug("Q1 W : %.8x %.8x\n", offset, hng64_tcram[offset]) ;
 
-	COMBINE_DATA (&hng64_tcram[offset]);
+/*
+    if (offset == 0x00000007)
+    {
+        sprintf(writeString, "%.8x ", hng64_tcram[offset]) ;
+    }
 
-	if(offset == 0x02)
-	{
-		UINT16 min_x, min_y, max_x, max_y;
-		rectangle visarea = space->machine().primary_screen->visible_area();
+    if (offset == 0x0000000a)
+    {
+        sprintf(writeString, "%s %.8x ", writeString, hng64_tcram[offset]) ;
+    }
 
-		min_x = (hng64_tcram[1] & 0xffff0000) >> 16;
-		min_y = (hng64_tcram[1] & 0x0000ffff) >> 0;
-		max_x = (hng64_tcram[2] & 0xffff0000) >> 16;
-		max_y = (hng64_tcram[2] & 0x0000ffff) >> 0;
-
-		if(max_x == 0 || max_y == 0) // bail out if values are invalid, Fatal Fury WA sets this to disable the screen.
-		{
-			state->m_screen_dis = 1;
-			return;
-		}
-
-		state->m_screen_dis = 0;
-
-		visarea.set(min_x, min_x + max_x - 1, min_y, min_y + max_y - 1);
-		space->machine().primary_screen->configure(HTOTAL, VTOTAL, visarea, space->machine().primary_screen->frame_period().attoseconds );
-	}
+    if (offset == 0x0000000b)
+    {
+        sprintf(writeString, "%s %.8x ", writeString, hng64_tcram[offset]) ;
+//      _("%s", writeString) ;
+    }
+*/
 }
 
 static READ32_HANDLER( tcram_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	//printf("Q1 R : %.8x %.8x\n", offset, hng64_tcram[offset]);
-	if(offset == 0x12)
-		return input_port_read(space->machine(), "VBLANK");
-
-	return state->m_tcram[offset];
-}
-
-/* Some games (namely sams64 after the title screen) tests bit 15 of this to be high,
-   unknown purpose (vblank? related to the display list?). */
-static READ32_HANDLER( unk_vreg_r )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	return ++state->m_unk_vreg_toggle;
-}
-
-
-static WRITE32_HANDLER( hng64_soundram_w )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	UINT32 mem_mask32 = mem_mask;
-	UINT32 data32 = data;
-
-	/* swap data around.. keep the v55 happy */
-	data = data32 >> 16;
-	data = FLIPENDIAN_INT16(data);
-	mem_mask = mem_mask32 >> 16;
-	mem_mask = FLIPENDIAN_INT16(mem_mask);
-	COMBINE_DATA(&state->m_soundram[offset * 2 + 0]);
-
-	data = data32 & 0xffff;
-	data = FLIPENDIAN_INT16(data);
-	mem_mask = mem_mask32 & 0xffff;
-	mem_mask = FLIPENDIAN_INT16(mem_mask);
-	COMBINE_DATA(&state->m_soundram[offset * 2 + 1]);
-}
-
-static READ32_HANDLER( hng64_soundram_r )
-{
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	UINT16 datalo = state->m_soundram[offset * 2 + 0];
-	UINT16 datahi = state->m_soundram[offset * 2 + 1];
-
-	return FLIPENDIAN_INT16(datahi) | (FLIPENDIAN_INT16(datalo) << 16);
-}
-
-/* The following is guesswork, needs confirmation with a test on the real board. */
-static WRITE32_HANDLER( hng64_sprite_clear_even_w )
-{
-	UINT32 spr_offs;
-
-	spr_offs = (offset) * 0x10 * 4;
-
-	if(ACCESSING_BITS_16_31)
-	{
-		space->write_dword(0x20000000+0x00+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x08+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x10+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x18+0x00+spr_offs, 0x00000000);
-	}
-	if(ACCESSING_BITS_8_15)
-	{
-		space->write_dword(0x20000000+0x00+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x08+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x10+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x18+0x20+spr_offs, 0x00000000);
-	}
-}
-
-static WRITE32_HANDLER( hng64_sprite_clear_odd_w )
-{
-	UINT32 spr_offs;
-
-	spr_offs = (offset) * 0x10 * 4;
-
-	if(ACCESSING_BITS_16_31)
-	{
-		space->write_dword(0x20000000+0x04+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x0c+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x14+0x00+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x1c+0x00+spr_offs, 0x00000000);
-	}
-	if(ACCESSING_BITS_0_15)
-	{
-		space->write_dword(0x20000000+0x04+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x0c+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x14+0x20+spr_offs, 0x00000000);
-		space->write_dword(0x20000000+0x1c+0x20+spr_offs, 0x00000000);
-	}
+//  mame_printf_debug("Q1 R : %.8x %.8x\n", offset, hng64_tcram[offset]) ;
+	return hng64_tcram[offset] ;
 }
 
 /*
@@ -1046,54 +890,77 @@ static WRITE32_HANDLER( hng64_sprite_clear_odd_w )
 <ElSemi> 0xBF800000-0xBF808000 S-RAM
 <ElSemi> 0x60000000-0x60001000 Comm dualport ram
 */
-static ADDRESS_MAP_START( hng_map, AS_PROGRAM, 32 )
 
-	AM_RANGE(0x00000000, 0x00ffffff) AM_RAM AM_BASE_MEMBER(hng64_state, m_mainram)
-	AM_RANGE(0x04000000, 0x05ffffff) AM_WRITENOP AM_ROM AM_REGION("user3", 0) AM_BASE_MEMBER(hng64_state, m_cart)
+static WRITE32_HANDLER( hng64_soundram_w )
+{
+	UINT32 mem_mask32 = mem_mask;
+	UINT32 data32 = data;
+
+	/* swap data around.. keep the v30 happy ;-) */
+	data = data32 >> 16;
+	data = FLIPENDIAN_INT16(data);
+	mem_mask = mem_mask32 >> 16;
+	mem_mask = FLIPENDIAN_INT16(mem_mask);
+	COMBINE_DATA(&hng64_soundram[offset * 2 + 0]);
+
+	data = data32 & 0xffff;
+	data = FLIPENDIAN_INT16(data);
+	mem_mask = mem_mask32 & 0xffff;
+	mem_mask = FLIPENDIAN_INT16(mem_mask);
+	COMBINE_DATA(&hng64_soundram[offset * 2 + 1]);
+}
+
+static READ32_HANDLER( hng64_soundram_r )
+{
+	UINT16 datalo = hng64_soundram[offset * 2 + 0];
+	UINT16 datahi = hng64_soundram[offset * 2 + 1];
+
+	return FLIPENDIAN_INT16(datahi) | (FLIPENDIAN_INT16(datalo) << 16);
+}
+
+static ADDRESS_MAP_START( hng_map, ADDRESS_SPACE_PROGRAM, 32 )
+
+	AM_RANGE(0x00000000, 0x00ffffff) AM_RAM AM_BASE(&hng_mainram)
+	AM_RANGE(0x04000000, 0x05ffffff) AM_WRITENOP AM_ROM AM_REGION("user3",0) AM_BASE(&hng_cart)
 
 	// Ports
-	AM_RANGE(0x1f700000, 0x1f702fff) AM_READWRITE(hng64_sysregs_r, hng64_sysregs_w) AM_BASE_MEMBER(hng64_state, m_sysregs)
+	AM_RANGE(0x1f700000, 0x1f702fff) AM_READWRITE(hng64_sysregs_r,hng64_sysregs_w) AM_BASE(&hng64_sysregs)
 
 	// SRAM.  Coin data, Player Statistics, etc.
-	AM_RANGE(0x1F800000, 0x1F803fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x1F800000, 0x1F803fff) AM_READWRITE(hng64_sram_r, hng64_sram_w) AM_BASE(&hng64_sram)
 
 	// Dualport RAM
-	AM_RANGE(0x1F808000, 0x1F8087ff) AM_READWRITE(hng64_dualport_r, hng64_dualport_w) AM_BASE_MEMBER(hng64_state, m_dualport)
+	AM_RANGE(0x1F808000, 0x1F8087ff) AM_READWRITE(hng64_dualport_r, hng64_dualport_w) AM_BASE(&hng64_dualport)
 
 	// BIOS
-	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_WRITENOP AM_ROM AM_REGION("user1", 0) AM_BASE_MEMBER(hng64_state, m_rombase)
+	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_WRITENOP AM_ROM AM_REGION("user1", 0) AM_BASE(&rombase)
 
 	// Video
-	AM_RANGE(0x20000000, 0x2000bfff) AM_RAM AM_BASE_MEMBER(hng64_state, m_spriteram)
-	AM_RANGE(0x2000d800, 0x2000e3ff) AM_WRITE(hng64_sprite_clear_even_w)
-	AM_RANGE(0x2000e400, 0x2000efff) AM_WRITE(hng64_sprite_clear_odd_w)
-	AM_RANGE(0x20010000, 0x20010013) AM_RAM AM_BASE_MEMBER(hng64_state, m_spriteregs)
-	AM_RANGE(0x20100000, 0x2017ffff) AM_RAM_WRITE(hng64_videoram_w) AM_BASE_MEMBER(hng64_state, m_videoram)	// Tilemap
-	AM_RANGE(0x20190000, 0x20190037) AM_RAM AM_BASE_MEMBER(hng64_state, m_videoregs)
-	AM_RANGE(0x20200000, 0x20203fff) AM_RAM_WRITE(hng64_pal_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x20208000, 0x2020805f) AM_READWRITE(tcram_r, tcram_w) AM_BASE_MEMBER(hng64_state, m_tcram)	// Transition Control
-	AM_RANGE(0x20300000, 0x203001ff) AM_RAM_WRITE(dl_w) AM_BASE_MEMBER(hng64_state, m_dl)	// 3d Display List
-//  AM_RANGE(0x20300200, 0x20300213) AM_RAM_WRITE(xxxx) AM_BASE_MEMBER(hng64_state, m_xxxxxxxx)  // 3d Display List Upload?
+	AM_RANGE(0x20000000, 0x2000bfff) AM_RAM AM_BASE(&hng64_spriteram)									// Sprites
+	AM_RANGE(0x20010000, 0x20010013) AM_READ(hng64_random_read)
+	AM_RANGE(0x20100000, 0x2017ffff) AM_RAM_WRITE(hng64_videoram_w) AM_BASE(&hng64_videoram)	// Tilemap
+	AM_RANGE(0x20190000, 0x20190037) AM_RAM AM_BASE(&hng64_videoregs)									// Video Registers
+	AM_RANGE(0x20200000, 0x20203fff) AM_READWRITE(SMH_RAM,hng64_pal_w) AM_BASE(&paletteram32)			// Palette
+	AM_RANGE(0x20208000, 0x2020805f) AM_READWRITE(tcram_r, tcram_w) AM_BASE(&hng64_tcram)				// Transition Control
+	AM_RANGE(0x20300000, 0x203001ff) AM_WRITE(dl_w) AM_BASE(&hng64_dl)						// 3d Display List
 	AM_RANGE(0x20300214, 0x20300217) AM_WRITE(dl_control_w)
-	AM_RANGE(0x20300218, 0x2030021b) AM_READ(unk_vreg_r)
 
 	// 3d?
-	AM_RANGE(0x30000000, 0x3000002f) AM_RAM AM_BASE_MEMBER(hng64_state, m_3dregs)
-	AM_RANGE(0x30100000, 0x3015ffff) AM_READWRITE(hng64_3d_1_r, hng64_3d_2_w) AM_BASE_MEMBER(hng64_state, m_3d_1)	// 3D Display Buffer A
-	AM_RANGE(0x30200000, 0x3025ffff) AM_READWRITE(hng64_3d_2_r, hng64_3d_2_w) AM_BASE_MEMBER(hng64_state, m_3d_2)	// 3D Display Buffer B
+//  AM_RANGE(0x30000000, 0x3000002f) AM_READWRITE(q2_r, q2_w) AM_BASE(&hng64_q2)
+	AM_RANGE(0x30100000, 0x3015ffff) AM_READWRITE(hng64_3d_1_r,hng64_3d_2_w) AM_BASE(&hng64_3d_1)		// 3D Display Buffer A
+	AM_RANGE(0x30200000, 0x3025ffff) AM_READWRITE(hng64_3d_2_r,hng64_3d_2_w) AM_BASE(&hng64_3d_2)		// 3D Display Buffer B
 
 	// Sound
-	AM_RANGE(0x60000000, 0x601fffff) AM_RAM												// Sound ??
-	AM_RANGE(0x60200000, 0x603fffff) AM_READWRITE(hng64_soundram_r, hng64_soundram_w)	// uploads the v53 sound program here, elsewhere on ss64-2
+	AM_RANGE(0x60000000, 0x601fffff) AM_RAM																// Sound ??
+	AM_RANGE(0x60200000, 0x603fffff) AM_READWRITE(hng64_soundram_r, hng64_soundram_w)					// uploads the v53 sound program here, elsewhere on ss64-2 */
 
-	// These are sound ports of some sort
-//  AM_RANGE(0x68000000, 0x68000003) AM_WRITENOP    // ??
-//  AM_RANGE(0x68000004, 0x68000007) AM_READNOP     // ??
-//  AM_RANGE(0x68000008, 0x6800000b) AM_WRITENOP    // ??
-//  AM_RANGE(0x6f000000, 0x6f000003) AM_WRITENOP    // halt / reset line for the sound CPU
+	// ?
+//  AM_RANGE(0x68000000, 0x68000003) AM_WRITENOP                                                // ??
+//  AM_RANGE(0x68000004, 0x68000007) AM_READNOP                                                 // ??
+//  AM_RANGE(0x68000008, 0x6800000b) AM_WRITENOP                                                // ??
 
 	// Communications
-	AM_RANGE(0xc0000000, 0xc0000fff) AM_READWRITE(hng64_com_r, hng64_com_w) AM_BASE_MEMBER(hng64_state, m_com_ram)
+	AM_RANGE(0xc0000000, 0xc0000fff) AM_READWRITE(hng64_com_r, hng64_com_w) AM_BASE(&hng64_com_ram)
 	AM_RANGE(0xc0001000, 0xc0001007) AM_READWRITE(hng64_com_share_r, hng64_com_share_w)
 
 	/* 6e000000-6fffffff */
@@ -1104,24 +971,126 @@ static ADDRESS_MAP_START( hng_map, AS_PROGRAM, 32 )
 	/* a0000000-a3ffffff */
 ADDRESS_MAP_END
 
-/**************/
-/** COMM CPU **/
-/**************/
-#define KL5C_MMU_A(xxx) ( (xxx == 0) ? 0x0000 : (state->m_com_mmu_mem[((xxx-1)*2)+1] << 2) | ((state->m_com_mmu_mem[(xxx-1)*2] & 0xc0) >> 6) )
-#define KL5C_MMU_B(xxx) ( (xxx == 0) ? 0x0000 : (state->m_com_mmu_mem[(xxx-1)*2] & 0x3f) )
+/*
+roadedge_full:
+index=00000000  pagesize=01000000  vaddr=00000000C0000000  paddr=0000000020000000  asid=00  r=0  c=2  dvg=dvg
+index=00000000  pagesize=01000000  vaddr=00000000C1000000  paddr=0000000021000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D0000000  paddr=0000000030000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D1000000  paddr=0000000031000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000D2000000  paddr=0000000032000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000D3000000  paddr=0000000033000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000D4000000  paddr=0000000034000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000D5000000  paddr=0000000035000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E0000000  paddr=0000000060000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E1000000  paddr=0000000061000000  asid=00  r=0  c=2  dvg=dvg
+index=00000005  pagesize=01000000  vaddr=00000000E8000000  paddr=0000000068000000  asid=00  r=0  c=2  dvg=dvg
+index=00000005  pagesize=01000000  vaddr=00000000E9000000  paddr=0000000069000000  asid=00  r=0  c=2  dvg=dvg
+index=00000006  pagesize=01000000  vaddr=00000000EE000000  paddr=000000006E000000  asid=00  r=0  c=2  dvg=dvg
+index=00000006  pagesize=01000000  vaddr=00000000EF000000  paddr=000000006F000000  asid=00  r=0  c=2  dvg=dvg
+index=00000007  pagesize=01000000  vaddr=0000000060000000  paddr=00000000C0000000  asid=00  r=0  c=2  dvg=dvg
+index=00000007  pagesize=01000000  vaddr=0000000061000000  paddr=00000000C1000000  asid=00  r=0  c=2  dvg=dvg
+index=00000008  pagesize=01000000  vaddr=0000000000000000  paddr=0000000004000000  asid=00  r=0  c=2  dvg=dvg
+index=00000008  pagesize=01000000  vaddr=0000000001000000  paddr=0000000004000000  asid=00  r=0  c=2  dvg=dvg
+index=00000009  pagesize=01000000  vaddr=0000000010000000  paddr=0000000080000000  asid=00  r=0  c=2  dvg=dvg
+index=00000009  pagesize=01000000  vaddr=0000000011000000  paddr=0000000081000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000A  pagesize=01000000  vaddr=0000000020000000  paddr=0000000088000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000A  pagesize=01000000  vaddr=0000000021000000  paddr=0000000089000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000B  pagesize=01000000  vaddr=0000000030000000  paddr=0000000090000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000B  pagesize=01000000  vaddr=0000000031000000  paddr=0000000091000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000C  pagesize=01000000  vaddr=0000000032000000  paddr=0000000092000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000C  pagesize=01000000  vaddr=0000000033000000  paddr=0000000093000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000D  pagesize=01000000  vaddr=0000000034000000  paddr=0000000094000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000D  pagesize=01000000  vaddr=0000000035000000  paddr=0000000095000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000E  pagesize=01000000  vaddr=0000000036000000  paddr=0000000096000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000E  pagesize=01000000  vaddr=0000000037000000  paddr=0000000097000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000F  pagesize=01000000  vaddr=0000000040000000  paddr=0000000098000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000F  pagesize=01000000  vaddr=0000000041000000  paddr=0000000099000000  asid=00  r=0  c=2  dvg=dvg
+index=00000010  pagesize=01000000  vaddr=0000000042000000  paddr=000000009A000000  asid=00  r=0  c=2  dvg=dvg
+index=00000010  pagesize=01000000  vaddr=0000000043000000  paddr=000000009B000000  asid=00  r=0  c=2  dvg=dvg
+index=00000011  pagesize=01000000  vaddr=0000000050000000  paddr=00000000A0000000  asid=00  r=0  c=2  dvg=dvg
+index=00000011  pagesize=01000000  vaddr=0000000051000000  paddr=00000000A1000000  asid=00  r=0  c=2  dvg=dvg
+index=00000012  pagesize=01000000  vaddr=0000000052000000  paddr=00000000A2000000  asid=00  r=0  c=2  dvg=dvg
+index=00000012  pagesize=01000000  vaddr=0000000053000000  paddr=00000000A3000000  asid=00  r=0  c=2  dvg=dvg
 
-DIRECT_UPDATE_HANDLER( KL5C80_direct_handler )
+fatfurwa_full:
+index=00000000  pagesize=01000000  vaddr=00000000C0000000  paddr=0000000020000000  asid=00  r=0  c=2  dvg=dvg
+index=00000000  pagesize=01000000  vaddr=00000000C1000000  paddr=0000000021000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D0000000  paddr=0000000030000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D1000000  paddr=0000000031000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000D2000000  paddr=0000000032000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000D3000000  paddr=0000000033000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000D4000000  paddr=0000000034000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000D5000000  paddr=0000000035000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E0000000  paddr=0000000060000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E1000000  paddr=0000000061000000  asid=00  r=0  c=2  dvg=dvg
+index=00000006  pagesize=01000000  vaddr=00000000E8000000  paddr=0000000068000000  asid=00  r=0  c=2  dvg=dvg
+index=00000006  pagesize=01000000  vaddr=00000000E9000000  paddr=0000000069000000  asid=00  r=0  c=2  dvg=dvg
+index=00000009  pagesize=01000000  vaddr=00000000EE000000  paddr=000000006E000000  asid=00  r=0  c=2  dvg=dvg
+index=00000009  pagesize=01000000  vaddr=00000000EF000000  paddr=000000006F000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000B  pagesize=01000000  vaddr=0000000000000000  paddr=0000000004000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000B  pagesize=01000000  vaddr=0000000001000000  paddr=0000000004000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000C  pagesize=01000000  vaddr=0000000010000000  paddr=0000000080000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000C  pagesize=01000000  vaddr=0000000011000000  paddr=0000000081000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000D  pagesize=01000000  vaddr=0000000020000000  paddr=0000000088000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000D  pagesize=01000000  vaddr=0000000021000000  paddr=0000000089000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000E  pagesize=01000000  vaddr=0000000030000000  paddr=0000000090000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000E  pagesize=01000000  vaddr=0000000031000000  paddr=0000000091000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000F  pagesize=01000000  vaddr=0000000032000000  paddr=0000000092000000  asid=00  r=0  c=2  dvg=dvg
+index=0000000F  pagesize=01000000  vaddr=0000000033000000  paddr=0000000093000000  asid=00  r=0  c=2  dvg=dvg
+index=00000010  pagesize=01000000  vaddr=0000000034000000  paddr=0000000094000000  asid=00  r=0  c=2  dvg=dvg
+index=00000010  pagesize=01000000  vaddr=0000000035000000  paddr=0000000095000000  asid=00  r=0  c=2  dvg=dvg
+index=00000011  pagesize=01000000  vaddr=0000000036000000  paddr=0000000096000000  asid=00  r=0  c=2  dvg=dvg
+index=00000011  pagesize=01000000  vaddr=0000000037000000  paddr=0000000097000000  asid=00  r=0  c=2  dvg=dvg
+index=00000012  pagesize=01000000  vaddr=0000000040000000  paddr=0000000098000000  asid=00  r=0  c=2  dvg=dvg
+index=00000012  pagesize=01000000  vaddr=0000000041000000  paddr=0000000099000000  asid=00  r=0  c=2  dvg=dvg
+index=00000013  pagesize=01000000  vaddr=0000000042000000  paddr=000000009A000000  asid=00  r=0  c=2  dvg=dvg
+index=00000013  pagesize=01000000  vaddr=0000000043000000  paddr=000000009B000000  asid=00  r=0  c=2  dvg=dvg
+index=00000014  pagesize=01000000  vaddr=0000000050000000  paddr=00000000A0000000  asid=00  r=0  c=2  dvg=dvg
+index=00000014  pagesize=01000000  vaddr=0000000051000000  paddr=00000000A1000000  asid=00  r=0  c=2  dvg=dvg
+index=00000015  pagesize=01000000  vaddr=0000000052000000  paddr=00000000A2000000  asid=00  r=0  c=2  dvg=dvg
+index=00000015  pagesize=01000000  vaddr=0000000053000000  paddr=00000000A3000000  asid=00  r=0  c=2  dvg=dvg
+index=00000016  pagesize=01000000  vaddr=0000000060000000  paddr=00000000C0000000  asid=00  r=0  c=2  dvg=dvg
+index=00000016  pagesize=01000000  vaddr=0000000061000000  paddr=00000000C1000000  asid=00  r=0  c=2  dvg=dvg
+
+
+roadedge/fatfurwa/buriki:
+index=00000000  pagesize=01000000  vaddr=00000000C0000000  paddr=0000000020000000  asid=00  r=0  c=2  dvg=dvg
+index=00000000  pagesize=01000000  vaddr=00000000C1000000  paddr=0000000021000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D0000000  paddr=0000000030000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000D1000000  paddr=0000000031000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E0000000  paddr=0000000060000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000E1000000  paddr=0000000061000000  asid=00  r=0  c=2  dvg=dvg
+index=00000007  pagesize=01000000  vaddr=0000000060000000  paddr=00000000C0000000  asid=00  r=0  c=2  dvg=dvg
+index=00000007  pagesize=01000000  vaddr=0000000061000000  paddr=00000000C1000000  asid=00  r=0  c=2  dvg=dvg
+
+sams64_2:
+index=00000000  pagesize=01000000  vaddr=00000000C0000000  paddr=0000000020000000  asid=00  r=0  c=2  dvg=dvg
+index=00000000  pagesize=01000000  vaddr=00000000C1000000  paddr=0000000021000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000C2000000  paddr=0000000030000000  asid=00  r=0  c=2  dvg=dvg
+index=00000001  pagesize=01000000  vaddr=00000000C3000000  paddr=0000000031000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000C4000000  paddr=0000000060000000  asid=00  r=0  c=2  dvg=dvg
+index=00000002  pagesize=01000000  vaddr=00000000C5000000  paddr=0000000061000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000C6000000  paddr=000000006E000000  asid=00  r=0  c=2  dvg=dvg
+index=00000003  pagesize=01000000  vaddr=00000000C7000000  paddr=000000006F000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000C8000000  paddr=0000000068000000  asid=00  r=0  c=2  dvg=dvg
+index=00000004  pagesize=01000000  vaddr=00000000C9000000  paddr=0000000069000000  asid=00  r=0  c=2  dvg=dvg
+*/
+
+
+/* COMM CPU */
+#define KL5C_MMU_A(xxx) ( (xxx==0) ? 0x0000 : (hng64_com_mmu_mem[((xxx-1)*2)+1] << 2) | ((hng64_com_mmu_mem[(xxx-1)*2] & 0xc0) >> 6) )
+#define KL5C_MMU_B(xxx) ( (xxx==0) ? 0x0000 : (hng64_com_mmu_mem[(xxx-1)*2] & 0x3f) )
+
+static DIRECT_UPDATE_HANDLER( KL5C80_direct_handler )
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	direct.explicit_configure(0x0000, 0xffff, 0xffff, state->m_com_op_base);
+	direct->raw = direct->decrypted = hng64_com_op_base;
 	return ~0;
 }
 
-static UINT32 KL5C80_translate_address(hng64_state *state, UINT16 vAddr)
+static UINT32 KL5C80_translate_address(UINT16 vAddr)
 {
-	int i;
-	UINT8 bNum = 4;
+	int i ;
+	UINT8 bNum = 4 ;
 
 	/* Determine what B the vAddr is in */
 	for (i = 1; i < 5; i++)
@@ -1144,7 +1113,7 @@ static UINT32 KL5C80_translate_address(hng64_state *state, UINT16 vAddr)
 	}
 }
 
-static void KL5C80_virtual_mem_sync(hng64_state *state)
+static void KL5C80_virtual_mem_sync(void)
 {
 	/* The KL5C80 maps each progressive chunk from the beginning of the
        virtual region until the beginning of the next virtual region.
@@ -1168,15 +1137,13 @@ static void KL5C80_virtual_mem_sync(hng64_state *state)
 		for (i = logical_offset; i <= 0xffff; i++)
 		{
 			if (physical_offset+i <= 0xfffff)
-				state->m_com_op_base[i] = state->m_com_virtual_mem[physical_offset+i];
+				hng64_com_op_base[i] = hng64_com_virtual_mem[physical_offset+i];
 		}
 	}
 }
 
-static void KL5C80_init(hng64_state *state)
+static void KL5C80_init(void)
 {
-	UINT8 *hng64_com_mmu_mem = state->m_com_mmu_mem;
-
 	/* init the MMU */
 	hng64_com_mmu_mem[0] =
 	hng64_com_mmu_mem[2] =
@@ -1191,9 +1158,8 @@ static void KL5C80_init(hng64_state *state)
 
 static READ8_HANDLER( hng64_comm_memory_r )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-	UINT32 physical_address = KL5C80_translate_address(state, offset);
-	logerror("READING 0x%02x from 0x%04x (0x%05x)\n", state->m_com_virtual_mem[physical_address], offset, physical_address);
+	UINT32 physical_address = KL5C80_translate_address(offset) ;
+	logerror("READING 0x%02x from 0x%04x (0x%05x)\n", hng64_com_virtual_mem[physical_address], offset, physical_address) ;
 
 	/* Custom "virtual" memory map */
 	if (physical_address >= 0x26000 && physical_address <= 0x28000)
@@ -1202,31 +1168,31 @@ static READ8_HANDLER( hng64_comm_memory_r )
 	}
 
 
-	return state->m_com_virtual_mem[physical_address];
+	return hng64_com_virtual_mem[physical_address] ;
 }
 
 static WRITE8_HANDLER( hng64_comm_memory_w )
 {
+//  UINT32 physical_address = KL5C80_translate_address(offset) ;
+//  logerror("WRITING 0x%02x to 0x%04x (0x%05x)\n", hng64_com_virtual_mem[physical_address], offset, physical_address) ;
+
 	// Write to both virtual and physical memory
-//  UINT32 physical_address = KL5C80_translate_address(offset);
-//  logerror("WRITING 0x%02x to 0x%04x (0x%05x)\n", hng64_com_virtual_mem[physical_address], offset, physical_address);
 }
+
 
 /* KL5C80 I/O handlers */
 static WRITE8_HANDLER( hng64_comm_io_mmu )
 {
-	hng64_state *state = space->machine().driver_data<hng64_state>();
-
-	state->m_com_mmu_mem[offset] = data;
+	hng64_com_mmu_mem[offset] = data;
 
 	/* Debugging - you can't change A4 - the hardware doesn't let you */
-	if (state->m_com_mmu_mem[7] != 0xf0 || ((state->m_com_mmu_mem[6] & 0xc0) != 0x00))
+	if (hng64_com_mmu_mem[7] != 0xf0 || ((hng64_com_mmu_mem[6] & 0xc0) != 0x00))
 		logerror("KL5C MMU error !!! Code is trying to change A4!\n");
 
-	logerror("COMM CPU MMU WRITE : ");
+	logerror("COMM CPU MMU WRITE : ") ;
 	logerror("B : %02x %02x %02x %02x  A : %03x %03x %03x %03x\n", KL5C_MMU_B(1), KL5C_MMU_B(2), KL5C_MMU_B(3), KL5C_MMU_B(4),
-																   KL5C_MMU_A(1), KL5C_MMU_A(2), KL5C_MMU_A(3), KL5C_MMU_A(4));
-	KL5C80_virtual_mem_sync(state);
+																   KL5C_MMU_A(1), KL5C_MMU_A(2), KL5C_MMU_A(3), KL5C_MMU_A(4)) ;
+	KL5C80_virtual_mem_sync();
 }
 
 #ifdef UNUSED_FUNCTION
@@ -1258,14 +1224,14 @@ WRITE8_HANDLER( hng64_comm_shared_w )
 }
 #endif
 
-static ADDRESS_MAP_START( hng_comm_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hng_comm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000,0xffff) AM_READWRITE( hng64_comm_memory_r, hng64_comm_memory_w )
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hng_comm_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( hng_comm_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	/* Reserved for the KL5C80 internal hardware */
-	AM_RANGE(0x00, 0x07) AM_WRITE( hng64_comm_io_mmu ) AM_BASE_MEMBER(hng64_state, m_com_mmu_mem)
+	AM_RANGE(0x00,0x07) AM_WRITE( hng64_comm_io_mmu ) AM_BASE(&hng64_com_mmu_mem)
 //  AM_RANGE(0x08,0x1f) AM_NOP              /* Reserved */
 //  AM_RANGE(0x20,0x25) AM_READWRITE        /* Timer/Counter B */           /* hng64 writes here */
 //  AM_RANGE(0x27,0x27) AM_NOP              /* Reserved */
@@ -1283,16 +1249,15 @@ static ADDRESS_MAP_START( hng_comm_io_map, AS_IO, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( hng_sound_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x00000, 0x3ffff) AM_ROMBANK("bank2")
-	AM_RANGE(0xe0000, 0xfffff) AM_ROMBANK("bank1")
+
+
+static ADDRESS_MAP_START( hng_sound_map, ADDRESS_SPACE_PROGRAM, 16 )
+	AM_RANGE(0x00000, 0x3ffff) AM_READ(SMH_BANK(2))
+	AM_RANGE(0xe0000, 0xfffff) AM_READ(SMH_BANK(1))
 ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( hng64 )
-	PORT_START("VBLANK")
-	PORT_BIT( 0xffffffff, IP_ACTIVE_HIGH, IPT_VBLANK )
-
 	PORT_START("IPT_TEST")
 	PORT_BIT( 0x0001, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x0002, IP_ACTIVE_HIGH, IPT_UNKNOWN )
@@ -1328,7 +1293,9 @@ static INPUT_PORTS_START( hng64 )
 	PORT_BIT( 0x10000000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x20000000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 	PORT_BIT( 0x40000000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x80000000, IP_ACTIVE_HIGH, IPT_SERVICE )
+	PORT_DIPNAME( 0x80000000, 0x00000000, "TST" )
+	PORT_DIPSETTING(          0x00000000, DEF_STR( Off ) )
+	PORT_DIPSETTING(          0x80000000, DEF_STR( On ) )
 
 	PORT_START("P1_P2")
 	PORT_BIT( 0x00000001, IP_ACTIVE_HIGH, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
@@ -1365,55 +1332,6 @@ static INPUT_PORTS_START( hng64 )
 	PORT_BIT( 0x80000000, IP_ACTIVE_HIGH, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( bbust2 )
-	PORT_START("VBLANK")
-	PORT_BIT( 0xffffffff, IP_ACTIVE_HIGH, IPT_VBLANK )
-
-	PORT_START("D_IN")
-	PORT_BIT( 0x000000ff, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x00000100, IP_ACTIVE_HIGH, IPT_COIN1 )
-	PORT_BIT( 0x00000200, IP_ACTIVE_HIGH, IPT_COIN2 )
-	PORT_BIT( 0x00000400, IP_ACTIVE_HIGH, IPT_COIN3 )
-	PORT_BIT( 0x00000800, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x00001000, IP_ACTIVE_HIGH, IPT_SERVICE1 )
-	PORT_BIT( 0x00002000, IP_ACTIVE_HIGH, IPT_SERVICE2 )
-	PORT_BIT( 0x00004000, IP_ACTIVE_HIGH, IPT_SERVICE3 )
-	PORT_BIT( 0x00008000, IP_ACTIVE_HIGH, IPT_SERVICE )
-	PORT_BIT( 0x00010000, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(3) //trigger
-	PORT_BIT( 0x00020000, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(3) //pump
-	PORT_BIT( 0x00040000, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(3) //bomb
-	PORT_BIT( 0x00080000, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x00100000, IP_ACTIVE_HIGH, IPT_START1 )
-	PORT_BIT( 0x00200000, IP_ACTIVE_HIGH, IPT_START2 )
-	PORT_BIT( 0x00400000, IP_ACTIVE_HIGH, IPT_START3 )
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x01000000, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(1) //trigger
-	PORT_BIT( 0x02000000, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(1) //pump
-	PORT_BIT( 0x04000000, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(1) //bomb
-	PORT_BIT( 0x08000000, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0x10000000, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(2) //trigger
-	PORT_BIT( 0x20000000, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2) //pump
-	PORT_BIT( 0x40000000, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(2) //bomb
-	PORT_BIT( 0x80000000, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-	PORT_START("LIGHT_P1_X")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(1)
-
-	PORT_START("LIGHT_P1_Y")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(1)
-
-	PORT_START("LIGHT_P2_X")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(2)
-
-	PORT_START("LIGHT_P2_Y")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(2)
-
-	PORT_START("LIGHT_P3_X")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(3)
-
-	PORT_START("LIGHT_P3_Y")
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_SENSITIVITY(25) PORT_KEYDELTA(7) PORT_REVERSE PORT_PLAYER(3)
-INPUT_PORTS_END
 
 
 static const gfx_layout hng64_8x8x4_tilelayout =
@@ -1422,7 +1340,7 @@ static const gfx_layout hng64_8x8x4_tilelayout =
 	RGN_FRAC(1,1),
 	4,
 	{ 0,1,2,3 },
-	{ 24, 28, 8, 12, 16, 20, 0, 4 },
+	{ 24, 28, 8,12,  16,20,    0,4},
 	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32 },
 	8*32
 };
@@ -1433,8 +1351,7 @@ static const gfx_layout hng64_8x8x8_tilelayout =
 	RGN_FRAC(1,1),
 	8,
 	{ 0,1,2,3,4,5,6,7 },
-	{ 24,     8,     16,     0,
-	  256+24, 256+8, 256+16, 256+0 },
+	{ 24, 8, 16, 0, 256+24, 256+8, 256+16, 256+0},
 	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32 },
 	16*32
 };
@@ -1445,10 +1362,11 @@ static const gfx_layout hng64_16x16x4_tilelayout =
 	RGN_FRAC(1,1),
 	4,
 	{ 0,1,2,3 },
-	{ 24,     28,     8,     12,     16,     20,     0,     4,
-	  256+24, 256+28, 256+8, 256+12, 256+16, 256+20, 256+0, 256+4 },
-	{ 0*32,  1*32,  2*32,  3*32,  4*32,  5*32,  6*32,  7*32,
-	  16*32, 17*32, 18*32, 19*32, 20*32, 21*32, 22*32, 23*32 },
+	{ 24, 28, 8,12,  16,20,    0,4,
+	256+24,256+28,256+8,256+12,256+16,256+20,256+0,256+4
+
+	},
+	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32, 16*32,17*32,18*32,19*32,20*32,21*32,22*32,23*32 },
 	32*32
 };
 
@@ -1459,12 +1377,14 @@ static const gfx_layout hng64_16x16x8_tilelayout =
 	RGN_FRAC(1,1),
 	8,
 	{ 0,1,2,3,4,5,6,7 },
-	{ 24,      8,      16,      0,
-	  256+24,  256+8,  256+16,  256+0,
-	  1024+24, 1024+8, 1024+16, 1024+0,
-	  1280+24, 1280+8, 1280+16, 1280+0, },
-	{ 0*32,  1*32,  2*32,  3*32,  4*32,  5*32,  6*32,  7*32,
-	  16*32, 17*32, 18*32, 19*32, 20*32, 21*32, 22*32, 23*32 },
+	{ 24, 8, 16, 0,
+	256+24, 256+8, 256+16, 256+0,
+	1024+24,1024+8,1024+16,1024+0,
+	1280+24,1280+8,1280+16,1280+0,
+	},
+	{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32,
+	  16*32,17*32,18*32,19*32,20*32,21*32,22*32,22*32,23*32
+	},
 	64*32
 };
 
@@ -1474,8 +1394,8 @@ static const gfx_layout hng64_16x16x4_spritelayout =
 	RGN_FRAC(1,1),
 	4,
 	{ 0,1,2,3 },
-	{ 56, 60, 24, 28, 48, 52, 16, 20, 40, 44, 8, 12, 32, 36, 0, 4 },
-	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64, 8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
+	{  56,60, 24, 28,  48,52,   16, 20,40, 44, 8,12,  32,36,    0,4 },
+	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,8*64,9*64,10*64,11*64,12*64,13*64,14*64,15*64 },
 	16*64
 };
 
@@ -1485,14 +1405,25 @@ static const gfx_layout hng64_16x16x8_spritelayout =
 	RGN_FRAC(1,1),
 	8,
 	{ 0,1,2,3,4,5,6,7 },
-	{ 56,      24,      48,      16,      40,      8,      32,      0,
-	  1024+56, 1024+24, 1024+48, 1024+16, 1024+40, 1024+8, 1024+32, 1024+0 },
-	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64, 8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
+
+	{ 56, 24, 48,16,  40, 8,  32, 0,
+	 1024+56, 1024+24, 1024+48,1024+16,  1024+40, 1024+8,  1024+32, 1024+0 },
+	{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64,8*64,9*64,10*64,11*64,12*64,13*64,14*64,15*64 },
 	32*64
 };
 
-static const UINT32 texlayout_xoffset[1024] = { STEP1024(0,8) };
-static const UINT32 texlayout_yoffset[512] = { STEP512(0,8192) };
+
+static const UINT32 texlayout_xoffset[1024] =
+{
+	STEP1024(0,8),
+
+};
+
+static const UINT32 texlayout_yoffset[512] =
+{
+	STEP512(0,8192),
+};
+
 static const gfx_layout hng64_texlayout =
 {
 	1024, 512,
@@ -1522,7 +1453,7 @@ static GFXDECODE_START( hng64 )
 	GFXDECODE_ENTRY( "textures", 0, hng64_texlayout,     0x0, 0x10 )  /* textures */
 GFXDECODE_END
 
-static void hng64_reorder(running_machine &machine, UINT8* gfxregion, size_t gfxregionsize)
+static void hng64_reorder(UINT8* gfxregion, size_t gfxregionsize)
 {
 	// by default 2 4bpp tiles are stored in each 8bpp tile, this makes decoding in MAME harder than it needs to be
 	// reorder them
@@ -1530,7 +1461,7 @@ static void hng64_reorder(running_machine &machine, UINT8* gfxregion, size_t gfx
 	int i;
 	UINT8 tilesize = 4*8; // 4 bytes per line, 8 lines
 
-	buffer = auto_alloc_array(machine, UINT8, gfxregionsize);
+	buffer = alloc_array_or_die(UINT8, gfxregionsize);
 
 	for (i=0;i<gfxregionsize/2;i+=tilesize)
 	{
@@ -1540,215 +1471,173 @@ static void hng64_reorder(running_machine &machine, UINT8* gfxregion, size_t gfx
 
 	memcpy(gfxregion, buffer, gfxregionsize);
 
-	auto_free (machine, buffer);
+	free (buffer);
+
 }
+
 
 static DRIVER_INIT( hng64_reorder_gfx )
 {
-	hng64_reorder(machine, machine.region("scrtile")->base(), machine.region("scrtile")->bytes());
+	hng64_reorder(memory_region(machine,"scrtile"), memory_region_length(machine, "scrtile"));
 }
 
-#define HACK_REGION
-#ifdef HACK_REGION
-static void hng64_patch_bios_region(running_machine& machine, int region)
-{
-	UINT8 *rom = machine.region("user1")->base();
 
-	if ((rom[0x4000]==0xff) && (rom[0x4001] == 0xff))
-	{
-		// both?
-		rom[0x4002] = region;
-		rom[0x4003] = region;
-
-	}
-}
-#endif
 
 static DRIVER_INIT( hng64 )
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	// region hacking, english error messages are more useful to us, but no english bios is dumped...
-#ifdef HACK_REGION
-// versions according to fatal fury test mode
-//  hng64_patch_bios_region(machine, 0); // 'Others Ver' (invalid?)
-	hng64_patch_bios_region(machine, 1); // Japan
-//  hng64_patch_bios_region(machine, 2); // USA
-//  hng64_patch_bios_region(machine, 3); // Korea
-//  hng64_patch_bios_region(machine, 4); // 'Others'
-#endif
-
-	/* 1 meg of virtual address space for the com cpu */
-	state->m_com_virtual_mem = auto_alloc_array(machine, UINT8, 0x100000);
-	state->m_com_op_base     = auto_alloc_array(machine, UINT8, 0x10000);
-
-	state->m_soundram = auto_alloc_array(machine, UINT16, 0x200000/2);
+	hng64_soundram=auto_alloc_array(machine, UINT16, 0x200000/2);
 	DRIVER_INIT_CALL(hng64_reorder_gfx);
 }
 
 static DRIVER_INIT(hng64_fght)
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	state->m_no_machine_error_code = 0x01000000;
+	no_machine_error_code=0x01000000;
 	DRIVER_INIT_CALL(hng64);
 }
 
 static DRIVER_INIT( fatfurwa )
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	/* FILE* fp = fopen("/tmp/test.bin", "wb"); fwrite(machine.region("verts")->base(), 1, 0x0c00000*2, fp); fclose(fp); */
 	DRIVER_INIT_CALL(hng64_fght);
-	state->m_mcu_type = FIGHT_MCU;
+	hng64_boothack = 2;
 }
 
 static DRIVER_INIT( ss64 )
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
 	DRIVER_INIT_CALL(hng64_fght);
-	state->m_mcu_type = SAMSHO_MCU;
+	hng64_boothack = 1;
 }
+
 
 static DRIVER_INIT(hng64_race)
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	state->m_no_machine_error_code = 0x02000000;
-	state->m_mcu_type = RACING_MCU;
+	no_machine_error_code=0x02000000;
 	DRIVER_INIT_CALL(hng64);
 }
 
 static DRIVER_INIT(hng64_shoot)
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
-	state->m_mcu_type = SHOOT_MCU;
-	state->m_no_machine_error_code = 0x03000000;
+	hng64_boothack = 2;
+	no_machine_error_code=0x03000000;
 	DRIVER_INIT_CALL(hng64);
 }
 
 
+
 /* ?? */
-static const mips3_config vr4300_config =
+static const mips3_config config =
 {
 	16384,				/* code cache size */
 	16384				/* data cache size */
 };
 
-
-static TIMER_DEVICE_CALLBACK( hng64_irq )
+static TIMER_CALLBACK( irq_stop )
 {
-	hng64_state *state = timer.machine().driver_data<hng64_state>();
-	int scanline = param;
-	int irq_fired,irq_type;
+	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
+}
 
-	irq_fired = irq_type = 0;
+static INTERRUPT_GEN( irq_start )
+{
+	logerror("HNG64 interrupt level %x\n", cpu_getiloops(device));
 
 	/* there are more, the sources are unknown at the moment */
-	switch(scanline)
+	switch (cpu_getiloops(device))
 	{
-		case 224*2:	state->m_interrupt_level_request = 0; irq_fired = 1; irq_type = 1; break;
-		case 0*2: state->m_interrupt_level_request = 1; irq_fired = 1; irq_type = 1; break;
-		case 64*2: state->m_interrupt_level_request = 2; irq_fired = 1; irq_type = 1; break;
-		case 128*2:  state->m_interrupt_level_request = 11; irq_fired = 1; irq_type = 1; break;
-		case (0+1)*2:
-		case (224+1)*2:
-		case (64+1)*2:
-		case (128+1)*2:
-			irq_fired = 1; irq_type = 0; break;
+		case 0x00: hng64_interrupt_level_request = 0;
+		break;
+		case 0x01: hng64_interrupt_level_request = 1;
+		break;
+		case 0x02: hng64_interrupt_level_request = 2;
+		break;
 	}
 
-	if(irq_fired)
-		device_set_input_line(state->m_maincpu, 0, (irq_type) ? ASSERT_LINE : CLEAR_LINE);
+	cpu_set_input_line(device, 0, ASSERT_LINE);
+	timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, irq_stop);
 }
 
 
 static MACHINE_START(hyperneo)
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-
 	/* set the fastest DRC options */
-	mips3drc_set_options(machine.device("maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY);
+	mips3drc_set_options(cputag_get_cpu(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(machine.device("maincpu"), 0x00000000, 0x00ffffff, FALSE, state->m_mainram);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x04000000, 0x05ffffff, TRUE,  state->m_cart);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  state->m_rombase);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x00ffffff, FALSE, hng_mainram);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x04000000, 0x05ffffff, TRUE,  hng_cart);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  rombase);
 }
 
 
 static MACHINE_RESET(hyperneo)
 {
-	hng64_state *state = machine.driver_data<hng64_state>();
-	int i;
-	const UINT8 *rom = machine.region("user2")->base();
+	int i ;
+	const UINT8 *rom = memory_region(machine, "user2");
 
 	/* Sound CPU */
-	UINT8 *RAM = (UINT8*)state->m_soundram;
-	memory_set_bankptr(machine, "bank1",&RAM[0x1e0000]);
-	memory_set_bankptr(machine, "bank2",&RAM[0x001000]); // where..
+	UINT8 *RAM = (UINT8*)hng64_soundram;
+	memory_set_bankptr(machine, 1,&RAM[0x1e0000]);
+	memory_set_bankptr(machine, 2,&RAM[0x001000]); // where..
 	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_HALT, ASSERT_LINE);
 	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 
+
 	/* Comm CPU */
-	KL5C80_init(state);
+	KL5C80_init();
+
+	/* 1 meg of virtual address space for the com cpu */
+	hng64_com_virtual_mem = auto_alloc_array(machine, UINT8, 0x100000);
+	hng64_com_op_base     = auto_alloc_array(machine, UINT8, 0x10000);
 
 	/* Fill up virtual memory with ROM */
 	for (i = 0x0; i < 0x100000; i++)
-		state->m_com_virtual_mem[i] = rom[i];
+		hng64_com_virtual_mem[i] = rom[i] ;
 
-	KL5C80_virtual_mem_sync(state);
-
-	address_space *space = machine.device<z80_device>("comm")->space(AS_PROGRAM);
-	space->set_direct_update_handler(direct_update_delegate(FUNC(KL5C80_direct_handler), &machine));
+	KL5C80_virtual_mem_sync();
+	memory_set_direct_update_handler(cputag_get_address_space(machine, "comm", ADDRESS_SPACE_PROGRAM), KL5C80_direct_handler);
 
 	cputag_set_input_line(machine, "comm", INPUT_LINE_RESET, PULSE_LINE);     // reset the CPU and let 'er rip
 //  cputag_set_input_line(machine, "comm", INPUT_LINE_HALT, ASSERT_LINE);     // hold on there pardner...
 
-	// "Display List" init - ugly
-	state->m_activeBuffer = 0;
 
-	/* For simulate MCU stepping */
-	state->m_mcu_fake_time = 0;
-	state->m_mcu_en = 0;
+
+	// "Display List" init - ugly
+	activeBuffer = 0 ;
 }
 
-static MACHINE_CONFIG_START( hng64, hng64_state )
 
+static MACHINE_DRIVER_START( hng64 )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", VR4300BE, MASTER_CLOCK) 	// actually R4300
-	MCFG_CPU_CONFIG(vr4300_config)
-	MCFG_CPU_PROGRAM_MAP(hng_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", hng64_irq, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", VR4300BE, MASTER_CLOCK)  	// actually R4300
+	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_PROGRAM_MAP(hng_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq_start,3)
 
-	MCFG_CPU_ADD("audiocpu", V33, 8000000)				// v53, 16? mhz!
-	MCFG_CPU_PROGRAM_MAP(hng_sound_map)
+	MDRV_CPU_ADD("audiocpu", V30,8000000)		 		// v53, 16? mhz!
+	MDRV_CPU_PROGRAM_MAP(hng_sound_map)
 
-	MCFG_CPU_ADD("comm", Z80,MASTER_CLOCK/4)		/* KL5C80A12CFP - binary compatible with Z80. */
-	MCFG_CPU_PROGRAM_MAP(hng_comm_map)
-	MCFG_CPU_IO_MAP(hng_comm_io_map)
+	MDRV_CPU_ADD("comm", Z80,MASTER_CLOCK/4)		/* KL5C80A12CFP - binary compatible with Z80. */
+	MDRV_CPU_PROGRAM_MAP(hng_comm_map)
+	MDRV_CPU_IO_MAP(hng_comm_io_map)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_GFXDECODE(hng64)
+	MDRV_MACHINE_START(hyperneo)
+	MDRV_MACHINE_RESET(hyperneo)
 
-	MCFG_GFXDECODE(hng64)
-	MCFG_MACHINE_START(hyperneo)
-	MCFG_MACHINE_RESET(hyperneo)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(1024, 1024)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 16, 447)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(hng64)
+	MDRV_PALETTE_LENGTH(0x1000)
 
-	MCFG_PALETTE_LENGTH(0x1000)
+	MDRV_VIDEO_START(hng64)
+	MDRV_VIDEO_UPDATE(hng64)
+MACHINE_DRIVER_END
 
-	MCFG_VIDEO_START(hng64)
-	MCFG_SCREEN_VBLANK_STATIC(hng64)
-MACHINE_CONFIG_END
 
 
 ROM_START( hng64 )
-	/* BIOS */
 	ROM_REGION32_BE( 0x0100000, "user1", 0 ) /* 512k for R4300 BIOS code */
 	ROM_LOAD ( "brom1.bin", 0x000000, 0x080000,  CRC(a30dd3de) SHA1(3e2fd0a56214e6f5dcb93687e409af13d065ea30) )
 	ROM_REGION( 0x0100000, "user2", 0 ) /* KL5C80 BIOS and unknown ROM */
@@ -1761,11 +1650,12 @@ ROM_START( hng64 )
 	ROM_REGION( 0x4000, "sprtile", ROMREGION_ERASEFF )
 	ROM_REGION( 0x1000000, "textures", ROMREGION_ERASEFF )
 	ROM_REGION16_BE( 0x0c00000, "verts", ROMREGION_ERASEFF )
-	ROM_REGION( 0x1000000, "samples", ROMREGION_ERASEFF ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", ROMREGION_ERASEFF ) /* Sound Samples? */
 ROM_END
 
-
+/* roads edge might need a different bios (driving board bios?) */
 ROM_START( roadedge )
+
 	/* BIOS */
 	ROM_REGION32_BE( 0x0100000, "user1", 0 ) /* 512k for R4300 BIOS code */
 	ROM_LOAD ( "brom1.bin", 0x000000, 0x080000,  CRC(a30dd3de) SHA1(3e2fd0a56214e6f5dcb93687e409af13d065ea30) )
@@ -1818,10 +1708,11 @@ ROM_START( roadedge )
 	ROMX_LOAD( "001vt02a.18", 0x0000002, 0x400000, CRC(449f94d0) SHA1(2228690532d82d2661285aeb4260689b027597cb), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "001vt03a.19", 0x0000004, 0x400000, CRC(50ac8639) SHA1(dd2d3689466990a7c479bb8f11bd930ea45e47b5), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "001sd01a.77", 0x0000000, 0x400000, CRC(a851da99) SHA1(2ba24feddafc5fadec155cdb7af305fdffcf6690) )
 	ROM_LOAD( "001sd02a.78", 0x0400000, 0x400000, CRC(ca5cec15) SHA1(05e91a602728a048d61bf86aa8d43bb4186aeac1) )
 ROM_END
+
 
 
 ROM_START( sams64 )
@@ -1869,16 +1760,17 @@ ROM_START( sams64 )
 	ROM_LOAD( "002-tx03a.15", 0x0800000, 0x400000, CRC(68c313f7) SHA1(90ce8d0d19a994647c7167e3b256ff31647e575a) )
 	ROM_LOAD( "002-tx04a.16", 0x0c00000, 0x400000, CRC(f7dac24f) SHA1(1215354f28cbeb9fc38f6a7acae450ad5f34bb6a) )
 
+
 	/* X,Y,Z Vertex ROMs */
 	ROM_REGION( 0x1800000, "verts", 0 )
 	ROMX_LOAD( "002-vt01a.17", 0x0000000, 0x400000, CRC(403fd7fd) SHA1(9bdadbeb4cd13c4c4e89a1c233af9eaaa46f8fdf), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "002-vt02a.18", 0x0000002, 0x400000, CRC(e1885905) SHA1(6b16083c50e887aebe2baf95bf56697c239970f2), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "002-vt03a.19", 0x0000004, 0x400000, CRC(2074a6a6) SHA1(9a5e8259d1e19d2b43878c24ca06afba5ee5e316), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "002-vt04a.20", 0x0c00000, 0x400000, CRC(aefc4d94) SHA1(f9d8222d4320ccf9f3c7c0ef307e03c8f34ea530), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "002-vt05a.21", 0x0c00002, 0x400000, CRC(d32ee9cb) SHA1(a768dfc15899924eb05eccbf8e85cb29c7b60396), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "002-vt06a.22", 0x0c00004, 0x400000, CRC(13bf3636) SHA1(7c704bf66b571350207bccc7a2d6ed1ec9de4cd5), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "002-vt04a.20", 0x0400000, 0x400000, CRC(aefc4d94) SHA1(f9d8222d4320ccf9f3c7c0ef307e03c8f34ea530), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "002-vt05a.21", 0x0400002, 0x400000, CRC(d32ee9cb) SHA1(a768dfc15899924eb05eccbf8e85cb29c7b60396), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "002-vt06a.22", 0x0400004, 0x400000, CRC(13bf3636) SHA1(7c704bf66b571350207bccc7a2d6ed1ec9de4cd5), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "002-sd01a.77", 0x0000000, 0x400000, CRC(6215036b) SHA1(ded71dce98b7f7ef78ef32d966a292bbf0d15332) )
 	ROM_LOAD( "002-sd02a.78", 0x0400000, 0x400000, CRC(32b28310) SHA1(5b80750a66c12b035b493d06e3842741a3334d0f) )
 	ROM_LOAD( "002-sd03a.79", 0x0800000, 0x400000, CRC(53591413) SHA1(36c7efa1aced0ca38b3ce7b95af28755973698f3) )
@@ -1921,12 +1813,12 @@ ROM_START( xrally )
 	ROM_LOAD( "003-tx04a.16", 0x0c00000, 0x400000, CRC(16d7805b) SHA1(4cc7b2375832c2f9f20fe882e604a2a52bf07f6f) )
 
 	/* X,Y,Z Vertex ROMs */
-	ROM_REGION( 0x0c00000, "verts", 0 )
+	ROM_REGION( 0x1800000, "verts", 0 )
 	ROMX_LOAD( "003-vt01a.17", 0x0000000, 0x400000, CRC(3e5e275d) SHA1(74f5ec88c258bc224e271f7abeb02d6485e27d8c), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "003-vt02a.18", 0x0000002, 0x400000, CRC(da7b956e) SHA1(c57cbb8c51145ae224faba5b6a1a7e61cb2bee64), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "003-vt03a.19", 0x0000004, 0x400000, CRC(4fe72cb7) SHA1(9f8e662f0656f201924834d1ee78498d4223745e), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "003-sd01a.77", 0x0000000, 0x400000, CRC(c43898ff) SHA1(0e49b87181b56c62a674d255d326f761942b99b1) )
 	ROM_LOAD( "003-sd02a.78", 0x0400000, 0x400000, CRC(079a3d5a) SHA1(a97b052de69fee7d605cae30f5a228e6ffeabb26) )
 	ROM_LOAD( "003-sd03a.79", 0x0800000, 0x400000, CRC(96c0991a) SHA1(01be872b3e307258236fe96a544417dd8a0bc8bd) )
@@ -1975,12 +1867,12 @@ ROM_START( bbust2 )
 	ROM_LOAD( "004-tx04a.16", 0x0c00000, 0x400000, CRC(b5f0ef01) SHA1(646bfb17b9e81aecf8db33d3a021f7769b262eda) )
 
 	/* X,Y,Z Vertex ROMs */
-	ROM_REGION( 0x0c00000, "verts", 0 )
+	ROM_REGION( 0x1800000, "verts", 0 )
 	ROMX_LOAD( "004-vt01a.17", 0x0000000, 0x400000, CRC(25ebbf9b) SHA1(b7c3fb9ee9cf75824d908e7a94970282f1845d5d), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "004-vt02a.18", 0x0000002, 0x400000, CRC(279fc216) SHA1(eb90cc347745491c1d1b1fb611fd6e227310731c), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "004-vt03a.19", 0x0000004, 0x400000, CRC(e0cf6a42) SHA1(dd09b3d05739cf030c820cd7dbaea2e7262764ab), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "004-sd01a.77", 0x0000000, 0x400000, CRC(2ef868bd) SHA1(0a1ef002efe6738698ebe98a1c3695b151fdd282) )
 	ROM_LOAD( "004-sd02a.78", 0x0400000, 0x400000, CRC(07fb3135) SHA1(56cc8e29ba9b13f82a4c9248bff02e2b7a0c49b0) )
 	ROM_LOAD( "004-sd03a.79", 0x0800000, 0x400000, CRC(42571f1d) SHA1(425cbd3f7c8aea1c0f057ea8f186acffb0091dc0) )
@@ -2053,19 +1945,20 @@ ROM_START( sams64_2 )
 	ROMX_LOAD( "005vt01a.17", 0x0000000, 0x400000, CRC(48a61479) SHA1(ef982b1ecc6dfca2ad989391afcc1b3d1e7fe652), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "005vt02a.18", 0x0000002, 0x400000, CRC(ba9100c8) SHA1(f7704fb8e5310ea7d0e6ae6b8935717ec9119b6d), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "005vt03a.19", 0x0000004, 0x400000, CRC(f54a28de) SHA1(c445cf7fee71a516065cf37e05b898208f48b17e), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "005vt04a.20", 0x0c00000, 0x400000, CRC(57ad79c7) SHA1(bc382317323c1f8a31b69ae3100d3bba6b5d0838), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "005vt05a.21", 0x0c00002, 0x400000, CRC(49c82bec) SHA1(09255279edb9a204bbe1cce8cef58d5c81e86d1f), ROM_GROUPWORD | ROM_SKIP(4) )
-	ROMX_LOAD( "005vt06a.22", 0x0c00004, 0x400000, CRC(7ba05b6c) SHA1(729c1d182d74998dd904b587a2405f55af9825e0), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "005vt04a.20", 0x0400000, 0x400000, CRC(57ad79c7) SHA1(bc382317323c1f8a31b69ae3100d3bba6b5d0838), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "005vt05a.21", 0x0400002, 0x400000, CRC(49c82bec) SHA1(09255279edb9a204bbe1cce8cef58d5c81e86d1f), ROM_GROUPWORD | ROM_SKIP(4) )
+	ROMX_LOAD( "005vt06a.22", 0x0400004, 0x400000, CRC(7ba05b6c) SHA1(729c1d182d74998dd904b587a2405f55af9825e0), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "005sd01a.77", 0x0000000, 0x400000, CRC(8f68150f) SHA1(a1e5efdfd1ed29f81e25c8da669851ddb7b0c826) )
 	ROM_LOAD( "005sd02a.78", 0x0400000, 0x400000, CRC(6b4da6a0) SHA1(8606c413c129635bdaaa37254edbfd19b10426bb) )
 	ROM_LOAD( "005sd03a.79", 0x0800000, 0x400000, CRC(a529fab3) SHA1(8559d402c8f66f638590b8b57ec9efa775010c96) )
-	ROM_LOAD( "005sd04a.80", 0x0c00000, 0x400000, CRC(dca95ead) SHA1(39afdfba0e5262b524f25706a96be00e5d14548e) )
+	ROM_LOAD( "005sd04a.80", 0x0800000, 0x400000, CRC(dca95ead) SHA1(39afdfba0e5262b524f25706a96be00e5d14548e) )
 ROM_END
 
 
 ROM_START( fatfurwa )
+
 	/* BIOS */
 	ROM_REGION32_BE( 0x0100000, "user1", 0 ) /* 512k for R4300 BIOS code */
 	ROM_LOAD ( "brom1.bin", 0x000000, 0x080000,  CRC(a30dd3de) SHA1(3e2fd0a56214e6f5dcb93687e409af13d065ea30) )
@@ -2123,18 +2016,17 @@ ROM_START( fatfurwa )
 	ROM_LOAD( "006tx04a.16",0x0c00000, 0x400000, CRC(82d61652) SHA1(28303ae9e2545a4cb0b5843f9e73407754f41e9e) )
 
 	/* X,Y,Z Vertex ROMs */
-	ROM_REGION( 0x0c00000, "verts", 0 )
+	ROM_REGION16_BE( 0x0c00000, "verts", 0 )
 	ROMX_LOAD( "006vt01a.17", 0x0000000, 0x400000, CRC(5c20ed4c) SHA1(df679f518292d70b9f23d2bddabf975d56b96910), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "006vt02a.18", 0x0000002, 0x400000, CRC(150eb717) SHA1(9acb067346eb386256047c0f1d24dc8fcc2118ca), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "006vt03a.19", 0x0000004, 0x400000, CRC(021cfcaf) SHA1(fb8b5f50d3490b31f0a4c3e6d3ae1b98bae41c97), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "006sd01a.77", 0x0000000, 0x400000, CRC(790efb6d) SHA1(23ddd3ee8ae808e58cbcaf92a9ef56d3ca6289b5) )
 	ROM_LOAD( "006sd02a.78", 0x0400000, 0x400000, CRC(f7f020c7) SHA1(b72fde4ff6384b80166a3cb67d31bf7afda750bc) )
 	ROM_LOAD( "006sd03a.79", 0x0800000, 0x400000, CRC(1a678084) SHA1(f52efb6145102d289f332d8341d89a5d231ba003) )
-	ROM_LOAD( "006sd04a.80", 0x0c00000, 0x400000, CRC(3c280a5c) SHA1(9d3fc78e18de45382878268db47ff9d9716f1505) )
+	ROM_LOAD( "006sd04a.80", 0x0800000, 0x400000, CRC(3c280a5c) SHA1(9d3fc78e18de45382878268db47ff9d9716f1505) )
 ROM_END
-
 
 ROM_START( buriki )
 	/* BIOS */
@@ -2196,27 +2088,27 @@ ROM_START( buriki )
 	ROM_LOAD( "007tx04a.16",0x0c00000, 0x400000, CRC(02aa3f46) SHA1(1fca89c70586f8ebcdf669ecac121afa5cdf623f) )
 
 	/* X,Y,Z Vertex ROMs */
-	ROM_REGION( 0x0c00000, "verts", 0 )
+	ROM_REGION16_BE( 0x0c00000, "verts", 0 )
 	ROMX_LOAD( "007vt01a.17", 0x0000000, 0x400000, CRC(f78a0376) SHA1(fde4ddd4bf326ae5f1ed10311c237b13b62e060c), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "007vt02a.18", 0x0000002, 0x400000, CRC(f365f608) SHA1(035fd9b829b7720c4aee6fdf204c080e6157994f), ROM_GROUPWORD | ROM_SKIP(4) )
 	ROMX_LOAD( "007vt03a.19", 0x0000004, 0x400000, CRC(ba05654d) SHA1(b7fe532732c0af7860c8eded3c5abd304d74e08e), ROM_GROUPWORD | ROM_SKIP(4) )
 
-	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples */
+	ROM_REGION( 0x1000000, "samples", 0 ) /* Sound Samples? */
 	ROM_LOAD( "007sd01a.77", 0x0000000, 0x400000, CRC(1afb48c6) SHA1(b072d4fe72d6c5267864818d300b32e85b426213) )
 	ROM_LOAD( "007sd02a.78", 0x0400000, 0x400000, CRC(c65f1dd5) SHA1(7f504c585a10c1090dbd1ac31a3a0db920c992a0) )
 	ROM_LOAD( "007sd03a.79", 0x0800000, 0x400000, CRC(356f25c8) SHA1(5250865900894232960686f40c5da35b3868b78c) )
-	ROM_LOAD( "007sd04a.80", 0x0c00000, 0x400000, CRC(dabfbbad) SHA1(7d58d5181705618e0e2d69c6fdb81b9b3d2b9e0f) )
+	ROM_LOAD( "007sd04a.80", 0x0800000, 0x400000, CRC(dabfbbad) SHA1(7d58d5181705618e0e2d69c6fdb81b9b3d2b9e0f) )
 ROM_END
 
 /* Bios */
-GAME( 1997, hng64,    0,      hng64, hng64,  hng64,       ROT0, "SNK", "Hyper NeoGeo 64 Bios", GAME_NOT_WORKING|GAME_NO_SOUND|GAME_IS_BIOS_ROOT )
+GAME( 1997, hng64,  0,        hng64, hng64, hng64,      ROT0, "SNK", "Hyper NeoGeo 64 Bios", GAME_NOT_WORKING|GAME_NO_SOUND|GAME_IS_BIOS_ROOT )
 
 /* Games */
-GAME( 1997, roadedge, hng64,  hng64, hng64,  hng64_race,  ROT0, "SNK", "Roads Edge / Round Trip (rev.B)",		  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 001 */
-GAME( 1998, sams64,   hng64,  hng64, hng64,  ss64,        ROT0, "SNK", "Samurai Shodown 64 / Samurai Spirits 64", GAME_NOT_WORKING|GAME_NO_SOUND )	/* 002 */
-GAME( 1998, xrally,   hng64,  hng64, hng64,  hng64_race,  ROT0, "SNK", "Xtreme Rally / Off Beat Racer!",		  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 003 */
-GAME( 1998, bbust2,   hng64,  hng64, bbust2, hng64_shoot, ROT0, "SNK", "Beast Busters 2nd Nightmare",			  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 004 */
-GAME( 1998, sams64_2, hng64,  hng64, hng64,  ss64,        ROT0, "SNK", "Samurai Shodown: Warrior's Rage / Samurai Spirits 2: Asura Zanmaden", GAME_NOT_WORKING|GAME_NO_SOUND )	/* 005 */
-GAME( 1998, fatfurwa, hng64,  hng64, hng64,  fatfurwa,    ROT0, "SNK", "Fatal Fury: Wild Ambition (rev.A)",		  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 006 */
-GAME( 1999, buriki,   hng64,  hng64, hng64,  fatfurwa,    ROT0, "SNK", "Buriki One (rev.B)",					  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 007 */
+GAME( 1997, roadedge, hng64,  hng64, hng64, hng64_race, ROT0, "SNK", "Roads Edge / Round Trip (rev.B)",	  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 001 */
+GAME( 1998, sams64,   hng64,  hng64, hng64, ss64,       ROT0, "SNK", "Samurai Shodown 64 / Samurai Spirits 64",	  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 002 */
+GAME( 1998, xrally,   hng64,  hng64, hng64, hng64_race, ROT0, "SNK", "Xtreme Rally / Off Beat Racer!",	  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 003 */
+GAME( 1998, bbust2,   hng64,  hng64, hng64, hng64_shoot,ROT0, "SNK", "Beast Busters 2nd Nightmare",	  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 004 */
+GAME( 1998, sams64_2, hng64,  hng64, hng64, ss64,       ROT0, "SNK", "Samurai Shodown: Warrior's Rage / Samurai Spirits 2: Asura Zanmaden",	  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 005 */
+GAME( 1998, fatfurwa, hng64,  hng64, hng64, fatfurwa,   ROT0, "SNK", "Fatal Fury: Wild Ambition (rev.A)", GAME_NOT_WORKING|GAME_NO_SOUND )	/* 006 */
+GAME( 1999, buriki,   hng64,  hng64, hng64, fatfurwa,   ROT0, "SNK", "Buriki One (rev.B)",				  GAME_NOT_WORKING|GAME_NO_SOUND )	/* 007 */
 

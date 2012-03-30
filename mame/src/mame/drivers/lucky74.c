@@ -155,14 +155,14 @@
 
 
     This hardware doesn't seems to be designed for a game like Lucky 74. The co-processor
-    existence, the apparently unused 2x SN76489, the YM2149 used only for input port and
+    existence, the aparently unused 2x SN76489, the YM2149 used only for input port and
     NMI trigger purposes and the USART communication system (among other things) indicate
     that a more elaborated kind of games were meant to be running on this hardware.
     For Lucky 74, is a big waste of resources.
 
 
     Regular sounds and music are driven through one SN76489 mapped at 0xf100. The other two
-    (mapped at 0xf300 & 0xf500) seems to be only initialized at the beginning but not used.
+    (mapped at 0xf300 & 0xf500) seems to be only initialized at the begining but not used.
 
     Samples are driven through a custom DIP-40 IC silkscreened '09R81P'.
 
@@ -207,7 +207,7 @@
     So, you can easily see that writes to ports 0x00-0x01 define the start (pos) offset,
     and writes to ports 0x03-0x04 the ending offset of each sample to be played.
 
-    Then, writing 0x01 to port 0x05 (bit 0 activated) just trigger the sample.
+    Then, writting 0x01 to port 0x05 (bit 0 activated) just trigger the sample.
 
     Once finished, the M5205 is ready again and the 09R81P clear the /Busy flag (port 0x00,
     bit 0 activated).
@@ -666,15 +666,33 @@
 #define C_06B49P_CLKOUT_19	(MASTER_CLOCK/200000)	/* 60 Hz. (V-Sync) */
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
 #include "sound/msm5205.h"
 #include "machine/8255ppi.h"
-#include "machine/nvram.h"
 #include "lucky74.lh"
-#include "includes/lucky74.h"
+
+/* from video hardware */
+extern UINT8 *lucky74_fg_videoram, *lucky74_fg_colorram, *lucky74_bg_videoram, *lucky74_bg_colorram;
+WRITE8_HANDLER( lucky74_fg_videoram_w );
+WRITE8_HANDLER( lucky74_fg_colorram_w );
+WRITE8_HANDLER( lucky74_bg_videoram_w );
+WRITE8_HANDLER( lucky74_bg_colorram_w );
+PALETTE_INIT( lucky74 );
+VIDEO_START( lucky74 );
+VIDEO_UPDATE( lucky74 );
+
+static UINT8 ym2149_portb;
+static UINT8 usart_8251;
+static UINT8 copro_sm7831;
+
+static int lucky74_adpcm_pos;
+static int lucky74_adpcm_end;
+static int lucky74_adpcm_data;
+static UINT8 lucky74_adpcm_reg[6];
+static UINT8 lucky74_adpcm_busy_line;
 
 
 /*****************************
@@ -683,34 +701,31 @@
 
 static READ8_HANDLER( custom_09R81P_port_r )
 {
-	lucky74_state *state = space->machine().driver_data<lucky74_state>();
 	if (offset != 0x00)
 	{
-		return state->m_adpcm_reg[offset];
+		return lucky74_adpcm_reg[offset];
 	}
 	else
 	{
-		return state->m_adpcm_busy_line;
+		return lucky74_adpcm_busy_line;
 	}
 }
 
 static WRITE8_HANDLER( custom_09R81P_port_w )
 {
-	lucky74_state *state = space->machine().driver_data<lucky74_state>();
-	state->m_adpcm_reg[offset] = data;
+	lucky74_adpcm_reg[offset] = data;
 }
 
 static WRITE8_DEVICE_HANDLER( ym2149_portb_w )
 {
-	lucky74_state *state = device->machine().driver_data<lucky74_state>();
 /*  when is in game mode writes 0x0a.
     when is in test mode writes 0x0e.
     after reset writes 0x16.
 
     bit 0 contains the screen orientation.
 */
-	state->m_ym2149_portb = data;
-	flip_screen_set(device->machine(), data & 0x01);
+	ym2149_portb = data;
+	flip_screen_set(device->machine, data & 0x01);
 }
 
 static READ8_HANDLER( usart_8251_r )
@@ -722,10 +737,9 @@ static READ8_HANDLER( usart_8251_r )
 
 static WRITE8_HANDLER( usart_8251_w )
 {
-	lucky74_state *state = space->machine().driver_data<lucky74_state>();
 	/* writes to USART 8251 port */
-	state->m_usart_8251 = data;
-	logerror("write to USART port: %02x \n", state->m_usart_8251);
+	usart_8251 = data;
+	logerror("write to USART port: %02x \n", usart_8251);
 }
 
 static READ8_HANDLER( copro_sm7831_r )
@@ -737,10 +751,9 @@ static READ8_HANDLER( copro_sm7831_r )
 
 static WRITE8_HANDLER( copro_sm7831_w )
 {
-	lucky74_state *state = space->machine().driver_data<lucky74_state>();
 	/* write to SM7831 co-processor */
-	state->m_copro_sm7831 = data;
-	logerror("write to co-processor: %2X\n", state->m_copro_sm7831);
+	copro_sm7831 = data;
+	logerror("write to co-processor: %2X\n", copro_sm7831);
 }
 
 
@@ -794,10 +807,9 @@ static WRITE8_DEVICE_HANDLER(lamps_b_w)
 
 static INTERRUPT_GEN( nmi_interrupt )
 {
-	lucky74_state *state = device->machine().driver_data<lucky74_state>();
-	if ((state->m_ym2149_portb & 0x10) == 0)	/* ym2149 portB bit 4 trigger the NMI */
+	if ((ym2149_portb & 0x10) == 0)	/* ym2149 portB bit 4 trigger the NMI */
 	{
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
@@ -806,27 +818,27 @@ static INTERRUPT_GEN( nmi_interrupt )
 * Memory Map Information *
 *************************/
 
-static ADDRESS_MAP_START( lucky74_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( lucky74_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_SHARE("nvram")	/* NVRAM */
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(lucky74_fg_videoram_w) AM_BASE_MEMBER(lucky74_state, m_fg_videoram)				/* VRAM1-1 */
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(lucky74_fg_colorram_w) AM_BASE_MEMBER(lucky74_state, m_fg_colorram)				/* VRAM1-2 */
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lucky74_bg_videoram_w) AM_BASE_MEMBER(lucky74_state, m_bg_videoram)				/* VRAM2-1 */
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lucky74_bg_colorram_w) AM_BASE_MEMBER(lucky74_state, m_bg_colorram)				/* VRAM2-2 */
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)	/* NVRAM */
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(lucky74_fg_videoram_w) AM_BASE(&lucky74_fg_videoram)				/* VRAM1-1 */
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(lucky74_fg_colorram_w) AM_BASE(&lucky74_fg_colorram)				/* VRAM1-2 */
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(lucky74_bg_videoram_w) AM_BASE(&lucky74_bg_videoram)				/* VRAM2-1 */
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(lucky74_bg_colorram_w) AM_BASE(&lucky74_bg_colorram)				/* VRAM2-2 */
 	AM_RANGE(0xf000, 0xf003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports 0 & 1 */
 	AM_RANGE(0xf080, 0xf083) AM_DEVREADWRITE("ppi8255_2", ppi8255_r, ppi8255_w)	/* DSW 1, 2 & 3 */
 	AM_RANGE(0xf0c0, 0xf0c3) AM_DEVREADWRITE("ppi8255_3", ppi8255_r, ppi8255_w)	/* DSW 4 */
 	AM_RANGE(0xf100, 0xf100) AM_DEVWRITE("sn1", sn76496_w)							/* SN76489 #1 */
 	AM_RANGE(0xf200, 0xf203) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* Input Ports 2 & 4 */
 	AM_RANGE(0xf300, 0xf300) AM_DEVWRITE("sn2", sn76496_w)							/* SN76489 #2 */
-	AM_RANGE(0xf400, 0xf400) AM_DEVWRITE("aysnd", ay8910_address_w)						/* YM2149 control */
+	AM_RANGE(0xf400, 0xf400) AM_DEVWRITE("ay", ay8910_address_w)						/* YM2149 control */
 	AM_RANGE(0xf500, 0xf500) AM_DEVWRITE("sn3", sn76496_w)							/* SN76489 #3 */
-	AM_RANGE(0xf600, 0xf600) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)			/* YM2149 (Input Port 1) */
+	AM_RANGE(0xf600, 0xf600) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)			/* YM2149 (Input Port 1) */
 	AM_RANGE(0xf700, 0xf701) AM_READWRITE(usart_8251_r, usart_8251_w)						/* USART 8251 port */
 	AM_RANGE(0xf800, 0xf803) AM_READWRITE(copro_sm7831_r, copro_sm7831_w)					/* SM7831 Co-Processor */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( lucky74_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( lucky74_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x05) AM_READWRITE(custom_09R81P_port_r, custom_09R81P_port_w)	/* custom 09R81P (samples system) */
 //  AM_RANGE(0xff, 0xff) AM_READWRITE(???)
@@ -1098,59 +1110,57 @@ GFXDECODE_END
 
 static SOUND_START( lucky74 )
 {
-	lucky74_state *state = machine.driver_data<lucky74_state>();
     /* cleaning all 09R81P registers */
 
 	UINT8 i;
 
 	for (i = 0; i < 6; i++)
 	{
-		state->m_adpcm_reg[i] = 0;
+		lucky74_adpcm_reg[i] = 0;
 	}
 
-	state->m_adpcm_busy_line = 0x01;	/* free and ready */
+	lucky74_adpcm_busy_line = 0x01;	/* free and ready */
 }
 
-static void lucky74_adpcm_int(device_t *device)
+static void lucky74_adpcm_int(const device_config *device)
 {
-	lucky74_state *state = device->machine().driver_data<lucky74_state>();
-	if (state->m_adpcm_reg[05] == 0x01)	/* register 0x05 (bit 0 activated), trigger the sample */
+	if (lucky74_adpcm_reg[05] == 0x01)	/* register 0x05 (bit 0 activated), trigger the sample */
 	{
 		/* conditional zone for samples reproduction */
 
-		if (state->m_adpcm_busy_line)     /* still not started */
+		if (lucky74_adpcm_busy_line)     /* still not started */
 		{
 			/* init all 09R81P registers */
 			logerror("init ADPCM registers\n");
-			state->m_adpcm_end = (state->m_adpcm_reg[04] << 8) + state->m_adpcm_reg[03];
-			state->m_adpcm_pos = (state->m_adpcm_reg[01] << 8) + state->m_adpcm_reg[00];
-			state->m_adpcm_busy_line = 0;
-			state->m_adpcm_data = -1;
+			lucky74_adpcm_end = (lucky74_adpcm_reg[04] << 8) + lucky74_adpcm_reg[03];
+			lucky74_adpcm_pos = (lucky74_adpcm_reg[01] << 8) + lucky74_adpcm_reg[00];
+			lucky74_adpcm_busy_line = 0;
+			lucky74_adpcm_data = -1;
 
-			logerror("sample pos:%4X\n", state->m_adpcm_pos);
-			logerror("sample end:%4X\n", state->m_adpcm_end);
+			logerror("sample pos:%4X\n", lucky74_adpcm_pos);
+			logerror("sample end:%4X\n", lucky74_adpcm_end);
 		}
 
-		if (state->m_adpcm_data == -1)
+		if (lucky74_adpcm_data == -1)
 		{
 			/* transferring 1st nibble */
-			state->m_adpcm_data = device->machine().region("adpcm")->base()[state->m_adpcm_pos];
-			state->m_adpcm_pos = (state->m_adpcm_pos + 1) & 0xffff;
-			msm5205_data_w(device, state->m_adpcm_data >> 4);
+			lucky74_adpcm_data = memory_region(device->machine, "adpcm")[lucky74_adpcm_pos];
+			lucky74_adpcm_pos = (lucky74_adpcm_pos + 1) & 0xffff;
+			msm5205_data_w(device, lucky74_adpcm_data >> 4);
 
-			if (state->m_adpcm_pos == state->m_adpcm_end)
+			if (lucky74_adpcm_pos == lucky74_adpcm_end)
 			{
 				msm5205_reset_w(device, 0);			/* reset the M5205 */
-				state->m_adpcm_reg[05] = 0;		/* clean trigger register */
-				state->m_adpcm_busy_line = 0x01;	/* deactivate busy flag */
+				lucky74_adpcm_reg[05] = 0;		/* clean trigger register */
+				lucky74_adpcm_busy_line = 0x01;	/* deactivate busy flag */
 				logerror("end of sample.\n");
 			}
 		}
 		else
 		{
 			/* transferring 2nd nibble */
-			msm5205_data_w(device, state->m_adpcm_data & 0x0f);
-			state->m_adpcm_data = -1;
+			msm5205_data_w(device, lucky74_adpcm_data & 0x0f);
+			lucky74_adpcm_data = -1;
 		}
 	}
 
@@ -1228,60 +1238,61 @@ static const msm5205_interface msm5205_config =
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_CONFIG_START( lucky74, lucky74_state )
+static MACHINE_DRIVER_START( lucky74 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, C_06B49P_CLKOUT_03)	/* 3 MHz. */
-	MCFG_CPU_PROGRAM_MAP(lucky74_map)
-	MCFG_CPU_IO_MAP(lucky74_portmap)
-	MCFG_CPU_VBLANK_INT("screen", nmi_interrupt)	/* 60 Hz. measured */
+	MDRV_CPU_ADD("maincpu", Z80, C_06B49P_CLKOUT_03)	/* 3 MHz. */
+	MDRV_CPU_PROGRAM_MAP(lucky74_map)
+	MDRV_CPU_IO_MAP(lucky74_portmap)
+	MDRV_CPU_VBLANK_INT("screen", nmi_interrupt)	/* 60 Hz. measured */
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_SOUND_START(lucky74)
+	MDRV_SOUND_START(lucky74)
 
 	/* 2x 82c255 (4x 8255) */
-	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
-	MCFG_PPI8255_ADD( "ppi8255_2", ppi8255_intf[2] )
-	MCFG_PPI8255_ADD( "ppi8255_3", ppi8255_intf[3] )
+	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MDRV_PPI8255_ADD( "ppi8255_2", ppi8255_intf[2] )
+	MDRV_PPI8255_ADD( "ppi8255_3", ppi8255_intf[3] )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 1*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(lucky74)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 1*8, 30*8-1)
 
-	MCFG_GFXDECODE(lucky74)
+	MDRV_GFXDECODE(lucky74)
 
-	MCFG_PALETTE_INIT(lucky74)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_PALETTE_INIT(lucky74)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(lucky74)
+	MDRV_VIDEO_START(lucky74)
+	MDRV_VIDEO_UPDATE(lucky74)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("sn1", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("sn2", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("sn2", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("sn3", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MDRV_SOUND_ADD("sn3", SN76489, C_06B49P_CLKOUT_03)	/* 3 MHz. */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MCFG_SOUND_ADD("aysnd", AY8910, C_06B49P_CLKOUT_04)	/* 1.5 MHz. */
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.00)			/* not routed to audio hardware */
+	MDRV_SOUND_ADD("ay", AY8910, C_06B49P_CLKOUT_04)	/* 1.5 MHz. */
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.00)			/* not routed to audio hardware */
 
-	MCFG_SOUND_ADD("msm", MSM5205, C_06B49P_CLKOUT_06)	/* 375 kHz. */
-	MCFG_SOUND_CONFIG(msm5205_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
+	MDRV_SOUND_ADD("msm", MSM5205, C_06B49P_CLKOUT_06)	/* 375 kHz. */
+	MDRV_SOUND_CONFIG(msm5205_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 /*************************
@@ -1369,6 +1380,6 @@ ROM_END
 *                Game Drivers                *
 **********************************************
 
-       YEAR  NAME      PARENT   MACHINE  INPUT     INIT  ROT    COMPANY          FULLNAME                     FLAGS             LAYOUT  */
-GAMEL( 1988, lucky74,  0,       lucky74, lucky74,  0,    ROT0, "Wing Co., Ltd.", "Lucky 74 (bootleg, set 1)", 0,                layout_lucky74 )
-GAMEL( 1988, lucky74a, lucky74, lucky74, lucky74,  0,    ROT0, "Wing Co., Ltd.", "Lucky 74 (bootleg, set 2)", GAME_NOT_WORKING, layout_lucky74 )
+       YEAR  NAME      PARENT   MACHINE  INPUT     INIT  ROT    COMPANY          FULLNAME                    FLAGS             LAYOUT  */
+GAMEL( 1988, lucky74,  0,       lucky74, lucky74,  0,    ROT0, "Wing Co.,Ltd.", "Lucky 74 (bootleg, set 1)", 0,                layout_lucky74 )
+GAMEL( 1988, lucky74a, lucky74, lucky74, lucky74,  0,    ROT0, "Wing Co.,Ltd.", "Lucky 74 (bootleg, set 2)", GAME_NOT_WORKING, layout_lucky74 )

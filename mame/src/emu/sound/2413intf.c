@@ -4,7 +4,8 @@
 
 ****************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "ym2413.h"
 #include "2413intf.h"
 
@@ -18,11 +19,13 @@ struct _ym2413_state
 };
 
 
-INLINE ym2413_state *get_safe_token(device_t *device)
+INLINE ym2413_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == YM2413);
-	return (ym2413_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_YM2413);
+	return (ym2413_state *)device->token;
 }
 
 
@@ -49,20 +52,20 @@ static STREAM_UPDATE( ym2413_stream_update )
 static void _stream_update(void *param, int interval)
 {
 	ym2413_state *info = (ym2413_state *)param;
-	info->stream->update();
+	stream_update(info->stream);
 }
 
 static DEVICE_START( ym2413 )
 {
 	ym2413_state *info = get_safe_token(device);
-	int rate = device->clock()/72;
+	int rate = device->clock/72;
 
 	/* emulator create */
-	info->chip = ym2413_init(device, device->clock(), rate);
+	info->chip = ym2413_init(device, device->clock, rate);
 	assert_always(info->chip != NULL, "Error creating YM2413 chip");
 
 	/* stream system initialize */
-	info->stream = device->machine().sound().stream_alloc(*device,0,2,rate,info,ym2413_stream_update);
+	info->stream = stream_create(device,0,2,rate,info,ym2413_stream_update);
 
 	ym2413_set_update_handler(info->chip, _stream_update, info);
 
@@ -83,7 +86,7 @@ static DEVICE_START( ym2413 )
 	{
 		ym2413_reset (i);
 
-		ym2413[i].DAC_stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/72, i, YM2413DAC_update);
+		ym2413[i].DAC_stream = stream_create(device, 0, 1, device->clock/72, i, YM2413DAC_update);
 
 		if (ym2413[i].DAC_stream == -1)
 			return 1;
@@ -140,6 +143,3 @@ DEVICE_GET_INFO( ym2413 )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
-
-
-DEFINE_LEGACY_SOUND_DEVICE(YM2413, ym2413);

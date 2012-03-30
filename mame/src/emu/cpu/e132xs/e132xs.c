@@ -211,8 +211,9 @@
 
 *********************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
+#include "cpuexec.h"
+#include "eminline.h"
 #include "e132xs.h"
 
 #ifdef MAME_DEBUG
@@ -318,11 +319,10 @@ struct _hyperstone_state
 
 	struct _delay delay;
 
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
-	address_space *io;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *program;
+	const address_space *io;
 	UINT32 opcodexor;
 
 	INT32 instruction_length;
@@ -360,10 +360,10 @@ static void check_interrupts(hyperstone_state *cpustate);
 #define EXTRA_U (decode)->extra.u
 #define EXTRA_S (decode)->extra.s
 
-#define SET_SREG( _data_ )  ((decode)->src_is_local ? set_local_register(cpustate, (decode)->src, (UINT32)_data_) : set_global_register(cpustate, (decode)->src, (UINT32)_data_))
-#define SET_SREGF( _data_ ) ((decode)->src_is_local ? set_local_register(cpustate, (decode)->src + 1, (UINT32)_data_) : set_global_register(cpustate, (decode)->src + 1, (UINT32)_data_))
-#define SET_DREG( _data_ )  ((decode)->dst_is_local ? set_local_register(cpustate, (decode)->dst, (UINT32)_data_) : set_global_register(cpustate, (decode)->dst, (UINT32)_data_))
-#define SET_DREGF( _data_ ) ((decode)->dst_is_local ? set_local_register(cpustate, (decode)->dst + 1, (UINT32)_data_) : set_global_register(cpustate, (decode)->dst + 1, (UINT32)_data_))
+#define SET_SREG( _data_ )  ((decode)->src_is_local ? set_local_register(cpustate, (decode)->src, _data_) : set_global_register(cpustate, (decode)->src, _data_))
+#define SET_SREGF( _data_ ) ((decode)->src_is_local ? set_local_register(cpustate, (decode)->src + 1, _data_) : set_global_register(cpustate, (decode)->src + 1, _data_))
+#define SET_DREG( _data_ )  ((decode)->dst_is_local ? set_local_register(cpustate, (decode)->dst, _data_) : set_global_register(cpustate, (decode)->dst, _data_))
+#define SET_DREGF( _data_ ) ((decode)->dst_is_local ? set_local_register(cpustate, (decode)->dst + 1, _data_) : set_global_register(cpustate, (decode)->dst + 1, _data_))
 
 #define SRC_IS_PC      (!(decode)->src_is_local && (decode)->src == PC_REGISTER)
 #define DST_IS_PC      (!(decode)->dst_is_local && (decode)->dst == PC_REGISTER)
@@ -375,13 +375,13 @@ static void check_interrupts(hyperstone_state *cpustate);
 
 // 4Kb IRAM (On-Chip Memory)
 
-static ADDRESS_MAP_START( e116_4k_iram_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( e116_4k_iram_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc0000fff) AM_RAM AM_MIRROR(0x1ffff000)
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( e132_4k_iram_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( e132_4k_iram_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xc0000000, 0xc0000fff) AM_RAM AM_MIRROR(0x1ffff000)
 ADDRESS_MAP_END
 
@@ -389,13 +389,13 @@ ADDRESS_MAP_END
 // 8Kb IRAM (On-Chip Memory)
 
 
-static ADDRESS_MAP_START( e116_8k_iram_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( e116_8k_iram_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc0001fff) AM_RAM AM_MIRROR(0x1fffe000)
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( e132_8k_iram_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( e132_8k_iram_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xc0000000, 0xc0001fff) AM_RAM AM_MIRROR(0x1fffe000)
 ADDRESS_MAP_END
 
@@ -403,35 +403,37 @@ ADDRESS_MAP_END
 // 16Kb IRAM (On-Chip Memory)
 
 
-static ADDRESS_MAP_START( e116_16k_iram_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( e116_16k_iram_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xc0000000, 0xc0003fff) AM_RAM AM_MIRROR(0x1fffc000)
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( e132_16k_iram_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( e132_16k_iram_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0xc0000000, 0xc0003fff) AM_RAM AM_MIRROR(0x1fffc000)
 ADDRESS_MAP_END
 
 
-INLINE hyperstone_state *get_safe_token(device_t *device)
+INLINE hyperstone_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == E116T ||
-		   device->type() == E116XT ||
-		   device->type() == E116XS ||
-		   device->type() == E116XSR ||
-		   device->type() == E132N ||
-		   device->type() == E132T ||
-		   device->type() == E132XN ||
-		   device->type() == E132XT ||
-		   device->type() == E132XS ||
-		   device->type() == E132XSR ||
-		   device->type() == GMS30C2116 ||
-		   device->type() == GMS30C2132 ||
-		   device->type() == GMS30C2216 ||
-		   device->type() == GMS30C2232);
-	return (hyperstone_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_E116T ||
+		   cpu_get_type(device) == CPU_E116XT ||
+		   cpu_get_type(device) == CPU_E116XS ||
+		   cpu_get_type(device) == CPU_E116XSR ||
+		   cpu_get_type(device) == CPU_E132N ||
+		   cpu_get_type(device) == CPU_E132T ||
+		   cpu_get_type(device) == CPU_E132XN ||
+		   cpu_get_type(device) == CPU_E132XT ||
+		   cpu_get_type(device) == CPU_E132XS ||
+		   cpu_get_type(device) == CPU_E132XSR ||
+		   cpu_get_type(device) == CPU_GMS30C2116 ||
+		   cpu_get_type(device) == CPU_GMS30C2132 ||
+		   cpu_get_type(device) == CPU_GMS30C2216 ||
+		   cpu_get_type(device) == CPU_GMS30C2232);
+	return (hyperstone_state *)device->token;
 }
 
 /* Return the entry point for a determinated trap */
@@ -496,7 +498,7 @@ static void hyperstone_set_trap_entry(hyperstone_state *cpustate, int which)
 	}
 }
 
-#define OP  			cpustate->op
+#define OP    			cpustate->op
 #define PPC				cpustate->ppc //previous pc
 #define PC				cpustate->global_regs[0] //Program Counter
 #define SR				cpustate->global_regs[1] //Status Register
@@ -559,7 +561,7 @@ static void hyperstone_set_trap_entry(hyperstone_state *cpustate, int which)
 #define SET_LOW_SR(val)			(SR = (SR & 0xffff0000) | ((val) & 0x0000ffff)) // when SR is addressed, only low 16 bits can be changed
 
 
-#define CHECK_C(x)				(SR = (SR & ~0x00000001) | (((x) & (((UINT64)1) << 32)) ? 1 : 0 ))
+#define CHECK_C(x) 				(SR = (SR & ~0x00000001) | (((x) & (((UINT64)1) << 32)) ? 1 : 0 ))
 #define CHECK_VADD(x,y,z)		(SR = (SR & ~0x00000008) | ((((x) ^ (z)) & ((y) ^ (z)) & 0x80000000) ? 8: 0))
 #define CHECK_VADD3(x,y,w,z)	(SR = (SR & ~0x00000008) | ((((x) ^ (z)) & ((y) ^ (z)) & ((w) ^ (z)) & 0x80000000) ? 8: 0))
 #define CHECK_VSUB(x,y,z)		(SR = (SR & ~0x00000008) | ((((z) ^ (y)) & ((y) ^ (x)) & 0x80000000) ? 8: 0))
@@ -576,7 +578,7 @@ static void hyperstone_set_trap_entry(hyperstone_state *cpustate, int which)
 
 static UINT32 compute_tr(hyperstone_state *cpustate)
 {
-	UINT64 cycles_since_base = cpustate->device->total_cycles() - cpustate->tr_base_cycles;
+	UINT64 cycles_since_base = cpu_get_total_cycles(cpustate->device) - cpustate->tr_base_cycles;
 	UINT64 clocks_since_base = cycles_since_base >> cpustate->clock_scale;
 	return cpustate->tr_base_value + (clocks_since_base / cpustate->tr_clocks_per_tick);
 }
@@ -592,12 +594,12 @@ static void update_timer_prescale(hyperstone_state *cpustate)
 	cpustate->clock_cycles_6 = 6 << cpustate->clock_scale;
 	cpustate->tr_clocks_per_tick = ((TPR >> 16) & 0xff) + 2;
 	cpustate->tr_base_value = prevtr;
-	cpustate->tr_base_cycles = cpustate->device->total_cycles();
+	cpustate->tr_base_cycles = cpu_get_total_cycles(cpustate->device);
 }
 
 static void adjust_timer_interrupt(hyperstone_state *cpustate)
 {
-	UINT64 cycles_since_base = cpustate->device->total_cycles() - cpustate->tr_base_cycles;
+	UINT64 cycles_since_base = cpu_get_total_cycles(cpustate->device) - cpustate->tr_base_cycles;
 	UINT64 clocks_since_base = cycles_since_base >> cpustate->clock_scale;
 	UINT64 cycles_until_next_clock = cycles_since_base - (clocks_since_base << cpustate->clock_scale);
 
@@ -609,7 +611,7 @@ static void adjust_timer_interrupt(hyperstone_state *cpustate)
 	{
 		UINT64 clocks_until_int = cpustate->tr_clocks_per_tick - (clocks_since_base % cpustate->tr_clocks_per_tick);
 		UINT64 cycles_until_int = (clocks_until_int << cpustate->clock_scale) + cycles_until_next_clock;
-		cpustate->timer->adjust(cpustate->device->cycles_to_attotime(cycles_until_int + 1), 1);
+		timer_adjust_oneshot(cpustate->timer, cpu_clocks_to_attotime(cpustate->device, cycles_until_int + 1), 1);
 	}
 
 	/* else if the timer interrupt is enabled, configure it to fire at the appropriate time */
@@ -620,24 +622,24 @@ static void adjust_timer_interrupt(hyperstone_state *cpustate)
 		if (delta > 0x80000000)
 		{
 			if (!cpustate->timer_int_pending)
-				cpustate->timer->adjust(attotime::zero);
+				timer_adjust_oneshot(cpustate->timer, attotime_zero, 0);
 		}
 		else
 		{
 			UINT64 clocks_until_int = mulu_32x32(delta, cpustate->tr_clocks_per_tick);
 			UINT64 cycles_until_int = (clocks_until_int << cpustate->clock_scale) + cycles_until_next_clock;
-			cpustate->timer->adjust(cpustate->device->cycles_to_attotime(cycles_until_int));
+			timer_adjust_oneshot(cpustate->timer, cpu_clocks_to_attotime(cpustate->device, cycles_until_int), 0);
 		}
 	}
 
 	/* otherwise, disable the timer */
 	else
-		cpustate->timer->adjust(attotime::never);
+		timer_adjust_oneshot(cpustate->timer, attotime_never, 0);
 }
 
 static TIMER_CALLBACK( e132xs_timer_callback )
 {
-	legacy_cpu_device *device = (legacy_cpu_device *)ptr;
+	const device_config *device = (const device_config *)ptr;
 	hyperstone_state *cpustate = get_safe_token(device);
 	int update = param;
 
@@ -767,7 +769,7 @@ INLINE void set_global_register(hyperstone_state *cpustate, UINT8 code, UINT32 v
 */
 			case TR_REGISTER:
 				cpustate->tr_base_value = val;
-				cpustate->tr_base_cycles = cpustate->device->total_cycles();
+				cpustate->tr_base_cycles = cpu_get_total_cycles(cpustate->device);
 				adjust_timer_interrupt(cpustate);
 				break;
 
@@ -1527,30 +1529,29 @@ static void set_irq_line(hyperstone_state *cpustate, int irqline, int state)
 		ISR &= ~(1 << irqline);
 }
 
-static void hyperstone_init(legacy_cpu_device *device, device_irq_callback irqcallback, int scale_mask)
+static void hyperstone_init(const device_config *device, cpu_irq_callback irqcallback, int scale_mask)
 {
 	hyperstone_state *cpustate = get_safe_token(device);
 
-	device->save_item(NAME(cpustate->global_regs));
-	device->save_item(NAME(cpustate->local_regs));
-	device->save_item(NAME(cpustate->ppc));
-	device->save_item(NAME(cpustate->trap_entry));
-	device->save_item(NAME(cpustate->delay.delay_pc));
-	device->save_item(NAME(cpustate->instruction_length));
-	device->save_item(NAME(cpustate->intblock));
-	device->save_item(NAME(cpustate->delay.delay_cmd));
-	device->save_item(NAME(cpustate->tr_clocks_per_tick));
+	state_save_register_device_item_array(device, 0, cpustate->global_regs);
+	state_save_register_device_item_array(device, 0, cpustate->local_regs);
+	state_save_register_device_item(device, 0, cpustate->ppc);
+	state_save_register_device_item(device, 0, cpustate->trap_entry);
+	state_save_register_device_item(device, 0, cpustate->delay.delay_pc);
+	state_save_register_device_item(device, 0, cpustate->instruction_length);
+	state_save_register_device_item(device, 0, cpustate->intblock);
+	state_save_register_device_item(device, 0, cpustate->delay.delay_cmd);
+	state_save_register_device_item(device, 0, cpustate->tr_clocks_per_tick);
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
-	cpustate->io = device->space(AS_IO);
-	cpustate->timer = device->machine().scheduler().timer_alloc(FUNC(e132xs_timer_callback), (void *)device);
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->timer = timer_alloc(device->machine, e132xs_timer_callback, (void *)device);
 	cpustate->clock_scale_mask = scale_mask;
 }
 
-static void e116_init(legacy_cpu_device *device, device_irq_callback irqcallback, int scale_mask)
+static void e116_init(const device_config *device, cpu_irq_callback irqcallback, int scale_mask)
 {
 	hyperstone_state *cpustate = get_safe_token(device);
 	hyperstone_init(device, irqcallback, scale_mask);
@@ -1587,7 +1588,7 @@ static CPU_INIT( gms30c2216 )
 	e116_init(device, irqcallback, 0);
 }
 
-static void e132_init(legacy_cpu_device *device, device_irq_callback irqcallback, int scale_mask)
+static void e132_init(const device_config *device, cpu_irq_callback irqcallback, int scale_mask)
 {
 	hyperstone_state *cpustate = get_safe_token(device);
 	hyperstone_init(device, irqcallback, scale_mask);
@@ -1641,7 +1642,7 @@ static CPU_RESET( hyperstone )
 	//TODO: Add different reset initializations for BCR, MCR, FCR, TPR
 
 	emu_timer *save_timer;
-	device_irq_callback save_irqcallback;
+	cpu_irq_callback save_irqcallback;
 	UINT32 save_opcodexor;
 
 	save_timer = cpustate->timer;
@@ -1651,9 +1652,8 @@ static CPU_RESET( hyperstone )
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->opcodexor = save_opcodexor;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
-	cpustate->io = device->space(AS_IO);
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
 	cpustate->timer = save_timer;
 
 	cpustate->tr_clocks_per_tick = 2;
@@ -1739,7 +1739,7 @@ INLINE void hyperstone_movd(hyperstone_state *cpustate, struct regs_decode *deco
 			old_l = GET_L;
 			PPC = PC;
 
-			SET_PC(SREG);
+			PC = SET_PC(SREG);
 			SR = (SREGF & 0xffe00000) | ((SREG & 0x01) << 18 ) | (SREGF & 0x3ffff);
 			if (cpustate->intblock < 1)
 				cpustate->intblock = 1;
@@ -4661,6 +4661,8 @@ static CPU_EXECUTE( hyperstone )
 {
 	hyperstone_state *cpustate = get_safe_token(device);
 
+	cpustate->icount = cycles;
+
 	if (cpustate->intblock < 0)
 		cpustate->intblock = 0;
 	check_interrupts(cpustate);
@@ -4695,6 +4697,8 @@ static CPU_EXECUTE( hyperstone )
 			check_interrupts(cpustate);
 
 	} while( cpustate->icount > 0 );
+
+	return cycles - cpustate->icount;
 }
 
 
@@ -4710,7 +4714,7 @@ static CPU_SET_INFO( hyperstone )
 		/* --- the following bits of info are set as 64-bit signed integers --- */
 
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + E132XS_PC:			PC = info->i;						break;
+		case CPUINFO_INT_REGISTER + E132XS_PC:			PC = info->i; 						break;
 		case CPUINFO_INT_REGISTER + E132XS_SR:			SR = info->i;						break;
 		case CPUINFO_INT_REGISTER + E132XS_FER:			FER = info->i;						break;
 		case CPUINFO_INT_REGISTER + E132XS_G3:			set_global_register(cpustate, 3, info->i);	break;
@@ -4841,7 +4845,7 @@ static CPU_SET_INFO( hyperstone )
 
 static CPU_GET_INFO( hyperstone )
 {
-	hyperstone_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	hyperstone_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -4856,13 +4860,13 @@ static CPU_GET_INFO( hyperstone )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 36;							break;
 
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 15;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 15;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:					/* not implemented */				break;
 
@@ -4993,8 +4997,8 @@ static CPU_GET_INFO( hyperstone )
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(hyperstone);	break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;		break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_DATA:    info->internal_map16 = NULL;	break;
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_IO:      info->internal_map16 = NULL;	break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:    info->internal_map16 = NULL;	break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_IO:      info->internal_map16 = NULL;	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Hyperstone CPU");		break;
@@ -5055,22 +5059,22 @@ static CPU_GET_INFO( hyperstone )
 		case CPUINFO_STR_REGISTER + E132XS_G29: 		sprintf(info->s, "G29 :%08X", cpustate->global_regs[29]); break;
 		case CPUINFO_STR_REGISTER + E132XS_G30: 		sprintf(info->s, "G30 :%08X", cpustate->global_regs[30]); break;
 		case CPUINFO_STR_REGISTER + E132XS_G31: 		sprintf(info->s, "G31 :%08X", cpustate->global_regs[31]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL0: 		sprintf(info->s, "CL0 :%08X", cpustate->local_regs[(0 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL1: 		sprintf(info->s, "CL1 :%08X", cpustate->local_regs[(1 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL2: 		sprintf(info->s, "CL2 :%08X", cpustate->local_regs[(2 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL3: 		sprintf(info->s, "CL3 :%08X", cpustate->local_regs[(3 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL4: 		sprintf(info->s, "CL4 :%08X", cpustate->local_regs[(4 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL5: 		sprintf(info->s, "CL5 :%08X", cpustate->local_regs[(5 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL6: 		sprintf(info->s, "CL6 :%08X", cpustate->local_regs[(6 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL7: 		sprintf(info->s, "CL7 :%08X", cpustate->local_regs[(7 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL8: 		sprintf(info->s, "CL8 :%08X", cpustate->local_regs[(8 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL9: 		sprintf(info->s, "CL9 :%08X", cpustate->local_regs[(9 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL10:		sprintf(info->s, "CL10:%08X", cpustate->local_regs[(10 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL11:		sprintf(info->s, "CL11:%08X", cpustate->local_regs[(11 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL12:		sprintf(info->s, "CL12:%08X", cpustate->local_regs[(12 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL13:		sprintf(info->s, "CL13:%08X", cpustate->local_regs[(13 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL14:		sprintf(info->s, "CL14:%08X", cpustate->local_regs[(14 + GET_FP) % 64]); break;
-		case CPUINFO_STR_REGISTER + E132XS_CL15:		sprintf(info->s, "CL15:%08X", cpustate->local_regs[(15 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL0:  		sprintf(info->s, "CL0 :%08X", cpustate->local_regs[(0 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL1:  		sprintf(info->s, "CL1 :%08X", cpustate->local_regs[(1 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL2:  		sprintf(info->s, "CL2 :%08X", cpustate->local_regs[(2 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL3:  		sprintf(info->s, "CL3 :%08X", cpustate->local_regs[(3 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL4:  		sprintf(info->s, "CL4 :%08X", cpustate->local_regs[(4 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL5:  		sprintf(info->s, "CL5 :%08X", cpustate->local_regs[(5 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL6:  		sprintf(info->s, "CL6 :%08X", cpustate->local_regs[(6 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL7:  		sprintf(info->s, "CL7 :%08X", cpustate->local_regs[(7 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL8:  		sprintf(info->s, "CL8 :%08X", cpustate->local_regs[(8 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL9:  		sprintf(info->s, "CL9 :%08X", cpustate->local_regs[(9 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL10: 		sprintf(info->s, "CL10:%08X", cpustate->local_regs[(10 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL11: 		sprintf(info->s, "CL11:%08X", cpustate->local_regs[(11 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL12: 		sprintf(info->s, "CL12:%08X", cpustate->local_regs[(12 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL13: 		sprintf(info->s, "CL13:%08X", cpustate->local_regs[(13 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL14: 		sprintf(info->s, "CL14:%08X", cpustate->local_regs[(14 + GET_FP) % 64]); break;
+		case CPUINFO_STR_REGISTER + E132XS_CL15: 		sprintf(info->s, "CL15:%08X", cpustate->local_regs[(15 + GET_FP) % 64]); break;
 		case CPUINFO_STR_REGISTER + E132XS_L0:  		sprintf(info->s, "L0  :%08X", cpustate->local_regs[0]); break;
 		case CPUINFO_STR_REGISTER + E132XS_L1:  		sprintf(info->s, "L1  :%08X", cpustate->local_regs[1]); break;
 		case CPUINFO_STR_REGISTER + E132XS_L2:  		sprintf(info->s, "L2  :%08X", cpustate->local_regs[2]); break;
@@ -5144,10 +5148,10 @@ CPU_GET_INFO( e116t )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_4k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_4k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e116t);					break;
@@ -5165,10 +5169,10 @@ CPU_GET_INFO( e116xt )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_8k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_8k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e116xt);					break;
@@ -5186,10 +5190,10 @@ CPU_GET_INFO( e116xs )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_16k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_16k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e116xs);					break;
@@ -5207,10 +5211,10 @@ CPU_GET_INFO( e116xsr )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_16k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_16k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e116xsr);					break;
@@ -5228,10 +5232,10 @@ CPU_GET_INFO( e132n )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132n);					break;
@@ -5249,10 +5253,10 @@ CPU_GET_INFO( e132t )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132t);					break;
@@ -5270,10 +5274,10 @@ CPU_GET_INFO( e132xn )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132xn);					break;
@@ -5291,10 +5295,10 @@ CPU_GET_INFO( e132xt )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132xt);					break;
@@ -5312,10 +5316,10 @@ CPU_GET_INFO( e132xs )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_16k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_16k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132xs);					break;
@@ -5333,10 +5337,10 @@ CPU_GET_INFO( e132xsr )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_16k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_16k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(e132xsr);					break;
@@ -5354,10 +5358,10 @@ CPU_GET_INFO( gms30c2116 )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_4k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_4k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(gms30c2116);					break;
@@ -5375,10 +5379,10 @@ CPU_GET_INFO( gms30c2132 )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_4k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(gms30c2132);					break;
@@ -5396,10 +5400,10 @@ CPU_GET_INFO( gms30c2216 )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 16;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_8k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(e116_8k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(gms30c2216);					break;
@@ -5417,10 +5421,10 @@ CPU_GET_INFO( gms30c2232 )
 	switch (state)
 	{
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 32;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
 
-		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + AS_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
+		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map32 = ADDRESS_MAP_NAME(e132_8k_iram_map); break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(gms30c2232);					break;
@@ -5432,18 +5436,3 @@ CPU_GET_INFO( gms30c2232 )
 			CPU_GET_INFO_CALL(hyperstone);
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(E116T, e116t);
-DEFINE_LEGACY_CPU_DEVICE(E116XT, e116xt);
-DEFINE_LEGACY_CPU_DEVICE(E116XS, e116xs);
-DEFINE_LEGACY_CPU_DEVICE(E116XSR, e116xsr);
-DEFINE_LEGACY_CPU_DEVICE(E132N, e132n);
-DEFINE_LEGACY_CPU_DEVICE(E132T, e132t);
-DEFINE_LEGACY_CPU_DEVICE(E132XN, e132xn);
-DEFINE_LEGACY_CPU_DEVICE(E132XT, e132xt);
-DEFINE_LEGACY_CPU_DEVICE(E132XS, e132xs);
-DEFINE_LEGACY_CPU_DEVICE(E132XSR, e132xsr);
-DEFINE_LEGACY_CPU_DEVICE(GMS30C2116, gms30c2116);
-DEFINE_LEGACY_CPU_DEVICE(GMS30C2132, gms30c2132);
-DEFINE_LEGACY_CPU_DEVICE(GMS30C2216, gms30c2216);
-DEFINE_LEGACY_CPU_DEVICE(GMS30C2232, gms30c2232);

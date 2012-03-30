@@ -4,7 +4,10 @@
 
  TODO:
  Needs to be tilemapped. The background layer and sprite layer are identical to spdodgeb, except for the
-  back-switched graphics roms and the size of the palette banks.
+  back-switched graphics roms and the size of the pallete banks.
+ Someone needs to look at Naz's board, and see what PCM sound chips are present.
+ And get whatever's in the dip package on Naz's board. (BG/FG Roms, I hope)
+ I'd also love to know whether Naz's is a bootleg or is missing the story for a different reason (US release?)
 
  03/28/03 - Additions by Steve Ellenoff
  ---------------------------------------
@@ -15,8 +18,10 @@
  -Implemented X Line Scrolling (only seems to be used for displaying Hawaii and Airfield Map Screen)
  -Adjusted visible screen size to match more closely the real game
  -Added support for cocktail mode/flip screen
+ -Adjusted Difficulty Dip settings based on some game testing I did
  -Confirmed the US version uses the oki6295 and does not display the story in attract mode like the JP version
- -Confirmed the Background graphics are contained in that unusual looking dip package on the US board
+ -Confirmed the Background graphics are contained in that unusual looking dip package on the US board,
+  (need help figuring out the pinout so I can try and dump it)
 
 
  Remaining Issues:
@@ -82,7 +87,8 @@ VBlank = 58Hz
 
   *********************************************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
@@ -105,44 +111,43 @@ INLINE int scanline_to_vcount(int scanline)
 
 static TIMER_DEVICE_CALLBACK( vball_scanline )
 {
-	vball_state *state = timer.machine().driver_data<vball_state>();
 	int scanline = param;
-	int screen_height = timer.machine().primary_screen->height();
+	int screen_height = video_screen_get_height(timer->machine->primary_screen);
 	int vcount_old = scanline_to_vcount((scanline == 0) ? screen_height - 1 : scanline - 1);
 	int vcount = scanline_to_vcount(scanline);
 
 	/* Update to the current point */
 	if (scanline > 0)
 	{
-		timer.machine().primary_screen->update_partial(scanline - 1);
+		video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
 	}
 
 	/* IRQ fires every on every 8th scanline */
 	if (!(vcount_old & 8) && (vcount & 8))
 	{
-		cputag_set_input_line(timer.machine(), "maincpu", M6502_IRQ_LINE, ASSERT_LINE);
+		cputag_set_input_line(timer->machine, "maincpu", M6502_IRQ_LINE, ASSERT_LINE);
 	}
 
 	/* NMI fires on scanline 248 (VBL) and is latched */
 	if (vcount == 0xf8)
 	{
-		cputag_set_input_line(timer.machine(), "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+		cputag_set_input_line(timer->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
 	}
 
 	/* Save the scroll x register value */
 	if (scanline < 256)
 	{
-		state->m_vb_scrollx[255 - scanline] = (state->m_vb_scrollx_hi + state->m_vb_scrollx_lo + 4);
+		vb_scrollx[255 - scanline] = (vb_scrollx_hi + vb_scrollx_lo + 4);
 	}
 }
 
 static WRITE8_HANDLER( vball_irq_ack_w )
 {
 	if (offset == 0)
-		cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, CLEAR_LINE);
 
 	else
-		cputag_set_input_line(space->machine(), "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "maincpu", M6502_IRQ_LINE, CLEAR_LINE);
 }
 
 
@@ -157,23 +162,22 @@ static WRITE8_HANDLER( vball_irq_ack_w )
 */
 static WRITE8_HANDLER( vb_bankswitch_w )
 {
-	vball_state *state = space->machine().driver_data<vball_state>();
-	UINT8 *RAM = space->machine().region("maincpu")->base();
-	memory_set_bankptr(space->machine(), "bank1", &RAM[0x10000 + (0x4000 * (data & 1))]);
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+	memory_set_bankptr(space->machine, 1, &RAM[0x10000 + (0x4000 * (data & 1))]);
 
-	if (state->m_gfxset != ((data  & 0x20) ^ 0x20))
+	if (vball_gfxset != ((data  & 0x20) ^ 0x20))
 	{
-		state->m_gfxset = (data  & 0x20) ^ 0x20;
-			vb_mark_all_dirty(space->machine());
+		vball_gfxset = (data  & 0x20) ^ 0x20;
+			vb_mark_all_dirty();
 	}
-	state->m_vb_scrolly_hi = (data & 0x40) << 2;
+	vb_scrolly_hi = (data & 0x40) << 2;
 }
 
 /* The sound system comes all but verbatim from Double Dragon */
 static WRITE8_HANDLER( cpu_sound_command_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -188,26 +192,24 @@ static WRITE8_HANDLER( cpu_sound_command_w )
 */
 static WRITE8_HANDLER( vb_scrollx_hi_w )
 {
-	vball_state *state = space->machine().driver_data<vball_state>();
-	flip_screen_set(space->machine(), ~data&1);
-	state->m_vb_scrollx_hi = (data & 0x02) << 7;
-	vb_bgprombank_w(space->machine(), (data >> 2) & 0x07);
-	vb_spprombank_w(space->machine(), (data >> 5) & 0x07);
-	//logerror("%04x: vb_scrollx_hi = %d\n", cpu_get_previouspc(&space->device()), state->m_vb_scrollx_hi);
+	flip_screen_set(space->machine, ~data&1);
+	vb_scrollx_hi = (data & 0x02) << 7;
+	vb_bgprombank_w(space->machine, (data >> 2) & 0x07);
+	vb_spprombank_w(space->machine, (data >> 5) & 0x07);
+	//logerror("%04x: vb_scrollx_hi = %d\n", cpu_get_previouspc(space->cpu), vb_scrollx_hi);
 }
 
 static WRITE8_HANDLER(vb_scrollx_lo_w)
 {
-	vball_state *state = space->machine().driver_data<vball_state>();
-	state->m_vb_scrollx_lo = data;
-	//logerror("%04x: vb_scrollx_lo =%d\n", cpu_get_previouspc(&space->device()), state->m_vb_scrollx_lo);
+	vb_scrollx_lo = data;
+	//logerror("%04x: vb_scrollx_lo =%d\n", cpu_get_previouspc(space->cpu), vb_scrollx_lo);
 }
 
 
 //Cheaters note: Scores are stored in ram @ 0x57-0x58 (though the space is used for other things between matches)
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x08ff) AM_RAM AM_BASE_SIZE_MEMBER(vball_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x0800, 0x08ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x1000, 0x1000) AM_READ_PORT("P1")
 	AM_RANGE(0x1001, 0x1001) AM_READ_PORT("P2")
 	AM_RANGE(0x1002, 0x1002) AM_READ_PORT("SYSTEM")
@@ -220,23 +222,23 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x100a, 0x100b) AM_WRITE(vball_irq_ack_w)	/* is there a scanline counter here? */
 	AM_RANGE(0x100c, 0x100c) AM_WRITE(vb_scrollx_lo_w)
 	AM_RANGE(0x100d, 0x100d) AM_WRITE(cpu_sound_command_w)
-	AM_RANGE(0x100e, 0x100e) AM_WRITEONLY AM_BASE_MEMBER(vball_state, m_vb_scrolly_lo)
-	AM_RANGE(0x2000, 0x2fff) AM_WRITE(vb_videoram_w) AM_BASE_MEMBER(vball_state, m_vb_videoram)
-	AM_RANGE(0x3000, 0x3fff) AM_WRITE(vb_attrib_w) AM_BASE_MEMBER(vball_state, m_vb_attribram)
-	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
+	AM_RANGE(0x100e, 0x100e) AM_WRITE(SMH_RAM) AM_BASE(&vb_scrolly_lo)
+	AM_RANGE(0x2000, 0x2fff) AM_WRITE(vb_videoram_w) AM_BASE(&vb_videoram)
+	AM_RANGE(0x3000, 0x3fff) AM_WRITE(vb_attrib_w) AM_BASE(&vb_attribram)
+	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK(1)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9803) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x9800, 0x9803) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xA000, 0xA000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 
-static INPUT_PORTS_START( vball )
+static INPUT_PORTS_START( common )
 	PORT_START("P1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(1)
@@ -267,31 +269,8 @@ static INPUT_PORTS_START( vball )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:1,2") /* Verified against Taito's US Vball manual */
-	PORT_DIPSETTING(    0x02, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
-	PORT_DIPNAME( 0x0c, 0x00, "Single Player Game Time")	PORT_DIPLOCATION("SW1:3,4")
-	PORT_DIPSETTING(    0x00, "1:15")
-	PORT_DIPSETTING(    0x04, "1:30")
-	PORT_DIPSETTING(    0x0c, "1:45")
-	PORT_DIPSETTING(    0x08, "2:00")
-	PORT_DIPNAME( 0x30, 0x00, "Start Buttons (4-player)")	PORT_DIPLOCATION("SW1:5,6")
-	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x20, "Button A")
-	PORT_DIPSETTING(    0x10, "Button B")
-	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
-	PORT_DIPNAME( 0x40, 0x40, "PL 1&4 (4-player)")		PORT_DIPLOCATION("SW1:7")
-	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x00, "Rotate 90")
-	PORT_DIPNAME( 0x80, 0x00, "Player Mode")		PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(    0x80, "2 Players")
-	PORT_DIPSETTING(    0x00, "4 Players")
-
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW2:1,2,3")
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 2C_1C ) )
@@ -300,7 +279,7 @@ static INPUT_PORTS_START( vball )
 	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x38, 0x38, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW2:4,5,6")
+	PORT_DIPNAME( 0x38, 0x38, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 2C_1C ) )
@@ -309,14 +288,51 @@ static INPUT_PORTS_START( vball )
 	PORT_DIPSETTING(    0x28, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW2:7")
+	PORT_DIPNAME( 0x40, 0x00, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
 	PORT_START("P3")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("P4")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( vball )
+	PORT_INCLUDE( common )
+
+	/* The dipswitch instructions in naz's dump (vball) don't quite sync here) */
+	/* Looks like the pins from the dips to the board were mixed up a little. */
+
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )
+// I've adjusted these to what I think is correct from gameplay testing - SJE - 03/28/03
+	PORT_DIPSETTING(    0x02, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( Medium ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Very_Hard ) )
+	PORT_DIPNAME( 0x0c, 0x00, "Single Player Game Time")
+	PORT_DIPSETTING(    0x00, "1:15")
+	PORT_DIPSETTING(    0x04, "1:30")
+	PORT_DIPSETTING(    0x0c, "1:45")
+	PORT_DIPSETTING(    0x08, "2:00")
+	PORT_DIPNAME( 0x30, 0x00, "Start Buttons (4-player)")
+	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x20, "Button A")
+	PORT_DIPSETTING(    0x10, "Button B")
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPNAME( 0x40, 0x40, "PL 1&4 (4-player)")
+	PORT_DIPSETTING(    0x40, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x00, "Rot 90")
+	PORT_DIPNAME( 0x80, 0x00, "Player Mode")
+	PORT_DIPSETTING(    0x80, "2")
+	PORT_DIPSETTING(    0x00, "4")
+
+	PORT_MODIFY("P3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(3)
@@ -326,7 +342,7 @@ static INPUT_PORTS_START( vball )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START3 )
 
-	PORT_START("P4")
+	PORT_MODIFY("P4")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(4)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_PLAYER(4)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(4)
@@ -338,31 +354,23 @@ static INPUT_PORTS_START( vball )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START (vball2pj)
-	PORT_INCLUDE( vball )
+	PORT_INCLUDE( common )
 
-	/* The 2-player roms have the game-time in the difficulty spot, and I've assumed vice-versa. (VS the instructions scanned in Naz's dump) */
+	/* The 2-player roms have the game-time in the difficulty spot, and
+       I've assumed vice-versa. (VS the instructions scanned in Naz's dump) */
 
-	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x00, "Single Player Game Time")	PORT_DIPLOCATION("SW1:1,2")
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x03, 0x00, "Single Player Game Time")
 	PORT_DIPSETTING(    0x00, "1:30")
 	PORT_DIPSETTING(    0x01, "1:45")
 	PORT_DIPSETTING(    0x03, "2:00")
 	PORT_DIPSETTING(    0x02, "2:15")
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:3,4") /* Difficulty order needs to be verified */
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Difficulty ) )
+	// This ordering is assumed. Someone has to play it a lot and find out.
 	PORT_DIPSETTING(    0x04, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( Very_Hard ) )
-	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:5" ) /* Dips 5 through 8 are used for 4 player mode, not supported in 2 player set */
-	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
-
-	PORT_MODIFY("P3")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED ) /* Used in 4 player mode, not supported in 2 player set */
-
-	PORT_MODIFY("P4")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED ) /* Used in 4 player mode, not supported in 2 player set */
 INPUT_PORTS_END
 
 
@@ -397,9 +405,9 @@ static GFXDECODE_START( vb )
 GFXDECODE_END
 
 
-static void vball_irq_handler(device_t *device, int irq)
+static void vball_irq_handler(const device_config *device, int irq)
 {
-	cputag_set_input_line(device->machine(), "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2151_interface ym2151_config =
@@ -408,39 +416,41 @@ static const ym2151_interface ym2151_config =
 };
 
 
-static MACHINE_CONFIG_START( vball, vball_state )
+static MACHINE_DRIVER_START( vball )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, CPU_CLOCK)	/* 2 MHz - measured by guru but it makes the game far far too slow ?! */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", vball_scanline, "screen", 0, 1)
+ 	MDRV_CPU_ADD("maincpu", M6502, CPU_CLOCK)	/* 2 MHz - measured by guru but it makes the game far far too slow ?! */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_TIMER_ADD_SCANLINE("scantimer", vball_scanline, "screen", 0, 1)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3579545)	/* 3.579545 MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, 3579545)	/* 3.579545 MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 8, 248)	/* based on ddragon driver */
-	MCFG_SCREEN_UPDATE_STATIC(vb)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 384, 0, 256, 272, 8, 248)	/* based on ddragon driver */
 
-	MCFG_GFXDECODE(vb)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(vb)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_START(vb)
+	MDRV_VIDEO_START(vb)
+	MDRV_VIDEO_UPDATE(vb)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, 3579545)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -483,6 +493,7 @@ ROM_START( vball2pj ) /* Japan version */
 
 	ROM_REGION( 0x10000, "audiocpu", 0 ) /* region#2: music CPU, 64kb */
 	ROM_LOAD( "25j1-0.47",    0x00000, 0x8000,  CRC(10ca79ad) SHA1(aad4a09d6745ca0b5665cb00ff7a4e08ea434068) )
+//ROM_LOAD( "vball04.bin",        0x00000, 0x8000,  CRC(534dfbd9) SHA1(d0cb37caf94fa85da4ebdfe15e7a78109084bf91) )
 
 	/* the original has the image data stored in a special ceramic embedded package made by Toshiba
     with part number 'TOSHIBA TRJ-101' (which has been dumped using a custom made adapter)

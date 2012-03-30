@@ -1,6 +1,6 @@
 /***************************************************************************
 
-    Zilog Z80 Parallel Input/Output Controller implementation
+    Z80 PIO (Z8420) implementation
 
     Copyright Nicola Salmoria and the MAME Team.
     Visit http://mamedev.org for licensing and usage restrictions.
@@ -16,7 +16,7 @@
                    PA7   7 |             | 34  PB7
                    PA6   8 |             | 33  PB6
                    PA5   9 |             | 32  PB5
-                   PA4  10 |    Z8420    | 31  PB4
+                   PA4  10 |   Z80-PIO   | 31  PB4
                    GND  11 |             | 30  PB3
                    PA3  12 |             | 29  PB2
                    PA2  13 |             | 28  PB1
@@ -30,192 +30,84 @@
 
 ***************************************************************************/
 
-#ifndef __Z80PIO__
-#define __Z80PIO__
+#ifndef __Z80PIO_H__
+#define __Z80PIO_H__
 
-#include "cpu/z80/z80daisy.h"
-
-
-//**************************************************************************
-//  DEVICE CONFIGURATION MACROS
-//**************************************************************************
-
-#define MCFG_Z80PIO_ADD(_tag, _clock, _intrf) \
-	MCFG_DEVICE_ADD(_tag, Z80PIO, _clock) \
-	MCFG_DEVICE_CONFIG(_intrf)
-
-#define Z80PIO_INTERFACE(_name) \
-	const z80pio_interface (_name) =
+#include "devcb.h"
 
 
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-//**************************************************************************
-//  TYPE DEFINITIONS
-//**************************************************************************
-
-
-// ======================> z80pio_interface
-
-struct z80pio_interface
+typedef struct _z80pio_interface z80pio_interface;
+struct _z80pio_interface
 {
-	devcb_write_line	m_out_int_cb;
-
-	devcb_read8			m_in_pa_cb;
-	devcb_write8		m_out_pa_cb;
-	devcb_write_line	m_out_ardy_cb;
-
-	devcb_read8			m_in_pb_cb;
-	devcb_write8		m_out_pb_cb;
-	devcb_write_line	m_out_brdy_cb;
+	devcb_write_line intr;    /* callback when change interrupt status */
+	devcb_read8 portAread;    /* port A read callback */
+	devcb_read8 portBread;    /* port B read callback */
+	devcb_write8 portAwrite;  /* port A write callback */
+	devcb_write8 portBwrite;  /* port B write callback */
+	devcb_write_line rdyA;    /* portA ready active callback */
+	devcb_write_line rdyB;    /* portB ready active callback */
 };
 
 
 
-// ======================> z80pio_device
+/***************************************************************************
+    DEVICE CONFIGURATION MACROS
+***************************************************************************/
 
-class z80pio_device :	public device_t,
-						public device_z80daisy_interface,
-						public z80pio_interface
-{
-public:
-	enum
-	{
-		PORT_A = 0,
-		PORT_B,
-		PORT_COUNT
-	};
-
-	// construction/destruction
-	z80pio_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
-
-	// I/O line access
-	int rdy(int which) { return m_port[which].rdy(); }
-	void strobe(int which, bool state) { m_port[which].strobe(state); }
-
-	// control register I/O
-	UINT8 control_read();
-	void control_write(int offset, UINT8 data) { m_port[offset & 1].control_write(data); }
-
-	// data register I/O
-	UINT8 data_read(int offset) { return m_port[offset & 1].data_read(); }
-	void data_write(int offset, UINT8 data) { m_port[offset & 1].data_write(data); }
-
-	// port I/O
-	UINT8 port_read(int offset) { return m_port[offset & 1].read(); }
-	void port_write(int offset, UINT8 data) { m_port[offset & 1].write(data); }
-
-private:
-	// device-level overrides
-	virtual void device_config_complete();
-	virtual void device_start();
-	virtual void device_reset();
-
-	// device_z80daisy_interface overrides
-	virtual int z80daisy_irq_state();
-	virtual int z80daisy_irq_ack();
-	virtual void z80daisy_irq_reti();
-
-	// internal helpers
-	void check_interrupts();
-
-	// a single PIO port
-	class pio_port
-	{
-		friend class z80pio_device;
-
-	public:
-		pio_port();
-
-		void start(z80pio_device *device, int index, const devcb_read8 &infunc, const devcb_write8 &outfunc, const devcb_write_line &rdyfunc);
-		void reset();
-
-		bool interrupt_signalled();
-		void trigger_interrupt();
-
-		int rdy() const { return m_rdy; }
-		void set_rdy(bool state);
-		void set_mode(int mode);
-		void strobe(bool state);
-
-		UINT8 read();
-		void write(UINT8 data);
-
-		void control_write(UINT8 data);
-
-		UINT8 data_read();
-		void data_write(UINT8 data);
-
-	private:
-		void check_interrupts() { m_device->check_interrupts(); }
-
-		z80pio_device *				m_device;
-		int							m_index;
-
-		devcb_resolved_read8		m_in_p_func;
-		devcb_resolved_write8		m_out_p_func;
-		devcb_resolved_write_line	m_out_rdy_func;
-
-		int m_mode;					// mode register
-		int m_next_control_word;	// next control word
-		UINT8 m_input;				// input latch
-		UINT8 m_output;				// output latch
-		UINT8 m_ior;				// input/output register
-		bool m_rdy;					// ready
-		bool m_stb;					// strobe
-
-		// interrupts
-		bool m_ie;					// interrupt enabled
-		bool m_ip;					// interrupt pending
-		bool m_ius;					// interrupt under service
-		UINT8 m_icw;				// interrupt control word
-		UINT8 m_vector;				// interrupt vector
-		UINT8 m_mask;				// interrupt mask
-		bool m_match;				// logic equation match
-	};
-
-	// internal state
-	pio_port					m_port[2];
-	devcb_resolved_write_line	m_out_int_func;
-};
-
-
-// device type definition
-extern const device_type Z80PIO;
+#define MDRV_Z80PIO_ADD(_tag, _intrf) \
+	MDRV_DEVICE_ADD(_tag, Z80PIO, 0) \
+	MDRV_DEVICE_CONFIG(_intrf)
 
 
 
-//**************************************************************************
-//  FUNCTION PROTOTYPES
-//**************************************************************************
+/***************************************************************************
+    CONTROL REGISTER READ/WRITE
+***************************************************************************/
 
-// control register access
-READ8_DEVICE_HANDLER( z80pio_c_r );
 WRITE8_DEVICE_HANDLER( z80pio_c_w );
+READ8_DEVICE_HANDLER( z80pio_c_r );
 
-// data register access
-READ8_DEVICE_HANDLER( z80pio_d_r );
+
+/***************************************************************************
+    DATA REGISTER READ/WRITE
+***************************************************************************/
+
 WRITE8_DEVICE_HANDLER( z80pio_d_w );
+READ8_DEVICE_HANDLER( z80pio_d_r );
 
-// register access
-READ8_DEVICE_HANDLER( z80pio_cd_ba_r );
-WRITE8_DEVICE_HANDLER( z80pio_cd_ba_w );
 
-READ8_DEVICE_HANDLER( z80pio_ba_cd_r );
-WRITE8_DEVICE_HANDLER( z80pio_ba_cd_w );
+/***************************************************************************
+    PORT I/O
+***************************************************************************/
 
-// port access
-READ8_DEVICE_HANDLER( z80pio_pa_r );
-WRITE8_DEVICE_HANDLER( z80pio_pa_w );
+WRITE8_DEVICE_HANDLER( z80pio_p_w );
+READ8_DEVICE_HANDLER( z80pio_p_r );
 
-READ8_DEVICE_HANDLER( z80pio_pb_r );
-WRITE8_DEVICE_HANDLER( z80pio_pb_w );
 
-// ready
-READ_LINE_DEVICE_HANDLER( z80pio_ardy_r );
-READ_LINE_DEVICE_HANDLER( z80pio_brdy_r );
+/***************************************************************************
+    STROBE STATE MANAGEMENT
+***************************************************************************/
 
-// strobe
-WRITE_LINE_DEVICE_HANDLER( z80pio_astb_w );
-WRITE_LINE_DEVICE_HANDLER( z80pio_bstb_w );
+void z80pio_astb_w(const device_config *device, int state);
+void z80pio_bstb_w(const device_config *device, int state);
+
+
+/***************************************************************************
+    READ/WRITE HANDLERS
+***************************************************************************/
+READ8_DEVICE_HANDLER(z80pio_r);
+WRITE8_DEVICE_HANDLER(z80pio_w);
+READ8_DEVICE_HANDLER(z80pio_alt_r);
+WRITE8_DEVICE_HANDLER(z80pio_alt_w);
+
+
+/* ----- device interface ----- */
+
+#define Z80PIO DEVICE_GET_INFO_NAME(z80pio)
+DEVICE_GET_INFO( z80pio );
 
 #endif

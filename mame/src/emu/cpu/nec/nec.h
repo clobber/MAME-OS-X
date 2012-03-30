@@ -2,6 +2,7 @@
 #ifndef __NEC_H_
 #define __NEC_H_
 
+#include "cpuintrf.h"
 
 typedef struct _nec_config nec_config;
 struct _nec_config
@@ -9,29 +10,27 @@ struct _nec_config
 	const UINT8*	v25v35_decryptiontable; // internal decryption table
 };
 
-#define NEC_INPUT_LINE_INTP0 10
-#define NEC_INPUT_LINE_INTP1 11
-#define NEC_INPUT_LINE_INTP2 12
 #define NEC_INPUT_LINE_POLL 20
-
-#define V25_PORT_P0 0x10000
-#define V25_PORT_P1 0x10002
-#define V25_PORT_P2 0x10004
-#define V25_PORT_PT 0x10006
 
 enum
 {
 	NEC_PC=0,
 	NEC_IP, NEC_AW, NEC_CW, NEC_DW, NEC_BW, NEC_SP, NEC_BP, NEC_IX, NEC_IY,
 	NEC_FLAGS, NEC_ES, NEC_CS, NEC_SS, NEC_DS,
-	NEC_PENDING
+	NEC_VECTOR, NEC_PENDING
 };
 
 /* Public functions */
-DECLARE_LEGACY_CPU_DEVICE(V20, v20);
-DECLARE_LEGACY_CPU_DEVICE(V25, v25);
-DECLARE_LEGACY_CPU_DEVICE(V30, v30);
-DECLARE_LEGACY_CPU_DEVICE(V33, v33);
-DECLARE_LEGACY_CPU_DEVICE(V35, v35);
+extern CPU_GET_INFO( v20 );
+extern CPU_GET_INFO( v25 );
+extern CPU_GET_INFO( v30 );
+extern CPU_GET_INFO( v33 );
+extern CPU_GET_INFO( v35 );
+
+#define CPU_V20 CPU_GET_INFO_NAME( v20 )
+#define CPU_V25 CPU_GET_INFO_NAME( v25 )
+#define CPU_V30 CPU_GET_INFO_NAME( v30 )
+#define CPU_V33 CPU_GET_INFO_NAME( v33 )
+#define CPU_V35 CPU_GET_INFO_NAME( v35 )
 
 #endif

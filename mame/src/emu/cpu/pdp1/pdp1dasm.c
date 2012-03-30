@@ -1,4 +1,5 @@
-#include "emu.h"
+#include <stdio.h>
+#include <string.h>
 #include "cpu/pdp1/pdp1.h"
 
 /* PDP1 registers */
@@ -23,7 +24,7 @@ CPU_DISASSEMBLE( pdp1 )
 	int md;
 	//int etime = 0;
 
-	md = oprom[0] << 24 | oprom[1] << 16 | oprom[2] << 8 | oprom[3];
+	md = *((UINT32 *) oprom);
 
 	y = md & 07777;
 	ib = (md >> 12) & 1;			   /* */

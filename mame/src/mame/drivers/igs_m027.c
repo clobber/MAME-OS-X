@@ -1,4 +1,4 @@
-/* IGS ARM7 (IGS027A) based Mahjong / Gambling platform
+/* IGS ARM7 (IGS027A) based Mahjong platform
  Driver by Xing Xing
 
  These games use the IGS027A processor.
@@ -10,31 +10,13 @@
  games make use of that feature.
 
  To emulate these games the Internal ROM will need dumping
- There are at least 20 other games on this and similar platforms.
+ There are at least 5 other games on the platform.
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/arm7/arm7.h"
 #include "cpu/arm7/arm7core.h"
-#include "machine/nvram.h"
-
-
-class igs_m027_state : public driver_device
-{
-public:
-	igs_m027_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT32 *m_igs_mainram;
-	UINT32 *m_igs_cg_videoram;
-	UINT32 *m_igs_tx_videoram;
-	UINT32 *m_igs_bg_videoram;
-	UINT32 *m_igs_palette32;
-	tilemap_t *m_igs_tx_tilemap;
-	tilemap_t *m_igs_bg_tilemap;
-};
-
 
 
 /***************************************************************************
@@ -42,22 +24,24 @@ public:
     Video
 
     0x38001000, 0x380017ff          CG_CONTROL,8 byte per object, 0x100 in total
-    0x38001800, 0x380019ff      PALETTE RAM,2 byte per color, 0x100 in total
+    0x38001800, 0x380019ff      PALLETE RAM,2 byte per color, 0x100 in total
     0x38004000, 0x38005FFF      TX Video RAM????????1E00??????512x240??????
     0x38006000, 0x38007FFF      BG Video RAM????????1E00??????512x240??????
 
 
 ***************************************************************************/
+static UINT32 *igs_mainram,*igs_cg_videoram,*igs_tx_videoram,*igs_bg_videoram;
+static UINT32 *igs_pallete32;
+static tilemap *igs_tx_tilemap,*igs_bg_tilemap;
 
 
 
 /* CGLayer */
 static WRITE32_HANDLER( igs_cg_videoram_w )
 {
-	igs_m027_state *state = space->machine().driver_data<igs_m027_state>();
-	COMBINE_DATA(&state->m_igs_cg_videoram[offset]);
+	COMBINE_DATA(&igs_cg_videoram[offset]);
 	//if(data!=0)
-	logerror("PC(%08X) CG @%x = %x!\n",cpu_get_pc(&space->device()),offset ,state->m_igs_cg_videoram[offset]);
+	logerror("PC(%08X) CG @%x = %x!\n",cpu_get_pc(space->cpu),offset ,igs_cg_videoram[offset]);
 
 
 
@@ -98,20 +82,18 @@ static WRITE32_HANDLER( igs_cg_videoram_w )
 /* TX Layer */
 static WRITE32_HANDLER( igs_tx_videoram_w )
 {
-	igs_m027_state *state = space->machine().driver_data<igs_m027_state>();
-	COMBINE_DATA(&state->m_igs_tx_videoram[offset]);
-	state->m_igs_tx_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&igs_tx_videoram[offset]);
+	tilemap_mark_tile_dirty(igs_tx_tilemap,offset);
 	//if(data!=0)
-	//logerror( "TX VIDEO RAM OFFSET %x ,data %x!\n",offset ,state->m_igs_tx_videoram[offset]);
+	//logerror( "TX VIDEO RAM OFFSET %x ,data %x!\n",offset ,igs_tx_videoram[offset]);
 }
 
 static TILE_GET_INFO( get_tx_tilemap_tile_info )
 {
-	igs_m027_state *state = machine.driver_data<igs_m027_state>();
 	//ppppppppNNNNNNNN
 	int tileno,colour;
-	tileno = state->m_igs_tx_videoram[tile_index] & 0xffff;
-	colour = (state->m_igs_tx_videoram[tile_index]>>0x10) & 0xffff;
+	tileno = igs_tx_videoram[tile_index] & 0xffff;
+	colour = (igs_tx_videoram[tile_index]>>0x10) & 0xffff;
 
 	SET_TILE_INFO(0,tileno,colour,0);
 }
@@ -119,63 +101,58 @@ static TILE_GET_INFO( get_tx_tilemap_tile_info )
 /* BG Layer */
 static WRITE32_HANDLER( igs_bg_videoram_w )
 {
-	igs_m027_state *state = space->machine().driver_data<igs_m027_state>();
-	COMBINE_DATA(&state->m_igs_bg_videoram[offset]);
-	state->m_igs_bg_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&igs_bg_videoram[offset]);
+	tilemap_mark_tile_dirty(igs_bg_tilemap,offset);
 	//if(data!=0)
-	logerror("BG VIDEO RAM OFFSET %x ,data %x!\n",offset ,state->m_igs_bg_videoram[offset]);
+	logerror("BG VIDEO RAM OFFSET %x ,data %x!\n",offset ,igs_bg_videoram[offset]);
 }
 
 static TILE_GET_INFO( get_bg_tilemap_tile_info )
 {
-	igs_m027_state *state = machine.driver_data<igs_m027_state>();
 	//ppppppppNNNNNNNN
 	int tileno,colour;
-	tileno = state->m_igs_bg_videoram[tile_index] & 0xffff;
-	colour = (state->m_igs_bg_videoram[tile_index]>>0x10) & 0xffff;
+	tileno = igs_bg_videoram[tile_index] & 0xffff;
+	colour = (igs_bg_videoram[tile_index]>>0x10) & 0xffff;
 
 	SET_TILE_INFO(0,tileno,colour,0);
 }
 
 
-/* Palette Layer */
-static WRITE32_HANDLER( igs_palette32_w )
+/* Pallete Layer */
+static WRITE32_HANDLER( igs_pallete32_w )
 {
-	igs_m027_state *state = space->machine().driver_data<igs_m027_state>();
-	space->machine().generic.paletteram.u16=(UINT16 *)state->m_igs_palette32;
-	COMBINE_DATA(&state->m_igs_palette32[offset]);
-	//paletteram16_xGGGGGRRRRRBBBBB_word_w(offset*2,space->machine().generic.paletteram.u16[offset*2],0);
-	//paletteram16_xGGGGGRRRRRBBBBB_word_w(offset*2+1,space->machine().generic.paletteram.u16[offset*2+1],0);
+	paletteram16=(UINT16 *)igs_pallete32;
+	COMBINE_DATA(&igs_pallete32[offset]);
+	//paletteram16_xGGGGGRRRRRBBBBB_word_w(offset*2,paletteram16[offset*2],0);
+	//paletteram16_xGGGGGRRRRRBBBBB_word_w(offset*2+1,paletteram16[offset*2+1],0);
 	//if(data!=0)
-	//fprintf(stdout,"PALETTE RAM OFFSET %x ,data %x!\n",offset ,state->m_igs_palette32[offset]);
+	//fprintf(stdout,"PALLETE RAM OFFSET %x ,data %x!\n",offset ,igs_pallete32[offset]);
 }
 
 
 
 static VIDEO_START(igs_majhong)
 {
-	igs_m027_state *state = machine.driver_data<igs_m027_state>();
-	state->m_igs_tx_tilemap= tilemap_create(machine, get_tx_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
-	state->m_igs_tx_tilemap->set_transparent_pen(15);
-	state->m_igs_bg_tilemap= tilemap_create(machine, get_bg_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
-	//state->m_igs_bg_tilemap= tilemap_create(machine, get_bg_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
-	//state->m_igs_bg_tilemap->set_transparent_pen(15);
+	igs_tx_tilemap= tilemap_create(machine, get_tx_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
+	tilemap_set_transparent_pen(igs_tx_tilemap,15);
+	igs_bg_tilemap= tilemap_create(machine, get_bg_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
+	//igs_bg_tilemap= tilemap_create(machine, get_bg_tilemap_tile_info,tilemap_scan_rows, 8, 8,64,32);
+	//tilemap_set_transparent_pen(igs_bg_tilemap,15);
 	logerror("Video START OK!\n");
 }
 
-static SCREEN_UPDATE_IND16(igs_majhong)
+static VIDEO_UPDATE(igs_majhong)
 {
-	igs_m027_state *state = screen.machine().driver_data<igs_m027_state>();
 	//??????????
-	bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 
 	//??????
-	state->m_igs_bg_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,igs_bg_tilemap,0,0);
 
 	//CG??????
 
 	//??????
-	state->m_igs_tx_tilemap->draw(bitmap, cliprect, 0,0);
+	tilemap_draw(bitmap,cliprect,igs_tx_tilemap,0,0);
 	//fprintf(stdout,"Video UPDATE OK!\n");
 	return 0;
 }
@@ -191,17 +168,17 @@ static SCREEN_UPDATE_IND16(igs_majhong)
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( igs_majhong_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( igs_majhong_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM /* Internal ROM */
 	AM_RANGE(0x08000000, 0x0807ffff) AM_ROM AM_REGION("user1", 0)/* Game ROM */
-	AM_RANGE(0x10000000, 0x100003ff) AM_RAM AM_BASE_MEMBER(igs_m027_state, m_igs_mainram)// main ram for asic?
+	AM_RANGE(0x10000000, 0x100003ff) AM_RAM AM_BASE(&igs_mainram)// main ram for asic?
 	AM_RANGE(0x18000000, 0x18007fff) AM_RAM
 
-	AM_RANGE(0x38001000, 0x380017ff) AM_RAM_WRITE(igs_cg_videoram_w) AM_BASE_MEMBER(igs_m027_state, m_igs_cg_videoram)		//0x200 * 1   CG PALETTE?
-	AM_RANGE(0x38001800, 0x38001fff) AM_RAM_WRITE(igs_palette32_w) AM_BASE_MEMBER(igs_m027_state, m_igs_palette32)		//0x200 * 1
+	AM_RANGE(0x38001000, 0x380017ff) AM_RAM_WRITE(igs_cg_videoram_w) AM_BASE(&igs_cg_videoram)		//0x200 * 1   CG PALLETE?
+	AM_RANGE(0x38001800, 0x38001fff) AM_RAM_WRITE(igs_pallete32_w) AM_BASE(&igs_pallete32)		//0x200 * 1
 
-	AM_RANGE(0x38004000, 0x38005FFF) AM_RAM_WRITE(igs_tx_videoram_w) AM_BASE_MEMBER(igs_m027_state, m_igs_tx_videoram) /* Text Layer */
-	AM_RANGE(0x38006000, 0x38007FFF) AM_RAM_WRITE(igs_bg_videoram_w) AM_BASE_MEMBER(igs_m027_state, m_igs_bg_videoram) /* CG Layer */
+	AM_RANGE(0x38004000, 0x38005FFF) AM_RAM_WRITE(igs_tx_videoram_w) AM_BASE(&igs_tx_videoram) /* Text Layer */
+	AM_RANGE(0x38006000, 0x38007FFF) AM_RAM_WRITE(igs_bg_videoram_w) AM_BASE(&igs_bg_videoram) /* CG Layer */
 
 
 	AM_RANGE(0x38002010, 0x38002017) AM_RAM		//??????????????
@@ -242,11 +219,11 @@ static const UINT8 sdwx_tab[] =
 	0x12,0x56,0x97,0x26,0x1D,0x5F,0xA7,0xF8,0x89,0x3F,0x14,0x36,0x72,0x3B,0x48,0x7B,
 	0xF1,0xED,0x72,0xB7,0x7A,0x56,0x05,0xDE,0x7B,0x27,0x6D,0xCF,0x33,0x4C,0x14,0x86,
 };
-static void sdwx_decrypt(running_machine &machine)
+static void sdwx_decrypt(running_machine *machine)
 {
 
 	int i;
-	UINT16 *src = (UINT16 *) machine.region("user1")->base();
+	UINT16 *src = (UINT16 *) memory_region(machine, "user1");
 
 	int rom_size = 0x80000;
 
@@ -287,12 +264,12 @@ static void sdwx_decrypt(running_machine &machine)
 
 
 
-static void sdwx_gfx_decrypt(running_machine &machine)
+static void sdwx_gfx_decrypt(running_machine *machine)
 {
 	int i;
 	unsigned rom_size = 0x80000;
-	UINT8 *src = (UINT8 *) (machine.region("gfx1")->base());
-	UINT8 *result_data = auto_alloc_array(machine, UINT8, rom_size);
+	UINT8 *src = (UINT8 *) (memory_region(machine, "gfx1"));
+	UINT8 *result_data = alloc_array_or_die(UINT8, rom_size);
 
 	for (i=0; i<rom_size; i++)
     	result_data[i] = src[BITSWAP24(i, 23,22,21,20,19,18,17,16,15,14,13,12,11,8,7,6,10,9,5,4,3,2,1,0)];
@@ -304,7 +281,7 @@ static void sdwx_gfx_decrypt(running_machine &machine)
 		memcpy(src+i+0x100,result_data+i+0x080,0x80);
 		memcpy(src+i+0x180,result_data+i+0x180,0x80);
 	}
-	auto_free(machine, result_data);
+	free(result_data);
 }
 
 /***************************************************************************
@@ -387,31 +364,32 @@ static INTERRUPT_GEN( igs_majhong_interrupt )
 }
 
 
-static MACHINE_CONFIG_START( igs_majhong, igs_m027_state )
-	MCFG_CPU_ADD("maincpu",ARM7, 20000000)
+static MACHINE_DRIVER_START( igs_majhong )
+	MDRV_CPU_ADD("maincpu",ARM7, 20000000)
 
-	MCFG_CPU_PROGRAM_MAP(igs_majhong_map)
+	MDRV_CPU_PROGRAM_MAP(igs_majhong_map)
 
-	MCFG_CPU_VBLANK_INT("screen", igs_majhong_interrupt)
-	//MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_CPU_VBLANK_INT("screen", igs_majhong_interrupt)
+	//MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_GFXDECODE(igs_m027)
+	MDRV_GFXDECODE(igs_m027)
 
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC( igs_majhong )
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
 
-	MCFG_PALETTE_LENGTH(0x200)
+	MDRV_PALETTE_LENGTH(0x200)
 
-	MCFG_VIDEO_START( igs_majhong )
+	MDRV_VIDEO_START( igs_majhong )
+	MDRV_VIDEO_UPDATE( igs_majhong )
 
 	/* sound hardware */
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 
@@ -612,170 +590,6 @@ ROM_START( bigd2 )
 	ROM_LOAD( "s2602.u14", 0x00000, 0x100000, CRC(f137028c) SHA1(0e4114222820bca2f7026fa653e2b96a489a0183) )
 ROM_END
 
-/*
-
-
-Gone Fishing II
-IGS PCB-0388-05-FW
-
-   +--------------------------------------------+
-+--+               8-Liner Connecter            +---+
-|                                                   |
-|    +---------------+                            +-+
-|    |   IGS 0027A   |     +------+               |
-+-+  |    Plug-in    |     | IGS  |               +-+
-  |  |   Daughter    |     | 025  |                P|
-+-+  |     Card      |     +------+                r|
-|    +---------------+ +---+                       i|
-|J                     |   |                       n|
-|A   +---+ +---+ +---+ |   |                       t|
-|M   |   | |   | |   | | U |                      +-+
-|M   |   | |   | |   | | 1 |                +---+ |
-|A   | U | | U | | U | | 2 |                |   | +-+
-|    | 1 | | 1 | | 1 | |   |         +----+ | U |   |
-|C   | 5 | | 7 | | 4 | |   |         |Oki | | 1 |   |
-|o   |   | |   | | * | |   |         |6295| | 3 |   |
-|n   |   | |   | |   | +---+         +----+ |   |   |
-|n   |   | |   | |   |                      +---+   |
-|e   +---+ |   | +---+                              |
-|c         +---+                                    |
-|t                        62257                     |
-|e                                                  |
-|r       +-------+                                  |
-|        |       |                                  |
-|        |  IGS  |                                  |
-|        |  031  |     61256                        |
-+-+      |       |          PAL     V3021           |
-  |      +-------+                                  |
-+-+                                      X1    SW4  |
-|                                                   |
-| JP11                        SW3 SW2 SW1      BT1  |
-|                                                   |
-+---------------------------------------------------+
-
-
-U12 - Program rom   - 27C4096
-U15 - Text graphics - 27C4096
-U17 - Char graphics - 27C160
-U23 - Sound samples - 27C040
-
-SW1-SW3 are unpopulated
-U14* Not used (27C4096) or else it's U16 and 27C160 type EPROM
-
-   X1 - 32.768kHZ OSC
-V3021 - Micro Electronic Ultra Low Power 1-Bit 32kHz RTC (Real Time Clock)
-  PAL - ATF22V10C at U26 labeled FW U26
-  BT1 - 3.6V battery
-  SW4 - Toggle switch
- JP11 - 4 Pin header (HD4-156)
-
-IGS 025  - Custom programmed A8B1723(?)
-IGS 0027 - Custom programmed ARM9
-
-*/
-
-
-
-ROM_START( gonefsh2 )
-	ROM_REGION( 0x04000, "maincpu", 0 )
-	/* Internal rom of IGS027A ARM based MCU */
-	ROM_LOAD( "gonefsh2_igs027a", 0x00000, 0x4000, NO_DUMP )
-
-	ROM_REGION( 0x80000, "user1", 0 ) // external ARM data / prg
-	ROM_LOAD( "gfii_v-904uso.u12", 0x000000, 0x80000, CRC(ef0f6735) SHA1(0add92599b0989f3e50dc64e32ce234b4bd87d33) )
-
-	ROM_REGION( 0x80000, "gfx1", 0 )
-	ROM_LOAD( "gfii_text.u15", 0x000000, 0x80000, CRC(b48118fd) SHA1(e718d23ce5f7f41ab94df2d05cdd3adbf27eef89) )
-
-	ROM_REGION( 0x400000, "gfx2", 0 )
-	ROM_LOAD( "gfii_cg.u17", 0x000000, 0x200000, CRC(2568359c) SHA1(f1f240246e53496bf624c84f7cae3edb9675579f) )
-
-	ROM_REGION( 0x200000, "unknown", 0 )
-	ROM_LOAD( "gfii_sp.u13", 0x00000, 0x080000, CRC(61da1d58) SHA1(0a79578f0daf15f0efe2b0eeac59a60d8372a644) )
-ROM_END
-
-/*
-
-
-Chess Challenge II
-
-IGS PCB-0388-04-FW
-
-   +--------------------------------------------+
-+--+               8-Liner Connecter            +---+
-|                                                   |
-|    +---------------+                            +-+
-|    |   IGS 0027A   |     +------+               |
-+-+  |    Plug-in    |     | IGS  |               +-+
-  |  |   Daughter    |     | 025  |                P|
-+-+  |     Card      |     +------+                r|
-|    +---------------+ +---+                       i|
-|J                     |   |                       n|
-|A   +---+ +---+ +---+ |   |                       t|
-|M   |   | |   | |   | | U |                      +-+
-|M   |   | |   | |   | | 1 |                +---+ |
-|A   | U | | U | | U | | 2 |                |   | +-+
-|    | 1 | | 1 | | 1 | |   |         +----+ | U |   |
-|C   | 5 | | 7 | | 4 | |   |         |Oki | | 1 |   |
-|o   |   | |   | | * | |   |         |6295| | 3 |   |
-|n   |   | |   | |   | +---+         +----+ |   |   |
-|n   |   | |   | |   |                      +---+   |
-|e   +---+ |   | +---+                              |
-|c         +---+                                    |
-|t                        62257                     |
-|e                                                  |
-|r       +-------+                                  |
-|        |       |                                  |
-|        |  IGS  |                                  |
-|        |  031  |     61256                        |
-+-+      |       |          PAL     V3021           |
-  |      +-------+                                  |
-+-+                                      X1    SW4  |
-|                                                   |
-| JP11                        SW3 SW2 SW1      BT1  |
-|                                                   |
-+---------------------------------------------------+
-
-
-U12 - Program rom   - 27C4096
-U15 - Text graphics - 27C4096
-U17 - Char graphics - 27C160
-U23 - Sound samples - 27C040
-
-SW1-SW3 are unpopulated
-U14* Not used (27C4096) or else it's U16 and 27C160 type EPROM
-
-   X1 - 32.768K OSC
-V3021 - Micro Electronic Ultra Low Power 1-Bit 32kHz RTC (Real Time Clock)
-  PAL - ATF22V10C at U26 labeled FW U26
-  BT1 - 3.6V battery
-  SW4 - Toggle switch
- JP11 - 4 Pin header (HD4-156)
-
-IGS 025  - Custom programmed A8B1723(?)
-IGS 0027 - Custom programmed ARM9
-
-*/
-
-ROM_START( chessc2 )
-	ROM_REGION( 0x04000, "maincpu", 0 )
-	/* Internal rom of IGS027A ARM based MCU */
-	ROM_LOAD( "gonefsh2_igs027a", 0x00000, 0x4000, NO_DUMP )
-
-	ROM_REGION( 0x80000, "user1", 0 ) // external ARM data / prg
-	ROM_LOAD( "ccii_v-707uso.u12", 0x000000, 0x80000, CRC(5937b67b) SHA1(967b3adf6f5bf92d63ec460d595e473898a78372) )
-
-	ROM_REGION( 0x80000, "gfx1", 0 )
-	ROM_LOAD( "ccii_text.u15", 0x000000, 0x80000, CRC(25fed033) SHA1(b321c4994f609906597c3f7d5cdfc2dca63cd340) )
-
-	ROM_REGION( 0x400000, "gfx2", 0 )
-	ROM_LOAD( "ccii_cg.u17", 0x000000, 0x200000, CRC(47e45157) SHA1(4459799a4a6c30a2d0a3ad9ac54e92b62221e10b) )
-
-	ROM_REGION( 0x200000, "unknown", 0 )
-	ROM_LOAD( "ccii_sp.u13", 0x00000, 0x080000,  CRC(220a7b71) SHA1(7dab7baa97c20b83763cf46ef0a6e5e8c4d6a348) )
-ROM_END
-
-
 
 /***************************************************************************
 
@@ -783,12 +597,10 @@ ROM_END
 
 ***************************************************************************/
 
-GAME( 2002,  sdwx,		0, igs_majhong, sdwx, sdwx, ROT0, "IGS", "Sheng Dan Wu Xian", GAME_NO_SOUND | GAME_NOT_WORKING ) // aka Christmas 5 Line?
-GAME( 200?,  sddz,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Super Dou Di Zhu",  GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000,  bigd2,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Big D2",  GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 200?,  lhzb3,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Long Hu Zheng Ba 3", GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 200?,  lhzb4,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Long Hu Zheng Ba 4", GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 200?,  klxyj,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Kuai Le Xi You Ji",  GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 2000,  mgfx,		0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Man Guan Fu Xing",   GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 200?,  gonefsh2,	0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Gone Fishing 2",   GAME_NO_SOUND | GAME_NOT_WORKING )
-GAME( 200?,  chessc2,	0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Chess Challenge 2",   GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2002,  sdwx, 0, igs_majhong, sdwx, sdwx, ROT0, "IGS", "Sheng Dan Wu Xian", GAME_NO_SOUND | GAME_NOT_WORKING ) // aka Christmas 5 Line?
+GAME( 200?,  sddz, 0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Super Dou Di Zhu",  GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 2000,  bigd2,0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Big D2",  GAME_NO_SOUND | GAME_NOT_WORKING )
+GAME( 200?,  lhzb3,0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Long Hu Zheng Ba 3", GAME_NO_SOUND | GAME_NOT_WORKING ) // ????????3
+GAME( 200?,  lhzb4,0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Long Hu Zheng Ba 4", GAME_NO_SOUND | GAME_NOT_WORKING ) // ????????4
+GAME( 200?,  klxyj,0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Kuai Le Xi You Ji",  GAME_NO_SOUND | GAME_NOT_WORKING ) // ??????????
+GAME( 2000,  mgfx, 0, igs_majhong, sdwx, 0,    ROT0, "IGS", "Man Guan Fu Xing",   GAME_NO_SOUND | GAME_NOT_WORKING ) // ????????

@@ -1,5 +1,13 @@
-#include "emu.h"
-#include "includes/news.h"
+#include "driver.h"
+#include "news.h"
+
+
+UINT8 *news_fgram;
+UINT8 *news_bgram;
+
+static int bgpic;
+static tilemap *fg_tilemap, *bg_tilemap;
+
 
 
 /***************************************************************************
@@ -10,8 +18,7 @@
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	news_state *state = machine.driver_data<news_state>();
-	int code = (state->m_fgram[tile_index * 2] << 8) | state->m_fgram[tile_index * 2 + 1];
+	int code = (news_fgram[tile_index*2] << 8) | news_fgram[tile_index*2+1];
 	SET_TILE_INFO(
 			0,
 			code & 0x0fff,
@@ -21,13 +28,11 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	news_state *state = machine.driver_data<news_state>();
-	int code = (state->m_bgram[tile_index * 2] << 8) | state->m_bgram[tile_index * 2 + 1];
+	int code = (news_bgram[tile_index*2] << 8) | news_bgram[tile_index*2+1];
 	int color = (code & 0xf000) >> 12;
 
 	code &= 0x0fff;
-	if ((code & 0x0e00) == 0x0e00)
-		code = (code & 0x1ff) | (state->m_bgpic << 9);
+	if ((code & 0x0e00) == 0x0e00) code = (code & 0x1ff) | (bgpic << 9);
 
 	SET_TILE_INFO(
 			0,
@@ -46,12 +51,11 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( news )
 {
-	news_state *state = machine.driver_data<news_state>();
 
-	state->m_fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->m_fg_tilemap->set_transparent_pen(0);
+	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32, 32);
+	tilemap_set_transparent_pen(fg_tilemap,0);
 
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info,tilemap_scan_rows,8,8,32, 32);
 }
 
 
@@ -64,28 +68,22 @@ VIDEO_START( news )
 
 WRITE8_HANDLER( news_fgram_w )
 {
-	news_state *state = space->machine().driver_data<news_state>();
-
-	state->m_fgram[offset] = data;
-	state->m_fg_tilemap->mark_tile_dirty(offset / 2);
+	news_fgram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tilemap,offset/2);
 }
 
 WRITE8_HANDLER( news_bgram_w )
 {
-	news_state *state = space->machine().driver_data<news_state>();
-
-	state->m_bgram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset / 2);
+	news_bgram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset/2);
 }
 
 WRITE8_HANDLER( news_bgpic_w )
 {
-	news_state *state = space->machine().driver_data<news_state>();
-
-	if (state->m_bgpic != data)
+	if (bgpic != data)
 	{
-		state->m_bgpic = data;
-		state->m_bg_tilemap->mark_all_dirty();
+		bgpic = data;
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 }
 
@@ -97,10 +95,9 @@ WRITE8_HANDLER( news_bgpic_w )
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( news )
+VIDEO_UPDATE( news )
 {
-	news_state *state = screen.machine().driver_data<news_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	state->m_fg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,fg_tilemap,0,0);
 	return 0;
 }

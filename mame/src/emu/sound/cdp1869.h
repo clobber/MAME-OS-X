@@ -1,96 +1,49 @@
-/**********************************************************************
+/*
 
-    RCA CDP1869/1870/1876 Video Interface System (VIS) emulation
+    RCA CDP1869/70/76 Video Interface System (VIS)
 
-    Copyright MESS Team.
-    Visit http://mamedev.org for licensing and usage restrictions.
+    http://homepage.mac.com/ruske/cosmacelf/cdp1869.pdf
 
-**********************************************************************
-                            _____   _____
-                   TPA   1 |*    \_/     | 40  Vdd
-                   TPB   2 |             | 39  PMSEL
-                  _MRD   3 |             | 38  _PMWR
-                  _MWR   4 |             | 37  CMSEL
-                 MA0/8   5 |             | 36  _CMWR
-                 MA1/9   6 |             | 35  PMA0
-                MA2/10   7 |             | 34  PMA1
-                MA3/11   8 |             | 33  PMA2
-                MA4/12   9 |             | 32  PMA3
-                MA5/13  10 |             | 31  PMA4
-                MA6/14  11 |   CDP1869   | 30  PMA5
-                MA7/15  12 |             | 29  PMA6
-                    N0  13 |             | 28  PMA7
-                    N1  14 |             | 27  PMA8
-                    N2  15 |             | 26  PMA9
-               _H SYNC  16 |             | 25  CMA3/PMA10
-              _DISPLAY  17 |             | 24  CMA2
-              _ADDRSTB  18 |             | 23  CMA1
-                 SOUND  19 |             | 22  CMA0
-                   Vss  20 |_____________| 21  _N=3
+                        ________________                                            ________________
+           TPA   1  ---|       \/       |---  40  Vdd          PREDISPLAY_   1  ---|       \/       |---  40  Vdd
+           TPB   2  ---|                |---  39  PMSEL          *DISPLAY_   2  ---|                |---  39  PAL/NTSC_
+          MRD_   3  ---|                |---  38  PMWR_                PCB   3  ---|                |---  38  CPUCLK
+          MWR_   4  ---|                |---  37  *CMSEL              CCB1   4  ---|                |---  37  XTAL (DOT)
+         MA0/8   5  ---|                |---  36  CMWR_               BUS7   5  ---|                |---  36  XTAL (DOT)_
+         MA1/9   6  ---|                |---  35  PMA0                CCB0   6  ---|                |---  35  *ADDRSTB_
+        MA2/10   7  ---|                |---  34  PMA1                BUS6   7  ---|                |---  34  MRD_
+        MA3/11   8  ---|                |---  33  PMA2                CDB5   8  ---|                |---  33  TPB
+        MA4/12   9  ---|                |---  32  PMA3                BUS5   9  ---|                |---  32  *CMSEL
+        MA5/13  10  ---|    CDP1869C    |---  31  PMA4                CDB4  10  ---|  CDP1870/76C   |---  31  BURST
+        MA6/14  11  ---|    top view    |---  30  PMA5                BUS4  11  ---|    top view    |---  30  *H SYNC_
+        MA7/15  12  ---|                |---  29  PMA6                CDB3  12  ---|                |---  29  COMPSYNC_
+            N0  13  ---|                |---  28  PMA7                BUS3  13  ---|                |---  28  LUM / (RED)^
+            N1  14  ---|                |---  27  PMA8                CDB2  14  ---|                |---  27  PAL CHROM / (BLUE)^
+            N2  15  ---|                |---  26  PMA9                BUS2  15  ---|                |---  26  NTSC CHROM / (GREEN)^
+      *H SYNC_  16  ---|                |---  25  CMA3/PMA10          CDB1  16  ---|                |---  25  XTAL_ (CHROM)
+     *DISPLAY_  17  ---|                |---  24  CMA2                BUS1  17  ---|                |---  24  XTAL (CHROM)
+     *ADDRSTB_  18  ---|                |---  23  CMA1                CDB0  18  ---|                |---  23  EMS_
+         SOUND  19  ---|                |---  22  CMA0                BUS0  19  ---|                |---  22  EVS_
+           VSS  20  ---|________________|---  21  *N=3_                Vss  20  ---|________________|---  21  *N=3_
 
-                            _____   _____
-           _PREDISPLAY   1 |*    \_/     | 40  Vdd
-              _DISPLAY   2 |             | 39  PAL/_NTSC
-                   PCB   3 |             | 38  CPUCLK
-                  CCB1   4 |             | 37  XTAL (DOT)
-                  BUS7   5 |             | 36  _XTAL (DOT)
-                  CCB0   6 |             | 35  _ADDRSTB
-                  BUS6   7 |             | 34  _MRD
-                  CDB5   8 |             | 33  TPB
-                  BUS5   9 |             | 32  CMSEL
-                  CDB4  10 |             | 31  BURST
-                  BUS4  11 |   CDP1870   | 30  _H SYNC
-                  CDB3  12 |             | 29  _COMPSYNC
-                  BUS3  13 |             | 28  LUM
-                  CDB2  14 |             | 27  PAL CHROM
-                  BUS2  15 |             | 26  NTSC CHROM
-                  CDB1  16 |             | 25  _XTAL (CHROM)
-                  BUS1  17 |             | 24  XTAL (CHROM)
-                  CDB0  18 |             | 23  _EMS
-                  BUS0  19 |             | 22  _EVS
-                   Vss  20 |_____________| 21  _N=3
 
-                            _____   _____
-           _PREDISPLAY   1 |*    \_/     | 40  Vdd
-              _DISPLAY   2 |             | 39  PAL/_NTSC
-                   PCB   3 |             | 38  CPUCLK
-                  CCB1   4 |             | 37  XTAL (DOT)
-                  BUS7   5 |             | 36  _XTAL (DOT)
-                  CCB0   6 |             | 35  _ADDRSTB
-                  BUS6   7 |             | 34  _MRD
-                  CDB5   8 |             | 33  TPB
-                  BUS5   9 |             | 32  CMSEL
-                  CDB4  10 |             | 31  BURST
-                  BUS4  11 |   CDP1876   | 30  _H SYNC
-                  CDB3  12 |             | 29  _COMPSYNC
-                  BUS3  13 |             | 28  RED
-                  CDB2  14 |             | 27  BLUE
-                  BUS2  15 |             | 26  GREEN
-                  CDB1  16 |             | 25  _XTAL (CHROM)
-                  BUS1  17 |             | 24  XTAL (CHROM)
-                  CDB0  18 |             | 23  _EMS
-                  BUS0  19 |             | 22  _EVS
-                   Vss  20 |_____________| 21  _N=3
+                 * = INTERCHIP CONNECTIONS      ^ = FOR THE RGB BOND-OUT OPTION (CDP1876C)      _ = ACTIVE LOW
 
-**********************************************************************/
-
-#pragma once
+*/
 
 #ifndef __CDP1869__
 #define __CDP1869__
 
-#include "emu.h"
+#include "devcb.h"
 
+/***************************************************************************
+    MACROS / CONSTANTS
+***************************************************************************/
 
-
-//**************************************************************************
-//  MACROS / CONSTANTS
-//**************************************************************************
-
-#define CDP1869_DOT_CLK_PAL			(float)XTAL_5_626MHz
-#define CDP1869_DOT_CLK_NTSC		(float)XTAL_5_67MHz
-#define CDP1869_COLOR_CLK_PAL		(float)XTAL_8_867236MHz
-#define CDP1869_COLOR_CLK_NTSC		(float)XTAL_7_15909MHz
+#define CDP1869_DOT_CLK_PAL			5626000.0
+#define CDP1869_DOT_CLK_NTSC		5670000.0
+#define CDP1869_COLOR_CLK_PAL		8867236.0
+#define CDP1869_COLOR_CLK_NTSC		7159090.0
 
 #define CDP1869_CPU_CLK_PAL			(CDP1869_DOT_CLK_PAL / 2)
 #define CDP1869_CPU_CLK_NTSC		(CDP1869_DOT_CLK_NTSC / 2)
@@ -131,183 +84,111 @@
 
 #define	CDP1869_PALETTE_LENGTH	8+64
 
+#define CDP1869 DEVICE_GET_INFO_NAME(cdp1869)
+#define SOUND_CDP1869 CDP1869
 
+#define MDRV_CDP1869_ADD(_tag, _pixclock, _config) \
+	MDRV_DEVICE_ADD(_tag, SOUND, _pixclock) \
+	MDRV_DEVICE_CONFIG_DATAPTR(sound_config, type, SOUND_CDP1869) \
+	MDRV_DEVICE_CONFIG(_config)
 
-//**************************************************************************
-//  INTERFACE CONFIGURATION MACROS
-//**************************************************************************
+#define MDRV_CDP1869_SCREEN_PAL_ADD(_tag, _clock) \
+	MDRV_SCREEN_ADD(_tag, RASTER) \
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16) \
+	MDRV_SCREEN_RAW_PARAMS(_clock, CDP1869_SCREEN_WIDTH, CDP1869_HBLANK_END, CDP1869_HBLANK_START, CDP1869_TOTAL_SCANLINES_PAL, CDP1869_SCANLINE_VBLANK_END_PAL, CDP1869_SCANLINE_VBLANK_START_PAL) \
+	MDRV_PALETTE_LENGTH(8+64) \
+	MDRV_PALETTE_INIT(cdp1869)
 
-#define MCFG_CDP1869_ADD(_tag, _pixclock, _config, _map) \
-	MCFG_DEVICE_ADD(_tag, CDP1869, _pixclock) \
-	MCFG_DEVICE_CONFIG(_config) \
-	MCFG_DEVICE_ADDRESS_MAP(AS_0, _map)
-
-#define MCFG_CDP1869_SCREEN_PAL_ADD(_cdptag, _tag, _clock) \
-	MCFG_SCREEN_ADD(_tag, RASTER) \
-	MCFG_SCREEN_UPDATE_DEVICE(_cdptag, cdp1869_device, screen_update) \
-	MCFG_SCREEN_RAW_PARAMS(_clock, CDP1869_SCREEN_WIDTH, CDP1869_HBLANK_END, CDP1869_HBLANK_START, CDP1869_TOTAL_SCANLINES_PAL, CDP1869_SCANLINE_VBLANK_END_PAL, CDP1869_SCANLINE_VBLANK_START_PAL) \
-	MCFG_PALETTE_LENGTH(8+64)
-
-#define MCFG_CDP1869_SCREEN_NTSC_ADD(_cdptag, _tag, _clock) \
-	MCFG_SCREEN_ADD(_tag, RASTER) \
-	MCFG_SCREEN_UPDATE_DEVICE(_cdptag, cdp1869_device, screen_update) \
-	MCFG_SCREEN_RAW_PARAMS(_clock, CDP1869_SCREEN_WIDTH, CDP1869_HBLANK_END, CDP1869_HBLANK_START, CDP1869_TOTAL_SCANLINES_NTSC, CDP1869_SCANLINE_VBLANK_END_NTSC, CDP1869_SCANLINE_VBLANK_START_NTSC) \
-	MCFG_PALETTE_LENGTH(8+64)
+#define MDRV_CDP1869_SCREEN_NTSC_ADD(_tag, _clock) \
+	MDRV_SCREEN_ADD(_tag, RASTER) \
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16) \
+	MDRV_SCREEN_RAW_PARAMS(_clock, CDP1869_SCREEN_WIDTH, CDP1869_HBLANK_END, CDP1869_HBLANK_START, CDP1869_TOTAL_SCANLINES_NTSC, CDP1869_SCANLINE_VBLANK_END_NTSC, CDP1869_SCANLINE_VBLANK_START_NTSC) \
+	MDRV_PALETTE_LENGTH(8+64) \
+	MDRV_PALETTE_INIT(cdp1869)
 
 #define CDP1869_INTERFACE(_name) \
 	const cdp1869_interface (_name) =
 
-#define CDP1869_CHAR_RAM_READ(name) UINT8 name(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd)
-#define CDP1869_CHAR_RAM_WRITE(name) void name(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd, UINT8 data)
-#define CDP1869_PCB_READ(name) int name(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd)
+#define CDP1869_CHAR_RAM_READ(name) UINT8 name(const device_config *device, UINT16 pma, UINT8 cma)
+#define CDP1869_CHAR_RAM_WRITE(name) void name(const device_config *device, UINT16 pma, UINT8 cma, UINT8 data)
+#define CDP1869_PAGE_RAM_READ(name) UINT8 name(const device_config *device, UINT16 pma)
+#define CDP1869_PAGE_RAM_WRITE(name) void name(const device_config *device, UINT16 pma, UINT8 data)
+#define CDP1869_PCB_READ(name) int name(const device_config *device, UINT16 pma, UINT8 cma)
+#define CDP1869_ON_PRD_CHANGED(name) void name(const device_config *device, int prd)
 
-#define CDP1869_PAL \
-	DEVCB_LINE_VCC
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-#define CDP1869_NTSC \
-	DEVCB_LINE_GND
+typedef UINT8 (*cdp1869_char_ram_read_func)(const device_config *device, UINT16 pma, UINT8 cma);
+typedef void (*cdp1869_char_ram_write_func)(const device_config *device, UINT16 pma, UINT8 cma, UINT8 data);
+typedef UINT8 (*cdp1869_page_ram_read_func)(const device_config *device, UINT16 pma);
+typedef void (*cdp1869_page_ram_write_func)(const device_config *device, UINT16 pma, UINT8 data);
+typedef int (*cdp1869_pcb_read_func)(const device_config *device, UINT16 pma, UINT8 cma);
 
+enum _cdp1869_format {
+	CDP1869_NTSC = 0,
+	CDP1869_PAL
+};
+typedef enum _cdp1869_format cdp1869_format;
 
-
-//**************************************************************************
-//  TYPE DEFINITIONS
-//**************************************************************************
-
-typedef UINT8 (*cdp1869_char_ram_read_func)(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd);
-typedef void (*cdp1869_char_ram_write_func)(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd, UINT8 data);
-typedef int (*cdp1869_pcb_read_func)(device_t *device, UINT16 pma, UINT8 cma, UINT8 pmd);
-
-
-// ======================> cdp1869_interface
-
-struct cdp1869_interface
+/* interface */
+typedef struct _cdp1869_interface cdp1869_interface;
+struct _cdp1869_interface
 {
-	const char *screen_tag;		// screen we are acting on
+	const char *cpu_tag;		/* CPU we work together with */
+	const char *screen_tag;		/* screen we are acting on */
 
-	// pixel clock of the chip is the device clock
-	int color_clock;			// the chroma clock of the chip
+	/* pixel clock of the chip is the device clock */
+	int color_clock;			/* the chroma clock of the chip */
 
-	// screen format
-	devcb_read_line					in_pal_ntsc_cb;
+	cdp1869_format pal_ntsc;	/* screen format */
 
-	// page memory color bit read function
-	cdp1869_pcb_read_func			in_pcb_cb;
+	/* page memory read function */
+	cdp1869_page_ram_read_func		page_ram_r;
 
-	// character memory read function
-	cdp1869_char_ram_read_func		in_char_ram_cb;
+	/* page memory write function */
+	cdp1869_page_ram_write_func		page_ram_w;
 
-	// character memory write function
-	cdp1869_char_ram_write_func		out_char_ram_cb;
+	/* page memory color bit read function */
+	cdp1869_pcb_read_func			pcb_r;
 
-	// if specified, this gets called for every change of the predisplay pin (CDP1870/76 pin 1)
-	devcb_write_line				out_prd_cb;
+	/* character memory read function */
+	cdp1869_char_ram_read_func		char_ram_r;
+
+	/* character memory write function */
+	cdp1869_char_ram_write_func		char_ram_w;
+
+	/* if specified, this gets called for every change of the predisplay pin (CDP1870/76 pin 1) */
+	devcb_write_line				out_prd_func;
 };
 
+/***************************************************************************
+    PROTOTYPES
+***************************************************************************/
 
+/* device interface */
+DEVICE_GET_INFO( cdp1869 );
 
-// ======================> cdp1869_device
+/* palette initialization */
+PALETTE_INIT( cdp1869 );
 
-class cdp1869_device :	public device_t,
-						public device_sound_interface,
-						public device_memory_interface,
-                        public cdp1869_interface
-{
-public:
-    // construction/destruction
-    cdp1869_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock);
+/* register access */
+WRITE8_DEVICE_HANDLER( cdp1869_out3_w );
+WRITE8_DEVICE_HANDLER( cdp1869_out4_w );
+WRITE8_DEVICE_HANDLER( cdp1869_out5_w );
+WRITE8_DEVICE_HANDLER( cdp1869_out6_w );
+WRITE8_DEVICE_HANDLER( cdp1869_out7_w );
 
-	DECLARE_WRITE8_MEMBER( out3_w );
-    DECLARE_WRITE8_MEMBER( out4_w );
-    DECLARE_WRITE8_MEMBER( out5_w );
-    DECLARE_WRITE8_MEMBER( out6_w );
-    DECLARE_WRITE8_MEMBER( out7_w );
+/* character memory access */
+READ8_DEVICE_HANDLER ( cdp1869_charram_r );
+WRITE8_DEVICE_HANDLER ( cdp1869_charram_w );
 
-	DECLARE_READ8_MEMBER( char_ram_r );
-    DECLARE_WRITE8_MEMBER( char_ram_w );
+/* page memory access */
+READ8_DEVICE_HANDLER ( cdp1869_pageram_r );
+WRITE8_DEVICE_HANDLER ( cdp1869_pageram_w );
 
-	DECLARE_READ8_MEMBER( page_ram_r );
-    DECLARE_WRITE8_MEMBER( page_ram_w );
-
-	DECLARE_READ_LINE_MEMBER( predisplay_r );
-	DECLARE_READ_LINE_MEMBER( pal_ntsc_r );
-
-	UINT32 screen_update(screen_device &screen, bitmap_ind16 &bitmap, const rectangle &cliprect);
-
-protected:
-    // device-level overrides
-	virtual void device_config_complete();
-    virtual void device_start();
-	virtual void device_post_load();
-	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
-
-	// device_memory_interface overrides
-	virtual const address_space_config *memory_space_config(address_spacenum spacenum = AS_0) const;
-
-	// device_sound_interface callbacks
-	virtual void sound_stream_update(sound_stream &stream, stream_sample_t **inputs, stream_sample_t **outputs, int samples);
-
-	inline bool is_ntsc();
-	inline UINT8 read_page_ram_byte(offs_t address);
-	inline void write_page_ram_byte(offs_t address, UINT8 data);
-	inline UINT8 read_char_ram_byte(offs_t pma, offs_t cma, UINT8 pmd);
-	inline void write_char_ram_byte(offs_t pma, offs_t cma, UINT8 pmd, UINT8 data);
-	inline int read_pcb(offs_t pma, offs_t cma, UINT8 pmd);
-	inline void update_prd_changed_timer();
-	inline rgb_t get_rgb(int i, int c, int l);
-	inline int get_lines();
-	inline UINT16 get_pmemsize(int cols, int rows);
-	inline UINT16 get_pma();
-	inline int get_pen(int ccb0, int ccb1, int pcb);
-
-	void initialize_palette();
-	void draw_line(bitmap_ind16 &bitmap, const rectangle &rect, int x, int y, UINT8 data, int color);
-	void draw_char(bitmap_ind16 &bitmap, const rectangle &rect, int x, int y, UINT16 pma);
-
-private:
-	devcb_resolved_read_line		m_in_pal_ntsc_func;
-	devcb_resolved_write_line		m_out_prd_func;
-	cdp1869_pcb_read_func			m_in_pcb_func;
-	cdp1869_char_ram_read_func		m_in_char_ram_func;
-	cdp1869_char_ram_write_func		m_out_char_ram_func;
-
-	screen_device *m_screen;
-	address_space *m_page_ram;
-	emu_timer *m_prd_timer;
-	sound_stream *m_stream;
-
-	// video state
-	int m_prd;						// predisplay
-	int m_dispoff;					// display off
-	int m_fresvert;					// full resolution vertical
-	int m_freshorz;					// full resolution horizontal
-	int m_cmem;						// character memory access mode
-	int m_dblpage;					// double page mode
-	int m_line16;					// 16-line hi-res mode
-	int m_line9;					// 9 line mode
-	int m_cfc;						// color format control
-	UINT8 m_col;					// character color control
-	UINT8 m_bkg;					// background color
-	UINT16 m_pma;					// page memory address
-	UINT16 m_hma;					// home memory address
-
-	// sound state
-	INT16 m_signal;					// current signal
-	int m_incr;						// initial wave state
-	int m_toneoff;					// tone off
-	int m_wnoff;					// white noise off
-	UINT8 m_tonediv;				// tone divisor
-	UINT8 m_tonefreq;				// tone range select
-	UINT8 m_toneamp;				// tone output amplitude
-	UINT8 m_wnfreq;					// white noise range select
-	UINT8 m_wnamp;					// white noise output amplitude
-
-	const address_space_config		m_space_config;
-};
-
-
-// device type definition
-extern const device_type CDP1869;
-
-
+/* screen update */
+void cdp1869_update(const device_config *device, bitmap_t *bitmap, const rectangle *cliprect);
 
 #endif

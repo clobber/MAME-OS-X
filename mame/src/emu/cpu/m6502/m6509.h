@@ -34,11 +34,12 @@ enum
 };
 
 #define M6509_IRQ_LINE					M6502_IRQ_LINE
-/* use device_set_input_line(cpudevice, M6509_SET_OVERFLOW, level)
+/* use cpu_set_input_line(cpudevice, M6509_SET_OVERFLOW, level)
    to change level of the so input line
    positiv edge sets overflow flag */
 #define M6509_SET_OVERFLOW 3
 
-DECLARE_LEGACY_CPU_DEVICE(M6509, m6509);
+CPU_GET_INFO( m6509 );
+#define CPU_M6509 CPU_GET_INFO_NAME( m6509 )
 
 #endif /* __M6509_H__ */

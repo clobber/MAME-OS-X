@@ -14,7 +14,8 @@
  *  separate MSM5205 emulator form adpcm.c and some fix
  */
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "msm5205.h"
 
 /*
@@ -31,7 +32,7 @@ typedef struct _msm5205_state msm5205_state;
 struct _msm5205_state
 {
 	const msm5205_interface *intf;
-	device_t *device;
+	const device_config *device;
 	sound_stream * stream;  /* number of stream system      */
 	INT32 clock;				/* clock rate */
 	emu_timer *timer;        /* VCLK callback timer          */
@@ -45,11 +46,13 @@ struct _msm5205_state
 	int diff_lookup[49*16];
 };
 
-INLINE msm5205_state *get_safe_token(device_t *device)
+INLINE msm5205_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == MSM5205);
-	return (msm5205_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_MSM5205);
+	return (msm5205_state *)device->token;
 }
 
 
@@ -147,7 +150,7 @@ static TIMER_CALLBACK( MSM5205_vclk_callback )
 	/* update when signal changed */
 	if( voice->signal != new_signal)
 	{
-		voice->stream->update();
+		stream_update(voice->stream);
 		voice->signal = new_signal;
 	}
 }
@@ -179,49 +182,49 @@ static DEVICE_START( msm5205 )
 	msm5205_state *voice = get_safe_token(device);
 
 	/* save a global pointer to our interface */
-	voice->intf = (const msm5205_interface *)device->static_config();
+	voice->intf = (const msm5205_interface *)device->static_config;
 	voice->device = device;
-	voice->clock = device->clock();
+	voice->clock = device->clock;
 
 	/* compute the difference tables */
 	ComputeTables (voice);
 
 	/* stream system initialize */
-	voice->stream = device->machine().sound().stream_alloc(*device,0,1,device->clock(),voice,MSM5205_update);
-	voice->timer = device->machine().scheduler().timer_alloc(FUNC(MSM5205_vclk_callback), voice);
+	voice->stream = stream_create(device,0,1,device->clock,voice,MSM5205_update);
+	voice->timer = timer_alloc(device->machine, MSM5205_vclk_callback, voice);
 
 	/* initialize */
 	DEVICE_RESET_CALL(msm5205);
 
 	/* register for save states */
-	device->save_item(NAME(voice->clock));
-	device->save_item(NAME(voice->data));
-	device->save_item(NAME(voice->vclk));
-	device->save_item(NAME(voice->reset));
-	device->save_item(NAME(voice->prescaler));
-	device->save_item(NAME(voice->bitwidth));
-	device->save_item(NAME(voice->signal));
-	device->save_item(NAME(voice->step));
+	state_save_register_device_item(device, 0, voice->clock);
+	state_save_register_device_item(device, 0, voice->data);
+	state_save_register_device_item(device, 0, voice->vclk);
+	state_save_register_device_item(device, 0, voice->reset);
+	state_save_register_device_item(device, 0, voice->prescaler);
+	state_save_register_device_item(device, 0, voice->bitwidth);
+	state_save_register_device_item(device, 0, voice->signal);
+	state_save_register_device_item(device, 0, voice->step);
 }
 
 /*
  *    Handle an update of the vclk status of a chip (1 is reset ON, 0 is reset OFF)
  *    This function can use selector = MSM5205_SEX only
  */
-void msm5205_vclk_w (device_t *device, int vclk)
+void msm5205_vclk_w (const device_config *device, int vclk)
 {
 	msm5205_state *voice = get_safe_token(device);
 
 	if( voice->prescaler != 0 )
 	{
-		logerror("error: msm5205_vclk_w() called with chip = '%s', but VCLK selected master mode\n", device->tag());
+		logerror("error: msm5205_vclk_w() called with chip = '%s', but VCLK selected master mode\n", device->tag);
 	}
 	else
 	{
 		if( voice->vclk != vclk)
 		{
 			voice->vclk = vclk;
-			if( !vclk ) MSM5205_vclk_callback(voice->device->machine(), voice, 0);
+			if( !vclk ) MSM5205_vclk_callback(voice->device->machine, voice, 0);
 		}
 	}
 }
@@ -230,7 +233,7 @@ void msm5205_vclk_w (device_t *device, int vclk)
  *    Handle an update of the reset status of a chip (1 is reset ON, 0 is reset OFF)
  */
 
-void msm5205_reset_w (device_t *device, int reset)
+void msm5205_reset_w (const device_config *device, int reset)
 {
 	msm5205_state *voice = get_safe_token(device);
 	voice->reset = reset;
@@ -240,7 +243,7 @@ void msm5205_reset_w (device_t *device, int reset)
  *    Handle an update of the data to the chip
  */
 
-void msm5205_data_w (device_t *device, int data)
+void msm5205_data_w (const device_config *device, int data)
 {
 	msm5205_state *voice = get_safe_token(device);
 	if( voice->bitwidth == 4)
@@ -253,7 +256,7 @@ void msm5205_data_w (device_t *device, int data)
  *    Handle an change of the selector
  */
 
-void msm5205_playmode_w(device_t *device, int select)
+void msm5205_playmode_w(const device_config *device, int select)
 {
 	msm5205_state *voice = get_safe_token(device);
 	msm5205_playmode(voice,select);
@@ -268,45 +271,36 @@ static void msm5205_playmode(msm5205_state *voice,int select)
 
 	if( voice->prescaler != prescaler )
 	{
-		voice->stream->update();
+		stream_update(voice->stream);
 
 		voice->prescaler = prescaler;
 		/* timer set */
 		if( prescaler )
 		{
-			attotime period = attotime::from_hz(voice->clock) * prescaler;
-			voice->timer->adjust(period, 0, period);
+			attotime period = attotime_mul(ATTOTIME_IN_HZ(voice->clock), prescaler);
+			timer_adjust_periodic(voice->timer, period, 0, period);
 		}
 		else
-			voice->timer->adjust(attotime::never);
+			timer_adjust_oneshot(voice->timer, attotime_never, 0);
 	}
 
 	if( voice->bitwidth != bitwidth )
 	{
-		voice->stream->update();
+		stream_update(voice->stream);
 
 		voice->bitwidth = bitwidth;
 	}
 }
 
 
-void msm5205_set_volume(device_t *device,int volume)
+void msm5205_set_volume(const device_config *device,int volume)
 {
 	msm5205_state *voice = get_safe_token(device);
 
-	voice->stream->set_output_gain(0,volume / 100.0);
+	stream_set_output_gain(voice->stream,0,volume / 100.0);
 }
 
-void msm5205_change_clock_w(device_t *device, INT32 clock)
-{
-	msm5205_state *voice = get_safe_token(device);
-	attotime period;
 
-	voice->clock = clock;
-
-	period = attotime::from_hz(voice->clock) * voice->prescaler;
-	voice->timer->adjust(period, 0, period);
-}
 
 
 /**************************************************************************
@@ -334,5 +328,3 @@ DEVICE_GET_INFO( msm5205 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(MSM5205, msm5205);

@@ -1,6 +1,8 @@
 #ifndef __I8085_H__
 #define __I8085_H__
 
+#include "cpuintrf.h"
+#include "devcb.h"
 
 /***************************************************************************
     CONSTANTS
@@ -9,13 +11,13 @@
 enum
 {
 	I8085_PC, I8085_SP, I8085_AF, I8085_BC, I8085_DE, I8085_HL,
-	I8085_A, I8085_B, I8085_C, I8085_D, I8085_E, I8085_F, I8085_H, I8085_L,
+	I8085_A, I8085_B, I8085_C, I8085_D, I8085_E, I8085_H, I8085_L,
 	I8085_STATUS, I8085_SOD, I8085_SID, I8085_INTE,
 	I8085_HALT, I8085_IM,
 
-	I8085_GENPC = STATE_GENPC,
-	I8085_GENSP = STATE_GENSP,
-	I8085_GENPCBASE = STATE_GENPCBASE
+	I8085_GENPC = REG_GENPC,
+	I8085_GENSP = REG_GENSP,
+	I8085_GENPCBASE = REG_GENPCBASE
 };
 
 #define I8085_INTR_LINE     0
@@ -50,9 +52,14 @@ struct _i8085_config
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-DECLARE_LEGACY_CPU_DEVICE(I8080, i8080);
-DECLARE_LEGACY_CPU_DEVICE(I8080A, i8080a);
-DECLARE_LEGACY_CPU_DEVICE(I8085A, i8085);
+CPU_GET_INFO( i8080 );
+#define CPU_8080 CPU_GET_INFO_NAME( i8080 )
+
+CPU_GET_INFO( i8080a );
+#define CPU_8080A CPU_GET_INFO_NAME( i8080a )
+
+CPU_GET_INFO( i8085 );
+#define CPU_8085A CPU_GET_INFO_NAME( i8085 )
 
 CPU_DISASSEMBLE( i8085 );
 

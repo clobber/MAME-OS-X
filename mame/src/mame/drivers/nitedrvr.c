@@ -34,23 +34,23 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/rescap.h"
 #include "sound/discrete.h"
-#include "includes/nitedrvr.h"
+#include "nitedrvr.h"
 
 /* Memory Map */
 
-static ADDRESS_MAP_START( nitedrvr_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( nitedrvr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x100) // SCRAM
-	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE_MEMBER(nitedrvr_state, m_videoram) // PFW
-	AM_RANGE(0x0400, 0x05ff) AM_WRITE(nitedrvr_hvc_w) AM_BASE_MEMBER(nitedrvr_state, m_hvc) // POSH, POSV, CHAR, Watchdog
+	AM_RANGE(0x0200, 0x027f) AM_RAM_WRITE(nitedrvr_videoram_w) AM_MIRROR(0x180) AM_BASE(&videoram) // PFW
+	AM_RANGE(0x0400, 0x05ff) AM_WRITE(nitedrvr_hvc_w) AM_BASE(&nitedrvr_hvc) // POSH, POSV, CHAR, Watchdog
 	AM_RANGE(0x0600, 0x07ff) AM_READ(nitedrvr_in0_r)
 	AM_RANGE(0x0800, 0x09ff) AM_READ(nitedrvr_in1_r)
 	AM_RANGE(0x0a00, 0x0bff) AM_WRITE(nitedrvr_out0_w)
 	AM_RANGE(0x0c00, 0x0dff) AM_WRITE(nitedrvr_out1_w)
-	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE_MEMBER(nitedrvr_state, m_videoram) // PFR
+	AM_RANGE(0x8000, 0x807f) AM_RAM AM_MIRROR(0x380) AM_BASE(&videoram) // PFR
 	AM_RANGE(0x8400, 0x87ff) AM_READWRITE(nitedrvr_steering_reset_r, nitedrvr_steering_reset_w)
 	AM_RANGE(0x9000, 0x9fff) AM_ROM // ROM1-ROM2
 	AM_RANGE(0xfff0, 0xffff) AM_ROM // ROM2 for 6502 vectors
@@ -134,40 +134,39 @@ GFXDECODE_END
 
 /* Machine Driver */
 
-static MACHINE_CONFIG_START( nitedrvr, nitedrvr_state )
+static MACHINE_DRIVER_START( nitedrvr )
+	// basic machine hardware
+	MDRV_CPU_ADD("maincpu", M6502, 12096000/12) // 1 MHz
+	MDRV_CPU_PROGRAM_MAP(nitedrvr_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_WATCHDOG_VBLANK_INIT(3)
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, XTAL_12_096MHz/12) // 1 MHz
-	MCFG_CPU_PROGRAM_MAP(nitedrvr_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-	MCFG_WATCHDOG_VBLANK_INIT(3)
+	MDRV_MACHINE_START(nitedrvr)
+	MDRV_MACHINE_RESET(nitedrvr)
 
-	MCFG_MACHINE_START(nitedrvr)
-	MCFG_MACHINE_RESET(nitedrvr)
+	// video hardware
 
-	MCFG_TIMER_ADD_PERIODIC("crash_timer", nitedrvr_crash_toggle_callback, PERIOD_OF_555_ASTABLE(RES_K(180), 330, CAP_U(1)))
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(57) // how is this derived?
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(57) // how is this derived?
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(nitedrvr)
+	MDRV_GFXDECODE(nitedrvr)
+	MDRV_PALETTE_LENGTH(2)
 
-	MCFG_GFXDECODE(nitedrvr)
-	MCFG_PALETTE_LENGTH(2)
+	MDRV_PALETTE_INIT(black_and_white)
+	MDRV_VIDEO_START(nitedrvr)
+	MDRV_VIDEO_UPDATE(nitedrvr)
 
-	MCFG_PALETTE_INIT(black_and_white)
-	MCFG_VIDEO_START(nitedrvr)
+	// sound hardware
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(nitedrvr)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(nitedrvr)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 /* ROMs */
 
@@ -200,4 +199,4 @@ ROM_END
 
 /* Game Drivers */
 
-GAME( 1976, nitedrvr, 0, nitedrvr, nitedrvr, 0, ROT0, "Atari", "Night Driver", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1976, nitedrvr, 0, nitedrvr, nitedrvr, 0, ROT0, "Atari", "Night Driver", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE)

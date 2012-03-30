@@ -7,41 +7,38 @@
 ****************************************************************************/
 
 
-class stactics_state : public driver_device
+typedef struct _stactics_state stactics_state;
+struct _stactics_state
 {
-public:
-	stactics_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
 	/* machine state */
-	int    m_vert_pos;
-	int    m_horiz_pos;
-	UINT8 *m_motor_on;
+	int    vert_pos;
+	int    horiz_pos;
+	UINT8 *motor_on;
 
 	/* video state */
-	UINT8 *m_videoram_b;
-	UINT8 *m_videoram_d;
-	UINT8 *m_videoram_e;
-	UINT8 *m_videoram_f;
-	UINT8 *m_palette;
-	UINT8 *m_display_buffer;
-	UINT8 *m_lamps;
+	UINT8 *videoram_b;
+	UINT8 *videoram_d;
+	UINT8 *videoram_e;
+	UINT8 *videoram_f;
+	UINT8 *palette;
+	UINT8 *display_buffer;
+	UINT8 *lamps;
 
-	UINT8  m_y_scroll_d;
-	UINT8  m_y_scroll_e;
-	UINT8  m_y_scroll_f;
-	UINT8  m_frame_count;
-	UINT8  m_shot_standby;
-	UINT8  m_shot_arrive;
-	UINT16 m_beam_state;
-	UINT16 m_old_beam_state;
-	UINT16 m_beam_states_per_frame;
+	UINT8  y_scroll_d;
+	UINT8  y_scroll_e;
+	UINT8  y_scroll_f;
+	UINT8  frame_count;
+	UINT8  shot_standby;
+	UINT8  shot_arrive;
+	UINT16 beam_state;
+	UINT16 old_beam_state;
+	UINT16 beam_states_per_frame;
 };
 
 
 /*----------- defined in video/stactics.c -----------*/
 
-MACHINE_CONFIG_EXTERN( stactics_video );
+MACHINE_DRIVER_EXTERN( stactics_video );
 
 WRITE8_HANDLER( stactics_scroll_ram_w );
 WRITE8_HANDLER( stactics_speed_latch_w );

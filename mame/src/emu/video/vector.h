@@ -10,11 +10,14 @@
 #define VECTOR_COLOR444(c) \
 	MAKE_RGB(pal4bit((c) >> 8), pal4bit((c) >> 4), pal4bit((c) >> 0))
 
+extern UINT8 *vectorram;
+extern size_t vectorram_size;
+
 VIDEO_START( vector );
-SCREEN_UPDATE_RGB32( vector );
+VIDEO_UPDATE( vector );
 
 void vector_clear_list(void);
-void vector_add_point(running_machine &machine, int x, int y, rgb_t color, int intensity);
+void vector_add_point(running_machine *machine, int x, int y, rgb_t color, int intensity);
 void vector_add_clip(int minx, int miny, int maxx, int maxy);
 
 void vector_set_flicker(float _flicker);

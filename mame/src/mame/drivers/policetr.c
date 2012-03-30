@@ -59,7 +59,7 @@ Chips:
   CPU: IDT 79R3041-25J (MIPS R3000 core)
 Sound: BSMT2000
 Other: Bt481AKPJ110 (44 Pin PQFP, Brooktree RAMDAC)
-       AT001 (160 Pin PQFP, P&P Marketing, custom programmed XILINX XC4310)
+       AT001 (160 Pin PQFP, P & P Marketing, custom programmed XILINX XC4310)
        ATMEL 93C66 (EEPROM)
        CN7 - 4 pin connector for stero speaker output
 PLDs:
@@ -83,15 +83,34 @@ PC5380-9651            5380-JY3306A           5380-N1045503A
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/mips/r3000.h"
 #include "machine/eeprom.h"
-#include "includes/policetr.h"
+#include "policetr.h"
 #include "sound/bsmt2000.h"
 
 
 /* constants */
 #define MASTER_CLOCK	48000000
+
+
+/* global variables */
+UINT32 *	policetr_rambase;
+
+
+/* local variables */
+static UINT32 control_data;
+
+static UINT32 bsmt_reg;
+static UINT32 bsmt_data_bank;
+static UINT32 bsmt_data_offset;
+
+static UINT32 *speedup_data;
+static UINT64 last_cycles;
+static UINT32 loop_count;
+
+static offs_t speedup_pc;
+
 
 
 /*************************************
@@ -108,8 +127,8 @@ static TIMER_CALLBACK( irq5_gen )
 
 static INTERRUPT_GEN( irq4_gen )
 {
-	device_set_input_line(device, R3000_IRQ4, ASSERT_LINE);
-	device->machine().scheduler().timer_set(device->machine().primary_screen->time_until_pos(0), FUNC(irq5_gen));
+	cpu_set_input_line(device, R3000_IRQ4, ASSERT_LINE);
+	timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, 0, 0), NULL, 0, irq5_gen);
 }
 
 
@@ -122,8 +141,7 @@ static INTERRUPT_GEN( irq4_gen )
 
 static WRITE32_HANDLER( control_w )
 {
-	policetr_state *state = space->machine().driver_data<policetr_state>();
-	UINT32 old = state->m_control_data;
+	UINT32 old = control_data;
 
 	// bit $80000000 = BSMT access/ROM read
 	// bit $20000000 = toggled every 64 IRQ4's
@@ -132,27 +150,27 @@ static WRITE32_HANDLER( control_w )
 	// bit $00400000 = EEPROM clock
 	// bit $00200000 = EEPROM enable (on 1)
 
-	COMBINE_DATA(&state->m_control_data);
+	COMBINE_DATA(&control_data);
 
 	/* handle EEPROM I/O */
 	if (ACCESSING_BITS_16_23)
 	{
-		eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
-		eeprom->write_bit(data & 0x00800000);
-		eeprom->set_cs_line((data & 0x00200000) ? CLEAR_LINE : ASSERT_LINE);
-		eeprom->set_clock_line((data & 0x00400000) ? ASSERT_LINE : CLEAR_LINE);
+		eeprom_write_bit(data & 0x00800000);
+		eeprom_set_cs_line((data & 0x00200000) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_set_clock_line((data & 0x00400000) ? ASSERT_LINE : CLEAR_LINE);
 	}
 
 	/* toggling BSMT off then on causes a reset */
-	if (!(old & 0x80000000) && (state->m_control_data & 0x80000000))
+	if (!(old & 0x80000000) && (control_data & 0x80000000))
 	{
-		bsmt2000_device *bsmt = space->machine().device<bsmt2000_device>("bsmt");
-		bsmt->reset();
+		const device_config *device = devtag_get_device(space->machine, "bsmt");
+		bsmt2000_data_w(device, bsmt_data_bank, 0, 0xffff);
+		device_reset(device);
 	}
 
 	/* log any unknown bits */
 	if (data & 0x4f1fffff)
-		logerror("%08X: control_w = %08X & %08X\n", cpu_get_previouspc(&space->device()), data, mem_mask);
+		logerror("%08X: control_w = %08X & %08X\n", cpu_get_previouspc(space->cpu), data, mem_mask);
 }
 
 
@@ -163,34 +181,27 @@ static WRITE32_HANDLER( control_w )
  *
  *************************************/
 
-static WRITE32_HANDLER( policetr_bsmt2000_reg_w )
+static WRITE32_DEVICE_HANDLER( policetr_bsmt2000_reg_w )
 {
-	policetr_state *state = space->machine().driver_data<policetr_state>();
-	if (state->m_control_data & 0x80000000)
-		space->machine().device<bsmt2000_device>("bsmt")->write_data(data);
+	if (control_data & 0x80000000)
+		bsmt2000_data_w(device, bsmt_reg, data & 0xffff, mem_mask & 0xffff);
 	else
-		COMBINE_DATA(&state->m_bsmt_data_offset);
+		COMBINE_DATA(&bsmt_data_offset);
 }
 
 
 static WRITE32_HANDLER( policetr_bsmt2000_data_w )
 {
-	policetr_state *state = space->machine().driver_data<policetr_state>();
-	space->machine().device<bsmt2000_device>("bsmt")->write_reg(data);
-	COMBINE_DATA(&state->m_bsmt_data_bank);
-}
-
-
-static CUSTOM_INPUT( bsmt_status_r )
-{
-	return field.machine().device<bsmt2000_device>("bsmt")->read_status();
+	if (control_data & 0x80000000)
+		COMBINE_DATA(&bsmt_reg);
+	else
+		COMBINE_DATA(&bsmt_data_bank);
 }
 
 
 static READ32_HANDLER( bsmt2000_data_r )
 {
-	policetr_state *state = space->machine().driver_data<policetr_state>();
-	return space->machine().region("bsmt")->base()[state->m_bsmt_data_bank * 0x10000 + state->m_bsmt_data_offset] << 8;
+	return memory_region(space->machine, "bsmt")[bsmt_data_bank * 0x10000 + bsmt_data_offset] << 8;
 }
 
 
@@ -203,27 +214,26 @@ static READ32_HANDLER( bsmt2000_data_r )
 
 static WRITE32_HANDLER( speedup_w )
 {
-	policetr_state *state = space->machine().driver_data<policetr_state>();
-	COMBINE_DATA(state->m_speedup_data);
+	COMBINE_DATA(speedup_data);
 
 	/* see if the PC matches */
-	if ((cpu_get_previouspc(&space->device()) & 0x1fffffff) == state->m_speedup_pc)
+	if ((cpu_get_previouspc(space->cpu) & 0x1fffffff) == speedup_pc)
 	{
-		UINT64 curr_cycles = space->machine().firstcpu->total_cycles();
+		UINT64 curr_cycles = cpu_get_total_cycles(space->cpu);
 
 		/* if less than 50 cycles from the last time, count it */
-		if (curr_cycles - state->m_last_cycles < 50)
+		if (curr_cycles - last_cycles < 50)
 		{
-			state->m_loop_count++;
+			loop_count++;
 
 			/* more than 2 in a row and we spin */
-			if (state->m_loop_count > 2)
-				device_spin_until_interrupt(&space->device());
+			if (loop_count > 2)
+				cpu_spinuntil_int(space->cpu);
 		}
 		else
-			state->m_loop_count = 0;
+			loop_count = 0;
 
-		state->m_last_cycles = curr_cycles;
+		last_cycles = curr_cycles;
 	}
 }
 
@@ -247,6 +257,18 @@ static const eeprom_interface eeprom_interface_policetr =
 };
 
 
+static NVRAM_HANDLER( policetr )
+{
+	if (read_or_write)
+		eeprom_save(file);
+	else
+	{
+		eeprom_init(machine, &eeprom_interface_policetr);
+		if (file)	eeprom_load(file);
+	}
+}
+
+
 
 /*************************************
  *
@@ -254,13 +276,13 @@ static const eeprom_interface eeprom_interface_policetr =
  *
  *************************************/
 
-static ADDRESS_MAP_START( policetr_map, AS_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE_MEMBER(policetr_state, m_rambase)
+static ADDRESS_MAP_START( policetr_map, ADDRESS_SPACE_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE(&policetr_rambase)
 	AM_RANGE(0x00200000, 0x0020000f) AM_WRITE(policetr_video_w)
 	AM_RANGE(0x00400000, 0x00400003) AM_READ(policetr_video_r)
 	AM_RANGE(0x00500000, 0x00500003) AM_WRITENOP		// copies ROM here at startup, plus checksum
 	AM_RANGE(0x00600000, 0x00600003) AM_READ(bsmt2000_data_r)
-	AM_RANGE(0x00700000, 0x00700003) AM_WRITE(policetr_bsmt2000_reg_w)
+	AM_RANGE(0x00700000, 0x00700003) AM_DEVWRITE("bsmt", policetr_bsmt2000_reg_w)
 	AM_RANGE(0x00800000, 0x00800003) AM_WRITE(policetr_bsmt2000_data_w)
 	AM_RANGE(0x00900000, 0x00900003) AM_WRITE(policetr_palette_offset_w)
 	AM_RANGE(0x00920000, 0x00920003) AM_WRITE(policetr_palette_data_w)
@@ -273,15 +295,15 @@ static ADDRESS_MAP_START( policetr_map, AS_PROGRAM, 32 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sshooter_map, AS_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE_MEMBER(policetr_state, m_rambase)
+static ADDRESS_MAP_START( sshooter_map, ADDRESS_SPACE_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x0001ffff) AM_RAM AM_BASE(&policetr_rambase)
 	AM_RANGE(0x00200000, 0x00200003) AM_WRITE(policetr_bsmt2000_data_w)
 	AM_RANGE(0x00300000, 0x00300003) AM_WRITE(policetr_palette_offset_w)
 	AM_RANGE(0x00320000, 0x00320003) AM_WRITE(policetr_palette_data_w)
 	AM_RANGE(0x00400000, 0x00400003) AM_READ(policetr_video_r)
 	AM_RANGE(0x00500000, 0x00500003) AM_WRITENOP		// copies ROM here at startup, plus checksum
 	AM_RANGE(0x00600000, 0x00600003) AM_READ(bsmt2000_data_r)
-	AM_RANGE(0x00700000, 0x00700003) AM_WRITE(policetr_bsmt2000_reg_w)
+	AM_RANGE(0x00700000, 0x00700003) AM_DEVWRITE("bsmt", policetr_bsmt2000_reg_w)
 	AM_RANGE(0x00800000, 0x0080000f) AM_WRITE(policetr_video_w)
 	AM_RANGE(0x00a00000, 0x00a00003) AM_WRITE(control_w)
 	AM_RANGE(0x00a00000, 0x00a00003) AM_READ_PORT("IN0")
@@ -326,13 +348,13 @@ static INPUT_PORTS_START( policetr )
 	PORT_BIT( 0x00100000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_SERVICE( 0x00200000, IP_ACTIVE_LOW )		/* Not actually a dipswitch */
 	PORT_BIT( 0x00400000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00800000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(bsmt_status_r, NULL)
+	PORT_BIT( 0x00800000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x01000000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x02000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04000000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x08000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x10000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)	/* EEPROM read */
+	PORT_BIT( 0x20000000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* EEPROM read */
 	PORT_BIT( 0x40000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x80000000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
@@ -406,7 +428,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const r3000_cpu_core r3000_config =
+static const r3000_cpu_core config =
 {
 	0,		/* 1 if we have an FPU, 0 otherwise */
 	4096,	/* code cache size */
@@ -414,44 +436,46 @@ static const r3000_cpu_core r3000_config =
 };
 
 
-static MACHINE_CONFIG_START( policetr, policetr_state )
+static MACHINE_DRIVER_START( policetr )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", R3000BE, MASTER_CLOCK/2)
-	MCFG_CPU_CONFIG(r3000_config)
-	MCFG_CPU_PROGRAM_MAP(policetr_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_gen)
+	MDRV_CPU_ADD("maincpu", R3000BE, MASTER_CLOCK/2)
+	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_PROGRAM_MAP(policetr_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_gen)
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_interface_policetr)
+	MDRV_NVRAM_HANDLER(policetr)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(400, 262)	/* needs to be verified */
-	MCFG_SCREEN_VISIBLE_AREA(0, 393, 0, 239)
-	MCFG_SCREEN_UPDATE_STATIC(policetr)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(400, 262)	/* needs to be verified */
+	MDRV_SCREEN_VISIBLE_AREA(0, 393, 0, 239)
 
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_VIDEO_START(policetr)
+	MDRV_VIDEO_START(policetr)
+	MDRV_VIDEO_UPDATE(policetr)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_BSMT2000_ADD("bsmt", MASTER_CLOCK/2)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("bsmt", BSMT2000, MASTER_CLOCK/2)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( sshooter, policetr )
+static MACHINE_DRIVER_START( sshooter )
+	MDRV_IMPORT_FROM(policetr)
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(sshooter_map)
-MACHINE_CONFIG_END
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(sshooter_map)
+MACHINE_DRIVER_END
 
 
 
@@ -474,7 +498,7 @@ ROM_START( policetr ) /* Rev 0.3 PCB , with all chips dated 04/01/97 */
 	ROM_LOAD32_BYTE( "pt-u111.bin", 0x00002, 0x20000, CRC(fb5ce933) SHA1(4a07ac3e2d86262061092f112cab89f8660dce3d) )
 	ROM_LOAD32_BYTE( "pt-u110.bin", 0x00003, 0x20000, CRC(40bd6f60) SHA1(156000d3c439eab45962f0a2681bd806a17f47ee) )
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )
+	ROM_REGION( 0x600000, "bsmt", 0 )
 	ROM_LOAD( "pt-u160.bin", 0x000000, 0x100000, CRC(f267f813) SHA1(ae58507947fe2e9701b5df46565fd9908e2f9d77) )
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "pt-u162.bin", 0x100000, 0x100000, CRC(75fe850e) SHA1(ab8cf24ae6e5cf80f6a9a34e46f2b1596879643b) )
@@ -495,7 +519,7 @@ ROM_START( policetr11 ) /* Rev 0.3 PCB with all chips dated 01/06/97 */
 	ROM_LOAD32_BYTE( "pt-u111.v11", 0x00002, 0x20000, CRC(da6c45a7) SHA1(471bd372d2ad5bcb29af19dae09f3cfab4b010fd) )
 	ROM_LOAD32_BYTE( "pt-u110.v11", 0x00003, 0x20000, CRC(f1c8a8c0) SHA1(8a2d1ada002be6f2a3c2d21d193e7cde6531545a) )
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )
+	ROM_REGION( 0x600000, "bsmt", 0 )
 	ROM_LOAD( "pt-u160.bin", 0x000000, 0x100000, CRC(f267f813) SHA1(ae58507947fe2e9701b5df46565fd9908e2f9d77) )
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "pt-u162.bin", 0x100000, 0x100000, CRC(75fe850e) SHA1(ab8cf24ae6e5cf80f6a9a34e46f2b1596879643b) )
@@ -521,7 +545,7 @@ ROM_START( policetr10 ) /* Rev 0.2 PCB with all chips dated 10/07/96 */
 	ROM_LOAD32_BYTE( "pt-u111.v10", 0x00002, 0x20000, CRC(61f79667) SHA1(25298cd8706b5c59f7c9e0f8d44db0df73c23403) )
 	ROM_LOAD32_BYTE( "pt-u110.v10", 0x00003, 0x20000, CRC(5c3c1548) SHA1(aab977274ecff7cb5fd540a3d0da7940e9707906) )
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )
+	ROM_REGION( 0x600000, "bsmt", 0 )
 	/* Same data as the other sets, but split in 4 meg roms */
 	ROM_LOAD( "pt-u160.v10", 0x000000, 0x080000, CRC(cd374405) SHA1(e53689d4344c78c3faac22747ada28bc3add8c56) )
 	ROM_RELOAD(              0x3f8000, 0x080000 )
@@ -557,7 +581,7 @@ Note: With this version, the program roms are twice the size of those found on a
 	ROM_LOAD32_BYTE( "pt-av13.u111", 0x00002, 0x40000, CRC(8c4f3a64) SHA1(4953e6fc26bae7d6e7c7230f4ca76e3f5032af14) ) /* Checksum printed on label  F343 */
 	ROM_LOAD32_BYTE( "pt-av13.u110", 0x00003, 0x40000, CRC(738a8277) SHA1(423a9bcecb82959f38ae79a0728d72eb13ed93b3) ) /* Checksum printed on label  050C */
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )
+	ROM_REGION( 0x600000, "bsmt", 0 )
 	ROM_LOAD( "pt-u160.bin", 0x000000, 0x100000, CRC(f267f813) SHA1(ae58507947fe2e9701b5df46565fd9908e2f9d77) )
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "pt-u162.bin", 0x100000, 0x100000, CRC(75fe850e) SHA1(ab8cf24ae6e5cf80f6a9a34e46f2b1596879643b) )
@@ -585,7 +609,7 @@ Note: If you set the dipswitch to service mode and reset the game within Mame. A
 	ROM_LOAD32_BYTE( "ptb-u111.v13", 0x00002, 0x20000, CRC(39e96d6a) SHA1(efe6ffe70432b94c98f3d7247408a6d2f6f9e33d) ) /* Checksum printed on label  E5F1 */
 	ROM_LOAD32_BYTE( "ptb-u110.v13", 0x00003, 0x20000, CRC(d7e6f4cb) SHA1(9dffe4937bc5cf47d870f06ae0dced362cd2dd66) ) /* Checksum printed on label  556D */
 
-	ROM_REGION( 0x1000000, "bsmt", 0 )
+	ROM_REGION( 0x600000, "bsmt", 0 )
 	ROM_LOAD( "pt-u160.bin", 0x000000, 0x100000, CRC(f267f813) SHA1(ae58507947fe2e9701b5df46565fd9908e2f9d77) )
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "pt-u162.bin", 0x100000, 0x100000, CRC(75fe850e) SHA1(ab8cf24ae6e5cf80f6a9a34e46f2b1596879643b) )
@@ -610,7 +634,7 @@ ROM_START( sshooter ) /* Rev 0.5B PCB , unknown program rom date */
 	ROM_LOAD32_BYTE( "ss-u111.v17", 0x00002, 0x40000, CRC(4240fa2f) SHA1(54223207c1e228d6b836918601c0f65c2692e5bc) ) // 1:3
 	ROM_LOAD32_BYTE( "ss-u110.v17", 0x00003, 0x40000, CRC(8ae744ce) SHA1(659cd27865cf5507aae6b064c5bc24b927cf5f5a) ) // 1:4
 
-	ROM_REGION( 0x1000000, "bsmt", 0 ) /* Sound v1.2 */
+	ROM_REGION( 0x600000, "bsmt", 0 ) /* Sound v1.2 */
 	ROM_LOAD( "ss-u160.bin", 0x000000, 0x100000, CRC(1c603d42) SHA1(880992871be52129684052d542946de0cc32ba9a) ) // 1:1
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "ss-u162.bin", 0x100000, 0x100000, CRC(40ef448a) SHA1(c96f7b169be2576e9f3783af84c07259efefb812) ) // 2:1
@@ -635,7 +659,7 @@ ROM_START( sshooter12 ) /* Rev 0.5B PCB , program roms dated 04/17/98 */
 	ROM_LOAD32_BYTE( "ss-u111.v12", 0x00002, 0x40000, CRC(0b291731) SHA1(bd04f0b1b52198344df625fcddfc6c6ccb0bd923) ) // 1:3
 	ROM_LOAD32_BYTE( "ss-u110.v12", 0x00003, 0x40000, CRC(76841008) SHA1(ccbb88c8d63bf929814144a9d8757c9c7048fdef) ) // 1:4
 
-	ROM_REGION( 0x1000000, "bsmt", 0 ) /* Sound v1.2 */
+	ROM_REGION( 0x600000, "bsmt", 0 ) /* Sound v1.2 */
 	ROM_LOAD( "ss-u160.bin", 0x000000, 0x100000, CRC(1c603d42) SHA1(880992871be52129684052d542946de0cc32ba9a) ) // 1:1
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "ss-u162.bin", 0x100000, 0x100000, CRC(40ef448a) SHA1(c96f7b169be2576e9f3783af84c07259efefb812) ) // 2:1
@@ -660,7 +684,7 @@ ROM_START( sshooter11 ) /* Rev 0.5B PCB , program roms dated 04/03/98 */
 	ROM_LOAD32_BYTE( "ss-u111.v11", 0x00002, 0x40000, CRC(ec209b5f) SHA1(1408b509853b325e865d0b23d237bca321e73f60) ) // 1:3
 	ROM_LOAD32_BYTE( "ss-u110.v11", 0x00003, 0x40000, CRC(0f1de201) SHA1(5001de3349357545a6a45102340caf0008b50d7b) ) // 1:4
 
-	ROM_REGION( 0x1000000, "bsmt", 0 ) /* Sound v1.2 */
+	ROM_REGION( 0x600000, "bsmt", 0 ) /* Sound v1.2 */
 	ROM_LOAD( "ss-u160.bin", 0x000000, 0x100000, CRC(1c603d42) SHA1(880992871be52129684052d542946de0cc32ba9a) ) // 1:1
 	ROM_RELOAD(              0x3f8000, 0x100000 )
 	ROM_LOAD( "ss-u162.bin", 0x100000, 0x100000, CRC(40ef448a) SHA1(c96f7b169be2576e9f3783af84c07259efefb812) ) // 2:1
@@ -677,31 +701,27 @@ ROM_END
 
 static DRIVER_INIT( policetr )
 {
-	policetr_state *state = machine.driver_data<policetr_state>();
-	state->m_speedup_data = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00000fc8, 0x00000fcb, FUNC(speedup_w));
-	state->m_speedup_pc = 0x1fc028ac;
+	speedup_data = memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00000fc8, 0x00000fcb, 0, 0, speedup_w);
+	speedup_pc = 0x1fc028ac;
 }
 
 static DRIVER_INIT( plctr13b )
 {
-	policetr_state *state = machine.driver_data<policetr_state>();
-	state->m_speedup_data = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00000fc8, 0x00000fcb, FUNC(speedup_w));
-	state->m_speedup_pc = 0x1fc028bc;
+	speedup_data = memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00000fc8, 0x00000fcb, 0, 0, speedup_w);
+	speedup_pc = 0x1fc028bc;
 }
 
 
 static DRIVER_INIT( sshooter )
 {
-	policetr_state *state = machine.driver_data<policetr_state>();
-	state->m_speedup_data = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00018fd8, 0x00018fdb, FUNC(speedup_w));
-	state->m_speedup_pc = 0x1fc03470;
+	speedup_data = memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00018fd8, 0x00018fdb, 0, 0, speedup_w);
+	speedup_pc = 0x1fc03470;
 }
 
 static DRIVER_INIT( sshoot12 )
 {
-	policetr_state *state = machine.driver_data<policetr_state>();
-	state->m_speedup_data = machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x00018fd8, 0x00018fdb, FUNC(speedup_w));
-	state->m_speedup_pc = 0x1fc033e0;
+	speedup_data = memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x00018fd8, 0x00018fdb, 0, 0, speedup_w);
+	speedup_pc = 0x1fc033e0;
 }
 
 
@@ -712,13 +732,13 @@ static DRIVER_INIT( sshoot12 )
  *
  *************************************/
 
-GAME( 1996, policetr,    0,        policetr, policetr, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3)", 0 )
-GAME( 1996, policetr11,  policetr, policetr, polict10, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.1)", 0 )
-GAME( 1996, policetr10,  policetr, policetr, polict10, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.0)", 0 )
+GAME( 1996, policetr,    0,        policetr, policetr, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3)", 0 )
+GAME( 1996, policetr11,  policetr, policetr, polict10, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.1)", 0 )
+GAME( 1996, policetr10,  policetr, policetr, polict10, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.0)", 0 )
 
-GAME( 1996, policetr13a, policetr, sshooter, policetr, plctr13b, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3B Newer)", 0 )
-GAME( 1996, policetr13b, policetr, sshooter, policetr, plctr13b, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3B)", 0 )
+GAME( 1996, policetr13a, policetr, sshooter, policetr, plctr13b, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3B Newer)", 0 )
+GAME( 1996, policetr13b, policetr, sshooter, policetr, plctr13b, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3B)", 0 )
 
-GAME( 1998, sshooter,    0,        sshooter, policetr, sshooter, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.7)", 0 )
-GAME( 1998, sshooter12,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.2)", 0 )
-GAME( 1998, sshooter11,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.1)", 0 )
+GAME( 1998, sshooter, 0,        sshooter, policetr, sshooter, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.7)", 0 )
+GAME( 1998, sshooter12, sshooter, sshooter, sshoot11, sshoot12, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.2)", 0 )
+GAME( 1998, sshooter11, sshooter, sshooter, sshoot11, sshoot12, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.1)", 0 )

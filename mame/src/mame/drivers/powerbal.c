@@ -13,11 +13,19 @@ Magic Sticks:
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "sound/okim6295.h"
 #include "includes/playmark.h"
+
+static tilemap *bg_tilemap;
+static UINT16 *magicstk_videoram;
+static int magicstk_tilebank;
+
+static int bg_yoffset;
+static int xoffset;
+static int yoffset;
 
 static const eeprom_interface eeprom_intf =
 {
@@ -32,75 +40,91 @@ static const eeprom_interface eeprom_intf =
 	5				/* reset_delay (otherwise wbeachvl will hang when saving settings) */
 };
 
-static WRITE16_DEVICE_HANDLER( magicstk_coin_eeprom_w )
+static NVRAM_HANDLER( magicstk )
+{
+	if (read_or_write)
+	{
+		eeprom_save(file);
+	}
+	else
+	{
+		eeprom_init(machine, &eeprom_intf);
+
+		if (file)
+			eeprom_load(file);
+		else
+		{
+			UINT8 init[128];
+			memset(init,0,128);
+			eeprom_set_data(init,128);
+		}
+	}
+}
+
+static WRITE16_HANDLER( magicstk_coin_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		coin_counter_w(device->machine(), 0, data & 0x20);
+		coin_counter_w(0,data & 0x20);
 
-		eeprom_device *eeprom = downcast<eeprom_device *>(device);
-		eeprom->set_cs_line((data & 8) ? CLEAR_LINE : ASSERT_LINE);
-		eeprom->write_bit(data & 2);
-		eeprom->set_clock_line((data & 4) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_set_cs_line((data & 8) ? CLEAR_LINE : ASSERT_LINE);
+		eeprom_write_bit(data & 2);
+		eeprom_set_clock_line((data & 4) ? CLEAR_LINE : ASSERT_LINE);
 	}
 }
 
 static WRITE16_HANDLER( magicstk_bgvideoram_w )
 {
-	playmark_state *state = space->machine().driver_data<playmark_state>();
-
-	COMBINE_DATA(&state->m_videoram1[offset]);
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&magicstk_videoram[offset]);
+	tilemap_mark_tile_dirty(bg_tilemap,offset);
 }
 
 static WRITE16_HANDLER( tile_banking_w )
 {
-	playmark_state *state = space->machine().driver_data<playmark_state>();
-
-	if (((data >> 12) & 0x0f) != state->m_tilebank)
+	if(((data >> 12) & 0x0f) != magicstk_tilebank)
 	{
-		state->m_tilebank = (data >> 12) & 0x0f;
-		state->m_bg_tilemap->mark_all_dirty();
+		magicstk_tilebank = (data >> 12) & 0x0f;
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 }
 
 static WRITE16_DEVICE_HANDLER( oki_banking )
 {
-	if (data & 3)
+	if(data & 3)
 	{
 		int addr = 0x40000 * ((data & 3) - 1);
 
-		if (addr < device->machine().region("oki")->bytes())
-			downcast<okim6295_device *>(device)->set_bank_base(addr);
+		if(addr < memory_region_length(device->machine, "oki"))
+			okim6295_set_bank_base(device, addr);
 	}
 }
 
-static ADDRESS_MAP_START( magicstk_main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( magicstk_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
 	AM_RANGE(0x094000, 0x094001) AM_WRITENOP
 	AM_RANGE(0x094002, 0x094003) AM_WRITENOP
 	AM_RANGE(0x094004, 0x094005) AM_WRITE(tile_banking_w)
-	AM_RANGE(0x098180, 0x09917f) AM_RAM_WRITE(magicstk_bgvideoram_w) AM_BASE_MEMBER(playmark_state, m_videoram1)
+	AM_RANGE(0x098180, 0x09917f) AM_RAM_WRITE(magicstk_bgvideoram_w) AM_BASE(&magicstk_videoram)
 	AM_RANGE(0x0c2010, 0x0c2011) AM_READ_PORT("IN0")
 	AM_RANGE(0x0c2012, 0x0c2013) AM_READ_PORT("IN1")
-	AM_RANGE(0x0c2014, 0x0c2015) AM_READ_PORT("IN2") AM_DEVWRITE("eeprom", magicstk_coin_eeprom_w)
+	AM_RANGE(0x0c2014, 0x0c2015) AM_READ_PORT("IN2") AM_WRITE(magicstk_coin_eeprom_w)
 	AM_RANGE(0x0c2016, 0x0c2017) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0c2018, 0x0c2019) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0c201c, 0x0c201d) AM_DEVWRITE("oki", oki_banking)
-	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0x0c4000, 0x0c4001) AM_WRITENOP
 	AM_RANGE(0x0e0000, 0x0fffff) AM_RAM
-	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE_SIZE_MEMBER(playmark_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x100000, 0x100fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( powerbal_main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( powerbal_main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x088000, 0x0883ff) AM_RAM_WRITE(bigtwin_paletteram_w) AM_BASE(&paletteram16)
 	AM_RANGE(0x094000, 0x094001) AM_WRITENOP
 	AM_RANGE(0x094002, 0x094003) AM_WRITENOP
 	AM_RANGE(0x094004, 0x094005) AM_WRITE(tile_banking_w)
-	AM_RANGE(0x098000, 0x098fff) AM_RAM_WRITE(magicstk_bgvideoram_w) AM_BASE_MEMBER(playmark_state, m_videoram1)
+	AM_RANGE(0x098000, 0x098fff) AM_RAM_WRITE(magicstk_bgvideoram_w) AM_BASE(&magicstk_videoram)
 	AM_RANGE(0x099000, 0x09bfff) AM_RAM // not used
 	AM_RANGE(0x0c2010, 0x0c2011) AM_READ_PORT("IN0")
 	AM_RANGE(0x0c2012, 0x0c2013) AM_READ_PORT("IN1")
@@ -108,10 +132,10 @@ static ADDRESS_MAP_START( powerbal_main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x0c2016, 0x0c2017) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0c2018, 0x0c2019) AM_READ_PORT("DSW2")
 	AM_RANGE(0x0c201c, 0x0c201d) AM_DEVWRITE("oki", oki_banking)
-	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x0c201e, 0x0c201f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0x0c4000, 0x0c4001) AM_WRITENOP
 	AM_RANGE(0x0f0000, 0x0fffff) AM_RAM
-	AM_RANGE(0x101000, 0x101fff) AM_RAM AM_BASE_SIZE_MEMBER(playmark_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x101000, 0x101fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x102000, 0x10200d) AM_WRITENOP // not used scroll regs?
 	AM_RANGE(0x103000, 0x103fff) AM_RAM
 ADDRESS_MAP_END
@@ -221,7 +245,7 @@ static INPUT_PORTS_START( magicstk )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)	/* EEPROM data */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* EEPROM data */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -318,7 +342,7 @@ static INPUT_PORTS_START( hotminda )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("IN2")
-	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)	/* EEPROM data */
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)	/* EEPROM data */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -378,62 +402,53 @@ INPUT_PORTS_END
 
 static TILE_GET_INFO( powerbal_get_bg_tile_info )
 {
-	playmark_state *state = machine.driver_data<playmark_state>();
-	int code = (state->m_videoram1[tile_index] & 0x07ff) + state->m_tilebank * 0x800;
-	int colr = state->m_videoram1[tile_index] & 0xf000;
+	int code = (magicstk_videoram[tile_index] & 0x07ff) + magicstk_tilebank * 0x800;
+	int colr = magicstk_videoram[tile_index] & 0xf000;
 
-	if (state->m_videoram1[tile_index] & 0x800)
-		code |= 0x8000;
+	if (magicstk_videoram[tile_index] & 0x800) code |= 0x8000;
 
-	SET_TILE_INFO(1, code, colr >> 12, 0);
+	SET_TILE_INFO(1,code,colr >> 12,0);
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	playmark_state *state = machine.driver_data<playmark_state>();
-	UINT16 *spriteram = state->m_spriteram;
 	int offs;
-	int height = machine.gfx[0]->height;
+	int height = machine->gfx[0]->height;
 
-	for (offs = 4; offs < state->m_spriteram_size / 2; offs += 4)
+	for (offs = 4;offs < spriteram_size/2;offs += 4)
 	{
-		int sx, sy, code, color, flipx;
+		int sx,sy,code,color,flipx;
 
-		sy = spriteram[offs + 3 - 4];	/* typical Playmark style... */
-		if (sy & 0x8000)
-			return;	/* end of list marker */
+		sy = spriteram16[offs+3-4];	/* typical Playmark style... */
+		if (sy & 0x8000) return;	/* end of list marker */
 
 		flipx = sy & 0x4000;
-		sx = (spriteram[offs + 1] & 0x01ff) - 16 - 7;
-		sy = (256 - 8 - height - sy) & 0xff;
-		code = spriteram[offs + 2];
-		color = (spriteram[offs + 1] & 0xf000) >> 12;
+		sx = (spriteram16[offs+1] & 0x01ff) - 16-7;
+		sy = (256-8-height - sy) & 0xff;
+		code = spriteram16[offs+2];
+		color = (spriteram16[offs+1] & 0xf000) >> 12;
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[0],
+		drawgfx_transpen(bitmap,cliprect,machine->gfx[0],
 				code,
 				color,
 				flipx,0,
-				sx + state->m_xoffset,sy + state->m_yoffset,0);
+				sx + xoffset,sy + yoffset,0);
 	}
 }
 
 static VIDEO_START( powerbal )
 {
-	playmark_state *state = machine.driver_data<playmark_state>();
+	bg_tilemap = tilemap_create(machine, powerbal_get_bg_tile_info,tilemap_scan_rows,8, 8,64,32);
 
-	state->m_bg_tilemap = tilemap_create(machine, powerbal_get_bg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	xoffset = -20;
 
-	state->m_xoffset = -20;
-
-	state->m_bg_tilemap->set_scrolly(0, state->m_bg_yoffset);
+	tilemap_set_scrolly(bg_tilemap, 0, bg_yoffset);
 }
 
-static SCREEN_UPDATE_IND16( powerbal )
+static VIDEO_UPDATE( powerbal )
 {
-	playmark_state *state = screen.machine().driver_data<playmark_state>();
-
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
@@ -468,84 +483,63 @@ static GFXDECODE_START( powerbal )
 	GFXDECODE_ENTRY( "gfx1", 0, magicstk_charlayout, 0x000, 16 )	/* colors 0x000-0x0ff */
 GFXDECODE_END
 
-
-
-static MACHINE_START( powerbal )
-{
-	playmark_state *state = machine.driver_data<playmark_state>();
-
-	state->save_item(NAME(state->m_tilebank));
-}
-
-static MACHINE_RESET( powerbal )
-{
-	playmark_state *state = machine.driver_data<playmark_state>();
-
-	state->m_tilebank = 0;
-}
-
-static MACHINE_CONFIG_START( powerbal, playmark_state )
-
+static MACHINE_DRIVER_START( powerbal )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
-	MCFG_CPU_PROGRAM_MAP(powerbal_main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
-
-	MCFG_MACHINE_START(powerbal)
-	MCFG_MACHINE_RESET(powerbal)
+	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
+	MDRV_CPU_PROGRAM_MAP(powerbal_main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(61)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(128*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(powerbal)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(61)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(128*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
 
-	MCFG_GFXDECODE(powerbal)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_GFXDECODE(powerbal)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(powerbal)
+	MDRV_VIDEO_START(powerbal)
+	MDRV_VIDEO_UPDATE(powerbal)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( magicstk, playmark_state )
-
+static MACHINE_DRIVER_START( magicstk )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
-	MCFG_CPU_PROGRAM_MAP(magicstk_main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
+	MDRV_CPU_PROGRAM_MAP(magicstk_main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
-	MCFG_EEPROM_DEFAULT_VALUE(0)
-
-	MCFG_MACHINE_START(powerbal)
-	MCFG_MACHINE_RESET(powerbal)
+	MDRV_NVRAM_HANDLER(magicstk)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(61)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(128*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(powerbal)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(61)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(128*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
 
-	MCFG_GFXDECODE(powerbal)
-	MCFG_PALETTE_LENGTH(512)
+	MDRV_GFXDECODE(powerbal)
+	MDRV_PALETTE_LENGTH(512)
 
-	MCFG_VIDEO_START(powerbal)
+	MDRV_VIDEO_START(powerbal)
+	MDRV_VIDEO_UPDATE(powerbal)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /*
@@ -681,18 +675,14 @@ ROM_END
 
 static DRIVER_INIT( powerbal )
 {
-	playmark_state *state = machine.driver_data<playmark_state>();
-
-	state->m_bg_yoffset = 16;
-	state->m_yoffset = -8;
+	bg_yoffset = 16;
+	yoffset = -8;
 }
 
 static DRIVER_INIT( magicstk )
 {
-	playmark_state *state = machine.driver_data<playmark_state>();
-
-	state->m_bg_yoffset = 0;
-	state->m_yoffset = -5;
+	bg_yoffset = 0;
+	yoffset = -5;
 }
 
 /*************************
@@ -700,6 +690,6 @@ static DRIVER_INIT( magicstk )
 *************************/
 
 /*    YEAR  NAME      PARENT   MACHINE   INPUT     INIT      ROT    COMPANY     FULLNAME                      FLAGS */
-GAME( 1994, powerbal, 0,       powerbal, powerbal, powerbal, ROT0, "Playmark", "Power Balls",                 GAME_SUPPORTS_SAVE )
-GAME( 1995, magicstk, 0,       magicstk, magicstk, magicstk, ROT0, "Playmark", "Magic Sticks",                GAME_SUPPORTS_SAVE )
-GAME( 1995, hotminda, hotmind, magicstk, hotminda, magicstk, ROT0, "Playmark", "Hot Mind (adjustable prize)", GAME_SUPPORTS_SAVE )
+GAME( 1994, powerbal, 0,       powerbal, powerbal, powerbal, ROT0, "Playmark", "Power Balls",                 0 )
+GAME( 1995, magicstk, 0,       magicstk, magicstk, magicstk, ROT0, "Playmark", "Magic Sticks",                0 )
+GAME( 1995, hotminda, hotmind, magicstk, hotminda, magicstk, ROT0, "Playmark", "Hot Mind (adjustable prize)", 0 )

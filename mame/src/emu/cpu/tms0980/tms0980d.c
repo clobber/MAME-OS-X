@@ -5,7 +5,6 @@ TMS0980 disassembly
 
 *******************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "tms0980.h"
 

@@ -5,14 +5,13 @@
  *
  */
 
-#include "devlegcy.h"
 
 /***************************************************************************
     DEVICE CONFIGURATION MACROS
 ***************************************************************************/
 
-#define MCFG_MATHBOX_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, MATHBOX, 0)
+#define MDRV_MATHBOX_ADD(_tag) \
+	MDRV_DEVICE_ADD(_tag, MATHBOX, 0)
 
 
 
@@ -26,4 +25,6 @@ READ8_DEVICE_HANDLER( mathbox_lo_r );
 READ8_DEVICE_HANDLER( mathbox_hi_r );
 
 /* ----- device interface ----- */
-DECLARE_LEGACY_DEVICE(MATHBOX, mathbox);
+
+#define MATHBOX DEVICE_GET_INFO_NAME(mathbox)
+DEVICE_GET_INFO( mathbox );

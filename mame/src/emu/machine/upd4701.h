@@ -9,21 +9,22 @@
 #ifndef __UPD4701_H__
 #define __UPD4701_H__
 
-#include "devlegcy.h"
-
 /***************************************************************************
     MACROS / CONSTANTS
 ***************************************************************************/
 
-DECLARE_LEGACY_DEVICE(UPD4701, upd4701);
+#define UPD4701		DEVICE_GET_INFO_NAME(upd4701)
 
-#define MCFG_UPD4701_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, UPD4701, 0)
+#define MDRV_UPD4701_ADD(_tag) \
+	MDRV_DEVICE_ADD(_tag, UPD4701, 0)
 
 
 /***************************************************************************
     PROTOTYPES
 ***************************************************************************/
+
+/* device interface */
+DEVICE_GET_INFO( upd4701 );
 
 extern WRITE8_DEVICE_HANDLER( upd4701_cs_w );
 extern WRITE8_DEVICE_HANDLER( upd4701_xy_w );

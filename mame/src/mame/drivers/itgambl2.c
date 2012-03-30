@@ -52,22 +52,12 @@
 #define MAIN_CLOCK	XTAL_16MHz
 #define SND_CLOCK	XTAL_14_31818MHz
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/h83002/h8.h"
 #include "sound/upd7759.h"
 
 
-class itgambl2_state : public driver_device
-{
-public:
-	itgambl2_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_test_x;
-	int m_test_y;
-	int m_start_offs;
-};
-
+static int test_x, test_y, start_offs;
 
 /*************************
 *     Video Hardware     *
@@ -75,59 +65,57 @@ public:
 
 static VIDEO_START( itgambl2 )
 {
-	itgambl2_state *state = machine.driver_data<itgambl2_state>();
-	state->m_test_x = 256;
-	state->m_test_y = 256;
-	state->m_start_offs = 0;
+	test_x = 256;
+	test_y = 256;
+	start_offs = 0;
 }
 
 /* (dirty) debug code for looking 8bpps blitter-based gfxs */
-static SCREEN_UPDATE_RGB32( itgambl2 )
+static VIDEO_UPDATE( itgambl2 )
 {
-	itgambl2_state *state = screen.machine().driver_data<itgambl2_state>();
 	int x,y,count;
-	const UINT8 *blit_ram = screen.machine().region("gfx1")->base();
+	const UINT8 *blit_ram = memory_region(screen->machine,"gfx1");
 
-	if(screen.machine().input().code_pressed(KEYCODE_Z))
-		state->m_test_x++;
+	if(input_code_pressed(screen->machine, KEYCODE_Z))
+		test_x++;
 
-	if(screen.machine().input().code_pressed(KEYCODE_X))
-		state->m_test_x--;
+	if(input_code_pressed(screen->machine, KEYCODE_X))
+		test_x--;
 
-	if(screen.machine().input().code_pressed(KEYCODE_A))
-		state->m_test_y++;
+	if(input_code_pressed(screen->machine, KEYCODE_A))
+		test_y++;
 
-	if(screen.machine().input().code_pressed(KEYCODE_S))
-		state->m_test_y--;
+	if(input_code_pressed(screen->machine, KEYCODE_S))
+		test_y--;
 
-	if(screen.machine().input().code_pressed(KEYCODE_Q))
-		state->m_start_offs+=0x200;
+	if(input_code_pressed(screen->machine, KEYCODE_Q))
+		start_offs+=0x200;
 
-	if(screen.machine().input().code_pressed(KEYCODE_W))
-		state->m_start_offs-=0x200;
+	if(input_code_pressed(screen->machine, KEYCODE_W))
+		start_offs-=0x200;
 
-	if(screen.machine().input().code_pressed(KEYCODE_E))
-		state->m_start_offs++;
+	if(input_code_pressed(screen->machine, KEYCODE_E))
+		start_offs++;
 
-	if(screen.machine().input().code_pressed(KEYCODE_R))
-		state->m_start_offs--;
+	if(input_code_pressed(screen->machine, KEYCODE_R))
+		start_offs--;
 
-	popmessage("%d %d %04x",state->m_test_x,state->m_test_y,state->m_start_offs);
+	popmessage("%d %d %04x",test_x,test_y,start_offs);
 
-	bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 
-	count = (state->m_start_offs);
+	count = (start_offs);
 
-	for(y=0;y<state->m_test_y;y++)
+	for(y=0;y<test_y;y++)
 	{
-		for(x=0;x<state->m_test_x;x++)
+		for(x=0;x<test_x;x++)
 		{
 			UINT32 color;
 
 			color = (blit_ram[count] & 0xff)>>0;
 
-			if(cliprect.contains(x, y))
-				bitmap.pix32(y, x) = screen.machine().pens[color];
+			if((x)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
+				*BITMAP_ADDR32(bitmap, y, x) = screen->machine->pens[color];
 
 			count++;
 		}
@@ -141,7 +129,7 @@ static SCREEN_UPDATE_RGB32( itgambl2 )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( itgambl2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( itgambl2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_GLOBAL_MASK(0xffffff)
 	AM_RANGE(0x000000, 0xffffff) AM_ROM
 ADDRESS_MAP_END
@@ -259,32 +247,32 @@ static PALETTE_INIT( itgambl2 )
 *     Machine Drivers     *
 **************************/
 
-static MACHINE_CONFIG_START( itgambl2, itgambl2_state )
+static MACHINE_DRIVER_START( itgambl2 )
 
     /* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", H83044, MAIN_CLOCK)	/* wrong CPU, but we have not a H8/3337 core ATM */
-	MCFG_CPU_PROGRAM_MAP(itgambl2_map)
+	MDRV_CPU_ADD("maincpu", H83044, MAIN_CLOCK)	/* wrong CPU, but we have not a H8/3337 core ATM */
+	MDRV_CPU_PROGRAM_MAP(itgambl2_map)
 
     /* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC( itgambl2 )
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 512-1, 0, 256-1)
+	MDRV_MACHINE_RESET( itgambl2 )
+	MDRV_PALETTE_INIT( itgambl2 )
 
-	MCFG_MACHINE_RESET( itgambl2 )
-	MCFG_PALETTE_INIT( itgambl2 )
-
-	MCFG_GFXDECODE(itgambl2)
-	MCFG_PALETTE_LENGTH(0x200)
-	MCFG_VIDEO_START( itgambl2 )
+	MDRV_GFXDECODE(itgambl2)
+	MDRV_PALETTE_LENGTH(0x200)
+	MDRV_VIDEO_START( itgambl2 )
+	MDRV_VIDEO_UPDATE( itgambl2 )
 
     /* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 /*************************
@@ -792,152 +780,21 @@ ROM_START( pirati )
 	ROM_LOAD( "m.s.g.0", 0x00000, 0x20000, CRC(01ed1dcd) SHA1(69b0b4ff2633ca4ca7b3a01830582c8b6df059e8) )
 ROM_END
 
-/*
-
-Magic Number
-
-CPUs
-1x   H8/3337             32-bit Single-Chip Microcomputer - main (internal ROM not dumped)
-1x  D7759                ADPCM Speech Synthesizer LSIs - sound
-1x  TDA2003              Audio Amplifier - sound
-1x  oscillator  14.31818MHz
-1x  oscillator  16.000
-ROMs
-3x  M27C4001    1,2,3   dumped
-1x  M27C1001    MSG     dumped
-RAMs
-3x  CXK581000BM-70LL
-PLDs
-2x  ispLSI1032E-70Lj        not dumped
-Others
-
-1x 28x2 edge connector
-1x 7x2 legs ISP connector
-1x RS232 connector
-2x trimmer
-2x 8x2 switches DIP
-1x jumper
-1x red LED
-1x battery 3.6V
-*/
-
-ROM_START( mnumitg )
-	ROM_REGION( 0x1000000, "maincpu", 0 ) /* all the program code is in here */
-	ROM_LOAD( "mnum_hd64f3337cp16.mcu", 0x00000, 0x4000, NO_DUMP )
-
-	ROM_REGION( 0x180000, "gfx1", 0 )
-	ROM_LOAD( "mnum-ep1.bin", 0x000000, 0x80000, CRC(ee80b8d6) SHA1(49dd3323f4369759c38c168d172f7716a9132f98) )
-	ROM_LOAD( "mnum-ep2.bin", 0x080000, 0x80000, CRC(685cb1cf) SHA1(7815ec3dcbf2c78f85520e533d9cbf51a119255d) )
-	ROM_LOAD( "mnum-ep3.bin", 0x100000, 0x80000, CRC(ebebd71c) SHA1(98902e43c69d207aa7dbca23d10bbeb81272292f) )
-
-	ROM_REGION( 0x20000, "upd", 0 ) /* NEC D7759GC samples */
-	ROM_LOAD( "mnum-msg0.bin", 0x00000, 0x20000, CRC(b25e1c8a) SHA1(a211412c3354a9f1a9662445b4cc379dad27813b) )
-ROM_END
-
-/*
-
-CPUs
-1x   H8/3337            32-bit Single-Chip Microcomputer - main (internal ROM not dumped)
-1x  D7759               ADPCM Speech Synthesizer LSIs - sound
-1x  TDA2003             Audio Amplifier - sound
-1x  oscillator  14.31818MHz
-1x  oscillator  16.000
-ROMs
-3x  M27C4001    1,2,3   dumped
-1x  M27C1001    SND     dumped
-RAMs
-3x  MX66C1024MC-70
-PLDs
-2x  ispLSI1032E-70Lj    not dumped
-Others
-
-1x 28x2 edge connector
-1x 17x2 legs ISP connector
-1x 7x2 legs ISP connector
-1x 10 legs connector
-1x 4 legs connector
-1x RS232 connector
-2x trimmer (unknown)
-2x 8x2 switches DIP
-1x jumper
-1x battery 3.6V
-
-*/
-
-ROM_START( mclass )
-	ROM_REGION( 0x1000000, "maincpu", 0 ) /* all the program code is in here */
-	ROM_LOAD( "mclass_hd64f3337cp16.mcu", 0x00000, 0x4000, NO_DUMP )
-
-	ROM_REGION( 0x180000, "gfx1", 0 )
-	ROM_LOAD( "magicclass1.bin", 0x000000, 0x80000, CRC(12927480) SHA1(380e980cf5d869fbcba224d75c7eaee650465227) )
-	ROM_LOAD( "magicclass2.bin", 0x080000, 0x80000, CRC(b472dda6) SHA1(e23202157dfa6f1f76f9dc410ef7e1f12b5031bf) )
-	ROM_LOAD( "magicclass3.bin", 0x100000, 0x80000, CRC(b1bc38e4) SHA1(7dfa352535baae7d048ef4537f2d9ac72c46dedc) )
-
-	ROM_REGION( 0x20000, "upd", 0 ) /* NEC D7759GC samples */
-	ROM_LOAD( "magicclasssnd.bin", 0x00000, 0x20000, CRC(9dab99a6) SHA1(ce34056dd964be32359acd2e53a6101cb4d9ddff) )
-ROM_END
-
-/*
-
-CPUs
-1x  H8/3337             32-bit Single-Chip Microcomputer - main (internal ROM not dumped)
-1x  D7759               ADPCM Speech Synthesizer LSIs - sound
-1x  TDA2003             Audio Amplifier - sound
-1x  oscillator  14.31818MHz
-1x  oscillator  16.000
-ROMs
-3x  M27C4001    1,2,3   dumped
-1x  M27C1001    SND     dumped
-RAMs
-3x  V62C5181024L-35W
-PLDs
-2x  ispLSI1032E-70Lj    not dumped
-Others
-
-1x 28x2 edge connector
-1x 7x2 legs ISP connector
-1x RS232 connector
-1x trimmer (unknown)
-1x trimmer (volume)
-2x 8x2 switches DIP
-1x jumper
-1x red LED
-1x battery 3.6V
-
-*/
-
-ROM_START( europass )
-	ROM_REGION( 0x1000000, "maincpu", 0 ) /* all the program code is in here */
-	ROM_LOAD( "europass_hd64f3337cp16.mcu", 0x00000, 0x4000, NO_DUMP )
-
-	ROM_REGION( 0x180000, "gfx1", 0 )
-	ROM_LOAD( "europass1.bin", 0x000000, 0x80000, CRC(93c54f02) SHA1(b0371c70363b6b2097dc478320bdae0856211d2e) )
-	ROM_LOAD( "europass2.bin", 0x080000, 0x80000, CRC(62bcb3de) SHA1(fc35f534635340f5ae22ae838bc10605ae0b7a4b) )
-	ROM_LOAD( "europass3.bin", 0x100000, 0x80000, CRC(0f2b2c21) SHA1(c4706585e4176e4a5f5ce40046e6e14b93952816) )
-
-	ROM_REGION( 0x20000, "upd", 0 ) /* NEC D7759GC samples */
-	ROM_LOAD( "xninesnd.bin", 0x00000, 0x20000, CRC(9dab99a6) SHA1(ce34056dd964be32359acd2e53a6101cb4d9ddff) )
-ROM_END
-
 
 /*************************
 *      Game Drivers      *
 *************************/
 
 /*    YEAR  NAME      PARENT  MACHINE   INPUT     INIT ROT    COMPANY    FULLNAME                          FLAGS  */
-GAME( 1999, ntcash,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "NtCash",                                GAME_IS_SKELETON )
-GAME( 1999, wizard,   0,      itgambl2, itgambl2, 0,   ROT0, "A.A.",      "Wizard (Ver 1.0)",                      GAME_IS_SKELETON )
-GAME( 200?, trstar2k, 0,      itgambl2, itgambl2, 0,   ROT0, "A.M.",      "Triple Star 2000",                      GAME_IS_SKELETON )
-GAME( 2001, laser2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Laser 2001 (Ver 1.2)",                  GAME_IS_SKELETON )
-GAME( 2001, mdrink,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Drink (Ver 1.2)",                 GAME_IS_SKELETON )
-GAME( 2001, te0144,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Puzzle Bobble (Italian Gambling Game)", GAME_IS_SKELETON )
-GAME( 200?, cmagica,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Carta Magica (Ver 1.8)",                GAME_IS_SKELETON )
-GAME( 200?, millsun,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Millennium Sun",                        GAME_IS_SKELETON )
-GAME( 200?, sspac2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Space 2001",                      GAME_IS_SKELETON )
-GAME( 200?, elvis,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Elvis?",                                GAME_IS_SKELETON )
-GAME( 200?, sstar,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Star",                            GAME_IS_SKELETON )
-GAME( 2001, pirati,   0,      itgambl2, itgambl2, 0,   ROT0, "Cin", 	  "Pirati",                                GAME_IS_SKELETON )
-GAME( 200?, mnumitg,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Number (Italian Gambling Game, Ver 1.5)", GAME_IS_SKELETON )
-GAME( 200?, mclass,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Class (Ver 2.2)",                 GAME_IS_SKELETON )
-GAME( 200?, europass, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Euro Pass (Ver 1.1)",                   GAME_IS_SKELETON )
-
+GAME( 1999, ntcash,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "NtCash",                                GAME_NOT_WORKING )
+GAME( 1999, wizard,   0,      itgambl2, itgambl2, 0,   ROT0, "A.A.",      "Wizard (Ver 1.0)",                      GAME_NOT_WORKING )
+GAME( 200?, trstar2k, 0,      itgambl2, itgambl2, 0,   ROT0, "A.M.",      "Triple Star 2000",                      GAME_NOT_WORKING )
+GAME( 2001, laser2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Laser 2001 (Ver 1.2)",                  GAME_NOT_WORKING )
+GAME( 2001, mdrink,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Magic Drink (Ver 1.2)",                 GAME_NOT_WORKING )
+GAME( 2001, te0144,   0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Puzzle Bobble (Italian Gambling Game)", GAME_NOT_WORKING )
+GAME( 200?, cmagica,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Carta Magica (Ver 1.8)",                GAME_NOT_WORKING )
+GAME( 200?, millsun,  0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Millennium Sun",                        GAME_NOT_WORKING )
+GAME( 200?, sspac2k1, 0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Space 2001",                      GAME_NOT_WORKING )
+GAME( 200?, elvis,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Elvis?",                                GAME_NOT_WORKING )
+GAME( 200?, sstar,    0,      itgambl2, itgambl2, 0,   ROT0, "<unknown>", "Super Star",                            GAME_NOT_WORKING )
+GAME( 2001, pirati,   0,      itgambl2, itgambl2, 0,   ROT0, "Cin", 	  "Pirati",                                GAME_NOT_WORKING )

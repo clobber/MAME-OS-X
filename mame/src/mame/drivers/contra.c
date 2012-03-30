@@ -16,50 +16,60 @@ Dip locations and factory settings verified with manual
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "cpu/hd6309/hd6309.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2151intf.h"
-#include "video/konicdev.h"
-#include "includes/konamipt.h"
-#include "includes/contra.h"
+#include "konamipt.h"
 
+extern UINT8 *contra_fg_vram,*contra_fg_cram;
+extern UINT8 *contra_bg_vram,*contra_bg_cram;
+extern UINT8 *contra_text_vram,*contra_text_cram;
 
-static INTERRUPT_GEN( contra_interrupt )
-{
-	contra_state *state = device->machine().driver_data<contra_state>();
-	if (k007121_ctrlram_r(state->m_k007121_1, 7) & 0x02)
-		device_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
-}
+PALETTE_INIT( contra );
+
+WRITE8_HANDLER( contra_fg_vram_w );
+WRITE8_HANDLER( contra_fg_cram_w );
+WRITE8_HANDLER( contra_bg_vram_w );
+WRITE8_HANDLER( contra_bg_cram_w );
+WRITE8_HANDLER( contra_text_vram_w );
+WRITE8_HANDLER( contra_text_cram_w );
+
+WRITE8_HANDLER( contra_K007121_ctrl_0_w );
+WRITE8_HANDLER( contra_K007121_ctrl_1_w );
+VIDEO_UPDATE( contra );
+VIDEO_START( contra );
+
 
 static WRITE8_HANDLER( contra_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 0x0f);
+	int bankaddress;
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
+
+
+	bankaddress = 0x10000 + (data & 0x0f) * 0x2000;
+	if (bankaddress < 0x28000)	/* for safety */
+		memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
 }
 
 static WRITE8_HANDLER( contra_sh_irqtrigger_w )
 {
-	contra_state *state = space->machine().driver_data<contra_state>();
-	device_set_input_line(state->m_audiocpu, M6809_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( contra_coin_counter_w )
 {
-	if (data & 0x01)
-		coin_counter_w(space->machine(), 0, data & 0x01);
-
-	if (data & 0x02)
-		coin_counter_w(space->machine(), 1, (data & 0x02) >> 1);
+	if (data & 0x01) coin_counter_w(0,data & 0x01);
+	if (data & 0x02) coin_counter_w(1,(data & 0x02) >> 1);
 }
 
 static WRITE8_HANDLER( cpu_sound_command_w )
 {
-	soundlatch_w(space, offset, data);
+	soundlatch_w(space,offset,data);
 }
 
 
 
-static ADDRESS_MAP_START( contra_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( contra_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0007) AM_WRITE(contra_K007121_ctrl_0_w)
 	AM_RANGE(0x0010, 0x0010) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x0011, 0x0011) AM_READ_PORT("P1")
@@ -75,30 +85,30 @@ static ADDRESS_MAP_START( contra_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x001e, 0x001e) AM_WRITENOP	/* ? */
 	AM_RANGE(0x0060, 0x0067) AM_WRITE(contra_K007121_ctrl_1_w)
 
-	AM_RANGE(0x0c00, 0x0cff) AM_RAM AM_BASE_MEMBER(contra_state, m_paletteram)
+	AM_RANGE(0x0c00, 0x0cff) AM_RAM AM_BASE(&paletteram)
 
 	AM_RANGE(0x1000, 0x1fff) AM_RAM
 
-	AM_RANGE(0x2000, 0x5fff) AM_READONLY
-	AM_RANGE(0x2000, 0x23ff) AM_WRITE(contra_fg_cram_w) AM_BASE_MEMBER(contra_state, m_fg_cram)
-	AM_RANGE(0x2400, 0x27ff) AM_WRITE(contra_fg_vram_w) AM_BASE_MEMBER(contra_state, m_fg_vram)
-	AM_RANGE(0x2800, 0x2bff) AM_WRITE(contra_text_cram_w) AM_BASE_MEMBER(contra_state, m_tx_cram)
-	AM_RANGE(0x2c00, 0x2fff) AM_WRITE(contra_text_vram_w) AM_BASE_MEMBER(contra_state, m_tx_vram)
-	AM_RANGE(0x3000, 0x37ff) AM_WRITEONLY AM_BASE_MEMBER(contra_state, m_spriteram)/* 2nd bank is at 0x5000 */
-	AM_RANGE(0x3800, 0x3fff) AM_WRITEONLY // second sprite buffer
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(contra_bg_cram_w) AM_BASE_MEMBER(contra_state, m_bg_cram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(contra_bg_vram_w) AM_BASE_MEMBER(contra_state, m_bg_vram)
-	AM_RANGE(0x4800, 0x5fff) AM_WRITEONLY
+	AM_RANGE(0x2000, 0x5fff) AM_READ(SMH_RAM)
+	AM_RANGE(0x2000, 0x23ff) AM_WRITE(contra_fg_cram_w) AM_BASE(&contra_fg_cram)
+	AM_RANGE(0x2400, 0x27ff) AM_WRITE(contra_fg_vram_w) AM_BASE(&contra_fg_vram)
+	AM_RANGE(0x2800, 0x2bff) AM_WRITE(contra_text_cram_w) AM_BASE(&contra_text_cram)
+	AM_RANGE(0x2c00, 0x2fff) AM_WRITE(contra_text_vram_w) AM_BASE(&contra_text_vram)
+	AM_RANGE(0x3000, 0x37ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram)/* 2nd bank is at 0x5000 */
+	AM_RANGE(0x3800, 0x3fff) AM_WRITE(SMH_RAM) // second sprite buffer
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(contra_bg_cram_w) AM_BASE(&contra_bg_cram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(contra_bg_vram_w) AM_BASE(&contra_bg_vram)
+	AM_RANGE(0x4800, 0x5fff) AM_WRITE(SMH_RAM)
 
-	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK("bank1")
-	AM_RANGE(0x7000, 0x7000) AM_WRITE(contra_bankswitch_w)
+	AM_RANGE(0x6000, 0x7fff) AM_ROMBANK(1)
+ 	AM_RANGE(0x7000, 0x7000) AM_WRITE(contra_bankswitch_w)
 
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0000) AM_READ(soundlatch_r)
-	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
 	AM_RANGE(0x4000, 0x4000) AM_WRITENOP /* read triggers irq reset and latch read (in the hardware only). */
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
 	AM_RANGE(0x8000, 0xffff) AM_ROM
@@ -176,60 +186,44 @@ GFXDECODE_END
 
 
 
-static MACHINE_START( contra )
-{
-	contra_state *state = machine.driver_data<contra_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 16, &ROM[0x10000], 0x2000);
-
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_k007121_1 = machine.device("k007121_1");
-	state->m_k007121_2 = machine.device("k007121_2");
-}
-
-static MACHINE_CONFIG_START( contra, contra_state )
+static MACHINE_DRIVER_START( contra )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", HD6309, XTAL_24MHz / 2 /* 3000000*4? */)
-	MCFG_CPU_PROGRAM_MAP(contra_map)
-	MCFG_CPU_VBLANK_INT("screen", contra_interrupt)
+ 	MDRV_CPU_ADD("maincpu", M6809, 1500000)
+	MDRV_CPU_PROGRAM_MAP(contra_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", M6809, XTAL_24MHz/8) /* 3000000? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+ 	MDRV_CPU_ADD("audiocpu", M6809, 2000000)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	/* enough for the sound CPU to read all commands */
-
-	MCFG_MACHINE_START(contra)
+	MDRV_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - enough for the sound CPU to read all commands */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(37*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(contra)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(37*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 35*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(contra)
-	MCFG_PALETTE_LENGTH(2*8*16*16)
+	MDRV_GFXDECODE(contra)
+	MDRV_PALETTE_LENGTH(2*8*16*16)
 
-	MCFG_PALETTE_INIT(contra)
-	MCFG_VIDEO_START(contra)
-
-	MCFG_K007121_ADD("k007121_1")
-	MCFG_K007121_ADD("k007121_2")
+	MDRV_PALETTE_INIT(contra)
+	MDRV_VIDEO_START(contra)
+	MDRV_VIDEO_UPDATE(contra)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2151, 3582071)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
+MACHINE_DRIVER_END
 
 
 ROM_START( contra )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "633m03.18a",   0x20000, 0x08000, CRC(d045e1da) SHA1(ec781e98a6efb14861223250c6239b06ec98ed0b) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633i02.17a",   0x10000, 0x10000, CRC(b2f7bd9a) SHA1(6c29568419bc49f0be3995b0c34edd9038f6f8d9) )
@@ -250,13 +244,10 @@ ROM_START( contra )
 	ROM_LOAD( "633e09.12g",   0x0100, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #0 char lookup table */
 	ROM_LOAD( "633f10.18g",   0x0200, 0x0100, CRC(2b244d84) SHA1(c3bde7afb501bae58d07721c637dc06938c22150) )	/* 007121 #1 sprite lookup table */
 	ROM_LOAD( "633f11.20g",   0x0300, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #1 char lookup table */
-
-	ROM_REGION( 0x0001, "pals", 0 )
-	ROM_LOAD( "007766.20d.bin", 0x0000, 0x0001, NO_DUMP ) /* PAL16L8A-2CN */
 ROM_END
 
 ROM_START( contra1 )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "633e03.18a",   0x20000, 0x08000, CRC(7fc0d8cf) SHA1(cf1cf15646a4e5dc72671e957bc51ca44d30995c) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633i02.17a",   0x10000, 0x10000, CRC(b2f7bd9a) SHA1(6c29568419bc49f0be3995b0c34edd9038f6f8d9) )
@@ -277,13 +268,10 @@ ROM_START( contra1 )
 	ROM_LOAD( "633e09.12g",   0x0100, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #0 char lookup table */
 	ROM_LOAD( "633f10.18g",   0x0200, 0x0100, CRC(2b244d84) SHA1(c3bde7afb501bae58d07721c637dc06938c22150) )	/* 007121 #1 sprite lookup table */
 	ROM_LOAD( "633f11.20g",   0x0300, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #1 char lookup table */
-
-	ROM_REGION( 0x0001, "pals", 0 )
-	ROM_LOAD( "007766.20d.bin", 0x0000, 0x0001, NO_DUMP ) /* PAL16L8A-2CN */
 ROM_END
 
 ROM_START( contrab )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "633m03.18a",   0x20000, 0x08000, CRC(d045e1da) SHA1(ec781e98a6efb14861223250c6239b06ec98ed0b) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633i02.17a",   0x10000, 0x10000, CRC(b2f7bd9a) SHA1(6c29568419bc49f0be3995b0c34edd9038f6f8d9) )
@@ -322,7 +310,7 @@ ROM_START( contrab )
 ROM_END
 
 ROM_START( contraj )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "633n03.18a",   0x20000, 0x08000, CRC(fedab568) SHA1(7fd4546335bdeef7f8326d4cbde7fa36d74e5cfc) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633k02.17a",   0x10000, 0x10000, CRC(5d5f7438) SHA1(489fe56ca57ef4f6a7792fba07a9656009f3f285) )
@@ -343,13 +331,10 @@ ROM_START( contraj )
 	ROM_LOAD( "633e09.12g",   0x0100, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #0 char lookup table */
 	ROM_LOAD( "633f10.18g",   0x0200, 0x0100, CRC(2b244d84) SHA1(c3bde7afb501bae58d07721c637dc06938c22150) )	/* 007121 #1 sprite lookup table */
 	ROM_LOAD( "633f11.20g",   0x0300, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #1 char lookup table */
-
-	ROM_REGION( 0x0001, "pals", 0 )
-	ROM_LOAD( "007766.20d.bin", 0x0000, 0x0001, NO_DUMP ) /* PAL16L8A-2CN */
 ROM_END
 
 ROM_START( contrajb )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "g-2.18a",      0x20000, 0x08000, CRC(bdb9196d) SHA1(fad170e8fda94c9c9d7b82433daa30b80af12efc) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633k02.17a",   0x10000, 0x10000, CRC(5d5f7438) SHA1(489fe56ca57ef4f6a7792fba07a9656009f3f285) )
@@ -388,7 +373,7 @@ ROM_START( contrajb )
 ROM_END
 
 ROM_START( gryzor )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "g2.18a",       0x20000, 0x08000, CRC(92ca77bd) SHA1(3a56f51a617edff9f2a60df0141dff040881b82a) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "g3.17a",       0x10000, 0x10000, CRC(bbd9e95e) SHA1(fd5de1bcc485de7b8fc2e321351c2e3ddd25d053) )
@@ -409,13 +394,10 @@ ROM_START( gryzor )
 	ROM_LOAD( "633e09.12g",   0x0100, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #0 char lookup table */
 	ROM_LOAD( "633f10.18g",   0x0200, 0x0100, CRC(2b244d84) SHA1(c3bde7afb501bae58d07721c637dc06938c22150) )	/* 007121 #1 sprite lookup table */
 	ROM_LOAD( "633f11.20g",   0x0300, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #1 char lookup table */
-
-	ROM_REGION( 0x0001, "pals", 0 )
-	ROM_LOAD( "007766.20d.bin", 0x0000, 0x0001, NO_DUMP ) /* PAL16L8A-2CN */
 ROM_END
 
 ROM_START( gryzora )
-	ROM_REGION( 0x30000, "maincpu", ROMREGION_ERASEFF )	/* 64k for code + 96k for banked ROMs */
+	ROM_REGION( 0x28000, "maincpu", 0 )	/* 64k for code + 96k for banked ROMs */
 	ROM_LOAD( "633j03.18a",   0x20000, 0x08000, CRC(20919162) SHA1(2f375166428ee03f6e8ac0372a373bb8ab35e64c) )
 	ROM_CONTINUE(             0x08000, 0x08000 )
 	ROM_LOAD( "633j02.17a",   0x10000, 0x10000, CRC(b5922f9a) SHA1(441a23dc99a908ec2c09c855e73070dbab8c5ae2) )
@@ -436,17 +418,14 @@ ROM_START( gryzora )
 	ROM_LOAD( "633e09.12g",   0x0100, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #0 char lookup table */
 	ROM_LOAD( "633f10.18g",   0x0200, 0x0100, CRC(2b244d84) SHA1(c3bde7afb501bae58d07721c637dc06938c22150) )	/* 007121 #1 sprite lookup table */
 	ROM_LOAD( "633f11.20g",   0x0300, 0x0100, CRC(14ca5e19) SHA1(eeee2f8b3d1e4acf47de1e74c4e507ff924591e7) )	/* 007121 #1 char lookup table */
-
-	ROM_REGION( 0x0001, "pals", 0 )
-	ROM_LOAD( "007766.20d.bin", 0x0000, 0x0001, NO_DUMP ) /* PAL16L8A-2CN */
 ROM_END
 
 
 
-GAME( 1987, contra,   0,      contra, contra, 0, ROT90, "Konami", "Contra (US, set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, contra1,  contra, contra, contra, 0, ROT90, "Konami", "Contra (US, set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1987, contrab,  contra, contra, contra, 0, ROT90, "bootleg", "Contra (bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 1987, contraj,  contra, contra, contra, 0, ROT90, "Konami", "Contra (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1987, contrajb, contra, contra, contra, 0, ROT90, "bootleg", "Contra (Japan bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 1987, gryzor,   contra, contra, contra, 0, ROT90, "Konami", "Gryzor (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, gryzora,  contra, contra, contra, 0, ROT90, "Konami", "Gryzor (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1987, contra,   0,      contra, contra, 0, ROT90, "Konami", "Contra (US, Set 1)", 0 )
+GAME( 1987, contra1,  contra, contra, contra, 0, ROT90, "Konami", "Contra (US, Set 2)", 0 )
+GAME( 1987, contrab,  contra, contra, contra, 0, ROT90, "bootleg", "Contra (bootleg)", 0 )
+GAME( 1987, contraj,  contra, contra, contra, 0, ROT90, "Konami", "Contra (Japan)", 0 )
+GAME( 1987, contrajb, contra, contra, contra, 0, ROT90, "bootleg", "Contra (Japan bootleg)", 0 )
+GAME( 1987, gryzor,   contra, contra, contra, 0, ROT90, "Konami", "Gryzor (Set 1)", 0 )
+GAME( 1987, gryzora,  contra, contra, contra, 0, ROT90, "Konami", "Gryzor (Set 2)", 0 )

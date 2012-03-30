@@ -177,8 +177,8 @@ c760    rom bank
                                 -----
 
 - Is the sub cpu / sound cpu communication status port (0e) correct ?
-- Main cpu: port  01 ? boot sub/sound cpu?
-- Sub  cpu: port 0x38 ? irq ack?
+- Main cpu: port  01 ?
+- Sub  cpu: port 0x38 ? Plus it can probably cause a nmi to main cpu
 - incomplete DSW's
 - Spriteram low 0x300 bytes (priority?)
 
@@ -217,168 +217,186 @@ Code at 505: waits for bit 1 to go low, writes command, waits for bit
 
 */
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
 #include "video/kan_pand.h"
-#include "includes/airbustr.h"
+
+static UINT8 *devram;
+static int soundlatch_status, soundlatch2_status;
+static int master_addr;
+static int slave_addr;
+
+extern UINT8 *airbustr_videoram2, *airbustr_colorram2;
+
+extern WRITE8_HANDLER( airbustr_videoram_w );
+extern WRITE8_HANDLER( airbustr_colorram_w );
+extern WRITE8_HANDLER( airbustr_videoram2_w );
+extern WRITE8_HANDLER( airbustr_colorram2_w );
+extern WRITE8_HANDLER( airbustr_scrollregs_w );
+extern VIDEO_START( airbustr );
+extern VIDEO_UPDATE( airbustr );
+extern VIDEO_EOF( airbustr );
 
 /* Read/Write Handlers */
+
 static READ8_HANDLER( devram_r )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
-
 	// There's an MCU here, possibly
+
 	switch (offset)
 	{
 		/* Reading efe0 probably resets a watchdog mechanism
            that would reset the main cpu. We avoid this and patch
            the rom instead (main cpu has to be reset once at startup) */
 		case 0xfe0:
-			return watchdog_reset_r(space, 0);
+			return watchdog_reset_r(space,0);
 
 		/* Reading a word at eff2 probably yelds the product
            of the words written to eff0 and eff2 */
 		case 0xff2:
 		case 0xff3:
 		{
-			int	x = (state->m_devram[0xff0] + state->m_devram[0xff1] * 256) * (state->m_devram[0xff2] + state->m_devram[0xff3] * 256);
-			if (offset == 0xff2)
-				return (x & 0x00ff) >> 0;
-			else
-				return (x & 0xff00) >> 8;
+			int	x = (devram[0xff0] + devram[0xff1] * 256) *
+					(devram[0xff2] + devram[0xff3] * 256);
+			if (offset == 0xff2)	return (x & 0x00FF) >> 0;
+			else				return (x & 0xFF00) >> 8;
 		}	break;
 
 		/* Reading eff4, F0 times must yield at most 80-1 consecutive
            equal values */
 		case 0xff4:
-			return space->machine().rand();
+			return mame_rand(space->machine);
 
 		default:
-			return state->m_devram[offset];
+			return devram[offset];
 	}
 }
 
 static WRITE8_HANDLER( master_nmi_trigger_w )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
-	device_set_input_line(state->m_slave, INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "slave", INPUT_LINE_NMI, PULSE_LINE);
+}
+
+static void airbustr_bankswitch(running_machine *machine, const char *cpu, int bank, int data)
+{
+	UINT8 *ROM = memory_region(machine, cpu);
+
+	if ((data & 0x07) <  3)
+		ROM = &ROM[0x4000 * (data & 0x07)];
+	else
+		ROM = &ROM[0x10000 + 0x4000 * ((data & 0x07) - 3)];
+
+	memory_set_bankptr(machine, bank, ROM);
 }
 
 static WRITE8_HANDLER( master_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 0x07);
+	airbustr_bankswitch(space->machine, "master", 1, data);
 }
 
 static WRITE8_HANDLER( slave_bankswitch_w )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
+	airbustr_bankswitch(space->machine, "slave", 2, data);
 
-	memory_set_bank(space->machine(), "bank2", data & 0x07);
-
-	flip_screen_set(space->machine(), data & 0x10);
+	flip_screen_set(space->machine, data & 0x10);
 
 	// used at the end of levels, after defeating the boss, to leave trails
-	pandora_set_clear_bitmap(state->m_pandora, data & 0x20);
+	pandora_set_clear_bitmap(data&0x20);
 }
 
 static WRITE8_HANDLER( sound_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank3", data & 0x07);
+	airbustr_bankswitch(space->machine, "audiocpu", 3, data);
 }
 
 static READ8_HANDLER( soundcommand_status_r )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
-
 	// bits: 2 <-> ?    1 <-> soundlatch full   0 <-> soundlatch2 empty
-	return 4 + state->m_soundlatch_status * 2 + (1 - state->m_soundlatch2_status);
+	return 4 + soundlatch_status * 2 + (1 - soundlatch2_status);
 }
 
 static READ8_HANDLER( soundcommand_r )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
-	state->m_soundlatch_status = 0;	// soundlatch has been read
-	return soundlatch_r(space, 0);
+	soundlatch_status = 0;	// soundlatch has been read
+	return soundlatch_r(space,0);
 }
 
 static READ8_HANDLER( soundcommand2_r )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
-	state->m_soundlatch2_status = 0;	// soundlatch2 has been read
-	return soundlatch2_r(space, 0);
+	soundlatch2_status = 0;	// soundlatch2 has been read
+	return soundlatch2_r(space,0);
 }
 
 static WRITE8_HANDLER( soundcommand_w )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
 	soundlatch_w(space, 0, data);
-	state->m_soundlatch_status = 1;	// soundlatch has been written
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);	// cause a nmi to sub cpu
+	soundlatch_status = 1;	// soundlatch has been written
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);	// cause a nmi to sub cpu
 }
 
 static WRITE8_HANDLER( soundcommand2_w )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
 	soundlatch2_w(space, 0, data);
-	state->m_soundlatch2_status = 1;	// soundlatch2 has been written
+	soundlatch2_status = 1;	// soundlatch2 has been written
 }
 
 static WRITE8_HANDLER( airbustr_paletteram_w )
 {
-	airbustr_state *state = space->machine().driver_data<airbustr_state>();
 	int val;
 
 	/*  ! byte 1 ! ! byte 0 !   */
 	/*  xGGG GGRR   RRRB BBBB   */
 	/*  x432 1043   2104 3210   */
 
-	state->m_paletteram[offset] = data;
-	val = (state->m_paletteram[offset | 1] << 8) | state->m_paletteram[offset & ~1];
+	paletteram[offset] = data;
+	val = (paletteram[offset | 1] << 8) | paletteram[offset & ~1];
 
-	palette_set_color_rgb(space->machine(), offset / 2, pal5bit(val >> 5), pal5bit(val >> 10), pal5bit(val >> 0));
+	palette_set_color_rgb(space->machine, offset/2, pal5bit(val >> 5), pal5bit(val >> 10), pal5bit(val >> 0));
 }
 
 static WRITE8_HANDLER( airbustr_coin_counter_w )
 {
-	coin_counter_w(space->machine(), 0, data & 1);
-	coin_counter_w(space->machine(), 1, data & 2);
-	coin_lockout_w(space->machine(), 0, ~data & 4);
-	coin_lockout_w(space->machine(), 1, ~data & 8);
+	coin_counter_w(0, data & 1);
+	coin_counter_w(1, data & 2);
+	coin_lockout_w(0, ~data & 4);
+	coin_lockout_w(1, ~data & 8);
 }
 
 /* Memory Maps */
-static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
+
+static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xcfff) AM_DEVREADWRITE("pandora", pandora_spriteram_r, pandora_spriteram_w)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
+	AM_RANGE(0xc000, 0xcfff) AM_READWRITE(pandora_spriteram_r, pandora_spriteram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM AM_BASE_MEMBER(airbustr_state, m_devram) // shared with protection device
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xefff) AM_RAM AM_BASE(&devram) // shared with protection device
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE(1)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( master_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(master_bankswitch_w)
 	AM_RANGE(0x01, 0x01) AM_WRITENOP // ???
 	AM_RANGE(0x02, 0x02) AM_WRITE(master_nmi_trigger_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank2")
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(airbustr_videoram2_w) AM_BASE_MEMBER(airbustr_state, m_videoram2)
-	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(airbustr_colorram2_w) AM_BASE_MEMBER(airbustr_state, m_colorram2)
-	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(airbustr_videoram_w) AM_BASE_MEMBER(airbustr_state, m_videoram)
-	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(airbustr_colorram_w) AM_BASE_MEMBER(airbustr_state, m_colorram)
-	AM_RANGE(0xd000, 0xd5ff) AM_RAM_WRITE(airbustr_paletteram_w) AM_BASE_MEMBER(airbustr_state, m_paletteram)
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(2)
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM_WRITE(airbustr_videoram2_w) AM_BASE(&airbustr_videoram2)
+	AM_RANGE(0xc400, 0xc7ff) AM_RAM_WRITE(airbustr_colorram2_w) AM_BASE(&airbustr_colorram2)
+	AM_RANGE(0xc800, 0xcbff) AM_RAM_WRITE(airbustr_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xcc00, 0xcfff) AM_RAM_WRITE(airbustr_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0xd000, 0xd5ff) AM_RAM_WRITE(airbustr_paletteram_w) AM_BASE(&paletteram)
 	AM_RANGE(0xd600, 0xdfff) AM_RAM
 	AM_RANGE(0xe000, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_SHARE(1)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( slave_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(slave_bankswitch_w)
 	AM_RANGE(0x02, 0x02) AM_READWRITE(soundcommand2_r, soundcommand_w)
@@ -388,20 +406,20 @@ static ADDRESS_MAP_START( slave_io_map, AS_IO, 8 )
 	AM_RANGE(0x22, 0x22) AM_READ_PORT("P2")
 	AM_RANGE(0x24, 0x24) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x28, 0x28) AM_WRITE(airbustr_coin_counter_w)
-	AM_RANGE(0x38, 0x38) AM_WRITENOP // irq ack / irq mask
+	AM_RANGE(0x38, 0x38) AM_WRITENOP // ???
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank3")
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(3)
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sound_bankswitch_w)
-	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
-	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
+	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x06, 0x06) AM_READWRITE(soundcommand_r, soundcommand2_w)
 ADDRESS_MAP_END
 
@@ -487,7 +505,7 @@ static INPUT_PORTS_START( airbustr )
 	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( airbustrj )
+static INPUT_PORTS_START( airbustj )
 	PORT_INCLUDE(airbustr)
 
 	PORT_MODIFY("DSW1")
@@ -556,137 +574,98 @@ static const ym2203_interface ym2203_config =
 
 /* Interrupt Generators */
 
-/* Main Z80 uses IM2 */
-static TIMER_DEVICE_CALLBACK( airbustr_scanline )
+static INTERRUPT_GEN( master_interrupt )
 {
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "master", 0, HOLD_LINE, 0xff);
-
-	/* Pandora "sprite end dma" irq? TODO: timing is likely off */
-	if(scanline == 64)
-		cputag_set_input_line_and_vector(timer.machine(), "master", 0, HOLD_LINE, 0xfd);
+	master_addr ^= 0x02;
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, master_addr);
 }
 
-/* Sub Z80 uses IM2 too, but 0xff irq routine just contains an irq ack in it */
 static INTERRUPT_GEN( slave_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, HOLD_LINE, 0xfd);
+	slave_addr ^= 0x02;
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, slave_addr);
 }
 
 /* Machine Initialization */
 
 static MACHINE_START( airbustr )
 {
-	airbustr_state *state = machine.driver_data<airbustr_state>();
-	UINT8 *MASTER = machine.region("master")->base();
-	UINT8 *SLAVE = machine.region("slave")->base();
-	UINT8 *AUDIO = machine.region("audiocpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 3, &MASTER[0x00000], 0x4000);
-	memory_configure_bank(machine, "bank1", 3, 5, &MASTER[0x10000], 0x4000);
-	memory_configure_bank(machine, "bank2", 0, 3, &SLAVE[0x00000], 0x4000);
-	memory_configure_bank(machine, "bank2", 3, 5, &SLAVE[0x10000], 0x4000);
-	memory_configure_bank(machine, "bank3", 0, 3, &AUDIO[0x00000], 0x4000);
-	memory_configure_bank(machine, "bank3", 3, 5, &AUDIO[0x10000], 0x4000);
-
-	state->m_master = machine.device("master");
-	state->m_slave = machine.device("slave");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_pandora = machine.device("pandora");
-
-	state->save_item(NAME(state->m_soundlatch_status));
-	state->save_item(NAME(state->m_soundlatch2_status));
-	state->save_item(NAME(state->m_bg_scrollx));
-	state->save_item(NAME(state->m_bg_scrolly));
-	state->save_item(NAME(state->m_fg_scrollx));
-	state->save_item(NAME(state->m_fg_scrolly));
-	state->save_item(NAME(state->m_highbits));
+    state_save_register_global(machine, soundlatch_status);
+    state_save_register_global(machine, soundlatch2_status);
+    state_save_register_global(machine, master_addr);
+    state_save_register_global(machine, slave_addr);
 }
 
 static MACHINE_RESET( airbustr )
 {
-	airbustr_state *state = machine.driver_data<airbustr_state>();
-
-	state->m_soundlatch_status = state->m_soundlatch2_status = 0;
-	state->m_bg_scrollx = 0;
-	state->m_bg_scrolly = 0;
-	state->m_fg_scrollx = 0;
-	state->m_fg_scrolly = 0;
-	state->m_highbits = 0;
-
-	memory_set_bank(machine, "bank1", 0x02);
-	memory_set_bank(machine, "bank2", 0x02);
-	memory_set_bank(machine, "bank3", 0x02);
+	const address_space *space = cputag_get_address_space(machine, "master", ADDRESS_SPACE_PROGRAM);
+	soundlatch_status = soundlatch2_status = 0;
+	master_addr = 0xff;
+	slave_addr = 0xfd;
+	master_bankswitch_w(space, 0, 0x02);
+	slave_bankswitch_w(space, 0, 0x02);
+	sound_bankswitch_w(space, 0, 0x02);
 }
 
 /* Machine Driver */
 
-static const kaneko_pandora_interface airbustr_pandora_config =
-{
-	"screen",	/* screen tag */
-	1,	/* gfx_region */
-	0, 0	/* x_offs, y_offs */
-};
+static MACHINE_DRIVER_START( airbustr )
+	// basic machine hardware
+	MDRV_CPU_ADD("master", Z80, 6000000)	// ???
+	MDRV_CPU_PROGRAM_MAP(master_map)
+	MDRV_CPU_IO_MAP(master_io_map)
+	MDRV_CPU_VBLANK_INT_HACK(master_interrupt, 2)	// nmi caused by sub cpu?, ?
 
-static MACHINE_CONFIG_START( airbustr, airbustr_state )
+	MDRV_CPU_ADD("slave", Z80, 6000000)	// ???
+	MDRV_CPU_PROGRAM_MAP(slave_map)
+	MDRV_CPU_IO_MAP(slave_io_map)
+	MDRV_CPU_VBLANK_INT_HACK(slave_interrupt, 2)		// nmi caused by main cpu, ?
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("master", Z80, 6000000)	// ???
-	MCFG_CPU_PROGRAM_MAP(master_map)
-	MCFG_CPU_IO_MAP(master_io_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", airbustr_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("audiocpu", Z80, 6000000)	// ???
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)		// nmi are caused by sub cpu writing a sound command
 
-	MCFG_CPU_ADD("slave", Z80, 6000000)	// ???
-	MCFG_CPU_PROGRAM_MAP(slave_map)
-	MCFG_CPU_IO_MAP(slave_io_map)
-	MCFG_CPU_VBLANK_INT("screen", slave_interrupt) /* nmi signal from master cpu */
-
-	MCFG_CPU_ADD("audiocpu", Z80, 6000000)	// ???
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)		// nmi are caused by sub cpu writing a sound command
-
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))	// Palette RAM is filled by sub cpu with data supplied by main cpu
+	MDRV_QUANTUM_TIME(HZ(6000))	// Palette RAM is filled by sub cpu with data supplied by main cpu
 							// Maybe a high value is safer in order to avoid glitches
-	MCFG_MACHINE_START(airbustr)
-	MCFG_MACHINE_RESET(airbustr)
-	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(3))	/* a guess, and certainly wrong */
+    MDRV_MACHINE_START(airbustr)
+	MDRV_MACHINE_RESET(airbustr)
+	MDRV_WATCHDOG_TIME_INIT(SEC(3))	/* a guess, and certainly wrong */
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(airbustr)
-	MCFG_SCREEN_VBLANK_STATIC(airbustr)
+	// video hardware
 
-	MCFG_GFXDECODE(airbustr)
-	MCFG_PALETTE_LENGTH(768)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(airbustr)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_KANEKO_PANDORA_ADD("pandora", airbustr_pandora_config)
+	MDRV_VIDEO_START(airbustr)
+	MDRV_VIDEO_UPDATE(airbustr)
+	MDRV_VIDEO_EOF(airbustr)
 
-	MCFG_VIDEO_START(airbustr)
+	// sound hardware
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ym", YM2203, 3000000)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.25)
+	MDRV_SOUND_ROUTE(1, "mono", 0.25)
+	MDRV_SOUND_ROUTE(2, "mono", 0.25)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ymsnd", YM2203, 3000000)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.25)
-	MCFG_SOUND_ROUTE(1, "mono", 0.25)
-	MCFG_SOUND_ROUTE(2, "mono", 0.25)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+	MDRV_SOUND_ADD("oki", OKIM6295, 12000000/4)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_DRIVER_END
 
-	MCFG_OKIM6295_ADD("oki", 12000000/4, OKIM6295_PIN7_LOW)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( airbustrb, airbustr )
-	MCFG_WATCHDOG_TIME_INIT(attotime::from_seconds(0)) // no protection device or watchdog
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( airbusb )
+	MDRV_IMPORT_FROM(airbustr)
+	MDRV_WATCHDOG_TIME_INIT(SEC(0)) // no protection device or watchdog
+MACHINE_DRIVER_END
 
 
 /* ROMs */
@@ -797,12 +776,12 @@ ROM_END
 
 static DRIVER_INIT( airbustr )
 {
-	machine.device("master")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xe000, 0xefff, FUNC(devram_r)); // protection device lives here
+	memory_install_read8_handler(cputag_get_address_space(machine, "master", ADDRESS_SPACE_PROGRAM), 0xe000, 0xefff, 0, 0, devram_r); // protection device lives here
 }
 
 
 /* Game Drivers */
 
 GAME( 1990, airbustr,   0,        airbustr, airbustr, airbustr, ROT0, "Kaneko (Namco license)", "Air Buster: Trouble Specialty Raid Unit (World)", GAME_SUPPORTS_SAVE )	// 891220
-GAME( 1990, airbustrj,  airbustr, airbustr, airbustrj,airbustr, ROT0, "Kaneko (Namco license)", "Air Buster: Trouble Specialty Raid Unit (Japan)", GAME_SUPPORTS_SAVE)    // 891229
-GAME( 1990, airbustrb,  airbustr, airbustrb,airbustrj,0,        ROT0, "bootleg", "Air Buster: Trouble Specialty Raid Unit (bootleg)", GAME_SUPPORTS_SAVE)	// based on Japan set (891229)
+GAME( 1990, airbustrj,  airbustr, airbustr, airbustj, airbustr, ROT0, "Kaneko (Namco license)", "Air Buster: Trouble Specialty Raid Unit (Japan)", GAME_SUPPORTS_SAVE)    // 891229
+GAME( 1990, airbustrb,  airbustr, airbusb,  airbustj, 0,        ROT0, "bootleg", "Air Buster: Trouble Specialty Raid Unit (bootleg)", GAME_SUPPORTS_SAVE)	// based on Japan set (891229)

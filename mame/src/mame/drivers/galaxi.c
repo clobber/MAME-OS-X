@@ -39,161 +39,117 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
-#include "machine/nvram.h"
 #include "galaxi.lh"
-
-class galaxi_state : public driver_device
-{
-public:
-	galaxi_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT16 *  m_bg1_ram;
-	UINT16 *  m_bg2_ram;
-	UINT16 *  m_bg3_ram;
-	UINT16 *  m_bg4_ram;
-	UINT16 *  m_fg_ram;
-//  UINT16 *  m_paletteram;   // currently this uses generic palette handling
-//  UINT16 *  m_nvram;        // currently this uses generic nvram handling
-
-	/* video-related */
-	tilemap_t   *m_bg1_tmap;
-	tilemap_t   *m_bg2_tmap;
-	tilemap_t   *m_bg3_tmap;
-	tilemap_t   *m_bg4_tmap;
-	tilemap_t   *m_fg_tmap;
-
-	/* misc */
-	int       m_hopper;
-	int       m_ticket;
-	UINT16    m_out[3];
-};
-
 
 /***************************************************************************
                                 Video Hardware
 ***************************************************************************/
 
+static UINT16  *bg1_ram,  *bg2_ram,  *bg3_ram,  *bg4_ram,  *fg_ram;
+static tilemap *bg1_tmap, *bg2_tmap, *bg3_tmap, *bg4_tmap, *fg_tmap;
+
 static TILE_GET_INFO( get_bg1_tile_info )
 {
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-	UINT16 code = state->m_bg1_ram[tile_index];
-	SET_TILE_INFO(0, code, 0x10 + (code >> 12), 0);
+	UINT16 code = bg1_ram[tile_index];
+	SET_TILE_INFO(0, code, 0x10+(code >> 12), 0);
 }
-
 static TILE_GET_INFO( get_bg2_tile_info )
 {
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-	UINT16 code = state->m_bg2_ram[tile_index];
-	SET_TILE_INFO(0, code, 0x10 + (code >> 12), 0);
+	UINT16 code = bg2_ram[tile_index];
+	SET_TILE_INFO(0, code, 0x10+(code >> 12), 0);
 }
-
 static TILE_GET_INFO( get_bg3_tile_info )
 {
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-	UINT16 code = state->m_bg3_ram[tile_index];
+	UINT16 code = bg3_ram[tile_index];
+	SET_TILE_INFO(0, code, (code >> 12), 0);
+}
+static TILE_GET_INFO( get_bg4_tile_info )
+{
+	UINT16 code = bg4_ram[tile_index];
 	SET_TILE_INFO(0, code, (code >> 12), 0);
 }
 
-static TILE_GET_INFO( get_bg4_tile_info )
-{
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-	UINT16 code = state->m_bg4_ram[tile_index];
-	SET_TILE_INFO(0, code, (code >> 12), 0);
-}
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-	UINT16 code = state->m_fg_ram[tile_index];
-	SET_TILE_INFO(1, code, 0x20 + (code >> 12), 0);
+	UINT16 code = fg_ram[tile_index];
+	SET_TILE_INFO(1, code, 0x20+(code >> 12), 0);
 }
+
 
 static WRITE16_HANDLER( galaxi_bg1_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_bg1_ram[offset]);
-	state->m_bg1_tmap->mark_tile_dirty(offset);
+	COMBINE_DATA( &bg1_ram[offset] );
+	tilemap_mark_tile_dirty( bg1_tmap, offset );
 }
-
 static WRITE16_HANDLER( galaxi_bg2_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_bg2_ram[offset]);
-	state->m_bg2_tmap->mark_tile_dirty(offset);
+	COMBINE_DATA( &bg2_ram[offset] );
+	tilemap_mark_tile_dirty( bg2_tmap, offset );
 }
-
 static WRITE16_HANDLER( galaxi_bg3_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_bg3_ram[offset]);
-	state->m_bg3_tmap->mark_tile_dirty(offset);
+	COMBINE_DATA( &bg3_ram[offset] );
+	tilemap_mark_tile_dirty( bg3_tmap, offset );
 }
-
 static WRITE16_HANDLER( galaxi_bg4_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_bg4_ram[offset]);
-	state->m_bg4_tmap->mark_tile_dirty(offset);
+	COMBINE_DATA( &bg4_ram[offset] );
+	tilemap_mark_tile_dirty( bg4_tmap, offset );
 }
 
 static WRITE16_HANDLER( galaxi_fg_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_fg_ram[offset]);
-	state->m_fg_tmap->mark_tile_dirty(offset);
+	COMBINE_DATA( &fg_ram[offset] );
+	tilemap_mark_tile_dirty( fg_tmap, offset );
 }
 
 static VIDEO_START(galaxi)
 {
-	galaxi_state *state = machine.driver_data<galaxi_state>();
+	bg1_tmap = tilemap_create( machine, get_bg1_tile_info, tilemap_scan_rows, 16,16, 0x20,0x10 );
+	bg2_tmap = tilemap_create( machine, get_bg2_tile_info, tilemap_scan_rows, 16,16, 0x20,0x10 );
+	bg3_tmap = tilemap_create( machine, get_bg3_tile_info, tilemap_scan_rows, 16,16, 0x20,0x10 );
+	bg4_tmap = tilemap_create( machine, get_bg4_tile_info, tilemap_scan_rows, 16,16, 0x20,0x10 );
 
-	state->m_bg1_tmap = tilemap_create(machine, get_bg1_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
-	state->m_bg2_tmap = tilemap_create(machine, get_bg2_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
-	state->m_bg3_tmap = tilemap_create(machine, get_bg3_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
-	state->m_bg4_tmap = tilemap_create(machine, get_bg4_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
+	fg_tmap  = tilemap_create( machine, get_fg_tile_info, tilemap_scan_rows, 8,8,   0x40,0x20 );
 
-	state->m_fg_tmap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 0x40, 0x20);
+	tilemap_set_transparent_pen(bg1_tmap, 0);
+	tilemap_set_transparent_pen(bg2_tmap, 0);
+	tilemap_set_transparent_pen(bg3_tmap, 0);
+	tilemap_set_transparent_pen(bg4_tmap, 0);
 
-	state->m_bg1_tmap->set_transparent_pen(0);
-	state->m_bg2_tmap->set_transparent_pen(0);
-	state->m_bg3_tmap->set_transparent_pen(0);
-	state->m_bg4_tmap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(fg_tmap, 0);
 
-	state->m_fg_tmap->set_transparent_pen(0);
-
-	state->m_bg3_tmap->set_scrolldx(-8, 0);
+	tilemap_set_scrolldx( bg3_tmap, -8, 0);
 }
 
-static SCREEN_UPDATE_IND16(galaxi)
+static VIDEO_UPDATE(galaxi)
 {
-	galaxi_state *state = screen.machine().driver_data<galaxi_state>();
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (screen.machine().input().code_pressed(KEYCODE_R))	// remapped due to inputs changes.
+	if (input_code_pressed(screen->machine, KEYCODE_R))	// remapped due to inputs changes.
 	{
 		int msk = 0;
-		if (screen.machine().input().code_pressed(KEYCODE_T))	msk |= 1;
-		if (screen.machine().input().code_pressed(KEYCODE_Y))	msk |= 2;
-		if (screen.machine().input().code_pressed(KEYCODE_U))	msk |= 4;
-		if (screen.machine().input().code_pressed(KEYCODE_I))	msk |= 8;
-		if (screen.machine().input().code_pressed(KEYCODE_O))	msk |= 16;
+		if (input_code_pressed(screen->machine, KEYCODE_T))	msk |= 1;
+		if (input_code_pressed(screen->machine, KEYCODE_Y))	msk |= 2;
+		if (input_code_pressed(screen->machine, KEYCODE_U))	msk |= 4;
+		if (input_code_pressed(screen->machine, KEYCODE_I))	msk |= 8;
+		if (input_code_pressed(screen->machine, KEYCODE_O))	msk |= 16;
 		if (msk != 0) layers_ctrl &= msk;
 	}
 #endif
 
-	if (layers_ctrl & 1)	state->m_bg1_tmap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
-	else				bitmap.fill(get_black_pen(screen.machine()), cliprect);
-	if (layers_ctrl & 2)	state->m_bg2_tmap->draw(bitmap, cliprect, 0, 0);
-	if (layers_ctrl & 4)	state->m_bg3_tmap->draw(bitmap, cliprect, 0, 0);
-	if (layers_ctrl & 8)	state->m_bg4_tmap->draw(bitmap, cliprect, 0, 0);
+	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, bg1_tmap,  TILEMAP_DRAW_OPAQUE, 0);
+	else					bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, bg2_tmap,  0, 0);
+	if (layers_ctrl & 4)	tilemap_draw(bitmap,cliprect, bg3_tmap,  0, 0);
+	if (layers_ctrl & 8)	tilemap_draw(bitmap,cliprect, bg4_tmap,  0, 0);
 
-	if (layers_ctrl & 16)	state->m_fg_tmap->draw(bitmap, cliprect, 0, 0);
+	if (layers_ctrl & 16)	tilemap_draw(bitmap,cliprect, fg_tmap, 0, 0);
 
 	return 0;
 }
@@ -202,31 +158,30 @@ static SCREEN_UPDATE_IND16(galaxi)
                             Memory Maps
 ***************************************************************************/
 
-static void show_out( running_machine &machine )
+static int hopper, ticket;
+
+static UINT16 out[3];
+
+static void show_out(void)
 {
-//  galaxi_state *state = machine.driver_data<galaxi_state>();
-//  popmessage("%04x %04x %04x", state->m_out[0], state->m_out[1], state->m_out[2]);
+//  popmessage("%04x %04x %04x", out[0], out[1], out[2]);
 }
 
 static WRITE16_HANDLER( galaxi_500000_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_out[0]);
-	show_out(space->machine());
+	COMBINE_DATA( &out[0] );
+	show_out();
 }
 
 static WRITE16_HANDLER( galaxi_500002_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-	COMBINE_DATA(&state->m_out[1]);
-	show_out(space->machine());
+	COMBINE_DATA( &out[1] );
+	show_out();
 }
 
 static WRITE16_HANDLER( galaxi_500004_w )
 {
-	galaxi_state *state = space->machine().driver_data<galaxi_state>();
-
-	if (ACCESSING_BITS_0_7)
+	if ( ACCESSING_BITS_0_7 )
 	{
 	/*
         - Lbits -
@@ -248,51 +203,48 @@ static WRITE16_HANDLER( galaxi_500004_w )
 		output_set_lamp_value(5, (data >> 4) & 1);		/* Lamp 5 - HOLD 5 */
 		output_set_lamp_value(6, (data >> 5) & 1);		/* Lamp 6 - START  */
 	}
-	if (ACCESSING_BITS_8_15)
+	if ( ACCESSING_BITS_8_15 )
 	{
-		state->m_ticket = data & 0x0100;
-		state->m_hopper = data & 0x1000;
-		coin_counter_w(space->machine(), 0, data & 0x2000);	// coins
+		ticket = data & 0x0100;
+		hopper = data & 0x1000;
+		coin_counter_w(0, data & 0x2000);	// coins
 	}
 
-	COMBINE_DATA(&state->m_out[2]);
-	show_out(space->machine());
+	COMBINE_DATA( &out[2] );
+	show_out();
 }
 
 static CUSTOM_INPUT( ticket_r )
 {
-	galaxi_state *state = field.machine().driver_data<galaxi_state>();
-	return state->m_ticket && !(field.machine().primary_screen->frame_number() % 10);
+	return ticket && !(video_screen_get_frame_number(field->port->machine->primary_screen)%10);
 }
-
 static CUSTOM_INPUT( hopper_r )
 {
-	galaxi_state *state = field.machine().driver_data<galaxi_state>();
-	return state->m_hopper && !(field.machine().primary_screen->frame_number() % 10);
+	return hopper && !(video_screen_get_frame_number(field->port->machine->primary_screen)%10);
 }
 
 
-static ADDRESS_MAP_START( galaxi_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM
+static ADDRESS_MAP_START( galaxi_map, ADDRESS_SPACE_PROGRAM, 16 )
+	AM_RANGE( 0x000000, 0x03ffff ) AM_ROM
 
-	AM_RANGE(0x100000, 0x1003ff) AM_RAM_WRITE(galaxi_bg1_w) AM_BASE_MEMBER(galaxi_state, m_bg1_ram)
-	AM_RANGE(0x100400, 0x1007ff) AM_RAM_WRITE(galaxi_bg2_w) AM_BASE_MEMBER(galaxi_state, m_bg2_ram)
-	AM_RANGE(0x100800, 0x100bff) AM_RAM_WRITE(galaxi_bg3_w) AM_BASE_MEMBER(galaxi_state, m_bg3_ram)
-	AM_RANGE(0x100c00, 0x100fff) AM_RAM_WRITE(galaxi_bg4_w) AM_BASE_MEMBER(galaxi_state, m_bg4_ram)
+	AM_RANGE( 0x100000, 0x1003ff ) AM_RAM_WRITE( galaxi_bg1_w ) AM_BASE( &bg1_ram )
+	AM_RANGE( 0x100400, 0x1007ff ) AM_RAM_WRITE( galaxi_bg2_w ) AM_BASE( &bg2_ram )
+	AM_RANGE( 0x100800, 0x100bff ) AM_RAM_WRITE( galaxi_bg3_w ) AM_BASE( &bg3_ram )
+	AM_RANGE( 0x100c00, 0x100fff ) AM_RAM_WRITE( galaxi_bg4_w ) AM_BASE( &bg4_ram )
 
-	AM_RANGE(0x101000, 0x101fff) AM_RAM_WRITE(galaxi_fg_w ) AM_BASE_MEMBER(galaxi_state, m_fg_ram)
-	AM_RANGE(0x102000, 0x1047ff) AM_READNOP	// unknown
+	AM_RANGE( 0x101000, 0x101fff ) AM_RAM_WRITE( galaxi_fg_w  ) AM_BASE( &fg_ram  )
+	AM_RANGE( 0x102000, 0x1047ff ) AM_READNOP	// unknown
 
-	AM_RANGE(0x300000, 0x3007ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE( 0x300000, 0x3007ff ) AM_RAM_WRITE( paletteram16_xRRRRRGGGGGBBBBB_word_w ) AM_BASE( &paletteram16 )
 
-	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("INPUTS")
-	AM_RANGE(0x500000, 0x500001) AM_WRITE(galaxi_500000_w)
-	AM_RANGE(0x500002, 0x500003) AM_WRITE(galaxi_500002_w)
-	AM_RANGE(0x500004, 0x500005) AM_WRITE(galaxi_500004_w)
+	AM_RANGE( 0x500000, 0x500001 ) AM_READ_PORT( "INPUTS" )
+	AM_RANGE( 0x500000, 0x500001 ) AM_WRITE( galaxi_500000_w )
+	AM_RANGE( 0x500002, 0x500003 ) AM_WRITE( galaxi_500002_w )
+	AM_RANGE( 0x500004, 0x500005 ) AM_WRITE( galaxi_500004_w )
 
-	AM_RANGE(0x700000, 0x700001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE( 0x700000, 0x700001 ) AM_DEVREADWRITE8( "oki", okim6295_r, okim6295_w, 0x00ff )
 
-	AM_RANGE(0x600000, 0x607fff) AM_RAM AM_SHARE("nvram")	// 2x DS1230Y (non volatile SRAM)
+	AM_RANGE( 0x600000, 0x607fff ) AM_RAM AM_BASE( &generic_nvram16 ) AM_SIZE( &generic_nvram_size )	// 2x DS1230Y (non volatile SRAM)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -376,68 +328,47 @@ GFXDECODE_END
                               Machine Drivers
 ***************************************************************************/
 
-static MACHINE_START( galaxi )
-{
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-
-	state->save_item(NAME(state->m_hopper));
-	state->save_item(NAME(state->m_ticket));
-	state->save_item(NAME(state->m_out));
-}
-
-static MACHINE_RESET( galaxi )
-{
-	galaxi_state *state = machine.driver_data<galaxi_state>();
-
-	state->m_hopper = 0;
-	state->m_ticket = 0;
-	state->m_out[0] = 0;
-	state->m_out[1] = 0;
-	state->m_out[2] = 0;
-}
-
-static MACHINE_CONFIG_START( galaxi, galaxi_state )
-
+static MACHINE_DRIVER_START( galaxi )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, XTAL_10MHz)	// ?
-	MCFG_CPU_PROGRAM_MAP(galaxi_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)	// ?
+	MDRV_CPU_PROGRAM_MAP(galaxi_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_MACHINE_START(galaxi)
-	MCFG_MACHINE_RESET(galaxi)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(16*5, 512-16*2-1, 16*1, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(galaxi)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(16*5, 512-16*2-1, 16*1, 256-1)
 
-	MCFG_GFXDECODE(galaxi)
-	MCFG_PALETTE_LENGTH(0x400)
+	MDRV_GFXDECODE(galaxi)
+	MDRV_PALETTE_LENGTH(0x400)
 
-	MCFG_VIDEO_START(galaxi)
+	MDRV_VIDEO_START(galaxi)
+	MDRV_VIDEO_UPDATE(galaxi)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", XTAL_16MHz/16, OKIM6295_PIN7_LOW)	// ?
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_16MHz/16)	// ?
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)	// ?
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( magjoker, galaxi )
-
+static MACHINE_DRIVER_START( magjoker )
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(galaxi)
 
 	/* sound hardware */
-	MCFG_SOUND_MODIFY("oki")
+	MDRV_SOUND_MODIFY("oki")
 
 	/* ADPCM samples are recorded with extremely low volume */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 4.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 4.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -475,6 +406,6 @@ ROM_END
                                Game Drivers
 ***************************************************************************/
 
-/*     YEAR  NAME      PARENT  MACHINE   INPUT     INIT  ROT    COMPANY   FULLNAME                       FLAGS                   LAYOUT  */
-GAMEL( 2000, galaxi,   0,      galaxi,   galaxi,   0,    ROT0,  "B.R.L.", "Galaxi (v2.0)",               GAME_SUPPORTS_SAVE,     layout_galaxi )
-GAMEL( 2000, magjoker, 0,      magjoker, magjoker, 0,    ROT0,  "B.R.L.", "Magic Joker (v1.25.10.2000)", GAME_SUPPORTS_SAVE,     layout_galaxi )
+/*     YEAR  NAME      PARENT  MACHINE   INPUT     INIT  ROT    COMPANY   FULLNAME                      FLAGS  LAYOUT  */
+GAMEL( 2000, galaxi,   0,      galaxi,   galaxi,   0,    ROT0, "B.R.L.", "Galaxi (v2.0)",               0,     layout_galaxi )
+GAMEL( 2000, magjoker, 0,      magjoker, magjoker, 0,    ROT0, "B.R.L.", "Magic Joker (v1.25.10.2000)", 0,     layout_galaxi )

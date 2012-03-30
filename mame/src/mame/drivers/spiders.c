@@ -187,20 +187,28 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "machine/rescap.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6809/m6809.h"
 #include "video/mc6845.h"
 #include "machine/6821pia.h"
 #include "machine/74123.h"
-#include "includes/spiders.h"
-#include "machine/nvram.h"
+#include "spiders.h"
 
 
 #define MAIN_CPU_MASTER_CLOCK	(11200000)
 #define PIXEL_CLOCK				(MAIN_CPU_MASTER_CLOCK / 2)
 #define CRTC_CLOCK				(MAIN_CPU_MASTER_CLOCK / 16)
+
+
+static UINT8 *spiders_ram;
+static UINT8 flipscreen;
+static UINT16 gfx_rom_address;
+static UINT8 gfx_rom_ctrl_mode;
+static UINT8 gfx_rom_ctrl_latch;
+static UINT8 gfx_rom_ctrl_data;
+
 
 
 /*************************************
@@ -223,26 +231,26 @@ static READ8_DEVICE_HANDLER( gfx_rom_r );
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 {
-	pia6821_device *pia1 = device->machine().device<pia6821_device>("pia1");
-	pia6821_device *pia2 = device->machine().device<pia6821_device>("pia2");
-	pia6821_device *pia3 = device->machine().device<pia6821_device>("pia3");
-	int combined_state = pia1->irq_a_state() | pia1->irq_b_state() |
-											      pia2->irq_b_state() |
-						 pia3->irq_a_state() | pia3->irq_b_state();
+	const device_config *pia1 = devtag_get_device(device->machine, "pia1");
+	const device_config *pia2 = devtag_get_device(device->machine, "pia2");
+	const device_config *pia3 = devtag_get_device(device->machine, "pia3");
+	int combined_state = pia6821_get_irq_a(pia1) | pia6821_get_irq_b(pia1) |
+						 					      pia6821_get_irq_b(pia2) |
+						 pia6821_get_irq_a(pia3) | pia6821_get_irq_b(pia3);
 
-	cputag_set_input_line(device->machine(), "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_firq )
 {
-	cputag_set_input_line(device->machine(), "maincpu", M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( audio_cpu_irq )
 {
-	cputag_set_input_line(device->machine(), "audiocpu", M6800_IRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", M6800_IRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -271,17 +279,17 @@ static const pia6821_interface pia_1_intf =
 
 static INTERRUPT_GEN( update_pia_1 )
 {
-	pia6821_device *pia1 = device->machine().device<pia6821_device>("pia1");
+	const device_config *pia1 = devtag_get_device(device->machine, "pia1");
 	/* update the different PIA pins from the input ports */
 
 	/* CA1 - copy of PA1 (COIN1) */
-	pia1->ca1_w(input_port_read(device->machine(), "IN0") & 0x02);
+	pia6821_ca1_w(pia1, 0, input_port_read(device->machine, "IN0") & 0x02);
 
 	/* CA2 - copy of PA0 (SERVICE1) */
-	pia1->ca2_w(input_port_read(device->machine(), "IN0") & 0x01);
+	pia6821_ca2_w(pia1, 0, input_port_read(device->machine, "IN0") & 0x01);
 
 	/* CB1 - (crosshatch) */
-	pia1->cb1_w(input_port_read(device->machine(), "XHATCH"));
+	pia6821_cb1_w(pia1, 0, input_port_read(device->machine, "XHATCH"));
 
 	/* CB2 - NOT CONNECTED */
 }
@@ -374,12 +382,12 @@ static const pia6821_interface pia_4_intf =
 
 static WRITE8_DEVICE_HANDLER( ic60_74123_output_changed)
 {
-	pia6821_device *pia2 = device->machine().device<pia6821_device>("pia2");
-	pia2->ca1_w(data);
+	const device_config *pia2 = devtag_get_device(device->machine, "pia2");
+	pia6821_ca1_w(pia2, 0, data);
 }
 
 
-static const ttl74123_interface ic60_intf =
+static const ttl74123_config ic60_intf =
 {
 	TTL74123_GROUNDED,	/* the hook up type */
 	RES_K(22),			/* resistor connected to RCext */
@@ -400,13 +408,12 @@ static const ttl74123_interface ic60_intf =
 
 static MACHINE_START( spiders )
 {
-	spiders_state *state = machine.driver_data<spiders_state>();
 	/* setup for save states */
-	state_save_register_global(machine, state->m_flipscreen);
-	state_save_register_global(machine, state->m_gfx_rom_address);
-	state_save_register_global(machine, state->m_gfx_rom_ctrl_mode);
-	state_save_register_global(machine, state->m_gfx_rom_ctrl_latch);
-	state_save_register_global(machine, state->m_gfx_rom_ctrl_data);
+	state_save_register_global(machine, flipscreen);
+	state_save_register_global(machine, gfx_rom_address);
+	state_save_register_global(machine, gfx_rom_ctrl_mode);
+	state_save_register_global(machine, gfx_rom_ctrl_latch);
+	state_save_register_global(machine, gfx_rom_ctrl_data);
 }
 
 
@@ -417,32 +424,32 @@ static MACHINE_START( spiders )
  *
  *************************************/
 
+#define NUM_PENS	(8)
+
 
 static WRITE_LINE_DEVICE_HANDLER( flipscreen_w )
 {
-	spiders_state *drvstate = device->machine().driver_data<spiders_state>();
-	drvstate->m_flipscreen = state;
+	flipscreen = state;
 }
 
 
 static MC6845_BEGIN_UPDATE( begin_update )
 {
-	spiders_state *state = device->machine().driver_data<spiders_state>();
 	/* create the pens */
 	offs_t i;
+	static pen_t pens[NUM_PENS];
 
 	for (i = 0; i < NUM_PENS; i++)
 	{
-		state->m_pens[i] = MAKE_RGB(pal1bit(i >> 0), pal1bit(i >> 1), pal1bit(i >> 2));
+		pens[i] = MAKE_RGB(pal1bit(i >> 0), pal1bit(i >> 1), pal1bit(i >> 2));
 	}
 
-	return state->m_pens;
+	return pens;
 }
 
 
 static MC6845_UPDATE_ROW( update_row )
 {
-	spiders_state *state = device->machine().driver_data<spiders_state>();
 	UINT8 cx;
 
 	pen_t *pens = (pen_t *)param;
@@ -455,21 +462,21 @@ static MC6845_UPDATE_ROW( update_row )
 
 		/* the memory is hooked up to the MA, RA lines this way */
 		offs_t offs = ((ma << 3) & 0x3f00) |
-					  ((ra << 5) & 0x00e0) |
-					  ((ma << 0) & 0x001f);
+			   		  ((ra << 5) & 0x00e0) |
+			   		  ((ma << 0) & 0x001f);
 
-		if (state->m_flipscreen)
+		if (flipscreen)
 			offs = offs ^ 0x3fff;
 
-		data1 = state->m_ram[0x0000 | offs];
-		data2 = state->m_ram[0x4000 | offs];
-		data3 = state->m_ram[0x8000 | offs];
+		data1 = spiders_ram[0x0000 | offs];
+		data2 = spiders_ram[0x4000 | offs];
+		data3 = spiders_ram[0x8000 | offs];
 
 		for (i = 0; i < 8; i++)
 		{
 			UINT8 color;
 
-			if (state->m_flipscreen)
+			if (flipscreen)
 			{
 				color = ((data3 & 0x80) >> 5) |
 						((data2 & 0x80) >> 6) |
@@ -490,7 +497,7 @@ static MC6845_UPDATE_ROW( update_row )
 				data3 = data3 >> 1;
 			}
 
-			bitmap.pix32(y, x) = pens[color];
+			*BITMAP_ADDR32(bitmap, y, x) = pens[color];
 
 			x = x + 1;
 		}
@@ -502,7 +509,7 @@ static MC6845_UPDATE_ROW( update_row )
 
 static WRITE_LINE_DEVICE_HANDLER( display_enable_changed )
 {
-	ttl74123_a_w(device->machine().device("ic60"), 0, state);
+	ttl74123_a_w(devtag_get_device(device->machine, "ic60"), 0, state);
 }
 
 
@@ -521,6 +528,15 @@ static const mc6845_interface mc6845_intf =
 };
 
 
+static VIDEO_UPDATE( spiders )
+{
+	const device_config *mc6845 = devtag_get_device(screen->machine, "crtc");
+	mc6845_update(mc6845, bitmap, cliprect);
+
+	return 0;
+}
+
+
 
 /*************************************
  *
@@ -531,30 +547,28 @@ static const mc6845_interface mc6845_intf =
 
 static WRITE8_DEVICE_HANDLER( gfx_rom_intf_w )
 {
-	spiders_state *state = device->machine().driver_data<spiders_state>();
-	state->m_gfx_rom_ctrl_mode  = ( data >> 7) & 0x01;
-	state->m_gfx_rom_ctrl_latch = ( data >> 4) & 0x03;
-	state->m_gfx_rom_ctrl_data  = (~data >> 0) & 0x0f;
+	gfx_rom_ctrl_mode  = ( data >> 7) & 0x01;
+	gfx_rom_ctrl_latch = ( data >> 4) & 0x03;
+	gfx_rom_ctrl_data  = (~data >> 0) & 0x0f;
 }
 
 
 static READ8_DEVICE_HANDLER( gfx_rom_r )
 {
-	spiders_state *state = device->machine().driver_data<spiders_state>();
 	UINT8 ret;
 
-	if (state->m_gfx_rom_ctrl_mode)
+	if (gfx_rom_ctrl_mode)
 	{
-		UINT8 *rom = device->machine().region("gfx1")->base();
+		UINT8 *rom = memory_region(device->machine, "gfx1");
 
-		ret = rom[state->m_gfx_rom_address];
+		ret = rom[gfx_rom_address];
 
-		state->m_gfx_rom_address = state->m_gfx_rom_address + 1;
+		gfx_rom_address = gfx_rom_address + 1;
 	}
 	else
 	{
-		UINT8 shift_count = state->m_gfx_rom_ctrl_latch << 2;
-		state->m_gfx_rom_address = (state->m_gfx_rom_address & ~(0x0f << shift_count)) | (state->m_gfx_rom_ctrl_data << shift_count);
+		UINT8 shift_count = gfx_rom_ctrl_latch << 2;
+		gfx_rom_address = (gfx_rom_address & ~(0x0f << shift_count)) | (gfx_rom_ctrl_data << shift_count);
 
 		ret = 0;
 	}
@@ -570,14 +584,14 @@ static READ8_DEVICE_HANDLER( gfx_rom_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( spiders_main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xbfff) AM_RAM AM_BASE_MEMBER(spiders_state, m_ram)
-	AM_RANGE(0xc000, 0xc000) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0xc001, 0xc001) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
-	AM_RANGE(0xc020, 0xc027) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0xc044, 0xc047) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
-	AM_RANGE(0xc048, 0xc04b) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read_alt, write_alt)
-	AM_RANGE(0xc050, 0xc053) AM_DEVREADWRITE_MODERN("pia3", pia6821_device, read, write)
+static ADDRESS_MAP_START( spiders_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0xbfff) AM_RAM AM_BASE(&spiders_ram)
+	AM_RANGE(0xc000, 0xc000) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0xc001, 0xc001) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0xc020, 0xc027) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0xc044, 0xc047) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
+	AM_RANGE(0xc048, 0xc04b) AM_DEVREADWRITE("pia2", pia6821_alt_r, pia6821_alt_w)
+	AM_RANGE(0xc050, 0xc053) AM_DEVREADWRITE("pia3", pia6821_r, pia6821_w)
 	AM_RANGE(0xc060, 0xc060) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc080, 0xc080) AM_READ_PORT("DSW2")
 	AM_RANGE(0xc0a0, 0xc0a0) AM_READ_PORT("DSW3")
@@ -585,9 +599,9 @@ static ADDRESS_MAP_START( spiders_main_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( spiders_audio_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( spiders_audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x007f) AM_RAM
-	AM_RANGE(0x0080, 0x0083) AM_DEVREADWRITE_MODERN("pia4", pia6821_device, read, write)
+	AM_RANGE(0x0080, 0x0083) AM_DEVREADWRITE("pia4", pia6821_r, pia6821_w)
 	AM_RANGE(0xf800, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -691,39 +705,41 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( spiders, spiders_state )
+static MACHINE_DRIVER_START( spiders )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, 2800000)
-	MCFG_CPU_PROGRAM_MAP(spiders_main_map)
-	MCFG_CPU_PERIODIC_INT(update_pia_1, 25)
+	MDRV_CPU_ADD("maincpu", M6809, 2800000)
+	MDRV_CPU_PROGRAM_MAP(spiders_main_map)
+	MDRV_CPU_PERIODIC_INT(update_pia_1, 25)
 
-	MCFG_CPU_ADD("audiocpu", M6802, 3000000)
-	MCFG_CPU_PROGRAM_MAP(spiders_audio_map)
+	MDRV_CPU_ADD("audiocpu", M6802, 3000000)
+	MDRV_CPU_PROGRAM_MAP(spiders_audio_map)
 
-	MCFG_MACHINE_START(spiders)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_START(spiders)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 256, 0, 256, 256, 0, 256)	/* temporary, CRTC will configure screen */
-	MCFG_SCREEN_UPDATE_DEVICE("crtc", mc6845_device, screen_update)
+	MDRV_VIDEO_UPDATE(spiders)
 
-	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 256, 0, 256, 256, 0, 256)	/* temporary, CRTC will configure screen */
+
+	MDRV_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
 	/* 74LS123 */
 
-	MCFG_PIA6821_ADD("pia1", pia_1_intf)
-	MCFG_PIA6821_ADD("pia2", pia_2_intf)
-	MCFG_PIA6821_ADD("pia3", pia_3_intf)
-	MCFG_PIA6821_ADD("pia4", pia_4_intf)
+	MDRV_PIA6821_ADD("pia1", pia_1_intf)
+	MDRV_PIA6821_ADD("pia2", pia_2_intf)
+	MDRV_PIA6821_ADD("pia3", pia_3_intf)
+	MDRV_PIA6821_ADD("pia4", pia_4_intf)
 
-	MCFG_TTL74123_ADD("ic60", ic60_intf)
+	MDRV_TTL74123_ADD("ic60", ic60_intf)
 
 	/* audio hardware */
-	MCFG_FRAGMENT_ADD(spiders_audio)
+	MDRV_IMPORT_FROM(spiders_audio)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 
@@ -795,25 +811,6 @@ ROM_START( spinner )
 	ROM_LOAD( "sp11-12.r9",   0x6000, 0x1000, CRC(4d37da5a) SHA1(37567d19596506385e9dcc7a7c0cf65120189ae0) )
 ROM_END
 
-ROM_START( spiders3 )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "sp-ic74.bin",   0xc000, 0x1000, CRC(ed6b5dcd) SHA1(551fecb9adbab5cb5ac07fb27cc1fcfa03b5e832) )
-	ROM_LOAD( "sp-ic73.bin",   0xd000, 0x1000, CRC(bc04f779) SHA1(a6366461a120d978b27470dad34a2270aee71428) )
-	ROM_LOAD( "sp-ic72.bin",   0xe000, 0x1000, CRC(c7dd097d) SHA1(c7802ac33c1a67ffcb1891e74f0e43483f5b1016) )
-	ROM_LOAD( "sp-ic71.bin",   0xf000, 0x1000, CRC(593b43c4) SHA1(f0cf06a22be205f00a9d52f766c3aae1985f0090) )
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "sp-ic3.bin",   0xf800, 0x0800, CRC(153adee7) SHA1(45dbd756adb5d75562b066fc152c0af7925052de) )
-
-	ROM_REGION( 0x10000, "gfx1", 0 )
-	ROM_LOAD( "sp-ic33.bin",  0x0000, 0x1000, CRC(7209dacd) SHA1(142de81c013f4074a8eaedc5cd7e9498e6910eb9) )
-	ROM_LOAD( "sp-ic25.bin",  0x1000, 0x1000, CRC(d3d06722) SHA1(da510ed162e5c310945123c9ce6d5648c7b0ae48) )
-	ROM_LOAD( "sp-ic24",      0x2000, 0x1000, CRC(a40a5517) SHA1(3f524c7dbbfe8aad7860d15c38d2702732895681) )
-	ROM_LOAD( "sp-ic23",      0x3000, 0x1000, CRC(3ca08053) SHA1(20c5709d9650c426b91aed5318a9ab0a10009f17) )
-	ROM_LOAD( "sp-ic22",      0x4000, 0x1000, CRC(07ea073c) SHA1(2e57831092730db5fbdb97c2d78d8842868906f4) )
-	ROM_LOAD( "sp-ic21",      0x5000, 0x1000, CRC(41b344b4) SHA1(c0eac1e332da1eada062059ae742b666051da76c) )
-	ROM_LOAD( "sp-ic20",      0x6000, 0x1000, CRC(4d37da5a) SHA1(37567d19596506385e9dcc7a7c0cf65120189ae0) )
-ROM_END
 
 
 /*************************************
@@ -825,5 +822,4 @@ ROM_END
 /* this is a newer version with just one bug fix */
 GAME( 1981, spiders,  0,       spiders, spiders, 0, ROT270, "Sigma Enterprises Inc.", "Spiders (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE)
 GAME( 1981, spiders2, spiders, spiders, spiders, 0, ROT270, "Sigma Enterprises Inc.", "Spiders (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE)
-GAME( 1981, spiders3, spiders, spiders, spiders, 0, ROT270, "Sigma Enterprises Inc.", "Spiders (set 3)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE)
 GAME( 1981, spinner,  spiders, spiders, spiders, 0, ROT270, "bootleg",				  "Spinner", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE)

@@ -3,10 +3,12 @@
 #ifndef __MC68HC11_H__
 #define __MC68HC11_H__
 
+#include "cpuintrf.h"
 
 CPU_DISASSEMBLE( hc11 );
 
-DECLARE_LEGACY_CPU_DEVICE(MC68HC11, mc68hc11);
+CPU_GET_INFO( mc68hc11 );
+#define CPU_MC68HC11 CPU_GET_INFO_NAME( mc68hc11 )
 
 
 #define MC68HC11_IO_PORTA			0x00
@@ -29,14 +31,12 @@ DECLARE_LEGACY_CPU_DEVICE(MC68HC11, mc68hc11);
 #define MC68HC11_IO_AD7				0x17
 
 #define MC68HC11_IRQ_LINE			0
-#define MC68HC11_TOC1_LINE			1
 
 typedef struct _hc11_config hc11_config;
 struct _hc11_config
 {
 	int has_extended_io; // I/O enable flag
 	int internal_ram_size;
-	int init_value; // default value for INIT register
 };
 
 

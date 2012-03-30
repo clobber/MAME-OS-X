@@ -1,4 +1,6 @@
-#include "emu.h"
+#include <math.h>
+#include "sndintrf.h"
+#include "streams.h"
 #include "digitalk.h"
 
 /*
@@ -168,7 +170,7 @@ period.
         - Rom organization
 
 The rom starts with a vector of 16-bits little endian values which are
-the addresses of the segments table for the samples.  The segments data
+the adresses of the segments table for the samples.  The segments data
 is a vector of 24-bits little-endian values organized as such:
 
       adr+2    adr+1    adr
@@ -239,7 +241,7 @@ complete set of waveforms is repeated R times.
 
 typedef struct {
 	const UINT8 *rom;
-	device_t *device;
+	const device_config *device;
 	sound_stream *stream;
 
 	// Port/lines state
@@ -284,11 +286,13 @@ static const int pitch_vals[32] = {
 };
 
 
-INLINE digitalker *get_safe_token(device_t *device)
+INLINE digitalker *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == DIGITALKER);
-	return (digitalker *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_DIGITALKER);
+	return (digitalker *)device->token;
 }
 
 
@@ -621,35 +625,35 @@ static int digitalker_intr_r(digitalker *dg)
 
 static void digitalker_register_for_save(digitalker *dg)
 {
-	dg->device->save_item(NAME(dg->data));
-	dg->device->save_item(NAME(dg->cs));
-	dg->device->save_item(NAME(dg->cms));
-	dg->device->save_item(NAME(dg->wr));
-	dg->device->save_item(NAME(dg->intr));
-	dg->device->save_item(NAME(dg->bpos));
-	dg->device->save_item(NAME(dg->apos));
-	dg->device->save_item(NAME(dg->mode));
-	dg->device->save_item(NAME(dg->cur_segment));
-	dg->device->save_item(NAME(dg->cur_repeat));
-	dg->device->save_item(NAME(dg->segments));
-	dg->device->save_item(NAME(dg->repeats));
-	dg->device->save_item(NAME(dg->prev_pitch));
-	dg->device->save_item(NAME(dg->pitch));
-	dg->device->save_item(NAME(dg->pitch_pos));
-	dg->device->save_item(NAME(dg->stop_after));
-	dg->device->save_item(NAME(dg->cur_dac));
-	dg->device->save_item(NAME(dg->cur_bits));
-	dg->device->save_item(NAME(dg->zero_count));
-	dg->device->save_item(NAME(dg->dac_index));
-	dg->device->save_item(NAME(dg->dac));
+	state_save_register_device_item(dg->device, 0, dg->data);
+	state_save_register_device_item(dg->device, 0, dg->cs);
+	state_save_register_device_item(dg->device, 0, dg->cms);
+	state_save_register_device_item(dg->device, 0, dg->wr);
+	state_save_register_device_item(dg->device, 0, dg->intr);
+	state_save_register_device_item(dg->device, 0, dg->bpos);
+	state_save_register_device_item(dg->device, 0, dg->apos);
+	state_save_register_device_item(dg->device, 0, dg->mode);
+	state_save_register_device_item(dg->device, 0, dg->cur_segment);
+	state_save_register_device_item(dg->device, 0, dg->cur_repeat);
+	state_save_register_device_item(dg->device, 0, dg->segments);
+	state_save_register_device_item(dg->device, 0, dg->repeats);
+	state_save_register_device_item(dg->device, 0, dg->prev_pitch);
+	state_save_register_device_item(dg->device, 0, dg->pitch);
+	state_save_register_device_item(dg->device, 0, dg->pitch_pos);
+	state_save_register_device_item(dg->device, 0, dg->stop_after);
+	state_save_register_device_item(dg->device, 0, dg->cur_dac);
+	state_save_register_device_item(dg->device, 0, dg->cur_bits);
+	state_save_register_device_item(dg->device, 0, dg->zero_count);
+	state_save_register_device_item(dg->device, 0, dg->dac_index);
+	state_save_register_device_item_array(dg->device, 0, dg->dac);
 }
 
 static DEVICE_START(digitalker)
 {
 	digitalker *dg = get_safe_token(device);
 	dg->device = device;
-	dg->rom = device->machine().region(device->tag())->base();
-	dg->stream = device->machine().sound().stream_alloc(*device, 0, 1, device->clock()/4, dg, digitalker_update);
+	dg->rom = memory_region(device->machine, device->tag);
+	dg->stream = stream_create(device, 0, 1, device->clock/4, dg, digitalker_update);
 	dg->dac_index = 128;
 	dg->data = 0xff;
 	dg->cs = dg->cms = dg->wr = 1;
@@ -674,25 +678,25 @@ DEVICE_GET_INFO(digitalker)
 	}
 }
 
-void digitalker_0_cs_w(device_t *device, int line)
+void digitalker_0_cs_w(const device_config *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_cs_w(dg, line);
 }
 
-void digitalker_0_cms_w(device_t *device, int line)
+void digitalker_0_cms_w(const device_config *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_cms_w(dg, line);
 }
 
-void digitalker_0_wr_w(device_t *device, int line)
+void digitalker_0_wr_w(const device_config *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_wr_w(dg, line);
 }
 
-int digitalker_0_intr_r(device_t *device)
+int digitalker_0_intr_r(const device_config *device)
 {
 	digitalker *dg = get_safe_token(device);
 	return digitalker_intr_r(dg);
@@ -703,6 +707,3 @@ WRITE8_DEVICE_HANDLER( digitalker_data_w )
 	digitalker *dg = get_safe_token(device);
 	dg->data = data;
 }
-
-
-DEFINE_LEGACY_SOUND_DEVICE(DIGITALKER, digitalker);

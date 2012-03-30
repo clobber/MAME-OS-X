@@ -1,6 +1,5 @@
-#include "emu.h"
-#include "debugger.h"
 #include "tms57002.h"
+#include "debugger.h"
 
 #ifdef __GNUC__
 #define noinline __attribute__((noinline))

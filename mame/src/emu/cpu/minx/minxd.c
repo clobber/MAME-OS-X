@@ -5,7 +5,6 @@
 
 ************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "minx.h"
 

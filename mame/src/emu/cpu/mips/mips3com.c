@@ -6,8 +6,9 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "mips3com.h"
+#include "cpuexec.h"
+#include "mame.h"
 
 
 /***************************************************************************
@@ -69,59 +70,47 @@ INLINE int tlb_entry_is_global(const mips3_tlb_entry *entry)
     structure based on the configured type
 -------------------------------------------------*/
 
-void mips3com_init(mips3_state *mips, mips3_flavor flavor, int bigendian, legacy_cpu_device *device, device_irq_callback irqcallback)
+void mips3com_init(mips3_state *mips, mips3_flavor flavor, int bigendian, const device_config *device, cpu_irq_callback irqcallback)
 {
-	const mips3_config *config = (const mips3_config *)device->static_config();
+	const mips3_config *config = (const mips3_config *)device->static_config;
 	int tlbindex;
 
 	/* initialize based on the config */
 	memset(mips, 0, sizeof(*mips));
 	mips->flavor = flavor;
 	mips->bigendian = bigendian;
-	mips->cpu_clock = device->clock();
+	mips->cpu_clock = device->clock;
 	mips->irq_callback = irqcallback;
 	mips->device = device;
-	mips->program = device->space(AS_PROGRAM);
-	mips->direct = &mips->program->direct();
+	mips->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 	mips->icache_size = config->icache;
 	mips->dcache_size = config->dcache;
 	mips->system_clock = config->system_clock;
 
-	/* configure flavor-specific parameters */
-	mips->pfnmask = 0x00ffffff;
-	mips->tlbentries = MIPS3_MAX_TLB_ENTRIES;
-
-	/* VR4300 and VR5432 have 4 fewer PFN bits, and only 32 TLB entries */
-	if (flavor == MIPS3_TYPE_VR4300)
-	{
-		mips->pfnmask = 0x000fffff;
-		mips->tlbentries = 32;
-	}
-
 	/* set up the endianness */
-	mips->program->accessors(mips->memory);
+	mips->memory = mips->program->accessors;
 
 	/* allocate the virtual TLB */
-	mips->vtlb = vtlb_alloc(device, AS_PROGRAM, 2 * mips->tlbentries + 2, 0);
+	mips->vtlb = vtlb_alloc(device, ADDRESS_SPACE_PROGRAM, 2 * MIPS3_TLB_ENTRIES + 2, 0);
 
 	/* allocate a timer for the compare interrupt */
-	mips->compare_int_timer = device->machine().scheduler().timer_alloc(FUNC(compare_int_callback), (void *)device);
+	mips->compare_int_timer = timer_alloc(device->machine, compare_int_callback, (void *)device);
 
 	/* reset the state */
 	mips3com_reset(mips);
 
 	/* register for save states */
-	device->save_item(NAME(mips->pc));
-	device->save_item(NAME(mips->r));
-	device->save_item(NAME(mips->cpr));
-	device->save_item(NAME(mips->ccr));
-	device->save_item(NAME(mips->llbit));
-	device->save_item(NAME(mips->count_zero_time));
-	for (tlbindex = 0; tlbindex < mips->tlbentries; tlbindex++)
+	state_save_register_device_item(device, 0, mips->pc);
+	state_save_register_device_item_array(device, 0, mips->r);
+	state_save_register_device_item_2d_array(device, 0, mips->cpr);
+	state_save_register_device_item_2d_array(device, 0, mips->ccr);
+	state_save_register_device_item(device, 0, mips->llbit);
+	state_save_register_device_item(device, 0, mips->count_zero_time);
+	for (tlbindex = 0; tlbindex < ARRAY_LENGTH(mips->tlb); tlbindex++)
 	{
-		device->save_item(NAME(mips->tlb[tlbindex].page_mask), tlbindex);
-		device->save_item(NAME(mips->tlb[tlbindex].entry_hi), tlbindex);
-		device->save_item(NAME(mips->tlb[tlbindex].entry_lo), tlbindex);
+		state_save_register_device_item(device, tlbindex, mips->tlb[tlbindex].page_mask);
+		state_save_register_device_item(device, tlbindex, mips->tlb[tlbindex].entry_hi);
+		state_save_register_device_item_array(device, tlbindex, mips->tlb[tlbindex].entry_lo);
 	}
 }
 
@@ -154,10 +143,10 @@ void mips3com_reset(mips3_state *mips)
 	mips->cpr[0][COP0_Count] = 0;
 	mips->cpr[0][COP0_Config] = compute_config_register(mips);
 	mips->cpr[0][COP0_PRId] = compute_prid_register(mips);
-	mips->count_zero_time = mips->device->total_cycles();
+	mips->count_zero_time = cpu_get_total_cycles(mips->device);
 
 	/* initialize the TLB state */
-	for (tlbindex = 0; tlbindex < mips->tlbentries; tlbindex++)
+	for (tlbindex = 0; tlbindex < ARRAY_LENGTH(mips->tlb); tlbindex++)
 	{
 		mips3_tlb_entry *entry = &mips->tlb[tlbindex];
 		entry->page_mask = 0;
@@ -169,8 +158,8 @@ void mips3com_reset(mips3_state *mips)
 	}
 
 	/* load the fixed TLB range */
-	vtlb_load(mips->vtlb, 2 * mips->tlbentries + 0, (0xa0000000 - 0x80000000) >> MIPS3_MIN_PAGE_SHIFT, 0x80000000, 0x00000000 | VTLB_READ_ALLOWED | VTLB_WRITE_ALLOWED | VTLB_FETCH_ALLOWED | VTLB_FLAG_VALID);
-	vtlb_load(mips->vtlb, 2 * mips->tlbentries + 1, (0xc0000000 - 0xa0000000) >> MIPS3_MIN_PAGE_SHIFT, 0xa0000000, 0x00000000 | VTLB_READ_ALLOWED | VTLB_WRITE_ALLOWED | VTLB_FETCH_ALLOWED | VTLB_FLAG_VALID);
+	vtlb_load(mips->vtlb, 2 * MIPS3_TLB_ENTRIES + 0, (0xa0000000 - 0x80000000) >> MIPS3_MIN_PAGE_SHIFT, 0x80000000, 0x00000000 | VTLB_READ_ALLOWED | VTLB_WRITE_ALLOWED | VTLB_FETCH_ALLOWED | VTLB_FLAG_VALID);
+	vtlb_load(mips->vtlb, 2 * MIPS3_TLB_ENTRIES + 1, (0xc0000000 - 0xa0000000) >> MIPS3_MIN_PAGE_SHIFT, 0xa0000000, 0x00000000 | VTLB_READ_ALLOWED | VTLB_WRITE_ALLOWED | VTLB_FETCH_ALLOWED | VTLB_FLAG_VALID);
 }
 
 
@@ -201,14 +190,14 @@ void mips3com_update_cycle_counting(mips3_state *mips)
 	/* modify the timer to go off */
 	if (mips->compare_armed && (mips->cpr[0][COP0_Status] & SR_IMEX5))
 	{
-		UINT32 count = (mips->device->total_cycles() - mips->count_zero_time) / 2;
+		UINT32 count = (cpu_get_total_cycles(mips->device) - mips->count_zero_time) / 2;
 		UINT32 compare = mips->cpr[0][COP0_Compare];
 		UINT32 delta = compare - count;
-		attotime newtime = mips->device->cycles_to_attotime((UINT64)delta * 2);
-		mips->compare_int_timer->adjust(newtime);
+		attotime newtime = cpu_clocks_to_attotime(mips->device, (UINT64)delta * 2);
+		timer_adjust_oneshot(mips->compare_int_timer, newtime, 0);
 		return;
 	}
-	mips->compare_int_timer->adjust(attotime::never);
+	timer_adjust_oneshot(mips->compare_int_timer, attotime_never, 0);
 }
 
 
@@ -227,7 +216,7 @@ void mips3com_asid_changed(mips3_state *mips)
 	int tlbindex;
 
 	/* iterate over all non-global TLB entries and remap them */
-	for (tlbindex = 0; tlbindex < mips->tlbentries; tlbindex++)
+	for (tlbindex = 0; tlbindex < ARRAY_LENGTH(mips->tlb); tlbindex++)
 		if (!tlb_entry_is_global(&mips->tlb[tlbindex]))
 			tlb_map_entry(mips, tlbindex);
 }
@@ -238,10 +227,10 @@ void mips3com_asid_changed(mips3_state *mips)
     from logical to physical
 -------------------------------------------------*/
 
-int mips3com_translate_address(mips3_state *mips, address_spacenum space, int intention, offs_t *address)
+int mips3com_translate_address(mips3_state *mips, int space, int intention, offs_t *address)
 {
 	/* only applies to the program address space */
-	if (space == AS_PROGRAM)
+	if (space == ADDRESS_SPACE_PROGRAM)
 	{
 		const vtlb_entry *table = vtlb_table(mips->vtlb);
 		vtlb_entry entry = table[*address >> MIPS3_MIN_PAGE_SHIFT];
@@ -262,7 +251,7 @@ void mips3com_tlbr(mips3_state *mips)
 	UINT32 tlbindex = mips->cpr[0][COP0_Index] & 0x3f;
 
 	/* only handle entries within the TLB */
-	if (tlbindex < mips->tlbentries)
+	if (tlbindex < ARRAY_LENGTH(mips->tlb))
 	{
 		mips3_tlb_entry *entry = &mips->tlb[tlbindex];
 
@@ -293,12 +282,12 @@ void mips3com_tlbwi(mips3_state *mips)
 void mips3com_tlbwr(mips3_state *mips)
 {
 	UINT32 wired = mips->cpr[0][COP0_Wired] & 0x3f;
-	UINT32 unwired = mips->tlbentries - wired;
-	UINT32 tlbindex = mips->tlbentries - 1;
+	UINT32 unwired = ARRAY_LENGTH(mips->tlb) - wired;
+	UINT32 tlbindex = ARRAY_LENGTH(mips->tlb) - 1;
 
 	/* "random" is based off of the current cycle counting through the non-wired pages */
 	if (unwired > 0)
-		tlbindex = ((mips->device->total_cycles() - mips->count_zero_time) % unwired + wired) & 0x3f;
+		tlbindex = ((cpu_get_total_cycles(mips->device) - mips->count_zero_time) % unwired + wired) & 0x3f;
 
 	/* use the common handler to write to this tlbindex */
 	tlb_write_common(mips, tlbindex);
@@ -312,10 +301,10 @@ void mips3com_tlbwr(mips3_state *mips)
 void mips3com_tlbp(mips3_state *mips)
 {
 	UINT32 tlbindex;
-//  UINT64 vpn;
+	UINT64 vpn;
 
 	/* iterate over TLB entries */
-	for (tlbindex = 0; tlbindex < mips->tlbentries; tlbindex++)
+	for (tlbindex = 0; tlbindex < ARRAY_LENGTH(mips->tlb); tlbindex++)
 	{
 		mips3_tlb_entry *entry = &mips->tlb[tlbindex];
 		UINT64 mask = ~((entry->page_mask >> 13) & 0xfff) << 13;
@@ -329,8 +318,8 @@ void mips3com_tlbp(mips3_state *mips)
 	}
 
 	/* validate that our tlb_table was in sync */
-//  vpn = ((mips->cpr[0][COP0_EntryHi] >> 13) & 0x07ffffff) << 1;
-	if (tlbindex != mips->tlbentries)
+	vpn = ((mips->cpr[0][COP0_EntryHi] >> 13) & 0x07ffffff) << 1;
+	if (tlbindex != ARRAY_LENGTH(mips->tlb))
 		mips->cpr[0][COP0_Index] = tlbindex;
 	else
 		mips->cpr[0][COP0_Index] = 0x80000000;
@@ -361,19 +350,19 @@ void mips3com_set_info(mips3_state *mips, UINT32 state, cpuinfo *info)
 
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + MIPS3_PC:			mips->pc = info->i;						break;
-		case CPUINFO_INT_REGISTER + MIPS3_SR:			mips->cpr[0][COP0_Status] = info->i;	break;
-		case CPUINFO_INT_REGISTER + MIPS3_EPC:			mips->cpr[0][COP0_EPC] = info->i;		break;
+		case CPUINFO_INT_REGISTER + MIPS3_SR:			mips->cpr[0][COP0_Status] = info->i; 	break;
+		case CPUINFO_INT_REGISTER + MIPS3_EPC:			mips->cpr[0][COP0_EPC] = info->i; 		break;
 		case CPUINFO_INT_REGISTER + MIPS3_CAUSE:		mips->cpr[0][COP0_Cause] = info->i;		break;
 		case CPUINFO_INT_REGISTER + MIPS3_COUNT:		mips->cpr[0][COP0_Count] = info->i; 	break;
-		case CPUINFO_INT_REGISTER + MIPS3_COMPARE:		mips->cpr[0][COP0_Compare] = info->i;	break;
+		case CPUINFO_INT_REGISTER + MIPS3_COMPARE:		mips->cpr[0][COP0_Compare] = info->i; 	break;
 		case CPUINFO_INT_REGISTER + MIPS3_INDEX:		mips->cpr[0][COP0_Index] = info->i; 	break;
-		case CPUINFO_INT_REGISTER + MIPS3_RANDOM:		mips->cpr[0][COP0_Random] = info->i;	break;
-		case CPUINFO_INT_REGISTER + MIPS3_ENTRYHI:		mips->cpr[0][COP0_EntryHi] = info->i;	break;
-		case CPUINFO_INT_REGISTER + MIPS3_ENTRYLO0:		mips->cpr[0][COP0_EntryLo0] = info->i;	break;
-		case CPUINFO_INT_REGISTER + MIPS3_ENTRYLO1:		mips->cpr[0][COP0_EntryLo1] = info->i;	break;
-		case CPUINFO_INT_REGISTER + MIPS3_PAGEMASK:		mips->cpr[0][COP0_PageMask] = info->i;	break;
+		case CPUINFO_INT_REGISTER + MIPS3_RANDOM:		mips->cpr[0][COP0_Random] = info->i; 	break;
+		case CPUINFO_INT_REGISTER + MIPS3_ENTRYHI:		mips->cpr[0][COP0_EntryHi] = info->i; 	break;
+		case CPUINFO_INT_REGISTER + MIPS3_ENTRYLO0:		mips->cpr[0][COP0_EntryLo0] = info->i; 	break;
+		case CPUINFO_INT_REGISTER + MIPS3_ENTRYLO1:		mips->cpr[0][COP0_EntryLo1] = info->i; 	break;
+		case CPUINFO_INT_REGISTER + MIPS3_PAGEMASK:		mips->cpr[0][COP0_PageMask] = info->i; 	break;
 		case CPUINFO_INT_REGISTER + MIPS3_WIRED:		mips->cpr[0][COP0_Wired] = info->i; 	break;
-		case CPUINFO_INT_REGISTER + MIPS3_BADVADDR:		mips->cpr[0][COP0_BadVAddr] = info->i;	break;
+		case CPUINFO_INT_REGISTER + MIPS3_BADVADDR:		mips->cpr[0][COP0_BadVAddr] = info->i; 	break;
 
 		case CPUINFO_INT_REGISTER + MIPS3_R0:			/* can't change R0 */					break;
 		case CPUINFO_INT_REGISTER + MIPS3_R1:			mips->r[1] = info->i;					break;
@@ -468,11 +457,11 @@ void mips3com_get_info(mips3_state *mips, UINT32 state, cpuinfo *info)
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = MIPS3_MAX_PADDR_SHIFT;break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 32;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = MIPS3_MAX_PADDR_SHIFT;break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = MIPS3_MIN_PAGE_SHIFT;	break;
+		case CPUINFO_INT_PAGE_SHIFT_PROGRAM: 	info->i = MIPS3_MIN_PAGE_SHIFT;	break;
 
 		case CPUINFO_INT_INPUT_STATE + MIPS3_IRQ0:		info->i = (mips->cpr[0][COP0_Cause] & 0x400) ? ASSERT_LINE : CLEAR_LINE;	break;
 		case CPUINFO_INT_INPUT_STATE + MIPS3_IRQ1:		info->i = (mips->cpr[0][COP0_Cause] & 0x800) ? ASSERT_LINE : CLEAR_LINE;	break;
@@ -488,7 +477,7 @@ void mips3com_get_info(mips3_state *mips, UINT32 state, cpuinfo *info)
 		case CPUINFO_INT_REGISTER + MIPS3_SR:			info->i = mips->cpr[0][COP0_Status];	break;
 		case CPUINFO_INT_REGISTER + MIPS3_EPC:			info->i = mips->cpr[0][COP0_EPC];		break;
 		case CPUINFO_INT_REGISTER + MIPS3_CAUSE:		info->i = mips->cpr[0][COP0_Cause];		break;
-		case CPUINFO_INT_REGISTER + MIPS3_COUNT:		info->i = ((mips->device->total_cycles() - mips->count_zero_time) / 2); break;
+		case CPUINFO_INT_REGISTER + MIPS3_COUNT:		info->i = ((cpu_get_total_cycles(mips->device) - mips->count_zero_time) / 2); break;
 		case CPUINFO_INT_REGISTER + MIPS3_COMPARE:		info->i = mips->cpr[0][COP0_Compare];	break;
 		case CPUINFO_INT_REGISTER + MIPS3_INDEX:		info->i = mips->cpr[0][COP0_Index];		break;
 		case CPUINFO_INT_REGISTER + MIPS3_RANDOM:		info->i = mips->cpr[0][COP0_Random];	break;
@@ -557,8 +546,8 @@ void mips3com_get_info(mips3_state *mips, UINT32 state, cpuinfo *info)
 		case CPUINFO_STR_REGISTER + MIPS3_PC:			sprintf(info->s, "PC: %08X", mips->pc); break;
 		case CPUINFO_STR_REGISTER + MIPS3_SR:			sprintf(info->s, "SR: %08X", (UINT32)mips->cpr[0][COP0_Status]); break;
 		case CPUINFO_STR_REGISTER + MIPS3_EPC:			sprintf(info->s, "EPC:%08X", (UINT32)mips->cpr[0][COP0_EPC]); break;
-		case CPUINFO_STR_REGISTER + MIPS3_CAUSE:		sprintf(info->s, "Cause:%08X", (UINT32)mips->cpr[0][COP0_Cause]); break;
-		case CPUINFO_STR_REGISTER + MIPS3_COUNT:		sprintf(info->s, "Count:%08X", (UINT32)((mips->device->total_cycles() - mips->count_zero_time) / 2)); break;
+		case CPUINFO_STR_REGISTER + MIPS3_CAUSE: 		sprintf(info->s, "Cause:%08X", (UINT32)mips->cpr[0][COP0_Cause]); break;
+		case CPUINFO_STR_REGISTER + MIPS3_COUNT: 		sprintf(info->s, "Count:%08X", (UINT32)((cpu_get_total_cycles(mips->device) - mips->count_zero_time) / 2)); break;
 		case CPUINFO_STR_REGISTER + MIPS3_COMPARE:		sprintf(info->s, "Compare:%08X", (UINT32)mips->cpr[0][COP0_Compare]); break;
 		case CPUINFO_STR_REGISTER + MIPS3_INDEX:		sprintf(info->s, "Index:%08X", (UINT32)mips->cpr[0][COP0_Index]); break;
 		case CPUINFO_STR_REGISTER + MIPS3_RANDOM:		sprintf(info->s, "Random:%08X", (UINT32)mips->cpr[0][COP0_Random]); break;
@@ -752,8 +741,8 @@ void mips3com_get_info(mips3_state *mips, UINT32 state, cpuinfo *info)
 
 static TIMER_CALLBACK( compare_int_callback )
 {
-	legacy_cpu_device *device = (legacy_cpu_device *)ptr;
-	device_set_input_line(device, MIPS3_IRQ5, ASSERT_LINE);
+	const device_config *device = (const device_config *)ptr;
+	cpu_set_input_line(device, MIPS3_IRQ5, ASSERT_LINE);
 }
 
 
@@ -903,8 +892,14 @@ static void tlb_map_entry(mips3_state *mips, int tlbindex)
 		UINT32 pfn;
 		UINT32 flags = 0;
 
-		/* compute physical page index */
-		pfn = (lo >> 6) & mips->pfnmask;
+		if (mips->flavor == MIPS3_TYPE_VR4300)
+		{
+			pfn = (lo >> 6) & 0x000fffff; 	// VR4300 and VR5432 have 4 fewer PFN bits
+		}
+		else
+		{
+			pfn = (lo >> 6) & 0x00ffffff;
+		}
 
 		/* valid? */
 		if ((lo & 2) != 0)
@@ -923,8 +918,6 @@ static void tlb_map_entry(mips3_state *mips, int tlbindex)
 		/* load the virtual TLB with the corresponding entries */
 		if ((effvpn + count) <= (0x80000000 >> MIPS3_MIN_PAGE_SHIFT) || effvpn >= (0xc0000000 >> MIPS3_MIN_PAGE_SHIFT))
 			vtlb_load(mips->vtlb, 2 * tlbindex + which, count, effvpn << MIPS3_MIN_PAGE_SHIFT, (pfn << MIPS3_MIN_PAGE_SHIFT) | flags);
-		else
-			vtlb_load(mips->vtlb, 2 * tlbindex + which, 0, 0, 0);
 	}
 }
 
@@ -937,7 +930,7 @@ static void tlb_map_entry(mips3_state *mips, int tlbindex)
 static void tlb_write_common(mips3_state *mips, int tlbindex)
 {
 	/* only handle entries within the TLB */
-	if (tlbindex < mips->tlbentries)
+	if (tlbindex < ARRAY_LENGTH(mips->tlb))
 	{
 		mips3_tlb_entry *entry = &mips->tlb[tlbindex];
 

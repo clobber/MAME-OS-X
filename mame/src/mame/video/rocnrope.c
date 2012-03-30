@@ -6,9 +6,10 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/resnet.h"
-#include "includes/rocnrope.h"
+
+static tilemap *bg_tilemap;
 
 /***************************************************************************
 
@@ -28,7 +29,6 @@
   bit 0 -- 1  kohm resistor  -- RED
 
 ***************************************************************************/
-
 PALETTE_INIT( rocnrope )
 {
 	static const int resistances_rg[3] = { 1000, 470, 220 };
@@ -43,7 +43,7 @@ PALETTE_INIT( rocnrope )
 			2, &resistances_b[0],  bweights, 1000, 0);
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x20);
+	machine->colortable = colortable_alloc(machine, 0x20);
 
 	/* create a lookup table for the palette */
 	for (i = 0; i < 0x20; i++)
@@ -68,7 +68,7 @@ PALETTE_INIT( rocnrope )
 		bit1 = (color_prom[i] >> 7) & 0x01;
 		b = combine_2_weights(bweights, bit0, bit1);
 
-		colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+		colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 	}
 
 	/* color_prom now points to the beginning of the lookup table */
@@ -78,38 +78,35 @@ PALETTE_INIT( rocnrope )
 	for (i = 0; i < 0x200; i++)
 	{
 		UINT8 ctabentry = color_prom[i] & 0x0f;
-		colortable_entry_set_value(machine.colortable, i, ctabentry);
+		colortable_entry_set_value(machine->colortable, i, ctabentry);
 	}
 }
 
 WRITE8_HANDLER( rocnrope_videoram_w )
 {
-	rocnrope_state *state = space->machine().driver_data<rocnrope_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( rocnrope_colorram_w )
 {
-	rocnrope_state *state = space->machine().driver_data<rocnrope_state>();
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( rocnrope_flipscreen_w )
 {
-	if (flip_screen_get(space->machine()) != (~data & 0x01))
+	if (flip_screen_get(space->machine) != (~data & 0x01))
 	{
-		flip_screen_set(space->machine(), ~data & 0x01);
-		space->machine().tilemap().mark_all_dirty();
+		flip_screen_set(space->machine, ~data & 0x01);
+		tilemap_mark_all_tiles_dirty_all(space->machine);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	rocnrope_state *state = machine.driver_data<rocnrope_state>();
-	int attr = state->m_colorram[tile_index];
-	int code = state->m_videoram[tile_index] + 2 * (attr & 0x80);
+	int attr = colorram[tile_index];
+	int code = videoram[tile_index] + 2 * (attr & 0x80);
 	int color = attr & 0x0f;
 	int flags = ((attr & 0x40) ? TILE_FLIPX : 0) | ((attr & 0x20) ? TILE_FLIPY : 0);
 
@@ -118,34 +115,29 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 VIDEO_START( rocnrope )
 {
-	rocnrope_state *state = machine.driver_data<rocnrope_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	rocnrope_state *state = machine.driver_data<rocnrope_state>();
-	UINT8 *spriteram = state->m_spriteram;
-	UINT8 *spriteram_2 = state->m_spriteram2;
 	int offs;
 
-	for (offs = state->m_spriteram_size - 2;offs >= 0;offs -= 2)
+	for (offs = spriteram_size - 2;offs >= 0;offs -= 2)
 	{
 		int color = spriteram_2[offs] & 0x0f;
 
-		drawgfx_transmask(bitmap, cliprect, machine.gfx[0],
+		drawgfx_transmask(bitmap,cliprect,machine->gfx[0],
 				spriteram[offs + 1],
 				color,
 				spriteram_2[offs] & 0x40,~spriteram_2[offs] & 0x80,
-				240 - spriteram[offs], spriteram_2[offs + 1],
-				colortable_get_transpen_mask(machine.colortable, machine.gfx[0], color, 0));
+				240-spriteram[offs],spriteram_2[offs + 1],
+				colortable_get_transpen_mask(machine->colortable, machine->gfx[0], color, 0));
 	}
 }
 
-SCREEN_UPDATE_IND16( rocnrope )
+VIDEO_UPDATE( rocnrope )
 {
-	rocnrope_state *state = screen.machine().driver_data<rocnrope_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

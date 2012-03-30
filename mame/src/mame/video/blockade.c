@@ -1,37 +1,35 @@
-#include "emu.h"
+#include "driver.h"
 #include "includes/blockade.h"
+
+static tilemap *bg_tilemap;
 
 WRITE8_HANDLER( blockade_videoram_w )
 {
-	blockade_state *state = space->machine().driver_data<blockade_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 
-	if (input_port_read(space->machine(), "IN3") & 0x80)
+	if (input_port_read(space->machine, "IN3") & 0x80)
 	{
-		logerror("blockade_videoram_w: scanline %d\n", space->machine().primary_screen->vpos());
-		device_spin_until_interrupt(&space->device());
+		logerror("blockade_videoram_w: scanline %d\n", video_screen_get_vpos(space->machine->primary_screen));
+		cpu_spinuntil_int(space->cpu);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	blockade_state *state = machine.driver_data<blockade_state>();
-	int code = state->m_videoram[tile_index];
+	int code = videoram[tile_index];
 
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
 VIDEO_START( blockade )
 {
-	blockade_state *state = machine.driver_data<blockade_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+		 8, 8, 32, 32);
 }
 
-SCREEN_UPDATE_IND16( blockade )
+VIDEO_UPDATE( blockade )
 {
-	blockade_state *state = screen.machine().driver_data<blockade_state>();
-
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 	return 0;
 }

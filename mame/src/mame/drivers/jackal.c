@@ -70,101 +70,35 @@ Address          Dir Data     Description
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2151intf.h"
 #include "includes/jackal.h"
-#include "includes/konamipt.h"
+#include "konamipt.h"
+
+#define MASTER_CLOCK		XTAL_18_432MHz
+#define SOUND_CLOCK			XTAL_3_579545MHz
 
 
-/*************************************
- *
- *  Memory handlers
- *
- *************************************/
+static int irq_enable;
+
+/* Read/Write Handlers */
 
 static READ8_HANDLER( topgunbl_rotary_r )
 {
-	return (1 << input_port_read_safe(space->machine(), offset ? "DIAL1" : "DIAL0", 0x00)) ^ 0xff;
+	return (1 << input_port_read(space->machine, offset ? "DIAL1" : "DIAL0")) ^ 0xff;
 }
 
 static WRITE8_HANDLER( jackal_flipscreen_w )
 {
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	state->m_irq_enable = data & 0x02;
-	flip_screen_set(space->machine(), data & 0x08);
+	irq_enable = data & 0x02;
+	flip_screen_set(space->machine, data & 0x08);
 }
 
-static READ8_HANDLER( jackal_zram_r )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	return state->m_rambank[0x0020 + offset];
-}
+/* Memory Maps */
 
-
-static READ8_HANDLER( jackal_voram_r )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	return state->m_rambank[0x2000 + offset];
-}
-
-
-static READ8_HANDLER( jackal_spriteram_r )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	return state->m_spritebank[0x3000 + offset];
-}
-
-
-static WRITE8_HANDLER( jackal_rambank_w )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	UINT8 *rgn = space->machine().region("master")->base();
-
-	if (data & 0x04)
-		popmessage("jackal_rambank_w %02x", data);
-
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
-
-	state->m_spritebank = &rgn[((data & 0x08) << 13)];
-	state->m_rambank = &rgn[((data & 0x10) << 12)];
-	memory_set_bank(space->machine(), "bank1", (data & 0x20) ? 1 : 0);
-}
-
-
-static WRITE8_HANDLER( jackal_zram_w )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	state->m_rambank[0x0020 + offset] = data;
-}
-
-
-static WRITE8_HANDLER( jackal_voram_w )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-
-	if ((offset & 0xf800) == 0)
-		jackal_mark_tile_dirty(space->machine(), offset & 0x3ff);
-
-	state->m_rambank[0x2000 + offset] = data;
-}
-
-
-static WRITE8_HANDLER( jackal_spriteram_w )
-{
-	jackal_state *state = space->machine().driver_data<jackal_state>();
-	state->m_spritebank[0x3000 + offset] = data;
-}
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0003) AM_RAM AM_BASE_MEMBER(jackal_state, m_videoctrl)	// scroll + other things
+static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0003) AM_RAM AM_BASE(&jackal_videoctrl)	// scroll + other things
 	AM_RANGE(0x0004, 0x0004) AM_WRITE(jackal_flipscreen_w)
 	AM_RANGE(0x0010, 0x0010) AM_READ_PORT("DSW1")
 	AM_RANGE(0x0011, 0x0011) AM_READ_PORT("IN1")
@@ -175,26 +109,22 @@ static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x0019, 0x0019) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x001c, 0x001c) AM_WRITE(jackal_rambank_w)
 	AM_RANGE(0x0020, 0x005f) AM_READWRITE(jackal_zram_r, jackal_zram_w)				// MAIN   Z RAM,SUB    Z RAM
-	AM_RANGE(0x0060, 0x1fff) AM_RAM AM_SHARE("share1")							// M COMMON RAM,S COMMON RAM
+	AM_RANGE(0x0060, 0x1fff) AM_RAM AM_SHARE(1)										// M COMMON RAM,S COMMON RAM
 	AM_RANGE(0x2000, 0x2fff) AM_READWRITE(jackal_voram_r, jackal_voram_w)			// MAIN V O RAM,SUB  V O RAM
 	AM_RANGE(0x3000, 0x3fff) AM_READWRITE(jackal_spriteram_r, jackal_spriteram_w)	// MAIN V O RAM,SUB  V O RAM
-	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK(1)
 	AM_RANGE(0xc000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_MEMBER(jackal_state, m_paletteram)	// self test only checks 0x4000-0x423f, 007327 should actually go up to 4fff
-	AM_RANGE(0x6000, 0x605f) AM_RAM						// SOUND RAM (Self test check 0x6000-605f, 0x7c00-0x7fff)
-	AM_RANGE(0x6060, 0x7fff) AM_RAM AM_SHARE("share1")
+static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x2000, 0x2001) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(SMH_RAM) AM_BASE(&paletteram)	// self test only checks 0x4000-0x423f, 007327 should actually go up to 4fff
+	AM_RANGE(0x6000, 0x605f) AM_RAM																	// SOUND RAM (Self test check 0x6000-605f, 0x7c00-0x7fff)
+	AM_RANGE(0x6060, 0x7fff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-/*************************************
- *
- *  Input ports
- *
- *************************************/
+/* Input Ports */
 
 static INPUT_PORTS_START( jackal )
 	PORT_START("DSW1")
@@ -259,12 +189,7 @@ static INPUT_PORTS_START( topgunbl )
 	PORT_BIT( 0xff, 0x00, IPT_POSITIONAL ) PORT_POSITIONS(8) PORT_WRAPS PORT_SENSITIVITY(15) PORT_KEYDELTA(1) PORT_CODE_DEC(KEYCODE_N) PORT_CODE_INC(KEYCODE_M) PORT_PLAYER(2) PORT_FULL_TURN_COUNT(8)
 INPUT_PORTS_END
 
-
-/*************************************
- *
- *  Graphics definitions
- *
- *************************************/
+/* Graphics Layouts */
 
 static const gfx_layout charlayout =
 {
@@ -301,6 +226,8 @@ static const gfx_layout spritelayout8 =
 	32*8
 };
 
+/* Graphics Decode Information */
+
 static GFXDECODE_START( jackal )
 	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,        0,  1 )	// colors 256-511 without lookup
 	GFXDECODE_ENTRY( "gfx1", 0x20000, spritelayout,  0x100, 16 )	// colors   0- 15 with lookup
@@ -309,102 +236,57 @@ static GFXDECODE_START( jackal )
 	GFXDECODE_ENTRY( "gfx1", 0x60000, spritelayout8, 0x200, 16 )	// to handle 8x8 sprites
 GFXDECODE_END
 
-/*************************************
- *
- *  Interrupt generator
- *
- *************************************/
+/* Interrupt Generator */
 
 static INTERRUPT_GEN( jackal_interrupt )
 {
-	jackal_state *state = device->machine().driver_data<jackal_state>();
-
-	if (state->m_irq_enable)
+	if (irq_enable)
 	{
-		device_set_input_line(device, 0, HOLD_LINE);
-		device_set_input_line(state->m_slavecpu, INPUT_LINE_NMI, PULSE_LINE);
+		cpu_set_input_line(device, 0, HOLD_LINE);
+		cputag_set_input_line(device->machine, "slave", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
+/* Machine Driver */
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
+static MACHINE_DRIVER_START( jackal )
+	// basic machine hardware
+	MDRV_CPU_ADD("master", M6809, MASTER_CLOCK/12) // verified on pcb
+	MDRV_CPU_PROGRAM_MAP(master_map)
+	MDRV_CPU_VBLANK_INT("screen", jackal_interrupt)
 
-static MACHINE_START( jackal )
-{
-	jackal_state *state = machine.driver_data<jackal_state>();
-	UINT8 *ROM = machine.region("master")->base();
+	MDRV_CPU_ADD("slave", M6809, MASTER_CLOCK/12) // verified on pcb
+	MDRV_CPU_PROGRAM_MAP(slave_map)
 
-	memory_configure_bank(machine, "bank1", 0, 1, &ROM[0x04000], 0x8000);
-	memory_configure_bank(machine, "bank1", 1, 1, &ROM[0x14000], 0x8000);
-	memory_set_bank(machine, "bank1", 0);
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	state->m_mastercpu = machine.device("master");
-	state->m_slavecpu = machine.device("slave");
+	MDRV_MACHINE_RESET(jackal)
 
-	state->save_item(NAME(state->m_irq_enable));
-}
+	// video hardware
 
-static MACHINE_RESET( jackal )
-{
-	jackal_state *state = machine.driver_data<jackal_state>();
-	UINT8 *rgn = machine.region("master")->base();
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
 
-	// HACK: running at the nominal clock rate, music stops working
-	// at the beginning of the game. This fixes it.
-	machine.device("slave")->set_clock_scale(1.2f);
+	MDRV_GFXDECODE(jackal)
+	MDRV_PALETTE_LENGTH(0x300)
 
-	state->m_rambank = rgn;
-	state->m_spritebank = rgn;
+	MDRV_PALETTE_INIT(jackal)
+	MDRV_VIDEO_START(jackal)
+	MDRV_VIDEO_UPDATE(jackal)
 
-	state->m_irq_enable = 0;
-}
+	// sound hardware
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-static MACHINE_CONFIG_START( jackal, jackal_state )
+	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK) // verified on pcb
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
-	/* basic machine hardware */
-	MCFG_CPU_ADD("master", M6809, MASTER_CLOCK/12) // verified on pcb
-	MCFG_CPU_PROGRAM_MAP(master_map)
-	MCFG_CPU_VBLANK_INT("screen", jackal_interrupt)
-
-	MCFG_CPU_ADD("slave", M6809, MASTER_CLOCK/12) // verified on pcb
-	MCFG_CPU_PROGRAM_MAP(slave_map)
-
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
-
-	MCFG_MACHINE_START(jackal)
-	MCFG_MACHINE_RESET(jackal)
-
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(jackal)
-
-	MCFG_GFXDECODE(jackal)
-	MCFG_PALETTE_LENGTH(0x300)
-
-	MCFG_PALETTE_INIT(jackal)
-	MCFG_VIDEO_START(jackal)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK) // verified on pcb
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.50)
-MACHINE_CONFIG_END
-
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+/* ROMs */
 
 ROM_START( jackal )
 	ROM_REGION( 0x20000, "master", 0 )	/* Banked 64k for 1st CPU */
@@ -506,12 +388,7 @@ ROM_START( topgunbl )
 	ROM_LOAD( "631r09.bpr",   0x0100, 0x0100, CRC(a74dd86c) SHA1(571f606f8fc0fd3d98d26761de79ccb4cc9ab044) )
 ROM_END
 
-
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
+/* Game Drivers */
 
 GAME( 1986, jackal,   0,      jackal, jackal,   0, ROT90, "Konami", "Jackal (World)", 0 )
 GAME( 1986, topgunr,  jackal, jackal, jackal,   0, ROT90, "Konami", "Top Gunner (US)", 0 )

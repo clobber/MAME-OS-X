@@ -30,7 +30,6 @@
 
 *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "m6805.h"
 
@@ -40,8 +39,7 @@ enum
 {
 	SUBTYPE_M6805,
 	SUBTYPE_M68705,
-	SUBTYPE_HD63705,
-	SUBTYPE_M68HC05EG
+	SUBTYPE_HD63705
 };
 
 /* 6805 Registers */
@@ -49,7 +47,7 @@ typedef struct
 {
 	/* Pre-pointerafied public globals */
 	int iCount;
-	PAIR ea;				/* effective address */
+	PAIR ea; 				/* effective address */
 
 	int 	subtype;		/* Which sub-type is being emulated */
 	UINT32	sp_mask;		/* Stack pointer address mask */
@@ -61,47 +59,47 @@ typedef struct
 	UINT8	cc; 			/* Condition codes */
 
 	UINT16	pending_interrupts; /* MB */
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *program;
 	int 	irq_state[9];		/* KW Additional lines for HD63705 */
 	int		nmi_state;
 } m6805_Regs;
 
-INLINE m6805_Regs *get_safe_token(device_t *device)
+INLINE m6805_Regs *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == M6805 ||
-		   device->type() == M68705 ||
-		   device->type() == HD63705 ||
-		   device->type() == M68HC05EG);
-	return (m6805_Regs *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_M6805 ||
+		   cpu_get_type(device) == CPU_M68705 ||
+		   cpu_get_type(device) == CPU_HD63705);
+	return (m6805_Regs *)device->token;
 }
 
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-#define M6805_RDMEM(Addr) ((unsigned)cpustate->program->read_byte(Addr))
+#define M6805_RDMEM(Addr) ((unsigned)memory_read_byte_8be(cpustate->program, Addr))
 
 /****************************************************************************/
 /* Write a byte to given memory location                                    */
 /****************************************************************************/
-#define M6805_WRMEM(Addr,Value) (cpustate->program->write_byte(Addr,Value))
+#define M6805_WRMEM(Addr,Value) (memory_write_byte_8be(cpustate->program, Addr,Value))
 
 /****************************************************************************/
 /* M6805_RDOP() is identical to M6805_RDMEM() except it is used for reading */
 /* opcodes. In case of system with memory mapped I/O, this function can be  */
 /* used to greatly speed up emulation                                       */
 /****************************************************************************/
-#define M6805_RDOP(Addr) ((unsigned)cpustate->direct->read_decrypted_byte(Addr))
+#define M6805_RDOP(Addr) ((unsigned)memory_decrypted_read_byte(cpustate->program, Addr))
 
 /****************************************************************************/
 /* M6805_RDOP_ARG() is identical to M6805_RDOP() but it's used for reading  */
 /* opcode arguments. This difference can be used to support systems that    */
 /* use different encoding mechanisms for opcodes and opcode arguments       */
 /****************************************************************************/
-#define M6805_RDOP_ARG(Addr) ((unsigned)cpustate->direct->read_raw_byte(Addr))
+#define M6805_RDOP_ARG(Addr) ((unsigned)memory_raw_read_byte(cpustate->program, Addr))
 
 #define SUBTYPE	cpustate->subtype	/* CPU Type */
 #define SP_MASK cpustate->sp_mask	/* stack pointer mask */
@@ -356,7 +354,7 @@ static void Interrupt( m6805_Regs *cpustate )
 		PUSHBYTE(cpustate->x);
 		PUSHBYTE(cpustate->a);
 		PUSHBYTE(cpustate->cc);
-		SEI;
+        SEI;
 		/* no vectors supported, just do the callback to clear irq_state if needed */
 		if (cpustate->irq_callback)
 			(*cpustate->irq_callback)(cpustate->device, 0);
@@ -379,7 +377,7 @@ static void Interrupt( m6805_Regs *cpustate )
 		PUSHBYTE(cpustate->x);
 		PUSHBYTE(cpustate->a);
 		PUSHBYTE(cpustate->cc);
-		SEI;
+        SEI;
 		/* no vectors supported, just do the callback to clear irq_state if needed */
 		if (cpustate->irq_callback)
 			(*cpustate->irq_callback)(cpustate->device, 0);
@@ -431,45 +429,27 @@ static void Interrupt( m6805_Regs *cpustate )
 				RM16( cpustate, 0x1fee, &pPC);
 			}
 		}
-		else if (SUBTYPE == SUBTYPE_M68HC05EG)
-		{
-			if((cpustate->pending_interrupts&(1<<M68HC05EG_INT_IRQ))!=0)
-			{
-				cpustate->pending_interrupts &= ~(1<<M68HC05EG_INT_IRQ);
-				RM16( cpustate, 0x1ffa, &pPC);
-			}
-			else if((cpustate->pending_interrupts&(1<<M68HC05EG_INT_TIMER))!=0)
-			{
-				cpustate->pending_interrupts &= ~(1<<M68HC05EG_INT_TIMER);
-				RM16( cpustate, 0x1ff8, &pPC);
-			}
-			else if((cpustate->pending_interrupts&(1<<M68HC05EG_INT_CPI))!=0)
-			{
-				cpustate->pending_interrupts &= ~(1<<M68HC05EG_INT_CPI);
-				RM16( cpustate, 0x1ff6, &pPC);
-			}
-		}
 		else
 		{
 			RM16( cpustate, 0xffff - 5, &pPC );
 		}
 
-	}	// CC & IFLAG
+		}	// CC & IFLAG
 			cpustate->pending_interrupts &= ~(1<<M6805_IRQ_LINE);
 		}
 		cpustate->iCount -= 11;
 	}
 }
 
-static void state_register(m6805_Regs *cpustate, const char *type, legacy_cpu_device *device)
+static void state_register(m6805_Regs *cpustate, const char *type, const device_config *device)
 {
-	device->save_item(NAME(A));
-	device->save_item(NAME(PC));
-	device->save_item(NAME(S));
-	device->save_item(NAME(X));
-	device->save_item(NAME(CC));
-	device->save_item(NAME(cpustate->pending_interrupts));
-	device->save_item(NAME(cpustate->irq_state));
+	state_save_register_device_item(device, 0, A);
+	state_save_register_device_item(device, 0, PC);
+	state_save_register_device_item(device, 0, S);
+	state_save_register_device_item(device, 0, X);
+	state_save_register_device_item(device, 0, CC);
+	state_save_register_device_item(device, 0, cpustate->pending_interrupts);
+	state_save_register_device_item_array(device, 0, cpustate->irq_state);
 }
 
 static CPU_INIT( m6805 )
@@ -479,22 +459,20 @@ static CPU_INIT( m6805 )
 	state_register(cpustate, "m6805", device);
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
+	cpustate->program = memory_find_address_space(cpustate->device, ADDRESS_SPACE_PROGRAM);
 }
 
 static CPU_RESET( m6805 )
 {
 	m6805_Regs *cpustate = get_safe_token(device);
 
-	device_irq_callback save_irqcallback = cpustate->irq_callback;
-	memset(cpustate, 0, sizeof(*cpustate));
+	cpu_irq_callback save_irqcallback = cpustate->irq_callback;
+	memset(cpustate, 0, sizeof(m6805_Regs));
 
 	cpustate->iCount=50000;		/* Used to be global */
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
+	cpustate->program = memory_find_address_space(cpustate->device, ADDRESS_SPACE_PROGRAM);
 
 	/* Force CPU sub-type and relevant masks */
 	cpustate->subtype = SUBTYPE_M6805;
@@ -536,6 +514,7 @@ static CPU_EXECUTE( m6805 )
 	m6805_Regs *cpustate = get_safe_token(device);
 
 	S = SP_ADJUST( S );		/* Taken from CPU_SET_CONTEXT when pointer'afying */
+	cpustate->iCount = cycles;
 
 	do
 	{
@@ -820,44 +799,9 @@ static CPU_EXECUTE( m6805 )
 		}
 		cpustate->iCount -= cycles1[ireg];
 	} while( cpustate->iCount > 0 );
+
+	return cycles - cpustate->iCount;
 }
-
-/****************************************************************************
- * M68HC05EG section
- ****************************************************************************/
-static CPU_INIT( m68hc05eg )
-{
-	m6805_Regs *cpustate = get_safe_token(device);
-	state_register(cpustate, "m68hc05eg", device);
-	cpustate->irq_callback = irqcallback;
-	cpustate->device = device;
-}
-
-static CPU_RESET( m68hc05eg )
-{
-	m6805_Regs *cpustate = get_safe_token(device);
-	CPU_RESET_CALL(m6805);
-
-	/* Overide default 6805 type */
-	cpustate->subtype = SUBTYPE_M68HC05EG;
-	SP_MASK = 0xff;
-	SP_LOW	= 0xc0;
-	RM16( cpustate, 0x1ffe, &cpustate->pc );
-}
-
-static void m68hc05eg_set_irq_line(m6805_Regs *cpustate, int irqline, int state)
-{
-	if (cpustate->irq_state[irqline] != state)
-	{
-		cpustate->irq_state[irqline] = state;
-
-		if (state != CLEAR_LINE)
-		{
-			cpustate->pending_interrupts |= 1<<irqline;
-		}
-	}
-}
-
 
 /****************************************************************************
  * M68705 section
@@ -947,7 +891,7 @@ static CPU_SET_INFO( m6805 )
 
 		case CPUINFO_INT_REGISTER + M6805_A:			A = info->i;			break;
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + M6805_PC:			PC = info->i;			break;
+		case CPUINFO_INT_REGISTER + M6805_PC:			PC = info->i; 			break;
 		case CPUINFO_INT_SP:
 		case CPUINFO_INT_REGISTER + M6805_S:			S = SP_ADJUST(info->i);	break;
 		case CPUINFO_INT_REGISTER + M6805_X:			X = info->i;			break;
@@ -963,7 +907,7 @@ static CPU_SET_INFO( m6805 )
 
 CPU_GET_INFO( m6805 )
 {
-	m6805_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	m6805_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -979,15 +923,15 @@ CPU_GET_INFO( m6805 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 12;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 12;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6805_IRQ_LINE:	info->i = cpustate->irq_state[M6805_IRQ_LINE]; break;
 
@@ -1038,47 +982,6 @@ CPU_GET_INFO( m6805 )
 	}
 }
 
-/**************************************************************************
- * CPU-specific set_info for 68HC05EG
- **************************************************************************/
-static CPU_SET_INFO( m68hc05eg )
-{
-	m6805_Regs *cpustate = get_safe_token(device);
-
-	switch(state)
-	{
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_IRQ:	m68hc05eg_set_irq_line(cpustate, M68HC05EG_INT_IRQ, info->i); break;
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_TIMER:	m68hc05eg_set_irq_line(cpustate, M68HC05EG_INT_TIMER, info->i); break;
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_CPI:	m68hc05eg_set_irq_line(cpustate, M68HC05EG_INT_CPI, info->i); break;
-
-		default:						CPU_SET_INFO_CALL(m6805); break;
-	}
-}
-
-CPU_GET_INFO( m68hc05eg )
-{
-	m6805_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
-
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_IRQ:	info->i = cpustate->irq_state[M68HC05EG_INT_IRQ]; break;
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_TIMER:	info->i = cpustate->irq_state[M68HC05EG_INT_TIMER]; break;
-		case CPUINFO_INT_INPUT_STATE + M68HC05EG_INT_CPI:	info->i = cpustate->irq_state[M68HC05EG_INT_CPI]; break;
-
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 13;					break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case CPUINFO_FCT_SET_INFO:		info->setinfo = CPU_SET_INFO_NAME(m68hc05eg);	break;
-		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68hc05eg);			break;
-		case CPUINFO_FCT_RESET:			info->reset = CPU_RESET_NAME(m68hc05eg);		break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:			strcpy(info->s, "M68HC05EG");	break;
-
-		default:    				CPU_GET_INFO_CALL(m6805);	break;
-	}
-}
 
 /**************************************************************************
  * CPU-specific set_info
@@ -1098,7 +1001,7 @@ static CPU_SET_INFO( m68705 )
 
 CPU_GET_INFO( m68705 )
 {
-	m6805_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	m6805_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1145,7 +1048,7 @@ static CPU_SET_INFO( hd63705 )
 
 CPU_GET_INFO( hd63705 )
 {
-	m6805_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	m6805_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1160,7 +1063,7 @@ CPU_GET_INFO( hd63705 )
 		case CPUINFO_INT_INPUT_STATE + HD63705_INT_ADCONV:	info->i = cpustate->irq_state[HD63705_INT_ADCONV];	break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:		info->i = cpustate->irq_state[HD63705_INT_NMI];		break;
 
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16; break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16; break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(hd63705);	break;
@@ -1175,8 +1078,3 @@ CPU_GET_INFO( hd63705 )
 		default:										CPU_GET_INFO_CALL(m6805);	break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(M6805, m6805);
-DEFINE_LEGACY_CPU_DEVICE(M68HC05EG, m68hc05eg);
-DEFINE_LEGACY_CPU_DEVICE(M68705, m68705);
-DEFINE_LEGACY_CPU_DEVICE(HD63705, hd63705);

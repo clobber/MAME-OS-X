@@ -36,71 +36,11 @@ Notes:
       Possibly Z80's @ 4MHz and YM2203 @ 2MHz
       PCB marked 'Ducksan Trading Co. Ltd. Made In Korea'
 
-
-
-
-Quiz Punch (C)1988 Space Computer
-Ducksan 1989
-
-88-01-14-0775
-|--------------------------------------------------|
-|VOL  MC1455                        02.U2   01.U1  |
-|UPC1241                                           |
-|LM358  05.U22 04.U21  03.U20                      |
-|YM3014B  6116   10.U30 09.U29 08.U28 07.U27 06.U26|
-|YM2203  Z80A                                      |
-|                                                  |
-|J              6116   6116   6116   6116   6116   |
-|A                                                 |
-|M                                                 |
-|M                       |------------|            |
-|A                       |            |            |
-|                        |  EPOXY     |            |
-|                        |  MODULE    |            |
-|                        |            |            |
-|    6116       6116     |            |            |
-|                        |------------|    14.U120 |
-|                               GM76C88    13.U119 |
-|                                          12.U118 |
-|                                          11.U117 |
-|   DSW(8)                   8MHz 15.U111     32MHz|
-|--------------------------------------------------|
-Notes:
-       Z80A - clock 4.000MHz (8/2)
-     YM2203 - clock 4.000MHz (8/2)
-     Epoxy Module likely contains a Z80A (an input clock of 4.000MHz is present) and possibly a ROM
-     VSync - 59.3148Hz
-     HSync - 15.2526kHz
-
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
-
-
-typedef enum { STATE_IDLE = 0, STATE_ADDR_R, STATE_ROM_R, STATE_EEPROM_R, STATE_EEPROM_W } prot_state;
-struct prot_t {
-	prot_state state;
-	int wait_param;
-	int param;
-	int cmd;
-	int addr;
-};
-
-class quizpun2_state : public driver_device
-{
-public:
-	quizpun2_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	struct prot_t m_prot;
-	UINT8 *m_bg_ram;
-	UINT8 *m_fg_ram;
-	tilemap_t *m_bg_tmap;
-	tilemap_t *m_fg_tmap;
-};
-
 
 #define VERBOSE_PROTECTION_LOG 0
 
@@ -108,65 +48,62 @@ public:
                                 Video Hardware
 ***************************************************************************/
 
+static UINT8   *bg_ram,  *fg_ram;
+static tilemap *bg_tmap, *fg_tmap;
+
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	quizpun2_state *state = machine.driver_data<quizpun2_state>();
-	UINT16 code = state->m_bg_ram[ tile_index * 2 ] + state->m_bg_ram[ tile_index * 2 + 1 ] * 256;
+	UINT16 code = bg_ram[ tile_index * 2 ] + bg_ram[ tile_index * 2 + 1 ] * 256;
 	SET_TILE_INFO(0, code, 0, 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	quizpun2_state *state = machine.driver_data<quizpun2_state>();
-	UINT16 code  = state->m_fg_ram[ tile_index * 4 ] + state->m_fg_ram[ tile_index * 4 + 1 ] * 256;
-	UINT8  color = state->m_fg_ram[ tile_index * 4 + 2 ];
+	UINT16 code  = fg_ram[ tile_index * 4 ] + fg_ram[ tile_index * 4 + 1 ] * 256;
+	UINT8  color = fg_ram[ tile_index * 4 + 2 ];
 	SET_TILE_INFO(1, code, color & 0x0f, 0);
 }
 
 static WRITE8_HANDLER( bg_ram_w )
 {
-	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
-	state->m_bg_ram[offset] = data;
-	state->m_bg_tmap->mark_tile_dirty(offset/2);
+	bg_ram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tmap, offset/2);
 }
 
 static WRITE8_HANDLER( fg_ram_w )
 {
-	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
-	state->m_fg_ram[offset] = data;
-	state->m_fg_tmap->mark_tile_dirty(offset/4);
+	fg_ram[offset] = data;
+	tilemap_mark_tile_dirty(fg_tmap, offset/4);
 }
 
 static VIDEO_START(quizpun2)
 {
-	quizpun2_state *state = machine.driver_data<quizpun2_state>();
-	state->m_bg_tmap = tilemap_create(	machine, get_bg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
-	state->m_fg_tmap = tilemap_create(	machine, get_fg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
+	bg_tmap = tilemap_create(	machine, get_bg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
+	fg_tmap = tilemap_create(	machine, get_fg_tile_info, tilemap_scan_rows,	8,16, 0x20,0x20	);
 
-	state->m_bg_tmap->set_transparent_pen(0);
-	state->m_fg_tmap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(bg_tmap, 0);
+	tilemap_set_transparent_pen(fg_tmap, 0);
 }
 
-static SCREEN_UPDATE_IND16(quizpun2)
+static VIDEO_UPDATE(quizpun2)
 {
-	quizpun2_state *state = screen.machine().driver_data<quizpun2_state>();
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
-	if (screen.machine().input().code_pressed(KEYCODE_Z))
+	if (input_code_pressed(screen->machine, KEYCODE_Z))
 	{
 		int msk = 0;
-		if (screen.machine().input().code_pressed(KEYCODE_Q))	msk |= 1;
-		if (screen.machine().input().code_pressed(KEYCODE_W))	msk |= 2;
+		if (input_code_pressed(screen->machine, KEYCODE_Q))	msk |= 1;
+		if (input_code_pressed(screen->machine, KEYCODE_W))	msk |= 2;
 		if (msk != 0) layers_ctrl &= msk;
 	}
 #endif
 
-	if (layers_ctrl & 1)	state->m_bg_tmap->draw(bitmap, cliprect, TILEMAP_DRAW_OPAQUE, 0);
-	else					bitmap.fill(get_black_pen(screen.machine()), cliprect);
+	if (layers_ctrl & 1)	tilemap_draw(bitmap,cliprect, bg_tmap,  TILEMAP_DRAW_OPAQUE, 0);
+	else					bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
 
-bitmap.fill(get_black_pen(screen.machine()), cliprect);
-	if (layers_ctrl & 2)	state->m_fg_tmap->draw(bitmap, cliprect, 0, 0);
+bitmap_fill(bitmap,cliprect,get_black_pen(screen->machine));
+	if (layers_ctrl & 2)	tilemap_draw(bitmap,cliprect, fg_tmap, 0, 0);
 
 	return 0;
 }
@@ -182,10 +119,17 @@ bitmap.fill(get_black_pen(screen.machine()), cliprect);
 
 ***************************************************************************/
 
+typedef enum { STATE_IDLE = 0, STATE_ADDR_R, STATE_ROM_R, STATE_EEPROM_R, STATE_EEPROM_W } prot_state;
+static struct {
+	prot_state state;
+	int wait_param;
+	int param;
+	int cmd;
+	int addr;
+} prot;
+
 static MACHINE_RESET( quizpun2 )
 {
-	quizpun2_state *state = machine.driver_data<quizpun2_state>();
-	struct prot_t &prot = state->m_prot;
 	prot.state = STATE_IDLE;
 	prot.wait_param = 0;
 	prot.param = 0;
@@ -193,11 +137,9 @@ static MACHINE_RESET( quizpun2 )
 	prot.addr = 0;
 }
 
-static void log_protection( address_space *space, const char *warning )
+static void log_protection( const address_space *space, const char *warning )
 {
-	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
-	struct prot_t &prot = state->m_prot;
-	logerror("%04x: protection - %s (state %x, wait %x, param %02x, cmd %02x, addr %02x)\n", cpu_get_pc(&space->device()), warning,
+	logerror("%04x: protection - %s (state %x, wait %x, param %02x, cmd %02x, addr %02x)\n", cpu_get_pc(space->cpu), warning,
 		prot.state,
 		prot.wait_param,
 		prot.param,
@@ -208,8 +150,6 @@ static void log_protection( address_space *space, const char *warning )
 
 static READ8_HANDLER( quizpun2_protection_r )
 {
-	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
-	struct prot_t &prot = state->m_prot;
 	UINT8 ret;
 
 	switch ( prot.state )
@@ -243,7 +183,7 @@ static READ8_HANDLER( quizpun2_protection_r )
 
 		case STATE_EEPROM_R:		// EEPROM read
 		{
-			UINT8 *eeprom = space->machine().region("eeprom")->base();
+			UINT8 *eeprom = memory_region(space->machine, "eeprom");
 			ret = eeprom[prot.addr];
 			break;
 		}
@@ -264,14 +204,11 @@ static READ8_HANDLER( quizpun2_protection_r )
 
 static WRITE8_HANDLER( quizpun2_protection_w )
 {
-	quizpun2_state *state = space->machine().driver_data<quizpun2_state>();
-	struct prot_t &prot = state->m_prot;
-
 	switch ( prot.state )
 	{
 		case STATE_EEPROM_W:
 		{
-			UINT8 *eeprom = space->machine().region("eeprom")->base();
+			UINT8 *eeprom = memory_region(space->machine, "eeprom");
 			eeprom[prot.addr] = data;
 			prot.addr++;
 			if ((prot.addr % 8) == 0)
@@ -338,34 +275,34 @@ static WRITE8_HANDLER( quizpun2_protection_w )
 
 static WRITE8_HANDLER( quizpun2_rombank_w )
 {
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-	memory_set_bankptr(space->machine(),  "bank1", &ROM[ 0x10000 + 0x2000 * (data & 0x1f) ] );
+	UINT8 *ROM = memory_region(space->machine, "maincpu");
+	memory_set_bankptr(space->machine,  1, &ROM[ 0x10000 + 0x2000 * (data & 0x1f) ] );
 }
 
 static WRITE8_HANDLER( quizpun2_irq_ack )
 {
-	cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( quizpun2_soundlatch_w )
 {
 	soundlatch_w(space, 0, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static ADDRESS_MAP_START( quizpun2_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( quizpun2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0x7fff ) AM_ROM
-	AM_RANGE( 0x8000, 0x9fff ) AM_ROMBANK("bank1")
+	AM_RANGE( 0x8000, 0x9fff ) AM_ROMBANK(1)
 
-	AM_RANGE( 0xa000, 0xbfff ) AM_RAM_WRITE( fg_ram_w ) AM_BASE_MEMBER(quizpun2_state, m_fg_ram )	// 4 * 800
-	AM_RANGE( 0xc000, 0xc7ff ) AM_RAM_WRITE( bg_ram_w ) AM_BASE_MEMBER(quizpun2_state, m_bg_ram )	// 4 * 400
+	AM_RANGE( 0xa000, 0xbfff ) AM_RAM_WRITE( fg_ram_w ) AM_BASE( &fg_ram )	// 4 * 800
+	AM_RANGE( 0xc000, 0xc7ff ) AM_RAM_WRITE( bg_ram_w ) AM_BASE( &bg_ram )	// 4 * 400
 	AM_RANGE( 0xc800, 0xcfff ) AM_RAM										//
 
-	AM_RANGE( 0xd000, 0xd3ff ) AM_RAM_WRITE( paletteram_xRRRRRGGGGGBBBBB_le_w )  AM_BASE_GENERIC( paletteram )
+	AM_RANGE( 0xd000, 0xd3ff ) AM_RAM_WRITE( paletteram_xRRRRRGGGGGBBBBB_le_w )  AM_BASE( &paletteram )
 	AM_RANGE( 0xe000, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quizpun2_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( quizpun2_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE( 0x40, 0x40 ) AM_WRITE( quizpun2_irq_ack )
 	AM_RANGE( 0x50, 0x50 ) AM_WRITE( quizpun2_soundlatch_w )
@@ -381,17 +318,17 @@ ADDRESS_MAP_END
                             Memory Maps - Sound CPU
 ***************************************************************************/
 
-static ADDRESS_MAP_START( quizpun2_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( quizpun2_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x0000, 0xf7ff ) AM_ROM
 	AM_RANGE( 0xf800, 0xffff ) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( quizpun2_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( quizpun2_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE( 0x00, 0x00 ) AM_WRITENOP	// IRQ end
-	AM_RANGE( 0x20, 0x20 ) AM_WRITENOP	// NMI end
+	AM_RANGE( 0x00, 0x00 ) AM_WRITE( SMH_NOP )	// IRQ end
+	AM_RANGE( 0x20, 0x20 ) AM_WRITE( SMH_NOP )	// NMI end
 	AM_RANGE( 0x40, 0x40 ) AM_READ( soundlatch_r )
-	AM_RANGE( 0x60, 0x61 ) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w )
+	AM_RANGE( 0x60, 0x61 ) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w )
 ADDRESS_MAP_END
 
 
@@ -478,40 +415,41 @@ GFXDECODE_END
                                 Machine Drivers
 ***************************************************************************/
 
-static MACHINE_CONFIG_START( quizpun2, quizpun2_state )
+static MACHINE_DRIVER_START( quizpun2 )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_8MHz / 2)	// 4 MHz?
-	MCFG_CPU_PROGRAM_MAP(quizpun2_map)
-	MCFG_CPU_IO_MAP(quizpun2_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_8MHz / 2)	// 4 MHz?
+	MDRV_CPU_PROGRAM_MAP(quizpun2_map)
+	MDRV_CPU_IO_MAP(quizpun2_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz / 2)	// 4 MHz?
-	MCFG_CPU_PROGRAM_MAP(quizpun2_sound_map)
-	MCFG_CPU_IO_MAP(quizpun2_sound_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_8MHz / 2)	// 4 MHz?
+	MDRV_CPU_PROGRAM_MAP(quizpun2_sound_map)
+	MDRV_CPU_IO_MAP(quizpun2_sound_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 	// NMI generated by main CPU
 
-	MCFG_MACHINE_RESET( quizpun2 )
+	MDRV_MACHINE_RESET( quizpun2 )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(quizpun2)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 256-1)
 
-	MCFG_GFXDECODE(quizpun2)
-	MCFG_PALETTE_LENGTH(0x200)
+	MDRV_GFXDECODE(quizpun2)
+	MDRV_PALETTE_LENGTH(0x200)
 
-	MCFG_VIDEO_START(quizpun2)
+	MDRV_VIDEO_START(quizpun2)
+	MDRV_VIDEO_UPDATE(quizpun2)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2203, XTAL_8MHz / 4 )	// 2 MHz?
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2203, XTAL_8MHz / 4 )	// 2 MHz?
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -528,9 +466,6 @@ ROM_START( quizpun2 )
 
 	ROM_REGION( 0x10000, "audiocpu", 0 )
 	ROM_LOAD( "u22", 0x00000, 0x10000, CRC(f40768b5) SHA1(4410f71850357ec1d10a3a114bb540966e72781b) )
-
-	ROM_REGION( 0x1000, "mcu", 0 )
-	ROM_LOAD( "mcu.bin", 0x0000, 0x1000, NO_DUMP ) // could be a state machine instead
 
 	ROM_REGION( 0x40000, "gfx1", 0 )	// 8x16x8
     ROM_LOAD( "u21", 0x00000, 0x10000, CRC(8ac86759) SHA1(2eac9ceee4462ce905aa08ff4f5a6215e0b6672f) )
@@ -557,42 +492,4 @@ ROM_START( quizpun2 )
 	ROM_LOAD( "u2a", 0x0000, 0x2000, CRC(13afc2bd) SHA1(0d9c8813525dfc7a844e72d2cf84261db3d10a23) )
 ROM_END
 
-ROM_START( quizpun )
-	ROM_REGION( 0x50000, "maincpu", 0 )
-	ROM_LOAD( "15.u111", 0x00000, 0x08000, CRC(0ffe42d9) SHA1(f91e499800923d185a5d3514fc4c50e5c86378bf) )
-	ROM_LOAD( "11.u117", 0x10000, 0x10000, CRC(13541476) SHA1(5e81e4143fbc8fa68c2c7d54792a432e97964d7f) )
-	ROM_LOAD( "12.u118", 0x20000, 0x10000, CRC(678b57c1) SHA1(83869e5b6fe528c0b072f7d97338febc31db9f8b) )
-	ROM_LOAD( "13.u119", 0x30000, 0x10000, CRC(9c0ee0de) SHA1(14b148f3ca951a5a9010b4d253e3ba7d35708403) )
-	ROM_LOAD( "14.u120", 0x40000, 0x10000, CRC(21c11262) SHA1(e50678fafdf775a49ef96f8837b124824a2d1ca2) )
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "05.u22", 0x00000, 0x10000, CRC(515f337e) SHA1(21b2cca95b5da934fd8139892c2ee2c623d51a4e) )
-
-	ROM_REGION( 0x1000, "mcu", 0 )
-	ROM_LOAD( "mcu.bin", 0x0000, 0x1000, NO_DUMP ) // could be a state machine instead
-
-	ROM_REGION( 0x40000, "gfx1", 0 )	// 8x16x8
-    ROM_LOAD( "04.u21", 0x00000, 0x10000, CRC(fa8d64f4) SHA1(71badabf8f34f246dec83323a1cddbe74deb91bd) )
-    ROM_LOAD( "03.u20", 0x10000, 0x10000, CRC(8dda8167) SHA1(42838cf6866fb1d59c5bb3b477053aac448e7760) )
-	ROM_LOAD( "09.u29", 0x20000, 0x10000, CRC(b9f28569) SHA1(1395cd226d314ee57385eed25f28b68607bfda53) )
-    ROM_LOAD( "10.u30", 0x30000, 0x10000, CRC(db5762c0) SHA1(606dc4a3e6b8034f063f11dcf0a2b1db59838f4c) )
-
-	ROM_REGION( 0xc000, "gfx2", 0 )	// 8x16x2
-	ROM_LOAD( "06.u26", 0x1000, 0x1000, CRC(6d071b6d) SHA1(19565c8d768eeecd4119677915cc06f3ea18a47a) )
-	ROM_CONTINUE(    0x0000, 0x1000 )
-	ROM_LOAD( "07.u27", 0x3000, 0x1000, CRC(0f8b516e) SHA1(8bfabfd0bd28a1c7ddd01586fe9757b241feb59b) )
-	ROM_CONTINUE(    0x2000, 0x1000 )
-	ROM_CONTINUE(    0x6000, 0x6000 ) // ??
-	ROM_LOAD( "08.u28", 0x5000, 0x1000, CRC(51c0c5cb) SHA1(0c7bfc9b6b3ce0cdd5c0e36df2b4d90f9cff7fae) )
-	ROM_CONTINUE(    0x4000, 0x1000 )
-
-	ROM_REGION( 0x20000, "gfx3", 0 )	// 8x16x2
-	ROM_LOAD( "01.u1", 0x00000, 0x10000, CRC(58506040) SHA1(9d8bed2585e8f188a20270fccd9cfbdb91e48599) )
-	ROM_LOAD( "02.u2", 0x10000, 0x10000, CRC(9294a19c) SHA1(cd7109262e5f68b946c84aa390108bcc47ee1300) )
-
-	ROM_REGION( 0x80, "eeprom", ROMREGION_ERASEFF )
-
-ROM_END
-
-GAME( 1988, quizpun, 0, quizpun2, quizpun2, 0, ROT270, "Space Computer", "Quiz Punch", GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION )
 GAME( 1989, quizpun2, 0, quizpun2, quizpun2, 0, ROT270, "Space Computer", "Quiz Punch 2", GAME_NOT_WORKING | GAME_UNEMULATED_PROTECTION )

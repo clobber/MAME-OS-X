@@ -1,26 +1,9 @@
 /******************************************************************************************
-System Control Unit - DSP emulator version 0.09
+System Control Unit - DSP emulator version 0.06
 
 Written by Angelo Salese & Mariusz Wojcieszek
 
 Changelog:
-110807: Angelo Salese
-- Allow the Program Counter to be read-backable from SH-2, needed by Virtua Fighter to not
-  get stuck on "round 1" announcement;
-
-110806: Angelo Salese
-- Allows reading from non-work ram h areas;
-- Fixed DMA add values;
-- Fixed a MVI condition shift flag bug, now Sega Saturn produces sound during splash screen;
-- Removed left-over IRQ;
-
-110722: Angelo Salese
-- Added DSP IRQ command, tested with "The King of Boxing"
-
-110527: Angelo Salese
-- Fixed incorrectly setted execute flag clearance, allows animation of the Sega Saturn
-  splash screen;
-
 051129: Mariusz Wojcieszek
 - Fixed parallel instructions which increment CT registers to update CT register only
   once, after dsp operation is finished. This fixes instructions like
@@ -61,37 +44,34 @@ Changelog:
 - overworked disassembler
 
  TODO:
-- Convert this to cpu structure
 - Disassembler: complete it
+- (Maybe) Convert this to cpu structure
 - Add control flags
 
 ******************************************************************************************/
-#include "emu.h"
+#include "driver.h"
 #include "machine/scudsp.h"
 #include "sound/scsp.h"
-#include "includes/stv.h"
 
 /*DSP macros*/
-#define PRF ((state->m_scu_regs[32] & 0x04000000) >> 26)
-#define EPF ((state->m_scu_regs[32] & 0x02000000) >> 25)
-#define T0F ((state->m_scu_regs[32] & 0x00800000) >> 23)
-#define SF  ((state->m_scu_regs[32] & 0x00400000) >> 22)
-#define ZF  ((state->m_scu_regs[32] & 0x00200000) >> 21)
-#define CF  ((state->m_scu_regs[32] & 0x00100000) >> 20)
-#define VF  ((state->m_scu_regs[32] & 0x00080000) >> 19)
-#define EF  ((state->m_scu_regs[32] & 0x00040000) >> 18)
-#define ESF ((state->m_scu_regs[32] & 0x00020000) >> 17)
-#define EXF ((state->m_scu_regs[32] & 0x00010000) >> 16)
-#define LEF ((state->m_scu_regs[32] & 0x00008000) >> 15)
-#define T0F_1 state->m_scu_regs[32]|=0x00800000
-#define T0F_0 state->m_scu_regs[32]&=~0x00800000
-#define EXF_0 state->m_scu_regs[32]&=~0x00010000
-#define EF_1  state->m_scu_regs[32]|=0x00040000
+#define PRF ((stv_scu[32] & 0x04000000) >> 26)
+#define EPF ((stv_scu[32] & 0x02000000) >> 25)
+#define T0F ((stv_scu[32] & 0x00800000) >> 23)
+#define SF  ((stv_scu[32] & 0x00400000) >> 22)
+#define ZF  ((stv_scu[32] & 0x00200000) >> 21)
+#define CF  ((stv_scu[32] & 0x00100000) >> 20)
+#define VF  ((stv_scu[32] & 0x00080000) >> 19)
+#define EF  ((stv_scu[32] & 0x00040000) >> 18)
+#define ESF ((stv_scu[32] & 0x00020000) >> 17)
+#define EXF ((stv_scu[32] & 0x00010000) >> 16)
+#define LEF ((stv_scu[32] & 0x00008000) >> 15)
+#define T0F_1 if(!(stv_scu[32] & 0x00800000)) stv_scu[32]^=0x00800000
+#define T0F_0 if(stv_scu[32] & 0x00800000) stv_scu[32]^=0x00800000
 
-#define SET_C(_val) (state->m_scu_regs[32] = ((state->m_scu_regs[32] & ~0x00100000) | ((_val) ? 0x00100000 : 0)))
-#define SET_S(_val) (state->m_scu_regs[32] = ((state->m_scu_regs[32] & ~0x00400000) | ((_val) ? 0x00400000 : 0)))
-#define SET_Z(_val) (state->m_scu_regs[32] = ((state->m_scu_regs[32] & ~0x00200000) | ((_val) ? 0x00200000 : 0)))
-#define SET_V(_val) (state->m_scu_regs[32] = ((state->m_scu_regs[32] & ~0x00080000) | ((_val) ? 0x00080000 : 0)))
+#define SET_C(_val) (stv_scu[32] = ((stv_scu[32] & ~0x00100000) | ((_val) ? 0x00100000 : 0)))
+#define SET_S(_val) (stv_scu[32] = ((stv_scu[32] & ~0x00400000) | ((_val) ? 0x00400000 : 0)))
+#define SET_Z(_val) (stv_scu[32] = ((stv_scu[32] & ~0x00200000) | ((_val) ? 0x00200000 : 0)))
+#define SET_V(_val) (stv_scu[32] = ((stv_scu[32] & ~0x00080000) | ((_val) ? 0x00080000 : 0)))
 
 typedef union {
 	INT32  si;
@@ -104,9 +84,9 @@ typedef union {
 } SCUDSPREG16;
 
 static struct {
-	   UINT8 pc;							           /*Program Counter*/
+	   UINT8 pc; 							           /*Program Counter*/
 	   UINT8 delay;									   /* Delay */
-	   UINT8 top;									   /*Jump Command memory*/
+	   UINT8 top;							   		   /*Jump Command memory*/
 	   UINT16 lop;								       /*Counter Register*/	  /*12-bits*/
 	   UINT8  ct0,ct1,ct2,ct3;					       /*Index for RAM*/	  /*6-bits */
 	   UINT32 md0[0x40],md1[0x40],md2[0x40],md3[0x40]; /*RAM memory*/
@@ -275,9 +255,8 @@ static void dsp_set_dest_mem_reg_2( UINT32 mode, UINT32 value )
 	}
 }
 
-static UINT32 dsp_compute_condition( address_space *space, UINT32 condition )
+static UINT32 dsp_compute_condition( UINT32 condition )
 {
-	saturn_state *state = space->machine().driver_data<saturn_state>();
 	UINT32 result = 0;
 
 	switch( condition & 0xf )
@@ -333,19 +312,12 @@ static UINT32 dsp_get_mem_source_dma( UINT32 memcode, UINT32 counter )
 	return 0;
 }
 
-UINT32 dsp_prg_ctrl_r(address_space *space)
+void dsp_prg_ctrl(const address_space *space, UINT32 data)
 {
-	saturn_state *state = space->machine().driver_data<saturn_state>();
-
-	return (state->m_scu_regs[0x80/4] & 0x06ff8000) | (dsp_reg.pc & 0xff);
-}
-
-void dsp_prg_ctrl_w(address_space *space, UINT32 data)
-{
-	saturn_state *state = space->machine().driver_data<saturn_state>();
-
 	if(LEF) dsp_reg.pc = (data & 0xff);
 	if(EXF) dsp_execute_program(space);
+	if(EF && (!(stv_scu[40] & 0x0020)))
+		cputag_set_input_line_and_vector(space->machine, "maincpu", 0xa, HOLD_LINE , 0x45);
 }
 
 void dsp_prg_data(UINT32 data)
@@ -394,9 +366,8 @@ UINT32 dsp_ram_addr_r()
 	return data;
 }
 
-static void dsp_operation(address_space *space)
+static void dsp_operation(void)
 {
-	saturn_state *state = space->machine().driver_data<saturn_state>();
 	INT64 i1,i2;
 	INT32 i3;
 	int update_ct[4] = {0,0,0,0};
@@ -597,13 +568,13 @@ static void dsp_operation(address_space *space)
 
 }
 
-static void dsp_move_immediate( address_space *space )
+static void dsp_move_immediate( void )
 {
 	UINT32 value;
 
 	if ( opcode & 0x2000000 )
 	{
-		if ( dsp_compute_condition( space, (opcode & 0x3F80000 ) >> 19 ) )
+		if ( dsp_compute_condition( (opcode & 0x3F80000 ) >> 18 ) )
 		{
 			value = opcode & 0x7ffff;
 			if ( value & 0x40000 ) value |= 0xfff80000;
@@ -619,16 +590,14 @@ static void dsp_move_immediate( address_space *space )
 }
 
 
-static void dsp_dma( address_space *space )
+static void dsp_dma( const address_space *space )
 {
-	saturn_state *state = space->machine().driver_data<saturn_state>();
-
 	UINT8 hold = (opcode &  0x4000) >> 14;
 	UINT32 add = (opcode & 0x38000) >> 15;
 	UINT32 dir_from_D0 = (opcode & 0x1000 ) >> 12;
 	UINT32 transfer_cnt = 0;
 	UINT32 source = 0, dest = 0;
-	UINT32 dsp_mem = (opcode & 0x300) >> 8;
+	UINT32 dsp_mem = (opcode & 0x700) >> 8;
 	UINT32 counter = 0;
 	UINT32 data;
 
@@ -638,11 +607,10 @@ static void dsp_dma( address_space *space )
 	if ( opcode & 0x2000 )
 	{
 		transfer_cnt = dsp_get_source_mem_value( opcode & 0xf );
-		switch ( add & 0x7 )
+		switch ( add & 0x1 )
 		{
-			case 0: add = 0; break;
-			case 1: add = 4; break;
-			default: add = 4; break;
+		  case 0: add = 2; break;
+		  case 1: add = 4; break;
 		}
 	}
 	else
@@ -655,9 +623,9 @@ static void dsp_dma( address_space *space )
 		  case 2: add = 4; break;  /* 2 */
 		  case 3: add = 16; break; /* 4 */
 		  case 4: add = 16; break;  /* 8 */
-		  case 5: add = 64; break; /* 16 */
-		  case 6: add = 128; break; /* 32 */
-		  case 7: add = 256; break; /* 64 */
+  		  case 5: add = 64; break; /* 16 */
+  		  case 6: add = 128; break; /* 32 */
+  		  case 7: add = 256; break; /* 64 */
         }
 	}
 
@@ -681,20 +649,21 @@ static void dsp_dma( address_space *space )
 
 			if ( source >= 0x06000000 && source <= 0x060fffff )
 			{
-				data = space->read_dword(source );
+				data = memory_read_dword(space, source );
 			}
 			else
 			{
-				data = (space->read_word(source)<<16) | space->read_word(source+2);
+				data = 0;
 				//popmessage( "Bad DSP DMA mem read = %08X", source );
 #if DEBUG_DSP
-				//fprintf( log_file, "/*Bad DSP DMA mem read = %08X*/\n", source );
+				fprintf( log_file, "/*Bad DSP DMA mem read = %08X*/\n", source );
 #endif
 			}
 
 #if DEBUG_DSP
             fprintf( log_file, "%08X,\n", data );
 #endif
+
 			dsp_set_dest_dma_mem( dsp_mem, data, counter );
 			source += add;
 		}
@@ -718,7 +687,7 @@ static void dsp_dma( address_space *space )
 #endif
 		for ( counter = 0; counter < transfer_cnt; counter++ )
 		{
-			space->write_dword(dest, dsp_get_mem_source_dma( dsp_mem, counter ) );
+			memory_write_dword(space, dest, dsp_get_mem_source_dma( dsp_mem, counter ) );
 			dest += add;
 		}
 
@@ -728,15 +697,14 @@ static void dsp_dma( address_space *space )
 		}
 	}
 
-	/* TODO: move this behind a timer */
 	T0F_0;
 }
 
-static void dsp_jump( address_space *space )
+static void dsp_jump( void )
 {
 	if ( opcode & 0x3f80000 )
 	{
-		if ( dsp_compute_condition( space, (opcode & 0x3f80000) >> 19 ) )
+		if ( dsp_compute_condition( (opcode & 0x3f80000) >> 19 ) )
 		{
 			dsp_reg.delay = dsp_reg.pc;
 			dsp_reg.pc = opcode & 0xff;
@@ -749,29 +717,20 @@ static void dsp_jump( address_space *space )
 	}
 }
 
-static TIMER_CALLBACK( dsp_ended )
+static void dsp_end( void )
 {
-	saturn_state *state = machine.driver_data<saturn_state>();
-
-	if(!(state->m_scu.ism & IRQ_DSP_END))
-		device_set_input_line_and_vector(state->m_maincpu, 0xa, HOLD_LINE, 0x45);
-	else
-		state->m_scu.ist |= (IRQ_DSP_END);
-
-	EF_1;
-}
-
-static void dsp_end( address_space *dmaspace )
-{
-	saturn_state *state = dmaspace->machine().driver_data<saturn_state>();
-
 	if(opcode & 0x08000000)
 	{
 		/*ENDI*/
-		dmaspace->machine().scheduler().timer_set(attotime::from_usec(300), FUNC(dsp_ended));
+		if(!EF) stv_scu[32]^=0x00040000;
+		if(EXF) stv_scu[32]^=0x00100000;
+	}
+	else
+	{
+		/*END*/
+		if(EXF) stv_scu[32]^=0x00100000;
 	}
 
-	EXF_0; /* END / ENDI */
 }
 
 static void dsp_loop( void )
@@ -827,7 +786,7 @@ static void dsp_dump_mem( FILE *f )
 }
 #endif
 
-void dsp_execute_program(address_space *dmaspace)
+void dsp_execute_program(const address_space *dmaspace)
 {
 	UINT32 cycles_run = 0;
 	UINT8 cont = 1;
@@ -837,7 +796,7 @@ void dsp_execute_program(address_space *dmaspace)
     if ( log_file == NULL )
     {
     	log_file = fopen("dsp.log", "a");
-	}
+   	}
 	for ( i = 0; i < 0x100; i++ )
 	{
         dsp_dasm_opcode( dsp_reg.internal_prg[ i ], dasm_buffer );
@@ -865,13 +824,13 @@ void dsp_execute_program(address_space *dmaspace)
 		switch( (opcode & 0xc0000000) >> 30 )
 		{
 		case 0x00: /* 00 */
-			dsp_operation( dmaspace );
+			dsp_operation();
 			break;
 		case 0x01: /* 01 */
 			/* unrecognized opcode */
 			break;
 		case 0x02: /* 10 */
-			dsp_move_immediate( dmaspace );
+			dsp_move_immediate( );
 			break;
 		case 0x03: /* 11 */
 			switch( (opcode & 0x30000000) >> 28 )
@@ -880,13 +839,13 @@ void dsp_execute_program(address_space *dmaspace)
 					dsp_dma(dmaspace);
 					break;
 				case 0x01:
-					dsp_jump(dmaspace);
+					dsp_jump();
 					break;
 				case 0x02:
 					dsp_loop();
 					break;
 				case 0x03:
-					dsp_end(dmaspace);
+					dsp_end();
 					cont = 0;
 					break;
 			}
@@ -1221,7 +1180,7 @@ static void dsp_dasm_move_immediate( UINT32 op, char *buffer )
 	{
 		data[0] = op & 0x7FFFF;
 		data[1] = (op & 0x3C000000) >> 26;
-		data[2] = (op & 0x3F80000 ) >> 19;
+		data[2] = (op & 0x3F80000 ) >> 18;
 		dsp_dasm_prefix( MVI_Command[1], buffer, data ); /* TODO: bad mem*/
 	}
 	else

@@ -7,7 +7,7 @@
  *
  **************************************************************************/
 
-#include "emu.h"
+#include "cpuintrf.h"
 
 static const UINT8 *rambase;
 static offs_t pcbase;

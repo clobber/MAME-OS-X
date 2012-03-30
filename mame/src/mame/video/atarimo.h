@@ -32,7 +32,7 @@
 ***************************************************************************/
 
 /* callback for special processing */
-typedef int (*atarimo_special_func)(bitmap_ind16 &bitmap, const rectangle &clip, int code, int color, int xpos, int ypos, rectangle *mobounds);
+typedef int (*atarimo_special_func)(bitmap_t *bitmap, const rectangle *clip, int code, int color, int xpos, int ypos, rectangle *mobounds);
 
 /* description for a four-word mask */
 typedef struct _atarimo_entry atarimo_entry;
@@ -60,22 +60,22 @@ struct _atarimo_desc
 	UINT16				maxcolors;			/* maximum number of colors */
 	UINT8				transpen;			/* transparent pen index */
 
-	atarimo_entry		linkmask;			/* mask for the link */
-	atarimo_entry		gfxmask;			/* mask for the graphics bank */
-	atarimo_entry		codemask;			/* mask for the code index */
-	atarimo_entry		codehighmask;		/* mask for the upper code index */
-	atarimo_entry		colormask;			/* mask for the color */
-	atarimo_entry		xposmask;			/* mask for the X position */
-	atarimo_entry		yposmask;			/* mask for the Y position */
-	atarimo_entry		widthmask;			/* mask for the width, in tiles*/
-	atarimo_entry		heightmask;			/* mask for the height, in tiles */
-	atarimo_entry		hflipmask;			/* mask for the horizontal flip */
-	atarimo_entry		vflipmask;			/* mask for the vertical flip */
-	atarimo_entry		prioritymask;		/* mask for the priority */
-	atarimo_entry		neighbormask;		/* mask for the neighbor */
-	atarimo_entry		absolutemask;		/* mask for absolute coordinates */
+	atarimo_entry 		linkmask;			/* mask for the link */
+	atarimo_entry 		gfxmask;			/* mask for the graphics bank */
+	atarimo_entry 		codemask;			/* mask for the code index */
+	atarimo_entry 		codehighmask;		/* mask for the upper code index */
+	atarimo_entry 		colormask;			/* mask for the color */
+	atarimo_entry 		xposmask;			/* mask for the X position */
+	atarimo_entry 		yposmask;			/* mask for the Y position */
+	atarimo_entry 		widthmask;			/* mask for the width, in tiles*/
+	atarimo_entry 		heightmask;			/* mask for the height, in tiles */
+	atarimo_entry 		hflipmask;			/* mask for the horizontal flip */
+	atarimo_entry 		vflipmask;			/* mask for the vertical flip */
+	atarimo_entry 		prioritymask;		/* mask for the priority */
+	atarimo_entry 		neighbormask;		/* mask for the neighbor */
+	atarimo_entry 		absolutemask;		/* mask for absolute coordinates */
 
-	atarimo_entry		specialmask;		/* mask for the special value */
+	atarimo_entry 		specialmask;		/* mask for the special value */
 	UINT16				specialvalue;		/* resulting value to indicate "special" */
 	atarimo_special_func specialcb;			/* callback routine for special entries */
 };
@@ -94,32 +94,25 @@ struct _atarimo_rect_list
 ***************************************************************************/
 
 /* setup/shutdown */
-void atarimo_init(running_machine &machine, int map, const atarimo_desc *desc);
+void atarimo_init(running_machine *machine, int map, const atarimo_desc *desc);
 UINT16 *atarimo_get_code_lookup(int map, int *size);
 UINT8 *atarimo_get_color_lookup(int map, int *size);
 UINT8 *atarimo_get_gfx_lookup(int map, int *size);
 
 /* core processing */
-bitmap_ind16 *atarimo_render(int map, const rectangle &cliprect, atarimo_rect_list *rectlist);
+bitmap_t *atarimo_render(int map, const rectangle *cliprect, atarimo_rect_list *rectlist);
 
 /* atrribute setters */
 void atarimo_set_bank(int map, int bank);
 void atarimo_set_xscroll(int map, int xscroll);
 void atarimo_set_yscroll(int map, int yscroll);
-void atarimo_set_slipram(int map, UINT16 *ram);
 
 /* atrribute getters */
 int atarimo_get_bank(int map);
 int atarimo_get_xscroll(int map);
 int atarimo_get_yscroll(int map);
 
-/* read/write handlers */
-READ16_HANDLER( atarimo_0_spriteram_r );
-READ16_HANDLER( atarimo_0_slipram_r );
-
-READ16_HANDLER( atarimo_1_spriteram_r );
-READ16_HANDLER( atarimo_1_slipram_r );
-
+/* write handlers */
 WRITE16_HANDLER( atarimo_0_spriteram_w );
 WRITE16_HANDLER( atarimo_0_spriteram_expanded_w );
 WRITE16_HANDLER( atarimo_0_slipram_w );
@@ -127,7 +120,17 @@ WRITE16_HANDLER( atarimo_0_slipram_w );
 WRITE16_HANDLER( atarimo_1_spriteram_w );
 WRITE16_HANDLER( atarimo_1_slipram_w );
 
-void atarimo_mark_high_palette(bitmap_ind16 &bitmap, UINT16 *pf, UINT16 *mo, int x, int y);
+
+
+/***************************************************************************
+    GLOBAL VARIABLES
+***************************************************************************/
+
+extern UINT16 *atarimo_0_spriteram;
+extern UINT16 *atarimo_0_slipram;
+
+extern UINT16 *atarimo_1_spriteram;
+extern UINT16 *atarimo_1_slipram;
 
 
 #endif

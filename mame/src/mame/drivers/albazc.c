@@ -4,83 +4,72 @@
 TODO:
 - colour decoding might not be perfect
 - Background color should be green, but current handling might be wrong.
-- some unknown sprite attributes
+- some unknown sprite attributes, sprite flipping in flip screen needed
 - don't know what to do when the jackpot is displayed (missing controls ?)
 - according to the board pic, there should be one more 4-switches dip
   switch bank, and probably some NVRAM because there's a battery.
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
-class albazc_state : public driver_device
-{
-public:
-	albazc_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* video-related */
-	UINT8 *  m_spriteram1;
-	UINT8 *  m_spriteram2;
-	UINT8 *  m_spriteram3;
-	UINT8 m_flip_bit;
-};
-
-
-
 /* video */
+
+static UINT8 *hanaroku_spriteram1;
+static UINT8 *hanaroku_spriteram2;
+static UINT8 *hanaroku_spriteram3;
+
 
 static PALETTE_INIT( hanaroku )
 {
 	int i;
-	int r, g, b;
+	int r,g,b;
 
 	for (i = 0; i < 0x200; i++)
 	{
-		b = (color_prom[i * 2 + 1] & 0x1f);
-		g = ((color_prom[i * 2 + 1] & 0xe0) | ((color_prom[i * 2 + 0]& 0x03) <<8)) >> 5;
-		r = (color_prom[i * 2 + 0] & 0x7c) >> 2;
+		b = (color_prom[i*2+1] & 0x1f);
+		g = ((color_prom[i*2+1] & 0xe0) | ( (color_prom[i*2+0]& 0x03) <<8)  ) >> 5;
+		r = (color_prom[i*2+0]&0x7c) >> 2;
 
-		palette_set_color_rgb(machine, i, pal5bit(r), pal5bit(g), pal5bit(b));
+		palette_set_color_rgb(machine,i,pal5bit(r),pal5bit(g),pal5bit(b));
 	}
 }
 
 
-static VIDEO_START( hanaroku )
+static VIDEO_START(hanaroku)
 {
 }
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	albazc_state *state = machine.driver_data<albazc_state>();
 	int i;
 
 	for (i = 511; i >= 0; i--)
 	{
-		int code = state->m_spriteram1[i] | (state->m_spriteram2[i] << 8);
-		int color = (state->m_spriteram2[i + 0x200] & 0xf8) >> 3;
+		int code = hanaroku_spriteram1[i] | (hanaroku_spriteram2[i] << 8);
+		int color = (hanaroku_spriteram2[i + 0x200] & 0xf8) >> 3;
 		int flipx = 0;
 		int flipy = 0;
-		int sx = state->m_spriteram1[i + 0x200] | ((state->m_spriteram2[i + 0x200] & 0x07) << 8);
-		int sy = 242 - state->m_spriteram3[i];
+		int sx = hanaroku_spriteram1[i + 0x200] | ((hanaroku_spriteram2[i + 0x200] & 0x07) << 8);
+		int sy = 242 - hanaroku_spriteram3[i];
 
-		if (state->m_flip_bit)
+		if (flip_screen_get(machine))
 		{
 			sy = 242 - sy;
 			flipx = !flipx;
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine.gfx[0], code, color, flipx, flipy,
+		drawgfx_transpen(bitmap, cliprect, machine->gfx[0], code, color, flipx, flipy,
 			sx, sy, 0);
 	}
 }
 
-static SCREEN_UPDATE_IND16(hanaroku)
+static VIDEO_UPDATE(hanaroku)
 {
-	bitmap.fill(0x1f0, cliprect);	// ???
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	bitmap_fill(bitmap, cliprect, 0x1f0);	// ???
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }
 
@@ -99,11 +88,11 @@ static WRITE8_HANDLER( hanaroku_out_0_w )
          7      meter5 (start)
     */
 
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
-	coin_counter_w(space->machine(), 2, data & 0x04);
-	coin_counter_w(space->machine(), 3, data & 0x08);
-	coin_counter_w(space->machine(), 4, data & 0x80);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
+	coin_counter_w(2, data & 0x04);
+	coin_counter_w(3, data & 0x08);
+	coin_counter_w(4, data & 0x80);
 }
 
 static WRITE8_HANDLER( hanaroku_out_1_w )
@@ -127,40 +116,20 @@ static WRITE8_HANDLER( hanaroku_out_2_w )
 	// unused
 }
 
-static WRITE8_HANDLER( albazc_vregs_w )
-{
-	albazc_state *state = space->machine().driver_data<albazc_state>();
-
-	#ifdef UNUSED_FUNCTION
-	{
-		static UINT8 x[5];
-		x[offset] = data;
-		popmessage("%02x %02x %02x %02x %02x",x[0],x[1],x[2],x[3],x[4]);
-	}
-	#endif
-
-	if(offset == 0)
-	{
-		/* core bug with this? */
-		//flip_screen_set(space->machine(), (data & 0x40) >> 6);
-		state->m_flip_bit = (data & 0x40) >> 6;
-	}
-}
-
 /* main cpu */
 
-static ADDRESS_MAP_START( hanaroku_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hanaroku_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram1)
-	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram2)
-	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_BASE_MEMBER(albazc_state, m_spriteram3)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&hanaroku_spriteram1)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM AM_BASE(&hanaroku_spriteram2)
+	AM_RANGE(0xa000, 0xa1ff) AM_RAM AM_BASE(&hanaroku_spriteram3)
 	AM_RANGE(0xa200, 0xa2ff) AM_WRITENOP	// ??? written once during P.O.S.T.
-	AM_RANGE(0xa300, 0xa304) AM_WRITE(albazc_vregs_w)	// ???
+	AM_RANGE(0xa300, 0xa304) AM_WRITENOP	// ???
 	AM_RANGE(0xb000, 0xb000) AM_WRITENOP	// ??? always 0x40
 	AM_RANGE(0xc000, 0xc3ff) AM_RAM			// main ram
 	AM_RANGE(0xc400, 0xc4ff) AM_RAM			// ???
-	AM_RANGE(0xd000, 0xd000) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xd000, 0xd000) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("ay", ay8910_address_data_w)
 	AM_RANGE(0xe000, 0xe000) AM_READ_PORT("IN0") AM_WRITE(hanaroku_out_0_w)
 	AM_RANGE(0xe001, 0xe001) AM_READ_PORT("IN1")
 	AM_RANGE(0xe002, 0xe002) AM_READ_PORT("IN2") AM_WRITE(hanaroku_out_1_w)
@@ -257,33 +226,33 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_CONFIG_START( hanaroku, albazc_state )
-
-	MCFG_CPU_ADD("maincpu", Z80,6000000)		 /* ? MHz */
-	MCFG_CPU_PROGRAM_MAP(hanaroku_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_DRIVER_START( hanaroku )
+	MDRV_CPU_ADD("maincpu", Z80,6000000)		 /* ? MHz */
+	MDRV_CPU_PROGRAM_MAP(hanaroku_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0, 48*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(hanaroku)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0, 48*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(hanaroku)
-	MCFG_PALETTE_LENGTH(0x200)
+	MDRV_GFXDECODE(hanaroku)
+	MDRV_PALETTE_LENGTH(0x200)
 
-	MCFG_PALETTE_INIT(hanaroku)
-	MCFG_VIDEO_START(hanaroku)
+	MDRV_PALETTE_INIT(hanaroku)
+	MDRV_VIDEO_START(hanaroku)
+	MDRV_VIDEO_UPDATE(hanaroku)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000) /* ? MHz */
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 ROM_START( hanaroku )
@@ -302,4 +271,4 @@ ROM_START( hanaroku )
 ROM_END
 
 
-GAME( 1988, hanaroku, 0,        hanaroku, hanaroku, 0, ROT0, "Alba", "Hanaroku", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1988, hanaroku, 0,        hanaroku, hanaroku, 0, ROT0, "Alba", "Hanaroku", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS )

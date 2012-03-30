@@ -2,12 +2,7 @@
 #ifndef __NECINTRF_H__
 #define __NECINTRF_H__
 
-
-typedef struct _nec_config nec_config;
-struct _nec_config
-{
-	const UINT8*	v25v35_decryptiontable; // internal decryption table
-};
+#include "cpuintrf.h"
 
 enum
 {
@@ -18,6 +13,7 @@ enum
 };
 
 /* Public functions */
-DECLARE_LEGACY_CPU_DEVICE(V30MZ, v30mz);
+extern CPU_GET_INFO( v30mz );
+#define CPU_V30MZ CPU_GET_INFO_NAME( v30mz )
 
 #endif /* __NECINTRF_H__ */

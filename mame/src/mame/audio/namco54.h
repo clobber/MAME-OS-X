@@ -1,7 +1,6 @@
 #ifndef NAMCO54_H
 #define NAMCO54_H
 
-#include "devlegcy.h"
 #include "sound/discrete.h"
 
 
@@ -13,16 +12,18 @@ struct _namco_54xx_config
 };
 
 
-#define MCFG_NAMCO_54XX_ADD(_tag, _clock, _discrete, _firstnode) \
-	MCFG_DEVICE_ADD(_tag, NAMCO_54XX, _clock) \
-	MCFG_DEVICE_CONFIG_DATAPTR(namco_54xx_config, discrete, _discrete) \
-	MCFG_DEVICE_CONFIG_DATA32(namco_54xx_config, firstnode, _firstnode)
+#define MDRV_NAMCO_54XX_ADD(_tag, _clock, _discrete, _firstnode) \
+	MDRV_DEVICE_ADD(_tag, NAMCO_54XX, _clock) \
+	MDRV_DEVICE_CONFIG_DATAPTR(namco_54xx_config, discrete, _discrete) \
+	MDRV_DEVICE_CONFIG_DATA32(namco_54xx_config, firstnode, _firstnode)
 
 
 WRITE8_DEVICE_HANDLER( namco_54xx_write );
 
 
-DECLARE_LEGACY_DEVICE(NAMCO_54XX, namco_54xx);
+/* device get info callback */
+#define NAMCO_54XX DEVICE_GET_INFO_NAME(namco_54xx)
+DEVICE_GET_INFO( namco_54xx );
 
 
 /* discrete nodes */

@@ -309,16 +309,38 @@ The first sprite data is located at f20b,then f21b and so on.
         C= Color palette selector
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/2203intf.h"
-#include "includes/psychic5.h"
 
+
+WRITE8_HANDLER( psychic5_paged_ram_w );
+WRITE8_HANDLER( psychic5_vram_page_select_w );
+WRITE8_HANDLER( psychic5_title_screen_w );
+
+READ8_HANDLER( psychic5_paged_ram_r );
+READ8_HANDLER( psychic5_vram_page_select_r );
+
+VIDEO_START( psychic5 );
+VIDEO_RESET( psychic5 );
+VIDEO_UPDATE( psychic5 );
+
+
+extern UINT8 *bombsa_paletteram;
+WRITE8_HANDLER( bombsa_paged_ram_w );
+WRITE8_HANDLER( bombsa_unknown_w );
+
+VIDEO_START( bombsa );
+VIDEO_RESET( bombsa );
+VIDEO_UPDATE( bombsa );
+
+
+static UINT8 psychic5_bank_latch;
 
 static MACHINE_RESET( psychic5 )
 {
-	psychic5_state *state = machine.driver_data<psychic5_state>();
-	state->m_bank_latch = 0xff;
+	psychic5_bank_latch = 0xff;
 	flip_screen_set(machine, 0);
 }
 
@@ -328,17 +350,13 @@ static MACHINE_RESET( psychic5 )
 
 ***************************************************************************/
 
-static TIMER_DEVICE_CALLBACK( psychic5_scanline )
+static INTERRUPT_GEN( psychic5_interrupt )
 {
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
-
-	if(scanline == 0) // sprite buffer irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xcf);	/* RST 08h */
+	if (cpu_getiloops(device) == 0)
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);		/* RST 10h */
+	else
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);		/* RST 08h */
 }
-
 
 
 /***************************************************************************
@@ -349,47 +367,44 @@ static TIMER_DEVICE_CALLBACK( psychic5_scanline )
 
 static READ8_HANDLER( psychic5_bankselect_r )
 {
-	psychic5_state *state = space->machine().driver_data<psychic5_state>();
-	return state->m_bank_latch;
+	return psychic5_bank_latch;
 }
 
 static WRITE8_HANDLER( psychic5_bankselect_w )
 {
-	psychic5_state *state = space->machine().driver_data<psychic5_state>();
-	UINT8 *RAM = space->machine().region("maincpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
 	int bankaddress;
 
-	if (state->m_bank_latch != data)
+	if (psychic5_bank_latch != data)
 	{
-		state->m_bank_latch = data;
+		psychic5_bank_latch = data;
 		bankaddress = 0x10000 + ((data & 3) * 0x4000);
-		memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);	 /* Select 4 banks of 16k */
+		memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);	 /* Select 4 banks of 16k */
 	}
 }
 
 static WRITE8_HANDLER( bombsa_bankselect_w )
 {
-	psychic5_state *state = space->machine().driver_data<psychic5_state>();
-	UINT8 *RAM = space->machine().region("maincpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
 	int bankaddress;
 
-	if (state->m_bank_latch != data)
+	if (psychic5_bank_latch != data)
 	{
-		state->m_bank_latch = data;
+		psychic5_bank_latch = data;
 		bankaddress = 0x10000 + ((data & 7) * 0x4000);
-		memory_set_bankptr(space->machine(), "bank1", &RAM[bankaddress]);	 /* Select 8 banks of 16k */
+		memory_set_bankptr(space->machine, 1, &RAM[bankaddress]);	 /* Select 8 banks of 16k */
 	}
 }
 
 static WRITE8_HANDLER( psychic5_coin_counter_w )
 {
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
 
 	// bit 7 toggles flip screen
 	if (data & 0x80)
 	{
-		flip_screen_set(space->machine(), !flip_screen_get(space->machine()));
+		flip_screen_set(space->machine, !flip_screen_get(space->machine));
 	}
 }
 
@@ -398,7 +413,7 @@ static WRITE8_HANDLER( bombsa_flipscreen_w )
 	// bit 7 toggles flip screen
 	if (data & 0x80)
 	{
-		flip_screen_set(space->machine(), !flip_screen_get(space->machine()));
+		flip_screen_set(space->machine, !flip_screen_get(space->machine));
 	}
 }
 
@@ -409,38 +424,38 @@ static WRITE8_HANDLER( bombsa_flipscreen_w )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( psychic5_main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( psychic5_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
 	AM_RANGE(0xc000, 0xdfff) AM_READWRITE(psychic5_paged_ram_r, psychic5_paged_ram_w)
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xf000) AM_RAM_WRITE(soundlatch_w)
-	AM_RANGE(0xf001, 0xf001) AM_READNOP AM_WRITE(psychic5_coin_counter_w)
+	AM_RANGE(0xf001, 0xf001) AM_READWRITE(SMH_NOP, psychic5_coin_counter_w)
 	AM_RANGE(0xf002, 0xf002) AM_READWRITE(psychic5_bankselect_r, psychic5_bankselect_w)
 	AM_RANGE(0xf003, 0xf003) AM_READWRITE(psychic5_vram_page_select_r, psychic5_vram_page_select_w)
 	AM_RANGE(0xf004, 0xf004) AM_NOP	// ???
-	AM_RANGE(0xf005, 0xf005) AM_READNOP AM_WRITE(psychic5_title_screen_w)
+	AM_RANGE(0xf005, 0xf005) AM_READWRITE(SMH_NOP, psychic5_title_screen_w)
 	AM_RANGE(0xf006, 0xf1ff) AM_NOP
-	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE_SIZE_MEMBER(psychic5_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xf200, 0xf7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( psychic5_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( psychic5_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( psychic5_soundport_map, AS_IO, 8 )
+static ADDRESS_MAP_START( psychic5_soundport_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ym2", ym2203_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( bombsa_main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( bombsa_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK("bank1")
+	AM_RANGE(0x8000, 0xbfff) AM_RAMBANK(1)
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
 
 	/* ports look like the other games */
@@ -451,20 +466,20 @@ static ADDRESS_MAP_START( bombsa_main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xd005, 0xd005) AM_WRITE(bombsa_unknown_w) // ?
 
 	AM_RANGE(0xd000, 0xd1ff) AM_RAM
-	AM_RANGE(0xd200, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(psychic5_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd200, 0xd7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
 
 	AM_RANGE(0xe000, 0xffff) AM_READWRITE(psychic5_paged_ram_r, bombsa_paged_ram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bombsa_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( bombsa_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xf000, 0xf000) AM_WRITEONLY								// Is this a confirm of some sort?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( bombsa_soundport_map, AS_IO, 8 )
+static ADDRESS_MAP_START( bombsa_soundport_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x80, 0x81) AM_DEVREADWRITE("ym2", ym2203_r, ym2203_w)
@@ -565,7 +580,7 @@ static INPUT_PORTS_START( bombsa )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN2 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
 
-	PORT_START("P1")		/* player 1 control */
+	PORT_START("P1")	 	/* player 1 control */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
@@ -619,7 +634,7 @@ static const gfx_layout charlayout =
 	{ 0, 1, 2, 3 }, /* the four bitplanes for pixel are packed into one nibble */
 	{ 0, 4, 8, 12, 16, 20, 24, 28 },
 	{ 0*8, 4*8, 8*8, 12*8, 16*8, 20*8, 24*8, 28*8 },
-	32*8	/* every char takes 32 consecutive bytes */
+	32*8   	/* every char takes 32 consecutive bytes */
 };
 
 static const gfx_layout spritelayout =
@@ -647,9 +662,9 @@ GFXDECODE_END
 
 
 
-static void irqhandler(device_t *device, int irq)
+static void irqhandler(const device_config *device, int irq)
 {
-	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2203_interface ym2203_config =
@@ -662,96 +677,98 @@ static const ym2203_interface ym2203_config =
 	irqhandler
 };
 
-static MACHINE_CONFIG_START( psychic5, psychic5_state )
+static MACHINE_DRIVER_START( psychic5 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)
-	MCFG_CPU_PROGRAM_MAP(psychic5_main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", psychic5_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)
+	MDRV_CPU_PROGRAM_MAP(psychic5_main_map)
+	MDRV_CPU_VBLANK_INT_HACK(psychic5_interrupt,2)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_12MHz/2)
-	MCFG_CPU_PROGRAM_MAP(psychic5_sound_map)
-	MCFG_CPU_IO_MAP(psychic5_soundport_map)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_12MHz/2)
+	MDRV_CPU_PROGRAM_MAP(psychic5_sound_map)
+	MDRV_CPU_IO_MAP(psychic5_soundport_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(600))      /* Allow time for 2nd cpu to interleave */
-	MCFG_MACHINE_RESET(psychic5)
+	MDRV_QUANTUM_TIME(HZ(600))      /* Allow time for 2nd cpu to interleave */
+	MDRV_MACHINE_RESET(psychic5)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(53.8)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(53.8)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	/* frames per second hand tuned to match game and music speed */
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(psychic5)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(psychic5)
-	MCFG_PALETTE_LENGTH(768)
+	MDRV_GFXDECODE(psychic5)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_VIDEO_START(psychic5)
-	MCFG_VIDEO_RESET(psychic5)
+	MDRV_VIDEO_START(psychic5)
+	MDRV_VIDEO_RESET(psychic5)
+	MDRV_VIDEO_UPDATE(psychic5)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.15)
-	MCFG_SOUND_ROUTE(1, "mono", 0.15)
-	MCFG_SOUND_ROUTE(2, "mono", 0.15)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+	MDRV_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.15)
+	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MDRV_SOUND_ROUTE(2, "mono", 0.15)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.15)
-	MCFG_SOUND_ROUTE(1, "mono", 0.15)
-	MCFG_SOUND_ROUTE(2, "mono", 0.15)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)
+	MDRV_SOUND_ROUTE(0, "mono", 0.15)
+	MDRV_SOUND_ROUTE(1, "mono", 0.15)
+	MDRV_SOUND_ROUTE(2, "mono", 0.15)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( bombsa, psychic5_state )
+static MACHINE_DRIVER_START( bombsa )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_12MHz/2 ) /* 6 MHz */
-	MCFG_CPU_PROGRAM_MAP(bombsa_main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", psychic5_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2 ) /* 6 MHz */
+	MDRV_CPU_PROGRAM_MAP(bombsa_main_map)
+	MDRV_CPU_VBLANK_INT_HACK(psychic5_interrupt,2)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_5MHz )
-	MCFG_CPU_PROGRAM_MAP(bombsa_sound_map)
-	MCFG_CPU_IO_MAP(bombsa_soundport_map)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_5MHz )
+	MDRV_CPU_PROGRAM_MAP(bombsa_sound_map)
+	MDRV_CPU_IO_MAP(bombsa_soundport_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(600))
-	MCFG_MACHINE_RESET(psychic5)
+	MDRV_QUANTUM_TIME(HZ(600))
+	MDRV_MACHINE_RESET(psychic5)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(54)				/* Guru says : VSync - 54Hz . HSync - 15.25kHz */
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(bombsa)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(54)				/* Guru says : VSync - 54Hz . HSync - 15.25kHz */
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(bombsa)
-	MCFG_PALETTE_LENGTH(768)
+	MDRV_GFXDECODE(bombsa)
+	MDRV_PALETTE_LENGTH(768)
 
-	MCFG_VIDEO_START(bombsa)
-	MCFG_VIDEO_RESET(bombsa)
+	MDRV_VIDEO_START(bombsa)
+	MDRV_VIDEO_RESET(bombsa)
+	MDRV_VIDEO_UPDATE(bombsa)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.30)
-	MCFG_SOUND_ROUTE(1, "mono", 0.30)
-	MCFG_SOUND_ROUTE(2, "mono", 0.30)
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)
+	MDRV_SOUND_ADD("ym1", YM2203, XTAL_12MHz/8)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.30)
+	MDRV_SOUND_ROUTE(1, "mono", 0.30)
+	MDRV_SOUND_ROUTE(2, "mono", 0.30)
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)
 
-	MCFG_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)
-	MCFG_SOUND_ROUTE(0, "mono", 0.30)
-	MCFG_SOUND_ROUTE(1, "mono", 0.30)
-	MCFG_SOUND_ROUTE(2, "mono", 0.30)
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, XTAL_12MHz/8)
+	MDRV_SOUND_ROUTE(0, "mono", 0.30)
+	MDRV_SOUND_ROUTE(1, "mono", 0.30)
+	MDRV_SOUND_ROUTE(2, "mono", 0.30)
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -767,7 +784,7 @@ ROM_START( psychic5 )
 	ROM_LOAD( "p5d",          0x00000, 0x08000, CRC(90259249) SHA1(ac2d8dd95f6c04b6ad726136931e37dcd537e977) )
 	ROM_LOAD( "p5e",          0x10000, 0x10000, CRC(72298f34) SHA1(725be2fbf5f3622f646c0fb8e6677cbddf0b1fc2) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )					/* Sound CPU */
+	ROM_REGION( 0x10000, "audiocpu", 0 ) 					/* Sound CPU */
 	ROM_LOAD( "p5a",          0x00000, 0x08000, CRC(50060ecd) SHA1(e6051fb4a1fa9429cfb6084e8a5dfe994a08280b) )
 
 	ROM_REGION( 0x20000, "gfx1", 0 )	/* sprite tiles */
@@ -791,7 +808,7 @@ ROM_START( psychic5a )
 	ROM_LOAD( "myp5d",          0x00000, 0x08000, CRC(1d40a8c7) SHA1(79b36e690ea334c066b55b1e39ceb5fe0688cd7b) )
 	ROM_LOAD( "myp5e",          0x10000, 0x10000, CRC(2fa7e8c0) SHA1(d5096ebec58329346a3292ad2da1be3742fad093) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )					/* Sound CPU */
+	ROM_REGION( 0x10000, "audiocpu", 0 ) 					/* Sound CPU */
 	ROM_LOAD( "myp5a",          0x00000, 0x10000, CRC(6efee094) SHA1(ae2b5bf6199121520bf8428b8b160b987f5b474f) )
 
 	ROM_REGION( 0x20000, "gfx1", 0 )	/* sprite tiles */

@@ -11,7 +11,7 @@
 
 **************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "smc91c9x.h"
 
 
@@ -109,7 +109,7 @@ static const char *const ethernet_regname[64] =
 typedef struct _smc91c9x_state smc91c9x_state;
 struct _smc91c9x_state
 {
-	device_t *device;
+	const device_config *device;
 	smc91c9x_irq_func irq_handler;
 
 	/* raw register data and masks */
@@ -123,7 +123,7 @@ struct _smc91c9x_state
 	UINT8			alloc_count;
 
 	/* transmit/receive FIFOs */
-	UINT8			fifo_count;
+	UINT8 			fifo_count;
 	UINT8			rx[ETHER_BUFFER_SIZE * ETHER_RX_BUFFERS];
 	UINT8			tx[ETHER_BUFFER_SIZE];
 
@@ -151,12 +151,13 @@ static void update_ethernet_irq(smc91c9x_state *smc);
     in device is, in fact, an IDE controller
 -------------------------------------------------*/
 
-INLINE smc91c9x_state *get_safe_token(device_t *device)
+INLINE smc91c9x_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == SMC91C94 || device->type() == SMC91C96);
+	assert(device->token != NULL);
+	assert(device->type == SMC91C94 || device->type == SMC91C96);
 
-	return (smc91c9x_state *)downcast<legacy_device_base *>(device)->token();
+	return (smc91c9x_state *)device->token;
 }
 
 
@@ -376,7 +377,7 @@ READ16_DEVICE_HANDLER( smc91c9x_r )
 	}
 
 	if (LOG_ETHERNET && offset != EREG_BANK)
-		logerror("%s:smc91c9x_r(%s) = %04X & %04X\n", device->machine().describe_context(), ethernet_regname[offset], result, mem_mask);
+		logerror("%s:smc91c9x_r(%s) = %04X & %04X\n", cpuexec_describe_context(device->machine), ethernet_regname[offset], result, mem_mask);
 	return result;
 }
 
@@ -388,7 +389,7 @@ READ16_DEVICE_HANDLER( smc91c9x_r )
 WRITE16_DEVICE_HANDLER( smc91c9x_w )
 {
 	smc91c9x_state *smc = get_safe_token(device);
-//  UINT16 olddata;
+	UINT16 olddata;
 
 	/* determine the effective register */
 	offset %= 8;
@@ -396,12 +397,12 @@ WRITE16_DEVICE_HANDLER( smc91c9x_w )
 		offset += 8 * (smc->reg[EREG_BANK] & 7);
 
 	/* update the data generically */
-//  olddata = smc->reg[offset];
+	olddata = smc->reg[offset];
 	mem_mask &= smc->regmask[offset];
 	COMBINE_DATA(&smc->reg[offset]);
 
 	if (LOG_ETHERNET && offset != 7)
-		logerror("%s:smc91c9x_w(%s) = %04X & %04X\n", device->machine().describe_context(), ethernet_regname[offset], data, mem_mask);
+		logerror("%s:smc91c9x_w(%s) = %04X & %04X\n", cpuexec_describe_context(device->machine), ethernet_regname[offset], data, mem_mask);
 
 	/* handle it */
 	switch (offset)
@@ -424,7 +425,7 @@ WRITE16_DEVICE_HANDLER( smc91c9x_w )
 		case EREG_RCR:		/* receive control register */
 			if (LOG_ETHERNET)
 			{
-				if (data & 0x8000) device->reset();
+				if (data & 0x8000) device_reset(device);
 				if (data & 0x8000) logerror("   SOFT RST\n");
 				if (data & 0x4000) logerror("   FILT_CAR\n");
 				if (data & 0x0200) logerror("   STRIP CRC\n");
@@ -509,28 +510,30 @@ WRITE16_DEVICE_HANDLER( smc91c9x_w )
 
 static DEVICE_START( smc91c9x )
 {
-	const smc91c9x_config *config = (const smc91c9x_config *)downcast<const legacy_device_base *>(device)->inline_config();
+	const smc91c9x_config *config = (const smc91c9x_config *)device->inline_config;
 	smc91c9x_state *smc = get_safe_token(device);
 
 	/* validate some basic stuff */
 	assert(device != NULL);
-	assert(device->static_config() == NULL);
-	assert(downcast<const legacy_device_base *>(device)->inline_config() != NULL);
+	assert(device->static_config == NULL);
+	assert(device->inline_config != NULL);
+	assert(device->machine != NULL);
+	assert(device->machine->config != NULL);
 
 	/* store a pointer back to the device */
 	smc->device = device;
 	smc->irq_handler = config->interrupt;
 
 	/* register ide states */
-	device->save_item(NAME(smc->reg));
-	device->save_item(NAME(smc->regmask));
-	device->save_item(NAME(smc->irq_state));
-	device->save_item(NAME(smc->alloc_count));
-	device->save_item(NAME(smc->fifo_count));
-	device->save_item(NAME(smc->rx));
-	device->save_item(NAME(smc->tx));
-	device->save_item(NAME(smc->sent));
-	device->save_item(NAME(smc->recd));
+	state_save_register_device_item_array(device, 0, smc->reg);
+	state_save_register_device_item_array(device, 0, smc->regmask);
+	state_save_register_device_item(device, 0, smc->irq_state);
+	state_save_register_device_item(device, 0, smc->alloc_count);
+	state_save_register_device_item(device, 0, smc->fifo_count);
+	state_save_register_device_item_array(device, 0, smc->rx);
+	state_save_register_device_item_array(device, 0, smc->tx);
+	state_save_register_device_item(device, 0, smc->sent);
+	state_save_register_device_item(device, 0, smc->recd);
 }
 
 
@@ -597,6 +600,7 @@ static DEVICE_GET_INFO( smc91c9x )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:			info->i = sizeof(smc91c9x_state);		break;
 		case DEVINFO_INT_INLINE_CONFIG_BYTES:	info->i = sizeof(smc91c9x_config);		break;
+		case DEVINFO_INT_CLASS:					info->i = DEVICE_CLASS_PERIPHERAL;		break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:					info->start = DEVICE_START_NAME(smc91c9x); break;
@@ -630,8 +634,3 @@ DEVICE_GET_INFO( smc91c96 )
 		default:								DEVICE_GET_INFO_CALL(smc91c9x);			break;
 	}
 }
-
-
-DEFINE_LEGACY_DEVICE(SMC91C94, smc91c94);
-DEFINE_LEGACY_DEVICE(SMC91C96, smc91c96);
-

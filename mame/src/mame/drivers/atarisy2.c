@@ -123,11 +123,12 @@
 ****************************************************************************/
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/t11/t11.h"
-#include "includes/slapstic.h"
-#include "includes/atarisy2.h"
+#include "machine/atarigen.h"
+#include "slapstic.h"
+#include "atarisy2.h"
 #include "sound/tms5220.h"
 #include "sound/2151intf.h"
 #include "sound/pokey.h"
@@ -141,11 +142,37 @@
 
 /*************************************
  *
+ *  Statics
+ *
+ *************************************/
+
+static UINT8 interrupt_enable;
+static UINT16 *bankselect;
+
+static INT8 pedal_count;
+
+static UINT8 has_tms5220;
+static UINT8 tms5220_data;
+static UINT8 tms5220_data_strobe;
+
+static UINT8 which_adc;
+
+static UINT8 p2portwr_state;
+static UINT8 p2portrd_state;
+
+static UINT16 *rombank1, *rombank2;
+
+static UINT8 sound_reset_state;
+
+
+
+/*************************************
+ *
  *  Prototypes
  *
  *************************************/
 
-static void bankselect_postload(running_machine &machine);
+static STATE_POSTLOAD( bankselect_postload );
 
 
 
@@ -155,26 +182,24 @@ static void bankselect_postload(running_machine &machine);
  *
  *************************************/
 
-static void update_interrupts(running_machine &machine)
+static void update_interrupts(running_machine *machine)
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-
-	if (state->m_video_int_state)
+	if (atarigen_video_int_state)
 		cputag_set_input_line(machine, "maincpu", 3, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 3, CLEAR_LINE);
 
-	if (state->m_scanline_int_state)
+	if (atarigen_scanline_int_state)
 		cputag_set_input_line(machine, "maincpu", 2, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 2, CLEAR_LINE);
 
-	if (state->m_p2portwr_state)
+	if (p2portwr_state)
 		cputag_set_input_line(machine, "maincpu", 1, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 1, CLEAR_LINE);
 
-	if (state->m_p2portrd_state)
+	if (p2portrd_state)
 		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
@@ -188,15 +213,14 @@ static void update_interrupts(running_machine &machine)
  *
  *************************************/
 
-static void scanline_update(screen_device &screen, int scanline)
+static void scanline_update(const device_config *screen, int scanline)
 {
-	atarisy2_state *state = screen.machine().driver_data<atarisy2_state>();
-	if (scanline <= screen.height())
+	if (scanline <= video_screen_get_height(screen))
 	{
 		/* generate the 32V interrupt (IRQ 2) */
 		if ((scanline % 64) == 0)
-			if (state->m_interrupt_enable & 4)
-				atarigen_scanline_int_gen(screen.machine().device("maincpu"));
+			if (interrupt_enable & 4)
+				atarigen_scanline_int_gen(cputag_get_cpu(screen->machine, "maincpu"));
 	}
 }
 
@@ -208,13 +232,12 @@ static void scanline_update(screen_device &screen, int scanline)
  *
  *************************************/
 
-DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
+static DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
 {
 	/* make sure slapstic area looks like ROM */
 	if (address >= 0x8000 && address < 0x8200)
 	{
-		atarisy2_state *state = machine.driver_data<atarisy2_state>();
-		direct.explicit_configure(0x8000, 0x81ff, 0x1ff, (UINT8 *)state->m_slapstic_base);
+		direct->raw = direct->decrypted = (UINT8 *)atarisy2_slapstic - 0x8000;
 		return ~0;
 	}
 	return address;
@@ -223,35 +246,32 @@ DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
 
 static MACHINE_START( atarisy2 )
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-	atarigen_init(machine);
-
-	state->save_item(NAME(state->m_interrupt_enable));
-	state->save_item(NAME(state->m_which_adc));
-	state->save_item(NAME(state->m_p2portwr_state));
-	state->save_item(NAME(state->m_p2portrd_state));
-	machine.save().register_postload(save_prepost_delegate(FUNC(bankselect_postload), &machine));
-	state->save_item(NAME(state->m_sound_reset_state));
+	state_save_register_global(machine, interrupt_enable);
+	state_save_register_global(machine, tms5220_data);
+	state_save_register_global(machine, tms5220_data_strobe);
+	state_save_register_global(machine, which_adc);
+	state_save_register_global(machine, p2portwr_state);
+	state_save_register_global(machine, p2portrd_state);
+	state_save_register_postload(machine, bankselect_postload, NULL);
+	state_save_register_global(machine, sound_reset_state);
 }
 
 
 static MACHINE_RESET( atarisy2 )
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-
-	atarigen_eeprom_reset(state);
+	atarigen_eeprom_reset();
 	slapstic_reset();
-	atarigen_interrupt_reset(state, update_interrupts);
-	atarigen_sound_io_reset(machine.device("soundcpu"));
-	atarigen_scanline_timer_reset(*machine.primary_screen, scanline_update, 64);
+	atarigen_interrupt_reset(update_interrupts);
+	atarigen_sound_io_reset(cputag_get_cpu(machine, "soundcpu"));
+	atarigen_scanline_timer_reset(machine->primary_screen, scanline_update, 64);
+	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), atarisy2_direct_handler);
 
-	address_space *main = machine.device<t11_device>("maincpu")->space(AS_PROGRAM);
-	main->set_direct_update_handler(direct_update_delegate(FUNC(atarisy2_direct_handler), &machine));
+	tms5220_data_strobe = 1;
 
-	state->m_p2portwr_state = 0;
-	state->m_p2portrd_state = 0;
+	p2portwr_state = 0;
+	p2portrd_state = 0;
 
-	state->m_which_adc = 0;
+	which_adc = 0;
 }
 
 
@@ -264,10 +284,8 @@ static MACHINE_RESET( atarisy2 )
 
 static INTERRUPT_GEN( vblank_int )
 {
-	atarisy2_state *state = device->machine().driver_data<atarisy2_state>();
-
 	/* clock the VBLANK through */
-	if (state->m_interrupt_enable & 8)
+	if (interrupt_enable & 8)
 		atarigen_video_int_gen(device);
 }
 
@@ -275,9 +293,8 @@ static INTERRUPT_GEN( vblank_int )
 static WRITE16_HANDLER( int0_ack_w )
 {
 	/* reset sound IRQ */
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	state->m_p2portrd_state = 0;
-	atarigen_update_interrupts(space->machine());
+	p2portrd_state = 0;
+	atarigen_update_interrupts(space->machine);
 }
 
 
@@ -285,21 +302,20 @@ static WRITE16_HANDLER( int1_ack_w )
 {
 	/* reset sound CPU */
 	if (ACCESSING_BITS_0_7)
-		cputag_set_input_line(space->machine(), "soundcpu", INPUT_LINE_RESET, (data & 1) ? ASSERT_LINE : CLEAR_LINE);
+		cputag_set_input_line(space->machine, "soundcpu", INPUT_LINE_RESET, (data & 1) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static TIMER_CALLBACK( delayed_int_enable_w )
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-	state->m_interrupt_enable = param;
+	interrupt_enable = param;
 }
 
 
 static WRITE16_HANDLER( int_enable_w )
 {
 	if (offset == 0 && ACCESSING_BITS_0_7)
-		space->machine().scheduler().synchronize(FUNC(delayed_int_enable_w), data);
+		timer_call_after_resynch(space->machine, NULL, data, delayed_int_enable_w);
 }
 
 
@@ -332,25 +348,23 @@ static WRITE16_HANDLER( bankselect_w )
 		0x8e000, 0x86000, 0x7e000, 0x76000
 	};
 
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	int newword = state->m_bankselect[offset];
+	int newword = bankselect[offset];
 	UINT8 *base;
 
 	COMBINE_DATA(&newword);
-	state->m_bankselect[offset] = newword;
+	bankselect[offset] = newword;
 
-	base = &space->machine().region("maincpu")->base()[bankoffset[(newword >> 10) & 0x3f]];
-	memcpy(offset ? state->m_rombank2 : state->m_rombank1, base, 0x2000);
+	base = &memory_region(space->machine, "maincpu")[bankoffset[(newword >> 10) & 0x3f]];
+	memcpy(offset ? rombank2 : rombank1, base, 0x2000);
 }
 
 
-static void bankselect_postload(running_machine &machine)
+static STATE_POSTLOAD( bankselect_postload )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
-	bankselect_w(space, 0, state->m_bankselect[0], 0xffff);
-	bankselect_w(space, 1, state->m_bankselect[1], 0xffff);
+	bankselect_w(space, 0, bankselect[0], 0xffff);
+	bankselect_w(space, 1, bankselect[1], 0xffff);
 }
 
 
@@ -363,11 +377,10 @@ static void bankselect_postload(running_machine &machine)
 
 static READ16_HANDLER( switch_r )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	int result = input_port_read(space->machine(), "1800") | (input_port_read(space->machine(), "1801") << 8);
+	int result = input_port_read(space->machine, "1800") | (input_port_read(space->machine, "1801") << 8);
 
-	if (state->m_cpu_to_sound_ready) result ^= 0x20;
-	if (state->m_sound_to_cpu_ready) result ^= 0x10;
+	if (atarigen_cpu_to_sound_ready) result ^= 0x20;
+	if (atarigen_sound_to_cpu_ready) result ^= 0x10;
 
 	return result;
 }
@@ -375,14 +388,12 @@ static READ16_HANDLER( switch_r )
 
 static READ8_HANDLER( switch_6502_r )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	int result = input_port_read(space->machine(), "1840");
+	int result = input_port_read(space->machine, "1840");
 
-	if (state->m_cpu_to_sound_ready) result |= 0x01;
-	if (state->m_sound_to_cpu_ready) result |= 0x02;
-	if ((state->m_has_tms5220) && (tms5220_readyq_r(space->machine().device("tms")) == 0))
-		result &= ~0x04;
-	if (!(input_port_read(space->machine(), "1801") & 0x80)) result |= 0x10;
+	if (atarigen_cpu_to_sound_ready) result ^= 0x01;
+	if (atarigen_sound_to_cpu_ready) result ^= 0x02;
+	if (!has_tms5220 || !tms5220_readyq_r(devtag_get_device(space->machine, "tms"))) result ^= 0x04;
+	if (!(input_port_read(space->machine, "1801") & 0x80)) result ^= 0x10;
 
 	return result;
 }
@@ -390,12 +401,12 @@ static READ8_HANDLER( switch_6502_r )
 
 static WRITE8_HANDLER( switch_6502_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
+	(void)offset;
 
-	if (state->m_has_tms5220)
+	if (has_tms5220)
 	{
 		data = 12 | ((data >> 5) & 1);
-		tms5220_set_frequency(space->machine().device("tms"), MASTER_CLOCK/4 / (16 - data) / 2);
+		tms5220_set_frequency(devtag_get_device(space->machine, "tms"), MASTER_CLOCK/4 / (16 - data) / 2);
 	}
 }
 
@@ -409,157 +420,74 @@ static WRITE8_HANDLER( switch_6502_w )
 
 static WRITE16_HANDLER( adc_strobe_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	state->m_which_adc = offset & 3;
+	which_adc = offset & 3;
 }
 
 
 static READ16_HANDLER( adc_r )
 {
 	static const char *const adcnames[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
 
-	if (state->m_which_adc < state->m_pedal_count)
-		return ~input_port_read(space->machine(), adcnames[state->m_which_adc]);
+	if (which_adc < pedal_count)
+		return ~input_port_read(space->machine, adcnames[which_adc]);
 
-	return input_port_read(space->machine(), adcnames[state->m_which_adc]) | 0xff00;
+	return input_port_read(space->machine, adcnames[which_adc]) | 0xff00;
 }
 
 
 static READ8_HANDLER( leta_r )
 {
 	static const char *const letanames[] = { "LETA0", "LETA1", "LETA2", "LETA3" };
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
 
-    if (offset <= 1 && state->m_pedal_count == -1)   /* 720 */
+    if (pedal_count == -1)   /* 720 */
 	{
-		switch (input_port_read(space->machine(), "SELECT"))
+		/* special thanks to MAME Analog+ for the mapping code */
+		switch (offset & 3)
 		{
-			case 0:	/* Real */
-				break;
-
-			case 1:	/* Fake Joystick */
-			/* special thanks to MAME Analog+ for the mapping code */
+			case 0:
+			case 1:
 			{
-				int analogx = input_port_read(space->machine(), "FAKE_JOY_X") - 128;
-				int analogy = input_port_read(space->machine(), "FAKE_JOY_Y") - 128;
+				static double last_angle;
+				static int rotations;
+
+				int analogx = input_port_read(space->machine, "LETA0") - 128;
+				int analogy = input_port_read(space->machine, "LETA1") - 128;
 				double angle;
 
 				/* if the joystick is centered, leave the rest of this alone */
-				angle = state->m_joy_last_angle;
+				angle = last_angle;
 				if (analogx < -32 || analogx > 32 || analogy < -32 || analogy > 32)
 					angle = atan2((double)analogx, (double)analogy) * 360 / (2 * M_PI);
 
 				/* detect when we pass the 0 point in either direction */
-				if (state->m_joy_last_angle < -90 && angle > 90)
-					state->m_joy_rotations--;
-				else if (state->m_joy_last_angle > 90 && angle < -90)
-					state->m_joy_rotations++;
-				state->m_joy_last_angle = angle;
+				if (last_angle < -90 && angle > 90)
+					rotations--;
+				else if (last_angle > 90 && angle < -90)
+					rotations++;
+				last_angle = angle;
 
-				/* make offset 0 return 0xff when the controller blocks one of two gaps */
-				/* this is not accurate, as a counter should count up/down 2 counts as it passes through each gap */
-				/* this is close enough to pass the service mode controller test the first couple of tries. */
-				if (offset == 0)
+				/* offset 0 returns 0xff when the controller blocks one of two gaps */
+				if ((offset & 3) == 0)
 				{
 					/* original controller had two gaps 10 degrees apart, each 2.5 degrees wide */
 					/* we fake it a little to make it possible to hit the zeroed state with a digital controller */
 					return (angle >= -5.0 && angle <= 5.0) ? 0xff : 0x00;
-					/* proper angles */
-					// return ((angle >= -12.5 && angle <= -7.5) || (angle >= 7.5 && angle <= 12.5)) ? 0xff : 0x00;
 				}
 
 				/* offset 1 returns dial value; 144 units = 1 full rotation */
 				else
 				{
 					/* take the rotations * 144 plus the current angle */
-					return (state->m_joy_rotations * 144 + (int)(angle * 144.0 / 360.0)) & 0xff;
+					return (rotations * 144 + (int)(angle * 144.0 / 360.0)) & 0xff;
 				}
+				break;
 			}
-
-			case 2:	/* Fake Spinner */
-			{
-				INT32  diff;
-				UINT32 temp;
-				UINT32 rotate_count = input_port_read(space->machine(), "FAKE_SPINNER") & 0xffff;
-				/* rotate_count behaves the same as the real LEAT1 Rotate encoder
-                 * we use it to generate the LETA0 Center encoder count
-                 */
-
-				if (rotate_count != state->m_spin_last_rotate_count)
-				{
-					/* see if count rolled between 0xffff and 0x0000 */
-					if ((state->m_spin_last_rotate_count > 0xc000) && (rotate_count < 0x03ff))
-					{
-						temp = 0xffff - state->m_spin_last_rotate_count;
-						diff = rotate_count + temp + 1;
-					}
-					else if ((rotate_count > 0xc000) && (state->m_spin_last_rotate_count < 0x03ff))
-					{
-						temp = 0xffff - rotate_count;
-						diff = state->m_spin_last_rotate_count - temp - 1;
-					}
-					else
-					{
-						temp = rotate_count - state->m_spin_last_rotate_count;
-						diff = temp;
-					}
-
-					state->m_spin_last_rotate_count = rotate_count;
-
-					/* you may not like this, but it is the easiest way to accurately fake the center count */
-					/* diff is never a big number anyways */
-					if (diff < 0)
-					{
-						for (int i = 0; i > diff; i--)
-						{
-							state->m_spin_pos--;
-							if (state->m_spin_pos < 0)
-								state->m_spin_pos = 143;
-							else
-								switch (state->m_spin_pos)
-								{
-									case 2:
-									case 3:
-									case 141:
-									case 142:
-										state->m_spin_center_count--;
-								}
-						}
-					}
-					else
-					{
-						for (int i = 0; i < diff; i++)
-						{
-							state->m_spin_pos++;
-							if (state->m_spin_pos > 143)
-								state->m_spin_pos = 0;
-							else
-								switch (state->m_spin_pos)
-								{
-									case 2:
-									case 3:
-									case 141:
-									case 142:
-										state->m_spin_center_count++;
-								}
-						}
-					}
-				}
-
-				if (offset == 0)
-					return state->m_spin_center_count & 0xff;
-				else
-					/* offset == 1 */
-					return rotate_count & 0xff;
-			}
-
-			default:
-				logerror("Unknown controller passed to leta_r");
-				return 0xff;
+			case 2: return 0xff;
+			case 3: return 0xff;
 		}
 	}
-	return input_port_read(space->machine(), letanames[offset]);
+
+	return input_port_read(space->machine, letanames[offset & 3]);
 }
 
 
@@ -669,7 +597,7 @@ static WRITE8_HANDLER( mixer_w )
 	if (!(data & 0x02)) rbott += 1.0/47;
 	if (!(data & 0x04)) rbott += 1.0/22;
 	gain = (rbott == 0) ? 1.0 : ((1.0/rbott) / (rtop + (1.0/rbott)));
-	atarigen_set_ym2151_vol(space->machine(), gain * 100);
+	atarigen_set_ym2151_vol(space->machine, gain * 100);
 
 	/* bits 3-4 control the volume of the POKEYs, using 47k and 100k resistors */
 	rtop = 1.0/(1.0/100 + 1.0/100);
@@ -677,7 +605,7 @@ static WRITE8_HANDLER( mixer_w )
 	if (!(data & 0x08)) rbott += 1.0/47;
 	if (!(data & 0x10)) rbott += 1.0/22;
 	gain = (rbott == 0) ? 1.0 : ((1.0/rbott) / (rtop + (1.0/rbott)));
-	atarigen_set_pokey_vol(space->machine(), gain * 100);
+	atarigen_set_pokey_vol(space->machine, gain * 100);
 
 	/* bits 5-7 control the volume of the TMS5220, using 22k, 47k, and 100k resistors */
 	rtop = 1.0/(1.0/100 + 1.0/100);
@@ -686,41 +614,35 @@ static WRITE8_HANDLER( mixer_w )
 	if (!(data & 0x40)) rbott += 1.0/47;
 	if (!(data & 0x80)) rbott += 1.0/22;
 	gain = (rbott == 0) ? 1.0 : ((1.0/rbott) / (rtop + (1.0/rbott)));
-	atarigen_set_tms5220_vol(space->machine(), gain * 100);
+	atarigen_set_tms5220_vol(space->machine, gain * 100);
 }
 
 
 static WRITE8_HANDLER( sound_reset_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-
 	/* if no change, do nothing */
-	if ((data & 1) == state->m_sound_reset_state)
+	if ((data & 1) == sound_reset_state)
 		return;
-	state->m_sound_reset_state = data & 1;
+	sound_reset_state = data & 1;
 
 	/* only track the 0 -> 1 transition */
-	if (state->m_sound_reset_state == 0)
+	if (sound_reset_state == 0)
 		return;
 
 	/* a large number of signals are reset when this happens */
-	atarigen_sound_io_reset(space->machine().device("soundcpu"));
-	devtag_reset(space->machine(), "ymsnd");
-	if (state->m_has_tms5220)
-	{
-		devtag_reset(space->machine(), "tms"); // technically what happens is the tms5220 gets a long stream of 0xFF written to it when sound_reset_state is 0 which halts the chip after a few frames, but this works just as well, even if it isn't exactly true to hardware... The hardware may not have worked either, the resistors to pull input to 0xFF are fighting against the ls263 gate holding the latched value to be sent to the chip.
-	}
+	atarigen_sound_io_reset(cputag_get_cpu(space->machine, "soundcpu"));
+	devtag_reset(space->machine, "ym");
 	mixer_w(space, 0, 0);
+	tms5220_data = 0;
+	tms5220_data_strobe = 0;
 }
 
 
 static READ16_HANDLER( sound_r )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-
 	/* clear the p2portwr state on a p1portrd */
-	state->m_p2portwr_state = 0;
-	atarigen_update_interrupts(space->machine());
+	p2portwr_state = 0;
+	atarigen_update_interrupts(space->machine);
 
 	/* handle it normally otherwise */
 	return atarigen_sound_r(space,offset,0xffff);
@@ -729,11 +651,9 @@ static READ16_HANDLER( sound_r )
 
 static WRITE8_HANDLER( sound_6502_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-
 	/* clock the state through */
-	state->m_p2portwr_state = (state->m_interrupt_enable & 2) != 0;
-	atarigen_update_interrupts(space->machine());
+	p2portwr_state = (interrupt_enable & 2) != 0;
+	atarigen_update_interrupts(space->machine);
 
 	/* handle it normally otherwise */
 	atarigen_6502_sound_w(space, offset, data);
@@ -742,11 +662,9 @@ static WRITE8_HANDLER( sound_6502_w )
 
 static READ8_HANDLER( sound_6502_r )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-
 	/* clock the state through */
-	state->m_p2portrd_state = (state->m_interrupt_enable & 1) != 0;
-	atarigen_update_interrupts(space->machine());
+	p2portrd_state = (interrupt_enable & 1) != 0;
+	atarigen_update_interrupts(space->machine);
 
 	/* handle it normally otherwise */
 	return atarigen_6502_sound_r(space, offset);
@@ -762,21 +680,21 @@ static READ8_HANDLER( sound_6502_r )
 
 static WRITE8_HANDLER( tms5220_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	if (state->m_has_tms5220)
-	{
-		tms5220_data_w(space->machine().device("tms"), 0, data);
-	}
+	tms5220_data = data;
 }
+
 
 static WRITE8_HANDLER( tms5220_strobe_w )
 {
-	atarisy2_state *state = space->machine().driver_data<atarisy2_state>();
-	if (state->m_has_tms5220)
+	if (!(offset & 1) && tms5220_data_strobe && has_tms5220)
 	{
-		tms5220_wsq_w(space->machine().device("tms"), 1-(offset & 1));
+		const device_config *tms = devtag_get_device(space->machine, "tms");
+		tms5220_data_w(tms, 0, tms5220_data);
 	}
+	tms5220_data_strobe = offset & 1;
 }
+
+
 
 /*************************************
  *
@@ -786,8 +704,8 @@ static WRITE8_HANDLER( tms5220_strobe_w )
 
 static WRITE8_HANDLER( coincount_w )
 {
-	coin_counter_w(space->machine(), 0, (data >> 0) & 1);
-	coin_counter_w(space->machine(), 1, (data >> 1) & 1);
+	coin_counter_w(0, (data >> 0) & 1);
+	coin_counter_w(1, (data >> 1) & 1);
 }
 
 
@@ -799,10 +717,10 @@ static WRITE8_HANDLER( coincount_w )
  *************************************/
 
 /* full memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
-	AM_RANGE(0x1000, 0x11ff) AM_MIRROR(0x0200) AM_RAM_WRITE(atarisy2_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x1400, 0x1403) AM_MIRROR(0x007c) AM_READWRITE(adc_r, bankselect_w) AM_BASE_MEMBER(atarisy2_state, m_bankselect)
+	AM_RANGE(0x1000, 0x11ff) AM_MIRROR(0x0200) AM_RAM_WRITE(atarisy2_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x1400, 0x1403) AM_MIRROR(0x007c) AM_READWRITE(adc_r, bankselect_w) AM_BASE(&bankselect)
 	AM_RANGE(0x1480, 0x1487) AM_MIRROR(0x0078) AM_WRITE(adc_strobe_w)
 	AM_RANGE(0x1580, 0x1581) AM_MIRROR(0x001e) AM_WRITE(int0_ack_w)
 	AM_RANGE(0x15a0, 0x15a1) AM_MIRROR(0x001e) AM_WRITE(int1_ack_w)
@@ -810,14 +728,14 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x15e0, 0x15e1) AM_MIRROR(0x001e) AM_WRITE(atarigen_video_int_ack_w)
 	AM_RANGE(0x1600, 0x1601) AM_MIRROR(0x007e) AM_WRITE(int_enable_w)
 	AM_RANGE(0x1680, 0x1681) AM_MIRROR(0x007e) AM_WRITE(atarigen_sound_w)
-	AM_RANGE(0x1700, 0x1701) AM_MIRROR(0x007e) AM_WRITE(atarisy2_xscroll_w) AM_BASE_MEMBER(atarisy2_state, m_xscroll)
-	AM_RANGE(0x1780, 0x1781) AM_MIRROR(0x007e) AM_WRITE(atarisy2_yscroll_w) AM_BASE_MEMBER(atarisy2_state, m_yscroll)
+	AM_RANGE(0x1700, 0x1701) AM_MIRROR(0x007e) AM_WRITE(atarisy2_xscroll_w) AM_BASE(&atarigen_xscroll)
+	AM_RANGE(0x1780, 0x1781) AM_MIRROR(0x007e) AM_WRITE(atarisy2_yscroll_w) AM_BASE(&atarigen_yscroll)
 	AM_RANGE(0x1800, 0x1801) AM_MIRROR(0x03fe) AM_READWRITE(switch_r, watchdog_reset16_w)
 	AM_RANGE(0x1c00, 0x1c01) AM_MIRROR(0x03fe) AM_READ(sound_r)
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(atarisy2_videoram_r, atarisy2_videoram_w)
-	AM_RANGE(0x4000, 0x5fff) AM_ROM AM_BASE_MEMBER(atarisy2_state, m_rombank1)
-	AM_RANGE(0x6000, 0x7fff) AM_ROM AM_BASE_MEMBER(atarisy2_state, m_rombank2)
-	AM_RANGE(0x8000, 0x81ff) AM_READWRITE(atarisy2_slapstic_r, atarisy2_slapstic_w) AM_BASE_MEMBER(atarisy2_state, m_slapstic_base)
+	AM_RANGE(0x4000, 0x5fff) AM_ROM AM_BASE(&rombank1)
+	AM_RANGE(0x6000, 0x7fff) AM_ROM AM_BASE(&rombank2)
+	AM_RANGE(0x8000, 0x81ff) AM_READWRITE(atarisy2_slapstic_r, atarisy2_slapstic_w) AM_BASE(&atarisy2_slapstic)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -830,14 +748,14 @@ ADDRESS_MAP_END
  *************************************/
 
 /* full memory map derived from schematics */
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_MIRROR(0x2000) AM_RAM
-	AM_RANGE(0x1000, 0x17ff) AM_MIRROR(0x2000) AM_RAM AM_SHARE("eeprom")
+	AM_RANGE(0x1000, 0x17ff) AM_MIRROR(0x2000) AM_RAM AM_BASE((UINT8 **)&atarigen_eeprom) AM_SIZE(&atarigen_eeprom_size)
 	AM_RANGE(0x1800, 0x180f) AM_MIRROR(0x2780) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x1810, 0x1813) AM_MIRROR(0x278c) AM_READ(leta_r)
 	AM_RANGE(0x1830, 0x183f) AM_MIRROR(0x2780) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
 	AM_RANGE(0x1840, 0x1840) AM_MIRROR(0x278f) AM_READ(switch_6502_r)
-	AM_RANGE(0x1850, 0x1851) AM_MIRROR(0x278e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x1850, 0x1851) AM_MIRROR(0x278e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
 	AM_RANGE(0x1860, 0x1860) AM_MIRROR(0x278f) AM_READ(sound_6502_r)
 	AM_RANGE(0x1870, 0x1870) AM_MIRROR(0x2781) AM_WRITE(tms5220_w)
 	AM_RANGE(0x1872, 0x1873) AM_MIRROR(0x2780) AM_WRITE(tms5220_strobe_w)
@@ -961,47 +879,11 @@ static INPUT_PORTS_START( 720 )
 	PORT_MODIFY("ADC1")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	/* 720 uses a special controller to control the player rotation.
-     * It uses 1 disc with 72 teeth for the rotation and another disc
-     * with 2 teeth for the alignment of the joystick to the top position.
-     * The following graph shows how the Center and Rotate disc align.
-     * The numbers show how the optical count varies from center.
-     *
-     *   _____2  1________1  2_____
-     *        |__|        |__|          Center disc - 2 teeth.  Shown lined up with Rotate disc
-     *      __    __    __    __
-     *   __|  |__|  |__|  |__|  |__     Rotate disc - 72 teeth (144 positions)
-     *     4  3  2  1  1  2  3  4
-     */
-
-	/* Center disc */
-	/* X1, X2 LETA inputs */
 	PORT_MODIFY("LETA0")	/* not direct mapped */
-	PORT_BIT( 0xff, 0x00, IPT_DIAL_V ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_NAME("Center") PORT_CONDITION("SELECT",0x03,PORTCOND_EQUALS,0x00)
+	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(100) PORT_KEYDELTA(10)
 
-	/* Rotate disc */
-	/* Y1, Y2 LETA inputs */
-	/* The disc has 72 teeth which are read by the hardware at 2x */
-	/* Computer hardware reads at 4x, so we set the sensitivity to 50% */
 	PORT_MODIFY("LETA1")	/* not direct mapped */
-	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(10) PORT_FULL_TURN_COUNT(144) PORT_NAME("Rotate") PORT_CONDITION("SELECT",0x03,PORTCOND_EQUALS,0x00)
-
-	PORT_START("FAKE_JOY_X")	/* not direct mapped */
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_X ) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_CONDITION("SELECT",0x03,PORTCOND_EQUALS,0x01)
-
-	PORT_START("FAKE_JOY_Y")	/* not direct mapped */
-	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_REVERSE PORT_CONDITION("SELECT",0x03,PORTCOND_EQUALS,0x01)
-
-	/* Let's assume we are using a 1200 count spinner.  We scale to get a 144 count.
-     * 144/1200 = 0.12 = 12% */
-	PORT_START("FAKE_SPINNER")	/* not direct mapped */
-	PORT_BIT( 0xffff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(12) PORT_KEYDELTA(10) PORT_CONDITION("SELECT",0x03,PORTCOND_EQUALS,0x02)
-
-	PORT_START("SELECT")
-    PORT_CONFNAME( 0x03, 0x02, "Controller Type" )
-    PORT_CONFSETTING(    0x00, "Real" )
-    PORT_CONFSETTING(    0x01, "Joystick" )
-    PORT_CONFSETTING(    0x02, "Spinner" )
+	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_SENSITIVITY(100) PORT_KEYDELTA(10) PORT_REVERSE
 
 	PORT_MODIFY("DSW1")
 	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("5/6A:!8,!7")
@@ -1258,60 +1140,62 @@ static const struct t11_setup t11_data =
 };
 
 
-static MACHINE_CONFIG_START( atarisy2, atarisy2_state )
+static MACHINE_DRIVER_START( atarisy2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", T11, MASTER_CLOCK/2)
-	MCFG_CPU_CONFIG(t11_data)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_int)
+	MDRV_CPU_ADD("maincpu", T11, MASTER_CLOCK/2)
+	MDRV_CPU_CONFIG(t11_data)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", vblank_int)
 
-	MCFG_CPU_ADD("soundcpu", M6502, SOUND_CLOCK/8)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(atarigen_6502_irq_gen, (double)MASTER_CLOCK/2/16/16/16/10)
+	MDRV_CPU_ADD("soundcpu", M6502, SOUND_CLOCK/8)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_PERIODIC_INT(atarigen_6502_irq_gen, (double)MASTER_CLOCK/2/16/16/16/10)
 
-	MCFG_MACHINE_START(atarisy2)
-	MCFG_MACHINE_RESET(atarisy2)
-	MCFG_NVRAM_ADD_1FILL("eeprom")
+	MDRV_MACHINE_START(atarisy2)
+	MDRV_MACHINE_RESET(atarisy2)
+	MDRV_NVRAM_HANDLER(atarigen)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MCFG_GFXDECODE(atarisy2)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MDRV_GFXDECODE(atarisy2)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK/2, 640, 0, 512, 416, 0, 384)
-	MCFG_SCREEN_UPDATE_STATIC(atarisy2)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_RAW_PARAMS(VIDEO_CLOCK/2, 640, 0, 512, 416, 0, 384)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 
-	MCFG_VIDEO_START(atarisy2)
+	MDRV_VIDEO_START(atarisy2)
+	MDRV_VIDEO_UPDATE(atarisy2)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-	MCFG_SOUND_ADD("ymsnd", YM2151, SOUND_CLOCK/4)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SOUND_ADD("ym", YM2151, SOUND_CLOCK/4)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
-	MCFG_SOUND_ADD("pokey1", POKEY, SOUND_CLOCK/8)
-	MCFG_SOUND_CONFIG(pokey_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.35)
+	MDRV_SOUND_ADD("pokey1", POKEY, SOUND_CLOCK/8)
+	MDRV_SOUND_CONFIG(pokey_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.35)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, SOUND_CLOCK/8)
-	MCFG_SOUND_CONFIG(pokey_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.35)
+	MDRV_SOUND_ADD("pokey2", POKEY, SOUND_CLOCK/8)
+	MDRV_SOUND_CONFIG(pokey_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.35)
 
-	MCFG_SOUND_ADD("tms", TMS5220C, MASTER_CLOCK/4/4/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("tms", TMS5220, MASTER_CLOCK/4/4/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( sprint, atarisy2 )
+static MACHINE_DRIVER_START( sprint )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(atarisy2)
 
 	/* sound hardware */
-	MCFG_DEVICE_REMOVE("tms")
-MACHINE_CONFIG_END
+	MDRV_DEVICE_REMOVE("tms")
+MACHINE_DRIVER_END
 
 
 
@@ -1357,9 +1241,6 @@ ROM_START( paperboy )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1399,9 +1280,6 @@ ROM_START( paperboyr2 )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1441,9 +1319,6 @@ ROM_START( paperboyr1 )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1509,9 +1384,6 @@ ROM_START( 720 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1577,9 +1449,6 @@ ROM_START( 720r3 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1645,9 +1514,6 @@ ROM_START( 720r2 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1713,9 +1579,6 @@ ROM_START( 720r1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1781,9 +1644,6 @@ ROM_START( 720g )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1225.4t",  0x000000, 0x004000, CRC(264eda88) SHA1(f0f5fe87741e0e17117085cf45f700090a02cb94) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1849,9 +1709,6 @@ ROM_START( 720gr1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1225.4t",  0x000000, 0x004000, CRC(264eda88) SHA1(f0f5fe87741e0e17117085cf45f700090a02cb94) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1897,9 +1754,6 @@ ROM_START( ssprint )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint-eeprom.bin", 0x0000, 0x0800, CRC(dfcd40de) SHA1(c68f0fd876b5edfd751bfa6c5967dc2a1e679b19) )
 ROM_END
 
 
@@ -1944,9 +1798,6 @@ ROM_START( ssprints )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-218.6t",   0x000000, 0x004000, CRC(8e500be1) SHA1(f21799bf97c8bf82328999cb912ad5f293035d55) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -1991,9 +1842,6 @@ ROM_START( ssprintf )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-218.6t",   0x000000, 0x004000, CRC(8e500be1) SHA1(f21799bf97c8bf82328999cb912ad5f293035d55) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2038,9 +1886,6 @@ ROM_START( ssprintg )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2085,9 +1930,6 @@ ROM_START( ssprint3 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2132,9 +1974,6 @@ ROM_START( ssprintg1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2179,9 +2018,6 @@ ROM_START( ssprint1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2224,9 +2060,6 @@ ROM_START( csprints )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2269,9 +2102,6 @@ ROM_START( csprint )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2314,9 +2144,6 @@ ROM_START( csprints1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2359,9 +2186,6 @@ ROM_START( csprintf )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2404,9 +2228,6 @@ ROM_START( csprintg )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2449,9 +2270,6 @@ ROM_START( csprint2 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2494,9 +2312,6 @@ ROM_START( csprintg1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2539,9 +2354,6 @@ ROM_START( csprint1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
-
-	ROM_REGION( 0x800, "eeprom", 0 )
-	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -3193,10 +3005,39 @@ ROM_END
 
 static DRIVER_INIT( paperboy )
 {
+	static const UINT16 compressed_default_eeprom[] =
+	{
+		0x0000,0x4300,0x0113,0x0124,0x0150,0x0153,0x0154,0x0100,
+		0x0112,0x01C0,0x0155,0x0143,0x0148,0x0100,0x0112,0x015C,
+		0x0154,0x014F,0x0149,0x0100,0x0111,0x01F8,0x0120,0x0152,
+		0x0153,0x0100,0x0111,0x0149,0x0159,0x0145,0x0120,0x0100,
+		0x0111,0x0130,0x014F,0x0120,0x0154,0x0100,0x0110,0x01CC,
+		0x0155,0x014F,0x0141,0x0100,0x0110,0x0168,0x0152,0x014E,
+		0x0142,0x0100,0x0110,0x0104,0x0120,0x0154,0x014C,0x0100,
+		0x010F,0x01A0,0x0120,0x014F,0x0145,0x0100,0x0126,0x01AC,
+		0x0150,0x0149,0x0147,0x0100,0x0126,0x0148,0x0141,0x0153,
+		0x0152,0x0100,0x0125,0x01E4,0x0150,0x0120,0x0145,0x0100,
+		0x0125,0x0180,0x0145,0x0154,0x0141,0x0100,0x0125,0x011C,
+		0x0152,0x0148,0x0154,0x0100,0x0124,0x01B8,0x0120,0x0245,
+		0x0100,0x0124,0x0154,0x0142,0x0120,0x0153,0x0100,0x0123,
+		0x01F0,0x014F,0x0120,0x0154,0x0100,0x0123,0x018C,0x0159,
+		0x0220,0x0100,0x0123,0x0128,0x0320,0x0100,0x013A,0x0134,
+		0x0144,0x0141,0x0154,0x0100,0x0139,0x01D0,0x0154,0x0148,
+		0x0145,0x0100,0x0139,0x016C,0x0142,0x014F,0x0159,0x0100,
+		0x0139,0x0108,0x0142,0x0146,0x0120,0x0100,0x0138,0x01A4,
+		0x014D,0x0145,0x0143,0x0100,0x0138,0x0140,0x0143,0x014A,
+		0x0120,0x0100,0x0137,0x01DC,0x014A,0x0145,0x0153,0x0100,
+		0x0137,0x0178,0x0150,0x0143,0x0154,0x0100,0x0137,0x0114,
+		0x014D,0x0241,0x0100,0x0136,0x01B0,0x0142,0x0141,0x0146,
+		0x0101,0x0400,0x010F,0x017F,0x012A,0x017F,0x013D,0x010F,
+		0x017F,0x012A,0x017F,0x013C,0x010F,0x017F,0x012A,0x017F,
+		0x013B,0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0xFC00,
+		0x0000
+	};
 	int i;
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-	UINT8 *cpu1 = machine.region("maincpu")->base();
+	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
+	atarigen_eeprom_default = compressed_default_eeprom;
 	slapstic_init(machine, 105);
 
 	/* expand the 16k program ROMs into full 64k chunks */
@@ -3207,9 +3048,8 @@ static DRIVER_INIT( paperboy )
 		memcpy(&cpu1[i + 0x18000], &cpu1[i], 0x8000);
 	}
 
-	state->m_pedal_count = 0;
-	state->m_has_tms5220 = 1;
-	tms5220_rsq_w(machine.device("tms"),  1); // /RS is tied high on sys2 hw
+	pedal_count = 0;
+	has_tms5220 = 1;
 }
 
 
@@ -3218,58 +3058,188 @@ static DRIVER_INIT( 720 )
 	/* without the default EEPROM, 720 hangs at startup due to communication
        issues with the sound CPU; temporarily increasing the sound CPU frequency
        to ~2.2MHz "fixes" the problem */
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
+	static const UINT16 compressed_default_eeprom[] =
+	{
+		0x0000,0x01ff,0x01d0,0x0107,0x0100,0x01d7,0x0300,0x01d7,0x0400,0x01d0,
+		0x0107,0x0100,0xffff,0x4fff,0x0100,0x014e,0x0120,0x0139,
+		0x01a4,0x0100,0x014c,0x012c,0x014e,0x01ce,0x0100,0x014a,
+		0x0138,0x014c,0x01f1,0x0100,0x0148,0x0144,0x0115,0x01d1,
+		0x0100,0x0146,0x0150,0x0215,0x0100,0x0144,0x015c,0x0149,
+		0x0117,0x0100,0x0142,0x0168,0x0148,0x0195,0x0100,0x0140,
+		0x0174,0x0111,0x0106,0x0100,0x013e,0x0180,0x0135,0x010d,
+		0x0100,0x013c,0x018c,0x014c,0x018d,0x0100,0x013a,0x0198,
+		0x0300,0x0138,0x01a4,0x0104,0x0121,0x0100,0x0136,0x01b0,
+		0x0108,0x0142,0x0100,0x0134,0x01bc,0x010c,0x0163,0x0100,
+		0x0132,0x01c8,0x0110,0x0184,0x0100,0x0130,0x01d4,0x0114,
+		0x01a5,0x0100,0x012e,0x01e0,0x0118,0x01c6,0x0100,0x012c,
+		0x01ec,0x011c,0x01e7,0x0100,0x012a,0x01f8,0x0121,0x0108,
+		0x0100,0x0129,0x0104,0x0125,0x0129,0x010f,0x0100,0x0163,
+		0x010e,0x01ca,0x0181,0x010e,0x0106,0x0120,0x010d,0x0189,
+		0x0162,0x010d,0x010c,0x0182,0x010c,0x01a1,0x01a2,0x010c,
+		0x0109,0x0171,0x010b,0x01a5,0x018f,0x010b,0x0146,0x0172,
+		0x010a,0x01b4,0x0186,0x010a,0x0105,0x0102,0x0109,0x0185,
+		0x0112,0x0109,0x0109,0x01cc,0x0108,0x01b5,0x01cf,0x0108,
+		0x0102,0x014b,0x0107,0x0182,0x0151,0x0107,0x0104,0x0190,
+		0x0106,0x0184,0x0142,0x0106,0x0105,0x0173,0x0105,0x0184,
+		0x0152,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0x06ff,
+		0x0000
+	};
+	atarigen_eeprom_default = compressed_default_eeprom;
 	slapstic_init(machine, 107);
 
-	state->m_pedal_count = -1;
-	state->m_has_tms5220 = 1;
-	tms5220_rsq_w(machine.device("tms"),  1); // /RS is tied high on sys2 hw
+	pedal_count = -1;
+	has_tms5220 = 1;
 }
 
 
-static DRIVER_INIT( ssprint )
+static void ssprint_init_common(running_machine *machine, const UINT16 *default_eeprom)
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
 	int i;
-	UINT8 *cpu1 = machine.region("maincpu")->base();
+	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
+	atarigen_eeprom_default = default_eeprom;
 	slapstic_init(machine, 108);
 
 	/* expand the 32k program ROMs into full 64k chunks */
 	for (i = 0x10000; i < 0x90000; i += 0x20000)
 		memcpy(&cpu1[i + 0x10000], &cpu1[i], 0x10000);
 
-	state->m_pedal_count = 3;
-	state->m_has_tms5220 = 0;
+	pedal_count = 3;
+	has_tms5220 = 0;
+}
+
+static DRIVER_INIT( ssprint )
+{
+	static const UINT16 compressed_default_eeprom[] =
+	{
+		0x0000,0x01FF,0x0E00,0x01FF,0x0100,0x0120,0x0100,0x0120,
+		0x0300,0x0120,0x0500,0x0120,0x01FF,0x0100,0x0140,0x0100,
+		0x0140,0x0110,0x0100,0x0110,0x0150,0x0100,0x0110,0x0300,
+		0x0140,0x01FF,0x0100,0x0160,0x0100,0x0160,0x0300,0x0160,
+		0x0500,0x0160,0x01FF,0x0100,0x0180,0x0100,0x0180,0x0300,
+		0x0180,0x0500,0x0180,0x01FF,0x0100,0x01A0,0x0100,0x01A0,
+		0x0300,0x01A0,0x0500,0x01A0,0x01FF,0x0100,0x01C0,0x0100,
+		0x01C0,0x0300,0x01C0,0x0500,0x01C0,0xFFFF,0x1EFF,0x0103,
+		0x01E8,0x0146,0x01D6,0x0103,0x01DE,0x0128,0x01B3,0x0103,
+		0x01D4,0x0144,0x0123,0x0103,0x01CA,0x011C,0x010B,0x0103,
+		0x01C0,0x0159,0x01BF,0x0103,0x01B6,0x0129,0x019F,0x0103,
+		0x01AC,0x014A,0x01C2,0x0103,0x01A2,0x010E,0x01DF,0x0103,
+		0x0198,0x0131,0x01BF,0x0103,0x018E,0x010D,0x0106,0x0103,
+		0x0184,0x010E,0x0186,0x0103,0x017A,0x0124,0x010C,0x0103,
+		0x0170,0x014A,0x0148,0x0103,0x0166,0x0151,0x01F2,0x0103,
+		0x015C,0x013E,0x013F,0x0103,0x0152,0x0111,0x0106,0x0103,
+		0x0148,0x0145,0x01B1,0x0103,0x013E,0x017E,0x0164,0x0103,
+		0x0134,0x017F,0x01E0,0x0103,0x012A,0x017F,0x01F3,0x0103,
+		0x0120,0x017F,0x01FF,0x0103,0x0116,0x012A,0x01D6,0x0103,
+		0x010C,0x0125,0x0176,0x0103,0x0102,0x014C,0x0161,0x0102,
+		0x01F8,0x0128,0x0101,0x0102,0x01EE,0x0101,0x0153,0x0102,
+		0x01E4,0x0109,0x0132,0x0102,0x01DA,0x012C,0x0132,0x0102,
+		0x01D0,0x0125,0x0186,0x0102,0x01C6,0x011D,0x011F,0xFF00,
+		0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0x0800,0x0000
+	};
+	ssprint_init_common(machine, compressed_default_eeprom);
+}
+
+static DRIVER_INIT( ssprint1 )
+{
+	static const UINT16 compressed_default_eeprom[] =
+	{
+		0x0000,0x1e00,0x01ff,0x2500,0x0103,0x01e8,0x0152,0x0157,
+		0x0157,0x0103,0x01de,0x014b,0x0146,0x0154,0x0103,0x01d4,
+		0x0152,0x0142,0x0144,0x0103,0x01ca,0x0148,0x0141,0x014c,
+		0x0103,0x01c0,0x0157,0x014e,0x0120,0x0103,0x01b6,0x014b,
+		0x014d,0x0120,0x0103,0x01ac,0x0153,0x0157,0x0143,0x0103,
+		0x01a2,0x0144,0x0157,0x0120,0x0103,0x0198,0x014d,0x014e,
+		0x0120,0x0103,0x018e,0x0144,0x0149,0x0147,0x0103,0x0184,
+		0x0144,0x0155,0x0147,0x0103,0x017a,0x014a,0x0141,0x014d,
+		0x0103,0x0170,0x0153,0x0153,0x0149,0x0103,0x0166,0x0155,
+		0x0150,0x0153,0x0103,0x015c,0x0150,0x0152,0x0120,0x0103,
+		0x0152,0x0145,0x0149,0x0147,0x0103,0x0148,0x0152,0x014e,
+		0x0152,0x0103,0x013e,0x0120,0x0154,0x0145,0x0103,0x0134,
+		0x0220,0x0141,0x0103,0x012a,0x0220,0x0154,0x0103,0x0420,
+		0x0103,0x0116,0x014b,0x0257,0x0103,0x010c,0x014a,0x014c,
+		0x0157,0x0103,0x0102,0x0154,0x0144,0x0142,0x0102,0x01f8,
+		0x014b,0x0141,0x0142,0x0102,0x01ee,0x0141,0x014b,0x0154,
+		0x0102,0x01e4,0x0143,0x014a,0x0153,0x0102,0x01da,0x014c,
+		0x0142,0x0153,0x0102,0x01d0,0x014a,0x014d,0x0147,0x0102,
+		0x01c6,0x0148,0x0149,0x0120,0x0110,0x0100,0x0110,0x0100,
+		0x0110,0x0100,0x0138,0x0110,0x0100,0x0110,0x0100,0x0110,
+		0x0100,0x0137,0x0110,0x0100,0x0110,0x0100,0x0110,0x0100,
+		0x0136,0x97ff,0x0103,0x01e8,0x0146,0x01d6,0x0103,0x01de,
+		0x0128,0x01b3,0x0103,0x01d4,0x0144,0x0123,0x0103,0x01ca,
+		0x011c,0x010b,0x0103,0x01c0,0x0159,0x01bf,0x0103,0x01b6,
+		0x0129,0x019f,0x0103,0x01ac,0x014a,0x01c2,0x0103,0x01a2,
+		0x010e,0x01df,0x0103,0x0198,0x0131,0x01bf,0x0103,0x018e,
+		0x010d,0x0106,0x0103,0x0184,0x010e,0x0186,0x0103,0x017a,
+		0x0124,0x010c,0x0103,0x0170,0x014a,0x0148,0x0103,0x0166,
+		0x0151,0x01f2,0x0103,0x015c,0x013e,0x013f,0x0103,0x0152,
+		0x0111,0x0106,0x0103,0x0148,0x0145,0x01b1,0x0103,0x013e,
+		0x017e,0x0164,0x0103,0x0134,0x017f,0x01e0,0x0103,0x012a,
+		0x017f,0x01f3,0x0103,0x0120,0x017f,0x01ff,0x0103,0x0116,
+		0x012a,0x01d6,0x0103,0x010c,0x0125,0x0176,0x0103,0x0102,
+		0x014c,0x0161,0x0102,0x01f8,0x0128,0x0101,0x0102,0x01ee,
+		0x0101,0x0153,0x0102,0x01e4,0x0109,0x0132,0x0102,0x01da,
+		0x012c,0x0132,0x0102,0x01d0,0x0125,0x0186,0x0102,0x01c6,
+		0x011d,0x011f,0x0200,0x0000
+	};
+	ssprint_init_common(machine, compressed_default_eeprom);
 }
 
 
 static DRIVER_INIT( csprint )
 {
+	static const UINT16 compressed_default_eeprom[] =
+	{
+		0x0000,0x01FF,0x0E00,0x0128,0x01D0,0x0127,0x0100,0x0120,
+		0x0300,0x01F7,0x01D0,0x0107,0x0300,0x0120,0x010F,0x01F0,
+		0x0140,0x0100,0x0140,0x0110,0x0100,0x0110,0x01A0,0x01F0,
+		0x0110,0x0300,0x0140,0x01FF,0x0100,0x0160,0x0100,0x0160,
+		0x0300,0x0160,0x0500,0x0160,0x01FF,0x0100,0x0180,0x0100,
+		0x0180,0x0300,0x0180,0x0500,0x0180,0x01FF,0x0100,0x01A0,
+		0x0100,0x01A0,0x0300,0x01A0,0x0500,0x01A0,0x01FF,0x0100,
+		0x01C0,0x0100,0x01C0,0x0300,0x01C0,0x0500,0x01C0,0xFFFF,
+		0x0100,0x0127,0x0110,0x0146,0x01D6,0x0100,0x0126,0x01AC,
+		0x0128,0x01B3,0x0100,0x0126,0x0148,0x0144,0x0123,0x0100,
+		0x0125,0x01E4,0x011C,0x010B,0x0100,0x0125,0x0180,0x0159,
+		0x01BF,0x0100,0x0125,0x011C,0x0129,0x019F,0x0100,0x0124,
+		0x0168,0x014A,0x01C2,0x0100,0x0124,0x0154,0x010E,0x01DF,
+		0x0100,0x0123,0x01F0,0x0131,0x01BF,0x0100,0x0123,0x018C,
+		0x010D,0x0106,0x0100,0x0123,0x0128,0x010E,0x0186,0x0100,
+		0x0122,0x01C4,0x0124,0x010C,0x0100,0x0122,0x0160,0x014A,
+		0x0148,0x0100,0x0121,0x01FC,0x0151,0x01F2,0x0100,0x0121,
+		0x0198,0x013E,0x013F,0x0100,0x0121,0x0134,0x0111,0x0106,
+		0x0100,0x0120,0x01D0,0x0145,0x01B1,0x0100,0x0120,0x016C,
+		0x017E,0x0164,0x0100,0x0120,0x0108,0x017F,0x01E0,0x0100,
+		0x011F,0x01A4,0x017F,0x01F3,0x0100,0x011F,0x0140,0x017F,
+		0x01FF,0x0100,0x011E,0x01DC,0x012A,0x01D6,0x0100,0x011E,
+		0x0178,0x0125,0x0176,0x0100,0x011E,0x0114,0x014C,0x0161,
+		0x0100,0x011D,0x01B0,0x0128,0x0101,0x0100,0x011D,0x014C,
+		0x0101,0x0153,0x0100,0x011C,0x01E8,0x0109,0x0132,0x0100,
+		0x011C,0x0184,0x012C,0x0132,0x0100,0x011C,0x0120,0x0125,
+		0x0186,0x0100,0x011B,0x01BC,0x011D,0x011F,0x0000
+	};
 	int i;
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-	UINT8 *cpu1 = machine.region("maincpu")->base();
+	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
+	atarigen_eeprom_default = compressed_default_eeprom;
 	slapstic_init(machine, 109);
 
 	/* expand the 32k program ROMs into full 64k chunks */
 	for (i = 0x10000; i < 0x90000; i += 0x20000)
 		memcpy(&cpu1[i + 0x10000], &cpu1[i], 0x10000);
 
-	state->m_pedal_count = 2;
-	state->m_has_tms5220 = 0;
+	pedal_count = 2;
+	has_tms5220 = 0;
 }
 
 
 static DRIVER_INIT( apb )
 {
-	atarisy2_state *state = machine.driver_data<atarisy2_state>();
-
+	atarigen_eeprom_default = NULL;
 	slapstic_init(machine, 110);
 
-	state->m_pedal_count = 2;
-	state->m_has_tms5220 = 1;
-	tms5220_rsq_w(machine.device("tms"),  1); // /RS is tied high on sys2 hw
+	pedal_count = 2;
+	has_tms5220 = 1;
 }
 
 
@@ -3292,12 +3262,12 @@ GAME( 1986, 720g,     720,      atarisy2, 720,      720,      ROT0,   "Atari Gam
 GAME( 1986, 720gr1,   720,      atarisy2, 720,      720,      ROT0,   "Atari Games", "720 Degrees (German, rev 1)", GAME_SUPPORTS_SAVE )
 
 GAME( 1986, ssprint,  0,        sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 4)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprint3, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprint1, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintg, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (German, rev 2)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintg1,ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (German, rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintf, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (French)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprints, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (Spanish)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprint3, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprint1, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (rev 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintg, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (German, rev 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintg1,ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (German, rev 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintf, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (French)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprints, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (Spanish)", GAME_SUPPORTS_SAVE )
 
 GAME( 1986, csprint,  0,        sprint,   csprint,  csprint,  ROT0,   "Atari Games", "Championship Sprint (rev 3)", GAME_SUPPORTS_SAVE )
 GAME( 1986, csprint2, csprint,  sprint,   csprint,  csprint,  ROT0,   "Atari Games", "Championship Sprint (rev 2)", GAME_SUPPORTS_SAVE )

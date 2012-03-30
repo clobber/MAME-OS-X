@@ -1,114 +1,112 @@
 /***************************************************************************
 
-    F-1 Grand Prix       (c) 1991 Video System Co.
+F-1 Grand Prix       (c) 1991 Video System Co.
 
-    driver by Nicola Salmoria
+driver by Nicola Salmoria
 
-    Notes:
-    - The ROZ layer generator is a Konami 053936.
-    - f1gp2's hardware is very similar to Lethal Crash Race, main difference
-      being an extra 68000.
+Notes:
+- The ROZ layer generator is a Konami 053936.
+- f1gp2's hardware is very similar to Lethal Crash Race, main difference
+  being an extra 68000.
 
-    TODO:
-    - Hook up link for Multi Player game mode. Currently will show ID CHECK
-      ERROR then hang.
-
-    f1gp:
-    - gfxctrl register not understood - handling of fg/sprite priority to fix
-      "continue" screen is just a kludge.
-    f1gp2:
-    - sprite lag noticeable in the animation at the end of a race (the wheels
-      of the car are sprites while the car is the fg tilemap)
+TODO:
+f1gp:
+- gfxctrl register not understood - handling of fg/sprite priority to fix
+  "continue" screen is just a kludge.
+f1gp2:
+- sprite lag noticeable in the animation at the end of a race (the wheels
+  of the car are sprites while the car is the fg tilemap)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "video/konicdev.h"
+#include "video/konamiic.h"
+#include "f1gp.h"
 #include "sound/2610intf.h"
 #include "sound/okim6295.h"
-#include "includes/f1gp.h"
 
+
+static UINT16 *sharedram;
 
 static READ16_HANDLER( sharedram_r )
 {
-	f1gp_state *state = space->machine().driver_data<f1gp_state>();
-	return state->m_sharedram[offset];
+	return sharedram[offset];
 }
 
 static WRITE16_HANDLER( sharedram_w )
 {
-	f1gp_state *state = space->machine().driver_data<f1gp_state>();
-	COMBINE_DATA(&state->m_sharedram[offset]);
+	COMBINE_DATA(&sharedram[offset]);
 }
 
 static READ16_HANDLER( extrarom_r )
 {
-	UINT8 *rom = space->machine().region("user1")->base();
+	UINT8 *rom = memory_region(space->machine, "user1");
 
 	offset *= 2;
 
-	return rom[offset] | (rom[offset + 1] << 8);
+	return rom[offset] | (rom[offset+1] << 8);
 }
 
 static READ16_HANDLER( extrarom2_r )
 {
-	UINT8 *rom = space->machine().region("user2")->base();
+	UINT8 *rom = memory_region(space->machine, "user2");
 
 	offset *= 2;
 
-	return rom[offset] | (rom[offset + 1] << 8);
+	return rom[offset] | (rom[offset+1] << 8);
 }
 
 static WRITE8_HANDLER( f1gp_sh_bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 0x01);
+	UINT8 *rom = memory_region(space->machine, "audiocpu") + 0x10000;
+
+	memory_set_bankptr(space->machine, 1,rom + (data & 0x01) * 0x8000);
 }
 
 
+static int pending_command;
+
 static WRITE16_HANDLER( sound_command_w )
 {
-	f1gp_state *state = space->machine().driver_data<f1gp_state>();
-
 	if (ACCESSING_BITS_0_7)
 	{
-		state->m_pending_command = 1;
+		pending_command = 1;
 		soundlatch_w(space, offset, data & 0xff);
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 static READ16_HANDLER( command_pending_r )
 {
-	f1gp_state *state = space->machine().driver_data<f1gp_state>();
-	return (state->m_pending_command ? 0xff : 0);
+	return (pending_command ? 0xff : 0);
 }
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	f1gp_state *state = space->machine().driver_data<f1gp_state>();
-	state->m_pending_command = 0;
+	pending_command = 0;
 }
 
 
-static ADDRESS_MAP_START( f1gp_cpu1_map, AS_PROGRAM, 16 )
+
+static ADDRESS_MAP_START( f1gp_cpu1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x2fffff) AM_READ(extrarom_r)
 	AM_RANGE(0xa00000, 0xbfffff) AM_READ(extrarom2_r)
 	AM_RANGE(0xc00000, 0xc3ffff) AM_READWRITE(f1gp_zoomdata_r, f1gp_zoomdata_w)
-	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE_MEMBER(f1gp_state, m_rozvideoram)
-	AM_RANGE(0xd02000, 0xd03fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)							 /* mirror */
-	AM_RANGE(0xd04000, 0xd05fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)							 /* mirror */
-	AM_RANGE(0xd06000, 0xd07fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)							 /* mirror */
-	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE_SIZE_MEMBER(f1gp_state, m_spr1cgram, m_spr1cgram_size)				// SPR-1 CG RAM
-	AM_RANGE(0xe04000, 0xe07fff) AM_RAM AM_BASE_SIZE_MEMBER(f1gp_state, m_spr2cgram, m_spr2cgram_size)				// SPR-2 CG RAM
-	AM_RANGE(0xf00000, 0xf003ff) AM_RAM AM_BASE_MEMBER(f1gp_state, m_spr1vram)								// SPR-1 VRAM
-	AM_RANGE(0xf10000, 0xf103ff) AM_RAM AM_BASE_MEMBER(f1gp_state, m_spr2vram)								// SPR-2 VRAM
-	AM_RANGE(0xff8000, 0xffbfff) AM_RAM															// WORK RAM-1
-	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(f1gp_state, m_sharedram)		// DUAL RAM
-	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE_MEMBER(f1gp_state, m_fgvideoram)			// CHARACTER
-	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// PALETTE
+	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram)
+	AM_RANGE(0xd02000, 0xd03fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram) /* mirror */
+	AM_RANGE(0xd04000, 0xd05fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram) /* mirror */
+	AM_RANGE(0xd06000, 0xd07fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram) /* mirror */
+	AM_RANGE(0xe00000, 0xe03fff) AM_RAM AM_BASE(&f1gp_spr1cgram) AM_SIZE(&f1gp_spr1cgram_size)				// SPR-1 CG RAM
+	AM_RANGE(0xe04000, 0xe07fff) AM_RAM AM_BASE(&f1gp_spr2cgram) AM_SIZE(&f1gp_spr2cgram_size)				// SPR-2 CG RAM
+	AM_RANGE(0xf00000, 0xf003ff) AM_RAM AM_BASE(&f1gp_spr1vram)												// SPR-1 VRAM
+	AM_RANGE(0xf10000, 0xf103ff) AM_RAM AM_BASE(&f1gp_spr2vram)												// SPR-2 VRAM
+	AM_RANGE(0xff8000, 0xffbfff) AM_RAM																		// WORK RAM-1
+	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)					// DUAL RAM
+	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE(&f1gp_fgvideoram)					// CHARACTER
+	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)	// PALETTE
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xfff000, 0xfff001) AM_WRITE(f1gp_gfxctrl_w)
 //  AM_RANGE(0xfff002, 0xfff003)    analog wheel?
@@ -117,48 +115,48 @@ static ADDRESS_MAP_START( f1gp_cpu1_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xfff006, 0xfff007) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfff008, 0xfff009) AM_READ(command_pending_r)
 	AM_RANGE(0xfff008, 0xfff009) AM_WRITE(sound_command_w)
-	AM_RANGE(0xfff040, 0xfff05f) AM_DEVWRITE("k053936", k053936_ctrl_w)
+	AM_RANGE(0xfff040, 0xfff05f) AM_WRITE(SMH_RAM) AM_BASE(&K053936_0_ctrl)
 	AM_RANGE(0xfff050, 0xfff051) AM_READ_PORT("DSW3")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( f1gp2_cpu1_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gp2_cpu1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x2fffff) AM_READ(extrarom_r)
-	AM_RANGE(0xa00000, 0xa07fff) AM_RAM AM_BASE_MEMBER(f1gp_state, m_sprcgram)									// SPR-1 CG RAM + SPR-2 CG RAM
-	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE_MEMBER(f1gp_state, m_rozvideoram)	// BACK VRAM
-	AM_RANGE(0xe00000, 0xe00fff) AM_RAM AM_BASE_MEMBER(f1gp_state, m_spritelist)							// not checked + SPR-1 VRAM + SPR-2 VRAM
-	AM_RANGE(0xff8000, 0xffbfff) AM_RAM																// WORK RAM-1
-	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(f1gp_state, m_sharedram)			// DUAL RAM
-	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE_MEMBER(f1gp_state, m_fgvideoram)				// CHARACTER
-	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)			// PALETTE
+	AM_RANGE(0xa00000, 0xa07fff) AM_RAM AM_BASE(&f1gp2_sprcgram)													// SPR-1 CG RAM + SPR-2 CG RAM
+	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram)	// BACK VRAM
+	AM_RANGE(0xe00000, 0xe00fff) AM_RAM AM_BASE(&f1gp2_spritelist)													// not checked + SPR-1 VRAM + SPR-2 VRAM
+	AM_RANGE(0xff8000, 0xffbfff) AM_RAM																				// WORK RAM-1
+	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)							// DUAL RAM
+	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE(&f1gp_fgvideoram)							// CHARACTER
+	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)			// PALETTE
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("INPUTS") AM_WRITE(f1gp2_gfxctrl_w)
 //  AM_RANGE(0xfff002, 0xfff003)    analog wheel?
 	AM_RANGE(0xfff004, 0xfff005) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfff006, 0xfff007) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfff008, 0xfff009) AM_READWRITE(command_pending_r, sound_command_w)
 	AM_RANGE(0xfff00a, 0xfff00b) AM_READ_PORT("DSW3")
-	AM_RANGE(0xfff020, 0xfff03f) AM_DEVWRITE("k053936", k053936_ctrl_w)
+	AM_RANGE(0xfff020, 0xfff02f) AM_WRITE(SMH_RAM) AM_BASE(&K053936_0_ctrl)
 	AM_RANGE(0xfff044, 0xfff047) AM_WRITE(f1gp_fgscroll_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( f1gp_cpu2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gp_cpu2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM
 	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(f1gp_sh_bankswitch_w)	// f1gp
 	AM_RANGE(0x0c, 0x0c) AM_WRITE(f1gp_sh_bankswitch_w)	// f1gp2
 	AM_RANGE(0x14, 0x14) AM_READWRITE(soundlatch_r, pending_command_clear_w)
-	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
+	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
 ADDRESS_MAP_END
 
 static WRITE16_HANDLER( f1gpb_misc_w )
@@ -171,8 +169,8 @@ static WRITE16_HANDLER( f1gpb_misc_w )
     if(old_bank != new_bank && new_bank < 5)
     {
         // oki banking
-        UINT8 *src = space->machine().region("oki")->base() + 0x40000 + 0x10000 * new_bank;
-        UINT8 *dst = space->machine().region("oki")->base() + 0x30000;
+        UINT8 *src = memory_region(space->machine, "oki") + 0x40000 + 0x10000 * new_bank;
+        UINT8 *dst = memory_region(space->machine, "oki") + 0x30000;
         memcpy(dst, src, 0x10000);
 
         old_bank = new_bank;
@@ -186,13 +184,13 @@ static WRITE16_HANDLER( f1gpb_misc_w )
     */
 }
 
-static ADDRESS_MAP_START( f1gpb_cpu1_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpb_cpu1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x2fffff) AM_READ(extrarom_r)
 	AM_RANGE(0xa00000, 0xbfffff) AM_READ(extrarom2_r)
-	AM_RANGE(0x800000, 0x801fff) AM_RAM AM_BASE_SIZE_MEMBER(f1gp_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM AM_BASE(&spriteram16) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xc00000, 0xc3ffff) AM_READWRITE(f1gp_zoomdata_r, f1gp_zoomdata_w)
-	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE_MEMBER(f1gp_state, m_rozvideoram)
+	AM_RANGE(0xd00000, 0xd01fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w) AM_BASE(&f1gp_rozvideoram)
 	AM_RANGE(0xd02000, 0xd03fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)	/* mirror */
 	AM_RANGE(0xd04000, 0xd05fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)	/* mirror */
 	AM_RANGE(0xd06000, 0xd07fff) AM_READWRITE(f1gp_rozvideoram_r, f1gp_rozvideoram_w)	/* mirror */
@@ -201,24 +199,24 @@ static ADDRESS_MAP_START( f1gpb_cpu1_map, AS_PROGRAM, 16 )
 	AM_RANGE(0xf00000, 0xf003ff) AM_RAM //unused
 	AM_RANGE(0xf10000, 0xf103ff) AM_RAM //unused
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM
-	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE_MEMBER(f1gp_state, m_sharedram)
-	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE_MEMBER(f1gp_state, m_fgvideoram)
-	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w) AM_BASE(&sharedram)
+	AM_RANGE(0xffd000, 0xffdfff) AM_RAM_WRITE(f1gp_fgvideoram_w) AM_BASE(&f1gp_fgvideoram)
+	AM_RANGE(0xffe000, 0xffefff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
 	AM_RANGE(0xfff000, 0xfff001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0xfff004, 0xfff005) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfff006, 0xfff007) AM_READ_PORT("DSW2")
 	AM_RANGE(0xfff008, 0xfff009) AM_READNOP //?
 	AM_RANGE(0xfff006, 0xfff007) AM_WRITENOP
-	AM_RANGE(0xfff00a, 0xfff00b) AM_RAM AM_BASE_MEMBER(f1gp_state, m_fgregs)
-	AM_RANGE(0xfff00e, 0xfff00f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0xfff00a, 0xfff00b) AM_RAM AM_BASE(&f1gpb_fgregs)
+	AM_RANGE(0xfff00e, 0xfff00f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 	AM_RANGE(0xfff00c, 0xfff00d) AM_WRITE(f1gpb_misc_w)
 	AM_RANGE(0xfff010, 0xfff011) AM_WRITENOP
 	AM_RANGE(0xfff020, 0xfff023) AM_RAM //?
 	AM_RANGE(0xfff050, 0xfff051) AM_READ_PORT("DSW3")
-	AM_RANGE(0xfff800, 0xfff809) AM_RAM AM_BASE_MEMBER(f1gp_state, m_rozregs)
+	AM_RANGE(0xfff800, 0xfff809) AM_RAM AM_BASE(&f1gpb_rozregs)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( f1gpb_cpu2_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( f1gpb_cpu2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 	AM_RANGE(0xff8000, 0xffbfff) AM_RAM
 	AM_RANGE(0xffc000, 0xffcfff) AM_READWRITE(sharedram_r, sharedram_w)
@@ -231,8 +229,8 @@ static INPUT_PORTS_START( f1gp )
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_2WAY
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_2WAY
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
@@ -245,8 +243,10 @@ static INPUT_PORTS_START( f1gp )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")
-	PORT_DIPUNUSED_DIPLOC( 0x0100, 0x0100, "SW1:1" )		/* Listed as "Unused" */
-	PORT_DIPNAME( 0x0e00, 0x0e00, DEF_STR( Coin_A ) )		PORT_CONDITION("DSW1",0x8000,PORTCOND_EQUALS,0x8000) PORT_DIPLOCATION("SW1:2,3,4")
+	PORT_DIPNAME( 0x0100, 0x0100, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0100, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0e00, 0x0e00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(      0x0a00, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x0c00, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x0e00, DEF_STR( 1C_1C ) )
@@ -255,7 +255,7 @@ static INPUT_PORTS_START( f1gp )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x0200, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x7000, 0x7000, DEF_STR( Coin_B ) )		PORT_CONDITION("DSW1",0x8000,PORTCOND_EQUALS,0x8000) PORT_DIPLOCATION("SW1:5,6,7")
+	PORT_DIPNAME( 0x7000, 0x7000, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(      0x5000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(      0x6000, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(      0x7000, DEF_STR( 1C_1C ) )
@@ -264,51 +264,65 @@ static INPUT_PORTS_START( f1gp )
 	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x7e00, 0x7e00, DEF_STR( Coinage ) )		PORT_CONDITION("DSW1",0x8000,PORTCOND_NOTEQUALS,0x8000) PORT_DIPLOCATION("SW1:2,3,4,5,6,7")
-	PORT_DIPSETTING(      0x7e00, "2 to Start, 1 to Continue" )
-	PORT_DIPNAME( 0x8000, 0x8000, "Continue Coin" )			PORT_DIPLOCATION("SW1:8")
-	PORT_DIPSETTING(      0x8000, "Normal Coinage" )
+	PORT_DIPNAME( 0x8000, 0x8000, "2 to Start, 1 to Cont." )	// Other desc. was too long !
+	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )		PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPNAME( 0x0003, 0x0003, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(      0x0002, DEF_STR( Easy ) )
 	PORT_DIPSETTING(      0x0003, DEF_STR( Normal ) )
 	PORT_DIPSETTING(      0x0001, DEF_STR( Hard ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0004, 0x0004, "Game Mode" )			PORT_DIPLOCATION("SW2:3") /* Setting to Multiple results in "ID CHECK   ERROR" then hang */
+	PORT_DIPNAME( 0x0004, 0x0004, "Game Mode" )
 	PORT_DIPSETTING(      0x0004, DEF_STR( Single ) )
 	PORT_DIPSETTING(      0x0000, "Multiple" )
-	PORT_DIPNAME( 0x0008, 0x0008, "Multi Player Mode" )		PORT_DIPLOCATION("SW2:4")
-	PORT_DIPSETTING(      0x0008, "Single or Multi Player" )		PORT_CONDITION("DSW1",0x0004,PORTCOND_EQUALS,0x0000)
-	PORT_DIPSETTING(      0x0000, "Multi Player Game Only" )		PORT_CONDITION("DSW1",0x0004,PORTCOND_EQUALS,0x0000)
-	PORT_DIPSETTING(      0x0008, "Multi Player Off" )			PORT_CONDITION("DSW1",0x0004,PORTCOND_NOTEQUALS,0x0000)
-	PORT_DIPSETTING(      0x0000, "Multi Player Off" )			PORT_CONDITION("DSW1",0x0004,PORTCOND_NOTEQUALS,0x0000)
-	PORT_DIPUNUSED_DIPLOC( 0x0010, 0x0010, "SW2:5" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x0020, 0x0020, "SW2:6" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x0040, 0x0040, "SW2:7" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x0080, 0x0080, "SW2:8" )		/* Listed as "Unused" */
+	PORT_DIPNAME( 0x0008, 0x0008, "Multi Player" )
+	PORT_DIPSETTING(      0x0008, "Type 1" )
+	PORT_DIPSETTING(      0x0000, "Type 2" )
+	PORT_DIPNAME( 0x0010, 0x0010, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0020, 0x0020, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
 	PORT_START("DSW2")
-	PORT_SERVICE_DIPLOC(  0x0100, IP_ACTIVE_LOW, "SW3:1" )
-	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Flip_Screen ) )		PORT_DIPLOCATION("SW3:2")
+	PORT_SERVICE( 0x0100, IP_ACTIVE_LOW )
+	PORT_DIPNAME( 0x0200, 0x0200, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(      0x0200, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Demo_Sounds ) )		PORT_DIPLOCATION("SW3:3")
+	PORT_DIPNAME( 0x0400, 0x0000, DEF_STR( Demo_Sounds ) )
 	PORT_DIPSETTING(      0x0400, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPUNUSED_DIPLOC( 0x0800, 0x0800, "SW3:4" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x1000, 0x1000, "SW3:5" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x2000, 0x2000, "SW3:6" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x4000, 0x4000, "SW3:7" )		/* Listed as "Unused" */
-	PORT_DIPUNUSED_DIPLOC( 0x8000, 0x8000, "SW3:8" )		/* Listed as "Unused" */
+	PORT_DIPNAME( 0x0800, 0x0800, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x0800, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1000, 0x1000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x2000, 0x2000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x4000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(      0x8000, DEF_STR( Off ) )
+	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 
 	PORT_START("DSW3")
-	PORT_DIPNAME( 0x001f, 0x0010, DEF_STR( Region ) )			/* Jumpers?? */
+	PORT_DIPNAME( 0x001f, 0x0010, "Country" )
 	PORT_DIPSETTING(      0x0010, DEF_STR( World ) )
 	PORT_DIPSETTING(      0x0001, "USA & Canada" )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Japan ) )
-	PORT_DIPSETTING(      0x0002, DEF_STR( Korea ) )
-	PORT_DIPSETTING(      0x0004, DEF_STR( Hong_Kong ) )
-	PORT_DIPSETTING(      0x0008, DEF_STR( Taiwan ) )
+	PORT_DIPSETTING(      0x0002, "Korea" )
+	PORT_DIPSETTING(      0x0004, "Hong Kong" )
+	PORT_DIPSETTING(      0x0008, "Taiwan" )
 	/* all other values are invalid */
 INPUT_PORTS_END
 
@@ -321,7 +335,7 @@ static INPUT_PORTS_START( f1gp2 )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 )
 
 	PORT_MODIFY("DSW3")
-	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Region ) )
+	PORT_DIPNAME( 0x0001, 0x0001, "Country" )
 	PORT_DIPSETTING(      0x0001, DEF_STR( World ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( Japan ) )
 	PORT_DIPUNUSED( 0x001e, 0x001e )
@@ -396,10 +410,9 @@ GFXDECODE_END
 
 
 
-static void irqhandler( device_t *device, int irq )
+static void irqhandler(const device_config *device, int irq)
 {
-	f1gp_state *state = device->machine().driver_data<f1gp_state>();
-	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -407,154 +420,102 @@ static const ym2610_interface ym2610_config =
 	irqhandler
 };
 
-static const k053936_interface f1gp_k053936_intf =
-{
-	1, -58, -2	/* wrap, xoff, yoff */
-};
-
-static const k053936_interface f1gp2_k053936_intf =
-{
-	1, -48, -21	/* wrap, xoff, yoff */
-};
 
 
-static MACHINE_START( f1gpb )
-{
-	f1gp_state *state = machine.driver_data<f1gp_state>();
-
-	state->save_item(NAME(state->m_pending_command));
-	state->save_item(NAME(state->m_roz_bank));
-	state->save_item(NAME(state->m_flipscreen));
-	state->save_item(NAME(state->m_gfxctrl));
-	state->save_item(NAME(state->m_scroll));
-}
-
-static MACHINE_START( f1gp )
-{
-	f1gp_state *state = machine.driver_data<f1gp_state>();
-	UINT8 *ROM = machine.region("audiocpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x8000);
-
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_k053936 = machine.device("k053936");
-
-	MACHINE_START_CALL(f1gpb);
-}
-
-static MACHINE_RESET( f1gp )
-{
-	f1gp_state *state = machine.driver_data<f1gp_state>();
-
-	state->m_pending_command = 0;
-	state->m_roz_bank = 0;
-	state->m_flipscreen = 0;
-	state->m_gfxctrl = 0;
-	state->m_scroll[0] = 0;
-	state->m_scroll[1] = 0;
-}
-
-static MACHINE_CONFIG_START( f1gp, f1gp_state )
+static MACHINE_DRIVER_START( f1gp )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",M68000,XTAL_20MHz/2)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(f1gp_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("maincpu",M68000,XTAL_20MHz/2)	/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(f1gp_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("sub", M68000,XTAL_20MHz/2)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(f1gp_cpu2_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("sub", M68000,XTAL_20MHz/2)	/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(f1gp_cpu2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,XTAL_20MHz/4)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,XTAL_20MHz/4)	/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
-
-	MCFG_MACHINE_START(f1gp)
-	MCFG_MACHINE_RESET(f1gp)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(f1gp)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
 
-	MCFG_GFXDECODE(f1gp)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(f1gp)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(f1gp)
-
-	MCFG_K053936_ADD("k053936", f1gp_k053936_intf)
+	MDRV_VIDEO_START(f1gp)
+	MDRV_VIDEO_UPDATE(f1gp)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2610, XTAL_8MHz)
-	MCFG_SOUND_CONFIG(ym2610_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.25)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.25)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2610, XTAL_8MHz)
+	MDRV_SOUND_CONFIG(ym2610_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( f1gpb, f1gp_state )
+static MACHINE_DRIVER_START( f1gpb )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",M68000,10000000)	/* 10 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(f1gpb_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("maincpu",M68000,10000000)	/* 10 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(f1gpb_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("sub", M68000,10000000)	/* 10 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(f1gpb_cpu2_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+	MDRV_CPU_ADD("sub", M68000,10000000)	/* 10 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(f1gpb_cpu2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
 	/* NO sound CPU */
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000)) /* 100 CPU slices per frame */
-
-	MCFG_MACHINE_START(f1gpb)
-	MCFG_MACHINE_RESET(f1gp)
+	MDRV_QUANTUM_TIME(HZ(6000)) /* 100 CPU slices per frame */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(64*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(f1gpb)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 1*8, 31*8-1)
 
-	MCFG_GFXDECODE(f1gp)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(f1gp)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(f1gpb)
+	MDRV_VIDEO_START(f1gpb)
+	MDRV_VIDEO_UPDATE(f1gpb)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( f1gp2, f1gp )
+static MACHINE_DRIVER_START( f1gp2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(f1gp2_cpu1_map)
+	MDRV_IMPORT_FROM(f1gp)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(f1gp2_cpu1_map)
 
 	/* video hardware */
-	MCFG_GFXDECODE(f1gp2)
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(f1gp2)
+	MDRV_GFXDECODE(f1gp2)
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MCFG_DEVICE_REMOVE("k053936")
-	MCFG_K053936_ADD("k053936", f1gp2_k053936_intf)
-
-	MCFG_VIDEO_START(f1gp2)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(f1gp2)
+	MDRV_VIDEO_UPDATE(f1gp2)
+MACHINE_DRIVER_END
 
 
 
@@ -599,10 +560,10 @@ ROM_START( f1gp )
 	ROM_REGION( 0x40000, "gfx4", ROMREGION_ERASE00 )	/* gfx data for the 053936 */
 	/* RAM, not ROM - handled at run time */
 
-	ROM_REGION( 0x100000, "ymsnd.deltat", 0 ) /* sound samples */
+	ROM_REGION( 0x100000, "ym.deltat", 0 ) /* sound samples */
 	ROM_LOAD( "rom14-a.09",   0x000000, 0x100000, CRC(b4c1ac31) SHA1(acab2e1b5ce4ca3a5c4734562481b54db4b46995) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 ) /* sound samples */
+	ROM_REGION( 0x100000, "ym", 0 ) /* sound samples */
 	ROM_LOAD( "rom17-a.08",   0x000000, 0x100000, CRC(ea70303d) SHA1(8de1a0e6d47cd80a622663c1745a1da54cd0ea05) )
 ROM_END
 
@@ -695,15 +656,16 @@ ROM_START( f1gp2 )
 	ROM_LOAD( "rom9",         0x200000, 0x100000, CRC(1bede8a1) SHA1(325ecc3afb30d281c2c8a56719e83e4dc20545bb) )
 	ROM_LOAD( "rom8",         0x300000, 0x100000, CRC(98baf2a1) SHA1(df7bd1a743ad0a6e067641e2b7a352c466875ef6) )
 
-	ROM_REGION( 0x080000, "ymsnd.deltat", 0 ) /* sound samples */
+	ROM_REGION( 0x080000, "ym.deltat", 0 ) /* sound samples */
 	ROM_LOAD( "rom4",         0x000000, 0x080000, CRC(c2d3d7ad) SHA1(3178096741583cfef1ca8f53e6efa0a59e1d5cb6) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 ) /* sound samples */
+	ROM_REGION( 0x100000, "ym", 0 ) /* sound samples */
 	ROM_LOAD( "rom3",         0x000000, 0x100000, CRC(7f8f066f) SHA1(5e051d5feb327ac818e9c7f7ac721dada3a102b6) )
 ROM_END
 
 
-GAME( 1991, f1gp,  0,    f1gp,  f1gp,  0, ROT90, "Video System Co.", "F-1 Grand Prix", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1991, f1gpb, f1gp, f1gpb, f1gp,  0, ROT90, "bootleg (Playmark)", "F-1 Grand Prix (Playmark bootleg)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE ) // PCB marked 'Super Formula II', manufactured by Playmark.
+GAME( 1991, f1gp,  0,    f1gp,  f1gp,  0, ROT90, "Video System Co.", "F-1 Grand Prix",         GAME_NO_COCKTAIL )
+GAME( 1991, f1gpb, f1gp, f1gpb, f1gp,  0, ROT90, "[Video System Co.] (Playmark bootleg)", "F-1 Grand Prix (Playmark bootleg)", GAME_NOT_WORKING ) // PCB marked 'Super Formula II', manufactured by Playmark.
 
-GAME( 1992, f1gp2, 0,    f1gp2, f1gp2, 0, ROT90, "Video System Co.", "F-1 Grand Prix Part II", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1992, f1gp2, 0,    f1gp2, f1gp2, 0, ROT90, "Video System Co.", "F-1 Grand Prix Part II", GAME_NO_COCKTAIL )
+

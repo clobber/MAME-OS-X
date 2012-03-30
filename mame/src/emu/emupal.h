@@ -72,7 +72,7 @@
     Shadows(Highlights) Quick Reference
     -----------------------------------
 
-    1) declare MCFG_VIDEO_ATTRIBUTES( ... VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS ... )
+    1) declare MDRV_VIDEO_ATTRIBUTES( ... VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS ... )
 
     2) make a pen table fill with DRAWMODE_NONE, DRAWMODE_SOURCE or DRAWMODE_SHADOW
 
@@ -91,12 +91,12 @@
 
 #pragma once
 
-#ifndef __EMU_H__
-#error Dont include this file directly; include emu.h instead.
-#endif
-
 #ifndef __EMUPAL_H__
 #define __EMUPAL_H__
+
+#include "palette.h"
+#include "memory.h"
+#include "tilemap.h"
 
 
 /***************************************************************************
@@ -112,7 +112,7 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-class colortable_t;
+typedef struct _colortable_t colortable_t;
 
 
 
@@ -124,34 +124,34 @@ class colortable_t;
 /* ----- initialization and configuration ----- */
 
 /* palette initialization that takes place before the display is created */
-void palette_init(running_machine &machine);
+void palette_init(running_machine *machine);
 
 
 
 /* ----- shadow/hilight configuration ----- */
 
 /* set the global shadow brightness factor */
-void palette_set_shadow_factor(running_machine &machine, double factor);
+void palette_set_shadow_factor(running_machine *machine, double factor);
 
 /* set the global highlight brightness factor */
-void palette_set_highlight_factor(running_machine &machine, double factor);
+void palette_set_highlight_factor(running_machine *machine, double factor);
 
 
 
 /* ----- shadow table configuration ----- */
 
 /* select 1 of 4 different live shadow tables */
-void palette_set_shadow_mode(running_machine &machine, int mode);
+void palette_set_shadow_mode(running_machine *machine, int mode);
 
 /* configure delta RGB values for 1 of 4 shadow tables */
-void palette_set_shadow_dRGB32(running_machine &machine, int mode, int dr, int dg, int db, int noclip);
+void palette_set_shadow_dRGB32(running_machine *machine, int mode, int dr, int dg, int db, int noclip);
 
 
 
 /* ----- colortable management ----- */
 
 /* allocate a new colortable with the given number of entries */
-colortable_t *colortable_alloc(running_machine &machine, UINT32 palettesize);
+colortable_t *colortable_alloc(running_machine *machine, UINT32 palettesize);
 
 /* set the value of a colortable entry */
 void colortable_entry_set_value(colortable_t *ctable, UINT32 entry, UINT16 value);
@@ -169,7 +169,7 @@ rgb_t colortable_palette_get_color(colortable_t *ctable, UINT32 entry);
 UINT32 colortable_get_transpen_mask(colortable_t *ctable, const gfx_element *gfx, int color, int transcolor);
 
 /* configure groups in a tilemap to represent transparency based on colortable entries (each group maps to a gfx color) */
-void colortable_configure_tilemap_groups(colortable_t *ctable, tilemap_t *tmap, const gfx_element *gfx, int transcolor);
+void colortable_configure_tilemap_groups(colortable_t *ctable, tilemap *tmap, const gfx_element *gfx, int transcolor);
 
 /* return the number of entries in a colortable */
 UINT32 colortable_palette_get_size(colortable_t *ctable);
@@ -179,10 +179,10 @@ UINT32 colortable_palette_get_size(colortable_t *ctable);
 /* ----- utilities ----- */
 
 /* return the pen for a fixed black color */
-pen_t get_black_pen(running_machine &machine);
+pen_t get_black_pen(running_machine *machine);
 
 /* return the pen for a fixed white color */
-pen_t get_white_pen(running_machine &machine);
+pen_t get_white_pen(running_machine *machine);
 
 
 
@@ -196,9 +196,9 @@ pen_t get_white_pen(running_machine &machine);
     entry
 -------------------------------------------------*/
 
-INLINE void palette_set_color(running_machine &machine, pen_t pen, rgb_t rgb)
+INLINE void palette_set_color(running_machine *machine, pen_t pen, rgb_t rgb)
 {
-	palette_entry_set_color(machine.palette, pen, rgb);
+	palette_entry_set_color(machine->palette, pen, rgb);
 }
 
 
@@ -207,9 +207,9 @@ INLINE void palette_set_color(running_machine &machine, pen_t pen, rgb_t rgb)
     entry with individual R,G,B components
 -------------------------------------------------*/
 
-INLINE void palette_set_color_rgb(running_machine &machine, pen_t pen, UINT8 r, UINT8 g, UINT8 b)
+INLINE void palette_set_color_rgb(running_machine *machine, pen_t pen, UINT8 r, UINT8 g, UINT8 b)
 {
-	palette_entry_set_color(machine.palette, pen, MAKE_RGB(r, g, b));
+	palette_entry_set_color(machine->palette, pen, MAKE_RGB(r, g, b));
 }
 
 
@@ -218,9 +218,9 @@ INLINE void palette_set_color_rgb(running_machine &machine, pen_t pen, UINT8 r, 
     entry
 -------------------------------------------------*/
 
-INLINE rgb_t palette_get_color(running_machine &machine, pen_t pen)
+INLINE rgb_t palette_get_color(running_machine *machine, pen_t pen)
 {
-	return palette_entry_get_color(machine.palette, pen);
+	return palette_entry_get_color(machine->palette, pen);
 }
 
 
@@ -229,9 +229,9 @@ INLINE rgb_t palette_get_color(running_machine &machine, pen_t pen)
     contrast factor
 -------------------------------------------------*/
 
-INLINE void palette_set_pen_contrast(running_machine &machine, pen_t pen, double bright)
+INLINE void palette_set_pen_contrast(running_machine *machine, pen_t pen, double bright)
 {
-	palette_entry_set_contrast(machine.palette, pen, bright);
+	palette_entry_set_contrast(machine->palette, pen, bright);
 }
 
 
@@ -240,10 +240,10 @@ INLINE void palette_set_pen_contrast(running_machine &machine, pen_t pen, double
     entries from an array of rgb_t values
 -------------------------------------------------*/
 
-INLINE void palette_set_colors(running_machine &machine, pen_t color_base, const rgb_t *colors, int color_count)
+INLINE void palette_set_colors(running_machine *machine, pen_t color_base, const rgb_t *colors, int color_count)
 {
 	while (color_count--)
-		palette_entry_set_color(machine.palette, color_base++, *colors++);
+		palette_entry_set_color(machine->palette, color_base++, *colors++);
 }
 
 

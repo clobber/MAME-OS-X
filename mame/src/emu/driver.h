@@ -2,49 +2,129 @@
 
     driver.h
 
-    Driver enumeration helpers.
+    Include this with all MAME files. Includes all the core system pieces.
 
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
+    Copyright Nicola Salmoria and the MAME Team.
+    Visit http://mamedev.org for licensing and usage restrictions.
 
 ***************************************************************************/
 
 #pragma once
 
-#ifndef __EMU_H__
-#error Dont include this file directly; include emu.h instead.
-#endif
-
 #ifndef __DRIVER_H__
 #define __DRIVER_H__
+
+
+/***************************************************************************
+    MACROS (must be *before* the includes below)
+***************************************************************************/
+
+#include "devintrf.h"
+
+#define DRIVER_INIT_NAME(name)		driver_init_##name
+#define DRIVER_INIT(name)			void DRIVER_INIT_NAME(name)(running_machine *machine)
+#define DRIVER_INIT_CALL(name)		DRIVER_INIT_NAME(name)(machine)
+
+#define NVRAM_HANDLER_NAME(name)	nvram_handler_##name
+#define NVRAM_HANDLER(name)			void NVRAM_HANDLER_NAME(name)(running_machine *machine, mame_file *file, int read_or_write)
+#define NVRAM_HANDLER_CALL(name)	NVRAM_HANDLER_NAME(name)(machine, file, read_or_write)
+
+#define MEMCARD_HANDLER_NAME(name)	memcard_handler_##name
+#define MEMCARD_HANDLER(name)		void MEMCARD_HANDLER_NAME(name)(running_machine *machine, mame_file *file, int action)
+#define MEMCARD_HANDLER_CALL(name)	MEMCARD_HANDLER_NAME(name)(machine, file, action)
+
+#define MACHINE_START_NAME(name)	machine_start_##name
+#define MACHINE_START(name)			void MACHINE_START_NAME(name)(running_machine *machine)
+#define MACHINE_START_CALL(name)	MACHINE_START_NAME(name)(machine)
+
+#define MACHINE_RESET_NAME(name)	machine_reset_##name
+#define MACHINE_RESET(name)			void MACHINE_RESET_NAME(name)(running_machine *machine)
+#define MACHINE_RESET_CALL(name)	MACHINE_RESET_NAME(name)(machine)
+
+#define SOUND_START_NAME(name)		sound_start_##name
+#define SOUND_START(name)			void SOUND_START_NAME(name)(running_machine *machine)
+#define SOUND_START_CALL(name)		SOUND_START_NAME(name)(machine)
+
+#define SOUND_RESET_NAME(name)		sound_reset_##name
+#define SOUND_RESET(name)			void SOUND_RESET_NAME(name)(running_machine *machine)
+#define SOUND_RESET_CALL(name)		SOUND_RESET_NAME(name)(machine)
+
+#define VIDEO_START_NAME(name)		video_start_##name
+#define VIDEO_START(name)			void VIDEO_START_NAME(name)(running_machine *machine)
+#define VIDEO_START_CALL(name)		VIDEO_START_NAME(name)(machine)
+
+#define VIDEO_RESET_NAME(name)		video_reset_##name
+#define VIDEO_RESET(name)			void VIDEO_RESET_NAME(name)(running_machine *machine)
+#define VIDEO_RESET_CALL(name)		VIDEO_RESET_NAME(name)(machine)
+
+#define PALETTE_INIT_NAME(name)		palette_init_##name
+#define PALETTE_INIT(name)			void PALETTE_INIT_NAME(name)(running_machine *machine, const UINT8 *color_prom)
+#define PALETTE_INIT_CALL(name)		PALETTE_INIT_NAME(name)(machine, color_prom)
+
+#define VIDEO_EOF_NAME(name)		video_eof_##name
+#define VIDEO_EOF(name)				void VIDEO_EOF_NAME(name)(running_machine *machine)
+#define VIDEO_EOF_CALL(name)		VIDEO_EOF_NAME(name)(machine)
+
+#define VIDEO_UPDATE_NAME(name)		video_update_##name
+#define VIDEO_UPDATE(name)			UINT32 VIDEO_UPDATE_NAME(name)(const device_config *screen, bitmap_t *bitmap, const rectangle *cliprect)
+#define VIDEO_UPDATE_CALL(name)		VIDEO_UPDATE_NAME(name)(screen, bitmap, cliprect)
+
+
+/* NULL versions */
+#define driver_init_0				NULL
+#define nvram_handler_0 			NULL
+#define memcard_handler_0			NULL
+#define machine_start_0 			NULL
+#define machine_reset_0 			NULL
+#define sound_start_0 				NULL
+#define sound_reset_0 				NULL
+#define video_start_0 				NULL
+#define video_reset_0 				NULL
+#define palette_init_0				NULL
+#define video_eof_0 				NULL
+#define video_update_0 				NULL
+
+
+typedef void   (*driver_init_func)(running_machine *machine);
+typedef void   (*nvram_handler_func)(running_machine *machine, mame_file *file, int read_or_write);
+typedef void   (*memcard_handler_func)(running_machine *machine, mame_file *file, int action);
+typedef void   (*machine_start_func)(running_machine *machine);
+typedef void   (*machine_reset_func)(running_machine *machine);
+typedef void   (*sound_start_func)(running_machine *machine);
+typedef void   (*sound_reset_func)(running_machine *machine);
+typedef void   (*video_start_func)(running_machine *machine);
+typedef void   (*video_reset_func)(running_machine *machine);
+typedef void   (*palette_init_func)(running_machine *machine, const UINT8 *color_prom);
+typedef void   (*video_eof_func)(running_machine *machine);
+typedef UINT32 (*video_update_func)(const device_config *screen, bitmap_t *bitmap, const rectangle *cliprect);
+
+
+
+/***************************************************************************
+    INCLUDES
+***************************************************************************/
+
+#include "cpuintrf.h"
+#include "sndintrf.h"
+#include "fileio.h"
+#include "drawgfx.h"
+#include "emupal.h"
+#include "sound.h"
+#include "input.h"
+#include "inptport.h"
+#include "output.h"
+#include "tilemap.h"
+#include "romload.h"
+#include "mconfig.h"
+#include "drivers/xtal.h"
+#include "machine/generic.h"
+#include "audio/generic.h"
+#include "video/generic.h"
+
+#ifdef MESS
+#include "messdrv.h"
+#endif
+
 
 
 /***************************************************************************
@@ -71,15 +151,14 @@
 #define GAME_IS_BIOS_ROOT				0x00001000	/* this driver entry is a BIOS root */
 #define GAME_NO_STANDALONE				0x00002000	/* this driver cannot stand alone */
 #define GAME_REQUIRES_ARTWORK			0x00004000	/* the driver requires external artwork for key elements of the game */
-#define GAME_UNOFFICIAL     			0x00008000	/* unofficial hardware change */
-#define GAME_NO_SOUND_HW				0x00010000	/* sound hardware not available */
-#define GAME_MECHANICAL					0x00020000	/* contains mechanical parts (pinball, redemption games,...) */
-#define GAME_IS_SKELETON				0x00000208	/* mask for skelly games */
-#define GAME_IS_SKELETON_MECHANICAL		0x00024208	/* mask for skelly mechanical games */
-#define GAME_TYPE_ARCADE				0x00040000	/* arcade machine (coin operated machines) */
-#define GAME_TYPE_CONSOLE				0x00080000	/* console system */
-#define GAME_TYPE_COMPUTER				0x00100000	/* any kind of computer including home computers, minis, calcs,... */
-#define GAME_TYPE_OTHER					0x00200000	/* any other emulated system that doesn't fit above (ex. clock, satelite receiver,...) */
+
+
+#ifdef MESS
+#define GAME_COMPUTER_MODIFIED      	0x00008000	/* Official? Hack */
+#define GAME_COMPUTER               	0x00010000  /* Driver is a computer (needs full keyboard) */
+#endif
+
+
 
 /* ----- flags to return from video_update ----- */
 #define UPDATE_HAS_NOT_CHANGED			0x0001	/* the video has not changed */
@@ -90,10 +169,8 @@
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef void   (*driver_init_func)(running_machine &machine);
-
-
-struct game_driver
+/* In mamecore.h: typedef struct _game_driver game_driver; */
+struct _game_driver
 {
 	const char *		source_file;				/* set this to __FILE__ */
 	const char *		parent;						/* if this is a clone, the name of the parent */
@@ -101,141 +178,18 @@ struct game_driver
 	const char *		description;				/* full name of the game */
 	const char *		year;						/* year the game was released */
 	const char *		manufacturer;				/* manufacturer of the game */
-	machine_config_constructor machine_config;		/* machine driver tokens */
-	ioport_constructor	ipt;					/* pointer to array of input port tokens */
-	void				(*driver_init)(running_machine &machine); /* DRIVER_INIT callback */
+	const machine_config_token *machine_config;		/* machine driver tokens */
+	const input_port_token *ipt;					/* pointer to array of input port tokens */
+	void				(*driver_init)(running_machine *machine); /* DRIVER_INIT callback */
 	const rom_entry *	rom;						/* pointer to list of ROMs for the game */
+
+#ifdef MESS
+	void (*sysconfig_ctor)(struct SystemConfigurationParamBlock *cfg);
 	const char *		compatible_with;
+#endif
+
 	UINT32				flags;						/* orientation and other flags; see defines below */
 	const char *		default_layout;				/* default internally defined layout */
-};
-
-
-// driver_list is a purely static class that wraps the global driver list
-class driver_list
-{
-	DISABLE_COPYING(driver_list);
-
-protected:
-	// construction/destruction
-	driver_list();
-
-public:
-	// getters
-	static int total() { return s_driver_count; }
-
-	// any item by index
-	static const game_driver &driver(int index) { assert(index >= 0 && index < s_driver_count); return *s_drivers_sorted[index]; }
-	static int clone(int index) { return find(driver(index).parent); }
-	static int non_bios_clone(int index) { int result = find(driver(index).parent); return (result != -1 && (driver(result).flags & GAME_IS_BIOS_ROOT) == 0) ? result : -1; }
-	static int compatible_with(int index) { return find(driver(index).compatible_with); }
-
-	// any item by driver
-	static int clone(const game_driver &driver) { int index = find(driver); assert(index != -1); return clone(index); }
-	static int non_bios_clone(const game_driver &driver) { int index = find(driver); assert(index != -1); return non_bios_clone(index); }
-	static int compatible_with(const game_driver &driver) { int index = find(driver); assert(index != -1); return compatible_with(index); }
-
-	// general helpers
-	static int find(const char *name);
-	static int find(const game_driver &driver) { return find(driver.name); }
-
-	// static helpers
-	static bool matches(const char *wildstring, const char *string);
-
-protected:
-	// internal helpers
-	static int driver_sort_callback(const void *elem1, const void *elem2);
-	static int penalty_compare(const char *source, const char *target);
-
-	// internal state
-	static int							s_driver_count;
-	static const game_driver * const	s_drivers_sorted[];
-};
-
-
-// driver_enumerator enables efficient iteration through the driver list
-class driver_enumerator : public driver_list
-{
-	DISABLE_COPYING(driver_enumerator);
-
-public:
-	// construction/destruction
-	driver_enumerator(emu_options &options);
-	driver_enumerator(emu_options &options, const char *filter);
-	driver_enumerator(emu_options &options, const game_driver &filter);
-	~driver_enumerator();
-
-	// getters
-	int count() const { return m_filtered_count; }
-	int current() const { return m_current; }
-	emu_options &options() const { return m_options; }
-
-	// current item
-	const game_driver &driver() const { return driver_list::driver(m_current); }
-	machine_config &config() const { return config(m_current, m_options); }
-	int clone() { return driver_list::clone(m_current); }
-	int non_bios_clone() { return driver_list::non_bios_clone(m_current); }
-	int compatible_with() { return driver_list::compatible_with(m_current); }
-	void include() { include(m_current); }
-	void exclude() { exclude(m_current); }
-
-	// any item by index
-	bool included(int index) const { assert(index >= 0 && index < s_driver_count); return m_included[index]; }
-	bool excluded(int index) const { assert(index >= 0 && index < s_driver_count); return !m_included[index]; }
-	machine_config &config(int index) const { return config(index,m_options); }
-	machine_config &config(int index, emu_options &options) const;
-	void include(int index) { assert(index >= 0 && index < s_driver_count); if (!m_included[index]) { m_included[index] = true; m_filtered_count++; }  }
-	void exclude(int index) { assert(index >= 0 && index < s_driver_count); if (m_included[index]) { m_included[index] = false; m_filtered_count--; } }
-	using driver_list::driver;
-	using driver_list::clone;
-	using driver_list::non_bios_clone;
-	using driver_list::compatible_with;
-
-	// filtering/iterating
-	int filter(const char *string = NULL);
-	int filter(const game_driver &driver);
-	void include_all();
-	void exclude_all() { memset(m_included, 0, sizeof(m_included[0]) * s_driver_count); m_filtered_count = 0; }
-	void reset() { m_current = -1; }
-	bool next();
-	bool next_excluded();
-
-	// general helpers
-	void set_current(int index) { assert(index >= -1 && index <= s_driver_count); m_current = index; }
-	void find_approximate_matches(const char *string, int count, int *results);
-
-private:
-	// entry in the config cache
-	struct config_entry
-	{
-		friend class simple_list<config_entry>;
-
-	public:
-		// construction/destruction
-		config_entry(machine_config &config, int index);
-		~config_entry();
-
-		// getters
-		config_entry *next() const { return m_next; }
-		int index() const { return m_index; }
-		machine_config *config() const { return m_config; }
-
-	private:
-		// internal state
-		config_entry *		m_next;
-		machine_config *	m_config;
-		int					m_index;
-	};
-
-	static const int CONFIG_CACHE_COUNT = 100;
-
-	// internal state
-	int					m_current;
-	int					m_filtered_count;
-	emu_options &		m_options;
-	UINT8 *				m_included;
-	machine_config **	m_config;
-	mutable simple_list<config_entry> m_config_cache;
 };
 
 
@@ -244,14 +198,6 @@ private:
     MACROS FOR BUILDING GAME DRIVERS
 ***************************************************************************/
 
-
-#define DRIVER_INIT_NAME(name)		driver_init_##name
-#define DRIVER_INIT(name)			void DRIVER_INIT_NAME(name)(running_machine &machine)
-#define DRIVER_INIT_CALL(name)		DRIVER_INIT_NAME(name)(machine)
-
-#define driver_init_0				NULL
-
-
 #define GAME_NAME(name) driver_##name
 #define GAME_EXTERN(name) extern const game_driver GAME_NAME(name)
 
@@ -259,7 +205,7 @@ private:
 	GAMEL(YEAR,NAME,PARENT,MACHINE,INPUT,INIT,MONITOR,COMPANY,FULLNAME,FLAGS,((const char *)0))
 
 #define GAMEL(YEAR,NAME,PARENT,MACHINE,INPUT,INIT,MONITOR,COMPANY,FULLNAME,FLAGS,LAYOUT)	\
-extern const game_driver GAME_NAME(NAME) =	\
+const game_driver GAME_NAME(NAME) =			\
 {											\
 	__FILE__,								\
 	#PARENT,								\
@@ -267,75 +213,35 @@ extern const game_driver GAME_NAME(NAME) =	\
 	FULLNAME,								\
 	#YEAR,									\
 	COMPANY,								\
-	MACHINE_CONFIG_NAME(MACHINE),			\
-	INPUT_PORTS_NAME(INPUT),				\
-	DRIVER_INIT_NAME(INIT),					\
-	ROM_NAME(NAME),							\
-	NULL,									\
-	(MONITOR)|(FLAGS)|GAME_TYPE_ARCADE,		\
+	MACHINE_DRIVER_NAME(MACHINE),				\
+	INPUT_PORTS_NAME(INPUT),							\
+	DRIVER_INIT_NAME(INIT),						\
+	ROM_NAME(NAME),								\
+	(MONITOR)|(FLAGS),						\
 	&LAYOUT[0]								\
 };
 
-#define CONS(YEAR,NAME,PARENT,COMPAT,MACHINE,INPUT,INIT,COMPANY,FULLNAME,FLAGS)	\
-extern const game_driver GAME_NAME(NAME) =	\
-{											\
-	__FILE__,								\
-	#PARENT,								\
-	#NAME,									\
-	FULLNAME,								\
-	#YEAR,									\
-	COMPANY,								\
-	MACHINE_CONFIG_NAME(MACHINE),			\
-	INPUT_PORTS_NAME(INPUT),				\
-	DRIVER_INIT_NAME(INIT),					\
-	ROM_NAME(NAME),							\
-	#COMPAT,								\
-	ROT0|(FLAGS)|GAME_TYPE_CONSOLE,			\
-	NULL									\
-};
 
-#define COMP(YEAR,NAME,PARENT,COMPAT,MACHINE,INPUT,INIT,COMPANY,FULLNAME,FLAGS)	\
-extern const game_driver GAME_NAME(NAME) =	\
-{											\
-	__FILE__,								\
-	#PARENT,								\
-	#NAME,									\
-	FULLNAME,								\
-	#YEAR,									\
-	COMPANY,								\
-	MACHINE_CONFIG_NAME(MACHINE),			\
-	INPUT_PORTS_NAME(INPUT),				\
-	DRIVER_INIT_NAME(INIT),					\
-	ROM_NAME(NAME),							\
-	#COMPAT,								\
-	ROT0|(FLAGS)|GAME_TYPE_COMPUTER,		\
-	NULL									\
-};
-
-#define SYST(YEAR,NAME,PARENT,COMPAT,MACHINE,INPUT,INIT,COMPANY,FULLNAME,FLAGS)	\
-extern const game_driver GAME_NAME(NAME) =	\
-{											\
-	__FILE__,								\
-	#PARENT,								\
-	#NAME,									\
-	FULLNAME,								\
-	#YEAR,									\
-	COMPANY,								\
-	MACHINE_CONFIG_NAME(MACHINE),			\
-	INPUT_PORTS_NAME(INPUT),				\
-	DRIVER_INIT_NAME(INIT),					\
-	ROM_NAME(NAME),							\
-	#COMPAT,								\
-	ROT0|(FLAGS)|GAME_TYPE_OTHER,		\
-	NULL									\
-};
 
 /***************************************************************************
     GLOBAL VARIABLES
 ***************************************************************************/
 
-GAME_EXTERN(___empty);
+extern const game_driver * const drivers[];
+
+GAME_EXTERN(empty);
 
 
 
-#endif
+/***************************************************************************
+    FUNCTION PROTOTYPES
+***************************************************************************/
+
+const game_driver *driver_get_name(const char *name);
+const game_driver *driver_get_clone(const game_driver *driver);
+
+void driver_list_get_approx_matches(const game_driver * const driverlist[], const char *name, int matches, const game_driver **list);
+int driver_list_get_count(const game_driver * const driverlist[]);
+
+
+#endif	/* __DRIVER_H__ */

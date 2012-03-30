@@ -16,21 +16,6 @@
 #define CANYON_ATTRACT2_EN		NODE_07
 
 
-
-class canyon_state : public driver_device
-{
-public:
-	canyon_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT8 *  m_videoram;
-
-	/* video-related */
-	tilemap_t  *m_bg_tilemap;
-};
-
-
 /*----------- defined in audio/canyon.c -----------*/
 
 WRITE8_DEVICE_HANDLER( canyon_motor_w );
@@ -43,7 +28,9 @@ DISCRETE_SOUND_EXTERN( canyon );
 
 /*----------- defined in video/canyon.c -----------*/
 
+extern UINT8* canyon_videoram;
+
 VIDEO_START( canyon );
-SCREEN_UPDATE_IND16( canyon );
+VIDEO_UPDATE( canyon );
 
 WRITE8_HANDLER( canyon_videoram_w );

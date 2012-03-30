@@ -1,35 +1,31 @@
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "machine/6522via.h"
 #include "includes/beezer.h"
 
+static int scanline=0;
 
-TIMER_DEVICE_CALLBACK( beezer_interrupt )
+INTERRUPT_GEN( beezer_interrupt )
 {
-	int scanline = param;
-//  beezer_state *state = timer.machine().driver_data<beezer_state>();
-	via6522_device *via_0 = timer.machine().device<via6522_device>("via6522_0");
+	const device_config *via_0 = devtag_get_device(device->machine, "via6522_0");
 
-	via_0->write_ca2((scanline & 0x20) ? 1 : 0);
-	#if 0
-	if (scanline == 240) // actually unused by the game! (points to a tight loop)
-		device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, ASSERT_LINE);
+	scanline = (scanline + 1) % 0x80;
+	via_ca2_w (via_0, 0, scanline & 0x10);
+	if ((scanline & 0x78) == 0x78)
+		cpu_set_input_line(device, M6809_FIRQ_LINE, ASSERT_LINE);
 	else
-		device_set_input_line(state->m_maincpu, M6809_FIRQ_LINE, CLEAR_LINE);
-	#endif
+		cpu_set_input_line(device, M6809_FIRQ_LINE, CLEAR_LINE);
 }
 
-SCREEN_UPDATE_IND16( beezer )
+VIDEO_UPDATE( beezer )
 {
-	beezer_state *state = screen.machine().driver_data<beezer_state>();
-	UINT8 *videoram = state->m_videoram;
 	int x,y;
 
-	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
-		for (x = cliprect.min_x; x <= cliprect.max_x; x+=2)
+	for (y = cliprect->min_y; y <= cliprect->max_y; y+=2)
+		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
 		{
-			bitmap.pix16(y, x+1) = videoram[0x80*x+y] & 0x0f;
-			bitmap.pix16(y, x+0) = videoram[0x80*x+y] >> 4;
+			*BITMAP_ADDR16(bitmap, y+1, x) = videoram[0x80*y+x] & 0x0f;
+			*BITMAP_ADDR16(bitmap, y,   x) = videoram[0x80*y+x] >> 4;
 		}
 
 	return 0;
@@ -65,12 +61,11 @@ WRITE8_HANDLER( beezer_map_w )
 	bit1 = (data >> 7) & 0x01;
 	b = 0x5f * bit0 + 0xa0 * bit1;
 
-	palette_set_color(space->machine(), offset, MAKE_RGB(r, g, b));
+	palette_set_color(space->machine, offset, MAKE_RGB(r, g, b));
 }
 
 READ8_HANDLER( beezer_line_r )
 {
-	return space->machine().primary_screen->vpos();
-//  Note: was (state->m_scanline & 0xfe) << 1; with scanline % 128
+	return (scanline & 0xfe) << 1;
 }
 

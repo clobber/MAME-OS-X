@@ -4,7 +4,7 @@
    Written by Ville Linde
 */
 
-#include "emu.h"
+#include "cpuintrf.h"
 
 enum
 {
@@ -40,7 +40,8 @@ enum
 	PARAM_ADDR,			/* 16:16 or 16:32 address */
 	PARAM_REL,			/* 16 or 32-bit PC-relative displacement */
 	PARAM_REL8,			/* 8-bit PC-relative displacement */
-	PARAM_MEM_OFFS,		/* 16 or 32-bit mem offset */
+	PARAM_MEM_OFFS_B,	/* 8-bit mem offset */
+	PARAM_MEM_OFFS_V,	/* 16 or 32-bit mem offset */
 	PARAM_SREG,			/* segment register */
 	PARAM_CREG,			/* control register */
 	PARAM_DREG,			/* debug register */
@@ -88,7 +89,7 @@ enum
 #define VAR_NAME4			0x200
 #define ALWAYS64			0x400
 #define SPECIAL64			0x800
-#define SPECIAL64_ENT(x)	(SPECIAL64 | ((x) << 24))
+#define SPECIAL64_ENT(x) 	(SPECIAL64 | ((x) << 24))
 
 typedef struct {
 	const char *mnemonic;
@@ -280,10 +281,10 @@ static const I386_OPCODE i386_opcode_table1[256] =
 	{"sahf",			0,				0,					0,					0				},
 	{"lahf",			0,				0,					0,					0				},
 	// 0xa0
-	{"mov",				0,				PARAM_AL,			PARAM_MEM_OFFS,		0				},
-	{"mov",				0,				PARAM_EAX,			PARAM_MEM_OFFS,		0				},
-	{"mov",				0,				PARAM_MEM_OFFS,		PARAM_AL,			0				},
-	{"mov",				0,				PARAM_MEM_OFFS,		PARAM_EAX,			0				},
+	{"mov",				0,				PARAM_AL,			PARAM_MEM_OFFS_V,	0				},
+	{"mov",				0,				PARAM_EAX,			PARAM_MEM_OFFS_V,	0				},
+	{"mov",				0,				PARAM_MEM_OFFS_V,	PARAM_AL,			0				},
+	{"mov",				0,				PARAM_MEM_OFFS_V,	PARAM_EAX,			0				},
 	{"movsb",			0,				0,					0,					0				},
 	{"movsw\0movsd\0movsq",VAR_NAME,	0,					0,					0				},
 	{"cmpsb",			0,				0,					0,					0				},
@@ -1092,9 +1093,6 @@ static const char *const i386_sreg[8] = {"es", "cs", "ss", "ds", "fs", "gs", "??
 
 static int address_size;
 static int operand_size;
-static int address_prefix;
-static int operand_prefix;
-static int max_length;
 static UINT64 pc;
 static UINT8 modrm;
 static UINT32 segment;
@@ -1109,7 +1107,7 @@ static UINT8 curmode;
 
 INLINE UINT8 FETCH(void)
 {
-	if ((opcode_ptr - opcode_ptr_base) + 1 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 1 > 15)
 		return 0xff;
 	pc++;
 	return *opcode_ptr++;
@@ -1118,7 +1116,7 @@ INLINE UINT8 FETCH(void)
 INLINE UINT16 FETCH16(void)
 {
 	UINT16 d;
-	if ((opcode_ptr - opcode_ptr_base) + 2 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 2 > 15)
 		return 0xffff;
 	d = opcode_ptr[0] | (opcode_ptr[1] << 8);
 	opcode_ptr += 2;
@@ -1129,7 +1127,7 @@ INLINE UINT16 FETCH16(void)
 INLINE UINT32 FETCH32(void)
 {
 	UINT32 d;
-	if ((opcode_ptr - opcode_ptr_base) + 4 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 4 > 15)
 		return 0xffffffff;
 	d = opcode_ptr[0] | (opcode_ptr[1] << 8) | (opcode_ptr[2] << 16) | (opcode_ptr[3] << 24);
 	opcode_ptr += 4;
@@ -1139,7 +1137,7 @@ INLINE UINT32 FETCH32(void)
 
 INLINE UINT8 FETCHD(void)
 {
-	if ((opcode_ptr - opcode_ptr_base) + 1 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 1 > 15)
 		return 0xff;
 	pc++;
 	return *opcode_ptr++;
@@ -1148,7 +1146,7 @@ INLINE UINT8 FETCHD(void)
 INLINE UINT16 FETCHD16(void)
 {
 	UINT16 d;
-	if ((opcode_ptr - opcode_ptr_base) + 2 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 2 > 15)
 		return 0xffff;
 	d = opcode_ptr[0] | (opcode_ptr[1] << 8);
 	opcode_ptr += 2;
@@ -1159,7 +1157,7 @@ INLINE UINT16 FETCHD16(void)
 INLINE UINT32 FETCHD32(void)
 {
 	UINT32 d;
-	if ((opcode_ptr - opcode_ptr_base) + 4 > max_length)
+	if ((opcode_ptr - opcode_ptr_base) + 4 > 15)
 		return 0xffffffff;
 	d = opcode_ptr[0] | (opcode_ptr[1] << 8) | (opcode_ptr[2] << 16) | (opcode_ptr[3] << 24);
 	opcode_ptr += 4;
@@ -1300,8 +1298,8 @@ static void handle_modrm(char* s)
 		{
 			case 0: s += sprintf( s, "bx+si" ); break;
 			case 1: s += sprintf( s, "bx+di" ); break;
-			case 2: s += sprintf( s, "bp+si" ); break;
-			case 3: s += sprintf( s, "bp+di" ); break;
+			case 2: s += sprintf( s, "bx+si" ); break;
+			case 3: s += sprintf( s, "bx+di" ); break;
 			case 4: s += sprintf( s, "si" ); break;
 			case 5: s += sprintf( s, "di" ); break;
 			case 6:
@@ -1555,23 +1553,18 @@ static char* handle_param(char* s, UINT32 param)
 			s += sprintf( s, "%s", hexstringpc(pc + d8) );
 			break;
 
-		case PARAM_MEM_OFFS:
-			switch(segment)
-			{
-				case SEG_CS: s += sprintf( s, "cs:" ); break;
-				case SEG_DS: s += sprintf( s, "ds:" ); break;
-				case SEG_ES: s += sprintf( s, "es:" ); break;
-				case SEG_FS: s += sprintf( s, "fs:" ); break;
-				case SEG_GS: s += sprintf( s, "gs:" ); break;
-				case SEG_SS: s += sprintf( s, "ss:" ); break;
-			}
+		case PARAM_MEM_OFFS_B:
+			d8 = FETCHD();
+			s += sprintf( s, "[%s]", hexstring(d8, 0) );
+			break;
 
+		case PARAM_MEM_OFFS_V:
 			if( address_size ) {
-				i32 = FETCHD32();
-				s += sprintf( s, "[%s]", hexstring(i32, 0) );
+				d32 = FETCHD32();
+				s += sprintf( s, "[%s]", hexstring(d32, 0) );
 			} else {
-				i16 = FETCHD16();
-				s += sprintf( s, "[%s]", hexstring(i16, 0) );
+				d32 = FETCHD16();
+				s += sprintf( s, "[%s]", hexstring(d32, 0) );
 			}
 			break;
 
@@ -1585,10 +1578,6 @@ static char* handle_param(char* s, UINT32 param)
 
 		case PARAM_TREG:
 			s += sprintf( s, "tr%d", MODRM_REG1 | regex );
-			break;
-
-		case PARAM_DREG:
-			s += sprintf( s, "dr%d", MODRM_REG1 | regex );
 			break;
 
 		case PARAM_1:
@@ -2002,7 +1991,7 @@ static void decode_opcode(char *s, const I386_OPCODE *op, UINT8 op1)
 	int i;
 	UINT8 op2;
 
-	if ((op->flags & SPECIAL64) && (address_size == 2))
+	if (op->flags & SPECIAL64)
 		op = &x64_opcode_alt[op->flags >> 24];
 
 	switch( op->flags & FLAGS_MASK )
@@ -2023,25 +2012,18 @@ static void decode_opcode(char *s, const I386_OPCODE *op, UINT8 op1)
 
 		case OP_SIZE:
 			rex = regex = sibex = rmex = 0;
-			if (operand_size < 2 && operand_prefix == 0)
-			{
+			if (operand_size < 2)
 				operand_size ^= 1;
-				operand_prefix = 1;
-			}
 			op2 = FETCH();
 			decode_opcode( s, &i386_opcode_table1[op2], op2 );
 			return;
 
 		case ADDR_SIZE:
 			rex = regex = sibex = rmex = 0;
-			if(address_prefix == 0)
-			{
-				if (curmode != 64)
-					address_size ^= 1;
-				else
-					address_size ^= 3;
-				address_prefix = 1;
-			}
+			if (curmode != 64)
+				address_size ^= 1;
+			else
+				address_size ^= 3;
 			op2 = FETCH();
 			decode_opcode( s, &i386_opcode_table1[op2], op2 );
 			return;
@@ -2133,47 +2115,19 @@ handle_unknown:
 	sprintf(s, "???");
 }
 
-int i386_dasm_one_ex(char *buffer, UINT64 eip, const UINT8 *oprom, int mode)
+static int i386_dasm_one_ex(char *buffer, UINT64 eip, const UINT8 *oprom, int mode)
 {
 	UINT8 op;
 
 	opcode_ptr = opcode_ptr_base = oprom;
-	switch(mode)
-	{
-		case 1: /* 8086/8088/80186/80188 */
-			address_size = 0;
-			operand_size = 0;
-			max_length = 8;	/* maximum without redundant prefixes - not enforced by chip */
-			break;
-		case 2: /* 80286 */
-			address_size = 0;
-			operand_size = 0;
-			max_length = 10;
-			break;
-		case 16: /* 80386+ 16-bit code segment */
-			address_size = 0;
-			operand_size = 0;
-			max_length = 15;
-			break;
-		case 32: /* 80386+ 32-bit code segment */
-			address_size = 1;
-			operand_size = 1;
-			max_length = 15;
-			break;
-		case 64: /* x86_64 */
-			address_size = 2;
-			operand_size = 1;
-			max_length = 15;
-			break;
-	}
+	address_size = (mode == 16) ? 0 : (mode == 32) ? 1 : 2;
+	operand_size = (mode == 16) ? 0 : 1;
 	pc = eip;
 	dasm_flags = 0;
 	segment = 0;
 	curmode = mode;
 	pre0f = 0;
 	rex = regex = sibex = rmex = 0;
-	address_prefix = 0;
-	operand_prefix = 0;
 
 	op = FETCH();
 

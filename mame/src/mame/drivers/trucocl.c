@@ -5,8 +5,8 @@ Truco Clemente (c) 1991 Miky SRL
 driver by Ernesto Corvi
 
 Notes:
-- After one game you can't play anymore.
 - Audio is almost there.
+- After one game you can't play anymore.
 - I think this runs on a heavily modified PacMan type of board.
 
 ----------------------------------
@@ -23,7 +23,7 @@ Daughterboard: Custom made, plugged in the 2 roms and Z80 mainboard sockets.
   - 01 x lm324n
 
   To not overload the driver, I put the rest of technical info in
-  http://robbie.mameworld.info/trucocl.htm
+  http://www.mameworld.net/robbie/trucocl.htm
 
 - Added 2 "hidden" color proms (am27s19)
 - One GAL is connected to the color proms inputs.
@@ -32,18 +32,25 @@ Daughterboard: Custom made, plugged in the 2 roms and Z80 mainboard sockets.
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
-#include "includes/trucocl.h"
+
+/* from video */
+WRITE8_HANDLER( trucocl_videoram_w );
+WRITE8_HANDLER( trucocl_colorram_w );
+PALETTE_INIT( trucocl );
+VIDEO_START( trucocl );
+VIDEO_UPDATE( trucocl );
+
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	trucocl_state *state = space->machine().driver_data<trucocl_state>();
-
-	state->m_irq_mask = (data & 1) ^ 1;
+	interrupt_enable_w( space, 0, (~data) & 1 );
 }
 
+static int cur_dac_address;
+static int cur_dac_address_index = 0;
 
 static TIMER_CALLBACK( dac_irq )
 {
@@ -52,19 +59,18 @@ static TIMER_CALLBACK( dac_irq )
 
 static WRITE8_DEVICE_HANDLER( audio_dac_w )
 {
-	trucocl_state *state = device->machine().driver_data<trucocl_state>();
-	UINT8 *rom = device->machine().region("maincpu")->base();
+	UINT8 *rom = memory_region(device->machine, "maincpu");
 	int	dac_address = ( data & 0xf0 ) << 8;
 	int	sel = ( ( (~data) >> 1 ) & 2 ) | ( data & 1 );
 
-	if ( state->m_cur_dac_address != dac_address )
+	if ( cur_dac_address != dac_address )
 	{
-		state->m_cur_dac_address_index = 0;
-		state->m_cur_dac_address = dac_address;
+		cur_dac_address_index = 0;
+		cur_dac_address = dac_address;
 	}
 	else
 	{
-		state->m_cur_dac_address_index++;
+		cur_dac_address_index++;
 	}
 
 	if ( sel & 1 )
@@ -75,15 +81,15 @@ static WRITE8_DEVICE_HANDLER( audio_dac_w )
 
 	dac_address += 0x10000;
 
-	dac_data_w( device, rom[dac_address+state->m_cur_dac_address_index] );
+	dac_data_w( device, rom[dac_address+cur_dac_address_index] );
 
-	device->machine().scheduler().timer_set( attotime::from_hz( 16000 ), FUNC(dac_irq ));
+	timer_set( device->machine, ATTOTIME_IN_HZ( 16000 ), NULL, 0, dac_irq );
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(trucocl_videoram_w) AM_BASE_MEMBER(trucocl_state, m_videoram)
-	AM_RANGE(0x4400, 0x47ff) AM_RAM_WRITE(trucocl_colorram_w) AM_BASE_MEMBER(trucocl_state, m_colorram)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(trucocl_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x4400, 0x47ff) AM_RAM_WRITE(trucocl_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x4c00, 0x4fff) AM_RAM
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(irq_enable_w)
 	AM_RANGE(0x5000, 0x503f) AM_READ_PORT("IN0")
@@ -125,39 +131,36 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( trucocl_interrupt )
 {
-	trucocl_state *state = device->machine().driver_data<trucocl_state>();
-
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-
+	irq0_line_hold(device);
 }
 
-static MACHINE_CONFIG_START( trucocl, trucocl_state )
+static MACHINE_DRIVER_START( trucocl )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 18432000/6)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", trucocl_interrupt)
+	MDRV_CPU_ADD("maincpu", Z80, 18432000/6)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", trucocl_interrupt)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(trucocl)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(trucocl)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(trucocl)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_PALETTE_INIT(trucocl)
-	MCFG_VIDEO_START(trucocl)
+	MDRV_PALETTE_INIT(trucocl)
+	MDRV_VIDEO_START(trucocl)
+	MDRV_VIDEO_UPDATE(trucocl)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -186,9 +189,8 @@ ROM_END
 
 static DRIVER_INIT( trucocl )
 {
-	trucocl_state *state = machine.driver_data<trucocl_state>();
-	state->m_cur_dac_address = -1;
-	state->m_cur_dac_address_index = 0;
+	cur_dac_address = -1;
+	cur_dac_address_index = 0;
 }
 
 
@@ -196,4 +198,4 @@ static DRIVER_INIT( trucocl )
 /******************************************************************************/
 /*    YEAR   NAME     PARENT  MACHINE  INPUT    INIT     MONITOR  */
 
-GAME( 1991, trucocl,  0,      trucocl, trucocl, trucocl, ROT0, "Miky SRL", "Truco Clemente", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1991, trucocl,  0,      trucocl, trucocl, trucocl, ROT0, "Miky SRL", "Truco Clemente", GAME_IMPERFECT_SOUND )

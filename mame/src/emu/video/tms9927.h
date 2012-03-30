@@ -10,23 +10,21 @@
 #ifndef __TMS9927__
 #define __TMS9927__
 
-#include "devlegcy.h"
+
+#define TMS9927		DEVICE_GET_INFO_NAME(tms9927)
+#define CRT5027		DEVICE_GET_INFO_NAME(crt5027)
+#define CRT5037		DEVICE_GET_INFO_NAME(crt5037)
+#define CRT5057		DEVICE_GET_INFO_NAME(crt5057)
 
 
-DECLARE_LEGACY_DEVICE(TMS9927, tms9927);
-DECLARE_LEGACY_DEVICE(CRT5027, crt5027);
-DECLARE_LEGACY_DEVICE(CRT5037, crt5037);
-DECLARE_LEGACY_DEVICE(CRT5057, crt5057);
+#define MDRV_TMS9927_ADD(_tag, _clock, _config) \
+	MDRV_DEVICE_ADD(_tag, TMS9927, _clock) \
+	MDRV_DEVICE_CONFIG(_config)
 
-
-#define MCFG_TMS9927_ADD(_tag, _clock, _config) \
-	MCFG_DEVICE_ADD(_tag, TMS9927, _clock) \
-	MCFG_DEVICE_CONFIG(_config)
-
-#define MCFG_TMS9927_RECONFIG(_tag, _clock, _config) \
-	MCFG_DEVICE_MODIFY(_tag) \
-	MCFG_DEVICE_CLOCK(_clock) \
-	MCFG_DEVICE_CONFIG(_config)
+#define MDRV_TMS9927_RECONFIG(_tag, _clock, _config) \
+	MDRV_DEVICE_MODIFY(_tag) \
+	MDRV_DEVICE_CLOCK(_clock) \
+	MDRV_DEVICE_CONFIG(_config)
 
 
 
@@ -39,17 +37,23 @@ struct _tms9927_interface
 	const char *selfload_region;	/* name of the region with self-load data */
 };
 
-extern const tms9927_interface tms9927_null_interface;
+extern tms9927_interface tms9927_null_interface;
 
+
+/* device interface */
+DEVICE_GET_INFO( tms9927 );
+DEVICE_GET_INFO( crt5027 );
+DEVICE_GET_INFO( crt5037 );
+DEVICE_GET_INFO( crt5057 );
 
 /* basic read/write handlers */
 WRITE8_DEVICE_HANDLER( tms9927_w );
 READ8_DEVICE_HANDLER( tms9927_r );
 
 /* other queries */
-int tms9927_screen_reset(device_t *device);
-int tms9927_upscroll_offset(device_t *device);
-int tms9927_cursor_bounds(device_t *device, rectangle &bounds);
+int tms9927_screen_reset(const device_config *device);
+int tms9927_upscroll_offset(const device_config *device);
+int tms9927_cursor_bounds(const device_config *device, rectangle *bounds);
 
 
 

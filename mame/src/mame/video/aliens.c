@@ -1,6 +1,8 @@
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/aliens.h"
+#include "driver.h"
+#include "video/konamiic.h"
+
+
+static int layer_colorbase[3],sprite_colorbase;
 
 /***************************************************************************
 
@@ -8,12 +10,10 @@
 
 ***************************************************************************/
 
-void aliens_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void tile_callback(int layer,int bank,int *code,int *color, int *flags, int *priority)
 {
-	aliens_state *state = machine.driver_data<aliens_state>();
-
 	*code |= ((*color & 0x3f) << 8) | (bank << 14);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xc0) >> 6);
+	*color = layer_colorbase[layer] + ((*color & 0xc0) >> 6);
 }
 
 
@@ -23,10 +23,8 @@ void aliens_tile_callback( running_machine &machine, int layer, int bank, int *c
 
 ***************************************************************************/
 
-void aliens_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask, int *shadow )
+static void sprite_callback(int *code,int *color,int *priority_mask,int *shadow)
 {
-	aliens_state *state = machine.driver_data<aliens_state>();
-
 	/* The PROM allows for mixed priorities, where sprites would have */
 	/* priority over text but not on one or both of the other two planes. */
 	switch (*color & 0x70)
@@ -41,7 +39,7 @@ void aliens_sprite_callback( running_machine &machine, int *code, int *color, in
 		case 0x70: *priority_mask =      0xcc|0xaa; break;	/* over F, not AB */
 	}
 	*code |= (*color & 0x80) << 6;
-	*color = state->m_sprite_colorbase + (*color & 0x0f);
+	*color = sprite_colorbase + (*color & 0x0f);
 	*shadow = 0;	/* shadows are not used by this game */
 }
 
@@ -55,16 +53,14 @@ void aliens_sprite_callback( running_machine &machine, int *code, int *color, in
 
 VIDEO_START( aliens )
 {
-	aliens_state *state = machine.driver_data<aliens_state>();
+	paletteram = auto_alloc_array(machine, UINT8, 0x400);
 
-	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x400);
-
-	state->m_layer_colorbase[0] = 0;
-	state->m_layer_colorbase[1] = 4;
-	state->m_layer_colorbase[2] = 8;
-	state->m_sprite_colorbase = 16;
-
-	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x400);
+	layer_colorbase[0] = 0;
+	layer_colorbase[1] = 4;
+	layer_colorbase[2] = 8;
+	sprite_colorbase = 16;
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,tile_callback);
+	K051960_vh_start(machine,"gfx2",NORMAL_PLANE_ORDER,sprite_callback);
 }
 
 
@@ -75,19 +71,16 @@ VIDEO_START( aliens )
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( aliens )
+VIDEO_UPDATE( aliens )
 {
-	aliens_state *state = screen.machine().driver_data<aliens_state>();
+	K052109_tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(bitmap,cliprect,layer_colorbase[1] * 16);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[1],0,1);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],0,2);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[0],0,4);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-	bitmap.fill(state->m_layer_colorbase[1] * 16, cliprect);
-
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 1);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, 0, 2);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 4);
-
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, -1, -1);
+	K051960_sprites_draw(screen->machine,bitmap,cliprect,-1,-1);
 	return 0;
 }

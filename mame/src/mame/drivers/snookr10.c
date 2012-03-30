@@ -361,13 +361,23 @@
 
 #define MASTER_CLOCK	XTAL_16MHz
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/okim6295.h"
 #include "snookr10.lh"
-#include "includes/snookr10.h"
-#include "machine/nvram.h"
 
+
+/* from video */
+WRITE8_HANDLER( snookr10_videoram_w );
+WRITE8_HANDLER( snookr10_colorram_w );
+PALETTE_INIT( snookr10 );
+PALETTE_INIT( apple10 );
+VIDEO_START( snookr10 );
+VIDEO_START( apple10 );
+VIDEO_UPDATE( snookr10 );
+
+static int outportl, outporth;
+static int bit0, bit1, bit2, bit3, bit4, bit5;
 
 /**********************
 * Read/Write Handlers *
@@ -390,7 +400,7 @@ static READ8_HANDLER( dsw_port_1_r )
     BIT 7 = Complement of DS1, bit 7
    ---------------------------------
 */
-return input_port_read(space->machine(), "SW1");
+return input_port_read(space->machine, "SW1");
 }
 
 
@@ -416,55 +426,53 @@ return input_port_read(space->machine(), "SW1");
 
 static WRITE8_HANDLER( output_port_0_w )
 {
-	snookr10_state *state = space->machine().driver_data<snookr10_state>();
 /*
    ----------------------------
     PORT 0x5000 ;OUTPUT PORT A
    ----------------------------
     BIT 0 = Coin counter.
-    BIT 1 = Lamps matrix, state->m_bit0.
+    BIT 1 = Lamps matrix, bit0.
     BIT 2 = Payout x10.
-    BIT 3 = Lamps matrix, state->m_bit1.
+    BIT 3 = Lamps matrix, bit1.
     BIT 4 = Key in.
-    BIT 5 = Lamps matrix, state->m_bit2.
+    BIT 5 = Lamps matrix, bit2.
     BIT 6 =
-    BIT 7 = Lamps matrix, state->m_bit3.
+    BIT 7 = Lamps matrix, bit3.
    ----------------------------
 */
-	state->m_outportl = data;
+	outportl = data;
 
-	state->m_bit0 = (data >> 1) & 1;
-	state->m_bit1 = (data >> 3) & 1;
-	state->m_bit2 = (data >> 5) & 1;
-	state->m_bit3 = (data >> 7) & 1;
-	state->m_bit4 = state->m_outporth & 1;
-	state->m_bit5 = (state->m_outporth >> 1) & 1;
+	bit0 = (data >> 1) & 1;
+	bit1 = (data >> 3) & 1;
+	bit2 = (data >> 5) & 1;
+	bit3 = (data >> 7) & 1;
+	bit4 = outporth & 1;
+	bit5 = (outporth >> 1) & 1;
 
-	output_set_lamp_value(0, state->m_bit5);	/* Lamp 0 - START  */
-	output_set_lamp_value(1, state->m_bit2);	/* Lamp 1 - CANCEL */
-	output_set_lamp_value(2, state->m_bit0);	/* Lamp 2 - STOP1  */
-	output_set_lamp_value(3, state->m_bit1);	/* Lamp 3 - STOP2  */
-	output_set_lamp_value(4, state->m_bit0);	/* Lamp 4 - STOP3  */
-	output_set_lamp_value(5, state->m_bit3);	/* Lamp 5 - STOP4  */
-	output_set_lamp_value(6, state->m_bit4);	/* Lamp 6 - STOP5  */
+	output_set_lamp_value(0, bit5);	/* Lamp 0 - START  */
+	output_set_lamp_value(1, bit2);	/* Lamp 1 - CANCEL */
+	output_set_lamp_value(2, bit0);	/* Lamp 2 - STOP1  */
+	output_set_lamp_value(3, bit1);	/* Lamp 3 - STOP2  */
+	output_set_lamp_value(4, bit0);	/* Lamp 4 - STOP3  */
+	output_set_lamp_value(5, bit3);	/* Lamp 5 - STOP4  */
+	output_set_lamp_value(6, bit4);	/* Lamp 6 - STOP5  */
 
-	coin_counter_w(space->machine(), 0, data & 0x01);	/* Coin in */
-	coin_counter_w(space->machine(), 1, data & 0x10);	/* Key in */
-	coin_counter_w(space->machine(), 2, data & 0x04);	/* Payout x10 */
+	coin_counter_w(0, data & 0x01);	/* Coin in */
+	coin_counter_w(1, data & 0x10);	/* Key in */
+	coin_counter_w(2, data & 0x04);	/* Payout x10 */
 
-//  logerror("high: %04x - low: %X \n", state->m_outporth, state->m_outportl);
+//  logerror("high: %04x - low: %X \n", outporth, outportl);
 //  popmessage("written : %02X", data);
 }
 
 static WRITE8_HANDLER( output_port_1_w )
 {
-	snookr10_state *state = space->machine().driver_data<snookr10_state>();
 /*
    ----------------------------
     PORT 0x5001 ;OUTPUT PORT B
    ----------------------------
-    BIT 0 = Lamps matrix, state->m_bit4
-    BIT 1 = Lamps matrix, state->m_bit5
+    BIT 0 = Lamps matrix, bit4
+    BIT 1 = Lamps matrix, bit5
     BIT 2 =
     BIT 3 =
     BIT 4 =
@@ -473,22 +481,22 @@ static WRITE8_HANDLER( output_port_1_w )
     BIT 7 =
    ----------------------------
 */
-	state->m_outporth = data << 8;
+	outporth = data << 8;
 
-	state->m_bit0 = (state->m_outportl >> 1) & 1;
-	state->m_bit1 = (state->m_outportl >> 3) & 1;
-	state->m_bit2 = (state->m_outportl >> 5) & 1;
-	state->m_bit3 = (state->m_outportl >> 7) & 1;
-	state->m_bit4 = data & 1;
-	state->m_bit5 = (data >> 1) & 1;
+	bit0 = (outportl >> 1) & 1;
+	bit1 = (outportl >> 3) & 1;
+	bit2 = (outportl >> 5) & 1;
+	bit3 = (outportl >> 7) & 1;
+	bit4 = data & 1;
+	bit5 = (data >> 1) & 1;
 
-	output_set_lamp_value(0, state->m_bit5);	/* Lamp 0 - START  */
-	output_set_lamp_value(1, state->m_bit2);	/* Lamp 1 - CANCEL */
-	output_set_lamp_value(2, state->m_bit0);	/* Lamp 2 - STOP1  */
-	output_set_lamp_value(3, state->m_bit1);	/* Lamp 3 - STOP2  */
-	output_set_lamp_value(4, state->m_bit0);	/* Lamp 4 - STOP3  */
-	output_set_lamp_value(5, state->m_bit3);	/* Lamp 5 - STOP4  */
-	output_set_lamp_value(6, state->m_bit4);	/* Lamp 6 - STOP5  */
+	output_set_lamp_value(0, bit5);	/* Lamp 0 - START  */
+	output_set_lamp_value(1, bit2);	/* Lamp 1 - CANCEL */
+	output_set_lamp_value(2, bit0);	/* Lamp 2 - STOP1  */
+	output_set_lamp_value(3, bit1);	/* Lamp 3 - STOP2  */
+	output_set_lamp_value(4, bit0);	/* Lamp 4 - STOP3  */
+	output_set_lamp_value(5, bit3);	/* Lamp 5 - STOP4  */
+	output_set_lamp_value(6, bit4);	/* Lamp 6 - STOP5  */
 }
 
 
@@ -496,9 +504,9 @@ static WRITE8_HANDLER( output_port_1_w )
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( snookr10_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+static ADDRESS_MAP_START( snookr10_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x3000, 0x3000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0x3001, 0x3001) AM_READ_PORT("IN1")		/* IN1 */
 	AM_RANGE(0x3002, 0x3002) AM_READ_PORT("IN2")		/* IN2 */
@@ -506,22 +514,22 @@ static ADDRESS_MAP_START( snookr10_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x3004, 0x3004) AM_READ(dsw_port_1_r)		/* complement of DS1, bit 7 */
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(output_port_0_w)	/* OUT0 */
 	AM_RANGE(0x5001, 0x5001) AM_WRITE(output_port_1_w)	/* OUT1 */
-	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE_MEMBER(snookr10_state, m_videoram)
-	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE_MEMBER(snookr10_state, m_colorram)
+	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( tenballs_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+static ADDRESS_MAP_START( tenballs_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x1000, 0x1000) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0x4000, 0x4000) AM_READ_PORT("IN0")		/* IN0 */
 	AM_RANGE(0x4001, 0x4001) AM_READ_PORT("IN1")		/* IN1 */
 	AM_RANGE(0x4002, 0x4002) AM_READ_PORT("IN2")		/* IN2 */
 	AM_RANGE(0x4003, 0x4003) AM_READ_PORT("SW1")		/* DS1 */
 	AM_RANGE(0x5000, 0x5000) AM_WRITE(output_port_0_w)	/* OUT0 */
 	AM_RANGE(0x5001, 0x5001) AM_WRITE(output_port_1_w)	/* OUT1 */
-	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE_MEMBER(snookr10_state, m_videoram)
-	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE_MEMBER(snookr10_state, m_colorram)
+	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(snookr10_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(snookr10_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -687,55 +695,59 @@ GFXDECODE_END
 *     Machine Drivers     *
 **************************/
 
-static MACHINE_CONFIG_START( snookr10, snookr10_state )
+static MACHINE_DRIVER_START( snookr10 )
 
     /* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M65SC02, MASTER_CLOCK/8)	/* 2 MHz (1.999 MHz measured) */
-	MCFG_CPU_PROGRAM_MAP(snookr10_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("maincpu", M65SC02, MASTER_CLOCK/8)	/* 2 MHz (1.999 MHz measured) */
+	MDRV_CPU_PROGRAM_MAP(snookr10_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
     /* video hardware */
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(96*4, 30*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(snookr10)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(96*4, 30*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 30*8-1)
 
-	MCFG_GFXDECODE(snookr10)
+	MDRV_GFXDECODE(snookr10)
 
-	MCFG_PALETTE_LENGTH(256)
-	MCFG_PALETTE_INIT(snookr10)
-	MCFG_VIDEO_START(snookr10)
+	MDRV_PALETTE_LENGTH(256)
+	MDRV_PALETTE_INIT(snookr10)
+	MDRV_VIDEO_START(snookr10)
+	MDRV_VIDEO_UPDATE(snookr10)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_OKIM6295_ADD("oki", MASTER_CLOCK/16, OKIM6295_PIN7_HIGH)	/* 1 MHz (995.5 kHz measured); pin7 checked HIGH on PCB */
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.8)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("oki", OKIM6295, MASTER_CLOCK/16)	/* 1 MHz (995.5 kHz measured) */
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)	/* pin7 checked HIGH on PCB */
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.8)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( apple10, snookr10 )
+static MACHINE_DRIVER_START( apple10 )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
+	MDRV_IMPORT_FROM(snookr10)
+	MDRV_CPU_MODIFY("maincpu")
 
     /* video hardware */
-	MCFG_PALETTE_INIT(apple10)
-	MCFG_VIDEO_START(apple10)
+	MDRV_PALETTE_INIT(apple10)
+	MDRV_VIDEO_START(apple10)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( tenballs, snookr10 )
+static MACHINE_DRIVER_START( tenballs )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(tenballs_map)
+	MDRV_IMPORT_FROM(snookr10)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(tenballs_map)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 /*************************

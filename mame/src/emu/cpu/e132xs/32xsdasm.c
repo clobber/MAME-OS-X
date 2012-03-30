@@ -5,7 +5,7 @@
 
 */
 
-#include "emu.h"
+#include <math.h>
 #include "debugger.h"
 #include "e132xs.h"
 
@@ -1103,7 +1103,7 @@ unsigned dasm_hyperstone(char *buffer, unsigned pc, const UINT8 *oprom, unsigned
 			}
 
 			break;
-		}
+			}
 
 		// LDxx.N/S
 		case 0x94: case 0x95: case 0x96: case 0x97:
@@ -1293,7 +1293,7 @@ unsigned dasm_hyperstone(char *buffer, unsigned pc, const UINT8 *oprom, unsigned
 			}
 
 			break;
-		}
+			}
 
 		// STxx.N/S
 		case 0x9c: case 0x9d: case 0x9e: case 0x9f:
@@ -1643,8 +1643,8 @@ unsigned dasm_hyperstone(char *buffer, unsigned pc, const UINT8 *oprom, unsigned
 				break;
 
 			default:
-				sprintf(buffer, "Ext. OP $%X @ %X\n", extended_op, pc);
-				logerror(buffer, "Illegal Extended Opcode: %X @ %X\n", extended_op, pc);
+				sprintf(buffer, "Ext. OP $%x", extended_op);
+				logerror(buffer, "Illegal Extended Opcode: %x\n", extended_op);
 				break;
 			}
 

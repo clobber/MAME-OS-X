@@ -4,13 +4,15 @@
 #define ENTER_HALT(cs) {										\
 	(cs)->_PC--;												\
 	(cs)->HALT = 1;												\
+	if( !(cs)->after_EI ) 										\
+		CPU_BURN_NAME(z180)( (cs)->device, (cs)->icount );		\
 }
 
 /***************************************************************
  * Leave HALT state; write 0 to fake port
  ***************************************************************/
 #define LEAVE_HALT(cs) {										\
-	if( (cs)->HALT )											\
+	if( (cs)->HALT ) 											\
 	{															\
 		(cs)->HALT = 0;											\
 		(cs)->_PC++;											\
@@ -22,15 +24,15 @@
  ***************************************************************/
 #define IN(cs,port)												\
 	(((port ^ (cs)->IO_IOCR) & 0xffc0) == 0) ?					\
-		z180_readcontrol(cs, port) : (cs)->iospace->read_byte(port)
+		z180_readcontrol(cs, port) : memory_read_byte_8le((cs)->iospace, port)
 
 /***************************************************************
  * Output a byte to given I/O port
  ***************************************************************/
-#define OUT(cs,port,value)										\
+#define OUT(cs,port,value) 										\
 	if (((port ^ (cs)->IO_IOCR) & 0xffc0) == 0)					\
 		z180_writecontrol(cs,port,value);						\
-	else (cs)->iospace->write_byte(port,value)
+	else memory_write_byte_8le((cs)->iospace,port,value)
 
 /***************************************************************
  * MMU calculate the memory managemant lookup table
@@ -52,11 +54,11 @@ INLINE void z180_mmu(z180_state *cpustate)
 		if (page >= bb)
 		{
 			if (page >= cb)
-				addr += (cpustate->IO_CBR << 12);
+				addr += cpustate->IO_CBR << 12;
 			else
-				addr += (cpustate->IO_BBR << 12);
+				addr += cpustate->IO_BBR << 12;
 		}
-		cpustate->mmu[page] = (addr & 0xfffff);
+		cpustate->mmu[page] = addr;
 	}
 }
 
@@ -66,9 +68,9 @@ INLINE void z180_mmu(z180_state *cpustate)
 /***************************************************************
  * Read a byte from given memory location
  ***************************************************************/
-#define RM(cs,addr)	(cs)->program->read_byte(MMU_REMAP_ADDR(cs,addr))
+#define RM(cs,addr)	memory_read_byte_8le((cs)->program, MMU_REMAP_ADDR(cs,addr))
 #ifdef UNUSED_FUNCTION
-UINT8 z180_readmem(device_t *device, offs_t offset)
+UINT8 z180_readmem(const device_config *device, offs_t offset)
 {
 	z180_state *cpustate = get_safe_token(device);
 	return RM(cpustate, offset);
@@ -78,9 +80,9 @@ UINT8 z180_readmem(device_t *device, offs_t offset)
 /***************************************************************
  * Write a byte to given memory location
  ***************************************************************/
-#define WM(cs,addr,value) (cs)->program->write_byte(MMU_REMAP_ADDR(cs,addr),value)
+#define WM(cs,addr,value) memory_write_byte_8le((cs)->program, MMU_REMAP_ADDR(cs,addr),value)
 #ifdef UNUSED_FUNCTION
-void z180_writemem(device_t *device, offs_t offset, UINT8 data)
+void z180_writemem(const device_config *device, offs_t offset, UINT8 data)
 {
 	z180_state *cpustate = get_safe_token(device);
 	WM(cpustate, offset, data);
@@ -114,7 +116,7 @@ INLINE UINT8 ROP(z180_state *cpustate)
 {
 	offs_t addr = cpustate->_PCD;
 	cpustate->_PC++;
-	return cpustate->direct->read_decrypted_byte(MMU_REMAP_ADDR(cpustate, addr));
+	return memory_decrypted_read_byte(cpustate->program, MMU_REMAP_ADDR(cpustate, addr));
 }
 
 /****************************************************************
@@ -127,14 +129,14 @@ INLINE UINT8 ARG(z180_state *cpustate)
 {
 	offs_t addr = cpustate->_PCD;
 	cpustate->_PC++;
-	return cpustate->direct->read_raw_byte(MMU_REMAP_ADDR(cpustate, addr));
+	return memory_raw_read_byte(cpustate->program, MMU_REMAP_ADDR(cpustate, addr));
 }
 
 INLINE UINT32 ARG16(z180_state *cpustate)
 {
 	offs_t addr = cpustate->_PCD;
 	cpustate->_PC += 2;
-	return cpustate->direct->read_raw_byte(MMU_REMAP_ADDR(cpustate, addr)) | (cpustate->direct->read_raw_byte(MMU_REMAP_ADDR(cpustate, addr+1)) << 8);
+	return memory_raw_read_byte(cpustate->program, MMU_REMAP_ADDR(cpustate, addr)) | (memory_raw_read_byte(cpustate->program, MMU_REMAP_ADDR(cpustate, addr+1)) << 8);
 }
 
 /***************************************************************
@@ -158,7 +160,7 @@ INLINE UINT32 ARG16(z180_state *cpustate)
  * JP
  ***************************************************************/
 #define JP {													\
-	cpustate->_PCD = ARG16(cpustate);											\
+	cpustate->_PCD = ARG16(cpustate); 											\
 }
 
 /***************************************************************
@@ -168,7 +170,7 @@ INLINE UINT32 ARG16(z180_state *cpustate)
 #define JP_COND(cond)											\
 	if( cond )													\
 	{															\
-		cpustate->_PCD = ARG16(cpustate);										\
+		cpustate->_PCD = ARG16(cpustate); 										\
 	}															\
 	else														\
 	{															\
@@ -180,8 +182,8 @@ INLINE UINT32 ARG16(z180_state *cpustate)
  ***************************************************************/
 #define JR()													\
 {																\
-	INT8 arg = (INT8)ARG(cpustate); /* ARG(cpustate) also increments cpustate->_PC */	\
-	cpustate->_PC += arg;			/* so don't do cpustate->_PC += ARG(cpustate) */      \
+	INT8 arg = (INT8)ARG(cpustate); /* ARG(cpustate) also increments cpustate->_PC */ 	\
+	cpustate->_PC += arg; 			/* so don't do cpustate->_PC += ARG(cpustate) */      \
 }
 
 /***************************************************************
@@ -191,17 +193,17 @@ INLINE UINT32 ARG16(z180_state *cpustate)
 	if( cond )													\
 	{															\
 		INT8 arg = (INT8)ARG(cpustate); /* ARG(cpustate) also increments cpustate->_PC */ \
-		cpustate->_PC += arg;			/* so don't do cpustate->_PC += ARG(cpustate) */  \
+		cpustate->_PC += arg; 			/* so don't do cpustate->_PC += ARG(cpustate) */  \
 		CC(ex,opcode);											\
 	}															\
-	else cpustate->_PC++;												\
+	else cpustate->_PC++; 												\
 
 /***************************************************************
  * CALL
  ***************************************************************/
 #define CALL()													\
 	cpustate->ea = ARG16(cpustate);												\
-	PUSH(cpustate,  PC );												\
+	PUSH(cpustate,  PC ); 												\
 	cpustate->_PCD = cpustate->ea;
 
 /***************************************************************
@@ -211,13 +213,13 @@ INLINE UINT32 ARG16(z180_state *cpustate)
 	if( cond )													\
 	{															\
 		cpustate->ea = ARG16(cpustate);											\
-		PUSH(cpustate,  PC );											\
+		PUSH(cpustate,  PC ); 											\
 		cpustate->_PCD = cpustate->ea;												\
 		CC(ex,opcode);											\
 	}															\
 	else														\
 	{															\
-		cpustate->_PC+=2;												\
+		cpustate->_PC+=2; 												\
 	}
 
 /***************************************************************
@@ -234,7 +236,7 @@ INLINE UINT32 ARG16(z180_state *cpustate)
  * RETN
  ***************************************************************/
 #define RETN	{												\
-	LOG(("Z180 '%s' RETN IFF1:%d IFF2:%d\n", cpustate->device->tag(), cpustate->IFF1, cpustate->IFF2)); \
+	LOG(("Z180 '%s' RETN IFF1:%d IFF2:%d\n", cpustate->device->tag, cpustate->IFF1, cpustate->IFF2)); \
 	POP(cpustate, PC);													\
 	cpustate->IFF1 = cpustate->IFF2;												\
 }
@@ -246,7 +248,8 @@ INLINE UINT32 ARG16(z180_state *cpustate)
 	POP(cpustate, PC);													\
 /* according to http://www.msxnet.org/tech/Z80/z80undoc.txt */	\
 /*  cpustate->IFF1 = cpustate->IFF2;  */											\
-	cpustate->daisy.call_reti_device();					\
+	if (cpustate->daisy)												\
+		z80daisy_call_reti_device(cpustate->daisy);					\
 }
 
 /***************************************************************
@@ -284,7 +287,7 @@ INLINE UINT32 ARG16(z180_state *cpustate)
  * RST
  ***************************************************************/
 #define RST(addr)												\
-	PUSH(cpustate,  PC );												\
+	PUSH(cpustate,  PC ); 												\
 	cpustate->_PCD = addr;
 
 /***************************************************************
@@ -311,14 +314,14 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
  * RLCA
  ***************************************************************/
 #define RLCA													\
-	cpustate->_A = (cpustate->_A << 1) | (cpustate->_A >> 7);								\
+	cpustate->_A = (cpustate->_A << 1) | (cpustate->_A >> 7); 								\
 	cpustate->_F = (cpustate->_F & (SF | ZF | PF)) | (cpustate->_A & (YF | XF | CF))
 
 /***************************************************************
  * RRCA
  ***************************************************************/
 #define RRCA													\
-	cpustate->_F = (cpustate->_F & (SF | ZF | PF)) | (cpustate->_A & (YF | XF | CF));		\
+	cpustate->_F = (cpustate->_F & (SF | ZF | PF)) | (cpustate->_A & (YF | XF | CF)); 		\
 	cpustate->_A = (cpustate->_A >> 1) | (cpustate->_A << 7)
 
 /***************************************************************
@@ -326,7 +329,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
  ***************************************************************/
 #define RLA {													\
 	UINT8 res = (cpustate->_A << 1) | (cpustate->_F & CF);							\
-	UINT8 c = (cpustate->_A & 0x80) ? CF : 0;							\
+	UINT8 c = (cpustate->_A & 0x80) ? CF : 0; 							\
 	cpustate->_F = (cpustate->_F & (SF | ZF | PF)) | c | (res & (YF | XF)); 		\
 	cpustate->_A = res;													\
 }
@@ -336,7 +339,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
  ***************************************************************/
 #define RRA {													\
 	UINT8 res = (cpustate->_A >> 1) | (cpustate->_F << 7);							\
-	UINT8 c = (cpustate->_A & 0x01) ? CF : 0;							\
+	UINT8 c = (cpustate->_A & 0x01) ? CF : 0; 							\
 	cpustate->_F = (cpustate->_F & (SF | ZF | PF)) | c | (res & (YF | XF)); 		\
 	cpustate->_A = res;													\
 }
@@ -401,7 +404,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
 {																\
 	UINT32 ah = cpustate->_AFD & 0xff00, c = cpustate->_AFD & 1;					\
 	UINT32 res = (UINT8)((ah >> 8) - value - c);				\
-	cpustate->_F = SZHVC_sub[(c<<16) | ah | res];						\
+	cpustate->_F = SZHVC_sub[(c<<16) | ah | res]; 						\
 	cpustate->_A = res;													\
 }
 
@@ -410,7 +413,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
  ***************************************************************/
 #define NEG {													\
 	UINT8 value = cpustate->_A;											\
-	cpustate->_A = 0;													\
+	cpustate->_A = 0; 													\
 	SUB(value); 												\
 }
 
@@ -495,7 +498,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
 {																\
 	PAIR tmp = { { 0, 0, 0, 0 } };								\
 	RM16(cpustate,  cpustate->_SPD, &tmp ); 										\
-	WM16(cpustate,  cpustate->_SPD, &cpustate->DR );									\
+	WM16(cpustate,  cpustate->_SPD, &cpustate->DR ); 									\
 	cpustate->DR = tmp;												\
 }
 
@@ -505,7 +508,7 @@ INLINE UINT8 DEC(z180_state *cpustate, UINT8 value)
  ***************************************************************/
 #define ADD16(DR,SR)											\
 {																\
-	UINT32 res = cpustate->DR.d + cpustate->SR.d;						\
+	UINT32 res = cpustate->DR.d + cpustate->SR.d; 						\
 	cpustate->_F = (cpustate->_F & (SF | ZF | VF)) |								\
 		(((cpustate->DR.d ^ res ^ cpustate->SR.d) >> 8) & HF) |			\
 		((res >> 16) & CF); 									\
@@ -671,7 +674,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 #define LDI {													\
 	UINT8 io = RM(cpustate, cpustate->_HL); 										\
 	WM(cpustate,  cpustate->_DE, io );												\
-	cpustate->_F &= SF | ZF | CF;										\
+	cpustate->_F &= SF | ZF | CF; 										\
 	if( (cpustate->_A + io) & 0x02 ) cpustate->_F |= YF; /* bit 1 -> flag 5 */		\
 	if( (cpustate->_A + io) & 0x08 ) cpustate->_F |= XF; /* bit 3 -> flag 3 */		\
 	cpustate->_HL++; cpustate->_DE++; cpustate->_BC--;										\
@@ -686,7 +689,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	UINT8 res = cpustate->_A - val;										\
 	cpustate->_HL++; cpustate->_BC--;												\
 	cpustate->_F = (cpustate->_F & CF) | (SZ[res] & ~(YF|XF)) | ((cpustate->_A ^ val ^ res) & HF) | NF;  \
-	if( cpustate->_F & HF ) res -= 1;									\
+	if( cpustate->_F & HF ) res -= 1; 									\
 	if( res & 0x02 ) cpustate->_F |= YF; /* bit 1 -> flag 5 */			\
 	if( res & 0x08 ) cpustate->_F |= XF; /* bit 3 -> flag 3 */			\
 	if( cpustate->_BC ) cpustate->_F |= VF; 										\
@@ -701,7 +704,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	WM(cpustate,  cpustate->_HL, io );												\
 	cpustate->_HL++;														\
 	cpustate->_F = SZ[cpustate->_B];												\
-	if( io & SF ) cpustate->_F |= NF;									\
+	if( io & SF ) cpustate->_F |= NF; 									\
 	if( (cpustate->_C + io + 1) & 0x100 ) cpustate->_F |= HF | CF;					\
 	if( (irep_tmp1[cpustate->_C & 3][io & 3] ^							\
 		 breg_tmp2[cpustate->_B] ^										\
@@ -719,7 +722,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	OUT(cpustate,  cpustate->_BC, io ); 											\
 	cpustate->_HL++;														\
 	cpustate->_F = SZ[cpustate->_B];												\
-	if( io & SF ) cpustate->_F |= NF;									\
+	if( io & SF ) cpustate->_F |= NF; 									\
 	if( (cpustate->_C + io + 1) & 0x100 ) cpustate->_F |= HF | CF;					\
 	if( (irep_tmp1[cpustate->_C & 3][io & 3] ^							\
 		 breg_tmp2[cpustate->_B] ^										\
@@ -734,7 +737,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 #define LDD {													\
 	UINT8 io = RM(cpustate, cpustate->_HL); 										\
 	WM(cpustate,  cpustate->_DE, io );												\
-	cpustate->_F &= SF | ZF | CF;										\
+	cpustate->_F &= SF | ZF | CF; 										\
 	if( (cpustate->_A + io) & 0x02 ) cpustate->_F |= YF; /* bit 1 -> flag 5 */		\
 	if( (cpustate->_A + io) & 0x08 ) cpustate->_F |= XF; /* bit 3 -> flag 3 */		\
 	cpustate->_HL--; cpustate->_DE--; cpustate->_BC--;										\
@@ -749,7 +752,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	UINT8 res = cpustate->_A - val;										\
 	cpustate->_HL--; cpustate->_BC--;												\
 	cpustate->_F = (cpustate->_F & CF) | (SZ[res] & ~(YF|XF)) | ((cpustate->_A ^ val ^ res) & HF) | NF;  \
-	if( cpustate->_F & HF ) res -= 1;									\
+	if( cpustate->_F & HF ) res -= 1; 									\
 	if( res & 0x02 ) cpustate->_F |= YF; /* bit 1 -> flag 5 */			\
 	if( res & 0x08 ) cpustate->_F |= XF; /* bit 3 -> flag 3 */			\
 	if( cpustate->_BC ) cpustate->_F |= VF; 										\
@@ -764,7 +767,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	WM(cpustate,  cpustate->_HL, io );												\
 	cpustate->_HL--;														\
 	cpustate->_F = SZ[cpustate->_B];												\
-	if( io & SF ) cpustate->_F |= NF;									\
+	if( io & SF ) cpustate->_F |= NF; 									\
 	if( (cpustate->_C + io - 1) & 0x100 ) cpustate->_F |= HF | CF;					\
 	if( (drep_tmp1[cpustate->_C & 3][io & 3] ^							\
 		 breg_tmp2[cpustate->_B] ^										\
@@ -782,7 +785,7 @@ INLINE UINT8 SET(UINT8 bit, UINT8 value)
 	OUT(cpustate,  cpustate->_BC, io ); 											\
 	cpustate->_HL--;														\
 	cpustate->_F = SZ[cpustate->_B];												\
-	if( io & SF ) cpustate->_F |= NF;									\
+	if( io & SF ) cpustate->_F |= NF; 									\
 	if( (cpustate->_C + io - 1) & 0x100 ) cpustate->_F |= HF | CF;					\
 	if( (drep_tmp1[cpustate->_C & 3][io & 3] ^							\
 		 breg_tmp2[cpustate->_B] ^										\

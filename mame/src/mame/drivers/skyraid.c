@@ -4,10 +4,21 @@ Atari Sky Raider driver
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
-#include "includes/skyraid.h"
+#include "skyraid.h"
 
+extern UINT8* skyraid_alpha_num_ram;
+extern UINT8* skyraid_pos_ram;
+extern UINT8* skyraid_obj_ram;
+
+extern int skyraid_scroll;
+
+extern VIDEO_START(skyraid);
+extern VIDEO_UPDATE(skyraid);
+
+static int analog_range;
+static int analog_offset;
 
 
 static PALETTE_INIT( skyraid )
@@ -36,12 +47,11 @@ static PALETTE_INIT( skyraid )
 
 static READ8_HANDLER( skyraid_port_0_r )
 {
-	skyraid_state *state = space->machine().driver_data<skyraid_state>();
-	UINT8 val = input_port_read(space->machine(), "LANGUAGE");
+	UINT8 val = input_port_read(space->machine, "LANGUAGE");
 
-	if (input_port_read(space->machine(), "STICKY") > state->m_analog_range)
+	if (input_port_read(space->machine, "STICKY") > analog_range)
 		val |= 0x40;
-	if (input_port_read(space->machine(), "STICKX") > state->m_analog_range)
+	if (input_port_read(space->machine, "STICKX") > analog_range)
 		val |= 0x80;
 
 	return val;
@@ -50,37 +60,31 @@ static READ8_HANDLER( skyraid_port_0_r )
 
 static WRITE8_HANDLER( skyraid_range_w )
 {
-	skyraid_state *state = space->machine().driver_data<skyraid_state>();
-
-	state->m_analog_range = data & 0x3f;
+	analog_range = data & 0x3f;
 }
 
 
 static WRITE8_HANDLER( skyraid_offset_w )
 {
-	skyraid_state *state = space->machine().driver_data<skyraid_state>();
-
-	state->m_analog_offset = data & 0x3f;
+	analog_offset = data & 0x3f;
 }
 
 
 static WRITE8_HANDLER( skyraid_scroll_w )
 {
-	skyraid_state *state = space->machine().driver_data<skyraid_state>();
-
-	state->m_scroll = data;
+	skyraid_scroll = data;
 }
 
 
-static ADDRESS_MAP_START( skyraid_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( skyraid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x00ff) AM_RAM AM_MIRROR(0x300)
-	AM_RANGE(0x0400, 0x040f) AM_WRITEONLY AM_BASE_MEMBER(skyraid_state, m_pos_ram)
-	AM_RANGE(0x0800, 0x087f) AM_RAM AM_MIRROR(0x480) AM_BASE_MEMBER(skyraid_state, m_alpha_num_ram)
+	AM_RANGE(0x0400, 0x040f) AM_WRITEONLY AM_BASE(&skyraid_pos_ram)
+	AM_RANGE(0x0800, 0x087f) AM_RAM AM_MIRROR(0x480) AM_BASE(&skyraid_alpha_num_ram)
 	AM_RANGE(0x1000, 0x1000) AM_READ(skyraid_port_0_r)
 	AM_RANGE(0x1001, 0x1001) AM_READ_PORT("DSW")
 	AM_RANGE(0x1400, 0x1400) AM_READ_PORT("COIN")
 	AM_RANGE(0x1400, 0x1401) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_BASE_MEMBER(skyraid_state, m_obj_ram)
+	AM_RANGE(0x1c00, 0x1c0f) AM_WRITEONLY AM_BASE(&skyraid_obj_ram)
 	AM_RANGE(0x4000, 0x4000) AM_WRITE(skyraid_scroll_w)
 	AM_RANGE(0x4400, 0x4400) AM_DEVWRITE("discrete", skyraid_sound_w)
 	AM_RANGE(0x4800, 0x4800) AM_WRITE(skyraid_range_w)
@@ -219,36 +223,37 @@ static GFXDECODE_START( skyraid )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( skyraid, skyraid_state )
+static MACHINE_DRIVER_START( skyraid )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, 12096000 / 12)
-	MCFG_CPU_PROGRAM_MAP(skyraid_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
-	MCFG_WATCHDOG_VBLANK_INIT(4)
+	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 12)
+	MDRV_CPU_PROGRAM_MAP(skyraid_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_WATCHDOG_VBLANK_INIT(4)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(22 * 1000000 / 15750))
-	MCFG_SCREEN_SIZE(512, 240)
-	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 239)
-	MCFG_SCREEN_UPDATE_STATIC(skyraid)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(22 * 1000000 / 15750))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 240)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 239)
 
-	MCFG_GFXDECODE(skyraid)
+	MDRV_GFXDECODE(skyraid)
 
-	MCFG_PALETTE_INIT(skyraid)
-	MCFG_PALETTE_LENGTH(20)
+	MDRV_PALETTE_INIT(skyraid)
+	MDRV_PALETTE_LENGTH(20)
 
-	MCFG_VIDEO_START(skyraid)
+	MDRV_VIDEO_START(skyraid)
+	MDRV_VIDEO_UPDATE(skyraid)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(skyraid)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(skyraid)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( skyraid )

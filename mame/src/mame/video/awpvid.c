@@ -29,7 +29,7 @@
 
 **************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "awpvid.h"
 #include "rendlay.h"
 #include "machine/steppers.h"

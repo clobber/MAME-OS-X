@@ -83,24 +83,32 @@ XD2210 or 8202
 DM81LS95 = TriState buffer
 **************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/tms5220.h"
-#include "machine/nvram.h"
-#include "includes/portrait.h"
+
+extern UINT8 *portrait_bgvideoram,*portrait_fgvideoram;
+
+extern int portrait_scroll;
+
+//PALETTE_INIT( portrait );
+VIDEO_START( portrait );
+VIDEO_UPDATE( portrait );
+WRITE8_HANDLER( portrait_bgvideo_write );
+WRITE8_HANDLER( portrait_fgvideo_write );
 
 static WRITE8_HANDLER( portrait_ctrl_w )
 {
 	/* bits 4 and 5 are unknown */
 
-	coin_counter_w(space->machine(), 0, data & 0x01);
-	coin_counter_w(space->machine(), 1, data & 0x02);
-	coin_counter_w(space->machine(), 2, data & 0x04);
+	coin_counter_w(0, data & 0x01);
+	coin_counter_w(1, data & 0x02);
+	coin_counter_w(2, data & 0x04);
 
 	/* the 2 lamps near the camera */
-	set_led_status(space->machine(), 0, data & 0x08);
-	set_led_status(space->machine(), 1, data & 0x40);
+	set_led_status(0, data & 0x08);
+	set_led_status(1, data & 0x40);
 
 	/* shows the black and white photo from the camera */
 	output_set_value("photo", (data >> 7) & 1);
@@ -108,21 +116,19 @@ static WRITE8_HANDLER( portrait_ctrl_w )
 
 static WRITE8_HANDLER( portrait_positive_scroll_w )
 {
-	portrait_state *state = space->machine().driver_data<portrait_state>();
-	state->m_scroll = data;
+	portrait_scroll = data;
 }
 
 static WRITE8_HANDLER( portrait_negative_scroll_w )
 {
-	portrait_state *state = space->machine().driver_data<portrait_state>();
-	state->m_scroll = - (data ^ 0xff);
+	portrait_scroll = - (data ^ 0xff);
 }
 
-static ADDRESS_MAP_START( portrait_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( portrait_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(portrait_bgvideo_write) AM_BASE_MEMBER(portrait_state, m_bgvideoram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(portrait_fgvideo_write) AM_BASE_MEMBER(portrait_state, m_fgvideoram)
-	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_SIZE_MEMBER(portrait_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(portrait_bgvideo_write) AM_BASE(&portrait_bgvideoram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(portrait_fgvideo_write) AM_BASE(&portrait_fgvideoram)
+	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x9200, 0x97ff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xa010, 0xa010) AM_WRITENOP // ?
@@ -130,14 +136,14 @@ static ADDRESS_MAP_START( portrait_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xa004, 0xa004) AM_READ_PORT("DSW2")
 	AM_RANGE(0xa008, 0xa008) AM_READ_PORT("SYSTEM") AM_WRITE(portrait_ctrl_w)
 	AM_RANGE(0xa010, 0xa010) AM_READ_PORT("INPUTS")
-	AM_RANGE(0xa018, 0xa018) AM_READNOP AM_WRITE(portrait_positive_scroll_w)
+	AM_RANGE(0xa018, 0xa018) AM_READWRITE(SMH_NOP, portrait_positive_scroll_w)
 	AM_RANGE(0xa019, 0xa019) AM_WRITE(portrait_negative_scroll_w)
-	AM_RANGE(0xa800, 0xa83f) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xa800, 0xa83f) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0xffff, 0xffff) AM_READNOP
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( portrait_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( portrait_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -228,7 +234,7 @@ static const gfx_layout tile_layout =
 	16,16, /* tile width, height   */
 	1024,  /* number of characters  */
 	3,     /* bits per pixel */
-	{ 0x8000*8, 0x4000*8, 0x0000*8 }, /* bitplane offsets */
+	{ 0, 0x4000*8, 0x8000*8 }, /* bitplane offsets */
 	{
 		RGN_FRAC(1,2)+7, RGN_FRAC(1,2)+6, RGN_FRAC(1,2)+5, RGN_FRAC(1,2)+4,
 		RGN_FRAC(1,2)+3, RGN_FRAC(1,2)+2, RGN_FRAC(1,2)+1, RGN_FRAC(1,2)+0,
@@ -239,39 +245,40 @@ static const gfx_layout tile_layout =
 };
 
 static GFXDECODE_START( portrait )
-	GFXDECODE_ENTRY( "gfx1", 0x00000, tile_layout, 0, 0x800/8 )
+	GFXDECODE_ENTRY( "gfx1", 0x00000, tile_layout, 0, 0x100 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( portrait, portrait_state )
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)     /* 4 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(portrait_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+static MACHINE_DRIVER_START( portrait )
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)     /* 4 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(portrait_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", I8039, 3120000)  /* ? */
-	MCFG_CPU_PROGRAM_MAP(portrait_sound_map)
+	MDRV_CPU_ADD("audiocpu", I8039, 3120000)  /* ? */
+	MDRV_CPU_PROGRAM_MAP(portrait_sound_map)
 
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(50)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 54*8-1, 0*8, 40*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(portrait)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(50)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 54*8-1, 0*8, 40*8-1)
 
-	MCFG_GFXDECODE(portrait)
-	MCFG_PALETTE_LENGTH(0x800)
-	MCFG_PALETTE_INIT(portrait)
+	MDRV_GFXDECODE(portrait)
+	MDRV_PALETTE_LENGTH(0x800)
+//  MDRV_PALETTE_INIT(portrait)
 
-	MCFG_VIDEO_START(portrait)
+	MDRV_VIDEO_START(portrait)
+	MDRV_VIDEO_UPDATE(portrait)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("tms", TMS5200, 640000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("tms", TMS5200, 640000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( portrait )
@@ -285,34 +292,29 @@ ROM_START( portrait )
 	ROM_LOAD( "port_w.bin",  0x0000, 0x0800, CRC(d3a4e950) SHA1(0a399d43c7690d568874f3b1d55135f803fc223f) )
 	ROM_LOAD( "port_ma.bin", 0x0800, 0x0800, CRC(ee242e4f) SHA1(fb67e0d136927e04f4fa819f684c97b0d52ee48c) )
 
-	ROM_REGION( 0x20000, "gfx1", 0 )
+	ROM_REGION( 0x20000, "gfx1", ROMREGION_INVERT )
 	ROM_LOAD( "port_00.a1", 0x00000, 0x2000, CRC(eb3e1c12) SHA1(2d38b66f52546b40553244c8a5c961279559f5b6) )	/*bit plane 1*/
 	ROM_LOAD( "port_10.b1", 0x02000, 0x2000, CRC(0f44e377) SHA1(1955f9f4deab2166f637f43c1f326bd65fc90f6a) )	/*bit plane 1*/
-
 	ROM_LOAD( "port_02.d1", 0x04000, 0x2000, CRC(bd93a3f9) SHA1(9cb479b8840cafd6043ff0cb9d5ca031dcd332ba) )	/*bit plane 2*/
 	ROM_LOAD( "port_12.e1", 0x06000, 0x2000, CRC(656b9f20) SHA1(c1907aba3d19be79d92cd73784b8e7ae94910da6) )	/*bit plane 2*/
-
 	ROM_LOAD( "port_04.g1", 0x08000, 0x2000, CRC(2a99feb5) SHA1(b373d2a2bd28aad6dd7a15a2166e03a8b7a34d9b) )	/*bit plane 3*/
 	ROM_LOAD( "port_14.g1", 0x0a000, 0x2000, CRC(224b7a58) SHA1(b84e70d22d1cab41e5773fc9daa2e4e55ec9d96e) )	/*bit plane 3*/
 
 	ROM_LOAD( "port_01.a2", 0x10000, 0x2000, CRC(70d27508) SHA1(d011f85b31bb3aa6f386e8e0edb91df10f4c4eb6) )	/*bit plane 1*/
 	ROM_LOAD( "port_11.b2", 0x12000, 0x2000, CRC(f498e395) SHA1(beb1d12433a350e5b773126de3f2803a9f5620c1) )	/*bit plane 1*/
-
 	ROM_LOAD( "port_03.d2", 0x14000, 0x2000, CRC(03d4153a) SHA1(7ce69ce6a101870dbfca1a9787fb1e660024bc02) )	/*bit plane 2*/
 	ROM_LOAD( "port_13.e2", 0x16000, 0x2000, CRC(10fa22b8) SHA1(e8f4c24fcdda0ce5e33bc600acd574a232a9bb21) )	/*bit plane 2*/
-
 	ROM_LOAD( "port_05.g2", 0x18000, 0x2000, CRC(43ea7951) SHA1(df0ae7fa802365979514063e1d67cdd45ecada90) )	/*bit plane 3*/
 	ROM_LOAD( "port_15.h2", 0x1a000, 0x2000, CRC(ab20b438) SHA1(ea5d60f6a9f06397bd0c6ee028b463c684090c01) )	/*bit plane 3*/
 
 	ROM_REGION( 0x0800, "user1", 0 ) // sound related?
 	ROM_LOAD( "port_sa.bin", 0x0000, 0x0800, CRC(50510897) SHA1(8af0f42699602a5b33500968c958e3784e03377f) )
 
-	ROM_REGION( 0x800, "tileattr", 0 ) // tile attributes
+	ROM_REGION( 0x840, "proms", 0 )
+	/* color prom? */
 	ROM_LOAD( "93z511.bin",   0x0000, 0x0800, CRC(d66d9036) SHA1(7a25efbd8f2f94a01aad9e2be9cb18da7b9ec1d1) )
-
-	ROM_REGION( 0x40, "proms", 0 ) // colors
-	ROM_LOAD( "port_pr1.bin", 0x00, 0x0020, CRC(1e2deabb) SHA1(8357e53dba26bca9bc5d7a25c715836f0b3700b9) )
-	ROM_LOAD( "port_pr2.n4",  0x20, 0x0020, CRC(008634f3) SHA1(7cde6b09ede672d562569866d944428198f2ba9c) )
+	ROM_LOAD( "port_pr1.bin", 0x0800, 0x0020, CRC(1e2deabb) SHA1(8357e53dba26bca9bc5d7a25c715836f0b3700b9) )
+	ROM_LOAD( "port_pr2.n4",  0x0820, 0x0020, CRC(008634f3) SHA1(7cde6b09ede672d562569866d944428198f2ba9c) )
 ROM_END
 
 ROM_START( portraita )
@@ -341,47 +343,15 @@ ROM_START( portraita )
 	ROM_LOAD( "port_05.g2", 0x18000, 0x2000, CRC(43ea7951) SHA1(df0ae7fa802365979514063e1d67cdd45ecada90) )	/*bit plane 3*/
 	ROM_LOAD( "port_15.h2", 0x1a000, 0x2000, CRC(ab20b438) SHA1(ea5d60f6a9f06397bd0c6ee028b463c684090c01) )	/*bit plane 3*/
 
-	ROM_REGION( 0x800, "tileattr", 0 ) // tile attributes (see notes)
+	ROM_REGION( 0x0800, "user1", 0 ) // sound related?
+	ROM_LOAD( "port_sa.bin", 0x0000, 0x0800, CRC(50510897) SHA1(8af0f42699602a5b33500968c958e3784e03377f) )
+
+	ROM_REGION( 0x840, "proms", 0 )
+	/* color prom? */
 	ROM_LOAD( "93z511.bin",   0x0000, 0x0800, CRC(d66d9036) SHA1(7a25efbd8f2f94a01aad9e2be9cb18da7b9ec1d1) )
-
-	ROM_REGION( 0x40, "proms", 0 ) // colors
-	ROM_LOAD( "port_pr1.bin", 0x00, 0x0020, CRC(1e2deabb) SHA1(8357e53dba26bca9bc5d7a25c715836f0b3700b9) )
-	ROM_LOAD( "port_pr2.n4",  0x20, 0x0020, CRC(008634f3) SHA1(7cde6b09ede672d562569866d944428198f2ba9c) )
+	ROM_LOAD( "port_pr1.bin", 0x0800, 0x0020, CRC(1e2deabb) SHA1(8357e53dba26bca9bc5d7a25c715836f0b3700b9) )
+	ROM_LOAD( "port_pr2.n4",  0x0820, 0x0020, CRC(008634f3) SHA1(7cde6b09ede672d562569866d944428198f2ba9c) )
 ROM_END
-
-/* tileattr rom
-
-  this appears to be divided into 2 0x400 banks
-
-  0x000 - 0x3ff relates to tiles 0x000-0x0ff
-
-  0x400 - 0x7ff relates to tiles 0x100-0x1ff, 0x200-0x2ff, and 0x300-0x3ff
-
-  every 2 tiles are somehow related to 8 bytes in the data
-
-   so tiles 0x00 and 0x01 use bytes 0x000-0x007
-            0x02                    0x008
-            0x04                    0x010
-            0x06                    0x018
-            0x08                    0x020
-            0x0a                    0x028
-            0x0c                    0x030
-            0x0e                    0x038
-            0x10                    0x040
-               .......
-            0xfe and 0xff use bytes 0x3f8-0x3ff
-            etc.
-
-    it's probably some kind of lookup table for the colours (6bpp = 8 colours, maybe every 2 tiles share the same 8 colours)
-    I guess either the bank (0/1) can be selected, or bank 0 is hardcoded to tiles 0x000-0x0ff (because tilemaps can use
-     these tiles too, so it's not a case of it being a sprite/tilemap lookup split)
-
-    anyway.. this is why the portraits logo is broken across 3 areas (0x1f2, 0x2f2, 0x3f2) so that they can share the same
-    attributes from this rom
-
-  */
-
-
 
 GAME( 1983, portrait, 0,        portrait, portrait,  0, ROT270, "Olympia", "Portraits (set 1)", GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS )
 GAME( 1983, portraita,portrait, portrait, portrait,  0, ROT270, "Olympia", "Portraits (set 2)", GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS )

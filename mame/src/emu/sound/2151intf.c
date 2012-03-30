@@ -6,7 +6,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "fm.h"
 #include "2151intf.h"
 #include "ym2151.h"
@@ -23,11 +24,13 @@ struct _ym2151_state
 };
 
 
-INLINE ym2151_state *get_safe_token(device_t *device)
+INLINE ym2151_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == YM2151);
-	return (ym2151_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_YM2151);
+	return (ym2151_state *)device->token;
 }
 
 
@@ -38,21 +41,30 @@ static STREAM_UPDATE( ym2151_update )
 }
 
 
+static STATE_POSTLOAD( ym2151intf_postload )
+{
+	ym2151_state *info = (ym2151_state *)param;
+	ym2151_postload(machine, info->chip);
+}
+
+
 static DEVICE_START( ym2151 )
 {
 	static const ym2151_interface dummy = { 0 };
 	ym2151_state *info = get_safe_token(device);
 	int rate;
 
-	info->intf = device->static_config() ? (const ym2151_interface *)device->static_config() : &dummy;
+	info->intf = device->static_config ? (const ym2151_interface *)device->static_config : &dummy;
 
-	rate = device->clock()/64;
+	rate = device->clock/64;
 
 	/* stream setup */
-	info->stream = device->machine().sound().stream_alloc(*device,0,2,rate,info,ym2151_update);
+	info->stream = stream_create(device,0,2,rate,info,ym2151_update);
 
-	info->chip = ym2151_init(device,device->clock(),rate);
+	info->chip = ym2151_init(device,device->clock,rate);
 	assert_always(info->chip != NULL, "Error creating YM2151 chip");
+
+	state_save_register_postload(device->machine, ym2151intf_postload, info);
 
 	ym2151_set_irq_handler(info->chip,info->intf->irqhandler);
 	ym2151_set_port_write_handler(info->chip,info->intf->portwritehandler);
@@ -78,7 +90,7 @@ READ8_DEVICE_HANDLER( ym2151_r )
 
 	if (offset & 1)
 	{
-		token->stream->update();
+		stream_update(token->stream);
 		return ym2151_read_status(token->chip);
 	}
 	else
@@ -91,7 +103,7 @@ WRITE8_DEVICE_HANDLER( ym2151_w )
 
 	if (offset & 1)
 	{
-		token->stream->update();
+		stream_update(token->stream);
 		ym2151_write_reg(token->chip, token->lastreg, data);
 	}
 	else
@@ -130,6 +142,3 @@ DEVICE_GET_INFO( ym2151 )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
-
-
-DEFINE_LEGACY_SOUND_DEVICE(YM2151, ym2151);

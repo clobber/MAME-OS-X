@@ -1,5 +1,18 @@
-#include "emu.h"
-#include "includes/dogfgt.h"
+#include "driver.h"
+#include "dogfgt.h"
+
+
+UINT8 *dogfgt_bgvideoram;
+
+static UINT8 *bitmapram;
+static int bm_plane;
+static bitmap_t *pixbitmap;
+static int pixcolor;
+static tilemap *bg_tilemap;
+
+#define PIXMAP_COLOR_BASE (16+32)
+
+#define BITMAPRAM_SIZE 0x6000
 
 
 /***************************************************************************
@@ -16,9 +29,11 @@ PALETTE_INIT( dogfgt )
 	int i;
 
 	/* first 16 colors are RAM */
-	for (i = 0; i < 64; i++)
+
+	for (i = 0;i < 64;i++)
 	{
-		int bit0, bit1, bit2, r, g, b;
+		int bit0,bit1,bit2,r,g,b;
+
 
 		/* red component */
 		bit0 = (*color_prom >> 0) & 0x01;
@@ -36,7 +51,7 @@ PALETTE_INIT( dogfgt )
 		bit2 = (*color_prom >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		palette_set_color(machine, i + 16, MAKE_RGB(r,g,b));
+		palette_set_color(machine,i+16,MAKE_RGB(r,g,b));
 		color_prom++;
 	}
 }
@@ -50,11 +65,10 @@ PALETTE_INIT( dogfgt )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	dogfgt_state *state = machine.driver_data<dogfgt_state>();
 	SET_TILE_INFO(
 			0,
-			state->m_bgvideoram[tile_index],
-			state->m_bgvideoram[tile_index + 0x400] & 0x03,
+			dogfgt_bgvideoram[tile_index],
+			dogfgt_bgvideoram[tile_index + 0x400] & 0x03,
 			0);
 }
 
@@ -67,14 +81,11 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( dogfgt )
 {
-	dogfgt_state *state = machine.driver_data<dogfgt_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,16,16,32,32);
 
-	state->m_bitmapram = auto_alloc_array(machine, UINT8, BITMAPRAM_SIZE);
-	state->save_pointer(NAME(state->m_bitmapram), BITMAPRAM_SIZE);
+	bitmapram = auto_alloc_array(machine, UINT8, BITMAPRAM_SIZE);
 
-	machine.primary_screen->register_screen_bitmap(state->m_pixbitmap);
-	state->save_item(NAME(state->m_pixbitmap));
+	pixbitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
 }
 
 
@@ -86,95 +97,85 @@ VIDEO_START( dogfgt )
 
 WRITE8_HANDLER( dogfgt_plane_select_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-
-	state->m_bm_plane = data;
+	bm_plane = data;
 }
 
 READ8_HANDLER( dogfgt_bitmapram_r )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-
-	if (state->m_bm_plane > 2)
+	if (bm_plane > 2)
 	{
-		popmessage("bitmapram_r offs %04x plane %d\n", offset, state->m_bm_plane);
+		popmessage("bitmapram_r offs %04x plane %d\n",offset,bm_plane);
 		return 0;
 	}
 
-	return state->m_bitmapram[offset + BITMAPRAM_SIZE / 3 * state->m_bm_plane];
+	return bitmapram[offset + BITMAPRAM_SIZE/3 * bm_plane];
 }
 
 static WRITE8_HANDLER( internal_bitmapram_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-	int x, y, subx;
+	int x,y,subx;
 
-	state->m_bitmapram[offset] = data;
 
-	offset &= (BITMAPRAM_SIZE / 3 - 1);
+	bitmapram[offset] = data;
+
+	offset &= (BITMAPRAM_SIZE/3-1);
 	x = 8 * (offset / 256);
 	y = offset % 256;
 
-	for (subx = 0; subx < 8; subx++)
+	for (subx = 0;subx < 8;subx++)
 	{
-		int i, color = 0;
+		int i,color = 0;
 
-		for (i = 0; i < 3; i++)
-			color |= ((state->m_bitmapram[offset + BITMAPRAM_SIZE / 3 * i] >> subx) & 1) << i;
-
-		if (flip_screen_get(space->machine()))
-			state->m_pixbitmap.pix16(y ^ 0xff, (x + subx) ^ 0xff) = PIXMAP_COLOR_BASE + 8 * state->m_pixcolor + color;
+		for (i = 0;i < 3;i++)
+			color |= ((bitmapram[offset + BITMAPRAM_SIZE/3 * i] >> subx) & 1) << i;
+		if (flip_screen_get(space->machine))
+			*BITMAP_ADDR16(pixbitmap, y^0xff, (x+subx)^0xff) = PIXMAP_COLOR_BASE + 8*pixcolor + color;
 		else
-			state->m_pixbitmap.pix16(y, x + subx) = PIXMAP_COLOR_BASE + 8 * state->m_pixcolor + color;
+			*BITMAP_ADDR16(pixbitmap, y, x+subx) = PIXMAP_COLOR_BASE + 8*pixcolor + color;
 	}
 }
 
 WRITE8_HANDLER( dogfgt_bitmapram_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-
-	if (state->m_bm_plane > 2)
+	if (bm_plane > 2)
 	{
-		popmessage("bitmapram_w offs %04x plane %d\n", offset, state->m_bm_plane);
+		popmessage("bitmapram_w offs %04x plane %d\n",offset,bm_plane);
 		return;
 	}
 
-	internal_bitmapram_w(space, offset + BITMAPRAM_SIZE / 3 * state->m_bm_plane, data);
+	internal_bitmapram_w(space,offset + BITMAPRAM_SIZE/3 * bm_plane,data);
 }
 
 WRITE8_HANDLER( dogfgt_bgvideoram_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-
-	state->m_bgvideoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset & 0x3ff);
+	dogfgt_bgvideoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
 }
 
 WRITE8_HANDLER( dogfgt_scroll_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
+	static int scroll[4];
 
-	state->m_scroll[offset] = data;
-	state->m_bg_tilemap->set_scrollx(0, state->m_scroll[0] + 256 * state->m_scroll[1] + 256);
-	state->m_bg_tilemap->set_scrolly(0, state->m_scroll[2] + 256 * state->m_scroll[3]);
+	scroll[offset] = data;
+
+	tilemap_set_scrollx(bg_tilemap,0,scroll[0] + 256 * scroll[1] + 256);
+	tilemap_set_scrolly(bg_tilemap,0,scroll[2] + 256 * scroll[3]);
 }
 
 WRITE8_HANDLER( dogfgt_1800_w )
 {
-	dogfgt_state *state = space->machine().driver_data<dogfgt_state>();
-
 	/* bits 0 and 1 are probably text color (not verified because PROM is missing) */
-	state->m_pixcolor = ((data & 0x01) << 1) | ((data & 0x02) >> 1);
+	pixcolor = ((data & 0x01) << 1) | ((data & 0x02) >> 1);
 
 	/* bits 4 and 5 are coin counters */
-	coin_counter_w(space->machine(), 0, data & 0x10);
-	coin_counter_w(space->machine(), 1, data & 0x20);
+	coin_counter_w(0,data & 0x10);
+	coin_counter_w(1,data & 0x20);
 
 	/* bit 7 is screen flip */
-	flip_screen_set(space->machine(), data & 0x80);
+	flip_screen_set(space->machine, data & 0x80);
 
 	/* other bits unused? */
-	logerror("PC %04x: 1800 = %02x\n", cpu_get_pc(&space->device()), data);
+	logerror("PC %04x: 1800 = %02x\n",cpu_get_pc(space->cpu),data);
 }
 
 
@@ -184,21 +185,20 @@ WRITE8_HANDLER( dogfgt_1800_w )
 
 ***************************************************************************/
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	dogfgt_state *state = machine.driver_data<dogfgt_state>();
 	int offs;
 
-	for (offs = 0; offs < state->m_spriteram_size; offs += 4)
+	for (offs = 0;offs < spriteram_size;offs += 4)
 	{
-		if (state->m_spriteram[offs] & 0x01)
+		if (spriteram[offs] & 0x01)
 		{
-			int sx, sy, flipx, flipy;
+			int sx,sy,flipx,flipy;
 
-			sx = state->m_spriteram[offs + 3];
-			sy = (240 - state->m_spriteram[offs + 2]) & 0xff;
-			flipx = state->m_spriteram[offs] & 0x04;
-			flipy = state->m_spriteram[offs] & 0x02;
+			sx = spriteram[offs+3];
+			sy = (240 - spriteram[offs+2]) & 0xff;
+			flipx = spriteram[offs] & 0x04;
+			flipy = spriteram[offs] & 0x02;
 			if (flip_screen_get(machine))
 			{
 				sx = 240 - sx;
@@ -207,9 +207,9 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap,const r
 				flipy = !flipy;
 			}
 
-			drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
-					state->m_spriteram[offs + 1] + ((state->m_spriteram[offs] & 0x30) << 4),
-					(state->m_spriteram[offs] & 0x08) >> 3,
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+					spriteram[offs+1] + ((spriteram[offs] & 0x30) << 4),
+					(spriteram[offs] & 0x08) >> 3,
 					flipx,flipy,
 					sx,sy,0);
 		}
@@ -217,27 +217,28 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap,const r
 }
 
 
-SCREEN_UPDATE_IND16( dogfgt )
+VIDEO_UPDATE( dogfgt )
 {
-	dogfgt_state *state = screen.machine().driver_data<dogfgt_state>();
+	static int lastflip,lastpixcolor;
 	int offs;
 
-	if (state->m_lastflip != flip_screen_get(screen.machine()) || state->m_lastpixcolor != state->m_pixcolor)
+
+	if (lastflip != flip_screen_get(screen->machine) || lastpixcolor != pixcolor)
 	{
-		address_space *space = screen.machine().device("maincpu")->memory().space(AS_PROGRAM);
+		const address_space *space = cputag_get_address_space(screen->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
-		state->m_lastflip = flip_screen_get(screen.machine());
-		state->m_lastpixcolor = state->m_pixcolor;
+		lastflip = flip_screen_get(screen->machine);
+		lastpixcolor = pixcolor;
 
-		for (offs = 0; offs < BITMAPRAM_SIZE; offs++)
-			internal_bitmapram_w(space, offs, state->m_bitmapram[offs]);
+		for (offs = 0;offs < BITMAPRAM_SIZE;offs++)
+			internal_bitmapram_w(space,offs,bitmapram[offs]);
 	}
 
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
 
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	draw_sprites(screen->machine, bitmap, cliprect);
 
-	copybitmap_trans(bitmap, state->m_pixbitmap, 0, 0, 0, 0, cliprect, PIXMAP_COLOR_BASE + 8 * state->m_pixcolor);
+	copybitmap_trans(bitmap,pixbitmap,0,0,0,0,cliprect,PIXMAP_COLOR_BASE + 8*pixcolor);
 	return 0;
 }

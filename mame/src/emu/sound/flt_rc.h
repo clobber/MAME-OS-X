@@ -4,7 +4,6 @@
 #define FLT_RC_H
 
 #include "machine/rescap.h"
-#include "devlegcy.h"
 
 #define FLT_RC_LOWPASS		0
 #define FLT_RC_HIGHPASS		1
@@ -36,12 +35,12 @@
  * Same as FLT_RC_HIGHPASS, but with standard frequency of 16 HZ
  * This filter may be setup just with
  *
- * MCFG_SOUND_ADD("tag", FILTER_RC, 0)
- * MCFG_SOUND_CONFIG(&flt_rc_ac_default)
+ * MDRV_SOUND_ADD("tag", FILTER_RC, 0)
+ * MDRV_SOUND_CONFIG(&flt_rc_ac_default)
  *
  * Default behaviour:
  *
- * Without MCFG_SOUND_CONFIG, a disabled FLT_RC_LOWPASS is created
+ * Without MDRV_SOUND_CONFIG, a disabled FLT_RC_LOWPASS is created
  *
  */
 
@@ -57,8 +56,9 @@ struct _flt_rc_config
 
 extern const flt_rc_config flt_rc_ac_default;
 
-void filter_rc_set_RC(device_t *device, int type, double R1, double R2, double R3, double C);
+void filter_rc_set_RC(const device_config *device, int type, double R1, double R2, double R3, double C);
 
-DECLARE_LEGACY_SOUND_DEVICE(FILTER_RC, filter_rc);
+DEVICE_GET_INFO( filter_rc );
+#define SOUND_FILTER_RC DEVICE_GET_INFO_NAME( filter_rc )
 
 #endif /* __FLT_RC_H__ */

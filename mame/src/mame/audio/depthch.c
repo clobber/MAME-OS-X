@@ -2,7 +2,7 @@
  *  Depth Charge audio routines
  */
 
-#include "emu.h"
+#include "driver.h"
 #include "sound/samples.h"
 #include "includes/vicdual.h"
 
@@ -21,10 +21,10 @@
 static const char *const depthch_sample_names[] =
 {
 	"*depthch",
-	"longex",
-	"shortex",
-	"spray",
-	"sonar",
+	"longex.wav",
+	"shortex.wav",
+	"spray.wav",
+	"sonar.wav",
 	0
 };
 
@@ -36,11 +36,11 @@ static const samples_interface depthch_samples_interface =
 };
 
 
-MACHINE_CONFIG_FRAGMENT( depthch_audio )
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(depthch_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
-MACHINE_CONFIG_END
+MACHINE_DRIVER_START( depthch_audio )
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(depthch_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
+MACHINE_DRIVER_END
 
 
 /* sample IDs - must match sample file name table above */
@@ -56,7 +56,7 @@ enum
 WRITE8_HANDLER( depthch_audio_w )
 {
 	static int port1State = 0;
-	device_t *samples = space->machine().device("samples");
+	const device_config *samples = devtag_get_device(space->machine, "samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;

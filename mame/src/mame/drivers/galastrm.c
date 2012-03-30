@@ -37,22 +37,29 @@ $305.b invincibility
 */
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "video/taitoic.h"
+#include "audio/taitosnd.h"
 #include "machine/eeprom.h"
 #include "sound/es5506.h"
+#include "includes/taito_f3.h"
 #include "audio/taito_en.h"
-#include "includes/galastrm.h"
 
+
+VIDEO_START( galastrm );
+VIDEO_UPDATE( galastrm );
+
+static UINT16 coin_word, frame_counter=0;
+static UINT32 *galastrm_ram;
+extern INT16  galastrm_tc0610_ctrl_reg[2][8];
 
 /*********************************************************************/
 
 static INTERRUPT_GEN( galastrm_interrupt )
 {
-	galastrm_state *state = device->machine().driver_data<galastrm_state>();
-	state->m_frame_counter ^= 1;
-	device_set_input_line(device, 5, HOLD_LINE);
+	frame_counter ^= 1;
+	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
 static TIMER_CALLBACK( galastrm_interrupt6 )
@@ -61,57 +68,55 @@ static TIMER_CALLBACK( galastrm_interrupt6 )
 }
 
 
+static int tc0110pcr_addr;
+static int tc0610_0_addr;
+static int tc0610_1_addr;
 
 static WRITE32_HANDLER( galastrm_palette_w )
 {
-	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		state->m_tc0110pcr_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (state->m_tc0110pcr_addr < 4096))
-		palette_set_color_rgb(space->machine(), state->m_tc0110pcr_addr, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+		tc0110pcr_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (tc0110pcr_addr < 4096))
+		palette_set_color_rgb(space->machine, tc0110pcr_addr, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
 static WRITE32_HANDLER( galastrm_tc0610_0_w )
 {
-	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		state->m_tc0610_0_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (state->m_tc0610_0_addr < 8))
-		state->m_tc0610_ctrl_reg[0][state->m_tc0610_0_addr] = data;
+		tc0610_0_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (tc0610_0_addr < 8))
+		galastrm_tc0610_ctrl_reg[0][tc0610_0_addr] = data;
 }
 
 static WRITE32_HANDLER( galastrm_tc0610_1_w )
 {
-	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 	if (ACCESSING_BITS_16_31)
-		state->m_tc0610_1_addr = data >> 16;
-	if ((ACCESSING_BITS_0_15) && (state->m_tc0610_1_addr < 8))
-		state->m_tc0610_ctrl_reg[1][state->m_tc0610_1_addr] = data;
+		tc0610_1_addr = data >> 16;
+	if ((ACCESSING_BITS_0_15) && (tc0610_1_addr < 8))
+		galastrm_tc0610_ctrl_reg[1][tc0610_1_addr] = data;
 }
 
 
 static CUSTOM_INPUT( frame_counter_r )
 {
-	galastrm_state *state = field.machine().driver_data<galastrm_state>();
-	return state->m_frame_counter;
+	return frame_counter;
 }
 
 static CUSTOM_INPUT( coin_word_r )
 {
-	galastrm_state *state = field.machine().driver_data<galastrm_state>();
-	return state->m_coin_word;
+	return coin_word;
 }
 
 static WRITE32_HANDLER( galastrm_input_w )
 {
-	galastrm_state *state = space->machine().driver_data<galastrm_state>();
 
 #if 0
 {
 char t[64];
-COMBINE_DATA(&state->m_mem[offset]);
+static UINT32 mem[2];
+COMBINE_DATA(&mem[offset]);
 
-sprintf(t,"%08x %08x",state->m_mem[0],state->m_mem[1]);
+sprintf(t,"%08x %08x",mem[0],mem[1]);
 popmessage(t);
 }
 #endif
@@ -122,15 +127,14 @@ popmessage(t);
 		{
 			if (ACCESSING_BITS_24_31)	/* $400000 is watchdog */
 			{
-				watchdog_reset(space->machine());
+				watchdog_reset(space->machine);
 			}
 
 			if (ACCESSING_BITS_0_7)
 			{
-				eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
-				eeprom->set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
-				eeprom->write_bit(data & 0x40);
-				eeprom->set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
+				eeprom_set_clock_line((data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+				eeprom_write_bit(data & 0x40);
+				eeprom_set_cs_line((data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 				return;
 			}
 			return;
@@ -140,13 +144,13 @@ popmessage(t);
 		{
 			if (ACCESSING_BITS_24_31)
 			{
-				coin_lockout_w(space->machine(), 0, ~data & 0x01000000);
-				coin_lockout_w(space->machine(), 1, ~data & 0x02000000);
-				coin_counter_w(space->machine(), 0, data & 0x04000000);
-				coin_counter_w(space->machine(), 1, data & 0x04000000);
-				state->m_coin_word = (data >> 16) &0xffff;
+				coin_lockout_w(0, ~data & 0x01000000);
+				coin_lockout_w(1, ~data & 0x02000000);
+				coin_counter_w(0, data & 0x04000000);
+				coin_counter_w(1, data & 0x04000000);
+				coin_word = (data >> 16) &0xffff;
 			}
-//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(&space->device()),offset);
+//logerror("CPU #0 PC %06x: write input %06x\n",cpu_get_pc(space->cpu),offset);
 		}
 	}
 }
@@ -156,39 +160,39 @@ static READ32_HANDLER( galastrm_adstick_ctrl_r )
 	if (offset == 0x00)
 	{
 		if (ACCESSING_BITS_24_31)
-			return input_port_read(space->machine(), "STICKX") << 24;
+			return input_port_read(space->machine, "STICKX") << 24;
 		if (ACCESSING_BITS_16_23)
-			return input_port_read(space->machine(), "STICKY") << 16;
+			return input_port_read(space->machine, "STICKY") << 16;
 	}
 	return 0;
 }
 
 static WRITE32_HANDLER( galastrm_adstick_ctrl_w )
 {
-	space->machine().scheduler().timer_set(downcast<cpu_device *>(&space->device())->cycles_to_attotime(1000), FUNC(galastrm_interrupt6));
+	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,1000), NULL, 0, galastrm_interrupt6);
 }
 
 /***********************************************************
              MEMORY STRUCTURES
 ***********************************************************/
 
-static ADDRESS_MAP_START( galastrm_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( galastrm_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE_MEMBER(galastrm_state, m_ram)								/* main CPUA ram */
-	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE_SIZE_MEMBER(galastrm_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x200000, 0x21ffff) AM_RAM AM_BASE(&galastrm_ram) 								/* main CPUA ram */
+	AM_RANGE(0x300000, 0x303fff) AM_RAM AM_BASE(&spriteram32) AM_SIZE(&spriteram_size)
 	AM_RANGE(0x400000, 0x400003) AM_READ_PORT("IN0")
 	AM_RANGE(0x400004, 0x400007) AM_READ_PORT("IN1")
 	AM_RANGE(0x400000, 0x400007) AM_WRITE(galastrm_input_w)									/* eerom etc. */
 	AM_RANGE(0x40fff0, 0x40fff3) AM_WRITENOP
 	AM_RANGE(0x500000, 0x500007) AM_READWRITE(galastrm_adstick_ctrl_r, galastrm_adstick_ctrl_w)
-	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_SHARE("f3_shared")								/* Sound shared ram */
-	AM_RANGE(0x800000, 0x80ffff) AM_DEVREADWRITE("tc0480scp", tc0480scp_long_r, tc0480scp_long_w)		/* tilemaps */
-	AM_RANGE(0x830000, 0x83002f) AM_DEVREADWRITE("tc0480scp", tc0480scp_ctrl_long_r, tc0480scp_ctrl_long_w)
+	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_BASE(&f3_shared_ram)								/* Sound shared ram */
+	AM_RANGE(0x800000, 0x80ffff) AM_READWRITE(TC0480SCP_long_r, TC0480SCP_long_w)
+	AM_RANGE(0x830000, 0x83002f) AM_READWRITE(TC0480SCP_ctrl_long_r, TC0480SCP_ctrl_long_w)
 	AM_RANGE(0x900000, 0x900003) AM_WRITE(galastrm_palette_w)								/* TC0110PCR */
 	AM_RANGE(0xb00000, 0xb00003) AM_WRITE(galastrm_tc0610_0_w)								/* TC0610 */
 	AM_RANGE(0xc00000, 0xc00003) AM_WRITE(galastrm_tc0610_1_w)
-	AM_RANGE(0xd00000, 0xd0ffff) AM_DEVREADWRITE("tc0100scn", tc0100scn_long_r, tc0100scn_long_w)		/* piv tilemaps */
-	AM_RANGE(0xd20000, 0xd2000f) AM_DEVREADWRITE("tc0100scn", tc0100scn_ctrl_long_r, tc0100scn_ctrl_long_w)
+	AM_RANGE(0xd00000, 0xd0ffff) AM_READWRITE(TC0100SCN_long_r, TC0100SCN_long_w)			/* piv tilemaps */
+	AM_RANGE(0xd20000, 0xd2000f) AM_READWRITE(TC0100SCN_ctrl_long_r, TC0100SCN_ctrl_long_w)
 ADDRESS_MAP_END
 
 /***********************************************************
@@ -197,14 +201,14 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( galastrm )
 	PORT_START("IN0")
-//  PORT_BIT( 0x00000001, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(1)  /* Freeze input */
+	PORT_BIT( 0x00000001, IP_ACTIVE_HIGH, IPT_BUTTON3 ) PORT_PLAYER(1)	/* Freeze input */
 	PORT_BIT( 0x00000002, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000004, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000008, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000010, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000020, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x00000040, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x00000080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_READ_LINE_DEVICE_MEMBER("eeprom", eeprom_device, read_bit)
+	PORT_BIT( 0x00000080, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(eeprom_bit_r, NULL)
 	PORT_BIT( 0x00000100, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x00000200, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(frame_counter_r, NULL)
 	PORT_BIT( 0x00000400, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -279,6 +283,24 @@ GFXDECODE_END
                  MACHINE DRIVERS
 ***********************************************************/
 
+static MACHINE_RESET( galastrm )
+{
+	taito_f3_soundsystem_reset(machine);
+	f3_68681_reset(machine);
+}
+
+
+static const UINT8 default_eeprom[128]={
+	0x45,0x58,0x00,0x00,0xff,0xff,0x00,0x00,0x00,0x28,0x00,0x01,0x00,0x00,0x00,0xfa,
+	0x00,0xec,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+};
+
 static const eeprom_interface galastrm_eeprom_interface =
 {
 	6,				/* address bits */
@@ -290,55 +312,49 @@ static const eeprom_interface galastrm_eeprom_interface =
 	"0100110000",	/* lock command */
 };
 
+static NVRAM_HANDLER( galastrm )
+{
+	if (read_or_write)
+		eeprom_save(file);
+	else {
+		eeprom_init(machine, &galastrm_eeprom_interface);
+		if (file)
+			eeprom_load(file);
+		else
+			eeprom_set_data(default_eeprom,128);  /* Default the gun setup values */
+	}
+}
+
 /***************************************************************************/
 
-static const tc0100scn_interface galastrm_tc0100scn_intf =
-{
-	"screen",
-	0, 2,		/* gfxnum, txnum */
-	-48, -56,		/* x_offset, y_offset */
-	0, 0,		/* flip_xoff, flip_yoff */
-	0, 0,		/* flip_text_xoff, flip_text_yoff */
-	0, 0
-};
-
-static const tc0480scp_interface galastrm_tc0480scp_intf =
-{
-	1, 3,		/* gfxnum, txnum */
-	0,		/* pixels */
-	-40, -3,		/* x_offset, y_offset */
-	0, 0,		/* text_xoff, text_yoff */
-	0, 0,		/* flip_xoff, flip_yoff */
-	0		/* col_base */
-};
-
-static MACHINE_CONFIG_START( galastrm, galastrm_state )
+static MACHINE_DRIVER_START( galastrm )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
-	MCFG_CPU_PROGRAM_MAP(galastrm_map)
-	MCFG_CPU_VBLANK_INT("screen", galastrm_interrupt) /* VBL */
+	MDRV_CPU_ADD("maincpu", M68EC020, 16000000)	/* 16 MHz */
+	MDRV_CPU_PROGRAM_MAP(galastrm_map)
+	MDRV_CPU_VBLANK_INT("screen", galastrm_interrupt) /* VBL */
 
-	MCFG_EEPROM_ADD("eeprom", galastrm_eeprom_interface)
+	TAITO_F3_SOUND_SYSTEM_CPU(16000000)
+
+	MDRV_MACHINE_RESET(galastrm)
+	MDRV_NVRAM_HANDLER(galastrm)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(64*8, 50*8)
-	MCFG_SCREEN_VISIBLE_AREA(0+96, 40*8-1+96, 3*8+60, 32*8-1+60)
-	MCFG_SCREEN_UPDATE_STATIC(galastrm)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 50*8)
+	MDRV_SCREEN_VISIBLE_AREA(0+96, 40*8-1+96, 3*8+60, 32*8-1+60)
 
-	MCFG_GFXDECODE(galastrm)
-	MCFG_PALETTE_LENGTH(4096)
+	MDRV_GFXDECODE(galastrm)
+	MDRV_PALETTE_LENGTH(4096)
 
-	MCFG_VIDEO_START(galastrm)
-
-	MCFG_TC0100SCN_ADD("tc0100scn", galastrm_tc0100scn_intf)
-	MCFG_TC0480SCP_ADD("tc0480scp", galastrm_tc0480scp_intf)
+	MDRV_VIDEO_START(galastrm)
+	MDRV_VIDEO_UPDATE(galastrm)
 
 	/* sound hardware */
-	MCFG_FRAGMENT_ADD(taito_f3_sound)
-MACHINE_CONFIG_END
+	TAITO_F3_SOUND_SYSTEM_ES5505(30476100/2)
+MACHINE_DRIVER_END
 
 /***************************************************************************/
 
@@ -374,9 +390,6 @@ ROM_START( galastrm )
 	ROM_CONTINUE( 0x600000, 0x040000 )
 	ROM_CONTINUE( 0x780000, 0x040000 )
 	ROM_CONTINUE( 0x700000, 0x040000 )
-
-	ROM_REGION16_BE( 0x80, "eeprom", 0 )
-	ROM_LOAD16_WORD( "eeprom-galastrm.bin", 0x0000, 0x0080, CRC(94efa7a6) SHA1(5870b988cb364065e8bd779efbdadca8d3ffc17c) )
 ROM_END
 
 

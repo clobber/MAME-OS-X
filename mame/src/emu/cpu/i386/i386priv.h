@@ -4,8 +4,7 @@
 #define __I386_H__
 
 #include "i386.h"
-#include "../../../lib/softfloat/milieu.h"
-#include "../../../lib/softfloat/softfloat.h"
+#include "cpuintrf.h"
 
 #define I386OP(XX)		i386_##XX
 #define I486OP(XX)		i486_##XX
@@ -111,7 +110,6 @@ enum
 	I386_CR1,
 	I386_CR2,
 	I386_CR3,
-	I386_CR4,
 
 	I386_DR0,
 	I386_DR1,
@@ -138,11 +136,8 @@ enum
 	I386_LDTR_LIMIT,
 	I386_LDTR_FLAGS,
 
-	I386_CPL,
-
 	X87_CTRL,
 	X87_STATUS,
-	X87_TAG,
 	X87_ST0,
 	X87_ST1,
 	X87_ST2,
@@ -153,36 +148,13 @@ enum
 	X87_ST7,
 };
 
-/* Protected mode exceptions */
-#define FAULT_UD 6   // Invalid Opcode
-#define FAULT_NM 7   // Coprocessor not available
-#define FAULT_DF 8   // Double Fault
-#define FAULT_TS 10  // Invalid TSS
-#define FAULT_NP 11  // Segment or Gate not present
-#define FAULT_SS 12  // Stack fault
-#define FAULT_GP 13  // General Protection Fault
-#define FAULT_PF 14  // Page Fault
-#define FAULT_MF 16  // Match (Coprocessor) Fault
-
 typedef struct {
 	UINT16 selector;
 	UINT16 flags;
 	UINT32 base;
 	UINT32 limit;
 	int d;		// Operand size
-	bool valid;
 } I386_SREG;
-
-typedef struct
-{
-	UINT16 segment;
-	UINT16 selector;
-	UINT32 offset;
-	UINT8 ar;  // access rights
-	UINT8 dpl;
-	UINT8 dword_count;
-	UINT8 present;
-} I386_CALL_GATE;
 
 typedef struct {
 	UINT32 base;
@@ -216,7 +188,6 @@ struct _i386_state
 	UINT32 pc;
 	UINT32 prev_eip;
 	UINT32 eflags;
-	UINT32 eflags_mask;
 	UINT8 CF;
 	UINT8 DF;
 	UINT8 SF;
@@ -226,22 +197,10 @@ struct _i386_state
 	UINT8 AF;
 	UINT8 IF;
 	UINT8 TF;
-	UINT8 IOP1;
-	UINT8 IOP2;
-	UINT8 NT;
-	UINT8 RF;
-	UINT8 VM;
-	UINT8 AC;
-	UINT8 VIF;
-	UINT8 VIP;
-	UINT8 ID;
-
-	UINT8 CPL;  // current privilege level
 
 	UINT8 performed_intersegment_jump;
-	UINT8 delayed_interrupt_enable;
 
-	UINT32 cr[5];		// Control registers
+	UINT32 cr[4];		// Control registers
 	UINT32 dr[8];		// Debug registers
 	UINT32 tr[8];		// Test registers
 
@@ -250,14 +209,10 @@ struct _i386_state
 	I386_SEG_DESC task;		// Task register
 	I386_SEG_DESC ldtr;		// Local Descriptor Table Register
 
-	UINT8 ext;  // external interrupt
-
 	int halted;
 
 	int operand_size;
 	int address_size;
-	int operand_prefix;
-	int address_prefix;
 
 	int segment_prefix;
 	int segment_override;
@@ -267,11 +222,10 @@ struct _i386_state
 	UINT8 opcode;
 
 	UINT8 irq_state;
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
-	address_space *io;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *program;
+	const address_space *io;
 	UINT32 a20_mask;
 
 	int cpuid_max_input_value_eax;
@@ -280,26 +234,15 @@ struct _i386_state
 	UINT32 feature_flags;
 	UINT64 tsc;
 
-
 	// FPU
-	floatx80 x87_reg[8];
-
-	UINT16 x87_cw;
-	UINT16 x87_sw;
-	UINT16 x87_tw;
-	UINT64 x87_data_ptr;
-	UINT64 x87_inst_ptr;
-	UINT16 x87_opcode;
-
-	void (*opcode_table_x87_d8[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_d9[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_da[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_db[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_dc[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_dd[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_de[256])(i386_state *cpustate, UINT8 modrm);
-	void (*opcode_table_x87_df[256])(i386_state *cpustate, UINT8 modrm);
-
+	X87_REG fpu_reg[8];
+	UINT16 fpu_control_word;
+	UINT16 fpu_status_word;
+	UINT16 fpu_tag_word;
+	UINT64 fpu_data_ptr;
+	UINT64 fpu_inst_ptr;
+	UINT16 fpu_opcode;
+	int fpu_top;
 
 	void (*opcode_table1_16[256])(i386_state *cpustate);
 	void (*opcode_table1_32[256])(i386_state *cpustate);
@@ -310,26 +253,23 @@ struct _i386_state
 	UINT8 *cycle_table_rm;
 };
 
-INLINE i386_state *get_safe_token(device_t *device)
+INLINE i386_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == I386 ||
-		   device->type() == I486 ||
-		   device->type() == PENTIUM ||
-		   device->type() == MEDIAGX);
-	return (i386_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_I386 ||
+		   cpu_get_type(device) == CPU_I486 ||
+		   cpu_get_type(device) == CPU_PENTIUM ||
+		   cpu_get_type(device) == CPU_MEDIAGX);
+	return (i386_state *)device->token;
 }
 
 extern int i386_parity_table[256];
-static int i386_limit_check(i386_state *cpustate, int seg, UINT32 offset);
-
-#define FAULT_THROW(fault,error) { throw (UINT64)(fault | (UINT64)error << 32); }
-#define PF_THROW(error) { cpustate->cr[2] = address; FAULT_THROW(FAULT_PF,error); }
 
 #define PROTECTED_MODE		(cpustate->cr[0] & 0x1)
 #define STACK_32BIT			(cpustate->sreg[SS].d)
-#define V8086_MODE			(cpustate->VM)
-#define NESTED_TASK			(cpustate->NT)
+#define V8086_MODE			(cpustate->eflags & 0x00020000)
 
 #define SetOF_Add32(r,s,d)	(cpustate->OF = (((r) ^ (s)) & ((r) ^ (d)) & 0x80000000) ? 1: 0)
 #define SetOF_Add16(r,s,d)	(cpustate->OF = (((r) ^ (s)) & ((r) ^ (d)) & 0x8000) ? 1 : 0)
@@ -387,132 +327,46 @@ extern MODRM_TABLE i386_MODRM_table[256];
 #define STORE_RM16(x, value)	(REG16(i386_MODRM_table[x].rm.w) = value)
 #define STORE_RM32(x, value)	(REG32(i386_MODRM_table[x].rm.d) = value)
 
-#define SWITCH_ENDIAN_32(x) (((((x) << 24) & (0xff << 24)) | (((x) << 8) & (0xff << 16)) | (((x) >> 8) & (0xff << 8)) | (((x) >> 24) & (0xff << 0))))
-
 /***********************************************************************************/
 
-INLINE UINT32 i386_translate(i386_state *cpustate, int segment, UINT32 ip, int rwn)
+INLINE UINT32 i386_translate(i386_state *cpustate, int segment, UINT32 ip)
 {
-	// TODO: segment limit access size, execution permission, handle exception thrown from exception handler
-	if(PROTECTED_MODE && !V8086_MODE && (rwn != -1))
-	{
-		if(!(cpustate->sreg[segment].valid))
-			FAULT_THROW((segment==SS)?FAULT_SS:FAULT_GP, 0);
-		if(i386_limit_check(cpustate, segment, ip))
-			FAULT_THROW((segment==SS)?FAULT_SS:FAULT_GP, 0);
-		if((rwn == 0) && ((cpustate->sreg[segment].flags & 8) && !(cpustate->sreg[segment].flags & 2)))
-			FAULT_THROW((segment==SS)?FAULT_SS:FAULT_GP, 0);
-		if((rwn == 1) && ((cpustate->sreg[segment].flags & 8) || !(cpustate->sreg[segment].flags & 2)))
-			FAULT_THROW((segment==SS)?FAULT_SS:FAULT_GP, 0);
-	}
+	// TODO: segment limit
 	return cpustate->sreg[segment].base + ip;
 }
 
-// rwn; read = 0, write = 1, none = -1
-INLINE int translate_address(i386_state *cpustate, int rwn, UINT32 *address, UINT32 *error)
+INLINE int translate_address(i386_state *cpustate, UINT32 *address)
 {
 	UINT32 a = *address;
 	UINT32 pdbr = cpustate->cr[3] & 0xfffff000;
 	UINT32 directory = (a >> 22) & 0x3ff;
 	UINT32 table = (a >> 12) & 0x3ff;
 	UINT32 offset = a & 0xfff;
-	UINT32 page_entry;
-	UINT32 ret = 1;
-	*error = 0;
 
-	// TODO: cr0 wp bit, 486 and higher
-	UINT32 page_dir = cpustate->program->read_dword(pdbr + directory * 4);
-	if(page_dir & 1)
-	{
-		if (!(cpustate->cr[4] & 0x10))
-		{
-			page_entry = cpustate->program->read_dword((page_dir & 0xfffff000) + (table * 4));
-			if(!(page_entry & 1))
-				ret = 0;
-			else if(!(page_entry & 2) && cpustate->CPL && (rwn == 1))
-			{
-				*error = 1;
-				ret = 0;
-			}
-			else
-			{
-				if(!(page_dir & 0x20) && (rwn != -1))
-					cpustate->program->write_dword(pdbr + directory * 4, page_dir | 0x20);
-				if(!(page_entry & 0x40) && (rwn == 1))
-					cpustate->program->write_dword((page_dir & 0xfffff000) + (table * 4), page_entry | 0x60);
-				else if(!(page_entry & 0x20) && (rwn != -1))
-					cpustate->program->write_dword((page_dir & 0xfffff000) + (table * 4), page_entry | 0x20);
-				*address = (page_entry & 0xfffff000) | offset;
-			}
-		}
-		else
-		{
-			if (page_dir & 0x80)
-			{
-				if(!(page_dir & 2) && cpustate->CPL && (rwn == 1))
-				{
-					*error = 1;
-					ret = 0;
-				}
-				else
-				{
-					if(!(page_dir & 0x40) && (rwn == 1))
-						cpustate->program->write_dword(pdbr + directory * 4, page_dir | 0x60);
-					else if(!(page_dir & 0x20) && (rwn != -1))
-						cpustate->program->write_dword(pdbr + directory * 4, page_dir | 0x20);
-					*address = (page_dir & 0xffc00000) | (a & 0x003fffff);
-				}
-			}
-			else
-			{
-				page_entry = cpustate->program->read_dword((page_dir & 0xfffff000) + (table * 4));
-				if(!(page_entry & 1))
-					ret = 0;
-				else if(!(page_entry & 2) && cpustate->CPL && (rwn == 1))
-				{
-					*error = 1;
-					ret = 0;
-				}
-				else
-				{
-					if(!(page_dir & 0x20) && (rwn != -1))
-						cpustate->program->write_dword(pdbr + directory * 4, page_dir | 0x20);
-					if(!(page_entry & 0x40) && (rwn == 1))
-						cpustate->program->write_dword((page_dir & 0xfffff000) + (table * 4), page_entry | 0x60);
-					else if(!(page_entry & 0x20) && (rwn != -1))
-						cpustate->program->write_dword((page_dir & 0xfffff000) + (table * 4), page_entry | 0x20);
-					*address = (page_entry & 0xfffff000) | offset;
-				}
-			}
-		}
-	}
-	else
-		ret = 0;
-	if(!ret)
-	{
-		if(rwn != -1)
-			*error |= ((rwn && 1)<<1) | ((cpustate->CPL==3)?1<<2:0);
-		return 0;
-	}
+	// TODO: 4MB pages
+	UINT32 page_dir = memory_read_dword_32le(cpustate->program, pdbr + directory * 4);
+	UINT32 page_entry = memory_read_dword_32le(cpustate->program, (page_dir & 0xfffff000) + (table * 4));
+
+	*address = (page_entry & 0xfffff000) | offset;
 	return 1;
 }
 
 INLINE void CHANGE_PC(i386_state *cpustate, UINT32 pc)
 {
-	UINT32 address, error;
-	cpustate->pc = i386_translate(cpustate, CS, pc, -1 );
+	UINT32 address;
+	cpustate->pc = i386_translate(cpustate, CS, pc );
 
 	address = cpustate->pc;
 
 	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
 	{
-		translate_address(cpustate,-1,&address,&error);
+		translate_address(cpustate,&address);
 	}
 }
 
 INLINE void NEAR_BRANCH(i386_state *cpustate, INT32 offs)
 {
-	UINT32 address, error;
+	UINT32 address;
 	/* TODO: limit */
 	cpustate->eip += offs;
 	cpustate->pc += offs;
@@ -521,22 +375,21 @@ INLINE void NEAR_BRANCH(i386_state *cpustate, INT32 offs)
 
 	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
 	{
-		translate_address(cpustate,-1,&address,&error);
+		translate_address(cpustate,&address);
 	}
 }
 
 INLINE UINT8 FETCH(i386_state *cpustate)
 {
 	UINT8 value;
-	UINT32 address = cpustate->pc, error;
+	UINT32 address = cpustate->pc;
 
 	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
 	{
-		if(!translate_address(cpustate,0,&address,&error))
-			PF_THROW(error);
+		translate_address(cpustate,&address);
 	}
 
-	value = cpustate->direct->read_decrypted_byte(address & cpustate->a20_mask);
+	value = memory_decrypted_read_byte(cpustate->program, address & cpustate->a20_mask);
 	cpustate->eip++;
 	cpustate->pc++;
 	return value;
@@ -544,101 +397,99 @@ INLINE UINT8 FETCH(i386_state *cpustate)
 INLINE UINT16 FETCH16(i386_state *cpustate)
 {
 	UINT16 value;
-	UINT32 address = cpustate->pc, error;
+	UINT32 address = cpustate->pc;
+
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
 
 	if( address & 0x1 ) {		/* Unaligned read */
-		value = (FETCH(cpustate) << 0) |
-				(FETCH(cpustate) << 8);
-	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,0,&address,&error))
-				PF_THROW(error);
-		}
 		address &= cpustate->a20_mask;
-		value = cpustate->direct->read_decrypted_word(address);
-		cpustate->eip += 2;
-		cpustate->pc += 2;
+		value = (memory_decrypted_read_byte(cpustate->program, address+0) << 0) |
+				(memory_decrypted_read_byte(cpustate->program, address+1) << 8);
+	} else {
+		address &= cpustate->a20_mask;
+		value = memory_decrypted_read_word(cpustate->program, address);
 	}
+	cpustate->eip += 2;
+	cpustate->pc += 2;
 	return value;
 }
 INLINE UINT32 FETCH32(i386_state *cpustate)
 {
 	UINT32 value;
-	UINT32 address = cpustate->pc, error;
+	UINT32 address = cpustate->pc;
+
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
 
 	if( cpustate->pc & 0x3 ) {		/* Unaligned read */
-		value = (FETCH(cpustate) << 0) |
-				(FETCH(cpustate) << 8) |
-				(FETCH(cpustate) << 16) |
-				(FETCH(cpustate) << 24);
-	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,0,&address,&error))
-				PF_THROW(error);
-		}
-
 		address &= cpustate->a20_mask;
-		value = cpustate->direct->read_decrypted_dword(address);
-		cpustate->eip += 4;
-		cpustate->pc += 4;
+		value = (memory_decrypted_read_byte(cpustate->program, address+0) << 0) |
+				(memory_decrypted_read_byte(cpustate->program, address+1) << 8) |
+				(memory_decrypted_read_byte(cpustate->program, address+2) << 16) |
+				(memory_decrypted_read_byte(cpustate->program, address+3) << 24);
+	} else {
+		address &= cpustate->a20_mask;
+		value = memory_decrypted_read_dword(cpustate->program, address);
 	}
+	cpustate->eip += 4;
+	cpustate->pc += 4;
 	return value;
 }
 
 INLINE UINT8 READ8(i386_state *cpustate,UINT32 ea)
 {
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
 	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
 	{
-		if(!translate_address(cpustate,0,&address,&error))
-			PF_THROW(error);
+		translate_address(cpustate,&address);
 	}
 
 	address &= cpustate->a20_mask;
-	return cpustate->program->read_byte(address);
+	return memory_read_byte_32le(cpustate->program, address);
 }
 INLINE UINT16 READ16(i386_state *cpustate,UINT32 ea)
 {
 	UINT16 value;
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	address &= cpustate->a20_mask;
 	if( ea & 0x1 ) {		/* Unaligned read */
-		value = (READ8( cpustate, address+0 ) << 0) |
-				(READ8( cpustate, address+1 ) << 8);
+		value = (memory_read_byte_32le( cpustate->program, address+0 ) << 0) |
+				(memory_read_byte_32le( cpustate->program, address+1 ) << 8);
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,0,&address,&error))
-				PF_THROW(error);
-		}
-
-		address &= cpustate->a20_mask;
-		value = cpustate->program->read_word( address );
+		value = memory_read_word_32le( cpustate->program, address );
 	}
 	return value;
 }
 INLINE UINT32 READ32(i386_state *cpustate,UINT32 ea)
 {
 	UINT32 value;
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	address &= cpustate->a20_mask;
 	if( ea & 0x3 ) {		/* Unaligned read */
-		value = (READ8( cpustate, address+0 ) << 0) |
-				(READ8( cpustate, address+1 ) << 8) |
-				(READ8( cpustate, address+2 ) << 16) |
-				(READ8( cpustate, address+3 ) << 24);
+		value = (memory_read_byte_32le( cpustate->program, address+0 ) << 0) |
+				(memory_read_byte_32le( cpustate->program, address+1 ) << 8) |
+				(memory_read_byte_32le( cpustate->program, address+2 ) << 16) |
+				(memory_read_byte_32le( cpustate->program, address+3 ) << 24);
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,0,&address,&error))
-				PF_THROW(error);
-		}
-
-		address &= cpustate->a20_mask;
-		value = cpustate->program->read_dword( address );
+		value = memory_read_dword_32le( cpustate->program, address );
 	}
 	return value;
 }
@@ -646,106 +497,101 @@ INLINE UINT32 READ32(i386_state *cpustate,UINT32 ea)
 INLINE UINT64 READ64(i386_state *cpustate,UINT32 ea)
 {
 	UINT64 value;
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	address &= cpustate->a20_mask;
 	if( ea & 0x7 ) {		/* Unaligned read */
-		value = (((UINT64) READ8( cpustate, address+0 )) << 0) |
-				(((UINT64) READ8( cpustate, address+1 )) << 8) |
-				(((UINT64) READ8( cpustate, address+2 )) << 16) |
-				(((UINT64) READ8( cpustate, address+3 )) << 24) |
-				(((UINT64) READ8( cpustate, address+4 )) << 32) |
-				(((UINT64) READ8( cpustate, address+5 )) << 40) |
-				(((UINT64) READ8( cpustate, address+6 )) << 48) |
-				(((UINT64) READ8( cpustate, address+7 )) << 56);
+		value = (((UINT64) memory_read_byte_32le( cpustate->program, address+0 )) << 0) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+1 )) << 8) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+2 )) << 16) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+3 )) << 24) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+4 )) << 32) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+5 )) << 40) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+6 )) << 48) |
+				(((UINT64) memory_read_byte_32le( cpustate->program, address+7 )) << 56);
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,0,&address,&error))
-				PF_THROW(error);
-		}
-
-		address &= cpustate->a20_mask;
-		value = (((UINT64) cpustate->program->read_dword( address+0 )) << 0) |
-				(((UINT64) cpustate->program->read_dword( address+4 )) << 32);
+		value = (((UINT64) memory_read_dword_32le( cpustate->program, address+0 )) << 0) |
+				(((UINT64) memory_read_dword_32le( cpustate->program, address+4 )) << 32);
 	}
 	return value;
 }
 
 INLINE void WRITE8(i386_state *cpustate,UINT32 ea, UINT8 value)
 {
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
 	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
 	{
-		if(!translate_address(cpustate,1,&address,&error))
-			PF_THROW(error);
+		translate_address(cpustate,&address);
 	}
 
 	address &= cpustate->a20_mask;
-	cpustate->program->write_byte(address, value);
+	memory_write_byte_32le(cpustate->program, address, value);
 }
 INLINE void WRITE16(i386_state *cpustate,UINT32 ea, UINT16 value)
 {
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	address &= cpustate->a20_mask;
 	if( ea & 0x1 ) {		/* Unaligned write */
-		WRITE8( cpustate, address+0, value & 0xff );
-		WRITE8( cpustate, address+1, (value >> 8) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+0, value & 0xff );
+		memory_write_byte_32le( cpustate->program, address+1, (value >> 8) & 0xff );
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,1,&address,&error))
-				PF_THROW(error);
-		}
-
-		address &= cpustate->a20_mask;
-		cpustate->program->write_word(address, value);
+		memory_write_word_32le(cpustate->program, address, value);
 	}
 }
 INLINE void WRITE32(i386_state *cpustate,UINT32 ea, UINT32 value)
 {
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	ea &= cpustate->a20_mask;
 	if( ea & 0x3 ) {		/* Unaligned write */
-		WRITE8( cpustate, address+0, value & 0xff );
-		WRITE8( cpustate, address+1, (value >> 8) & 0xff );
-		WRITE8( cpustate, address+2, (value >> 16) & 0xff );
-		WRITE8( cpustate, address+3, (value >> 24) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+0, value & 0xff );
+		memory_write_byte_32le( cpustate->program, address+1, (value >> 8) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+2, (value >> 16) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+3, (value >> 24) & 0xff );
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,1,&address,&error))
-				PF_THROW(error);
-		}
-
-		ea &= cpustate->a20_mask;
-		cpustate->program->write_dword(address, value);
+		memory_write_dword_32le(cpustate->program, address, value);
 	}
 }
 
 INLINE void WRITE64(i386_state *cpustate,UINT32 ea, UINT64 value)
 {
-	UINT32 address = ea, error;
+	UINT32 address = ea;
 
+	if (cpustate->cr[0] & 0x80000000)		// page translation enabled
+	{
+		translate_address(cpustate,&address);
+	}
+
+	ea &= cpustate->a20_mask;
 	if( ea & 0x7 ) {		/* Unaligned write */
-		WRITE8( cpustate, address+0, value & 0xff );
-		WRITE8( cpustate, address+1, (value >> 8) & 0xff );
-		WRITE8( cpustate, address+2, (value >> 16) & 0xff );
-		WRITE8( cpustate, address+3, (value >> 24) & 0xff );
-		WRITE8( cpustate, address+4, (value >> 32) & 0xff );
-		WRITE8( cpustate, address+5, (value >> 40) & 0xff );
-		WRITE8( cpustate, address+6, (value >> 48) & 0xff );
-		WRITE8( cpustate, address+7, (value >> 56) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+0, value & 0xff );
+		memory_write_byte_32le( cpustate->program, address+1, (value >> 8) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+2, (value >> 16) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+3, (value >> 24) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+4, (value >> 32) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+5, (value >> 40) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+6, (value >> 48) & 0xff );
+		memory_write_byte_32le( cpustate->program, address+7, (value >> 56) & 0xff );
 	} else {
-		if (cpustate->cr[0] & 0x80000000)		// page translation enabled
-		{
-			if(!translate_address(cpustate,1,&address,&error))
-				PF_THROW(error);
-		}
-
-		ea &= cpustate->a20_mask;
-		cpustate->program->write_dword(address+0, value & 0xffffffff);
-		cpustate->program->write_dword(address+4, (value >> 32) & 0xffffffff);
+		memory_write_dword_32le(cpustate->program, address+0, value & 0xffffffff);
+		memory_write_dword_32le(cpustate->program, address+4, (value >> 32) & 0xffffffff);
 	}
 }
 
@@ -937,32 +783,28 @@ INLINE UINT32 DEC32(i386_state *cpustate,UINT32 dst)
 
 INLINE void PUSH16(i386_state *cpustate,UINT16 value)
 {
-	UINT32 ea, new_esp;
+	UINT32 ea;
 	if( STACK_32BIT ) {
-		new_esp = REG32(ESP) - 2;
-		ea = i386_translate(cpustate, SS, new_esp, 1);
+		REG32(ESP) -= 2;
+		ea = i386_translate(cpustate, SS, REG32(ESP) );
 		WRITE16(cpustate, ea, value );
-		REG32(ESP) = new_esp;
 	} else {
-		new_esp = (REG16(SP) - 2) & 0xffff;
-		ea = i386_translate(cpustate, SS, new_esp, 1);
+		REG16(SP) -= 2;
+		ea = i386_translate(cpustate, SS, REG16(SP) );
 		WRITE16(cpustate, ea, value );
-		REG16(SP) = new_esp;
 	}
 }
 INLINE void PUSH32(i386_state *cpustate,UINT32 value)
 {
-	UINT32 ea, new_esp;
+	UINT32 ea;
 	if( STACK_32BIT ) {
-		new_esp = REG32(ESP) - 4;
-		ea = i386_translate(cpustate, SS, new_esp, 1);
+		REG32(ESP) -= 4;
+		ea = i386_translate(cpustate, SS, REG32(ESP) );
 		WRITE32(cpustate, ea, value );
-		REG32(ESP) = new_esp;
 	} else {
-		new_esp = (REG16(SP) - 4) & 0xffff;
-		ea = i386_translate(cpustate, SS, new_esp, 1);
+		REG16(SP) -= 4;
+		ea = i386_translate(cpustate, SS, REG16(SP) );
 		WRITE32(cpustate, ea, value );
-		REG16(SP) = new_esp;
 	}
 }
 INLINE void PUSH8(i386_state *cpustate,UINT8 value)
@@ -977,51 +819,45 @@ INLINE void PUSH8(i386_state *cpustate,UINT8 value)
 INLINE UINT8 POP8(i386_state *cpustate)
 {
 	UINT8 value;
-	UINT32 ea, new_esp;
+	UINT32 ea;
 	if( STACK_32BIT ) {
-		new_esp = REG32(ESP) + 1;
-		ea = i386_translate(cpustate, SS, new_esp - 1, 0);
+		ea = i386_translate(cpustate, SS, REG32(ESP) );
 		value = READ8(cpustate, ea );
-		REG32(ESP) = new_esp;
+		REG32(ESP) += 1;
 	} else {
-		new_esp = REG16(SP) + 1;
-		ea = i386_translate(cpustate, SS, (new_esp - 1) & 0xffff, 0);
+		ea = i386_translate(cpustate, SS, REG16(SP) );
 		value = READ8(cpustate, ea );
-		REG16(SP) = new_esp;
+		REG16(SP) += 1;
 	}
 	return value;
 }
 INLINE UINT16 POP16(i386_state *cpustate)
 {
 	UINT16 value;
-	UINT32 ea, new_esp;
+	UINT32 ea;
 	if( STACK_32BIT ) {
-		new_esp = REG32(ESP) + 2;
-		ea = i386_translate(cpustate, SS, new_esp - 2, 0);
+		ea = i386_translate(cpustate, SS, REG32(ESP) );
 		value = READ16(cpustate, ea );
-		REG32(ESP) = new_esp;
+		REG32(ESP) += 2;
 	} else {
-		new_esp = REG16(SP) + 2;
-		ea = i386_translate(cpustate, SS, (new_esp - 2) & 0xffff, 0);
+		ea = i386_translate(cpustate, SS, REG16(SP) );
 		value = READ16(cpustate, ea );
-		REG16(SP) = new_esp;
+		REG16(SP) += 2;
 	}
 	return value;
 }
 INLINE UINT32 POP32(i386_state *cpustate)
 {
 	UINT32 value;
-	UINT32 ea, new_esp;
+	UINT32 ea;
 	if( STACK_32BIT ) {
-		new_esp = REG32(ESP) + 4;
-		ea = i386_translate(cpustate, SS, new_esp - 4, 0);
+		ea = i386_translate(cpustate, SS, REG32(ESP) );
 		value = READ32(cpustate, ea );
-		REG32(ESP) = new_esp;
+		REG32(ESP) += 4;
 	} else {
-		new_esp = REG16(SP) + 4;
-		ea = i386_translate(cpustate, SS, (new_esp - 4) & 0xffff, 0);
+		ea = i386_translate(cpustate, SS, REG16(SP) );
 		value = READ32(cpustate, ea );
-		REG16(SP) = new_esp;
+		REG16(SP) += 4;
 	}
 	return value;
 }
@@ -1044,142 +880,13 @@ INLINE void BUMP_DI(i386_state *cpustate,int adjustment)
 
 
 
-/***********************************************************************************
-    I/O ACCESS
-***********************************************************************************/
+/***********************************************************************************/
 
-INLINE void check_ioperm(i386_state *cpustate, offs_t port, UINT8 mask)
-{
-	UINT8 IOPL, map;
-	UINT16 IOPB;
-	UINT32 address;
-
-	if(!PROTECTED_MODE)
-		return;
-
-	IOPL = cpustate->IOP1 | (cpustate->IOP2 << 1);
-	if(!V8086_MODE && (cpustate->CPL <= IOPL))
-		return;
-
-	if((cpustate->task.limit < 0x67) || ((cpustate->task.flags & 0xd) != 9))
-		FAULT_THROW(FAULT_GP,0);
-
-	address = cpustate->task.base;
-	IOPB = READ16(cpustate, address+0x66);
-	if((IOPB+(port/8)) >= cpustate->task.limit)
-		FAULT_THROW(FAULT_GP,0);
-
-	map = READ8(cpustate, address+IOPB+(port/8));
-	map >>= (port%8);
-	if(map & mask)
-		FAULT_THROW(FAULT_GP,0);
-}
-
-INLINE UINT8 READPORT8(i386_state *cpustate, offs_t port)
-{
-	check_ioperm(cpustate, port, 1);
-	return cpustate->io->read_byte(port);
-}
-
-INLINE void WRITEPORT8(i386_state *cpustate, offs_t port, UINT8 value)
-{
-	check_ioperm(cpustate, port, 1);
-	cpustate->io->write_byte(port, value);
-}
-
-INLINE UINT16 READPORT16(i386_state *cpustate, offs_t port)
-{
-	if (port & 1)
-	{
-		return  READPORT8(cpustate, port) |
-		       (READPORT8(cpustate, port + 1) << 8);
-	}
-	else
-	{
-		check_ioperm(cpustate, port, 3);
-		return cpustate->io->read_word(port);
-	}
-}
-
-INLINE void WRITEPORT16(i386_state *cpustate, offs_t port, UINT16 value)
-{
-	if (port & 1)
-	{
-		WRITEPORT8(cpustate, port, value & 0xff);
-		WRITEPORT8(cpustate, port + 1, (value >> 8) & 0xff);
-	}
-	else
-	{
-		check_ioperm(cpustate, port, 3);
-		cpustate->io->write_word(port, value);
-	}
-}
-
-INLINE UINT32 READPORT32(i386_state *cpustate, offs_t port)
-{
-	if (port & 3)
-	{
-		return  READPORT8(cpustate, port) |
-		       (READPORT8(cpustate, port + 1) << 8) |
-		       (READPORT8(cpustate, port + 2) << 16) |
-		       (READPORT8(cpustate, port + 3) << 24);
-	}
-	else
-	{
-		check_ioperm(cpustate, port, 0xf);
-		return cpustate->io->read_dword(port);
-	}
-}
-
-INLINE void WRITEPORT32(i386_state *cpustate, offs_t port, UINT32 value)
-{
-	if (port & 3)
-	{
-		WRITEPORT8(cpustate, port, value & 0xff);
-		WRITEPORT8(cpustate, port + 1, (value >> 8) & 0xff);
-		WRITEPORT8(cpustate, port + 2, (value >> 16) & 0xff);
-		WRITEPORT8(cpustate, port + 3, (value >> 24) & 0xff);
-	}
-	else
-	{
-		check_ioperm(cpustate, port, 0xf);
-		cpustate->io->write_dword(port, value);
-	}
-}
-
-/***********************************************************************************
-    MSR ACCESS
-***********************************************************************************/
-
-INLINE UINT64 MSR_READ(i386_state *cpustate, UINT32 offset,UINT8 *valid_msr)
-{
-	UINT64 res;
-
-	*valid_msr = 0;
-
-	switch(offset)
-	{
-		default:
-			logerror("RDMSR: unimplemented register called %08x at %08x\n",offset,cpustate->pc-2);
-			res = -1;
-			*valid_msr = 1;
-			break;
-	}
-
-	return res;
-}
-
-INLINE void MSR_WRITE(i386_state *cpustate, UINT32 offset, UINT64 data, UINT8 *valid_msr)
-{
-	*valid_msr = 0;
-
-	switch(offset)
-	{
-		default:
-			logerror("WRMSR: unimplemented register called %08x (%08x%08x) at %08x\n",offset,(UINT32)(data >> 32),(UINT32)data,cpustate->pc-2);
-			*valid_msr = 1;
-			break;
-	}
-}
+#define READPORT8(port)		       	(memory_read_byte_32le(cpustate->io, port))
+#define READPORT16(port)	       	(memory_read_word_32le(cpustate->io, port))
+#define READPORT32(port)	       	(memory_read_dword_32le(cpustate->io, port))
+#define WRITEPORT8(port, value)		(memory_write_byte_32le(cpustate->io, port, value))
+#define WRITEPORT16(port, value)	(memory_write_word_32le(cpustate->io, port, value))
+#define WRITEPORT32(port, value)	(memory_write_dword_32le(cpustate->io, port, value))
 
 #endif /* __I386_H__ */

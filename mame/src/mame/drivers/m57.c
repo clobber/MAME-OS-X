@@ -36,7 +36,7 @@
      Ribbon cable connector to M57-A-A PCB
 
     New Tropical Angel:
-     Roms were found on an official IREM board with genuine IREM Tropical Angel
+     Roms where found on an official IREM board with genuine IREM Tropical Angel
      license seal and genuine IREM serial number sticker.
      The "new" roms have hand written labels, while those that match the current
      Tropical Angel set look to be factory labeled chips.
@@ -47,11 +47,11 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "iremipt.h"
+#include "m57.h"
 #include "audio/irem.h"
-#include "includes/iremipt.h"
-#include "includes/m57.h"
 
 
 #define MASTER_CLOCK		XTAL_18_432MHz
@@ -64,11 +64,11 @@
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE_MEMBER(m57_state, m_videoram)
-	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_MEMBER(m57_state, m_scrollram)
-	AM_RANGE(0xc820, 0xc8ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m57_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE(&m57_scroll)
+	AM_RANGE(0xc820, 0xc8ff) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(m57_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0")
@@ -223,32 +223,33 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( m57, m57_state )
+static MACHINE_DRIVER_START( m57 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)	/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(57)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(57)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
 				/* the Lode Runner manual (similar but different hardware) */
 				/* talks about 55Hz and 1790ms vblank duration. */
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(m57)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
 
-	MCFG_GFXDECODE(m57)
-	MCFG_PALETTE_LENGTH(32*8+32*8)
+	MDRV_GFXDECODE(m57)
+	MDRV_PALETTE_LENGTH(32*8+32*8)
 
-	MCFG_PALETTE_INIT(m57)
-	MCFG_VIDEO_START(m57)
+	MDRV_PALETTE_INIT(m57)
+	MDRV_VIDEO_START(m57)
+	MDRV_VIDEO_UPDATE(m57)
 
 	/* sound hardware */
-	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(m52_sound_c_audio)
+MACHINE_DRIVER_END
 
 
 
@@ -326,5 +327,5 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, troangel, 0,        m57,   troangel, 0, ROT0, "Irem", "Tropical Angel", GAME_SUPPORTS_SAVE )
-GAME( 1983, newtangl, troangel, m57,   troangel, 0, ROT0, "Irem", "New Tropical Angel", GAME_SUPPORTS_SAVE )
+GAME( 1983, troangel, 0,        m57,      troangel, 0, ROT0, "Irem", "Tropical Angel", 0 )
+GAME( 1983, newtangl, troangel, m57,      troangel, 0, ROT0, "Irem", "New Tropical Angel", 0 )

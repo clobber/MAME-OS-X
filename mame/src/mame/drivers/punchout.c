@@ -109,20 +109,43 @@ DIP locations verified for:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/vlm5030.h"
 #include "sound/nes_apu.h"
-#include "machine/nvram.h"
+
 #include "rendlay.h"
-#include "includes/punchout.h"
+
+extern UINT8 *punchout_bg_top_videoram;
+extern UINT8 *punchout_bg_bot_videoram;
+extern UINT8 *armwrest_fg_videoram;
+extern UINT8 *punchout_spr1_videoram;
+extern UINT8 *punchout_spr2_videoram;
+extern UINT8 *punchout_spr1_ctrlram;
+extern UINT8 *punchout_spr2_ctrlram;
+extern UINT8 *punchout_palettebank;
+WRITE8_HANDLER( punchout_bg_top_videoram_w );
+WRITE8_HANDLER( punchout_bg_bot_videoram_w );
+WRITE8_HANDLER( armwrest_fg_videoram_w );
+WRITE8_HANDLER( punchout_spr1_videoram_w );
+WRITE8_HANDLER( punchout_spr2_videoram_w );
+VIDEO_START( punchout );
+VIDEO_START( armwrest );
+VIDEO_UPDATE( punchout );
+VIDEO_UPDATE( armwrest );
+
+DRIVER_INIT( punchout );
+DRIVER_INIT( spnchout );
+DRIVER_INIT( spnchotj );
+DRIVER_INIT( armwrest );
+
 
 
 static CUSTOM_INPUT( punchout_vlm5030_busy_r )
 {
 	/* bit 4 of DSW1 is busy pin level */
-	return (vlm5030_bsy(field.machine().device("vlm"))) ? 0x00 : 0x01;
+	return (vlm5030_bsy(devtag_get_device(field->port->machine, "vlm"))) ? 0x00 : 0x01;
 }
 
 static WRITE8_DEVICE_HANDLER( punchout_speech_reset_w )
@@ -143,62 +166,63 @@ static WRITE8_DEVICE_HANDLER( punchout_speech_vcu_w )
 static WRITE8_HANDLER( punchout_2a03_reset_w )
 {
 	if (data & 1)
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, ASSERT_LINE);
 	else
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, CLEAR_LINE);
 }
 
+static int rp5c01_mode_sel; /* Mode selector */
+static int rp5c01_mem[16*4];
 
 static READ8_HANDLER( spunchout_rp5c01_r )
 {
-	punchout_state *state = space->machine().driver_data<punchout_state>();
-	logerror("%04x: prot_r %x\n", cpu_get_previouspc(&space->device()), offset);
+	logerror("%04x: prot_r %x\n", cpu_get_previouspc(space->cpu), offset);
 
 	if (offset <= 0x0c)
 	{
-		switch (state->m_rp5c01_mode_sel & 3)
+		switch (rp5c01_mode_sel & 3)
 		{
 			case 0:	// time
 				switch ( offset )
 				{
 					case 0x00:	// 1-second counter
-						return state->m_rp5c01_mem[0x00];
+						return rp5c01_mem[0x00];
 
 					case 0x01:	// 10-second counter
-						return state->m_rp5c01_mem[0x01] & 0x7;
+						return rp5c01_mem[0x01] & 0x7;
 
 					case 0x02:	// 1-minute counter
-						return state->m_rp5c01_mem[0x02];
+						return rp5c01_mem[0x02];
 
 					case 0x03:	// 10-minute counter
-						return state->m_rp5c01_mem[0x03] & 0x07;
+						return rp5c01_mem[0x03] & 0x07;
 
 					case 0x04:	// 1-hour counter
-						return state->m_rp5c01_mem[0x04];
+						return rp5c01_mem[0x04];
 
 					case 0x05:	// 10-hour counter
-						return state->m_rp5c01_mem[0x05] & 0x03;
+						return rp5c01_mem[0x05] & 0x03;
 
 					case 0x06:	// day-of-the-week counter
-						return state->m_rp5c01_mem[0x06] & 0x07;
+						return rp5c01_mem[0x06] & 0x07;
 
 					case 0x07:	// 1-day counter
-						return state->m_rp5c01_mem[0x07];
+						return rp5c01_mem[0x07];
 
 					case 0x08:	// 10-day counter
-						return state->m_rp5c01_mem[0x08] & 0x03;
+						return rp5c01_mem[0x08] & 0x03;
 
 					case 0x09:	// 1-month counter
-						return state->m_rp5c01_mem[0x09];
+						return rp5c01_mem[0x09];
 
 					case 0x0a:	// 10-month counter
-						return state->m_rp5c01_mem[0x0a] & 0x01;
+						return rp5c01_mem[0x0a] & 0x01;
 
 					case 0x0b:	// 1-year counter
-						return state->m_rp5c01_mem[0x0b];
+						return rp5c01_mem[0x0b];
 
 					case 0x0c:	// 10-year counter
-						return state->m_rp5c01_mem[0x0c];
+						return rp5c01_mem[0x0c];
 				}
 				break;
 
@@ -212,34 +236,34 @@ static READ8_HANDLER( spunchout_rp5c01_r )
 						return 0x00;
 
 					case 0x02:	// 1-minute alarm register
-						return state->m_rp5c01_mem[0x12];
+						return rp5c01_mem[0x12];
 
 					case 0x03:	// 10-minute alarm register
-						return state->m_rp5c01_mem[0x13] & 0x07;
+						return rp5c01_mem[0x13] & 0x07;
 
 					case 0x04:	// 1-hour alarm register
-						return state->m_rp5c01_mem[0x14];
+						return rp5c01_mem[0x14];
 
 					case 0x05:	// 10-hour alarm register
-						return state->m_rp5c01_mem[0x15] & 0x03;
+						return rp5c01_mem[0x15] & 0x03;
 
 					case 0x06:	// day-of-the-week alarm register
-						return state->m_rp5c01_mem[0x16] & 0x07;
+						return rp5c01_mem[0x16] & 0x07;
 
 					case 0x07:	// 1-day alarm register
-						return state->m_rp5c01_mem[0x17];
+						return rp5c01_mem[0x17];
 
 					case 0x08:	// 10-day alarm register
-						return state->m_rp5c01_mem[0x18] & 0x03;
+						return rp5c01_mem[0x18] & 0x03;
 
 					case 0x09:	// n/a
 						return 0x00;
 
 					case 0x0a:	// /12/24 select register
-						return state->m_rp5c01_mem[0x1a] & 0x01;
+						return rp5c01_mem[0x1a] & 0x01;
 
 					case 0x0b:	// leap year count
-						return state->m_rp5c01_mem[0x1b] & 0x03;
+						return rp5c01_mem[0x1b] & 0x03;
 
 					case 0x0c:	// n/a
 						return 0x00;
@@ -248,32 +272,31 @@ static READ8_HANDLER( spunchout_rp5c01_r )
 
 			case 2:	// RAM BLOCK 10
 			case 3:	// RAM BLOCK 11
-				return state->m_rp5c01_mem[0x10 * (state->m_rp5c01_mode_sel & 3) + offset];
+				return rp5c01_mem[0x10 * (rp5c01_mode_sel & 3) + offset];
 		}
 	}
 	else if (offset == 0x0d)
 	{
-		return state->m_rp5c01_mode_sel;
+		return rp5c01_mode_sel;
 	}
 
-	logerror("Read from unknown protection? port %02x ( selector = %02x )\n", offset, state->m_rp5c01_mode_sel );
+	logerror("Read from unknown protection? port %02x ( selector = %02x )\n", offset, rp5c01_mode_sel );
 	return 0;
 }
 
 static WRITE8_HANDLER( spunchout_rp5c01_w )
 {
-	punchout_state *state = space->machine().driver_data<punchout_state>();
 	data &= 0x0f;
 
-	logerror("%04x: prot_w %x = %02x\n",cpu_get_previouspc(&space->device()),offset,data);
+	logerror("%04x: prot_w %x = %02x\n",cpu_get_previouspc(space->cpu),offset,data);
 
 	if (offset <= 0x0c)
 	{
-		state->m_rp5c01_mem[0x10 * (state->m_rp5c01_mode_sel & 3) + offset] = data;
+		rp5c01_mem[0x10 * (rp5c01_mode_sel & 3) + offset] = data;
 	}
 	else if (offset == 0x0d)
 	{
-		state->m_rp5c01_mode_sel = data;
+		rp5c01_mode_sel = data;
 		logerror("MODE: Timer EN = %d  Alarm EN = %d  MODE %d\n",BIT(data,3),BIT(data,2),data&3);
 	}
 	else if (offset == 0x0e)
@@ -300,7 +323,7 @@ static READ8_HANDLER( spunchout_exp_r )
 	/* PC = 0x0313 */
 	/* (ret or 0x10) -> (D7DF),(D7A0) - (D7DF),(D7A0) = 0d0h(ret nc) */
 
-	if (cpu_get_previouspc(&space->device()) == 0x0313)
+	if (cpu_get_previouspc(space->cpu) == 0x0313)
 		ret |= 0xc0;
 
 	return ret;
@@ -313,42 +336,36 @@ static WRITE8_HANDLER( spunchout_exp_w )
 
 
 
-static ADDRESS_MAP_START( punchout_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( punchout_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(punchout_bg_top_videoram_w) AM_BASE_MEMBER(punchout_state, m_bg_top_videoram)
-	AM_RANGE(0xdff0, 0xdff7) AM_BASE_MEMBER(punchout_state, m_spr1_ctrlram)
-	AM_RANGE(0xdff8, 0xdffc) AM_BASE_MEMBER(punchout_state, m_spr2_ctrlram)
-	AM_RANGE(0xdffd, 0xdffd) AM_BASE_MEMBER(punchout_state, m_palettebank)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(punchout_spr1_videoram_w) AM_BASE_MEMBER(punchout_state, m_spr1_videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(punchout_spr2_videoram_w) AM_BASE_MEMBER(punchout_state, m_spr2_videoram)
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(punchout_bg_bot_videoram_w) AM_BASE_MEMBER(punchout_state, m_bg_bot_videoram)	// also contains scroll RAM
+	AM_RANGE(0xdff0, 0xdff7) AM_RAM AM_BASE(&punchout_spr1_ctrlram)
+	AM_RANGE(0xdff8, 0xdffc) AM_RAM AM_BASE(&punchout_spr2_ctrlram)
+	AM_RANGE(0xdffd, 0xdffd) AM_RAM AM_BASE(&punchout_palettebank)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(punchout_bg_top_videoram_w) AM_BASE(&punchout_bg_top_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(punchout_spr1_videoram_w) AM_BASE(&punchout_spr1_videoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(punchout_spr2_videoram_w) AM_BASE(&punchout_spr2_videoram)
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(punchout_bg_bot_videoram_w) AM_BASE(&punchout_bg_bot_videoram)	// also contains scroll RAM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( armwrest_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( armwrest_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xc000, 0xc3ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(armwrest_fg_videoram_w) AM_BASE_MEMBER(punchout_state, m_armwrest_fg_videoram)
-	AM_RANGE(0xdff0, 0xdff7) AM_BASE_MEMBER(punchout_state, m_spr1_ctrlram)
-	AM_RANGE(0xdff8, 0xdffc) AM_BASE_MEMBER(punchout_state, m_spr2_ctrlram)
-	AM_RANGE(0xdffd, 0xdffd) AM_BASE_MEMBER(punchout_state, m_palettebank)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(punchout_spr1_videoram_w) AM_BASE_MEMBER(punchout_state, m_spr1_videoram)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(punchout_spr2_videoram_w) AM_BASE_MEMBER(punchout_state, m_spr2_videoram)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(punchout_bg_bot_videoram_w) AM_BASE_MEMBER(punchout_state, m_bg_bot_videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(punchout_bg_top_videoram_w) AM_BASE_MEMBER(punchout_state, m_bg_top_videoram)
+	AM_RANGE(0xdff0, 0xdff7) AM_RAM AM_BASE(&punchout_spr1_ctrlram)
+	AM_RANGE(0xdff8, 0xdffc) AM_RAM AM_BASE(&punchout_spr2_ctrlram)
+	AM_RANGE(0xdffd, 0xdffd) AM_RAM AM_BASE(&punchout_palettebank)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(armwrest_fg_videoram_w) AM_BASE(&armwrest_fg_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(punchout_spr1_videoram_w) AM_BASE(&punchout_spr1_videoram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(punchout_spr2_videoram_w) AM_BASE(&punchout_spr2_videoram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(punchout_bg_bot_videoram_w) AM_BASE(&punchout_bg_bot_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(punchout_bg_top_videoram_w) AM_BASE(&punchout_bg_top_videoram)
 ADDRESS_MAP_END
 
-static WRITE8_HANDLER( nmi_mask_w )
-{
-	punchout_state *state = space->machine().driver_data<punchout_state>();
 
-	state->m_nmi_mask = data & 1;
-}
-
-static ADDRESS_MAP_START( punchout_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( punchout_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
@@ -358,7 +375,7 @@ static ADDRESS_MAP_START( punchout_io_map, AS_IO, 8 )
 	AM_RANGE(0x04, 0x04) AM_DEVWRITE("vlm", vlm5030_data_w)	/* VLM5030 */
 //  AM_RANGE(0x05, 0x05) AM_WRITENOP  /* unused */
 //  AM_RANGE(0x06, 0x06) AM_WRITENOP
-	AM_RANGE(0x08, 0x08) AM_WRITE(nmi_mask_w)
+	AM_RANGE(0x08, 0x08) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x09, 0x09) AM_WRITENOP	/* watchdog reset, seldom used because 08 clears the watchdog as well */
 	AM_RANGE(0x0a, 0x0a) AM_WRITENOP	/* ?? */
 	AM_RANGE(0x0b, 0x0b) AM_WRITE(punchout_2a03_reset_w)
@@ -371,7 +388,7 @@ static ADDRESS_MAP_START( punchout_io_map, AS_IO, 8 )
 	AM_RANGE(0x07, 0x07) AM_MIRROR(0xf0) AM_MASK(0xf0) AM_READWRITE(spunchout_exp_r, spunchout_exp_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( punchout_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( punchout_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
 	AM_RANGE(0x4016, 0x4016) AM_READ(soundlatch_r)
 	AM_RANGE(0x4017, 0x4017) AM_READ(soundlatch2_r)
@@ -491,386 +508,42 @@ static INPUT_PORTS_START( armwrest )
 	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_COIN2 )
 	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_SERVICE1 )
 
-	/* Coinage:
-
-    R18 (Coin Slots setting) determines which table is used.
-
-    L = number of credits per coin for left coin slot
-    R = number of credits per coin for right coin slot
-    C = number of credits needed for one play
-
-Table 1 (for 2 Coin Slots):
-
-    DSW1 DSW2
-bit 3210 5432  L  R  C
-
-    0000 0000  1  1  1
-    0000 0001  8  1  1
-    0000 0010  2  1  1
-    0000 0011  8  3  3
-    0000 0100  3  1  2
-    0000 0101  3  12 4
-    0000 0110  1  2  2
-    0000 0111  3  24 2
-    0000 1000  1  3  3
-    0000 1001  4  1  3
-    0000 1010  1  4  4
-    0000 1011  3  3  4
-    0000 1100  1  5  5
-    0000 1101  1  1  1
-    0000 1110  2  3  3
-    0000 1111  5  5  3
-
-    0001 0000  1  2  1
-    0001 0001  1  8  1
-    0001 0010  2  2  1
-    0001 0011  3  8  3
-    0001 0100  3  2  1
-    0001 0101  12 3  4
-    0001 0110  1  4  2
-    0001 0111  24 3  2
-    0001 1000  1  6  3
-    0001 1001  1  4  3
-    0001 1010  1  8  4
-    0001 1011  3  3  4
-    0001 1100  1  10 5
-    0001 1101  1  1  2
-    0001 1110  2  6  3
-    0001 1111  5  5  4
-
-    0010 0000  1  3  1
-    0010 0001  9  1  1
-    0010 0010  2  3  1
-    0010 0011  3  4  4
-    0010 0100  3  3  1
-    0010 0101  4  4  1
-    0010 0110  1  6  2
-    0010 0111  3  1  2
-    0010 1000  1  9  3
-    0010 1001  10 1  3
-    0010 1010  1  12 4
-    0010 1011  1  1  6
-    0010 1100  1  15 5
-    0010 1101  2  2  1
-    0010 1110  2  9  3
-    0010 1111  2  2  5
-
-    0011 0000  1  4  1
-    0011 0001  1  9  1
-    0011 0010  2  4  1
-    0011 0011  4  3  4
-    0011 0100  3  4  1
-    0011 0101  4  4  1
-    0011 0110  1  8  2
-    0011 0111  1  3  2
-    0011 1000  1  12 3
-    0011 1001  1  10 3
-    0011 1010  1  16 4
-    0011 1011  1  1  6
-    0011 1100  1  20 5
-    0011 1101  1  1  4
-    0011 1110  2  12 3
-    0011 1111  8  8  1
-
-    0100 0000  1  5  1
-    0100 0001  10 1  1
-    0100 0010  2  5  1
-    0100 0011  2  5  5
-    0100 0100  3  5  1
-    0100 0101  4  4  1
-    0100 0110  1  10 2
-    0100 0111  10 1  2
-    0100 1000  1  15 3
-    0100 1001  20 1  3
-    0100 1010  1  20 4
-    0100 1011  16 1  2
-    0100 1100  1  25 5
-    0100 1101  1  1  5
-    0100 1110  2  15 3
-    0100 1111  8  8  3
-
-    0101 0000  1  6  1
-    0101 0001  1  10 1
-    0101 0010  2  6  1
-    0101 0011  5  2  5
-    0101 0100  3  6  1
-    0101 0101  4  5  1
-    0101 0110  1  12 2
-    0101 0111  1  10 2
-    0101 1000  1  18 3
-    0101 1001  1  20 3
-    0101 1010  1  24 4
-    0101 1011  20 20 0  Not a "Freeplay": you MUST insert a coin!
-    0101 1100  1  30 5
-    0101 1101  3  3  3
-    0101 1110  2  18 1
-    0101 1111  9  9  1
-
-    0110 0000  2  1  2
-    0110 0001  12 1  1
-    0110 0010  4  1  2
-    0110 0011  10 2  1
-    0110 0100  6  1  2
-    0110 0101  3  8  2
-    0110 0110  1  1  2
-    0110 0111  3  2  4
-    0110 1000  2  3  6
-    0110 1001  9  4  12
-    0110 1010  1  2  4
-    0110 1011  1  1  1
-    0110 1100  2  5  10
-    0110 1101  4  4  1
-    0110 1110  4  3  6
-    0110 1111  9  9  2
-
-    0111 0000  3  1  3
-    0111 0001  1  12 1
-    0111 0010  6  1  3
-    0111 0011  2  10 1
-    0111 0100  9  1  3
-    0111 0101  8  3  2
-    0111 0110  3  2  6
-    0111 0111  2  3  4
-    0111 1000  1  1  3
-    0111 1001  4  9  12
-    0111 1010  3  4  12
-    0111 1011  1  1  1
-    0111 1100  3  5  15
-    0111 1101  6  6  1
-    0111 1110  2  2  3
-    0111 1111  10 10 1
-
-    1000 0000  4  1  4
-    1000 0001  3  2  2
-    1000 0010  8  1  4
-    1000 0011  12 2  1
-    1000 0100  12 1  4
-    1000 0101  5  5  1
-    1000 0110  2  1  4
-    1000 0111  3  3  2
-    1000 1000  4  3  12
-    1000 1001  4  2  3
-    1000 1010  1  1  4
-    1000 1011  1  1  1
-    1000 1100  4  5  20
-    1000 1101  1  1  6
-    1000 1110  8  3  12
-    1000 1111  10 10 3
-
-    1001 0000  5  1  5
-    1001 0001  2  3  2
-    1001 0010  10 1  5
-    1001 0011  2  12 1
-    1001 0100  15 1  5
-    1001 0101  5  5  1
-    1001 0110  5  2  10
-    1001 0111  3  3  2
-    1001 1000  5  3  15
-    1001 1001  2  4  3
-    1001 1010  5  4  20
-    1001 1011  1  1  1
-    1001 1100  1  1  5
-    1001 1101  2  2  3
-    1001 1110  10 3  15
-    1001 1111  11 11 1
-
-    1010 0000  3  2  3
-    1010 0001  5  2  2
-    1010 0010  6  2  3
-    1010 0011  3  4  2
-    1010 0100  9  2  3
-    1010 0101  6  6  1
-    1010 0110  3  4  6
-    1010 0111  4  9  6
-    1010 1000  1  2  3
-    1010 1001  10 2  3
-    1010 1010  3  8 12
-    1010 1011  1  1  1
-    1010 1100  2  10 15
-    1010 1101  5  5  1
-    1010 1110  2  2  3
-    1010 1111  11 11 3
-
-    1011 0000  3  5  3
-    1011 0001  2  5  2
-    1011 0010  6  5  3
-    1011 0011  4  3  2
-    1011 0100  9  5  3
-    1011 0101  6  6  1
-    1011 0110  3  10 6
-    1011 0111  9  4  6
-    1011 1000  1  5  3
-    1011 1001  2  10 3
-    1011 1010  3  20 12
-    1011 1011  1  1  1
-    1011 1100  3  25 15
-    1011 1101  3  3  2
-    1011 1110  2  5  3
-    1011 1111  12 12 1
-
-    1100 0000  4  5  4
-    1100 0001  9  2  2
-    1100 0010  8  5  4
-    1100 0011  3  8  4
-    1100 0100  12 5  4
-    1100 0101  3  12 2
-    1100 0110  2  5  4
-    1100 0111  8  9  6
-    1100 1000  4  15 12
-    1100 1001  11 2  3
-    1100 1010  1  5  4
-    1100 1011  1  1  1
-    1100 1100  4  25 20
-    1100 1101  1  1  3
-    1100 1110  8  15 12
-    1100 1111  20 20 3
-
-    1101 0000  4  1  1
-    1101 0001  2  9  2
-    1101 0010  4  2  1
-    1101 0011  8  3  4
-    1101 0100  4  3  1
-    1101 0101  12 3  2
-    1101 0110  8  1  2
-    1101 0111  9  8  6
-    1101 1000  12 1  3
-    1101 1001  2  11 3
-    1101 1010  12 2  3
-    1101 1011  1  1  1
-    1101 1100  20 1  5
-    1101 1101  5  5  2
-    1101 1110  18 2  3
-    1101 1111  3  3  4
-
-    1110 0000  5  5  1
-    1110 0001  4  4  3
-    1110 0010  5  2  1
-    1110 0011  11 2  1
-    1110 0100  5  3  1
-    1110 0101  3  24 4
-    1110 0110  10 1  2
-    1110 0111  1  6  4
-    1110 1000  15 1  3
-    1110 1001  9  8  12
-    1110 1010  20 1  4
-    1110 1011  1  1  1
-    1110 1100  25 1  5
-    1110 1101  4  4  3
-    1110 1110  20 4  4
-    1110 1111  20 20 0  Not a "Freeplay": you MUST insert a coin!
-
-    1111 0000  6  1  1
-    1111 0001  3  4  3
-    1111 0010  6  2  1
-    1111 0011  2  11 1
-    1111 0100  6  3  1
-    1111 0101  24 3  1
-    1111 0110  12 1  2
-    1111 0111  6  1  4
-    1111 1000  18 1  3
-    1111 1001  8  9  12
-    1111 1010  24 1  4
-    1111 1011  1  1  1
-    1111 1100  15 2  3
-    1111 1101  3  3  4
-    1111 1110  "Freeplay"
-    1111 1111  "Freeplay"
-
-
-Table 2 (for 1 Coin Slot):
-
-    DSW1 DSW2
-bit 3210 5432  L  R  C
-
-    0000 0xxx  1  1  1
-    0000 1xxx  5  5  3
-
-    0001 0xxx  1  1  2
-    0001 1xxx  5  5  4
-
-    0010 0xxx  2  2  1
-    0010 1xxx  2  2  5
-
-    0011 0xxx  1  1  4
-    0011 1xxx  8  8  1
-
-    0100 0xxx  1  1  5
-    0100 1xxx  8  8  3
-
-    0101 0xxx  3  3  1
-    0101 1xxx  9  9  1
-
-    0110 0xxx  4  4  1
-    0110 1xxx  9  9  2
-
-    0111 0xxx  6  6  1
-    0111 1xxx  10 10 1
-
-    1000 0xxx  1  1  6
-    1000 1xxx  10 10 3
-
-    1001 0xxx  5  1  5
-    1001 1xxx  11 11 1
-
-    1010 0xxx  5  5  1
-    1010 1xxx  11 11 3
-
-    1011 0xxx  3  3  2
-    1011 1xxx  12 12 1
-
-    1100 0xxx  1  1  3
-    1100 1xxx  20 20 3
-
-    1101 0xxx  5  5  2
-    1101 1xxx  3  3  4
-
-    1110 0xxx  4  4  3
-    1110 1xxx  20 20 0  Not a "Freeplay": you MUST insert a coin!
-
-    1111 xxxx  "Freeplay"
-
-    */
-
+	/* See http://www.mametesters.org/mantis/view.php?id=790 for more info about coinage */
 	PORT_MODIFY("DSW2")
-	PORT_DIPNAME( 0x3c, 0x00, "Coinage 2" )				PORT_DIPLOCATION("SW2:!3,!4,!5,!6") // K,L,M,N
-	PORT_DIPSETTING(    0x00, "0000" )
-	PORT_DIPSETTING(    0x04, "0001" )
-	PORT_DIPSETTING(    0x08, "0010" )
-	PORT_DIPSETTING(    0x0c, "0011" )
-	PORT_DIPSETTING(    0x10, "0100" )
-	PORT_DIPSETTING(    0x14, "0101" )
-	PORT_DIPSETTING(    0x18, "0110" )
-	PORT_DIPSETTING(    0x1c, "0111" )
-	PORT_DIPSETTING(    0x20, "1000" )
-	PORT_DIPSETTING(    0x24, "1001" )
-	PORT_DIPSETTING(    0x28, "1010" )
-	PORT_DIPSETTING(    0x2c, "1011" )
-	PORT_DIPSETTING(    0x30, "1100" )
-	PORT_DIPSETTING(    0x34, "1101" )
-	PORT_DIPSETTING(    0x38, "1110" )
-	PORT_DIPSETTING(    0x3c, "1111" )
+	PORT_DIPNAME( 0x1c, 0x00, "Coinage 2" )				PORT_DIPLOCATION("SW2:!3,!4,!5") //K,L,M
+	PORT_DIPSETTING(    0x00, "0" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x08, "8" )
+	PORT_DIPSETTING(    0x0c, "c" )
+	PORT_DIPSETTING(    0x10, "10" )
+	PORT_DIPSETTING(    0x14, "14" )
+	PORT_DIPSETTING(    0x18, "18" )
+	PORT_DIPSETTING(    0x1c, "1c" )
+	PORT_DIPNAME( 0x20, 0x00, "Coinage 3" )				PORT_DIPLOCATION("SW2:!6") //N
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x00, "Rematches" )				PORT_DIPLOCATION("SW2:!7")
 	PORT_DIPSETTING(    0x40, "3" )
 	PORT_DIPSETTING(    0x00, "7" )
 
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x0f, 0x00, "Coinage 1" )				PORT_DIPLOCATION("SW1:!1,!2,!3,!4") // A,B,C,D
-	PORT_DIPSETTING(    0x00, "0000" )
-	PORT_DIPSETTING(    0x01, "0001" )
-	PORT_DIPSETTING(    0x02, "0010" )
-	PORT_DIPSETTING(    0x03, "0011" )
-	PORT_DIPSETTING(    0x04, "0100" )
-	PORT_DIPSETTING(    0x05, "0101" )
-	PORT_DIPSETTING(    0x06, "0110" )
-	PORT_DIPSETTING(    0x07, "0111" )
-	PORT_DIPSETTING(    0x08, "1000" )
-	PORT_DIPSETTING(    0x09, "1001" )
-	PORT_DIPSETTING(    0x0a, "1010" )
-	PORT_DIPSETTING(    0x0b, "1011" )
-	PORT_DIPSETTING(    0x0c, "1100" )
-	PORT_DIPSETTING(    0x0d, "1101" )
-	PORT_DIPSETTING(    0x0e, "1110" )
-	PORT_DIPSETTING(    0x0f, "1111" )
+	PORT_DIPNAME( 0x0f, 0x00, "Coinage 1" )				PORT_DIPLOCATION("SW1:!1,!2,!3,!4") //A,B,C,D
+	PORT_DIPSETTING(    0x00, "0" )
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x02, "2" )
+	PORT_DIPSETTING(    0x03, "3" )
+	PORT_DIPSETTING(    0x04, "4" )
+	PORT_DIPSETTING(    0x05, "5" )
+	PORT_DIPSETTING(    0x06, "6" )
+	PORT_DIPSETTING(    0x07, "7" )
+	PORT_DIPSETTING(    0x08, "8" )
+	PORT_DIPSETTING(    0x09, "9" )
+	PORT_DIPSETTING(    0x0a, "a" )
+	PORT_DIPSETTING(    0x0b, "b" )
+	PORT_DIPSETTING(    0x0c, "c" )
+	PORT_DIPSETTING(    0x0d, "d" )
+	PORT_DIPSETTING(    0x0e, "e" )
+	PORT_DIPSETTING(    0x0f, "f" )
 	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(punchout_vlm5030_busy_r, NULL)	/* VLM5030 busy signal */
 	PORT_DIPNAME( 0x40, 0x00, "Coin Slots" )			PORT_DIPLOCATION("R18:!1") /* R18 resistor */
 	PORT_DIPSETTING(    0x40, "1" )
@@ -924,85 +597,74 @@ static const nes_interface nes_config =
 
 static MACHINE_RESET( punchout )
 {
-	punchout_state *state = machine.driver_data<punchout_state>();
-	state->m_rp5c01_mode_sel = 0;
-	memset(state->m_rp5c01_mem, 0, sizeof(state->m_rp5c01_mem));
-}
-
-static INTERRUPT_GEN( vblank_irq )
-{
-	punchout_state *state = device->machine().driver_data<punchout_state>();
-
-	if(state->m_nmi_mask)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
+	rp5c01_mode_sel = 0;
+	memset(rp5c01_mem, 0, sizeof(rp5c01_mem));
 }
 
 
-
-static MACHINE_CONFIG_START( punchout, punchout_state )
+static MACHINE_DRIVER_START( punchout )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 8000000/2)	/* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(punchout_map)
-	MCFG_CPU_IO_MAP(punchout_io_map)
-	MCFG_CPU_VBLANK_INT("top", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 8000000/2)	/* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(punchout_map)
+	MDRV_CPU_IO_MAP(punchout_io_map)
+	MDRV_CPU_VBLANK_INT("top", nmi_line_pulse)
 
-	MCFG_CPU_ADD("audiocpu", N2A03, N2A03_DEFAULTCLOCK)
-	MCFG_CPU_PROGRAM_MAP(punchout_sound_map)
-	MCFG_CPU_VBLANK_INT("top", nmi_line_pulse)
+	MDRV_CPU_ADD("audiocpu", N2A03, N2A03_DEFAULTCLOCK)
+	MDRV_CPU_PROGRAM_MAP(punchout_sound_map)
+	MDRV_CPU_VBLANK_INT("top", nmi_line_pulse)
 
-	MCFG_MACHINE_RESET(punchout)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_RESET(punchout)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* video hardware */
-	MCFG_GFXDECODE(punchout)
-	MCFG_PALETTE_LENGTH(0x200)
-	MCFG_DEFAULT_LAYOUT(layout_dualhovu)
+	MDRV_GFXDECODE(punchout)
+	MDRV_PALETTE_LENGTH(0x200)
+	MDRV_DEFAULT_LAYOUT(layout_dualhovu)
 
-	MCFG_SCREEN_ADD("top", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(punchout_top)
+	MDRV_SCREEN_ADD("top", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_SCREEN_ADD("bottom", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(punchout_bottom)
+	MDRV_SCREEN_ADD("bottom", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_VIDEO_START(punchout)
+	MDRV_VIDEO_START(punchout)
+	MDRV_VIDEO_UPDATE(punchout)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("nes", NES, N2A03_DEFAULTCLOCK)
-	MCFG_SOUND_CONFIG(nes_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("nes", NES, N2A03_DEFAULTCLOCK)
+	MDRV_SOUND_CONFIG(nes_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("vlm", VLM5030, 3580000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("vlm", VLM5030, 3580000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( armwrest, punchout )
+static MACHINE_DRIVER_START( armwrest )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(punchout)
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(armwrest_map)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(armwrest_map)
 
 	/* video hardware */
-	MCFG_GFXDECODE(armwrest)
+	MDRV_GFXDECODE(armwrest)
 
-	MCFG_VIDEO_START(armwrest)
-	MCFG_SCREEN_MODIFY("top")
-	MCFG_SCREEN_UPDATE_STATIC(armwrest_top)
-	MCFG_SCREEN_MODIFY("bottom")
-	MCFG_SCREEN_UPDATE_STATIC(armwrest_bottom)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(armwrest)
+	MDRV_VIDEO_UPDATE(armwrest)
+MACHINE_DRIVER_END
 
 
 

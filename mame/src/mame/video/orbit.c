@@ -4,26 +4,33 @@ Atari Orbit video emulation
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/orbit.h"
+
+UINT8* orbit_playfield_ram;
+UINT8* orbit_sprite_ram;
+
+static tilemap* bg_tilemap;
+
+static int orbit_flip_screen;
+
 
 WRITE8_HANDLER( orbit_playfield_w )
 {
-	orbit_state *state = space->machine().driver_data<orbit_state>();
-	state->m_playfield_ram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	orbit_playfield_ram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 
 static TILE_GET_INFO( get_tile_info )
 {
-	orbit_state *state = machine.driver_data<orbit_state>();
-	UINT8 code = state->m_playfield_ram[tile_index];
+	UINT8 code = orbit_playfield_ram[tile_index];
+
 	int flags = 0;
 
-	if (BIT(code, 6))
+	if (code & 0x40)
 		flags |= TILE_FLIPX;
-	if (state->m_flip_screen)
+	if (orbit_flip_screen)
 		flags |= TILE_FLIPY;
 
 	SET_TILE_INFO(3, code & 0x3f, 0, flags);
@@ -32,15 +39,13 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( orbit )
 {
-	orbit_state *state = machine.driver_data<orbit_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 16, 16, 32, 30);
+	bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 16, 16, 32, 30);
 }
 
 
-static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect )
+static void draw_sprites(running_machine *machine, bitmap_t* bitmap, const rectangle* cliprect)
 {
-	orbit_state *state = machine.driver_data<orbit_state>();
-	const UINT8* p = state->m_sprite_ram;
+	const UINT8* p = orbit_sprite_ram;
 
 	int i;
 
@@ -55,8 +60,8 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 			((flag & 0xc0) == 0x80) ? 1 :
 			((flag & 0xc0) == 0xc0) ? 2 : 0;
 
-		int flip_x = BIT(code, 6);
-		int flip_y = BIT(code, 7);
+		int flip_x = code & 0x40;
+		int flip_y = code & 0x80;
 
 		int zoom_x = 0x10000;
 		int zoom_y = 0x10000;
@@ -73,20 +78,18 @@ static void draw_sprites( running_machine &machine, bitmap_ind16 &bitmap, const 
 		hpos <<= 1;
 		vpos <<= 1;
 
-		drawgfxzoom_transpen(bitmap, cliprect, machine.gfx[layout], code, 0, flip_x, flip_y,
+		drawgfxzoom_transpen(bitmap, cliprect, machine->gfx[layout], code, 0, flip_x, flip_y,
 			hpos, vpos, zoom_x, zoom_y, 0);
 	}
 }
 
 
-SCREEN_UPDATE_IND16( orbit )
+VIDEO_UPDATE( orbit )
 {
-	orbit_state *state = screen.machine().driver_data<orbit_state>();
+	orbit_flip_screen = input_port_read(screen->machine, "DSW2") & 8;
 
-	state->m_flip_screen = input_port_read(screen.machine(), "DSW2") & 8;
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

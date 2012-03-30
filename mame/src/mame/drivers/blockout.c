@@ -1,164 +1,76 @@
 /***************************************************************************
 
-    Block Out
+Block Out
 
-    driver by Nicola Salmoria
+driver by Nicola Salmoria
 
-    DIP locations verified for:
-    - blockout (manual)
-
-****************************************************************************
-
-   Agress PCB Info
-   Palco System Corp., 1991
-
-   This game runs on an original unmodified Technos 'Block Out' PCB.
-   All of the Technos identifications are hidden under 'Palco' or 'Agress' stickers.
-
-   PCB Layout (Applies to both Agress and Block Out)
-   ----------
-
-   PS-05307 (sticker)
-   TA-0029-P1-02 (printed on Block Out PCB under the sticker)
-
-   |--------------------------------------------------------|
-   | M51516            YM2151                    3.579545MHz|
-   |           YM3012     6116                              |
-   |   MB3615  1.056MHz   PALCO3.73            20MHz        |
-   |           M6295                                        |
-   |   MB3615                            82S129PR.25  28MHz |
-   |           PALCO4.78                                    |
-   |                      Z80            |-------|          |
-   |                                     |TECHNOS|          |
-   |J         2018     6264              |TJ-001 |          |
-   |A                                    |(QFP80)|          |
-   |M         2018                       |-------|          |
-   |M                                                       |
-   |A                  6264                                 |
-   |                               MB81461-12               |
-   |                               MB81461-12               |
-   |                               MB81461-12               |
-   |                               MB81461-12               |
-   |                               MB81461-12               |
-   |  DSW1(8)                      MB81461-12               |
-   |                               MB81461-12               |
-   |  DSW2(8)                      MB81461-12               |
-   |         PALCO2.91                                      |
-   |                 PALCO1.81               68000          |
-   |--------------------------------------------------------|
-
-   Notes:
-      68000 clock : 10.000MHz
-      Z80 clock   : 3.579545MHz
-      M6295 clock : 1.056MHz, sample rate = 1056000 / 132
-      YM2151 clock: 3.579545MHz
-      VSync       : 58Hz
-
-      PROM is used for video timing etc, without it, no graphics are displayed,
-      only 'Insert Coin' and the manufacturer text/year on the title screen.
-
-      palco1.81 \ Main program   27C010
-      palco2.91 /                  "
-      palco3.73   OKI samples    27C256
-      palco4.78   Z80 program    27C010
+DIP locations verified for:
+- blockout (manual)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-#include "includes/blockout.h"
 
-#define MAIN_CLOCK XTAL_10MHz
-#define AUDIO_CLOCK XTAL_3_579545MHz
+
+extern UINT16 *blockout_videoram;
+extern UINT16 *blockout_frontvideoram;
+
+WRITE16_HANDLER( blockout_videoram_w );
+WRITE16_HANDLER( blockout_paletteram_w );
+WRITE16_HANDLER( blockout_frontcolor_w );
+VIDEO_START( blockout );
+VIDEO_UPDATE( blockout );
+
+
+static INTERRUPT_GEN( blockout_interrupt )
+{
+	/* interrupt 6 is vblank */
+	/* interrupt 5 reads coin inputs - might have to be triggered only */
+	/* when a coin is inserted */
+	cpu_set_input_line(device, 6 - cpu_getiloops(device), HOLD_LINE);
+}
 
 static WRITE16_HANDLER( blockout_sound_command_w )
 {
-	blockout_state *state = space->machine().driver_data<blockout_state>();
-
 	if (ACCESSING_BITS_0_7)
 	{
-		soundlatch_w(space, offset, data & 0xff);
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		soundlatch_w(space,offset,data & 0xff);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
-static WRITE16_HANDLER( blockout_irq6_ack_w )
-{
-	blockout_state *state = space->machine().driver_data<blockout_state>();
 
-	device_set_input_line(state->m_maincpu, 6, CLEAR_LINE);
-}
-
-static WRITE16_HANDLER( blockout_irq5_ack_w )
-{
-	blockout_state *state = space->machine().driver_data<blockout_state>();
-
-	device_set_input_line(state->m_maincpu, 5, CLEAR_LINE);
-}
-
-/*************************************
- *
- *  Address maps
- *
- *************************************/
-
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READ_PORT("P1")
 	AM_RANGE(0x100002, 0x100003) AM_READ_PORT("P2")
 	AM_RANGE(0x100004, 0x100005) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x100006, 0x100007) AM_READ_PORT("DSW1")
 	AM_RANGE(0x100008, 0x100009) AM_READ_PORT("DSW2")
-	AM_RANGE(0x100010, 0x100011) AM_WRITE(blockout_irq6_ack_w)
-	AM_RANGE(0x100012, 0x100013) AM_WRITE(blockout_irq5_ack_w)
 	AM_RANGE(0x100014, 0x100015) AM_WRITE(blockout_sound_command_w)
 	AM_RANGE(0x100016, 0x100017) AM_WRITENOP	/* don't know, maybe reset sound CPU */
-	AM_RANGE(0x180000, 0x1bffff) AM_RAM_WRITE(blockout_videoram_w) AM_BASE_MEMBER(blockout_state, m_videoram)
+	AM_RANGE(0x180000, 0x1bffff) AM_RAM_WRITE(blockout_videoram_w) AM_BASE(&blockout_videoram)
 	AM_RANGE(0x1d4000, 0x1dffff) AM_RAM	/* work RAM */
 	AM_RANGE(0x1f4000, 0x1fffff) AM_RAM	/* work RAM */
-	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE_MEMBER(blockout_state, m_frontvideoram)
+	AM_RANGE(0x200000, 0x207fff) AM_RAM AM_BASE(&blockout_frontvideoram)
 	AM_RANGE(0x208000, 0x21ffff) AM_RAM	/* ??? */
 	AM_RANGE(0x280002, 0x280003) AM_WRITE(blockout_frontcolor_w)
-	AM_RANGE(0x280200, 0x2805ff) AM_RAM_WRITE(blockout_paletteram_w) AM_BASE_MEMBER(blockout_state, m_paletteram)
+	AM_RANGE(0x280200, 0x2805ff) AM_RAM_WRITE(blockout_paletteram_w) AM_BASE(&paletteram16)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( agress_map, AS_PROGRAM, 16 )
-	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x100000, 0x100001) AM_READ_PORT("P1")
-	AM_RANGE(0x100002, 0x100003) AM_READ_PORT("P2")
-	AM_RANGE(0x100004, 0x100005) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x100006, 0x100007) AM_READ_PORT("DSW1")
-	AM_RANGE(0x100008, 0x100009) AM_READ_PORT("DSW2")
-	AM_RANGE(0x100010, 0x100011) AM_WRITE(blockout_irq6_ack_w)
-	AM_RANGE(0x100012, 0x100013) AM_WRITE(blockout_irq5_ack_w)
-	AM_RANGE(0x100014, 0x100015) AM_WRITE(blockout_sound_command_w)
-	AM_RANGE(0x100016, 0x100017) AM_WRITENOP	/* don't know, maybe reset sound CPU */
-	AM_RANGE(0x180000, 0x1bffff) AM_RAM_WRITE(blockout_videoram_w) AM_BASE_MEMBER(blockout_state, m_videoram)
-	AM_RANGE(0x1d4000, 0x1dffff) AM_RAM	/* work RAM */
-	AM_RANGE(0x1f4000, 0x1fffff) AM_RAM	/* work RAM */
-	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_BASE_MEMBER(blockout_state, m_frontvideoram) AM_MIRROR(0x004000) // agress checks at F3A that this is mirrored, blockout glitches if you do it to it
-	AM_RANGE(0x208000, 0x21ffff) AM_RAM	/* ??? */
-	AM_RANGE(0x280002, 0x280003) AM_WRITE(blockout_frontcolor_w)
-	AM_RANGE(0x280200, 0x2805ff) AM_RAM_WRITE(blockout_paletteram_w) AM_BASE_MEMBER(blockout_state, m_paletteram)
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( audio_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
+	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
-
-/*************************************
- *
- *  Input ports
- *
- *************************************/
 
 static INPUT_PORTS_START( blockout )
 	PORT_START("P1")
@@ -221,7 +133,7 @@ static INPUT_PORTS_START( blockout )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_DIPLOCATION("SW2:8") /* Listed as "Unused" */
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( blockoutj )
+static INPUT_PORTS_START( blckoutj )
 	PORT_INCLUDE( blockout )
 
 	PORT_MODIFY("P1")
@@ -255,18 +167,10 @@ static INPUT_PORTS_START( agress )
 	PORT_DIPSETTING(    0x00, "2" )
 INPUT_PORTS_END
 
-
-/*************************************
- *
- *  Sound interface
- *
- *************************************/
-
 /* handler called by the 2151 emulator when the internal timers cause an IRQ */
-static void blockout_irq_handler(device_t *device, int irq)
+static void blockout_irq_handler(const device_config *device, int irq)
 {
-	blockout_state *state = device->machine().driver_data<blockout_state>();
-	device_set_input_line_and_vector(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
+	cputag_set_input_line_and_vector(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
 }
 
 static const ym2151_interface ym2151_config =
@@ -275,89 +179,50 @@ static const ym2151_interface ym2151_config =
 };
 
 
-/*************************************
- *
- *  Machine driver
- *
- *************************************/
-
-static MACHINE_START( blockout )
-{
-	blockout_state *state = machine.driver_data<blockout_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_color));
-}
-
-static MACHINE_RESET( blockout )
-{
-	blockout_state *state = machine.driver_data<blockout_state>();
-
-	state->m_color = 0;
-}
-
-static TIMER_DEVICE_CALLBACK( blockout_scanline )
-{
-	blockout_state *state = timer.machine().driver_data<blockout_state>();
-	int scanline = param;
-
-	if(scanline == 248) // vblank-out irq
-		device_set_input_line(state->m_maincpu, 6, ASSERT_LINE);
-
-	if(scanline == 0) // vblank-in irq or directly tied to coin inputs (TODO: check)
-		device_set_input_line(state->m_maincpu, 5, ASSERT_LINE);
-}
-
-static MACHINE_CONFIG_START( blockout, blockout_state )
+static MACHINE_DRIVER_START( blockout )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, MAIN_CLOCK)       /* MRH - 8.76 makes gfx/adpcm samples sync better -- but 10 is correct speed*/
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", blockout_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", M68000, 10000000)       /* MRH - 8.76 makes gfx/adpcm samples sync better -- but 10 is correct speed*/
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT_HACK(blockout_interrupt,2)
 
-	MCFG_CPU_ADD("audiocpu", Z80, AUDIO_CLOCK)	/* 3.579545 MHz */
-	MCFG_CPU_PROGRAM_MAP(audio_map)
-
-	MCFG_MACHINE_START(blockout)
-	MCFG_MACHINE_RESET(blockout)
+	MDRV_CPU_ADD("audiocpu", Z80, 3579545)	/* 3.579545 MHz */
+	MDRV_CPU_PROGRAM_MAP(audio_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(58)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(320, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 8, 247)
-	MCFG_SCREEN_UPDATE_STATIC(blockout)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(58)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(320, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 319, 8, 247)
 
-	MCFG_PALETTE_LENGTH(513)
+	MDRV_PALETTE_LENGTH(513)
 
-	MCFG_VIDEO_START(blockout)
+	MDRV_VIDEO_START(blockout)
+	MDRV_VIDEO_UPDATE(blockout)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, AUDIO_CLOCK)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.60)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.60)
+	MDRV_SOUND_ADD("ym", YM2151, 3579545)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( agress, blockout )
-	MCFG_CPU_MODIFY( "maincpu" )
-	MCFG_CPU_PROGRAM_MAP(agress_map)
-MACHINE_CONFIG_END
 
-/*************************************
- *
- *  ROM definition(s)
- *
- *************************************/
+
+/***************************************************************************
+
+  Game driver(s)
+
+***************************************************************************/
 
 ROM_START( blockout )
 	ROM_REGION( 0x40000, "maincpu", 0 )	/* 2*128k for 68000 code */
@@ -404,6 +269,61 @@ ROM_START( blockoutj )
 	ROM_LOAD( "mb7114h.25",   0x0000, 0x0100, CRC(b25bbda7) SHA1(840f1470886bd0019db3cd29e3d1d80205a65f48) )	/* unknown */
 ROM_END
 
+/*
+
+Agress
+Palco System Corp., 1991
+
+This game runs on an original unmodified Technos 'Block Out' PCB.
+All of the Technos identifications are hidden under 'Palco' or 'Agress' stickers.
+
+PCB Layout (Applies to both Agress and Block Out)
+----------
+
+PS-05307 (sticker)
+TA-0029-P1-02 (printed on Block Out PCB under the sticker)
+|--------------------------------------------------------|
+| M51516            YM2151                    3.579545MHz|
+|           YM3012     6116                              |
+|   MB3615  1.056MHz   PALCO3.73            20MHz        |
+|           M6295                                        |
+|   MB3615                            82S129PR.25  28MHz |
+|           PALCO4.78                                    |
+|                      Z80            |-------|          |
+|                                     |TECHNOS|          |
+|J         2018     6264              |TJ-001 |          |
+|A                                    |(QFP80)|          |
+|M         2018                       |-------|          |
+|M                                                       |
+|A                  6264                                 |
+|                               MB81461-12               |
+|                               MB81461-12               |
+|                               MB81461-12               |
+|                               MB81461-12               |
+|                               MB81461-12               |
+|  DSW1(8)                      MB81461-12               |
+|                               MB81461-12               |
+|  DSW2(8)                      MB81461-12               |
+|         PALCO2.91                                      |
+|                 PALCO1.81               68000          |
+|--------------------------------------------------------|
+Notes:
+      68000 clock : 10.000MHz
+      Z80 clock   : 3.579545MHz
+      M6295 clock : 1.056MHz, sample rate = 1056000 / 132
+      YM2151 clock: 3.579545MHz
+      VSync       : 58Hz
+
+      PROM is used for video timing etc, without it, no graphics are displayed,
+      only 'Insert Coin' and the manufacturer text/year on the title screen.
+
+      palco1.81 \ Main program   27C010
+      palco2.91 /                  "
+      palco3.73   OKI samples    27C256
+      palco4.78   Z80 program    27C010
+
+*/
+
 ROM_START( agress )
 	ROM_REGION( 0x40000, "maincpu", 0 )	/* 2*128k for 68000 code */
 	ROM_LOAD16_BYTE( "palco1.81",         0x00000, 0x20000, CRC(3acc917a) SHA1(14960588673458d862daf14a8d7474af6c95c2ad) )
@@ -436,14 +356,8 @@ ROM_START( agressb )
 ROM_END
 
 
-/*************************************
- *
- *  Game driver(s)
- *
- *************************************/
-
-GAME( 1989, blockout, 0,        blockout, blockout, 0, ROT0, "Technos Japan / California Dreams", "Block Out (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, blockout2,blockout, blockout, blockout, 0, ROT0, "Technos Japan / California Dreams", "Block Out (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1989, blockoutj,blockout, blockout, blockoutj,0, ROT0, "Technos Japan / California Dreams", "Block Out (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1991, agress,   0,        agress,   agress,   0, ROT0, "Palco", "Agress", GAME_SUPPORTS_SAVE )
-GAME( 2003, agressb,  agress,   agress,   agress,   0, ROT0, "bootleg", "Agress (English bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1989, blockout, 0,        blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 1)", 0 )
+GAME( 1989, blockout2,blockout, blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 2)", 0 )
+GAME( 1989, blockoutj,blockout, blockout, blckoutj, 0, ROT0, "Technos Japan + California Dreams", "Block Out (Japan)", 0 )
+GAME( 1991, agress,   0,        blockout, agress,   0, ROT0, "Palco", "Agress", 0 )
+GAME( 2003, agressb,  agress,   blockout, agress,   0, ROT0, "Palco", "Agress (English bootleg)", 0 )

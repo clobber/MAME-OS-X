@@ -1,6 +1,7 @@
 #ifndef __SUPERFX_H__
 #define __SUPERFX_H__
 
+#include "devcb.h"
 
 enum
 {
@@ -90,15 +91,14 @@ struct _superfx_config
 };
 #define SUPERFX_CONFIG(name) const superfx_config (name) =
 
-DECLARE_LEGACY_CPU_DEVICE(SUPERFX, superfx);
+CPU_GET_INFO( superfx );
+#define CPU_SUPERFX CPU_GET_INFO_NAME( superfx )
 
 CPU_DISASSEMBLE( superfx );
 extern offs_t superfx_dasm_one(char *buffer, offs_t pc, UINT8 op, UINT8 param0, UINT8 param1, UINT16 alt);
 
-UINT8 superfx_mmio_read(device_t *cpu, UINT32 addr);
-void superfx_mmio_write(device_t *cpu, UINT32 addr, UINT8 data);
-void superfx_add_clocks(device_t *cpu, INT32 clocks);
-int superfx_access_ram(device_t *cpu);
-int superfx_access_rom(device_t *cpu);
+UINT8 superfx_mmio_read(const device_config *cpu, UINT32 addr);
+void superfx_mmio_write(const device_config *cpu, UINT32 addr, UINT8 data);
+void superfx_add_clocks(const device_config *cpu, INT32 clocks);
 
 #endif /* __SUPERFX_H__ */

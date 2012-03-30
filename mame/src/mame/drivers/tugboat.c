@@ -10,7 +10,6 @@ TODO:
   supposed to access videoram scanning it by columns (like btime_mirrorvideoram_w),
   but the current implementation is a big kludge, and it still looks wrong.
 - colors might not be entirely accurate
-  Suspect berenstn is using the wrong color PROM.
 
 the problem which caused the controls not to work
 ---
@@ -22,25 +21,17 @@ always false - counter was reloaded and incremented before interrupt occurs
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/6821pia.h"
 #include "sound/ay8910.h"
 
 
-class tugboat_state : public driver_device
-{
-public:
-	tugboat_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+static UINT8 *tugboat_ram;
+//UINT8 *tugboat_score;
 
-	UINT8 *m_ram;
-	UINT8 m_hd46505_0_reg[18];
-	UINT8 m_hd46505_1_reg[18];
-	int m_reg0;
-	int m_reg1;
-	int m_ctrl;
-};
+
+static UINT8 hd46505_0_reg[18],hd46505_1_reg[18];
 
 
 /*  there isn't the usual resistor array anywhere near the color prom,
@@ -50,7 +41,7 @@ static PALETTE_INIT( tugboat )
 	int i;
 
 
-	for (i = 0;i < machine.total_colors();i++)
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
 		int r,g,b,brt;
 
@@ -71,36 +62,34 @@ static PALETTE_INIT( tugboat )
    because I need the start_addr register to handle scrolling */
 static WRITE8_HANDLER( tugboat_hd46505_0_w )
 {
-	tugboat_state *state = space->machine().driver_data<tugboat_state>();
-	if (offset == 0) state->m_reg0 = data & 0x0f;
-	else if (state->m_reg0 < 18) state->m_hd46505_0_reg[state->m_reg0] = data;
+	static int reg;
+	if (offset == 0) reg = data & 0x0f;
+	else if (reg < 18) hd46505_0_reg[reg] = data;
 }
 static WRITE8_HANDLER( tugboat_hd46505_1_w )
 {
-	tugboat_state *state = space->machine().driver_data<tugboat_state>();
-	if (offset == 0) state->m_reg1 = data & 0x0f;
-	else if (state->m_reg1 < 18) state->m_hd46505_1_reg[state->m_reg1] = data;
+	static int reg;
+	if (offset == 0) reg = data & 0x0f;
+	else if (reg < 18) hd46505_1_reg[reg] = data;
 }
 
 
 static WRITE8_HANDLER( tugboat_score_w )
 {
-	tugboat_state *state = space->machine().driver_data<tugboat_state>();
-      if (offset>=0x8) state->m_ram[0x291d + 32*offset + 32*(1-8)] = data ^ 0x0f;
-      if (offset<0x8 ) state->m_ram[0x291d + 32*offset + 32*9] = data ^ 0x0f;
+      if (offset>=0x8) tugboat_ram[0x291d + 32*offset + 32*(1-8)] = data ^ 0x0f;
+      if (offset<0x8 ) tugboat_ram[0x291d + 32*offset + 32*9] = data ^ 0x0f;
 }
 
-static void draw_tilemap(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,
+static void draw_tilemap(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect,
 		int addr,int gfx0,int gfx1,int transparency)
 {
-	tugboat_state *state = machine.driver_data<tugboat_state>();
 	int x,y;
 
 	for (y = 0;y < 32;y++)
 	{
 		for (x = 0;x < 32;x++)
 		{
-			int code = (state->m_ram[addr + 0x400] << 8) | state->m_ram[addr];
+			int code = (tugboat_ram[addr + 0x400] << 8) | tugboat_ram[addr];
 			int color = (code & 0x3c00) >> 10;
 			int rgn;
 
@@ -113,7 +102,7 @@ static void draw_tilemap(running_machine &machine, bitmap_ind16 &bitmap,const re
 				rgn = gfx1;
 			}
 
-			drawgfx_transpen(bitmap,cliprect,machine.gfx[rgn],
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[rgn],
 					code,
 					color,
 					0,0,
@@ -125,45 +114,42 @@ static void draw_tilemap(running_machine &machine, bitmap_ind16 &bitmap,const re
 	}
 }
 
-static SCREEN_UPDATE_IND16( tugboat )
+static VIDEO_UPDATE( tugboat )
 {
-	tugboat_state *state = screen.machine().driver_data<tugboat_state>();
-	int startaddr0 = state->m_hd46505_0_reg[0x0c]*256 + state->m_hd46505_0_reg[0x0d];
-	int startaddr1 = state->m_hd46505_1_reg[0x0c]*256 + state->m_hd46505_1_reg[0x0d];
+	int startaddr0 = hd46505_0_reg[0x0c]*256 + hd46505_0_reg[0x0d];
+	int startaddr1 = hd46505_1_reg[0x0c]*256 + hd46505_1_reg[0x0d];
 
 
-	draw_tilemap(screen.machine(), bitmap,cliprect,startaddr0,0,1,FALSE);
-	draw_tilemap(screen.machine(), bitmap,cliprect,startaddr1,2,3,TRUE);
+	draw_tilemap(screen->machine, bitmap,cliprect,startaddr0,0,1,FALSE);
+	draw_tilemap(screen->machine, bitmap,cliprect,startaddr1,2,3,TRUE);
 	return 0;
 }
 
 
+static int ctrl;
 
 static READ8_DEVICE_HANDLER( tugboat_input_r )
 {
-	tugboat_state *state = device->machine().driver_data<tugboat_state>();
-	if (~state->m_ctrl & 0x80)
-		return input_port_read(device->machine(), "IN0");
-	else if (~state->m_ctrl & 0x40)
-		return input_port_read(device->machine(), "IN1");
-	else if (~state->m_ctrl & 0x20)
-		return input_port_read(device->machine(), "IN2");
-	else if (~state->m_ctrl & 0x10)
-		return input_port_read(device->machine(), "IN3");
+	if (~ctrl & 0x80)
+		return input_port_read(device->machine, "IN0");
+	else if (~ctrl & 0x40)
+		return input_port_read(device->machine, "IN1");
+	else if (~ctrl & 0x20)
+		return input_port_read(device->machine, "IN2");
+	else if (~ctrl & 0x10)
+		return input_port_read(device->machine, "IN3");
 	else
-		return input_port_read(device->machine(), "IN4");
+		return input_port_read(device->machine, "IN4");
 }
 
 static READ8_DEVICE_HANDLER( tugboat_ctrl_r )
 {
-	tugboat_state *state = device->machine().driver_data<tugboat_state>();
-	return state->m_ctrl;
+	return ctrl;
 }
 
 static WRITE8_DEVICE_HANDLER( tugboat_ctrl_w )
 {
-	tugboat_state *state = device->machine().driver_data<tugboat_state>();
-	state->m_ctrl = data;
+	ctrl = data;
 }
 
 static const pia6821_interface pia0_intf =
@@ -201,27 +187,28 @@ static const pia6821_interface pia1_intf =
 static TIMER_CALLBACK( interrupt_gen )
 {
 	cputag_set_input_line(machine, "maincpu", 0, HOLD_LINE);
-	machine.scheduler().timer_set(machine.primary_screen->frame_period(), FUNC(interrupt_gen));
+	timer_set(machine, video_screen_get_frame_period(machine->primary_screen), NULL, 0, interrupt_gen);
 }
 
 static MACHINE_RESET( tugboat )
 {
-	machine.scheduler().timer_set(machine.primary_screen->time_until_pos(30*8+4), FUNC(interrupt_gen));
+	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 30*8+4, 0), NULL, 0, interrupt_gen);
 }
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x01ff) AM_RAM AM_BASE_MEMBER(tugboat_state, m_ram)
-	AM_RANGE(0x1060, 0x1061) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x01ff) AM_RAM AM_BASE(&tugboat_ram)
+	AM_RANGE(0x1060, 0x1061) AM_DEVWRITE("ay", ay8910_address_data_w)
 	AM_RANGE(0x10a0, 0x10a1) AM_WRITE(tugboat_hd46505_0_w)	/* scrolling is performed changing the start_addr register (0C/0D) */
 	AM_RANGE(0x10c0, 0x10c1) AM_WRITE(tugboat_hd46505_1_w)
-	AM_RANGE(0x11e4, 0x11e7) AM_DEVREADWRITE_MODERN("pia0", pia6821_device, read, write)
-	AM_RANGE(0x11e8, 0x11eb) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
+	AM_RANGE(0x11e4, 0x11e7) AM_DEVREADWRITE("pia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x11e8, 0x11eb) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
 	//AM_RANGE(0x1700, 0x1fff) AM_RAM
 	AM_RANGE(0x18e0, 0x18ef) AM_WRITE(tugboat_score_w)
 	AM_RANGE(0x2000, 0x2fff) AM_RAM	/* tilemap RAM */
-	AM_RANGE(0x4000, 0x7fff) AM_ROM
-	AM_RANGE(0xfff0, 0xffff) AM_ROM	/* vectors */
+	AM_RANGE(0x4000, 0x7fff) AM_READ(SMH_ROM)
+    AM_RANGE(0x5000, 0x7fff) AM_WRITE(SMH_ROM)
+	AM_RANGE(0xfff0, 0xffff) AM_READ(SMH_ROM)	/* vectors */
 ADDRESS_MAP_END
 
 
@@ -326,33 +313,34 @@ static GFXDECODE_START( tugboat )
 GFXDECODE_END
 
 
-static MACHINE_CONFIG_START( tugboat, tugboat_state )
-	MCFG_CPU_ADD("maincpu", M6502, 2000000)	/* 2 MHz ???? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+static MACHINE_DRIVER_START( tugboat )
+	MDRV_CPU_ADD("maincpu", M6502, 2000000)	/* 2 MHz ???? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_MACHINE_RESET(tugboat)
+	MDRV_MACHINE_RESET(tugboat)
 
-	MCFG_PIA6821_ADD("pia0", pia0_intf)
-	MCFG_PIA6821_ADD("pia1", pia1_intf)
+	MDRV_PIA6821_ADD("pia0", pia0_intf)
+	MDRV_PIA6821_ADD("pia1", pia1_intf)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(32*8,32*8)
-	MCFG_SCREEN_VISIBLE_AREA(1*8,31*8-1,2*8,30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(tugboat)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8,32*8)
+	MDRV_SCREEN_VISIBLE_AREA(1*8,31*8-1,2*8,30*8-1)
 
-	MCFG_GFXDECODE(tugboat)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(tugboat)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(tugboat)
+	MDRV_PALETTE_INIT(tugboat)
+	MDRV_VIDEO_UPDATE(tugboat)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 2000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay", AY8910, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+MACHINE_DRIVER_END
 
 
 ROM_START( tugboat )
@@ -420,40 +408,5 @@ ROM_START( noahsark )
 ROM_END
 
 
-ROM_START( berenstn )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "u6.bin", 0x4000, 0x1000, CRC(e45275a2) SHA1(d788bc5a69b3cdb2596a3b354371ff88d39f6d46) )
-	ROM_LOAD( "u7.bin", 0x5000, 0x1000, CRC(1984d787) SHA1(c13959c9be075400e9d1668b5404bc73f6db5fe4) )
-	ROM_LOAD( "u8.bin", 0x6000, 0x1000, CRC(0c4d53b7) SHA1(45bd847fdb7bbfbe53d750003024ef3454faa6e6) )
-	ROM_LOAD( "u9.bin", 0x7000, 0x1000, CRC(7e058e57) SHA1(e9506fa4ec693abf0dc4e4cbfd4b93bdbcfc9ba4) )
-	ROM_RELOAD(         0xf000, 0x1000 )	/* for the vectors */
-
-	ROM_REGION( 0x1800, "gfx1", ROMREGION_INVERT  )
-	ROM_LOAD( "u67.bin",  0x0000, 0x0800, CRC(1a77605b) SHA1(8c25750f94895f5820ad4f1fa4ae1ea70ee0aee2) )
-	ROM_FILL(             0x0800, 0x0800, 0xff )
-	ROM_FILL(             0x1000, 0x0800, 0xff )
-
-	ROM_REGION( 0x3000, "gfx2", ROMREGION_INVERT  )
-	ROM_LOAD( "u68.bin", 0x0000, 0x1000, CRC(21bf375f) SHA1(52bc81a4f289a96edfab034445bcf639b1524ada) )
-	ROM_LOAD( "u69.bin", 0x1000, 0x1000, CRC(9dc770f6) SHA1(5dc16fac72d68b521dbb415935f5e7f682c26d7f) )
-	ROM_LOAD( "u70.bin", 0x2000, 0x1000, CRC(a810bd45) SHA1(8be531529174c5d4b4f164bd2397116b9d5350db) )
-
-	ROM_REGION( 0x1800, "gfx3", 0 )
-	ROM_LOAD( "u167.bin", 0x0000, 0x0800, CRC(7fc7280f) SHA1(93bf46e421b580edf81177db85cb220073761c57) )
-	ROM_RELOAD(         0x0800, 0x0800 )
-	ROM_RELOAD(         0x1000, 0x0800 )
-
-	ROM_REGION( 0x3000, "gfx4", 0 )
-	ROM_LOAD( "u168.bin", 0x0000, 0x0800, CRC(af532ba3) SHA1(b196e294eaf4c25549278fd040b1dad2799e18d5) )
-	ROM_LOAD( "u169.bin", 0x1000, 0x0800, CRC(07b6e660) SHA1(c755f63cc7c566e200fc11199bfac06a7e8f89e4) )
-	ROM_LOAD( "u170.bin", 0x2000, 0x0800, CRC(73261eff) SHA1(19edd6957fceb3df12fd29cd5e156a5eb1c70710) )
-
-	ROM_REGION( 0x0100, "proms", 0 ) /* Same as Tugboat but is this actually correct? */
-	ROM_LOAD( "n.t.2-031j.24s10", 0x0000, 0x0100, CRC(236672bf) SHA1(57482d0a23223ef7b211045ad28d3e41e90f961e) )
-ROM_END
-
-
-GAME( 1982, tugboat,  0, tugboat, tugboat,  0, ROT90, "Enter-Tech, Ltd.", "Tugboat",    GAME_IMPERFECT_GRAPHICS )
-GAME( 1983, noahsark, 0, tugboat, noahsark, 0, ROT90, "Enter-Tech, Ltd.", "Noah's Ark", GAME_IMPERFECT_GRAPHICS )
-GAME( 1984, berenstn, 0, tugboat, noahsark, 0, ROT90, "Enter-Tech, Ltd.", "The Berenstain Bears in Big Paw's Cave", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS )
-
+GAME( 1982, tugboat,  0, tugboat, tugboat,  0, ROT90, "ETM", "Tugboat",    GAME_IMPERFECT_GRAPHICS )
+GAME( 1983, noahsark, 0, tugboat, noahsark, 0, ROT90, "Enter-Tech", "Noah's Ark", GAME_IMPERFECT_GRAPHICS )

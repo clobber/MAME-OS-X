@@ -19,7 +19,8 @@
 #ifndef __POKEY_H__
 #define __POKEY_H__
 
-#include "devlegcy.h"
+#include "sndintrf.h"
+#include "devcb.h"
 
 /* CONSTANT DEFINITIONS */
 
@@ -75,7 +76,7 @@ struct _pokey_interface
 	devcb_read8 allpot_r;
 	devcb_read8 serin_r;
 	devcb_write8 serout_w;
-	void (*interrupt_cb)(device_t *device, int mask);
+	void (*interrupt_cb)(const device_config *device, int mask);
 };
 
 
@@ -86,10 +87,11 @@ WRITE8_DEVICE_HANDLER( pokey_w );
 READ8_HANDLER( quad_pokey_r );
 WRITE8_HANDLER( quad_pokey_w );
 
-void pokey_serin_ready (device_t *device, int after);
-void pokey_break_w (device_t *device, int shift);
-void pokey_kbcode_w (device_t *device, int kbcode, int make);
+void pokey_serin_ready (const device_config *device, int after);
+void pokey_break_w (const device_config *device, int shift);
+void pokey_kbcode_w (const device_config *device, int kbcode, int make);
 
-DECLARE_LEGACY_SOUND_DEVICE(POKEY, pokey);
+DEVICE_GET_INFO( pokey );
+#define SOUND_POKEY DEVICE_GET_INFO_NAME( pokey )
 
 #endif	/* __POKEY_H__ */

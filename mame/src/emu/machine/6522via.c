@@ -22,15 +22,79 @@
    timer init, reset, read changed
  */
 
-#include "emu.h"
+#include "driver.h"
 #include "6522via.h"
-#include "devhelpr.h"
+
 
 /***************************************************************************
     PARAMETERS
 ***************************************************************************/
 
 #define TRACE_VIA		0
+
+
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
+
+/******************* internal VIA data structure *******************/
+
+typedef struct _via6522_t via6522_t;
+struct _via6522_t
+{
+	devcb_resolved_read8 in_a_func;
+	devcb_resolved_read8 in_b_func;
+	devcb_resolved_read_line in_ca1_func;
+	devcb_resolved_read_line in_cb1_func;
+	devcb_resolved_read_line in_ca2_func;
+	devcb_resolved_read_line in_cb2_func;
+	devcb_resolved_write8 out_a_func;
+	devcb_resolved_write8 out_b_func;
+	devcb_resolved_write_line out_ca1_func;
+	devcb_resolved_write_line out_cb1_func;
+	devcb_resolved_write_line out_ca2_func;
+	devcb_resolved_write_line out_cb2_func;
+	devcb_resolved_write_line irq_func;
+
+	UINT8 in_a;
+	UINT8 in_ca1;
+	UINT8 in_ca2;
+	UINT8 out_a;
+	UINT8 out_ca2;
+	UINT8 ddr_a;
+
+	UINT8 in_b;
+	UINT8 in_cb1;
+	UINT8 in_cb2;
+	UINT8 out_b;
+	UINT8 out_cb2;
+	UINT8 ddr_b;
+
+	UINT8 t1cl;
+	UINT8 t1ch;
+	UINT8 t1ll;
+	UINT8 t1lh;
+	UINT8 t2cl;
+	UINT8 t2ch;
+	UINT8 t2ll;
+	UINT8 t2lh;
+
+	UINT8 sr;
+	UINT8 pcr;
+	UINT8 acr;
+	UINT8 ier;
+	UINT8 ifr;
+
+	emu_timer *t1;
+	attotime time1;
+	UINT8 t1_active;
+	emu_timer *t2;
+	attotime time2;
+	UINT8 t2_active;
+
+	emu_timer *shift_timer;
+	UINT8 shift_counter;
+};
 
 
 /***************************************************************************
@@ -95,209 +159,110 @@
 #define INT_T1	0x40
 #define INT_ANY	0x80
 
-#define CLR_PA_INT()	clear_int(INT_CA1 | ((!CA2_IND_IRQ(m_pcr)) ? INT_CA2: 0))
-#define CLR_PB_INT()	clear_int(INT_CB1 | ((!CB2_IND_IRQ(m_pcr)) ? INT_CB2: 0))
+#define CLR_PA_INT(device)	via_clear_int (device, INT_CA1 | ((!CA2_IND_IRQ(get_token(device)->pcr)) ? INT_CA2: 0))
+#define CLR_PB_INT(device)	via_clear_int (device, INT_CB1 | ((!CB2_IND_IRQ(get_token(device)->pcr)) ? INT_CB2: 0))
 
 #define IFR_DELAY 3
 
-#define TIMER1_VALUE    (m_t1ll+(m_t1lh<<8))
-#define TIMER2_VALUE    (m_t2ll+(m_t2lh<<8))
+#define TIMER1_VALUE(v) (v->t1ll+(v->t1lh<<8))
+#define TIMER2_VALUE(v) (v->t2ll+(v->t2lh<<8))
 
+/***************************************************************************
+    PROTOTYPES
+***************************************************************************/
+
+static TIMER_CALLBACK( via_shift_callback );
+static TIMER_CALLBACK( via_t1_timeout );
+static TIMER_CALLBACK( via_t2_timeout );
 
 
 /***************************************************************************
     INLINE FUNCTIONS
 ***************************************************************************/
 
-inline void via6522_device::set_irq_line(int state)
+INLINE via6522_t *get_token(const device_config *device)
 {
-	if (m_irq != state)
-	{
-		m_irq_func(state);
-		m_irq = state;
-	}
-}
-
-attotime via6522_device::cycles_to_time(int c)
-{
-	return attotime::from_hz(clock()) * c;
+	assert(device != NULL);
+	assert((device->type == VIA6522));
+	return (via6522_t *) device->token;
 }
 
 
-UINT32 via6522_device::time_to_cycles(attotime t)
+INLINE const via6522_interface *get_interface(const device_config *device)
 {
-	return (t * clock()).as_double();
+	assert(device != NULL);
+	assert((device->type == VIA6522));
+	return (const via6522_interface *) device->static_config;
 }
 
 
-UINT16 via6522_device::get_counter1_value()
+INLINE attotime v_cycles_to_time(const device_config *device, int c)
 {
+	return attotime_mul(ATTOTIME_IN_HZ(device->clock), c);
+}
+
+
+INLINE UINT32 v_time_to_cycles(const device_config *device, attotime t)
+{
+	return attotime_to_double(attotime_mul(t, device->clock));
+}
+
+
+INLINE UINT16 v_get_counter1_value(const device_config *device)
+{
+	via6522_t *v = get_token(device);
 	UINT16 val;
 
-	if(m_t1_active)
-	{
-		val = time_to_cycles(m_t1->remaining()) - IFR_DELAY;
+	if (v->t1_active) {
+		val = v_time_to_cycles(device, timer_timeleft(v->t1)) - IFR_DELAY;
+	} else {
+		val = 0xFFFF - v_time_to_cycles(device, attotime_sub(timer_get_time(device->machine), v->time1));
 	}
-	else
-	{
-		val = 0xffff - time_to_cycles(machine().time() - m_time1);
-	}
-
 	return val;
 }
 
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
+/***************************************************************************
+    IMPLEMENTATION
+***************************************************************************/
 
-// device type definition
-const device_type VIA6522 = &device_creator<via6522_device>;
+/*-------------------------------------------------
+    DEVICE_START( via6522 )
+-------------------------------------------------*/
 
-//-------------------------------------------------
-//  via6522_device - constructor
-//-------------------------------------------------
-
-via6522_device::via6522_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: device_t(mconfig, VIA6522, "6522 VIA", tag, owner, clock),
-	  m_irq(CLEAR_LINE)
+static DEVICE_START( via6522 )
 {
+	via6522_t *v = get_token(device);
+	const via6522_interface *intf = get_interface(device);
 
-}
+	memset(v, 0, sizeof(*v));
 
+	devcb_resolve_read8(&v->in_a_func, &intf->in_a_func, device);
+	devcb_resolve_read8(&v->in_b_func, &intf->in_b_func, device);
+	devcb_resolve_read_line(&v->in_ca1_func, &intf->in_ca1_func, device);
+	devcb_resolve_read_line(&v->in_cb1_func, &intf->in_cb1_func, device);
+	devcb_resolve_read_line(&v->in_ca2_func, &intf->in_ca2_func, device);
+	devcb_resolve_read_line(&v->in_cb2_func, &intf->in_cb2_func, device);
+	devcb_resolve_write8(&v->out_a_func, &intf->out_a_func, device);
+	devcb_resolve_write8(&v->out_b_func, &intf->out_b_func, device);
+	devcb_resolve_write_line(&v->out_ca1_func, &intf->out_ca1_func, device);
+	devcb_resolve_write_line(&v->out_cb1_func, &intf->out_cb1_func, device);
+	devcb_resolve_write_line(&v->out_ca2_func, &intf->out_ca2_func, device);
+	devcb_resolve_write_line(&v->out_cb2_func, &intf->out_cb2_func, device);
+	devcb_resolve_write_line(&v->irq_func, &intf->irq_func, device);
 
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void via6522_device::device_config_complete()
-{
-	// inherit a copy of the static data
-	const via6522_interface *intf = reinterpret_cast<const via6522_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<via6522_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		memset(&m_in_a_cb, 0, sizeof(m_in_a_cb));
-		memset(&m_in_b_cb, 0, sizeof(m_in_b_cb));
-		memset(&m_in_ca1_cb, 0, sizeof(m_in_ca1_cb));
-		memset(&m_in_cb1_cb, 0, sizeof(m_in_cb1_cb));
-		memset(&m_in_ca2_cb, 0, sizeof(m_in_ca2_cb));
-		memset(&m_in_cb2_cb, 0, sizeof(m_in_cb2_cb));
-		memset(&m_out_a_cb, 0, sizeof(m_out_a_cb));
-		memset(&m_out_b_cb, 0, sizeof(m_out_b_cb));
-		memset(&m_out_ca2_cb, 0, sizeof(m_out_ca2_cb));
-		memset(&m_out_cb2_cb, 0, sizeof(m_out_cb2_cb));
-		memset(&m_irq_cb, 0, sizeof(m_irq_cb));
-	}
-}
-
-
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void via6522_device::device_start()
-{
-	m_in_a_func.resolve(m_in_a_cb, *this);
-	m_in_b_func.resolve(m_in_b_cb, *this);
-	m_in_ca1_func.resolve(m_in_ca1_cb, *this);
-	m_in_cb1_func.resolve(m_in_cb1_cb, *this);
-	m_in_ca2_func.resolve(m_in_ca2_cb, *this);
-	m_in_cb2_func.resolve(m_in_cb2_cb, *this);
-	m_out_a_func.resolve(m_out_a_cb, *this);
-	m_out_b_func.resolve(m_out_b_cb, *this);
-	m_out_ca1_func.resolve(m_out_ca1_cb, *this);
-	m_out_cb1_func.resolve(m_out_cb1_cb, *this);
-	m_out_ca2_func.resolve(m_out_ca2_cb, *this);
-	m_out_cb2_func.resolve(m_out_cb2_cb, *this);
-	m_irq_func.resolve(m_irq_cb, *this);
-
-	m_t1ll = 0xf3; /* via at 0x9110 in vic20 show these values */
-	m_t1lh = 0xb5; /* ports are not written by kernel! */
-	m_t2ll = 0xff; /* taken from vice */
-	m_t2lh = 0xff;
-	m_time2 = m_time1 = machine().time();
-	m_t1 = timer_alloc(TIMER_T1);
-	m_t2 = timer_alloc(TIMER_T2);
-	m_ca2_timer = timer_alloc(TIMER_CA2);
-	m_shift_timer = timer_alloc(TIMER_SHIFT);
+	v->t1ll = 0xf3; /* via at 0x9110 in vic20 show these values */
+	v->t1lh = 0xb5; /* ports are not written by kernel! */
+	v->t2ll = 0xff; /* taken from vice */
+	v->t2lh = 0xff;
+	v->time2 = v->time1 = timer_get_time(device->machine);
+	v->t1 = timer_alloc(device->machine, via_t1_timeout, (void *) device);
+	v->t2 = timer_alloc(device->machine, via_t2_timeout, (void *) device);
+	v->shift_timer = timer_alloc(device->machine, via_shift_callback, (void *) device);
 
 	/* Default clock is from CPU1 */
-	if (clock() == 0)
-	{
-		set_unscaled_clock(machine().firstcpu->clock());
-	}
-
-	/* save state register */
-	save_item(NAME(m_in_a));
-	save_item(NAME(m_in_ca1));
-	save_item(NAME(m_in_ca2));
-	save_item(NAME(m_out_a));
-	save_item(NAME(m_out_ca2));
-	save_item(NAME(m_ddr_a));
-	save_item(NAME(m_in_b));
-	save_item(NAME(m_in_cb1));
-	save_item(NAME(m_in_cb2));
-	save_item(NAME(m_out_b));
-	save_item(NAME(m_out_cb2));
-	save_item(NAME(m_ddr_b));
-	save_item(NAME(m_t1cl));
-	save_item(NAME(m_t1ch));
-	save_item(NAME(m_t1ll));
-	save_item(NAME(m_t1lh));
-	save_item(NAME(m_t2cl));
-	save_item(NAME(m_t2ch));
-	save_item(NAME(m_t2ll));
-	save_item(NAME(m_t2lh));
-	save_item(NAME(m_sr));
-	save_item(NAME(m_pcr));
-	save_item(NAME(m_acr));
-	save_item(NAME(m_ier));
-	save_item(NAME(m_ifr));
-	save_item(NAME(m_irq));
-	save_item(NAME(m_t1_active));
-	save_item(NAME(m_t2_active));
-	save_item(NAME(m_shift_counter));
-}
-
-
-//-------------------------------------------------
-//  device_reset - device-specific reset
-//-------------------------------------------------
-
-void via6522_device::device_reset()
-{
-	m_in_a = 0;
-	m_in_ca1 = 0;
-	m_in_ca2 = 0;
-	m_out_a = 0;
-	m_out_ca2 = 0;
-	m_ddr_a = 0;
-	m_in_b = 0;
-	m_in_cb1 = 0;
-	m_in_cb2 = 0;
-	m_out_b = 0;
-	m_out_cb2 = 0;
-	m_ddr_b = 0;
-
-	m_t1cl = 0;
-	m_t1ch = 0;
-	m_t2cl = 0;
-	m_t2ch = 0;
-
-	m_sr = 0;
-	m_pcr = 0;
-	m_acr = 0;
-	m_ier = 0;
-	m_ifr = 0;
-	m_t1_active = 0;
-	m_t2_active = 0;
-	m_shift_counter = 0;
+	if (device->clock == 0)
+		device_set_clock(device, device->machine->firstcpu->clock);
 }
 
 
@@ -305,19 +270,19 @@ void via6522_device::device_reset()
     via_set_int - external interrupt check
 -------------------------------------------------*/
 
-void via6522_device::set_int(int data)
+static void via_set_int (const device_config *device, int data)
 {
-	m_ifr |= data;
-	if (TRACE_VIA)
-	{
-		logerror("%s:6522VIA chip %s: IFR = %02X\n", machine().describe_context(), tag(), m_ifr);
-	}
+	via6522_t *v = get_token(device);
 
-	if (m_ier & m_ifr)
-	{
-		m_ifr |= INT_ANY;
-		set_irq_line(ASSERT_LINE);
-	}
+	v->ifr |= data;
+	if (TRACE_VIA)
+		logerror("%s:6522VIA chip %s: IFR = %02X\n", cpuexec_describe_context(device->machine), device->tag, v->ifr);
+
+	if (v->ier & v->ifr)
+    {
+		v->ifr |= INT_ANY;
+		devcb_call_write_line(&v->irq_func, ASSERT_LINE);
+    }
 }
 
 
@@ -325,22 +290,20 @@ void via6522_device::set_int(int data)
     via_clear_int - external interrupt check
 -------------------------------------------------*/
 
-void via6522_device::clear_int(int data)
+static void via_clear_int (const device_config *device, int data)
 {
-	m_ifr = (m_ifr & ~data) & 0x7f;
+	via6522_t *v = get_token(device);
+
+	v->ifr = (v->ifr & ~data) & 0x7f;
 
 	if (TRACE_VIA)
-	{
-		logerror("%s:6522VIA chip %s: IFR = %02X\n", machine().describe_context(), tag(), m_ifr);
-	}
+		logerror("%s:6522VIA chip %s: IFR = %02X\n", cpuexec_describe_context(device->machine), device->tag, v->ifr);
 
-	if (m_ifr & m_ier)
-	{
-		m_ifr |= INT_ANY;
-	}
+	if (v->ifr & v->ier)
+		v->ifr |= INT_ANY;
 	else
 	{
-		set_irq_line(CLEAR_LINE);
+		devcb_call_write_line(&v->irq_func, CLEAR_LINE);
 	}
 }
 
@@ -349,370 +312,318 @@ void via6522_device::clear_int(int data)
     via_shift
 -------------------------------------------------*/
 
-void via6522_device::shift()
+static void via_shift(const device_config *device)
 {
-	if (SO_O2_CONTROL(m_acr) || SO_T2_CONTROL(m_acr))
+	via6522_t *v = get_token(device);
+
+	if (SO_O2_CONTROL(v->acr))
 	{
-		m_out_cb2 = (m_sr >> 7) & 1;
-		m_sr =  (m_sr << 1) | m_out_cb2;
+		v->out_cb2 = (v->sr >> 7) & 1;
+		v->sr =  (v->sr << 1) | v->out_cb2;
 
-		m_out_cb2_func(m_out_cb2);
+		devcb_call_write_line(&v->out_cb2_func, v->out_cb2);
 
-		m_in_cb1=1;
+		v->in_cb1=1;
 
 		/* this should be one cycle wide */
-		m_out_cb1_func(0);
-		m_out_cb1_func(1);
+		devcb_call_write_line(&v->out_cb1_func, 0);
+		devcb_call_write_line(&v->out_cb1_func, 1);
 
-		m_shift_counter = (m_shift_counter + 1) % 8;
+		v->shift_counter = (v->shift_counter + 1) % 8;
 
-		if (m_shift_counter)
-		{
-			if (SO_O2_CONTROL(m_acr)) {
-				m_shift_timer->adjust(cycles_to_time(2));
-			} else {
-				m_shift_timer->adjust(cycles_to_time((m_t2ll + 2)*2));
-			}
-		}
+		if (v->shift_counter)
+			timer_adjust_oneshot(v->shift_timer, v_cycles_to_time(device, 2), 0);
 		else
 		{
-			if (!(m_ifr & INT_SR))
-			{
-				set_int(INT_SR);
-			}
+			if (!(v->ifr & INT_SR))
+				via_set_int(device, INT_SR);
 		}
 	}
-
-	if (SO_EXT_CONTROL(m_acr))
+	if (SO_EXT_CONTROL(v->acr))
 	{
-		m_out_cb2 = (m_sr >> 7) & 1;
-		m_sr =  (m_sr << 1) | m_out_cb2;
+		v->out_cb2 = (v->sr >> 7) & 1;
+		v->sr =  (v->sr << 1) | v->out_cb2;
 
-		m_out_cb2_func(m_out_cb2);
+		devcb_call_write_line(&v->out_cb2_func, v->out_cb2);
 
-		m_shift_counter = (m_shift_counter + 1) % 8;
+		v->shift_counter = (v->shift_counter + 1) % 8;
 
-		if (m_shift_counter == 0)
+		if (v->shift_counter == 0)
 		{
-			if (!(m_ifr & INT_SR))
-			{
-				set_int(INT_SR);
-			}
+			if (!(v->ifr & INT_SR))
+				via_set_int(device, INT_SR);
 		}
 	}
-
-	if (SI_O2_CONTROL(m_acr) || SI_T2_CONTROL(m_acr))
+	if (SI_EXT_CONTROL(v->acr))
 	{
-		/* this should be one cycle wide */
-		m_out_cb1_func(0);
-		m_out_cb1_func(1);
+		if (v->in_cb2_func.read != NULL)
+			v->in_cb2 = devcb_call_read_line(&v->in_cb2_func);
 
-		if (!m_in_cb2_func.isnull())
+		v->sr =  (v->sr << 1) | (v->in_cb2 & 1);
+
+		v->shift_counter = (v->shift_counter + 1) % 8;
+
+		if (v->shift_counter == 0)
 		{
-			m_in_cb2 = m_in_cb2_func();
-		}
-
-		m_sr =  (m_sr << 1) | (m_in_cb2 & 1);
-
-		m_shift_counter = (m_shift_counter + 1) % 8;
-
-		if (m_shift_counter)
-		{
-			if (SI_O2_CONTROL(m_acr)) {
-				m_shift_timer->adjust(cycles_to_time(2));
-			} else {
-				m_shift_timer->adjust(cycles_to_time((m_t2ll + 2)*2));
-			}
-		}
-		else
-		{
-			if (!(m_ifr & INT_SR))
+			if (!(v->ifr & INT_SR))
 			{
-				set_int(INT_SR);
-			}
-		}
-	}
-
-	if (SI_EXT_CONTROL(m_acr))
-	{
-		if (!m_in_cb2_func.isnull())
-		{
-			m_in_cb2 = m_in_cb2_func();
-		}
-
-		m_sr =  (m_sr << 1) | (m_in_cb2 & 1);
-
-		m_shift_counter = (m_shift_counter + 1) % 8;
-
-		if (m_shift_counter == 0)
-		{
-			if (!(m_ifr & INT_SR))
-			{
-				set_int(INT_SR);
+				via_set_int(device, INT_SR);
 			}
 		}
 	}
 }
 
 
-void via6522_device::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+/*-------------------------------------------------
+    TIMER_CALLBACK( via_shift_callback )
+-------------------------------------------------*/
+
+static TIMER_CALLBACK( via_shift_callback )
 {
-	switch (id)
-	{
-		// shift timer
-		case TIMER_SHIFT:
-			shift();
-			break;
-
-		// t1 timeout
-		case TIMER_T1:
-			if (T1_CONTINUOUS (m_acr))
-			{
-				if (T1_SET_PB7(m_acr))
-				{
-					m_out_b ^= 0x80;
-				}
-				m_t1->adjust(cycles_to_time(TIMER1_VALUE + IFR_DELAY));
-			}
-			else
-			{
-				if (T1_SET_PB7(m_acr))
-				{
-					m_out_b |= 0x80;
-				}
-				m_t1_active = 0;
-				m_time1 = machine().time();
-			}
-			if (m_ddr_b)
-			{
-				UINT8 write_data = (m_out_b & m_ddr_b) | (m_ddr_b ^ 0xff);
-				m_out_b_func(0, write_data);
-			}
-
-			if (!(m_ifr & INT_T1))
-			{
-				set_int(INT_T1);
-			}
-			break;
-
-		// t2 timeout
-		case TIMER_T2:
-			m_t2_active = 0;
-			m_time2 = machine().time();
-
-			if (!(m_ifr & INT_T2))
-			{
-				set_int(INT_T2);
-			}
-			break;
-
-		case TIMER_CA2:
-			m_out_ca2_func(1);
-			m_out_ca2 = 1;
-			break;
-	}
+	const device_config *device = (const device_config *)ptr;
+	via_shift(device);
 }
+
+
+/*-------------------------------------------------
+    TIMER_CALLBACK( via_t1_timeout )
+-------------------------------------------------*/
+
+static TIMER_CALLBACK( via_t1_timeout )
+{
+	const device_config *device = (const device_config *)ptr;
+	via6522_t *v = get_token(device);
+
+	if (T1_CONTINUOUS (v->acr))
+    {
+		if (T1_SET_PB7(v->acr))
+			v->out_b ^= 0x80;
+		timer_adjust_oneshot(v->t1, v_cycles_to_time(device, TIMER1_VALUE(v) + IFR_DELAY), 0);
+    }
+	else
+    {
+		if (T1_SET_PB7(v->acr))
+			v->out_b |= 0x80;
+		v->t1_active = 0;
+		v->time1 = timer_get_time(device->machine);
+    }
+	if (v->ddr_b)
+	{
+		UINT8 write_data = (v->out_b & v->ddr_b) | (v->ddr_b ^ 0xff);
+		devcb_call_write8(&v->out_b_func, 0, write_data);
+	}
+
+	if (!(v->ifr & INT_T1))
+		via_set_int (device, INT_T1);
+}
+
+
+/*-------------------------------------------------
+    TIMER_CALLBACK( via_t2_timeout )
+-------------------------------------------------*/
+
+static TIMER_CALLBACK( via_t2_timeout )
+{
+	const device_config *device = (const device_config *)ptr;
+	via6522_t *v = get_token(device);
+
+	v->t2_active = 0;
+	v->time2 = timer_get_time(device->machine);
+
+	if (!(v->ifr & INT_T2))
+		via_set_int (device, INT_T2);
+}
+
+
+/*-------------------------------------------------
+    DEVICE_RESET( via6522 )
+-------------------------------------------------*/
+
+static DEVICE_RESET( via6522 )
+{
+	via6522_t *v = get_token(device);
+	v->in_a = 0;
+	v->in_ca1 = 0;
+	v->in_ca2 = 0;
+	v->out_a = 0;
+	v->out_ca2 = 0;
+	v->ddr_a = 0;
+	v->in_b = 0;
+	v->in_cb1 = 0;
+	v->in_cb2 = 0;
+	v->out_b = 0;
+	v->out_cb2 = 0;
+	v->ddr_b = 0;
+
+	v->t1cl = 0;
+	v->t1ch = 0;
+	v->t2cl = 0;
+	v->t2ch = 0;
+
+	v->sr = 0;
+	v->pcr = 0;
+	v->acr = 0;
+	v->ier = 0;
+	v->ifr = 0;
+	v->t1_active = 0;
+	v->t2_active = 0;
+	v->shift_counter = 0;
+}
+
 
 /*-------------------------------------------------
     via_r - CPU interface for VIA read
 -------------------------------------------------*/
 
-READ8_MEMBER( via6522_device::read )
+READ8_DEVICE_HANDLER(via_r)
 {
+	via6522_t *v = get_token(device);
 	int val = 0;
 
 	offset &= 0xf;
 
 	switch (offset)
-	{
-	case VIA_PB:
+    {
+    case VIA_PB:
 		/* update the input */
-		if (PB_LATCH_ENABLE(m_acr) == 0)
+		if (PB_LATCH_ENABLE(v->acr) == 0)
 		{
-			if (m_ddr_b != 0xff)
-			{
-				if (!m_in_b_func.isnull())
-				{
-					m_in_b = m_in_b_func(0);
-				}
-				else
-				{
-					logerror("%s:6522VIA chip %s: Port B is being read but has no handler\n", machine().describe_context(), tag());
-				}
-			}
+			if (v->in_b_func.read != NULL)
+				v->in_b = devcb_call_read8(&v->in_b_func, 0);
+			else
+				logerror("%s:6522VIA chip %s: Port B is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag);
 		}
 
-		CLR_PB_INT();
+		CLR_PB_INT(device);
 
 		/* combine input and output values, hold DDRB bit 7 high if T1_SET_PB7 */
-		if (T1_SET_PB7(m_acr))
-		{
-			val = (m_out_b & (m_ddr_b | 0x80)) | (m_in_b & ~(m_ddr_b | 0x80));
-		}
+		if (T1_SET_PB7(v->acr))
+			val = (v->out_b & (v->ddr_b | 0x80)) | (v->in_b & ~(v->ddr_b | 0x80));
 		else
-		{
-			val = (m_out_b & m_ddr_b) + (m_in_b & ~m_ddr_b);
-		}
+			val = (v->out_b & v->ddr_b) + (v->in_b & ~v->ddr_b);
 		break;
 
-	case VIA_PA:
+    case VIA_PA:
 		/* update the input */
-		if (PA_LATCH_ENABLE(m_acr) == 0)
+		if (PA_LATCH_ENABLE(v->acr) == 0)
 		{
-			if (m_ddr_a != 0xff)
-			{
-				if (!m_in_a_func.isnull())
-				{
-					m_in_a = m_in_a_func(0);
-				}
-				else
-				{
-					logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", machine().describe_context(), tag());
-				}
-			}
+			if (v->in_a_func.read != NULL)
+				v->in_a = devcb_call_read8(&v->in_a_func, 0);
+			else
+				logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag);
 		}
 
 		/* combine input and output values */
-		val = (m_out_a & m_ddr_a) + (m_in_a & ~m_ddr_a);
+		val = (v->out_a & v->ddr_a) + (v->in_a & ~v->ddr_a);
 
-		CLR_PA_INT();
+		CLR_PA_INT(device);
 
 		/* If CA2 is configured as output and in pulse or handshake mode,
            CA2 is set now */
-		if (CA2_PULSE_OUTPUT(m_pcr))
+		if (CA2_AUTO_HS(v->pcr))
 		{
-			/* call the CA2 output function */
-			m_out_ca2_func(0);
-			m_out_ca2 = 0;
-
-			m_ca2_timer->adjust(cycles_to_time(1));
-		}
-		/* If CA2 is configured as output and in pulse or handshake mode,
-           CA2 is set now */
-		else if (CA2_AUTO_HS(m_pcr))
-		{
-			if (m_out_ca2)
+			if (v->out_ca2)
 			{
 				/* set CA2 */
-				m_out_ca2 = 0;
+				v->out_ca2 = 0;
 
 				/* call the CA2 output function */
-				m_out_ca2_func(0);
+				devcb_call_write_line(&v->out_ca2_func, 0);
 			}
 		}
 
 		break;
 
-	case VIA_PANH:
+    case VIA_PANH:
 		/* update the input */
-		if (PA_LATCH_ENABLE(m_acr) == 0)
+		if (PA_LATCH_ENABLE(v->acr) == 0)
 		{
-			if (!m_in_a_func.isnull())
-			{
-				m_in_a = m_in_a_func(0);
-			}
+			if (v->in_a_func.read != NULL)
+				v->in_a = devcb_call_read8(&v->in_a_func, 0);
 			else
-			{
-				logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", machine().describe_context(), tag());
-			}
+				logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag);
 		}
 
 		/* combine input and output values */
-		val = (m_out_a & m_ddr_a) + (m_in_a & ~m_ddr_a);
+		val = (v->out_a & v->ddr_a) + (v->in_a & ~v->ddr_a);
 		break;
 
-	case VIA_DDRB:
-		val = m_ddr_b;
+    case VIA_DDRB:
+		val = v->ddr_b;
 		break;
 
-	case VIA_DDRA:
-		val = m_ddr_a;
+    case VIA_DDRA:
+		val = v->ddr_a;
 		break;
 
-	case VIA_T1CL:
-		clear_int(INT_T1);
-		val = get_counter1_value() & 0xFF;
+    case VIA_T1CL:
+		via_clear_int (device, INT_T1);
+		val = v_get_counter1_value(device) & 0xFF;
 		break;
 
-	case VIA_T1CH:
-		val = get_counter1_value() >> 8;
+    case VIA_T1CH:
+		val = v_get_counter1_value(device) >> 8;
 		break;
 
-	case VIA_T1LL:
-		val = m_t1ll;
+    case VIA_T1LL:
+		val = v->t1ll;
 		break;
 
-	case VIA_T1LH:
-		val = m_t1lh;
+    case VIA_T1LH:
+		val = v->t1lh;
 		break;
 
-	case VIA_T2CL:
-		clear_int(INT_T2);
-		if (m_t2_active)
-		{
-			val = time_to_cycles(m_t2->remaining()) & 0xff;
-		}
+    case VIA_T2CL:
+		via_clear_int (device, INT_T2);
+		if (v->t2_active)
+			val = v_time_to_cycles(device, timer_timeleft(v->t2)) & 0xff;
 		else
 		{
-			if (T2_COUNT_PB6(m_acr))
-			{
-				val = m_t2cl;
-			}
+			if (T2_COUNT_PB6(v->acr))
+				val = v->t2cl;
 			else
-			{
-				val = (0x10000 - (time_to_cycles(machine().time() - m_time2) & 0xffff) - 1) & 0xff;
-			}
+				val = (0x10000- (v_time_to_cycles(device, attotime_sub(timer_get_time(device->machine), v->time2)) & 0xffff) - 1) & 0xff;
 		}
 		break;
 
-	case VIA_T2CH:
-		if (m_t2_active)
-		{
-			val = time_to_cycles(m_t2->remaining()) >> 8;
-		}
+    case VIA_T2CH:
+		if (v->t2_active)
+			val = v_time_to_cycles(device, timer_timeleft(v->t2)) >> 8;
 		else
 		{
-			if (T2_COUNT_PB6(m_acr))
-			{
-				val = m_t2ch;
-			}
+			if (T2_COUNT_PB6(v->acr))
+				val = v->t2ch;
 			else
-			{
-				val = (0x10000 - (time_to_cycles(machine().time() - m_time2) & 0xffff) - 1) >> 8;
-			}
+				val = (0x10000- (v_time_to_cycles(device, attotime_sub(timer_get_time(device->machine), v->time2)) & 0xffff) - 1) >> 8;
 		}
 		break;
 
-	case VIA_SR:
-		val = m_sr;
-		m_shift_counter=0;
-		clear_int(INT_SR);
-		if (SI_O2_CONTROL(m_acr))
+    case VIA_SR:
+		val = v->sr;
+		via_clear_int(device, INT_SR);
+		if (SO_O2_CONTROL(v->acr))
 		{
-			m_shift_timer->adjust(cycles_to_time(2));
-		}
-		if (SI_T2_CONTROL(m_acr))
-		{
-			m_shift_timer->adjust(cycles_to_time((m_t2ll + 2)*2));
+			v->shift_counter=0;
+			timer_adjust_oneshot(v->shift_timer, v_cycles_to_time(device, 2), 0);
 		}
 		break;
 
-	case VIA_PCR:
-		val = m_pcr;
+    case VIA_PCR:
+		val = v->pcr;
 		break;
 
-	case VIA_ACR:
-		val = m_acr;
+    case VIA_ACR:
+		val = v->acr;
 		break;
 
-	case VIA_IER:
-		val = m_ier | 0x80;
+    case VIA_IER:
+		val = v->ier | 0x80;
 		break;
 
-	case VIA_IFR:
-		val = m_ifr;
+    case VIA_IFR:
+		val = v->ifr;
 		break;
-	}
+    }
 	return val;
 }
 
@@ -721,412 +632,529 @@ READ8_MEMBER( via6522_device::read )
     via_w - CPU interface for VIA write
 -------------------------------------------------*/
 
-WRITE8_MEMBER( via6522_device::write )
+WRITE8_DEVICE_HANDLER(via_w)
 {
+	via6522_t *v = get_token(device);
+
 	offset &=0x0f;
 
 	switch (offset)
-	{
-	case VIA_PB:
-		if (T1_SET_PB7(m_acr))
-			m_out_b = (m_out_b & 0x80) | (data  & 0x7f);
+    {
+    case VIA_PB:
+		if (T1_SET_PB7(v->acr))
+			v->out_b = (v->out_b & 0x80) | (data  & 0x7f);
 		else
-			m_out_b = data;
+			v->out_b = data;
 
-		if (m_ddr_b)
+		if (v->ddr_b)
 		{
-			UINT8 write_data = (m_out_b & m_ddr_b) | (m_ddr_b ^ 0xff);
-			m_out_b_func(0, write_data);
+			UINT8 write_data = (v->out_b & v->ddr_b) | (v->ddr_b ^ 0xff);
+			devcb_call_write8(&v->out_b_func, 0, write_data);
 		}
 
-		CLR_PB_INT();
+		CLR_PB_INT(device);
 
 		/* If CB2 is configured as output and in pulse or handshake mode,
            CB2 is set now */
-		if (CB2_AUTO_HS(m_pcr))
+		if (CB2_AUTO_HS(v->pcr))
 		{
-			if (m_out_cb2)
+			if (v->out_cb2)
 			{
 				/* set CB2 */
-				m_out_cb2 = 0;
+				v->out_cb2 = 0;
 
 				/* call the CB2 output function */
-				m_out_cb2_func(0);
+				devcb_call_write_line(&v->out_cb2_func, 0);
 			}
 		}
 		break;
 
-	case VIA_PA:
-		m_out_a = data;
+    case VIA_PA:
+		v->out_a = data;
 
-		if (m_ddr_a)
+		if (v->ddr_a)
 		{
-			UINT8 write_data = (m_out_a & m_ddr_a) | (m_ddr_a ^ 0xff);
-			m_out_a_func(0, write_data);
+			UINT8 write_data = (v->out_a & v->ddr_a) | (v->ddr_a ^ 0xff);
+			devcb_call_write8(&v->out_a_func, 0, write_data);
 		}
 
-		CLR_PA_INT();
+		CLR_PA_INT(device);
 
 		/* If CA2 is configured as output and in pulse or handshake mode,
            CA2 is set now */
-		if (CA2_PULSE_OUTPUT(m_pcr))
+		if (CA2_PULSE_OUTPUT(v->pcr))
 		{
 			/* call the CA2 output function */
-			m_out_ca2_func(0);
-			m_out_ca2 = 0;
+			devcb_call_write_line(&v->out_ca2_func, 0);
+			devcb_call_write_line(&v->out_ca2_func, 1);
 
-			m_ca2_timer->adjust(cycles_to_time(1));
+			/* set CA2 (shouldn't be needed) */
+			v->out_ca2 = 1;
 		}
-		else if (CA2_AUTO_HS(m_pcr))
+		else if (CA2_AUTO_HS(v->pcr))
 		{
-			if (m_out_ca2)
+			if (v->out_ca2)
 			{
 				/* set CA2 */
-				m_out_ca2 = 0;
+				v->out_ca2 = 0;
 
 				/* call the CA2 output function */
-				m_out_ca2_func(0);
+				devcb_call_write_line(&v->out_ca2_func, 0);
 			}
 		}
 
 		break;
 
-	case VIA_PANH:
-		m_out_a = data;
+    case VIA_PANH:
+		v->out_a = data;
 
-		if (m_ddr_a)
+		if (v->ddr_a)
 		{
-			UINT8 write_data = (m_out_a & m_ddr_a) | (m_ddr_a ^ 0xff);
-			m_out_a_func(0, write_data);
+			UINT8 write_data = (v->out_a & v->ddr_a) | (v->ddr_a ^ 0xff);
+			devcb_call_write8(&v->out_a_func, 0, write_data);
 		}
 
 		break;
 
-	case VIA_DDRB:
-		/* EHC 03/04/2000 - If data direction changed, present output on the lines */
-		if ( data != m_ddr_b )
-		{
-			m_ddr_b = data;
+    case VIA_DDRB:
+    	/* EHC 03/04/2000 - If data direction changed, present output on the lines */
+    	if ( data != v->ddr_b )
+    	{
+			v->ddr_b = data;
 
-			//if (m_ddr_b)
+			//if (v->ddr_b)
 			{
-				UINT8 write_data = (m_out_b & m_ddr_b) | (m_ddr_b ^ 0xff);
-				m_out_b_func(0, write_data);
+				UINT8 write_data = (v->out_b & v->ddr_b) | (v->ddr_b ^ 0xff);
+				devcb_call_write8(&v->out_b_func, 0, write_data);
 			}
 		}
 		break;
 
-	case VIA_DDRA:
-		/* EHC 03/04/2000 - If data direction changed, present output on the lines */
-		if ( data != m_ddr_a )
-		{
-			m_ddr_a = data;
+    case VIA_DDRA:
+    	/* EHC 03/04/2000 - If data direction changed, present output on the lines */
+    	if ( data != v->ddr_a )
+    	{
+			v->ddr_a = data;
 
-			//if (m_ddr_a)
+			//if (v->ddr_a)
 			{
-				UINT8 write_data = (m_out_a & m_ddr_a) | (m_ddr_a ^ 0xff);
-				m_out_a_func(0, write_data);
+				UINT8 write_data = (v->out_a & v->ddr_a) | (v->ddr_a ^ 0xff);
+				devcb_call_write8(&v->out_a_func, 0, write_data);
 			}
 		}
 		break;
 
-	case VIA_T1CL:
-	case VIA_T1LL:
-		m_t1ll = data;
+    case VIA_T1CL:
+    case VIA_T1LL:
+		v->t1ll = data;
 		break;
 
 	case VIA_T1LH:
-		m_t1lh = data;
-		clear_int(INT_T1);
-		break;
+	    v->t1lh = data;
+	    via_clear_int (device, INT_T1);
+	    break;
 
-	case VIA_T1CH:
-		m_t1ch = m_t1lh = data;
-		m_t1cl = m_t1ll;
+    case VIA_T1CH:
+		v->t1ch = v->t1lh = data;
+		v->t1cl = v->t1ll;
 
-		clear_int(INT_T1);
+		via_clear_int (device, INT_T1);
 
-		if (T1_SET_PB7(m_acr))
+		if (T1_SET_PB7(v->acr))
 		{
-			m_out_b &= 0x7f;
+			v->out_b &= 0x7f;
 
-			//if (m_ddr_b)
+			//if (v->ddr_b)
 			{
-				UINT8 write_data = (m_out_b & m_ddr_b) | (m_ddr_b ^ 0xff);
-				m_out_b_func(0, write_data);
+				UINT8 write_data = (v->out_b & v->ddr_b) | (v->ddr_b ^ 0xff);
+				devcb_call_write8(&v->out_b_func, 0, write_data);
 			}
 		}
-		m_t1->adjust(cycles_to_time(TIMER1_VALUE + IFR_DELAY));
-		m_t1_active = 1;
+		timer_adjust_oneshot(v->t1, v_cycles_to_time(device, TIMER1_VALUE(v) + IFR_DELAY), 0);
+		v->t1_active = 1;
 		break;
 
-	case VIA_T2CL:
-		m_t2ll = data;
+    case VIA_T2CL:
+		v->t2ll = data;
 		break;
 
-	case VIA_T2CH:
-		m_t2ch = m_t2lh = data;
-		m_t2cl = m_t2ll;
+    case VIA_T2CH:
+		v->t2ch = v->t2lh = data;
+		v->t2cl = v->t2ll;
 
-		clear_int(INT_T2);
+		via_clear_int (device, INT_T2);
 
-		if (!T2_COUNT_PB6(m_acr))
+		if (!T2_COUNT_PB6(v->acr))
 		{
-			m_t2->adjust(cycles_to_time(TIMER2_VALUE + IFR_DELAY));
-			m_t2_active = 1;
+			timer_adjust_oneshot(v->t2, v_cycles_to_time(device, TIMER2_VALUE(v) + IFR_DELAY), 0);
+			v->t2_active = 1;
 		}
 		else
 		{
-			m_t2->adjust(cycles_to_time(TIMER2_VALUE));
-			m_t2_active = 1;
-			m_time2 = machine().time();
+			v->time2 = timer_get_time(device->machine);
 		}
 		break;
 
-	case VIA_SR:
-		m_sr = data;
-		m_shift_counter=0;
-		clear_int(INT_SR);
-		if (SO_O2_CONTROL(m_acr))
+    case VIA_SR:
+		v->sr = data;
+		v->shift_counter=0;
+		via_clear_int(device, INT_SR);
+		if (SO_O2_CONTROL(v->acr))
 		{
-			m_shift_timer->adjust(cycles_to_time(2));
-		}
-		if (SO_T2_CONTROL(m_acr))
-		{
-			m_shift_timer->adjust(cycles_to_time((m_t2ll + 2)*2));
+			timer_set(device->machine, v_cycles_to_time(device, 2), (void *) device, 0, via_shift_callback);
 		}
 		break;
 
-	case VIA_PCR:
-		m_pcr = data;
+    case VIA_PCR:
+		v->pcr = data;
 
 		if (TRACE_VIA)
+			logerror("%s:6522VIA chip %s: PCR = %02X\n", cpuexec_describe_context(device->machine), device->tag, data);
+
+		if (CA2_FIX_OUTPUT(data) && CA2_OUTPUT_LEVEL(data) ^ v->out_ca2)
 		{
-			logerror("%s:6522VIA chip %s: PCR = %02X\n", machine().describe_context(), tag(), data);
+			v->out_ca2 = CA2_OUTPUT_LEVEL(data);
+			devcb_call_write_line(&v->out_ca2_func, v->out_ca2);
 		}
 
-		if (CA2_FIX_OUTPUT(data) && CA2_OUTPUT_LEVEL(data) ^ m_out_ca2)
+		if (CB2_FIX_OUTPUT(data) && CB2_OUTPUT_LEVEL(data) ^ v->out_cb2)
 		{
-			m_out_ca2 = CA2_OUTPUT_LEVEL(data);
-			m_out_ca2_func(m_out_ca2);
-		}
-
-		if (CB2_FIX_OUTPUT(data) && CB2_OUTPUT_LEVEL(data) ^ m_out_cb2)
-		{
-			m_out_cb2 = CB2_OUTPUT_LEVEL(data);
-			m_out_cb2_func(m_out_cb2);
+			v->out_cb2 = CB2_OUTPUT_LEVEL(data);
+			devcb_call_write_line(&v->out_cb2_func, v->out_cb2);
 		}
 		break;
 
-	case VIA_ACR:
+    case VIA_ACR:
 		{
-			UINT16 counter1 = get_counter1_value();
-			m_acr = data;
-			if (T1_SET_PB7(m_acr))
+			UINT16 counter1 = v_get_counter1_value(device);
+			v->acr = data;
+			if (T1_SET_PB7(v->acr))
 			{
-				if (m_t1_active)
-				{
-					m_out_b &= ~0x80;
-				}
+				if (v->t1_active)
+					v->out_b &= ~0x80;
 				else
-				{
-					m_out_b |= 0x80;
-				}
+					v->out_b |= 0x80;
 
-				//if (m_ddr_b)
+				//if (v->ddr_b)
 				{
-					UINT8 write_data = (m_out_b & m_ddr_b) | (m_ddr_b ^ 0xff);
-					m_out_b_func(0, write_data);
+					UINT8 write_data = (v->out_b & v->ddr_b) | (v->ddr_b ^ 0xff);
+					devcb_call_write8(&v->out_b_func, 0, write_data);
 				}
 			}
 			if (T1_CONTINUOUS(data))
 			{
-				m_t1->adjust(cycles_to_time(counter1 + IFR_DELAY));
-				m_t1_active = 1;
+				timer_adjust_oneshot(v->t1, v_cycles_to_time(device, counter1 + IFR_DELAY), 0);
+				v->t1_active = 1;
 			}
 		}
 		break;
 
 	case VIA_IER:
 		if (data & 0x80)
-		{
-			m_ier |= data & 0x7f;
-		}
+			v->ier |= data & 0x7f;
 		else
-		{
-			m_ier &= ~(data & 0x7f);
-		}
+			v->ier &= ~(data & 0x7f);
 
-		if (m_ifr & INT_ANY)
+		if (v->ifr & INT_ANY)
 		{
-			if (((m_ifr & m_ier) & 0x7f) == 0)
+			if (((v->ifr & v->ier) & 0x7f) == 0)
 			{
-				m_ifr &= ~INT_ANY;
-				set_irq_line(CLEAR_LINE);
+				v->ifr &= ~INT_ANY;
+				devcb_call_write_line(&v->irq_func, CLEAR_LINE);
 			}
 		}
 		else
 		{
-			if ((m_ier & m_ifr) & 0x7f)
+			if ((v->ier & v->ifr) & 0x7f)
 			{
-				m_ifr |= INT_ANY;
-				set_irq_line(ASSERT_LINE);
+				v->ifr |= INT_ANY;
+				devcb_call_write_line(&v->irq_func, ASSERT_LINE);
 			}
 		}
 		break;
 
 	case VIA_IFR:
 		if (data & INT_ANY)
-		{
 			data = 0x7f;
-		}
-		clear_int(data);
+		via_clear_int (device, data);
 		break;
-	}
+    }
 }
 
 
 /*-------------------------------------------------
-    ca1_w - interface setting VIA port CA1 input
+    via_porta_w - interface setting VIA port
+    A input
 -------------------------------------------------*/
 
-WRITE_LINE_MEMBER( via6522_device::write_ca1 )
+WRITE8_DEVICE_HANDLER(via_porta_w)
 {
-	/* handle the active transition */
-	if (state != m_in_ca1)
-	{
-		if (TRACE_VIA)
-			logerror("%s:6522VIA chip %s: CA1 = %02X\n", machine().describe_context(), tag(), state);
+	via6522_t *v = get_token(device);
 
-		if ((CA1_LOW_TO_HIGH(m_pcr) && state) || (CA1_HIGH_TO_LOW(m_pcr) && !state))
+	/* set the input, what could be easier? */
+	v->in_a = data;
+}
+
+
+/*-------------------------------------------------
+    via_ca1_r - interface retrieving VIA port
+    CA1 input
+-------------------------------------------------*/
+
+READ8_DEVICE_HANDLER(via_ca1_r)
+{
+	via6522_t *v = get_token(device);
+	return v->in_ca1;
+}
+
+
+/*-------------------------------------------------
+    via_ca1_w - interface setting VIA port
+    CA1 input
+-------------------------------------------------*/
+
+WRITE8_DEVICE_HANDLER(via_ca1_w)
+{
+	via6522_t *v = get_token(device);
+
+	/* limit the data to 0 or 1 */
+	data = data ? 1 : 0;
+
+	/* handle the active transition */
+	if (data != v->in_ca1)
+    {
+		if (TRACE_VIA)
+			logerror("%s:6522VIA chip %s: CA1 = %02X\n", cpuexec_describe_context(device->machine), device->tag, data);
+
+		if ((CA1_LOW_TO_HIGH(v->pcr) && data) || (CA1_HIGH_TO_LOW(v->pcr) && !data))
 		{
-			if (PA_LATCH_ENABLE(m_acr))
+			if (PA_LATCH_ENABLE(v->acr))
 			{
-				if (!m_in_a_func.isnull())
-				{
-					m_in_a = m_in_a_func(0);
-				}
+				if (v->in_a_func.read != NULL)
+					v->in_a = devcb_call_read8(&v->in_a_func, 0);
 				else
-				{
-					logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", machine().describe_context(), tag());
-				}
+					logerror("%s:6522VIA chip %s: Port A is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag);
 			}
 
-			set_int(INT_CA1);
+			via_set_int (device, INT_CA1);
 
 			/* CA2 is configured as output and in pulse or handshake mode,
                CA2 is cleared now */
-			if (CA2_AUTO_HS(m_pcr))
+			if (CA2_AUTO_HS(v->pcr))
 			{
-				if (!m_out_ca2)
+				if (!v->out_ca2)
 				{
 					/* clear CA2 */
-					m_out_ca2 = 1;
+					v->out_ca2 = 1;
 
 					/* call the CA2 output function */
-					m_out_ca2_func(1);
+					devcb_call_write_line(&v->out_ca2_func, 1);
 				}
 			}
 		}
 
-		m_in_ca1 = state;
-	}
+		v->in_ca1 = data;
+    }
 }
 
 
 /*-------------------------------------------------
-    ca2_w - interface setting VIA port CA2 input
+    via_ca2_r - interface retrieving VIA port
+    CA2 input
 -------------------------------------------------*/
 
-WRITE_LINE_MEMBER( via6522_device::write_ca2 )
+READ8_DEVICE_HANDLER(via_ca2_r)
 {
+	via6522_t *v = get_token(device);
+	return v->in_ca2;
+}
+
+
+/*-------------------------------------------------
+    via_ca2_w - interface setting VIA port
+    CA2 input
+-------------------------------------------------*/
+
+WRITE8_DEVICE_HANDLER(via_ca2_w)
+{
+	via6522_t *v = get_token(device);
+
+	/* limit the data to 0 or 1 */
+	data = data ? 1 : 0;
+
 	/* CA2 is in input mode */
-	if (CA2_INPUT(m_pcr))
-	{
+	if (CA2_INPUT(v->pcr))
+    {
 		/* the new state has caused a transition */
-		if (m_in_ca2 != state)
+		if (v->in_ca2 != data)
 		{
 			/* handle the active transition */
-			if ((state && CA2_LOW_TO_HIGH(m_pcr)) || (!state && CA2_HIGH_TO_LOW(m_pcr)))
+			if ((data && CA2_LOW_TO_HIGH(v->pcr)) || (!data && CA2_HIGH_TO_LOW(v->pcr)))
 			{
 				/* mark the IRQ */
-				set_int(INT_CA2);
+				via_set_int (device, INT_CA2);
 			}
 			/* set the new value for CA2 */
-			m_in_ca2 = state;
+			v->in_ca2 = data;
 		}
-	}
+    }
+
+
 }
 
 
 /*-------------------------------------------------
-    cb1_w - interface setting VIA port CB1 input
+    via_portb_r - interface retrieving VIA port
+    B input
 -------------------------------------------------*/
 
-WRITE_LINE_MEMBER( via6522_device::write_cb1 )
+READ8_DEVICE_HANDLER(via_portb_r)
 {
-	/* handle the active transition */
-	if (state != m_in_cb1)
-	{
-		if ((CB1_LOW_TO_HIGH(m_pcr) && state) || (CB1_HIGH_TO_LOW(m_pcr) && !state))
-		{
-			if (PB_LATCH_ENABLE(m_acr))
-			{
-				if (!m_in_b_func.isnull())
-				{
-					m_in_b = m_in_b_func(0);
-				}
-				else
-				{
-					logerror("%s:6522VIA chip %s: Port B is being read but has no handler\n", machine().describe_context(), tag());
-				}
-			}
-			if (SO_EXT_CONTROL(m_acr) || SI_EXT_CONTROL(m_acr))
-			{
-				shift();
-			}
+	via6522_t *v = get_token(device);
+	return v->in_b;
+}
 
-			set_int(INT_CB1);
+
+/*-------------------------------------------------
+    via_portb_w - interface setting VIA port
+    B input
+-------------------------------------------------*/
+
+WRITE8_DEVICE_HANDLER(via_portb_w)
+{
+	via6522_t *v = get_token(device);
+
+	/* set the input, what could be easier? */
+	v->in_b = data;
+}
+
+
+/*-------------------------------------------------
+    via_cb1_r - interface retrieving VIA port
+    CB1 input
+-------------------------------------------------*/
+
+READ8_DEVICE_HANDLER(via_cb1_r)
+{
+	via6522_t *v = get_token(device);
+	return v->in_cb1;
+}
+
+
+/*-------------------------------------------------
+    via_cb1_w - interface setting VIA port
+    CB1 input
+-------------------------------------------------*/
+
+WRITE8_DEVICE_HANDLER(via_cb1_w)
+{
+	via6522_t *v = get_token(device);
+
+	/* limit the data to 0 or 1 */
+	data = data ? 1 : 0;
+
+	/* handle the active transition */
+	if (data != v->in_cb1)
+    {
+		if ((CB1_LOW_TO_HIGH(v->pcr) && data) || (CB1_HIGH_TO_LOW(v->pcr) && !data))
+		{
+			if (PB_LATCH_ENABLE(v->acr))
+			{
+				if (v->in_b_func.read != NULL)
+					v->in_b = devcb_call_read8(&v->in_b_func, 0);
+				else
+					logerror("%s:6522VIA chip %s: Port B is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag);
+			}
+			if (SO_EXT_CONTROL(v->acr) || SI_EXT_CONTROL(v->acr))
+				via_shift (device);
+
+			via_set_int (device, INT_CB1);
 
 			/* CB2 is configured as output and in pulse or handshake mode,
                CB2 is cleared now */
-			if (CB2_AUTO_HS(m_pcr))
+			if (CB2_AUTO_HS(v->pcr))
 			{
-				if (!m_out_cb2)
+				if (!v->out_cb2)
 				{
 					/* clear CB2 */
-					m_out_cb2 = 1;
+					v->out_cb2 = 1;
 
 					/* call the CB2 output function */
-					m_out_cb2_func(1);
+					devcb_call_write_line(&v->out_cb2_func, 1);
 				}
 			}
 		}
-		m_in_cb1 = state;
-	}
+		v->in_cb1 = data;
+    }
 }
 
 
 /*-------------------------------------------------
-    cb2_w - interface setting VIA port CB2 input
+    via_cb2_r - interface retrieving VIA port
+    CB2 input
 -------------------------------------------------*/
 
-WRITE_LINE_MEMBER( via6522_device::write_cb2 )
+READ8_DEVICE_HANDLER(via_cb2_r)
 {
+	via6522_t *v = get_token(device);
+	return v->in_cb2;
+}
+
+
+/*-------------------------------------------------
+    via_cb2_w - interface setting VIA port
+    CB2 input
+-------------------------------------------------*/
+
+WRITE8_DEVICE_HANDLER(via_cb2_w)
+{
+	via6522_t *v = get_token(device);
+
+	/* limit the data to 0 or 1 */
+	data = data ? 1 : 0;
+
 	/* CB2 is in input mode */
-	if (CB2_INPUT(m_pcr))
-	{
+	if (CB2_INPUT(v->pcr))
+    {
 		/* the new state has caused a transition */
-		if (m_in_cb2 != state)
+		if (v->in_cb2 != data)
 		{
 			/* handle the active transition */
-			if ((state && CB2_LOW_TO_HIGH(m_pcr)) || (!state && CB2_HIGH_TO_LOW(m_pcr)))
+			if ((data && CB2_LOW_TO_HIGH(v->pcr)) || (!data && CB2_HIGH_TO_LOW(v->pcr)))
 			{
 				/* mark the IRQ */
-				set_int(INT_CB2);
+				via_set_int (device, INT_CB2);
 			}
 			/* set the new value for CB2 */
-			m_in_cb2 = state;
+			v->in_cb2 = data;
 		}
+    }
+}
+
+
+/*-------------------------------------------------
+    DEVICE_GET_INFO( via6522 )
+-------------------------------------------------*/
+
+DEVICE_GET_INFO(via6522)
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as 64-bit signed integers --- */
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(via6522_t);				break;
+		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;								break;
+		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;			break;
+
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(via6522);	break;
+		case DEVINFO_FCT_STOP:							/* Nothing */								break;
+		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME(via6522);	break;
+
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "6522 VIA");				break;
+		case DEVINFO_STR_FAMILY:						strcpy(info->s, "6522 VIA");				break;
+		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");						break;
+		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);					break;
+		case DEVINFO_STR_CREDITS:						/* Nothing */								break;
 	}
 }

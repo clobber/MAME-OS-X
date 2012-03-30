@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "tia.h"
 #include "sound/tiaintf.h"
 
@@ -106,7 +106,7 @@ static UINT8 HMBL_latch;
 static UINT8 REFLECT;		/* Should playfield be reflected or not */
 static UINT8 NUSIZx_changed;
 
-static bitmap_ind16 *helper[3];
+static bitmap_t *helper[3];
 
 static UINT16 screen_height;
 
@@ -126,7 +126,7 @@ static read16_space_func	tia_read_input_port;
 static read8_space_func	tia_get_databus;
 static write16_space_func	tia_vsync_callback;
 
-static void extend_palette(running_machine &machine) {
+static void extend_palette(running_machine *machine) {
 	int	i,j;
 
 	for( i = 0; i < 128; i ++ )
@@ -271,19 +271,19 @@ PALETTE_INIT( tia_PAL )
 
 VIDEO_START( tia )
 {
-	int cx = machine.primary_screen->width();
+	int cx = video_screen_get_width(machine->primary_screen);
 
-	screen_height = machine.primary_screen->height();
-	helper[0] = auto_bitmap_ind16_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT);
-	helper[1] = auto_bitmap_ind16_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT);
-	helper[2] = auto_bitmap_ind16_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT);
+	screen_height = video_screen_get_height(machine->primary_screen);
+	helper[0] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
+	helper[1] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
+	helper[2] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
 }
 
 
-SCREEN_UPDATE_IND16( tia )
+VIDEO_UPDATE( tia )
 {
-	screen_height = screen.height();
-	copybitmap(bitmap, *helper[2], 0, 0, 0, 0, cliprect);
+	screen_height = video_screen_get_height(screen);
+	copybitmap(bitmap, helper[2], 0, 0, 0, 0, cliprect);
 	return 0;
 }
 
@@ -506,15 +506,15 @@ static int collision_check(UINT8* p1, UINT8* p2, int x1, int x2)
 }
 
 
-INLINE int current_x(address_space *space)
+INLINE int current_x(const address_space *space)
 {
-	return 3 * ((space->machine().firstcpu->total_cycles() - frame_cycles) % 76) - 68;
+	return 3 * ((cpu_get_total_cycles(space->cpu) - frame_cycles) % 76) - 68;
 }
 
 
-INLINE int current_y(address_space *space)
+INLINE int current_y(const address_space *space)
 {
-	return (space->machine().firstcpu->total_cycles() - frame_cycles) / 76;
+	return (cpu_get_total_cycles(space->cpu) - frame_cycles) / 76;
 }
 
 
@@ -664,7 +664,7 @@ static void update_bitmap(int next_x, int next_y)
 				redraw_line = 1;
 			}
 
-			/* Redraw line if a RESPx or NUSIZx occurred during the last line */
+			/* Redraw line if a RESPx or NUSIZx occured during the last line */
 			if ( ! startP0 || ! startP1 || ! startM0 || ! startM1) {
 				startP0 = 1;
 				startP1 = 1;
@@ -819,7 +819,7 @@ static void update_bitmap(int next_x, int next_y)
 		if (collision_check(lineM0, lineM1, colx1, x2))
 			CXPPMM |= 0x40;
 
-		p = &helper[current_bitmap]->pix16(y % screen_height, 34);
+		p = BITMAP_ADDR16(helper[current_bitmap], y % screen_height, 34);
 
 		for (x = x1; x < x2; x++)
 		{
@@ -828,12 +828,12 @@ static void update_bitmap(int next_x, int next_y)
 
 		if ( x2 == 160 && y % screen_height == (screen_height - 1) ) {
 			int	t_y;
-			for ( t_y = 0; t_y < helper[2]->height(); t_y++ ) {
-				UINT16*	l0 = &helper[current_bitmap]->pix16(t_y);
-				UINT16*	l1 = &helper[1 - current_bitmap]->pix16(t_y);
-				UINT16*	l2 = &helper[2]->pix16(t_y);
+			for ( t_y = 0; t_y < helper[2]->height; t_y++ ) {
+				UINT16*	l0 = BITMAP_ADDR16( helper[current_bitmap], t_y, 0 );
+				UINT16*	l1 = BITMAP_ADDR16( helper[1 - current_bitmap], t_y, 0 );
+				UINT16*	l2 = BITMAP_ADDR16( helper[2], t_y, 0 );
 				int t_x;
-				for( t_x = 0; t_x < helper[2]->width(); t_x++ ) {
+				for( t_x = 0; t_x < helper[2]->width; t_x++ ) {
 					if ( l0[t_x] != l1[t_x] ) {
 						/* Combine both entries */
 						l2[t_x] = ( ( l0[t_x] + 1 ) << 7 ) | l1[t_x];
@@ -853,11 +853,11 @@ static void update_bitmap(int next_x, int next_y)
 
 static WRITE8_HANDLER( WSYNC_w )
 {
-	int cycles = space->machine().firstcpu->total_cycles() - frame_cycles;
+	int cycles = cpu_get_total_cycles(space->cpu) - frame_cycles;
 
 	if (cycles % 76)
 	{
-		device_adjust_icount(&space->device(), cycles % 76 - 76);
+		cpu_adjust_icount(space->cpu, cycles % 76 - 76);
 	}
 }
 
@@ -872,8 +872,8 @@ static WRITE8_HANDLER( VSYNC_w )
 
 			if ( curr_y > 5 )
 				update_bitmap(
-					space->machine().primary_screen->width(),
-					space->machine().primary_screen->height());
+					video_screen_get_width(space->machine->primary_screen),
+					video_screen_get_height(space->machine->primary_screen));
 
 			if ( tia_vsync_callback ) {
 				tia_vsync_callback( space, 0, curr_y, 0xFFFF );
@@ -894,7 +894,7 @@ static WRITE8_HANDLER( VBLANK_w )
 {
 	if (data & 0x80)
 	{
-		paddle_cycles = space->machine().firstcpu->total_cycles();
+		paddle_cycles = cpu_get_total_cycles(space->cpu);
 	}
 	if ( ! ( VBLANK & 0x40 ) ) {
 		INPT4 = 0x80;
@@ -1188,7 +1188,7 @@ static WRITE8_HANDLER( HMOVE_w )
 		}
 		if (curr_y < screen_height)
 		{
-			memset(&helper[current_bitmap]->pix16(curr_y, 34), 0, 16);
+			memset(BITMAP_ADDR16(helper[current_bitmap], curr_y, 34), 0, 16);
 		}
 
 		prev_x = 8;
@@ -1647,7 +1647,7 @@ static WRITE8_HANDLER( GRP1_w )
 
 static READ8_HANDLER( INPT_r )
 {
-	UINT64 elapsed = space->machine().firstcpu->total_cycles() - paddle_cycles;
+	UINT64 elapsed = cpu_get_total_cycles(space->cpu) - paddle_cycles;
 	int input = TIA_INPUT_PORT_ALWAYS_ON;
 	if ( tia_read_input_port )
 	{
@@ -1863,7 +1863,7 @@ WRITE8_HANDLER( tia_w )
 	case 0x18: /* AUDF1 */
 	case 0x19: /* AUDV0 */
 	case 0x1A: /* AUDV1 */
-		tia_sound_w(space->machine().device("tia"), offset, data);
+		tia_sound_w(devtag_get_device(space->machine, "tia"), offset, data);
 		break;
 
 	case 0x1B:
@@ -1924,7 +1924,7 @@ WRITE8_HANDLER( tia_w )
 }
 
 
-static void tia_reset(running_machine &machine)
+static void tia_reset(running_machine *machine)
 {
 	int i;
 
@@ -1979,9 +1979,9 @@ static void tia_reset(running_machine &machine)
 
 
 
-void tia_init(running_machine &machine, const struct tia_interface* ti)
+void tia_init(running_machine *machine, const struct tia_interface* ti)
 {
-	assert_always(machine.phase() == MACHINE_PHASE_INIT, "Can only call tia_init at init time!");
+	assert_always(mame_get_phase(machine) == MAME_PHASE_INIT, "Can only call tia_init at init time!");
 
 	if ( ti ) {
 		tia_read_input_port = ti->read_input_port;
@@ -1995,6 +1995,6 @@ void tia_init(running_machine &machine, const struct tia_interface* ti)
 
 	tia_reset( machine );
 
-	machine.add_notifier(MACHINE_NOTIFY_RESET, machine_notify_delegate(FUNC(tia_reset), &machine));
+	add_reset_callback(machine, tia_reset);
 }
 

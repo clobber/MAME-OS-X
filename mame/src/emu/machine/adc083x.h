@@ -9,8 +9,7 @@
 #ifndef __ADC083X_H__
 #define __ADC083X_H__
 
-#include "devlegcy.h"
-
+#include "devcb.h"
 
 /***************************************************************************
     CONSTANTS
@@ -32,36 +31,36 @@
     MACROS / CONSTANTS
 ***************************************************************************/
 
-DECLARE_LEGACY_DEVICE(ADC0831, adc0831);
-DECLARE_LEGACY_DEVICE(ADC0832, adc0832);
-DECLARE_LEGACY_DEVICE(ADC0834, adc0834);
-DECLARE_LEGACY_DEVICE(ADC0838, adc0838);
+#define ADC0831		DEVICE_GET_INFO_NAME(adc0831)
+#define ADC0832		DEVICE_GET_INFO_NAME(adc0832)
+#define ADC0834		DEVICE_GET_INFO_NAME(adc0834)
+#define ADC0838		DEVICE_GET_INFO_NAME(adc0838)
 
-#define MCFG_ADC0831_ADD(_tag, _config) \
-	MCFG_DEVICE_ADD(_tag, ADC0831, 0) \
-	MCFG_DEVICE_CONFIG(_config)
+#define MDRV_ADC0831_ADD(_tag, _config) \
+	MDRV_DEVICE_ADD(_tag, ADC0831, 0) \
+	MDRV_DEVICE_CONFIG(_config)
 
-#define MCFG_ADC0832_ADD(_tag, _config) \
-	MCFG_DEVICE_ADD(_tag, ADC0832, 0) \
-	MCFG_DEVICE_CONFIG(_config)
+#define MDRV_ADC0832_ADD(_tag, _config) \
+	MDRV_DEVICE_ADD(_tag, ADC0832, 0) \
+	MDRV_DEVICE_CONFIG(_config)
 
-#define MCFG_ADC0834_ADD(_tag, _config) \
-	MCFG_DEVICE_ADD(_tag, ADC0834, 0) \
-	MCFG_DEVICE_CONFIG(_config)
+#define MDRV_ADC0834_ADD(_tag, _config) \
+	MDRV_DEVICE_ADD(_tag, ADC0834, 0) \
+	MDRV_DEVICE_CONFIG(_config)
 
-#define MCFG_ADC0838_ADD(_tag, _config) \
-	MCFG_DEVICE_ADD(_tag, ADC0838, 0) \
-	MCFG_DEVICE_CONFIG(_config)
+#define MDRV_ADC0838_ADD(_tag, _config) \
+	MDRV_DEVICE_ADD(_tag, ADC0838, 0) \
+	MDRV_DEVICE_CONFIG(_config)
 
 
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
-typedef double (*adc083x_input_convert_func)(device_t *device, UINT8 input);
+typedef double (*adc083x_input_convert_func)(const device_config *device, UINT8 input);
 
-typedef struct _adc083x_interface adc083x_interface;
-struct _adc083x_interface
+typedef struct _adc0831_interface adc0831_interface;
+struct _adc0831_interface
 {
 	adc083x_input_convert_func input_callback_r;
 };
@@ -71,11 +70,17 @@ struct _adc083x_interface
     PROTOTYPES
 ***************************************************************************/
 
-extern WRITE_LINE_DEVICE_HANDLER( adc083x_cs_write );
-extern WRITE_LINE_DEVICE_HANDLER( adc083x_clk_write );
-extern WRITE_LINE_DEVICE_HANDLER( adc083x_di_write );
-extern WRITE_LINE_DEVICE_HANDLER( adc083x_se_write );
-extern READ_LINE_DEVICE_HANDLER( adc083x_sars_read );
-extern READ_LINE_DEVICE_HANDLER( adc083x_do_read );
+/* device interface */
+DEVICE_GET_INFO( adc0831 );
+DEVICE_GET_INFO( adc0832 );
+DEVICE_GET_INFO( adc0834 );
+DEVICE_GET_INFO( adc0838 );
+
+extern WRITE8_DEVICE_HANDLER( adc083x_cs_write );
+extern WRITE8_DEVICE_HANDLER( adc083x_clk_write );
+extern WRITE8_DEVICE_HANDLER( adc083x_di_write );
+extern WRITE8_DEVICE_HANDLER( adc083x_se_write );
+extern READ8_DEVICE_HANDLER( adc083x_sars_read );
+extern READ8_DEVICE_HANDLER( adc083x_do_read );
 
 #endif	/* __ADC083X_H__ */

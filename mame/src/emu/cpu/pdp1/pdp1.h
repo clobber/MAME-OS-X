@@ -3,6 +3,7 @@
 #ifndef __PDP1_H__
 #define __PDP1_H__
 
+#include "cpuintrf.h"
 
 
 /* register ids for pdp1_get_reg/pdp1_set_reg */
@@ -19,12 +20,12 @@ enum
 	PDP1_IO_COMPLETE	/* hack, do not use directly, use pdp1_pulse_iot_done instead */
 };
 
-#define pdp1_pulse_start_clear(cpudevice)	cpu_set_reg(cpudevice, PDP1_START_CLEAR, (UINT64)0)
-#define pdp1_pulse_iot_done(cpudevice)		cpu_set_reg(cpudevice, PDP1_IO_COMPLETE, (UINT64)0)
+#define pdp1_pulse_start_clear(cpudevice)	cpu_set_reg(cpudevice, PDP1_START_CLEAR, 0)
+#define pdp1_pulse_iot_done(cpudevice)		cpu_set_reg(cpudevice, PDP1_IO_COMPLETE, 0)
 
-typedef void (*pdp1_extern_iot_func)(device_t *device, int op2, int nac, int mb, int *io, int ac);
-typedef void (*pdp1_read_binary_word_func)(device_t *device);
-typedef void (*pdp1_io_sc_func)(device_t *device);
+typedef void (*pdp1_extern_iot_func)(const device_config *device, int op2, int nac, int mb, int *io, int ac);
+typedef void (*pdp1_read_binary_word_func)(const device_config *device);
+typedef void (*pdp1_io_sc_func)(const device_config *device);
 
 
 typedef struct _pdp1_reset_param_t pdp1_reset_param_t;
@@ -48,7 +49,8 @@ struct _pdp1_reset_param_t
 #define IOT_NO_COMPLETION_PULSE -1
 
 /* PUBLIC FUNCTIONS */
-DECLARE_LEGACY_CPU_DEVICE(PDP1, pdp1);
+CPU_GET_INFO( pdp1 );
+#define CPU_PDP1 CPU_GET_INFO_NAME( pdp1 )
 
 #define AND 001
 #define IOR 002

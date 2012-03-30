@@ -16,6 +16,7 @@
 #ifndef __PPC_H__
 #define __PPC_H__
 
+#include "cpuintrf.h"
 
 
 /***************************************************************************
@@ -145,7 +146,7 @@ enum
     STRUCTURES AND TYPEDEFS
 ***************************************************************************/
 
-typedef void (*ppc4xx_spu_tx_handler)(device_t *device, UINT8 data);
+typedef void (*ppc4xx_spu_tx_handler)(const device_config *device, UINT8 data);
 
 typedef struct _powerpc_config powerpc_config;
 struct _powerpc_config
@@ -159,24 +160,40 @@ struct _powerpc_config
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-void ppcdrc_set_options(device_t *device, UINT32 options);
-void ppcdrc_add_fastram(device_t *device, offs_t start, offs_t end, UINT8 readonly, void *base);
-void ppcdrc_add_hotspot(device_t *device, offs_t pc, UINT32 opcode, UINT32 cycles);
+void ppcdrc_set_options(const device_config *device, UINT32 options);
+void ppcdrc_add_fastram(const device_config *device, offs_t start, offs_t end, UINT8 readonly, void *base);
+void ppcdrc_add_hotspot(const device_config *device, offs_t pc, UINT32 opcode, UINT32 cycles);
 
-void ppc4xx_spu_set_tx_handler(device_t *device, ppc4xx_spu_tx_handler handler);
-void ppc4xx_spu_receive_byte(device_t *device, UINT8 byteval);
+void ppc4xx_spu_set_tx_handler(const device_config *device, ppc4xx_spu_tx_handler handler);
+void ppc4xx_spu_receive_byte(const device_config *device, UINT8 byteval);
 
 
-DECLARE_LEGACY_CPU_DEVICE(PPC403GA, ppc403ga);
-DECLARE_LEGACY_CPU_DEVICE(PPC403GCX, ppc403gcx);
+CPU_GET_INFO( ppc403ga );
+#define CPU_PPC403GA CPU_GET_INFO_NAME( ppc403ga )
 
-DECLARE_LEGACY_CPU_DEVICE(PPC601, ppc601);
-DECLARE_LEGACY_CPU_DEVICE(PPC602, ppc602);
-DECLARE_LEGACY_CPU_DEVICE(PPC603, ppc603);
-DECLARE_LEGACY_CPU_DEVICE(PPC603E, ppc603e);
-DECLARE_LEGACY_CPU_DEVICE(PPC603R, ppc603r);
-DECLARE_LEGACY_CPU_DEVICE(PPC604, ppc604);
-DECLARE_LEGACY_CPU_DEVICE(MPC8240, mpc8240);
+CPU_GET_INFO( ppc403gcx );
+#define CPU_PPC403GCX CPU_GET_INFO_NAME( ppc403gcx )
+
+CPU_GET_INFO( ppc601 );
+#define CPU_PPC601 CPU_GET_INFO_NAME( ppc601 )
+
+CPU_GET_INFO( ppc602 );
+#define CPU_PPC602 CPU_GET_INFO_NAME( ppc602 )
+
+CPU_GET_INFO( ppc603 );
+#define CPU_PPC603 CPU_GET_INFO_NAME( ppc603 )
+
+CPU_GET_INFO( ppc603e );
+#define CPU_PPC603E CPU_GET_INFO_NAME( ppc603e )
+
+CPU_GET_INFO( ppc603r );
+#define CPU_PPC603R CPU_GET_INFO_NAME( ppc603r )
+
+CPU_GET_INFO( ppc604 );
+#define CPU_PPC604 CPU_GET_INFO_NAME( ppc604 )
+
+CPU_GET_INFO( mpc8240 );
+#define CPU_MPC8240 CPU_GET_INFO_NAME( mpc8240 )
 
 
 #endif	/* __PPC_H__ */

@@ -9,7 +9,7 @@
 #define LOG_32031_IOPORTS	(0)
 
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/tms32031/tms32031.h"
 #include "sound/dmadac.h"
 #include "cage.h"
@@ -33,35 +33,31 @@
  *
  *************************************/
 
+static const device_config *cage_cpu;
+static attotime cage_cpu_h1_clock_period;
 
-typedef struct
-{
-	cpu_device *cpu;
-	attotime cpu_h1_clock_period;
+static UINT8 cpu_to_cage_ready;
+static UINT8 cage_to_cpu_ready;
 
-	UINT8 cpu_to_cage_ready;
-	UINT8 cage_to_cpu_ready;
+static void (*cage_irqhandler)(running_machine *, int);
 
-	void (*irqhandler)(running_machine &, int);
+static attotime serial_period_per_word;
 
-	attotime serial_period_per_word;
+static UINT8 dma_enabled;
+static UINT8 dma_timer_enabled;
+static emu_timer *dma_timer;
 
-	UINT8 dma_enabled;
-	UINT8 dma_timer_enabled;
-	timer_device *dma_timer;
+static UINT8 cage_timer_enabled[2];
+static emu_timer *timer[2];
 
-	UINT8 timer_enabled[2];
-	timer_device *timer[2];
+static UINT32 *tms32031_io_regs;
 
-	UINT32 tms32031_io_regs[0x100];
-	UINT16 from_main;
-	UINT16 control;
+static UINT16 cage_from_main;
+static UINT16 cage_control;
 
-	UINT32 *speedup_ram;
-	dmadac_sound_device *dmadac[DAC_BUFFER_CHANNELS];
-} cage_t;
+static UINT32 *speedup_ram;
 
-static cage_t cage;
+static const device_config *dmadac[DAC_BUFFER_CHANNELS];
 
 
 
@@ -144,8 +140,8 @@ static const char *const register_names[] =
  *
  *************************************/
 
-static TIMER_DEVICE_CALLBACK( dma_timer_callback );
-static TIMER_DEVICE_CALLBACK( cage_timer_callback );
+static TIMER_CALLBACK( dma_timer_callback );
+static TIMER_CALLBACK( cage_timer_callback );
 static void update_timer(int which);
 static WRITE32_HANDLER( speedup_w );
 
@@ -157,59 +153,57 @@ static WRITE32_HANDLER( speedup_w );
  *
  *************************************/
 
-void cage_init(running_machine &machine, offs_t speedup)
+void cage_init(running_machine *machine, offs_t speedup)
 {
-	cage_t *state = &cage;
 	attotime cage_cpu_clock_period;
 	int chan;
 
-	state->irqhandler = NULL;
+	cage_irqhandler = NULL;
 
-	memory_set_bankptr(machine, "bank10", machine.region("cageboot")->base());
-	memory_set_bankptr(machine, "bank11", machine.region("cage")->base());
+	memory_set_bankptr(machine, 10, memory_region(machine, "cageboot"));
+	memory_set_bankptr(machine, 11, memory_region(machine, "cage"));
 
-	state->cpu = machine.device<cpu_device>("cage");
-	cage_cpu_clock_period = attotime::from_hz(state->cpu->clock());
-	state->cpu_h1_clock_period = cage_cpu_clock_period * 2;
+	cage_cpu = cputag_get_cpu(machine, "cage");
+	cage_cpu_clock_period = ATTOTIME_IN_HZ(cpu_get_clock(cage_cpu));
+	cage_cpu_h1_clock_period = attotime_mul(cage_cpu_clock_period, 2);
 
-	state->dma_timer = machine.device<timer_device>("cage_dma_timer");
-	state->timer[0] = machine.device<timer_device>("cage_timer0");
-	state->timer[1] = machine.device<timer_device>("cage_timer1");
+	dma_timer = timer_alloc(machine, dma_timer_callback, NULL);
+	timer[0] = timer_alloc(machine, cage_timer_callback, NULL);
+	timer[1] = timer_alloc(machine, cage_timer_callback, NULL);
 
 	if (speedup)
-		state->speedup_ram = state->cpu->memory().space(AS_PROGRAM)->install_legacy_write_handler(speedup, speedup, FUNC(speedup_w));
+		speedup_ram = memory_install_write32_handler(cpu_get_address_space(cage_cpu, ADDRESS_SPACE_PROGRAM), speedup, speedup, 0, 0, speedup_w);
 
 	for (chan = 0; chan < DAC_BUFFER_CHANNELS; chan++)
 	{
 		char buffer[10];
 		sprintf(buffer, "dac%d", chan + 1);
-		state->dmadac[chan] = machine.device<dmadac_sound_device>(buffer);
+		dmadac[chan] = devtag_get_device(machine, buffer);
 	}
 
-	state_save_register_global(machine, cage.cpu_to_cage_ready);
-	state_save_register_global(machine, cage.cage_to_cpu_ready);
-	state_save_register_global(machine, cage.serial_period_per_word);
-	state_save_register_global(machine, cage.dma_enabled);
-	state_save_register_global(machine, cage.dma_timer_enabled);
-	state_save_register_global_array(machine, cage.timer_enabled);
-	state_save_register_global(machine, cage.from_main);
-	state_save_register_global(machine, cage.control);
+	state_save_register_global(machine, cpu_to_cage_ready);
+	state_save_register_global(machine, cage_to_cpu_ready);
+	state_save_register_global(machine, serial_period_per_word.seconds);
+	state_save_register_global(machine, serial_period_per_word.attoseconds);
+	state_save_register_global(machine, dma_enabled);
+	state_save_register_global(machine, dma_timer_enabled);
+	state_save_register_global_array(machine, cage_timer_enabled);
+	state_save_register_global(machine, cage_from_main);
+	state_save_register_global(machine, cage_control);
 }
 
 
-void cage_set_irq_handler(void (*irqhandler)(running_machine &, int))
+void cage_set_irq_handler(void (*irqhandler)(running_machine *, int))
 {
-	cage_t *state = &cage;
-	state->irqhandler = irqhandler;
+	cage_irqhandler = irqhandler;
 }
 
 
-void cage_reset_w(address_space *space, int state)
+void cage_reset_w(int state)
 {
-	cage_t *sndstate = &cage;
 	if (state)
-		cage_control_w(space->machine(), 0);
-	device_set_input_line(sndstate->cpu, INPUT_LINE_RESET, state ? ASSERT_LINE : CLEAR_LINE);
+		cage_control_w(cage_cpu->machine, 0);
+	cpu_set_input_line(cage_cpu, INPUT_LINE_RESET, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -220,18 +214,15 @@ void cage_reset_w(address_space *space, int state)
  *
  *************************************/
 
-static TIMER_DEVICE_CALLBACK( dma_timer_callback )
+static TIMER_CALLBACK( dma_timer_callback )
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
-
 	/* if we weren't enabled, don't do anything, just shut ourself off */
-	if (!state->dma_enabled)
+	if (!dma_enabled)
 	{
-		if (state->dma_timer_enabled)
+		if (dma_timer_enabled)
 		{
-			timer.adjust(attotime::never);
-			state->dma_timer_enabled = 0;
+			timer_adjust_oneshot(dma_timer, attotime_never, 0);
+			dma_timer_enabled = 0;
 		}
 		return;
 	}
@@ -241,21 +232,18 @@ static TIMER_DEVICE_CALLBACK( dma_timer_callback )
 	tms32031_io_regs[DMA_SOURCE_ADDR] = param;
 
 	/* set the interrupt */
-	device_set_input_line(state->cpu, TMS3203X_DINT, ASSERT_LINE);
-	state->dma_enabled = 0;
+	cpu_set_input_line(cage_cpu, TMS32031_DINT, ASSERT_LINE);
+	dma_enabled = 0;
 }
 
 
-static void update_dma_state(address_space *space)
+static void update_dma_state(const address_space *space)
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
-
 	/* determine the new enabled state */
 	int enabled = ((tms32031_io_regs[DMA_GLOBAL_CTL] & 3) == 3) && (tms32031_io_regs[DMA_TRANSFER_COUNT] != 0);
 
 	/* see if we turned on */
-	if (enabled && !state->dma_enabled)
+	if (enabled && !dma_enabled)
 	{
 		INT16 sound_data[STACK_SOUND_BUFSIZE];
 		UINT32 addr, inc;
@@ -272,32 +260,32 @@ static void update_dma_state(address_space *space)
 		inc = (tms32031_io_regs[DMA_GLOBAL_CTL] >> 4) & 1;
 		for (i = 0; i < tms32031_io_regs[DMA_TRANSFER_COUNT]; i++)
 		{
-			sound_data[i % STACK_SOUND_BUFSIZE] = space->read_dword(addr * 4);
+			sound_data[i % STACK_SOUND_BUFSIZE] = memory_read_dword(space, addr * 4);
 			addr += inc;
 			if (i % STACK_SOUND_BUFSIZE == STACK_SOUND_BUFSIZE - 1)
-				dmadac_transfer(&state->dmadac[0], DAC_BUFFER_CHANNELS, 1, DAC_BUFFER_CHANNELS, STACK_SOUND_BUFSIZE / DAC_BUFFER_CHANNELS, sound_data);
+				dmadac_transfer(&dmadac[0], DAC_BUFFER_CHANNELS, 1, DAC_BUFFER_CHANNELS, STACK_SOUND_BUFSIZE / DAC_BUFFER_CHANNELS, sound_data);
 		}
 		if (tms32031_io_regs[DMA_TRANSFER_COUNT] % STACK_SOUND_BUFSIZE != 0)
-			dmadac_transfer(&state->dmadac[0], DAC_BUFFER_CHANNELS, 1, DAC_BUFFER_CHANNELS, (tms32031_io_regs[DMA_TRANSFER_COUNT] % STACK_SOUND_BUFSIZE) / DAC_BUFFER_CHANNELS, sound_data);
+			dmadac_transfer(&dmadac[0], DAC_BUFFER_CHANNELS, 1, DAC_BUFFER_CHANNELS, (tms32031_io_regs[DMA_TRANSFER_COUNT] % STACK_SOUND_BUFSIZE) / DAC_BUFFER_CHANNELS, sound_data);
 
 		/* compute the time of the interrupt and set the timer */
-		if (!state->dma_timer_enabled)
+		if (!dma_timer_enabled)
 		{
-			attotime period = state->serial_period_per_word * tms32031_io_regs[DMA_TRANSFER_COUNT];
-			state->dma_timer->adjust(period, addr, period);
-			state->dma_timer_enabled = 1;
+			attotime period = attotime_mul(serial_period_per_word, tms32031_io_regs[DMA_TRANSFER_COUNT]);
+			timer_adjust_periodic(dma_timer, period, addr, period);
+			dma_timer_enabled = 1;
 		}
 	}
 
 	/* see if we turned off */
-	else if (!enabled && state->dma_enabled)
+	else if (!enabled && dma_enabled)
 	{
-		state->dma_timer->reset();
-		state->dma_timer_enabled = 0;
+		timer_adjust_oneshot(dma_timer, attotime_never, 0);
+		dma_timer_enabled = 0;
 	}
 
 	/* set the new state */
-	state->dma_enabled = enabled;
+	dma_enabled = enabled;
 }
 
 
@@ -308,47 +296,43 @@ static void update_dma_state(address_space *space)
  *
  *************************************/
 
-static TIMER_DEVICE_CALLBACK( cage_timer_callback )
+static TIMER_CALLBACK( cage_timer_callback )
 {
-	cage_t *state = &cage;
 	int which = param;
 
 	/* set the interrupt */
-	device_set_input_line(state->cpu, TMS3203X_TINT0 + which, ASSERT_LINE);
-	state->timer_enabled[which] = 0;
+	cpu_set_input_line(cage_cpu, TMS32031_TINT0 + which, ASSERT_LINE);
+	cage_timer_enabled[which] = 0;
 	update_timer(which);
 }
 
 
 static void update_timer(int which)
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
-
 	/* determine the new enabled state */
 	int base = 0x10 * which;
 	int enabled = ((tms32031_io_regs[base + TIMER0_GLOBAL_CTL] & 0xc0) == 0xc0);
 
 	/* see if we turned on */
-	if (enabled && !state->timer_enabled[which])
+	if (enabled && !cage_timer_enabled[which])
 	{
-		attotime period = state->cpu_h1_clock_period * (2 * tms32031_io_regs[base + TIMER0_PERIOD]);
+		attotime period = attotime_mul(cage_cpu_h1_clock_period, 2 * tms32031_io_regs[base + TIMER0_PERIOD]);
 
 		/* make sure our assumptions are correct */
 		if (tms32031_io_regs[base + TIMER0_GLOBAL_CTL] != 0x2c1)
 			logerror("CAGE TIMER%d: unexpected timer config %08X!\n", which, tms32031_io_regs[base + TIMER0_GLOBAL_CTL]);
 
-		state->timer[which]->adjust(period, which);
+		timer_adjust_oneshot(timer[which], period, which);
 	}
 
 	/* see if we turned off */
-	else if (!enabled && state->timer_enabled[which])
+	else if (!enabled && cage_timer_enabled[which])
 	{
-		state->timer[which]->adjust(attotime::never, which);
+		timer_adjust_oneshot(timer[which], attotime_never, which);
 	}
 
 	/* set the new state */
-	state->timer_enabled[which] = enabled;
+	cage_timer_enabled[which] = enabled;
 }
 
 
@@ -359,32 +343,30 @@ static void update_timer(int which)
  *
  *************************************/
 
-static void update_serial(running_machine &machine)
+static void update_serial(running_machine *machine)
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
 	attotime serial_clock_period, bit_clock_period;
 	UINT32 freq;
 
 	/* we start out at half the H1 frequency (or 2x the H1 period) */
-	serial_clock_period = state->cpu_h1_clock_period * 2;
+	serial_clock_period = attotime_mul(cage_cpu_h1_clock_period, 2);
 
 	/* if we're in clock mode, muliply by another factor of 2 */
 	if (tms32031_io_regs[SPORT_GLOBAL_CTL] & 4)
-		serial_clock_period *= 2;
+		serial_clock_period = attotime_mul(serial_clock_period, 2);
 
 	/* now multiply by the timer period */
-	bit_clock_period = serial_clock_period * (tms32031_io_regs[SPORT_TIMER_PERIOD] & 0xffff);
+	bit_clock_period = attotime_mul(serial_clock_period, (tms32031_io_regs[SPORT_TIMER_PERIOD] & 0xffff));
 
 	/* and times the number of bits per sample */
-	state->serial_period_per_word = bit_clock_period * (8 * (((tms32031_io_regs[SPORT_GLOBAL_CTL] >> 18) & 3) + 1));
+	serial_period_per_word = attotime_mul(bit_clock_period, 8 * (((tms32031_io_regs[SPORT_GLOBAL_CTL] >> 18) & 3) + 1));
 
 	/* compute the step value to stretch this to the sample_rate */
-	freq = ATTOSECONDS_TO_HZ(state->serial_period_per_word.attoseconds) / DAC_BUFFER_CHANNELS;
+	freq = ATTOSECONDS_TO_HZ(serial_period_per_word.attoseconds) / DAC_BUFFER_CHANNELS;
 	if (freq > 0 && freq < 100000)
 	{
-		dmadac_set_frequency(&state->dmadac[0], DAC_BUFFER_CHANNELS, freq);
-		dmadac_enable(&state->dmadac[0], DAC_BUFFER_CHANNELS, 1);
+		dmadac_set_frequency(&dmadac[0], DAC_BUFFER_CHANNELS, freq);
+		dmadac_enable(&dmadac[0], DAC_BUFFER_CHANNELS, 1);
 	}
 }
 
@@ -398,32 +380,27 @@ static void update_serial(running_machine &machine)
 
 static READ32_HANDLER( tms32031_io_r )
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
 	UINT16 result = tms32031_io_regs[offset];
 
 	switch (offset)
 	{
 		case DMA_GLOBAL_CTL:
-			result = (result & ~0xc) | (state->dma_enabled ? 0xc : 0x0);
+			result = (result & ~0xc) | (dma_enabled ? 0xc : 0x0);
 			break;
 	}
 
 	if (LOG_32031_IOPORTS)
-		logerror("CAGE:%06X:%s read -> %08X\n", cpu_get_pc(&space->device()), register_names[offset & 0x7f], result);
+		logerror("CAGE:%06X:%s read -> %08X\n", cpu_get_pc(space->cpu), register_names[offset & 0x7f], result);
 	return result;
 }
 
 
 static WRITE32_HANDLER( tms32031_io_w )
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
-
 	COMBINE_DATA(&tms32031_io_regs[offset]);
 
 	if (LOG_32031_IOPORTS)
-		logerror("CAGE:%06X:%s write = %08X\n", cpu_get_pc(&space->device()), register_names[offset & 0x7f], tms32031_io_regs[offset]);
+		logerror("CAGE:%06X:%s write = %08X\n", cpu_get_pc(space->cpu), register_names[offset & 0x7f], tms32031_io_regs[offset]);
 
 	switch (offset)
 	{
@@ -454,7 +431,7 @@ static WRITE32_HANDLER( tms32031_io_w )
 
 		case SPORT_DATA_TX:
 #if (DAC_BUFFER_CHANNELS == 4)
-			if ((int)ATTOSECONDS_TO_HZ(state->serial_period_per_word.attoseconds) == 22050*4 && (tms32031_io_regs[SPORT_RX_CTL] & 0xff) == 0x62)
+			if ((int)ATTOSECONDS_TO_HZ(serial_period_per_word.attoseconds) == 22050*4 && (tms32031_io_regs[SPORT_RX_CTL] & 0xff) == 0x62)
 				tms32031_io_regs[SPORT_RX_CTL] ^= 0x800;
 #endif
 			break;
@@ -462,7 +439,7 @@ static WRITE32_HANDLER( tms32031_io_w )
 		case SPORT_GLOBAL_CTL:
 		case SPORT_TIMER_CTL:
 		case SPORT_TIMER_PERIOD:
-			update_serial(space->machine());
+			update_serial(space->machine);
 			break;
 	}
 }
@@ -475,149 +452,137 @@ static WRITE32_HANDLER( tms32031_io_w )
  *
  *************************************/
 
-static void update_control_lines(running_machine &machine)
+static void update_control_lines(running_machine *machine)
 {
-	cage_t *state = &cage;
 	int val;
 
 	/* set the IRQ to the main CPU */
-	if (state->irqhandler)
+	if (cage_irqhandler)
 	{
 		int reason = 0;
 
-		if ((state->control & 3) == 3 && !state->cpu_to_cage_ready)
+		if ((cage_control & 3) == 3 && !cpu_to_cage_ready)
 			reason |= CAGE_IRQ_REASON_BUFFER_EMPTY;
-		if ((state->control & 2) && state->cage_to_cpu_ready)
+		if ((cage_control & 2) && cage_to_cpu_ready)
 			reason |= CAGE_IRQ_REASON_DATA_READY;
 
-		(*state->irqhandler)(machine, reason);
+		(*cage_irqhandler)(machine, reason);
 	}
 
 	/* set the IOF input lines */
-	val = cpu_get_reg(state->cpu, TMS3203X_IOF);
+	val = cpu_get_reg(cage_cpu, TMS32031_IOF);
 	val &= ~0x88;
-	if (state->cpu_to_cage_ready) val |= 0x08;
-	if (state->cage_to_cpu_ready) val |= 0x80;
-	state->cpu->set_state(TMS3203X_IOF, val);
+	if (cpu_to_cage_ready) val |= 0x08;
+	if (cage_to_cpu_ready) val |= 0x80;
+	cpu_set_reg(cage_cpu, TMS32031_IOF, val);
 }
 
 
 static READ32_HANDLER( cage_from_main_r )
 {
-	cage_t *state = &cage;
 	if (LOG_COMM)
-		logerror("%06X:CAGE read command = %04X\n", cpu_get_pc(&space->device()), state->from_main);
-	state->cpu_to_cage_ready = 0;
-	update_control_lines(space->machine());
-	device_set_input_line(state->cpu, TMS3203X_IRQ0, CLEAR_LINE);
-	return state->from_main;
+		logerror("%06X:CAGE read command = %04X\n", cpu_get_pc(space->cpu), cage_from_main);
+	cpu_to_cage_ready = 0;
+	update_control_lines(space->machine);
+	cpu_set_input_line(cage_cpu, TMS32031_IRQ0, CLEAR_LINE);
+	return cage_from_main;
 }
 
 
 static WRITE32_HANDLER( cage_from_main_ack_w )
 {
 	if (LOG_COMM)
-	{
-		cage_t *state = &cage;
-		logerror("%06X:CAGE ack command = %04X\n", cpu_get_pc(&space->device()), state->from_main);
-	}
+		logerror("%06X:CAGE ack command = %04X\n", cpu_get_pc(space->cpu), cage_from_main);
 }
 
 
 static WRITE32_HANDLER( cage_to_main_w )
 {
-	cage_t *state = &cage;
 	if (LOG_COMM)
-		logerror("%06X:Data from CAGE = %04X\n", cpu_get_pc(&space->device()), data);
+		logerror("%06X:Data from CAGE = %04X\n", cpu_get_pc(space->cpu), data);
 	soundlatch_word_w(space, 0, data, mem_mask);
-	state->cage_to_cpu_ready = 1;
-	update_control_lines(space->machine());
+	cage_to_cpu_ready = 1;
+	update_control_lines(space->machine);
 }
 
 
 static READ32_HANDLER( cage_io_status_r )
 {
-	cage_t *state = &cage;
 	int result = 0;
-	if (state->cpu_to_cage_ready)
+	if (cpu_to_cage_ready)
 		result |= 0x80;
-	if (!state->cage_to_cpu_ready)
+	if (!cage_to_cpu_ready)
 		result |= 0x40;
 	return result;
 }
 
 
-UINT16 cage_main_r(address_space *space)
+UINT16 main_from_cage_r(const address_space *space)
 {
-	cage_t *state = &cage;
 	if (LOG_COMM)
-		logerror("%s:main read data = %04X\n", space->machine().describe_context(), soundlatch_word_r(space, 0, 0));
-	state->cage_to_cpu_ready = 0;
-	update_control_lines(space->machine());
+		logerror("%s:main read data = %04X\n", cpuexec_describe_context(space->machine), soundlatch_word_r(space, 0, 0));
+	cage_to_cpu_ready = 0;
+	update_control_lines(space->machine);
 	return soundlatch_word_r(space, 0, 0xffff);
 }
 
 
-static TIMER_CALLBACK( cage_deferred_w )
+static TIMER_CALLBACK( deferred_cage_w )
 {
-	cage_t *state = &cage;
-	state->from_main = param;
-	state->cpu_to_cage_ready = 1;
+	cage_from_main = param;
+	cpu_to_cage_ready = 1;
 	update_control_lines(machine);
-	device_set_input_line(state->cpu, TMS3203X_IRQ0, ASSERT_LINE);
+	cpu_set_input_line(cage_cpu, TMS32031_IRQ0, ASSERT_LINE);
 }
 
 
-void cage_main_w(address_space *space, UINT16 data)
+void main_to_cage_w(UINT16 data)
 {
+	running_machine *machine = cage_cpu->machine;
 	if (LOG_COMM)
-		logerror("%s:Command to CAGE = %04X\n", space->machine().describe_context(), data);
-	space->machine().scheduler().synchronize(FUNC(cage_deferred_w), data);
+		logerror("%s:Command to CAGE = %04X\n", cpuexec_describe_context(machine), data);
+	timer_call_after_resynch(machine, NULL, data, deferred_cage_w);
 }
 
 
-UINT16 cage_control_r(running_machine &machine)
+UINT16 cage_control_r(void)
 {
-	cage_t *state = &cage;
 	UINT16 result = 0;
 
-	if (state->cpu_to_cage_ready)
+	if (cpu_to_cage_ready)
 		result |= 2;
-	if (state->cage_to_cpu_ready)
+	if (cage_to_cpu_ready)
 		result |= 1;
 
 	return result;
 }
 
 
-void cage_control_w(running_machine &machine, UINT16 data)
+void cage_control_w(running_machine *machine, UINT16 data)
 {
-	cage_t *state = &cage;
-	UINT32 *tms32031_io_regs = state->tms32031_io_regs;
-
-	state->control = data;
+	cage_control = data;
 
 	/* CPU is reset if both control lines are 0 */
-	if (!(state->control & 3))
+	if (!(cage_control & 3))
 	{
-		device_set_input_line(state->cpu, INPUT_LINE_RESET, ASSERT_LINE);
+		cpu_set_input_line(cage_cpu, INPUT_LINE_RESET, ASSERT_LINE);
 
-		state->dma_enabled = 0;
-		state->dma_timer_enabled = 0;
-		state->dma_timer->reset();
+		dma_enabled = 0;
+		dma_timer_enabled = 0;
+		timer_adjust_oneshot(dma_timer, attotime_never, 0);
 
-		state->timer_enabled[0] = 0;
-		state->timer_enabled[1] = 0;
-		state->timer[0]->reset();
-		state->timer[1]->reset();
+		cage_timer_enabled[0] = 0;
+		cage_timer_enabled[1] = 0;
+		timer_adjust_oneshot(timer[0], attotime_never, 0);
+		timer_adjust_oneshot(timer[1], attotime_never, 0);
 
 		memset(tms32031_io_regs, 0, 0x60 * 4);
 
-		state->cpu_to_cage_ready = 0;
-		state->cage_to_cpu_ready = 0;
+		cpu_to_cage_ready = 0;
+		cage_to_cpu_ready = 0;
 	}
 	else
-		device_set_input_line(state->cpu, INPUT_LINE_RESET, CLEAR_LINE);
+		cpu_set_input_line(cage_cpu, INPUT_LINE_RESET, CLEAR_LINE);
 
 	/* update the control state */
 	update_control_lines(machine);
@@ -633,10 +598,8 @@ void cage_control_w(running_machine &machine, UINT16 data)
 
 static WRITE32_HANDLER( speedup_w )
 {
-	cage_t *state = &cage;
-
-	device_eat_cycles(&space->device(), 100);
-	COMBINE_DATA(&state->speedup_ram[offset]);
+	cpu_eat_cycles(space->cpu, 100);
+	COMBINE_DATA(&speedup_ram[offset]);
 }
 
 
@@ -647,33 +610,33 @@ static WRITE32_HANDLER( speedup_w )
  *
  *************************************/
 
-static const tms3203x_config cage_config =
+static const tms32031_config cage_config =
 {
 	0x400000
 };
 
 
-static ADDRESS_MAP_START( cage_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( cage_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x00ffff) AM_RAM
 	AM_RANGE(0x200000, 0x200000) AM_WRITENOP
-	AM_RANGE(0x400000, 0x47ffff) AM_ROMBANK("bank10")
-	AM_RANGE(0x808000, 0x8080ff) AM_READWRITE(tms32031_io_r, tms32031_io_w)
+	AM_RANGE(0x400000, 0x47ffff) AM_ROMBANK(10)
+	AM_RANGE(0x808000, 0x8080ff) AM_READWRITE(tms32031_io_r, tms32031_io_w) AM_BASE(&tms32031_io_regs)
 	AM_RANGE(0x809800, 0x809fff) AM_RAM
 	AM_RANGE(0xa00000, 0xa00000) AM_READWRITE(cage_from_main_r, cage_to_main_w)
-	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK("bank11")
+	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK(11)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cage_map_seattle, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( cage_map_seattle, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x00ffff) AM_RAM
 	AM_RANGE(0x200000, 0x200000) AM_WRITENOP
-	AM_RANGE(0x400000, 0x47ffff) AM_ROMBANK("bank10")
-	AM_RANGE(0x808000, 0x8080ff) AM_READWRITE(tms32031_io_r, tms32031_io_w)
+	AM_RANGE(0x400000, 0x47ffff) AM_ROMBANK(10)
+	AM_RANGE(0x808000, 0x8080ff) AM_READWRITE(tms32031_io_r, tms32031_io_w) AM_BASE(&tms32031_io_regs)
 	AM_RANGE(0x809800, 0x809fff) AM_RAM
 	AM_RANGE(0xa00000, 0xa00000) AM_READWRITE(cage_from_main_r, cage_from_main_ack_w)
 	AM_RANGE(0xa00001, 0xa00001) AM_WRITE(cage_to_main_w)
 	AM_RANGE(0xa00003, 0xa00003) AM_READ(cage_io_status_r)
-	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK("bank11")
+	AM_RANGE(0xc00000, 0xffffff) AM_ROMBANK(11)
 ADDRESS_MAP_END
 
 
@@ -684,44 +647,41 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-MACHINE_CONFIG_FRAGMENT( cage )
+MACHINE_DRIVER_START( cage )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("cage", TMS32031, 33868800)
-	MCFG_TMS3203X_CONFIG(cage_config)
-	MCFG_CPU_PROGRAM_MAP(cage_map)
-
-	MCFG_TIMER_ADD("cage_dma_timer", dma_timer_callback)
-	MCFG_TIMER_ADD("cage_timer0", cage_timer_callback)
-	MCFG_TIMER_ADD("cage_timer1", cage_timer_callback)
+	MDRV_CPU_ADD("cage", TMS32031, 33868800)
+	MDRV_CPU_CONFIG(cage_config)
+	MDRV_CPU_PROGRAM_MAP(cage_map)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
 #if (DAC_BUFFER_CHANNELS == 4)
-	MCFG_SOUND_ADD("dac1", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("dac1", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
-	MCFG_SOUND_ADD("dac2", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ADD("dac2", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 
-	MCFG_SOUND_ADD("dac3", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ADD("dac3", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 
-	MCFG_SOUND_ADD("dac4", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+	MDRV_SOUND_ADD("dac4", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 #else
-	MCFG_SOUND_ADD("dac1", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ADD("dac1", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 
-	MCFG_SOUND_ADD("dac2", DMADAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MDRV_SOUND_ADD("dac2", DMADAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 #endif
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
-MACHINE_CONFIG_DERIVED( cage_seattle, cage )
+MACHINE_DRIVER_START( cage_seattle )
+	MDRV_IMPORT_FROM(cage)
 
-	MCFG_CPU_MODIFY("cage")
-	MCFG_CPU_PROGRAM_MAP(cage_map_seattle)
-MACHINE_CONFIG_END
+	MDRV_CPU_MODIFY("cage")
+	MDRV_CPU_PROGRAM_MAP(cage_map_seattle)
+MACHINE_DRIVER_END

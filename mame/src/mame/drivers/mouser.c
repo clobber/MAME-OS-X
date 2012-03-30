@@ -12,25 +12,31 @@
 
 *******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/ay8910.h"
-#include "includes/mouser.h"
+
+static UINT8 mouser_sound_byte;
+static UINT8 mouser_nmi_enable;
+
+/* From "video/mouser.c" */
+PALETTE_INIT( mouser );
+WRITE8_HANDLER( mouser_flip_screen_x_w );
+WRITE8_HANDLER( mouser_flip_screen_y_w );
+VIDEO_UPDATE( mouser );
 
 /* Mouser has external masking circuitry around
  * the NMI input on the main CPU */
+
 static WRITE8_HANDLER( mouser_nmi_enable_w )
 {
-	mouser_state *state = space->machine().driver_data<mouser_state>();
-	//logerror("nmi_enable %02x\n", data);
-	state->m_nmi_enable = data;
+	mouser_nmi_enable = data;
 }
 
 static INTERRUPT_GEN( mouser_nmi_interrupt )
 {
-	mouser_state *state = device->machine().driver_data<mouser_state>();
-
-	if (BIT(state->m_nmi_enable, 0))
+	if ((mouser_nmi_enable & 1) == 1)
 		nmi_line_pulse(device);
 }
 
@@ -38,40 +44,22 @@ static INTERRUPT_GEN( mouser_nmi_interrupt )
 
 static WRITE8_HANDLER( mouser_sound_interrupt_w )
 {
-	mouser_state *state = space->machine().driver_data<mouser_state>();
-	//logerror("int %02x\n", data);
-	state->m_sound_byte = data;
-	device_set_input_line(state->m_audiocpu, 0, ASSERT_LINE);
+	mouser_sound_byte = data;
+	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( mouser_sound_byte_r )
 {
-	mouser_state *state = space->machine().driver_data<mouser_state>();
-	//logerror("sound r\n");
-	device_set_input_line(state->m_audiocpu, 0, CLEAR_LINE);
-	return state->m_sound_byte;
+	return mouser_sound_byte;
 }
 
-static WRITE8_HANDLER( mouser_sound_nmi_clear_w )
-{
-	mouser_state *state = space->machine().driver_data<mouser_state>();
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
-}
-
-static INTERRUPT_GEN( mouser_sound_nmi_assert )
-{
-	mouser_state *state = device->machine().driver_data<mouser_state>();
-	if (BIT(state->m_nmi_enable, 0))
-		device_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
-}
-
-static ADDRESS_MAP_START( mouser_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mouser_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x6bff) AM_RAM
 	AM_RANGE(0x8800, 0x88ff) AM_WRITENOP /* unknown */
-	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE_MEMBER(mouser_state, m_videoram)
-	AM_RANGE(0x9800, 0x9cff) AM_RAM AM_BASE_SIZE_MEMBER(mouser_state, m_spriteram, m_spriteram_size)
-	AM_RANGE(0x9c00, 0x9fff) AM_RAM AM_BASE_MEMBER(mouser_state, m_colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
+	AM_RANGE(0x9800, 0x9cff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0x9c00, 0x9fff) AM_RAM AM_BASE(&colorram)
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1") AM_WRITE(mouser_nmi_enable_w) /* bit 0 = NMI Enable */
 	AM_RANGE(0xa001, 0xa001) AM_WRITE(mouser_flip_screen_x_w)
 	AM_RANGE(0xa002, 0xa002) AM_WRITE(mouser_flip_screen_y_w)
@@ -81,14 +69,14 @@ static ADDRESS_MAP_START( mouser_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( mouser_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mouser_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 	AM_RANGE(0x3000, 0x3000) AM_READ(mouser_sound_byte_r)
-	AM_RANGE(0x4000, 0x4000) AM_WRITE(mouser_sound_nmi_clear_w)
+	AM_RANGE(0x4000, 0x4000) AM_WRITENOP	/* watchdog? */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mouser_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mouser_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay1", ay8910_data_address_w)
 	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ay2", ay8910_data_address_w)
@@ -187,62 +175,41 @@ static GFXDECODE_START( mouser )
 GFXDECODE_END
 
 
-static MACHINE_START( mouser )
-{
-	mouser_state *state = machine.driver_data<mouser_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_sound_byte));
-	state->save_item(NAME(state->m_nmi_enable));
-}
-
-static MACHINE_RESET( mouser )
-{
-	mouser_state *state = machine.driver_data<mouser_state>();
-
-	state->m_sound_byte = 0;
-	state->m_nmi_enable = 0;
-}
-
-static MACHINE_CONFIG_START( mouser, mouser_state )
+static MACHINE_DRIVER_START( mouser )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(mouser_map)
-	MCFG_CPU_VBLANK_INT("screen", mouser_nmi_interrupt) /* NMI is masked externally */
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(mouser_map)
+	MDRV_CPU_VBLANK_INT("screen", mouser_nmi_interrupt) /* NMI is masked externally */
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)	/* ??? */
-	MCFG_CPU_PROGRAM_MAP(mouser_sound_map)
-	MCFG_CPU_IO_MAP(mouser_sound_io_map)
-	MCFG_CPU_PERIODIC_INT(mouser_sound_nmi_assert, 4*60) /* ??? This controls the sound tempo */
-
-	MCFG_MACHINE_START(mouser)
-	MCFG_MACHINE_RESET(mouser)
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)	/* ??? */
+	MDRV_CPU_PROGRAM_MAP(mouser_sound_map)
+	MDRV_CPU_IO_MAP(mouser_sound_io_map)
+	MDRV_CPU_VBLANK_INT_HACK(nmi_line_pulse,4) /* ??? This controls the sound tempo */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(mouser)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(mouser)
-	MCFG_PALETTE_LENGTH(64)
+	MDRV_GFXDECODE(mouser)
+	MDRV_PALETTE_LENGTH(64)
 
-	MCFG_PALETTE_INIT(mouser)
+	MDRV_PALETTE_INIT(mouser)
+	MDRV_VIDEO_UPDATE(mouser)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 4000000/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("ay1", AY8910, 4000000/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 4000000/2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 4000000/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 ROM_START( mouser )
@@ -298,19 +265,19 @@ static DRIVER_INIT( mouser )
 	/* Decode the opcodes */
 
 	offs_t i;
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	UINT8 *rom = machine.region("maincpu")->base();
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	UINT8 *rom = memory_region(machine, "maincpu");
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x6000);
-	UINT8 *table = machine.region("user1")->base();
+	UINT8 *table = memory_region(machine, "user1");
 
-	space->set_decrypted_region(0x0000, 0x5fff, decrypted);
+	memory_set_decrypted_region(space, 0x0000, 0x5fff, decrypted);
 
-	for (i = 0; i < 0x6000; i++)
+	for (i = 0;i < 0x6000;i++)
 	{
 		decrypted[i] = table[rom[i]];
 	}
 }
 
 
-GAME( 1983, mouser,   0,      mouser, mouser, mouser, ROT90, "UPL", "Mouser", GAME_SUPPORTS_SAVE )
-GAME( 1983, mouserc,  mouser, mouser, mouser, mouser, ROT90, "UPL (Cosmos license)", "Mouser (Cosmos)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mouser,   0,      mouser, mouser, mouser, ROT90, "UPL", "Mouser", 0 )
+GAME( 1983, mouserc,  mouser, mouser, mouser, mouser, ROT90, "[UPL] (Cosmos license)", "Mouser (Cosmos)", 0 )

@@ -4,10 +4,15 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/kangaroo.h"
+#include "driver.h"
+#include "kangaroo.h"
 
-static void blitter_execute(running_machine &machine);
+
+UINT8 *kangaroo_video_control;
+
+
+static void blitter_execute(running_machine *machine);
+
 
 
 /*************************************
@@ -18,11 +23,9 @@ static void blitter_execute(running_machine &machine);
 
 VIDEO_START( kangaroo )
 {
-	kangaroo_state *state = machine.driver_data<kangaroo_state>();
-
 	/* video RAM is accessed 32 bits at a time (two planes, 4bpp each, 4 pixels) */
-	state->m_videoram = auto_alloc_array(machine, UINT32, 256 * 64);
-	state->save_pointer(NAME(state->m_videoram), 256 * 64);
+	videoram32 = auto_alloc_array(machine, UINT32, 256 * 64);
+	state_save_register_global_pointer(machine, videoram32, 256 * 64);
 }
 
 
@@ -33,9 +36,8 @@ VIDEO_START( kangaroo )
  *
  *************************************/
 
-static void videoram_write( running_machine &machine, UINT16 offset, UINT8 data, UINT8 mask )
+static void videoram_write(UINT16 offset, UINT8 data, UINT8 mask)
 {
-	kangaroo_state *state = machine.driver_data<kangaroo_state>();
 	UINT32 expdata, layermask;
 
 	/* data contains 4 2-bit values packed as DCBADCBA; expand these into 4 8-bit values */
@@ -57,14 +59,13 @@ static void videoram_write( running_machine &machine, UINT16 offset, UINT8 data,
 	if (mask & 0x01) layermask |= 0x0c0c0c0c;
 
 	/* update layers */
-	state->m_videoram[offset] = (state->m_videoram[offset] & ~layermask) | (expdata & layermask);
+	videoram32[offset] = (videoram32[offset] & ~layermask) | (expdata & layermask);
 }
 
 
 WRITE8_HANDLER( kangaroo_videoram_w )
 {
-	kangaroo_state *state = space->machine().driver_data<kangaroo_state>();
-	videoram_write(space->machine(), offset, data, state->m_video_control[8]);
+	videoram_write(offset, data, kangaroo_video_control[8]);
 }
 
 
@@ -77,17 +78,16 @@ WRITE8_HANDLER( kangaroo_videoram_w )
 
 WRITE8_HANDLER( kangaroo_video_control_w )
 {
-	kangaroo_state *state = space->machine().driver_data<kangaroo_state>();
-	state->m_video_control[offset] = data;
+	kangaroo_video_control[offset] = data;
 
 	switch (offset)
 	{
 		case 5:	/* blitter start */
-			blitter_execute(space->machine());
+			blitter_execute(space->machine);
 			break;
 
 		case 8:	/* bank select */
-			memory_set_bank(space->machine(), "bank1", (data & 0x05) ? 0 : 1);
+			memory_set_bank(space->machine, 1, (data & 0x05) ? 0 : 1);
 			break;
 	}
 }
@@ -100,16 +100,15 @@ WRITE8_HANDLER( kangaroo_video_control_w )
  *
  *************************************/
 
-static void blitter_execute( running_machine &machine )
+static void blitter_execute(running_machine *machine)
 {
-	kangaroo_state *state = machine.driver_data<kangaroo_state>();
-	UINT32 gfxhalfsize = machine.region("gfx1")->bytes() / 2;
-	const UINT8 *gfxbase = machine.region("gfx1")->base();
-	UINT16 src = state->m_video_control[0] + 256 * state->m_video_control[1];
-	UINT16 dst = state->m_video_control[2] + 256 * state->m_video_control[3];
-	UINT8 height = state->m_video_control[5];
-	UINT8 width = state->m_video_control[4];
-	UINT8 mask = state->m_video_control[8];
+	UINT32 gfxhalfsize = memory_region_length(machine, "gfx1") / 2;
+	const UINT8 *gfxbase = memory_region(machine, "gfx1");
+	UINT16 src = kangaroo_video_control[0] + 256 * kangaroo_video_control[1];
+	UINT16 dst = kangaroo_video_control[2] + 256 * kangaroo_video_control[3];
+	UINT8 height = kangaroo_video_control[5];
+	UINT8 width = kangaroo_video_control[4];
+	UINT8 mask = kangaroo_video_control[8];
 	int x, y;
 
 	/* during DMA operations, the top 2 bits are ORed together, as well as the bottom 2 bits */
@@ -123,8 +122,8 @@ static void blitter_execute( running_machine &machine )
 		{
 			UINT16 effdst = (dst + x) & 0x3fff;
 			UINT16 effsrc = src++ & (gfxhalfsize - 1);
-			videoram_write(machine, effdst, gfxbase[0 * gfxhalfsize + effsrc], mask & 0x05);
-			videoram_write(machine, effdst, gfxbase[1 * gfxhalfsize + effsrc], mask & 0x0a);
+			videoram_write(effdst, gfxbase[0*gfxhalfsize + effsrc], mask & 0x05);
+			videoram_write(effdst, gfxbase[1*gfxhalfsize + effsrc], mask & 0x0a);
 		}
 }
 
@@ -136,19 +135,18 @@ static void blitter_execute( running_machine &machine )
  *
  *************************************/
 
-SCREEN_UPDATE_RGB32( kangaroo )
+VIDEO_UPDATE( kangaroo )
 {
-	kangaroo_state *state = screen.machine().driver_data<kangaroo_state>();
-	UINT8 scrolly = state->m_video_control[6];
-	UINT8 scrollx = state->m_video_control[7];
-	UINT8 maska = (state->m_video_control[10] & 0x28) >> 3;
-	UINT8 maskb = (state->m_video_control[10] & 0x07) >> 0;
-	UINT8 xora = (state->m_video_control[9] & 0x20) ? 0xff : 0x00;
-	UINT8 xorb = (state->m_video_control[9] & 0x10) ? 0xff : 0x00;
-	UINT8 enaa = (state->m_video_control[9] & 0x08);
-	UINT8 enab = (state->m_video_control[9] & 0x04);
-	UINT8 pria = (~state->m_video_control[9] & 0x02);
-	UINT8 prib = (~state->m_video_control[9] & 0x01);
+	UINT8 scrolly = kangaroo_video_control[6];
+	UINT8 scrollx = kangaroo_video_control[7];
+	UINT8 maska = (kangaroo_video_control[10] & 0x28) >> 3;
+	UINT8 maskb = (kangaroo_video_control[10] & 0x07) >> 0;
+	UINT8 xora = (kangaroo_video_control[9] & 0x20) ? 0xff : 0x00;
+	UINT8 xorb = (kangaroo_video_control[9] & 0x10) ? 0xff : 0x00;
+	UINT8 enaa = (kangaroo_video_control[9] & 0x08);
+	UINT8 enab = (kangaroo_video_control[9] & 0x04);
+	UINT8 pria = (~kangaroo_video_control[9] & 0x02);
+	UINT8 prib = (~kangaroo_video_control[9] & 0x01);
 	rgb_t pens[8];
 	int x, y;
 
@@ -157,18 +155,18 @@ SCREEN_UPDATE_RGB32( kangaroo )
 		pens[x] = MAKE_RGB(pal1bit(x >> 2), pal1bit(x >> 1), pal1bit(x >> 0));
 
 	/* iterate over pixels */
-	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
+	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 	{
-		UINT32 *dest = &bitmap.pix32(y);
+		UINT32 *dest = BITMAP_ADDR32(bitmap, y, 0);
 
-		for (x = cliprect.min_x; x <= cliprect.max_x; x += 2)
+		for (x = cliprect->min_x; x <= cliprect->max_x; x += 2)
 		{
 			UINT8 effxa = scrollx + ((x / 2) ^ xora);
 			UINT8 effya = scrolly + (y ^ xora);
 			UINT8 effxb = (x / 2) ^ xorb;
 			UINT8 effyb = y ^ xorb;
-			UINT8 pixa = (state->m_videoram[effya + 256 * (effxa / 4)] >> (8 * (effxa % 4) + 0)) & 0x0f;
-			UINT8 pixb = (state->m_videoram[effyb + 256 * (effxb / 4)] >> (8 * (effxb % 4) + 4)) & 0x0f;
+			UINT8 pixa = (videoram32[effya + 256 * (effxa / 4)] >> (8 * (effxa % 4) + 0)) & 0x0f;
+			UINT8 pixb = (videoram32[effyb + 256 * (effxb / 4)] >> (8 * (effxb % 4) + 4)) & 0x0f;
 			UINT8 finalpens;
 
 			/* for each layer, contribute bits if (a) enabled, and (b) either has priority or the opposite plane is 0 */

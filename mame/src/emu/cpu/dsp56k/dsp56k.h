@@ -12,8 +12,50 @@
 #ifndef __DSP56K_H__
 #define __DSP56K_H__
 
-#include "emu.h"
+#include "cpuintrf.h"
 
+/***************************************************************************
+    REGISTER ENUMERATION
+***************************************************************************/
+enum
+{
+	// PCU
+	DSP56K_PC=1,
+	DSP56K_SR,
+	DSP56K_LC,
+	DSP56K_LA,
+	DSP56K_SP,
+	DSP56K_OMR,
+
+	// ALU
+	DSP56K_X, DSP56K_Y,
+	DSP56K_A, DSP56K_B,
+
+	// AGU
+	DSP56K_R0,DSP56K_R1,DSP56K_R2,DSP56K_R3,
+	DSP56K_N0,DSP56K_N1,DSP56K_N2,DSP56K_N3,
+	DSP56K_M0,DSP56K_M1,DSP56K_M2,DSP56K_M3,
+	DSP56K_TEMP,
+	DSP56K_STATUS,
+
+	// CPU STACK
+	DSP56K_ST0,
+	DSP56K_ST1,
+	DSP56K_ST2,
+	DSP56K_ST3,
+	DSP56K_ST4,
+	DSP56K_ST5,
+	DSP56K_ST6,
+	DSP56K_ST7,
+	DSP56K_ST8,
+	DSP56K_ST9,
+	DSP56K_ST10,
+	DSP56K_ST11,
+	DSP56K_ST12,
+	DSP56K_ST13,
+	DSP56K_ST14,
+	DSP56K_ST15
+};
 
 // IRQ Lines
 // MODA and MODB are also known as IRQA and IRQB
@@ -23,7 +65,8 @@
 #define DSP56K_IRQ_RESET 3	/* Is this needed? */
 
 // Needed for MAME
-DECLARE_LEGACY_CPU_DEVICE(DSP56156, dsp56k);
+extern CPU_GET_INFO( dsp56k );
+#define CPU_DSP56156 CPU_GET_INFO_NAME( dsp56k )
 
 
 /***************************************************************************
@@ -190,30 +233,18 @@ typedef struct
 	UINT32			op;
 	int				interrupt_cycles;
 	void			(*output_pins_changed)(UINT32 pins);
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
-	address_space *data;
-
-	UINT16 peripheral_ram[0x40];
-	UINT16 program_ram[0x800];
+	const device_config *device;
+	const address_space *program;
+	const address_space *data;
 } dsp56k_core;
-
-
-INLINE dsp56k_core *get_safe_token(device_t *device)
-{
-	assert(device != NULL);
-	assert(device->type() == DSP56156);
-	return (dsp56k_core *)downcast<legacy_cpu_device *>(device)->token();
-}
 
 
 /***************************************************************************
     PUBLIC FUNCTIONS - ACCESSIBLE TO DRIVERS
 ***************************************************************************/
-void  dsp56k_host_interface_write(device_t* device, UINT8 offset, UINT8 data);
-UINT8 dsp56k_host_interface_read(device_t* device, UINT8 offset);
+void  dsp56k_host_interface_write(const device_config* device, UINT8 offset, UINT8 data);
+UINT8 dsp56k_host_interface_read(const device_config* device, UINT8 offset);
 
-UINT16 dsp56k_get_peripheral_memory(device_t* device, UINT16 addr);
+UINT16 dsp56k_get_peripheral_memory(const device_config* device, UINT16 addr);
 
 #endif /* __DSP56K_H__ */

@@ -1,42 +1,10 @@
-class nbmj8688_state : public driver_device
-{
-public:
-	nbmj8688_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_mjsikaku_scrolly;
-	int m_blitter_destx;
-	int m_blitter_desty;
-	int m_blitter_sizex;
-	int m_blitter_sizey;
-	int m_blitter_direction_x;
-	int m_blitter_direction_y;
-	int m_blitter_src_addr;
-	int m_mjsikaku_gfxrom;
-	int m_mjsikaku_dispflag;
-	int m_mjsikaku_gfxflag2;
-	int m_mjsikaku_gfxflag3;
-	int m_mjsikaku_flipscreen;
-	int m_mjsikaku_screen_refresh;
-	int m_mjsikaku_gfxmode;
-	bitmap_ind16 *m_mjsikaku_tmpbitmap;
-	UINT16 *m_mjsikaku_videoram;
-	UINT8 *m_clut;
-	UINT8 *m_HD61830B_ram[2];
-	int m_HD61830B_instr[2];
-	int m_HD61830B_addr[2];
-	int m_mjsikaku_flipscreen_old;
-};
-
-
 /*----------- defined in video/nbmj8688.c -----------*/
 
 PALETTE_INIT( mbmj8688_8bit );
 PALETTE_INIT( mbmj8688_12bit );
 PALETTE_INIT( mbmj8688_16bit );
-SCREEN_UPDATE_IND16( mbmj8688 );
-SCREEN_UPDATE_IND16( mbmj8688_lcd0 );
-SCREEN_UPDATE_IND16( mbmj8688_lcd1 );
+VIDEO_UPDATE( mbmj8688 );
+VIDEO_UPDATE( mbmj8688_LCD );
 VIDEO_START( mbmj8688_8bit );
 VIDEO_START( mbmj8688_hybrid_12bit );
 VIDEO_START( mbmj8688_pure_12bit );

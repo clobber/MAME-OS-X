@@ -55,127 +55,85 @@ KISEKAE -- info
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/st0016.h"
-#include "includes/st0016.h"
+#include "st0016.h"
 
 
-class macs_state : public driver_device
-{
-public:
-	macs_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
 
-	UINT8 m_mux_data;
-	UINT8 m_rev;
-	UINT8 *m_ram1;
-	UINT8 *m_ram2;
-};
-
+static UINT8 macs_mux_data;
 
 static MACHINE_RESET(macs);
 
 
-static ADDRESS_MAP_START( macs_mem, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x7fff) AM_ROMBANK("bank4")
-	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+static ADDRESS_MAP_START( macs_mem, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK(1)
 	AM_RANGE(0xc000, 0xcfff) AM_READ(st0016_sprite_ram_r) AM_WRITE(st0016_sprite_ram_w)
 	AM_RANGE(0xd000, 0xdfff) AM_READ(st0016_sprite2_ram_r) AM_WRITE(st0016_sprite2_ram_w)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM /* work ram ? */
-	AM_RANGE(0xe800, 0xe87f) AM_RAM AM_BASE_MEMBER(macs_state, m_ram2)
-	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("stsnd", st0016_snd_r, st0016_snd_w)
+	AM_RANGE(0xe800, 0xe87f) AM_RAM AM_BASE(&macs_ram2)
+	AM_RANGE(0xe900, 0xe9ff) AM_DEVREADWRITE("st", st0016_snd_r, st0016_snd_w)
 	AM_RANGE(0xea00, 0xebff) AM_READ(st0016_palette_ram_r) AM_WRITE(st0016_palette_ram_w)
 	AM_RANGE(0xec00, 0xec1f) AM_READ(st0016_character_ram_r) AM_WRITE(st0016_character_ram_w)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAMBANK("bank3") /* common /backup ram ?*/
-	AM_RANGE(0xf800, 0xffff) AM_RAMBANK("bank2") /* common /backup ram ?*/
+	AM_RANGE(0xf000, 0xf7ff) AM_RAMBANK(3) /* common /backup ram ?*/
+	AM_RANGE(0xf800, 0xffff) AM_RAMBANK(2) /* common /backup ram ?*/
 ADDRESS_MAP_END
 
 static WRITE8_HANDLER(rambank_w)
 {
-	macs_state *state = space->machine().driver_data<macs_state>();
-	memory_set_bankptr(space->machine(),  "bank3", &state->m_ram1[0x10000+(data&1)*0x800] );
+	memory_set_bankptr(space->machine,  3, &macs_ram1[0x10000+(data&1)*0x800] );
 }
 
 static READ8_HANDLER( macs_input_r )
 {
-	macs_state *state = space->machine().driver_data<macs_state>();
 	switch(offset)
 	{
 		case 0:
 		{
 			/*It's bit-wise*/
-			switch(state->m_mux_data&0x0f)
+			switch(macs_mux_data&0x0f)
 			{
-				case 0x00: return input_port_read(space->machine(), "IN0");
-				case 0x01: return input_port_read(space->machine(), "IN1");
-				case 0x02: return input_port_read(space->machine(), "IN2");
-				case 0x04: return input_port_read(space->machine(), "IN3");
-				case 0x08: return input_port_read(space->machine(), "IN4");
+				case 0x00: return input_port_read(space->machine, "IN0");
+				case 0x01: return input_port_read(space->machine, "IN1");
+				case 0x02: return input_port_read(space->machine, "IN2");
+				case 0x04: return input_port_read(space->machine, "IN3");
+				case 0x08: return input_port_read(space->machine, "IN4");
 				default:
-				logerror("Unmapped mahjong panel mux data %02x\n",state->m_mux_data);
+				logerror("Unmapped mahjong panel mux data %02x\n",macs_mux_data);
 				return 0xff;
 			}
 		}
-		case 1: return input_port_read(space->machine(), "SYS0");
-		case 2: return input_port_read(space->machine(), "DSW0");
-		case 3: return input_port_read(space->machine(), "DSW1");
-		case 4: return input_port_read(space->machine(), "DSW2");
-		case 5: return input_port_read(space->machine(), "DSW3");
-		case 6: return input_port_read(space->machine(), "DSW4");
-		case 7: return input_port_read(space->machine(), "SYS1");
-		default:	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(&space->device()),offset+0xc0);
+		case 1: return input_port_read(space->machine, "SYS0");
+		case 2: return input_port_read(space->machine, "DSW0");
+		case 3: return input_port_read(space->machine, "DSW1");
+		case 4: return input_port_read(space->machine, "DSW2");
+		case 5: return input_port_read(space->machine, "DSW3");
+		case 6: return input_port_read(space->machine, "DSW4");
+		case 7: return input_port_read(space->machine, "SYS1");
+		default: 	popmessage("Unmapped I/O read at PC = %06x offset = %02x",cpu_get_pc(space->cpu),offset+0xc0);
 	}
 
 	return 0xff;
 }
 
-
-static WRITE8_HANDLER( macs_rom_bank_w )
-{
-	memory_set_bankptr(space->machine(),  "bank1", space->machine().region("maincpu")->base() + (data* 0x4000) + 0x10000 + macs_cart_slot*0x400000 );
-
-	st0016_rom_bank=data;
-}
-
 static WRITE8_HANDLER( macs_output_w )
 {
-	macs_state *state = space->machine().driver_data<macs_state>();
-	UINT8 *ROM = space->machine().region("maincpu")->base();
-
 	switch(offset)
 	{
-		case 0:
-		/*
-        --x- ---- sets RAM bank?
-        ---- -x-- Cassette B slot
-        ---- --x- Cassette A slot
-        */
-
-		if(state->m_rev == 1)
-		{
-			/* FIXME: dunno if this RAM bank is right, DASM tracking made on the POST screens indicates that there's just one RAM bank,
-                      but then MACS2 games locks up. */
-			memory_set_bankptr(space->machine(),  "bank3", &state->m_ram1[((data&0x20)>>5)*0x1000+0x000] );
-
-			macs_cart_slot = (data & 0xc) >> 2;
-
-			memory_set_bankptr(space->machine(),  "bank4", &ROM[macs_cart_slot*0x400000+0x10000] );
-		}
-
-		memory_set_bankptr(space->machine(),  "bank2", &state->m_ram1[((data&0x20)>>5)*0x1000+0x800] );
-		break;
-		case 2: state->m_mux_data = data; break;
+		case 0: memory_set_bankptr(space->machine,  2, &macs_ram1[((data&0x20)>>5)*0x1000+0x800] );break;
+		case 2: macs_mux_data = data; break;
 
 	}
 }
 
-static ADDRESS_MAP_START( macs_io, AS_IO, 8 )
+static ADDRESS_MAP_START( macs_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0xbf) AM_READ(st0016_vregs_r) AM_WRITE(st0016_vregs_w) /* video/crt regs ? */
 	AM_RANGE(0xc0, 0xc7) AM_READWRITE(macs_input_r,macs_output_w)
 	AM_RANGE(0xe0, 0xe0) AM_WRITENOP /* renju = $40, neratte = 0 */
-	AM_RANGE(0xe1, 0xe1) AM_WRITE(macs_rom_bank_w)
+	AM_RANGE(0xe1, 0xe1) AM_WRITE(st0016_rom_bank_w)
 	AM_RANGE(0xe2, 0xe2) AM_WRITE(st0016_sprite_bank_w)
 	AM_RANGE(0xe3, 0xe4) AM_WRITE(st0016_character_bank_w)
 	AM_RANGE(0xe5, 0xe5) AM_WRITE(st0016_palette_bank_w)
@@ -194,25 +152,25 @@ static INPUT_PORTS_START( macs_base )
 	PORT_DIPNAME( 0x01, 0x01, "DSW0 - BIT 1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DSW0 - BIT 2" )
+	PORT_DIPNAME( 0x02, 0x02, "BIT 2" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "DSW0 - BIT 4" )
+	PORT_DIPNAME( 0x04, 0x04, "BIT 4" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DSW0 - BIT 8" )
+	PORT_DIPNAME( 0x08, 0x08, "BIT 8" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "DSW0 - BIT 10" )
+	PORT_DIPNAME( 0x10, 0x10, "BIT 10" )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "DSW0 - BIT 20" )
+	PORT_DIPNAME( 0x20, 0x20, "BIT 20" )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "DSW0 - BIT 40" )
+	PORT_DIPNAME( 0x40, 0x40, "BIT 40" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "DSW0 - BIT 80" )
+	PORT_DIPNAME( 0x80, 0x80, "BIT 80" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -221,52 +179,52 @@ static INPUT_PORTS_START( macs_base )
 	PORT_DIPNAME( 0x01, 0x01, "DSW1 - BIT 1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DSW1 - BIT 2" )
+	PORT_DIPNAME( 0x02, 0x02, "BIT 2" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "DSW1 - BIT 4" )
+	PORT_DIPNAME( 0x04, 0x04, "BIT 4" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DSW1 - BIT 8" )
+	PORT_DIPNAME( 0x08, 0x08, "BIT 8" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "DSW1 - BIT 10" )
+	PORT_DIPNAME( 0x10, 0x10, "BIT 10" )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "DSW1 - BIT 20" )
+	PORT_DIPNAME( 0x20, 0x20, "BIT 20" )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "DSW1 - BIT 40" )
+	PORT_DIPNAME( 0x40, 0x40, "BIT 40" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "DSW1 - BIT 80" )
+	PORT_DIPNAME( 0x80, 0x80, "BIT 80" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	/*2*/
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x01, 0x01, "DSW2 - BIT 1" )
+	PORT_DIPNAME( 0x01, 0x01, "DSW 2 - BIT 1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DSW2 - BIT 2" )
+	PORT_DIPNAME( 0x02, 0x02, "BIT 2" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "DSW2 - BIT 4" )
+	PORT_DIPNAME( 0x04, 0x04, "BIT 4" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DSW2 - BIT 8" )
+	PORT_DIPNAME( 0x08, 0x08, "BIT 8" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "DSW2 - BIT 10" )
+	PORT_DIPNAME( 0x10, 0x10, "BIT 10" )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "DSW2 - BIT 20" )
+	PORT_DIPNAME( 0x20, 0x20, "BIT 20" )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "DSW2 - BIT 40" )
+	PORT_DIPNAME( 0x40, 0x40, "BIT 40" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "DSW2 - BIT 80" )
+	PORT_DIPNAME( 0x80, 0x80, "BIT 80" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -275,7 +233,7 @@ static INPUT_PORTS_START( macs_base )
 	PORT_DIPNAME( 0x01, 0x01, "DSW3 - BIT 1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DSW3 - BIT 2" )
+	PORT_DIPNAME( 0x02, 0x02, "BIT 2" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Demo_Sounds ) )
@@ -302,25 +260,25 @@ static INPUT_PORTS_START( macs_base )
 	PORT_DIPNAME( 0x01, 0x01, "DSW4 - BIT 1" )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, "DSW4 - BIT 2" )
+	PORT_DIPNAME( 0x02, 0x02, "BIT 2" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "DSW4 - BIT 4" )
+	PORT_DIPNAME( 0x04, 0x04, "BIT 4" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "DSW4 - BIT 8" )
+	PORT_DIPNAME( 0x08, 0x08, "BIT 8" )
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "DSW4 - BIT 10" )
+	PORT_DIPNAME( 0x10, 0x10, "BIT 10" )
 	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "DSW4 - BIT 20" )
+	PORT_DIPNAME( 0x20, 0x20, "BIT 20" )
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "DSW4 - BIT 40" )
+	PORT_DIPNAME( 0x40, 0x40, "BIT 40" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "DSW4 - BIT 80" )
+	PORT_DIPNAME( 0x80, 0x00, "BIT 80" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -334,12 +292,12 @@ static INPUT_PORTS_START( macs_base )
 	PORT_START("SYS1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Clear Coin Counter") PORT_CODE(KEYCODE_1_PAD)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Memory Reset Key") PORT_CODE(KEYCODE_2_PAD)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Analyzer Key") PORT_CODE(KEYCODE_3_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Memory Reset") PORT_CODE(KEYCODE_2_PAD)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Analyzer") PORT_CODE(KEYCODE_3_PAD)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( macs_m )
+static INPUT_PORTS_START( macs_m)
 	PORT_INCLUDE( macs_base )
 
 	/*MAHJONG PANEL*/
@@ -386,35 +344,7 @@ static INPUT_PORTS_START( macs_m )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( kisekaem )
-	PORT_INCLUDE( macs_m )
-
-	PORT_MODIFY("SYS1")
-	PORT_DIPNAME( 0x01, 0x01, "SYS1 - BIT 1" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_DIPNAME( 0x04, 0x04, "SYS1 - BIT 4" )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, "SYS1 - BIT 8" )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "SYS1 - BIT 10" )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "SYS1 - BIT 20" )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "SYS1 - BIT 40" )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x00, "SYS1 - BIT 80" )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( macs_h )
+static INPUT_PORTS_START( macs_h)
 	PORT_INCLUDE( macs_base )
 
 	/*HANAFUDA PANEL*/
@@ -468,36 +398,37 @@ static const st0016_interface st0016_config =
 	&st0016_charram
 };
 
-static MACHINE_CONFIG_START( macs, macs_state )
+static MACHINE_DRIVER_START( macs )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(macs_mem)
-	MCFG_CPU_IO_MAP(macs_io)
+	MDRV_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(macs_mem)
+	MDRV_CPU_IO_MAP(macs_io)
 
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_RESET(macs)
+	MDRV_MACHINE_RESET(macs)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(128*8, 128*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 128*8-1, 0*8, 128*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(st0016)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(128*8, 128*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 128*8-1, 0*8, 128*8-1)
 
-	MCFG_GFXDECODE(macs)
-	MCFG_PALETTE_LENGTH(16*16*4+1)
+	MDRV_GFXDECODE(macs)
+	MDRV_PALETTE_LENGTH(16*16*4+1)
 
-	MCFG_VIDEO_START(st0016)
+	MDRV_VIDEO_START(st0016)
+	MDRV_VIDEO_UPDATE(st0016)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("stsnd", ST0016, 0)
-	MCFG_SOUND_CONFIG(st0016_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("st", ST0016, 0)
+	MDRV_SOUND_CONFIG(st0016_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -544,9 +475,8 @@ ROM_START( kisekaem )
 	ROM_REGION( 0x400000, "user3", ROMREGION_ERASEFF ) // Slot B
 
 	ROM_REGION( 0x1000000, "maincpu", 0 )
-	ROM_COPY( "user1",   0x00000, 0x010000, 0x400000 )
-	ROM_COPY( "user1",   0x00000, 0x000000, 0x008000 )
-	ROM_COPY( "user2",   0x00000, 0x410000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x010000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x000000, 0x0008000 )
 ROM_END
 
 ROM_START( kisekaeh )
@@ -562,22 +492,21 @@ ROM_START( kisekaeh )
 	ROM_REGION( 0x400000, "user3", ROMREGION_ERASEFF ) // Slot B
 
 	ROM_REGION( 0x1000000, "maincpu", 0 )
-	ROM_COPY( "user1",   0x00000, 0x010000, 0x400000 )
-	ROM_COPY( "user1",   0x00000, 0x000000, 0x008000 )
-	ROM_COPY( "user2",   0x00000, 0x410000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x010000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x000000, 0x0008000 )
 ROM_END
 
 ROM_START( cultname ) // uses printer - two different games ? (slot a - checks for printer, slot b - not)
 	MACS_BIOS
 
-	ROM_REGION( 0x400000, "user2", 0 ) // Slot A
+	ROM_REGION( 0x400000, "user3", 0 ) // Slot A
 	ROM_LOAD16_BYTE( "cult-d0.u8", 0x000000, 0x100000, CRC(394bc1a6) SHA1(98df5406862234815b46c7b0ac0b19e4b597d1b6) )
 	ROM_LOAD16_BYTE( "cult-d1.u7", 0x000001, 0x100000, CRC(f628133b) SHA1(f06e20212074e5d95cc7d419ac8ce98fb9be3b62) )
 	ROM_LOAD16_BYTE( "cult-d2.u6", 0x200000, 0x100000, CRC(c5521bc6) SHA1(7554b56b0201b7d81754defa2244fb7ff7452bf6) )
 	ROM_LOAD16_BYTE( "cult-d3.u5", 0x200001, 0x100000, CRC(4325b09b) SHA1(45699a0444a221f893724754c917d33041cabcb9) )
 
 
-	ROM_REGION( 0x400000, "user3", 0 ) // Slot B
+	ROM_REGION( 0x400000, "user2", 0 ) // Slot B
 	ROM_LOAD16_BYTE( "cult-g0.u8", 0x000000, 0x100000, CRC(f5ab977b) SHA1(e7ee758cc2864500b339e236b944f98df9a1c10e) )
 	ROM_LOAD16_BYTE( "cult-g1.u7", 0x000001, 0x100000, CRC(32ae15a4) SHA1(061992efec1ed5527f200bf4c111344b156e759d) )
 	ROM_LOAD16_BYTE( "cult-g2.u6", 0x200000, 0x100000, CRC(30ed056d) SHA1(71735339bb501b94402ef403b5a2a60effa39c36) )
@@ -585,10 +514,8 @@ ROM_START( cultname ) // uses printer - two different games ? (slot a - checks f
 
 
 	ROM_REGION( 0x1000000, "maincpu", 0 )
-	ROM_COPY( "user1",   0x00000, 0x010000, 0x400000 )
-	ROM_COPY( "user1",   0x00000, 0x000000, 0x008000 )
-	ROM_COPY( "user2",   0x00000, 0x410000, 0x400000 )
-	ROM_COPY( "user3",   0x00000, 0x810000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x010000, 0x400000 )
+	ROM_COPY( "user2",   0x00000, 0x000000, 0x0008000 )
 ROM_END
 
 /* these are listed as MACS2 sub-boards, is it the same?  - it's not ;) */
@@ -642,10 +569,6 @@ static const UINT8 ramdata[160]=
 
 static MACHINE_RESET(macs)
 {
-	macs_state *state = machine.driver_data<macs_state>();
-	UINT8 *macs_ram1 = state->m_ram1;
-	#if 0
-	UINT8 *macs_ram2 = state->m_ram2;
 /*
         BIOS ram init:
 
@@ -674,13 +597,13 @@ static MACHINE_RESET(macs)
         730E: ED B0         ldir
         ...
 */
-		memcpy(macs_ram1 + 0x0e9f, machine.region("user1")->base()+0x7327, 0xc7);
-		memcpy(macs_ram1 + 0x1e9f, machine.region("user1")->base()+0x7327, 0xc7);
+		memcpy(macs_ram1 + 0x0e9f, memory_region(machine, "user1")+0x7327, 0xc7);
+		memcpy(macs_ram1 + 0x1e9f, memory_region(machine, "user1")+0x7327, 0xc7);
 
-		memcpy(macs_ram1 + 0x0800, machine.region("user1")->base()+0x73fa, 0x507);
-		memcpy(macs_ram1 + 0x1800, machine.region("user1")->base()+0x73fa, 0x507);
+		memcpy(macs_ram1 + 0x0800, memory_region(machine, "user1")+0x73fa, 0x507);
+		memcpy(macs_ram1 + 0x1800, memory_region(machine, "user1")+0x73fa, 0x507);
 
-#define MAKEJMP(n,m)	macs_ram2[(n) - 0xe800 + 0]=0xc3;\
+#define MAKEJMP(n,m) 	macs_ram2[(n) - 0xe800 + 0]=0xc3;\
 						macs_ram2[(n) - 0xe800 + 1]=(m)&0xff;\
 						macs_ram2[(n) - 0xe800 + 2]=((m)>>8)&0xff;
 
@@ -712,52 +635,36 @@ static MACHINE_RESET(macs)
 
 		macs_ram1[0x0ff9]=0x07;
 		macs_ram1[0x1ff9]=0x07;
-		#endif
 
-		memory_set_bankptr(machine,  "bank1", machine.region("maincpu")->base() + 0x10000 );
-		memory_set_bankptr(machine,  "bank2", macs_ram1+0x800);
-		memory_set_bankptr(machine,  "bank3", macs_ram1+0x10000);
-		memory_set_bankptr(machine,  "bank4", machine.region("maincpu")->base() );
+		memory_set_bankptr(machine,  1, memory_region(machine, "maincpu") + 0x10000 );
+		memory_set_bankptr(machine,  2, macs_ram1+0x800);
+		memory_set_bankptr(machine,  3, macs_ram1+0x10000);
 }
 
 static DRIVER_INIT(macs)
 {
-	macs_state *state = machine.driver_data<macs_state>();
-	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=10|0x80;
-	state->m_rev = 1;
-}
-
-static DRIVER_INIT(macs2)
-{
-	macs_state *state = machine.driver_data<macs_state>();
-	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
-	st0016_game=10|0x80;
-	state->m_rev = 2;
 }
 
 static DRIVER_INIT(kisekaeh)
 {
-	macs_state *state = machine.driver_data<macs_state>();
-	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=11|0x180;
-	state->m_rev = 1;
 }
 
 static DRIVER_INIT(kisekaem)
 {
-	macs_state *state = machine.driver_data<macs_state>();
-	state->m_ram1=auto_alloc_array(machine, UINT8, 0x20000);
+	macs_ram1=auto_alloc_array(machine, UINT8, 0x20000);
 	st0016_game=10|0x180;
-	state->m_rev = 1;
 }
 
 
 GAME( 1995, macsbios, 0,        macs, macs_m, macs,     ROT0, "I'Max", "Multi Amenity Cassette System BIOS", GAME_IS_BIOS_ROOT | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
-GAME( 1995, mac2bios, 0,        macs, macs_m, macs2,     ROT0, "I'Max", "Multi Amenity Cassette System 2 BIOS", GAME_IS_BIOS_ROOT | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
+GAME( 1995, mac2bios, 0,        macs, macs_m, macs,     ROT0, "I'Max", "Multi Amenity Cassette System 2 BIOS", GAME_IS_BIOS_ROOT | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING )
 
-GAME( 1995, kisekaem, macsbios, macs, kisekaem, kisekaem,   ROT0, "I'Max", "Kisekae Mahjong",  GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )
-GAME( 1995, kisekaeh, macsbios, macs, macs_h,   kisekaeh,   ROT0, "I'Max", "Kisekae Hanafuda",  GAME_NOT_WORKING |GAME_IMPERFECT_SOUND)
-GAME( 1996, cultname, macsbios, macs, macs_m,   macs,       ROT0, "I'Max", "Seimei-Kantei-Meimei-Ki Cult Name",  GAME_NOT_WORKING |GAME_IMPERFECT_SOUND)
-GAME( 1999, yuka,     macsbios, macs, macs_h,   macs2,      ROT0, "Yubis / T.System", "Yu-Ka",  0 )
-GAME( 1999, yujan,    macsbios, macs, macs_m,   macs2,      ROT0, "Yubis / T.System", "Yu-Jan",  0 )
+GAME( 1995, kisekaem, macsbios, macs, macs_m, kisekaem, ROT0, "I'Max", "Kisekae Mahjong",  GAME_NOT_WORKING|GAME_IMPERFECT_SOUND )
+GAME( 1995, kisekaeh, macsbios, macs, macs_h, kisekaeh, ROT0, "I'Max", "Kisekae Hanafuda",  GAME_NOT_WORKING |GAME_IMPERFECT_SOUND)
+GAME( 1996, cultname, macsbios, macs, macs_m, macs,     ROT0, "I'Max", "Seimei-Kantei-Meimei-Ki Cult Name",  GAME_NOT_WORKING |GAME_IMPERFECT_SOUND)
+GAME( 1999, yuka,     macsbios, macs, macs_h, macs,     ROT0, "Yubis / T.System", "Yu-Ka",  0 )
+GAME( 1999, yujan,    macsbios, macs, macs_m, macs,     ROT0, "Yubis / T.System", "Yu-Jan",  0 )

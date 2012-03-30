@@ -8,106 +8,109 @@
     Todo:
         Calculate the timeout from parameters.
 
+
+    2009-06 Converted to be a device
+
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "mb3773.h"
 
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-// device type definition
-const device_type MB3773 = &device_creator<mb3773_device>;
-
-//-------------------------------------------------
-//  mb3773_device - constructor
-//-------------------------------------------------
-
-mb3773_device::mb3773_device( const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock )
-	: device_t(mconfig, MB3773, "MB3773", tag, owner, clock)
+typedef struct _mb3773_state mb3773_state;
+struct _mb3773_state
 {
+	emu_timer *watchdog_timer;
+	UINT8 ck;
+};
+
+/***************************************************************************
+    INLINE FUNCTIONS
+***************************************************************************/
+
+INLINE mb3773_state *get_safe_token(const device_config *device)
+{
+	assert(device != NULL);
+	assert(device->token != NULL);
+	assert((device->type == MB3773));
+	return (mb3773_state *)device->token;
 }
 
+/***************************************************************************
+    IMPLEMENTATION
+***************************************************************************/
 
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
+/*-------------------------------------------------
+    TIMER_CALLBACK( watchdog_timeout )
+-------------------------------------------------*/
 
-void mb3773_device::device_config_complete()
+static TIMER_CALLBACK( watchdog_timeout )
 {
+	mame_schedule_soft_reset(machine);
 }
 
+/*-------------------------------------------------
+    reset_timer
+-------------------------------------------------*/
 
-//-------------------------------------------------
-//  device_validity_check - perform validity checks
-//  on this device
-//-------------------------------------------------
-
-void mb3773_device::device_validity_check(validity_checker &valid) const
+static void reset_timer( const device_config *device )
 {
+	mb3773_state *mb3773 = get_safe_token(device);
+	timer_adjust_oneshot(mb3773->watchdog_timer, ATTOTIME_IN_SEC( 5 ), 0);
 }
 
+/*-------------------------------------------------
+    mb3773_set_ck
+-------------------------------------------------*/
 
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
-
-void mb3773_device::device_start()
+WRITE8_DEVICE_HANDLER( mb3773_set_ck )
 {
-	m_watchdog_timer = machine().scheduler().timer_alloc( FUNC(watchdog_timeout), this );
-	reset_timer();
-
-	save_item( NAME(m_ck) );
-}
-
-
-//-------------------------------------------------
-//  device_reset - device-specific reset
-//-------------------------------------------------
-
-void mb3773_device::device_reset()
-{
-	m_ck = 0;
-}
-
-
-
-//**************************************************************************
-//  READ/WRITE HANDLERS
-//**************************************************************************
-
-WRITE_LINE_DEVICE_HANDLER( mb3773_set_ck )
-{
-	downcast<mb3773_device *>( device )->set_ck( state );
-}
-
-void mb3773_device::set_ck( int state )
-{
-	state &= 1;
-
-	if( state == 0 && m_ck != 0 )
+	mb3773_state *mb3773 = get_safe_token(device);
+	if( data == 0 && mb3773->ck != 0 )
 	{
-		reset_timer();
+		reset_timer(device);
 	}
-
-	m_ck = state;
+	mb3773->ck = data;
 }
 
+/*-------------------------------------------------
+    DEVICE_START( mb3773 )
+-------------------------------------------------*/
 
-//**************************************************************************
-//  INTERNAL HELPERS
-//**************************************************************************
-
-void mb3773_device::reset_timer()
+static DEVICE_START( mb3773 )
 {
-	m_watchdog_timer->adjust( attotime::from_seconds( 5 ) );
+	mb3773_state *mb3773 = get_safe_token(device);
+
+	/* create the timer */
+	mb3773->watchdog_timer = timer_alloc(device->machine, watchdog_timeout, NULL);
+	reset_timer(device);
+
+	/* register for state saving */
+	state_save_register_device_item(device, 0, mb3773->ck);
 }
 
-TIMER_CALLBACK( mb3773_device::watchdog_timeout )
+/*-------------------------------------------------
+    DEVICE_RESET( mb3773 )
+-------------------------------------------------*/
+
+static DEVICE_RESET( mb3773 )
 {
-	reinterpret_cast<mb3773_device *>(ptr)->machine().schedule_soft_reset();
+	mb3773_state *mb3773 = get_safe_token(device);
+	mb3773->ck = 0;
 }
+
+/*-------------------------------------------------
+    DEVICE_GET_INFO( mb3773 )
+-------------------------------------------------*/
+
+static const char DEVTEMPLATE_SOURCE[] = __FILE__;
+
+#define DEVTEMPLATE_ID(p,s)		p##mb3773##s
+#define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
+#define DEVTEMPLATE_NAME		"Fujistu MB3773"
+#define DEVTEMPLATE_FAMILY		"Fujistu Power Supply Monitor"
+#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
+#include "devtempl.h"

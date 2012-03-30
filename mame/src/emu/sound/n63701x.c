@@ -13,7 +13,8 @@ silence compression: '00 nn' must be replaced by nn+1 times '80'.
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "n63701x.h"
 
 
@@ -46,11 +47,13 @@ struct _namco_63701x
 static const int vol_table[4] = { 26, 84, 200, 258 };
 
 
-INLINE namco_63701x *get_safe_token(device_t *device)
+INLINE namco_63701x *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == NAMCO_63701X);
-	return (namco_63701x *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_NAMCO_63701X);
+	return (namco_63701x *)device->token;
 }
 
 
@@ -112,9 +115,9 @@ static DEVICE_START( namco_63701x )
 {
 	namco_63701x *chip = get_safe_token(device);
 
-	chip->rom = *device->region();
+	chip->rom = device->region;
 
-	chip->stream = device->machine().sound().stream_alloc(*device, 0, 2, device->clock()/1000, chip, namco_63701x_update);
+	chip->stream = stream_create(device, 0, 2, device->clock/1000, chip, namco_63701x_update);
 }
 
 
@@ -139,7 +142,7 @@ WRITE8_DEVICE_HANDLER( namco_63701x_w )
 			int rom_offs;
 
 			/* update the streams */
-			chip->stream->update();
+			stream_update(chip->stream);
 
 			chip->voices[ch].playing = 1;
 			chip->voices[ch].base_addr = 0x10000 * ((chip->voices[ch].select & 0xe0) >> 5);
@@ -184,5 +187,3 @@ DEVICE_GET_INFO( namco_63701x )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(NAMCO_63701X, namco_63701x);

@@ -1,4 +1,4 @@
-#include "emu.h"
+#include "driver.h"
 #include "includes/pacman.h"
 
 
@@ -39,14 +39,14 @@ static UINT8 decrypt(int addr, UINT8 e)
 }
 
 
-void jumpshot_decode(running_machine &machine)
+void jumpshot_decode(running_machine *machine)
 {
 	int i;
 	UINT8 *RAM;
 
 	/* CPU ROMs */
 
-	RAM = machine.region("maincpu")->base();
+	RAM = memory_region(machine, "maincpu");
 	for (i = 0; i < 0x4000; i++)
 	{
 		RAM[i] = decrypt(i,RAM[i]);

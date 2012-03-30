@@ -5,7 +5,7 @@ this could get messy if games change their own code after initial loading as we'
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/fd1094.h"
 #include "includes/segas24.h"
@@ -28,7 +28,7 @@ static int fd1094_selected_state;
    if it is then it copies the cached data to the user region where code is
    executed from, if its not cached then it gets decrypted to the current
    cache position using the functions in s24_fd1094.c */
-static void s24_fd1094_setstate_and_decrypt(running_machine &machine, int state)
+static void s24_fd1094_setstate_and_decrypt(running_machine *machine, int state)
 {
 	int i;
 	UINT32 addr;
@@ -43,7 +43,7 @@ static void s24_fd1094_setstate_and_decrypt(running_machine &machine, int state)
 
 	fd1094_state = state;
 
-	cpu_set_reg(machine.device("sub"), M68K_PREF_ADDR, 0x0010);	// force a flush of the prefetch cache
+	cpu_set_reg(cputag_get_cpu(machine, "sub"), M68K_PREF_ADDR, 0x0010);	// force a flush of the prefetch cache
 
 	/* set the s24_fd1094 state ready to decrypt.. */
 	state = fd1094_set_state(s24_fd1094_key,state) & 0xff;
@@ -55,8 +55,8 @@ static void s24_fd1094_setstate_and_decrypt(running_machine &machine, int state)
 		{
 			/* copy cached state */
 			s24_fd1094_userregion = s24_fd1094_cacheregion[i];
-			machine.device<cpu_device>("sub")->space(AS_PROGRAM)->set_decrypted_region(0, s24_fd1094_cpuregionsize - 1, s24_fd1094_userregion);
-			m68k_set_encrypted_opcode_range(machine.device("sub"), 0, s24_fd1094_cpuregionsize);
+			memory_set_decrypted_region(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0, s24_fd1094_cpuregionsize - 1, s24_fd1094_userregion);
+			m68k_set_encrypted_opcode_range(cputag_get_cpu(machine, "sub"), 0, s24_fd1094_cpuregionsize);
 
 			return;
 		}
@@ -76,8 +76,8 @@ static void s24_fd1094_setstate_and_decrypt(running_machine &machine, int state)
 
 	/* copy newly decrypted data to user region */
 	s24_fd1094_userregion = s24_fd1094_cacheregion[fd1094_current_cacheposition];
-	machine.device<cpu_device>("sub")->space(AS_PROGRAM)->set_decrypted_region(0, s24_fd1094_cpuregionsize - 1, s24_fd1094_userregion);
-	m68k_set_encrypted_opcode_range(machine.device("sub"), 0, s24_fd1094_cpuregionsize);
+	memory_set_decrypted_region(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), 0, s24_fd1094_cpuregionsize - 1, s24_fd1094_userregion);
+	m68k_set_encrypted_opcode_range(cputag_get_cpu(machine, "sub"), 0, s24_fd1094_cpuregionsize);
 
 	fd1094_current_cacheposition++;
 
@@ -89,24 +89,24 @@ static void s24_fd1094_setstate_and_decrypt(running_machine &machine, int state)
 }
 
 /* Callback for CMP.L instructions (state change) */
-static void s24_fd1094_cmp_callback(device_t *device, UINT32 val, UINT8 reg)
+static void s24_fd1094_cmp_callback(const device_config *device, UINT32 val, UINT8 reg)
 {
 	if (reg == 0 && (val & 0x0000ffff) == 0x0000ffff) // ?
 	{
-		s24_fd1094_setstate_and_decrypt(device->machine(), (val & 0xffff0000) >> 16);
+		s24_fd1094_setstate_and_decrypt(device->machine, (val & 0xffff0000) >> 16);
 	}
 }
 
 /* Callback when the s24_fd1094 enters interrupt code */
 static IRQ_CALLBACK(s24_fd1094_int_callback)
 {
-	s24_fd1094_setstate_and_decrypt(device->machine(), FD1094_STATE_IRQ);
+	s24_fd1094_setstate_and_decrypt(device->machine, FD1094_STATE_IRQ);
 	return (0x60+irqline*4)/4; // vector address
 }
 
-static void s24_fd1094_rte_callback (device_t *device)
+static void s24_fd1094_rte_callback (const device_config *device)
 {
-	s24_fd1094_setstate_and_decrypt(device->machine(), FD1094_STATE_RTE);
+	s24_fd1094_setstate_and_decrypt(device->machine, FD1094_STATE_RTE);
 }
 
 
@@ -121,7 +121,7 @@ static void s24_fd1094_kludge_reset_values(void)
 
 
 /* function, to be called from MACHINE_RESET (every reset) */
-void s24_fd1094_machine_init(running_machine &machine)
+void s24_fd1094_machine_init(running_machine *machine)
 {
 	/* punt if no key; this allows us to be called even for non-s24_fd1094 games */
 	if (!s24_fd1094_key)
@@ -130,14 +130,14 @@ void s24_fd1094_machine_init(running_machine &machine)
 	s24_fd1094_setstate_and_decrypt(machine, FD1094_STATE_RESET);
 	s24_fd1094_kludge_reset_values();
 
-	m68k_set_cmpild_callback(machine.device("sub"), s24_fd1094_cmp_callback);
-	m68k_set_rte_callback(machine.device("sub"), s24_fd1094_rte_callback);
-	device_set_irq_callback(machine.device("sub"), s24_fd1094_int_callback);
+	m68k_set_cmpild_callback(cputag_get_cpu(machine, "sub"), s24_fd1094_cmp_callback);
+	m68k_set_rte_callback(cputag_get_cpu(machine, "sub"), s24_fd1094_rte_callback);
+	cpu_set_irq_callback(cputag_get_cpu(machine, "sub"), s24_fd1094_int_callback);
 
-	machine.device("sub")->reset();
+	device_reset(cputag_get_cpu(machine, "sub"));
 }
 
-static void s24_fd1094_postload(running_machine &machine)
+static STATE_POSTLOAD( s24_fd1094_postload )
 {
 	if (fd1094_state != -1)
 	{
@@ -152,13 +152,13 @@ static void s24_fd1094_postload(running_machine &machine)
 }
 
 /* startup function, to be called from DRIVER_INIT (once on startup) */
-void s24_fd1094_driver_init(running_machine &machine)
+void s24_fd1094_driver_init(running_machine *machine)
 {
 	int i;
 
-	s24_fd1094_cpuregion = (UINT16*)memory_get_shared(machine, "share2");
+	s24_fd1094_cpuregion = (UINT16*)s24_mainram1;
 	s24_fd1094_cpuregionsize = 0x40000;
-	s24_fd1094_key = machine.region("fd1094key")->base();
+	s24_fd1094_key = memory_region(machine, "fd1094key");
 
 	/* punt if no key; this allows us to be called even for non-s24_fd1094 games */
 	if (!s24_fd1094_key)
@@ -179,5 +179,5 @@ void s24_fd1094_driver_init(running_machine &machine)
 
 	state_save_register_global(machine, fd1094_selected_state);
 	state_save_register_global(machine, fd1094_state);
-	machine.save().register_postload(save_prepost_delegate(FUNC(s24_fd1094_postload), &machine));
+	state_save_register_postload(machine, s24_fd1094_postload, NULL);
 }

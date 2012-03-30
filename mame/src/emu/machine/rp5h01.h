@@ -8,26 +8,34 @@
 #ifndef __RP5H01_H__
 #define __RP5H01_H__
 
-#include "devlegcy.h"
-
 /***************************************************************************
     MACROS / CONSTANTS
 ***************************************************************************/
 
-DECLARE_LEGACY_DEVICE(RP5H01, rp5h01);
+#define RP5H01		DEVICE_GET_INFO_NAME(rp5h01)
 
-#define MCFG_RP5H01_ADD(_tag) \
-	MCFG_DEVICE_ADD(_tag, RP5H01, 0)
+#define MDRV_RP5H01_ADD(_tag, _config) \
+	MDRV_DEVICE_ADD(_tag, RP5H01, 0) \
+	MDRV_DEVICE_CONFIG(_config)
 
-/*
- * Device uses memory region
- * with the same tag as the one
- * assigned to device.
- */
+
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
+
+typedef struct _rp5h01_interface rp5h01_interface;
+struct _rp5h01_interface
+{
+	const char *region;		/* memory region where data resides */
+	int offset;		/* memory offset within the above region where data resides */
+};
 
 /***************************************************************************
     PROTOTYPES
 ***************************************************************************/
+
+/* device interface */
+DEVICE_GET_INFO( rp5h01 );
 
 WRITE8_DEVICE_HANDLER( rp5h01_enable_w );	/* /CE */
 WRITE8_DEVICE_HANDLER( rp5h01_reset_w );	/* RESET */

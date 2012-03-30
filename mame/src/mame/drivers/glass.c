@@ -8,25 +8,39 @@ The DS5002FP has up to 128KB undumped gameplay code making the game unplayable :
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
-#include "includes/glass.h"
+
+extern UINT16 *glass_vregs;
+extern UINT16 *glass_videoram;
+extern UINT16 *glass_spriteram;
+extern int glass_current_bit;
+
+/* from video/glass.c */
+WRITE16_HANDLER( glass_vram_w );
+WRITE16_HANDLER( glass_blitter_w );
+VIDEO_START( glass );
+VIDEO_UPDATE( glass );
+
+static int cause_interrupt;
+
+static MACHINE_RESET( glass )
+{
+	cause_interrupt = 1;
+	glass_current_bit = 0;
+}
 
 static WRITE16_HANDLER( clr_int_w )
 {
-	glass_state *state = space->machine().driver_data<glass_state>();
-	state->m_cause_interrupt = 1;
+	cause_interrupt = 1;
 }
 
 static INTERRUPT_GEN( glass_interrupt )
 {
-	glass_state *state = device->machine().driver_data<glass_state>();
-
-	if (state->m_cause_interrupt)
-	{
-		device_set_input_line(device, 6, HOLD_LINE);
-		state->m_cause_interrupt = 0;
+	if (cause_interrupt){
+		cpu_set_input_line(device, 6, HOLD_LINE);
+		cause_interrupt = 0;
 	}
 }
 
@@ -55,44 +69,44 @@ GFXDECODE_END
 
 static WRITE16_HANDLER( OKIM6295_bankswitch_w )
 {
-	UINT8 *RAM = space->machine().region("oki")->base();
+	UINT8 *RAM = memory_region(space->machine, "oki");
 
-	if (ACCESSING_BITS_0_7)
-		memcpy(&RAM[0x30000], &RAM[0x40000 + (data & 0x0f) * 0x10000], 0x10000);
+	if (ACCESSING_BITS_0_7){
+		memcpy(&RAM[0x30000], &RAM[0x40000 + (data & 0x0f)*0x10000], 0x10000);
+	}
 }
 
 static WRITE16_HANDLER( glass_coin_w )
 {
-	switch (offset >> 3)
-	{
+	switch (offset >> 3){
 		case 0x00:	/* Coin Lockouts */
 		case 0x01:
-			coin_lockout_w(space->machine(), (offset >> 3) & 0x01, ~data & 0x01);
+			coin_lockout_w((offset >> 3) & 0x01, ~data & 0x01);
 			break;
 		case 0x02:	/* Coin Counters */
 		case 0x03:
-			coin_counter_w(space->machine(), (offset >> 3) & 0x01, data & 0x01);
+			coin_counter_w((offset >> 3) & 0x01, data & 0x01);
 			break;
 		case 0x04:	/* Sound Muting (if bit 0 == 1, sound output stream = 0) */
 			break;
 	}
 }
 
-static ADDRESS_MAP_START( glass_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( glass_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM																		/* ROM */
-	AM_RANGE(0x100000, 0x101fff) AM_RAM_WRITE(glass_vram_w) AM_BASE_MEMBER(glass_state, m_videoram)						/* Video RAM */
+	AM_RANGE(0x100000, 0x101fff) AM_RAM_WRITE(glass_vram_w) AM_BASE(&glass_videoram)						/* Video RAM */
 	AM_RANGE(0x102000, 0x102fff) AM_RAM																		/* Extra Video RAM */
-	AM_RANGE(0x108000, 0x108007) AM_WRITEONLY AM_BASE_MEMBER(glass_state, m_vregs)									/* Video Registers */
+	AM_RANGE(0x108000, 0x108007) AM_WRITE(SMH_RAM) AM_BASE(&glass_vregs)									/* Video Registers */
 	AM_RANGE(0x108008, 0x108009) AM_WRITE(clr_int_w)														/* CLR INT Video */
-	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)	/* Palette */
-	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE_MEMBER(glass_state, m_spriteram)											/* Sprite RAM */
+	AM_RANGE(0x200000, 0x2007ff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE(&paletteram16)	/* Palette */
+	AM_RANGE(0x440000, 0x440fff) AM_RAM AM_BASE(&glass_spriteram)											/* Sprite RAM */
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSW2")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSW1")
 	AM_RANGE(0x700004, 0x700005) AM_READ_PORT("P1")
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("P2")
 	AM_RANGE(0x700008, 0x700009) AM_WRITE(glass_blitter_w)													/* serial blitter */
 	AM_RANGE(0x70000c, 0x70000d) AM_WRITE(OKIM6295_bankswitch_w)											/* OKI6295 bankswitch */
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)					/* OKI6295 status register */
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)					/* OKI6295 status register */
 	AM_RANGE(0x70000a, 0x70004b) AM_WRITE(glass_coin_w)														/* Coin Counters/Lockout */
 	AM_RANGE(0xfec000, 0xfeffff) AM_RAM																		/* Work RAM (partially shared with DS5002FP) */
 ADDRESS_MAP_END
@@ -100,50 +114,50 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( glass )
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,7,8")
-	PORT_DIPSETTING(    0x07, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 3C_4C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 2C_3C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_6C ) )
-	PORT_DIPNAME( 0x38, 0x38, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4,5")
-	PORT_DIPSETTING(    0x10, DEF_STR( 6C_1C ) )
-	PORT_DIPSETTING(    0x18, DEF_STR( 5C_1C ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0x28, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0x30, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( 3C_2C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 4C_3C ) )
-	PORT_DIPSETTING(    0x38, DEF_STR( 1C_1C ) )
-	PORT_DIPNAME( 0x40, 0x40, "Credit configuration" ) PORT_DIPLOCATION("SW1:2")
-	PORT_DIPSETTING(    0x40, "Start 1C" )
-	PORT_DIPSETTING(    0x00, "Start 2C" )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW1:1")
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x07,    0x07, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:6,7,8")
+	PORT_DIPSETTING(       0x07, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(       0x00, DEF_STR( 3C_4C ) )
+	PORT_DIPSETTING(       0x01, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(       0x06, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(       0x05, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(       0x04, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(       0x03, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(       0x02, DEF_STR( 1C_6C ) )
+	PORT_DIPNAME( 0x38,    0x38, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:3,4,5")
+	PORT_DIPSETTING(       0x10, DEF_STR( 6C_1C ) )
+	PORT_DIPSETTING(       0x18, DEF_STR( 5C_1C ) )
+	PORT_DIPSETTING(       0x20, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(       0x28, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(       0x30, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(       0x08, DEF_STR( 3C_2C ) )
+	PORT_DIPSETTING(       0x00, DEF_STR( 4C_3C ) )
+	PORT_DIPSETTING(       0x38, DEF_STR( 1C_1C ) )
+	PORT_DIPNAME( 0x40,    0x40, "Credit configuration" ) PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(       0x40, "Start 1C" )
+	PORT_DIPSETTING(       0x00, "Start 2C" )
+	PORT_DIPNAME( 0x80,    0x80, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(       0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(       0x00, DEF_STR( On ) )
 
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
-	PORT_DIPSETTING(    0x02, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:5,6")
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x08, "1" )
-	PORT_DIPSETTING(    0x04, "2" )
-	PORT_DIPSETTING(    0x00, "4" )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Version ) ) PORT_DIPLOCATION("SW2:4")
-	PORT_DIPSETTING(    0x10, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x00, "Light" )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:3")
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPNAME( 0x03,    0x03, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPSETTING(       0x02, DEF_STR( Easy ) )
+	PORT_DIPSETTING(       0x03, DEF_STR( Normal ) )
+	PORT_DIPSETTING(       0x01, DEF_STR( Hard ) )
+	PORT_DIPSETTING(       0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0x0c,    0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(       0x0c, "3" )
+	PORT_DIPSETTING(       0x08, "1" )
+	PORT_DIPSETTING(       0x04, "2" )
+	PORT_DIPSETTING(       0x00, "4" )
+	PORT_DIPNAME( 0x10,    0x10, DEF_STR( Version ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(       0x10, DEF_STR( Normal ) )
+	PORT_DIPSETTING(       0x00, "Light" )
+	PORT_DIPNAME( 0x20,    0x20, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(       0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(       0x20, DEF_STR( On ) )
 	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:2" ) /* Listed as "Unused" */
-	PORT_SERVICE_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:1" )
+	PORT_SERVICE_DIPLOC(   0x80, IP_ACTIVE_LOW, "SW2:1" )
 
 	PORT_START("P1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(1)
@@ -171,58 +185,36 @@ INPUT_PORTS_END
 
 
 
-static MACHINE_START( glass )
-{
-	glass_state *state = machine.driver_data<glass_state>();
-
-	state->save_item(NAME(state->m_cause_interrupt));
-	state->save_item(NAME(state->m_current_bit));
-	state->save_item(NAME(state->m_current_command));
-	state->save_item(NAME(state->m_blitter_serial_buffer));
-}
-
-static MACHINE_RESET( glass )
-{
-	glass_state *state = machine.driver_data<glass_state>();
-	int i;
-
-	state->m_cause_interrupt = 1;
-	state->m_current_bit = 0;
-	state->m_current_command = 0;
-
-	for (i = 0; i < 5; i++)
-		state->m_blitter_serial_buffer[i] = 0;
-}
-
-static MACHINE_CONFIG_START( glass, glass_state )
+static MACHINE_DRIVER_START( glass )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000,24000000/2)		/* 12 MHz (M680000 P12) */
-	MCFG_CPU_PROGRAM_MAP(glass_map)
-	MCFG_CPU_VBLANK_INT("screen", glass_interrupt)
+	MDRV_CPU_ADD("maincpu", M68000,24000000/2)		/* 12 MHz (M680000 P12) */
+	MDRV_CPU_PROGRAM_MAP(glass_map)
+	MDRV_CPU_VBLANK_INT("screen", glass_interrupt)
 
-	MCFG_MACHINE_START(glass)
-	MCFG_MACHINE_RESET(glass)
+	MDRV_MACHINE_RESET(glass)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*16, 32*16)
-	MCFG_SCREEN_VISIBLE_AREA(0, 368-1, 16, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(glass)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*16, 32*16)
+	MDRV_SCREEN_VISIBLE_AREA(0, 368-1, 16, 256-1)
 
-	MCFG_GFXDECODE(glass)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(glass)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(glass)
+	MDRV_VIDEO_START(glass)
+	MDRV_VIDEO_UPDATE(glass)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 ROM_START( glass ) /* Version 1.1 */
 	ROM_REGION( 0x080000, "maincpu", 0 )	/* 68000 code */
@@ -293,21 +285,20 @@ ROM_END
 
 ***************************************************************************/
 
-static void glass_ROM16_split_gfx( running_machine &machine, const char *src_reg, const char *dst_reg, int start, int length, int dest1, int dest2 )
+static void glass_ROM16_split_gfx(running_machine *machine, const char *src_reg, const char *dst_reg, int start, int length, int dest1, int dest2)
 {
 	int i;
 
 	/* get a pointer to the source data */
-	UINT8 *src = (UINT8 *)machine.region(src_reg)->base();
+	UINT8 *src = (UINT8 *)memory_region(machine, src_reg);
 
 	/* get a pointer to the destination data */
-	UINT8 *dst = (UINT8 *)machine.region(dst_reg)->base();
+	UINT8 *dst = (UINT8 *)memory_region(machine, dst_reg);
 
 	/* fill destination areas with the proper data */
-	for (i = 0; i < length / 2; i++)
-	{
-		dst[dest1 + i] = src[start + i * 2 + 0];
-		dst[dest2 + i] = src[start + i * 2 + 1];
+	for (i = 0; i < length/2; i++){
+		dst[dest1 + i] = src[start + i*2 + 0];
+		dst[dest2 + i] = src[start + i*2 + 1];
 	}
 }
 
@@ -332,6 +323,6 @@ static DRIVER_INIT( glass )
 	glass_ROM16_split_gfx(machine, "gfx2", "gfx1", 0x0200000, 0x0200000, 0x0200000, 0x0300000);
 }
 
-GAME( 1993, glass,    0,     glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.1)",                GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1993, glass10,  glass, glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.0)",                GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1993, glassbrk, glass, glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.0, Break Edition)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1993, glass,    0,     glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.1)",                GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, glass10,  glass, glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.0)",                GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, glassbrk, glass, glass, glass, glass, ROT0, "Gaelco", "Glass (Ver 1.0, Break Edition)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )

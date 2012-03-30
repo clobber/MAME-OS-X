@@ -1,7 +1,9 @@
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/blockhl.h"
+#include "driver.h"
+#include "video/konamiic.h"
 
+
+
+static int layer_colorbase[3],sprite_colorbase;
 
 /***************************************************************************
 
@@ -9,11 +11,10 @@
 
 ***************************************************************************/
 
-void blockhl_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void tile_callback(int layer,int bank,int *code,int *color, int *flags, int *priority)
 {
-	blockhl_state *state = machine.driver_data<blockhl_state>();
 	*code |= ((*color & 0x0f) << 8);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xe0) >> 5);
+	*color = layer_colorbase[layer] + ((*color & 0xe0) >> 5);
 }
 
 /***************************************************************************
@@ -22,16 +23,14 @@ void blockhl_tile_callback( running_machine &machine, int layer, int bank, int *
 
 ***************************************************************************/
 
-void blockhl_sprite_callback( running_machine &machine, int *code, int *color, int *priority, int *shadow )
+static void sprite_callback(int *code,int *color,int *priority,int *shadow)
 {
-	blockhl_state *state = machine.driver_data<blockhl_state>();
-
 	if(*color & 0x10)
 		*priority = 0xfe; // under K052109_tilemap[0]
 	else
 		*priority = 0xfc; // under K052109_tilemap[1]
 
-	*color = state->m_sprite_colorbase + (*color & 0x0f);
+	*color = sprite_colorbase + (*color & 0x0f);
 }
 
 
@@ -43,30 +42,26 @@ void blockhl_sprite_callback( running_machine &machine, int *code, int *color, i
 
 VIDEO_START( blockhl )
 {
-	blockhl_state *state = machine.driver_data<blockhl_state>();
+	layer_colorbase[0] = 0;
+	layer_colorbase[1] = 16;
+	layer_colorbase[2] = 32;
+	sprite_colorbase = 48;
 
-	machine.generic.paletteram.u8 = auto_alloc_array(machine, UINT8, 0x800);
-
-	state->m_layer_colorbase[0] = 0;
-	state->m_layer_colorbase[1] = 16;
-	state->m_layer_colorbase[2] = 32;
-	state->m_sprite_colorbase = 48;
-
-	state_save_register_global_pointer(machine, machine.generic.paletteram.u8, 0x800);
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,tile_callback);
+	K051960_vh_start(machine,"gfx2",NORMAL_PLANE_ORDER,sprite_callback);
 }
 
-SCREEN_UPDATE_IND16( blockhl )
+
+VIDEO_UPDATE( blockhl )
 {
-	blockhl_state *state = screen.machine().driver_data<blockhl_state>();
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	K052109_tilemap_update();
 
-	k052109_tilemap_update(state->m_k052109);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[2],TILEMAP_DRAW_OPAQUE,0);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[1],0,1);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[0],0,2);
 
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 2, TILEMAP_DRAW_OPAQUE, 0);	// tile 2
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 1, 0, 1);	// tile 1
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, 0, 0, 2);	// tile 0
-
-	k051960_sprites_draw(state->m_k051960, bitmap, cliprect, 0, -1);
+	K051960_sprites_draw(screen->machine,bitmap,cliprect,0,-1); // draw sprites with pdrawgfx
 	return 0;
 }

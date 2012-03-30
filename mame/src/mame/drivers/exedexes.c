@@ -1,34 +1,48 @@
 /***************************************************************************
 
-    Exed Exes
+Exed Exes
 
-    Notes:
-    - Flip screen is not supported, but doesn't seem to be used (no flip screen
-      dip switch and no cocktail mode)
-    - Some writes to unknown memory locations (always 0?)
+Notes:
+- Flip screen is not supported, but doesn't seem to be used (no flip screen
+  dip switch and no cocktail mode)
+- Some writes to unknown memory locations (always 0?)
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
-#include "includes/exedexes.h"
 
 
-static TIMER_DEVICE_CALLBACK( exedexes_scanline )
+extern UINT8 *exedexes_bg_scroll;
+extern UINT8 *exedexes_nbg_yscroll;
+extern UINT8 *exedexes_nbg_xscroll;
+
+extern WRITE8_HANDLER( exedexes_videoram_w );
+extern WRITE8_HANDLER( exedexes_colorram_w );
+extern WRITE8_HANDLER( exedexes_c804_w );
+extern WRITE8_HANDLER( exedexes_gfxctrl_w );
+
+extern PALETTE_INIT( exedexes );
+extern VIDEO_START( exedexes );
+extern VIDEO_UPDATE( exedexes );
+extern VIDEO_EOF( exedexes );
+
+
+
+static INTERRUPT_GEN( exedexes_interrupt )
 {
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
-
-	if(scanline == 0) // unknown irq event
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE, 0xcf);	/* RST 08h */
+	if (cpu_getiloops(device) != 0)
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);	/* RST 08h */
+	else
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xd7);	/* RST 10h - vblank */
 }
 
 
-static ADDRESS_MAP_START( exedexes_map, AS_PROGRAM, 8 )
+
+static ADDRESS_MAP_START( exedexes_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc000) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xc001, 0xc001) AM_READ_PORT("P1")
@@ -37,24 +51,24 @@ static ADDRESS_MAP_START( exedexes_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc004, 0xc004) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc800, 0xc800) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xc804, 0xc804) AM_WRITE(exedexes_c804_w)								/* coin counters + text layer enable */
-	AM_RANGE(0xc806, 0xc806) AM_WRITENOP											/* Watchdog ?? */
-	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(exedexes_videoram_w) AM_BASE_MEMBER(exedexes_state, m_videoram)	/* Video RAM */
-	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(exedexes_colorram_w) AM_BASE_MEMBER(exedexes_state, m_colorram)	/* Color RAM */
-	AM_RANGE(0xd800, 0xd801) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_nbg_yscroll)
-	AM_RANGE(0xd802, 0xd803) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_nbg_xscroll)
-	AM_RANGE(0xd804, 0xd805) AM_WRITEONLY AM_BASE_MEMBER(exedexes_state, m_bg_scroll)
+	AM_RANGE(0xc806, 0xc806) AM_WRITENOP 											/* Watchdog ?? */
+	AM_RANGE(0xd000, 0xd3ff) AM_RAM_WRITE(exedexes_videoram_w) AM_BASE(&videoram)	/* Video RAM */
+	AM_RANGE(0xd400, 0xd7ff) AM_RAM_WRITE(exedexes_colorram_w) AM_BASE(&colorram)	/* Color RAM */
+	AM_RANGE(0xd800, 0xd801) AM_WRITE(SMH_RAM) AM_BASE(&exedexes_nbg_yscroll)
+	AM_RANGE(0xd802, 0xd803) AM_WRITE(SMH_RAM) AM_BASE(&exedexes_nbg_xscroll)
+	AM_RANGE(0xd804, 0xd805) AM_WRITE(SMH_RAM) AM_BASE(&exedexes_bg_scroll)
 	AM_RANGE(0xd807, 0xd807) AM_WRITE(exedexes_gfxctrl_w)							/* layer enables */
 	AM_RANGE(0xe000, 0xefff) AM_RAM													/* Work RAM */
-	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)	/* Sprite RAM */
+	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* Sprite RAM */
 ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x6000, 0x6000) AM_READ(soundlatch_r)
-	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ay", ay8910_address_data_w)
 	AM_RANGE(0x8002, 0x8002) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x8003, 0x8003) AM_DEVWRITE("sn2", sn76496_w)
 ADDRESS_MAP_END
@@ -154,7 +168,6 @@ static const gfx_layout charlayout =
 	{ 0*16, 1*16, 2*16, 3*16, 4*16, 5*16, 6*16, 7*16 },
 	16*8	/* every char takes 16 consecutive bytes */
 };
-
 static const gfx_layout spritelayout =
 {
 	16,16,	/* 16*16 sprites */
@@ -167,7 +180,6 @@ static const gfx_layout spritelayout =
 			8*16, 9*16, 10*16, 11*16, 12*16, 13*16, 14*16, 15*16 },
 	64*8	/* every sprite takes 64 consecutive bytes */
 };
-
 static const gfx_layout tilelayout =
 {
 	32,32,  /* 32*32 tiles */
@@ -196,69 +208,47 @@ GFXDECODE_END
 
 
 
-static MACHINE_START( exedexes )
-{
-	exedexes_state *state = machine.driver_data<exedexes_state>();
-
-	state->save_item(NAME(state->m_chon));
-	state->save_item(NAME(state->m_objon));
-	state->save_item(NAME(state->m_sc1on));
-	state->save_item(NAME(state->m_sc2on));
-}
-
-static MACHINE_RESET( exedexes )
-{
-	exedexes_state *state = machine.driver_data<exedexes_state>();
-
-	state->m_chon = 0;
-	state->m_objon = 0;
-	state->m_sc1on = 0;
-	state->m_sc2on = 0;
-}
-
-static MACHINE_CONFIG_START( exedexes, exedexes_state )
+static MACHINE_DRIVER_START( exedexes )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
-	MCFG_CPU_PROGRAM_MAP(exedexes_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", exedexes_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
+	MDRV_CPU_PROGRAM_MAP(exedexes_map)
+	MDRV_CPU_VBLANK_INT_HACK(exedexes_interrupt,2)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3000000)	/* 3 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)
-
-	MCFG_MACHINE_START(exedexes)
-	MCFG_MACHINE_RESET(exedexes)
+	MDRV_CPU_ADD("audiocpu", Z80, 3000000)	/* 3 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(exedexes)
-	MCFG_SCREEN_VBLANK_STATIC(exedexes)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(exedexes)
-	MCFG_PALETTE_LENGTH(64*4+64*4+16*16+16*16)
+	MDRV_GFXDECODE(exedexes)
+	MDRV_PALETTE_LENGTH(64*4+64*4+16*16+16*16)
 
-	MCFG_PALETTE_INIT(exedexes)
-	MCFG_VIDEO_START(exedexes)
+	MDRV_PALETTE_INIT(exedexes)
+	MDRV_VIDEO_START(exedexes)
+	MDRV_VIDEO_EOF(exedexes)
+	MDRV_VIDEO_UPDATE(exedexes)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("sn1", SN76489, 3000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.36)
+   MDRV_SOUND_ADD("sn1", SN76489, 3000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.36)
 
-	MCFG_SOUND_ADD("sn2", SN76489, 3000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.36)
-MACHINE_CONFIG_END
+   MDRV_SOUND_ADD("sn2", SN76489, 3000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.36)
+MACHINE_DRIVER_END
 
 
 
@@ -348,5 +338,5 @@ ROM_END
 
 
 
-GAME( 1985, exedexes, 0,        exedexes, exedexes, 0, ROT270, "Capcom", "Exed Exes", GAME_SUPPORTS_SAVE )
-GAME( 1985, savgbees, exedexes, exedexes, exedexes, 0, ROT270, "Capcom (Memetron license)", "Savage Bees", GAME_SUPPORTS_SAVE )
+GAME( 1985, exedexes, 0,        exedexes, exedexes, 0, ROT270, "Capcom", "Exed Exes", 0 )
+GAME( 1985, savgbees, exedexes, exedexes, exedexes, 0, ROT270, "Capcom (Memetron license)", "Savage Bees", 0 )

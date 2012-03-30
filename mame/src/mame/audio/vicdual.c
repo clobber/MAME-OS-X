@@ -4,8 +4,8 @@
 
 *************************************************************************/
 
-#include "emu.h"
-#include "includes/vicdual.h"
+#include "driver.h"
+#include "vicdual.h"
 #include "sound/discrete.h"
 #include "sound/samples.h"
 
@@ -73,14 +73,14 @@ static DISCRETE_SOUND_START(frogs)
 	DISCRETE_INPUT_NOT(FROGS_CAPTURE_EN)
 	DISCRETE_INPUT_NOT(FROGS_SPLASH_EN)
 
-	DISCRETE_ADJUSTMENT(FROGS_R93, RES_M(1), RES_K(10), DISC_LOGADJ, "R93")
+	DISCRETE_ADJUSTMENT_TAG(FROGS_R93, RES_M(1), RES_K(10), DISC_LOGADJ, "R93")
 
 	DISCRETE_555_MSTABLE(NODE_30, 1, FROGS_TONGUE_EN, RES_K(100), CAP_U(1), &frogsZip555m)
 
 	/* Q11 & Q12 transform the voltage from the oneshot U4, to what is
      * needed by the 555CC circuit.  Vin to R29 must be > 1V for things
      * to change.  <=1 then The Vout of this circuit is 12V.
-     * The Current through R28 equals current through R51. iR28 = iR51
+     * The Current thru R28 equals current thru R51. iR28 = iR51
      * So when Vin>.5, iR51 = (Vin-.5)/39k.  =0 when Vin<=.5
      * So the voltage drop across R28 is vR28 = iR51 * 22k.
      * Finally the Vout = 12 - vR28.
@@ -103,12 +103,12 @@ DISCRETE_SOUND_END
 static const char *const frogs_sample_names[] =
 {
 	"*frogs",
-	"boing",
-	"buzzz",
-	"croak",
-	"hop",
-	"splash",
-	"zip",
+	"boing.wav",
+	"buzzz.wav",
+	"croak.wav",
+	"hop.wav",
+	"splash.wav",
+	"zip.wav",
 	0
 };
 
@@ -119,34 +119,34 @@ static const samples_interface frogs_samples_interface =
 };
 
 
-MACHINE_CONFIG_FRAGMENT( frogs_audio )
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(frogs_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
+MACHINE_DRIVER_START( frogs_audio )
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(frogs_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
 
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(frogs)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(frogs)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 static TIMER_CALLBACK( frogs_croak_callback )
 {
-	device_t *samples = machine.device("samples");
+	const device_config *samples = devtag_get_device(machine, "samples");
 	sample_stop(samples, 2);
 }
 
 
 MACHINE_START( frogs_audio )
 {
-	frogs_croak_timer = machine.scheduler().timer_alloc(FUNC(frogs_croak_callback));
+	frogs_croak_timer = timer_alloc(machine, frogs_croak_callback, NULL);
 }
 
 
 WRITE8_HANDLER( frogs_audio_w )
 {
-	device_t *samples = space->machine().device("samples");
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *samples = devtag_get_device(space->machine, "samples");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 	static int last_croak = 0;
 	static int last_buzzz = 0;
 	int new_croak = data & 0x08;
@@ -170,7 +170,7 @@ WRITE8_HANDLER( frogs_audio_w )
 		if (last_croak)
 		{
 			/* The croak will keep playing until .429s after being disabled */
-			frogs_croak_timer->adjust(attotime::from_double(1.1 * RES_K(390) * CAP_U(1)));
+			timer_adjust_oneshot(frogs_croak_timer, double_to_attotime(1.1 * RES_K(390) * CAP_U(1)), 0);
 		}
 	}
 	if (new_buzzz)
@@ -245,16 +245,16 @@ static const discrete_mixer_desc headon_crash_mixer =
 	0, 1
 };
 
-static const discrete_dss_inverter_osc_node::description headon_inverter_osc_1 =
+static const discrete_inverter_osc_desc headon_inverter_osc_1 =
 {
 	DEFAULT_CD40XX_VALUES(12),
-	discrete_dss_inverter_osc_node::IS_TYPE4
+	DISC_OSC_INVERTER_IS_TYPE4
 };
 
-static const discrete_dss_inverter_osc_node::description headon_inverter_osc_2 =
+static const discrete_inverter_osc_desc headon_inverter_osc_2 =
 {
 	DEFAULT_CD40XX_VALUES(12),
-	discrete_dss_inverter_osc_node::IS_TYPE5 | discrete_dss_inverter_osc_node::OUT_IS_LOGIC
+	DISC_OSC_INVERTER_IS_TYPE5 | DISC_OSC_INVERTER_OUT_IS_LOGIC
 };
 
 static const discrete_555_desc headon_555_bonus =
@@ -311,7 +311,7 @@ static const discrete_lfsr_desc mm5837_lfsr =
 	DISC_LFSR_NOT_IN0,	  /* F1 is inverted F0*/
 	DISC_LFSR_REPLACE,	  /* F2 replaces the shifted register contents */
 	0x000001,		      /* Everything is shifted into the first bit only */
-	0,					  /* Flags */
+	0, 					  /* Flags */
 	16			          /* Output bit */
 };
 
@@ -453,16 +453,16 @@ static DISCRETE_SOUND_START(headon)
 
 DISCRETE_SOUND_END
 
-MACHINE_CONFIG_FRAGMENT( headon_audio )
+MACHINE_DRIVER_START( headon_audio )
 
-	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
-	MCFG_SOUND_CONFIG_DISCRETE(headon)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
+	MDRV_SOUND_CONFIG_DISCRETE(headon)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 WRITE8_HANDLER( headon_audio_w )
 {
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 	if (discrete == NULL)
 		return;
 	discrete_sound_w(discrete, HEADON_HISPEED_PC_EN, data & 0x01);
@@ -477,7 +477,7 @@ WRITE8_HANDLER( headon_audio_w )
 
 WRITE8_HANDLER( invho2_audio_w )
 {
-	device_t *discrete = space->machine().device("discrete");
+	const device_config *discrete = devtag_get_device(space->machine, "discrete");
 	if (discrete == NULL)
 		return;
 	discrete_sound_w(discrete, HEADON_HISPEED_PC_EN, data & 0x10);

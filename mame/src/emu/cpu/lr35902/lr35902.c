@@ -37,7 +37,6 @@
 /**                                                         **/
 /*************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "lr35902.h"
 
@@ -47,8 +46,8 @@
 #define FLAG_C  0x10
 
 #define CYCLES_PASSED(X)		cpustate->w.icount -= ((X) / (cpustate->w.gb_speed));	\
-					if ( cpustate->w.timer_expired_func ) {			\
-						cpustate->w.timer_expired_func( cpustate->w.device, X );		\
+					if ( cpustate->w.timer_fired_func ) {			\
+						cpustate->w.timer_fired_func( cpustate->w.device, X );		\
 					}
 
 typedef struct {
@@ -64,12 +63,12 @@ typedef struct {
 	UINT8	IF;
 	int	irq_state;
 	int	ei_delay;
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *program;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *program;
 	int icount;
 	/* Timer stuff */
-	lr35902_timer_fired_func timer_expired_func;
+	lr35902_timer_fired_func timer_fired_func;
 	/* Fetch & execute related */
 	int		execution_state;
 	UINT8	op;
@@ -113,11 +112,13 @@ union _lr35902_state {
 	lr35902_8BitRegs b;
 };
 
-INLINE lr35902_state *get_safe_token(device_t *device)
+INLINE lr35902_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == LR35902);
-	return (lr35902_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_LR35902);
+	return (lr35902_state *)device->token;
 }
 
 typedef int (*OpcodeEmulator) (lr35902_state *cpustate);
@@ -129,8 +130,8 @@ typedef int (*OpcodeEmulator) (lr35902_state *cpustate);
 /* Memory functions                                                         */
 /****************************************************************************/
 
-#define mem_ReadByte(cs,A)		((UINT8)(cs)->w.program->read_byte(A))
-#define mem_WriteByte(cs,A,V)	((cs)->w.program->write_byte(A,V))
+#define mem_ReadByte(cs,A)		((UINT8)memory_read_byte_8le((cs)->w.program,A))
+#define mem_WriteByte(cs,A,V)	(memory_write_byte_8le((cs)->w.program,A,V))
 
 INLINE UINT16 mem_ReadWord (lr35902_state *cpustate, UINT32 address)
 {
@@ -189,10 +190,10 @@ static CPU_INIT( lr35902 )
 {
 	lr35902_state *cpustate = get_safe_token(device);
 
-	cpustate->w.config = (const lr35902_cpu_core *) device->static_config();
+	cpustate->w.config = (const lr35902_cpu_core *) device->static_config;
 	cpustate->w.irq_callback = irqcallback;
 	cpustate->w.device = device;
-	cpustate->w.program = device->space(AS_PROGRAM);
+	cpustate->w.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 }
 
 /*** Reset lr353902 registers: ******************************/
@@ -210,7 +211,7 @@ static CPU_RESET( lr35902 )
 	cpustate->w.HL = 0x0000;
 	cpustate->w.SP = 0x0000;
 	cpustate->w.PC = 0x0000;
-	cpustate->w.timer_expired_func = NULL;
+	cpustate->w.timer_fired_func = NULL;
 	cpustate->w.features = LR35902_FEATURE_HALT_BUG;
 	if (cpustate->w.config)
 	{
@@ -222,7 +223,7 @@ static CPU_RESET( lr35902 )
 			cpustate->w.SP = cpustate->w.config->regs[4];
 			cpustate->w.PC = cpustate->w.config->regs[5];
 		}
-		cpustate->w.timer_expired_func = cpustate->w.config->timer_expired_func;
+		cpustate->w.timer_fired_func = cpustate->w.config->timer_fired_func;
 		cpustate->w.features = cpustate->w.config->features;
 	}
 	cpustate->w.enable = 0;
@@ -267,7 +268,7 @@ INLINE void lr35902_ProcessInterrupts (lr35902_state *cpustate)
 					cpustate->w.enable &= ~HALTED;
 					cpustate->w.PC++;
 					if ( cpustate->w.features & LR35902_FEATURE_HALT_BUG ) {
-						if ( ! ( cpustate->w.enable & IME ) ) {
+						if ( ! cpustate->w.enable & IME ) {
 							/* Old cpu core (dmg/mgb/sgb) */
 							cpustate->w.doHALTbug = 1;
 						}
@@ -305,6 +306,8 @@ static CPU_EXECUTE( lr35902 )
 {
 	lr35902_state *cpustate = get_safe_token(device);
 
+	cpustate->w.icount = cycles;
+
 	do
 	{
 		if ( cpustate->w.execution_state ) {
@@ -331,6 +334,8 @@ static CPU_EXECUTE( lr35902 )
 		}
 		cpustate->w.execution_state ^= 1;
 	} while (cpustate->w.icount > 0);
+
+	return cycles - cpustate->w.icount;
 }
 
 static CPU_BURN( lr35902 )
@@ -365,7 +370,7 @@ static void lr35902_set_irq_line (lr35902_state *cpustate, int irqline, int stat
 		cpustate->w.IF &= ~(0x01 << irqline);
 		/*logerror("LR35902 clear irq line %d ($%02X)\n", irqline, cpustate->w.IF);*/
 
-	}
+     }
 }
 
 #ifdef UNUSED_FUNCTION
@@ -389,9 +394,9 @@ static CPU_SET_INFO( lr35902 )
 	case CPUINFO_INT_INPUT_STATE + 4:			lr35902_set_irq_line(cpustate, state-CPUINFO_INT_INPUT_STATE, info->i); break;
 
 	case CPUINFO_INT_SP:						cpustate->w.SP = info->i;						break;
-	case CPUINFO_INT_PC:						cpustate->w.PC = info->i;						break;
+	case CPUINFO_INT_PC:						cpustate->w.PC = info->i; 						break;
 
-	case CPUINFO_INT_REGISTER + LR35902_PC:		cpustate->w.PC = info->i;						break;
+	case CPUINFO_INT_REGISTER + LR35902_PC:		cpustate->w.PC = info->i; 						break;
 	case CPUINFO_INT_REGISTER + LR35902_SP:		cpustate->w.SP = info->i;						break;
 	case CPUINFO_INT_REGISTER + LR35902_AF:		cpustate->w.AF = info->i;						break;
 	case CPUINFO_INT_REGISTER + LR35902_BC:		cpustate->w.BC = info->i;						break;
@@ -405,7 +410,7 @@ static CPU_SET_INFO( lr35902 )
 
 CPU_GET_INFO( lr35902 )
 {
-	lr35902_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	lr35902_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -421,15 +426,15 @@ CPU_GET_INFO( lr35902 )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 1;	/* right? */			break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 16;	/* right? */			break;
 
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;					break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 16;					break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 16;					break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = cpustate->w.SP;					break;
 	case CPUINFO_INT_PC:							info->i = cpustate->w.PC;					break;
@@ -461,11 +466,11 @@ CPU_GET_INFO( lr35902 )
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->w.icount;			break;
 
 	/* --- the following bits of info are returned as NULL-terminated strings --- */
-	case DEVINFO_STR_NAME:							strcpy(info->s, "LR35902"); break;
-	case DEVINFO_STR_FAMILY:					strcpy(info->s, "Sharp LR35902"); break;
-	case DEVINFO_STR_VERSION:					strcpy(info->s, "1.4"); break;
-	case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__); break;
-	case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright The MESS Team."); break;
+	case DEVINFO_STR_NAME: 							strcpy(info->s, "LR35902"); break;
+	case DEVINFO_STR_FAMILY: 					strcpy(info->s, "Sharp LR35902"); break;
+	case DEVINFO_STR_VERSION: 					strcpy(info->s, "1.4"); break;
+	case DEVINFO_STR_SOURCE_FILE: 					strcpy(info->s, __FILE__); break;
+	case DEVINFO_STR_CREDITS: 					strcpy(info->s, "Copyright The MESS Team."); break;
 
 	case CPUINFO_STR_FLAGS:
 		sprintf(info->s, "%c%c%c%c%c%c%c%c",
@@ -488,8 +493,5 @@ CPU_GET_INFO( lr35902 )
 	case CPUINFO_STR_REGISTER + LR35902_IRQ_STATE: sprintf(info->s, "IRQ:%X", cpustate->w.enable & IME ); break;
 	case CPUINFO_STR_REGISTER + LR35902_IE: sprintf(info->s, "IE:%02X", cpustate->w.IE); break;
 	case CPUINFO_STR_REGISTER + LR35902_IF: sprintf(info->s, "IF:%02X", cpustate->w.IF); break;
-	case CPUINFO_STR_REGISTER + LR35902_SPEED: sprintf(info->s, "SPD:%02x", 0x7E | ( ( cpustate->w.gb_speed - 1 ) << 7 ) | cpustate->w.gb_speed_change_pending ); break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(LR35902, lr35902);

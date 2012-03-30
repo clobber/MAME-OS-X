@@ -134,7 +134,7 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "memconv.h"
 #include "profiler.h"
 #include "machine/atarigen.h"
@@ -196,12 +196,10 @@ static UINT16 gpu_regs[GPU_REGS];
 static emu_timer *object_timer;
 static UINT8 cpu_irq_state;
 
-static bitmap_rgb32 *screen_bitmap;
+static bitmap_t *screen_bitmap;
 
 static pen_t *pen_table;
-static int pixel_clock;
 
-UINT8 blitter_status;
 
 
 /*************************************
@@ -211,19 +209,22 @@ UINT8 blitter_status;
  *************************************/
 
 /* from jagobj.c */
-static void jagobj_init(running_machine &machine);
-static void process_object_list(running_machine &machine, int vc, UINT16 *_scanline);
+static void jagobj_init(running_machine *machine);
+static void process_object_list(running_machine *machine, int vc, UINT16 *_scanline);
 
 /* from jagblit.c */
-static void generic_blitter(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_09800001_010020_010020(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_09800009_000020_000020(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_01800009_000028_000028(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_01800001_000018_000018(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_01c00001_000018_000018(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_00010000_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_01800001_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
-static void blitter_x1800x01_xxxxxx_xxxxxx(running_machine &machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void generic_blitter(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_09800001_010020_010020(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_09800009_000020_000020(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_01800009_000028_000028(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_01800001_000018_000018(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_01c00001_000018_000018(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+
+#ifdef MESS
+static void blitter_00010000_xxxxxx_xxxxxx(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_01800001_xxxxxx_xxxxxx(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+static void blitter_x1800x01_xxxxxx_xxxxxx(running_machine *machine, UINT32 command, UINT32 a1flags, UINT32 a2flags);
+#endif
 
 
 
@@ -233,15 +234,15 @@ static void blitter_x1800x01_xxxxxx_xxxxxx(running_machine &machine, UINT32 comm
  *
  *************************************/
 
-INLINE void get_crosshair_xy(running_machine &machine, int player, int *x, int *y)
+INLINE void get_crosshair_xy(running_machine *machine, int player, int *x, int *y)
 {
-	const rectangle &visarea = machine.primary_screen->visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
-	int width = visarea.width();
-	int height = visarea.height();
+	int width = visarea->max_x + 1 - visarea->min_x;
+	int height = visarea->max_y + 1 - visarea->min_y;
 	/* only 2 lightguns are connected */
-	*x = visarea.min_x + (((input_port_read(machine, player ? "FAKE2_X" : "FAKE1_X") & 0xff) * width) >> 8);
-	*y = visarea.min_y + (((input_port_read(machine, player ? "FAKE2_Y" : "FAKE1_Y") & 0xff) * height) >> 8);
+	*x = visarea->min_x + (((input_port_read(machine, player ? "FAKE2_X" : "FAKE1_X") & 0xff) * width) >> 8);
+	*y = visarea->min_y + (((input_port_read(machine, player ? "FAKE2_Y" : "FAKE1_Y") & 0xff) * height) >> 8);
 }
 
 
@@ -268,7 +269,7 @@ INLINE int effective_hvalue(int value)
  *
  *************************************/
 
-INLINE int adjust_object_timer(running_machine &machine, int vc)
+INLINE int adjust_object_timer(running_machine *machine, int vc)
 {
 	int hdbpix[2];
 	int hdb = 0;
@@ -289,11 +290,11 @@ INLINE int adjust_object_timer(running_machine &machine, int vc)
 	hdb = hdbpix[vc % 2];
 
 	/* if setting the second one in a line, make sure we will ever actually hit it */
-	if (vc % 2 == 1 && (hdbpix[1] == hdbpix[0] || hdbpix[1] >= machine.primary_screen->width()))
+	if (vc % 2 == 1 && (hdbpix[1] == hdbpix[0] || hdbpix[1] >= video_screen_get_width(machine->primary_screen)))
 		return FALSE;
 
 	/* adjust the timer */
-	object_timer->adjust(machine.primary_screen->time_until_pos(vc / 2, hdb), vc | (hdb << 16));
+	timer_adjust_oneshot(object_timer, video_screen_get_time_until_pos(machine->primary_screen, vc / 2, hdb), vc | (hdb << 16));
 	return TRUE;
 }
 
@@ -305,15 +306,15 @@ INLINE int adjust_object_timer(running_machine &machine, int vc)
  *
  *************************************/
 
-void jaguar_gpu_suspend(running_machine &machine)
+void jaguar_gpu_suspend(running_machine *machine)
 {
-	machine.device<cpu_device>("gpu")->suspend(SUSPEND_REASON_SPIN, 1);
+	cputag_suspend(machine, "gpu", SUSPEND_REASON_SPIN, 1);
 }
 
 
-void jaguar_gpu_resume(running_machine &machine)
+void jaguar_gpu_resume(running_machine *machine)
 {
-	machine.device<cpu_device>("gpu")->resume(SUSPEND_REASON_SPIN);
+	cputag_resume(machine, "gpu", SUSPEND_REASON_SPIN);
 }
 
 
@@ -324,7 +325,7 @@ void jaguar_gpu_resume(running_machine &machine)
  *
  *************************************/
 
-static void update_cpu_irq(running_machine &machine)
+static void update_cpu_irq(running_machine *machine)
 {
 	if (cpu_irq_state & gpu_regs[INT1] & 0x1f)
 		cputag_set_input_line(machine, "maincpu", cojag_is_r3000 ? R3000_IRQ4 : M68K_IRQ_6, ASSERT_LINE);
@@ -333,17 +334,17 @@ static void update_cpu_irq(running_machine &machine)
 }
 
 
-void jaguar_gpu_cpu_int(device_t *device)
+void jaguar_gpu_cpu_int(const device_config *device)
 {
 	cpu_irq_state |= 2;
-	update_cpu_irq(device->machine());
+	update_cpu_irq(device->machine);
 }
 
 
-void jaguar_dsp_cpu_int(device_t *device)
+void jaguar_dsp_cpu_int(const device_config *device)
 {
 	cpu_irq_state |= 16;
-	update_cpu_irq(device->machine());
+	update_cpu_irq(device->machine);
 }
 
 
@@ -434,8 +435,9 @@ static void jaguar_set_palette(UINT16 vmode)
 			}
 			break;
 
-		/* YCC VARMOD */
+		/* YCC/RGB VARMOD */
 		case 0x100:
+		case 0x106:
 			for (i = 0; i < 65536; i++)
 			{
 				UINT8 r = (red_lookup[i >> 8] * (i & 0xff)) >> 8;
@@ -453,17 +455,6 @@ static void jaguar_set_palette(UINT16 vmode)
 					b = (b << 3) | (b >> 2);
 				}
 				pen_table[i] = MAKE_RGB(r, g, b);
-			}
-			break;
-
-		/* RGB VARMOD */
-		case 0x106:
-			for (i = 0; i < 65536; i++)
-			{
-				if (i & 1) // FIXME: controls RGB 5-5-5 / 5-6-5 format or it's just ignored? Used by UBI Soft logo in Rayman
-					pen_table[i] = MAKE_RGB(pal5bit(i >> 11), pal5bit(i >> 1), pal5bit(i >> 6));
-				else
-					pen_table[i] = MAKE_RGB(pal5bit(i >> 11), pal6bit(i >> 0), pal5bit(i >> 6));
 			}
 			break;
 
@@ -489,10 +480,10 @@ static void jaguar_set_palette(UINT16 vmode)
  *
  *************************************/
 
-static UINT8 *get_jaguar_memory(running_machine &machine, UINT32 offset)
+static UINT8 *get_jaguar_memory(running_machine *machine, UINT32 offset)
 {
-	address_space *space = machine.device("gpu")->memory().space(AS_PROGRAM);
-	return (UINT8 *)space->get_read_ptr(offset);
+	const address_space *space = cputag_get_address_space(machine, "gpu", ADDRESS_SPACE_PROGRAM);
+	return (UINT8 *)memory_get_read_ptr(space, offset);
 }
 
 
@@ -503,13 +494,13 @@ static UINT8 *get_jaguar_memory(running_machine &machine, UINT32 offset)
  *
  *************************************/
 
-static void blitter_run(running_machine &machine)
+static void blitter_run(running_machine *machine)
 {
 	UINT32 command = blitter_regs[B_CMD] & STATIC_COMMAND_MASK;
 	UINT32 a1flags = blitter_regs[A1_FLAGS] & STATIC_FLAGS_MASK;
 	UINT32 a2flags = blitter_regs[A2_FLAGS] & STATIC_FLAGS_MASK;
 
-	g_profiler.start(PROFILER_USER1);
+	profiler_mark_start(PROFILER_USER1);
 
 	if (a1flags == a2flags)
 	{
@@ -542,6 +533,7 @@ static void blitter_run(running_machine &machine)
 		}
 	}
 
+#ifdef MESS
 	if (command == 0x00010000)
 	{
 		blitter_00010000_xxxxxx_xxxxxx(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
@@ -559,6 +551,8 @@ static void blitter_run(running_machine &machine)
 		blitter_x1800x01_xxxxxx_xxxxxx(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
 		return;
 	}
+#endif
+
 
 if (LOG_BLITTER_STATS)
 {
@@ -595,23 +589,19 @@ if (++reps % 100 == 99)
 }
 
 	generic_blitter(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
-	g_profiler.stop();
+	profiler_mark_end();
 }
 
-static TIMER_CALLBACK( blitter_done )
-{
-	blitter_status = 1;
-}
 
 READ32_HANDLER( jaguar_blitter_r )
 {
 	switch (offset)
 	{
 		case B_CMD:	/* B_CMD */
-			return blitter_status & 3;
+			return 1;
 
 		default:
-			logerror("%08X:Blitter read register @ F022%02X\n", cpu_get_previouspc(&space->device()), offset * 4);
+			logerror("%08X:Blitter read register @ F022%02X\n", cpu_get_previouspc(space->cpu), offset * 4);
 			return 0;
 	}
 }
@@ -620,15 +610,11 @@ READ32_HANDLER( jaguar_blitter_r )
 WRITE32_HANDLER( jaguar_blitter_w )
 {
 	COMBINE_DATA(&blitter_regs[offset]);
-	if ((offset == B_CMD) && (mem_mask & 0x0000ffff))
-	{
-		blitter_status = 0;
-		space->machine().scheduler().timer_set(attotime::from_usec(100), FUNC(blitter_done));
-		blitter_run(space->machine());
-	}
+	if (offset == B_CMD)
+		blitter_run(space->machine);
 
 	if (LOG_BLITTER_WRITE)
-	logerror("%08X:Blitter write register @ F022%02X = %08X\n", cpu_get_previouspc(&space->device()), offset * 4, data);
+	logerror("%08X:Blitter write register @ F022%02X = %08X\n", cpu_get_previouspc(space->cpu), offset * 4, data);
 }
 
 
@@ -642,7 +628,7 @@ WRITE32_HANDLER( jaguar_blitter_w )
 READ16_HANDLER( jaguar_tom_regs_r )
 {
 	if (offset != INT1 && offset != INT2 && offset != HC && offset != VC)
-		logerror("%08X:TOM read register @ F00%03X\n", cpu_get_previouspc(&space->device()), offset * 2);
+		logerror("%08X:TOM read register @ F00%03X\n", cpu_get_previouspc(space->cpu), offset * 2);
 
 	switch (offset)
 	{
@@ -650,30 +636,17 @@ READ16_HANDLER( jaguar_tom_regs_r )
 			return cpu_irq_state;
 
 		case HC:
-			return space->machine().primary_screen->hpos() % (space->machine().primary_screen->width() / 2);
+			return video_screen_get_hpos(space->machine->primary_screen) % (video_screen_get_width(space->machine->primary_screen) / 2);
 
 		case VC:
-		{
-			UINT8 half_line;
+			return video_screen_get_vpos(space->machine->primary_screen) * 2 + gpu_regs[VBE];
 
-			if(space->machine().primary_screen->hpos() >= (space->machine().primary_screen->width() / 2))
-				half_line = 1;
-			else
-				half_line = 0;
-
-			return space->machine().primary_screen->vpos() * 2 + half_line;
-		}
 	}
 
 	return gpu_regs[offset];
 }
 
-/*
-FIXME: this should be 1, but then MAME performance will be s*** with this (i.e. it drops the performance from 400% to 6% on an i5 machine).
-But the PIT irq is definitely needed by some games (for example Pitfall refuses to enter into gameplay without this enabled).
-*/
-#define PIT_MULT_DBG_HACK 64
-
+#if 0
 static TIMER_CALLBACK( jaguar_pit )
 {
 	attotime sample_period;
@@ -682,39 +655,34 @@ static TIMER_CALLBACK( jaguar_pit )
 
 	if (gpu_regs[PIT0])
 	{
-		sample_period = attotime::from_nsec(((machine.device("gpu")->unscaled_clock()*PIT_MULT_DBG_HACK) / (1+gpu_regs[PIT0])) / (1+gpu_regs[PIT1]));
-		machine.scheduler().timer_set(sample_period, FUNC(jaguar_pit));
+		sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(cputag_get_cpu(machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
+//      timer_set(machine, sample_period, NULL, 0, jaguar_pit);
 	}
 }
-
+#endif
 
 WRITE16_HANDLER( jaguar_tom_regs_w )
 {
 	UINT32 reg_store = gpu_regs[offset];
-	attotime sample_period;
+//  attotime sample_period;
 	if (offset < GPU_REGS)
 	{
 		COMBINE_DATA(&gpu_regs[offset]);
 
 		switch (offset)
 		{
-			case MEMCON1:
-				if((gpu_regs[offset] & 1) == 0)
-					printf("Warning: ROMHI = 0!\n");
-
-				break;
-			case PIT0:
+#if 0
 			case PIT1:
-				if (gpu_regs[PIT0] && gpu_regs[PIT0] != 0xffff) //FIXME: avoid too much small timers for now
+				if (gpu_regs[PIT0])
 				{
-					sample_period = attotime::from_nsec(((space->machine().device("gpu")->unscaled_clock()*PIT_MULT_DBG_HACK) / (1+gpu_regs[PIT0])) / (1+gpu_regs[PIT1]));
-					space->machine().scheduler().timer_set(sample_period, FUNC(jaguar_pit));
+					sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(cputag_get_cpu(space->machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
+					timer_set(space->machine, sample_period, NULL, 0, jaguar_pit);
 				}
 				break;
-
+#endif
 			case INT1:
 				cpu_irq_state &= ~(gpu_regs[INT1] >> 8);
-				update_cpu_irq(space->machine());
+				update_cpu_irq(space->machine);
 				break;
 
 			case VMODE:
@@ -724,7 +692,7 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 
 			case OBF:	/* clear GPU interrupt */
 				cpu_irq_state &= 0xfd;
-				update_cpu_irq(space->machine());
+				update_cpu_irq(space->machine);
 				break;
 
 			case HP:
@@ -751,8 +719,12 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 					/* adjust for the half-lines */
 					if (hperiod != 0 && vperiod != 0 && hbend < hbstart && vbend < vbstart && hbstart < hperiod)
 					{
-						rectangle visarea(hbend / 2, hbstart / 2 - 1, vbend / 2, vbstart / 2 - 1);
-						space->machine().primary_screen->configure(hperiod / 2, vperiod / 2, visarea, HZ_TO_ATTOSECONDS((double)pixel_clock * 2 / hperiod / vperiod));
+						rectangle visarea;
+						visarea.min_x = hbend / 2;
+						visarea.max_x = hbstart / 2 - 1;
+						visarea.min_y = vbend / 2;
+						visarea.max_y = vbstart / 2 - 1;
+						video_screen_configure(space->machine->primary_screen, hperiod / 2, vperiod / 2, &visarea, HZ_TO_ATTOSECONDS((double)COJAG_PIXEL_CLOCK * 2 / hperiod / vperiod));
 					}
 				}
 				break;
@@ -760,8 +732,8 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 		}
 	}
 
-	if (offset != INT2 && offset != VI && offset != INT1)
-		logerror("%08X:TOM write register @ F00%03X = %04X\n", cpu_get_previouspc(&space->device()), offset * 2, data);
+	if (offset != INT2 && offset != VI)
+		logerror("%08X:TOM write register @ F00%03X = %04X\n", cpu_get_previouspc(space->cpu), offset * 2, data);
 }
 
 
@@ -798,15 +770,15 @@ READ32_HANDLER( cojag_gun_input_r )
 	switch (offset)
 	{
 		case 0:
-			get_crosshair_xy(space->machine(), 1, &beamx, &beamy);
+			get_crosshair_xy(space->machine, 1, &beamx, &beamy);
 			return (beamy << 16) | (beamx ^ 0x1ff);
 
 		case 1:
-			get_crosshair_xy(space->machine(), 0, &beamx, &beamy);
+			get_crosshair_xy(space->machine, 0, &beamx, &beamy);
 			return (beamy << 16) | (beamx ^ 0x1ff);
 
 		case 2:
-			return input_port_read(space->machine(), "IN3");
+			return input_port_read(space->machine, "IN3");
 	}
 	return 0;
 }
@@ -823,13 +795,13 @@ static TIMER_CALLBACK( cojag_scanline_update )
 {
 	int vc = param & 0xffff;
 	int hdb = param >> 16;
-	const rectangle &visarea = machine.primary_screen->visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
 	/* only run if video is enabled and we are past the "display begin" */
 	if ((gpu_regs[VMODE] & 1) && vc >= (gpu_regs[VDB] & 0x7ff))
 	{
-		UINT32 *dest = &screen_bitmap->pix32(vc >> 1);
-		int maxx = visarea.max_x;
+		UINT32 *dest = BITMAP_ADDR32(screen_bitmap, vc >> 1, 0);
+		int maxx = visarea->max_x;
 		int hde = effective_hvalue(gpu_regs[HDE]) >> 1;
 		UINT16 x,scanline[760];
 		UINT8 y,pixel_width = ((gpu_regs[VMODE]>>10)&3)+1;
@@ -838,7 +810,7 @@ static TIMER_CALLBACK( cojag_scanline_update )
 		if (ENABLE_BORDERS && vc % 2 == 0)
 		{
 			rgb_t border = MAKE_RGB(gpu_regs[BORD1] & 0xff, gpu_regs[BORD1] >> 8, gpu_regs[BORD2] & 0xff);
-			for (x = visarea.min_x; x <= visarea.max_x; x++)
+			for (x = visarea->min_x; x <= visarea->max_x; x++)
 				dest[x] = border;
 		}
 
@@ -876,10 +848,15 @@ static TIMER_CALLBACK( cojag_scanline_update )
 		}
 
 		/* point to the next counter value */
-		if (++vc / 2 >= machine.primary_screen->height())
+		if (++vc / 2 >= video_screen_get_height(machine->primary_screen))
 			vc = 0;
 
 	} while (!adjust_object_timer(machine, vc));
+}
+
+static STATE_POSTLOAD( cojag_postload )
+{
+	update_cpu_irq(machine);
 }
 
 VIDEO_START( cojag )
@@ -888,10 +865,10 @@ VIDEO_START( cojag )
 	memset(&gpu_regs, 0, sizeof(gpu_regs));
 	cpu_irq_state = 0;
 
-	object_timer = machine.scheduler().timer_alloc(FUNC(cojag_scanline_update));
+	object_timer = timer_alloc(machine, cojag_scanline_update, NULL);
 	adjust_object_timer(machine, 0);
 
-	screen_bitmap = auto_bitmap_rgb32_alloc(machine, 760, 512);
+	screen_bitmap = auto_bitmap_alloc(machine, 760, 512, BITMAP_FORMAT_RGB32);
 
 	jagobj_init(machine);
 
@@ -901,15 +878,9 @@ VIDEO_START( cojag )
 	state_save_register_global_array(machine, blitter_regs);
 	state_save_register_global_array(machine, gpu_regs);
 	state_save_register_global(machine, cpu_irq_state);
-	machine.save().register_postload(save_prepost_delegate(FUNC(update_cpu_irq), &machine));
-	pixel_clock = COJAG_PIXEL_CLOCK;
+	state_save_register_postload(machine, cojag_postload, NULL);
 }
 
-VIDEO_START( jaguar )
-{
-	VIDEO_START_CALL( cojag );
-	pixel_clock = JAGUAR_CLOCK;
-}
 
 
 /*************************************
@@ -918,17 +889,17 @@ VIDEO_START( jaguar )
  *
  *************************************/
 
-SCREEN_UPDATE_RGB32( cojag )
+VIDEO_UPDATE( cojag )
 {
 	/* if not enabled, just blank */
 	if (!(gpu_regs[VMODE] & 1))
 	{
-		bitmap.fill(0, cliprect);
+		bitmap_fill(bitmap, cliprect, 0);
 		return 0;
 	}
 
 	/* render the object list */
-	copybitmap(bitmap, *screen_bitmap, 0, 0, 0, 0, cliprect);
+	copybitmap(bitmap, screen_bitmap, 0, 0, 0, 0, cliprect);
 	return 0;
 }
 
@@ -1013,6 +984,7 @@ SCREEN_UPDATE_RGB32( cojag )
 #undef COMMAND
 #undef FUNCNAME
 
+#ifdef MESS
 
 #define FUNCNAME	blitter_00010000_xxxxxx_xxxxxx
 #define COMMAND		0x00010000
@@ -1044,3 +1016,4 @@ SCREEN_UPDATE_RGB32( cojag )
 #undef COMMAND
 #undef FUNCNAME
 
+#endif /* MESS */

@@ -13,10 +13,11 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
-#include "includes/segas16.h"
+#include "deprecat.h"
+#include "system16.h"
 #include "machine/segaic16.h"
 #include "machine/fd1089.h"
 #include "machine/8255ppi.h"
@@ -24,8 +25,6 @@
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
 #include "sound/segapcm.h"
-#include "video/segaic16.h"
-#include "includes/segaipt.h"
 
 
 #define MASTER_CLOCK_25MHz		(25174800)
@@ -40,6 +39,12 @@
  *************************************/
 
 static UINT16 *workram;
+
+static UINT8 adc_select;
+
+static void (*i8751_vblank_hook)(running_machine *machine);
+
+
 
 /*************************************
  *
@@ -90,28 +95,16 @@ static const ppi8255_interface hangon_ppi_intf[2] =
  *
  *************************************/
 
-static void hangon_generic_init( running_machine &machine )
+static void hangon_generic_init(void)
 {
-	segas1x_state *state = machine.driver_data<segas1x_state>();
-
 	/* reset the custom handlers and other pointers */
-	state->m_i8751_vblank_hook = NULL;
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_soundcpu = machine.device("soundcpu");
-	state->m_subcpu = machine.device("sub");
-	state->m_mcu = machine.device("mcu");
-	state->m_ppi8255_1 = machine.device("ppi8255_1");
-	state->m_ppi8255_2 = machine.device("ppi8255_2");
-
-	state->save_item(NAME(state->m_adc_select));
+	i8751_vblank_hook = NULL;
 }
 
 
 static TIMER_CALLBACK( suspend_i8751 )
 {
-	segas1x_state *state = machine.driver_data<segas1x_state>();
-	device_suspend(state->m_mcu, SUSPEND_REASON_DISABLE, 1);
+	cputag_suspend(machine, "mcu", SUSPEND_REASON_DISABLE, 1);
 }
 
 
@@ -124,33 +117,27 @@ static TIMER_CALLBACK( suspend_i8751 )
 
 static MACHINE_RESET( hangon )
 {
-	segas1x_state *state = machine.driver_data<segas1x_state>();
-
-	fd1094_machine_init(machine.device("sub"));
+	fd1094_machine_init(cputag_get_cpu(machine, "sub"));
 
 	/* reset misc components */
 	segaic16_tilemap_reset(machine, 0);
 
 	/* if we have a fake i8751 handler, disable the actual 8751 */
-	if (state->m_i8751_vblank_hook != NULL)
-		machine.scheduler().synchronize(FUNC(suspend_i8751));
+	if (i8751_vblank_hook != NULL)
+		timer_call_after_resynch(machine, NULL, 0, suspend_i8751);
 
 	/* reset global state */
-	state->m_adc_select = 0;
+	adc_select = 0;
 }
 
 #if 0
-static TIMER_DEVICE_CALLBACK( hangon_irq )
+static INTERRUPT_GEN( hangon_irq )
 {
-	segas1x_state *state = timer.machine().driver_data<segas1x_state>();
-	int scanline = param;
-
 	/* according to the schematics, IRQ2 is generated every 16 scanlines */
-	if((scanline % 16) == 0)
-		device_set_input_line(state->m_maincpu, 2, HOLD_LINE);
-
-	if(scanline == 240)
-		device_set_input_line(state->m_maincpu, 4, HOLD_LINE);
+	if (cpu_getiloops(device) != 0)
+		cpu_set_input_line(device, 2, HOLD_LINE);
+	else
+		cpu_set_input_line(device, 4, HOLD_LINE);
 }
 #endif
 
@@ -163,119 +150,110 @@ static TIMER_DEVICE_CALLBACK( hangon_irq )
 
 static TIMER_CALLBACK( delayed_ppi8255_w )
 {
-	segas1x_state *state = machine.driver_data<segas1x_state>();
-	ppi8255_w(state->m_ppi8255_1, param >> 8, param & 0xff);
+	ppi8255_w(devtag_get_device(machine, "ppi8255_0"), param >> 8, param & 0xff);
 }
 
 
 static READ16_HANDLER( hangon_io_r )
 {
-	segas1x_state *state = space->machine().driver_data<segas1x_state>();
-
 	switch (offset & 0x3020/2)
 	{
 		case 0x0000/2: /* PPI @ 4B */
-			return ppi8255_r(state->m_ppi8255_1, offset & 3);
+			return ppi8255_r(devtag_get_device(space->machine, "ppi8255_0"), offset & 3);
 
 		case 0x1000/2: /* Input ports and DIP switches */
 		{
 			static const char *const sysports[] = { "SERVICE", "COINAGE", "DSW", "UNKNOWN" };
-			return input_port_read(space->machine(), sysports[offset & 3]);
+			return input_port_read(space->machine, sysports[offset & 3]);
 		}
 
 		case 0x3000/2: /* PPI @ 4C */
-			return ppi8255_r(state->m_ppi8255_2, offset & 3);
+			return ppi8255_r(devtag_get_device(space->machine, "ppi8255_1"), offset & 3);
 
 		case 0x3020/2: /* ADC0804 data output */
 		{
 			static const char *const adcports[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-			return input_port_read_safe(space->machine(), adcports[state->m_adc_select], 0);
+			return input_port_read_safe(space->machine, adcports[adc_select], 0);
 		}
 	}
 
-	logerror("%06X:hangon_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
-	return segaic16_open_bus_r(space, 0, mem_mask);
+	logerror("%06X:hangon_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	return segaic16_open_bus_r(space,0,mem_mask);
 }
 
 
 static WRITE16_HANDLER( hangon_io_w )
 {
-	segas1x_state *state = space->machine().driver_data<segas1x_state>();
-
 	if (ACCESSING_BITS_0_7)
 		switch (offset & 0x3020/2)
 		{
 			case 0x0000/2: /* PPI @ 4B */
 				/* the port C handshaking signals control the Z80 NMI, */
 				/* so we have to sync whenever we access this PPI */
-				space->machine().scheduler().synchronize(FUNC(delayed_ppi8255_w), ((offset & 3) << 8) | (data & 0xff));
+				timer_call_after_resynch(space->machine, NULL, ((offset & 3) << 8) | (data & 0xff), delayed_ppi8255_w);
 				return;
 
 			case 0x3000/2: /* PPI @ 4C */
-				ppi8255_w(state->m_ppi8255_2, offset & 3, data & 0xff);
+				ppi8255_w(devtag_get_device(space->machine, "ppi8255_1"), offset & 3, data & 0xff);
 				return;
 
 			case 0x3020/2: /* ADC0804 */
 				return;
 		}
 
-	logerror("%06X:hangon_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
+	logerror("%06X:hangon_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
 }
 
 
 static READ16_HANDLER( sharrier_io_r )
 {
-	segas1x_state *state = space->machine().driver_data<segas1x_state>();
-
 	switch (offset & 0x0030/2)
 	{
 		case 0x0000/2:
-			return ppi8255_r(state->m_ppi8255_1, offset & 3);
+			return ppi8255_r(devtag_get_device(space->machine, "ppi8255_0"), offset & 3);
 
 		case 0x0010/2: /* Input ports and DIP switches */
 		{
 			static const char *const sysports[] = { "SERVICE", "UNKNOWN", "COINAGE", "DSW" };
-			return input_port_read(space->machine(), sysports[offset & 3]);
+			return input_port_read(space->machine, sysports[offset & 3]);
 		}
 
 		case 0x0020/2: /* PPI @ 4C */
 			if (offset == 2) return 0;
-			return ppi8255_r(state->m_ppi8255_2, offset & 3);
+			return ppi8255_r(devtag_get_device(space->machine, "ppi8255_1"), offset & 3);
 
 		case 0x0030/2: /* ADC0804 data output */
 		{
 			static const char *const adcports[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-			return input_port_read_safe(space->machine(), adcports[state->m_adc_select], 0);
+			return input_port_read_safe(space->machine, adcports[adc_select], 0);
 		}
 	}
 
-	logerror("%06X:sharrier_io_r - unknown read access to address %04X\n", cpu_get_pc(&space->device()), offset * 2);
-	return segaic16_open_bus_r(space, 0, mem_mask);
+	logerror("%06X:sharrier_io_r - unknown read access to address %04X\n", cpu_get_pc(space->cpu), offset * 2);
+	return segaic16_open_bus_r(space,0,mem_mask);
 }
 
 
 static WRITE16_HANDLER( sharrier_io_w )
 {
-	segas1x_state *state = space->machine().driver_data<segas1x_state>();
-
 	if (ACCESSING_BITS_0_7)
 		switch (offset & 0x0030/2)
 		{
 			case 0x0000/2:
 				/* the port C handshaking signals control the Z80 NMI, */
 				/* so we have to sync whenever we access this PPI */
-				space->machine().scheduler().synchronize(FUNC(delayed_ppi8255_w), ((offset & 3) << 8) | (data & 0xff));
+				timer_call_after_resynch(space->machine, NULL, ((offset & 3) << 8) | (data & 0xff), delayed_ppi8255_w);
 				return;
 
 			case 0x0020/2: /* PPI @ 4C */
-				ppi8255_w(state->m_ppi8255_2, offset & 3, data & 0xff);
+				ppi8255_w(devtag_get_device(space->machine, "ppi8255_1"), offset & 3, data & 0xff);
 				return;
 
 			case 0x0030/2: /* ADC0804 */
 				return;
 		}
 
-	logerror("%06X:sharrier_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(&space->device()), offset * 2, data, mem_mask);
+	logerror("%06X:sharrier_io_w - unknown write access to address %04X = %04X & %04X\n", cpu_get_pc(space->cpu), offset * 2, data, mem_mask);
 }
 
 
@@ -288,8 +266,7 @@ static WRITE16_HANDLER( sharrier_io_w )
 
 static WRITE8_DEVICE_HANDLER( sound_latch_w )
 {
-	segas1x_state *state = device->machine().driver_data<segas1x_state>();
-	address_space *space = state->m_maincpu->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	soundlatch_w(space, offset, data);
 }
 
@@ -304,21 +281,19 @@ static WRITE8_DEVICE_HANDLER( video_lamps_w )
 	/* D2 : LAMP1 */
 	/* D1 : COIN2 */
 	/* D0 : COIN1 */
-	segaic16_tilemap_set_flip(device->machine(), 0, data & 0x80);
-	segaic16_sprites_set_flip(device->machine(), 0, data & 0x80);
-	segaic16_sprites_set_shadow(device->machine(), 0, ~data & 0x40);
-	segaic16_set_display_enable(device->machine(), data & 0x10);
-	set_led_status(device->machine(), 1, data & 0x08);
-	set_led_status(device->machine(), 0, data & 0x04);
-	coin_counter_w(device->machine(), 1, data & 0x02);
-	coin_counter_w(device->machine(), 0, data & 0x01);
+	segaic16_tilemap_set_flip(device->machine, 0, data & 0x80);
+	segaic16_sprites_set_flip(device->machine, 0, data & 0x80);
+	segaic16_sprites_set_shadow(device->machine, 0, ~data & 0x40);
+	segaic16_set_display_enable(device->machine, data & 0x10);
+	set_led_status(1, data & 0x08);
+	set_led_status(0, data & 0x04);
+	coin_counter_w(1, data & 0x02);
+	coin_counter_w(0, data & 0x01);
 }
 
 
 static WRITE8_DEVICE_HANDLER( tilemap_sound_w )
 {
-	segas1x_state *state = device->machine().driver_data<segas1x_state>();
-
 	/* Port C : Tilemap origin and audio mute */
 	/* D7 : Port A handshaking signal /OBF */
 	/* D6 : Port A handshaking signal ACK */
@@ -328,31 +303,29 @@ static WRITE8_DEVICE_HANDLER( tilemap_sound_w )
 	/* D2 : SCONT1 - Tilemap origin bit 1 */
 	/* D1 : SCONT0 - Tilemap origin bit 0 */
 	/* D0 : MUTE (1= audio on, 0= audio off) */
-	device_set_input_line(state->m_soundcpu, INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
-	segaic16_tilemap_set_colscroll(device->machine(), 0, ~data & 0x04);
-	segaic16_tilemap_set_rowscroll(device->machine(), 0, ~data & 0x02);
-	device->machine().sound().system_enable(data & 0x01);
+	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, (data & 0x80) ? CLEAR_LINE : ASSERT_LINE);
+	segaic16_tilemap_set_colscroll(device->machine, 0, ~data & 0x04);
+	segaic16_tilemap_set_rowscroll(device->machine, 0, ~data & 0x02);
+	sound_global_enable(device->machine, data & 0x01);
 }
 
 
 static WRITE8_DEVICE_HANDLER( sub_control_adc_w )
 {
-	segas1x_state *state = device->machine().driver_data<segas1x_state>();
-
 	/* Port A : S.CPU control and ADC channel select */
 	/* D6 : INTR line on second CPU */
 	/* D5 : RESET line on second CPU */
 	/* D3-D2 : ADC_SELECT */
-	device_set_input_line(state->m_subcpu, 4, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
-	device_set_input_line(state->m_subcpu, INPUT_LINE_RESET, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "sub", 4, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(device->machine, "sub", INPUT_LINE_RESET, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* If the CPU is being Reset we also need to reset the fd1094 state */
 	if (data & 0x20)
 	{
-		fd1094_machine_init(state->m_subcpu);
+		fd1094_machine_init(cputag_get_cpu(device->machine, "sub"));
 	}
 
-	state->m_adc_select = (data >> 2) & 3;
+	adc_select = (data >> 2) & 3;
 }
 
 
@@ -375,11 +348,9 @@ static READ8_DEVICE_HANDLER( adc_status_r )
 
 static INTERRUPT_GEN( i8751_main_cpu_vblank )
 {
-	segas1x_state *state = device->machine().driver_data<segas1x_state>();
-
 	/* if we have a fake 8751 handler, call it on VBLANK */
-	if (state->m_i8751_vblank_hook != NULL)
-		(*state->m_i8751_vblank_hook)(device->machine());
+	if (i8751_vblank_hook != NULL)
+		(*i8751_vblank_hook)(device->machine);
 	irq4_line_hold(device);
 }
 
@@ -391,7 +362,7 @@ static INTERRUPT_GEN( i8751_main_cpu_vblank )
  *
  *************************************/
 
-static void sharrier_i8751_sim(running_machine &machine)
+static void sharrier_i8751_sim(running_machine *machine)
 {
 	workram[0x492/2] = (input_port_read(machine, "ADC0") << 8) | input_port_read(machine, "ADC1");
 }
@@ -404,19 +375,16 @@ static void sharrier_i8751_sim(running_machine &machine)
  *
  *************************************/
 
-static void sound_irq(device_t *device, int irq)
+static void sound_irq(const device_config *device, int irq)
 {
-	segas1x_state *state = device->machine().driver_data<segas1x_state>();
-	device_set_input_line(state->m_soundcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static READ8_HANDLER( sound_data_r )
 {
-	segas1x_state *state = space->machine().driver_data<segas1x_state>();
-
 	/* assert ACK */
-	ppi8255_set_port_c(state->m_ppi8255_1, 0x00);
+	ppi8255_set_port_c(devtag_get_device(space->machine, "ppi8255_0"), 0x00);
 	return soundlatch_r(space, offset);
 }
 
@@ -428,31 +396,31 @@ static READ8_HANDLER( sound_data_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( hangon_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( hangon_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x20c000, 0x20ffff) AM_RAM
 	AM_RANGE(0x400000, 0x403fff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x410000, 0x410fff) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
 	AM_RANGE(0x600000, 0x6007ff) AM_RAM AM_BASE(&segaic16_spriteram_0)
-	AM_RANGE(0xa00000, 0xa00fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
+	AM_RANGE(0xa00000, 0xa00fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
 	AM_RANGE(0xc00000, 0xc3ffff) AM_ROM AM_REGION("sub", 0)
-	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE("share1") AM_BASE(&segaic16_roadram_0)
-	AM_RANGE(0xc7c000, 0xc7ffff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE(1) AM_BASE(&segaic16_roadram_0)
+	AM_RANGE(0xc7c000, 0xc7ffff) AM_RAM AM_SHARE(2)
 	AM_RANGE(0xe00000, 0xffffff) AM_READWRITE(hangon_io_r, hangon_io_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sharrier_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( sharrier_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x040000, 0x043fff) AM_RAM AM_BASE(&workram)
 	AM_RANGE(0x100000, 0x107fff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x108000, 0x108fff) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
-	AM_RANGE(0x110000, 0x110fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&segaic16_paletteram)
-	AM_RANGE(0x124000, 0x127fff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x110000, 0x110fff) AM_RAM_WRITE(segaic16_paletteram_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x124000, 0x127fff) AM_RAM AM_SHARE(2)
 	AM_RANGE(0x130000, 0x130fff) AM_RAM AM_BASE(&segaic16_spriteram_0)
 	AM_RANGE(0x140000, 0x14ffff) AM_READWRITE(sharrier_io_r, sharrier_io_w)
-	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE("share1") AM_BASE(&segaic16_roadram_0)
+	AM_RANGE(0xc68000, 0xc68fff) AM_RAM AM_SHARE(1) AM_BASE(&segaic16_roadram_0)
 ADDRESS_MAP_END
 
 
@@ -464,12 +432,12 @@ ADDRESS_MAP_END
  *************************************/
 
  /* On Super Hang On there is a memory mapper, like the System16 one, todo: emulate it! */
-static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x7ffff)
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x068000, 0x068fff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x07c000, 0x07ffff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x068000, 0x068fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x07c000, 0x07ffff) AM_RAM AM_SHARE(2)
 ADDRESS_MAP_END
 
 
@@ -480,36 +448,36 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( sound_map_2203, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_2203, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_MIRROR(0x0800) AM_RAM
-	AM_RANGE(0xd000, 0xd001) AM_MIRROR(0x0ffe) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0xd000, 0xd001) AM_MIRROR(0x0ffe) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
 	AM_RANGE(0xe000, 0xe0ff) AM_MIRROR(0x0f00) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2203, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2203, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_map_2151, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map_2151, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf000, 0xf0ff) AM_MIRROR(0x700) AM_DEVREADWRITE("pcm", sega_pcm_r, sega_pcm_w)
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2151, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2151, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
+	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym", ym2151_r, ym2151_w)
 	AM_RANGE(0x40, 0x40) AM_MIRROR(0x3f) AM_READ(sound_data_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_portmap_2203x2, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_portmap_2203x2, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_MIRROR(0x3e) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
@@ -525,7 +493,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mcu_io_map, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
@@ -548,17 +516,66 @@ static INPUT_PORTS_START( hangon_generic )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("COINAGE")
-	SEGA_COINAGE_LOC(SWA)
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2,3,4")
+	PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x05, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x04, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x01, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x02, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x03, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x06, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, "Free Play (if Coin B too) or 1/1" )
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:5,6,7,8")
+	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x90, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x50, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x40, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x10, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x60, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, "Free Play (if Coin A too) or 1/1" )
 
 	PORT_START("DSW")
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SWB:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SWB:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SWB:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SWB:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SWB:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SWB:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SWB:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SWB:8" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:5")
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
 	PORT_START("UNKNOWN")
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -580,17 +597,66 @@ static INPUT_PORTS_START( sharrier_generic )
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("COINAGE")
-	SEGA_COINAGE_LOC(SWA)
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2,3,4")
+	PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x09, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x05, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x04, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0x0f, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x01, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x02, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x03, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x06, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0x0e, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x0d, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, "Free Play (if Coin B too) or 1/1" )
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:5,6,7,8")
+	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x90, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x50, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x40, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x10, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x60, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, "Free Play (if Coin A too) or 1/1" )
 
 	PORT_START("DSW")
-	PORT_DIPUNUSED_DIPLOC( 0x01, IP_ACTIVE_LOW, "SWB:1" )
-	PORT_DIPUNUSED_DIPLOC( 0x02, IP_ACTIVE_LOW, "SWB:2" )
-	PORT_DIPUNUSED_DIPLOC( 0x04, IP_ACTIVE_LOW, "SWB:3" )
-	PORT_DIPUNUSED_DIPLOC( 0x08, IP_ACTIVE_LOW, "SWB:4" )
-	PORT_DIPUNUSED_DIPLOC( 0x10, IP_ACTIVE_LOW, "SWB:5" )
-	PORT_DIPUNUSED_DIPLOC( 0x20, IP_ACTIVE_LOW, "SWB:6" )
-	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SWB:7" )
-	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SWB:8" )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:5")
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:7")
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) ) PORT_DIPLOCATION("SW2:8")
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
 
@@ -605,20 +671,20 @@ static INPUT_PORTS_START( hangon )
 	PORT_INCLUDE( hangon_generic )
 
 	PORT_MODIFY("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SWB:1")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:2,3") // Other Bike's Appearance Frequency
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x18, 0x18, "Time Adj." ) PORT_DIPLOCATION("SWB:4,5")
+	PORT_DIPNAME( 0x18, 0x18, "Time Adj." ) PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x20, 0x20, "Play Music" ) PORT_DIPLOCATION("SWB:6")
+	PORT_DIPNAME( 0x20, 0x20, "Play Music" ) PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
 
@@ -640,15 +706,15 @@ static INPUT_PORTS_START( shangupb )
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("Supercharger") PORT_CODE(KEYCODE_LSHIFT)
 
 	PORT_MODIFY("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SWB:1")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:2,3") // Other Bike's Appearance Frequency
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x18, 0x18, "Time Adj." ) PORT_DIPLOCATION("SWB:4,5")
+	PORT_DIPNAME( 0x18, 0x18, "Time Adj." ) PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
@@ -683,24 +749,24 @@ static INPUT_PORTS_START( sharrier )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON3 )
 
 	PORT_MODIFY("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SWB:1")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x01, "Moving" )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SWB:2")
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:2")
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SWB:3,4")
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) ) PORT_DIPLOCATION("SW2:3,4")
 	PORT_DIPSETTING(    0x08, "2" )
 	PORT_DIPSETTING(    0x0c, "3" )
 	PORT_DIPSETTING(    0x04, "4" )
 	PORT_DIPSETTING(    0x00, "5" )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SWB:5")
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW2:5")
 	PORT_DIPSETTING(    0x10, "5000000" )
 	PORT_DIPSETTING(    0x00, "7000000" )
-	PORT_DIPNAME( 0x20, 0x20, "Trial Time" ) PORT_DIPLOCATION("SWB:6")
+	PORT_DIPNAME( 0x20, 0x20, "Trial Time" ) PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:7,8")
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:7,8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
@@ -722,25 +788,25 @@ static INPUT_PORTS_START( enduror )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START1 )
 
 	PORT_MODIFY("DSW")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SWB:1")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Cabinet ) ) PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
 	PORT_DIPSETTING(    0x01, "Wheelie" )
-	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SWB:2,3")
+	PORT_DIPNAME( 0x06, 0x06, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:2,3")
 	PORT_DIPSETTING(    0x04, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x06, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x18, 0x18, "Time Adjust" ) PORT_DIPLOCATION("SWB:4,5")
+	PORT_DIPNAME( 0x18, 0x18, "Time Adjust" ) PORT_DIPLOCATION("SW2:4,5")
 	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x18, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x60, 0x60, "Time Control" ) PORT_DIPLOCATION("SWB:6,7")
+	PORT_DIPNAME( 0x60, 0x60, "Time Control" ) PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING(    0x40, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x60, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SWB:8")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Demo_Sounds ) ) PORT_DIPLOCATION("SW2:8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
@@ -819,136 +885,136 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( hangon_base, segas1x_state )
+static MACHINE_DRIVER_START( hangon_base )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK_25MHz/4)
-	MCFG_CPU_PROGRAM_MAP(hangon_map)
-	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK_25MHz/4)
+	MDRV_CPU_PROGRAM_MAP(hangon_map)
+	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MCFG_CPU_ADD("sub", M68000, MASTER_CLOCK_25MHz/4)
-	MCFG_CPU_PROGRAM_MAP(sub_map)
+	MDRV_CPU_ADD("sub", M68000, MASTER_CLOCK_25MHz/4)
+	MDRV_CPU_PROGRAM_MAP(sub_map)
 
-	MCFG_MACHINE_RESET(hangon)
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_MACHINE_RESET(hangon)
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_PPI8255_ADD( "ppi8255_1", hangon_ppi_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_2", hangon_ppi_intf[1] )
+	MDRV_PPI8255_ADD( "ppi8255_0", hangon_ppi_intf[0] )
+	MDRV_PPI8255_ADD( "ppi8255_1", hangon_ppi_intf[1] )
 
 	/* video hardware */
-	MCFG_GFXDECODE(segahang)
-	MCFG_PALETTE_LENGTH(2048*3)
+	MDRV_GFXDECODE(segahang)
+	MDRV_PALETTE_LENGTH(2048*3)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
-	MCFG_SCREEN_UPDATE_STATIC(hangon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
 
-	MCFG_VIDEO_START(hangon)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(hangon)
+	MDRV_VIDEO_UPDATE(hangon)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( sharrier_base, hangon_base )
+static MACHINE_DRIVER_START( sharrier_base )
+	MDRV_IMPORT_FROM(hangon_base)
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_CLOCK(MASTER_CLOCK_10MHz)
-	MCFG_CPU_PROGRAM_MAP(sharrier_map)
-	MCFG_CPU_VBLANK_INT("screen", i8751_main_cpu_vblank)
+	MDRV_CPU_REPLACE("maincpu", M68000, MASTER_CLOCK_10MHz)
+	MDRV_CPU_PROGRAM_MAP(sharrier_map)
+	MDRV_CPU_VBLANK_INT("screen", i8751_main_cpu_vblank)
 
-	MCFG_CPU_MODIFY("sub")
-	MCFG_CPU_CLOCK(MASTER_CLOCK_10MHz)
+	MDRV_CPU_REPLACE("sub", M68000, MASTER_CLOCK_10MHz)
 
 	/* video hardware */
-	MCFG_VIDEO_START(sharrier)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(sharrier)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_FRAGMENT( sound_board_2203 )
-
-	/* basic machine hardware */
-	MCFG_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
-	MCFG_CPU_PROGRAM_MAP(sound_map_2203)
-	MCFG_CPU_IO_MAP(sound_portmap_2203)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("ymsnd", YM2203, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(2, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(3, "lspeaker",  0.37)
-	MCFG_SOUND_ROUTE(3, "rspeaker", 0.37)
-
-	MCFG_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz)
-	MCFG_SOUND_CONFIG(segapcm_interface)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_FRAGMENT( sound_board_2203x2 )
+static MACHINE_DRIVER_START( sound_board_2203 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
-	MCFG_CPU_PROGRAM_MAP(sound_map_2151)
-	MCFG_CPU_IO_MAP(sound_portmap_2203x2)
+	MDRV_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
+	MDRV_CPU_PROGRAM_MAP(sound_map_2203)
+	MDRV_CPU_IO_MAP(sound_portmap_2203)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ym1", YM2203, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(2, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(3, "lspeaker",  0.37)
-	MCFG_SOUND_ROUTE(3, "rspeaker", 0.37)
+	MDRV_SOUND_ADD("ym", YM2203, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(2, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(3, "lspeaker",  0.37)
+	MDRV_SOUND_ROUTE(3, "rspeaker", 0.37)
 
-	MCFG_SOUND_ADD("ym2", YM2203, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(2, "lspeaker",  0.13)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 0.13)
-	MCFG_SOUND_ROUTE(3, "lspeaker",  0.37)
-	MCFG_SOUND_ROUTE(3, "rspeaker", 0.37)
-
-	MCFG_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_CONFIG(segapcm_interface)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz)
+	MDRV_SOUND_CONFIG(segapcm_interface)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_FRAGMENT( sound_board_2151 )
+static MACHINE_DRIVER_START( sound_board_2203x2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
-	MCFG_CPU_PROGRAM_MAP(sound_map_2151)
-	MCFG_CPU_IO_MAP(sound_portmap_2151)
+	MDRV_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
+	MDRV_CPU_PROGRAM_MAP(sound_map_2151)
+	MDRV_CPU_IO_MAP(sound_portmap_2203x2)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2151, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_CONFIG(ym2151_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.43)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 0.43)
+	MDRV_SOUND_ADD("ym1", YM2203, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(2, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(3, "lspeaker",  0.37)
+	MDRV_SOUND_ROUTE(3, "rspeaker", 0.37)
 
-	MCFG_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz/2)
-	MCFG_SOUND_CONFIG(segapcm_interface)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym2", YM2203, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(2, "lspeaker",  0.13)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 0.13)
+	MDRV_SOUND_ROUTE(3, "lspeaker",  0.37)
+	MDRV_SOUND_ROUTE(3, "rspeaker", 0.37)
+
+	MDRV_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_CONFIG(segapcm_interface)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( sound_board_2151 )
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_8MHz/2)
+	MDRV_CPU_PROGRAM_MAP(sound_map_2151)
+	MDRV_CPU_IO_MAP(sound_portmap_2151)
+
+	/* sound hardware */
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+
+	MDRV_SOUND_ADD("ym", YM2151, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_CONFIG(ym2151_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.43)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 0.43)
+
+	MDRV_SOUND_ADD("pcm", SEGAPCM, MASTER_CLOCK_8MHz/2)
+	MDRV_SOUND_CONFIG(segapcm_interface)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -958,56 +1024,48 @@ MACHINE_CONFIG_END
  *
  *************************************/
 
-static MACHINE_CONFIG_DERIVED( hangon, hangon_base )
-	MCFG_FRAGMENT_ADD(sound_board_2203)
+static MACHINE_DRIVER_START( hangon )
+	MDRV_IMPORT_FROM(hangon_base)
+	MDRV_IMPORT_FROM(sound_board_2203)
+MACHINE_DRIVER_END
 
-	MCFG_SEGA16SP_ADD_HANGON("segaspr1")
-MACHINE_CONFIG_END
 
-
-static MACHINE_CONFIG_DERIVED( shangupb, hangon_base )
-	MCFG_FRAGMENT_ADD(sound_board_2151)
+static MACHINE_DRIVER_START( shangupb )
+	MDRV_IMPORT_FROM(hangon_base)
+	MDRV_IMPORT_FROM(sound_board_2151)
 
 	/* not sure about these speeds, but at 6MHz, the road is not updated fast enough */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_CLOCK(10000000)
-	MCFG_CPU_MODIFY("sub")
-	MCFG_CPU_CLOCK(10000000)
-
-	MCFG_SEGA16SP_ADD_HANGON("segaspr1")
-MACHINE_CONFIG_END
+	MDRV_CPU_REPLACE("maincpu", M68000, 10000000)
+	MDRV_CPU_REPLACE("sub", M68000, 10000000)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( sharrier, sharrier_base )
-	MCFG_FRAGMENT_ADD(sound_board_2203)
+static MACHINE_DRIVER_START( sharrier )
+	MDRV_IMPORT_FROM(sharrier_base)
+	MDRV_IMPORT_FROM(sound_board_2203)
 
-	MCFG_CPU_ADD("mcu", I8751, 8000000)
-	MCFG_CPU_IO_MAP(mcu_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_pulse)
-
-	MCFG_SEGA16SP_ADD_SHARRIER("segaspr1")
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( enduror, sharrier_base )
-	MCFG_FRAGMENT_ADD(sound_board_2151)
-
-	MCFG_SEGA16SP_ADD_SHARRIER("segaspr1")
-MACHINE_CONFIG_END
+	MDRV_CPU_ADD("mcu", I8751, 8000000)
+	MDRV_CPU_IO_MAP(mcu_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_pulse)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( enduror1, sharrier_base )
-	MCFG_FRAGMENT_ADD(sound_board_2203)
+static MACHINE_DRIVER_START( enduror )
+	MDRV_IMPORT_FROM(sharrier_base)
+	MDRV_IMPORT_FROM(sound_board_2151)
+MACHINE_DRIVER_END
 
-	MCFG_SEGA16SP_ADD_SHARRIER("segaspr1")
-MACHINE_CONFIG_END
+
+static MACHINE_DRIVER_START( enduror1 )
+	MDRV_IMPORT_FROM(sharrier_base)
+	MDRV_IMPORT_FROM(sound_board_2203)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( endurob2, sharrier_base )
-	MCFG_FRAGMENT_ADD(sound_board_2203x2)
-
-	MCFG_SEGA16SP_ADD_SHARRIER("segaspr1")
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( endurob2 )
+	MDRV_IMPORT_FROM(sharrier_base)
+	MDRV_IMPORT_FROM(sound_board_2203x2)
+MACHINE_DRIVER_END
 
 
 
@@ -1739,34 +1797,32 @@ ROM_END
 
 static DRIVER_INIT( hangon )
 {
-	hangon_generic_init(machine);
+	hangon_generic_init();
 }
 
 
 static DRIVER_INIT( sharrier )
 {
-	segas1x_state *state = machine.driver_data<segas1x_state>();
-
-	hangon_generic_init(machine);
-	state->m_i8751_vblank_hook = sharrier_i8751_sim;
+	hangon_generic_init();
+	i8751_vblank_hook = sharrier_i8751_sim;
 }
 
 
 static DRIVER_INIT( enduror )
 {
-	hangon_generic_init(machine);
+	hangon_generic_init();
 	fd1089b_decrypt(machine);
 }
 
 
 static DRIVER_INIT( endurobl )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
 	UINT16 *decrypt = auto_alloc_array(machine, UINT16, 0x40000/2);
 
-	hangon_generic_init(machine);
-	space->set_decrypted_region(0x000000, 0x03ffff, decrypt);
+	hangon_generic_init();
+	memory_set_decrypted_region(space, 0x000000, 0x03ffff, decrypt);
 
 	memcpy(decrypt + 0x00000/2, rom + 0x30000/2, 0x10000);
 	memcpy(decrypt + 0x10000/2, rom + 0x10000/2, 0x20000);
@@ -1775,20 +1831,19 @@ static DRIVER_INIT( endurobl )
 
 static DRIVER_INIT( endurob2 )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
 	UINT16 *decrypt = auto_alloc_array(machine, UINT16, 0x40000/2);
 
-	hangon_generic_init(machine);
-	space->set_decrypted_region(0x000000, 0x03ffff, decrypt);
+	hangon_generic_init();
+	memory_set_decrypted_region(space, 0x000000, 0x03ffff, decrypt);
 
 	memcpy(decrypt, rom, 0x30000);
 	/* missing data ROM */
 }
-
 static DRIVER_INIT( shangonro )
 {
-	hangon_generic_init(machine);
+	hangon_generic_init();
 
 	/* init the FD1094 */
 	fd1094_driver_init(machine, "sub", NULL);
@@ -1801,15 +1856,13 @@ static DRIVER_INIT( shangonro )
  *
  *************************************/
 
-//    YEAR, NAME,      PARENT,   MACHINE,  INPUT,     INIT,      MONITOR,COMPANY,FULLNAME,FLAGS
-GAME( 1985, hangon,    0,        hangon,   hangon,    hangon,    ROT0,   "Sega", "Hang-On (Rev A)", 0 )
-GAME( 1985, hangon1,   hangon,   hangon,   hangon,    hangon,    ROT0,   "Sega", "Hang-On", 0 )
-GAME( 1987, shangonro, shangon,  shangupb, shangonro, shangonro, ROT0,   "Sega", "Super Hang-On (ride-on, Japan, FD1094 317-0038)", 0 )
-GAME( 1992, shangonrb, shangon,  shangupb, shangupb,  hangon,    ROT0,   "bootleg", "Super Hang-On (bootleg)", 0 )
-GAME( 1985, sharrier,  0,        sharrier, sharrier,  sharrier,  ROT0,   "Sega", "Space Harrier (Rev A, 8751 315-5163A)", 0 )
-GAME( 1985, sharrier1, sharrier, sharrier, sharrier,  sharrier,  ROT0,   "Sega", "Space Harrier (8751 315-5163)", 0 )
-GAME( 1986, enduror,   0,        enduror,  enduror,   enduror,   ROT0,   "Sega", "Enduro Racer (YM2151, FD1089B 317-0013A)", 0 )
-GAME( 1986, enduror1,  enduror,  enduror1, enduror,   enduror,   ROT0,   "Sega", "Enduro Racer (YM2203, FD1089B 317-0013A)", 0 )
-GAME( 1986, endurobl,  enduror,  enduror1, enduror,   endurobl,  ROT0,   "bootleg", "Enduro Racer (bootleg set 1)", 0 )
-GAME( 1986, endurob2,  enduror,  endurob2, enduror,   endurob2,  ROT0,   "bootleg", "Enduro Racer (bootleg set 2)", GAME_NOT_WORKING )
-
+GAME( 1985, hangon,    0,        hangon,   hangon,   hangon,   ROT0, "Sega",    "Hang-On (Rev A)", 0 )
+GAME( 1985, hangon1,   hangon,   hangon,   hangon,   hangon,   ROT0, "Sega",    "Hang-On", 0 )
+GAME( 1992, shangonro, shangon,  shangupb, shangonro,shangonro,ROT0, "Sega",    "Super Hang-On (Japan, FD1094 317-0038)", 0 )
+GAME( 1992, shangonrb, shangon,  shangupb, shangupb, hangon,   ROT0, "bootleg", "Super Hang-On (bootleg)", 0 )
+GAME( 1985, sharrier,  0,        sharrier, sharrier, sharrier, ROT0, "Sega",    "Space Harrier (Rev A, 8751 315-5163A)", 0 )
+GAME( 1985, sharrier1, sharrier, sharrier, sharrier, sharrier, ROT0, "Sega",    "Space Harrier (8751 315-5163)", 0 )
+GAME( 1986, enduror,   0,        enduror,  enduror,  enduror,  ROT0, "Sega",    "Enduro Racer (YM2151, FD1089B 317-0013A)", 0 )
+GAME( 1986, enduror1,  enduror,  enduror1, enduror,  enduror,  ROT0, "Sega",    "Enduro Racer (YM2203, FD1089B 317-0013A)", 0 )
+GAME( 1986, endurobl,  enduror,  enduror1, enduror,  endurobl, ROT0, "bootleg", "Enduro Racer (bootleg set 1)", 0 )
+GAME( 1986, endurob2,  enduror,  endurob2, enduror,  endurob2, ROT0, "bootleg", "Enduro Racer (bootleg set 2)", GAME_NOT_WORKING )

@@ -32,23 +32,11 @@ Notes/Tidbits:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
-#include "machine/7474.h"
+#include "galaxold.h"
 #include "sound/ay8910.h"
-#include "includes/scramble.h"
-
-
-class scobra_state : public scramble_state
-{
-public:
-	scobra_state(const machine_config &mconfig, device_type type, const char *tag)
-		: scramble_state(mconfig, type, tag) { }
-
-	UINT8 *m_soundram;
-};
-
 
 static const gfx_layout scobra_charlayout =
 {
@@ -112,15 +100,15 @@ static WRITE8_DEVICE_HANDLER(hustler_ppi8255_w)
 	ppi8255_w(device, offset >> 3, data);
 }
 
-static ADDRESS_MAP_START( type1_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( type1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE_MEMBER(galaxold_state, m_videoram)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
 	AM_RANGE(0x8c00, 0x8fff) AM_RAM_WRITE(galaxold_videoram_w)	/* mirror */
 	AM_RANGE(0x8c00, 0x8fff) AM_READ(galaxold_videoram_r)	/* mirror */
-	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE_MEMBER(galaxold_state, m_attributesram)
-	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_spriteram) AM_SIZE_MEMBER(galaxold_state, m_spriteram_size)
-	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_bulletsram) AM_SIZE_MEMBER(galaxold_state, m_bulletsram_size)
+	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
 	AM_RANGE(0x9080, 0x90ff) AM_RAM
 	AM_RANGE(0x9800, 0x9803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xa000, 0xa003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
@@ -132,14 +120,14 @@ static ADDRESS_MAP_START( type1_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb000) AM_READ(watchdog_reset_r)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( type2_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( type2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x883f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE_MEMBER(galaxold_state, m_attributesram)
-	AM_RANGE(0x8840, 0x885f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_spriteram) AM_SIZE_MEMBER(galaxold_state, m_spriteram_size)
-	AM_RANGE(0x8860, 0x887f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_bulletsram) AM_SIZE_MEMBER(galaxold_state, m_bulletsram_size)
+	AM_RANGE(0x8800, 0x883f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x8840, 0x885f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x8860, 0x887f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
 	AM_RANGE(0x8880, 0x88ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE_MEMBER(galaxold_state, m_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
 	AM_RANGE(0x9400, 0x97ff) AM_READWRITE(galaxold_videoram_r, galaxold_videoram_w)	/* mirror */
 	AM_RANGE(0x9800, 0x9800) AM_READ(watchdog_reset_r)
 	AM_RANGE(0xa000, 0xa00f) AM_DEVREADWRITE("ppi8255_0", scobra_type2_ppi8255_r, scobra_type2_ppi8255_w)
@@ -152,13 +140,13 @@ static ADDRESS_MAP_START( type2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb00e, 0xb00e) AM_WRITE(galaxold_flip_screen_x_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hustler_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hustler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE_MEMBER(galaxold_state, m_videoram)
-	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE_MEMBER(galaxold_state, m_attributesram)
-	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_spriteram) AM_SIZE_MEMBER(galaxold_state, m_spriteram_size)
-	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_bulletsram) AM_SIZE_MEMBER(galaxold_state, m_bulletsram_size)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
+	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
 	AM_RANGE(0x9080, 0x90ff) AM_RAM
 	AM_RANGE(0xa802, 0xa802) AM_WRITE(galaxold_flip_screen_x_w)
 	AM_RANGE(0xa804, 0xa804) AM_WRITE(galaxold_nmi_enable_w)
@@ -169,13 +157,13 @@ static ADDRESS_MAP_START( hustler_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xe01f) AM_DEVREADWRITE("ppi8255_1", hustler_ppi8255_r, hustler_ppi8255_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hustlerb_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hustlerb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_RAM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE_MEMBER(galaxold_state, m_videoram)
-	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE_MEMBER(galaxold_state, m_attributesram)
-	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_spriteram) AM_SIZE_MEMBER(galaxold_state, m_spriteram_size)
-	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_bulletsram) AM_SIZE_MEMBER(galaxold_state, m_bulletsram_size)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
+	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
 	AM_RANGE(0x9080, 0x90ff) AM_RAM
 	AM_RANGE(0xa801, 0xa801) AM_WRITE(galaxold_nmi_enable_w)
 	AM_RANGE(0xa802, 0xa802) AM_WRITENOP	/* coin counters */
@@ -186,14 +174,14 @@ static ADDRESS_MAP_START( hustlerb_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc200, 0xc203) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mimonkey_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mimonkey_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE_MEMBER(galaxold_state, m_videoram)
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
 	AM_RANGE(0x8c00, 0x8fff) AM_READWRITE(galaxold_videoram_r, galaxold_videoram_w)	/* mirror */
-	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE_MEMBER(galaxold_state, m_attributesram)
-	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_spriteram) AM_SIZE_MEMBER(galaxold_state, m_spriteram_size)
-	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE_MEMBER(galaxold_state, m_bulletsram) AM_SIZE_MEMBER(galaxold_state, m_bulletsram_size)
+	AM_RANGE(0x9000, 0x903f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x9040, 0x905f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x9060, 0x907f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
 	AM_RANGE(0x9080, 0x90ff) AM_RAM
 	AM_RANGE(0x9800, 0x9803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xa000, 0xa003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
@@ -206,34 +194,141 @@ static ADDRESS_MAP_START( mimonkey_map, AS_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
+static READ8_DEVICE_HANDLER( anteatg_ppi8255_0_reg0_r )
+{
+	return ppi8255_r(device, 0);
+}
+
+static READ8_DEVICE_HANDLER( anteatg_ppi8255_0_reg1_r )
+{
+	return ppi8255_r(device, 1);
+}
+
+static READ8_DEVICE_HANDLER( anteatg_ppi8255_0_reg2_r )
+{
+	return ppi8255_r(device, 2);
+}
+
+static READ8_DEVICE_HANDLER( anteatg_ppi8255_0_reg3_r )
+{
+	return ppi8255_r(device, 3);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_0_reg0_w )
+{
+	ppi8255_w(device, 0, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_0_reg1_w )
+{
+	ppi8255_w(device, 1, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_0_reg2_w )
+{
+	ppi8255_w(device, 2, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_0_reg3_w )
+{
+	ppi8255_w(device, 3, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_1_reg0_w )
+{
+	ppi8255_w(device, 0, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_1_reg1_w )
+{
+	ppi8255_w(device, 1, data);
+}
+
+static WRITE8_DEVICE_HANDLER( anteatg_ppi8255_1_reg3_w )
+{
+	ppi8255_w(device, 3, data);
+}
+
+static ADDRESS_MAP_START( anteatg_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_ROM
+	AM_RANGE(0x0400, 0x0bff) AM_RAM
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
+	AM_RANGE(0x2000, 0x203f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x2040, 0x205f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x2060, 0x207f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
+	AM_RANGE(0x2080, 0x20ff) AM_RAM
+	AM_RANGE(0x2423, 0x2423) AM_DEVWRITE("ppi8255_1", anteatg_ppi8255_1_reg3_w)
+	AM_RANGE(0x2450, 0x2450) AM_DEVWRITE("ppi8255_1", anteatg_ppi8255_1_reg0_w)
+	AM_RANGE(0x2511, 0x2511) AM_DEVWRITE("ppi8255_1", anteatg_ppi8255_1_reg1_w)
+	AM_RANGE(0x2621, 0x2621) AM_WRITE(galaxold_nmi_enable_w)
+	AM_RANGE(0x2624, 0x2624) AM_WRITE(galaxold_stars_enable_w)
+	AM_RANGE(0x2647, 0x2647) AM_WRITE(galaxold_flip_screen_y_w)
+	AM_RANGE(0x2653, 0x2653) AM_WRITE(scrambold_background_enable_w)
+	AM_RANGE(0x2702, 0x2702) AM_WRITE(galaxold_coin_counter_w)
+	AM_RANGE(0x2736, 0x2736) AM_WRITE(galaxold_flip_screen_x_w)
+	AM_RANGE(0x4600, 0x4fff) AM_ROM
+	AM_RANGE(0x6400, 0x7aff) AM_ROM
+	AM_RANGE(0x7c00, 0x7fff) AM_READWRITE(galaxold_videoram_r, galaxold_videoram_w)	/* mirror */
+	AM_RANGE(0x8300, 0x98ff) AM_ROM
+	AM_RANGE(0xa300, 0xa7ff) AM_ROM
+	AM_RANGE(0xf521, 0xf521) AM_READ(watchdog_reset_r)
+	AM_RANGE(0xf612, 0xf612) AM_DEVREADWRITE("ppi8255_0", anteatg_ppi8255_0_reg0_r, anteatg_ppi8255_0_reg0_w)
+	AM_RANGE(0xf631, 0xf631) AM_DEVREADWRITE("ppi8255_0", anteatg_ppi8255_0_reg1_r, anteatg_ppi8255_0_reg1_w)
+	AM_RANGE(0xf710, 0xf710) AM_DEVREADWRITE("ppi8255_0", anteatg_ppi8255_0_reg2_r, anteatg_ppi8255_0_reg2_w)
+	AM_RANGE(0xf753, 0xf753) AM_DEVREADWRITE("ppi8255_0", anteatg_ppi8255_0_reg3_r, anteatg_ppi8255_0_reg3_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( anteatgb_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_ROM
+	AM_RANGE(0x0400, 0x0bff) AM_RAM
+	AM_RANGE(0x0c00, 0x0fff) AM_RAM_WRITE(galaxold_videoram_w) AM_BASE(&galaxold_videoram)
+	AM_RANGE(0x1171, 0x1171) AM_WRITE(galaxold_nmi_enable_w)
+	AM_RANGE(0x1174, 0x1174) AM_WRITE(galaxold_stars_enable_w)
+	AM_RANGE(0x1177, 0x1177) AM_WRITE(galaxold_flip_screen_y_w)
+	AM_RANGE(0x1173, 0x1173) AM_WRITE(scrambold_background_enable_w)
+	AM_RANGE(0x1172, 0x1172) AM_WRITE(galaxold_coin_counter_w)
+	AM_RANGE(0x1176, 0x1176) AM_WRITE(galaxold_flip_screen_x_w)
+	AM_RANGE(0x1200, 0x123f) AM_RAM_WRITE(galaxold_attributesram_w) AM_BASE(&galaxold_attributesram)
+	AM_RANGE(0x1240, 0x125f) AM_RAM AM_BASE(&galaxold_spriteram) AM_SIZE(&galaxold_spriteram_size)
+	AM_RANGE(0x1260, 0x127f) AM_RAM AM_BASE(&galaxold_bulletsram) AM_SIZE(&galaxold_bulletsram_size)
+	AM_RANGE(0x1280, 0x12ff) AM_RAM
+	AM_RANGE(0x145b, 0x145b) AM_READ(watchdog_reset_r)
+	AM_RANGE(0x4600, 0x4fff) AM_ROM
+	AM_RANGE(0x6400, 0x7aff) AM_ROM
+	AM_RANGE(0x8300, 0x98ff) AM_ROM
+	AM_RANGE(0xa300, 0xa7ff) AM_ROM
+	AM_RANGE(0xf300, 0xf303) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
+	AM_RANGE(0xfe00, 0xfe03) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
+ADDRESS_MAP_END
+
+static UINT8 *scobra_soundram;
+
 static READ8_HANDLER(scobra_soundram_r)
 {
-	scobra_state *state = space->machine().driver_data<scobra_state>();
-	return state->m_soundram[offset & 0x03ff];
+	return scobra_soundram[offset & 0x03ff];
 }
 
 static WRITE8_HANDLER(scobra_soundram_w)
 {
-	scobra_state *state = space->machine().driver_data<scobra_state>();
-	state->m_soundram[offset & 0x03ff] = data;
+	scobra_soundram[offset & 0x03ff] = data;
 }
 
-static ADDRESS_MAP_START( scobra_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( scobra_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(scobra_soundram_r, scobra_soundram_w)
-	AM_RANGE(0x8000, 0x83ff) AM_WRITENOP AM_BASE_MEMBER(scobra_state, m_soundram)  /* only here to initialize pointer */
+	AM_RANGE(0x8000, 0x83ff) AM_WRITENOP AM_BASE(&scobra_soundram)  /* only here to initialize pointer */
 	AM_RANGE(0x9000, 0x9fff) AM_WRITE(scramble_filter_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( hustlerb_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hustlerb_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
 	AM_RANGE(0x6000, 0x6fff) AM_WRITE(frogger_filter_w)
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_READ(scobra_soundram_r) AM_BASE_MEMBER(scobra_state, m_soundram)  /* only here to initialize pointer */
+	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(scobra_soundram_r, SMH_RAM) AM_BASE(&scobra_soundram)  /* only here to initialize pointer */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( scobra_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( scobra_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x10) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0x20, 0x20) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_data_w)
@@ -241,30 +336,30 @@ static ADDRESS_MAP_START( scobra_sound_io_map, AS_IO, 8 )
 	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hustler_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( hustler_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
     AM_RANGE(0x6000, 0x6fff) AM_WRITE(frogger_filter_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hustler_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( hustler_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
-	AM_RANGE(0x80, 0x80) AM_DEVWRITE("aysnd", ay8910_address_w)
+	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x80, 0x80) AM_DEVWRITE("ay", ay8910_address_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( hustlerb_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( hustlerb_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0x40, 0x40) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0x80, 0x80) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
 ADDRESS_MAP_END
 
-/* stratgyx coinage DIPs are spread across two input ports */
+/* stratgyx coinage DIPs are spread accross two input ports */
 static CUSTOM_INPUT( stratgyx_coinage_r )
 {
 	int bit_mask = (FPTR)param;
-	return (input_port_read(field.machine(), "IN4") & bit_mask) ? 0x01 : 0x00;
+	return (input_port_read(field->port->machine, "IN4") & bit_mask) ? 0x01 : 0x00;
 }
 
 
@@ -434,6 +529,108 @@ static INPUT_PORTS_START( tazmania )
 INPUT_PORTS_END
 
 
+static INPUT_PORTS_START( anteatg )
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(    0x02, "Coin A 1/1 Coin B 1/5" )
+	PORT_DIPSETTING(    0x00, "Coin A 2/1 Coin B 1/3" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPSETTING(    0x00, "6" )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+	PORT_START("IN1")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
+
+	PORT_START("IN2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( anteatgb )
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
+
+	PORT_START("IN1")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
+
+	PORT_START("IN2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(    0x02, "Coin A 1/1 Coin B 1/5" )
+	PORT_DIPSETTING(    0x00, "Coin A 2/1 Coin B 1/3" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Lives ) )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPSETTING(    0x00, "6" )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+INPUT_PORTS_END
+
 /* cocktail mode is N/A */
 static INPUT_PORTS_START( rescue )
 	PORT_START("IN0")
@@ -555,11 +752,12 @@ static INPUT_PORTS_START( hustler )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
 
 	PORT_START("IN1")
-	PORT_DIPNAME( 0x03, 0x02, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Lives ) )
 	PORT_DIPSETTING(    0x00, "1" )
 	PORT_DIPSETTING(    0x01, "2" )
-	PORT_DIPSETTING(    0x02, "3" )
-	PORT_DIPSETTING(    0x03, "Infinite (Test)" )
+	PORT_DIPNAME( 0x02, 0x00, "Infinite Lives (Cheat)")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( On ) )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
@@ -651,183 +849,199 @@ static const ay8910_interface scobra_ay8910_interface_2 =
 };
 
 
-static MACHINE_CONFIG_START( type1, scobra_state )
+static MACHINE_DRIVER_START( type1 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
-	MCFG_CPU_PROGRAM_MAP(type1_map)
+	MDRV_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
+	MDRV_CPU_PROGRAM_MAP(type1_map)
 
-	MCFG_CPU_ADD("audiocpu", Z80,14318000/8)	/* 1.78975 MHz */
-	MCFG_CPU_PROGRAM_MAP(scobra_sound_map)
-	MCFG_CPU_IO_MAP(scobra_sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,14318000/8)	/* 1.78975 MHz */
+	MDRV_CPU_PROGRAM_MAP(scobra_sound_map)
+	MDRV_CPU_IO_MAP(scobra_sound_io_map)
 
-	MCFG_7474_ADD("konami_7474", "konami_7474", NULL, scramble_sh_7474_q_callback)
+	MDRV_MACHINE_RESET(scramble)
 
-	MCFG_MACHINE_RESET(scramble)
-
-	MCFG_PPI8255_ADD( "ppi8255_0", scramble_ppi_0_intf )
-	MCFG_PPI8255_ADD( "ppi8255_1", scramble_ppi_1_intf )
-
-	MCFG_7474_ADD("7474_9m_1", "7474_9m_1", galaxold_7474_9m_1_callback, NULL)
-	MCFG_7474_ADD("7474_9m_2", "7474_9m_1", NULL, galaxold_7474_9m_2_q_callback)
-
-	MCFG_TIMER_ADD("int_timer", galaxold_interrupt_timer)
+	MDRV_PPI8255_ADD( "ppi8255_0", scramble_ppi_0_intf )
+	MDRV_PPI8255_ADD( "ppi8255_1", scramble_ppi_1_intf )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(16000.0/132/2)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(galaxold)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(16000.0/132/2)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(scobra)
-	MCFG_PALETTE_LENGTH(32+64+2+1)	/* 32 for characters, 64 for stars, 2 for bullets, 1 for background */
+	MDRV_GFXDECODE(scobra)
+	MDRV_PALETTE_LENGTH(32+64+2+1)	/* 32 for characters, 64 for stars, 2 for bullets, 1 for background */
 
-	MCFG_PALETTE_INIT(scrambold)
-	MCFG_VIDEO_START(scrambold)
+	MDRV_PALETTE_INIT(scrambold)
+	MDRV_VIDEO_START(scrambold)
+	MDRV_VIDEO_UPDATE(galaxold)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("ay1", AY8910, 14318000/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.16)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay1", AY8910, 14318000/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.16)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 14318000/8)
-	MCFG_SOUND_CONFIG(scobra_ay8910_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.16)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 14318000/8)
+	MDRV_SOUND_CONFIG(scobra_ay8910_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.16)
+MACHINE_DRIVER_END
 
 
 
 /* Rescue, Minefield and Strategy X have extra colors, and custom video initialise */
 /* routines to set up the graduated color backgound they use */
-static MACHINE_CONFIG_DERIVED( rescue, type1 )
+static MACHINE_DRIVER_START( rescue )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type1)
 
 	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_PALETTE_LENGTH(32+64+2+128)	/* 32 for characters, 64 for stars, 2 for bullets, 128 for background */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_PALETTE_LENGTH(32+64+2+128)	/* 32 for characters, 64 for stars, 2 for bullets, 128 for background */
 
-	MCFG_PALETTE_INIT(rescue)
-	MCFG_VIDEO_START(rescue)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_INIT(rescue)
+	MDRV_VIDEO_START(rescue)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( minefld, type1 )
+static MACHINE_DRIVER_START( minefld )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type1)
 
 	/* video hardware */
-	MCFG_SCREEN_MODIFY("screen")
-	MCFG_PALETTE_LENGTH(32+64+2+256)	/* 32 for characters, 64 for stars, 2 for bullets, 256 for background */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_PALETTE_LENGTH(32+64+2+256)	/* 32 for characters, 64 for stars, 2 for bullets, 256 for background */
 
-	MCFG_PALETTE_INIT(minefld)
-	MCFG_VIDEO_START(minefld)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_INIT(minefld)
+	MDRV_VIDEO_START(minefld)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( mimonkey, type1 )
+static MACHINE_DRIVER_START( mimonkey )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(mimonkey_map)
+	MDRV_IMPORT_FROM(type1)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(mimonkey_map)
 
 	/* video hardware */
-	MCFG_VIDEO_START(mimonkey)
-MACHINE_CONFIG_END
+	MDRV_VIDEO_START(mimonkey)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( type2, type1 )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(type2_map)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( stratgyx, type2 )
+static MACHINE_DRIVER_START( type2 )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type1)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(type2_map)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( stratgyx )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type2)
 
 	/* device config overrides */
-	MCFG_PPI8255_RECONFIG( "ppi8255_1", stratgyx_ppi_1_intf )
+	MDRV_PPI8255_RECONFIG( "ppi8255_1", stratgyx_ppi_1_intf )
 
 	/* video hardware */
-	MCFG_PALETTE_LENGTH(32+64+2+8)	/* 32 for characters, 64 for stars, 2 for bullets, 8 for background */
+	MDRV_PALETTE_LENGTH(32+64+2+8)	/* 32 for characters, 64 for stars, 2 for bullets, 8 for background */
 
-	MCFG_PALETTE_INIT(stratgyx)
-	MCFG_VIDEO_START(stratgyx)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_INIT(stratgyx)
+	MDRV_VIDEO_START(stratgyx)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( darkplnt, type2 )
+static MACHINE_DRIVER_START( darkplnt )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type2)
 
 	/* video hardware */
-	MCFG_PALETTE_LENGTH(32+64+2) /* 32 for characters, 64 (buffer) for stars, 2 for bullets */
+	MDRV_PALETTE_LENGTH(32+64+2) /* 32 for characters, 64 (buffer) for stars, 2 for bullets */
 
-	MCFG_PALETTE_INIT(darkplnt)
-	MCFG_VIDEO_START(darkplnt)
-MACHINE_CONFIG_END
+	MDRV_PALETTE_INIT(darkplnt)
+	MDRV_VIDEO_START(darkplnt)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( hustler, scobra_state )
+static MACHINE_DRIVER_START( hustler )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
-	MCFG_CPU_PROGRAM_MAP(hustler_map)
+	MDRV_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
+	MDRV_CPU_PROGRAM_MAP(hustler_map)
 
-	MCFG_CPU_ADD("audiocpu",Z80,14318000/8)	/* 1.78975 MHz */
-	MCFG_CPU_PROGRAM_MAP(hustler_sound_map)
-	MCFG_CPU_IO_MAP(hustler_sound_io_map)
+	MDRV_CPU_ADD("audiocpu",Z80,14318000/8)	/* 1.78975 MHz */
+	MDRV_CPU_PROGRAM_MAP(hustler_sound_map)
+	MDRV_CPU_IO_MAP(hustler_sound_io_map)
 
-	MCFG_7474_ADD("konami_7474", "konami_7474", NULL, scramble_sh_7474_q_callback)
-
-	MCFG_MACHINE_RESET(scramble)
-
-	MCFG_7474_ADD("7474_9m_1", "7474_9m_1", galaxold_7474_9m_1_callback, NULL)
-	MCFG_7474_ADD("7474_9m_2", "7474_9m_1", NULL, galaxold_7474_9m_2_q_callback)
-
-	MCFG_TIMER_ADD("int_timer", galaxold_interrupt_timer)
+	MDRV_MACHINE_RESET(scramble)
 
 	/* device config overrides */
-	MCFG_PPI8255_ADD( "ppi8255_0", scramble_ppi_0_intf )
-	MCFG_PPI8255_ADD( "ppi8255_1", scramble_ppi_1_intf )
+	MDRV_PPI8255_ADD( "ppi8255_0", scramble_ppi_0_intf )
+	MDRV_PPI8255_ADD( "ppi8255_1", scramble_ppi_1_intf )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(16000.0/132/2)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(galaxold)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(16000.0/132/2)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(scobra)
-	MCFG_PALETTE_LENGTH(32+64+2)	/* 32 for characters, 64 for stars, 2 for bullets */
+	MDRV_GFXDECODE(scobra)
+	MDRV_PALETTE_LENGTH(32+64+2)	/* 32 for characters, 64 for stars, 2 for bullets */
 
-	MCFG_PALETTE_INIT(galaxold)
-	MCFG_VIDEO_START(scrambold)
+	MDRV_PALETTE_INIT(galaxold)
+	MDRV_VIDEO_START(scrambold)
+	MDRV_VIDEO_UPDATE(galaxold)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, 14318000/8)
-	MCFG_SOUND_CONFIG(hustler_ay8910_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, 14318000/8)
+	MDRV_SOUND_CONFIG(hustler_ay8910_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( hustlerb, hustler )
+static MACHINE_DRIVER_START( hustlerb )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(hustlerb_map)
+	MDRV_IMPORT_FROM(hustler)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(hustlerb_map)
 
-	MCFG_CPU_MODIFY("audiocpu")
-	MCFG_CPU_PROGRAM_MAP(hustlerb_sound_map)
-	MCFG_CPU_IO_MAP(hustlerb_sound_io_map)
-MACHINE_CONFIG_END
+	MDRV_CPU_MODIFY("audiocpu")
+	MDRV_CPU_PROGRAM_MAP(hustlerb_sound_map)
+	MDRV_CPU_IO_MAP(hustlerb_sound_io_map)
+MACHINE_DRIVER_END
+
+
+/* same as type1 but with a strange memory map, maybe a kind of protection */
+static MACHINE_DRIVER_START( anteatg )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type1)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(anteatg_map)
+MACHINE_DRIVER_END
+
+/* same as type1 but with a strange memory map, maybe a kind of protection */
+static MACHINE_DRIVER_START( anteatgb )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(type1)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(anteatgb_map)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -950,12 +1164,47 @@ ROM_START( tazmani2 )
 	ROM_LOAD( "colr6f.cpu",   0x0000, 0x0020, CRC(fce333c7) SHA1(f63a214dc47c5e7c80db000b0b6a261ca8da6629) )
 ROM_END
 
-/*
-    Rescue
+ROM_START( anteatg )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "prg_2.bin",    0x0000, 0x0400, CRC(2ba793a8) SHA1(a97c96dcd55804d3b41856ece6477ec1c1e45892) )
+	ROM_CONTINUE(             0x4600, 0x0a00 )
+	ROM_CONTINUE(             0x6400, 0x1200 )
+	ROM_LOAD( "prg_1.bin",    0x7600, 0x0500, CRC(7a798af5) SHA1(b4c8672c92b207a7a334dd3b78e57537b7d99b71) )
+	ROM_CONTINUE(             0x8300, 0x1600 )
+	ROM_CONTINUE(             0xa300, 0x0500 )
 
-    CPU/Video Board: A969 (Has various wire mods)
-    Sound Board:     ?
-*/
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "ra4-5c",       0x0000, 0x0800, CRC(87300b4f) SHA1(b81b685ac1d353ff1cd40b876a7478b87b85e7a9) )
+	ROM_LOAD( "ra4-5d",       0x0800, 0x0800, CRC(af4e5ffe) SHA1(62717a233cf9f58267af4a9e1c80479b373ab317) )
+
+	ROM_REGION( 0x1000, "gfx1", 0 )
+	ROM_LOAD( "gfx_1.bin",    0x0000, 0x0800, CRC(1e2824b1) SHA1(9527937db618505181f4d5a22bc532977a767232) )
+	ROM_LOAD( "gfx_2.bin",    0x0800, 0x0800, CRC(784319b3) SHA1(0c3612a428d0906b07b35782cc0f84fda13aab73) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "colr6f.cpu",   0x0000, 0x0020, CRC(fce333c7) SHA1(f63a214dc47c5e7c80db000b0b6a261ca8da6629) )
+ROM_END
+
+ROM_START( anteatgb )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ant1.bin",     0x0000, 0x0400, CRC(69debc90) SHA1(2ad4c86a1cbaf86d0b76bb07b885f61bc6604009) )
+	ROM_CONTINUE(             0x4600, 0x0a00 )
+	ROM_CONTINUE(             0x6400, 0x1200 )
+	ROM_LOAD( "ant2.bin",     0x7600, 0x0500, CRC(ab352805) SHA1(858928f2b57c324a7942c13e0e6a7717a36f6ffc) )
+	ROM_CONTINUE(             0x8300, 0x1600 )
+	ROM_CONTINUE(             0xa300, 0x0500 )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "ra4-5c",       0x0000, 0x0800, CRC(87300b4f) SHA1(b81b685ac1d353ff1cd40b876a7478b87b85e7a9) )
+	ROM_LOAD( "ra4-5d",       0x0800, 0x0800, CRC(af4e5ffe) SHA1(62717a233cf9f58267af4a9e1c80479b373ab317) )
+
+	ROM_REGION( 0x1000, "gfx1", 0 )
+	ROM_LOAD( "gfx_1.bin",    0x0000, 0x0800, CRC(1e2824b1) SHA1(9527937db618505181f4d5a22bc532977a767232) )
+	ROM_LOAD( "gfx_2.bin",    0x0800, 0x0800, CRC(784319b3) SHA1(0c3612a428d0906b07b35782cc0f84fda13aab73) )
+
+	ROM_REGION( 0x0020, "proms", 0 )
+	ROM_LOAD( "colr6f.cpu",   0x0000, 0x0020, CRC(fce333c7) SHA1(f63a214dc47c5e7c80db000b0b6a261ca8da6629) )
+ROM_END
 
 ROM_START( rescue )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -972,26 +1221,6 @@ ROM_START( rescue )
 	ROM_REGION( 0x1000, "gfx1", 0 )
 	ROM_LOAD( "rb15fcpu.bin", 0x0000, 0x0800, CRC(4489d20c) SHA1(c7a2afbd2e5645a1a25dec6147d61a38ba12380f) )
 	ROM_LOAD( "rb15hcpu.bin", 0x0800, 0x0800, CRC(5512c547) SHA1(e0f1c994daaa8933230cbc4bb88d459a698e0d8e) )
-
-	ROM_REGION( 0x0020, "proms", 0 )
-	ROM_LOAD( "rescue.clr",   0x0000, 0x0020, CRC(40c6bcbd) SHA1(cb0c058eadc37eba4b1a99be095da81a14099d8d) )
-ROM_END
-
-ROM_START( rescueb )  /* VIDEL GAMES @ ($079A-$07A4) */
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "p1.2c",        0x0000, 0x1000, CRC(d3661258) SHA1(41782097f6acb1d76067e7d727837a5a5297e43f) )
-	ROM_LOAD( "p2.2e",        0x1000, 0x1000, CRC(47464506) SHA1(53a2a3ff307ad49ead8a7fcf897c8650f56eeb19) )
-	ROM_LOAD( "p3.2f",        0x2000, 0x1000, CRC(7dc03ec3) SHA1(9aa5fda48a40c977d15e51bbcfe9b155705a6941) )
-	ROM_LOAD( "p4.2h",        0x3000, 0x1000, CRC(a11eaf78) SHA1(dfbc6ea5894493fd74fe3f75cd1793bd31673319) )
-	ROM_LOAD( "rb15ecpu.bin", 0x4000, 0x1000, CRC(604df3a4) SHA1(15790fa442538632f232280c096ac788d9bf8117) ) // p5.2j
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "rb15csnd.bin", 0x0000, 0x0800, CRC(8b24bf17) SHA1(cc49fef3c629c12f1a7eb9886fdc2df4b08f4b37) ) // s1.5c
-	ROM_LOAD( "rb15dsnd.bin", 0x0800, 0x0800, CRC(d96e4fb3) SHA1(8bb023c7c668f93d2333d648fc3cefdbd66f92db) ) // s1.5d
-
-	ROM_REGION( 0x1000, "gfx1", 0 )
-	ROM_LOAD( "rb15fcpu.bin", 0x0000, 0x0800, CRC(4489d20c) SHA1(c7a2afbd2e5645a1a25dec6147d61a38ba12380f) ) // c1.5f
-	ROM_LOAD( "rb15hcpu.bin", 0x0800, 0x0800, CRC(5512c547) SHA1(e0f1c994daaa8933230cbc4bb88d459a698e0d8e) ) // c2.5h
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "rescue.clr",   0x0000, 0x0020, CRC(40c6bcbd) SHA1(cb0c058eadc37eba4b1a99be095da81a14099d8d) )
@@ -1057,25 +1286,6 @@ ROM_START( hustler )
 	ROM_LOAD( "hustler.clr",  0x0000, 0x0020, CRC(aa1f7f5e) SHA1(311dd17aa11490a1173c76223e4ccccf8ea29850) )
 ROM_END
 
-ROM_START( hustlerd )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "vh1.ic5",    0x0000, 0x1000, CRC(7cb6a940) SHA1(8b51072563f7a63aab5d5ee4e835dc7275a2b98a) )
-	ROM_LOAD( "vh2.ic6",    0x1000, 0x1000, CRC(4ca45239) SHA1(729ec16c0a192f957ba454d4acbe873a71030a22) )
-	ROM_LOAD( "vh3.ic7",    0x2000, 0x1000, CRC(4c752453) SHA1(467ffd6e3ec13a27fc2979883678a1e7531d98ac) )
-	/* 3000-3fff space for diagnostics ROM */
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "ho1.ic32",    0x0000, 0x0800, CRC(7a946544) SHA1(7ee2ad3fdf996f08534fb87fc02b619c168f420c) )
-	ROM_LOAD( "ho2.ic33",    0x0800, 0x0800, CRC(3db57351) SHA1(e5075a7130a80d2bf24f0556c2589dff0625ee60) )
-
-	ROM_REGION( 0x1000, "gfx1", 0 )
-	ROM_LOAD( "hc2",   0x0000, 0x0800, CRC(0bdfad0e) SHA1(8e6f1737604f3801c03fa2e9a5e6a2778b54bae8) )
-	ROM_LOAD( "hc1",   0x0800, 0x0800, CRC(8e062177) SHA1(7e52a1669804b6c2f694cfc64b04abc8246bb0c2) )
-
-	ROM_REGION( 0x0020, "proms", 0 )
-	ROM_LOAD( "hustler.clr",  0x0000, 0x0020, CRC(aa1f7f5e) SHA1(311dd17aa11490a1173c76223e4ccccf8ea29850) )
-ROM_END
-
 ROM_START( billiard )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "a",            0x0000, 0x1000, CRC(b7eb50c0) SHA1(213d177d2b2af648a18d196b83e96d804947fd40) )
@@ -1113,25 +1323,6 @@ ROM_START( hustlerb )
 
 	ROM_REGION( 0x0020, "proms", 0 )
 	ROM_LOAD( "hustler.clr",  0x0000, 0x0020, CRC(aa1f7f5e) SHA1(311dd17aa11490a1173c76223e4ccccf8ea29850) )
-ROM_END
-
-ROM_START( hustlerb2 )
-	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "b1.1",   0x0000, 0x1000, CRC(2ce5e7b9) SHA1(e47e89bd085b40d7dd38be51fd69f69b143daf1b) )
-	ROM_LOAD( "b1.2",   0x1000, 0x1000, CRC(dc6752ec) SHA1(b103021079646286156e4141fe34dd92ccfd34bd) )
-	ROM_LOAD( "b3.3",   0x2000, 0x1000, CRC(23092f67) SHA1(3c04544c636eab8998752e1f521e34b1345e39ff) )
-	/* 3000-3fff space for diagnostics ROM */
-
-	ROM_REGION( 0x10000, "audiocpu", 0 )
-	ROM_LOAD( "b6.bin",    0x0000, 0x0800, CRC(7a946544) SHA1(7ee2ad3fdf996f08534fb87fc02b619c168f420c) )
-	ROM_LOAD( "b7.bin",    0x0800, 0x0800, CRC(3db57351) SHA1(e5075a7130a80d2bf24f0556c2589dff0625ee60) )
-
-	ROM_REGION( 0x1000, "gfx1", 0 )
-	ROM_LOAD( "b4.r2",   0x0000, 0x0800, CRC(0bdfad0e) SHA1(8e6f1737604f3801c03fa2e9a5e6a2778b54bae8) )
-	ROM_LOAD( "b5", 	 0x0800, 0x0800, CRC(8e062177) SHA1(7e52a1669804b6c2f694cfc64b04abc8246bb0c2) ) // broken rom, assumed to be the same
-
-	ROM_REGION( 0x0020, "proms", 0 )
-	ROM_LOAD( "27s19.bin",  0x0000, 0x0020, CRC(aa1f7f5e) SHA1(311dd17aa11490a1173c76223e4ccccf8ea29850) )
 ROM_END
 
 ROM_START( mimonkey )
@@ -1183,20 +1374,19 @@ ROM_START( mimonsco )
 ROM_END
 
 
-GAME( 1981, stratgyx,  0,        stratgyx,  stratgyx,  stratgyx,     ROT0,   "Konami", "Strategy X", GAME_SUPPORTS_SAVE )
-GAME( 1981, stratgys,  stratgyx, stratgyx,  stratgyx,  stratgyx,     ROT0,   "Konami (Stern Electronics license)", "Strategy X (Stern Electronics)", GAME_SUPPORTS_SAVE )
-GAME( 1982, strongx,   stratgyx, stratgyx,  stratgyx,  stratgyx,     ROT0,   "bootleg", "Strong X", GAME_SUPPORTS_SAVE )
-GAME( 1982, darkplnt,  0,        darkplnt,  darkplnt,  darkplnt,     ROT180, "Stern Electronics", "Dark Planet", GAME_SUPPORTS_SAVE )
-GAME( 1982, tazmani2,  tazmania, type2,     tazmania,  tazmani2,     ROT90,  "Stern Electronics", "Tazz-Mania (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1982, rescue,    0,        rescue,    rescue,    rescue,       ROT90,  "Stern Electronics", "Rescue", GAME_SUPPORTS_SAVE )
-GAME( 1982, rescueb,   rescue,   rescue,    rescue,    rescue,       ROT90,  "bootleg (Videl Games)", "Rescue (bootleg)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1982, aponow,    rescue,   rescue,    rescue,    rescue,       ROT90,  "bootleg", "Apocaljpse Now", GAME_SUPPORTS_SAVE )
-GAME( 1983, minefld,   0,        minefld,   minefld,   minefld,      ROT90,  "Stern Electronics", "Minefield", GAME_SUPPORTS_SAVE )
-GAME( 1981, hustler,   0,        hustler,   hustler,   hustler,      ROT90,  "Konami", "Video Hustler", GAME_SUPPORTS_SAVE )
-GAME( 1981, hustlerd,  hustler,  hustler,   hustler,   hustlerd,     ROT90,  "Konami (Dynamo Games license)", "Video Hustler (Dynamo Games)", GAME_SUPPORTS_SAVE )
-GAME( 1981, billiard,  hustler,  hustler,   hustler,   billiard,     ROT90,  "bootleg", "The Billiards (Video Hustler bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 1981, hustlerb,  hustler,  hustlerb,  hustler,   scramble_ppi, ROT90,  "bootleg (Digimatic)", "Video Hustler (bootleg)", GAME_NOT_WORKING ) // broken?
-GAME( 1981, hustlerb2, hustler,  hustler,   hustler,   scramble_ppi, ROT90,  "bootleg", "Fatsy Gambler (Video Hustler bootleg)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, mimonkey,  0,        mimonkey,  mimonkey,  mimonkey,     ROT90,  "Universal Video Games", "Mighty Monkey", GAME_SUPPORTS_SAVE )
-GAME( 1982, mimonsco,  mimonkey, mimonkey,  mimonsco,  mimonsco,     ROT90,  "bootleg", "Mighty Monkey (bootleg on Super Cobra hardware)", GAME_SUPPORTS_SAVE )
+GAME( 1981, stratgyx, 0,        stratgyx, stratgyx, stratgyx,     ROT0,   "Konami", "Strategy X", GAME_SUPPORTS_SAVE )
+GAME( 1981, stratgys, stratgyx, stratgyx, stratgyx, stratgyx,     ROT0,   "[Konami] (Stern license)", "Strategy X (Stern)", GAME_SUPPORTS_SAVE )
+GAME( 1982, strongx,  stratgyx, stratgyx, stratgyx, stratgyx,	  ROT0,	  "bootleg", "Strong X", GAME_SUPPORTS_SAVE )
+GAME( 1982, darkplnt, 0,        darkplnt, darkplnt, darkplnt,     ROT180, "Stern", "Dark Planet", GAME_SUPPORTS_SAVE )
+GAME( 1982, tazmani2, tazmania, type2,    tazmania, tazmani2,     ROT90,  "Stern", "Tazz-Mania (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1983, anteatg,  anteater, anteatg,  anteatg,  scramble_ppi, ROT90,  "TV-Tuning (F.E.G. license)", "Ameisenbaer (German)", GAME_SUPPORTS_SAVE )
+GAME( 1983, anteatgb, anteater, anteatgb, anteatgb, scramble_ppi, ROT90,  "Free Enterprise Games", "The Anteater (UK)", GAME_SUPPORTS_SAVE )
+GAME( 1982, rescue,   0,        rescue,   rescue,   rescue,       ROT90,  "Stern", "Rescue", GAME_SUPPORTS_SAVE )
+GAME( 1982, aponow,   rescue,   rescue,   rescue,   rescue,       ROT90,  "bootleg", "Apocaljpse Now", GAME_SUPPORTS_SAVE )
+GAME( 1983, minefld,  0,        minefld,  minefld,  minefld,      ROT90,  "Stern", "Minefield", GAME_SUPPORTS_SAVE )
+GAME( 1981, hustler,  0,        hustler,  hustler,  hustler,      ROT90,  "Konami", "Video Hustler", GAME_SUPPORTS_SAVE )
+GAME( 1981, billiard, hustler,  hustler,  hustler,  billiard,     ROT90,  "bootleg", "The Billiards", GAME_SUPPORTS_SAVE )
+GAME( 1981, hustlerb, hustler,  hustlerb, hustler,  scramble_ppi, ROT90,  "bootleg", "Video Hustler (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1982, mimonkey, 0,	mimonkey, mimonkey, mimonkey,	  ROT90,  "Universal Video Games", "Mighty Monkey", GAME_SUPPORTS_SAVE )
+GAME( 1982, mimonsco, mimonkey, mimonkey, mimonsco, mimonsco,     ROT90,  "bootleg", "Mighty Monkey (bootleg on Super Cobra hardware)", GAME_SUPPORTS_SAVE )
 

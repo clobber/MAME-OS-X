@@ -4,9 +4,9 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/vector.h"
-#include "includes/cchasm.h"
+#include "cchasm.h"
 
 #define HALT   0
 #define JUMP   1
@@ -17,16 +17,17 @@
 #define POSX   6
 #define LENGTH 7
 
+UINT16 *cchasm_ram;
 
+static int xcenter, ycenter;
 
 static TIMER_CALLBACK( cchasm_refresh_end )
 {
     cputag_set_input_line (machine, "maincpu", 2, ASSERT_LINE);
 }
 
-static void cchasm_refresh (running_machine &machine)
+static void cchasm_refresh (running_machine *machine)
 {
-	cchasm_state *state = machine.driver_data<cchasm_state>();
 
 	int pc = 0;
     int done = 0;
@@ -41,8 +42,8 @@ static void cchasm_refresh (running_machine &machine)
 
 	while (!done)
 	{
-        data = state->m_ram[pc];
-		opcode = data >> 12;
+        data = cchasm_ram[pc];
+   		opcode = data >> 12;
         data &= 0xfff;
         if ((opcode > COLOR) && (data & 0x800))
           data |= 0xfffff000;
@@ -66,14 +67,14 @@ static void cchasm_refresh (running_machine &machine)
             break;
         case POSY:
             move = 1;
-            currenty = state->m_ycenter + (data << 16);
+            currenty = ycenter + (data << 16);
             break;
         case SCALEX:
             scalex = data << 5;
             break;
         case POSX:
             move = 1;
-            currentx = state->m_xcenter - (data << 16);
+            currentx = xcenter - (data << 16);
             break;
         case LENGTH:
             if (move)
@@ -99,7 +100,7 @@ static void cchasm_refresh (running_machine &machine)
 		}
 	}
     /* Refresh processor runs with 6 MHz */
-    machine.scheduler().timer_set (attotime::from_hz(6000000) * total_length, FUNC(cchasm_refresh_end));
+    timer_set (machine, attotime_mul(ATTOTIME_IN_HZ(6000000), total_length), NULL, 0, cchasm_refresh_end);
 }
 
 
@@ -110,10 +111,10 @@ WRITE16_HANDLER( cchasm_refresh_control_w )
 		switch (data >> 8)
 		{
 		case 0x37:
-			cchasm_refresh(space->machine());
+			cchasm_refresh(space->machine);
 			break;
 		case 0xf7:
-			cputag_set_input_line (space->machine(), "maincpu", 2, CLEAR_LINE);
+			cputag_set_input_line (space->machine, "maincpu", 2, CLEAR_LINE);
 			break;
 		}
 	}
@@ -121,11 +122,10 @@ WRITE16_HANDLER( cchasm_refresh_control_w )
 
 VIDEO_START( cchasm )
 {
-	cchasm_state *state = machine.driver_data<cchasm_state>();
-	const rectangle &visarea = machine.primary_screen->visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
-	state->m_xcenter=visarea.xcenter() << 16;
-	state->m_ycenter=visarea.ycenter() << 16;
+	xcenter=((visarea->max_x + visarea->min_x)/2) << 16;
+	ycenter=((visarea->max_y + visarea->min_y)/2) << 16;
 
 	VIDEO_START_CALL(vector);
 }

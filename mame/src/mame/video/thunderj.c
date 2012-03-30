@@ -4,10 +4,19 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "machine/atarigen.h"
-#include "video/atarimo.h"
 #include "includes/thunderj.h"
+
+
+
+/*************************************
+ *
+ *  Globals
+ *
+ *************************************/
+
+UINT8 thunderj_alpha_tile_bank;
 
 
 
@@ -19,9 +28,8 @@
 
 static TILE_GET_INFO( get_alpha_tile_info )
 {
-	thunderj_state *state = machine.driver_data<thunderj_state>();
-	UINT16 data = state->m_alpha[tile_index];
-	int code = ((data & 0x200) ? (state->m_alpha_tile_bank * 0x200) : 0) + (data & 0x1ff);
+	UINT16 data = atarigen_alpha[tile_index];
+	int code = ((data & 0x200) ? (thunderj_alpha_tile_bank * 0x200) : 0) + (data & 0x1ff);
 	int color = ((data >> 10) & 0x0f) | ((data >> 9) & 0x20);
 	int opaque = data & 0x8000;
 	SET_TILE_INFO(2, code, color, opaque ? TILE_FORCE_LAYER0 : 0);
@@ -30,25 +38,23 @@ static TILE_GET_INFO( get_alpha_tile_info )
 
 static TILE_GET_INFO( get_playfield_tile_info )
 {
-	thunderj_state *state = machine.driver_data<thunderj_state>();
-	UINT16 data1 = state->m_playfield[tile_index];
-	UINT16 data2 = state->m_playfield_upper[tile_index] & 0xff;
+	UINT16 data1 = atarigen_playfield[tile_index];
+	UINT16 data2 = atarigen_playfield_upper[tile_index] & 0xff;
 	int code = data1 & 0x7fff;
 	int color = 0x10 + (data2 & 0x0f);
 	SET_TILE_INFO(0, code, color, (data1 >> 15) & 1);
-	tileinfo.category = (data2 >> 4) & 3;
+	tileinfo->category = (data2 >> 4) & 3;
 }
 
 
 static TILE_GET_INFO( get_playfield2_tile_info )
 {
-	thunderj_state *state = machine.driver_data<thunderj_state>();
-	UINT16 data1 = state->m_playfield2[tile_index];
-	UINT16 data2 = state->m_playfield_upper[tile_index] >> 8;
+	UINT16 data1 = atarigen_playfield2[tile_index];
+	UINT16 data2 = atarigen_playfield_upper[tile_index] >> 8;
 	int code = data1 & 0x7fff;
 	int color = data2 & 0x0f;
 	SET_TILE_INFO(0, code, color, (data1 >> 15) & 1);
-	tileinfo.category = (data2 >> 4) & 3;
+	tileinfo->category = (data2 >> 4) & 3;
 }
 
 
@@ -97,22 +103,46 @@ VIDEO_START( thunderj )
 		0,					/* resulting value to indicate "special" */
 		NULL				/* callback routine for special entries */
 	};
-	thunderj_state *state = machine.driver_data<thunderj_state>();
 
 	/* initialize the playfield */
-	state->m_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	atarigen_playfield_tilemap = tilemap_create(machine, get_playfield_tile_info, tilemap_scan_cols,  8,8, 64,64);
 
 	/* initialize the second playfield */
-	state->m_playfield2_tilemap = tilemap_create(machine, get_playfield2_tile_info, tilemap_scan_cols,  8,8, 64,64);
-	state->m_playfield2_tilemap->set_transparent_pen(0);
+	atarigen_playfield2_tilemap = tilemap_create(machine, get_playfield2_tile_info, tilemap_scan_cols,  8,8, 64,64);
+	tilemap_set_transparent_pen(atarigen_playfield2_tilemap, 0);
 
 	/* initialize the motion objects */
 	atarimo_init(machine, 0, &modesc);
 
 	/* initialize the alphanumerics */
-	state->m_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
-	state->m_alpha_tilemap->set_transparent_pen(0);
+	atarigen_alpha_tilemap = tilemap_create(machine, get_alpha_tile_info, tilemap_scan_rows,  8,8, 64,32);
+	tilemap_set_transparent_pen(atarigen_alpha_tilemap, 0);
 }
+
+
+
+/*************************************
+ *
+ *  Mark high palette bits starting
+ *  at the given X,Y and continuing
+ *  until a stop or the end of line
+ *
+ *************************************/
+
+void thunderj_mark_high_palette(bitmap_t *bitmap, UINT16 *pf, UINT16 *mo, int x, int y)
+{
+	#define START_MARKER	((4 << ATARIMO_PRIORITY_SHIFT) | 2)
+	#define END_MARKER		((4 << ATARIMO_PRIORITY_SHIFT) | 4)
+	int offnext = 0;
+
+	for ( ; x < bitmap->width; x++)
+	{
+		pf[x] |= 0x400;
+		if (offnext && (mo[x] & START_MARKER) != START_MARKER)
+			break;
+		offnext = ((mo[x] & END_MARKER) == END_MARKER);
+	}
+ }
 
 
 
@@ -122,33 +152,32 @@ VIDEO_START( thunderj )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( thunderj )
+VIDEO_UPDATE( thunderj )
 {
-	thunderj_state *state = screen.machine().driver_data<thunderj_state>();
-	bitmap_ind8 &priority_bitmap = screen.machine().priority_bitmap;
+	bitmap_t *priority_bitmap = screen->machine->priority_bitmap;
 	atarimo_rect_list rectlist;
-	bitmap_ind16 *mobitmap;
+	bitmap_t *mobitmap;
 	int x, y, r;
 
 	/* draw the playfield */
-	priority_bitmap.fill(0, cliprect);
-	state->m_playfield_tilemap->draw(bitmap, cliprect, 0, 0x00);
-	state->m_playfield_tilemap->draw(bitmap, cliprect, 1, 0x01);
-	state->m_playfield_tilemap->draw(bitmap, cliprect, 2, 0x02);
-	state->m_playfield_tilemap->draw(bitmap, cliprect, 3, 0x03);
-	state->m_playfield2_tilemap->draw(bitmap, cliprect, 0, 0x80);
-	state->m_playfield2_tilemap->draw(bitmap, cliprect, 1, 0x84);
-	state->m_playfield2_tilemap->draw(bitmap, cliprect, 2, 0x88);
-	state->m_playfield2_tilemap->draw(bitmap, cliprect, 3, 0x8c);
+	bitmap_fill(priority_bitmap, cliprect, 0);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 0, 0x00);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 1, 0x01);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 2, 0x02);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield_tilemap, 3, 0x03);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield2_tilemap, 0, 0x80);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield2_tilemap, 1, 0x84);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield2_tilemap, 2, 0x88);
+	tilemap_draw(bitmap, cliprect, atarigen_playfield2_tilemap, 3, 0x8c);
 
 	/* draw and merge the MO */
 	mobitmap = atarimo_render(0, cliprect, &rectlist);
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = &mobitmap->pix16(y);
-			UINT16 *pf = &bitmap.pix16(y);
-			UINT8 *pri = &priority_bitmap.pix8(y);
+			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
+			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
+			UINT8 *pri = (UINT8 *)priority_bitmap->base + priority_bitmap->rowpixels * y;
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -238,15 +267,15 @@ SCREEN_UPDATE_IND16( thunderj )
 		}
 
 	/* add the alpha on top */
-	state->m_alpha_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, atarigen_alpha_tilemap, 0, 0);
 
 	/* now go back and process the upper bit of MO priority */
 	rectlist.rect -= rectlist.numrects;
 	for (r = 0; r < rectlist.numrects; r++, rectlist.rect++)
 		for (y = rectlist.rect->min_y; y <= rectlist.rect->max_y; y++)
 		{
-			UINT16 *mo = &mobitmap->pix16(y);
-			UINT16 *pf = &bitmap.pix16(y);
+			UINT16 *mo = (UINT16 *)mobitmap->base + mobitmap->rowpixels * y;
+			UINT16 *pf = (UINT16 *)bitmap->base + bitmap->rowpixels * y;
 			for (x = rectlist.rect->min_x; x <= rectlist.rect->max_x; x++)
 				if (mo[x])
 				{
@@ -257,7 +286,7 @@ SCREEN_UPDATE_IND16( thunderj )
 					{
 						/* if bit 2 is set, start setting high palette bits */
 						if (mo[x] & 2)
-							atarimo_mark_high_palette(bitmap, pf, mo, x, y);
+							thunderj_mark_high_palette(bitmap, pf, mo, x, y);
 					}
 
 					/* erase behind ourselves */

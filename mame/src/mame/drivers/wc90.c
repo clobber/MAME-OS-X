@@ -74,7 +74,7 @@ voice.ic82     CRC32 abc61f3d   SHA1 c6f123d16a26c4d77c635617dd97bb4b906c463a
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/2608intf.h"
 #include "includes/wc90.h"
@@ -83,79 +83,79 @@ voice.ic82     CRC32 abc61f3d   SHA1 c6f123d16a26c4d77c635617dd97bb4b906c463a
 static WRITE8_HANDLER( wc90_bankswitch_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine().region("maincpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "maincpu");
 
 
 	bankaddress = 0x10000 + ( ( data & 0xf8 ) << 8 );
-	memory_set_bankptr(space->machine(), "bank1", &RAM[bankaddress] );
+	memory_set_bankptr(space->machine, 1, &RAM[bankaddress] );
 }
 
 static WRITE8_HANDLER( wc90_bankswitch1_w )
 {
 	int bankaddress;
-	UINT8 *RAM = space->machine().region("sub")->base();
+	UINT8 *RAM = memory_region(space->machine, "sub");
 
 
 	bankaddress = 0x10000 + ( ( data & 0xf8 ) << 8 );
-	memory_set_bankptr(space->machine(), "bank2", &RAM[bankaddress] );
+	memory_set_bankptr(space->machine, 2, &RAM[bankaddress] );
 }
 
 static WRITE8_HANDLER( wc90_sound_command_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
 
-static ADDRESS_MAP_START( wc90_map_1, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( wc90_map_1, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_RAM		/* Main RAM */
-	AM_RANGE(0xa000, 0xafff) AM_RAM_WRITE(wc90_fgvideoram_w) AM_BASE_MEMBER(wc90_state, m_fgvideoram)	/* fg video ram */
+	AM_RANGE(0xa000, 0xafff) AM_RAM_WRITE(wc90_fgvideoram_w) AM_BASE(&wc90_fgvideoram)	/* fg video ram */
 	AM_RANGE(0xb000, 0xbfff) AM_RAM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(wc90_bgvideoram_w) AM_BASE_MEMBER(wc90_state, m_bgvideoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM_WRITE(wc90_bgvideoram_w) AM_BASE(&wc90_bgvideoram)
 	AM_RANGE(0xd000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(wc90_txvideoram_w) AM_BASE_MEMBER(wc90_state, m_txvideoram)	/* tx video ram */
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank1")
-	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(wc90_txvideoram_w) AM_BASE(&wc90_txvideoram)	/* tx video ram */
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(1)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0xfc00, 0xfc00) AM_READ_PORT("P1")
 	AM_RANGE(0xfc02, 0xfc02) AM_READ_PORT("P2")
 	AM_RANGE(0xfc05, 0xfc05) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0xfc06, 0xfc06) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfc07, 0xfc07) AM_READ_PORT("DSW2")
-	AM_RANGE(0xfc02, 0xfc02) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll0ylo)
-	AM_RANGE(0xfc03, 0xfc03) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll0yhi)
-	AM_RANGE(0xfc06, 0xfc06) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll0xlo)
-	AM_RANGE(0xfc07, 0xfc07) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll0xhi)
-	AM_RANGE(0xfc22, 0xfc22) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll1ylo)
-	AM_RANGE(0xfc23, 0xfc23) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll1yhi)
-	AM_RANGE(0xfc26, 0xfc26) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll1xlo)
-	AM_RANGE(0xfc27, 0xfc27) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll1xhi)
-	AM_RANGE(0xfc42, 0xfc42) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll2ylo)
-	AM_RANGE(0xfc43, 0xfc43) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll2yhi)
-	AM_RANGE(0xfc46, 0xfc46) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll2xlo)
-	AM_RANGE(0xfc47, 0xfc47) AM_WRITEONLY AM_BASE_MEMBER(wc90_state, m_scroll2xhi)
+	AM_RANGE(0xfc02, 0xfc02) AM_WRITEONLY AM_BASE(&wc90_scroll0ylo)
+	AM_RANGE(0xfc03, 0xfc03) AM_WRITEONLY AM_BASE(&wc90_scroll0yhi)
+	AM_RANGE(0xfc06, 0xfc06) AM_WRITEONLY AM_BASE(&wc90_scroll0xlo)
+	AM_RANGE(0xfc07, 0xfc07) AM_WRITEONLY AM_BASE(&wc90_scroll0xhi)
+	AM_RANGE(0xfc22, 0xfc22) AM_WRITEONLY AM_BASE(&wc90_scroll1ylo)
+	AM_RANGE(0xfc23, 0xfc23) AM_WRITEONLY AM_BASE(&wc90_scroll1yhi)
+	AM_RANGE(0xfc26, 0xfc26) AM_WRITEONLY AM_BASE(&wc90_scroll1xlo)
+	AM_RANGE(0xfc27, 0xfc27) AM_WRITEONLY AM_BASE(&wc90_scroll1xhi)
+	AM_RANGE(0xfc42, 0xfc42) AM_WRITEONLY AM_BASE(&wc90_scroll2ylo)
+	AM_RANGE(0xfc43, 0xfc43) AM_WRITEONLY AM_BASE(&wc90_scroll2yhi)
+	AM_RANGE(0xfc46, 0xfc46) AM_WRITEONLY AM_BASE(&wc90_scroll2xlo)
+	AM_RANGE(0xfc47, 0xfc47) AM_WRITEONLY AM_BASE(&wc90_scroll2xhi)
 	AM_RANGE(0xfcc0, 0xfcc0) AM_WRITE(wc90_sound_command_w)
 	AM_RANGE(0xfcd0, 0xfcd0) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xfce0, 0xfce0) AM_WRITE(wc90_bankswitch_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( wc90_map_2, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( wc90_map_2, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xcfff) AM_RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_SIZE_MEMBER(wc90_state, m_spriteram, m_spriteram_size)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK("bank2")
-	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(paletteram_xxxxBBBBRRRRGGGG_be_w) AM_BASE(&paletteram)
+	AM_RANGE(0xf000, 0xf7ff) AM_ROMBANK(2)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITE(wc90_bankswitch1_w)
 	AM_RANGE(0xfc01, 0xfc01) AM_WRITE(watchdog_reset_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
-	AM_RANGE(0xf800, 0xf803) AM_DEVREADWRITE("ymsnd", ym2608_r, ym2608_w)
+	AM_RANGE(0xf800, 0xf803) AM_DEVREADWRITE("ym", ym2608_r, ym2608_w)
 	AM_RANGE(0xfc00, 0xfc00) AM_READNOP /* ??? adpcm ??? */
 	AM_RANGE(0xfc10, 0xfc10) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -282,7 +282,7 @@ static const gfx_layout spritelayout =
 };
 
 static GFXDECODE_START( wc90 )
-	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,   	1*16*16, 16*16 )
+	GFXDECODE_ENTRY( "gfx1", 0x00000, charlayout,      	1*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx2", 0x00000, tilelayout,		2*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx3", 0x00000, tilelayout,		3*16*16, 16*16 )
 	GFXDECODE_ENTRY( "gfx4", 0x00000, spritelayout,		0*16*16, 16*16 ) // sprites
@@ -291,9 +291,9 @@ GFXDECODE_END
 
 
 /* handler called by the 2608 emulator when the internal timers cause an IRQ */
-static void irqhandler(device_t *device, int irq)
+static void irqhandler(const device_config *device, int irq)
 {
-	cputag_set_input_line(device->machine(), "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const ym2608_interface ym2608_config =
@@ -306,47 +306,50 @@ static const ym2608_interface ym2608_config =
 	irqhandler
 };
 
-static MACHINE_CONFIG_START( wc90, wc90_state )
+static MACHINE_DRIVER_START( wc90 )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, XTAL_8MHz)		/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(wc90_map_1)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 6000000)	/* 6.0 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(wc90_map_1)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80, XTAL_8MHz)		/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(wc90_map_2)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("sub", Z80, 6000000)	/* 6.0 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(wc90_map_2)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)	/* verified on pcb */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz ???? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
 	/* NMIs are triggered by the main CPU */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.17)			/* verified on pcb */
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(wc90)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(wc90)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(wc90)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(wc90)
+	MDRV_VIDEO_START(wc90)
+	MDRV_VIDEO_UPDATE(wc90)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd", YM2608, XTAL_8MHz)	/* verified on pcb */
-	MCFG_SOUND_CONFIG(ym2608_config)
-	MCFG_SOUND_ROUTE(0, "mono", 0.50)
-	MCFG_SOUND_ROUTE(1, "mono", 1.0)
-	MCFG_SOUND_ROUTE(2, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2608, 8000000)
+	MDRV_SOUND_CONFIG(ym2608_config)
+	MDRV_SOUND_ROUTE(0, "mono", 0.50)
+	MDRV_SOUND_ROUTE(1, "mono", 1.0)
+	MDRV_SOUND_ROUTE(2, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( wc90t, wc90 )
-	MCFG_VIDEO_START( wc90t )
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( wc90t )
+
+	MDRV_IMPORT_FROM( wc90 )
+	MDRV_VIDEO_START( wc90t )
+MACHINE_DRIVER_END
 
 ROM_START( wc90 )
 	ROM_REGION( 0x20000, "maincpu", 0 )
@@ -377,7 +380,7 @@ ROM_START( wc90 )
 	ROM_LOAD( "ic60_14v.bin", 0x40000, 0x20000, CRC(499dfb1b) SHA1(ac67985d36fea18c82a4ea00019d9e6e4bcb5d0d) )	/* sprites  */
 	ROM_LOAD( "ic65_15v.bin", 0x60000, 0x20000, CRC(d8ea5c81) SHA1(ccb3f7d565b1c1b8e874a2df91cda40dde2962ed) )	/* sprites  */
 
-	ROM_REGION( 0x20000, "ymsnd", 0 )	/* 64k for ADPCM samples */
+	ROM_REGION( 0x20000, "ym", 0 )	/* 64k for ADPCM samples */
 	ROM_LOAD( "ic82_06.bin",  0x00000, 0x20000, CRC(2fd692ed) SHA1(0273dc39181504320bec0187d074b2f86c821508) )
 ROM_END
 
@@ -410,7 +413,7 @@ ROM_START( wc90a )
 	ROM_LOAD( "ic60_14v.bin", 0x40000, 0x20000, CRC(499dfb1b) SHA1(ac67985d36fea18c82a4ea00019d9e6e4bcb5d0d) )	/* sprites  */
 	ROM_LOAD( "ic65_15v.bin", 0x60000, 0x20000, CRC(d8ea5c81) SHA1(ccb3f7d565b1c1b8e874a2df91cda40dde2962ed) )	/* sprites  */
 
-	ROM_REGION( 0x20000, "ymsnd", 0 )	/* 64k for ADPCM samples */
+	ROM_REGION( 0x20000, "ym", 0 )	/* 64k for ADPCM samples */
 	ROM_LOAD( "ic82_06.bin",  0x00000, 0x20000, CRC(2fd692ed) SHA1(0273dc39181504320bec0187d074b2f86c821508) )
 ROM_END
 
@@ -443,7 +446,7 @@ ROM_START( wc90b )
 	ROM_LOAD( "ic60_14v.bin", 0x40000, 0x20000, CRC(499dfb1b) SHA1(ac67985d36fea18c82a4ea00019d9e6e4bcb5d0d) )	/* sprites  */
 	ROM_LOAD( "ic65_15v.bin", 0x60000, 0x20000, CRC(d8ea5c81) SHA1(ccb3f7d565b1c1b8e874a2df91cda40dde2962ed) )	/* sprites  */
 
-	ROM_REGION( 0x20000, "ymsnd", 0 )	/* 64k for ADPCM samples */
+	ROM_REGION( 0x20000, "ym", 0 )	/* 64k for ADPCM samples */
 	ROM_LOAD( "ic82_06.bin",  0x00000, 0x20000, CRC(2fd692ed) SHA1(0273dc39181504320bec0187d074b2f86c821508) )
 ROM_END
 
@@ -476,7 +479,7 @@ ROM_START( wc90t )
 	ROM_LOAD( "ic60_14v.bin", 0x40000, 0x20000, CRC(499dfb1b) SHA1(ac67985d36fea18c82a4ea00019d9e6e4bcb5d0d) )	/* sprites  */
 	ROM_LOAD( "ic65_15v.bin", 0x60000, 0x20000, CRC(d8ea5c81) SHA1(ccb3f7d565b1c1b8e874a2df91cda40dde2962ed) )	/* sprites  */
 
-	ROM_REGION( 0x20000, "ymsnd", 0 )	/* 64k for ADPCM samples */
+	ROM_REGION( 0x20000, "ym", 0 )	/* 64k for ADPCM samples */
 	ROM_LOAD( "ic82_06.bin",  0x00000, 0x20000, CRC(2fd692ed) SHA1(0273dc39181504320bec0187d074b2f86c821508) )
 ROM_END
 

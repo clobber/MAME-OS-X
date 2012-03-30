@@ -36,48 +36,57 @@ Dip locations and factory settings verified with US manual
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/nec/nec.h"
+#include "deprecat.h"
 #include "audio/seibu.h"
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
-#include "includes/deadang.h"
+
+extern UINT16 *deadang_video_data, *deadang_scroll_ram;
+
+extern WRITE16_HANDLER( deadang_foreground_w );
+extern WRITE16_HANDLER( deadang_text_w );
+extern WRITE16_HANDLER( deadang_bank_w );
+
+extern VIDEO_START( deadang );
+extern VIDEO_UPDATE( deadang );
 
 /* Read/Write Handlers */
 
 static READ16_HANDLER( ghunter_trackball_low_r )
 {
-	return (input_port_read(space->machine(), "TRACKX") & 0xff) | ((input_port_read(space->machine(), "TRACKY") & 0xff) << 8);
+	return (input_port_read(space->machine, "TRACKX") & 0xff) | ((input_port_read(space->machine, "TRACKY") & 0xff) << 8);
 }
 static READ16_HANDLER( ghunter_trackball_high_r )
 {
-	return ((input_port_read(space->machine(), "TRACKX") & 0x0f00) >> 4) | (input_port_read(space->machine(), "TRACKY") & 0x0f00);
+	return ((input_port_read(space->machine, "TRACKX") & 0x0f00) >> 4) | (input_port_read(space->machine, "TRACKY") & 0x0f00);
 }
 
 /* Memory Maps */
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x037ff) AM_RAM
-	AM_RANGE(0x03800, 0x03fff) AM_RAM AM_BASE_MEMBER(deadang_state, m_spriteram)
-	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x05000, 0x05fff) AM_WRITEONLY
+	AM_RANGE(0x03800, 0x03fff) AM_RAM AM_BASE(&spriteram16)
+	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x05000, 0x05fff) AM_WRITE(SMH_RAM)
 	AM_RANGE(0x06000, 0x0600f) AM_READWRITE(seibu_main_word_r, seibu_main_word_w)
-	AM_RANGE(0x06010, 0x07fff) AM_WRITEONLY
-	AM_RANGE(0x08000, 0x087ff) AM_WRITE(deadang_text_w) AM_BASE_MEMBER(deadang_state, m_videoram)
-	AM_RANGE(0x08800, 0x0bfff) AM_WRITEONLY
+	AM_RANGE(0x06010, 0x07fff) AM_WRITE(SMH_RAM)
+	AM_RANGE(0x08000, 0x087ff) AM_WRITE(deadang_text_w) AM_BASE(&videoram16)
+	AM_RANGE(0x08800, 0x0bfff) AM_WRITE(SMH_RAM)
 	AM_RANGE(0x0a000, 0x0a001) AM_READ_PORT("P1_P2")
 	AM_RANGE(0x0a002, 0x0a003) AM_READ_PORT("DSW")
-	AM_RANGE(0x0c000, 0x0cfff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x0d000, 0x0dfff) AM_WRITEONLY
-	AM_RANGE(0x0e000, 0x0e0ff) AM_WRITEONLY AM_BASE_MEMBER(deadang_state, m_scroll_ram)
-	AM_RANGE(0x0e100, 0x0ffff) AM_WRITEONLY
+	AM_RANGE(0x0c000, 0x0cfff) AM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x0d000, 0x0dfff) AM_WRITE(SMH_RAM)
+	AM_RANGE(0x0e000, 0x0e0ff) AM_WRITE(SMH_RAM) AM_BASE(&deadang_scroll_ram)
+	AM_RANGE(0x0e100, 0x0ffff) AM_WRITE(SMH_RAM)
 	AM_RANGE(0xc0000, 0xfffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sub_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000, 0x037ff) AM_RAM
-	AM_RANGE(0x03800, 0x03fff) AM_RAM_WRITE(deadang_foreground_w) AM_BASE_MEMBER(deadang_state, m_video_data)
-	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x03800, 0x03fff) AM_RAM_WRITE(deadang_foreground_w) AM_BASE(&deadang_video_data)
+	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x08000, 0x08001) AM_WRITE(deadang_bank_w)
 	AM_RANGE(0x0c000, 0x0c001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0xe0000, 0xfffff) AM_ROM
@@ -191,7 +200,7 @@ static const gfx_layout spritelayout =
 	{ 8,12,0,4},
 	{ STEP4(3,-1), STEP4(19,-1), STEP4(512+3,-1), STEP4(512+19,-1) },
 	{ STEP16(0,32) },
-	1024
+ 	1024
 };
 
 /* Graphics Decode Information */
@@ -206,64 +215,51 @@ GFXDECODE_END
 
 /* Interrupt Generators */
 
-static TIMER_DEVICE_CALLBACK( deadang_main_scanline )
+static INTERRUPT_GEN( deadang_interrupt )
 {
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xc4/4);
-
-	if(scanline == 0) // vblank-in irq
-		cputag_set_input_line_and_vector(timer.machine(), "maincpu", 0, HOLD_LINE,0xc8/4);
-}
-
-static TIMER_DEVICE_CALLBACK( deadang_sub_scanline )
-{
-	int scanline = param;
-
-	if(scanline == 240) // vblank-out irq
-		cputag_set_input_line_and_vector(timer.machine(), "sub", 0, HOLD_LINE,0xc4/4);
-
-	if(scanline == 0) // vblank-in irq
-		cputag_set_input_line_and_vector(timer.machine(), "sub", 0, HOLD_LINE,0xc8/4);
+	if (cpu_getiloops(device))
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
+	else
+		cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc4/4);	/* VBL */
 }
 
 /* Machine Drivers */
 
-static MACHINE_CONFIG_START( deadang, deadang_state )
+static MACHINE_DRIVER_START( deadang )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", V30,XTAL_16MHz/2) /* Sony 8623h9 CXQ70116D-8 (V30 compatible) */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer1", deadang_main_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("maincpu", V30,XTAL_16MHz/2) /* Sony 8623h9 CXQ70116D-8 (V30 compatible) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT_HACK(deadang_interrupt,2)
 
-	MCFG_CPU_ADD("sub", V30,XTAL_16MHz/2) /* Sony 8623h9 CXQ70116D-8 (V30 compatible) */
-	MCFG_CPU_PROGRAM_MAP(sub_map)
-	MCFG_TIMER_ADD_SCANLINE("scantimer2", deadang_sub_scanline, "screen", 0, 1)
+	MDRV_CPU_ADD("sub", V30,XTAL_16MHz/2) /* Sony 8623h9 CXQ70116D-8 (V30 compatible) */
+	MDRV_CPU_PROGRAM_MAP(sub_map)
+	MDRV_CPU_VBLANK_INT_HACK(deadang_interrupt,2)
 
 	SEIBU3A_SOUND_SYSTEM_CPU(XTAL_14_31818MHz/4)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(60)) // the game stops working with higher interleave rates..
+	MDRV_QUANTUM_TIME(HZ(60)) // the game stops working with higher interleave rates..
 
-	MCFG_MACHINE_RESET(seibu_sound)
+	MDRV_MACHINE_RESET(seibu_sound)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(deadang)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(deadang)
-	MCFG_PALETTE_LENGTH(2048)
+	MDRV_GFXDECODE(deadang)
+	MDRV_PALETTE_LENGTH(2048)
 
-	MCFG_VIDEO_START(deadang)
+	MDRV_VIDEO_START(deadang)
+	MDRV_VIDEO_UPDATE(deadang)
 
 	/* sound hardware */
 	SEIBU_SOUND_SYSTEM_YM2203_INTERFACE(XTAL_14_31818MHz/4)
 	SEIBU_SOUND_SYSTEM_ADPCM_INTERFACE
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /* ROMs */
 
@@ -307,11 +303,9 @@ ROM_START( deadang )
 	ROM_LOAD16_BYTE( "12.6j",  0x00000, 0x8000, CRC(2674d23f) SHA1(0533d80a23d917e20a703aeb833dcaccfa3a1967) )
 	ROM_LOAD16_BYTE( "11.6k",  0x00001, 0x8000, CRC(3dd4d81d) SHA1(94f0a13a8d3812f6879819ca186abf3a8665f7cb) )
 
-	ROM_REGION( 0x10000, "adpcm1", 0 )
+	ROM_REGION( 0x20000, "adpcm", 0 )
 	ROM_LOAD( "15.b11", 0x000000, 0x10000, CRC(fabd74f2) SHA1(ac70e952a8b38287613b384cdc7ca00a7f155a13) )
-
-    ROM_REGION( 0x10000, "adpcm2", 0 )
-	ROM_LOAD( "16.11a", 0x000000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
+	ROM_LOAD( "16.11a", 0x010000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
 ROM_END
 
 ROM_START( leadang )
@@ -354,11 +348,9 @@ ROM_START( leadang )
 	ROM_LOAD16_BYTE( "12.6j",  0x00000, 0x8000, CRC(2674d23f) SHA1(0533d80a23d917e20a703aeb833dcaccfa3a1967) )
 	ROM_LOAD16_BYTE( "11.6k",  0x00001, 0x8000, CRC(3dd4d81d) SHA1(94f0a13a8d3812f6879819ca186abf3a8665f7cb) )
 
-	ROM_REGION( 0x10000, "adpcm1", 0 )
+	ROM_REGION( 0x20000, "adpcm", 0 )
 	ROM_LOAD( "15.b11", 0x000000, 0x10000, CRC(fabd74f2) SHA1(ac70e952a8b38287613b384cdc7ca00a7f155a13) )
-
-    ROM_REGION( 0x10000, "adpcm2", 0 )
-	ROM_LOAD( "16.11a", 0x000000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
+	ROM_LOAD( "16.11a", 0x010000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
 ROM_END
 
 ROM_START( ghunter )
@@ -401,11 +393,9 @@ ROM_START( ghunter )
 	ROM_LOAD16_BYTE( "12.6j",  0x00000, 0x8000, CRC(2674d23f) SHA1(0533d80a23d917e20a703aeb833dcaccfa3a1967) )
 	ROM_LOAD16_BYTE( "11.6k",  0x00001, 0x8000, CRC(3dd4d81d) SHA1(94f0a13a8d3812f6879819ca186abf3a8665f7cb) )
 
-	ROM_REGION( 0x10000, "adpcm1", 0 )
+	ROM_REGION( 0x20000, "adpcm", 0 )
 	ROM_LOAD( "15.b11", 0x000000, 0x10000, CRC(fabd74f2) SHA1(ac70e952a8b38287613b384cdc7ca00a7f155a13) )
-
-	ROM_REGION( 0x10000, "adpcm2", 0 )
-    ROM_LOAD( "16.11a", 0x000000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
+	ROM_LOAD( "16.11a", 0x010000, 0x10000, CRC(a8d46fc9) SHA1(3ba51bdec4057413396a152b35015f9d95253e3f) )
 ROM_END
 
 /* Driver Initialization */
@@ -413,18 +403,16 @@ ROM_END
 static DRIVER_INIT( deadang )
 {
 	seibu_sound_decrypt(machine, "audiocpu", 0x2000);
-	seibu_adpcm_decrypt(machine, "adpcm1");
-	seibu_adpcm_decrypt(machine, "adpcm2");
+	seibu_adpcm_decrypt(machine, "adpcm");
 }
 
 static DRIVER_INIT( ghunter )
 {
 	seibu_sound_decrypt(machine, "audiocpu", 0x2000);
-	seibu_adpcm_decrypt(machine, "adpcm1");
-	seibu_adpcm_decrypt(machine, "adpcm2");
+	seibu_adpcm_decrypt(machine, "adpcm");
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x80000, 0x80001, FUNC(ghunter_trackball_low_r));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0xb0000, 0xb0001, FUNC(ghunter_trackball_high_r));
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x80000, 0x80001, 0, 0, ghunter_trackball_low_r);
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xb0000, 0xb0001, 0, 0, ghunter_trackball_high_r);
 }
 
 /* Game Drivers */

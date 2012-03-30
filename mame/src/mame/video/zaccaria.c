@@ -6,9 +6,26 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/resnet.h"
-#include "includes/zaccaria.h"
+
+
+
+UINT8 *zaccaria_videoram,*zaccaria_attributesram;
+
+static tilemap *bg_tilemap;
+
+static const rectangle spritevisiblearea =
+{
+	2*8+1, 29*8-1,
+	2*8, 30*8-1
+};
+static const rectangle spritevisiblearea_flipx =
+{
+	3*8+1, 30*8-1,
+	2*8, 30*8-1
+};
+
 
 
 /***************************************************************************
@@ -47,7 +64,7 @@ PALETTE_INIT( zaccaria )
 							 0, 0, 0, 0, 0);
 
 	/* allocate the colortable */
-	machine.colortable = colortable_alloc(machine, 0x200);
+	machine->colortable = colortable_alloc(machine, 0x200);
 
 	for (i = 0; i < 0x200; i++)
 	{
@@ -60,7 +77,7 @@ PALETTE_INIT( zaccaria )
           black anyway.
          */
 		if (((i % 64) / 8) == 0)
-			colortable_palette_set_color(machine.colortable, i, RGB_BLACK);
+			colortable_palette_set_color(machine->colortable, i, RGB_BLACK);
 		else
 		{
 			int bit0, bit1, bit2;
@@ -83,7 +100,7 @@ PALETTE_INIT( zaccaria )
 			bit1 = (color_prom[i + 0x200] >> 0) & 0x01;
 			b = combine_2_weights(weights_b, bit0, bit1);
 
-			colortable_palette_set_color(machine.colortable, i, MAKE_RGB(r, g, b));
+			colortable_palette_set_color(machine->colortable, i, MAKE_RGB(r, g, b));
 		}
 	}
 
@@ -95,13 +112,13 @@ PALETTE_INIT( zaccaria )
 		for (j = 0;j < 4;j++)
 			for (k = 0;k < 8;k++)
 				/* swap j and k to make the colors sequential */
-				colortable_entry_set_value(machine.colortable, 0 + 32 * i + 8 * j + k, 64 * i + 8 * k + 2*j);
+				colortable_entry_set_value(machine->colortable, 0 + 32 * i + 8 * j + k, 64 * i + 8 * k + 2*j);
 
 	for (i = 0;i < 8;i++)
 		for (j = 0;j < 4;j++)
 			for (k = 0;k < 8;k++)
 				/* swap j and k to make the colors sequential */
-				colortable_entry_set_value(machine.colortable, 256 + 32 * i + 8 * j + k, 64 * i + 8 * k + 2*j+1);
+				colortable_entry_set_value(machine->colortable, 256 + 32 * i + 8 * j + k, 64 * i + 8 * k + 2*j+1);
 }
 
 
@@ -114,12 +131,11 @@ PALETTE_INIT( zaccaria )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	zaccaria_state *state = machine.driver_data<zaccaria_state>();
-	UINT8 attr = state->m_videoram[tile_index + 0x400];
+	UINT8 attr = zaccaria_videoram[tile_index + 0x400];
 	SET_TILE_INFO(
 			0,
-			state->m_videoram[tile_index] + ((attr & 0x03) << 8),
-			((attr & 0x0c) >> 2) + ((state->m_attributesram[2 * (tile_index % 32) + 1] & 0x07) << 2),
+			zaccaria_videoram[tile_index] + ((attr & 0x03) << 8),
+			((attr & 0x0c) >> 2) + ((zaccaria_attributesram[2 * (tile_index % 32) + 1] & 0x07) << 2),
 			0);
 }
 
@@ -133,10 +149,9 @@ static TILE_GET_INFO( get_tile_info )
 
 VIDEO_START( zaccaria )
 {
-	zaccaria_state *state = machine.driver_data<zaccaria_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,32,32);
+	bg_tilemap = tilemap_create(machine, get_tile_info,tilemap_scan_rows,8,8,32,32);
 
-	state->m_bg_tilemap->set_scroll_cols(32);
+	tilemap_set_scroll_cols(bg_tilemap,32);
 }
 
 
@@ -149,38 +164,36 @@ VIDEO_START( zaccaria )
 
 WRITE8_HANDLER( zaccaria_videoram_w )
 {
-	zaccaria_state *state = space->machine().driver_data<zaccaria_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset & 0x3ff);
+	zaccaria_videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap,offset & 0x3ff);
 }
 
 WRITE8_HANDLER( zaccaria_attributes_w )
 {
-	zaccaria_state *state = space->machine().driver_data<zaccaria_state>();
 	if (offset & 1)
 	{
-		if (state->m_attributesram[offset] != data)
+		if (zaccaria_attributesram[offset] != data)
 		{
 			int i;
 
 			for (i = offset / 2;i < 0x400;i += 32)
-				state->m_bg_tilemap->mark_tile_dirty(i);
+				tilemap_mark_tile_dirty(bg_tilemap,i);
 		}
 	}
 	else
-		state->m_bg_tilemap->set_scrolly(offset / 2,data);
+		tilemap_set_scrolly(bg_tilemap,offset / 2,data);
 
-	state->m_attributesram[offset] = data;
+	zaccaria_attributesram[offset] = data;
 }
 
 WRITE8_HANDLER( zaccaria_flip_screen_x_w )
 {
-	flip_screen_x_set(space->machine(), data & 1);
+	flip_screen_x_set(space->machine, data & 1);
 }
 
 WRITE8_HANDLER( zaccaria_flip_screen_y_w )
 {
-	flip_screen_y_set(space->machine(), data & 1);
+	flip_screen_y_set(space->machine, data & 1);
 }
 
 
@@ -191,39 +204,36 @@ WRITE8_HANDLER( zaccaria_flip_screen_y_w )
 
 ***************************************************************************/
 
-/* sprite format:
-
-  76543210
-0 xxxxxxxx x
-1 x....... flipy
-  .x...... flipx
-  ..xxxxxx code low
-2 xx...... code high
-  ..xxx... ?
-  .....xxx color
-3 xxxxxxxx y
-
-offsets 1 and 2 are swapped if accessed from spriteram2
-
-*/
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const rectangle &cliprect,UINT8 *spriteram,int color,int section)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
 {
-	int offs,o1 = 1,o2 = 2;
+	int offs;
+	rectangle clip = *cliprect;
 
-	if (section)
+	if (flip_screen_x_get(machine))
+		sect_rect(&clip, &spritevisiblearea_flipx);
+	else
+		sect_rect(&clip, &spritevisiblearea);
+
+	/*
+      TODO: sprites have 32 color codes, but we are using only 8. In Jack
+      Rabbit the extra codes are all duplicates, but there is a quadruple
+      of codes in Money Money which contains two different combinations. That
+      color code seems to be used only by crocodiles, so the one we are picking
+      seems the correct one (otherwise they would be red).
+    */
+
+	/*
+      TODO: sprite placement is not perfect, I made the Jack Rabbit mouth
+      animation correct but this moves one pixel to the left the sprite
+      which masks the holes when you fall in them. The hardware is probably
+      similar to Amidar, but the code in the Amidar driver is not good either.
+    */
+	for (offs = 0;offs < spriteram_2_size;offs += 4)
 	{
-		o1 = 2;
-		o2 = 1;
-	}
-
-	for (offs = 0;offs < 0x20;offs += 4)
-	{
-		int sx = spriteram[offs + 3] + 1;
-		int sy = 242 - spriteram[offs];
-		int flipx = spriteram[offs + o1] & 0x40;
-		int flipy = spriteram[offs + o1] & 0x80;
-
-		if (sx == 1) continue;
+		int sx = spriteram_2[offs + 3] + 1;
+		int sy = 242 - spriteram_2[offs];
+		int flipx = spriteram_2[offs + 2] & 0x40;
+		int flipy = spriteram_2[offs + 2] & 0x80;
 
 		if (flip_screen_x_get(machine))
 		{
@@ -236,23 +246,43 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap,const re
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap,cliprect,machine.gfx[1],
-				(spriteram[offs + o1] & 0x3f) + (spriteram[offs + o2] & 0xc0),
-				((spriteram[offs + o2] & 0x07) << 2) | color,
-				flipx,flipy,sx,sy,0);
+		drawgfx_transpen(bitmap,&clip,machine->gfx[1],
+				(spriteram_2[offs + 2] & 0x3f) + (spriteram_2[offs + 1] & 0xc0),
+				4 * (spriteram_2[offs + 1] & 0x07),
+				flipx,flipy,
+				sx,sy,0);
+	}
+
+	for (offs = 0;offs < spriteram_size;offs += 4)
+	{
+		int sx = spriteram[offs + 3] + 1;
+		int sy = 242 - spriteram[offs];
+		int flipx = spriteram[offs + 1] & 0x40;
+		int flipy = spriteram[offs + 1] & 0x80;
+
+		if (flip_screen_x_get(machine))
+		{
+			sx = 240 - sx;
+			flipx = !flipx;
+		}
+		if (flip_screen_y_get(machine))
+		{
+			sy = 240 - sy;
+			flipy = !flipy;
+		}
+
+		drawgfx_transpen(bitmap,&clip,machine->gfx[1],
+				(spriteram[offs + 1] & 0x3f) + (spriteram[offs + 2] & 0xc0),
+				4 * (spriteram[offs + 2] & 0x07),
+				flipx,flipy,
+				sx,sy,0);
 	}
 }
 
-SCREEN_UPDATE_IND16( zaccaria )
+
+VIDEO_UPDATE( zaccaria )
 {
-	zaccaria_state *state = screen.machine().driver_data<zaccaria_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0,0);
-
-	// 3 layers of sprites, each with their own palette and priorities
-	// Not perfect yet, does spriteram(1) layer have a priority bit somewhere?
-	draw_sprites(screen.machine(),bitmap,cliprect,state->m_spriteram2,2,1);
-	draw_sprites(screen.machine(),bitmap,cliprect,state->m_spriteram,1,0);
-	draw_sprites(screen.machine(),bitmap,cliprect,state->m_spriteram2+0x20,0,1);
-
+	tilemap_draw(bitmap,cliprect,bg_tilemap,0,0);
+	draw_sprites(screen->machine, bitmap,cliprect);
 	return 0;
 }

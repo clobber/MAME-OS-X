@@ -5,6 +5,7 @@
 #ifndef __HD6309_H__
 #define __HD6309_H__
 
+#include "cpuintrf.h"
 
 enum
 {
@@ -17,7 +18,8 @@ enum
 
 
 /* PUBLIC FUNCTIONS */
-DECLARE_LEGACY_CPU_DEVICE(HD6309, hd6309);
+CPU_GET_INFO( hd6309 );
+#define CPU_HD6309 CPU_GET_INFO_NAME( hd6309 )
 
 
 CPU_DISASSEMBLE( hd6309 );

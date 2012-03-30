@@ -9,17 +9,33 @@ palazzol@home.com
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/samples.h"
-#include "includes/starcrus.h"
 
-static ADDRESS_MAP_START( starcrus_map, AS_PROGRAM, 8 )
+/* included from video/starcrus.c */
+WRITE8_HANDLER( starcrus_s1_x_w );
+WRITE8_HANDLER( starcrus_s1_y_w );
+WRITE8_HANDLER( starcrus_s2_x_w );
+WRITE8_HANDLER( starcrus_s2_y_w );
+WRITE8_HANDLER( starcrus_p1_x_w );
+WRITE8_HANDLER( starcrus_p1_y_w );
+WRITE8_HANDLER( starcrus_p2_x_w );
+WRITE8_HANDLER( starcrus_p2_y_w );
+WRITE8_HANDLER( starcrus_ship_parm_1_w );
+WRITE8_HANDLER( starcrus_ship_parm_2_w );
+WRITE8_HANDLER( starcrus_proj_parm_1_w );
+WRITE8_HANDLER( starcrus_proj_parm_2_w );
+READ8_HANDLER( starcrus_coll_det_r );
+extern VIDEO_START( starcrus );
+extern VIDEO_UPDATE( starcrus );
+
+static ADDRESS_MAP_START( starcrus_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x1000, 0x10ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( starcrus_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( starcrus_io_map, ADDRESS_SPACE_IO, 8 )
     AM_RANGE(0x00, 0x00) AM_READ_PORT("P1") AM_WRITE(starcrus_s1_x_w)
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("P2") AM_WRITE(starcrus_s1_y_w)
 	AM_RANGE(0x02, 0x02) AM_READWRITE(starcrus_coll_det_r, starcrus_s2_x_w)
@@ -120,10 +136,10 @@ GFXDECODE_END
 static const char *const starcrus_sample_names[] =
 {
     "*starcrus",
-    "engine",	/* engine sound, channel 0 */
-    "explos1",	/* explosion sound, first part, channel 1 */
-    "explos2",	/* explosion sound, second part, channel 1 */
-    "launch",	/* launch sound, channels 2 and 3 */
+    "engine.wav",	/* engine sound, channel 0 */
+    "explos1.wav",	/* explosion sound, first part, channel 1 */
+    "explos2.wav",	/* explosion sound, second part, channel 1 */
+    "launch.wav",	/* launch sound, channels 2 and 3 */
     0
 };
 
@@ -134,35 +150,36 @@ static const samples_interface starcrus_samples_interface =
 };
 
 
-static MACHINE_CONFIG_START( starcrus, starcrus_state )
+static MACHINE_DRIVER_START( starcrus )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", I8080,9750000/9)  /* 8224 chip is a divide by 9 */
-	MCFG_CPU_PROGRAM_MAP(starcrus_map)
-	MCFG_CPU_IO_MAP(starcrus_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", 8080,9750000/9)  /* 8224 chip is a divide by 9 */
+	MDRV_CPU_PROGRAM_MAP(starcrus_map)
+	MDRV_CPU_IO_MAP(starcrus_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(57)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(starcrus)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(57)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(starcrus)
-	MCFG_PALETTE_LENGTH(2)
+	MDRV_GFXDECODE(starcrus)
+	MDRV_PALETTE_LENGTH(2)
 
-	MCFG_PALETTE_INIT(black_and_white)
-	MCFG_VIDEO_START(starcrus)
+	MDRV_PALETTE_INIT(black_and_white)
+	MDRV_VIDEO_START(starcrus)
+	MDRV_VIDEO_UPDATE(starcrus)
 
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+    /* sound hardware */
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("samples", SAMPLES, 0)
-	MCFG_SOUND_CONFIG(starcrus_samples_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("samples", SAMPLES, 0)
+	MDRV_SOUND_CONFIG(starcrus_samples_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 

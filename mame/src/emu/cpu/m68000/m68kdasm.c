@@ -25,8 +25,11 @@
 /* ================================ INCLUDES ============================== */
 /* ======================================================================== */
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
 #define m68ki_cpu_core void
-#include "emu.h"
 #include "m68000.h"
 
 #ifndef DECL_SPEC
@@ -82,26 +85,23 @@
 #define TYPE_68020 8
 #define TYPE_68030 16
 #define TYPE_68040 32
-#define TYPE_68340 64	// (CPU32)
-#define TYPE_COLDFIRE 128
 
 #define M68000_ONLY		(TYPE_68000 | TYPE_68008)
 
 #define M68010_ONLY		TYPE_68010
 #define M68010_LESS		(TYPE_68000 | TYPE_68008 | TYPE_68010)
-#define M68010_PLUS		(TYPE_68010 | TYPE_68020 | TYPE_68030 | TYPE_68040 | TYPE_68340 | TYPE_COLDFIRE)
+#define M68010_PLUS		(TYPE_68010 | TYPE_68020 | TYPE_68030 | TYPE_68040)
 
-#define M68020_ONLY 	(TYPE_68020 | TYPE_68340)
-#define M68020_LESS 	(TYPE_68010 | TYPE_68020 | TYPE_68340)
-#define M68020_PLUS		(TYPE_68020 | TYPE_68030 | TYPE_68040 | TYPE_68340 | TYPE_COLDFIRE)
+#define M68020_ONLY 	TYPE_68020
+#define M68020_LESS 	(TYPE_68010 | TYPE_68020)
+#define M68020_PLUS		(TYPE_68020 | TYPE_68030 | TYPE_68040)
 
 #define M68030_ONLY 	TYPE_68030
-#define M68030_LESS 	(TYPE_68010 | TYPE_68020 | TYPE_68030 | TYPE_68340 )
+#define M68030_LESS 	(TYPE_68010 | TYPE_68020 | TYPE_68030)
 #define M68030_PLUS		(TYPE_68030 | TYPE_68040)
 
 #define M68040_PLUS		TYPE_68040
 
-#define COLDFIRE		TYPE_COLDFIRE
 
 /* Extension word formats */
 #define EXT_8BIT_DISPLACEMENT(A)          ((A)&0xff)
@@ -146,7 +146,6 @@ UINT32  peek_imm_32(void);
 /* make signed integers 100% portably */
 static int make_int_8(int value);
 static int make_int_16(int value);
-static int make_int_32(int value);
 
 /* make a string of a hex value */
 static char* make_signed_hex_str_8(UINT32 val);
@@ -231,12 +230,6 @@ static const char *const g_mmuregs[8] =
 	"tc", "drp", "srp", "crp", "cal", "val", "sccr", "acr"
 };
 
-static const char *const g_mmucond[16] =
-{
-	"bs", "bc", "ls", "lc", "ss", "sc", "as", "ac",
-	"ws", "wc", "is", "ic", "gs", "gc", "cs", "cc"
-};
-
 /* ======================================================================== */
 /* =========================== UTILITY FUNCTIONS ========================== */
 /* ======================================================================== */
@@ -299,11 +292,6 @@ static UINT32 dasm_read_imm_32(UINT32 advance)
 #define get_imm_str_u16() get_imm_str_u(1)
 #define get_imm_str_u32() get_imm_str_u(2)
 
-static int sext_7bit_int(int value)
-{
-	return (value & 0x40) ? (value | 0xffffff80) : (value & 0x7f);
-}
-
 
 /* 100% portable signed int generators */
 static int make_int_8(int value)
@@ -316,10 +304,6 @@ static int make_int_16(int value)
 	return (value & 0x8000) ? value | ~0xffff : value & 0xffff;
 }
 
-static int make_int_32(int value)
-{
-	return (value & 0x80000000) ? value | ~0xffffffff : value & 0xffffffff;
-}
 
 /* Get string representation of hex values */
 static char* make_signed_hex_str_8(UINT32 val)
@@ -488,14 +472,7 @@ static char* get_ea_mode_str(UINT32 instruction, UINT32 size)
 					strcat(mode, "[");
 				if(base)
 				{
-					if (EXT_BASE_DISPLACEMENT_LONG(extension))
-					{
-						strcat(mode, make_signed_hex_str_32(base));
-					}
-					else
-					{
-						strcat(mode, make_signed_hex_str_16(base));
-					}
+					strcat(mode, make_signed_hex_str_16(base));
 					comma = 1;
 				}
 				if(*base_reg)
@@ -1337,22 +1314,19 @@ static void d68020_chk2_cmp2_32(void)
 static void d68040_cinv(void)
 {
 	LIMIT_CPU_TYPES(M68040_PLUS);
-
-	static const char *cachetype[4] = { "nop", "data", "inst", "both" };
-
 	switch((g_cpu_ir>>3)&3)
 	{
 		case 0:
 			sprintf(g_dasm_str, "cinv (illegal scope); (4)");
 			break;
 		case 1:
-			sprintf(g_dasm_str, "cinvl   %s, (A%d); (4)", cachetype[(g_cpu_ir>>6)&3], g_cpu_ir&7);
+			sprintf(g_dasm_str, "cinvl   %d, (A%d); (4)", (g_cpu_ir>>6)&3, g_cpu_ir&7);
 			break;
 		case 2:
-			sprintf(g_dasm_str, "cinvp   %s, (A%d); (4)", cachetype[(g_cpu_ir>>6)&3], g_cpu_ir&7);
+			sprintf(g_dasm_str, "cinvp   %d, (A%d); (4)", (g_cpu_ir>>6)&3, g_cpu_ir&7);
 			break;
 		case 3:
-			sprintf(g_dasm_str, "cinva   %s; (4)", cachetype[(g_cpu_ir>>6)&3]);
+			sprintf(g_dasm_str, "cinva   %d; (4)", (g_cpu_ir>>6)&3);
 			break;
 	}
 }
@@ -1521,27 +1495,13 @@ static void d68020_cpgen(void)
 static void d68020_cprestore(void)
 {
 	LIMIT_CPU_TYPES(M68020_PLUS);
-	if (((g_cpu_ir>>9)&7) == 1)
-	{
-		sprintf(g_dasm_str, "frestore %s", get_ea_mode_str_8(g_cpu_ir));
-	}
-	else
-	{
-		sprintf(g_dasm_str, "%drestore %s; (2-3)", (g_cpu_ir>>9)&7, get_ea_mode_str_8(g_cpu_ir));
-	}
+	sprintf(g_dasm_str, "%drestore %s; (2-3)", (g_cpu_ir>>9)&7, get_ea_mode_str_8(g_cpu_ir));
 }
 
 static void d68020_cpsave(void)
 {
 	LIMIT_CPU_TYPES(M68020_PLUS);
-	if (((g_cpu_ir>>9)&7) == 1)
-	{
-		sprintf(g_dasm_str, "fsave   %s", get_ea_mode_str_8(g_cpu_ir));
-	}
-	else
-	{
-		sprintf(g_dasm_str, "%dsave   %s; (2-3)", (g_cpu_ir>>9)&7, get_ea_mode_str_8(g_cpu_ir));
-	}
+	sprintf(g_dasm_str, "%dsave   %s; (2-3)", (g_cpu_ir>>9)&7, get_ea_mode_str_8(g_cpu_ir));
 }
 
 static void d68020_cpscc(void)
@@ -1586,8 +1546,6 @@ static void d68020_cptrapcc_32(void)
 
 static void d68040_cpush(void)
 {
-	static const char *cachetype[4] = { "nop", "data", "inst", "both" };
-
 	LIMIT_CPU_TYPES(M68040_PLUS);
 	switch((g_cpu_ir>>3)&3)
 	{
@@ -1595,13 +1553,13 @@ static void d68040_cpush(void)
 			sprintf(g_dasm_str, "cpush (illegal scope); (4)");
 			break;
 		case 1:
-			sprintf(g_dasm_str, "cpushl  %s, (A%d); (4)", cachetype[(g_cpu_ir>>6)&3], g_cpu_ir&7);
+			sprintf(g_dasm_str, "cpushl  %d, (A%d); (4)", (g_cpu_ir>>6)&3, g_cpu_ir&7);
 			break;
 		case 2:
-			sprintf(g_dasm_str, "cpushp  %s, (A%d); (4)", cachetype[(g_cpu_ir>>6)&3], g_cpu_ir&7);
+			sprintf(g_dasm_str, "cpushp  %d, (A%d); (4)", (g_cpu_ir>>6)&3, g_cpu_ir&7);
 			break;
 		case 3:
-			sprintf(g_dasm_str, "cpusha  %s; (4)", cachetype[(g_cpu_ir>>6)&3]);
+			sprintf(g_dasm_str, "cpusha  %d; (4)", (g_cpu_ir>>6)&3);
 			break;
 	}
 }
@@ -1722,23 +1680,16 @@ static void d68040_fpu(void)
 {
 	char float_data_format[8][3] =
 	{
-		".l", ".s", ".x", ".p", ".w", ".d", ".b", ".p"
+		".l", ".s", ".x", ".p", ".w", ".d", ".b", ".?"
 	};
 
 	char mnemonic[40];
 	UINT32 w2, src, dst_reg;
-	LIMIT_CPU_TYPES(M68020_PLUS);
+	LIMIT_CPU_TYPES(M68030_PLUS);
 	w2 = read_imm_16();
 
 	src = (w2 >> 10) & 0x7;
 	dst_reg = (w2 >> 7) & 0x7;
-
-	// special override for FMOVECR
-	if ((((w2 >> 13) & 0x7) == 2) && (((w2>>10)&0x7) == 7))
-	{
-		sprintf(g_dasm_str, "fmovecr   #$%0x, fp%d", (w2&0x7f), dst_reg);
-		return;
-	}
 
 	switch ((w2 >> 13) & 0x7)
 	{
@@ -1817,110 +1768,21 @@ static void d68040_fpu(void)
 
 		case 0x3:
 		{
-			switch ((w2>>10)&7)
-			{
-				case 3:		// packed decimal w/fixed k-factor
-					sprintf(g_dasm_str, "fmove%s   FP%d, %s {#%d}", float_data_format[(w2>>10)&7], dst_reg, get_ea_mode_str_32(g_cpu_ir), sext_7bit_int(w2&0x7f));
-					break;
-
-				case 7:		// packed decimal w/dynamic k-factor (register)
-					sprintf(g_dasm_str, "fmove%s   FP%d, %s {D%d}", float_data_format[(w2>>10)&7], dst_reg, get_ea_mode_str_32(g_cpu_ir), (w2>>4)&7);
-					break;
-
-				default:
-					sprintf(g_dasm_str, "fmove%s   FP%d, %s", float_data_format[(w2>>10)&7], dst_reg, get_ea_mode_str_32(g_cpu_ir));
-					break;
-			}
+			sprintf(g_dasm_str, "fmove /todo");
 			break;
 		}
 
-		case 0x4:	// ea to control
+		case 0x4:
+		case 0x5:
 		{
-			sprintf(g_dasm_str, "fmovem.l   %s, ", get_ea_mode_str_32(g_cpu_ir));
-			if (w2 & 0x1000) strcat(g_dasm_str, "fpcr");
-			if (w2 & 0x0800) strcat(g_dasm_str, "/fpsr");
-			if (w2 & 0x0400) strcat(g_dasm_str, "/fpiar");
+			sprintf(g_dasm_str, "fmove /todo");
 			break;
 		}
 
-		case 0x5:	// control to ea
+		case 0x6:
+		case 0x7:
 		{
-
-			strcpy(g_dasm_str, "fmovem.l   ");
-			if (w2 & 0x1000) strcat(g_dasm_str, "fpcr");
-			if (w2 & 0x0800) strcat(g_dasm_str, "/fpsr");
-			if (w2 & 0x0400) strcat(g_dasm_str, "/fpiar");
-			strcat(g_dasm_str, ", ");
-			strcat(g_dasm_str, get_ea_mode_str_32(g_cpu_ir));
-			break;
-		}
-
-		case 0x6:	// memory to FPU, list
-		{
-			char temp[32];
-
-			if ((w2>>11) & 1)	// dynamic register list
-			{
-				sprintf(g_dasm_str, "fmovem.x   %s, D%d", get_ea_mode_str_32(g_cpu_ir), (w2>>4)&7);
-			}
-			else	// static register list
-			{
-				int i;
-
-				sprintf(g_dasm_str, "fmovem.x   %s, ", get_ea_mode_str_32(g_cpu_ir));
-
-				for (i = 0; i < 8; i++)
-				{
-					if (w2 & (1<<i))
-					{
-						if ((w2>>12) & 1)	// postincrement or control
-						{
-							sprintf(temp, "FP%d ", 7-i);
-						}
-						else			// predecrement
-						{
-							sprintf(temp, "FP%d ", i);
-						}
-						strcat(g_dasm_str, temp);
-					}
-				}
-			}
-			break;
-		}
-
-		case 0x7:	// FPU to memory, list
-		{
-			char temp[32];
-
-			if ((w2>>11) & 1)	// dynamic register list
-			{
-				sprintf(g_dasm_str, "fmovem.x   D%d, %s", (w2>>4)&7, get_ea_mode_str_32(g_cpu_ir));
-			}
-			else	// static register list
-			{
-				int i;
-
-				sprintf(g_dasm_str, "fmovem.x   ");
-
-				for (i = 0; i < 8; i++)
-				{
-					if (w2 & (1<<i))
-					{
-						if ((w2>>12) & 1)	// postincrement or control
-						{
-							sprintf(temp, "FP%d ", 7-i);
-						}
-						else			// predecrement
-						{
-							sprintf(temp, "FP%d ", i);
-						}
-						strcat(g_dasm_str, temp);
-					}
-				}
-
-				strcat(g_dasm_str, ", ");
-				strcat(g_dasm_str, get_ea_mode_str_32(g_cpu_ir));
-			}
+			sprintf(g_dasm_str, "fmovem /todo");
 			break;
 		}
 
@@ -2135,52 +1997,20 @@ static void d68010_movec(void)
 			processor = "4+";
 			break;
 		case 0x004:
-			if(g_cpu_type & COLDFIRE)
-			{
-				reg_name = "ACR0";
-				processor = "CF";
-			}
-			else
-			{
-				reg_name = "ITT0";
-				processor = "4+";
-			}
+			reg_name = "ITT0";
+			processor = "4+";
 			break;
 		case 0x005:
-			if(g_cpu_type & COLDFIRE)
-			{
-				reg_name = "ACR1";
-				processor = "CF";
-			}
-			else
-			{
-				reg_name = "ITT1";
-				processor = "4+";
-			}
+			reg_name = "ITT1";
+			processor = "4+";
 			break;
 		case 0x006:
-			if(g_cpu_type & COLDFIRE)
-			{
-				reg_name = "ACR2";
-				processor = "CF";
-			}
-			else
-			{
-				reg_name = "DTT0";
-				processor = "4+";
-			}
+			reg_name = "DTT0";
+			processor = "4+";
 			break;
 		case 0x007:
-			if(g_cpu_type & COLDFIRE)
-			{
-				reg_name = "ACR3";
-				processor = "CF";
-			}
-			else
-			{
-				reg_name = "DTT1";
-				processor = "4+";
-			}
+			reg_name = "DTT1";
+			processor = "4+";
 			break;
 		case 0x805:
 			reg_name = "MMUSR";
@@ -2193,38 +2023,6 @@ static void d68010_movec(void)
 		case 0x807:
 			reg_name = "SRP";
 			processor = "4+";
-			break;
-		case 0xc00:
-			reg_name = "ROMBAR0";
-			processor = "CF";
-			break;
-		case 0xc01:
-			reg_name = "ROMBAR1";
-			processor = "CF";
-			break;
-		case 0xc04:
-			reg_name = "RAMBAR0";
-			processor = "CF";
-			break;
-		case 0xc05:
-			reg_name = "RAMBAR1";
-			processor = "CF";
-			break;
-		case 0xc0c:
-			reg_name = "MPCR";
-			processor = "CF";
-			break;
-		case 0xc0d:
-			reg_name = "EDRAMBAR";
-			processor = "CF";
-			break;
-		case 0xc0e:
-			reg_name = "SECMBAR";
-			processor = "CF";
-			break;
-		case 0xc0f:
-			reg_name = "MBAR";
-			processor = "CF";
 			break;
 		default:
 			reg_name = make_signed_hex_str_16(extension & 0xfff);
@@ -2765,7 +2563,6 @@ static void d68000_pea(void)
 	sprintf(g_dasm_str, "pea     %s", get_ea_mode_str_32(g_cpu_ir));
 }
 
-// this is a 68040-specific form of PFLUSH
 static void d68040_pflush(void)
 {
 	LIMIT_CPU_TYPES(M68040_PLUS);
@@ -3222,16 +3019,7 @@ static void d68020_unpk_mm(void)
 }
 
 
-// PFLUSH:  001xxx0xxxxxxxxx
-// PLOAD:   001000x0000xxxxx
-// PVALID1: 0010100000000000
-// PVALID2: 0010110000000xxx
-// PMOVE 1: 010xxxx000000000
-// PMOVE 2: 011xxxx0000xxx00
-// PMOVE 3: 011xxxx000000000
-// PTEST:   100xxxxxxxxxxxxx
-// PFLUSHR:  1010000000000000
-static void d68851_p000(void)
+static void d68030_pmove(void)
 {
 	char* str;
 	UINT16 modes = read_imm_16();
@@ -3243,41 +3031,25 @@ static void d68851_p000(void)
 	{
 		if (modes & 0x0200)
 		{
-			sprintf(g_dasm_str, "pload  #%d, %s", (modes>>10)&7, str);
+	 		sprintf(g_dasm_str, "pload  #%d, %s", (modes>>10)&7, str);
 		}
 		else
 		{
-			sprintf(g_dasm_str, "pload  %s, #%d", str, (modes>>10)&7);
+	 		sprintf(g_dasm_str, "pload  %s, #%d", str, (modes>>10)&7);
 		}
 		return;
 	}
 
-	if ((modes & 0xe200) == 0x2000)	// PFLUSH
+	if ((modes & 0xe200) == 0x2000)	// PFLUSHA
 	{
-		sprintf(g_dasm_str, "pflushr %x, %x, %s", modes & 0x1f, (modes>>5)&0xf, str);
-		return;
-	}
-
-	if (modes == 0xa000)	// PFLUSHR
-	{
-		sprintf(g_dasm_str, "pflushr %s", str);
-	}
-
-	if (modes == 0x2800)	// PVALID (FORMAT 1)
-	{
-		sprintf(g_dasm_str, "pvalid VAL, %s", str);
-		return;
-	}
-
-	if ((modes & 0xfff8) == 0x2c00)	// PVALID (FORMAT 2)
-	{
-		sprintf(g_dasm_str, "pvalid A%d, %s", modes & 0xf, str);
-		return;
-	}
-
-	if ((modes & 0xe000) == 0x8000)	// PTEST
-	{
-		sprintf(g_dasm_str, "ptest #%d, %s", modes & 0x1f, str);
+		if (modes & 0x0200)
+		{
+	 		sprintf(g_dasm_str, "pflush %s, %s", g_mmuregs[(modes>>10)&7], str);
+		}
+		else
+		{
+	 		sprintf(g_dasm_str, "pflush %s, %s", str, g_mmuregs[(modes>>10)&7]);
+		}
 		return;
 	}
 
@@ -3289,22 +3061,22 @@ static void d68851_p000(void)
 			{
 				if (modes & 0x0200)
 				{
-					sprintf(g_dasm_str, "pmovefd  %s, %s", g_mmuregs[(modes>>10)&7], str);
+			 		sprintf(g_dasm_str, "pmovefd  %s, %s", g_mmuregs[(modes>>10)&7], str);
 				}
 				else
 				{
-					sprintf(g_dasm_str, "pmovefd  %s, %s", str, g_mmuregs[(modes>>10)&7]);
+			 		sprintf(g_dasm_str, "pmovefd  %s, %s", str, g_mmuregs[(modes>>10)&7]);
 				}
 			}
 			else
 			{
 				if (modes & 0x0200)
 				{
-					sprintf(g_dasm_str, "pmove  %s, %s", g_mmuregs[(modes>>10)&7], str);
+			 		sprintf(g_dasm_str, "pmove  %s, %s", g_mmuregs[(modes>>10)&7], str);
 				}
 				else
 				{
-					sprintf(g_dasm_str, "pmove  %s, %s", str, g_mmuregs[(modes>>10)&7]);
+			 		sprintf(g_dasm_str, "pmove  %s, %s", str, g_mmuregs[(modes>>10)&7]);
 				}
 			}
 			break;
@@ -3312,11 +3084,11 @@ static void d68851_p000(void)
 		case 3:	// MC68030 to/from status reg
 			if (modes & 0x0200)
 			{
-				sprintf(g_dasm_str, "pmove  mmusr, %s", str);
+		 		sprintf(g_dasm_str, "pmove  mmusr, %s", str);
 			}
 			else
 			{
-				sprintf(g_dasm_str, "pmove  %s, mmusr", str);
+		 		sprintf(g_dasm_str, "pmove  %s, mmusr", str);
 			}
 			break;
 
@@ -3326,33 +3098,6 @@ static void d68851_p000(void)
 	}
 }
 
-static void d68851_pbcc16(void)
-{
-	UINT32 temp_pc = g_cpu_pc;
-
-	sprintf(g_dasm_str, "pb%s %x", g_mmucond[g_cpu_ir&0xf], temp_pc + make_int_16(read_imm_16()));
-}
-
-static void d68851_pbcc32(void)
-{
-	UINT32 temp_pc = g_cpu_pc;
-
-	sprintf(g_dasm_str, "pb%s %x", g_mmucond[g_cpu_ir&0xf], temp_pc + make_int_32(read_imm_32()));
-}
-
-static void d68851_pdbcc(void)
-{
-	UINT32 temp_pc = g_cpu_pc;
-	UINT16 modes = read_imm_16();
-
-	sprintf(g_dasm_str, "pb%s %x", g_mmucond[modes&0xf], temp_pc + make_int_16(read_imm_16()));
-}
-
-// PScc:  0000000000xxxxxx
-static void d68851_p001(void)
-{
-	sprintf(g_dasm_str, "MMU 001 group");
-}
 
 /* ======================================================================== */
 /* ======================= INSTRUCTION TABLE BUILDER ====================== */
@@ -3676,11 +3421,7 @@ static const opcode_struct g_opcode_info[] =
 	{d68000_unlk         , 0xfff8, 0x4e58, 0x000},
 	{d68020_unpk_rr      , 0xf1f8, 0x8180, 0x000},
 	{d68020_unpk_mm      , 0xf1f8, 0x8188, 0x000},
-	{d68851_p000         , 0xffc0, 0xf000, 0x000},
-	{d68851_pbcc16       , 0xffc0, 0xf080, 0x000},
-	{d68851_pbcc32       , 0xffc0, 0xf0c0, 0x000},
-	{d68851_pdbcc        , 0xfff8, 0xf048, 0x000},
-	{d68851_p001         , 0xffc0, 0xf040, 0x000},
+	{d68030_pmove        , 0xffc0, 0xf000, 0x278},
 	{0, 0, 0, 0}
 };
 
@@ -3810,23 +3551,16 @@ static unsigned int m68k_disassemble(char* str_buff, unsigned int pc, unsigned i
 			g_cpu_type = TYPE_68010;
 			break;
 		case M68K_CPU_TYPE_68EC020:
+			g_cpu_type = TYPE_68020;
+			break;
 		case M68K_CPU_TYPE_68020:
 			g_cpu_type = TYPE_68020;
 			break;
-		case M68K_CPU_TYPE_68EC030:
 		case M68K_CPU_TYPE_68030:
 			g_cpu_type = TYPE_68030;
 			break;
 		case M68K_CPU_TYPE_68040:
-		case M68K_CPU_TYPE_68EC040:
-		case M68K_CPU_TYPE_68LC040:
 			g_cpu_type = TYPE_68040;
-			break;
-		case M68K_CPU_TYPE_68340:
-			g_cpu_type = TYPE_68340;
-			break;
-		case M68K_CPU_TYPE_COLDFIRE:
-			g_cpu_type = TYPE_COLDFIRE;
 			break;
 		default:
 			return 0;
@@ -4018,9 +3752,6 @@ unsigned int m68k_is_valid_instruction(unsigned int instruction, unsigned int cp
 		case M68K_CPU_TYPE_68EC020:
 		case M68K_CPU_TYPE_68020:
 		case M68K_CPU_TYPE_68030:
-		case M68K_CPU_TYPE_68EC030:
-		case M68K_CPU_TYPE_68340:
-		case M68K_CPU_TYPE_COLDFIRE:
 			if(g_instruction_table[instruction] == d68040_cinv)
 				return 0;
 			if(g_instruction_table[instruction] == d68040_cpush)
@@ -4035,9 +3766,9 @@ unsigned int m68k_is_valid_instruction(unsigned int instruction, unsigned int cp
 				return 0;
 			if(g_instruction_table[instruction] == d68040_move16_al_ai)
 				return 0;
+			if(g_instruction_table[instruction] == d68040_pflush)
+				return 0;
 		case M68K_CPU_TYPE_68040:
-		case M68K_CPU_TYPE_68EC040:
-		case M68K_CPU_TYPE_68LC040:
 			if(g_instruction_table[instruction] == d68020_cpbcc_16)
 				return 0;
 			if(g_instruction_table[instruction] == d68020_cpbcc_32)
@@ -4057,8 +3788,6 @@ unsigned int m68k_is_valid_instruction(unsigned int instruction, unsigned int cp
 			if(g_instruction_table[instruction] == d68020_cptrapcc_16)
 				return 0;
 			if(g_instruction_table[instruction] == d68020_cptrapcc_32)
-				return 0;
-			if(g_instruction_table[instruction] == d68040_pflush)
 				return 0;
 	}
 	if(cpu_type != M68K_CPU_TYPE_68020 && cpu_type != M68K_CPU_TYPE_68EC020 &&
@@ -4100,15 +3829,7 @@ CPU_DISASSEMBLE( m68040 )
 	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68040);
 }
 
-CPU_DISASSEMBLE( m68340 )
-{
-	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_68340);
-}
-
-CPU_DISASSEMBLE( coldfire )
-{
-	return m68k_disassemble_raw(buffer, pc, oprom, opram, M68K_CPU_TYPE_COLDFIRE);
-}
+// f028 2215 0008
 
 /* ======================================================================== */
 /* ============================== END OF FILE ============================= */

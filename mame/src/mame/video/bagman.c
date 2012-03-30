@@ -6,23 +6,26 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/resnet.h"
 #include "includes/bagman.h"
 
 
+UINT8 *bagman_video_enable;
+
+static tilemap *bg_tilemap;
+
+
 WRITE8_HANDLER( bagman_videoram_w )
 {
-	bagman_state *state = space->machine().driver_data<bagman_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	videoram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 WRITE8_HANDLER( bagman_colorram_w )
 {
-	bagman_state *state = space->machine().driver_data<bagman_state>();
-	state->m_colorram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	colorram[offset] = data;
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 /***************************************************************************
@@ -58,7 +61,7 @@ PALETTE_INIT( bagman )
 			2,	resistances_b,	weights_b,	470,	0);
 
 
-	for (i = 0; i < machine.total_colors(); i++)
+	for (i = 0; i < machine->config->total_colors; i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -83,77 +86,69 @@ PALETTE_INIT( bagman )
 
 WRITE8_HANDLER( bagman_flipscreen_w )
 {
-	bagman_state *state = space->machine().driver_data<bagman_state>();
-	if ((flip_screen_get(space->machine()) ^ data) & 1)
+	if (flip_screen_get(space->machine) != (data & 0x01))
 	{
-		flip_screen_set(space->machine(), data & 0x01);
-		state->m_bg_tilemap->mark_all_dirty();
+		flip_screen_set(space->machine, data & 0x01);
+		tilemap_mark_all_tiles_dirty(bg_tilemap);
 	}
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	bagman_state *state = machine.driver_data<bagman_state>();
-	int gfxbank = (machine.gfx[2] && (state->m_colorram[tile_index] & 0x10)) ? 2 : 0;
-	int code = state->m_videoram[tile_index] + 8 * (state->m_colorram[tile_index] & 0x20);
-	int color = state->m_colorram[tile_index] & 0x0f;
+	int gfxbank = (machine->gfx[2] && (colorram[tile_index] & 0x10)) ? 2 : 0;
+	int code = videoram[tile_index] + 8 * (colorram[tile_index] & 0x20);
+	int color = colorram[tile_index] & 0x0f;
 
 	SET_TILE_INFO(gfxbank, code, color, 0);
 }
 
 VIDEO_START( bagman )
 {
-	bagman_state *state = machine.driver_data<bagman_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,
 		 8, 8, 32, 32);
-
-	state->m_bg_tilemap->set_scrolldy(-1, -1);
 }
 
-
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	bagman_state *state = machine.driver_data<bagman_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int offs;
 
-	for (offs = state->m_spriteram_size - 4;offs >= 0;offs -= 4)
+	for (offs = spriteram_size - 4;offs >= 0;offs -= 4)
 	{
 		int sx,sy,flipx,flipy;
 
+
 		sx = spriteram[offs + 3];
-		sy = 255 - spriteram[offs + 2] - 16;
+		sy = 240 - spriteram[offs + 2];
 		flipx = spriteram[offs] & 0x40;
 		flipy = spriteram[offs] & 0x80;
 		if (flip_screen_x_get(machine))
 		{
-			sx = bitmap.width() - sx - 15;
+			sx = 240 - sx +1;	/* compensate misplacement */
 			flipx = !flipx;
 		}
 		if (flip_screen_y_get(machine))
 		{
-			sy = bitmap.height() - sy - 15;
+			sy = 240 - sy;
 			flipy = !flipy;
 		}
 
 		if (spriteram[offs + 2] && spriteram[offs + 3])
-			drawgfx_transpen(bitmap,
-					cliprect,machine.gfx[1],
+			drawgfx_transpen(bitmap,/* compensate misplacement */
+					cliprect,machine->gfx[1],
 					(spriteram[offs] & 0x3f) + 2 * (spriteram[offs + 1] & 0x20),
 					spriteram[offs + 1] & 0x1f,
 					flipx,flipy,
-					sx,sy,0);
+					sx,sy+1,0);
 	}
 }
 
-SCREEN_UPDATE_IND16( bagman )
+
+VIDEO_UPDATE( bagman )
 {
-	bagman_state *state = screen.machine().driver_data<bagman_state>();
-	bitmap.fill(0, cliprect);
-	if (*state->m_video_enable == 0)
+	if (*bagman_video_enable == 0)
 		return 0;
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }

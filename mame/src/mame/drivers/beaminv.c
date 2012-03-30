@@ -33,7 +33,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
       . 2 players game : [0x1839] = 0xaa (player 1) or 0x55 (player 2)
   - Credits are stored at address 0x1837 (BCD coded, range 0x00-0x99)
 
-2) 'pacominv'
+2) 'beaminva'
 
   - Routine to handle the analog inputs at 0x04bd.
     Contents from 0x3400 (IN2) is compared with contents from 0x1d05 (value in RAM).
@@ -51,30 +51,13 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "beaminv.lh"
 
 
-class beaminv_state : public driver_device
-{
-public:
-	beaminv_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT8 *    m_videoram;
-	size_t     m_videoram_size;
-
-	/* misc */
-	emu_timer  *m_interrupt_timer;
-
-	/* input-related */
-	UINT8      m_controller_select;
-
-	/* devices */
-	device_t *m_maincpu;
-};
+static UINT8 *beaminv_videoram;
+static size_t beaminv_videoram_size;
+static UINT8 controller_select;
 
 
 
@@ -90,36 +73,35 @@ public:
 
 static const int interrupt_lines[INTERRUPTS_PER_FRAME] = { 0x00, 0x80 };
 
+static emu_timer *interrupt_timer;
+
 
 static TIMER_CALLBACK( interrupt_callback )
 {
-	beaminv_state *state = machine.driver_data<beaminv_state>();
 	int interrupt_number = param;
 	int next_interrupt_number;
 	int next_vpos;
 
-	device_set_input_line(state->m_maincpu, 0, HOLD_LINE);
+	cputag_set_input_line(machine, "maincpu", 0, HOLD_LINE);
 
 	/* set up for next interrupt */
 	next_interrupt_number = (interrupt_number + 1) % INTERRUPTS_PER_FRAME;
 	next_vpos = interrupt_lines[next_interrupt_number];
 
-	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(next_vpos), next_interrupt_number);
+	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, next_vpos, 0), next_interrupt_number);
 }
 
 
-static void create_interrupt_timer( running_machine &machine )
+static void create_interrupt_timer(running_machine *machine)
 {
-	beaminv_state *state = machine.driver_data<beaminv_state>();
-	state->m_interrupt_timer = machine.scheduler().timer_alloc(FUNC(interrupt_callback));
+	interrupt_timer = timer_alloc(machine, interrupt_callback, NULL);
 }
 
 
-static void start_interrupt_timer( running_machine &machine )
+static void start_interrupt_timer(running_machine *machine)
 {
-	beaminv_state *state = machine.driver_data<beaminv_state>();
 	int vpos = interrupt_lines[0];
-	state->m_interrupt_timer->adjust(machine.primary_screen->time_until_pos(vpos));
+	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos, 0), 0);
 }
 
 
@@ -132,13 +114,10 @@ static void start_interrupt_timer( running_machine &machine )
 
 static MACHINE_START( beaminv )
 {
-	beaminv_state *state = machine.driver_data<beaminv_state>();
 	create_interrupt_timer(machine);
 
-	state->m_maincpu = machine.device("maincpu");
-
 	/* setup for save states */
-	state->save_item(NAME(state->m_controller_select));
+	state_save_register_global(machine, controller_select);
 }
 
 
@@ -151,10 +130,7 @@ static MACHINE_START( beaminv )
 
 static MACHINE_RESET( beaminv )
 {
-	beaminv_state *state = machine.driver_data<beaminv_state>();
 	start_interrupt_timer(machine);
-
-	state->m_controller_select = 0;
 }
 
 
@@ -165,23 +141,22 @@ static MACHINE_RESET( beaminv )
  *
  *************************************/
 
-static SCREEN_UPDATE_RGB32( beaminv )
+static VIDEO_UPDATE( beaminv )
 {
-	beaminv_state *state = screen.machine().driver_data<beaminv_state>();
 	offs_t offs;
 
-	for (offs = 0; offs < state->m_videoram_size; offs++)
+	for (offs = 0; offs < beaminv_videoram_size; offs++)
 	{
 		int i;
 
 		UINT8 y = offs;
 		UINT8 x = offs >> 8 << 3;
-		UINT8 data = state->m_videoram[offs];
+		UINT8 data = beaminv_videoram[offs];
 
 		for (i = 0; i < 8; i++)
 		{
 			pen_t pen = (data & 0x01) ? RGB_WHITE : RGB_BLACK;
-			bitmap.pix32(y, x) = pen;
+			*BITMAP_ADDR32(bitmap, y, x) = pen;
 
 			data = data >> 1;
 			x = x + 1;
@@ -194,7 +169,7 @@ static SCREEN_UPDATE_RGB32( beaminv )
 
 static READ8_HANDLER( v128_r )
 {
-	return (space->machine().primary_screen->vpos() >> 7) & 0x01;
+	return (video_screen_get_vpos(space->machine->primary_screen) >> 7) & 0x01;
 }
 
 
@@ -211,16 +186,14 @@ static READ8_HANDLER( v128_r )
 
 static WRITE8_HANDLER( controller_select_w )
 {
-	beaminv_state *state = space->machine().driver_data<beaminv_state>();
 	/* 0x01 (player 1) or 0x02 (player 2) */
-	state->m_controller_select = data;
+	controller_select = data;
 }
 
 
 static READ8_HANDLER( controller_r )
 {
-	beaminv_state *state = space->machine().driver_data<beaminv_state>();
-	return input_port_read(space->machine(), (state->m_controller_select == 1) ? P1_CONTROL_PORT_TAG : P2_CONTROL_PORT_TAG);
+	return input_port_read(space->machine, (controller_select == 1) ? P1_CONTROL_PORT_TAG : P2_CONTROL_PORT_TAG);
 }
 
 
@@ -231,14 +204,14 @@ static READ8_HANDLER( controller_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x17ff) AM_ROM
 	AM_RANGE(0x1800, 0x1fff) AM_RAM
 	AM_RANGE(0x2400, 0x2400) AM_MIRROR(0x03ff) AM_READ_PORT("DSW")
 	AM_RANGE(0x2800, 0x2800) AM_MIRROR(0x03ff) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x3400, 0x3400) AM_MIRROR(0x03ff) AM_READ(controller_r)
 	AM_RANGE(0x3800, 0x3800) AM_MIRROR(0x03ff) AM_READ(v128_r)
-	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_SIZE_MEMBER(beaminv_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE(&beaminv_videoram) AM_SIZE(&beaminv_videoram_size)
 ADDRESS_MAP_END
 
 
@@ -249,7 +222,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( main_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(controller_select_w) /* to be confirmed */
 ADDRESS_MAP_END
@@ -298,7 +271,7 @@ static INPUT_PORTS_START( beaminv )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( pacominv )
+static INPUT_PORTS_START( beaminva )
 	PORT_INCLUDE( beaminv )
 
 	PORT_MODIFY("DSW")
@@ -328,24 +301,26 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( beaminv, beaminv_state )
+static MACHINE_DRIVER_START( beaminv )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 2000000)	/* 2 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_io_map)
+	MDRV_CPU_ADD("maincpu", Z80, 2000000)	/* 2 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_io_map)
 
-	MCFG_MACHINE_START(beaminv)
-	MCFG_MACHINE_RESET(beaminv)
+	MDRV_MACHINE_START(beaminv)
+	MDRV_MACHINE_RESET(beaminv)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 247, 16, 231)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_UPDATE_STATIC(beaminv)
+	MDRV_VIDEO_UPDATE(beaminv)
 
-MACHINE_CONFIG_END
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 247, 16, 231)
+	MDRV_SCREEN_REFRESH_RATE(60)
+
+MACHINE_DRIVER_END
 
 
 
@@ -366,7 +341,7 @@ ROM_START( beaminv )
 ROM_END
 
 
-ROM_START( pacominv )
+ROM_START( beaminva )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "rom_0", 0x0000, 0x0400, CRC(67e100dd) SHA1(5f58e2ed3da14c48f7c382ee6091a59caf8e0609) )
 	ROM_LOAD( "rom_1", 0x0400, 0x0400, CRC(442bbe98) SHA1(0e0382d4f6491629449759747019bd453a458b66) )
@@ -384,5 +359,5 @@ ROM_END
  *
  *************************************/
 
-GAMEL( 1979, beaminv,  0,       beaminv, beaminv,  0, ROT270, "Tekunon Kougyou",   "Beam Invader",  GAME_NO_SOUND | GAME_SUPPORTS_SAVE, layout_beaminv )
-GAMEL( 1979, pacominv, beaminv, beaminv, pacominv, 0, ROT270, "Pacom Corporation", "Pacom Invader", GAME_NO_SOUND | GAME_SUPPORTS_SAVE, layout_beaminv )
+GAME( 1979, beaminv,  0,       beaminv, beaminv,  0, ROT270, "Tekunon Kougyou", "Beam Invader (set 1)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE)
+GAME( 1979, beaminva, beaminv, beaminv, beaminva, 0, ROT270, "Tekunon Kougyou", "Beam Invader (set 2)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE) // what's the real title ?

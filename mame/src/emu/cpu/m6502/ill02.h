@@ -52,7 +52,7 @@
  *  ASR logical and, logical shift right
  ***************************************************************/
 #define ASR 													\
-	tmp &= A;									\
+	tmp &= A; 									\
 	LSR
 
 /* 6510 ********************************************************
@@ -139,7 +139,7 @@
  *  DCP decrement data and compare
  ***************************************************************/
 #define DCP 													\
-	tmp = (UINT8)(tmp-1);										\
+	tmp = (UINT8)(tmp-1); 										\
 	P &= ~F_C;													\
 	if (A >= tmp)												\
 		P |= F_C;												\
@@ -155,7 +155,7 @@
  *  ISB increment and subtract with carry
  ***************************************************************/
 #define ISB 													\
-	tmp = (UINT8)(tmp+1);										\
+	tmp = (UINT8)(tmp+1); 										\
 	SBC
 
 /* 6510 ********************************************************
@@ -235,7 +235,7 @@
 #if 0
 #define SSH 													\
 	tmp = S = A & X;											\
-	tmp &= (UINT8)(cpustate->direct->read_raw_byte((PCW + 1) & 0xffff) + 1)
+	tmp &= (UINT8)(memory_raw_read_byte(cpustate->space, (PCW + 1) & 0xffff) + 1)
 #endif
 
 /* 6510 ********************************************************
@@ -264,13 +264,13 @@
 #define KIL 													\
 	PCW--;														\
 	logerror("M6510 KILL opcode %04x: %02x\n",                  \
-				PCW, cpustate->direct->read_decrypted_byte(PCW))
+				PCW, memory_decrypted_read_byte(cpustate->space, PCW))
 
 /* N2A03 *******************************************************
  *  ARR logical and, rotate right - no decimal mode
  ***************************************************************/
 #define ARR_NES												\
-	{												\
+        {												\
 		tmp &= A;										\
 		ROR;											\
 		P &=~(F_V|F_C);										\

@@ -5,7 +5,6 @@ Notes:
 - tilemap system is identical to Namco System2
 
 ToDo:
-- improve interrupts
 - gunbulet force feedback
 - music tempo is too fast in Nebulas Ray, JLS V-Shoot and the Great Sluggers games
 
@@ -269,48 +268,39 @@ GFX:                Custom 145     ( 80 pin PQFP)
                     Custom 187     (120 pin PQFP)
                     Custom 169     (120 pin PQFP)
 */
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
-#include "includes/namconb1.h"
-#include "includes/namcos2.h"
-#include "includes/namcoic.h"
+#include "deprecat.h"
+#include "namconb1.h"
+#include "namcos2.h"
+#include "namcoic.h"
 #include "sound/c352.h"
 #include "cpu/m37710/m37710.h"
 
 #define NB1_NVMEM_SIZE (0x800)
+static UINT32 *nvmem32;
 
+UINT32 *namconb1_spritebank32;
+UINT32 *namconb1_tilebank32;
+static UINT16 *namconb_shareram;
 
 /****************************************************************************/
 
-
-static TIMER_DEVICE_CALLBACK( mcu_interrupt )
-{
-	int scanline = param;
-
-	/* TODO: real sources of these */
-	if (scanline == 224)
-		cputag_set_input_line(timer.machine(), "mcu", M37710_LINE_IRQ0, HOLD_LINE);
-	else if (scanline == 0)
-		cputag_set_input_line(timer.machine(), "mcu", M37710_LINE_IRQ2, HOLD_LINE);
-	else if (scanline == 128)
-		cputag_set_input_line(timer.machine(), "mcu", M37710_LINE_ADC, HOLD_LINE);
-}
-
+static UINT8 namconb_cpureg[32];
+static int vblank_irq_active, pos_irq_active;
 
 static TIMER_CALLBACK( namconb1_TriggerPOSIRQ )
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
-	if(state->m_pos_irq_active || !(state->m_namconb_cpureg[0x02] & 0xf0))
+	if(pos_irq_active || !(namconb_cpureg[0x02] & 0xf0))
 		return;
 
-	machine.primary_screen->update_partial(param);
-	state->m_pos_irq_active = 1;
-	cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x02] & 0xf, ASSERT_LINE);
+	video_screen_update_partial(machine->primary_screen, param);
+	pos_irq_active = 1;
+	cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x02] & 0xf, ASSERT_LINE);
 }
 
 static INTERRUPT_GEN( namconb1_interrupt )
 {
-	namconb1_state *state = device->machine().driver_data<namconb1_state>();
 	/**
      * 400000 0x00
      * 400001 0x00
@@ -345,11 +335,11 @@ static INTERRUPT_GEN( namconb1_interrupt )
      * 40001e 0x00
      * 40001f 0x00
      */
-	int scanline = (device->machine().generic.paletteram.u32[0x1808/4]&0xffff)-32;
+	int scanline = (paletteram32[0x1808/4]&0xffff)-32;
 
-	if((!state->m_vblank_irq_active) && (state->m_namconb_cpureg[0x04] & 0xf0)) {
-		device_set_input_line(device, state->m_namconb_cpureg[0x04] & 0xf, ASSERT_LINE);
-		state->m_vblank_irq_active = 1;
+	if((!vblank_irq_active) && (namconb_cpureg[0x04] & 0xf0)) {
+		cpu_set_input_line(device, namconb_cpureg[0x04] & 0xf, ASSERT_LINE);
+		vblank_irq_active = 1;
 	}
 
 	if( scanline<0 )
@@ -358,22 +348,35 @@ static INTERRUPT_GEN( namconb1_interrupt )
 	}
 	if( scanline < NAMCONB1_VBSTART )
 	{
-		device->machine().scheduler().timer_set( device->machine().primary_screen->time_until_pos(scanline), FUNC(namconb1_TriggerPOSIRQ ), scanline);
+		timer_set( device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, scanline, 0), NULL, scanline, namconb1_TriggerPOSIRQ );
 	}
 } /* namconb1_interrupt */
 
+static INTERRUPT_GEN( mcu_interrupt )
+{
+	if (cpu_getiloops(device) == 0)
+	{
+		cpu_set_input_line(device, M37710_LINE_IRQ0, HOLD_LINE);
+	}
+	else if (cpu_getiloops(device) == 1)
+	{
+		cpu_set_input_line(device, M37710_LINE_IRQ2, HOLD_LINE);
+	}
+	else
+	{
+ 		cpu_set_input_line(device, M37710_LINE_ADC, HOLD_LINE);
+	}
+}
 
 static TIMER_CALLBACK( namconb2_TriggerPOSIRQ )
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
-	machine.primary_screen->update_partial(param);
-	state->m_pos_irq_active = 1;
-	cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x02], ASSERT_LINE);
+	video_screen_update_partial(machine->primary_screen, param);
+	pos_irq_active = 1;
+	cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x02], ASSERT_LINE);
 }
 
 static INTERRUPT_GEN( namconb2_interrupt )
 {
-	namconb1_state *state = device->machine().driver_data<namconb1_state>();
 	/**
      * f00000 0x01 // VBLANK irq level
      * f00001 0x00
@@ -403,57 +406,56 @@ static INTERRUPT_GEN( namconb2_interrupt )
      * f0001e 0x00
      * f0001f 0x01
      */
-	int scanline = (device->machine().generic.paletteram.u32[0x1808/4]&0xffff)-32;
+	int scanline = (paletteram32[0x1808/4]&0xffff)-32;
 
-	if((!state->m_vblank_irq_active) && state->m_namconb_cpureg[0x00]) {
-		device_set_input_line(device, state->m_namconb_cpureg[0x00], ASSERT_LINE);
-		state->m_vblank_irq_active = 1;
+	if((!vblank_irq_active) && namconb_cpureg[0x00]) {
+		cpu_set_input_line(device, namconb_cpureg[0x00], ASSERT_LINE);
+		vblank_irq_active = 1;
 	}
 
 	if( scanline<0 )
 		scanline = 0;
 
 	if( scanline < NAMCONB1_VBSTART )
-		device->machine().scheduler().timer_set( device->machine().primary_screen->time_until_pos(scanline), FUNC(namconb2_TriggerPOSIRQ ), scanline);
+		timer_set( device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, scanline, 0), NULL, scanline, namconb2_TriggerPOSIRQ );
 } /* namconb2_interrupt */
 
-static void namconb1_cpureg8_w(running_machine &machine, int reg, UINT8 data)
+static void namconb1_cpureg8_w(running_machine *machine, int reg, UINT8 data)
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
-	UINT8 prev = state->m_namconb_cpureg[reg];
-	state->m_namconb_cpureg[reg] = data;
+	UINT8 prev = namconb_cpureg[reg];
+	namconb_cpureg[reg] = data;
 	switch(reg) {
 	case 0x02: // POS IRQ level/enable
-		if(state->m_pos_irq_active && (((prev & 0xf) != (data & 0xf)) || !(data & 0xf0))) {
+		if(pos_irq_active && (((prev & 0xf) != (data & 0xf)) || !(data & 0xf0))) {
 			cputag_set_input_line(machine, "maincpu", prev & 0xf, CLEAR_LINE);
 			if(data & 0xf0)
 				cputag_set_input_line(machine, "maincpu", data & 0xf, ASSERT_LINE);
 			else
-				state->m_pos_irq_active = 0;
+				pos_irq_active = 0;
 		}
 		break;
 
 	case 0x04: // VBLANK IRQ level/enable
-		if(state->m_vblank_irq_active && (((prev & 0xf) != (data & 0xf)) || !(data & 0xf0))) {
+		if(vblank_irq_active && (((prev & 0xf) != (data & 0xf)) || !(data & 0xf0))) {
 			cputag_set_input_line(machine, "maincpu", prev & 0xf, CLEAR_LINE);
 			if(data & 0xf0)
 				cputag_set_input_line(machine, "maincpu", data & 0xf, ASSERT_LINE);
 			else
-				state->m_vblank_irq_active = 0;
+				vblank_irq_active = 0;
 		}
 		break;
 
 	case 0x07: // POS ack
-		if(state->m_pos_irq_active) {
-			cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x02] & 0xf, CLEAR_LINE);
-			state->m_pos_irq_active = 0;
+		if(pos_irq_active) {
+			cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x02] & 0xf, CLEAR_LINE);
+			pos_irq_active = 0;
 		}
 		break;
 
 	case 0x09: // VBLANK ack
-		if(state->m_vblank_irq_active) {
-			cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x04] & 0xf, CLEAR_LINE);
-			state->m_vblank_irq_active = 0;
+		if(vblank_irq_active) {
+			cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x04] & 0xf, CLEAR_LINE);
+			vblank_irq_active = 0;
 		}
 		break;
 
@@ -474,53 +476,52 @@ static void namconb1_cpureg8_w(running_machine &machine, int reg, UINT8 data)
 static WRITE32_HANDLER( namconb1_cpureg_w )
 {
 	if(mem_mask & 0xff000000)
-		namconb1_cpureg8_w(space->machine(), offset*4, data >> 24);
+		namconb1_cpureg8_w(space->machine, offset*4, data >> 24);
 	if(mem_mask & 0x00ff0000)
-		namconb1_cpureg8_w(space->machine(), offset*4+1, data >> 16);
+		namconb1_cpureg8_w(space->machine, offset*4+1, data >> 16);
 	if(mem_mask & 0x0000ff00)
-		namconb1_cpureg8_w(space->machine(), offset*4+2, data >> 8);
+		namconb1_cpureg8_w(space->machine, offset*4+2, data >> 8);
 	if(mem_mask & 0x000000ff)
-		namconb1_cpureg8_w(space->machine(), offset*4+3, data);
+		namconb1_cpureg8_w(space->machine, offset*4+3, data);
 }
 
 
-static void namconb2_cpureg8_w(running_machine &machine, int reg, UINT8 data)
+static void namconb2_cpureg8_w(running_machine *machine, int reg, UINT8 data)
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
-	UINT8 prev = state->m_namconb_cpureg[reg];
-	state->m_namconb_cpureg[reg] = data;
+	UINT8 prev = namconb_cpureg[reg];
+	namconb_cpureg[reg] = data;
 	switch(reg) {
 	case 0x00: // VBLANK IRQ level
-		if(state->m_vblank_irq_active && (prev != data)) {
+		if(vblank_irq_active && (prev != data)) {
 			cputag_set_input_line(machine, "maincpu", prev, CLEAR_LINE);
 			if(data)
 				cputag_set_input_line(machine, "maincpu", data, ASSERT_LINE);
 			else
-				state->m_vblank_irq_active = 0;
+				vblank_irq_active = 0;
 		}
 		break;
 
 	case 0x02: // POS IRQ level
-		if(state->m_pos_irq_active && (prev != data)) {
+		if(pos_irq_active && (prev != data)) {
 			cputag_set_input_line(machine, "maincpu", prev, CLEAR_LINE);
 			if(data)
 				cputag_set_input_line(machine, "maincpu", data, ASSERT_LINE);
 			else
-				state->m_pos_irq_active = 0;
+				pos_irq_active = 0;
 		}
 		break;
 
 	case 0x04: // VBLANK ack
-		if(state->m_vblank_irq_active) {
-			cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x00], CLEAR_LINE);
-			state->m_vblank_irq_active = 0;
+		if(vblank_irq_active) {
+			cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x00], CLEAR_LINE);
+			vblank_irq_active = 0;
 		}
 		break;
 
 	case 0x06: // POS ack
-		if(state->m_pos_irq_active) {
-			cputag_set_input_line(machine, "maincpu", state->m_namconb_cpureg[0x02], CLEAR_LINE);
-			state->m_pos_irq_active = 0;
+		if(pos_irq_active) {
+			cputag_set_input_line(machine, "maincpu", namconb_cpureg[0x02], CLEAR_LINE);
+			pos_irq_active = 0;
 		}
 		break;
 
@@ -542,20 +543,19 @@ static void namconb2_cpureg8_w(running_machine &machine, int reg, UINT8 data)
 static WRITE32_HANDLER( namconb2_cpureg_w )
 {
 	if(mem_mask & 0xff000000)
-		namconb2_cpureg8_w(space->machine(), offset*4, data >> 24);
+		namconb2_cpureg8_w(space->machine, offset*4, data >> 24);
 	if(mem_mask & 0x00ff0000)
-		namconb2_cpureg8_w(space->machine(), offset*4+1, data >> 16);
+		namconb2_cpureg8_w(space->machine, offset*4+1, data >> 16);
 	if(mem_mask & 0x0000ff00)
-		namconb2_cpureg8_w(space->machine(), offset*4+2, data >> 8);
+		namconb2_cpureg8_w(space->machine, offset*4+2, data >> 8);
 	if(mem_mask & 0x000000ff)
-		namconb2_cpureg8_w(space->machine(), offset*4+3, data);
+		namconb2_cpureg8_w(space->machine, offset*4+3, data);
 }
 
 static READ32_HANDLER(namconb_cpureg_r)
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	return (state->m_namconb_cpureg[offset*4] << 24) | (state->m_namconb_cpureg[offset*4+1] << 16)
-		| (state->m_namconb_cpureg[offset*4+2] << 8) | state->m_namconb_cpureg[offset*4+3];
+	return (namconb_cpureg[offset*4] << 24) | (namconb_cpureg[offset*4+1] << 16)
+		| (namconb_cpureg[offset*4+2] << 8) | namconb_cpureg[offset*4+3];
 }
 
 
@@ -563,19 +563,18 @@ static READ32_HANDLER(namconb_cpureg_r)
 
 static NVRAM_HANDLER( namconb1 )
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
 	int i;
 	UINT8 data[4];
 	if( read_or_write )
 	{
 		for( i=0; i<NB1_NVMEM_SIZE/4; i++ )
 		{
-			UINT32 dword = state->m_nvmem32[i];
+			UINT32 dword = nvmem32[i];
 			data[0] = dword>>24;
 			data[1] = (dword&0x00ff0000)>>16;
 			data[2] = (dword&0x0000ff00)>>8;
 			data[3] = dword&0xff;
-			file->write( data, 4 );
+			mame_fwrite( file, data, 4 );
 		}
 	}
 	else
@@ -584,16 +583,16 @@ static NVRAM_HANDLER( namconb1 )
 		{
 			for( i=0; i<NB1_NVMEM_SIZE/4; i++ )
 			{
-				file->read( data, 4 );
-				state->m_nvmem32[i] = (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3];
+				mame_fread( file, data, 4 );
+				nvmem32[i] = (data[0]<<24)|(data[1]<<16)|(data[2]<<8)|data[3];
 			}
 		}
 		else
 		{
-			memset( state->m_nvmem32, 0x00, NB1_NVMEM_SIZE );
+			memset( nvmem32, 0x00, NB1_NVMEM_SIZE );
 			if( namcos2_gametype == NAMCONB1_GUNBULET )
 			{
-				state->m_nvmem32[0] = 0x0f260f26; /* default gun calibration */
+				nvmem32[0] = 0x0f260f26; /* default gun calibration */
 			}
 		}
 	}
@@ -601,15 +600,14 @@ static NVRAM_HANDLER( namconb1 )
 
 static MACHINE_START(namconb)
 {
-	namconb1_state *state = machine.driver_data<namconb1_state>();
-	state->m_vblank_irq_active = 0;
-	state->m_pos_irq_active = 0;
-	memset(state->m_namconb_cpureg, 0, sizeof(state->m_namconb_cpureg));
+	vblank_irq_active = 0;
+	pos_irq_active = 0;
+	memset(namconb_cpureg, 0, sizeof(namconb_cpureg));
 }
 
 static DRIVER_INIT( nebulray )
 {
-	UINT8 *pMem = (UINT8 *)machine.region(NAMCONB1_TILEMASKREGION)->base();
+	UINT8 *pMem = (UINT8 *)memory_region(machine, NAMCONB1_TILEMASKREGION);
 	size_t numBytes = (0xfe7-0xe6f)*8;
 	memset( &pMem[0xe6f*8], 0, numBytes );
 
@@ -663,13 +661,13 @@ static DRIVER_INIT( outfxies )
 
 static READ32_HANDLER( custom_key_r )
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	UINT16 old_count = state->m_count;
+	static UINT16 count;
+	UINT16 old_count = count;
 
 	do
 	{ /* pick a random number, but don't pick the same twice in a row */
-		state->m_count = space->machine().rand();
-	} while( state->m_count==old_count );
+		count = mame_rand(space->machine);
+	} while( count==old_count );
 
 	switch( namcos2_gametype )
 	{
@@ -680,7 +678,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 0: return 0x0189;
-		case 1: return  state->m_count<<16;
+		case 1: return  count<<16;
 		}
 		break;
 
@@ -688,7 +686,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 0: return 0x01aa<<16;
-		case 4: return state->m_count<<16;
+		case 4: return count<<16;
 		}
 		break;
 
@@ -696,7 +694,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 2: return 0x1b2<<16;
-		case 5: return state->m_count<<16;
+		case 5: return count<<16;
 		}
 		break;
 
@@ -704,7 +702,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 0: return 0x0167;
-		case 1: return state->m_count<<16;
+		case 1: return count<<16;
 		}
 		break;
 
@@ -712,7 +710,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 1: return 0;
-		case 3: return (0x0171<<16) | state->m_count;
+		case 3: return (0x0171<<16) | count;
 		}
 		break;
 
@@ -720,14 +718,14 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 1: return 0x016e;
-		case 3: return state->m_count;
+		case 3: return count;
 		}
 		break;
 
 	case NAMCONB1_VSHOOT:
 		switch( offset )
 		{
-		case 2: return state->m_count<<16;
+		case 2: return count<<16;
 		case 3: return 0x0170<<16;
 		}
 		break;
@@ -736,7 +734,7 @@ static READ32_HANDLER( custom_key_r )
 		switch( offset )
 		{
 		case 0: return 0x0186;
-		case 1: return state->m_count<<16;
+		case 1: return count<<16;
 		}
 		break;
 
@@ -744,7 +742,7 @@ static READ32_HANDLER( custom_key_r )
 		break; /* no protection? */
 	}
 
-	logerror( "custom_key_r(%d); pc=%08x\n", offset, cpu_get_pc(&space->device()) );
+	logerror( "custom_key_r(%d); pc=%08x\n", offset, cpu_get_pc(space->cpu) );
 	return 0;
 } /* custom_key_r */
 
@@ -815,10 +813,10 @@ static READ32_HANDLER( gunbulet_gun_r )
 
 	switch( offset )
 	{
-	case 0: case 1: result = (UINT8)(0x0f + input_port_read(space->machine(), "LIGHT1_Y") * 224/255); break; /* Y (p2) */
-	case 2: case 3: result = (UINT8)(0x26 + input_port_read(space->machine(), "LIGHT1_X") * 288/314); break; /* X (p2) */
-	case 4: case 5: result = (UINT8)(0x0f + input_port_read(space->machine(), "LIGHT0_Y") * 224/255); break; /* Y (p1) */
-	case 6: case 7: result = (UINT8)(0x26 + input_port_read(space->machine(), "LIGHT0_X") * 288/314); break; /* X (p1) */
+	case 0: case 1: result = (UINT8)(0x0f + input_port_read(space->machine, "LIGHT1_Y") * 224/255); break; /* Y (p2) */
+	case 2: case 3: result = (UINT8)(0x26 + input_port_read(space->machine, "LIGHT1_X") * 288/314); break; /* X (p2) */
+	case 4: case 5: result = (UINT8)(0x0f + input_port_read(space->machine, "LIGHT0_Y") * 224/255); break; /* Y (p1) */
+	case 6: case 7: result = (UINT8)(0x26 + input_port_read(space->machine, "LIGHT0_X") * 288/314); break; /* X (p1) */
 	}
 	return result<<24;
 } /* gunbulet_gun_r */
@@ -826,7 +824,7 @@ static READ32_HANDLER( gunbulet_gun_r )
 static
 READ32_HANDLER( randgen_r )
 {
-	return space->machine().rand();
+	return mame_rand(space->machine);
 } /* randgen_r */
 
 static
@@ -840,20 +838,18 @@ WRITE32_HANDLER( srand_w )
 
 static READ32_HANDLER(namconb_share_r)
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	return (state->m_namconb_shareram[offset*2] << 16) | state->m_namconb_shareram[offset*2+1];
+	return (namconb_shareram[offset*2] << 16) | namconb_shareram[offset*2+1];
 }
 
 static WRITE32_HANDLER(namconb_share_w)
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	COMBINE_DATA(state->m_namconb_shareram+offset*2+1);
+	COMBINE_DATA(namconb_shareram+offset*2+1);
 	data >>= 16;
 	mem_mask >>= 16;
-	COMBINE_DATA(state->m_namconb_shareram+offset*2);
+	COMBINE_DATA(namconb_shareram+offset*2);
 }
 
-static ADDRESS_MAP_START( namconb1_am, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( namconb1_am, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10001f) AM_READ(gunbulet_gun_r)
 	AM_RANGE(0x1c0000, 0x1cffff) AM_RAM
@@ -861,17 +857,17 @@ static ADDRESS_MAP_START( namconb1_am, AS_PROGRAM, 32 )
 	AM_RANGE(0x200000, 0x207fff) AM_READWRITE(namconb_share_r, namconb_share_w)
 	AM_RANGE(0x208000, 0x2fffff) AM_RAM
 	AM_RANGE(0x400000, 0x40001f) AM_READWRITE(namconb_cpureg_r, namconb1_cpureg_w)
-	AM_RANGE(0x580000, 0x5807ff) AM_RAM AM_BASE_MEMBER(namconb1_state, m_nvmem32)
+	AM_RANGE(0x580000, 0x5807ff) AM_RAM AM_BASE(&nvmem32)
 	AM_RANGE(0x600000, 0x61ffff) AM_READWRITE(namco_obj32_r,namco_obj32_w)
 	AM_RANGE(0x620000, 0x620007) AM_READWRITE(namco_spritepos32_r,namco_spritepos32_w)
 	AM_RANGE(0x640000, 0x64ffff) AM_READWRITE(namco_tilemapvideoram32_r,namco_tilemapvideoram32_w )
 	AM_RANGE(0x660000, 0x66003f) AM_READWRITE(namco_tilemapcontrol32_r,namco_tilemapcontrol32_w)
-	AM_RANGE(0x680000, 0x68000f) AM_RAM AM_BASE_MEMBER(namconb1_state, m_spritebank32)
+	AM_RANGE(0x680000, 0x68000f) AM_RAM AM_BASE(&namconb1_spritebank32)
 	AM_RANGE(0x6e0000, 0x6e001f) AM_READ(custom_key_r) AM_WRITENOP
-	AM_RANGE(0x700000, 0x707fff) AM_RAM AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x700000, 0x707fff) AM_RAM AM_BASE(&paletteram32)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( namconb2_am, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( namconb2_am, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x1c0000, 0x1cffff) AM_RAM
 	AM_RANGE(0x1e4000, 0x1e4003) AM_READWRITE(randgen_r,srand_w)
@@ -885,18 +881,17 @@ static ADDRESS_MAP_START( namconb2_am, AS_PROGRAM, 32 )
 	AM_RANGE(0x6c0000, 0x6c003f) AM_READWRITE(namco_tilemapcontrol32_r, namco_tilemapcontrol32_w )
 	AM_RANGE(0x700000, 0x71ffff) AM_READWRITE(namco_rozvideoram32_r,namco_rozvideoram32_w)
 	AM_RANGE(0x740000, 0x74001f) AM_READWRITE(namco_rozcontrol32_r,namco_rozcontrol32_w)
-	AM_RANGE(0x800000, 0x807fff) AM_RAM AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x900008, 0x90000f) AM_RAM AM_BASE_MEMBER(namconb1_state, m_spritebank32)
-	AM_RANGE(0x940000, 0x94000f) AM_RAM AM_BASE_MEMBER(namconb1_state, m_tilebank32)
+	AM_RANGE(0x800000, 0x807fff) AM_RAM AM_BASE(&paletteram32)
+	AM_RANGE(0x900008, 0x90000f) AM_RAM AM_BASE(&namconb1_spritebank32)
+	AM_RANGE(0x940000, 0x94000f) AM_RAM AM_BASE(&namconb1_tilebank32)
 	AM_RANGE(0x980000, 0x98000f) AM_READ(namco_rozbank32_r) AM_WRITE(namco_rozbank32_w)
-	AM_RANGE(0xa00000, 0xa007ff) AM_RAM AM_BASE_MEMBER(namconb1_state, m_nvmem32)
+	AM_RANGE(0xa00000, 0xa007ff) AM_RAM AM_BASE(&nvmem32)
 	AM_RANGE(0xc00000, 0xc0001f) AM_READ(custom_key_r) AM_WRITENOP
 	AM_RANGE(0xf00000, 0xf0001f) AM_READWRITE(namconb_cpureg_r, namconb2_cpureg_w)
 ADDRESS_MAP_END
 
 static WRITE16_HANDLER( nbmcu_shared_w )
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
 	// HACK!  Many games data ROM routines redirect the vector from the sound command read to an RTS.
 	// This needs more investigation.  nebulray and vshoot do NOT do this.
 	// Timers A2 and A3 are set up in "external input counter" mode, this may be related.
@@ -907,51 +902,49 @@ static WRITE16_HANDLER( nbmcu_shared_w )
 	}
 #endif
 
-	COMBINE_DATA(&state->m_namconb_shareram[offset]);
+	COMBINE_DATA(&namconb_shareram[offset]);
 
 	// C74 BIOS has a very short window on the CPU sync signal, so immediately let the '020 at it
 	if ((offset == 0x6000/2) && (data & 0x80))
 	{
-		device_spin_until_time(&space->device(), downcast<cpu_device *>(&space->device())->cycles_to_attotime(300));	// was 300
+		cpu_spinuntil_time(space->cpu, cpu_clocks_to_attotime(space->cpu, 300));	// was 300
 	}
 }
 
-static ADDRESS_MAP_START( namcoc75_am, AS_PROGRAM, 16 )
-	AM_RANGE(0x002000, 0x002fff) AM_DEVREADWRITE_MODERN("c352", c352_device, read, write)
-	AM_RANGE(0x004000, 0x00bfff) AM_RAM_WRITE(nbmcu_shared_w) AM_BASE_MEMBER(namconb1_state, m_namconb_shareram)
+static ADDRESS_MAP_START( namcoc75_am, ADDRESS_SPACE_PROGRAM, 16 )
+	AM_RANGE(0x002000, 0x002fff) AM_DEVREADWRITE("c352", c352_r, c352_w)
+	AM_RANGE(0x004000, 0x00bfff) AM_RAM_WRITE(nbmcu_shared_w) AM_BASE(&namconb_shareram)
 	AM_RANGE(0x00c000, 0x00ffff) AM_ROM AM_REGION("c75", 0)
 	AM_RANGE(0x200000, 0x27ffff) AM_ROM AM_REGION("c75data", 0)
 ADDRESS_MAP_END
 
+static UINT8 nbx_port6;
 
 static READ8_HANDLER( port6_r )
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	return state->m_nbx_port6;
+	return nbx_port6;
 }
 
 static WRITE8_HANDLER( port6_w )
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	state->m_nbx_port6 = data;
+	nbx_port6 = data;
 }
 
 static READ8_HANDLER( port7_r )
 {
-	namconb1_state *state = space->machine().driver_data<namconb1_state>();
-	switch (state->m_nbx_port6 & 0xf0)
+	switch (nbx_port6 & 0xf0)
 	{
 		case 0x00:
-			return input_port_read_safe(space->machine(), "P4", 0xff);
+			return input_port_read_safe(space->machine, "P4", 0xff);
 
 		case 0x20:
-			return input_port_read(space->machine(), "MISC");
+			return input_port_read(space->machine, "MISC");
 
 		case 0x40:
-			return input_port_read(space->machine(), "P1");
+			return input_port_read(space->machine, "P1");
 
 		case 0x60:
-			return input_port_read(space->machine(), "P2");
+			return input_port_read(space->machine, "P2");
 
 		default:
 			break;
@@ -965,45 +958,45 @@ static READ8_HANDLER( port7_r )
 // register full scale, so it works...
 static READ8_HANDLER(dac7_r)		// bit 7
 {
-	return input_port_read_safe(space->machine(), "P3", 0xff)&0x80;
+	return input_port_read_safe(space->machine, "P3", 0xff)&0x80;
 }
 
 static READ8_HANDLER(dac6_r)		// bit 3
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<1)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<1)&0x80;
 }
 
 static READ8_HANDLER(dac5_r)		// bit 2
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<2)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<2)&0x80;
 }
 
 static READ8_HANDLER(dac4_r)		// bit 1
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<3)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<3)&0x80;
 }
 
 static READ8_HANDLER(dac3_r)		// bit 0
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<4)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<4)&0x80;
 }
 
 static READ8_HANDLER(dac2_r)		// bit 4
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<5)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<5)&0x80;
 }
 
 static READ8_HANDLER(dac1_r)		// bit 5
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<6)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<6)&0x80;
 }
 
 static READ8_HANDLER(dac0_r)		// bit 6
 {
-	return (input_port_read_safe(space->machine(), "P3", 0xff)<<7)&0x80;
+	return (input_port_read_safe(space->machine, "P3", 0xff)<<7)&0x80;
 }
 
-static ADDRESS_MAP_START( namcoc75_io, AS_IO, 8 )
+static ADDRESS_MAP_START( namcoc75_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(M37710_PORT6, M37710_PORT6) AM_READWRITE(port6_r, port6_w)
 	AM_RANGE(M37710_PORT7, M37710_PORT7) AM_READ(port7_r)
 	AM_RANGE(M37710_ADC7_L, M37710_ADC7_L) AM_READ(dac7_r)
@@ -1018,73 +1011,75 @@ ADDRESS_MAP_END
 
 #define MASTER_CLOCK_HZ 48384000
 
-static MACHINE_CONFIG_START( namconb1, namconb1_state )
-	MCFG_CPU_ADD("maincpu", M68EC020,MASTER_CLOCK_HZ/2)
-	MCFG_CPU_PROGRAM_MAP(namconb1_am)
-	MCFG_CPU_VBLANK_INT("screen", namconb1_interrupt)
+static MACHINE_DRIVER_START( namconb1 )
+	MDRV_CPU_ADD("maincpu", M68EC020,MASTER_CLOCK_HZ/2)
+	MDRV_CPU_PROGRAM_MAP(namconb1_am)
+	MDRV_CPU_VBLANK_INT("screen", namconb1_interrupt)
 
-	MCFG_CPU_ADD("mcu", M37702, MASTER_CLOCK_HZ/3)
-	MCFG_CPU_PROGRAM_MAP(namcoc75_am)
-	MCFG_CPU_IO_MAP(namcoc75_io)
-	MCFG_TIMER_ADD_SCANLINE("mcu_st", mcu_interrupt, "screen", 0, 1)
+	MDRV_CPU_ADD("mcu", M37702, MASTER_CLOCK_HZ/3)
+	MDRV_CPU_PROGRAM_MAP(namcoc75_am)
+	MDRV_CPU_IO_MAP(namcoc75_io)
+	MDRV_CPU_VBLANK_INT_HACK(mcu_interrupt, 3)
 
-	MCFG_NVRAM_HANDLER(namconb1)
-	MCFG_MACHINE_START(namconb)
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_NVRAM_HANDLER(namconb1)
+	MDRV_MACHINE_START(namconb)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.7)
-	MCFG_SCREEN_SIZE(NAMCONB1_HTOTAL, NAMCONB1_VTOTAL)
-	MCFG_SCREEN_VISIBLE_AREA(0, NAMCONB1_HBSTART-1, 0, NAMCONB1_VBSTART-1)
-	MCFG_SCREEN_UPDATE_STATIC(namconb1)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(59.7)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(NAMCONB1_HTOTAL, NAMCONB1_VTOTAL)
+	MDRV_SCREEN_VISIBLE_AREA(0, NAMCONB1_HBSTART-1, 0, NAMCONB1_VBSTART-1)
 
-	MCFG_GFXDECODE(namconb1)
-	MCFG_PALETTE_LENGTH(0x2000)
-	MCFG_VIDEO_START(namconb1)
+	MDRV_GFXDECODE(namconb1)
+	MDRV_PALETTE_LENGTH(0x2000)
+	MDRV_VIDEO_START(namconb1)
+	MDRV_VIDEO_UPDATE(namconb1)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-	MCFG_C352_ADD("c352", MASTER_CLOCK_HZ/2)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(1, "lspeaker", 1.00)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(3, "lspeaker", 1.00)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SOUND_ADD("c352", C352, MASTER_CLOCK_HZ/3)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(1, "lspeaker", 1.00)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(3, "lspeaker", 1.00)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( namconb2, namconb1_state )
-	MCFG_CPU_ADD("maincpu", M68EC020,MASTER_CLOCK_HZ/2)
-	MCFG_CPU_PROGRAM_MAP(namconb2_am)
-	MCFG_CPU_VBLANK_INT("screen", namconb2_interrupt)
+static MACHINE_DRIVER_START( namconb2 )
+	MDRV_CPU_ADD("maincpu", M68EC020,MASTER_CLOCK_HZ/2)
+	MDRV_CPU_PROGRAM_MAP(namconb2_am)
+	MDRV_CPU_VBLANK_INT("screen", namconb2_interrupt)
 
-	MCFG_CPU_ADD("mcu", M37702, MASTER_CLOCK_HZ/3)
-	MCFG_CPU_PROGRAM_MAP(namcoc75_am)
-	MCFG_CPU_IO_MAP(namcoc75_io)
-	MCFG_TIMER_ADD_SCANLINE("mcu_st", mcu_interrupt, "screen", 0, 1)
+	MDRV_CPU_ADD("mcu", M37702, MASTER_CLOCK_HZ/3)
+	MDRV_CPU_PROGRAM_MAP(namcoc75_am)
+	MDRV_CPU_IO_MAP(namcoc75_io)
+	MDRV_CPU_VBLANK_INT_HACK(mcu_interrupt, 3)
 
-	MCFG_NVRAM_HANDLER(namconb1)
-	MCFG_MACHINE_START(namconb)
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MDRV_NVRAM_HANDLER(namconb1)
+	MDRV_MACHINE_START(namconb)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(59.7)
-	MCFG_SCREEN_SIZE(NAMCONB1_HTOTAL, NAMCONB1_VTOTAL)
-	MCFG_SCREEN_VISIBLE_AREA(0, NAMCONB1_HBSTART-1, 0, NAMCONB1_VBSTART-1)
-	MCFG_SCREEN_UPDATE_STATIC(namconb2)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(59.7)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(NAMCONB1_HTOTAL, NAMCONB1_VTOTAL)
+	MDRV_SCREEN_VISIBLE_AREA(0, NAMCONB1_HBSTART-1, 0, NAMCONB1_VBSTART-1)
 
-	MCFG_GFXDECODE(2)
-	MCFG_PALETTE_LENGTH(0x2000)
-	MCFG_VIDEO_START(namconb2)
+	MDRV_GFXDECODE(2)
+	MDRV_PALETTE_LENGTH(0x2000)
+	MDRV_VIDEO_START(namconb2)
+	MDRV_VIDEO_UPDATE(namconb2)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-	MCFG_C352_ADD("c352", MASTER_CLOCK_HZ/2)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(1, "lspeaker", 1.00)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.00)
-	MCFG_SOUND_ROUTE(3, "lspeaker", 1.00)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SOUND_ADD("c352", C352, MASTER_CLOCK_HZ/3)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(1, "lspeaker", 1.00)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.00)
+	MDRV_SOUND_ROUTE(3, "lspeaker", 1.00)
+MACHINE_DRIVER_END
 
 /***************************************************************/
 
-ROM_START( ptblank ) /* World set using 4Mb sound data rom (verified) */
+ROM_START( ptblank )
 	ROM_REGION( 0x100000, "maincpu", 0 ) /* main program */
 	ROM_LOAD32_WORD( "gn2_mprlb.15b", 0x00002, 0x80000, CRC(fe2d9425) SHA1(51b166a629cbb522720d63720558816b496b6b76) )
 	ROM_LOAD32_WORD( "gn2_mprub.13b", 0x00000, 0x80000, CRC(3bf4985a) SHA1(f559e0d5f55d23d886fe61bd7d5ca556acc7f87c) )
@@ -1092,11 +1087,10 @@ ROM_START( ptblank ) /* World set using 4Mb sound data rom (verified) */
 	ROM_REGION16_LE( 0x4000, "c75", 0 ) /* C75 program */
 	ROM_LOAD( "c75.bin", 0, 0x4000, CRC(42f539a5) SHA1(3103e5a0a2867620309fd4fe478a2be0effbeff8) )
 
-	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data - JP1 jumper selectable between 1Mb (27C1024) or 4Mb (27C4096) either rom is correct */
-//  ROM_LOAD( "gn1_spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) ) /* 1Megabit, same data as the 4Mb rom at 0x00000-0x1ffff */
-	ROM_LOAD( "gn1-spr0.5b", 0, 0x80000, CRC(71773811) SHA1(e482784d9b9ebf8c2e4a2a3f6f6c4dc8304d2251) ) /* 4Megabit, same data at 0x00000-0x1ffff, 0x20000-0x7ffff is 0xff filled */
+	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
+	ROM_LOAD( "gn1-spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gn1-voi0.5j", 0, 0x200000, CRC(05477eb7) SHA1(f2eaacb5dbac06c37c56b9b131230c9cf6602221) )
 
 	ROM_REGION( 0x800000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1115,7 +1109,7 @@ ROM_START( ptblank ) /* World set using 4Mb sound data rom (verified) */
 	ROM_LOAD( "gn1-sha0.5m", 0, 0x80000, CRC(86d4ff85) SHA1(a71056b2bcbba50c834fe28269ebda9719df354a) )
 ROM_END
 
-ROM_START( gunbuletw ) /* World set using 4Mb sound data rom (verified) */
+ROM_START( gunbuletw )
 	ROM_REGION( 0x100000, "maincpu", 0 ) /* main program */
 	ROM_LOAD32_WORD( "gn3_mprlb.15b", 0x00002, 0x80000, CRC(9260fce5) SHA1(064579be1ac90e04082a8b403c6adf35dbb46a7e) )
 	ROM_LOAD32_WORD( "gn3_mprub.13b", 0x00000, 0x80000, CRC(6c1ac697) SHA1(7b52b5ef8154a5d741ac24673f3e6bbfa246a494) )
@@ -1123,11 +1117,10 @@ ROM_START( gunbuletw ) /* World set using 4Mb sound data rom (verified) */
 	ROM_REGION16_LE( 0x4000, "c75", 0 ) /* C75 program */
 	ROM_LOAD( "c75.bin", 0, 0x4000, CRC(42f539a5) SHA1(3103e5a0a2867620309fd4fe478a2be0effbeff8) )
 
-	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data - JP1 jumper selectable between 1Mb (27C1024) or 4Mb (27C4096) either rom is correct */
-//  ROM_LOAD( "gn1_spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) ) /* 1Megabit, same data as the 4Mb rom at 0x00000-0x1ffff */
-	ROM_LOAD( "gn1-spr0.5b", 0, 0x80000, CRC(71773811) SHA1(e482784d9b9ebf8c2e4a2a3f6f6c4dc8304d2251) ) /* 4Megabit, same data at 0x00000-0x1ffff, 0x20000-0x7ffff is 0xff filled */
+	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
+	ROM_LOAD( "gn1-spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gn1-voi0.5j", 0, 0x200000, CRC(05477eb7) SHA1(f2eaacb5dbac06c37c56b9b131230c9cf6602221) )
 
 	ROM_REGION( 0x800000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1146,7 +1139,7 @@ ROM_START( gunbuletw ) /* World set using 4Mb sound data rom (verified) */
 	ROM_LOAD( "gn1-sha0.5m", 0, 0x80000, CRC(86d4ff85) SHA1(a71056b2bcbba50c834fe28269ebda9719df354a) )
 ROM_END
 
-ROM_START( gunbuletj ) /* Japanese set using 1Mb sound data rom (verified) */
+ROM_START( gunbuletj )
 	ROM_REGION( 0x100000, "maincpu", 0 ) /* main program */
 	ROM_LOAD32_WORD( "gn1_mprl.15b", 0x00002, 0x80000, CRC(f99e309e) SHA1(3fe0ddf756e6849f8effc7672456cbe32f65c98a) )
 	ROM_LOAD32_WORD( "gn1_mpru.13b", 0x00000, 0x80000, CRC(72a4db07) SHA1(8c5e1e51cd961b311d03f7b21f36a5bd5e8e9104) )
@@ -1154,11 +1147,10 @@ ROM_START( gunbuletj ) /* Japanese set using 1Mb sound data rom (verified) */
 	ROM_REGION16_LE( 0x4000, "c75", 0 ) /* C75 program */
 	ROM_LOAD( "c75.bin", 0, 0x4000, CRC(42f539a5) SHA1(3103e5a0a2867620309fd4fe478a2be0effbeff8) )
 
-	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data - JP1 jumper selectable between 1Mb (27C1024) or 4Mb (27C4096) either rom is correct */
-	ROM_LOAD( "gn1_spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) ) /* 1Megabit, same data as the 4Mb rom at 0x00000-0x1ffff */
-//  ROM_LOAD( "gn1-spr0.5b", 0, 0x80000, CRC(71773811) SHA1(e482784d9b9ebf8c2e4a2a3f6f6c4dc8304d2251) ) /* 4Megabit, same data at 0x00000-0x1ffff, 0x20000-0x7ffff is 0xff filled */
+	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
+	ROM_LOAD( "gn1-spr0.5b", 0, 0x20000, CRC(6836ba38) SHA1(6ea17ea4bbb59be108e8887acd7871409580732f) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gn1-voi0.5j", 0, 0x200000, CRC(05477eb7) SHA1(f2eaacb5dbac06c37c56b9b131230c9cf6602221) )
 
 	ROM_REGION( 0x800000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1188,7 +1180,7 @@ ROM_START( nebulray )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "nr1-spr0", 0, 0x20000, CRC(1cc2b44b) SHA1(161f4ed39fabe89d7ee1d539f8b9f08cd0ff3111) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "nr1-voi0", 0, 0x200000, CRC(332d5e26) SHA1(9daddac3fbe0709e25ed8e0b456bac15bfae20d7) )
 
 	ROM_REGION( 0x1000000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1225,7 +1217,7 @@ ROM_START( nebulrayj )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "nr1-spr0", 0, 0x20000, CRC(1cc2b44b) SHA1(161f4ed39fabe89d7ee1d539f8b9f08cd0ff3111) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "nr1-voi0", 0, 0x200000, CRC(332d5e26) SHA1(9daddac3fbe0709e25ed8e0b456bac15bfae20d7) )
 
 	ROM_REGION( 0x1000000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1262,7 +1254,7 @@ ROM_START( gslgr94u )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "gse2spr0.bin", 0, 0x20000, CRC(17e87cfc) SHA1(9cbeadb6dfcb736e8c80eab344f70fc2f58469d6) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gse-voi0.bin", 0, 0x200000, CRC(d3480574) SHA1(0c468ed060769b36b7e41cf4919cb6d8691d64f6) )
 
 	ROM_REGION( 0x400000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1290,7 +1282,7 @@ ROM_START( gslgr94j )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "gs41spr0.5b", 0, 0x80000, CRC(3e2b6d55) SHA1(f6a1ecaee3a9a7a535850084e469aa7f873f301e) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gs4voi0.5j", 0, 0x200000, CRC(c3053a90) SHA1(e76799b33b2457421255b03786bc24266d59c7dd) )
 
 	ROM_REGION( 0x800000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1445,7 +1437,7 @@ ROM_START( gslugrsj )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "gs1spr0.5b", 0, 0x80000, CRC(561ea20f) SHA1(adac6b77effc3a82079a9b228bafca0fcef72ba5) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "gs1voi-0.5j", 0, 0x200000, CRC(6f8262aa) SHA1(beea98d9f8b927a572eb0bfcf678e9d6e40fc68d) )
 
 	ROM_REGION( 0x400000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1473,7 +1465,7 @@ ROM_START( sws95 )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "ss51spr0.bin", 0, 0x80000, CRC(71cb12f5) SHA1(6e13bd16a5ba14d6e47a21875db3663ada3c06a5) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "ss51voi0.bin", 0, 0x200000, CRC(2740ec72) SHA1(9694a7378ea72771d2b1d43db6d74ed347ba27d3) )
 
 
@@ -1502,7 +1494,7 @@ ROM_START( sws96 )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "ss61spr0.bin", 0, 0x80000, CRC(71cb12f5) SHA1(6e13bd16a5ba14d6e47a21875db3663ada3c06a5) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "ss61voi0.bin", 0, 0x200000, CRC(2740ec72) SHA1(9694a7378ea72771d2b1d43db6d74ed347ba27d3) )
 
 	ROM_REGION( 0x400000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1530,7 +1522,7 @@ ROM_START( sws97 )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "ss71spr0.bin", 0, 0x80000, CRC(71cb12f5) SHA1(6e13bd16a5ba14d6e47a21875db3663ada3c06a5) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "ss71voi0.bin", 0, 0x200000, CRC(2740ec72) SHA1(9694a7378ea72771d2b1d43db6d74ed347ba27d3) )
 
 	ROM_REGION( 0x400000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1558,7 +1550,7 @@ ROM_START( vshoot )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "vsj1spr0.5b", 0, 0x80000, CRC(b0c71aa6) SHA1(a94fae02b46a645ff728d2f98827c85ff155892b) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "vsjvoi-0.5j", 0, 0x200000, CRC(0528c9ed) SHA1(52b67978fdeb97b77065575774a7ddeb49fe1d81) )
 
 	ROM_REGION( 0x800000, NAMCONB1_SPRITEGFXREGION, 0 )
@@ -1746,7 +1738,7 @@ ROM_START( outfxies )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "ou1spr0.5b", 0, 0x80000, CRC(60cee566) SHA1(2f3b96793816d90011586e0f9f71c58b636b6d4c) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "ou1voi0.6n", 0, 0x200000, CRC(2d8fb271) SHA1(bde9d45979728f5a2cd8ec89f5f81bf16b694cc2) )
 
 	ROM_REGION( 0x200000, NAMCONB1_TILEMASKREGION, 0 )
@@ -1791,7 +1783,7 @@ ROM_START( outfxiesj )
 	ROM_REGION16_LE( 0x80000, "c75data", 0 ) /* sound data */
 	ROM_LOAD( "ou1spr0.5b", 0, 0x80000, CRC(60cee566) SHA1(2f3b96793816d90011586e0f9f71c58b636b6d4c) )
 
-	ROM_REGION( 0x1000000, "c352", 0 ) // Samples
+	ROM_REGION( 0x200000, "c352", 0 )
 	ROM_LOAD( "ou1voi0.6n", 0, 0x200000, CRC(2d8fb271) SHA1(bde9d45979728f5a2cd8ec89f5f81bf16b694cc2) )
 
 	ROM_REGION( 0x200000, NAMCONB1_TILEMASKREGION, 0 )

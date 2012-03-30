@@ -72,19 +72,14 @@
     Notes:
     - There is no flip screen nor cocktail mode in the original game
 
-02/2010 - Added XTAL values based on the parts listing the manual.  The
-          divisors for the cpus make sense, however, they are not verified.
-
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/pokey.h"
-#include "machine/nvram.h"
-#include "includes/irobot.h"
+#include "irobot.h"
 
-#define MAIN_CLOCK		XTAL_12_096MHz
-#define VIDEO_CLOCK		XTAL_20MHz
+
 
 /*************************************
  *
@@ -94,8 +89,7 @@
 
 static WRITE8_HANDLER( irobot_nvram_w )
 {
-	irobot_state *state = space->machine().driver_data<irobot_state>();
-	state->m_nvram[offset] = data & 0x0f;
+	generic_nvram[offset] = data & 0x0f;
 }
 
 
@@ -108,13 +102,13 @@ static WRITE8_HANDLER( irobot_nvram_w )
 
 static WRITE8_HANDLER( irobot_clearirq_w )
 {
-    cputag_set_input_line(space->machine(), "maincpu", M6809_IRQ_LINE ,CLEAR_LINE);
+    cputag_set_input_line(space->machine, "maincpu", M6809_IRQ_LINE ,CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( irobot_clearfirq_w )
 {
-    cputag_set_input_line(space->machine(), "maincpu", M6809_FIRQ_LINE ,CLEAR_LINE);
+    cputag_set_input_line(space->machine, "maincpu", M6809_FIRQ_LINE ,CLEAR_LINE);
 }
 
 
@@ -125,9 +119,9 @@ static WRITE8_HANDLER( irobot_clearfirq_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( irobot_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( irobot_map, ADDRESS_SPACE_PROGRAM, 8 )
     AM_RANGE(0x0000, 0x07ff) AM_RAM
-    AM_RANGE(0x0800, 0x0fff) AM_RAMBANK("bank2")
+    AM_RANGE(0x0800, 0x0fff) AM_RAMBANK(2)
     AM_RANGE(0x1000, 0x103f) AM_READ_PORT("IN0")
     AM_RANGE(0x1040, 0x1040) AM_READ_PORT("IN1")
     AM_RANGE(0x1080, 0x1080) AM_READ(irobot_status_r)
@@ -136,16 +130,16 @@ static ADDRESS_MAP_START( irobot_map, AS_PROGRAM, 8 )
     AM_RANGE(0x1140, 0x1140) AM_WRITE(irobot_statwr_w)
     AM_RANGE(0x1180, 0x1180) AM_WRITE(irobot_out0_w)
     AM_RANGE(0x11c0, 0x11c0) AM_WRITE(irobot_rom_banksel_w)
-    AM_RANGE(0x1200, 0x12ff) AM_RAM_WRITE(irobot_nvram_w) AM_SHARE("nvram")
+    AM_RANGE(0x1200, 0x12ff) AM_RAM_WRITE(irobot_nvram_w) AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
     AM_RANGE(0x1300, 0x13ff) AM_READ(irobot_control_r)
     AM_RANGE(0x1400, 0x143f) AM_READWRITE(quad_pokey_r, quad_pokey_w)
     AM_RANGE(0x1800, 0x18ff) AM_WRITE(irobot_paletteram_w)
-    AM_RANGE(0x1900, 0x19ff) AM_WRITEONLY            /* Watchdog reset */
+    AM_RANGE(0x1900, 0x19ff) AM_WRITE(SMH_RAM)            /* Watchdog reset */
     AM_RANGE(0x1a00, 0x1a00) AM_WRITE(irobot_clearfirq_w)
     AM_RANGE(0x1b00, 0x1bff) AM_WRITE(irobot_control_w)
-    AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE_MEMBER(irobot_state, m_videoram)
+    AM_RANGE(0x1c00, 0x1fff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
     AM_RANGE(0x2000, 0x3fff) AM_READWRITE(irobot_sharedmem_r, irobot_sharedmem_w)
-    AM_RANGE(0x4000, 0x5fff) AM_ROMBANK("bank1")
+    AM_RANGE(0x4000, 0x5fff) AM_ROMBANK(1)
     AM_RANGE(0x6000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -159,75 +153,50 @@ ADDRESS_MAP_END
 
 static INPUT_PORTS_START( irobot )
 	PORT_START("IN0")	/* IN0 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN3 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
+    PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_SERVICE( 0x10, IP_ACTIVE_LOW )
+    PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN3 )
+    PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
+    PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN2 )
 
 	PORT_START("IN1")	/* IN1 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
+    PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
+    PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
+    PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_START2 )
+    PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_START1 )
 
 	PORT_START("IN2")	/* IN2 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* MB DONE */
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* EXT DONE */
-	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
+    PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* MB DONE */
+    PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* EXT DONE */
+    PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_VBLANK )
 
-	PORT_START("DSW2") /* DSW2 - 5E*/
-	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Language ) )  PORT_DIPLOCATION("SW5E:1")
-	PORT_DIPSETTING(	0x01, DEF_STR( English ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( German ) )
-//  Printed Manual States Dip (0x01) adjusts Doodle City playtime:  ON=2M10S / OFF=3M5S
-	PORT_DIPNAME( 0x02, 0x02, "Minimum Game Time" )  PORT_DIPLOCATION("SW5E:2")
-	PORT_DIPSETTING(	0x00, "90 Seconds on Level 1" )
-	PORT_DIPSETTING(	0x02, DEF_STR( None ) )
-	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) )  PORT_DIPLOCATION("SW5E:3,4")
-	PORT_DIPSETTING(	0x08, DEF_STR( None ) )
-	PORT_DIPSETTING(	0x0c, "20000" )
-	PORT_DIPSETTING(	0x00, "30000" )
-	PORT_DIPSETTING(	0x04, "50000" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) )  PORT_DIPLOCATION("SW5E:5,6")
-	PORT_DIPSETTING(	0x20, "2" )
-	PORT_DIPSETTING(	0x30, "3" )
-	PORT_DIPSETTING(	0x00, "4" )
-	PORT_DIPSETTING(	0x10, "5" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )  PORT_DIPLOCATION("SW5E:7")
-	PORT_DIPSETTING(	0x00, DEF_STR( Easy ) )
-	PORT_DIPSETTING(	0x40, DEF_STR( Medium ) )
-	PORT_DIPNAME( 0x80, 0x80, "Demo Mode" )  PORT_DIPLOCATION("SW5E:8")
-	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-
-	PORT_START("DSW1") /* DSW1 - 3J */
-	PORT_DIPNAME(    0x03, 0x00, "Coins Per Credit" )  PORT_DIPLOCATION("SW3J:!1,!2")
+	PORT_START("DSW1") /* DSW1 */
+	PORT_DIPNAME(    0x03, 0x00, "Coins Per Credit" )
 	PORT_DIPSETTING( 0x00, "1 Coin 1 Credit" )
 	PORT_DIPSETTING( 0x01, "2 Coins 1 Credit" )
 	PORT_DIPSETTING( 0x02, "3 Coins 1 Credit" )
 	PORT_DIPSETTING( 0x03, "4 Coins 1 Credit" )
-	PORT_DIPNAME(    0x0c, 0x00, "Right Coin" )  PORT_DIPLOCATION("SW3J:!3,!4")
+	PORT_DIPNAME(    0x0c, 0x00, "Right Coin" )
 	PORT_DIPSETTING( 0x00, "1 Coin for 1 Coin Unit" )
 	PORT_DIPSETTING( 0x04, "1 Coin for 4 Coin Units" )
 	PORT_DIPSETTING( 0x08, "1 Coin for 5 Coin Units" )
 	PORT_DIPSETTING( 0x0c, "1 Coin for 6 Coin Units" )
-	PORT_DIPNAME(    0x10, 0x00, "Left Coin" )  PORT_DIPLOCATION("SW3J:!5")
+	PORT_DIPNAME(    0x10, 0x00, "Left Coin" )
 	PORT_DIPSETTING( 0x00, "1 Coin for 1 Coin Unit" )
 	PORT_DIPSETTING( 0x10, "1 Coin for 2 Coin Units" )
-	PORT_DIPNAME(    0xe0, 0x00, "Bonus Adder" )  PORT_DIPLOCATION("SW3J:!6,!7,!8")
+	PORT_DIPNAME(    0xe0, 0x00, "Bonus Adder" )
 	PORT_DIPSETTING( 0x00, DEF_STR( None ) )
 	PORT_DIPSETTING( 0x20, "1 Credit for 2 Coin Units" )
 	PORT_DIPSETTING( 0xa0, "1 Credit for 3 Coin Units" )
@@ -235,6 +204,30 @@ static INPUT_PORTS_START( irobot )
 	PORT_DIPSETTING( 0x80, "1 Credit for 5 Coin Units" )
 	PORT_DIPSETTING( 0x60, "2 Credits for 4 Coin Units" )
 	PORT_DIPSETTING( 0xe0, DEF_STR( Free_Play ) )
+
+	PORT_START("DSW2") /* DSW2 */
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Language ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( English ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( German ) )
+	PORT_DIPNAME( 0x02, 0x02, "Min Game Time" )
+	PORT_DIPSETTING(	0x00, "90 Sec" )
+	PORT_DIPSETTING(	0x02, "3 Lives" )
+	PORT_DIPNAME( 0x0c, 0x0c, DEF_STR( Bonus_Life ) )
+	PORT_DIPSETTING(	0x08, DEF_STR( None ) )
+	PORT_DIPSETTING(	0x0c, "20000" )
+	PORT_DIPSETTING(	0x00, "30000" )
+	PORT_DIPSETTING(	0x04, "50000" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Lives ) )
+	PORT_DIPSETTING(	0x20, "2" )
+	PORT_DIPSETTING(	0x30, "3" )
+	PORT_DIPSETTING(	0x00, "4" )
+	PORT_DIPSETTING(	0x10, "5" )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Difficulty ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Easy ) )
+	PORT_DIPSETTING(	0x40, DEF_STR( Medium ) )
+	PORT_DIPNAME( 0x80, 0x80, "Demo Mode" )
+	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 
 	PORT_START("AN0")	/* IN4 */
 	PORT_BIT( 0xff, 0x80, IPT_AD_STICK_Y ) PORT_MINMAX(96,163) PORT_SENSITIVITY(70) PORT_KEYDELTA(50)
@@ -289,48 +282,46 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( irobot, irobot_state )
+static MACHINE_DRIVER_START( irobot )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, MAIN_CLOCK/8)
-	MCFG_CPU_PROGRAM_MAP(irobot_map)
+	MDRV_CPU_ADD("maincpu", M6809,1500000)
+	MDRV_CPU_PROGRAM_MAP(irobot_map)
 
-	MCFG_MACHINE_RESET(irobot)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_RESET(irobot)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(irobot)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 29*8-1)
 
-	MCFG_GFXDECODE(irobot)
-	MCFG_PALETTE_LENGTH(64 + 32)	/* 64 for polygons, 32 for text */
+	MDRV_GFXDECODE(irobot)
+	MDRV_PALETTE_LENGTH(64 + 32)	/* 64 for polygons, 32 for text */
 
-	MCFG_PALETTE_INIT(irobot)
-	MCFG_VIDEO_START(irobot)
-
-	MCFG_TIMER_ADD("irvg_timer", irobot_irvg_done_callback)
-	MCFG_TIMER_ADD("irmb_timer", irobot_irmb_done_callback)
+	MDRV_PALETTE_INIT(irobot)
+	MDRV_VIDEO_START(irobot)
+	MDRV_VIDEO_UPDATE(irobot)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, MAIN_CLOCK/8)
-	MCFG_SOUND_CONFIG(pokey_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("pokey1", POKEY, 1250000)
+	MDRV_SOUND_CONFIG(pokey_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, MAIN_CLOCK/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("pokey2", POKEY, 1250000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("pokey3", POKEY, MAIN_CLOCK/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MDRV_SOUND_ADD("pokey3", POKEY, 1250000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MCFG_SOUND_ADD("pokey4", POKEY, MAIN_CLOCK/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pokey4", POKEY, 1250000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
 
 

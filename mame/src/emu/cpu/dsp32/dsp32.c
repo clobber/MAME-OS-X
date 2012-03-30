@@ -2,37 +2,7 @@
 
     dsp32.c
     Core implementation for the portable DSP32 emulator.
-
-****************************************************************************
-
-    Copyright Aaron Giles
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are
-    met:
-
-        * Redistributions of source code must retain the above copyright
-          notice, this list of conditions and the following disclaimer.
-        * Redistributions in binary form must reproduce the above copyright
-          notice, this list of conditions and the following disclaimer in
-          the documentation and/or other materials provided with the
-          distribution.
-        * Neither the name 'MAME' nor the names of its contributors may be
-          used to endorse or promote products derived from this software
-          without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY AARON GILES ''AS IS'' AND ANY EXPRESS OR
-    IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED. IN NO EVENT SHALL AARON GILES BE LIABLE FOR ANY DIRECT,
-    INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-    (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
-    IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
+    Written by Aaron Giles
 
 ****************************************************************************
 
@@ -57,24 +27,25 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "dsp32.h"
 
+CPU_DISASSEMBLE( dsp32c );
 
-//**************************************************************************
-//  DEBUGGING
-//**************************************************************************
+
+/***************************************************************************
+    DEBUGGING
+***************************************************************************/
 
 #define DETECT_MISALIGNED_MEMORY	0
 
 
 
-//**************************************************************************
-//  CONSTANTS
-//**************************************************************************
+/***************************************************************************
+    CONSTANTS
+***************************************************************************/
 
-// internal register numbering for PIO registers
+/* internal register numbering for PIO registers */
 #define PIO_PAR			0
 #define PIO_PDR			1
 #define PIO_EMR			2
@@ -88,7 +59,7 @@
 #define UPPER			(0x00ff << 8)
 #define LOWER			(0xff00 << 8)
 
-// bits in the PCR register
+/* bits in the PCR register */
 #define PCR_RESET		0x001
 #define PCR_REGMAP		0x002
 #define PCR_ENI			0x004
@@ -101,578 +72,361 @@
 #define PCR_PIO16		0x200
 #define PCR_FLG			0x400
 
-// internal flag bits
+/* internal flag bits */
 #define UFLAGBIT		1
 #define VFLAGBIT		2
 
 
 
-//**************************************************************************
-//  MACROS
-//**************************************************************************
+/***************************************************************************
+    MACROS
+***************************************************************************/
 
-// register mapping
-#define R0				m_r[0]
-#define R1				m_r[1]
-#define R2				m_r[2]
-#define R3				m_r[3]
-#define R4				m_r[4]
-#define R5				m_r[5]
-#define R6				m_r[6]
-#define R7				m_r[7]
-#define R8				m_r[8]
-#define R9				m_r[9]
-#define R10				m_r[10]
-#define R11				m_r[11]
-#define R12				m_r[12]
-#define R13				m_r[13]
-#define R14				m_r[14]
-#define PC				m_r[15]
-#define R0_ALT			m_r[16]
-#define R15				m_r[17]
-#define R16				m_r[18]
-#define R17				m_r[19]
-#define R18				m_r[20]
-#define R19				m_r[21]
-#define RMM				m_r[22]
-#define RPP				m_r[23]
-#define R20				m_r[24]
-#define R21				m_r[25]
-#define DAUC			m_r[26]
-#define IOC				m_r[27]
-#define R22				m_r[29]
-#define PCSH			m_r[30]
+/* register mapping */
+#define R0				r[0]
+#define R1				r[1]
+#define R2				r[2]
+#define R3				r[3]
+#define R4				r[4]
+#define R5				r[5]
+#define R6				r[6]
+#define R7				r[7]
+#define R8				r[8]
+#define R9				r[9]
+#define R10				r[10]
+#define R11				r[11]
+#define R12				r[12]
+#define R13				r[13]
+#define R14				r[14]
+#define PC				r[15]
+#define R0_ALT			r[16]
+#define R15				r[17]
+#define R16				r[18]
+#define R17				r[19]
+#define R18				r[20]
+#define R19				r[21]
+#define RMM				r[22]
+#define RPP				r[23]
+#define R20				r[24]
+#define R21				r[25]
+#define DAUC			r[26]
+#define IOC				r[27]
+#define R22				r[29]
+#define PCSH			r[30]
 
-#define A0				m_a[0]
-#define A1				m_a[1]
-#define A2				m_a[2]
-#define A3				m_a[3]
-#define A_0				m_a[4]
-#define A_1				m_a[5]
+#define A0				a[0]
+#define A1				a[1]
+#define A2				a[2]
+#define A3				a[3]
+#define A_0				a[4]
+#define A_1				a[5]
 
-#define zFLAG			((m_nzcflags & 0xffffff) == 0)
-#define nFLAG			((m_nzcflags & 0x800000) != 0)
-#define cFLAG			((m_nzcflags & 0x1000000) != 0)
-#define vFLAG			((m_vflags & 0x800000) != 0)
-#define ZFLAG			(m_NZflags == 0)
-#define NFLAG			(m_NZflags < 0)
-#define UFLAG			(m_VUflags & UFLAGBIT)
-#define VFLAG			(m_VUflags & VFLAGBIT)
+#define zFLAG			((cpustate->nzcflags & 0xffffff) == 0)
+#define nFLAG			((cpustate->nzcflags & 0x800000) != 0)
+#define cFLAG			((cpustate->nzcflags & 0x1000000) != 0)
+#define vFLAG			((cpustate->vflags & 0x800000) != 0)
+#define ZFLAG			(cpustate->NZflags == 0)
+#define NFLAG			(cpustate->NZflags < 0)
+#define UFLAG			(cpustate->VUflags & UFLAGBIT)
+#define VFLAG			(cpustate->VUflags & VFLAGBIT)
 
 
 
-//**************************************************************************
-//  DEVICE INTERFACE
-//**************************************************************************
+/***************************************************************************
+    STRUCTURES & TYPEDEFS
+***************************************************************************/
 
-const device_type DSP32C = &device_creator<dsp32c_device>;
-
-//-------------------------------------------------
-//  dsp32c_device - constructor
-//-------------------------------------------------
-
-dsp32c_device::dsp32c_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-	: cpu_device(mconfig, DSP32C, "DSP32C", tag, owner, clock),
-	  m_program_config("program", ENDIANNESS_LITTLE, 32, 24),
-	  m_pin(0),
-	  m_pout(0),
-	  m_ivtp(0),
-	  m_nzcflags(0),
-	  m_vflags(0),
-	  m_NZflags(0),
-	  m_VUflags(0),
-	  m_abuf_index(0),
-	  m_mbuf_index(0),
-	  m_par(0),
-	  m_pare(0),
-	  m_pdr(0),
-	  m_pdr2(0),
-	  m_pir(0),
-	  m_pcr(0),
-	  m_emr(0),
-	  m_esr(0),
-	  m_pcw(0),
-	  m_piop(0),
-	  m_ibuf(0),
-	  m_isr(0),
-	  m_obuf(0),
-	  m_osr(0),
-	  m_iotemp(0),
-	  m_lastp(0),
-	  m_icount(0),
-	  m_lastpins(0),
-	  m_ppc(0),
-	  m_program(NULL),
-	  m_direct(NULL)
+/* DSP32 Registers */
+typedef struct _dsp32_state dsp32_state;
+struct _dsp32_state
 {
-	m_output_pins_changed = NULL;
+	/* core registers */
+	UINT32			r[32];
+	UINT32			pin, pout;
+	UINT32			ivtp;
+	UINT32			nzcflags;
+	UINT32			vflags;
 
-	// set our instruction counter
-	m_icountptr = &m_icount;
-}
+	double			a[6];
+	double			NZflags;
+	UINT8			VUflags;
+
+	double			abuf[4];
+	UINT8			abufreg[4];
+	UINT8			abufVUflags[4];
+	UINT8			abufNZflags[4];
+	int				abufcycle[4];
+	int				abuf_index;
+
+	INT32			mbufaddr[4];
+	UINT32			mbufdata[4];
+	int				mbuf_index;
+
+	UINT16			par;
+	UINT8			pare;
+	UINT16			pdr;
+	UINT16			pdr2;
+	UINT16			pir;
+	UINT16			pcr;
+	UINT16			emr;
+	UINT8			esr;
+	UINT16			pcw;
+	UINT8			piop;
+
+	UINT32			ibuf;
+	UINT32			isr;
+	UINT32			obuf;
+	UINT32			osr;
+
+	/* internal stuff */
+	int				icount;
+	UINT8			lastpins;
+	UINT32			ppc;
+	void			(*output_pins_changed)(const device_config *device, UINT32 pins);
+	const device_config *device;
+	const address_space *program;
+};
 
 
-//-------------------------------------------------
-//  static_set_config - set the configuration
-//  structure
-//-------------------------------------------------
 
-void dsp32c_device::static_set_config(device_t &device, const dsp32_config &config)
+/***************************************************************************
+    FUNCTION PROTOTYPES
+***************************************************************************/
+
+static CPU_RESET( dsp32c );
+
+
+
+/***************************************************************************
+    STATE ACCESSORS
+***************************************************************************/
+
+INLINE dsp32_state *get_safe_token(const device_config *device)
 {
-	dsp32c_device &dsp = downcast<dsp32c_device &>(device);
-	static_cast<dsp32_config &>(dsp) = config;
-}
-
-
-//-------------------------------------------------
-//  device_start - start up the device
-//-------------------------------------------------
-
-void dsp32c_device::device_start()
-{
-	// get our address spaces
-	m_program = space(AS_PROGRAM);
-	m_direct = &m_program->direct();
-
-	// register our state for the debugger
-	astring tempstr;
-	state_add(STATE_GENPC,     "GENPC",     m_r[15]).noshow();
-	state_add(STATE_GENPCBASE, "GENPCBASE", m_ppc).noshow();
-	state_add(STATE_GENSP,     "GENSP",     m_r[21]).noshow();
-	state_add(STATE_GENFLAGS,  "GENFLAGS",  m_iotemp).callimport().callexport().formatstr("%6s").noshow();
-	state_add(DSP32_PC,        "PC",        m_r[15]).mask(0xffffff);
-	for (int regnum = 0; regnum <= 14; regnum++)
-		state_add(DSP32_R0 + regnum, tempstr.format("R%d", regnum), m_r[regnum]).mask(0xffffff);
-	state_add(DSP32_R15,       "R15",       m_r[17]).mask(0xffffff);
-	state_add(DSP32_R16,       "R16",       m_r[18]).mask(0xffffff);
-	state_add(DSP32_R17,       "R17",       m_r[19]).mask(0xffffff);
-	state_add(DSP32_R18,       "R18",       m_r[20]).mask(0xffffff);
-	state_add(DSP32_R19,       "R19",       m_r[21]).mask(0xffffff);
-	state_add(DSP32_R20,       "R20",       m_r[24]).mask(0xffffff);
-	state_add(DSP32_R21,       "R21",       m_r[25]).mask(0xffffff);
-	state_add(DSP32_R22,       "R22",       m_r[29]).mask(0xffffff);
-	state_add(DSP32_PIN,       "PIN",       m_pin).mask(0xffffff);
-	state_add(DSP32_POUT,      "POUT",      m_pout).mask(0xffffff);
-	state_add(DSP32_IVTP,      "IVTP",      m_ivtp).mask(0xffffff);
-	state_add(DSP32_A0,        "A0",        m_a[0]).formatstr("%8s");
-	state_add(DSP32_A1,        "A1",        m_a[1]).formatstr("%8s");
-	state_add(DSP32_A2,        "A2",        m_a[2]).formatstr("%8s");
-	state_add(DSP32_A3,        "A3",        m_a[3]).formatstr("%8s");
-	state_add(DSP32_DAUC,      "DAUC",      m_r[26]).mask(0xff);
-	state_add(DSP32_PAR,       "PAR",       m_par);
-	state_add(DSP32_PDR,       "PDR",       m_pdr);
-	state_add(DSP32_PIR,       "PIR",       m_pir);
-	state_add(DSP32_PCR,       "PCR",       m_iotemp).mask(0x3ff).callimport();
-	state_add(DSP32_EMR,       "EMR",       m_emr);
-	state_add(DSP32_ESR,       "ESR",       m_esr);
-	state_add(DSP32_PCW,       "PCW",       m_pcw);
-	state_add(DSP32_PIOP,      "PIOP",      m_piop);
-	state_add(DSP32_IBUF,      "IBUF",      m_ibuf);
-	state_add(DSP32_ISR,       "ISR",       m_isr);
-	state_add(DSP32_OBUF,      "OBUF",      m_obuf);
-	state_add(DSP32_OSR,       "OSR" ,      m_osr);
-	state_add(DSP32_IOC,       "IOC",       m_r[27]).mask(0xfffff);
-
-	// register our state for saving
-	save_item(NAME(m_r));
-	save_item(NAME(m_pin));
-	save_item(NAME(m_pout));
-	save_item(NAME(m_ivtp));
-	save_item(NAME(m_nzcflags));
-	save_item(NAME(m_vflags));
-	save_item(NAME(m_a));
-	save_item(NAME(m_NZflags));
-	save_item(NAME(m_VUflags));
-	save_item(NAME(m_abuf));
-	save_item(NAME(m_abufreg));
-	save_item(NAME(m_abufVUflags));
-	save_item(NAME(m_abufNZflags));
-	save_item(NAME(m_abufcycle));
-	save_item(NAME(m_abuf_index));
-	save_item(NAME(m_mbufaddr));
-	save_item(NAME(m_mbufdata));
-	save_item(NAME(m_par));
-	save_item(NAME(m_pare));
-	save_item(NAME(m_pdr));
-	save_item(NAME(m_pdr2));
-	save_item(NAME(m_pir));
-	save_item(NAME(m_pcr));
-	save_item(NAME(m_emr));
-	save_item(NAME(m_esr));
-	save_item(NAME(m_pcw));
-	save_item(NAME(m_piop));
-	save_item(NAME(m_ibuf));
-	save_item(NAME(m_isr));
-	save_item(NAME(m_obuf));
-	save_item(NAME(m_osr));
-	save_item(NAME(m_lastpins));
-	save_item(NAME(m_ppc));
-}
-
-
-//-------------------------------------------------
-//  device_reset - reset the device
-//-------------------------------------------------
-
-void dsp32c_device::device_reset()
-{
-	// reset goes to 0
-	PC = 0;
-
-	// clear some registers
-	m_pcw &= 0x03ff;
-	update_pcr(m_pcr & PCR_RESET);
-	m_esr = 0;
-	m_emr = 0xffff;
-
-	// initialize fixed registers
-	R0 = R0_ALT = 0;
-	RMM = -1;
-	RPP = 1;
-	A_0 = 0.0;
-	A_1 = 1.0;
-
-	// init internal stuff
-	m_abufcycle[0] = m_abufcycle[1] = m_abufcycle[2] = m_abufcycle[3] = 12345678;
-	m_mbufaddr[0] = m_mbufaddr[1] = m_mbufaddr[2] = m_mbufaddr[3] = 1;
-}
-
-
-//-------------------------------------------------
-//  memory_space_config - return the configuration
-//  of the specified address space, or NULL if
-//  the space doesn't exist
-//-------------------------------------------------
-
-const address_space_config *dsp32c_device::memory_space_config(address_spacenum spacenum) const
-{
-	return (spacenum == AS_PROGRAM) ? &m_program_config : NULL;
-}
-
-
-//-------------------------------------------------
-//  state_import - import state into the device,
-//  after it has been set
-//-------------------------------------------------
-
-void dsp32c_device::state_import(const device_state_entry &entry)
-{
-	switch (entry.index())
-	{
-		case STATE_GENFLAGS:
-			break;
-
-		case DSP32_PCR:
-			update_pcr(m_iotemp);
-			break;
-
-		default:
-			fatalerror("dsp32c_device::state_import called for unexpected value\n");
-			break;
-	}
-}
-
-
-//-------------------------------------------------
-//  state_export - export state out of the device
-//-------------------------------------------------
-
-void dsp32c_device::state_export(const device_state_entry &entry)
-{
-	switch (entry.index())
-	{
-		case STATE_GENFLAGS:
-			// no actual flags register, so just make something up
-			m_iotemp =	((zFLAG != 0) << 0) |
-						((nFLAG != 0) << 1) |
-						((cFLAG != 0) << 2) |
-						((vFLAG != 0) << 3) |
-						((ZFLAG != 0) << 4) |
-						((NFLAG != 0) << 5) |
-						((UFLAG != 0) << 6) |
-						((VFLAG != 0) << 7);
-			break;
-
-		case DSP32_PCR:
-			m_iotemp = m_pcr;
-			break;
-
-		default:
-			fatalerror("dsp32c_device::state_export called for unexpected value\n");
-			break;
-	}
-}
-
-
-//-------------------------------------------------
-//  state_string_export - export state as a string
-//  for the debugger
-//-------------------------------------------------
-
-void dsp32c_device::state_string_export(const device_state_entry &entry, astring &string)
-{
-	switch (entry.index())
-	{
-		case STATE_GENFLAGS:
-			string.printf("%c%c%c%c%c%c%c%c",
-				NFLAG ? 'N':'.',
-				ZFLAG ? 'Z':'.',
-                UFLAG ? 'U':'.',
-                VFLAG ? 'V':'.',
-                nFLAG ? 'n':'.',
-                zFLAG ? 'z':'.',
-                cFLAG ? 'c':'.',
-                vFLAG ? 'v':'.');
-			break;
-
-		case DSP32_A0:
-		case DSP32_A1:
-		case DSP32_A2:
-		case DSP32_A3:
-			string.printf("%8g", *(double *)entry.dataptr());
-			break;
-	}
-}
-
-
-//-------------------------------------------------
-//  disasm_min_opcode_bytes - return the length
-//  of the shortest instruction, in bytes
-//-------------------------------------------------
-
-UINT32 dsp32c_device::disasm_min_opcode_bytes() const
-{
-	return 4;
-}
-
-
-//-------------------------------------------------
-//  disasm_max_opcode_bytes - return the length
-//  of the longest instruction, in bytes
-//-------------------------------------------------
-
-UINT32 dsp32c_device::disasm_max_opcode_bytes() const
-{
-	return 4;
-}
-
-
-//-------------------------------------------------
-//  disasm_disassemble - call the disassembly
-//  helper function
-//-------------------------------------------------
-
-offs_t dsp32c_device::disasm_disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram, UINT32 options)
-{
-	extern CPU_DISASSEMBLE( dsp32c );
-	return CPU_DISASSEMBLE_NAME(dsp32c)(NULL, buffer, pc, oprom, opram, 0);
+	assert(device != NULL);
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_DSP32C);
+	return (dsp32_state *)device->token;
 }
 
 
 
+/***************************************************************************
+    MEMORY ACCESSORS
+***************************************************************************/
 
-//**************************************************************************
-//  MEMORY ACCESSORS
-//**************************************************************************
+#define ROPCODE(cs,pc)			memory_decrypted_read_dword((cs)->program, pc)
 
-inline UINT32 dsp32c_device::ROPCODE(offs_t pc)
+#define RBYTE(cs,addr)			memory_read_byte_32le((cs)->program, addr)
+#define WBYTE(cs,addr,data)		memory_write_byte_32le((cs)->program, (addr), data)
+
+#if (!DETECT_MISALIGNED_MEMORY)
+
+#define RWORD(cs,addr)			memory_read_word_32le((cs)->program, addr)
+#define WWORD(cs,addr,data)		memory_write_word_32le((cs)->program, (addr), data)
+#define RLONG(cs,addr)			memory_read_dword_32le((cs)->program, addr)
+#define WLONG(cs,addr,data)		memory_write_dword_32le((cs)->program, (addr), data)
+
+#else
+
+INLINE UINT16 RWORD(dsp32_state *cpustate, offs_t addr)
 {
-	return m_direct->read_decrypted_dword(pc);
+	UINT16 data;
+	if (addr & 1) fprintf(stderr, "Unaligned word read @ %06X, PC=%06X\n", addr, cpustate->PC);
+	data = memory_read_word_32le(cpustate->program, addr);
+	return data;
 }
 
-inline UINT8 dsp32c_device::RBYTE(offs_t addr)
+INLINE UINT32 RLONG(dsp32_state *cpustate, offs_t addr)
 {
-	return m_program->read_byte(addr);
+	UINT32 data;
+	if (addr & 3) fprintf(stderr, "Unaligned long read @ %06X, PC=%06X\n", addr, cpustate->PC);
+	data = memory_write_word_32le(cpustate->program, addr);
+	return data;
 }
 
-inline void dsp32c_device::WBYTE(offs_t addr, UINT8 data)
+INLINE void WWORD(dsp32_state *cpustate, offs_t addr, UINT16 data)
 {
-	m_program->write_byte(addr, data);
+	if (addr & 1) fprintf(stderr, "Unaligned word write @ %06X, PC=%06X\n", addr, cpustate->PC);
+	memory_read_dword_32le(cpustate->program, (addr), data);
 }
 
-inline UINT16 dsp32c_device::RWORD(offs_t addr)
+INLINE void WLONG(dsp32_state *cpustate, offs_t addr, UINT32 data)
 {
-#if DETECT_MISALIGNED_MEMORY
-	if (addr & 1) fprintf(stderr, "Unaligned word read @ %06X, PC=%06X\n", addr, PC);
+	if (addr & 3) fprintf(stderr, "Unaligned long write @ %06X, PC=%06X\n", addr, cpustate->PC);
+	memory_write_dword_32le(cpustate->program, (addr), data);
+}
+
 #endif
-	return m_program->read_word(addr);
+
+
+
+/***************************************************************************
+    IRQ HANDLING
+***************************************************************************/
+
+static void check_irqs(dsp32_state *cpustate)
+{
+	/* finish me! */
 }
 
-inline UINT32 dsp32c_device::RLONG(offs_t addr)
-{
-#if DETECT_MISALIGNED_MEMORY
-	if (addr & 3) fprintf(stderr, "Unaligned long read @ %06X, PC=%06X\n", addr, PC);
-#endif
-	return m_program->read_dword(addr);
-}
 
-inline void dsp32c_device::WWORD(offs_t addr, UINT16 data)
+static void set_irq_line(dsp32_state *cpustate, int irqline, int state)
 {
-#if DETECT_MISALIGNED_MEMORY
-	if (addr & 1) fprintf(stderr, "Unaligned word write @ %06X, PC=%06X\n", addr, PC);
-#endif
-	m_program->write_word(addr, data);
-}
-
-inline void dsp32c_device::WLONG(offs_t addr, UINT32 data)
-{
-#if DETECT_MISALIGNED_MEMORY
-	if (addr & 3) fprintf(stderr, "Unaligned long write @ %06X, PC=%06X\n", addr, PC);
-#endif
-	m_program->write_dword(addr, data);
+	/* finish me! */
 }
 
 
 
-//**************************************************************************
-//  IRQ HANDLING
-//**************************************************************************
+/***************************************************************************
+    REGISTER HANDLING
+***************************************************************************/
 
-void dsp32c_device::check_irqs()
+static void update_pcr(dsp32_state *cpustate, UINT16 newval)
 {
-	// finish me!
-}
+	UINT16 oldval = cpustate->pcr;
+	cpustate->pcr = newval;
 
-
-void dsp32c_device::set_irq_line(int irqline, int state)
-{
-	// finish me!
-}
-
-
-
-//**************************************************************************
-//  REGISTER HANDLING
-//**************************************************************************
-
-void dsp32c_device::update_pcr(UINT16 newval)
-{
-	UINT16 oldval = m_pcr;
-	m_pcr = newval;
-
-	// reset the chip if we get a reset
+	/* reset the chip if we get a reset */
 	if ((oldval & PCR_RESET) == 0 && (newval & PCR_RESET) != 0)
-		reset();
+		CPU_RESET_NAME(dsp32c)(cpustate->device);
 
-	// track the state of the output pins
-	if (m_output_pins_changed != NULL)
+	/* track the state of the output pins */
+	if (cpustate->output_pins_changed)
 	{
 		UINT16 newoutput = ((newval & (PCR_PIFs | PCR_ENI)) == (PCR_PIFs | PCR_ENI)) ? DSP32_OUTPUT_PIF : 0;
-		if (newoutput != m_lastpins)
+		if (newoutput != cpustate->lastpins)
 		{
-			m_lastpins = newoutput;
-			(*m_output_pins_changed)(*this, newoutput);
+			cpustate->lastpins = newoutput;
+			(*cpustate->output_pins_changed)(cpustate->device, newoutput);
 		}
 	}
 }
 
 
 
-//**************************************************************************
-//  CORE INCLUDE
-//**************************************************************************
+/***************************************************************************
+    INITIALIZATION AND SHUTDOWN
+***************************************************************************/
+
+static CPU_INIT( dsp32c )
+{
+	const dsp32_config *configdata = (const dsp32_config *)device->static_config;
+	dsp32_state *cpustate = get_safe_token(device);
+
+	/* copy in config data */
+	if (configdata != NULL)
+		cpustate->output_pins_changed = configdata->output_pins_changed;
+
+	cpustate->device = device;
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+}
+
+
+static CPU_RESET( dsp32c )
+{
+	dsp32_state *cpustate = get_safe_token(device);
+
+	/* reset goes to 0 */
+	cpustate->PC = 0;
+
+	/* clear some registers */
+	cpustate->pcw &= 0x03ff;
+	update_pcr(cpustate, cpustate->pcr & PCR_RESET);
+	cpustate->esr = 0;
+	cpustate->emr = 0xffff;
+
+	/* initialize fixed registers */
+	cpustate->R0 = cpustate->R0_ALT = 0;
+	cpustate->RMM = -1;
+	cpustate->RPP = 1;
+	cpustate->A_0 = 0.0;
+	cpustate->A_1 = 1.0;
+
+	/* init internal stuff */
+	cpustate->abufcycle[0] = cpustate->abufcycle[1] = cpustate->abufcycle[2] = cpustate->abufcycle[3] = 12345678;
+	cpustate->mbufaddr[0] = cpustate->mbufaddr[1] = cpustate->mbufaddr[2] = cpustate->mbufaddr[3] = 1;
+}
+
+
+static CPU_EXIT( dsp32c )
+{
+}
+
+
+
+/***************************************************************************
+    CORE INCLUDE
+***************************************************************************/
 
 #include "dsp32ops.c"
 
 
 
-//**************************************************************************
-//  CORE EXECUTION LOOP
-//**************************************************************************
+/***************************************************************************
+    CORE EXECUTION LOOP
+***************************************************************************/
 
-//-------------------------------------------------
-//  execute_min_cycles - return minimum number of
-//  cycles it takes for one instruction to execute
-//-------------------------------------------------
-
-UINT32 dsp32c_device::execute_min_cycles() const
+static CPU_EXECUTE( dsp32c )
 {
-	return 4;
-}
+	dsp32_state *cpustate = get_safe_token(device);
 
+	/* skip if halted */
+	if ((cpustate->pcr & PCR_RESET) == 0)
+		return cycles;
 
-//-------------------------------------------------
-//  execute_max_cycles - return maximum number of
-//  cycles it takes for one instruction to execute
-//-------------------------------------------------
+	/* count cycles and interrupt cycles */
+	cpustate->icount = cycles;
 
-UINT32 dsp32c_device::execute_max_cycles() const
-{
-	return 4;
-}
+	/* update buffered accumulator values */
+	cpustate->abufcycle[0] += cpustate->icount;
+	cpustate->abufcycle[1] += cpustate->icount;
+	cpustate->abufcycle[2] += cpustate->icount;
+	cpustate->abufcycle[3] += cpustate->icount;
 
+	/* handle interrupts */
+	check_irqs(cpustate);
 
-//-------------------------------------------------
-//  execute_input_lines - return the number of
-//  input/interrupt lines
-//-------------------------------------------------
+	while (cpustate->icount > 0)
+		execute_one(cpustate);
 
-UINT32 dsp32c_device::execute_input_lines() const
-{
-	return 2;
-}
+	/* normalize buffered accumulator values */
+	cpustate->abufcycle[0] -= cpustate->icount;
+	cpustate->abufcycle[1] -= cpustate->icount;
+	cpustate->abufcycle[2] -= cpustate->icount;
+	cpustate->abufcycle[3] -= cpustate->icount;
 
-
-void dsp32c_device::execute_set_input(int inputnum, int state)
-{
-}
-
-
-void dsp32c_device::execute_run()
-{
-	// skip if halted
-	if ((m_pcr & PCR_RESET) == 0)
-	{
-		m_icount = 0;
-		return;
-	}
-
-	// update buffered accumulator values
-	m_abufcycle[0] += m_icount;
-	m_abufcycle[1] += m_icount;
-	m_abufcycle[2] += m_icount;
-	m_abufcycle[3] += m_icount;
-
-	// handle interrupts
-	check_irqs();
-
-	while (m_icount > 0)
-		execute_one();
-
-	// normalize buffered accumulator values
-	m_abufcycle[0] -= m_icount;
-	m_abufcycle[1] -= m_icount;
-	m_abufcycle[2] -= m_icount;
-	m_abufcycle[3] -= m_icount;
+	return cycles - cpustate->icount;
 }
 
 
 
-//**************************************************************************
-//  PARALLEL INTERFACE WRITES
-//**************************************************************************
+/***************************************************************************
+    PARALLEL INTERFACE WRITES
+***************************************************************************/
 
-const UINT32 dsp32c_device::s_regmap[4][16] =
+static const UINT32 regmap[4][16] =
 {
-	{	// DSP32 compatible mode
+	{	/* DSP32 compatible mode */
 		PIO_PAR|LOWER, PIO_PAR|UPPER, PIO_PDR|LOWER, PIO_PDR|UPPER,
 		PIO_EMR|LOWER, PIO_EMR|UPPER, PIO_ESR|LOWER, PIO_PCR|LOWER,
 		PIO_PIR|UPPER, PIO_PIR|UPPER, PIO_PIR|UPPER, PIO_PIR|UPPER,
 		PIO_PIR|UPPER, PIO_PIR|UPPER, PIO_PIR|UPPER, PIO_PIR|UPPER
 	},
-	{	// DSP32C 8-bit mode
+	{	/* DSP32C 8-bit mode */
 		PIO_PAR|LOWER, PIO_PAR|UPPER, PIO_PDR|LOWER, PIO_PDR|UPPER,
 		PIO_EMR|LOWER, PIO_EMR|UPPER, PIO_ESR|LOWER, PIO_PCR|LOWER,
 		PIO_PIR|LOWER, PIO_PIR|UPPER, PIO_PCR|UPPER, PIO_PARE|LOWER,
 		PIO_PDR2|LOWER,PIO_PDR2|UPPER,PIO_RESERVED,  PIO_RESERVED
 	},
-	{	// DSP32C illegal mode
+	{	/* DSP32C illegal mode */
 		PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,
 		PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,
 		PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,
 		PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED,  PIO_RESERVED
 	},
-	{	// DSP32C 16-bit mode
+	{	/* DSP32C 16-bit mode */
 		PIO_PAR,       PIO_RESERVED,  PIO_PDR,       PIO_RESERVED,
 		PIO_EMR,       PIO_RESERVED,  PIO_ESR|LOWER, PIO_PCR,
 		PIO_PIR,       PIO_RESERVED,  PIO_RESERVED,  PIO_PARE|LOWER,
@@ -682,134 +436,135 @@ const UINT32 dsp32c_device::s_regmap[4][16] =
 
 
 
-//**************************************************************************
-//  PARALLEL INTERFACE WRITES
-//**************************************************************************
+/***************************************************************************
+    PARALLEL INTERFACE WRITES
+***************************************************************************/
 
-void dsp32c_device::dma_increment()
+INLINE void dma_increment(dsp32_state *cpustate)
 {
-	if (m_pcr & PCR_AUTO)
+	if (cpustate->pcr & PCR_AUTO)
 	{
-		int amount = (m_pcr & PCR_DMA32) ? 4 : 2;
-		m_par += amount;
-		if (m_par < amount)
-			m_pare++;
+		int amount = (cpustate->pcr & PCR_DMA32) ? 4 : 2;
+		cpustate->par += amount;
+		if (cpustate->par < amount)
+			cpustate->pare++;
 	}
 }
 
 
-void dsp32c_device::dma_load()
+INLINE void dma_load(dsp32_state *cpustate)
 {
-	// only process if DMA is enabled
-	if (m_pcr & PCR_DMA)
+	/* only process if DMA is enabled */
+	if (cpustate->pcr & PCR_DMA)
 	{
-		UINT32 addr = m_par | (m_pare << 16);
+		UINT32 addr = cpustate->par | (cpustate->pare << 16);
 
-		// 16-bit case
-		if (!(m_pcr & PCR_DMA32))
-			m_pdr = RWORD(addr & 0xfffffe);
+		/* 16-bit case */
+		if (!(cpustate->pcr & PCR_DMA32))
+			cpustate->pdr = RWORD(cpustate, addr & 0xfffffe);
 
-		// 32-bit case
+		/* 32-bit case */
 		else
 		{
-			UINT32 temp = RLONG(addr & 0xfffffc);
-			m_pdr = temp >> 16;
-			m_pdr2 = temp & 0xffff;
+			UINT32 temp = RLONG(cpustate, addr & 0xfffffc);
+			cpustate->pdr = temp >> 16;
+			cpustate->pdr2 = temp & 0xffff;
 		}
 
-		// set the PDF flag to indicate we have data ready
-		update_pcr(m_pcr | PCR_PDFs);
+		/* set the PDF flag to indicate we have data ready */
+		update_pcr(cpustate, cpustate->pcr | PCR_PDFs);
 	}
 }
 
 
-void dsp32c_device::dma_store()
+INLINE void dma_store(dsp32_state *cpustate)
 {
-	// only process if DMA is enabled
-	if (m_pcr & PCR_DMA)
+	/* only process if DMA is enabled */
+	if (cpustate->pcr & PCR_DMA)
 	{
-		UINT32 addr = m_par | (m_pare << 16);
+		UINT32 addr = cpustate->par | (cpustate->pare << 16);
 
-		// 16-bit case
-		if (!(m_pcr & PCR_DMA32))
-			WWORD(addr & 0xfffffe, m_pdr);
+		/* 16-bit case */
+		if (!(cpustate->pcr & PCR_DMA32))
+			WWORD(cpustate, addr & 0xfffffe, cpustate->pdr);
 
-		// 32-bit case
+		/* 32-bit case */
 		else
-			WLONG(addr & 0xfffffc, (m_pdr << 16) | m_pdr2);
+			WLONG(cpustate, addr & 0xfffffc, (cpustate->pdr << 16) | cpustate->pdr2);
 
-		// clear the PDF flag to indicate we have taken the data
-		update_pcr(m_pcr & ~PCR_PDFs);
+		/* clear the PDF flag to indicate we have taken the data */
+		update_pcr(cpustate, cpustate->pcr & ~PCR_PDFs);
 	}
 }
 
 
-void dsp32c_device::pio_w(int reg, int data)
+void dsp32c_pio_w(const device_config *device, int reg, int data)
 {
+	dsp32_state *cpustate = get_safe_token(device);
 	UINT16 mask;
 	UINT8 mode;
 
-	// look up register and mask
-	mode = ((m_pcr >> 8) & 2) | ((m_pcr >> 1) & 1);
-	reg = s_regmap[mode][reg];
+	/* look up register and mask */
+	mode = ((cpustate->pcr >> 8) & 2) | ((cpustate->pcr >> 1) & 1);
+	reg = regmap[mode][reg];
 	mask = reg >> 8;
 	if (mask == 0x00ff) data <<= 8;
 	data &= ~mask;
 	reg &= 0xff;
 
-	// switch off the register
+	/* switch off the register */
 	switch (reg)
 	{
 		case PIO_PAR:
-			m_par = (m_par & mask) | data;
+			cpustate->par = (cpustate->par & mask) | data;
 
-			// trigger a load on the upper half
+			/* trigger a load on the upper half */
 			if (!(mask & 0xff00))
-				dma_load();
+				dma_load(cpustate);
 			break;
 
 		case PIO_PARE:
-			m_pare = (m_pare & mask) | data;
+			cpustate->pare = (cpustate->pare & mask) | data;
 			break;
 
 		case PIO_PDR:
-			m_pdr = (m_pdr & mask) | data;
+			cpustate->pdr = (cpustate->pdr & mask) | data;
 
-			// trigger a write and PDF setting on the upper half
+			/* trigger a write and PDF setting on the upper half */
 			if (!(mask & 0xff00))
 			{
-				dma_store();
-				dma_increment();
+				dma_store(cpustate);
+				dma_increment(cpustate);
 			}
 			break;
 
 		case PIO_PDR2:
-			m_pdr2 = (m_pdr2 & mask) | data;
+			cpustate->pdr2 = (cpustate->pdr2 & mask) | data;
 			break;
 
 		case PIO_EMR:
-			m_emr = (m_emr & mask) | data;
+			cpustate->emr = (cpustate->emr & mask) | data;
 			break;
 
 		case PIO_ESR:
-			m_esr = (m_esr & mask) | data;
+			cpustate->esr = (cpustate->esr & mask) | data;
 			break;
 
 		case PIO_PCR:
 			mask |= 0x0060;
 			data &= ~mask;
-			update_pcr((m_pcr & mask) | data);
+			update_pcr(cpustate, (cpustate->pcr & mask) | data);
 			break;
 
 		case PIO_PIR:
-			m_pir = (m_pir & mask) | data;
+			cpustate->pir = (cpustate->pir & mask) | data;
 
-			// set PIF on upper half
+			/* set PIF on upper half */
 			if (!(mask & 0xff00))
-				update_pcr(m_pcr | PCR_PIFs);
+				update_pcr(cpustate, cpustate->pcr | PCR_PIFs);
 			break;
 
-		// error case
+		/* error case */
 		default:
 			logerror("dsp32_pio_w called on invalid register %d\n", reg);
 			break;
@@ -818,72 +573,322 @@ void dsp32c_device::pio_w(int reg, int data)
 
 
 
-//**************************************************************************
-//  PARALLEL INTERFACE READS
-//**************************************************************************
+/***************************************************************************
+    PARALLEL INTERFACE READS
+***************************************************************************/
 
-int dsp32c_device::pio_r(int reg)
+int dsp32c_pio_r(const device_config *device, int reg)
 {
+	dsp32_state *cpustate = get_safe_token(device);
 	UINT16 mask, result = 0xffff;
 	UINT8 mode, shift = 0;
 
-	// look up register and mask
-	mode = ((m_pcr >> 8) & 2) | ((m_pcr >> 1) & 1);
-	reg = s_regmap[mode][reg];
+	/* look up register and mask */
+	mode = ((cpustate->pcr >> 8) & 2) | ((cpustate->pcr >> 1) & 1);
+	reg = regmap[mode][reg];
 	mask = reg >> 8;
 	if (mask == 0x00ff) mask = 0xff00, shift = 8;
 	reg &= 0xff;
 
-	// switch off the register
+	/* switch off the register */
 	switch (reg)
 	{
 		case PIO_PAR:
-			result = m_par | 1;
+			result = cpustate->par | 1;
 			break;
 
 		case PIO_PARE:
-			result = m_pare;
+			result = cpustate->pare;
 			break;
 
 		case PIO_PDR:
-			result = m_pdr;
+			result = cpustate->pdr;
 
-			// trigger an increment on the lower half
+			/* trigger an increment on the lower half */
 			if (shift != 8)
-				dma_increment();
+				dma_increment(cpustate);
 
-			// trigger a fetch on the upper half
+			/* trigger a fetch on the upper half */
 			if (!(mask & 0xff00))
-				dma_load();
+				dma_load(cpustate);
 			break;
 
 		case PIO_PDR2:
-			result = m_pdr2;
+			result = cpustate->pdr2;
 			break;
 
 		case PIO_EMR:
-			result = m_emr;
+			result = cpustate->emr;
 			break;
 
 		case PIO_ESR:
-			result = m_esr;
+			result = cpustate->esr;
 			break;
 
 		case PIO_PCR:
-			result = m_pcr;
+			result = cpustate->pcr;
 			break;
 
 		case PIO_PIR:
 			if (!(mask & 0xff00))
-				update_pcr(m_pcr & ~PCR_PIFs);	// clear PIFs
-			result = m_pir;
+				update_pcr(cpustate, cpustate->pcr & ~PCR_PIFs);	/* clear PIFs */
+			result = cpustate->pir;
 			break;
 
-		// error case
+		/* error case */
 		default:
 			logerror("dsp32_pio_w called on invalid register %d\n", reg);
 			break;
 	}
 
 	return (result >> shift) & ~mask;
+}
+
+
+
+/**************************************************************************
+ * Generic set_info
+ **************************************************************************/
+
+static CPU_SET_INFO( dsp32c )
+{
+	dsp32_state *cpustate = get_safe_token(device);
+	switch (state)
+	{
+		/* --- the following bits of info are set as 64-bit signed integers --- */
+		case CPUINFO_INT_INPUT_STATE + DSP32_IRQ0:	set_irq_line(cpustate, DSP32_IRQ0, info->i);			break;
+		case CPUINFO_INT_INPUT_STATE + DSP32_IRQ1:	set_irq_line(cpustate, DSP32_IRQ1, info->i);			break;
+
+		/* CAU */
+		case CPUINFO_INT_PC:
+		case CPUINFO_INT_REGISTER + DSP32_PC:		cpustate->PC = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R0:		cpustate->R0 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R1:		cpustate->R1 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R2:		cpustate->R2 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R3:		cpustate->R3 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R4:		cpustate->R4 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R5:		cpustate->R5 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R6:		cpustate->R6 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R7:		cpustate->R7 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R8:		cpustate->R8 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R9:		cpustate->R9 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R10:		cpustate->R10 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R11:		cpustate->R11 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R12:		cpustate->R12 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R13:		cpustate->R13 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R14:		cpustate->R14 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R15:		cpustate->R15 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R16:		cpustate->R16 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R17:		cpustate->R17 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R18:		cpustate->R18 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R19:		cpustate->R19 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R20:		cpustate->R20 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_SP:
+		case CPUINFO_INT_REGISTER + DSP32_R21:		cpustate->R21 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_R22:		cpustate->R22 = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_PIN:		cpustate->pin = info->i & 0xffffff;				break;
+		case CPUINFO_INT_REGISTER + DSP32_POUT:		cpustate->pout = info->i & 0xffffff;			break;
+		case CPUINFO_INT_REGISTER + DSP32_IVTP:		cpustate->ivtp = info->i & 0xffffff;			break;
+
+		/* DAU */
+		case CPUINFO_INT_REGISTER + DSP32_A0:		cpustate->A0 = info->i;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A1:		cpustate->A1 = info->i;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A2:		cpustate->A2 = info->i;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A3:		cpustate->A3 = info->i;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_DAUC:		cpustate->DAUC = info->i;						break;
+
+		/* PIO */
+		case CPUINFO_INT_REGISTER + DSP32_PAR:		cpustate->par = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_PDR:		cpustate->pdr = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_PIR:		cpustate->pir = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_PCR:		update_pcr(cpustate, info->i & 0x3ff);			break;
+		case CPUINFO_INT_REGISTER + DSP32_EMR:		cpustate->emr = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_ESR:		cpustate->esr = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_PCW:		cpustate->pcw = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_PIOP:		cpustate->piop = info->i;						break;
+
+		/* SIO */
+		case CPUINFO_INT_REGISTER + DSP32_IBUF:		cpustate->ibuf = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_ISR:		cpustate->isr = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_OBUF:		cpustate->obuf = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_OSR:		cpustate->osr = info->i;						break;
+		case CPUINFO_INT_REGISTER + DSP32_IOC:		cpustate->IOC = info->i & 0xfffff;				break;
+	}
+}
+
+
+
+/**************************************************************************
+ * Generic get_info
+ **************************************************************************/
+
+CPU_GET_INFO( dsp32c )
+{
+	dsp32_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	switch (state)
+	{
+		/* --- the following bits of info are returned as 64-bit signed integers --- */
+		case CPUINFO_INT_CONTEXT_SIZE:					info->i = sizeof(dsp32_state);			break;
+		case CPUINFO_INT_INPUT_LINES:					info->i = 2;							break;
+		case CPUINFO_INT_DEFAULT_IRQ_VECTOR:			info->i = 0;							break;
+		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_LITTLE;			break;
+		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
+		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 1;							break;
+		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 4;							break;
+		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 4;							break;
+		case CPUINFO_INT_MIN_CYCLES:					info->i = 4;							break;
+		case CPUINFO_INT_MAX_CYCLES:					info->i = 4;							break;
+
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 24;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
+
+		case CPUINFO_INT_INPUT_STATE + DSP32_IRQ0:		info->i = 0;							break;
+		case CPUINFO_INT_INPUT_STATE + DSP32_IRQ1:		info->i = 0;							break;
+
+		case CPUINFO_INT_PREVIOUSPC:					info->i = cpustate->ppc;					break;
+
+		/* CAU */
+		case CPUINFO_INT_PC:
+		case CPUINFO_INT_REGISTER + DSP32_PC:			info->i = cpustate->PC;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R0:			info->i = cpustate->R0;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R1:			info->i = cpustate->R1;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R2:			info->i = cpustate->R2;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R3:			info->i = cpustate->R3;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R4:			info->i = cpustate->R4;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R5:			info->i = cpustate->R5;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R6:			info->i = cpustate->R6;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R7:			info->i = cpustate->R7;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R8:			info->i = cpustate->R8;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R9:			info->i = cpustate->R9;						break;
+		case CPUINFO_INT_REGISTER + DSP32_R10:			info->i = cpustate->R10;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R11:			info->i = cpustate->R11;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R12:			info->i = cpustate->R12;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R13:			info->i = cpustate->R13;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R14:			info->i = cpustate->R14;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R15:			info->i = cpustate->R15;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R16:			info->i = cpustate->R16;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R17:			info->i = cpustate->R17;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R18:			info->i = cpustate->R18;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R19:			info->i = cpustate->R19;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R20:			info->i = cpustate->R20;					break;
+		case CPUINFO_INT_SP:
+		case CPUINFO_INT_REGISTER + DSP32_R21:			info->i = cpustate->R21;					break;
+		case CPUINFO_INT_REGISTER + DSP32_R22:			info->i = cpustate->R22;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PIN:			info->i = cpustate->pin;					break;
+		case CPUINFO_INT_REGISTER + DSP32_POUT:			info->i = cpustate->pout;					break;
+		case CPUINFO_INT_REGISTER + DSP32_IVTP:			info->i = cpustate->ivtp;					break;
+
+		/* DAU */
+		case CPUINFO_INT_REGISTER + DSP32_A0:			info->i = cpustate->A0;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A1:			info->i = cpustate->A1;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A2:			info->i = cpustate->A2;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_A3:			info->i = cpustate->A3;	/* fix me -- very wrong */ break;
+		case CPUINFO_INT_REGISTER + DSP32_DAUC:			info->i = cpustate->DAUC;					break;
+
+		/* PIO */
+		case CPUINFO_INT_REGISTER + DSP32_PAR:			info->i = cpustate->par;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PDR:			info->i = cpustate->pdr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PIR:			info->i = cpustate->pir;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PCR:			info->i = cpustate->pcr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_EMR:			info->i = cpustate->emr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_ESR:			info->i = cpustate->esr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PCW:			info->i = cpustate->pcw;					break;
+		case CPUINFO_INT_REGISTER + DSP32_PIOP:			info->i = cpustate->piop;					break;
+
+		/* SIO */
+		case CPUINFO_INT_REGISTER + DSP32_IBUF:			info->i = cpustate->ibuf;					break;
+		case CPUINFO_INT_REGISTER + DSP32_ISR:			info->i = cpustate->isr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_OBUF:			info->i = cpustate->obuf;					break;
+		case CPUINFO_INT_REGISTER + DSP32_OSR:			info->i = cpustate->osr;					break;
+		case CPUINFO_INT_REGISTER + DSP32_IOC:			info->i = cpustate->IOC;					break;
+
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(dsp32c);		break;
+		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(dsp32c);				break;
+		case CPUINFO_FCT_RESET:							info->reset = CPU_RESET_NAME(dsp32c);				break;
+		case CPUINFO_FCT_EXIT:							info->exit = CPU_EXIT_NAME(dsp32c);				break;
+		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(dsp32c);			break;
+		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
+		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(dsp32c);		break;
+		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
+
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "DSP32C");				break;
+		case DEVINFO_STR_FAMILY:					strcpy(info->s, "Lucent DSP32");		break;
+		case DEVINFO_STR_VERSION:					strcpy(info->s, "1.0");					break;
+		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);				break;
+		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Aaron Giles");			break;
+
+		case CPUINFO_STR_FLAGS:
+			sprintf(info->s, "%c%c%c%c%c%c%c%c",
+				NFLAG ? 'N':'.',
+				ZFLAG ? 'Z':'.',
+                UFLAG ? 'U':'.',
+                VFLAG ? 'V':'.',
+                nFLAG ? 'n':'.',
+                zFLAG ? 'z':'.',
+                cFLAG ? 'c':'.',
+                vFLAG ? 'v':'.');
+            break;
+
+		/* CAU */
+		case CPUINFO_STR_REGISTER + DSP32_PC:			sprintf(info->s, "PC: %06X", cpustate->PC); break;
+		case CPUINFO_STR_REGISTER + DSP32_R0:			sprintf(info->s, "R0: %06X", cpustate->R0); break;
+		case CPUINFO_STR_REGISTER + DSP32_R1:			sprintf(info->s, "R1: %06X", cpustate->R1); break;
+		case CPUINFO_STR_REGISTER + DSP32_R2:			sprintf(info->s, "R2: %06X", cpustate->R2); break;
+		case CPUINFO_STR_REGISTER + DSP32_R3:			sprintf(info->s, "R3: %06X", cpustate->R3); break;
+		case CPUINFO_STR_REGISTER + DSP32_R4:			sprintf(info->s, "R4: %06X", cpustate->R4); break;
+		case CPUINFO_STR_REGISTER + DSP32_R5:			sprintf(info->s, "R5: %06X", cpustate->R5); break;
+		case CPUINFO_STR_REGISTER + DSP32_R6:			sprintf(info->s, "R6: %06X", cpustate->R6); break;
+		case CPUINFO_STR_REGISTER + DSP32_R7:			sprintf(info->s, "R7: %06X", cpustate->R7); break;
+		case CPUINFO_STR_REGISTER + DSP32_R8:			sprintf(info->s, "R8: %06X", cpustate->R8); break;
+		case CPUINFO_STR_REGISTER + DSP32_R9:			sprintf(info->s, "R9: %06X", cpustate->R9); break;
+		case CPUINFO_STR_REGISTER + DSP32_R10:			sprintf(info->s, "R10:%06X", cpustate->R10); break;
+		case CPUINFO_STR_REGISTER + DSP32_R11:			sprintf(info->s, "R11:%06X", cpustate->R11); break;
+		case CPUINFO_STR_REGISTER + DSP32_R12:			sprintf(info->s, "R12:%06X", cpustate->R12); break;
+		case CPUINFO_STR_REGISTER + DSP32_R13:			sprintf(info->s, "R13:%06X", cpustate->R13); break;
+		case CPUINFO_STR_REGISTER + DSP32_R14:			sprintf(info->s, "R14:%06X", cpustate->R14); break;
+		case CPUINFO_STR_REGISTER + DSP32_R15:			sprintf(info->s, "R15:%06X", cpustate->R15); break;
+		case CPUINFO_STR_REGISTER + DSP32_R16:			sprintf(info->s, "R16:%06X", cpustate->R16); break;
+		case CPUINFO_STR_REGISTER + DSP32_R17:			sprintf(info->s, "R17:%06X", cpustate->R17); break;
+		case CPUINFO_STR_REGISTER + DSP32_R18:			sprintf(info->s, "R18:%06X", cpustate->R18); break;
+		case CPUINFO_STR_REGISTER + DSP32_R19:			sprintf(info->s, "R19:%06X", cpustate->R19); break;
+		case CPUINFO_STR_REGISTER + DSP32_R20:			sprintf(info->s, "R20:%06X", cpustate->R20); break;
+		case CPUINFO_STR_REGISTER + DSP32_R21:			sprintf(info->s, "R21:%06X", cpustate->R21); break;
+		case CPUINFO_STR_REGISTER + DSP32_R22:			sprintf(info->s, "R22:%06X", cpustate->R22); break;
+		case CPUINFO_STR_REGISTER + DSP32_PIN:			sprintf(info->s, "PIN:%06X", cpustate->pin); break;
+		case CPUINFO_STR_REGISTER + DSP32_POUT:			sprintf(info->s, "POUT:%06X", cpustate->pout); break;
+		case CPUINFO_STR_REGISTER + DSP32_IVTP:			sprintf(info->s, "IVTP:%06X", cpustate->ivtp); break;
+
+		/* DAU */
+		case CPUINFO_STR_REGISTER + DSP32_A0:			sprintf(info->s, "A0:%8g", cpustate->A0); break;
+		case CPUINFO_STR_REGISTER + DSP32_A1:			sprintf(info->s, "A1:%8g", cpustate->A1); break;
+		case CPUINFO_STR_REGISTER + DSP32_A2:			sprintf(info->s, "A2:%8g", cpustate->A2); break;
+		case CPUINFO_STR_REGISTER + DSP32_A3:			sprintf(info->s, "A3:%8g", cpustate->A3); break;
+		case CPUINFO_STR_REGISTER + DSP32_DAUC:			sprintf(info->s, "DAUC:%02X", cpustate->DAUC); break;
+
+		/* PIO */
+		case CPUINFO_STR_REGISTER + DSP32_PAR:			sprintf(info->s, "PAR:%08X", cpustate->par); break;
+		case CPUINFO_STR_REGISTER + DSP32_PDR:			sprintf(info->s, "PDR:%08X", cpustate->pdr); break;
+		case CPUINFO_STR_REGISTER + DSP32_PIR:			sprintf(info->s, "PIR:%04X", cpustate->pir); break;
+		case CPUINFO_STR_REGISTER + DSP32_PCR:			sprintf(info->s, "PCR:%03X", cpustate->pcr); break;
+		case CPUINFO_STR_REGISTER + DSP32_EMR:			sprintf(info->s, "EMR:%04X", cpustate->emr); break;
+		case CPUINFO_STR_REGISTER + DSP32_ESR:			sprintf(info->s, "ESR:%02X", cpustate->esr); break;
+		case CPUINFO_STR_REGISTER + DSP32_PCW:			sprintf(info->s, "PCW:%04X", cpustate->pcw); break;
+		case CPUINFO_STR_REGISTER + DSP32_PIOP:			sprintf(info->s, "PIOP:%02X", cpustate->piop); break;
+
+		/* SIO */
+		case CPUINFO_STR_REGISTER + DSP32_IBUF:			sprintf(info->s, "IBUF:%08X", cpustate->ibuf); break;
+		case CPUINFO_STR_REGISTER + DSP32_ISR:			sprintf(info->s, "ISR:%08X", cpustate->isr); break;
+		case CPUINFO_STR_REGISTER + DSP32_OBUF:			sprintf(info->s, "OBUF:%08X", cpustate->obuf); break;
+		case CPUINFO_STR_REGISTER + DSP32_OSR:			sprintf(info->s, "OSR:%08X", cpustate->osr); break;
+		case CPUINFO_STR_REGISTER + DSP32_IOC:			sprintf(info->s, "IOC:%05X", cpustate->IOC); break;
+	}
 }

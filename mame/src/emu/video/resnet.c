@@ -47,7 +47,7 @@
 *****************************************************************************/
 
 
-#include "emu.h"
+#include "driver.h"
 #include "resnet.h"
 
 #define VERBOSE 0
@@ -260,8 +260,8 @@ double compute_resistor_net_outputs(
 
 	/* parse input parameters */
 
-	o  = global_alloc_array(double, (1<<MAX_RES_PER_NET) *  MAX_NETS);
-	os = global_alloc_array(double, (1<<MAX_RES_PER_NET) *  MAX_NETS);
+	o  = alloc_array_or_die(double, (1<<MAX_RES_PER_NET) *  MAX_NETS);
+	os = alloc_array_or_die(double, (1<<MAX_RES_PER_NET) *  MAX_NETS);
 
 	networks_no = 0;
 	for (n = 0; n < MAX_NETS; n++)
@@ -423,8 +423,8 @@ if (VERBOSE)
 }
 /* debug end */
 
-	global_free(o);
-	global_free(os);
+	free(o);
+	free(os);
 	return (scale);
 
 }
@@ -564,7 +564,7 @@ int compute_res_net(int inputs, int channel, const res_net_info *di)
 			cut = 0.0;
 			break;
 		case RES_NET_AMP_DARLINGTON:
-			minout = 0.7;
+			minout = 0.9;
 			cut = 0.0;
 			break;
 		case RES_NET_AMP_EMITTER:
@@ -685,24 +685,22 @@ int compute_res_net(int inputs, int channel, const res_net_info *di)
 			v = vcc - v;
 			v = MAX(0, v-0.7);
 			v = MIN(v, vcc - 2 * 0.7);
-			v = v / (vcc-1.4);
-			v = v * vcc;
 			break;
 		case RES_NET_MONITOR_ELECTROHOME_G07:
 			/* Nothing */
 			break;
 	}
 
-	return (int) (v * 255 / vcc + 0.4);
+	return (int) (v *255 / vcc + 0.4);
 }
 
-rgb_t *compute_res_net_all(running_machine &machine, const UINT8 *prom, const res_net_decode_info *rdi, const res_net_info *di)
+rgb_t *compute_res_net_all(const UINT8 *prom, const res_net_decode_info *rdi, const res_net_info *di)
 {
 	UINT8 r,g,b;
 	int i,j,k;
 	rgb_t *rgb;
 
-	rgb = auto_alloc_array(machine, rgb_t, rdi->end - rdi->start + 1);
+	rgb = alloc_array_or_die(rgb_t, rdi->end - rdi->start + 1);
 	for (i=rdi->start; i<=rdi->end; i++)
 	{
 		UINT8 t[3] = {0,0,0};

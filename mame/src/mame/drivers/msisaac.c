@@ -6,13 +6,12 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
 #include "sound/ay8910.h"
 #include "sound/msm5232.h"
-#include "machine/buggychl.h"
-#include "includes/msisaac.h"
+#include "includes/buggychl.h"
 
 /*
 TO DO:
@@ -21,55 +20,74 @@ TO DO:
   - TA7630 volume table is hand tuned to match the sample, but still slighty off.
 */
 
+//not used
+//WRITE8_HANDLER( msisaac_textbank1_w );
+
+//used
+WRITE8_HANDLER( msisaac_fg_scrolly_w );
+WRITE8_HANDLER( msisaac_fg_scrollx_w );
+WRITE8_HANDLER( msisaac_bg_scrolly_w );
+WRITE8_HANDLER( msisaac_bg_scrollx_w );
+WRITE8_HANDLER( msisaac_bg2_scrolly_w );
+WRITE8_HANDLER( msisaac_bg2_scrollx_w );
+
+WRITE8_HANDLER( msisaac_bg2_textbank_w );
+
+WRITE8_HANDLER( msisaac_bg_videoram_w );
+WRITE8_HANDLER( msisaac_bg2_videoram_w );
+WRITE8_HANDLER( msisaac_fg_videoram_w );
+
+extern VIDEO_UPDATE( msisaac );
+extern VIDEO_START( msisaac );
+extern UINT8 *msisaac_videoram;
+extern UINT8 *msisaac_videoram2;
+
+
+
+static int sound_nmi_enable,pending_nmi;
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	msisaac_state *state = machine.driver_data<msisaac_state>();
-	if (state->m_sound_nmi_enable)
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-	else
-		state->m_pending_nmi = 1;
+	if (sound_nmi_enable) cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+	else pending_nmi = 1;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
-	soundlatch_w(space, 0, data);
-	space->machine().scheduler().synchronize(FUNC(nmi_callback), data);
+	soundlatch_w(space,0,data);
+	timer_call_after_resynch(space->machine, NULL, data,nmi_callback);
 }
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	msisaac_state *state = space->machine().driver_data<msisaac_state>();
-	state->m_sound_nmi_enable = 0;
+	sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	msisaac_state *state = space->machine().driver_data<msisaac_state>();
-	state->m_sound_nmi_enable = 1;
-	if (state->m_pending_nmi)
+	sound_nmi_enable = 1;
+	if (pending_nmi)
 	{
-		device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
-		state->m_pending_nmi = 0;
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		pending_nmi = 0;
 	}
 }
 
 #if 0
 static WRITE8_HANDLER( flip_screen_w )
 {
-	flip_screen_set(space->machine(), data);
+	flip_screen_set(space->machine, data);
 }
 
 static WRITE8_HANDLER( msisaac_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset,data);
+	coin_counter_w(offset,data);
 }
 #endif
-
 static WRITE8_HANDLER( ms_unknown_w )
 {
-	if (data != 0x08)
-		popmessage("CPU #0 write to 0xf0a3 data=%2x", data);
+	if (data!=0x08)
+		popmessage("CPU #0 write to 0xf0a3 data=%2x",data);
 }
 
 
@@ -79,6 +97,13 @@ static WRITE8_HANDLER( ms_unknown_w )
 /* If good MCU dump will be available, it should be fully working game */
 /* To test the game without the MCU simply comment out #define USE_MCU */
 
+/* Disabled because the mcu dump is currently unavailable. -AS */
+//#define USE_MCU
+
+#ifndef USE_MCU
+static UINT8 mcu_val = 0;
+static UINT8 direction = 0;
+#endif
 
 
 static READ8_HANDLER( msisaac_mcu_r )
@@ -92,64 +117,63 @@ MCU simulation TODO:
 \-Fix some graphics imperfections(*not* confirmed if they are caused by unhandled
   commands or imperfect video emulation).
 */
-	msisaac_state *state = space->machine().driver_data<msisaac_state>();
 
-	switch (state->m_mcu_val)
+	switch(mcu_val)
 	{
 		/*Start-up check*/
-		case 0x5f:  return (state->m_mcu_val + 0x6b);
+		case 0x5f:  return (mcu_val+0x6b);
 		/*These interferes with RAM operations(setting them to non-zero you  *
          * will have unexpected results,such as infinite lives or score not  *
          * incremented properly).*/
 		case 0x40:
 		case 0x41:
-		case 0x42:
-			return 0;
+ 		case 0x42:
+ 			return 0;
 
-		/*With this command the MCU controls body direction  */
-		case 0x02:
-		{
-			//direction:
-			//0-left
-			//1-leftup
-			//2-up
-			//3-rigtup
-			//4-right
-			//5-rightdwn
-			//6-down
-			//7-leftdwn
+ 		/*With this command the MCU controls body direction  */
+ 		case 0x02:
+ 		{
+ 			//direction:
+ 			//0-left
+ 			//1-leftup
+ 			//2-up
+ 			//3-rigtup
+ 			//4-right
+ 			//5-rightdwn
+ 			//6-down
+ 			//7-leftdwn
 
-			UINT8 val= (input_port_read(space->machine(), "IN1") >> 2) & 0x0f;
-			/* bit0 = left
+ 			UINT8 val= (input_port_read(space->machine, "IN1")>>2) & 0x0f;
+ 			/* bit0 = left
                bit1 = right
                bit2 = down
                bit3 = up
             */
-			/* direction is encoded as:
+ 			/* direction is encoded as:
                                4
                              3   5
                             2     6
                              1   7
                                0
             */
-			/*       0000   0001   0010   0011      0100   0101   0110   0111     1000   1001   1010   1011   1100   1101   1110   1111 */
-			/*      nochange left  right nochange   down downlft dwnrght down     up     upleft uprgt  up    nochnge left   right  nochange */
+ 			/*       0000   0001   0010   0011      0100   0101   0110   0111     1000   1001   1010   1011   1100   1101   1110   1111 */
+ 			/*      nochange left  right nochange   down downlft dwnrght down     up     upleft uprgt  up    nochnge left   right  nochange */
 
-			static const INT8 table[16] = { -1,    2,    6,     -1,       0,   1,      7,      0,       4,     3,     5,    4,     -1,     2,     6,    -1 };
+ 			static const INT8 table[16] = { -1,    2,    6,     -1,       0,   1,      7,      0,       4,     3,     5,    4,     -1,     2,     6,    -1 };
 
-			if (table[val] >= 0)
-				state->m_direction = table[val];
+ 			if (table[val] >= 0 )
+ 				direction = table[val];
 
-			return state->m_direction;
-		}
+ 			return direction;
+ 		}
 
 		/*This controls the arms when they return to the player.            */
-		case 0x07:
-			return 0x45;
+ 		case 0x07:
+ 			return 0x45;
 
-		default:
-			logerror("CPU#0 read from MCU pc=%4x, mcu_val=%2x\n", cpu_get_pc(&space->device()), state->m_mcu_val);
-			return state->m_mcu_val;
+ 		default:
+ 			logerror("CPU#0 read from MCU pc=%4x, mcu_val=%2x\n", cpu_get_pc(space->cpu), mcu_val );
+ 		   	return mcu_val;
 	}
 #endif
 }
@@ -168,20 +192,19 @@ static WRITE8_HANDLER( msisaac_mcu_w )
 #ifdef USE_MCU
 	buggychl_mcu_w(offset,data);
 #else
-	msisaac_state *state = space->machine().driver_data<msisaac_state>();
 	//if(data != 0x0a && data != 0x42 && data != 0x02)
-	//  popmessage("PC = %04x %02x", cpu_get_pc(&space->device()), data);
-	state->m_mcu_val = data;
+	//  popmessage("PC = %04x %02x",cpu_get_pc(space->cpu),data);
+	mcu_val = data;
 #endif
 }
 
-static ADDRESS_MAP_START( msisaac_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( msisaac_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xxxxRRRRGGGGBBBB_le_w) AM_BASE(&paletteram)
 	AM_RANGE(0xf000, 0xf000) AM_WRITE(msisaac_bg2_textbank_w)
-	AM_RANGE(0xf001, 0xf001) AM_WRITENOP					//???
-	AM_RANGE(0xf002, 0xf002) AM_WRITENOP					//???
+	AM_RANGE(0xf001, 0xf001) AM_WRITENOP 					//???
+	AM_RANGE(0xf002, 0xf002) AM_WRITENOP		 			//???
 
 	AM_RANGE(0xf060, 0xf060) AM_WRITE(sound_command_w)		//sound command
 	AM_RANGE(0xf061, 0xf061) AM_WRITENOP /*sound_reset*/	//????
@@ -195,7 +218,7 @@ static ADDRESS_MAP_START( msisaac_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xf0c4, 0xf0c4) AM_WRITE(msisaac_bg_scrollx_w)
 	AM_RANGE(0xf0c5, 0xf0c5) AM_WRITE(msisaac_bg_scrolly_w)
 
-	AM_RANGE(0xf0e0, 0xf0e0) AM_READWRITE(msisaac_mcu_r, msisaac_mcu_w)
+	AM_RANGE(0xf0e0, 0xf0e0) AM_READWRITE(msisaac_mcu_r,msisaac_mcu_w)
 	AM_RANGE(0xf0e1, 0xf0e1) AM_READ(msisaac_mcu_status_r)
 
 	AM_RANGE(0xf080, 0xf080) AM_READ_PORT("DSW1")
@@ -205,18 +228,19 @@ static ADDRESS_MAP_START( msisaac_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xf084, 0xf084) AM_READ_PORT("IN1")
 //  AM_RANGE(0xf086, 0xf086) AM_READ_PORT("IN2")
 
-	AM_RANGE(0xf100, 0xf17f) AM_RAM AM_BASE_MEMBER(msisaac_state, m_spriteram)	//sprites
-	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(msisaac_fg_videoram_w) AM_BASE_MEMBER(msisaac_state, m_videoram)
-	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(msisaac_bg2_videoram_w) AM_BASE_MEMBER(msisaac_state, m_videoram3)
-	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(msisaac_bg_videoram_w) AM_BASE_MEMBER(msisaac_state, m_videoram2)
+	AM_RANGE(0xf100, 0xf17f) AM_RAM AM_BASE(&spriteram)	//sprites
+	AM_RANGE(0xf400, 0xf7ff) AM_RAM_WRITE(msisaac_fg_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0xf800, 0xfbff) AM_RAM_WRITE(msisaac_bg2_videoram_w) AM_BASE(&msisaac_videoram2)
+	AM_RANGE(0xfc00, 0xffff) AM_RAM_WRITE(msisaac_bg_videoram_w) AM_BASE(&msisaac_videoram)
 //  AM_RANGE(0xf801, 0xf801) AM_WRITE(msisaac_bgcolor_w)
 //  AM_RANGE(0xfc00, 0xfc00) AM_WRITE(flip_screen_w)
 //  AM_RANGE(0xfc03, 0xfc04) AM_WRITE(msisaac_coin_counter_w)
 ADDRESS_MAP_END
 
+static int vol_ctrl[16];
+
 static MACHINE_RESET( ta7630 )
 {
-	msisaac_state *state = machine.driver_data<msisaac_state>();
 	int i;
 
 	double db			= 0.0;
@@ -225,8 +249,8 @@ static MACHINE_RESET( ta7630 )
 	for (i=0; i<16; i++)
 	{
 		double max = 100.0 / pow(10.0, db/20.0 );
-		state->m_vol_ctrl[15 - i] = max;
-		/*logerror("vol_ctrl[%x] = %i (%f dB)\n",15 - i, state->m_vol_ctrl[15 - i], db);*/
+		vol_ctrl[ 15-i ] = max;
+		/*logerror("vol_ctrl[%x] = %i (%f dB)\n",15-i,vol_ctrl[ 15-i ],db);*/
 		db += db_step;
 		db_step += db_step_inc;
 	}
@@ -240,31 +264,30 @@ static MACHINE_RESET( ta7630 )
 */
 }
 
+static UINT8 snd_ctrl0=0;
+static UINT8 snd_ctrl1=0;
+
 static WRITE8_DEVICE_HANDLER( sound_control_0_w )
 {
-	msisaac_state *state = device->machine().driver_data<msisaac_state>();
-	state->m_snd_ctrl0 = data & 0xff;
-	//popmessage("SND0 0=%2x 1=%2x", state->m_snd_ctrl0, state->m_snd_ctrl1);
+	snd_ctrl0 = data & 0xff;
+	//popmessage("SND0 0=%2x 1=%2x", snd_ctrl0, snd_ctrl1);
 
-	device_sound_interface *sound;
-	device->interface(sound);
-	sound->set_output_gain(0, state->m_vol_ctrl[state->m_snd_ctrl0 & 15] / 100.0);	/* group1 from msm5232 */
-	sound->set_output_gain(1, state->m_vol_ctrl[state->m_snd_ctrl0 & 15] / 100.0);	/* group1 from msm5232 */
-	sound->set_output_gain(2, state->m_vol_ctrl[state->m_snd_ctrl0 & 15] / 100.0);	/* group1 from msm5232 */
-	sound->set_output_gain(3, state->m_vol_ctrl[state->m_snd_ctrl0 & 15] / 100.0);	/* group1 from msm5232 */
-	sound->set_output_gain(4, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound->set_output_gain(5, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound->set_output_gain(6, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
-	sound->set_output_gain(7, state->m_vol_ctrl[(state->m_snd_ctrl0 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
+	sound_set_output_gain(device, 0, vol_ctrl[  snd_ctrl0     & 15 ] / 100.0);	/* group1 from msm5232 */
+	sound_set_output_gain(device, 1, vol_ctrl[  snd_ctrl0     & 15 ] / 100.0);	/* group1 from msm5232 */
+	sound_set_output_gain(device, 2, vol_ctrl[  snd_ctrl0     & 15 ] / 100.0);	/* group1 from msm5232 */
+	sound_set_output_gain(device, 3, vol_ctrl[  snd_ctrl0     & 15 ] / 100.0);	/* group1 from msm5232 */
+	sound_set_output_gain(device, 4, vol_ctrl[ (snd_ctrl0>>4) & 15 ] / 100.0);	/* group2 from msm5232 */
+	sound_set_output_gain(device, 5, vol_ctrl[ (snd_ctrl0>>4) & 15 ] / 100.0);	/* group2 from msm5232 */
+	sound_set_output_gain(device, 6, vol_ctrl[ (snd_ctrl0>>4) & 15 ] / 100.0);	/* group2 from msm5232 */
+	sound_set_output_gain(device, 7, vol_ctrl[ (snd_ctrl0>>4) & 15 ] / 100.0);	/* group2 from msm5232 */
 }
 static WRITE8_HANDLER( sound_control_1_w )
 {
-	msisaac_state *state = space->machine().driver_data<msisaac_state>();
-	state->m_snd_ctrl1 = data & 0xff;
-	//popmessage("SND1 0=%2x 1=%2x", state->m_snd_ctrl0, state->m_snd_ctrl1);
+	snd_ctrl1 = data & 0xff;
+	//popmessage("SND1 0=%2x 1=%2x", snd_ctrl0, snd_ctrl1);
 }
 
-static ADDRESS_MAP_START( msisaac_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( msisaac_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x47ff) AM_RAM
 	AM_RANGE(0x8000, 0x8001) AM_DEVWRITE("ay1", ay8910_address_data_w)
@@ -278,6 +301,22 @@ static ADDRESS_MAP_START( msisaac_sound_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xc003, 0xc003) AM_WRITENOP /*???*/ /* this is NOT mixer_enable */
 	AM_RANGE(0xe000, 0xffff) AM_READNOP /*space for diagnostic ROM (not dumped, not reachable) */
 ADDRESS_MAP_END
+
+#ifdef USE_MCU
+
+static ADDRESS_MAP_START( msisaac_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
+	AM_RANGE(0x0000, 0x0000) AM_READ(buggychl_68705_portA_r,buggychl_68705_portA_w)
+	AM_RANGE(0x0001, 0x0001) AM_READ(buggychl_68705_portB_r,buggychl_68705_portB_w)
+	AM_RANGE(0x0002, 0x0002) AM_READ(buggychl_68705_portC_r,buggychl_68705_portC_w)
+	AM_RANGE(0x0004, 0x0004) AM_WRITE(buggychl_68705_ddrA_w)
+	AM_RANGE(0x0005, 0x0005) AM_WRITE(buggychl_68705_ddrB_w)
+	AM_RANGE(0x0006, 0x0006) AM_WRITE(buggychl_68705_ddrC_w)
+	AM_RANGE(0x0010, 0x007f) AM_RAM
+	AM_RANGE(0x0080, 0x07ff) AM_ROM
+ADDRESS_MAP_END
+
+#endif
 
 static INPUT_PORTS_START( msisaac )
 	PORT_START("DSW1")
@@ -436,106 +475,61 @@ static const msm5232_interface msm5232_config =
 
 /*******************************************************************************/
 
-static MACHINE_START( msisaac )
-{
-	msisaac_state *state = machine.driver_data<msisaac_state>();
-
-	state->m_audiocpu = machine.device("audiocpu");
-
-	/* video */
-	state->save_item(NAME(state->m_bg2_textbank));
-	/* sound */
-	state->save_item(NAME(state->m_sound_nmi_enable));
-	state->save_item(NAME(state->m_pending_nmi));
-	state->save_item(NAME(state->m_vol_ctrl));
-	state->save_item(NAME(state->m_snd_ctrl0));
-	state->save_item(NAME(state->m_snd_ctrl1));
-
-#ifdef USE_MCU
-#else
-	state->save_item(NAME(state->m_mcu_val));
-	state->save_item(NAME(state->m_direction));
-#endif
-}
-
-static MACHINE_RESET( msisaac )
-{
-	msisaac_state *state = machine.driver_data<msisaac_state>();
-
-	MACHINE_RESET_CALL(ta7630);
-
-	/* video */
-	state->m_bg2_textbank = 0;
-	/* sound */
-	state->m_sound_nmi_enable = 0;
-	state->m_pending_nmi = 0;
-	state->m_snd_ctrl0 = 0;
-	state->m_snd_ctrl1 = 0;
-
-#ifdef USE_MCU
-	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
-#else
-	state->m_mcu_val = 0;
-	state->m_direction = 0;
-#endif
-}
-
-static MACHINE_CONFIG_START( msisaac, msisaac_state )
+static MACHINE_DRIVER_START( msisaac )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(msisaac_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(msisaac_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 4000000)
-	MCFG_CPU_PROGRAM_MAP(msisaac_sound_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)	/* source of IRQs is unknown */
+	MDRV_CPU_ADD("audiocpu", Z80, 4000000)
+	MDRV_CPU_PROGRAM_MAP(msisaac_sound_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* source of IRQs is unknown */
 
 #ifdef USE_MCU
-	MCFG_CPU_ADD("mcu", M68705,8000000/2)  /* 4 MHz */
-	MCFG_CPU_PROGRAM_MAP(buggychl_mcu_map)
-	MCFG_DEVICE_ADD("bmcu", BUGGYCHL_MCU, 0)
+	MDRV_CPU_ADD("mcu", M68705,8000000/2)  /* 4 MHz */
+	MDRV_CPU_PROGRAM_MAP(msisaac_mcu_map)
 #endif
 
-	MCFG_MACHINE_START(msisaac)
-	MCFG_MACHINE_RESET(msisaac)
+	MDRV_MACHINE_RESET(ta7630)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 1*8, 31*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(msisaac)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0, 32*8-1, 1*8, 31*8-1)
 
-	MCFG_GFXDECODE(msisaac)
-	MCFG_PALETTE_LENGTH(1024)
+	MDRV_GFXDECODE(msisaac)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_VIDEO_START(msisaac)
+	MDRV_VIDEO_START(msisaac)
+	MDRV_VIDEO_UPDATE(msisaac)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay1", AY8910, 2000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay1", AY8910, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 2000000)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MDRV_SOUND_ADD("ay2", AY8910, 2000000)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MCFG_SOUND_ADD("msm", MSM5232, 2000000)
-	MCFG_SOUND_CONFIG(msm5232_config)
-	MCFG_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
-	MCFG_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
-	MCFG_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
-	MCFG_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
-	MCFG_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
-	MCFG_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
-	MCFG_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
-	MCFG_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
+	MDRV_SOUND_ADD("msm", MSM5232, 2000000)
+	MDRV_SOUND_CONFIG(msm5232_config)
+	MDRV_SOUND_ROUTE(0, "mono", 1.0)	// pin 28  2'-1
+	MDRV_SOUND_ROUTE(1, "mono", 1.0)	// pin 29  4'-1
+	MDRV_SOUND_ROUTE(2, "mono", 1.0)	// pin 30  8'-1
+	MDRV_SOUND_ROUTE(3, "mono", 1.0)	// pin 31 16'-1
+	MDRV_SOUND_ROUTE(4, "mono", 1.0)	// pin 36  2'-2
+	MDRV_SOUND_ROUTE(5, "mono", 1.0)	// pin 35  4'-2
+	MDRV_SOUND_ROUTE(6, "mono", 1.0)	// pin 34  8'-2
+	MDRV_SOUND_ROUTE(7, "mono", 1.0)	// pin 33 16'-2
 	// pin 1 SOLO  8'       not mapped
 	// pin 2 SOLO 16'       not mapped
 	// pin 22 Noise Output  not mapped
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 
 /*******************************************************************************/
@@ -573,5 +567,4 @@ ROM_START( msisaac )
 
 ROM_END
 
-
-GAME( 1985, msisaac, 0,     msisaac, msisaac, 0, ROT270, "Taito Corporation", "Metal Soldier Isaac II", GAME_UNEMULATED_PROTECTION | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1985, msisaac, 0,        msisaac, msisaac, 0, ROT270, "Taito Corporation", "Metal Soldier Isaac II", GAME_UNEMULATED_PROTECTION | GAME_NO_COCKTAIL)

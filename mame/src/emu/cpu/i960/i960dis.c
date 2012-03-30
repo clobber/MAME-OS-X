@@ -4,7 +4,6 @@
     By Farfetch'd and R. Belmont
 */
 
-#include "emu.h"
 #include "i960.h"
 #include "i960dis.h"
 
@@ -145,7 +144,7 @@ static char *dis_decode_reg(unsigned long iCode, char* tmpStr,unsigned char cnt)
 		else		sprintf(src2,"%s,",regnames[SRC2]);
 	}
 	if(M3)		dst[0] = 0;
-	else			sprintf(dst,"%s,",regnames[DST]);
+	else 			sprintf(dst,"%s,",regnames[DST]);
 	if (cnt == 1)
 		sprintf(tmpStr,"%s%s",dst,src1);
 	else
@@ -158,7 +157,7 @@ static char *dis_decode_reg(unsigned long iCode, char* tmpStr,unsigned char cnt)
 static char *i960_disassemble(disassemble_t *diss)
 {
 	unsigned char op,op2;
-	unsigned char /*mode,*/ modeh, model;
+	unsigned char mode, modeh, model;
 	unsigned char dst,abase,reg2;
 	unsigned short opc;
 	unsigned long iCode;
@@ -171,7 +170,7 @@ static char *i960_disassemble(disassemble_t *diss)
 
 	model = (unsigned char) (iCode >> 10) &0x3;
 	modeh = (unsigned char) (iCode >> 12) &0x3;
-	//mode = (unsigned char) (iCode >> 10) &0x7;
+	mode = (unsigned char) (iCode >> 10) &0x7;
 	dst = (unsigned char) (iCode >> 19) &0x1f;
 	abase = (unsigned char) (iCode>>14)&0x1f;
 	reg2 = (unsigned char) (iCode)&0x1f;

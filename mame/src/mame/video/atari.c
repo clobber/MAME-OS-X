@@ -6,7 +6,7 @@
     Juergen Buchmueller, June 1998
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/atari.h"
 #include "video/gtia.h"
 
@@ -713,8 +713,6 @@ VIDEO_START( atari )
 	LOG(("atari antic_vh_start\n"));
     memset(&antic, 0, sizeof(antic));
 
-	antic.bitmap = auto_bitmap_ind16_alloc(machine, machine.primary_screen->width(), machine.primary_screen->height());
-
 	antic.renderer = antic_mode_0_xx;
 	antic.cclk_expand = auto_alloc_array(machine, UINT32, 21 * 256);
 
@@ -744,7 +742,7 @@ VIDEO_START( atari )
 
 	/* reset the ANTIC color tables */
 	for( i = 0; i < 256; i ++ )
-        antic.color_lookup[i] = (machine.pens[0] << 8) + machine.pens[0];
+        antic.color_lookup[i] = (machine->pens[0] << 8) + machine->pens[0];
 
 	LOG(("atari cclk_init\n"));
     cclk_init();
@@ -757,10 +755,12 @@ VIDEO_START( atari )
 	LOG(("atari prio_init\n"));
     prio_init();
 
-	for( i = 0; i < machine.primary_screen->height(); i++ )
+	for( i = 0; i < video_screen_get_height(machine->primary_screen); i++ )
     {
 		antic.video[i] = auto_alloc_clear(machine, VIDEO);
     }
+
+    VIDEO_START_CALL(generic_bitmapped);
 }
 
 /************************************************************************
@@ -768,13 +768,13 @@ VIDEO_START( atari )
  * Refresh screen bitmap.
  * Note: Actual drawing is done scanline wise during atari_interrupt
  ************************************************************************/
-SCREEN_UPDATE_IND16( atari )
+VIDEO_UPDATE( atari )
 {
 	UINT32 new_tv_artifacts;
 
-	copybitmap(bitmap, *antic.bitmap, 0, 0, 0, 0, cliprect);
+	VIDEO_UPDATE_CALL(generic_bitmapped);
 
-	new_tv_artifacts = input_port_read_safe(screen.machine(), "artifacts", 0);
+	new_tv_artifacts = input_port_read_safe(screen->machine, "artifacts", 0);
 	if( tv_artifacts != new_tv_artifacts )
 	{
 		tv_artifacts = new_tv_artifacts;
@@ -938,7 +938,7 @@ static void artifacts_txt(UINT8 * src, UINT8 * dst, int width)
 }
 
 
-static void antic_linerefresh(running_machine &machine)
+static void antic_linerefresh(running_machine *machine)
 {
 	int x, y;
 	UINT8 *src;
@@ -946,7 +946,7 @@ static void antic_linerefresh(running_machine &machine)
 	UINT32 scanline[4 + (HCHARS * 2) + 4];
 
 	/* increment the scanline */
-    if( ++antic.scanline == machine.primary_screen->height() )
+    if( ++antic.scanline == video_screen_get_height(machine->primary_screen) )
     {
         /* and return to the top if the frame was complete */
         antic.scanline = 0;
@@ -1043,20 +1043,20 @@ static void antic_linerefresh(running_machine &machine)
 	dst[2] = antic.color_lookup[PBK] | antic.color_lookup[PBK] << 16;
 	dst[3] = antic.color_lookup[PBK] | antic.color_lookup[PBK] << 16;
 
-	draw_scanline8(*antic.bitmap, 12, y, MIN(antic.bitmap->width() - 12, sizeof(scanline)), (const UINT8 *) scanline, NULL);
+	draw_scanline8(tmpbitmap, 12, y, MIN(tmpbitmap->width - 12, sizeof(scanline)), (const UINT8 *) scanline, NULL);
 }
 
-static int cycle(running_machine &machine)
+static int cycle(running_machine *machine)
 {
-	return machine.primary_screen->hpos() * CYCLES_PER_LINE / machine.primary_screen->width();
+	return video_screen_get_hpos(machine->primary_screen) * CYCLES_PER_LINE / video_screen_get_width(machine->primary_screen);
 }
 
-static void after(running_machine &machine, int cycles, timer_expired_func function, const char *funcname)
+static void after(running_machine *machine, int cycles, timer_fired_func function, const char *funcname)
 {
-    attotime duration = machine.primary_screen->scan_period() * cycles / CYCLES_PER_LINE;
+    attotime duration = attotime_make(0, attotime_to_attoseconds(video_screen_get_scan_period(machine->primary_screen)) * cycles / CYCLES_PER_LINE);
     (void)funcname;
-	LOG(("           after %3d (%5.1f us) %s\n", cycles, duration.as_double() * 1.0e6, funcname));
-	machine.scheduler().timer_set(duration, function, funcname);
+	LOG(("           after %3d (%5.1f us) %s\n", cycles, attotime_to_double(duration) * 1.0e6, funcname));
+	timer_set(machine, duration, NULL, 0, function);
 }
 
 static TIMER_CALLBACK( antic_issue_dli )
@@ -1134,13 +1134,13 @@ static TIMER_CALLBACK( antic_line_done )
     {
 		LOG(("           @cycle #%3d release WSYNC\n", cycle(machine)));
         /* release the CPU if it was actually waiting for HSYNC */
-        machine.scheduler().trigger(TRIGGER_HSYNC);
+        cpuexec_trigger(machine, TRIGGER_HSYNC);
         /* and turn off the 'wait for hsync' flag */
         antic.w.wsync = 0;
     }
 	LOG(("           @cycle #%3d release CPU\n", cycle(machine)));
     /* release the CPU (held for emulating cycles stolen by ANTIC DMA) */
-	machine.scheduler().trigger(TRIGGER_STEAL);
+	cpuexec_trigger(machine, TRIGGER_STEAL);
 
 	/* refresh the display (translate color clocks to pixels) */
     antic_linerefresh(machine);
@@ -1158,9 +1158,9 @@ static TIMER_CALLBACK( antic_line_done )
 static TIMER_CALLBACK( antic_steal_cycles )
 {
 	LOG(("           @cycle #%3d steal %d cycles\n", cycle(machine), antic.steal_cycles));
-	after(machine, antic.steal_cycles, FUNC(antic_line_done));
+	after(machine, antic.steal_cycles, antic_line_done, "antic_line_done");
     antic.steal_cycles = 0;
-	device_spin_until_trigger( machine.device("maincpu"), TRIGGER_STEAL );
+	cpu_spinuntil_trigger( cputag_get_cpu(machine, "maincpu"), TRIGGER_STEAL );
 }
 
 
@@ -1174,7 +1174,7 @@ static TIMER_CALLBACK( antic_steal_cycles )
  *****************************************************************************/
 static TIMER_CALLBACK( antic_scanline_render )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	VIDEO *video = antic.video[antic.scanline];
 	LOG(("           @cycle #%3d render mode $%X lines to go #%d\n", cycle(machine), (antic.cmd & 0x0f), antic.modelines));
@@ -1229,12 +1229,12 @@ static TIMER_CALLBACK( antic_scanline_render )
 
     antic.steal_cycles += CYCLES_REFRESH;
 	LOG(("           run CPU for %d cycles\n", CYCLES_HSYNC - CYCLES_HSTART - antic.steal_cycles));
-	after(machine, CYCLES_HSYNC - CYCLES_HSTART - antic.steal_cycles, FUNC(antic_steal_cycles));
+	after(machine, CYCLES_HSYNC - CYCLES_HSTART - antic.steal_cycles, antic_steal_cycles, "antic_steal_cycles");
 }
 
 
 
-INLINE void LMS(running_machine &machine, int new_cmd)
+INLINE void LMS(running_machine *machine, int new_cmd)
 {
     /**************************************************************
      * If the LMS bit (load memory scan) of the current display
@@ -1244,11 +1244,11 @@ INLINE void LMS(running_machine &machine, int new_cmd)
      **************************************************************/
     if( new_cmd & ANTIC_LMS )
     {
-    	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+    	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 		int addr = RDANTIC(space);
-        antic.doffs = (antic.doffs + 1) & DOFFS;
+        antic.doffs = ++antic.doffs & DOFFS;
         addr += 256 * RDANTIC(space);
-        antic.doffs = (antic.doffs + 1) & DOFFS;
+        antic.doffs = ++antic.doffs & DOFFS;
         antic.vpage = addr & VPAGE;
         antic.voffs = addr & VOFFS;
 		LOG(("           LMS $%04x\n", addr));
@@ -1267,9 +1267,9 @@ INLINE void LMS(running_machine &machine, int new_cmd)
  *  if so, read a new command and set up the renderer function
  *
  *****************************************************************************/
-static void antic_scanline_dma(running_machine &machine, int param)
+static void antic_scanline_dma(running_machine *machine, int param)
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+   	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	LOG(("           @cycle #%3d DMA fetch\n", cycle(machine)));
 	if (antic.scanline == VBL_END)
 		antic.r.nmist &= ~VBL_NMI;
@@ -1284,7 +1284,7 @@ static void antic_scanline_dma(running_machine &machine, int param)
 				UINT8 new_cmd;
 
 				new_cmd = RDANTIC(space);
-				antic.doffs = (antic.doffs + 1) & DOFFS;
+				antic.doffs = ++antic.doffs & DOFFS;
 				/* steal at one clock cycle from the CPU for fetching the command */
                 antic.steal_cycles += 1;
 				LOG(("           ANTIC CMD $%02x\n", new_cmd));
@@ -1341,26 +1341,26 @@ static void antic_scanline_dma(running_machine &machine, int param)
 					{
 						/* remove the DLI bit */
 						new_cmd &= ~ANTIC_DLI;
-						after(machine, CYCLES_DLI_NMI, FUNC(antic_issue_dli));
+						after(machine, CYCLES_DLI_NMI, antic_issue_dli, "antic_issue_dli");
 					}
 					/* load memory scan bit set ? */
 					if( new_cmd & ANTIC_LMS )
 					{
 						int addr = RDANTIC(space);
-                        antic.doffs = (antic.doffs + 1) & DOFFS;
+                        antic.doffs = ++antic.doffs & DOFFS;
                         addr += 256 * RDANTIC(space);
                         antic.dpage = addr & DPAGE;
                         antic.doffs = addr & DOFFS;
                         /* produce empty scanlines until vblank start */
 						antic.modelines = VBL_START + 1 - antic.scanline;
 						if( antic.modelines < 0 )
-							antic.modelines = machine.primary_screen->height() - antic.scanline;
+							antic.modelines = video_screen_get_height(machine->primary_screen) - antic.scanline;
 						LOG(("           JVB $%04x\n", antic.dpage|antic.doffs));
 					}
 					else
 					{
 						int addr = RDANTIC(space);
-                        antic.doffs = (antic.doffs + 1) & DOFFS;
+                        antic.doffs = ++antic.doffs & DOFFS;
                         addr += 256 * RDANTIC(space);
                         antic.dpage = addr & DPAGE;
                         antic.doffs = addr & DOFFS;
@@ -1473,9 +1473,9 @@ static void antic_scanline_dma(running_machine &machine, int param)
 
 	antic.r.nmist &= ~DLI_NMI;
 	if( antic.modelines == 1 && (antic.cmd & antic.w.nmien & DLI_NMI) )
-		after(machine, CYCLES_DLI_NMI, FUNC(antic_issue_dli));
+		after(machine, CYCLES_DLI_NMI, antic_issue_dli, "antic_issue_dli");
 
-	after(machine, CYCLES_HSTART, FUNC(antic_scanline_render));
+	after(machine, CYCLES_HSTART, antic_scanline_render, "antic_scanline_render");
 }
 
 /*****************************************************************************
@@ -1487,7 +1487,7 @@ static void antic_scanline_dma(running_machine &machine, int param)
  *
  *****************************************************************************/
 
-static void generic_atari_interrupt(running_machine &machine, void (*handle_keyboard)(running_machine &machine), int button_count)
+static void generic_atari_interrupt(running_machine *machine, void (*handle_keyboard)(running_machine *machine), int button_count)
 {
 	int button_port, i;
 
@@ -1521,7 +1521,7 @@ static void generic_atari_interrupt(running_machine &machine, void (*handle_keyb
 		handle_keyboard(machine);
 
 		/* do nothing new for the rest of the frame */
-		antic.modelines = machine.primary_screen->height() - VBL_START;
+		antic.modelines = video_screen_get_height(machine->primary_screen) - VBL_START;
 		antic.renderer = antic_mode_0_xx;
 
 		/* if the CPU want's to be interrupted at vertical blank... */
@@ -1540,124 +1540,22 @@ static void generic_atari_interrupt(running_machine &machine, void (*handle_keyb
 
 
 
-TIMER_DEVICE_CALLBACK( a400_interrupt )
+INTERRUPT_GEN( a400_interrupt )
 {
-	generic_atari_interrupt(timer.machine(), a800_handle_keyboard, 4);
+	generic_atari_interrupt(device->machine, a800_handle_keyboard, 4);
 }
 
-TIMER_DEVICE_CALLBACK( a800_interrupt )
+INTERRUPT_GEN( a800_interrupt )
 {
-	generic_atari_interrupt(timer.machine(), a800_handle_keyboard, 4);
+	generic_atari_interrupt(device->machine, a800_handle_keyboard, 4);
 }
 
-TIMER_DEVICE_CALLBACK( a800xl_interrupt )
+INTERRUPT_GEN( a800xl_interrupt )
 {
-	generic_atari_interrupt(timer.machine(), a800_handle_keyboard, 2);
+	generic_atari_interrupt(device->machine, a800_handle_keyboard, 2);
 }
 
-TIMER_DEVICE_CALLBACK( a5200_interrupt )
+INTERRUPT_GEN( a5200_interrupt )
 {
-	generic_atari_interrupt(timer.machine(), a5200_handle_keypads, 4);
-}
-
-/**************************************************************
- *
- * Palette
- *
- **************************************************************/
-
-static const UINT8 atari_palette[256*3] =
-{
-	/* Grey */
-    0x00,0x00,0x00, 0x25,0x25,0x25, 0x34,0x34,0x34, 0x4e,0x4e,0x4e,
-	0x68,0x68,0x68, 0x75,0x75,0x75, 0x8e,0x8e,0x8e, 0xa4,0xa4,0xa4,
-	0xb8,0xb8,0xb8, 0xc5,0xc5,0xc5, 0xd0,0xd0,0xd0, 0xd7,0xd7,0xd7,
-	0xe1,0xe1,0xe1, 0xea,0xea,0xea, 0xf4,0xf4,0xf4, 0xff,0xff,0xff,
-	/* Gold */
-    0x41,0x20,0x00, 0x54,0x28,0x00, 0x76,0x37,0x00, 0x9a,0x50,0x00,
-	0xc3,0x68,0x06, 0xe4,0x7b,0x07, 0xff,0x91,0x1a, 0xff,0xab,0x1d,
-	0xff,0xc5,0x1f, 0xff,0xd0,0x3b, 0xff,0xd8,0x4c, 0xff,0xe6,0x51,
-	0xff,0xf4,0x56, 0xff,0xf9,0x70, 0xff,0xff,0x90, 0xff,0xff,0xaa,
-	/* Orange */
-    0x45,0x19,0x04, 0x72,0x1e,0x11, 0x9f,0x24,0x1e, 0xb3,0x3a,0x20,
-	0xc8,0x51,0x20, 0xe3,0x69,0x20, 0xfc,0x81,0x20, 0xfd,0x8c,0x25,
-	0xfe,0x98,0x2c, 0xff,0xae,0x38, 0xff,0xb9,0x46, 0xff,0xbf,0x51,
-	0xff,0xc6,0x6d, 0xff,0xd5,0x87, 0xff,0xe4,0x98, 0xff,0xe6,0xab,
-	/* Red-Orange */
-    0x5d,0x1f,0x0c, 0x7a,0x24,0x0d, 0x98,0x2c,0x0e, 0xb0,0x2f,0x0f,
-	0xbf,0x36,0x24, 0xd3,0x4e,0x2a, 0xe7,0x62,0x3e, 0xf3,0x6e,0x4a,
-	0xfd,0x78,0x54, 0xff,0x8a,0x6a, 0xff,0x98,0x7c, 0xff,0xa4,0x8b,
-	0xff,0xb3,0x9e, 0xff,0xc2,0xb2, 0xff,0xd0,0xc3, 0xff,0xda,0xd0,
-	/* Pink */
-    0x4a,0x17,0x00, 0x72,0x1f,0x00, 0xa8,0x13,0x00, 0xc8,0x21,0x0a,
-	0xdf,0x25,0x12, 0xec,0x3b,0x24, 0xfa,0x52,0x36, 0xfc,0x61,0x48,
-	0xff,0x70,0x5f, 0xff,0x7e,0x7e, 0xff,0x8f,0x8f, 0xff,0x9d,0x9e,
-	0xff,0xab,0xad, 0xff,0xb9,0xbd, 0xff,0xc7,0xce, 0xff,0xca,0xde,
-	/* Purple */
-    0x49,0x00,0x36, 0x66,0x00,0x4b, 0x80,0x03,0x5f, 0x95,0x0f,0x74,
-	0xaa,0x22,0x88, 0xba,0x3d,0x99, 0xca,0x4d,0xa9, 0xd7,0x5a,0xb6,
-	0xe4,0x67,0xc3, 0xef,0x72,0xce, 0xfb,0x7e,0xda, 0xff,0x8d,0xe1,
-	0xff,0x9d,0xe5, 0xff,0xa5,0xe7, 0xff,0xaf,0xea, 0xff,0xb8,0xec,
-	/* Purple-Blue */
-    0x48,0x03,0x6c, 0x5c,0x04,0x88, 0x65,0x0d,0x90, 0x7b,0x23,0xa7,
-	0x93,0x3b,0xbf, 0x9d,0x45,0xc9, 0xa7,0x4f,0xd3, 0xb2,0x5a,0xde,
-	0xbd,0x65,0xe9, 0xc5,0x6d,0xf1, 0xce,0x76,0xfa, 0xd5,0x83,0xff,
-	0xda,0x90,0xff, 0xde,0x9c,0xff, 0xe2,0xa9,0xff, 0xe6,0xb6,0xff,
-	/* Blue 1 */
-    0x05,0x1e,0x81, 0x06,0x26,0xa5, 0x08,0x2f,0xca, 0x26,0x3d,0xd4,
-	0x44,0x4c,0xde, 0x4f,0x5a,0xec, 0x5a,0x68,0xff, 0x65,0x75,0xff,
-	0x71,0x83,0xff, 0x80,0x91,0xff, 0x90,0xa0,0xff, 0x97,0xa9,0xff,
-	0x9f,0xb2,0xff, 0xaf,0xbe,0xff, 0xc0,0xcb,0xff, 0xcd,0xd3,0xff,
-	/* Blue 2 */
-    0x0b,0x07,0x79, 0x20,0x1c,0x8e, 0x35,0x31,0xa3, 0x46,0x42,0xb4,
-	0x57,0x53,0xc5, 0x61,0x5d,0xcf, 0x6d,0x69,0xdb, 0x7b,0x77,0xe9,
-	0x89,0x85,0xf7, 0x91,0x8d,0xff, 0x9c,0x98,0xff, 0xa7,0xa4,0xff,
-	0xb2,0xaf,0xff, 0xbb,0xb8,0xff, 0xc3,0xc1,0xff, 0xd3,0xd1,0xff,
-	/* Light-Blue */
-    0x1d,0x29,0x5a, 0x1d,0x38,0x76, 0x1d,0x48,0x92, 0x1d,0x5c,0xac,
-	0x1d,0x71,0xc6, 0x32,0x86,0xcf, 0x48,0x9b,0xd9, 0x4e,0xa8,0xec,
-	0x55,0xb6,0xff, 0x69,0xca,0xff, 0x74,0xcb,0xff, 0x82,0xd3,0xff,
-	0x8d,0xda,0xff, 0x9f,0xd4,0xff, 0xb4,0xe2,0xff, 0xc0,0xeb,0xff,
-	/* Turquoise */
-    0x00,0x4b,0x59, 0x00,0x5d,0x6e, 0x00,0x6f,0x84, 0x00,0x84,0x9c,
-	0x00,0x99,0xbf, 0x00,0xab,0xca, 0x00,0xbc,0xde, 0x00,0xd0,0xf5,
-	0x10,0xdc,0xff, 0x3e,0xe1,0xff, 0x64,0xe7,0xff, 0x76,0xea,0xff,
-	0x8b,0xed,0xff, 0x9a,0xef,0xff, 0xb1,0xf3,0xff, 0xc7,0xf6,0xff,
-	/* Green-Blue */
-    0x00,0x48,0x00, 0x00,0x54,0x00, 0x03,0x6b,0x03, 0x0e,0x76,0x0e,
-	0x18,0x80,0x18, 0x27,0x92,0x27, 0x36,0xa4,0x36, 0x4e,0xb9,0x4e,
-	0x51,0xcd,0x51, 0x72,0xda,0x72, 0x7c,0xe4,0x7c, 0x85,0xed,0x85,
-	0x99,0xf2,0x99, 0xb3,0xf7,0xb3, 0xc3,0xf9,0xc3, 0xcd,0xfc,0xcd,
-	/* Green */
-    0x16,0x40,0x00, 0x1c,0x53,0x00, 0x23,0x66,0x00, 0x28,0x78,0x00,
-	0x2e,0x8c,0x00, 0x3a,0x98,0x0c, 0x47,0xa5,0x19, 0x51,0xaf,0x23,
-	0x5c,0xba,0x2e, 0x71,0xcf,0x43, 0x85,0xe3,0x57, 0x8d,0xeb,0x5f,
-	0x97,0xf5,0x69, 0xa0,0xfe,0x72, 0xb1,0xff,0x8a, 0xbc,0xff,0x9a,
-	/* Yellow-Green */
-    0x2c,0x35,0x00, 0x38,0x44,0x00, 0x44,0x52,0x00, 0x49,0x56,0x00,
-	0x60,0x71,0x00, 0x6c,0x7f,0x00, 0x79,0x8d,0x0a, 0x8b,0x9f,0x1c,
-	0x9e,0xb2,0x2f, 0xab,0xbf,0x3c, 0xb8,0xcc,0x49, 0xc2,0xd6,0x53,
-	0xcd,0xe1,0x53, 0xdb,0xef,0x6c, 0xe8,0xfc,0x79, 0xf2,0xff,0xab,
-	/* Orange-Green */
-    0x46,0x3a,0x09, 0x4d,0x3f,0x09, 0x54,0x45,0x09, 0x6c,0x58,0x09,
-	0x90,0x76,0x09, 0xab,0x8b,0x0a, 0xc1,0xa1,0x20, 0xd0,0xb0,0x2f,
-	0xde,0xbe,0x3d, 0xe6,0xc6,0x45, 0xed,0xcd,0x4c, 0xf5,0xd8,0x62,
-	0xfb,0xe2,0x76, 0xfc,0xee,0x98, 0xfd,0xf3,0xa9, 0xfd,0xf3,0xbe,
-	/* Light-Orange */
-    0x40,0x1a,0x02, 0x58,0x1f,0x05, 0x70,0x24,0x08, 0x8d,0x3a,0x13,
-	0xab,0x51,0x1f, 0xb5,0x64,0x27, 0xbf,0x77,0x30, 0xd0,0x85,0x3a,
-	0xe1,0x93,0x44, 0xed,0xa0,0x4e, 0xf9,0xad,0x58, 0xfc,0xb7,0x5c,
-	0xff,0xc1,0x60, 0xff,0xca,0x69, 0xff,0xcf,0x7e, 0xff,0xda,0x96
-};
-
-
-/* Initialise the palette */
-PALETTE_INIT( atari )
-{
-	int i;
-
-	for ( i = 0; i < sizeof(atari_palette) / 3; i++ )
-	{
-		palette_set_color_rgb(machine, i, atari_palette[i*3], atari_palette[i*3+1], atari_palette[i*3+2]);
-	}
+	generic_atari_interrupt(device->machine, a5200_handle_keypads, 4);
 }

@@ -32,7 +32,7 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "machine/pd4990a.h"
 
 
@@ -82,11 +82,12 @@ struct _upd4990a_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE upd4990a_state *get_safe_token(device_t *device)
+INLINE upd4990a_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert((device->type() == UPD4990A));
-	return (upd4990a_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert((device->type == UPD4990A));
+	return (upd4990a_state *)device->token;
 }
 
 INLINE UINT8 convert_to_bcd(int val)
@@ -103,7 +104,7 @@ INLINE UINT8 convert_to_bcd(int val)
     upd4990a_increment_month
 -------------------------------------------------*/
 
-static void upd4990a_increment_month( device_t *device )
+static void upd4990a_increment_month( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -126,7 +127,7 @@ static void upd4990a_increment_month( device_t *device )
     upd4990a_increment_day
 -------------------------------------------------*/
 
-static void upd4990a_increment_day( device_t *device )
+static void upd4990a_increment_day( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 	int real_year;
@@ -184,7 +185,7 @@ static void upd4990a_increment_day( device_t *device )
     upd4990a_addretrace
 -------------------------------------------------*/
 
-void upd4990a_addretrace( device_t *device )
+void upd4990a_addretrace( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -257,7 +258,7 @@ READ8_DEVICE_HANDLER( upd4990a_databit_r )
     upd4990a_readbit
 -------------------------------------------------*/
 
-static void upd4990a_readbit( device_t *device )
+static void upd4990a_readbit( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -299,7 +300,7 @@ static void upd4990a_readbit( device_t *device )
     upd4990a_resetbitstream
 -------------------------------------------------*/
 
-static void upd4990a_resetbitstream( device_t *device )
+static void upd4990a_resetbitstream( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -312,7 +313,7 @@ static void upd4990a_resetbitstream( device_t *device )
     upd4990a_writebit
 -------------------------------------------------*/
 
-static void upd4990a_writebit( device_t *device , UINT8 bit )
+static void upd4990a_writebit( const device_config *device , UINT8 bit )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 	if (upd4990a->bitno <= 31)	//low part
@@ -325,7 +326,7 @@ static void upd4990a_writebit( device_t *device , UINT8 bit )
     upd4990a_nextbit
 -------------------------------------------------*/
 
-static void upd4990a_nextbit( device_t *device )
+static void upd4990a_nextbit( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 	++upd4990a->bitno;
@@ -345,7 +346,7 @@ static void upd4990a_nextbit( device_t *device )
     upd4990a_getcommand
 -------------------------------------------------*/
 
-static UINT8 upd4990a_getcommand( device_t *device )
+static UINT8 upd4990a_getcommand( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 	//Warning: problems if the 4 bits are in different
@@ -360,7 +361,7 @@ static UINT8 upd4990a_getcommand( device_t *device )
     upd4990a_update_date
 -------------------------------------------------*/
 
-static void upd4990a_update_date( device_t *device )
+static void upd4990a_update_date( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -377,7 +378,7 @@ static void upd4990a_update_date( device_t *device )
     upd4990a_process_command
 -------------------------------------------------*/
 
-static void upd4990a_process_command( device_t *device )
+static void upd4990a_process_command( const device_config *device )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -411,7 +412,7 @@ static void upd4990a_process_command( device_t *device )
     upd4990a_serial_control
 -------------------------------------------------*/
 
-static void upd4990a_serial_control( device_t *device, UINT8 data )
+static void upd4990a_serial_control( const device_config *device, UINT8 data )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
@@ -448,8 +449,8 @@ static DEVICE_START( upd4990a )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
-	system_time curtime, *systime = &curtime;
-	device->machine().current_datetime(curtime);
+	mame_system_time curtime, *systime = &curtime;
+	mame_get_current_datetime(device->machine, &curtime);
 
 #if 0
 	upd4990a->seconds = 0x00;
@@ -470,29 +471,29 @@ static DEVICE_START( upd4990a )
 	upd4990a->weekday = systime->local_time.weekday;
 
 	/* register for state saving */
-	device->save_item(NAME(upd4990a->seconds));
-	device->save_item(NAME(upd4990a->minutes));
-	device->save_item(NAME(upd4990a->hours));
-	device->save_item(NAME(upd4990a->days));
-	device->save_item(NAME(upd4990a->month));
-	device->save_item(NAME(upd4990a->year));
-	device->save_item(NAME(upd4990a->weekday));
+	state_save_register_device_item(device, 0, upd4990a->seconds);
+	state_save_register_device_item(device, 0, upd4990a->minutes);
+	state_save_register_device_item(device, 0, upd4990a->hours);
+	state_save_register_device_item(device, 0, upd4990a->days);
+	state_save_register_device_item(device, 0, upd4990a->month);
+	state_save_register_device_item(device, 0, upd4990a->year);
+	state_save_register_device_item(device, 0, upd4990a->weekday);
 
-	device->save_item(NAME(upd4990a->shiftlo));
-	device->save_item(NAME(upd4990a->shifthi));
+	state_save_register_device_item(device, 0, upd4990a->shiftlo);
+	state_save_register_device_item(device, 0, upd4990a->shifthi);
 
-	device->save_item(NAME(upd4990a->retraces));
-	device->save_item(NAME(upd4990a->testwaits));
-	device->save_item(NAME(upd4990a->maxwaits));
-	device->save_item(NAME(upd4990a->testbit));
+	state_save_register_device_item(device, 0, upd4990a->retraces);
+	state_save_register_device_item(device, 0, upd4990a->testwaits);
+	state_save_register_device_item(device, 0, upd4990a->maxwaits);
+	state_save_register_device_item(device, 0, upd4990a->testbit);
 
-	device->save_item(NAME(upd4990a->outputbit));
-	device->save_item(NAME(upd4990a->bitno));
-	device->save_item(NAME(upd4990a->reading));
-	device->save_item(NAME(upd4990a->writing));
+	state_save_register_device_item(device, 0, upd4990a->outputbit);
+	state_save_register_device_item(device, 0, upd4990a->bitno);
+	state_save_register_device_item(device, 0, upd4990a->reading);
+	state_save_register_device_item(device, 0, upd4990a->writing);
 
-	device->save_item(NAME(upd4990a->clock_line));
-	device->save_item(NAME(upd4990a->command_line));
+	state_save_register_device_item(device, 0, upd4990a->clock_line);
+	state_save_register_device_item(device, 0, upd4990a->command_line);
 }
 
 
@@ -531,7 +532,5 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"NEC uPD4990A"
 #define DEVTEMPLATE_FAMILY		"NEC uPD4990A Calendar & Clock"
+#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
 #include "devtempl.h"
-
-
-DEFINE_LEGACY_DEVICE(UPD4990A, upd4990a);

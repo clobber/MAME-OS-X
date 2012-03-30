@@ -1,91 +1,75 @@
-/* Clarue Flower sound driver.
-Initial version was based on the Wiping sound driver, which was based on the old namco.c sound driver.
+/***************************************************************************
 
-TODO:
-- timing (see main driver file), but also of samplerate and effects counter
-- what do the unknown bits in soundregs do?
-- Are channel effects correct? It's currently mostly guesswork, the pitch effects sound pretty convincing though.
-  Considering that the game sound hardware isn't complicated (no dedicated soundchip) these bits are possibly
-  for something way simpler, such as a length counter. PCB sound recordings would be useful!
+    Flower sound driver (quick hack of the Wiping sound driver)
 
-*/
+***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "streams.h"
 #include "includes/flower.h"
 
-#define FLOWER_VERBOSE		0		// show register writes
 
-#define MIXER_SAMPLERATE	48000	/* ? (native freq is probably in the MHz range) */
-#define MIXER_DEFGAIN		48
+/* 8 voices max */
+#define MAX_VOICES 8
+
+
+static const int samplerate = 48000;
+static const int defgain = 48;
 
 
 /* this structure defines the parameters for a channel */
 typedef struct
 {
-	UINT32 start;
-	UINT32 pos;
-	UINT16 freq;
-	UINT8 volume;
-	UINT8 voltab;
+	UINT32 frequency;
+	UINT32 counter;
+	UINT16 volume;
 	UINT8 oneshot;
-	UINT8 active;
-	UINT8 effect;
-	UINT32 ecount;
+	UINT8 oneshotplaying;
+	UINT16 rom_offset;
 
 } sound_channel;
 
 
-typedef struct _flower_sound_state flower_sound_state;
-struct _flower_sound_state
-{
-	emu_timer *m_effect_timer;
+/* globals available to everyone */
+UINT8 *flower_soundregs1,*flower_soundregs2;
 
-	/* data about the sound system */
-	sound_channel m_channel_list[8];
-	sound_channel *m_last_channel;
+/* data about the sound system */
+static sound_channel channel_list[MAX_VOICES];
+static sound_channel *last_channel;
 
-	/* global sound parameters */
-	const UINT8 *m_sample_rom;
-	const UINT8 *m_volume_rom;
-	sound_stream * m_stream;
+/* global sound parameters */
+static const UINT8 *sound_rom1, *sound_rom2;
+static UINT8 num_voices;
+static UINT8 sound_enable;
+static sound_stream * stream;
 
-	/* mixer tables and internal buffers */
-	INT16 *m_mixer_table;
-	INT16 *m_mixer_lookup;
-	short *m_mixer_buffer;
+/* mixer tables and internal buffers */
+static INT16 *mixer_table;
+static INT16 *mixer_lookup;
+static short *mixer_buffer;
+static short *mixer_buffer_2;
 
-	UINT8 m_soundregs1[0x40];
-	UINT8 m_soundregs2[0x40];
-};
 
-INLINE flower_sound_state *get_safe_token( device_t *device )
-{
-	assert(device != NULL);
-	assert(device->type() == FLOWER);
-
-	return (flower_sound_state *)downcast<legacy_device_base *>(device)->token();
-}
 
 /* build a table to divide by the number of voices; gain is specified as gain*16 */
-static void make_mixer_table(device_t *device, int voices, int gain)
+static void make_mixer_table(running_machine *machine, int voices, int gain)
 {
-	flower_sound_state *state = get_safe_token(device);
 	int count = voices * 128;
 	int i;
 
 	/* allocate memory */
-	state->m_mixer_table = auto_alloc_array(device->machine(), INT16, 256 * voices);
+	mixer_table = auto_alloc_array(machine, INT16, 256 * voices);
 
 	/* find the middle of the table */
-	state->m_mixer_lookup = state->m_mixer_table + (128 * voices);
+	mixer_lookup = mixer_table + (128 * voices);
 
 	/* fill in the table - 16 bit case */
 	for (i = 0; i < count; i++)
 	{
 		int val = i * gain * 16 / voices;
 		if (val > 32767) val = 32767;
-		state->m_mixer_lookup[ i] = val;
-		state->m_mixer_lookup[-i] =-val;
+		mixer_lookup[ i] = val;
+		mixer_lookup[-i] = -val;
 	}
 }
 
@@ -93,285 +77,234 @@ static void make_mixer_table(device_t *device, int voices, int gain)
 /* generate sound to the mix buffer in mono */
 static STREAM_UPDATE( flower_update_mono )
 {
-	flower_sound_state *state = get_safe_token(device);
 	stream_sample_t *buffer = outputs[0];
 	sound_channel *voice;
 	short *mix;
 	int i;
 
+	/* if no sound, we're done */
+	if (sound_enable == 0)
+	{
+		memset(buffer, 0, samples * sizeof(*buffer));
+		return;
+	}
+
 	/* zap the contents of the mixer buffer */
-	memset(state->m_mixer_buffer, 0, samples * sizeof(short));
+	memset(mixer_buffer, 0, samples * sizeof(short));
 
 	/* loop over each voice and add its contribution */
-	for (voice = state->m_channel_list; voice < state->m_last_channel; voice++)
+	for (voice = channel_list; voice < last_channel; voice++)
 	{
-		int f = voice->freq;
+		int f = 256*voice->frequency;
 		int v = voice->volume;
 
-		if (!voice->active)
-			continue;
-
-		// effects
-		// bit 0: volume slide down?
-		if (voice->effect & 1 && !voice->oneshot)
+		/* only update if we have non-zero volume and frequency */
+		if (v && f)
 		{
-			// note: one-shot samples are fixed volume
-			v -= (voice->ecount >> 4);
-			if (v < 0) v = 0;
-		}
-		// bit 1: used often, but hard to figure out what for
-		// bit 2: probably pitch slide
-		if (voice->effect & 4)
-		{
-			f -= (voice->ecount << 7);
-			if (f < 0) f = 0;
-		}
-		// bit 3: not used much, maybe pitch slide the other way?
+			const UINT8 *w = &sound_rom1[voice->rom_offset];
+			int c = voice->counter;
 
-		v |= voice->voltab;
-		mix = state->m_mixer_buffer;
+			mix = mixer_buffer;
 
-		for (i = 0; i < samples; i++)
-		{
-			// add sample
-			if (voice->oneshot)
+			/* add our contribution */
+			for (i = 0; i < samples; i++)
 			{
-				UINT8 sample = state->m_sample_rom[(voice->start + voice->pos) >> 7 & 0x7fff];
-				if (sample == 0xff)
+				int offs;
+
+				c += f;
+
+				if (voice->oneshot)
 				{
-					voice->active = 0;
-					break;
+					if (voice->oneshotplaying)
+					{
+						offs = (c >> 15);
+						if (w[offs] == 0xff)
+						{
+							voice->oneshotplaying = 0;
+						}
+
+						if (voice->oneshotplaying)
+						{
+//                          *mix++ += ((w[offs] - 0x80) * v) / 16;
+							*mix++ += sound_rom2[v*256 + w[offs]] - 0x80;
+						}
+					}
 				}
 				else
-					*mix++ += state->m_volume_rom[v << 8 | sample] - 0x80;
-			}
-			else
-			{
-				UINT8 sample = state->m_sample_rom[(voice->start >> 7 & 0x7e00) | (voice->pos >> 7 & 0x1ff)];
-				*mix++ += state->m_volume_rom[v << 8 | sample] - 0x80;
+				{
+					offs = (c >> 15) & 0x1ff;
+
+//                  *mix++ += ((w[offs] - 0x80) * v) / 16;
+					*mix++ += sound_rom2[v*256 + w[offs]] - 0x80;
+				}
 			}
 
-			// update counter
-			voice->pos += f;
+			/* update the counter for this voice */
+			voice->counter = c;
 		}
 	}
 
 	/* mix it down */
-	mix = state->m_mixer_buffer;
+	mix = mixer_buffer;
 	for (i = 0; i < samples; i++)
-		*buffer++ = state->m_mixer_lookup[*mix++];
-}
-
-/* clock sound channel effect counters */
-static TIMER_CALLBACK( flower_clock_effect )
-{
-	flower_sound_state *state = (flower_sound_state *)ptr;
-	sound_channel *voice;
-	state->m_stream->update();
-
-	for (voice = state->m_channel_list; voice < state->m_last_channel; voice++)
-		voice->ecount += (voice->ecount < (1<<22));
+		*buffer++ = mixer_lookup[*mix++];
 }
 
 
 
 static DEVICE_START( flower_sound )
 {
-	flower_sound_state *state = get_safe_token(device);
-	running_machine &machine = device->machine();
+	running_machine *machine = device->machine;
 	sound_channel *voice;
 	int i;
 
-	state->m_effect_timer = machine.scheduler().timer_alloc(FUNC(flower_clock_effect), state);
-	state->m_stream = device->machine().sound().stream_alloc(*device, 0, 1, MIXER_SAMPLERATE, 0, flower_update_mono);
-	state->m_mixer_buffer = auto_alloc_array(device->machine(), short, MIXER_SAMPLERATE);
-	make_mixer_table(device, 8, MIXER_DEFGAIN);
+	/* get stream channels */
+	stream = stream_create(device, 0, 1, samplerate, 0, flower_update_mono);
+
+	/* allocate a pair of buffers to mix into - 1 second's worth should be more than enough */
+	mixer_buffer = auto_alloc_array(device->machine, short, 2 * samplerate);
+	mixer_buffer_2 = mixer_buffer + samplerate;
+
+	/* build the mixer table */
+	make_mixer_table(machine, 8, defgain);
 
 	/* extract globals from the interface */
-	state->m_last_channel = state->m_channel_list + 8;
+	num_voices = 8;
+	last_channel = channel_list + num_voices;
 
-	state->m_sample_rom = machine.region("sound1")->base();
-	state->m_volume_rom = machine.region("sound2")->base();
+	sound_rom1 = memory_region(machine, "sound1");
+	sound_rom2 = memory_region(machine, "sound2");
 
-	/* register for savestates */
-	for (i = 0; i < 8; i++)
-	{
-		voice = &state->m_channel_list[i];
+	/* start with sound enabled, many games don't have a sound enable register */
+	sound_enable = 1;
 
-		device->save_item(NAME(voice->freq), i+1);
-		device->save_item(NAME(voice->pos), i+1);
-		device->save_item(NAME(voice->volume), i+1);
-		device->save_item(NAME(voice->voltab), i+1);
-		device->save_item(NAME(voice->effect), i+1);
-		device->save_item(NAME(voice->ecount), i+1);
-		device->save_item(NAME(voice->oneshot), i+1);
-		device->save_item(NAME(voice->active), i+1);
-		device->save_item(NAME(voice->start), i+1);
-	}
-}
-
-static DEVICE_RESET( flower_sound )
-{
-	flower_sound_state *state = get_safe_token(device);
-	sound_channel *voice;
-	attotime period;
-	int i;
-
-	/* reset effect timer, period is unknown/guessed */
-	period = attotime::from_hz(MIXER_SAMPLERATE / 256);
-	state->m_effect_timer->adjust(period, 0, period);
+	/* save globals */
+	state_save_register_item(machine, "flower_custom", NULL, 0, num_voices);
+	state_save_register_item(machine, "flower_custom", NULL, 0, sound_enable);
 
 	/* reset all the voices */
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < num_voices; i++)
 	{
-		voice = &state->m_channel_list[i];
+		voice = &channel_list[i];
 
-		voice->freq = 0;
-		voice->pos = 0;
+		voice->frequency = 0;
 		voice->volume = 0;
-		voice->voltab = 0;
-		voice->effect = 0;
-		voice->ecount = 0;
-		voice->oneshot = 1;
-		voice->active = 0;
-		voice->start = 0;
+		voice->counter = 0;
+		voice->rom_offset = 0;
+
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->frequency);
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->counter);
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->volume);
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->oneshot);
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->oneshotplaying);
+		state_save_register_item(machine, "flower_custom", NULL, i+1, voice->rom_offset);
 	}
 }
+
 
 DEVICE_GET_INFO( flower_sound )
 {
 	switch (state)
 	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(flower_sound_state);			break;
-
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(flower_sound);	break;
-		case DEVINFO_FCT_RESET:							info->start = DEVICE_RESET_NAME(flower_sound);	break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "Flower Custom");				break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);						break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
+		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
 	}
 }
 
 
 /********************************************************************************/
 
-#if FLOWER_VERBOSE
-static int r_numwrites[2][8] = {{0,0,0,0,0,0,0,0},{0,0,0,0,0,0,0,0}};
-static void show_soundregs(device_t *device)
+WRITE8_HANDLER( flower_sound1_w )
 {
-	flower_sound_state *state = get_safe_token(device);
-	int set,reg,chan;
-	char text[0x100];
-	char message[0x1000] = {0};
-	UINT8 *base = state->m_soundregs1;
+	sound_channel *voice;
+	int base;
 
-	for (set=0;set<2;set++)
+	/* update the streams */
+	stream_update(stream);
+
+	/* set the register */
+	flower_soundregs1[offset] = data;
+
+	/* recompute all the voice parameters */
+	for (base = 0, voice = channel_list; voice < last_channel; voice++, base += 8)
 	{
-		for (reg=0;reg<8;reg++)
+		voice->frequency = flower_soundregs1[2 + base] & 0x0f;
+		voice->frequency = voice->frequency * 16 + ((flower_soundregs1[3 + base]) & 0x0f);
+		voice->frequency = voice->frequency * 16 + ((flower_soundregs1[0 + base]) & 0x0f);
+		voice->frequency = voice->frequency * 16 + ((flower_soundregs1[1 + base]) & 0x0f);
+
+		voice->volume = (flower_soundregs1[7 + base] >> 4) | ((flower_soundregs2[7 + base] & 0x03) << 4);
+// the following would fix the hanging notes...
+//if ((flower_soundregs2[7 + base] & 0x01) == 0)
+//  voice->volume = 0;
+
+		if (flower_soundregs1[4 + base] & 0x10)
 		{
-			sprintf(text,"R%d%d:",set+1,reg);
-			strcat(message,text);
-
-			for (chan=0;chan<8;chan++)
-			{
-				sprintf(text," %02X",base[reg + 8*chan]);
-				strcat(message,text);
-			}
-			sprintf(text," - %07d\n",r_numwrites[set][reg]);
-			strcat(message,text);
+			voice->oneshot = 0;
+			voice->oneshotplaying = 0;
 		}
-		strcat(message,"\n");
-		base = state->m_soundregs2;
+		else
+		{
+			voice->oneshot = 1;
+		}
 	}
-	popmessage("%s",message);
 }
-#endif // FLOWER_VERBOSE
 
+WRITE8_HANDLER( flower_sound2_w )
+{
+	sound_channel *voice;
+	int base = offset & 0xf8;
 
-/* register functions (preliminary):
-offset: cccrrr      c=channel, r=register
-
-set 1:
-R  76543210
-0  xxxxxxxx         frequency (which nibble?)
-1  xxxxxxxx         *
-2  xxxxxxxx         *
-3  xxxxxxxx         *
-4  ...x....         one-shot sample
-5  ...x....         ??? same as R4?
-6  ........         unused
-7  xxxx....         volume
-
-set 2:
-R  76543210
-0  ....xxxx         start address
-1  ....xxxx         *
-2  ....xxxx         *
-3  ....xxxx         *
-4  xxxx             assume it's channel pitch/volume effects
-       xxxx         start address
-5  x...             ???
-       xxxx         start address
-6  ........         unused
-7  ......xx         volume table + start trigger
-
+/*
+popmessage("%02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x %02x%02x",
+        flower_soundregs2[7 + 8*0],flower_soundregs1[7 + 8*0],
+        flower_soundregs2[7 + 8*1],flower_soundregs1[7 + 8*1],
+        flower_soundregs2[7 + 8*2],flower_soundregs1[7 + 8*2],
+        flower_soundregs2[7 + 8*3],flower_soundregs1[7 + 8*3],
+        flower_soundregs2[7 + 8*4],flower_soundregs1[7 + 8*4],
+        flower_soundregs2[7 + 8*5],flower_soundregs1[7 + 8*5],
+        flower_soundregs2[7 + 8*6],flower_soundregs1[7 + 8*6],
+        flower_soundregs2[7 + 8*7],flower_soundregs1[7 + 8*7]
+    );
 */
 
-WRITE8_DEVICE_HANDLER( flower_sound1_w )
-{
-	flower_sound_state *state = get_safe_token(device);
-	sound_channel *voice = &state->m_channel_list[offset >> 3 & 7];
-	int c = offset & 0xf8;
-	UINT8 *base1 = state->m_soundregs1;
-//  UINT8 *base2 = state->m_soundregs2;
+	/* update the streams */
+	stream_update(stream);
 
-	state->m_stream->update();
-	base1[offset] = data;
-#if FLOWER_VERBOSE
-	r_numwrites[0][offset & 7]++;
-	show_soundregs(device);
-#endif
+	/* set the register */
+	flower_soundregs2[offset] = data;
 
-	// recompute voice parameters
-	voice->freq = (base1[c+2] & 0xf) << 12 | (base1[c+3] & 0xf) << 8 | (base1[c+0] & 0xf) << 4 | (base1[c+1] & 0xf);
-	voice->volume = base1[c+7] >> 4;
+	/* recompute all the voice parameters */
+	voice = &channel_list[offset/8];
+	if (voice->oneshot)
+	{
+		int start;
+
+		start = flower_soundregs2[5 + base] & 0x0f;
+		start = start * 16 + ((flower_soundregs2[4 + base]) & 0x0f);
+		start = start * 16 + ((flower_soundregs2[3 + base]) & 0x0f);
+		start = start * 16 + ((flower_soundregs2[2 + base]) & 0x0f);
+		start = start * 16 + ((flower_soundregs2[1 + base]) & 0x0f);
+		start = start * 16 + ((flower_soundregs2[0 + base]) & 0x0f);
+
+		voice->rom_offset = (start >> 7) & 0x7fff;
+
+		voice->counter = 0;
+		voice->oneshotplaying = 1;
+	}
+	else
+	{
+		int start;
+
+		start = flower_soundregs2[5 + base] & 0x0f;
+		start = start * 16 + ((flower_soundregs2[4 + base]) & 0x0f);
+
+		voice->rom_offset = (start << 9) & 0x7fff;	// ???
+		voice->oneshot = 0;
+		voice->oneshotplaying = 0;
+	}
 }
-
-WRITE8_DEVICE_HANDLER( flower_sound2_w )
-{
-	flower_sound_state *state = get_safe_token(device);
-	sound_channel *voice = &state->m_channel_list[offset >> 3 & 7];
-	int i, c = offset & 0xf8;
-	UINT8 *base1 = state->m_soundregs1;
-	UINT8 *base2 = state->m_soundregs2;
-
-	state->m_stream->update();
-	base2[offset] = data;
-#if FLOWER_VERBOSE
-	r_numwrites[1][offset & 7]++;
-	show_soundregs(device);
-#endif
-
-	// reg 7 is start trigger!
-	if ((offset & 7) != 7)
-		return;
-
-	voice->voltab = (base2[c+7] & 3) << 4;
-	voice->oneshot = (~base1[c+4] & 0x10) >> 4;
-	voice->effect = base2[c+4] >> 4;
-	voice->ecount = 0;
-	voice->pos = 0;
-	voice->active = 1;
-
-	// full start address is 6 nibbles
-	voice->start = 0;
-	for (i = 5; i >= 0; i--)
-		voice->start = (voice->start << 4) | (base2[c+i] & 0xf);
-}
-
-
-DEFINE_LEGACY_SOUND_DEVICE(FLOWER, flower_sound);

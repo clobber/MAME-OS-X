@@ -1,10 +1,10 @@
 
 /*****************************************************************************
 
-    Irem Custom V35 Software Guard CPU
+    Irem Custom V35+ CPU
     -- has internal 256 byte lookup table, handled in realtime.  Bomberman
-    World runs encrypted code from RAM, Risky Challenge and QuizF1 expects
-    to be able to run code in emulation (non-encrypted) mode for some subroutines..
+    World runs encrypted code from RAM,  Risky Challenge expects to be able
+    to run code in emulation (non-encrypted) mode for some subroutines..
 
     Hasamu                             Nanao   08J27261A1 011 9102KK700
     Gunforce                           Nanao   08J27261A1 011 9106KK701
@@ -39,7 +39,7 @@
 
 
 
-#include "emu.h"
+#include "driver.h"
 #include "irem_cpu.h"
 
 
@@ -51,9 +51,8 @@
 
 //double check 0x00 0x22 0x28 0x4a 0x34 in these tables
 
-#define xxxx 0x90 /* Unknown */
+#define xxxx 0x90/* Unknown */
 
-// gunforce, kengo, hasamu
 const UINT8 gunforce_decryption_table[256] = {
 	0xff,xxxx,xxxx,0x2c,xxxx,xxxx,0x43,0x88, xxxx,0x13,0x0a,0xbd,0xba,0x60,0xea,xxxx, /* 00 */
 	xxxx,xxxx,0xf2,0x29,0xb3,0x22,xxxx,0x0c, 0xa9,0x5f,0x9d,0x07,xxxx,xxxx,0x0b,0xbb, /* 10 */
@@ -88,7 +87,6 @@ const UINT8 gunforce_decryption_table[256] = {
 
 // 0x00 is NOT 0x20 (no context in bomberman)
 
-// bmaster, bomberman
 const UINT8 bomberman_decryption_table[256] = {
 	xxxx,xxxx,0x79,xxxx,0x9d,0x48,xxxx,xxxx, xxxx,xxxx,0x2e,xxxx,xxxx,0xa5,0x72,xxxx, /* 00 */
 	0x46,0x5b,0xb1,0x3a,0xc3,xxxx,0x35,xxxx, xxxx,0x23,xxxx,0x99,xxxx,0x05,xxxx,0x3c, /* 10 */
@@ -109,22 +107,21 @@ const UINT8 bomberman_decryption_table[256] = {
 };
 // 49 -> 4a (verified in a bombrman PCB)
 
-// lethalth, gunforc2, quizf1
 const UINT8 lethalth_decryption_table[256] = {
-   0x7f,0x26,0x5d,xxxx,0xba,xxxx,0x1e,0x5e, 0xb8,0x49,0xbc,0xe8,0x01,xxxx,0x4a,0x25, /* 00 */
-// ssss !!!! !!!!      !!!!      !!!! !!!!  !!!! gggg !!!! !!!! !!!!           !!!!
-   xxxx,0xbd,xxxx,0x22,0x10,xxxx,0x02,0x57, 0x70,xxxx,0x7c,xxxx,0xe7,0x52,xxxx,0xa9, /* 10 */
+   0x7f,0x26,0x5d,xxxx,0xba,xxxx,0x1e,0x5e, 0xb8,xxxx,0xbc,0xe8,0x01,xxxx,0x4a,0x25, /* 00 */
+// ssss !!!! !!!!      !!!!      !!!! !!!!  !!!!      !!!! !!!! !!!!           !!!!
+   xxxx,0xbd,xxxx,0x22,0x10,xxxx,0x02,0x57, 0x70,xxxx,0x7e,xxxx,0xe7,0x52,xxxx,0xa9, /* 10 */
 //                !!!!           !!!! !!!!            ????      !!!! !!!!      gggg
-   xxxx,xxxx,0xc6,0x06,0xa0,0xfe,0xcf,0x8e, 0x43,0x8f,0x2d,0x8c,0xd4,0x85,0x75,0xa2, /* 20 */
-//           !!!! !!!!      !!!! !!!! !!!!  !!!!           gggg           !!!! !!!!
-   0x3d,xxxx,xxxx,0x38,0x7e,0x89,0xd1,0x80, 0x3b,0x72,0x07,xxxx,0x42,0x37,0x0a,0x18, /* 30 */
+   xxxx,xxxx,0xc6,0x06,0xa0,0xfe,0xcf,0x8e, 0x43,0x8f,0x2d,xxxx,0xd4,0x85,0x75,0xa2, /* 20 */
+//           !!!! !!!!      !!!! !!!! !!!!  !!!!                          !!!! !!!!
+   0x3d,xxxx,xxxx,0x38,0x7c,0x89,0xd1,0x80, 0x3b,0x72,0x07,xxxx,0x42,0x37,0x0a,0x18, /* 30 */
 // gggg           !!!! ???? !!!! !!!! !!!!  !!!! !!!! !!!!           ssss !!!!
    0x88,0xb4,0x98,0x8b,0xb9,0x9c,0xad,0x0e, 0x2b,xxxx,0xbf,xxxx,0x55,xxxx,0x56,0xb0, /* 40 */
 // !!!!      pppp !!!! !!!! !!!! !!!!       gggg      !!!!      !!!!      !!!! !!!!
    0x93,0x91,xxxx,0xeb,xxxx,0x50,0x41,0x29, 0x47,xxxx,xxxx,0x60,xxxx,0xab,xxxx,xxxx, /* 50 */
 // pppp !!!! !!!!      !!!!      !!!! !!!!                      !!!!      !!!!
-   0xc3,0xe2,0xd0,0xb2,0x11,0x79,xxxx,0x08, 0x82,0xfb,xxxx,0x2c,0x23,xxxx,0x28,0x0d, /* 60 */
-// !!!! !!!! !!!! !!!!      gggg            pppp !!!!           !!!!
+   0xc3,0xe2,0xd0,0xb2,0x11,0x79,xxxx,0x08, xxxx,0xfb,xxxx,0x2c,0x23,xxxx,0x28,0x0d, /* 60 */
+// !!!! !!!! !!!! !!!!      ????                 !!!!           !!!!
    xxxx,xxxx,xxxx,0x83,0x3c,xxxx,0x1b,0x34, 0x5b,xxxx,0x40,xxxx,xxxx,0x04,0xfc,0xcd, /* 70 */
 //                !!!! !!!!                 !!!!                     !!!! !!!! ssss
    0xb1,0xf3,0x8a,xxxx,xxxx,0x87,xxxx,xxxx, xxxx,xxxx,xxxx,xxxx,0xbe,0x84,0x1f,0xe6, /* 80 */
@@ -133,27 +130,19 @@ const UINT8 lethalth_decryption_table[256] = {
 // !!!!                     !!!!      !!!!
    0xa5,xxxx,xxxx,0xc7,xxxx,0x27,0x0b,xxxx, 0x20,xxxx,xxxx,xxxx,xxxx,xxxx,0x61,0x7d, /* A0 */
 // !!!!           !!!!           !!!!                                     !!!! ????
-   0x63,xxxx,0x86,0x0f,xxxx,0xb7,xxxx,0x4f, 0x13,xxxx,0xc0,0xfd,xxxx,0x39,xxxx,0x77, /* B0 */
-// ssss      !!!! !!!!                      ????      !!!!           !!!!      !!!!
-   0x05,0x3a,xxxx,0x48,0x92,0x71,0x3e,0x03, xxxx,0xf8,xxxx,0x59,0xa8,0x5f,0xf9,0xbb, /* C0 */
-// !!!! !!!!                ????      !!!!                 !!!!      !!!! !!!! !!!!
+   xxxx,xxxx,0x86,0x0f,xxxx,0xb7,xxxx,0x4f, xxxx,xxxx,0xc0,0xfd,xxxx,0x39,xxxx,0x77, /* B0 */
+//           !!!! !!!!                                !!!!           !!!!      !!!!
+   0x05,0x3a,xxxx,0x48,0x92,0x76,0x3e,0x03, xxxx,0xf8,xxxx,0x59,0xa8,0x5f,0xf9,0xbb, /* C0 */
+// !!!! !!!!                pppp      !!!!                 !!!!      !!!! !!!! !!!!
    0x81,0xfa,0x9d,0xe9,0x2e,0xa1,0xc1,0x33, xxxx,0x78,xxxx,0x0c,xxxx,0x24,0xaa,0xac, /* D0 */
-// !!!! !!!! !!!! !!!! !!!! !!!! !!!! !!!!       gggg                !!!!      !!!!
+// !!!! !!!! !!!! !!!! !!!! !!!! !!!! !!!!       ????                !!!!      !!!!
    xxxx,0xb6,xxxx,0xea,xxxx,0x73,0xe5,0x58, 0x00,0xf7,xxxx,0x74,xxxx,0x76,xxxx,0xa3, /* E0 */
 //                !!!!      gggg !!!! !!!!       !!!!      !!!!      ????      !!!!
-   xxxx,0x5a,0xf6,0x32,0x46,0x2a,xxxx,xxxx, 0x53,0x4b,0x90,0x35,0x51,0x68,0x99,0x13, /* F0 */
-//      !!!! !!!! !!!! !!!! !!!!            !!!!           ???? !!!! !!!!
+   xxxx,0x5a,0xf6,0x32,0x46,0x2a,xxxx,xxxx, 0x53,0x4b,0x90,0x0d,0x51,0x68,0x99,0x13, /* F0 */
+//      !!!! !!!! !!!! !!!! !!!!            !!!!      !!!! ???? !!!! !!!!
 };
 /*
 missing opcode:
-
-b8 -> 0x13 ??? (17cb4)
-1a -> (7c,7e) ->
-34 -> (7c,7e) ->
-c5 -> (18d56 - from 1844f) (71,76,7a,7d,7e) -> to handle level number (a008d=00-0f) ->
-af -> (7d) (strange 71) ->
-ed -> (p76,7c,7e) ->
-fb -> 0x35 ???
 
 "!!!!" -> checked against gussun
 "gggg" -> very probably
@@ -161,22 +150,30 @@ fb -> 0x35 ???
 "ssss" -> sure
 "????" -> missing
 
+
+1a -> (78,7c,7e) ->
+34 -> (78,7c,7e) -> 78
+
+65 -> (79,
+af -> (79,7d) (strange 71) ->
+d9 -> (11e07 from 11de6) (70,78    -> to handle a01ce=000-7d0 -> 0x78
+ed -> (p76,78,7c,7e) ->
+fb ->
+
 probably:
-68 -> 0x82
 42 -> 0x98 (083a3)
 50 -> 0x93 (083a7)
+c5 -> (18d56 - from 1844f) (71,73,76,79,7a,7d,7e) -> to handle level number (a008d=00-0f) -> 0x76
 
 very probably:
-09 -> 0x49
 48 -> 0x2b
 e5 -> 0x73
-2b -> 0x8c
 
 sure:
 00 -> 0x7f
 3d -> 0x37
 7f -> 0xcd (little machine in the game - 16058)
-b0 -> 0x63 (11479)
+
 */
 // 0x2c (0xd4) complete guess
 // 0x2d (0x85) complete guess
@@ -191,13 +188,15 @@ b0 -> 0x63 (11479)
 // 0xbd (0x39) guess - risky challenge use same code
 // 0xc3 (0x48) guess
 // and our collection of conditional branches:
-// 0x34 (0x7e) < or <= (seems more like <) | these two are used toghether
-// 0xaf (0x7d) > or >=
-// 0xed (0x76) <= or < (seems more like <=)
+// 0xbf (0x7d) >= (monitor test)
+// 0x34 (0x7c) < or <= (seems more like <) | these two are used toghether
+// 0xaf (0x7f) > or >= (seems more like >) |
+// 0xed (0x7e) <= or < (seems more like <=)
+// 0x00 (0x7f) > ? | these two are used toghether
 // 0x1a (0x7c) < ? | (rowscroll on pink screen on startup)
 // 0xc5 (0x7a) completely in the dark (game start after car seelction)
 
-// uccops, dynablaster
+
 const UINT8 dynablaster_decryption_table[256] = {
 	0x1f,0x51,0x84,xxxx,0x3d,0x09,0x0d,xxxx, xxxx,0x57,xxxx,xxxx,xxxx,0x32,0x11,xxxx, /* 00 */
 	xxxx,0x9c,xxxx,xxxx,0x4b,xxxx,xxxx,0x03, xxxx,xxxx,xxxx,0x89,0xb0,xxxx,xxxx,xxxx, /* 10 */
@@ -231,11 +230,9 @@ const UINT8 dynablaster_decryption_table[256] = {
 //    therefore it seems to be 0x2b (SUB)
 // NS010718  0xa0 was 0x00 (ADDB), verified to be 0x22 (ANDB)
 
-/* note: mysticrib sound is identical revision to bbmanw sound code */
-// mysticri
+
 const UINT8 mysticri_decryption_table[256] = {
-	xxxx,0x57,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, 0xbf,0x43,xxxx,xxxx,0xb3,xxxx,0xfc,xxxx, /* 00 */
-	                                                             /*r*/
+	xxxx,0x57,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, 0xbf,0x43,xxxx,xxxx,xxxx,xxxx,0xfc,xxxx, /* 00 */
 	xxxx,xxxx,xxxx,xxxx,xxxx,0x52,0xa3,0x26, xxxx,0xc7,xxxx,0x0f,xxxx,0x0c,xxxx,xxxx, /* 10 */
 	xxxx,xxxx,0xff,xxxx,xxxx,0x02,xxxx,xxxx, 0x2e,xxxx,0x5f,xxxx,xxxx,xxxx,0x73,0x50, /* 20 */
 	0xb2,0x3a,xxxx,xxxx,0xbb,xxxx,xxxx,xxxx, xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, /* 30 */
@@ -243,24 +240,19 @@ const UINT8 mysticri_decryption_table[256] = {
 	0xb5,0x1f,xxxx,0xaa,xxxx,0xfb,xxxx,xxxx, xxxx,xxxx,xxxx,xxxx,0x38,xxxx,xxxx,xxxx, /* 50 */
 	0x2c,xxxx,xxxx,0xc6,xxxx,xxxx,0xb1,xxxx, xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0xa2,xxxx, /* 60 */
 	0xe9,0xe8,xxxx,xxxx,0x86,xxxx,0x8b,xxxx, xxxx,xxxx,xxxx,xxxx,0x5b,0x72,xxxx,xxxx, /* 70 */
-	xxxx,xxxx,0x5d,0x0a,xxxx,xxxx,0x89,xxxx, 0xb0,0x88,xxxx,0xb7,xxxx,0x87,0x75,0xbd, /* 80 */
-	xxxx,0x51,xxxx,xxxx,xxxx,xxxx,xxxx,0xbe, xxxx,xxxx,xxxx,0x5a,0x58,xxxx,xxxx,0x56, /* 90 */
-	                                   /*?*/
+	xxxx,xxxx,0x5d,0x0a,xxxx,xxxx,0x89,xxxx, 0xb0,0x88,xxxx,xxxx,xxxx,0x87,0x75,0xbd, /* 80 */
+	xxxx,0x51,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, xxxx,xxxx,xxxx,0x5a,0x58,xxxx,xxxx,0x56, /* 90 */
 	xxxx,0x8a,xxxx,0x55,xxxx,xxxx,xxxx,0xb4, 0x08,xxxx,0xf6,xxxx,xxxx,0x9d,xxxx,0xbc, /* A0 */
-	0x0b,0x00,xxxx,0x5e,xxxx,xxxx,xxxx,0x22, 0x36,0x4b,0x1e,xxxx,0xb6,0xba,0x23,xxxx, /* B0 */
-	     /*r*/                                    /*r*/
+	0x0b,xxxx,xxxx,0x5e,xxxx,xxxx,xxxx,0x22, 0x36,xxxx,0x1e,xxxx,0xb6,0xba,0x23,xxxx, /* B0 */
 	0x20,xxxx,xxxx,xxxx,0x59,0x53,xxxx,0x04, 0x81,xxxx,xxxx,0xf3,xxxx,xxxx,0x3b,0x06, /* C0 */
-	0xe2,0x79,0x83,0x9c,xxxx,0x18,0x80,xxxx, 0xc3,xxxx,xxxx,xxxx,0x32,xxxx,0xcf,xxxx, /* D0 */
-	/*r*/
+	xxxx,0x79,0x83,0x9c,xxxx,0x18,0x80,xxxx, 0xc3,xxxx,xxxx,xxxx,0x32,xxxx,0xcf,xxxx, /* D0 */
 	0xeb,xxxx,xxxx,0x33,xxxx,0xfa,xxxx,xxxx, 0xd2,xxxx,0x24,xxxx,0x74,0x41,0xb8,xxxx, /* E0 */
-	0x34,xxxx,0xd0,0x07,0xf8,xxxx,xxxx,xxxx, xxxx,0x46,xxxx,0xea,0xfe,0x78,xxxx,xxxx, /* F0 */
-	/*r*/               /*r*/
+	xxxx,xxxx,0xd0,0x07,xxxx,xxxx,xxxx,xxxx, xxxx,0x46,xxxx,0xea,0xfe,0x78,xxxx,xxxx, /* F0 */
 };
 // 0xd5 (0x18) opcode is right but arguments could be swapped
 // 0x4e (0x2b) not sure, could be 0x1b
-// 0x8b (0xb3) needed by mysticrib
 
-// majtitl2
+
 const UINT8 majtitl2_decryption_table[256] = {
 	0x87,xxxx,0x78,0xaa,xxxx,xxxx,xxxx,0x2c, 0x32,0x0a,0x0f,xxxx,0x5e,xxxx,0xc6,0x8a, /* 00 */
 	0x33,xxxx,xxxx,xxxx,xxxx,0xea,xxxx,0x72, xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0x24,0x55, /* 10 */
@@ -282,7 +274,7 @@ const UINT8 majtitl2_decryption_table[256] = {
 // 0x7c (0x18) opcode is right but arguments could be swapped
 // 0x70 (0x2b) not sure, could be 0x1b
 
-// hook
+
 const UINT8 hook_decryption_table[256] = {
 	0xb6,0x20,0x22,xxxx,0x0f,0x57,0x59,0xc6, 0xeb,xxxx,0xb0,0xbb,0x3b,xxxx,xxxx,xxxx, /* 00 */
 	0x36,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, xxxx,0xfe,xxxx,xxxx,xxxx,xxxx,xxxx,0xa0, /* 10 */
@@ -304,7 +296,7 @@ const UINT8 hook_decryption_table[256] = {
 // 0x87 (0x18) opcode is right but arguments could be swapped
 // 0xbb (0x2b) not sure, could be 0x1b
 
-// rtypeleo, firebarr
+
 const UINT8 rtypeleo_decryption_table[256] = {
 	0x5d,xxxx,0xc6,xxxx,xxxx,xxxx,0x2a,0x3a,xxxx,xxxx,xxxx,0x86,xxxx,0x22,xxxx,0xf3, /* 00 */
 	xxxx,xxxx,xxxx,xxxx,xxxx,0x38,0xf7,0x42,0x04,xxxx,xxxx,0x1f,0x4b,xxxx,xxxx,0x58, /* 10 */
@@ -322,14 +314,14 @@ const UINT8 rtypeleo_decryption_table[256] = {
 	xxxx,xxxx,xxxx,xxxx,0x81,xxxx,0x79,xxxx,xxxx,0x24,0x23,xxxx,xxxx,0xb0,0x07,0xff, /* D0 */
 	xxxx,0xba,0xf6,0x51,xxxx,xxxx,xxxx,0xfe,xxxx,0x92,xxxx,xxxx,xxxx,xxxx,0xe9,xxxx, /* E0 */
 	xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0xe8,0xd2,xxxx,0x18,xxxx,xxxx,xxxx,0xd1,xxxx,xxxx, /* F0 */
-//                                                                   ^^^^
+//                                                                    ^^^^
 };
 // 0xf9 (0x18) opcode is right but arguments could be swapped
 // 0x80 (0x2b) not sure, could be 0x1b
+// 0x16 (0x01) guess (wrong?)
 // fixed 0x16 = 0xf7 mapping
 // 3d = correct
 
-// inthunt
 const UINT8 inthunt_decryption_table[256] = {
 	0x1f,xxxx,0xbb,0x50,xxxx,0x58,0x42,0x57, xxxx,xxxx,0xe9,xxxx,xxxx,xxxx,xxxx,0x0b, /* 00 */
 	xxxx,xxxx,0x9d,0x9c,xxxx,xxxx,0x1e,xxxx, xxxx,0xb4,0x5b,xxxx,xxxx,xxxx,xxxx,xxxx, /* 10 */
@@ -351,7 +343,6 @@ const UINT8 inthunt_decryption_table[256] = {
 // 0x77 (0x18) opcode is right but arguments could be swapped
 // 0xb8 (0x2b) not sure, could be 0x1b
 
-// gussun
 const UINT8 gussun_decryption_table[256] = {
     0x63,xxxx,xxxx,0x36,xxxx,0x52,0xb1,0x5b, 0x68,0xcd,xxxx,xxxx,xxxx,0xa8,xxxx,xxxx, /* 00 */
 //  gggg                          gggg            gggg                gggg
@@ -458,6 +449,9 @@ f9 -> 76 (16d02(f 16cfa)-16598-165a1-18de7(f 18dc4) no 71(no),77(no),(icons? 70,
 fb -> bd
 fd -> 7e (1d659 - routine from 1d63c to 1d65e) no 70,76,77,78,79,7a,7b, 7c,7d,7e,7f  ok 7e
 
+missing V35+ core:
+0f 92 -> of 92 not supported (1011d before STI instruction) (for now no effects)
+
 -------------------------------------------------------------------------------------------------------------
 
 AS notes:
@@ -498,10 +492,9 @@ clc
 ret
 */
 
-// leagueman, wpksoc
 const UINT8 leagueman_decryption_table[256] = {
 	xxxx,xxxx,xxxx,0x55,0xbb,xxxx,0x23,0x79, xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0x38,xxxx, /* 00 */
-	0xf7,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, 0x3d,xxxx,xxxx,xxxx,0xba,xxxx,0x1e,xxxx, /* 10 */
+	0x01,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, 0x3d,xxxx,xxxx,xxxx,0xba,xxxx,0x1e,xxxx, /* 10 */
 	0x2c,0x46,xxxx,0xb5,xxxx,0x4b,xxxx,0xfe, xxxx,xxxx,0xfb,0x2e,xxxx,xxxx,0x36,0x04, /* 20 */
 	0xcf,xxxx,0xf3,0x5a,0x8a,0x0c,0x9c,xxxx, xxxx,xxxx,0xb2,0x50,xxxx,xxxx,xxxx,0x5f, /* 30 */
 	xxxx,xxxx,0x24,xxxx,xxxx,0x41,0x2b,xxxx, 0xe9,xxxx,0x08,0x3b,xxxx,xxxx,xxxx,xxxx, /* 40 */
@@ -518,12 +511,12 @@ const UINT8 leagueman_decryption_table[256] = {
 	xxxx,xxxx,xxxx,0xea,xxxx,0x52,xxxx,0x5d, xxxx,xxxx,xxxx,xxxx,0xbc,xxxx,xxxx,xxxx, /* F0 */
 };
 // 0x25 (0x4b) guess
-// fixed 0x10 = 0xf7 mapping
+// 0x10 (0x01) guess (wrong?)
 
-// psoldier
+
 const UINT8 psoldier_decryption_table[256] = {
 	xxxx,xxxx,xxxx,0x8a,xxxx,0xaa,xxxx,xxxx, xxxx,0x20,0x23,0x55,xxxx,0xb5,0x0a,xxxx, /* 00 */
-	xxxx,0x46,xxxx,0xb6,xxxx,0x74,0x8b,xxxx, xxxx,0xba,0xf7,xxxx,xxxx,0x5a,0x86,0xfb, /* 10 */
+	xxxx,0x46,xxxx,0xb6,xxxx,0x74,0x8b,xxxx, xxxx,0xba,0x01,xxxx,xxxx,0x5a,0x86,0xfb, /* 10 */
 	0xb2,xxxx,0xb0,xxxx,0x42,0x06,0x1e,0x08, 0x22,0x9d,xxxx,xxxx,xxxx,xxxx,xxxx,0x73, /* 20 */
 	xxxx,xxxx,0x5f,xxxx,xxxx,0xd0,xxxx,0xff, xxxx,xxxx,0xbd,xxxx,0x03,xxxx,0xb9,xxxx, /* 30 */
 	xxxx,xxxx,xxxx,0x51,0x5e,0x24,xxxx,xxxx, xxxx,xxxx,xxxx,0x58,0x59,xxxx,xxxx,xxxx, /* 40 */
@@ -540,9 +533,9 @@ const UINT8 psoldier_decryption_table[256] = {
 	xxxx,0x43,0x32,xxxx,xxxx,xxxx,0xeb,xxxx, xxxx,xxxx,xxxx,xxxx,0x83,0x89,xxxx,xxxx, /* F0 */
 };
 // 0x9e (0x4b) guess
-// fixed 0x1a = 0xf7 mapping
+// 0x1a (0x01) guess (wrong?)
 
-// dsoccr94
+
 const UINT8 dsoccr94_decryption_table[256] = {
 	xxxx,0xd1,xxxx,xxxx,xxxx,0x79,0x2e,xxxx, xxxx,xxxx,0x5a,0x0f,xxxx,xxxx,0x43,xxxx, /* 00 */
 	xxxx,xxxx,0xe8,0x50,xxxx,xxxx,xxxx,0xa0, 0x5d,0x22,xxxx,xxxx,0xb2,0x3a,xxxx,xxxx, /* 10 */
@@ -550,7 +543,7 @@ const UINT8 dsoccr94_decryption_table[256] = {
 	xxxx,xxxx,0xb9,xxxx,xxxx,0x2a,xxxx,0x3c, xxxx,0x80,0x26,xxxx,0xb0,xxxx,0x47,xxxx, /* 30 */
 	xxxx,xxxx,0x0a,0x55,xxxx,xxxx,xxxx,0x88, xxxx,xxxx,0x87,xxxx,xxxx,0xb4,0x0c,xxxx, /* 40 */
 	0x73,0x53,xxxx,xxxx,0x3b,0x1f,xxxx,xxxx, xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx, /* 50 */
-	0xf7,xxxx,xxxx,xxxx,xxxx,0x1e,xxxx,xxxx, 0xc3,xxxx,0xa3,0x74,xxxx,0x32,0x42,0x75, /* 60 */
+	0x01,xxxx,xxxx,xxxx,xxxx,0x1e,xxxx,xxxx, 0xc3,xxxx,0xa3,0x74,xxxx,0x32,0x42,0x75, /* 60 */
 	0xfc,xxxx,0xb8,xxxx,0x33,xxxx,0x5e,xxxx, xxxx,0xaa,xxxx,xxxx,0x04,xxxx,0x9c,0xba, /* 70 */
 	xxxx,xxxx,0x24,0x89,xxxx,xxxx,0xea,xxxx, 0x23,xxxx,xxxx,xxxx,0xbb,xxxx,xxxx,0xc7, /* 80 */
 	xxxx,0x8e,xxxx,0x52,xxxx,0x18,xxxx,0x72, xxxx,xxxx,xxxx,xxxx,0xb6,xxxx,xxxx,xxxx, /* 90 */
@@ -564,11 +557,10 @@ const UINT8 dsoccr94_decryption_table[256] = {
 
 // 0x95 (0x18) opcode is right but arguments could be swapped
 // 0x2a (0x2b) not sure, could be 0x1b
-// fixed 0x60 = 0xf7 mapping
+// 0x60 (0x01) guess (wrong?)
 
 
 /* preliminary table by Pierpaolo Prazzoli */
-// matchit2
 const UINT8 matchit2_decryption_table[256] = {
 	xxxx,0x86,0x0a,xxxx,0x32,0x01,0x81,0xbe, 0xea,xxxx,0xbb,xxxx,xxxx,xxxx,0xa5,0xf6, /* 00 */
 //  new  new       new  new  new  new                  new                 new  new

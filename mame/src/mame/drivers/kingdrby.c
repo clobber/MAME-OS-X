@@ -3,20 +3,17 @@
 King Derby (c) 1981 Tatsumi
 
 driver by Andrew Gardner, Angelo Salese & Roberto Fresca
-original cowrace.c by Luca Elia
 
 TODO:
 - remaining video issues, priorities, sprites etc.;
 - inputs;
 - Understand how tilemap color offsets really works;
 - Discrete sound part? There's a Rossini's "William Tell" bgm on the Chinese bootlegs,
-  I think it's tied with ay8910 port B. Update: the 1986 version sounds that just fine, could be
-  that this is a btanb;
+  I think it's tied with ay8910 port B.
 - unknown memories;
-- Garbage on the window tilemap if you win, it could be a btanb (masked by the color prom).
+- Garbage on the window tilemap if you win, it could be a BTANB (masked by the color prom).
 - the name "King Derby" is a raw guess, there's a chance that it uses a different name
-  (but there isn't any title screen in the game?)
-- Fix I/O in the 1986 bootleg version;
+  (but there isn't any title screen on the game?)
 
 ============================================================================================
 
@@ -63,39 +60,16 @@ sg1_b.e1       4096     0x92ef3c13      D2732D
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "video/mc6845.h"
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
-#include "sound/okim6295.h"
-#include "sound/2203intf.h"
-#include "machine/nvram.h"
-#include "kingdrby.lh"
-
-
-class kingdrby_state : public driver_device
-{
-public:
-	kingdrby_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 m_sound_cmd;
-	UINT8 *m_vram;
-	UINT8 *m_attr;
-	tilemap_t *m_sc0_tilemap;
-	tilemap_t *m_sc0w_tilemap;
-	tilemap_t *m_sc1_tilemap;
-	UINT8 m_p1_hopper;
-	UINT8 m_p2_hopper;
-	UINT8 m_mux_data;
-	UINT8 *m_spriteram;
-};
-
 
 #define CLK_1	XTAL_20MHz
 #define CLK_2	XTAL_3_579545MHz
 
+static UINT8 sound_cmd;
 
 /*************************************
  *
@@ -103,6 +77,8 @@ public:
  *
  *************************************/
 
+static UINT8 *kingdrby_vram,*kingdrby_attr;
+static tilemap *sc0_tilemap,*sc0w_tilemap,*sc1_tilemap;
 
 /*
 tile
@@ -116,9 +92,8 @@ xxxx ---- basic color?
 
 static TILE_GET_INFO( get_sc0_tile_info )
 {
-	kingdrby_state *state = machine.driver_data<kingdrby_state>();
-	int tile = state->m_vram[tile_index] | state->m_attr[tile_index]<<8;
-	int color = (state->m_attr[tile_index] & 0x06)>>1;
+	int tile = kingdrby_vram[tile_index] | kingdrby_attr[tile_index]<<8;
+	int color = (kingdrby_attr[tile_index] & 0x06)>>1;
 
 	tile&=0x1ff;
 
@@ -131,9 +106,8 @@ static TILE_GET_INFO( get_sc0_tile_info )
 
 static TILE_GET_INFO( get_sc1_tile_info )
 {
-	kingdrby_state *state = machine.driver_data<kingdrby_state>();
-	int tile = state->m_vram[tile_index] | state->m_attr[tile_index]<<8;
-	int color = (state->m_attr[tile_index] & 0x06)>>1;
+	int tile = kingdrby_vram[tile_index] | kingdrby_attr[tile_index]<<8;
+	int color = (kingdrby_attr[tile_index] & 0x06)>>1;
 
 	tile&=0x1ff;
 	//original 0xc
@@ -146,109 +120,100 @@ static TILE_GET_INFO( get_sc1_tile_info )
 			color|0x40,
 			0);
 
-	tileinfo.category = (state->m_attr[tile_index] & 0x08)>>3;
+	tileinfo->category = (kingdrby_attr[tile_index] & 0x08)>>3;
 }
 
 static VIDEO_START(kingdrby)
 {
-	kingdrby_state *state = machine.driver_data<kingdrby_state>();
-	state->m_sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,24);
-	state->m_sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,32,24);
-	state->m_sc0w_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
+	sc0_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,24);
+	sc1_tilemap = tilemap_create(machine, get_sc1_tile_info,tilemap_scan_rows,8,8,32,24);
+	sc0w_tilemap = tilemap_create(machine, get_sc0_tile_info,tilemap_scan_rows,8,8,32,32);
 
-	state->m_sc1_tilemap->set_transparent_pen(0);
+	tilemap_set_transparent_pen(sc1_tilemap,0);
 }
 
-static const UINT8 hw_sprite[16] =
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	0x34, 0x34, 0x34, 0x34, 0x34, 0x34, 0x34, 0x22,
-	0x22, 0x22, 0x22, 0x22, 0x22, 0x11, 0x22, 0x22
-};
-
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
-{
-	kingdrby_state *state = machine.driver_data<kingdrby_state>();
-	UINT8 *spriteram = state->m_spriteram;
 	int count = 0;
 
 	/*sprites not fully understood.*/
 	for(count=0;count<0x48;count+=4)
 	{
-		int x,y,spr_offs,colour,fx,dx,dy,h,w;
+		int x,y,spr_offs,colour,fx,dx,dy,h,w,mode;
 
 		spr_offs = (spriteram[count]);
 		spr_offs &=0x7f;
+		mode = spr_offs;
 		spr_offs*=4;
 		colour = (spriteram[count+3] & 0xf0)>>4;
 		fx = spriteram[count] & 0x80;
-		y = (spriteram[count+1] == 0) ? 0 : 0x100-spriteram[count+1];
+		if(spriteram[count+1] == 0)
+			y = 0;
+		else
+			y = 0x100-spriteram[count+1];
 		x = spriteram[count+2] - ((spriteram[count+3] & 1)<<8);
 
-		/* TODO: hardcoded via a table, there must be some other way to do this */
-		h = (hw_sprite[colour] & 0xf0) >> 4;
-		w = (hw_sprite[colour] & 0x0f) >> 0;
-
-		if(h == 1 && w == 1)
-		{
-			spr_offs /= 4;
-			/* TODO: horse number signs */
-			spr_offs  = 0x16c + (((spr_offs & 8) << 2) ^ 0x20) + ((spr_offs & 4) << 2) + (spr_offs & 3);
-		}
+		/*TODO: I really believe that this is actually driven by a prom.*/
+		if((mode >= 0x168/4) && (mode <= 0x17f/4))     { h = 1; w = 1; }
+		else if((mode >= 0x18c/4) && (mode <= 0x18f/4)) { h = 1; w = 1; }
+		else if((mode >= 0x19c/4) && (mode <= 0x19f/4)) { h = 1; w = 1; }
+		else if((mode & 3) == 3 || (mode) >= 0x13c/4)  { h = 2; w = 2; }
+		else                                           { h = 3; w = 4; }
 
 		if(fx)
 		{
 			for(dy=0;dy<h;dy++)
 				for(dx=0;dx<w;dx++)
-					drawgfx_transpen(bitmap,cliprect,machine.gfx[0],spr_offs++,colour,1,0,((x+16*w)-(dx+1)*16),(y+dy*16),0);
+					drawgfx_transpen(bitmap,cliprect,machine->gfx[0],spr_offs++,colour,1,0,((x+16*w)-(dx+1)*16),(y+dy*16),0);
 		}
 		else
 		{
 			for(dy=0;dy<h;dy++)
 				for(dx=0;dx<w;dx++)
-					drawgfx_transpen(bitmap,cliprect,machine.gfx[0],spr_offs++,colour,0,0,(x+dx*16),(y+dy*16),0);
+					drawgfx_transpen(bitmap,cliprect,machine->gfx[0],spr_offs++,colour,0,0,(x+dx*16),(y+dy*16),0);
 		}
 	}
 }
 
-static SCREEN_UPDATE_IND16(kingdrby)
+static VIDEO_UPDATE(kingdrby)
 {
-	kingdrby_state *state = screen.machine().driver_data<kingdrby_state>();
-	const rectangle &visarea = screen.visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(screen);
 	rectangle clip;
-	state->m_sc0_tilemap->set_scrollx(0, state->m_vram[0x342]);
-	state->m_sc0_tilemap->set_scrolly(0, state->m_vram[0x341]);
-	state->m_sc1_tilemap->set_scrollx(0, state->m_vram[0x342]);
-	state->m_sc1_tilemap->set_scrolly(0, state->m_vram[0x341]);
-	state->m_sc0w_tilemap->set_scrolly(0, 32);
+	tilemap_set_scrollx( sc0_tilemap,0, kingdrby_vram[0x342]);
+	tilemap_set_scrolly( sc0_tilemap,0, kingdrby_vram[0x341]);
+	tilemap_set_scrollx( sc1_tilemap,0, kingdrby_vram[0x342]);
+	tilemap_set_scrolly( sc1_tilemap,0, kingdrby_vram[0x341]);
+	tilemap_set_scrolly( sc0w_tilemap,0, 32);
 
 	/* maybe it needs two window tilemaps? (one at the top, the other at the bottom)*/
-	clip.set(visarea.min_x, 256, 192, visarea.max_y);
+	clip.min_x = visarea->min_x;
+	clip.max_x = 256;
+	clip.min_y = 192;
+	clip.max_y = visarea->max_y;
 
 	/*TILEMAP_DRAW_CATEGORY + TILEMAP_DRAW_OPAQUE doesn't suit well?*/
-	state->m_sc0_tilemap->draw(bitmap, cliprect, 0,0);
-	draw_sprites(screen.machine(),bitmap,cliprect);
-	state->m_sc1_tilemap->draw(bitmap, cliprect, TILEMAP_DRAW_CATEGORY(1),0);
-	state->m_sc0w_tilemap->draw(bitmap, clip, 0,0);
+	tilemap_draw(bitmap,cliprect,sc0_tilemap,0,0);
+	draw_sprites(screen->machine,bitmap,cliprect);
+	tilemap_draw(bitmap,cliprect,sc1_tilemap,TILEMAP_DRAW_CATEGORY(1),0);
+	tilemap_draw(bitmap,&clip,sc0w_tilemap,0,0);
 
 	return 0;
 }
 
 static WRITE8_HANDLER( sc0_vram_w )
 {
-	kingdrby_state *state = space->machine().driver_data<kingdrby_state>();
-	state->m_vram[offset] = data;
-	state->m_sc0_tilemap->mark_tile_dirty(offset);
-	state->m_sc0w_tilemap->mark_tile_dirty(offset);
-	state->m_sc1_tilemap->mark_tile_dirty(offset);
+	kingdrby_vram[offset] = data;
+	tilemap_mark_tile_dirty(sc0_tilemap,offset);
+	tilemap_mark_tile_dirty(sc0w_tilemap,offset);
+	tilemap_mark_tile_dirty(sc1_tilemap,offset);
 }
 
 static WRITE8_HANDLER( sc0_attr_w )
 {
-	kingdrby_state *state = space->machine().driver_data<kingdrby_state>();
-	state->m_attr[offset] = data;
-	state->m_sc0_tilemap->mark_tile_dirty(offset);
-	state->m_sc0w_tilemap->mark_tile_dirty(offset);
-	state->m_sc1_tilemap->mark_tile_dirty(offset);
+	kingdrby_attr[offset] = data;
+	tilemap_mark_tile_dirty(sc0_tilemap,offset);
+	tilemap_mark_tile_dirty(sc0w_tilemap,offset);
+	tilemap_mark_tile_dirty(sc1_tilemap,offset);
 }
 
 /*************************************
@@ -258,55 +223,52 @@ static WRITE8_HANDLER( sc0_attr_w )
  *************************************/
 
 /* hopper I/O */
+static UINT8 p1_hopper,p2_hopper;
 
 static READ8_DEVICE_HANDLER( hopper_io_r )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
-	return (input_port_read(device->machine(),"HPIO") & 0x3f) | state->m_p1_hopper | state->m_p2_hopper;
+	return (input_port_read(device->machine,"HPIO") & 0x3f) | p1_hopper | p2_hopper;
 }
 
 static WRITE8_DEVICE_HANDLER( hopper_io_w )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
-	state->m_p1_hopper = (data & 0x8)<<3;
-	state->m_p2_hopper = (data & 0x4)<<5;
+	p1_hopper = (data & 0x8)<<3;
+	p2_hopper = (data & 0x4)<<5;
 //  printf("%02x\n",data);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_cmd_w )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
-	cputag_set_input_line(device->machine(), "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
-	state->m_sound_cmd = data;
+	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
+	sound_cmd = data;
 	/* soundlatch is unneeded since we are already using perfect interleave. */
 	// soundlatch_w(space,0, data);
 }
 
+static UINT8 mux_data;
 
 /* No idea about what's this (if it's really a mux etc.)*/
 static WRITE8_DEVICE_HANDLER( outport2_w )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
 //  popmessage("PPI1 port C(upper) out: %02X", data);
-	state->m_mux_data = data & 0x80;
+	mux_data = data & 0x80;
 }
 
 static READ8_DEVICE_HANDLER( input_mux_r )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
-	if(state->m_mux_data & 0x80)
-		return input_port_read(device->machine(),"MUX0");
+	if(mux_data & 0x80)
+		return input_port_read(device->machine,"MUX0");
 	else
-		return input_port_read(device->machine(),"MUX1");
+		return input_port_read(device->machine,"MUX1");
 }
 
 static READ8_DEVICE_HANDLER( key_matrix_r )
 {
-	UINT16 p1_val,p2_val;
-	UINT8 p1_res,p2_res;
+	static UINT16 p1_val,p2_val;
+	static UINT8 p1_res,p2_res;
 
-	p1_val = input_port_read(device->machine(),"KEY_1P");
-	p2_val = input_port_read(device->machine(),"KEY_2P");
+	p1_val = input_port_read(device->machine,"KEY_1P");
+	p2_val = input_port_read(device->machine,"KEY_2P");
 
 	p1_res = 0;
 	p2_res = 0;
@@ -354,12 +316,8 @@ static READ8_DEVICE_HANDLER( key_matrix_r )
 
 static READ8_DEVICE_HANDLER( sound_cmd_r )
 {
-	kingdrby_state *state = device->machine().driver_data<kingdrby_state>();
-	return state->m_sound_cmd;
+	return sound_cmd;
 }
-
-static const UINT8 led_map[16] =
-	{ 0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7c,0x07,0x7f,0x67,0x77,0x7c,0x39,0x5e,0x79,0x00 };
 
 static WRITE8_HANDLER( led_array_w )
 {
@@ -370,9 +328,6 @@ static WRITE8_HANDLER( led_array_w )
     they goes from 0 to 5, to indicate the number.
     If one player bets something, the other led will toggle between p1 and p2 bets.
     */
-	output_set_digit_value(0xf + offset, led_map[(data & 0xf0) >> 4]);
-	output_set_digit_value(0x0 + offset, led_map[(data & 0x0f) >> 0]);
-
 }
 
 /*************************************
@@ -381,83 +336,48 @@ static WRITE8_HANDLER( led_array_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( master_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM AM_MIRROR(0xc00) AM_SHARE("share1")
-	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE_MEMBER(kingdrby_state, m_vram)
-	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(sc0_attr_w) AM_BASE_MEMBER(kingdrby_state, m_attr)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM AM_MIRROR(0xc00) AM_SHARE(1)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM_WRITE(sc0_vram_w) AM_BASE(&kingdrby_vram)
+	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(sc0_attr_w) AM_BASE(&kingdrby_attr)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( master_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( master_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP //interrupt ack
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( slave_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x2fff) AM_ROM
-	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom, tested for the post check
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_SHARE("nvram") //backup ram
+	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom tested for the post check
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size) //backup ram
 	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* I/O Ports */
 	AM_RANGE(0x6000, 0x6003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* I/O Ports */
-	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_MEMBER(kingdrby_state, m_spriteram)
-	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
+	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE(1)
+	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE(&spriteram)
+	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
 	AM_RANGE(0x7801, 0x780f) AM_WRITE(led_array_w)
 	AM_RANGE(0x7a00, 0x7a00) AM_RAM //buffer for the key matrix
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("DSW")
 ADDRESS_MAP_END
 
-static WRITE8_HANDLER( kingdrbb_lamps_w )
-{
-	// (same as the inputs but active high)
-}
-
-static ADDRESS_MAP_START( slave_1986_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x2fff) AM_ROM
-	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom tested for the post check
-	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_SHARE("nvram") //backup ram
-	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* I/O Ports */
-//  AM_RANGE(0x6000, 0x6003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w) /* I/O Ports */
-	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_MEMBER(kingdrby_state, m_spriteram)
-	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE_MODERN("crtc", mc6845_device, register_r, register_w)
-	AM_RANGE(0x7800, 0x7800) AM_READ_PORT("KEY0")
-    AM_RANGE(0x7801, 0x7801) AM_READ_PORT("KEY1")
-	AM_RANGE(0x7802, 0x7802) AM_READ_PORT("KEY2")
-	AM_RANGE(0x7803, 0x7803) AM_READ_PORT("KEY3")
-	AM_RANGE(0x7800, 0x7803) AM_WRITE(kingdrbb_lamps_w)
-	AM_RANGE(0x7a00, 0x7a00) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("DSW")
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( slave_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( slave_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP //interrupt ack
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x40) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_data_address_w)
+	AM_RANGE(0x40, 0x40) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("ay", ay8910_data_address_w)
 ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( cowrace_sound_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x23ff) AM_RAM
-ADDRESS_MAP_END
-
-static ADDRESS_MAP_START( cowrace_sound_io, AS_IO, 8 )
-	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ym2203_w)
-ADDRESS_MAP_END
-
 
 /*************************************
 *
@@ -488,35 +408,6 @@ static const ppi8255_interface ppi8255_intf[2] =
 		DEVCB_HANDLER(sound_cmd_w),  /* Port A write */
 		DEVCB_NULL,					/* Port B write */
 		DEVCB_HANDLER(outport2_w)	/* Port C write */
-	}
-};
-
-static WRITE8_DEVICE_HANDLER( outportb_w )
-{
-//  printf("%02x B\n",data);
-}
-
-
-static const ppi8255_interface ppi8255_1986_intf[2] =
-{
-	/* C as input, (all) as output */
-	{
-		DEVCB_NULL,	                        /* Port A read */
-		DEVCB_INPUT_PORT("IN0"),	        /* Port B read */
-		DEVCB_INPUT_PORT("IN1"),			/* Port C read */
-		DEVCB_HANDLER(sound_cmd_w),			/* Port A write */
-		DEVCB_HANDLER(outportb_w),			/* Port B write */
-		DEVCB_NULL						    /* Port C write */
-	},
-
-	/* actually unused */
-	{
-		DEVCB_NULL,					/* Port A read */
-		DEVCB_NULL,					/* Port B read */
-		DEVCB_NULL,					/* Port C read */
-		DEVCB_NULL, 				/* Port A write */
-		DEVCB_NULL,					/* Port B write */
-		DEVCB_NULL					/* Port C write */
 	}
 };
 
@@ -678,158 +569,7 @@ static INPUT_PORTS_START( kingdrby )
 	PORT_DIPNAME( 0x40, 0x40, "POST Check" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Reset Backup RAM" )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( kingdrbb )
-	/*this might be different.*/
-	PORT_START("HPIO")	// ppi0 (5000)
-	PORT_DIPNAME( 0x01, 0x01, "HPIO" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) //1p hopper i/o
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL ) //2p hopper i/o
-
-	PORT_START("IN0")	// ppi0 (5001)
-	PORT_DIPNAME( 0x01, 0x01, "IN0" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-
-	PORT_START("IN1")	// ppi0 (5001)
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_VBLANK ) //?
-	PORT_DIPNAME( 0x02, 0x02, "IN1" )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-
-	PORT_START("SYSTEM")	// ppi0 (5001)
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_DIPNAME( 0x02, 0x02, "SYSTEM" )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_GAMBLE_KEYOUT )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) ) //causes "hopper overpay" msg
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-
-	PORT_START("KEY0") // (7800)
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("1P 1-2") PORT_CODE(KEYCODE_Q)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("1P 1-3") PORT_CODE(KEYCODE_W)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("1P 1-4") PORT_CODE(KEYCODE_E)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("1P 1-5") PORT_CODE(KEYCODE_R)
-	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("KEY1") // (7801)
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("1P 1-6") PORT_CODE(KEYCODE_T)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("1P 2-3") PORT_CODE(KEYCODE_A)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("1P 2-4") PORT_CODE(KEYCODE_S)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("1P 2-5") PORT_CODE(KEYCODE_D)
-	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("KEY2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("1P 2-6") PORT_CODE(KEYCODE_F)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("1P 3-4") PORT_CODE(KEYCODE_G)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON11 ) PORT_NAME("1P 3-5") PORT_CODE(KEYCODE_H)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON12 ) PORT_NAME("1P 3-6") PORT_CODE(KEYCODE_Z)
-	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("KEY3")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON13 ) PORT_NAME("1P 4-5") PORT_CODE(KEYCODE_X)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON14 ) PORT_NAME("1P 4-6") PORT_CODE(KEYCODE_C)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON15 ) PORT_NAME("1P 5-6") PORT_CODE(KEYCODE_V)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("DSW")
-	PORT_DIPNAME( 0x01, 0x01, "SYSTEM" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Game Type?" ) //enables two new msgs "advance" and "exchange" in analyzer mode
-	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, "POST Check" )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Reset Backup RAM" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -868,29 +608,9 @@ static const gfx_layout layout16x16x2 =
 	16*16
 };
 
-/* seems more suitable with 2bpp?*/
-static const gfx_layout cowrace_layout16x16x2 =
-{
-	16,16,
-	RGN_FRAC(1,2),
-	2,
-	{
-		RGN_FRAC(1,2),
-		RGN_FRAC(0,2),
-	},
-	{ 16*8+0,16*8+1,16*8+2,16*8+3,16*8+4,16*8+5,16*8+6,16*8+7,0,1,2,3,4,5,6,7 },
-	{ 0*8,1*8,2*8,3*8,4*8,5*8,6*8,7*8,8*8,9*8,10*8,11*8,12*8,13*8,14*8,15*8  },
-	16*16
-};
-
 static GFXDECODE_START( kingdrby )
 	GFXDECODE_ENTRY( "gfx1", 0x0000, layout16x16x2, 0x080, 0x10 )
 	GFXDECODE_ENTRY( "gfx2", 0x0000, layout8x8x2,   0x000, 0x80 )
-GFXDECODE_END
-
-static GFXDECODE_START( cowrace )
-	GFXDECODE_ENTRY( "gfx1", 0x000000, cowrace_layout16x16x2, 0x080, 0x10 )
-	GFXDECODE_ENTRY( "gfx2", 0x000000, layout8x8x2, 0x000, 0x80 )
 GFXDECODE_END
 
 /**********************************************************************************************************
@@ -934,19 +654,6 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL /* discrete write? */
 };
 
-static const ym2203_interface cowrace_ym2203_interface =
-{
-	{
-		AY8910_LEGACY_OUTPUT,
-		AY8910_DEFAULT_LOADS,
-		DEVCB_HANDLER(sound_cmd_r),									// read A
-		DEVCB_DEVICE_MEMBER("oki", okim6295_device, read),			// read B
-		DEVCB_NULL,													// write A
-		DEVCB_DEVICE_MEMBER("oki", okim6295_device, write)			// write B
-	},
-	NULL
-};
-
 static PALETTE_INIT(kingdrby)
 {
 	int	bit0, bit1, bit2 , r, g, b;
@@ -972,110 +679,52 @@ static PALETTE_INIT(kingdrby)
 	}
 }
 
-static PALETTE_INIT(kingdrbb)
-{
-	UINT8 *raw_prom = machine.region("raw_prom")->base();
-	UINT8 *prom = machine.region("proms")->base();
-	int	bit0, bit1, bit2 , r, g, b;
-	int	i;
+static MACHINE_DRIVER_START( kingdrby )
+	MDRV_CPU_ADD("master", Z80, CLK_2)
+	MDRV_CPU_PROGRAM_MAP(master_map)
+	MDRV_CPU_IO_MAP(master_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	for(i = 0; i < 0x200; i++)
-	{
-		/* this set has an extra address line shuffle applied on the prom */
-		prom[i] = raw_prom[BITSWAP16(i, 15,14,13,12,11,10,9,8,7,6,5,0,1,2,3,4)+0x1000];
-	}
+	MDRV_CPU_ADD("slave", Z80, CLK_2)
+	MDRV_CPU_PROGRAM_MAP(slave_map)
+	MDRV_CPU_IO_MAP(slave_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	for(i = 0; i < 0x200; i++)
-	{
-		bit0 = 0;
-		bit1 = (prom[i] >> 1) & 0x01;
-		bit2 = (prom[i] >> 0) & 0x01;
-		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
-		bit0 = (prom[i] >> 4) & 0x01;
-		bit1 = (prom[i] >> 3) & 0x01;
-		bit2 = (prom[i] >> 2) & 0x01;
-		g = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
-		bit0 = (prom[i] >> 7) & 0x01;
-		bit1 = (prom[i] >> 6) & 0x01;
-		bit2 = (prom[i] >> 5) & 0x01;
-		r = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
+	MDRV_CPU_ADD("soundcpu", Z80, CLK_2)
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,1000) /* guess, controls ay8910 tempo.*/
 
-		palette_set_color(machine, i, MAKE_RGB(r, g, b));
-	}
-}
+	MDRV_QUANTUM_PERFECT_CPU("master")
 
-static MACHINE_CONFIG_START( kingdrby, kingdrby_state )
-	MCFG_CPU_ADD("master", Z80, CLK_2)
-	MCFG_CPU_PROGRAM_MAP(master_map)
-	MCFG_CPU_IO_MAP(master_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_CPU_ADD("slave", Z80, CLK_2)
-	MCFG_CPU_PROGRAM_MAP(slave_map)
-	MCFG_CPU_IO_MAP(slave_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
-	MCFG_CPU_ADD("soundcpu", Z80, CLK_2)
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,1000) /* guess, controls ay8910 tempo.*/
+	MDRV_GFXDECODE(kingdrby)
+	MDRV_PALETTE_LENGTH(0x200)
+	MDRV_PALETTE_INIT(kingdrby)
 
-	MCFG_QUANTUM_PERFECT_CPU("master")
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(256, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)	/* controlled by CRTC */
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_VIDEO_START(kingdrby)
+	MDRV_VIDEO_UPDATE(kingdrby)
 
-	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MDRV_MC6845_ADD("crtc", MC6845, CLK_1/32, mc6845_intf)	/* 53.333 Hz. guess */
 
-	MCFG_GFXDECODE(kingdrby)
-	MCFG_PALETTE_LENGTH(0x200)
-	MCFG_PALETTE_INIT(kingdrby)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
-	MCFG_SCREEN_SIZE(256, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 0, 224-1)	/* controlled by CRTC */
-	MCFG_SCREEN_UPDATE_STATIC(kingdrby)
+	MDRV_SOUND_ADD("ay", AY8910, CLK_1/8)	/* guess */
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+MACHINE_DRIVER_END
 
-	MCFG_VIDEO_START(kingdrby)
-
-	MCFG_MC6845_ADD("crtc", MC6845, CLK_1/32, mc6845_intf)	/* 53.333 Hz. guess */
-
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("aysnd", AY8910, CLK_1/8)	/* guess */
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( kingdrbb, kingdrby )
-
-	MCFG_CPU_MODIFY("slave")
-	MCFG_CPU_PROGRAM_MAP(slave_1986_map)
-
-	MCFG_PALETTE_INIT(kingdrbb)
-
-	MCFG_PPI8255_RECONFIG( "ppi8255_0", ppi8255_1986_intf[0] )
-	MCFG_PPI8255_RECONFIG( "ppi8255_1", ppi8255_1986_intf[1] )
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( cowrace, kingdrbb )
-
-	MCFG_CPU_MODIFY("soundcpu")
-	MCFG_CPU_PROGRAM_MAP(cowrace_sound_map)
-	MCFG_CPU_IO_MAP(cowrace_sound_io)
-
-	MCFG_GFXDECODE(cowrace)
-	MCFG_PALETTE_INIT(kingdrby)
-
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-
-	MCFG_SOUND_REPLACE("aysnd", YM2203, 3000000)
-	MCFG_SOUND_CONFIG(cowrace_ym2203_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_CONFIG_END
 
 ROM_START( kingdrby )
 	ROM_REGION( 0x3000, "master", 0 )
@@ -1113,76 +762,4 @@ ROM_START( kingdrby )
 	ROM_LOAD( "147.f8",  0x000, 0x200, CRC(9245c4af) SHA1(813d628ac55913542a4deabe6ac0a4f9db09cf19) )
 ROM_END
 
-// might be closer to the original than the cowrace bootleg even if it shares some roms with cowrace?
-ROM_START( kingdrbb ) // has 'Made in Taiwan' on the PCB.
-	ROM_REGION( 0x8000, "master", 0 )
-	ROM_LOAD( "kingdrbb_u3.bin", 0x0000, 0x4000, CRC(90a14686) SHA1(ce2ee8c0cbb4212aa8e71d7145b1eefb4f282590) )
-	ROM_CONTINUE(0x0000,0x4000)
-
-	ROM_REGION( 0x4000, "slave", 0 ) // slave z80?
-	ROM_LOAD( "kingdrbb_u30.bin", 0x0000, 0x4000, CRC(98717214) SHA1(70ca61c15f66642b85dd248b24638a95a8254bbb) )
-	ROM_CONTINUE(0x0000,0x4000)
-
-	ROM_REGION( 0x4000, "soundcpu", 0 ) // audio z80?
-	ROM_LOAD( "kingdrbb_u161.bin", 0x0000, 0x4000, CRC(7d84b577) SHA1(d230b49df19bf68793a561f4c07413d22fa8ff28) )
-
-	ROM_REGION( 0x8000, "gfx1", 0 )
-	ROM_LOAD( "kingdrbb_u94.bin", 0x0000, 0x4000, CRC(ba59e4b8) SHA1(425dc4055d5ea400eeef33e26fcc73fa726f414d) )
-	ROM_LOAD( "kingdrbb_u95.bin", 0x4000, 0x4000, CRC(fa97deb6) SHA1(1630281f0cac3fe3bfaf924e1c6316107200eb4a) )
-
-	ROM_REGION( 0x4000, "gfx2", 0 )
-	ROM_LOAD( "kingdrbb_u39.bin", 0x0000, 0x2000, CRC(4a34cef0) SHA1(b54f1f2ccd3dd773e47bfb044c5aec15c11426c2) )
-	ROM_LOAD( "kingdrbb_u140.bin", 0x2000, 0x2000, CRC(7e24b674) SHA1(c774efeb8e4e833e73c29007d5294c93df1abef4) )
-
-	ROM_REGION( 0x4000, "raw_prom", 0 )
-	ROM_LOAD( "kingdrbb_u1.bin", 0x0000, 0x4000, CRC(97931952) SHA1(a0ef3be105f2ed7f744c73e92c583d25bb322e6a) ) // palette but in a normal rom?
-
-	ROM_REGION( 0x200, "proms", ROMREGION_ERASE00 ) // address shuffled, decoded inside PALETTE_INIT
-//  ROM_COPY( "raw_prom", 0x1000, 0x000, 0x200 )
-//  ROM_COPY( "raw_prom", 0x3000, 0x200, 0x200 ) //identical to 0x1000 bank
-
-	ROM_REGION( 0x4000, "pals", 0 ) // all read protected
-	ROM_LOAD( "palce16v.u101.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u113.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u160.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u2.bin",   0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u29.bin",  0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u4.bin",   0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	ROM_LOAD( "palce16v.u75.bin",  0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
-	// jedutil just complains these are invalid..
-	ROM_LOAD( "palce16v8q.u53.jed", 0x0000, 0x892, CRC(123d539a) SHA1(cccf0cbae3175b091a998eedf4aa44a55b679400) )
-	ROM_LOAD( "palce16v8q.u77.jed", 0x0000, 0x892, CRC(b7956421) SHA1(57db38b571adf6cf49d7c221cd65a068a9a3383a) )
-	ROM_LOAD( "palce16v8q.u87.jed", 0x0000, 0x892, CRC(b7956421) SHA1(57db38b571adf6cf49d7c221cd65a068a9a3383a) )
-ROM_END
-
-ROM_START( cowrace )
-	ROM_REGION( 0x8000, "master", 0 )
-	ROM_LOAD( "u3.bin", 0x0000, 0x8000, CRC(c05c3bd3) SHA1(b7199a069ab45edd25e021589b79105cdfa5511a) )
-
-	ROM_REGION( 0x8000, "slave", ROMREGION_ERASEFF ) // slave z80?
-	/* I've tried the kingdrbb slave CPU rom ... game works until the auto race in attract mode. We need to locate and dump this on the PCB. */
-	ROM_LOAD( "slave.bin", 0x0000, 0x8000, NO_DUMP )
-	ROM_FILL( 0x0000, 0x8000, 0xff ) // <- to remove once that the above is dumped
-
-	ROM_REGION( 0x2000, "soundcpu", 0 )
-	ROM_LOAD( "u164.bin", 0x0000, 0x2000, CRC(9affa1c8) SHA1(bfc07693e8f749cbf20ab8cda33975b66f567962) )
-
-	ROM_REGION( 0x10000, "gfx1", 0 )
-	ROM_LOAD( "u94.bin", 0x8000, 0x8000, CRC(945dc115) SHA1(bdd145234e6361c42ed20e8ca4cac64f07332748) )
-	ROM_LOAD( "u95.bin", 0x0000, 0x8000, CRC(fc1fc006) SHA1(326a67c1ea0f487ecc8b7aef2d90124a01e6dee3) )
-
-	ROM_REGION( 0x4000, "gfx2", 0 )
-	ROM_LOAD( "u139.bin", 0x2000, 0x2000, CRC(b746bb2f) SHA1(5f5f48752689079ed65fe7bb4a69512ada5db05d) )
-	ROM_LOAD( "u140.bin", 0x0000, 0x2000, CRC(7e24b674) SHA1(c774efeb8e4e833e73c29007d5294c93df1abef4) )
-
-	ROM_REGION( 0x40000, "oki", 0 )
-	ROM_LOAD( "u4.bin", 0x00000, 0x20000, CRC(f92a3ab5) SHA1(fc164492793597eadb8a50154410936edb74fa23) )
-
-	ROM_REGION( 0x20000, "proms", 0 )
-	ROM_LOAD( "u149.bin", 0x00000, 0x200, CRC(f41a5eca) SHA1(797f2d95d4e00f96e5a99604935810e1add59689) )
-ROM_END
-
-
-GAMEL( 1981, kingdrby,  0,             kingdrby,   kingdrby,   0,       ROT0,   "Tazmi",    "King Derby (1981)",   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS | GAME_IMPERFECT_SOUND, layout_kingdrby )
-GAME( 1986, kingdrbb,  kingdrby,      kingdrbb,   kingdrbb,   0,       ROT0,   "bootleg (Casino Electronics)",  "King Derby (Taiwan bootleg)",   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS )
-GAME( 2000, cowrace,   kingdrby,      cowrace,    kingdrbb,   0,       ROT0,   "bootleg",  "Cow Race (1986 King Derby hack)", GAME_NOT_WORKING | GAME_WRONG_COLORS )
+GAME( 1981, kingdrby,  0,      kingdrby,   kingdrby,   0,       ROT0,   "Tazmi",    "King Derby",   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS| GAME_IMPERFECT_SOUND )

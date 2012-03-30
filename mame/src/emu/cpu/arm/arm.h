@@ -3,6 +3,8 @@
 #ifndef __ARM_H__
 #define __ARM_H__
 
+#include "cpuintrf.h"
+
 /****************************************************************************************************
  *  INTERRUPT CONSTANTS
  ***************************************************************************************************/
@@ -14,8 +16,8 @@
  *  PUBLIC FUNCTIONS
  ***************************************************************************************************/
 
-DECLARE_LEGACY_CPU_DEVICE(ARM, arm);
-DECLARE_LEGACY_CPU_DEVICE(ARM_BE, arm_be);
+extern CPU_GET_INFO( arm );
+#define CPU_ARM CPU_GET_INFO_NAME( arm )
 
 enum
 {

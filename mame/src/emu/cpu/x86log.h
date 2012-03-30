@@ -15,6 +15,7 @@
 #ifndef __X86LOG_H__
 #define __X86LOG_H__
 
+#include "cpuintrf.h"
 #include "x86emit.h"
 
 

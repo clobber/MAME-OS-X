@@ -6,7 +6,8 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "snkwave.h"
 
 
@@ -32,11 +33,13 @@ struct _snkwave_state
 	INT16 waveform[WAVEFORM_LENGTH];
 };
 
-INLINE snkwave_state *get_safe_token(device_t *device)
+INLINE snkwave_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == SNKWAVE);
-	return (snkwave_state *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_SNKWAVE);
+	return (snkwave_state *)device->token;
 }
 
 
@@ -110,16 +113,16 @@ static DEVICE_START( snkwave )
 {
 	snkwave_state *chip = get_safe_token(device);
 
-	assert(device->static_config() == 0);
+	assert(device->static_config == 0);
 
 	/* adjust internal clock */
-	chip->external_clock = device->clock();
+	chip->external_clock = device->clock;
 
 	/* adjust output clock */
 	chip->sample_rate = chip->external_clock >> CLOCK_SHIFT;
 
 	/* get stream channels */
-	chip->stream = device->machine().sound().stream_alloc(*device, 0, 1, chip->sample_rate, chip, snkwave_update);
+	chip->stream = stream_create(device, 0, 1, chip->sample_rate, chip, snkwave_update);
 
 	/* reset all the voices */
 	chip->frequency = 0;
@@ -127,10 +130,10 @@ static DEVICE_START( snkwave )
 	chip->waveform_position = 0;
 
 	/* register with the save state system */
-	device->save_item(NAME(chip->frequency));
-	device->save_item(NAME(chip->counter));
-	device->save_item(NAME(chip->waveform_position));
-	device->save_pointer(NAME(chip->waveform), WAVEFORM_LENGTH);
+	state_save_register_device_item(device, 0, chip->frequency);
+	state_save_register_device_item(device, 0, chip->counter);
+	state_save_register_device_item(device, 0, chip->waveform_position);
+	state_save_register_device_item_pointer(device, 0, chip->waveform, WAVEFORM_LENGTH);
 }
 
 
@@ -146,7 +149,7 @@ WRITE8_DEVICE_HANDLER( snkwave_w )
 {
 	snkwave_state *chip = get_safe_token(device);
 
-	chip->stream->update();
+	stream_update(chip->stream);
 
 	// all registers are 6-bit
 	data &= 0x3f;
@@ -170,7 +173,7 @@ DEVICE_GET_INFO( snkwave )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(snkwave_state);		break;
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(snkwave_state); 		break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME( snkwave );		break;
@@ -185,5 +188,3 @@ DEVICE_GET_INFO( snkwave )
 		case DEVINFO_STR_CREDITS:					strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
 	}
 }
-
-DEFINE_LEGACY_SOUND_DEVICE(SNKWAVE, snkwave);

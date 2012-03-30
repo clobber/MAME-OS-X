@@ -1,6 +1,9 @@
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/parodius.h"
+#include "driver.h"
+#include "video/konamiic.h"
+
+
+static int layer_colorbase[3],sprite_colorbase,bg_colorbase;
+static int layerpri[3];
 
 
 /***************************************************************************
@@ -9,11 +12,10 @@
 
 ***************************************************************************/
 
-void parodius_tile_callback( running_machine &machine, int layer, int bank, int *code, int *color, int *flags, int *priority )
+static void tile_callback(int layer,int bank,int *code,int *color,int *flags,int *priority)
 {
-	parodius_state *state = machine.driver_data<parodius_state>();
 	*code |= ((*color & 0x03) << 8) | ((*color & 0x10) << 6) | ((*color & 0x0c) << 9) | (bank << 13);
-	*color = state->m_layer_colorbase[layer] + ((*color & 0xe0) >> 5);
+	*color = layer_colorbase[layer] + ((*color & 0xe0) >> 5);
 }
 
 /***************************************************************************
@@ -22,20 +24,15 @@ void parodius_tile_callback( running_machine &machine, int layer, int bank, int 
 
 ***************************************************************************/
 
-void parodius_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
+static void sprite_callback(int *code,int *color,int *priority_mask)
 {
-	parodius_state *state = machine.driver_data<parodius_state>();
 	int pri = 0x20 | ((*color & 0x60) >> 2);
-	if (pri <= state->m_layerpri[2])
-		*priority_mask = 0;
-	else if (pri > state->m_layerpri[2] && pri <= state->m_layerpri[1])
-		*priority_mask = 0xf0;
-	else if (pri > state->m_layerpri[1] && pri <= state->m_layerpri[0])
-		*priority_mask = 0xf0 | 0xcc;
-	else
-		*priority_mask = 0xf0 | 0xcc | 0xaa;
+	if (pri <= layerpri[2])								*priority_mask = 0;
+	else if (pri > layerpri[2] && pri <= layerpri[1])	*priority_mask = 0xf0;
+	else if (pri > layerpri[1] && pri <= layerpri[0])	*priority_mask = 0xf0|0xcc;
+	else 												*priority_mask = 0xf0|0xcc|0xaa;
 
-	*color = state->m_sprite_colorbase + (*color & 0x1f);
+	*color = sprite_colorbase + (*color & 0x1f);
 }
 
 
@@ -45,34 +42,57 @@ void parodius_sprite_callback( running_machine &machine, int *code, int *color, 
 
 ***************************************************************************/
 
-SCREEN_UPDATE_IND16( parodius )
+VIDEO_START( parodius )
 {
-	parodius_state *state = screen.machine().driver_data<parodius_state>();
-	int layer[3], bg_colorbase;
+	K053251_vh_start(machine);
+	K052109_vh_start(machine,"gfx1",NORMAL_PLANE_ORDER,tile_callback);
+	K053245_vh_start(machine,0,"gfx2",NORMAL_PLANE_ORDER,sprite_callback);
+}
 
-	bg_colorbase = k053251_get_palette_index(state->m_k053251, K053251_CI0);
-	state->m_sprite_colorbase   = k053251_get_palette_index(state->m_k053251, K053251_CI1);
-	state->m_layer_colorbase[0] = k053251_get_palette_index(state->m_k053251, K053251_CI2);
-	state->m_layer_colorbase[1] = k053251_get_palette_index(state->m_k053251, K053251_CI4);
-	state->m_layer_colorbase[2] = k053251_get_palette_index(state->m_k053251, K053251_CI3);
+/* useful function to sort the three tile layers by priority order */
+static void sortlayers(int *layer,int *pri)
+{
+#define SWAP(a,b) \
+	if (pri[a] < pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
 
-	k052109_tilemap_update(state->m_k052109);
+	SWAP(0,1)
+	SWAP(0,2)
+	SWAP(1,2)
+}
+
+VIDEO_UPDATE( parodius )
+{
+	int layer[3];
+
+
+	bg_colorbase       = K053251_get_palette_index(K053251_CI0);
+	sprite_colorbase   = K053251_get_palette_index(K053251_CI1);
+	layer_colorbase[0] = K053251_get_palette_index(K053251_CI2);
+	layer_colorbase[1] = K053251_get_palette_index(K053251_CI4);
+	layer_colorbase[2] = K053251_get_palette_index(K053251_CI3);
+
+	K052109_tilemap_update();
 
 	layer[0] = 0;
-	state->m_layerpri[0] = k053251_get_priority(state->m_k053251, K053251_CI2);
+	layerpri[0] = K053251_get_priority(K053251_CI2);
 	layer[1] = 1;
-	state->m_layerpri[1] = k053251_get_priority(state->m_k053251, K053251_CI4);
+	layerpri[1] = K053251_get_priority(K053251_CI4);
 	layer[2] = 2;
-	state->m_layerpri[2] = k053251_get_priority(state->m_k053251, K053251_CI3);
+	layerpri[2] = K053251_get_priority(K053251_CI3);
 
-	konami_sortlayers3(layer, state->m_layerpri);
+	sortlayers(layer,layerpri);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
-	bitmap.fill(16 * bg_colorbase, cliprect);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[0], 0,1);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[1], 0,2);
-	k052109_tilemap_draw(state->m_k052109, bitmap, cliprect, layer[2], 0,4);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
+	bitmap_fill(bitmap,cliprect,16 * bg_colorbase);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[0]],0,1);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[1]],0,2);
+	tilemap_draw(bitmap,cliprect,K052109_tilemap[layer[2]],0,4);
 
-	k053245_sprites_draw(state->m_k053245, bitmap, cliprect);
+	K053245_sprites_draw(screen->machine,0,bitmap,cliprect);
 	return 0;
 }

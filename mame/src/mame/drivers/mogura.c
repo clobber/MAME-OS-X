@@ -1,134 +1,119 @@
 /* Mogura Desse */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
-#include "includes/konamipt.h"
+#include "konamipt.h"
 
-class mogura_state : public driver_device
-{
-public:
-	mogura_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	/* memory pointers */
-	UINT8 *   m_tileram;
-	UINT8 *   m_gfxram;
-
-	/* video-related */
-	tilemap_t *m_tilemap;
-
-	/* devices */
-	device_t *m_maincpu;
-	device_t *m_dac1;
-	device_t *m_dac2;
-};
-
+static UINT8 *mogura_tileram;
+static UINT8* mogura_gfxram;
+static tilemap *mogura_tilemap;
 
 static PALETTE_INIT( mogura )
 {
-	int i, j;
+	int i,j;
 
 	j = 0;
-	for (i = 0; i < 0x20; i++)
+	for (i = 0;i < 0x20;i++)
 	{
-		int bit0, bit1, bit2, r, g, b;
+		int bit0,bit1,bit2,r,g,b;
 
 		/* red component */
-		bit0 = BIT(color_prom[i], 0);
-		bit1 = BIT(color_prom[i], 1);
-		bit2 = BIT(color_prom[i], 2);
+		bit0 = (color_prom[i] >> 0) & 0x01;
+		bit1 = (color_prom[i] >> 1) & 0x01;
+		bit2 = (color_prom[i] >> 2) & 0x01;
 		r = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 		/* green component */
-		bit0 = BIT(color_prom[i], 3);
-		bit1 = BIT(color_prom[i], 4);
-		bit2 = BIT(color_prom[i], 5);
+		bit0 = (color_prom[i] >> 3) & 0x01;
+		bit1 = (color_prom[i] >> 4) & 0x01;
+		bit2 = (color_prom[i] >> 5) & 0x01;
 		g = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 		/* blue component */
 		bit0 = 0;
-		bit1 = BIT(color_prom[i], 6);
-		bit2 = BIT(color_prom[i], 7);
+		bit1 = (color_prom[i] >> 6) & 0x01;
+		bit2 = (color_prom[i] >> 7) & 0x01;
 		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
 
-		palette_set_color(machine, j, MAKE_RGB(r, g, b));
-		j += 4;
-		if (j > 31) j -= 31;
+		palette_set_color(machine,j,MAKE_RGB(r,g,b));
+		j+=4;
+		if (j>31) j-=31;
 	}
 }
 
 
 static TILE_GET_INFO( get_mogura_tile_info )
 {
-	mogura_state *state = machine.driver_data<mogura_state>();
-	int code = state->m_tileram[tile_index];
-	int attr = state->m_tileram[tile_index + 0x800];
+	int code = mogura_tileram[tile_index];
+	int attr = mogura_tileram[tile_index+0x800];
 
 	SET_TILE_INFO(
 			0,
 			code,
-			(attr >> 1) & 7,
+			(attr>>1)&7,
 			0);
 }
 
 
 static VIDEO_START( mogura )
 {
-	mogura_state *state = machine.driver_data<mogura_state>();
-	gfx_element_set_source(machine.gfx[0], state->m_gfxram);
-	state->m_tilemap = tilemap_create(machine, get_mogura_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
+	gfx_element_set_source(machine->gfx[0], mogura_gfxram);
+	mogura_tilemap = tilemap_create(machine, get_mogura_tile_info,tilemap_scan_rows,8,8,64, 32);
 }
 
-static SCREEN_UPDATE_IND16( mogura )
+static VIDEO_UPDATE( mogura )
 {
-	mogura_state *state = screen.machine().driver_data<mogura_state>();
-	const rectangle &visarea = screen.visible_area();
+	const rectangle *visarea = video_screen_get_visible_area(screen);
 
 	/* tilemap layout is a bit strange ... */
-	rectangle clip = visarea;
-	clip.max_x = 256 - 1;
-	state->m_tilemap->set_scrollx(0, 256);
-	state->m_tilemap->draw(bitmap, clip, 0, 0);
+	rectangle clip;
+	clip.min_x = visarea->min_x;
+	clip.max_x = 256-1;
+	clip.min_y = visarea->min_y;
+	clip.max_y = visarea->max_y;
+	tilemap_set_scrollx(mogura_tilemap,0, 256);
+	tilemap_draw(bitmap,&clip,mogura_tilemap,0,0);
 
 	clip.min_x = 256;
-	clip.max_x = 512 - 1;
-	state->m_tilemap->set_scrollx(0, -128);
-	state->m_tilemap->draw(bitmap, clip, 0, 0);
+	clip.max_x = 512-1;
+	clip.min_y = visarea->min_y;
+	clip.max_y = visarea->max_y;
+	tilemap_set_scrollx(mogura_tilemap,0, -128);
+	tilemap_draw(bitmap,&clip,mogura_tilemap,0,0);
 
 	return 0;
 }
 
 static WRITE8_HANDLER( mogura_tileram_w )
 {
-	mogura_state *state = space->machine().driver_data<mogura_state>();
-	state->m_tileram[offset] = data;
-	state->m_tilemap->mark_tile_dirty(offset & 0x7ff);
+	mogura_tileram[offset] = data;
+	tilemap_mark_tile_dirty(mogura_tilemap,offset&0x7ff);
 }
 
 static WRITE8_HANDLER(mogura_dac_w)
 {
-	mogura_state *state = space->machine().driver_data<mogura_state>();
-	dac_data_w(state->m_dac1, data & 0xf0);	/* left */
-	dac_data_w(state->m_dac2, (data & 0x0f) << 4);	/* right */
+	dac_data_w(devtag_get_device(space->machine, "dac1"), data & 0xf0 );	/* left */
+	dac_data_w(devtag_get_device(space->machine, "dac2"), (data & 0x0f)<<4 );	/* right */
 }
+
+
 
 
 static WRITE8_HANDLER ( mogura_gfxram_w )
 {
-	mogura_state *state = space->machine().driver_data<mogura_state>();
-	state->m_gfxram[offset] = data ;
+	mogura_gfxram[offset] = data ;
 
-	gfx_element_mark_dirty(space->machine().gfx[0], offset / 16);
+	gfx_element_mark_dirty(space->machine->gfx[0], offset/16);
 }
 
 
-static ADDRESS_MAP_START( mogura_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mogura_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM // main ram
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(mogura_gfxram_w) AM_BASE_MEMBER(mogura_state, m_gfxram) // ram based characters
-	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(mogura_tileram_w) AM_BASE_MEMBER(mogura_state, m_tileram) // tilemap
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(mogura_gfxram_w) AM_BASE(&mogura_gfxram) // ram based characters
+	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(mogura_tileram_w) AM_BASE(&mogura_tileram) // tilemap
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mogura_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( mogura_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITENOP	// ??
 	AM_RANGE(0x08, 0x08) AM_READ_PORT("SYSTEM")
@@ -185,49 +170,38 @@ static GFXDECODE_START( mogura )
 	GFXDECODE_ENTRY( NULL, 0, tiles8x8_layout, 0, 8 )
 GFXDECODE_END
 
-static MACHINE_START( mogura )
-{
-	mogura_state *state = machine.driver_data<mogura_state>();
-
-	state->m_maincpu = machine.device("maincpu");
-	state->m_dac1 = machine.device("dac1");
-	state->m_dac2 = machine.device("dac2");
-}
-
-static MACHINE_CONFIG_START( mogura, mogura_state )
-
+static MACHINE_DRIVER_START( mogura )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,3000000)		 /* 3 MHz */
-	MCFG_CPU_PROGRAM_MAP(mogura_map)
-	MCFG_CPU_IO_MAP(mogura_io_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,3000000)		 /* 3 MHz */
+	MDRV_CPU_PROGRAM_MAP(mogura_map)
+	MDRV_CPU_IO_MAP(mogura_io_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_START(mogura)
-
-	MCFG_GFXDECODE(mogura)
+	MDRV_GFXDECODE(mogura)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60) // ?
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(512, 512)
-	MCFG_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-1)
-	MCFG_SCREEN_UPDATE_STATIC(mogura)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60) // ?
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 512)
+	MDRV_SCREEN_VISIBLE_AREA(0, 320-1, 0, 256-1)
 
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_PALETTE_INIT(mogura)
-	MCFG_VIDEO_START(mogura)
+	MDRV_PALETTE_INIT(mogura)
+	MDRV_VIDEO_START(mogura)
+	MDRV_VIDEO_UPDATE(mogura)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("dac1", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
+	MDRV_SOUND_ADD("dac1", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 
-	MCFG_SOUND_ADD("dac2", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac2", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
+MACHINE_DRIVER_END
 
 ROM_START( mogura )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -237,4 +211,4 @@ ROM_START( mogura )
 	ROM_LOAD( "gx141.7j", 0x00, 0x20,  CRC(b21c5d5f) SHA1(6913c840dd69a7d4687f4c4cbe3ff12300f62bc2) )
 ROM_END
 
-GAME( 1991, mogura, 0, mogura, mogura, 0, ROT0, "Konami", "Mogura Desse (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1991, mogura, 0, mogura, mogura, 0, ROT0, "Konami", "Mogura Desse (Japan)", 0 )

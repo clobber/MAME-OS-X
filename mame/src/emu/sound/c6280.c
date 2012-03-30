@@ -26,7 +26,7 @@
       game will reset the index prior to playback so this isn't an issue.
 
     - While the noise emulation is complete, the data for the pseudo-random
-      bitstream is calculated by machine.rand() and is not a representation of what
+      bitstream is calculated by mame_rand() and is not a representation of what
       the actual hardware does.
 
     For some background on Hudson Soft's C62 chipset:
@@ -53,7 +53,8 @@
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#include "emu.h"
+#include "sndintrf.h"
+#include "streams.h"
 #include "c6280.h"
 
 typedef struct {
@@ -70,8 +71,8 @@ typedef struct {
 
 typedef struct {
 	sound_stream *stream;
-	device_t *device;
-	device_t *cpudevice;
+	const device_config *device;
+	const device_config *cpudevice;
     UINT8 select;
     UINT8 balance;
     UINT8 lfo_frequency;
@@ -82,11 +83,13 @@ typedef struct {
     UINT32 wave_freq_tab[4096];
 } c6280_t;
 
-INLINE c6280_t *get_safe_token(device_t *device)
+INLINE c6280_t *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == C6280);
-	return (c6280_t *)downcast<legacy_device_base *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == SOUND);
+	assert(sound_get_type(device) == SOUND_C6280);
+	return (c6280_t *)device->token;
 }
 
 
@@ -94,9 +97,9 @@ INLINE c6280_t *get_safe_token(device_t *device)
 #include "cpu/h6280/h6280.h"
 
 
-static void c6280_init(device_t *device, c6280_t *p, double clk, double rate)
+static void c6280_init(const device_config *device, c6280_t *p, double clk, double rate)
 {
-	const c6280_interface *intf = (const c6280_interface *)device->static_config();
+	const c6280_interface *intf = (const c6280_interface *)device->static_config;
     int i;
     double step;
 
@@ -107,9 +110,9 @@ static void c6280_init(device_t *device, c6280_t *p, double clk, double rate)
     memset(p, 0, sizeof(c6280_t));
 
     p->device = device;
-    p->cpudevice = device->machine().device(intf->cpu);
+    p->cpudevice = cputag_get_cpu(device->machine, intf->cpu);
     if (p->cpudevice == NULL)
-    	fatalerror("c6280_init: no CPU found with tag of '%s'\n", device->tag());
+    	fatalerror("c6280_init: no CPU found with tag of '%s'\n", device->tag);
 
     /* Make waveform frequency table */
     for(i = 0; i < 4096; i += 1)
@@ -142,7 +145,7 @@ static void c6280_write(c6280_t *p, int offset, int data)
     t_channel *q = &p->channel[p->select];
 
     /* Update stream */
-    p->stream->update();
+    stream_update(p->stream);
 
     switch(offset & 0x0F)
     {
@@ -277,7 +280,7 @@ static STREAM_UPDATE( c6280_update )
                     p->channel[ch].noise_counter += step;
                     if(p->channel[ch].noise_counter >= 0x800)
                     {
-                        data = (p->device->machine().rand() & 1) ? 0x1F : 0;
+                        data = (mame_rand(p->device->machine) & 1) ? 0x1F : 0;
                     }
                     p->channel[ch].noise_counter &= 0x7FF;
                     outputs[0][i] += (INT16)(vll * (data - 16));
@@ -321,14 +324,14 @@ static STREAM_UPDATE( c6280_update )
 
 static DEVICE_START( c6280 )
 {
-    int rate = device->clock()/16;
+    int rate = device->clock/16;
     c6280_t *info = get_safe_token(device);
 
     /* Initialize PSG emulator */
-    c6280_init(device, info, device->clock(), rate);
+    c6280_init(device, info, device->clock, rate);
 
     /* Create stereo stream */
-    info->stream = device->machine().sound().stream_alloc(*device, 0, 2, rate, info, c6280_update);
+    info->stream = stream_create(device, 0, 2, rate, info, c6280_update);
 }
 
 READ8_DEVICE_HANDLER( c6280_r )
@@ -371,5 +374,3 @@ DEVICE_GET_INFO( c6280 )
 	}
 }
 
-
-DEFINE_LEGACY_SOUND_DEVICE(C6280, c6280);

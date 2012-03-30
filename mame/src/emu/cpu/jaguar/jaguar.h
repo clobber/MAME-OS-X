@@ -11,6 +11,7 @@
 #ifndef __JAGUAR_H__
 #define __JAGUAR_H__
 
+#include "cpuintrf.h"
 
 
 /***************************************************************************
@@ -71,7 +72,7 @@ enum
     CONFIGURATION STRUCTURE
 ***************************************************************************/
 
-typedef void (*jaguar_int_func)(device_t *device);
+typedef void (*jaguar_int_func)(const device_config *device);
 
 
 typedef struct _jaguar_cpu_config jaguar_cpu_config;
@@ -99,13 +100,15 @@ struct _jaguar_cpu_config
     PUBLIC FUNCTIONS
 ***************************************************************************/
 
-DECLARE_LEGACY_CPU_DEVICE(JAGUARGPU, jaguargpu);
-extern void jaguargpu_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_mask);
-extern UINT32 jaguargpu_ctrl_r(device_t *device, offs_t offset);
+extern CPU_GET_INFO( jaguargpu );
+#define CPU_JAGUARGPU CPU_GET_INFO_NAME( jaguargpu )
+extern void jaguargpu_ctrl_w(const device_config *device, offs_t offset, UINT32 data, UINT32 mem_mask);
+extern UINT32 jaguargpu_ctrl_r(const device_config *device, offs_t offset);
 
-DECLARE_LEGACY_CPU_DEVICE(JAGUARDSP, jaguardsp);
-extern void jaguardsp_ctrl_w(device_t *device, offs_t offset, UINT32 data, UINT32 mem_mask);
-extern UINT32 jaguardsp_ctrl_r(device_t *device, offs_t offset);
+extern CPU_GET_INFO( jaguardsp );
+#define CPU_JAGUARDSP CPU_GET_INFO_NAME( jaguardsp )
+extern void jaguardsp_ctrl_w(const device_config *device, offs_t offset, UINT32 data, UINT32 mem_mask);
+extern UINT32 jaguardsp_ctrl_r(const device_config *device, offs_t offset);
 
 
 #endif /* __JAGUAR_H__ */

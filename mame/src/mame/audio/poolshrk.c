@@ -3,8 +3,8 @@
     audio\poolshrk.c
 
 *************************************************************************/
-#include "emu.h"
-#include "includes/poolshrk.h"
+#include "driver.h"
+#include "poolshrk.h"
 #include "sound/discrete.h"
 
 /************************************************************************/

@@ -3,6 +3,8 @@
 #ifndef __G65816_H__
 #define __G65816_H__
 
+#include "cpuintrf.h"
+#include "debugger.h"
 #include "g65816cm.h"
 
 /* ======================================================================== */
@@ -57,14 +59,10 @@ enum
 };
 
 /* Main interface function */
-DECLARE_LEGACY_CPU_DEVICE(G65816, g65816);
-DECLARE_LEGACY_CPU_DEVICE(_5A22, _5a22);
+CPU_GET_INFO( g65816 );
+#define CPU_G65816 CPU_GET_INFO_NAME( g65816 )
 
-#define CPU_TYPE_G65816 0
-#define CPU_TYPE_5A22 1
-
-
-void g65816_set_read_vector_callback(device_t *device, read8_space_func read_vector);
+void g65816_set_read_vector_callback(const device_config *device, read8_space_func read_vector);
 
 
 /* ======================================================================== */

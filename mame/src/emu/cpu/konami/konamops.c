@@ -191,6 +191,10 @@ INLINE void lbra( konami_state *cpustate )
 {
 	IMMWORD(cpustate, cpustate->ea);
 	PC += EA;
+
+	/* EHC 980508 speed up busy loop */
+	if( EA == 0xfffd && cpustate->icount > 0 )
+		cpustate->icount = 0;
 }
 
 /* $17 LBSR relative ----- */
@@ -297,13 +301,16 @@ INLINE void bra( konami_state *cpustate )
 	UINT8 t;
 	IMMBYTE(cpustate, t);
 	PC += SIGNED(t);
+	/* JB 970823 - speed up busy loops */
+	if( t == 0xfe && cpustate->icount > 0 )
+		cpustate->icount = 0;
 }
 
 /* $21 BRN relative ----- */
-static UINT8 konami_brn_t;	// hack around GCC 4.6 error because we need the side effects of IMMBYTE
 INLINE void brn( konami_state *cpustate )
 {
-	IMMBYTE(cpustate, konami_brn_t);
+	UINT8 t;
+	IMMBYTE(cpustate, t);
 }
 
 /* $1021 LBRN relative ----- */

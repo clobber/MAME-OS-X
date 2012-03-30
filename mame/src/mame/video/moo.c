@@ -8,128 +8,162 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/moo.h"
+#include "driver.h"
+#include "video/konamiic.h"
 
-void moo_sprite_callback( running_machine &machine, int *code, int *color, int *priority_mask )
+static int sprite_colorbase;
+static int layer_colorbase[4], layerpri[3];
+static int alpha_enabled;
+
+#ifdef UNUSED_FUNCTION
+void moo_set_alpha(int on)
 {
-	moo_state *state = machine.driver_data<moo_state>();
+	alpha_enabled = on;
+}
+#endif
+
+static void moo_sprite_callback(int *code, int *color, int *priority_mask)
+{
 	int pri = (*color & 0x03e0) >> 4;
 
-	if (pri <= state->m_layerpri[2])
-		*priority_mask = 0;
-	else if (pri <= state->m_layerpri[1])
-		*priority_mask = 0xf0;
-	else if (pri <= state->m_layerpri[0])
-		*priority_mask = 0xf0|0xcc;
-	else
-		*priority_mask = 0xf0|0xcc|0xaa;
+	if      (pri <= layerpri[2])	*priority_mask = 0;
+	else if (pri <= layerpri[1])	*priority_mask = 0xf0;
+	else if (pri <= layerpri[0])	*priority_mask = 0xf0|0xcc;
+	else 							*priority_mask = 0xf0|0xcc|0xaa;
 
-	*color = state->m_sprite_colorbase | (*color & 0x001f);
+	*color = sprite_colorbase | (*color & 0x001f);
 }
 
-void moo_tile_callback( running_machine &machine, int layer, int *code, int *color, int *flags )
+static void moo_tile_callback(int layer, int *code, int *color, int *flags)
 {
-	moo_state *state = machine.driver_data<moo_state>();
-	*color = state->m_layer_colorbase[layer] | (*color >> 2 & 0x0f);
+	*color = layer_colorbase[layer] | (*color>>2 & 0x0f);
 }
 
 VIDEO_START(moo)
 {
-	moo_state *state = machine.driver_data<moo_state>();
+	int offsx, offsy;
 
-	assert(machine.primary_screen->format() == BITMAP_FORMAT_RGB32);
+	assert(video_screen_get_format(machine->primary_screen) == BITMAP_FORMAT_RGB32);
 
-	state->m_alpha_enabled = 0;
+	alpha_enabled = 0;
 
-	if (!strcmp(machine.system().name, "bucky") || !strcmp(machine.system().name, "buckyua") || !strcmp(machine.system().name, "buckyaa"))
+	K053251_vh_start(machine);
+	K054338_vh_start(machine);
+
+	K056832_vh_start(machine, "gfx1", K056832_BPP_4, 1, NULL, moo_tile_callback, 0);
+
+	if (!strcmp(machine->gamedrv->name, "bucky") || !strcmp(machine->gamedrv->name, "buckyua") || !strcmp(machine->gamedrv->name, "buckyaa"))
 	{
 		// Bucky doesn't chain tilemaps
-		k056832_set_layer_association(state->m_k056832, 0);
+		K056832_set_LayerAssociation(0);
 
-		k056832_set_layer_offs(state->m_k056832, 0, -2, 0);
-		k056832_set_layer_offs(state->m_k056832, 1,  2, 0);
-		k056832_set_layer_offs(state->m_k056832, 2,  4, 0);
-		k056832_set_layer_offs(state->m_k056832, 3,  6, 0);
+		K056832_set_LayerOffset(0, -2, 0);
+		K056832_set_LayerOffset(1,  2, 0);
+		K056832_set_LayerOffset(2,  4, 0);
+		K056832_set_LayerOffset(3,  6, 0);
+
+		offsx = -48;
+		offsy =  23;
 	}
 	else
 	{
 		// other than the intro showing one blank line alignment is good through the game
-		k056832_set_layer_offs(state->m_k056832, 0, -2 + 1, 0);
-		k056832_set_layer_offs(state->m_k056832, 1,  2 + 1, 0);
-		k056832_set_layer_offs(state->m_k056832, 2,  4 + 1, 0);
-		k056832_set_layer_offs(state->m_k056832, 3,  6 + 1, 0);
+		K056832_set_LayerOffset(0, -2+1, 0);
+		K056832_set_LayerOffset(1,  2+1, 0);
+		K056832_set_LayerOffset(2,  4+1, 0);
+		K056832_set_LayerOffset(3,  6+1, 0);
+
+		offsx = -48+1;
+		offsy =  23;
 	}
+
+	K053247_vh_start(machine, "gfx2", offsx, offsy, NORMAL_PLANE_ORDER, moo_sprite_callback);
+
+	K054338_invert_alpha(0);
 }
 
-SCREEN_UPDATE_RGB32(moo)
+/* useful function to sort the three tile layers by priority order */
+static void sortlayers(int *layer,int *pri)
 {
-	moo_state *state = screen.machine().driver_data<moo_state>();
+#define SWAP(a,b) \
+	if (pri[a] < pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
+
+	SWAP(0,1)
+	SWAP(0,2)
+	SWAP(1,2)
+}
+
+VIDEO_UPDATE(moo)
+{
 	static const int K053251_CI[4] = { K053251_CI1, K053251_CI2, K053251_CI3, K053251_CI4 };
 	int layers[3];
-	int new_colorbase, plane, dirty, alpha;
+	int bg_colorbase, new_colorbase, plane, dirty, alpha;
 
-	state->m_sprite_colorbase = k053251_get_palette_index(state->m_k053251, K053251_CI0);
-	state->m_layer_colorbase[0] = 0x70;
+	bg_colorbase       = K053251_get_palette_index(K053251_CI1);
+	sprite_colorbase   = K053251_get_palette_index(K053251_CI0);
+	layer_colorbase[0] = 0x70;
 
-	if (k056832_get_layer_association(state->m_k056832))
+	if (K056832_get_LayerAssociation())
 	{
-		for (plane = 1; plane < 4; plane++)
+		for (plane=1; plane<4; plane++)
 		{
-			new_colorbase = k053251_get_palette_index(state->m_k053251, K053251_CI[plane]);
-			if (state->m_layer_colorbase[plane] != new_colorbase)
+			new_colorbase = K053251_get_palette_index(K053251_CI[plane]);
+			if (layer_colorbase[plane] != new_colorbase)
 			{
-				state->m_layer_colorbase[plane] = new_colorbase;
-				k056832_mark_plane_dirty(state->m_k056832, plane);
+				layer_colorbase[plane] = new_colorbase;
+				K056832_mark_plane_dirty(plane);
 			}
 		}
 	}
 	else
 	{
-		for (dirty = 0, plane = 1; plane < 4; plane++)
+		for (dirty=0, plane=1; plane<4; plane++)
 		{
-			new_colorbase = k053251_get_palette_index(state->m_k053251, K053251_CI[plane]);
-			if (state->m_layer_colorbase[plane] != new_colorbase)
+			new_colorbase = K053251_get_palette_index(K053251_CI[plane]);
+			if (layer_colorbase[plane] != new_colorbase)
 			{
-				state->m_layer_colorbase[plane] = new_colorbase;
+				layer_colorbase[plane] = new_colorbase;
 				dirty = 1;
 			}
 		}
-		if (dirty)
-			k056832_mark_all_tmaps_dirty(state->m_k056832);
+		if (dirty) K056832_MarkAllTilemapsDirty();
 	}
 
 	layers[0] = 1;
-	state->m_layerpri[0] = k053251_get_priority(state->m_k053251, K053251_CI2);
+	layerpri[0] = K053251_get_priority(K053251_CI2);
 	layers[1] = 2;
-	state->m_layerpri[1] = k053251_get_priority(state->m_k053251, K053251_CI3);
+	layerpri[1] = K053251_get_priority(K053251_CI3);
 	layers[2] = 3;
-	state->m_layerpri[2] = k053251_get_priority(state->m_k053251, K053251_CI4);
+	layerpri[2] = K053251_get_priority(K053251_CI4);
 
-	konami_sortlayers3(layers, state->m_layerpri);
+	sortlayers(layers, layerpri);
 
-	k054338_update_all_shadows(state->m_k054338, 0);
-	k054338_fill_backcolor(state->m_k054338, bitmap, 0);
+	K054338_update_all_shadows(screen->machine);
+	K054338_fill_backcolor(screen->machine, bitmap, 0);
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
-	if (state->m_layerpri[0] < k053251_get_priority(state->m_k053251, K053251_CI1))	/* bucky hides back layer behind background */
-		k056832_tilemap_draw(state->m_k056832, bitmap, cliprect, layers[0], 0, 1);
+	if (layerpri[0] < K053251_get_priority(K053251_CI1))	/* bucky hides back layer behind background */
+		K056832_tilemap_draw(screen->machine, bitmap, cliprect, layers[0], 0, 1);
 
-	k056832_tilemap_draw(state->m_k056832, bitmap, cliprect, layers[1], 0, 2);
+	K056832_tilemap_draw(screen->machine, bitmap, cliprect, layers[1], 0, 2);
 
 	// Enabling alpha improves fog and fading in Moo but causes other things to disappear.
 	// There is probably a control bit somewhere to turn off alpha blending.
-	state->m_alpha_enabled = k054338_register_r(state->m_k054338, K338_REG_CONTROL) & K338_CTL_MIXPRI; // DUMMY
+	alpha_enabled = K054338_read_register(K338_REG_CONTROL) & K338_CTL_MIXPRI; // DUMMY
 
-	alpha = (state->m_alpha_enabled) ? k054338_set_alpha_level(state->m_k054338, 1) : 255;
+	alpha = (alpha_enabled) ? K054338_set_alpha_level(1) : 255;
 
 	if (alpha > 0)
-		k056832_tilemap_draw(state->m_k056832, bitmap, cliprect, layers[2], TILEMAP_DRAW_ALPHA(alpha), 4);
+		K056832_tilemap_draw(screen->machine, bitmap, cliprect, layers[2], TILEMAP_DRAW_ALPHA(alpha), 4);
 
-	k053247_sprites_draw(state->m_k053246, bitmap, cliprect);
+	K053247_sprites_draw(screen->machine, bitmap,cliprect);
 
-	k056832_tilemap_draw(state->m_k056832, bitmap, cliprect, 0, 0, 0);
+	K056832_tilemap_draw(screen->machine, bitmap, cliprect, 0, 0, 0);
 	return 0;
 }

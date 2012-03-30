@@ -54,82 +54,64 @@ Notes:
        U3 is 27C512 EPROM
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/dac.h"
 #include "sound/nes_apu.h"
 #include "video/ppu2c0x.h"
 
+static UINT8* nt_ram;
+static UINT8* nt_page[4];
 
-class cham24_state : public driver_device
+static void cham24_set_mirroring( int mirroring )
 {
-public:
-	cham24_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8* m_nt_ram;
-	UINT8* m_nt_page[4];
-	UINT32 m_in_0;
-	UINT32 m_in_1;
-	UINT32 m_in_0_shift;
-	UINT32 m_in_1_shift;
-};
-
-
-
-static void cham24_set_mirroring( running_machine &machine, int mirroring )
-{
-	cham24_state *state = machine.driver_data<cham24_state>();
 	switch(mirroring)
 	{
 	case PPU_MIRROR_LOW:
-		state->m_nt_page[0] = state->m_nt_page[1] = state->m_nt_page[2] = state->m_nt_page[3] = state->m_nt_ram;
+		nt_page[0] = nt_page[1] = nt_page[2] = nt_page[3] = nt_ram;
 		break;
 	case PPU_MIRROR_HIGH:
-		state->m_nt_page[0] = state->m_nt_page[1] = state->m_nt_page[2] = state->m_nt_page[3] = state->m_nt_ram + 0x400;
+		nt_page[0] = nt_page[1] = nt_page[2] = nt_page[3] = nt_ram + 0x400;
 		break;
 	case PPU_MIRROR_HORZ:
-		state->m_nt_page[0] = state->m_nt_ram;
-		state->m_nt_page[1] = state->m_nt_ram;
-		state->m_nt_page[2] = state->m_nt_ram + 0x400;
-		state->m_nt_page[3] = state->m_nt_ram + 0x400;
+		nt_page[0] = nt_ram;
+		nt_page[1] = nt_ram;
+		nt_page[2] = nt_ram + 0x400;
+		nt_page[3] = nt_ram + 0x400;
 		break;
 	case PPU_MIRROR_VERT:
-		state->m_nt_page[0] = state->m_nt_ram;
-		state->m_nt_page[1] = state->m_nt_ram + 0x400;
-		state->m_nt_page[2] = state->m_nt_ram;
-		state->m_nt_page[3] = state->m_nt_ram + 0x400;
+		nt_page[0] = nt_ram;
+		nt_page[1] = nt_ram + 0x400;
+		nt_page[2] = nt_ram;
+		nt_page[3] = nt_ram + 0x400;
 		break;
 	case PPU_MIRROR_NONE:
 	default:
-		state->m_nt_page[0] = state->m_nt_ram;
-		state->m_nt_page[1] = state->m_nt_ram + 0x400;
-		state->m_nt_page[2] = state->m_nt_ram + 0x800;
-		state->m_nt_page[3] = state->m_nt_ram + 0xc00;
+		nt_page[0] = nt_ram;
+		nt_page[1] = nt_ram + 0x400;
+		nt_page[2] = nt_ram + 0x800;
+		nt_page[3] = nt_ram + 0xc00;
 		break;
 	}
 }
 
 static WRITE8_HANDLER( nt_w )
 {
-	cham24_state *state = space->machine().driver_data<cham24_state>();
 	int page = ((offset & 0xc00) >> 10);
-	state->m_nt_page[page][offset & 0x3ff] = data;
+	nt_page[page][offset & 0x3ff] = data;
 }
 
 static READ8_HANDLER( nt_r )
 {
-	cham24_state *state = space->machine().driver_data<cham24_state>();
 	int page = ((offset & 0xc00) >> 10);
-	return state->m_nt_page[page][offset & 0x3ff];
+	return nt_page[page][offset & 0x3ff];
 
 }
 
 static WRITE8_HANDLER( sprite_dma_w )
 {
 	int source = (data & 7);
-	ppu2c0x_device *ppu = space->machine().device<ppu2c0x_device>("ppu");
-	ppu->spriteram_dma(space, source);
+	ppu2c0x_spriteram_dma(space, devtag_get_device(space->machine, "ppu"), source);
 }
 
 static READ8_DEVICE_HANDLER( psg_4015_r )
@@ -147,16 +129,18 @@ static WRITE8_DEVICE_HANDLER( psg_4017_w )
 	nes_psg_w(device,0x17, data);
 }
 
+static UINT32 in_0;
+static UINT32 in_1;
+static UINT32 in_0_shift;
+static UINT32 in_1_shift;
 
 static READ8_HANDLER( cham24_IN0_r )
 {
-	cham24_state *state = space->machine().driver_data<cham24_state>();
-	return ((state->m_in_0 >> state->m_in_0_shift++) & 0x01) | 0x40;
+	return ((in_0 >> in_0_shift++) & 0x01) | 0x40;
 }
 
 static WRITE8_HANDLER( cham24_IN0_w )
 {
-	cham24_state *state = space->machine().driver_data<cham24_state>();
 	if (data & 0xfe)
 	{
 		//logerror("Unhandled cham24_IN0_w write: data = %02X\n", data);
@@ -167,18 +151,17 @@ static WRITE8_HANDLER( cham24_IN0_w )
 		return;
 	}
 
-	state->m_in_0_shift = 0;
-	state->m_in_1_shift = 0;
+	in_0_shift = 0;
+	in_1_shift = 0;
 
-	state->m_in_0 = input_port_read(space->machine(), "P1");
-	state->m_in_1 = input_port_read(space->machine(), "P2");
+	in_0 = input_port_read(space->machine, "P1");
+	in_1 = input_port_read(space->machine, "P2");
 
 }
 
 static READ8_HANDLER( cham24_IN1_r )
 {
-	cham24_state *state = space->machine().driver_data<cham24_state>();
-	return ((state->m_in_1 >> state->m_in_1_shift++) & 0x01) | 0x40;
+	return ((in_1 >> in_1_shift++) & 0x01) | 0x40;
 }
 
 static WRITE8_HANDLER( cham24_mapper_w )
@@ -189,14 +172,14 @@ static WRITE8_HANDLER( cham24_mapper_w )
 	UINT32 prg_bank_page_size = (offset >> 12) & 0x01;
 	UINT32 gfx_mirroring = (offset >> 13) & 0x01;
 
-	UINT8* dst = space->machine().region("maincpu")->base();
-	UINT8* src = space->machine().region("user1")->base();
+	UINT8* dst = memory_region(space->machine, "maincpu");
+	UINT8* src = memory_region(space->machine, "user1");
 
 	// switch PPU VROM bank
-	memory_set_bankptr(space->machine(), "bank1", space->machine().region("gfx1")->base() + (0x2000 * gfx_bank));
+	memory_set_bankptr(space->machine, 1, memory_region(space->machine, "gfx1") + (0x2000 * gfx_bank));
 
 	// set gfx mirroring
-	cham24_set_mirroring(space->machine(), gfx_mirroring != 0 ? PPU_MIRROR_HORZ : PPU_MIRROR_VERT);
+	cham24_set_mirroring(gfx_mirroring != 0 ? PPU_MIRROR_HORZ : PPU_MIRROR_VERT);
 
 	// switch PRG bank
 	if (prg_bank_page_size == 0)
@@ -221,9 +204,9 @@ static WRITE8_HANDLER( cham24_mapper_w )
 	}
 }
 
-static ADDRESS_MAP_START( cham24_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( cham24_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM	/* NES RAM */
-	AM_RANGE(0x2000, 0x3fff) AM_DEVREADWRITE_MODERN("ppu", ppu2c0x_device, read, write)
+	AM_RANGE(0x2000, 0x3fff) AM_DEVREADWRITE("ppu", ppu2c0x_r, ppu2c0x_w)
 	AM_RANGE(0x4000, 0x4013) AM_DEVREADWRITE("nes", nes_psg_r, nes_psg_w)			/* PSG primary registers */
 	AM_RANGE(0x4014, 0x4014) AM_WRITE(sprite_dma_w)
 	AM_RANGE(0x4015, 0x4015) AM_DEVREADWRITE("nes", psg_4015_r, psg_4015_w)			/* PSG status / first control register */
@@ -265,20 +248,17 @@ static MACHINE_RESET( cham24 )
 
 static PALETTE_INIT( cham24 )
 {
-	ppu2c0x_device *ppu = machine.device<ppu2c0x_device>("ppu");
-	ppu->init_palette(machine, 0);
+	ppu2c0x_init_palette(machine, 0);
 }
 
-static void ppu_irq( device_t *device, int *ppu_regs )
+static void ppu_irq( const device_config *device, int *ppu_regs )
 {
-	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 /* our ppu interface                                            */
 static const ppu2c0x_interface ppu_interface =
 {
-	"maincpu",
-	"screen",
 	0,					/* gfxlayout num */
 	0,					/* color base */
 	PPU_MIRROR_NONE,	/* mirroring */
@@ -289,38 +269,36 @@ static VIDEO_START( cham24 )
 {
 }
 
-static SCREEN_UPDATE_IND16( cham24 )
+static VIDEO_UPDATE( cham24 )
 {
 	/* render the ppu */
-	ppu2c0x_device *ppu = screen.machine().device<ppu2c0x_device>("ppu");
-	ppu->render(bitmap, 0, 0, 0, 0);
+	ppu2c0x_render(devtag_get_device(screen->machine, "ppu"), bitmap, 0, 0, 0, 0);
 	return 0;
 }
 
 
 static MACHINE_START( cham24 )
 {
-	cham24_state *state = machine.driver_data<cham24_state>();
 	/* switch PRG rom */
-	UINT8* dst = machine.region("maincpu")->base();
-	UINT8* src = machine.region("user1")->base();
+	UINT8* dst = memory_region(machine, "maincpu");
+	UINT8* src = memory_region(machine, "user1");
 
 	memcpy(&dst[0x8000], &src[0x0f8000], 0x4000);
 	memcpy(&dst[0xc000], &src[0x0f8000], 0x4000);
 
 	/* uses 8K swapping, all ROM!*/
-	machine.device("ppu")->memory().space(AS_PROGRAM)->install_read_bank(0x0000, 0x1fff, "bank1");
-	memory_set_bankptr(machine, "bank1", machine.region("gfx1")->base());
+	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x0000, 0x1fff, 0, 0, (read8_space_func)SMH_BANK(1), 0);
+	memory_set_bankptr(machine, 1, memory_region(machine, "gfx1"));
 
 	/* need nametable ram, though. I doubt this uses more than 2k, but it starts up configured for 4 */
-	state->m_nt_ram = auto_alloc_array(machine, UINT8, 0x1000);
-	state->m_nt_page[0] = state->m_nt_ram;
-	state->m_nt_page[1] = state->m_nt_ram + 0x400;
-	state->m_nt_page[2] = state->m_nt_ram + 0x800;
-	state->m_nt_page[3] = state->m_nt_ram + 0xc00;
+	nt_ram = auto_alloc_array(machine, UINT8, 0x1000);
+	nt_page[0] = nt_ram;
+	nt_page[1] = nt_ram + 0x400;
+	nt_page[2] = nt_ram + 0x800;
+	nt_page[3] = nt_ram + 0xc00;
 
 	/* and read/write handlers */
-	machine.device("ppu")->memory().space(AS_PROGRAM)->install_legacy_readwrite_handler(0x2000, 0x3eff, FUNC(nt_r), FUNC(nt_w));
+	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, nt_r, nt_w);
 }
 
 static DRIVER_INIT( cham24 )
@@ -331,39 +309,40 @@ static GFXDECODE_START( cham24 )
 	/* none, the ppu generates one */
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( cham24, cham24_state )
+static MACHINE_DRIVER_START( cham24 )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", N2A03, N2A03_DEFAULTCLOCK)
-	MCFG_CPU_PROGRAM_MAP(cham24_map)
+	MDRV_CPU_ADD("maincpu", N2A03, N2A03_DEFAULTCLOCK)
+	MDRV_CPU_PROGRAM_MAP(cham24_map)
 
-	MCFG_MACHINE_RESET( cham24 )
-	MCFG_MACHINE_START( cham24 )
+	MDRV_MACHINE_RESET( cham24 )
+	MDRV_MACHINE_START( cham24 )
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(32*8, 262)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(cham24)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 262)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 30*8-1)
 
-	MCFG_GFXDECODE(cham24)
-	MCFG_PALETTE_LENGTH(8*4*16)
+	MDRV_GFXDECODE(cham24)
+	MDRV_PALETTE_LENGTH(8*4*16)
 
-	MCFG_PALETTE_INIT(cham24)
-	MCFG_VIDEO_START(cham24)
+	MDRV_PALETTE_INIT(cham24)
+	MDRV_VIDEO_START(cham24)
+	MDRV_VIDEO_UPDATE(cham24)
 
-	MCFG_PPU2C04_ADD("ppu", ppu_interface)
+	MDRV_PPU2C04_ADD("ppu", ppu_interface)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("nes", NES, N2A03_DEFAULTCLOCK)
-	MCFG_SOUND_CONFIG(cham24_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("nes", NES, N2A03_DEFAULTCLOCK)
+	MDRV_SOUND_CONFIG(cham24_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 ROM_START( cham24 )
 	ROM_REGION(0x10000, "maincpu", ROMREGION_ERASE00)

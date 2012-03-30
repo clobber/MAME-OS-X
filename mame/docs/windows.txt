@@ -25,25 +25,6 @@ Windows debugging options
 	the same time as -log to output the log data to both targets as well.
 	Default is OFF (-nooslog).
 
--watchdog <duration> / -wdog <duration>
-
-	Enables an internal watchdog timer that will automatically kill the MAME
-	process if more than <duration> seconds passes without a frame update.
-	Keep in mind that some games sit for a while during load time without
-	updating the screen, so <duration> should be long enough to cover that.
-	10-30 seconds on a modern system should be plenty in general. By default
-	there is no watchdog.
-
--debugger_font <fontname> / -dfont <fontname>
-
-	Specifies the name of the font to use for debugger windows. By default,
-	the font is Lucida Console.
-	
--debugger_font_size <points> / -dfontsize <points>
-
-	Specifies the size of the font to use for debugger windows, in points.
-	By default, this is set to 9pt.
-	
 
 
 Windows performance options
@@ -62,13 +43,6 @@ Windows performance options
 	window and all DirectDraw/Direct3D code to execute on a second thread,
 	which can improve performance on hyperthreaded and multicore systems.
 	The default is OFF (-nomultithreading).
-	
--numprocessors <auto|value> / -np <auto|value>
-	Specify the number of processors to use for work queues. Specifying
-	"auto" will use the value reported by the system or environment 
-	variable OSDPROCESSORS. To avoid abuse, this value is internally limited
-	to 4 times the number of processors reported by the system. 
-	The default is "auto".
 
 
 
@@ -99,7 +73,7 @@ Windows video options
 	physical monitor, aspect ratio, resolution, and view, which can be
 	set using the options below. The default is 1.
 
--[no]window / -[no]w
+-[no]window
 
 	Run MAME in either a window or full screen. The default is OFF
 	(-nowindow).
@@ -134,6 +108,23 @@ Windows video options
 	image at the expense of some speed. In -video ddraw mode, this also
 	increases the effective resolution of non-screen elements such as
 	artwork and fonts. The default is 1.
+
+-effect <filename>
+
+	Specifies a single PNG file that is used as an overlay over any game
+	screens in the video display. This PNG file is assumed to live in the
+	root of one of the artpath directories. The pattern in the PNG file is
+	repeated both horizontally and vertically to cover the entire game
+	screen areas (but not any external artwork), and is rendered at
+	the target resolution of the game image. For -video gdi and -video d3d
+	modes, this means that one pixel in the PNG will map to one pixel on
+	your output display. For -video ddraw, this means that one pixel in the
+	PNG will map to one pixel in the prescaled game screen. If you wish to
+	use an effect that requires mapping n PNG pixels to each game screen
+	pixel with -video ddraw, you need to specify a -prescale factor of n as
+	well. The RGB values of each pixel in the PNG are multiplied against the
+	RGB values of the target screen. The default is 'none', meaning no
+	effect.
 
 -[no]waitvsync
 

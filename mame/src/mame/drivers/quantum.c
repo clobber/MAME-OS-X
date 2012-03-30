@@ -43,22 +43,11 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "sound/pokey.h"
-#include "machine/nvram.h"
-
-
-class quantum_state : public driver_device
-{
-public:
-	quantum_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-};
-
 
 #define MASTER_CLOCK (12096000)
 #define CLOCK_3KHZ  (MASTER_CLOCK / 4096)
@@ -72,19 +61,19 @@ public:
 
 static READ16_HANDLER( trackball_r )
 {
-	return (input_port_read(space->machine(), "TRACKY") << 4) | input_port_read(space->machine(), "TRACKX");
+	return (input_port_read(space->machine, "TRACKY") << 4) | input_port_read(space->machine, "TRACKX");
 }
 
 
 static READ8_DEVICE_HANDLER( input_1_r )
 {
-	return (input_port_read(device->machine(), "DSW0") << (7 - (offset - POT0_C))) & 0x80;
+	return (input_port_read(device->machine, "DSW0") << (7 - (offset - POT0_C))) & 0x80;
 }
 
 
 static READ8_DEVICE_HANDLER( input_2_r )
 {
-	return (input_port_read(device->machine(), "DSW1") << (7 - (offset - POT0_C))) & 0x80;
+	return (input_port_read(device->machine, "DSW1") << (7 - (offset - POT0_C))) & 0x80;
 }
 
 
@@ -100,14 +89,14 @@ static WRITE16_HANDLER( led_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		/* bits 0 and 1 are coin counters */
-		coin_counter_w(space->machine(), 0, data & 2);
-		coin_counter_w(space->machine(), 1, data & 1);
+		coin_counter_w(0, data & 2);
+		coin_counter_w(1, data & 1);
 
 		/* bit 3 = select second trackball for cocktail mode? */
 
 		/* bits 4 and 5 are LED controls */
-		set_led_status(space->machine(), 0, data & 0x10);
-		set_led_status(space->machine(), 1, data & 0x20);
+		set_led_status(0, data & 0x10);
+		set_led_status(1, data & 0x20);
 
 		/* bits 6 and 7 flip screen */
 		avg_set_flip_x (data & 0x40);
@@ -123,21 +112,21 @@ static WRITE16_HANDLER( led_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x013fff) AM_ROM
 	AM_RANGE(0x018000, 0x01cfff) AM_RAM
-	AM_RANGE(0x800000, 0x801fff) AM_RAM AM_BASE((UINT16 **)&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size)
+	AM_RANGE(0x800000, 0x801fff) AM_RAM AM_BASE(&quantum_vectorram) AM_SIZE(&vectorram_size)
 	AM_RANGE(0x840000, 0x84001f) AM_DEVREADWRITE8("pokey1", pokey_r, pokey_w, 0x00ff)
 	AM_RANGE(0x840020, 0x84003f) AM_DEVREADWRITE8("pokey2", pokey_r, pokey_w, 0x00ff)
-	AM_RANGE(0x900000, 0x9001ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x900000, 0x9001ff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0x940000, 0x940001) AM_READ(trackball_r) /* trackball */
 	AM_RANGE(0x948000, 0x948001) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x950000, 0x95001f) AM_WRITEONLY AM_BASE((UINT16**)&avgdvg_colorram)
+	AM_RANGE(0x950000, 0x95001f) AM_WRITE(SMH_RAM) AM_BASE(&quantum_colorram)
 	AM_RANGE(0x958000, 0x958001) AM_WRITE(led_w)
 	AM_RANGE(0x960000, 0x960001) AM_WRITENOP
 	AM_RANGE(0x968000, 0x968001) AM_WRITE(avgdvg_reset_word_w)
     AM_RANGE(0x970000, 0x970001) AM_WRITE(avgdvg_go_word_w)
-	AM_RANGE(0x978000, 0x978001) AM_READNOP AM_WRITE(watchdog_reset16_w)
+	AM_RANGE(0x978000, 0x978001) AM_READWRITE(SMH_NOP, watchdog_reset16_w)
 ADDRESS_MAP_END
 
 
@@ -236,35 +225,35 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( quantum, quantum_state )
+static MACHINE_DRIVER_START( quantum )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_PERIODIC_INT(irq1_line_hold, (double)MASTER_CLOCK / 4096 / 12)
+	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_PERIODIC_INT(irq1_line_hold, (double)MASTER_CLOCK / 4096 / 12)
 
-	MCFG_NVRAM_ADD_1FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_1fill)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", VECTOR)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(400, 300)
-	MCFG_SCREEN_VISIBLE_AREA(0, 900, 0, 600)
-	MCFG_SCREEN_UPDATE_STATIC(vector)
+	MDRV_SCREEN_ADD("screen", VECTOR)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_SIZE(400, 300)
+	MDRV_SCREEN_VISIBLE_AREA(0, 900, 0, 600)
 
-	MCFG_VIDEO_START(avg_quantum)
+	MDRV_VIDEO_START(avg_quantum)
+	MDRV_VIDEO_UPDATE(vector)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, 600000)
-	MCFG_SOUND_CONFIG(pokey_interface_1)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("pokey1", POKEY, 600000)
+	MDRV_SOUND_CONFIG(pokey_interface_1)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, 600000)
-	MCFG_SOUND_CONFIG(pokey_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pokey2", POKEY, 600000)
+	MDRV_SOUND_CONFIG(pokey_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 

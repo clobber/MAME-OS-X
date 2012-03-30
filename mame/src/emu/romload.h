@@ -11,12 +11,12 @@
 
 #pragma once
 
-#ifndef __EMU_H__
-#error Dont include this file directly; include emu.h instead.
-#endif
-
 #ifndef __ROMLOAD_H__
 #define __ROMLOAD_H__
+
+#include "mamecore.h"
+#include "chd.h"
+#include "options.h"
 
 
 
@@ -64,6 +64,10 @@ enum
 #define ROMREGION_DATATYPEMASK		0x00004000			/* type of region (ROM versus disk) */
 #define		ROMREGION_DATATYPEROM	0x00000000
 #define		ROMREGION_DATATYPEDISK	0x00004000
+
+#define ROMREGION_LOADBYNAMEMASK	0x00008000			/* use region name as path to read from */
+#define		ROMREGION_NOLOADBYNAME	0x00000000
+#define		ROMREGION_LOADBYNAME	0x00008000
 
 #define ROMREGION_ERASEVALMASK		0x00ff0000			/* value to erase the region to */
 #define		ROMREGION_ERASEVAL(x)	((((x) & 0xff) << 16) | ROMREGION_ERASE)
@@ -119,13 +123,11 @@ enum
     TYPE DEFINITIONS
 ***************************************************************************/
 
-class machine_config;
-class emu_options;
-
-typedef device_t rom_source;
+typedef struct _rom_source rom_source;
 
 
-struct rom_entry
+typedef struct _rom_entry rom_entry;
+struct _rom_entry
 {
 	const char *	_name;				/* name of the file to load */
 	const char *	_hashdata;			/* hashing informations (checksums) */
@@ -168,6 +170,7 @@ struct rom_entry
 #define ROMREGION_GETDATATYPE(r)	(ROMREGION_GETFLAGS(r) & ROMREGION_DATATYPEMASK)
 #define ROMREGION_ISROMDATA(r)		(ROMREGION_GETDATATYPE(r) == ROMREGION_DATATYPEROM)
 #define ROMREGION_ISDISKDATA(r)		(ROMREGION_GETDATATYPE(r) == ROMREGION_DATATYPEDISK)
+#define ROMREGION_ISLOADBYNAME(r)	((ROMREGION_GETFLAGS(r) & ROMREGION_LOADBYNAMEMASK) == ROMREGION_LOADBYNAME)
 
 
 /* ----- per-ROM macros ----- */
@@ -185,6 +188,7 @@ struct rom_entry
 #define ROM_GETBITSHIFT(r)			((ROM_GETFLAGS(r) & ROM_BITSHIFTMASK) >> 20)
 #define ROM_INHERITSFLAGS(r)		((ROM_GETFLAGS(r) & ROM_INHERITFLAGSMASK) == ROM_INHERITFLAGS)
 #define ROM_GETBIOSFLAGS(r)			((ROM_GETFLAGS(r) & ROM_BIOSFLAGSMASK) >> 24)
+#define ROM_NOGOODDUMP(r)			(hash_data_has_info((r)->_hashdata, HASH_INFO_NO_DUMP))
 
 
 /* ----- per-disk macros ----- */
@@ -237,7 +241,7 @@ struct rom_entry
 #define ROM_CONTINUE(offset,length)					{ NULL, NULL, offset, length, ROMENTRYTYPE_CONTINUE | ROM_INHERITFLAGS },
 #define ROM_IGNORE(length)							{ NULL, NULL, 0,      length, ROMENTRYTYPE_IGNORE | ROM_INHERITFLAGS },
 #define ROM_FILL(offset,length,value)				{ NULL, (const char *)value, offset, length, ROMENTRYTYPE_FILL },
-#define ROM_COPY(srctag,srcoffs,offset,length)		{ srctag, (const char *)srcoffs, offset, length, ROMENTRYTYPE_COPY },
+#define ROM_COPY(srctag,srcoffs,offset,length) 		{ srctag, (const char *)srcoffs, offset, length, ROMENTRYTYPE_COPY },
 
 
 /* ----- system BIOS macros ----- */
@@ -252,6 +256,14 @@ struct rom_entry
 #define DISK_IMAGE_READONLY_OPTIONAL(name,idx,hash)	ROMX_LOAD(name, idx, 0, hash, DISK_READONLY | ROM_OPTIONAL)
 
 
+/* ----- hash macros ----- */
+#define CRC(x)										"c:" #x "#"
+#define SHA1(x)										"s:" #x "#"
+#define MD5(x)										"m:" #x "#"
+#define NO_DUMP										"$ND$"
+#define BAD_DUMP									"$BD$"
+
+
 
 /***************************************************************************
     FUNCTION PROTOTYPES
@@ -260,37 +272,24 @@ struct rom_entry
 
 /* ----- ROM processing ----- */
 
-/* load the ROMs and open the disk images associated with the given machine */
-void rom_init(running_machine &machine);
+/* load the ROMs and open the disk  images associated with the given machine */
+void rom_init(running_machine *machine);
 
 /* return the number of warnings we generated */
-int rom_load_warnings(running_machine &machine);
+int rom_load_warnings(running_machine *machine);
 
-/* return the number of BAD_DUMP/NO_DUMP warnings we generated */
-int rom_load_knownbad(running_machine &machine);
-
-/* return id of selected bios */
-int rom_system_bios(running_machine &machine);
-
-/* return id of default bios */
-int rom_default_bios(running_machine &machine);
-
-/* ----- Helpers ----- */
-
-file_error common_process_file(emu_options &options, const char *location, const char *ext, const rom_entry *romp, emu_file **image_file);
-file_error common_process_file(emu_options &options, const char *location, bool has_crc, UINT32 crc, const rom_entry *romp, emu_file **image_file);
 
 
 /* ----- ROM iteration ----- */
 
 /* return pointer to first ROM source */
-const rom_source *rom_first_source(const machine_config &config);
+const rom_source *rom_first_source(const game_driver *drv, const machine_config *config);
 
 /* return pointer to next ROM source */
-const rom_source *rom_next_source(const rom_source &previous);
+const rom_source *rom_next_source(const game_driver *drv, const machine_config *config, const rom_source *previous);
 
 /* return pointer to the first ROM region within a source */
-const rom_entry *rom_first_region(const rom_source &romp);
+const rom_entry *rom_first_region(const game_driver *drv, const rom_source *romp);
 
 /* return pointer to the next ROM region within a source */
 const rom_entry *rom_next_region(const rom_entry *romp);
@@ -308,21 +307,23 @@ int rom_source_is_gamedrv(const game_driver *drv, const rom_source *source);
 UINT32 rom_file_size(const rom_entry *romp);
 
 /* return the appropriate name for a rom region */
-astring &rom_region_name(astring &result, const game_driver *drv, const rom_source *source, const rom_entry *romp);
+astring *rom_region_name(astring *result, const game_driver *drv, const rom_source *source, const rom_entry *romp);
 
 
 
 /* ----- disk handling ----- */
 
 /* open a disk image, searching up the parent and loading by checksum */
-chd_error open_disk_image(emu_options &options, const game_driver *gamedrv, const rom_entry *romp, emu_file **image_file, chd_file **image_chd,const char *locationtag);
+chd_error open_disk_image(const game_driver *gamedrv, const rom_entry *romp, mame_file **image_file, chd_file **image_chd);
+
+/* open a disk image, searching up the parent and loading by checksum */
+chd_error open_disk_image_options(core_options *options, const game_driver *gamedrv, const rom_entry *romp, mame_file **image_file, chd_file **image_chd);
 
 /* return a pointer to the CHD file associated with the given region */
-chd_file *get_disk_handle(running_machine &machine, const char *region);
+chd_file *get_disk_handle(running_machine *machine, const char *region);
 
 /* set a pointer to the CHD file associated with the given region */
-void set_disk_handle(running_machine &machine, const char *region, emu_file &file, chd_file &chdfile);
+void set_disk_handle(running_machine *machine, const char *region, mame_file *file, chd_file *chd);
 
-void load_software_part_region(device_t *device, char *swlist, char *swname, rom_entry *start_region);
 
 #endif	/* __ROMLOAD_H__ */

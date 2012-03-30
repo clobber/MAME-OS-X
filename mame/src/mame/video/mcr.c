@@ -4,14 +4,14 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/mcr.h"
+#include "driver.h"
+#include "mcr.h"
 
 
 INT8 mcr12_sprite_xoffs;
 INT8 mcr12_sprite_xoffs_flip;
 
-static tilemap_t *bg_tilemap;
+static tilemap *bg_tilemap;
 
 
 /*************************************
@@ -28,12 +28,10 @@ static tilemap_t *bg_tilemap;
  */
 static TILE_GET_INFO( mcr_90009_get_tile_info )
 {
-	mcr_state *state = machine.driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	SET_TILE_INFO(0, videoram[tile_index], 0, 0);
 
 	/* sprite color base is constant 0x10 */
-	tileinfo.category = 1;
+	tileinfo->category = 1;
 }
 
 
@@ -52,15 +50,13 @@ static TILE_GET_INFO( mcr_90009_get_tile_info )
  */
 static TILE_GET_INFO( mcr_90010_get_tile_info )
 {
-	mcr_state *state = machine.driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	int data = videoram[tile_index * 2] | (videoram[tile_index * 2 + 1] << 8);
 	int code = data & 0x1ff;
 	int color = (data >> 11) & 3;
 	SET_TILE_INFO(0, code, color, TILE_FLIPYX((data >> 9) & 3));
 
 	/* sprite color base comes from the top 2 bits */
-	tileinfo.category = (data >> 14) & 3;
+	tileinfo->category = (data >> 14) & 3;
 }
 
 
@@ -79,15 +75,13 @@ static TILE_GET_INFO( mcr_90010_get_tile_info )
  */
 static TILE_GET_INFO( mcr_91490_get_tile_info )
 {
-	mcr_state *state = machine.driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	int data = videoram[tile_index * 2] | (videoram[tile_index * 2 + 1] << 8);
 	int code = data & 0x3ff;
 	int color = (data >> 12) & 3;
 	SET_TILE_INFO(0, code, color, TILE_FLIPYX((data >> 10) & 3));
 
 	/* sprite color base might come from the top 2 bits */
-	tileinfo.category = (data >> 14) & 3;
+	tileinfo->category = (data >> 14) & 3;
 }
 
 
@@ -133,13 +127,13 @@ VIDEO_START( mcr )
  *
  *************************************/
 
-static void mcr_set_color(running_machine &machine, int index, int data)
+static void mcr_set_color(running_machine *machine, int index, int data)
 {
 	palette_set_color_rgb(machine, index, pal3bit(data >> 6), pal3bit(data >> 0), pal3bit(data >> 3));
 }
 
 
-static void journey_set_color(running_machine &machine, int index, int data)
+static void journey_set_color(running_machine *machine, int index, int data)
 {
 	/* 3 bits each, RGB */
 	int r = (data >> 6) & 7;
@@ -170,9 +164,9 @@ static void journey_set_color(running_machine &machine, int index, int data)
 
 WRITE8_HANDLER( mcr_91490_paletteram_w )
 {
-	space->machine().generic.paletteram.u8[offset] = data;
+	paletteram[offset] = data;
 	offset &= 0x7f;
-	mcr_set_color(space->machine(), (offset / 2) & 0x3f, data | ((offset & 1) << 8));
+	mcr_set_color(space->machine, (offset / 2) & 0x3f, data | ((offset & 1) << 8));
 }
 
 
@@ -185,35 +179,29 @@ WRITE8_HANDLER( mcr_91490_paletteram_w )
 
 WRITE8_HANDLER( mcr_90009_videoram_w )
 {
-	mcr_state *state = space->machine().driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	bg_tilemap->mark_tile_dirty(offset);
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 
 WRITE8_HANDLER( mcr_90010_videoram_w )
 {
-	mcr_state *state = space->machine().driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	bg_tilemap->mark_tile_dirty(offset / 2);
+	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
 
 	/* palette RAM is mapped into the upper 0x80 bytes here */
 	if ((offset & 0x780) == 0x780)
 	{
 		if (mcr_cpu_board != 91475)
-			mcr_set_color(space->machine(), (offset / 2) & 0x3f, data | ((offset & 1) << 8));
+			mcr_set_color(space->machine, (offset / 2) & 0x3f, data | ((offset & 1) << 8));
 		else
-			journey_set_color(space->machine(), (offset / 2) & 0x3f, data | ((offset & 1) << 8));
+			journey_set_color(space->machine, (offset / 2) & 0x3f, data | ((offset & 1) << 8));
 	}
 }
 
 
 READ8_HANDLER( twotiger_videoram_r )
 {
-	mcr_state *state = space->machine().driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	/* Two Tigers swizzles the address bits on videoram */
 	int effoffs = ((offset << 1) & 0x7fe) | ((offset >> 10) & 1);
 	return videoram[effoffs];
@@ -221,26 +209,22 @@ READ8_HANDLER( twotiger_videoram_r )
 
 WRITE8_HANDLER( twotiger_videoram_w )
 {
-	mcr_state *state = space->machine().driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	/* Two Tigers swizzles the address bits on videoram */
 	int effoffs = ((offset << 1) & 0x7fe) | ((offset >> 10) & 1);
 
 	videoram[effoffs] = data;
-	bg_tilemap->mark_tile_dirty(effoffs / 2);
+	tilemap_mark_tile_dirty(bg_tilemap, effoffs / 2);
 
 	/* palette RAM is mapped into the upper 0x80 bytes here */
 	if ((effoffs & 0x780) == 0x780)
-		mcr_set_color(space->machine(), ((offset & 0x400) >> 5) | ((offset >> 1) & 0x1f), data | ((offset & 1) << 8));
+		mcr_set_color(space->machine, ((offset & 0x400) >> 5) | ((offset >> 1) & 0x1f), data | ((offset & 1) << 8));
 }
 
 
 WRITE8_HANDLER( mcr_91490_videoram_w )
 {
-	mcr_state *state = space->machine().driver_data<mcr_state>();
-	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	bg_tilemap->mark_tile_dirty(offset / 2);
+	tilemap_mark_tile_dirty(bg_tilemap, offset / 2);
 }
 
 
@@ -255,14 +239,13 @@ WRITE8_HANDLER( mcr_91490_videoram_w )
  *
  *************************************/
 
-static void render_sprites_91399(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void render_sprites_91399(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	UINT8 *spriteram = machine.generic.spriteram.u8;
-	const gfx_element *gfx = machine.gfx[1];
+	const gfx_element *gfx = machine->gfx[1];
 	int offs;
 
 	/* render the sprites into the bitmap, ORing together */
-	for (offs = 0; offs < machine.generic.spriteram_size; offs += 4)
+	for (offs = 0; offs < spriteram_size; offs += 4)
 	{
 		int code, x, y, sx, sy, hflip, vflip;
 
@@ -290,11 +273,11 @@ static void render_sprites_91399(running_machine &machine, bitmap_ind16 &bitmap,
 
 		/* loop over lines in the sprite */
 		for (y = 0; y < 32; y++, sy = (sy + 1) & 0x1ff)
-			if (sy >= cliprect.min_y && sy <= cliprect.max_y)
+			if (sy >= cliprect->min_y && sy <= cliprect->max_y)
 			{
 				const UINT8 *src = gfx_element_get_data(gfx, code) + gfx->line_modulo * (y ^ vflip);
-				UINT16 *dst = &bitmap.pix16(sy);
-				UINT8 *pri = &machine.priority_bitmap.pix8(sy);
+				UINT16 *dst = BITMAP_ADDR16(bitmap, sy, 0);
+				UINT8 *pri = BITMAP_ADDR8(machine->priority_bitmap, sy, 0);
 
 				/* loop over columns */
 				for (x = 0; x < 32; x++)
@@ -327,14 +310,13 @@ static void render_sprites_91399(running_machine &machine, bitmap_ind16 &bitmap,
  *
  *************************************/
 
-static void render_sprites_91464(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int primask, int sprmask, int colormask)
+static void render_sprites_91464(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int primask, int sprmask, int colormask)
 {
-	UINT8 *spriteram = machine.generic.spriteram.u8;
-	const gfx_element *gfx = machine.gfx[1];
+	const gfx_element *gfx = machine->gfx[1];
 	int offs;
 
 	/* render the sprites into the bitmap, working from topmost to bottommost */
-	for (offs = machine.generic.spriteram_size - 4; offs >= 0; offs -= 4)
+	for (offs = spriteram_size - 4; offs >= 0; offs -= 4)
 	{
 		int code, color, x, y, sx, sy, hflip, vflip;
 
@@ -361,11 +343,11 @@ static void render_sprites_91464(running_machine &machine, bitmap_ind16 &bitmap,
 
 		/* loop over lines in the sprite */
 		for (y = 0; y < 32; y++, sy = (sy + 1) & 0x1ff)
-			if (sy >= 2 && sy >= cliprect.min_y && sy <= cliprect.max_y)
+			if (sy >= 2 && sy >= cliprect->min_y && sy <= cliprect->max_y)
 			{
 				const UINT8 *src = gfx_element_get_data(gfx, code) + gfx->line_modulo * (y ^ vflip);
-				UINT16 *dst = &bitmap.pix16(sy);
-				UINT8 *pri = &machine.priority_bitmap.pix8(sy);
+				UINT16 *dst = BITMAP_ADDR16(bitmap, sy, 0);
+				UINT8 *pri = BITMAP_ADDR8(machine->priority_bitmap, sy, 0);
 
 				/* loop over columns */
 				for (x = 0; x < 32; x++)
@@ -401,34 +383,34 @@ static void render_sprites_91464(running_machine &machine, bitmap_ind16 &bitmap,
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( mcr )
+VIDEO_UPDATE( mcr )
 {
 	/* update the flip state */
-	bg_tilemap->set_flip(mcr_cocktail_flip ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0);
+	tilemap_set_flip(bg_tilemap, mcr_cocktail_flip ? (TILEMAP_FLIPX | TILEMAP_FLIPY) : 0);
 
 	/* draw the background */
-	screen.machine().priority_bitmap.fill(0, cliprect);
-	bg_tilemap->draw(bitmap, cliprect, 0, 0x00);
-	bg_tilemap->draw(bitmap, cliprect, 1, 0x10);
-	bg_tilemap->draw(bitmap, cliprect, 2, 0x20);
-	bg_tilemap->draw(bitmap, cliprect, 3, 0x30);
+	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0x00);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 1, 0x10);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 2, 0x20);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 3, 0x30);
 
 	/* update the sprites and render them */
 	switch (mcr_sprite_board)
 	{
 		case 91399:
-			render_sprites_91399(screen.machine(), bitmap, cliprect);
+			render_sprites_91399(screen->machine, bitmap, cliprect);
 			break;
 
 		case 91464:
 			if (mcr_cpu_board == 91442)
-				render_sprites_91464(screen.machine(), bitmap, cliprect, 0x00, 0x30, 0x00);
+				render_sprites_91464(screen->machine, bitmap, cliprect, 0x00, 0x30, 0x00);
 			else if (mcr_cpu_board == 91475)
-				render_sprites_91464(screen.machine(), bitmap, cliprect, 0x00, 0x30, 0x40);
+				render_sprites_91464(screen->machine, bitmap, cliprect, 0x00, 0x30, 0x40);
 			else if (mcr_cpu_board == 91490)
-				render_sprites_91464(screen.machine(), bitmap, cliprect, 0x00, 0x30, 0x00);
+				render_sprites_91464(screen->machine, bitmap, cliprect, 0x00, 0x30, 0x00);
 			else if (mcr_cpu_board == 91721)
-				render_sprites_91464(screen.machine(), bitmap, cliprect, 0x00, 0x30, 0x00);
+				render_sprites_91464(screen->machine, bitmap, cliprect, 0x00, 0x30, 0x00);
 			break;
 	}
 	return 0;

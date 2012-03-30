@@ -1,17 +1,3 @@
-class wrally_state : public driver_device
-{
-public:
-	wrally_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT16 *m_shareram;
-	tilemap_t *m_pant[2];
-	UINT16 *m_vregs;
-	UINT16 *m_videoram;
-	UINT16 *m_spriteram;
-};
-
-
 /*----------- defined in machine/wrally.c -----------*/
 
 WRITE16_HANDLER( wrally_vram_w );
@@ -22,6 +8,12 @@ WRITE16_HANDLER( wrally_coin_lockout_w );
 
 /*----------- defined in video/wrally.c -----------*/
 
+extern tilemap *wrally_pant[2];
+
+extern UINT16 *wrally_vregs;
+extern UINT16 *wrally_videoram;
+extern UINT16 *wrally_spriteram;
+
 VIDEO_START( wrally );
-SCREEN_UPDATE_IND16( wrally );
+VIDEO_UPDATE( wrally );
 

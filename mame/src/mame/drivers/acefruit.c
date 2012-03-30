@@ -8,37 +8,20 @@ Inputs and Dip Switches by Stephh
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
-#include "machine/nvram.h"
 
 #include "sidewndr.lh"
 
-
-class acefruit_state : public driver_device
+static void acefruit_update_irq(running_machine *machine, int vpos )
 {
-public:
-	acefruit_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_spriteram;
-	UINT8 *m_colorram;
-	UINT8 *m_videoram;
-	emu_timer *m_refresh_timer;
-};
-
-
-
-static void acefruit_update_irq(running_machine &machine, int vpos )
-{
-	acefruit_state *state = machine.driver_data<acefruit_state>();
 	int col;
 	int row = vpos / 8;
 
 	for( col = 0; col < 32; col++ )
 	{
 		int tile_index = ( col * 32 ) + row;
-		int color = state->m_colorram[ tile_index ];
+		int color = colorram[ tile_index ];
 
 		switch( color )
 		{
@@ -49,38 +32,35 @@ static void acefruit_update_irq(running_machine &machine, int vpos )
 	}
 }
 
+static emu_timer *acefruit_refresh_timer;
 
 static TIMER_CALLBACK( acefruit_refresh )
 {
-	acefruit_state *state = machine.driver_data<acefruit_state>();
-	int vpos = machine.primary_screen->vpos();
+	int vpos = video_screen_get_vpos(machine->primary_screen);
 
-	machine.primary_screen->update_partial(vpos );
+	video_screen_update_partial(machine->primary_screen, vpos );
 	acefruit_update_irq(machine, vpos );
 
 	vpos = ( ( vpos / 8 ) + 1 ) * 8;
 
-	state->m_refresh_timer->adjust( machine.primary_screen->time_until_pos(vpos) );
+	timer_adjust_oneshot( acefruit_refresh_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos, 0 ), 0 );
 }
 
 static VIDEO_START( acefruit )
 {
-	acefruit_state *state = machine.driver_data<acefruit_state>();
-	state->m_refresh_timer = machine.scheduler().timer_alloc(FUNC(acefruit_refresh));
+	acefruit_refresh_timer = timer_alloc(machine, acefruit_refresh, NULL);
 }
 
 static INTERRUPT_GEN( acefruit_vblank )
 {
-	acefruit_state *state = device->machine().driver_data<acefruit_state>();
-	device_set_input_line(device, 0, HOLD_LINE );
-	state->m_refresh_timer->adjust( attotime::zero );
+	cpu_set_input_line(device, 0, HOLD_LINE );
+	timer_adjust_oneshot( acefruit_refresh_timer, attotime_zero, 0 );
 }
 
-static SCREEN_UPDATE_IND16( acefruit )
+static VIDEO_UPDATE( acefruit )
 {
-	acefruit_state *state = screen.machine().driver_data<acefruit_state>();
-	int startrow = cliprect.min_y / 8;
-	int endrow = cliprect.max_y / 8;
+	int startrow = cliprect->min_y / 8;
+	int endrow = cliprect->max_y / 8;
 	int row;
 	int col;
 
@@ -93,12 +73,12 @@ static SCREEN_UPDATE_IND16( acefruit )
 		for( col = 0; col < 32; col++ )
 		{
 			int tile_index = ( col * 32 ) + row;
-			int code = state->m_videoram[ tile_index ];
-			int color = state->m_colorram[ tile_index ];
+			int code = videoram[ tile_index ];
+			int color = colorram[ tile_index ];
 
 			if( color < 0x4 )
 			{
-				drawgfx_opaque( bitmap, cliprect, screen.machine().gfx[ 1 ], code, color, 0, 0, col * 16, row * 8 );
+				drawgfx_opaque( bitmap, cliprect, screen->machine->gfx[ 1 ], code, color, 0, 0, col * 16, row * 8 );
 			}
 			else if( color >= 0x5 && color <= 0x7 )
 			{
@@ -106,16 +86,16 @@ static SCREEN_UPDATE_IND16( acefruit )
 				int x;
 				static const int spriteskip[] = { 1, 2, 4 };
 				int spritesize = spriteskip[ color - 5 ];
-				const gfx_element *gfx = screen.machine().gfx[ 0 ];
+				const gfx_element *gfx = screen->machine->gfx[ 0 ];
 
 				for( x = 0; x < 16; x++ )
 				{
-					int sprite = ( state->m_spriteram[ ( spriteindex / 64 ) % 6 ] & 0xf ) ^ 0xf;
+					int sprite = ( spriteram[ ( spriteindex / 64 ) % 6 ] & 0xf ) ^ 0xf;
 					const UINT8 *gfxdata = gfx_element_get_data(gfx, sprite);
 
 					for( y = 0; y < 8; y++ )
 					{
-						UINT16 *dst = &bitmap.pix16(y + ( row * 8 ), x + ( col * 16 ) );
+						UINT16 *dst = BITMAP_ADDR16( bitmap, y + ( row * 8 ), x + ( col * 16 ) );
 						*( dst ) = *( gfxdata + ( ( spriterow + y ) * gfx->line_modulo ) + ( ( spriteindex % 64 ) >> 1 ) );
 					}
 
@@ -131,7 +111,7 @@ static SCREEN_UPDATE_IND16( acefruit )
 				{
 					for( y = 0; y < 8; y++ )
 					{
-						UINT16 *dst = &bitmap.pix16(y + ( row * 8 ), x + ( col * 16 ) );
+						UINT16 *dst = BITMAP_ADDR16( bitmap, y + ( row * 8 ), x + ( col * 16 ) );
 						*( dst ) = 0;
 					}
 				}
@@ -168,9 +148,9 @@ static CUSTOM_INPUT( sidewndr_payout_r )
 	switch (bit_mask)
 	{
 		case 0x01:
-			return ((input_port_read(field.machine(), "PAYOUT") & bit_mask) >> 0);
+			return ((input_port_read(field->port->machine, "PAYOUT") & bit_mask) >> 0);
 		case 0x02:
-			return ((input_port_read(field.machine(), "PAYOUT") & bit_mask) >> 1);
+			return ((input_port_read(field->port->machine, "PAYOUT") & bit_mask) >> 1);
 		default:
 			logerror("sidewndr_payout_r : invalid %02X bit_mask\n",bit_mask);
 			return 0;
@@ -184,13 +164,13 @@ static CUSTOM_INPUT( starspnr_coinage_r )
 	switch (bit_mask)
 	{
 		case 0x01:
-			return ((input_port_read(field.machine(), "COINAGE") & bit_mask) >> 0);
+			return ((input_port_read(field->port->machine, "COINAGE") & bit_mask) >> 0);
 		case 0x02:
-			return ((input_port_read(field.machine(), "COINAGE") & bit_mask) >> 1);
+			return ((input_port_read(field->port->machine, "COINAGE") & bit_mask) >> 1);
 		case 0x04:
-			return ((input_port_read(field.machine(), "COINAGE") & bit_mask) >> 2);
+			return ((input_port_read(field->port->machine, "COINAGE") & bit_mask) >> 2);
 		case 0x08:
-			return ((input_port_read(field.machine(), "COINAGE") & bit_mask) >> 3);
+			return ((input_port_read(field->port->machine, "COINAGE") & bit_mask) >> 3);
 		default:
 			logerror("starspnr_coinage_r : invalid %02X bit_mask\n",bit_mask);
 			return 0;
@@ -204,11 +184,11 @@ static CUSTOM_INPUT( starspnr_payout_r )
 	switch (bit_mask)
 	{
 		case 0x01:
-			return ((input_port_read(field.machine(), "PAYOUT") & bit_mask) >> 0);
+			return ((input_port_read(field->port->machine, "PAYOUT") & bit_mask) >> 0);
 		case 0x02:
-			return ((input_port_read(field.machine(), "PAYOUT") & bit_mask) >> 1);
+			return ((input_port_read(field->port->machine, "PAYOUT") & bit_mask) >> 1);
 		case 0x04:
-			return ((input_port_read(field.machine(), "PAYOUT") & bit_mask) >> 2);
+			return ((input_port_read(field->port->machine, "PAYOUT") & bit_mask) >> 2);
 		default:
 			logerror("starspnr_payout_r : invalid %02X bit_mask\n",bit_mask);
 			return 0;
@@ -217,8 +197,7 @@ static CUSTOM_INPUT( starspnr_payout_r )
 
 static WRITE8_HANDLER( acefruit_colorram_w )
 {
-	acefruit_state *state = space->machine().driver_data<acefruit_state>();
-	state->m_colorram[ offset ] = data & 0xf;
+	colorram[ offset ] = data & 0xf;
 }
 
 static WRITE8_HANDLER( acefruit_coin_w )
@@ -274,11 +253,11 @@ static PALETTE_INIT( acefruit )
 	palette_set_color( machine, 15, MAKE_RGB(0xff, 0x00, 0x00) );
 }
 
-static ADDRESS_MAP_START( acefruit_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( acefruit_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_SHARE("nvram")
-	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_MEMBER(acefruit_state, m_videoram)
-	AM_RANGE(0x4400, 0x47ff) AM_RAM_WRITE(acefruit_colorram_w) AM_BASE_MEMBER(acefruit_state, m_colorram)
+	AM_RANGE(0x2000, 0x20ff) AM_RAM AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE(&videoram)
+	AM_RANGE(0x4400, 0x47ff) AM_RAM_WRITE(acefruit_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("IN0")
 	AM_RANGE(0x8001, 0x8001) AM_READ_PORT("IN1")
 	AM_RANGE(0x8002, 0x8002) AM_READ_PORT("IN2")
@@ -287,7 +266,7 @@ static ADDRESS_MAP_START( acefruit_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8005, 0x8005) AM_READ_PORT("IN5")
 	AM_RANGE(0x8006, 0x8006) AM_READ_PORT("IN6")
 	AM_RANGE(0x8007, 0x8007) AM_READ_PORT("IN7")
-	AM_RANGE(0x6000, 0x6005) AM_RAM AM_BASE_MEMBER(acefruit_state, m_spriteram)
+	AM_RANGE(0x6000, 0x6005) AM_RAM AM_BASE(&spriteram)
 	AM_RANGE(0xa000, 0xa001) AM_WRITE(acefruit_lamp_w)
 	AM_RANGE(0xa002, 0xa003) AM_WRITE(acefruit_coin_w)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(acefruit_solenoid_w)
@@ -296,7 +275,7 @@ static ADDRESS_MAP_START( acefruit_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( acefruit_io, AS_IO, 8 )
+static ADDRESS_MAP_START( acefruit_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP /* ? */
 ADDRESS_MAP_END
@@ -420,7 +399,7 @@ static INPUT_PORTS_START( spellbnd )
 	PORT_BIT( 0xf4, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
-/* I've only mapped the known inputs after comparison with 'spellbnd' and the ones known to do something */
+/* I've only mapped the known inputs after comparaison with 'spellbnd' and the ones known to do something */
 static INPUT_PORTS_START( starspnr )
 	PORT_START("IN0")	// 0
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME( "Gamble" )
@@ -565,36 +544,36 @@ static GFXDECODE_START( acefruit )
 	GFXDECODE_ENTRY( "gfx1", 0x1800, charlayout, 8, 4 )
 GFXDECODE_END
 
-static MACHINE_CONFIG_START( acefruit, acefruit_state )
+static MACHINE_DRIVER_START( acefruit )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 2500000) /* 2.5MHz */
-	MCFG_CPU_PROGRAM_MAP(acefruit_map)
-	MCFG_CPU_IO_MAP(acefruit_io)
-	MCFG_GFXDECODE(acefruit)
-	MCFG_CPU_VBLANK_INT("screen", acefruit_vblank)
+	MDRV_CPU_ADD("maincpu", Z80, 2500000) /* 2.5MHz */
+	MDRV_CPU_PROGRAM_MAP(acefruit_map)
+	MDRV_CPU_IO_MAP(acefruit_io)
+	MDRV_GFXDECODE(acefruit)
+	MDRV_CPU_VBLANK_INT("screen", acefruit_vblank)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(512, 256)
-	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 255)
-	MCFG_SCREEN_UPDATE_STATIC(acefruit)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(512, 256)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 255)
+	MDRV_PALETTE_LENGTH(16)
 
-	MCFG_PALETTE_LENGTH(16)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
-
-	MCFG_PALETTE_INIT(acefruit)
-	MCFG_VIDEO_START(acefruit)
+	MDRV_PALETTE_INIT(acefruit)
+	MDRV_VIDEO_START(acefruit)
+	MDRV_VIDEO_UPDATE(acefruit)
 
 	/* sound hardware */
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 static DRIVER_INIT( sidewndr )
 {
-	UINT8 *ROM = machine.region( "maincpu" )->base();
+	UINT8 *ROM = memory_region( machine, "maincpu" );
 	/* replace "ret nc" ( 0xd0 ) with "di" */
 	ROM[ 0 ] = 0xf3;
 	/* this is either a bad dump or the cpu core should set the carry flag on reset */
@@ -706,7 +685,7 @@ ROM_START( starspnr )
 	ROM_LOAD( "16-1-101.b11", 0x0200, 0x0100, NO_DUMP )
 ROM_END
 
-/* This has been identified as Silhouette with the help of a flyer */
+/* no information about this one */
 ROM_START( acefruit  )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "vp-h9.bin",    0x00e000, 0x0800, CRC(f595daf7) SHA1(be5abd34fd06f73cd80f5b15902d158e33705c8f) )
@@ -731,8 +710,7 @@ ROM_END
 
 
 GAMEL( 1981?, sidewndr, 0,        acefruit, sidewndr, sidewndr, ROT270, "ACE", "Sidewinder", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND, layout_sidewndr )
-GAMEL( 1981?, spellbnd, 0,		  acefruit, spellbnd, 0,        ROT270, "ACE", "Spellbound", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND, layout_sidewndr )
+GAMEL( 1981?, spellbnd, sidewndr, acefruit, spellbnd, 0,        ROT270, "ACE", "Spellbound", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND, layout_sidewndr )
 GAME ( 1982?, starspnr, 0,        acefruit, starspnr, 0,        ROT270, "ACE", "Starspinner (Dutch/Nederlands)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME ( 1982?, acefruit, 0,        acefruit, spellbnd, 0,        ROT270, "ACE", "Silhouette", GAME_NOT_WORKING | GAME_NO_SOUND ) // inputs and video in bonus game need fixing on this one
-// not dumped: Magnum?
-
+// inputs need fixing on this one, no idea what it's called either
+GAME ( 1982?, acefruit, 0,        acefruit, spellbnd, 0,        ROT270, "ACE", "Unknown ACE Fruits Game", GAME_NOT_WORKING | GAME_NO_SOUND )

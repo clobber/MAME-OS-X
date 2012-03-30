@@ -1,6 +1,32 @@
-#include "emu.h"
+#include "driver.h"
 #include "video/taitoic.h"
-#include "includes/asuka.h"
+
+#define TC0100SCN_GFX_NUM 1
+
+
+/**********************************************************/
+
+static void asuka_core_video_start(running_machine *machine, int x_offs,int buffering)
+{
+	PC090OJ_vh_start(machine,0,0,8,buffering);	/* gfxset, x offset, y offset, buffering */
+	TC0100SCN_vh_start(machine,1,TC0100SCN_GFX_NUM,x_offs,0,0,0,0,0,0);
+	TC0110PCR_vh_start(machine);
+}
+
+VIDEO_START( asuka )
+{
+	asuka_core_video_start(machine, 0,0);
+}
+
+VIDEO_START( galmedes )
+{
+	asuka_core_video_start(machine, 1,0);
+}
+
+VIDEO_START( cadash )
+{
+	asuka_core_video_start(machine, 1,1);
+}
 
 /**************************************************************
                  SPRITE READ AND WRITE HANDLERS
@@ -8,10 +34,8 @@
 
 WRITE16_HANDLER( asuka_spritectrl_w )
 {
-	asuka_state *state = space->machine().driver_data<asuka_state>();
-
 	/* Bits 2-5 are color bank; in asuka games bit 0 is global priority */
-	pc090oj_set_sprite_ctrl(state->m_pc090oj, ((data & 0x3c) >> 2) | ((data & 0x1) << 15));
+	PC090OJ_sprite_ctrl = ((data & 0x3c) >> 2) | ((data & 0x1) << 15);
 }
 
 
@@ -19,53 +43,51 @@ WRITE16_HANDLER( asuka_spritectrl_w )
                         SCREEN REFRESH
 **************************************************************/
 
-SCREEN_UPDATE_IND16( asuka )
+VIDEO_UPDATE( asuka )
 {
-	asuka_state *state = screen.machine().driver_data<asuka_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->m_tc0100scn);
+	TC0100SCN_tilemap_update(screen->machine);
 
-	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
-	layer[1] = layer[0] ^ 1;
+	layer[0] = TC0100SCN_bottomlayer(0);
+	layer[1] = layer[0]^1;
 	layer[2] = 2;
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap.fill(0, cliprect);
+	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 2);
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,1);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,2);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
 
 	/* Sprites may be over or under top bg layer */
-	pc090oj_draw_sprites(state->m_pc090oj, bitmap, cliprect, 2);
+	PC090OJ_draw_sprites(screen->machine,bitmap,cliprect,2);
 	return 0;
 }
 
 
-SCREEN_UPDATE_IND16( bonzeadv )
+VIDEO_UPDATE( bonzeadv )
 {
-	asuka_state *state = screen.machine().driver_data<asuka_state>();
 	UINT8 layer[3];
 
-	tc0100scn_tilemap_update(state->m_tc0100scn);
+	TC0100SCN_tilemap_update(screen->machine);
 
-	layer[0] = tc0100scn_bottomlayer(state->m_tc0100scn);
-	layer[1] = layer[0] ^ 1;
+	layer[0] = TC0100SCN_bottomlayer(0);
+	layer[1] = layer[0]^1;
 	layer[2] = 2;
 
-	screen.machine().priority_bitmap.fill(0, cliprect);
+	bitmap_fill(screen->machine->priority_bitmap,cliprect,0);
 
 	/* Ensure screen blanked even when bottom layer not drawn due to disable bit */
-	bitmap.fill(0, cliprect);
+	bitmap_fill(bitmap, cliprect, 0);
 
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[0], TILEMAP_DRAW_OPAQUE, 1);
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[1], 0, 2);
-	tc0100scn_tilemap_draw(state->m_tc0100scn, bitmap, cliprect, layer[2], 0, 4);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[0],TILEMAP_DRAW_OPAQUE,1);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[1],0,2);
+	TC0100SCN_tilemap_draw(screen->machine,bitmap,cliprect,0,layer[2],0,4);
 
 	/* Sprites are always over both bg layers */
-	pc090oj_draw_sprites(state->m_pc090oj, bitmap, cliprect, 0);
+	PC090OJ_draw_sprites(screen->machine,bitmap,cliprect,0);
 	return 0;
 }

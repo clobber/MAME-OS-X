@@ -9,15 +9,15 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/nec/nec.h"
 #include "sound/2203intf.h"
 #include "sound/flt_vol.h"
-#include "includes/lockon.h"
+#include "lockon.h"
 
-#define V30_GND_ADDR	((state->m_ctrl_reg & 0x3) << 16)
-#define V30_OBJ_ADDR	((state->m_ctrl_reg & 0x18) << 13)
+#define V30_GND_ADDR	((lockon_ctrl_reg & 0x3) << 16)
+#define V30_OBJ_ADDR	((lockon_ctrl_reg & 0x18) << 13)
 
 
 /*************************************
@@ -28,6 +28,16 @@
 
 static WRITE8_HANDLER( sound_vol );
 static READ8_HANDLER( adc_r );
+
+
+/*************************************
+ *
+ *  Globals
+ *
+ *************************************/
+
+UINT32	lockon_main_inten;
+UINT8	lockon_ctrl_reg;
 
 
 /*************************************
@@ -53,97 +63,86 @@ static READ8_HANDLER( adc_r );
 
 static WRITE16_HANDLER( adrst_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	state->m_ctrl_reg = data & 0xff;
+	lockon_ctrl_reg = data & 0xff;
 
 	/* Bus mastering for shared access */
-	device_set_input_line(state->m_ground, INPUT_LINE_HALT, data & 0x04 ? ASSERT_LINE : CLEAR_LINE);
-	device_set_input_line(state->m_object, INPUT_LINE_HALT, data & 0x20 ? ASSERT_LINE : CLEAR_LINE);
-	device_set_input_line(state->m_audiocpu, INPUT_LINE_HALT, data & 0x40 ? CLEAR_LINE : ASSERT_LINE);
+	cputag_set_input_line(space->machine, "ground", INPUT_LINE_HALT, data & 0x04 ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine, "object", INPUT_LINE_HALT, data & 0x20 ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_HALT, data & 0x40 ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static READ16_HANDLER( main_gnd_r )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *gndspace = state->m_ground->memory().space(AS_PROGRAM);
-	return gndspace->read_word(V30_GND_ADDR | offset * 2);
+	const address_space *gndspace = cputag_get_address_space(space->machine, "ground", ADDRESS_SPACE_PROGRAM);
+	return memory_read_word(gndspace, V30_GND_ADDR | offset * 2);
 }
 
 static WRITE16_HANDLER( main_gnd_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *gndspace = state->m_ground->memory().space(AS_PROGRAM);
+	const address_space *gndspace = cputag_get_address_space(space->machine, "ground", ADDRESS_SPACE_PROGRAM);
 
 	if (ACCESSING_BITS_0_7)
-		gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 0), data);
+		memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 0), data);
 	if (ACCESSING_BITS_8_15)
-		gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 1), data >> 8);
+		memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 1), data >> 8);
 }
 
 static READ16_HANDLER( main_obj_r )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *objspace = state->m_object->memory().space(AS_PROGRAM);
-	return objspace->read_word(V30_OBJ_ADDR | offset * 2);
+	const address_space *objspace = cputag_get_address_space(space->machine, "object", ADDRESS_SPACE_PROGRAM);
+	return memory_read_word(objspace, V30_OBJ_ADDR | offset * 2);
 }
 
 static WRITE16_HANDLER( main_obj_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *objspace = state->m_object->memory().space(AS_PROGRAM);
+	const address_space *objspace = cputag_get_address_space(space->machine, "object", ADDRESS_SPACE_PROGRAM);
 
 	if (ACCESSING_BITS_0_7)
-		objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 0), data);
+		memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 0), data);
 	if (ACCESSING_BITS_8_15)
-		objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
+		memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
 }
 
 static WRITE16_HANDLER( tst_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-
 	if (offset < 0x800)
 	{
-		address_space *gndspace = state->m_ground->memory().space(AS_PROGRAM);
-		address_space *objspace = state->m_object->memory().space(AS_PROGRAM);
+		const address_space *gndspace = cputag_get_address_space(space->machine, "ground", ADDRESS_SPACE_PROGRAM);
+		const address_space *objspace = cputag_get_address_space(space->machine, "object", ADDRESS_SPACE_PROGRAM);
 
 		if (ACCESSING_BITS_0_7)
-			gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 0), data);
+			memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 0), data);
 		if (ACCESSING_BITS_8_15)
-			gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 1), data >> 8);
+			memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 1), data >> 8);
 
 		if (ACCESSING_BITS_0_7)
-			objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 0), data);
+			memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 0), data);
 		if (ACCESSING_BITS_8_15)
-			objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
+			memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
 	}
 }
 
 static READ16_HANDLER( main_z80_r )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *sndspace = state->m_audiocpu->memory().space(AS_PROGRAM);
-	return 0xff00 | sndspace->read_byte(offset);
+	const address_space *sndspace = cputag_get_address_space(space->machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	return 0xff00 | memory_read_byte(sndspace, offset);
 }
 
 static WRITE16_HANDLER( main_z80_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	address_space *sndspace = state->m_audiocpu->memory().space(AS_PROGRAM);
-	sndspace->write_byte(offset, data);
+	const address_space *sndspace = cputag_get_address_space(space->machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	memory_write_byte(sndspace, offset, data);
 }
 
 static WRITE16_HANDLER( inten_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	state->m_main_inten = 1;
+	lockon_main_inten = 1;
 }
 
 static WRITE16_HANDLER( emres_w )
 {
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-	watchdog_reset(space->machine());
-	state->m_main_inten = 0;
+	watchdog_reset(space->machine);
+	lockon_main_inten = 0;
 }
 
 
@@ -153,19 +152,19 @@ static WRITE16_HANDLER( emres_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_v30, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_v30, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
 	AM_RANGE(0x04000, 0x04003) AM_READWRITE(lockon_crtc_r, lockon_crtc_w)
 	AM_RANGE(0x06000, 0x06001) AM_READ_PORT("DSW")
-	AM_RANGE(0x08000, 0x081ff) AM_RAM AM_BASE_SIZE_MEMBER(lockon_state, m_hud_ram, m_hudram_size)
-	AM_RANGE(0x09000, 0x09fff) AM_RAM_WRITE(lockon_char_w) AM_BASE_MEMBER(lockon_state, m_char_ram)
+	AM_RANGE(0x08000, 0x081ff) AM_RAM AM_BASE(&lockon_hud_ram) AM_SIZE(&lockon_hudram_size)
+	AM_RANGE(0x09000, 0x09fff) AM_RAM_WRITE(lockon_char_w) AM_BASE(&lockon_char_ram)
 	AM_RANGE(0x0a000, 0x0a001) AM_WRITE(adrst_w)
 	AM_RANGE(0x0b000, 0x0bfff) AM_WRITE(lockon_rotate_w)
 	AM_RANGE(0x0c000, 0x0cfff) AM_WRITE(lockon_fb_clut_w)
 	AM_RANGE(0x0e000, 0x0e001) AM_WRITE(inten_w)
 	AM_RANGE(0x0f000, 0x0f001) AM_WRITE(emres_w)
-	AM_RANGE(0x10000, 0x1ffff) AM_READNOP AM_WRITE(tst_w)
+	AM_RANGE(0x10000, 0x1ffff) AM_READWRITE(SMH_NOP, tst_w)
 	AM_RANGE(0x20000, 0x2ffff) AM_READWRITE(main_z80_r, main_z80_w)
 	AM_RANGE(0x30000, 0x3ffff) AM_READWRITE(main_gnd_r, main_gnd_w)
 	AM_RANGE(0x40000, 0x4ffff) AM_READWRITE(main_obj_r, main_obj_w)
@@ -175,11 +174,11 @@ static ADDRESS_MAP_START( main_v30, AS_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ground_v30, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( ground_v30, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
-	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_BASE_MEMBER(lockon_state, m_scene_ram)
-	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_BASE_SIZE_MEMBER(lockon_state, m_ground_ram, m_groundram_size)
+	AM_RANGE(0x04000, 0x04fff) AM_RAM AM_BASE(&lockon_scene_ram)
+	AM_RANGE(0x08000, 0x08fff) AM_RAM AM_BASE(&lockon_ground_ram) AM_SIZE(&lockon_groundram_size)
 	AM_RANGE(0x0C000, 0x0C001) AM_WRITE(lockon_scene_h_scr_w)
 	AM_RANGE(0x0C002, 0x0C003) AM_WRITE(lockon_scene_v_scr_w)
 	AM_RANGE(0x0C004, 0x0C005) AM_WRITE(lockon_ground_ctrl_w)
@@ -188,27 +187,27 @@ static ADDRESS_MAP_START( ground_v30, AS_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( object_v30, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( object_v30, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x00000, 0x03fff) AM_RAM
 	AM_RANGE(0x04000, 0x04001) AM_READWRITE(lockon_obj_4000_r, lockon_obj_4000_w)
 	AM_RANGE(0x08000, 0x08fff) AM_WRITE(lockon_tza112_w)
-	AM_RANGE(0x0c000, 0x0c1ff) AM_RAM AM_BASE_SIZE_MEMBER(lockon_state, m_object_ram, m_objectram_size)
+	AM_RANGE(0x0c000, 0x0c1ff) AM_RAM AM_BASE(&lockon_object_ram) AM_SIZE(&lockon_objectram_size)
 	AM_RANGE(0x30000, 0x3ffff) AM_MIRROR(0xc0000) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( sound_prg, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_prg, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
 	AM_RANGE(0x7000, 0x7000) AM_WRITE(sound_vol)
-	AM_RANGE(0x7400, 0x7403) AM_READ(adc_r) AM_WRITENOP
+	AM_RANGE(0x7400, 0x7403) AM_READWRITE(adc_r, SMH_NOP)
 	AM_RANGE(0x7800, 0x7fff) AM_MIRROR(0x8000) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
+	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym", ym2203_r, ym2203_w)
 	AM_RANGE(0x02, 0x02) AM_NOP
 ADDRESS_MAP_END
 
@@ -258,15 +257,15 @@ static INPUT_PORTS_START( lockon )
 	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(      0x0700, DEF_STR( Free_Play ) )
 
-	PORT_DIPNAME( 0x3800, 0x0000, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW2:4,5,6")
-	PORT_DIPSETTING(      0x3000, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(      0x2800, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(      0x3800, DEF_STR( 1C_6C ) )
+ 	PORT_DIPNAME( 0x3800, 0x0000, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW2:4,5,6")
+ 	PORT_DIPSETTING(      0x3000, DEF_STR( 4C_1C ) )
+ 	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
+ 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
+ 	PORT_DIPSETTING(      0x1000, DEF_STR( 1C_2C ) )
+ 	PORT_DIPSETTING(      0x2000, DEF_STR( 1C_3C ) )
+ 	PORT_DIPSETTING(      0x2800, DEF_STR( 1C_4C ) )
+ 	PORT_DIPSETTING(      0x1800, DEF_STR( 1C_5C ) )
+ 	PORT_DIPSETTING(      0x3800, DEF_STR( 1C_6C ) )
 
 	/*
         Wire jumper beside the dipswitches on PCB TF011.
@@ -319,15 +318,15 @@ static INPUT_PORTS_START( lockone )
 	PORT_DIPSETTING(      0x0400, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(      0x0500, DEF_STR( 1C_3C ) )
 
-	PORT_DIPNAME( 0x0800, 0x0000, "Buy-In" )
-	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
+ 	PORT_DIPNAME( 0x0800, 0x0000, "Buy-In" )
+ 	PORT_DIPSETTING(      0x0800, DEF_STR( 2C_1C ) )
+ 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_1C ) )
 
 	PORT_DIPNAME( 0x1000, 0x0000, DEF_STR( Unused ) )
 	PORT_DIPSETTING(      0x1000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On )  )
 	PORT_DIPNAME( 0x2000, 0x0000, DEF_STR( Unused ) )
-	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
+ 	PORT_DIPSETTING(      0x2000, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On )  )
 INPUT_PORTS_END
 
@@ -342,10 +341,10 @@ static READ8_HANDLER( adc_r )
 {
 	switch (offset)
 	{
-		case 0:  return input_port_read(space->machine(), "ADC_BANK");
-		case 1:  return input_port_read(space->machine(), "ADC_PITCH");
-		case 2:  return input_port_read(space->machine(), "ADC_MISSILE");
-		case 3:  return input_port_read(space->machine(), "ADC_HOVER");
+		case 0:  return input_port_read(space->machine, "ADC_BANK");
+		case 1:  return input_port_read(space->machine, "ADC_PITCH");
+		case 2:  return input_port_read(space->machine, "ADC_MISSILE");
+		case 3:  return input_port_read(space->machine, "ADC_HOVER");
 		default: return 0;
 	}
 }
@@ -392,8 +391,6 @@ static WRITE8_HANDLER( sound_vol )
 #define LO_RI		100000.0
 #define LO_RP		100000.0
 
-	lockon_state *state = space->machine().driver_data<lockon_state>();
-
 	static const double gains[16] =
 	{
 		-( 1 / (1/LO_RP + 1/(LO_R3   + LO_R2   + LO_R1   + LO_R0))  ) / LO_RI,
@@ -417,29 +414,28 @@ static WRITE8_HANDLER( sound_vol )
 	double lgain = gains[data & 0xf];
 	double rgain = gains[data >> 4];
 
-	flt_volume_set_volume(state->m_f2203_1l, lgain);
-	flt_volume_set_volume(state->m_f2203_2l, lgain);
-	flt_volume_set_volume(state->m_f2203_3l, lgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.1l"), lgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.2l"), lgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.3l"), lgain);
 
-	flt_volume_set_volume(state->m_f2203_1r, rgain);
-	flt_volume_set_volume(state->m_f2203_2r, rgain);
-	flt_volume_set_volume(state->m_f2203_3r, rgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.1r"), rgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.2r"), rgain);
+	flt_volume_set_volume(devtag_get_device(space->machine, "f2203.3r"), rgain);
 }
 
-static void ym2203_irq(device_t *device, int irq)
+static void ym2203_irq(const device_config *device, int irq)
 {
-	lockon_state *state = device->machine().driver_data<lockon_state>();
-	device_set_input_line(state->m_audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE );
+	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static WRITE8_DEVICE_HANDLER( ym2203_out_b )
 {
-	coin_counter_w(device->machine(), 0, data & 0x80);
-	coin_counter_w(device->machine(), 1, data & 0x40);
-	coin_counter_w(device->machine(), 2, data & 0x20);
+	coin_counter_w(0, data & 0x80);
+	coin_counter_w(1, data & 0x40);
+	coin_counter_w(2, data & 0x20);
 
 	/* 'Lock-On' lamp */
-	set_led_status(device->machine(), 1, !(data & 0x10));
+	set_led_status(1, !(data & 0x10));
 }
 
 static const ym2203_interface ym2203_config =
@@ -462,121 +458,63 @@ static const ym2203_interface ym2203_config =
  *
  *************************************/
 
-static MACHINE_START( lockon )
-{
-	lockon_state *state = machine.driver_data<lockon_state>();
+static MACHINE_DRIVER_START( lockon )
+	MDRV_CPU_ADD("maincpu", V30, XTAL_16MHz / 2)
+	MDRV_CPU_PROGRAM_MAP(main_v30)
 
-	state->m_maincpu = machine.device("maincpu");
-	state->m_audiocpu = machine.device("audiocpu");
-	state->m_ground = machine.device("ground");
-	state->m_object = machine.device("object");
-	state->m_f2203_1l = machine.device("f2203.1l");
-	state->m_f2203_2l = machine.device("f2203.2l");
-	state->m_f2203_3l = machine.device("f2203.3l");
-	state->m_f2203_1r = machine.device("f2203.1r");
-	state->m_f2203_2r = machine.device("f2203.2r");
-	state->m_f2203_3r = machine.device("f2203.3r");
+	MDRV_CPU_ADD("ground", V30, XTAL_16MHz / 2)
+	MDRV_CPU_PROGRAM_MAP(ground_v30)
 
-	state->save_item(NAME(state->m_ground_ctrl));
-	state->save_item(NAME(state->m_scroll_h));
-	state->save_item(NAME(state->m_scroll_v));
-	state->save_item(NAME(state->m_xsal));
-	state->save_item(NAME(state->m_x0ll));
-	state->save_item(NAME(state->m_dx0ll));
-	state->save_item(NAME(state->m_dxll));
-	state->save_item(NAME(state->m_ysal));
-	state->save_item(NAME(state->m_y0ll));
-	state->save_item(NAME(state->m_dy0ll));
-	state->save_item(NAME(state->m_dyll));
-	state->save_item(NAME(state->m_iden));
-	state->save_item(NAME(state->m_obj_pal_latch));
-	state->save_item(NAME(state->m_obj_pal_addr));
-	state->save_item(NAME(state->m_ctrl_reg));
-	state->save_item(NAME(state->m_main_inten));
-}
+	MDRV_CPU_ADD("object", V30, XTAL_16MHz / 2)
+	MDRV_CPU_PROGRAM_MAP(object_v30)
 
-static MACHINE_RESET( lockon )
-{
-	lockon_state *state = machine.driver_data<lockon_state>();
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_16MHz / 4)
+	MDRV_CPU_PROGRAM_MAP(sound_prg)
+	MDRV_CPU_IO_MAP(sound_io)
 
-	state->m_ground_ctrl = 0;
-	state->m_scroll_h = 0;
-	state->m_scroll_v = 0;
-	state->m_xsal = 0;
-	state->m_x0ll = 0;
-	state->m_dx0ll = 0;
-	state->m_dxll = 0;
-	state->m_ysal = 0;
-	state->m_y0ll = 0;
-	state->m_dy0ll = 0;
-	state->m_dyll = 0;
-	state->m_iden = 0;
-	state->m_obj_pal_latch = 0;
-	state->m_obj_pal_addr = 0;
-	state->m_ctrl_reg = 0;
-	state->m_main_inten = 0;
-}
+	MDRV_WATCHDOG_TIME_INIT(NSEC(PERIOD_OF_555_ASTABLE_NSEC(10000, 4700, 10000e-12) * 4096))
+	MDRV_QUANTUM_TIME(HZ(600))
 
-static MACHINE_CONFIG_START( lockon, lockon_state )
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
-	MCFG_CPU_ADD("maincpu", V30, XTAL_16MHz / 2)
-	MCFG_CPU_PROGRAM_MAP(main_v30)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_CPU_ADD("ground", V30, XTAL_16MHz / 2)
-	MCFG_CPU_PROGRAM_MAP(ground_v30)
+	MDRV_GFXDECODE(lockon)
+	MDRV_PALETTE_INIT(lockon)
+	MDRV_PALETTE_LENGTH(1024 + 2048)
 
-	MCFG_CPU_ADD("object", V30, XTAL_16MHz / 2)
-	MCFG_CPU_PROGRAM_MAP(object_v30)
+	MDRV_VIDEO_START(lockon)
+	MDRV_VIDEO_UPDATE(lockon)
+	MDRV_VIDEO_EOF(lockon)
 
-	MCFG_CPU_ADD("audiocpu", Z80, XTAL_16MHz / 4)
-	MCFG_CPU_PROGRAM_MAP(sound_prg)
-	MCFG_CPU_IO_MAP(sound_io)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_WATCHDOG_TIME_INIT(PERIOD_OF_555_ASTABLE(10000, 4700, 10000e-12) * 4096)
-	MCFG_QUANTUM_TIME(attotime::from_hz(600))
+	MDRV_SOUND_ADD("ym", YM2203, XTAL_16MHz / 4)
+	MDRV_SOUND_CONFIG(ym2203_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.40)
+	MDRV_SOUND_ROUTE(1, "f2203.1l", 1.0)
+	MDRV_SOUND_ROUTE(1, "f2203.1r", 1.0)
+	MDRV_SOUND_ROUTE(2, "f2203.2l", 1.0)
+	MDRV_SOUND_ROUTE(2, "f2203.2r", 1.0)
+	MDRV_SOUND_ROUTE(3, "f2203.3l", 1.0)
+	MDRV_SOUND_ROUTE(3, "f2203.3r", 1.0)
 
-	MCFG_MACHINE_START(lockon)
-	MCFG_MACHINE_RESET(lockon)
-
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
-
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(lockon)
-	MCFG_SCREEN_VBLANK_STATIC(lockon)
-
-	MCFG_GFXDECODE(lockon)
-	MCFG_PALETTE_INIT(lockon)
-	MCFG_PALETTE_LENGTH(1024 + 2048)
-
-	MCFG_VIDEO_START(lockon)
-
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("ymsnd", YM2203, XTAL_16MHz / 4)
-	MCFG_SOUND_CONFIG(ym2203_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 0.40)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.40)
-	MCFG_SOUND_ROUTE(1, "f2203.1l", 1.0)
-	MCFG_SOUND_ROUTE(1, "f2203.1r", 1.0)
-	MCFG_SOUND_ROUTE(2, "f2203.2l", 1.0)
-	MCFG_SOUND_ROUTE(2, "f2203.2r", 1.0)
-	MCFG_SOUND_ROUTE(3, "f2203.3l", 1.0)
-	MCFG_SOUND_ROUTE(3, "f2203.3r", 1.0)
-
-	MCFG_SOUND_ADD("f2203.1l", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ADD("f2203.1r", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-	MCFG_SOUND_ADD("f2203.2l", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ADD("f2203.2r", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-	MCFG_SOUND_ADD("f2203.3l", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ADD("f2203.3r", FILTER_VOLUME, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("f2203.1l", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ADD("f2203.1r", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MDRV_SOUND_ADD("f2203.2l", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ADD("f2203.2r", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MDRV_SOUND_ADD("f2203.3l", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ADD("f2203.3r", FILTER_VOLUME, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 /*************************************
@@ -816,5 +754,5 @@ ROM_END
  *
  *************************************/
 
-GAME( 1986, lockon,  0,      lockon,  lockon,  0, ROT0, "Tatsumi", "Lock-On (rev. E)", GAME_SUPPORTS_SAVE )
-GAME( 1986, lockonc, lockon, lockon,  lockone, 0, ROT0, "Tatsumi", "Lock-On (rev. C)", GAME_SUPPORTS_SAVE )
+GAME( 1986, lockon,  0,      lockon,  lockon,  0, ROT0, "Tatsumi", "Lock-On (rev. E)", 0 )
+GAME( 1986, lockonc, lockon, lockon,  lockone, 0, ROT0, "Tatsumi", "Lock-On (rev. C)", 0 )

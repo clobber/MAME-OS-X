@@ -220,10 +220,11 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
+#include "lazercmd.h"
 #include "cpu/s2650/s2650.h"
 #include "sound/dac.h"
-#include "includes/lazercmd.h"
 
 #include "rendlay.h"
 #include "lazercmd.lh"
@@ -231,37 +232,32 @@
 #define MASTER_CLOCK XTAL_8MHz
 
 /*************************************************************
+ *
+ * Statics
+ *
+ *************************************************************/
+static int timer_count = 0;
+
+/*************************************************************
  * Interrupt for the cpu
  * Fake something toggling the sense input line of the S2650
  * The rate should be at about 1 Hz
  *************************************************************/
-
-static TIMER_DEVICE_CALLBACK( lazercmd_timer )
+static INTERRUPT_GEN( lazercmd_timer )
 {
-	lazercmd_state *state = timer.machine().driver_data<lazercmd_state>();
-	int scanline = param;
+	static int sense_state = 0;
 
-	if((scanline % 2) == 1)
-		return;
-
-	if (++state->m_timer_count >= 64 * 128)
-	{
-		state->m_timer_count = 0;
-		state->m_sense_state ^= 1;
-		device_set_input_line(state->m_maincpu, 1, (state->m_sense_state) ? ASSERT_LINE : CLEAR_LINE);
+	if( ++timer_count >= 64*128 ) {
+		timer_count = 0;
+		sense_state ^= 1;
+		cpu_set_input_line(device, 1, (sense_state) ? ASSERT_LINE : CLEAR_LINE );
 	}
 }
 
-static TIMER_DEVICE_CALLBACK( bbonk_timer )
+static INTERRUPT_GEN( bbonk_timer )
 {
-	lazercmd_state *state = timer.machine().driver_data<lazercmd_state>();
-	int scanline = param;
-
-	if((scanline % 2) == 1)
-		return;
-
-	if (++state->m_timer_count >= 64 * 128)
-		state->m_timer_count = 0;
+	if( ++timer_count >= 64*128 )
+		timer_count = 0;
 }
 
 /*************************************************************
@@ -278,7 +274,7 @@ static WRITE8_HANDLER( lazercmd_ctrl_port_w )
 /* triggered by REDC,r opcode */
 static READ8_HANDLER( lazercmd_ctrl_port_r )
 {
-	UINT8 data = 0;
+	int data = 0;
 	return data;
 }
 
@@ -290,28 +286,33 @@ static WRITE8_HANDLER( lazercmd_data_port_w )
 /* triggered by REDD,r opcode */
 static READ8_HANDLER( lazercmd_data_port_r )
 {
-	UINT8 data = input_port_read(space->machine(), "DSW") & 0x0f;
+	int data;
+	data = input_port_read(space->machine, "DSW") & 0x0f;
 	return data;
 }
 
 static WRITE8_HANDLER( lazercmd_hardware_w )
 {
-	lazercmd_state *state = space->machine().driver_data<lazercmd_state>();
+	static int DAC_data = 0;
 
 	switch (offset)
 	{
 		case 0: /* audio channels */
-			state->m_dac_data = (data & 0x80) ^ ((data & 0x40) << 1) ^ ((data & 0x20) << 2) ^ ((data & 0x10) << 3);
-			if (state->m_dac_data)
-				dac_data_w(state->m_dac, 0xff);
+			DAC_data=(data&0x80)^((data&0x40)<<1)^((data&0x20)<<2)^((data&0x10)<<3);
+			if (DAC_data)
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0xff);
+			}
 			else
-				dac_data_w(state->m_dac, 0);
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0);
+			}
 			break;
 		case 1: /* marker Y position */
-			state->m_marker_y = data;
+			marker_y = data;
 			break;
 		case 2: /* marker X position */
-			state->m_marker_x = data;
+			marker_x = data;
 			break;
 		case 3: /* D4 clears coin detected and D0 toggles on attract mode */
 			break;
@@ -320,7 +321,7 @@ static WRITE8_HANDLER( lazercmd_hardware_w )
 
 static WRITE8_HANDLER( medlanes_hardware_w )
 {
-	lazercmd_state *state = space->machine().driver_data<lazercmd_state>();
+	static int DAC_data = 0;
 
 	switch (offset)
 	{
@@ -328,17 +329,21 @@ static WRITE8_HANDLER( medlanes_hardware_w )
 			/* bits 4 and 5 are used to control a sound board */
 			/* these could be used to control sound samples */
 			/* at the moment they are routed through the dac */
-			state->m_dac_data = ((data & 0x20) << 2) ^ ((data & 0x10) << 3);
-			if (state->m_dac_data)
-				dac_data_w(state->m_dac, 0xff);
+			DAC_data=((data&0x20)<<2)^((data&0x10)<<3);
+			if (DAC_data)
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0xff);
+			}
 			else
-				dac_data_w(state->m_dac, 0);
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0);
+			}
 			break;
 		case 1: /* marker Y position */
-			state->m_marker_y = data;
+			marker_y = data;
 			break;
 		case 2: /* marker X position */
-			state->m_marker_x = data;
+			marker_x = data;
 			break;
 		case 3: /* D4 clears coin detected and D0 toggles on attract mode */
 			break;
@@ -347,7 +352,7 @@ static WRITE8_HANDLER( medlanes_hardware_w )
 
 static WRITE8_HANDLER( bbonk_hardware_w )
 {
-	lazercmd_state *state = space->machine().driver_data<lazercmd_state>();
+	static int DAC_data = 0;
 
 	switch (offset)
 	{
@@ -355,11 +360,15 @@ static WRITE8_HANDLER( bbonk_hardware_w )
 			/* bits 4 and 5 are used to control a sound board */
 			/* these could be used to control sound samples */
 			/* at the moment they are routed through the dac */
-			state->m_dac_data = ((data & 0x20) << 2) ^ ((data & 0x10) << 3);
-			if (state->m_dac_data)
-				dac_data_w(state->m_dac, 0xff);
+			DAC_data=((data&0x20)<<2)^((data&0x10)<<3);
+			if (DAC_data)
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0xff);
+			}
 			else
-				dac_data_w(state->m_dac, 0);
+			{
+				dac_data_w(devtag_get_device(space->machine, "dac"), 0);
+			}
 			break;
 		case 3: /* D4 clears coin detected and D0 toggles on attract mode */
 			break;
@@ -368,35 +377,33 @@ static WRITE8_HANDLER( bbonk_hardware_w )
 
 static READ8_HANDLER( lazercmd_hardware_r )
 {
-	lazercmd_state *state = space->machine().driver_data<lazercmd_state>();
-	UINT8 data = 0;
+	int data = 0;
 
 	switch (offset)
 	{
 		case 0: 			   /* player 1 joysticks */
-			data = input_port_read(space->machine(), "IN0");
+			data = input_port_read(space->machine, "IN0");
 			break;
 		case 1: 			   /* player 2 joysticks */
-			data = input_port_read(space->machine(), "IN1");
+			data = input_port_read(space->machine, "IN1");
 			break;
 		case 2: 			   /* player 1 + 2 buttons */
-			data = input_port_read(space->machine(), "IN3");
+			data = input_port_read(space->machine, "IN3");
 			break;
 		case 3: 			   /* coin slot + start buttons */
-			data = input_port_read(space->machine(), "IN2");
+			data = input_port_read(space->machine, "IN2");
 			break;
 		case 4: 			   /* vertical scan counter */
-			data = ((state->m_timer_count & 0x10) >> 1) | ((state->m_timer_count & 0x20) >> 3)
-						| ((state->m_timer_count & 0x40) >> 5) | ((state->m_timer_count & 0x80) >> 7);
+			data = ((timer_count&0x10)>>1)|((timer_count&0x20)>>3)|((timer_count&0x40)>>5)|((timer_count&0x80)>>7);
 			break;
 		case 5: 			   /* vertical scan counter */
-			data = state->m_timer_count & 0x0f;
+			data = timer_count & 0x0f;
 			break;
 		case 6: 			   /* 1f02 readback */
-			data = state->m_marker_x;
+			data = marker_x;
 			break;
 		case 7: 			   /* 1f01 readback */
-			data = state->m_marker_y;
+			data = marker_y;
 			break;
 	}
 	return data;
@@ -409,35 +416,35 @@ static READ8_HANDLER( lazercmd_hardware_r )
  *
  *************************************************************/
 
-static ADDRESS_MAP_START( lazercmd_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( lazercmd_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x1c00, 0x1c1f) AM_RAM
-	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE_SIZE_MEMBER(lazercmd_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 	AM_RANGE(0x1f00, 0x1f03) AM_WRITE(lazercmd_hardware_w)
 	AM_RANGE(0x1f00, 0x1f07) AM_READ(lazercmd_hardware_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( medlanes_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( medlanes_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x1000, 0x17ff) AM_ROM
 	AM_RANGE(0x1c00, 0x1c1f) AM_RAM
-	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE_SIZE_MEMBER(lazercmd_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 	AM_RANGE(0x1f00, 0x1f03) AM_WRITE(medlanes_hardware_w)
 	AM_RANGE(0x1f00, 0x1f07) AM_READ(lazercmd_hardware_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( bbonk_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( bbonk_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0bff) AM_ROM
 	AM_RANGE(0x1c00, 0x1c1f) AM_RAM
-	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE_SIZE_MEMBER(lazercmd_state, m_videoram, m_videoram_size)
+	AM_RANGE(0x1c20, 0x1eff) AM_RAM AM_BASE(&videoram) AM_SIZE(&videoram_size)
 	AM_RANGE(0x1f00, 0x1f03) AM_WRITE(bbonk_hardware_w)
 	AM_RANGE(0x1f00, 0x1f07) AM_READ(lazercmd_hardware_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( lazercmd_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( lazercmd_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(S2650_CTRL_PORT, S2650_CTRL_PORT) AM_READWRITE(lazercmd_ctrl_port_r, lazercmd_ctrl_port_w)
 	AM_RANGE(S2650_DATA_PORT, S2650_DATA_PORT) AM_READWRITE(lazercmd_data_port_r, lazercmd_data_port_w)
 ADDRESS_MAP_END
@@ -445,47 +452,47 @@ ADDRESS_MAP_END
 
 
 static INPUT_PORTS_START( lazercmd )
-	PORT_START("IN0")
+	PORT_START("IN0")		/* IN0 player 1 controls */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(1)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN1")
+	PORT_START("IN1")		/* IN1 player 2 controls */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("DSW")
+	PORT_START("DSW")		/* IN2 dip switch */
 	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Game_Time ) )
-	PORT_DIPSETTING(    0x00, "60 seconds" )
-	PORT_DIPSETTING(    0x01, "90 seconds" )
-	PORT_DIPSETTING(    0x02, "120 seconds" )
-	PORT_DIPSETTING(    0x03, "180 seconds" )
+	PORT_DIPSETTING(	0x00, "60 seconds" )
+	PORT_DIPSETTING(	0x01, "90 seconds" )
+	PORT_DIPSETTING(	0x02, "120 seconds" )
+	PORT_DIPSETTING(	0x03, "180 seconds" )
 	PORT_BIT( 0x18, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_DIPNAME( 0x20, 0x20, "Video Invert" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x20, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x40, "Marker Size" )
-	PORT_DIPSETTING(    0x00, "Small" )
-	PORT_DIPSETTING(    0x40, "Large" )
+	PORT_DIPSETTING(	0x00, "Small" )
+	PORT_DIPSETTING(	0x40, "Large" )
 //  PORT_DIPNAME( 0x80, 0x80, "Color Overlay" )
 //  PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 //  PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-	PORT_START("IN2")
+	PORT_START("IN2")		/* IN3 coinage & start */
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( 1C_1C ) )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0xf0, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("IN3")
+	PORT_START("IN3")		/* IN4 player 1 + 2 buttons */
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
@@ -494,87 +501,87 @@ static INPUT_PORTS_START( lazercmd )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( medlanes )
-	PORT_START("IN0")
+	PORT_START("IN0")		/* IN0 player 1 controls */
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hook Left") PORT_CODE(KEYCODE_Z)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hook Right") PORT_CODE(KEYCODE_X)
-	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_START("IN1")		/* IN1 player 1 controls */
+	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hook Left") PORT_CODE(KEYCODE_Z)
+	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Hook Right") PORT_CODE(KEYCODE_X)
+	PORT_BIT( 0xfc, IP_ACTIVE_LOW, IPT_UNUSED)
 
-	PORT_START("DSW")
+	PORT_START("DSW")		/* IN2 dip switch */
 	PORT_DIPNAME( 0x01, 0x01, "Game Timer" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( On ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( On ) )
 	PORT_DIPNAME( 0x02, 0x02, "Time" )
-	PORT_DIPSETTING(    0x00, "3 seconds" )
-	PORT_DIPSETTING(    0x02, "5 seconds" )
-	PORT_BIT( 0x1C, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPSETTING(	0x00, "3 seconds" )
+	PORT_DIPSETTING(	0x02, "5 seconds" )
+	PORT_BIT( 0x1C, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_DIPNAME( 0x20, 0x00, "Video Invert" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x20, DEF_STR( On ) )
 	PORT_DIPNAME( 0x40, 0x00, "Marker Size" )
-	PORT_DIPSETTING(    0x00, "Small" )
-	PORT_DIPSETTING(    0x40, "Large" )
+	PORT_DIPSETTING(	0x00, "Small" )
+	PORT_DIPSETTING(	0x40, "Large" )
 //  PORT_DIPNAME( 0x80, 0x80, "Color Overlay" )
 //  PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 //  PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-	PORT_START("IN2")
+	PORT_START("IN2")		/* IN3 coinage & start */
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( 1C_1C ) )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0xf4, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("IN3")
+	PORT_START("IN3")		/* IN4 not used */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( bbonk )
-	PORT_START("IN0")
+	PORT_START("IN0")		/* IN0 player 1 controls */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(1)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(1)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(1)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(1)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN1")
+	PORT_START("IN1")		/* IN1 player 2 controls */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("DSW")
+	PORT_START("DSW")		/* IN2 dip switch */
 	PORT_DIPNAME( 0x03, 0x02, "Games to win" )
-	PORT_DIPSETTING(    0x02, "2" )
-	PORT_DIPSETTING(    0x03, "3" )
-	PORT_DIPSETTING(    0x00, "4" )
-	PORT_DIPSETTING(    0x01, "5" )
-	PORT_BIT( 0x1C, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPSETTING(	0x02, "2" )
+	PORT_DIPSETTING(	0x03, "3" )
+	PORT_DIPSETTING(	0x00, "4" )
+	PORT_DIPSETTING(	0x01, "5" )
+	PORT_BIT( 0x1C, IP_ACTIVE_LOW, IPT_UNUSED)
 	PORT_DIPNAME( 0x20, 0x00, "Video Invert" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(	0x20, DEF_STR( On ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED)
 //  PORT_DIPNAME( 0x80, 0x00, "Color Overlay" )
 //  PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 //  PORT_DIPSETTING(    0x80, DEF_STR( On ) )
 
-	PORT_START("IN2")
+	PORT_START("IN2")		/* IN3 coinage & start */
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(	0x00, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( 1C_1C ) )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_COIN1 )
 	PORT_BIT( 0xf4, IP_ACTIVE_HIGH, IPT_UNUSED )
 
-	PORT_START("IN3")
+	PORT_START("IN3")		/* IN4 not used */
 	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
@@ -596,150 +603,118 @@ GFXDECODE_END
 
 static PALETTE_INIT( lazercmd )
 {
-	palette_set_color(machine, 0, MAKE_RGB(0xb0, 0xb0, 0xb0));	/* white */
-	palette_set_color(machine, 1, MAKE_RGB(0x00, 0x00, 0x00));	/* black */
+	palette_set_color(machine,0,MAKE_RGB(0xb0,0xb0,0xb0)); 	/* white */
+	palette_set_color(machine,1,MAKE_RGB(0x00,0x00,0x00)); 	/* black */
 
-	palette_set_color(machine, 2, MAKE_RGB(0x00, 0x00, 0x00));	/* black */
-	palette_set_color(machine, 3, MAKE_RGB(0xb0, 0xb0, 0xb0));	/* white */
+	palette_set_color(machine,2,MAKE_RGB(0x00,0x00,0x00)); 	/* black */
+	palette_set_color(machine,3,MAKE_RGB(0xb0,0xb0,0xb0)); 	/* white */
 
-	palette_set_color(machine, 4, MAKE_RGB(0xff, 0xff, 0xff));	/* bright white */
+	palette_set_color(machine,4,MAKE_RGB(0xff,0xff,0xff)); 	/* bright white */
 }
 
-
-static MACHINE_START( lazercmd )
-{
-	lazercmd_state *state = machine.driver_data<lazercmd_state>();
-
-	state->m_dac = machine.device("dac");
-
-	state->save_item(NAME(state->m_marker_x));
-	state->save_item(NAME(state->m_marker_y));
-	state->save_item(NAME(state->m_timer_count));
-	state->save_item(NAME(state->m_sense_state));
-	state->save_item(NAME(state->m_dac_data));
-}
-
-static MACHINE_RESET( lazercmd )
-{
-	lazercmd_state *state = machine.driver_data<lazercmd_state>();
-
-	state->m_marker_x = 0;
-	state->m_marker_y = 0;
-	state->m_timer_count = 0;
-	state->m_sense_state = 0;
-	state->m_dac_data = 0;
-}
-
-
-static MACHINE_CONFIG_START( lazercmd, lazercmd_state )
+static MACHINE_DRIVER_START( lazercmd )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 672 kHz? */
-/*  Main Clock is 8MHz divided by 12
-    but memory and IO access is only possible
-    within the line and frame blanking period
-    thus requiring an extra loading of approx 3-5 */
-	MCFG_CPU_PROGRAM_MAP(lazercmd_map)
-	MCFG_CPU_IO_MAP(lazercmd_portmap)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", lazercmd_timer, "screen", 0, 1) /* 7680 Hz */
-
-	MCFG_MACHINE_START(lazercmd)
-	MCFG_MACHINE_RESET(lazercmd)
+	MDRV_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 672 kHz? */
+/*          Main Clock is 8MHz divided by 12
+            but memory and IO access is only possible
+            within the line and frame blanking period
+            thus requiring an extra loading of approx 3-5 */
+	MDRV_CPU_PROGRAM_MAP(lazercmd_map)
+	MDRV_CPU_IO_MAP(lazercmd_portmap)
+	MDRV_CPU_VBLANK_INT_HACK(lazercmd_timer, 128) 	/* 7680 Hz */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR + 16)
-	MCFG_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR)
+	MDRV_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
 						0 * VERT_CHR, (VERT_RES - 1) * VERT_CHR - 1)
-	MCFG_SCREEN_UPDATE_STATIC(lazercmd)
 
-	MCFG_GFXDECODE(lazercmd)
-	MCFG_PALETTE_LENGTH(5)
+	MDRV_GFXDECODE(lazercmd)
+	MDRV_PALETTE_LENGTH(5)
 
-	MCFG_PALETTE_INIT(lazercmd)
+	MDRV_PALETTE_INIT(lazercmd)
+	MDRV_VIDEO_UPDATE(lazercmd)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( medlanes, lazercmd_state )
+static MACHINE_DRIVER_START( medlanes )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 666 kHz */
-/*  Main Clock is 8MHz divided by 12
-    but memory and IO access is only possible
-    within the line and frame blanking period
-    thus requiring an extra loading of approx 3-5 */
-	MCFG_CPU_PROGRAM_MAP(medlanes_map)
-	MCFG_CPU_IO_MAP(lazercmd_portmap)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", lazercmd_timer, "screen", 0, 1) /* 7680 Hz */
-
-	MCFG_MACHINE_START(lazercmd)
-	MCFG_MACHINE_RESET(lazercmd)
+	MDRV_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 666 kHz */
+/*          Main Clock is 8MHz divided by 12
+            but memory and IO access is only possible
+            within the line and frame blanking period
+            thus requiring an extra loading of approx 3-5 */
+	MDRV_CPU_PROGRAM_MAP(medlanes_map)
+	MDRV_CPU_IO_MAP(lazercmd_portmap)
+	MDRV_CPU_VBLANK_INT_HACK(lazercmd_timer, 128) 	/* 7680 Hz */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR)
-	MCFG_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR)
+	MDRV_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
 						 0 * VERT_CHR, VERT_RES * VERT_CHR - 1)
-	MCFG_SCREEN_UPDATE_STATIC(lazercmd)
 
-	MCFG_GFXDECODE(lazercmd)
-	MCFG_PALETTE_LENGTH(5)
+	MDRV_GFXDECODE(lazercmd)
+	MDRV_PALETTE_LENGTH(5)
 
-	MCFG_PALETTE_INIT(lazercmd)
+	MDRV_PALETTE_INIT(lazercmd)
+	MDRV_VIDEO_UPDATE(lazercmd)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( bbonk, lazercmd_state )
+static MACHINE_DRIVER_START( bbonk )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 666 kHz */
-/*  Main Clock is 8MHz divided by 12
-    but memory and IO access is only possible
-    within the line and frame blanking period
-    thus requiring an extra loading of approx 3-5 */
-	MCFG_CPU_PROGRAM_MAP(bbonk_map)
-	MCFG_CPU_IO_MAP(lazercmd_portmap)
-	MCFG_TIMER_ADD_SCANLINE("scantimer", bbonk_timer, "screen", 0, 1) /* 7680 Hz */
-
-	MCFG_MACHINE_START(lazercmd)
-	MCFG_MACHINE_RESET(lazercmd)
+	MDRV_CPU_ADD("maincpu", S2650,MASTER_CLOCK/12)				/* 666 kHz */
+/*          Main Clock is 8MHz divided by 12
+            but memory and IO access is only possible
+            within the line and frame blanking period
+            thus requiring an extra loading of approx 3-5 */
+	MDRV_CPU_PROGRAM_MAP(bbonk_map)
+	MDRV_CPU_IO_MAP(lazercmd_portmap)
+	MDRV_CPU_VBLANK_INT_HACK(bbonk_timer, 128) 	/* 7680 Hz */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR)
-	MCFG_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(HORZ_RES * HORZ_CHR, VERT_RES * VERT_CHR)
+	MDRV_SCREEN_VISIBLE_AREA(0 * HORZ_CHR, HORZ_RES * HORZ_CHR - 1,
 						0 * VERT_CHR, (VERT_RES - 1) * VERT_CHR - 1)
-	MCFG_SCREEN_UPDATE_STATIC(lazercmd)
 
-	MCFG_GFXDECODE(lazercmd)
-	MCFG_PALETTE_LENGTH(5)
+	MDRV_GFXDECODE(lazercmd)
+	MDRV_PALETTE_LENGTH(5)
 
-	MCFG_PALETTE_INIT(lazercmd)
+	MDRV_PALETTE_INIT(lazercmd)
+	MDRV_VIDEO_UPDATE(lazercmd)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -792,8 +767,8 @@ ROM_END
 
 static DRIVER_INIT( lazercmd )
 {
-	int i, y;
-	UINT8 *gfx = machine.region("gfx1")->base();
+int i, y;
+UINT8 *gfx = memory_region(machine, "gfx1");
 
 /******************************************************************
  * To show the maze bit #6 and #7 of the video ram are used.
@@ -810,10 +785,10 @@ static DRIVER_INIT( lazercmd )
 
 		for (y = 0; y < VERT_CHR; y++)
 		{
-			d[0 * 64 * 10] = (y < VERT_FNT) ? *s++ : 0xff;
-			d[1 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d;
-			d[2 * 64 * 10] = *d & 0xfe;
-			d[3 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
+			d[0*64*10] = (y < VERT_FNT) ? *s++ : 0xff;
+			d[1*64*10] = (y == VERT_CHR - 1) ? 0 : *d;
+			d[2*64*10] = *d & 0xfe;
+			d[3*64*10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
 			d++;
 		}
 	}
@@ -821,8 +796,8 @@ static DRIVER_INIT( lazercmd )
 
 static DRIVER_INIT( medlanes )
 {
-	int i, y;
-	UINT8 *gfx = machine.region("gfx1")->base();
+int i, y;
+UINT8 *gfx = memory_region(machine, "gfx1");
 
 /******************************************************************
  * To show the maze bit #6 and #7 of the video ram are used.
@@ -839,10 +814,10 @@ static DRIVER_INIT( medlanes )
 
 		for (y = 0; y < VERT_CHR; y++)
 		{
-			d[0 * 64 * 10] = (y < VERT_FNT) ? *s++ : 0xff;
-			d[1 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d;
-			d[2 * 64 * 10] = *d & 0xfe;
-			d[3 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
+			d[0*64*10] = (y < VERT_FNT) ? *s++ : 0xff;
+			d[1*64*10] = (y == VERT_CHR - 1) ? 0 : *d;
+			d[2*64*10] = *d & 0xfe;
+			d[3*64*10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
 			d++;
 		}
 	}
@@ -850,8 +825,8 @@ static DRIVER_INIT( medlanes )
 
 static DRIVER_INIT( bbonk )
 {
-	int i, y;
-	UINT8 *gfx = machine.region("gfx1")->base();
+int i, y;
+UINT8 *gfx = memory_region(machine, "gfx1");
 
 /******************************************************************
  * To show the maze bit #6 and #7 of the video ram are used.
@@ -868,10 +843,10 @@ static DRIVER_INIT( bbonk )
 
 		for (y = 0; y < VERT_CHR; y++)
 		{
-			d[0 * 64 * 10] = (y < VERT_FNT) ? *s++ : 0xff;
-			d[1 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d;
-			d[2 * 64 * 10] = *d & 0xfe;
-			d[3 * 64 * 10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
+			d[0*64*10] = (y < VERT_FNT) ? *s++ : 0xff;
+			d[1*64*10] = (y == VERT_CHR - 1) ? 0 : *d;
+			d[2*64*10] = *d & 0xfe;
+			d[3*64*10] = (y == VERT_CHR - 1) ? 0 : *d & 0xfe;
 			d++;
 		}
 	}
@@ -879,6 +854,6 @@ static DRIVER_INIT( bbonk )
 
 
 
-GAMEL( 1976, lazercmd, 0, lazercmd, lazercmd, lazercmd, ROT0, "Meadows Games, Inc.", "Lazer Command", GAME_SUPPORTS_SAVE, layout_lazercmd )
-GAMEL( 1977, medlanes, 0, medlanes, medlanes, medlanes, ROT0, "Meadows Games, Inc.", "Meadows Lanes", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_ho2eff2e )
-GAME ( 1976, bbonk,    0, bbonk,    bbonk,    bbonk,    ROT0, "Meadows Games, Inc.", "Bigfoot Bonkers", GAME_SUPPORTS_SAVE )
+GAMEL( 1976, lazercmd, 0, lazercmd, lazercmd, lazercmd, ROT0, "Meadows Games, Inc.", "Lazer Command", 0, layout_lazercmd )
+GAMEL( 1977, medlanes, 0, medlanes, medlanes, medlanes, ROT0, "Meadows Games, Inc.", "Meadows Lanes", GAME_IMPERFECT_SOUND, layout_ho2eff2e )
+GAME ( 1976, bbonk,	   0, bbonk,    bbonk,	 bbonk,    ROT0, "Meadows Games, Inc.", "Bigfoot Bonkers", 0 )

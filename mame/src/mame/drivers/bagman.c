@@ -28,7 +28,7 @@ write:
 a000      interrupt enable
 a001      horizontal flip
 a002      vertical flip
-a003      video enable, not available on earlier hardware revision(s)
+a003      video enable?? (seems to be unused in the schems)
 a004      coin counter
 a007      ? /SCS line in the schems connected to AY8910 pin A4 or AA (schems are unreadable)
 
@@ -60,74 +60,134 @@ DIP locations verified for:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/tms5110.h"
 #include "includes/bagman.h"
 
 
-static WRITE8_DEVICE_HANDLER( bagman_ls259_w )
+static int speech_rom_address = 0;
+
+static UINT8 ls259_buf[8] = {0,0,0,0,0,0,0,0};
+
+
+static void start_talking (const device_config *tms)
 {
-	bagman_state *state = device->machine().driver_data<bagman_state>();
-	address_space *space = device->machine().device("maincpu")->memory().space(AS_PROGRAM);
-	bagman_pal16r6_w(space, offset,data); /*this is just a simulation*/
+	speech_rom_address = 0x0;
+	tms5110_ctl_w(tms,0,TMS5110_CMD_SPEAK);
+	tms5110_pdc_w(tms,0,0);
+	tms5110_pdc_w(tms,0,1);
+	tms5110_pdc_w(tms,0,0);
+}
 
-	if (state->m_ls259_buf[offset] != (data&1) )
+static void reset_talking (const device_config *tms)
+{
+/*To be extremely accurate there should be a delays between each of
+  the function calls below. In real they happen with the frequency of 160 kHz.
+*/
+
+	tms5110_ctl_w(tms,0,TMS5110_CMD_RESET);
+	tms5110_pdc_w(tms,0,0);
+	tms5110_pdc_w(tms,0,1);
+	tms5110_pdc_w(tms,0,0);
+
+	tms5110_pdc_w(tms,0,0);
+	tms5110_pdc_w(tms,0,1);
+	tms5110_pdc_w(tms,0,0);
+
+	tms5110_pdc_w(tms,0,0);
+	tms5110_pdc_w(tms,0,1);
+	tms5110_pdc_w(tms,0,0);
+
+	speech_rom_address = 0x0;
+}
+
+
+static int bagman_speech_rom_read_bit(const device_config *device)
+{
+	UINT8 *ROM = memory_region(device->machine, "speech");
+	int bit_no = (ls259_buf[0]<<2) | (ls259_buf[1]<<1) | (ls259_buf[2]<<0);
+	int byte = 0;
+
+#if 0
+	if ( (ls259_buf[4] == 0) &&  (ls259_buf[5] == 0) )
+		logerror("readbit: BAD SPEECH ROM SELECT (both enabled)\n");
+	if ( (ls259_buf[4] == 1) &&  (ls259_buf[5] == 1) )
+		logerror("readbit: BAD SPEECH ROM SELECT (both disabled)\n");
+#endif
+
+
+	if (ls259_buf[4]==0)	/*ROM 11 chip enable*/
 	{
-		state->m_ls259_buf[offset] = data&1;
+		byte |= ROM[ speech_rom_address + 0x0000 ];
+	}
 
-		switch (offset)
+	if (ls259_buf[5]==0)	/*ROM 12 chip enable*/
+	{
+		byte |= ROM[ speech_rom_address + 0x1000 ]; /*0x1000 is because both roms are loaded in one memory region*/
+	}
+
+	speech_rom_address++;
+	speech_rom_address &= 0x0fff;
+
+	return (byte>>(bit_no^0x7)) & 1;
+}
+
+#if 0
+static READ8_HANDLER( bagman_ls259_r )
+{
+	return ls259_buf[offset];
+}
+#endif
+
+static WRITE8_HANDLER( bagman_ls259_w )
+{
+	bagman_pal16r6_w(space,offset,data); /*this is just a simulation*/
+
+	if (ls259_buf[offset] != (data&1) )
+	{
+		ls259_buf[offset] = data&1;
+
+		if (offset==3)
 		{
-		case 0:
-		case 1:
-		case 2:
-			tmsprom_bit_w(device, 0, 7 - ((state->m_ls259_buf[0]<<2) | (state->m_ls259_buf[1]<<1) | (state->m_ls259_buf[2]<<0)));
-			break;
-		case 3:
-			tmsprom_enable_w(device, state->m_ls259_buf[offset]);
-			break;
-		case 4:
-			tmsprom_rom_csq_w(device, 0, state->m_ls259_buf[offset]);
-			break;
-		case 5:
-			tmsprom_rom_csq_w(device, 1, state->m_ls259_buf[offset]);
-			break;
+			const device_config *tms = devtag_get_device(space->machine, "tms");
+			if (ls259_buf[3] == 0)	/* 1->0 transition */
+			{
+				reset_talking(tms);
+			}
+			else
+			{
+				start_talking(tms);	/* 0->1 transition */
+			}
 		}
 	}
 }
 
 static WRITE8_HANDLER( bagman_coin_counter_w )
 {
-	coin_counter_w(space->machine(), offset,data);
+	coin_counter_w(offset,data);
 }
 
-static WRITE8_HANDLER( irq_mask_w )
-{
-	bagman_state *state = space->machine().driver_data<bagman_state>();
-
-	state->m_irq_mask = data & 1;
-}
-
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_RAM
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE_MEMBER(bagman_state, m_videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE_MEMBER(bagman_state, m_colorram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
 	AM_RANGE(0xa000, 0xa000) AM_READ(bagman_pal16r6_r)
 	//AM_RANGE(0xa800, 0xa805) AM_READ(bagman_ls259_r) /*just for debugging purposes*/
-	AM_RANGE(0xa000, 0xa000) AM_WRITE(irq_mask_w)
+	AM_RANGE(0xa000, 0xa000) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0xa001, 0xa002) AM_WRITE(bagman_flipscreen_w)
-	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE_MEMBER(bagman_state, m_video_enable)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&bagman_video_enable)
 	AM_RANGE(0xc000, 0xffff) AM_ROM /* Super Bagman only */
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bagman_state, m_spriteram, m_spriteram_size)	/* hidden portion of color RAM */
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
-	AM_RANGE(0xa800, 0xa805) AM_DEVWRITE("tmsprom", bagman_ls259_w) /* TMS5110 driving state machine */
+	AM_RANGE(0xa800, 0xa805) AM_WRITE(bagman_ls259_w) /* TMS5110 driving state machine */
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(bagman_coin_counter_w)
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW")
-	AM_RANGE(0xb800, 0xb800) AM_READNOP								/* looks like watchdog from schematics */
+	AM_RANGE(0xb800, 0xb800) AM_READNOP
 
 #if 0
 	AM_RANGE(0xa007, 0xa007) AM_WRITENOP	/* ???? */
@@ -138,18 +198,18 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( pickin_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( pickin_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
 	AM_RANGE(0x7000, 0x77ff) AM_RAM
-	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE_MEMBER(bagman_state, m_videoram)
-	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE_MEMBER(bagman_state, m_colorram)
-	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE_SIZE_MEMBER(bagman_state, m_spriteram, m_spriteram_size)	/* hidden portion of color RAM */
+	AM_RANGE(0x8800, 0x8bff) AM_RAM_WRITE(bagman_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x9800, 0x9bff) AM_RAM_WRITE(bagman_colorram_w) AM_BASE(&colorram)
+	AM_RANGE(0x9800, 0x981f) AM_WRITEONLY AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* hidden portion of color RAM */
 									/* here only to initialize the pointer, */
 									/* writes are handled by bagman_colorram_w */
 	AM_RANGE(0x9c00, 0x9fff) AM_WRITENOP	/* written to, but unused */
-	AM_RANGE(0xa000, 0xa000) AM_WRITE(irq_mask_w)
+	AM_RANGE(0xa000, 0xa000) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0xa001, 0xa002) AM_WRITE(bagman_flipscreen_w)
-	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE_MEMBER(bagman_state, m_video_enable)
+	AM_RANGE(0xa003, 0xa003) AM_WRITEONLY AM_BASE(&bagman_video_enable)
 	AM_RANGE(0xa004, 0xa004) AM_WRITE(bagman_coin_counter_w)
 	AM_RANGE(0xa800, 0xa800) AM_READ_PORT("DSW")
 
@@ -163,10 +223,10 @@ static ADDRESS_MAP_START( pickin_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb800, 0xb800) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_portmap, AS_IO, 8 )
+static ADDRESS_MAP_START( main_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x08, 0x09) AM_DEVWRITE("aysnd", ay8910_address_data_w)
-	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x08, 0x09) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x0c, 0x0c) AM_DEVREAD("ay", ay8910_r)
 	//AM_RANGE(0x56, 0x56) AM_WRITENOP
 ADDRESS_MAP_END
 
@@ -274,23 +334,23 @@ INPUT_PORTS_END
 
 static INPUT_PORTS_START( squaitsa )
 	PORT_START("P1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p1 dial
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )
+ 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+ 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )
+ 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )
+ 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
+ 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
+ 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p1 dial
+ 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
+ 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )
 
-	PORT_START("P2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN3 )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN4 )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p2 dial
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
+ 	PORT_START("P2")
+ 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN3 )
+ 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN4 )
+ 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
+ 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+ 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
+ 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_SPECIAL ) // special handling for the p2 dial
+ 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) // ^
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL
 
 	PORT_START("DSW")
@@ -373,48 +433,46 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL
 };
 
-/* squaitsa doesn't map the dial directly, instead it polls the results of the dial through an external circuitry.
+/* squaitsa doesn't map the dial directly, instead it polls the results of the dial thru an external circuitry.
    I don't know if the following is correct, there can possbily be multiple solutions for the same problem. */
 static READ8_DEVICE_HANDLER( dial_input_p1_r )
 {
-	bagman_state *state = device->machine().driver_data<bagman_state>();
-	UINT8 dial_val;
+	static UINT8 res,dial_val,old_val;
 
-	dial_val = input_port_read(device->machine(), "DIAL_P1");
+	dial_val = input_port_read(device->machine, "DIAL_P1");
 
-	if(state->m_p1_res != 0x60)
-		state->m_p1_res = 0x60;
-	else if(dial_val > state->m_p1_old_val)
-		state->m_p1_res = 0x40;
-	else if(dial_val < state->m_p1_old_val)
-		state->m_p1_res = 0x20;
+	if(res != 0x60)
+		res = 0x60;
+	else if(dial_val > old_val)
+		res = 0x40;
+	else if(dial_val < old_val)
+		res = 0x20;
 	else
-		state->m_p1_res = 0x60;
+		res = 0x60;
 
-	state->m_p1_old_val = dial_val;
+	old_val = dial_val;
 
-	return (input_port_read(device->machine(), "P1") & 0x9f) | (state->m_p1_res);
+	return (input_port_read(device->machine, "P1") & 0x9f) | (res);
 }
 
 static READ8_DEVICE_HANDLER( dial_input_p2_r )
 {
-	bagman_state *state = device->machine().driver_data<bagman_state>();
-	UINT8 dial_val;
+	static UINT8 res,dial_val,old_val;
 
-	dial_val = input_port_read(device->machine(), "DIAL_P2");
+	dial_val = input_port_read(device->machine, "DIAL_P2");
 
-	if(state->m_p2_res != 0x60)
-		state->m_p2_res = 0x60;
-	else if(dial_val > state->m_p2_old_val)
-		state->m_p2_res = 0x40;
-	else if(dial_val < state->m_p2_old_val)
-		state->m_p2_res = 0x20;
+	if(res != 0x60)
+		res = 0x60;
+	else if(dial_val > old_val)
+		res = 0x40;
+	else if(dial_val < old_val)
+		res = 0x20;
 	else
-		state->m_p2_res = 0x60;
+		res = 0x60;
 
-	state->m_p2_old_val = dial_val;
+	old_val = dial_val;
 
-	return (input_port_read(device->machine(), "P2") & 0x9f) | (state->m_p2_res);
+	return (input_port_read(device->machine, "P2") & 0x9f) | (res);
 }
 
 static const ay8910_interface ay8910_dial_config =
@@ -437,113 +495,83 @@ static const ay8910_interface ay8910_interface_2 =
 	DEVCB_NULL
 };
 
-static const tmsprom_interface prom_intf =
-{
-	"5110ctrl",						/* prom memory region - sound region is automatically assigned */
-	0x1000,							/* individual rom_size */
-	1,								/* bit # of pdc line */
-	/* virtual bit 8: constant 0, virtual bit 9:constant 1 */
-	8,								/* bit # of ctl1 line */
-	2,								/* bit # of ctl2 line */
-	8,								/* bit # of ctl4 line */
-	2,								/* bit # of ctl8 line */
-	6,								/* bit # of rom reset */
-	7,								/* bit # of stop */
-	DEVCB_DEVICE_LINE("tms", tms5110_pdc_w),		/* tms pdc func */
-	DEVCB_DEVICE_HANDLER("tms", tms5110_ctl_w)		/* tms ctl func */
-};
-
 static const tms5110_interface bagman_tms5110_interface =
 {
-	/* legacy interface */
-	NULL,											/* function to be called when chip requests another bit */
-	NULL,											/* speech ROM load address callback */
-	/* new rom controller interface */
-	DEVCB_DEVICE_LINE("tmsprom", tmsprom_m0_w),		/* the M0 line */
-	DEVCB_NULL,										/* the M1 line */
-	DEVCB_NULL,										/* Write to ADD1,2,4,8 - 4 address bits */
-	DEVCB_DEVICE_LINE("tmsprom", tmsprom_data_r),	/* Read one bit from ADD8/Data - voice data */
-	DEVCB_NULL										/* rom clock - Only used to drive the data lines */
+	bagman_speech_rom_read_bit	/*M0 callback function. Called whenever chip requests a single bit of data*/
 };
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	bagman_state *state = device->machine().driver_data<bagman_state>();
-
-	if(state->m_irq_mask)
-		device_set_input_line(device, 0, HOLD_LINE);
-}
-
-
-static MACHINE_CONFIG_START( bagman, bagman_state )
+static MACHINE_DRIVER_START( bagman )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_RESET(bagman)
+	MDRV_MACHINE_RESET(bagman)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(bagman)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(bagman)
+	MDRV_PALETTE_LENGTH(64)
 
-	MCFG_GFXDECODE(bagman)
-	MCFG_PALETTE_LENGTH(64)
-
-	MCFG_PALETTE_INIT(bagman)
-	MCFG_VIDEO_START(bagman)
-
-	MCFG_DEVICE_ADD("tmsprom", TMSPROM, 640000 / 2)  /* rom clock */
-	MCFG_DEVICE_CONFIG(prom_intf)
+	MDRV_PALETTE_INIT(bagman)
+	MDRV_VIDEO_START(bagman)
+	MDRV_VIDEO_UPDATE(bagman)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, BAGMAN_H0 / 2)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("tms", TMS5110A, 640000)
-	MCFG_SOUND_CONFIG(bagman_tms5110_interface)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("tms", TMS5110A, 640000)
+	MDRV_SOUND_CONFIG(bagman_tms5110_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( pickin, bagman_state )
+static MACHINE_DRIVER_START( pickin )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
-	MCFG_CPU_PROGRAM_MAP(pickin_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
+	MDRV_CPU_PROGRAM_MAP(pickin_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_RESET(bagman)
+	MDRV_MACHINE_RESET(bagman)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(bagman)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(pickin)
+	MDRV_PALETTE_LENGTH(64)
 
-	MCFG_GFXDECODE(pickin)
-	MCFG_PALETTE_LENGTH(64)
-
-	MCFG_PALETTE_INIT(bagman)
-	MCFG_VIDEO_START(bagman)
+	MDRV_PALETTE_INIT(bagman)
+	MDRV_VIDEO_START(bagman)
+	MDRV_VIDEO_UPDATE(bagman)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	/* maybe */
-	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_DRIVER_END
 
 /*
 
@@ -563,44 +591,48 @@ z80
 */
 
 
-static MACHINE_CONFIG_START( botanic, bagman_state )
+static MACHINE_DRIVER_START( botanic )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, BAGMAN_H0)
-	MCFG_CPU_PROGRAM_MAP(pickin_map)
-	MCFG_CPU_IO_MAP(main_portmap)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
+	MDRV_CPU_PROGRAM_MAP(pickin_map)
+	MDRV_CPU_IO_MAP(main_portmap)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_MACHINE_RESET(bagman)
+	MDRV_MACHINE_RESET(bagman)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(BAGMAN_HCLK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(bagman)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MDRV_GFXDECODE(bagman)
+	MDRV_PALETTE_LENGTH(64)
 
-	MCFG_GFXDECODE(bagman)
-	MCFG_PALETTE_LENGTH(64)
-
-	MCFG_PALETTE_INIT(bagman)
-	MCFG_VIDEO_START(bagman)
+	MDRV_PALETTE_INIT(bagman)
+	MDRV_VIDEO_START(bagman)
+	MDRV_VIDEO_UPDATE(bagman)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
-	MCFG_SOUND_ADD("ay2", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_interface_2)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_interface_2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( squaitsa, botanic )
-	MCFG_SOUND_MODIFY("aysnd")
-	MCFG_SOUND_CONFIG(ay8910_dial_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( squaitsa )
+	MDRV_IMPORT_FROM( botanic )
+	MDRV_SOUND_MODIFY("ay")
+	MDRV_SOUND_CONFIG(ay8910_dial_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
@@ -629,11 +661,9 @@ ROM_START( bagman )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "r9_b11.bin",   0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "t9_b12.bin",   0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -658,11 +688,9 @@ ROM_START( bagnard )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "r9_b11.bin",   0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "t9_b12.bin",   0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -687,11 +715,9 @@ ROM_START( bagnarda )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "r9_b11.bin",   0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "t9_b12.bin",   0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -716,11 +742,9 @@ ROM_START( bagmans )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "r9_b11.bin",   0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "t9_b12.bin",   0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -745,11 +769,9 @@ ROM_START( bagmans2 )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "r9_b11.bin",   0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "t9_b12.bin",   0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -786,11 +808,9 @@ ROM_START( sbagman )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "11.9r",        0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "12.9t",        0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -825,11 +845,9 @@ ROM_START( sbagmans )
 	ROM_REGION( 0x0060, "proms", 0 )
 	ROM_LOAD( "p3.bin",       0x0000, 0x0020, CRC(2a855523) SHA1(91e032233fee397c90b7c1662934aca9e0671482) )
 	ROM_LOAD( "r3.bin",       0x0020, 0x0020, CRC(ae6f1019) SHA1(fd711882b670380cb4bd909c840ba06277b8fbe3) )
+	ROM_LOAD( "r6.bin",       0x0040, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
 
-	ROM_REGION( 0x0060, "5110ctrl", 0)
-	ROM_LOAD( "r6.bin",       0x0000, 0x0020, CRC(c58a4f6a) SHA1(35ef244b3e94032df2610aa594ea5670b91e1449) ) /*state machine driving TMS5110*/
-
-	ROM_REGION( 0x2000, "tmsprom", 0 ) /* data for the TMS5110 speech chip */
+	ROM_REGION( 0x2000, "speech", 0 ) /* data for the TMS5110 speech chip */
 	ROM_LOAD( "11.9r",        0x0000, 0x1000, CRC(2e0057ff) SHA1(33e3ffa6418f86864eb81e5e9bda4bf540c143a6) )
 	ROM_LOAD( "12.9t",        0x1000, 0x1000, CRC(b2120edd) SHA1(52b89dbcc749b084331fa82b13d0876e911fce52) )
 ROM_END
@@ -900,7 +918,7 @@ Note
 1x 8 switches dip
 
 This is a strange thing: the PCB is marked "Valadon Automation (C) 1983" and "Fabrique
-sous license par GECAS/MILANO" (manufactured under license from GECAS/MILANO)
+sous licence par GECAS/MILANO" (manufactured under license from GECAS/MILANO)
 
 But if you look in rom 7 with an hex editor you can see the following: "(C) 1984 ITISA"
 and "UN BONJOUR A JACQUES DE PEPE PETIT ET HENK" (a good morning to Jacques from Pepe
@@ -910,7 +928,7 @@ Morillas, the very same 3 persons working on BOTANIC (1984)(ITISA).
 Game writings in the eprom are in English and Spanish.
 
 So we have an English/Spanish game with a French easter egg on a French PCB manufactured
-under license from an Italian company! Let's call it melting pot!
+under licence from an Italian company! Let's call it melting pot!
 
 */
 
@@ -933,25 +951,20 @@ ROM_START( squaitsa )
 	ROM_LOAD( "mmi6331.3r",    0x0020, 0x0020,CRC(86c1e7db) SHA1(5c974b51d770a555ddab5c23f03a666c6f286cbf) )
 ROM_END
 
-static DRIVER_INIT( bagman )
+static DRIVER_INIT( bagnarda )
 {
-	bagman_state *state = machine.driver_data<bagman_state>();
-
-	/* Unmap video enable register, not available on earlier hardware revision(s)
-       Bagman is supposed to have glitches during screen transitions */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->unmap_write(0xa003, 0xa003);
-	*state->m_video_enable = 1;
+	/* initialize video enable because it's not done in the code */
+	*bagman_video_enable = 1;
 }
 
+GAME( 1982, bagman,	  0,	   bagman,  bagman,  0,        ROT270, "Valadon Automation", "Bagman", 0 )
+GAME( 1982, bagnard,  bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation", "Le Bagnard (set 1)", 0 )
+GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagnarda, ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
+GAME( 1982, bagmans,  bagman,  bagman,  bagmans, 0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 1)", 0 )
+GAME( 1982, bagmans2, bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 2)", 0 )
+GAME( 1984, sbagman,  0, 	   bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
+GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,        ROT270, "Valadon Automation (Stern license)", "Super Bagman (Stern)", 0 )
+GAME( 1983, pickin,	  0,	   pickin,  pickin,  0,        ROT270, "Valadon Automation", "Pickin'", 0 )
+GAME( 1984, botanic,  0,       botanic, botanic, 0,        ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
+GAME( 1984, squaitsa, 0,       squaitsa,squaitsa,0,        ROT0,   "Itisa",              "Squash (Itisa)", 0 )
 
-GAME( 1982, bagman,   0,       bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Bagman", 0 )
-GAME( 1982, bagnard,  bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Le Bagnard (set 1)", 0 )
-GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
-GAME( 1982, bagmans,  bagman,  bagman,  bagmans, bagman,  ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 1)", 0 )
-GAME( 1982, bagmans2, bagman,  bagman,  bagman,  bagman,  ROT270, "Valadon Automation (Stern Electronics license)", "Bagman (Stern Electronics, set 2)", 0 )
-
-GAME( 1984, sbagman,  0,       bagman,  sbagman, 0,       ROT270, "Valadon Automation", "Super Bagman", 0 )
-GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,       ROT270, "Valadon Automation (Stern Electronics license)", "Super Bagman (Stern Electronics)", 0 )
-GAME( 1983, pickin,   0,       pickin,  pickin,  0,       ROT270, "Valadon Automation", "Pickin'", 0 )
-GAME( 1984, botanic,  0,       botanic, botanic, 0,       ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
-GAME( 1984, squaitsa, 0,       squaitsa,squaitsa,0,       ROT0,   "Itisa", "Squash (Itisa)", 0 )

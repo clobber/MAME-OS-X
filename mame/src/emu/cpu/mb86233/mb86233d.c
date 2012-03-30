@@ -1,4 +1,3 @@
-#include "emu.h"
 #include "debugger.h"
 #include "mb86233.h"
 

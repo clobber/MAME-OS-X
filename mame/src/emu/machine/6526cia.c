@@ -7,8 +7,9 @@
 
 **********************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "6526cia.h"
+
 
 /***************************************************************************
     CONSTANTS
@@ -32,341 +33,426 @@
 #define CIA_CRA			14
 #define CIA_CRB			15
 
-#define CIA_CRA_START	0x01
-#define	CIA_CRA_PBON	0x02
-#define	CIA_CRA_OUTMODE	0x04
-#define	CIA_CRA_RUNMODE	0x08
-#define	CIA_CRA_LOAD	0x10
-#define	CIA_CRA_INMODE	0x20
-#define	CIA_CRA_SPMODE	0x40
-#define	CIA_CRA_TODIN	0x80
 
-//**************************************************************************
-//  DEVICE CONFIGURATION
-//**************************************************************************
+/***************************************************************************
+    TYPE DEFINITIONS
+***************************************************************************/
 
+typedef struct _cia_timer cia_timer;
+typedef struct _cia_port cia_port;
+typedef struct _cia_state cia_state;
 
-//**************************************************************************
-//  LIVE DEVICE
-//**************************************************************************
-
-// device type definition
-const device_type MOS6526R1 = &device_creator<mos6526r1_device>;
-const device_type MOS6526R2 = &device_creator<mos6526r2_device>;
-const device_type MOS8520 = &device_creator<mos8520_device>;
-
-//-------------------------------------------------
-//  mos6526_device - constructor
-//-------------------------------------------------
-
-mos6526_device::mos6526_device(const machine_config &mconfig, device_type type, const char *name, const char *tag, device_t *owner, UINT32 clock)
-    : device_t(mconfig, type, name, tag, owner, clock)
+struct _cia_timer
 {
-}
+	UINT16		latch;
+	UINT16		count;
+	UINT8		mode;
+	UINT8		irq;
+	emu_timer *timer;
+	cia_state *	cia;
+};
 
-mos6526r1_device::mos6526r1_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : mos6526_device(mconfig, MOS6526R1, "MOS6526r1", tag, owner, clock) { }
-
-mos6526r2_device::mos6526r2_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : mos6526_device(mconfig, MOS6526R2, "MOS6526r2", tag, owner, clock) { }
-
-mos8520_device::mos8520_device(const machine_config &mconfig, const char *tag, device_t *owner, UINT32 clock)
-    : mos6526_device(mconfig, MOS8520, "MOS8520", tag, owner, clock) { }
-
-
-//-------------------------------------------------
-//  device_reset - device-specific reset
-//-------------------------------------------------
-
-void mos6526_device::device_reset()
+struct _cia_port
 {
-	/* clear things out */
-	m_port[0].m_latch = 0x00;
-	m_port[0].m_in = 0x00;
-	m_port[0].m_out = 0x00;
-	m_port[0].m_mask_value = 0xff;
-	m_port[1].m_latch = 0x00;
-	m_port[1].m_in = 0x00;
-	m_port[1].m_out = 0x00;
-	m_port[1].m_mask_value = 0xff;
-	m_tod = 0;
-	m_tod_latch = 0;
-	m_alarm = 0;
-	m_icr = 0x00;
-	m_ics = 0x00;
-	m_irq = 0;
-	m_shift = 0;
-	m_loaded = 0;
-	m_cnt = 1;
-	m_sp = 0;
+	UINT8		ddr;
+	UINT8		latch;
+	UINT8		in;
+	UINT8		out;
+	devcb_resolved_read8	read;
+	devcb_resolved_write8	write;
+	UINT8		mask_value; /* in READ operation the value can be forced by a extern electric circuit */
+};
 
-	/* initialize data direction registers */
-	m_port[0].m_ddr = !strcmp(tag(), "cia_0") ? 0x03 : 0xff;
-	m_port[1].m_ddr = !strcmp(tag(), "cia_0") ? 0x00 : 0xff;
+struct _cia_state
+{
+	const device_config *device;
+	devcb_resolved_write_line irq_func;
+	devcb_resolved_write_line pc_func;
 
-	/* TOD running by default */
-	m_tod_running = TRUE;
+	cia_port		port[2];
+	cia_timer		timer[2];
 
-	/* initialize timers */
-	for(int t = 0; t < 2; t++)
-	{
-		cia_timer *timer = &m_timer[t];
-		timer->m_cia = this;
-		timer->m_clock = clock();
-		timer->m_latch = 0xffff;
-		timer->m_count = 0x0000;
-		timer->m_mode = 0x00;
-	}
+	/* Time Of the Day clock (TOD) */
+	UINT32			tod;
+	UINT32			tod_latch;
+	UINT8			tod_latched;
+	UINT8			tod_running;
+	UINT32			alarm;
+
+	/* Interrupts */
+	UINT8			icr;
+	UINT8			ics;
+	UINT8			irq;
+
+	/* Serial */
+	UINT8			loaded;
+	UINT8			sdr;
+	UINT8			sp;
+	UINT8			cnt;
+	UINT8			shift;
+	UINT8			serial;
+};
+
+
+/***************************************************************************
+    PROTOTYPES
+***************************************************************************/
+
+static TIMER_CALLBACK( cia_timer_proc );
+static void cia_timer_underflow(const device_config *device, int timer);
+static TIMER_CALLBACK( cia_clock_tod_callback );
+
+
+
+/***************************************************************************
+    INLINE FUNCTIONS
+***************************************************************************/
+
+INLINE cia_state *get_token(const device_config *device)
+{
+	assert(device != NULL);
+	assert((device->type == CIA6526R1) || (device->type == CIA6526R2) || (device->type == CIA8520));
+	return (cia_state *) device->token;
 }
 
 
-//-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
-//-------------------------------------------------
-
-void mos6526_device::device_config_complete()
+INLINE const cia6526_interface *get_interface(const device_config *device)
 {
-	// inherit a copy of the static data
-	const mos6526_interface *intf = reinterpret_cast<const mos6526_interface *>(static_config());
-	if (intf != NULL)
-		*static_cast<mos6526_interface *>(this) = *intf;
-
-	// or initialize to defaults if none provided
-	else
-	{
-		m_tod_clock = 0;
-    	memset(&m_out_irq_cb, 0, sizeof(m_out_irq_cb));
-    	memset(&m_out_pc_cb, 0, sizeof(m_out_pc_cb));
-    	memset(&m_out_cnt_cb, 0, sizeof(m_out_cnt_cb));
-    	memset(&m_out_sp_cb, 0, sizeof(m_out_sp_cb));
-    	memset(&m_in_pa_cb, 0, sizeof(m_in_pa_cb));
-    	memset(&m_out_pa_cb, 0, sizeof(m_out_pa_cb));
-    	memset(&m_in_pb_cb, 0, sizeof(m_in_pb_cb));
-    	memset(&m_out_pb_cb, 0, sizeof(m_out_pb_cb));
-	}
+	assert(device != NULL);
+	assert((device->type == CIA6526R1) || (device->type == CIA6526R2) || (device->type == CIA8520));
+	return (cia6526_interface *) device->static_config;
 }
 
 
-//-------------------------------------------------
-//  device_start - device-specific startup
-//-------------------------------------------------
+/***************************************************************************
+    IMPLEMENTATION
+***************************************************************************/
 
-void mos6526_device::device_start()
+/*-------------------------------------------------
+    DEVICE_START( cia )
+-------------------------------------------------*/
+
+static DEVICE_START( cia )
 {
+	int t, p;
+	cia_state *cia = get_token(device);
+	const cia6526_interface *intf = get_interface(device);
+
 	/* clear out CIA structure, and copy the interface */
-	m_out_irq_func.resolve(m_out_irq_cb, *this);
-	m_out_pc_func.resolve(m_out_pc_cb, *this);
-	m_out_cnt_func.resolve(m_out_cnt_cb, *this);
-	m_out_sp_func.resolve(m_out_sp_cb, *this);
-	m_flag = 1;
+	memset(cia, 0, sizeof(*cia));
+	cia->device = device;
+	devcb_resolve_write_line(&cia->irq_func, &intf->irq_func, device);
+	devcb_resolve_write_line(&cia->pc_func, &intf->pc_func, device);
 
 	/* setup ports */
-	m_port[0].m_read.resolve(m_in_pa_cb, *this);
-	m_port[0].m_write.resolve(m_out_pa_cb, *this);
-	m_port[1].m_read.resolve(m_in_pb_cb, *this);
-	m_port[1].m_write.resolve(m_out_pb_cb, *this);
-
-	for (int p = 0; p < (sizeof(m_port) / sizeof(m_port[0])); p++)
+	for (p = 0; p < (sizeof(cia->port) / sizeof(cia->port[0])); p++)
 	{
-		m_port[p].m_mask_value = 0xff;
+		devcb_resolve_read8(&cia->port[p].read, &intf->port[p].read, device);
+		devcb_resolve_write8(&cia->port[p].write, &intf->port[p].write, device);
+		cia->port[p].mask_value = 0xff;
 	}
 
 	/* setup timers */
-	for (int t = 0; t < (sizeof(m_timer) / sizeof(m_timer[0])); t++)
+	for (t = 0; t < (sizeof(cia->timer) / sizeof(cia->timer[0])); t++)
 	{
-		cia_timer *timer = &m_timer[t];
-		timer->m_timer = machine().scheduler().timer_alloc(FUNC(timer_proc), (void*)this);
-		timer->m_cia = this;
-		timer->m_irq = 0x01 << t;
+		cia_timer *timer = &cia->timer[t];
+		timer->timer = timer_alloc(device->machine, cia_timer_proc, timer);
+		timer->cia = cia;
+		timer->irq = 0x01 << t;
 	}
 
 	/* setup TOD timer, if appropriate */
-	if (m_tod_clock != 0)
-	{
-		machine().scheduler().timer_pulse(attotime::from_hz(m_tod_clock), FUNC(clock_tod_callback), 0, (void *)this);
-	}
+	if (intf->tod_clock != 0)
+		timer_pulse(device->machine, ATTOTIME_IN_HZ(intf->tod_clock), (void *) device, 0, cia_clock_tod_callback);
 
 	/* state save support */
-	save_item(NAME(m_port[0].m_ddr));
-	save_item(NAME(m_port[0].m_latch));
-	save_item(NAME(m_port[0].m_in));
-	save_item(NAME(m_port[0].m_out));
-	save_item(NAME(m_port[0].m_mask_value));
-	save_item(NAME(m_port[1].m_ddr));
-	save_item(NAME(m_port[1].m_latch));
-	save_item(NAME(m_port[1].m_in));
-	save_item(NAME(m_port[1].m_out));
-	save_item(NAME(m_port[1].m_mask_value));
-	save_item(NAME(m_timer[0].m_latch));
-	save_item(NAME(m_timer[0].m_count));
-	save_item(NAME(m_timer[0].m_mode));
-	save_item(NAME(m_timer[0].m_irq));
-	save_item(NAME(m_timer[1].m_latch));
-	save_item(NAME(m_timer[1].m_count));
-	save_item(NAME(m_timer[1].m_mode));
-	save_item(NAME(m_timer[1].m_irq));
-	save_item(NAME(m_tod));
-	save_item(NAME(m_tod_latch));
-	save_item(NAME(m_tod_latched));
-	save_item(NAME(m_tod_running));
-	save_item(NAME(m_alarm));
-	save_item(NAME(m_icr));
-	save_item(NAME(m_ics));
-	save_item(NAME(m_irq));
-	save_item(NAME(m_flag));
-	save_item(NAME(m_loaded));
-	save_item(NAME(m_sdr));
-	save_item(NAME(m_sp));
-	save_item(NAME(m_cnt));
-	save_item(NAME(m_shift));
-	save_item(NAME(m_serial));
+	state_save_register_device_item(device, 0, cia->port[0].ddr);
+	state_save_register_device_item(device, 0, cia->port[0].latch);
+	state_save_register_device_item(device, 0, cia->port[0].in);
+	state_save_register_device_item(device, 0, cia->port[0].out);
+	state_save_register_device_item(device, 0, cia->port[0].mask_value);
+	state_save_register_device_item(device, 0, cia->port[1].ddr);
+	state_save_register_device_item(device, 0, cia->port[1].latch);
+	state_save_register_device_item(device, 0, cia->port[1].in);
+	state_save_register_device_item(device, 0, cia->port[1].out);
+	state_save_register_device_item(device, 0, cia->port[1].mask_value);
+	state_save_register_device_item(device, 0, cia->timer[0].latch);
+	state_save_register_device_item(device, 0, cia->timer[0].count);
+	state_save_register_device_item(device, 0, cia->timer[0].mode);
+	state_save_register_device_item(device, 0, cia->timer[0].irq);
+	state_save_register_device_item(device, 0, cia->timer[1].latch);
+	state_save_register_device_item(device, 0, cia->timer[1].count);
+	state_save_register_device_item(device, 0, cia->timer[1].mode);
+	state_save_register_device_item(device, 0, cia->timer[1].irq);
+	state_save_register_device_item(device, 0, cia->tod);
+	state_save_register_device_item(device, 0, cia->tod_latch);
+	state_save_register_device_item(device, 0, cia->tod_latched);
+	state_save_register_device_item(device, 0, cia->tod_running);
+	state_save_register_device_item(device, 0, cia->alarm);
+	state_save_register_device_item(device, 0, cia->icr);
+	state_save_register_device_item(device, 0, cia->ics);
+	state_save_register_device_item(device, 0, cia->irq);
+	state_save_register_device_item(device, 0, cia->loaded);
+	state_save_register_device_item(device, 0, cia->sdr);
+	state_save_register_device_item(device, 0, cia->sp);
+	state_save_register_device_item(device, 0, cia->cnt);
+	state_save_register_device_item(device, 0, cia->shift);
+	state_save_register_device_item(device, 0, cia->serial);
 }
 
 
 /*-------------------------------------------------
-    set_port_mask_value
+    cia_set_port_mask_value
 -------------------------------------------------*/
 
-void mos6526_device::set_port_mask_value(int port, int data)
+void cia_set_port_mask_value(const device_config *device, int port, int data)
 {
-	m_port[port].m_mask_value = data;
+	cia_state *cia = get_token(device);
+	cia->port[port].mask_value = data;
 }
 
+
 /*-------------------------------------------------
-    update_pc - pulse /pc output
+    DEVICE_RESET( cia )
 -------------------------------------------------*/
 
-void mos6526_device::update_pc()
+static DEVICE_RESET( cia )
 {
+	int t;
+	cia_state *cia = get_token(device);
+
+	/* clear things out */
+	cia->port[0].latch = 0x00;
+	cia->port[0].in = 0x00;
+	cia->port[0].out = 0x00;
+	cia->port[0].mask_value = 0xff;
+	cia->port[1].latch = 0x00;
+	cia->port[1].in = 0x00;
+	cia->port[1].out = 0x00;
+	cia->port[1].mask_value = 0xff;
+	cia->tod = 0;
+	cia->tod_latch = 0;
+	cia->alarm = 0;
+	cia->icr = 0x00;
+	cia->ics = 0x00;
+	cia->irq = 0;
+
+	/* initialize data direction registers */
+	cia->port[0].ddr = !strcmp(device->tag, "cia_0") ? 0x03 : 0xff;
+	cia->port[1].ddr = !strcmp(device->tag, "cia_0") ? 0x00 : 0xff;
+
+	/* TOD running by default */
+	cia->tod_running = TRUE;
+
+	/* initialize timers */
+	for (t = 0; t < 2; t++)
+	{
+		cia_timer *timer = &cia->timer[t];
+
+		timer->latch = 0xffff;
+		timer->count = 0x0000;
+		timer->mode = 0x00;
+	}
+}
+
+
+/*-------------------------------------------------
+    DEVICE_VALIDITY_CHECK( cia )
+-------------------------------------------------*/
+
+static DEVICE_VALIDITY_CHECK( cia )
+{
+	int error = FALSE;
+
+	if (device->clock <= 0)
+	{
+		mame_printf_error("%s: %s has a cia with an invalid clock\n", driver->source_file, driver->name);
+		error = TRUE;
+	}
+
+	return error;
+}
+
+
+/*-------------------------------------------------
+    cia_update_pc - pulse /pc output
+-------------------------------------------------*/
+
+static void cia_update_pc(const device_config *device)
+{
+	cia_state *cia = get_token(device);
+
 	/* this should really be one cycle long */
-	m_out_pc_func(0);
-	m_out_pc_func(1);
+	devcb_call_write_line(&cia->pc_func, 0);
+	devcb_call_write_line(&cia->pc_func, 1);
 }
 
+
 /*-------------------------------------------------
-    update_interrupts
+    cia_update_interrupts
 -------------------------------------------------*/
 
-void mos6526_device::update_interrupts()
+static void cia_update_interrupts(const device_config *device)
 {
 	UINT8 new_irq;
+	cia_state *cia = get_token(device);
 
 	/* always update the high bit of ICS */
-	if (m_ics & 0x7f)
-	{
-		m_ics |= 0x80;
-	}
+	if (cia->ics & 0x7f)
+		cia->ics |= 0x80;
 	else
-	{
-		m_ics &= ~0x80;
-	}
+		cia->ics &= ~0x80;
 
 	/* based on what is enabled, set/clear the IRQ via the custom chip */
-	new_irq = (m_ics & m_icr) ? 1 : 0;
-	if (m_irq != new_irq)
+	new_irq = (cia->ics & cia->icr) ? 1 : 0;
+	if (cia->irq != new_irq)
 	{
-		m_irq = new_irq;
-		m_out_irq_func(m_irq);
+		cia->irq = new_irq;
+		devcb_call_write_line(&cia->irq_func, cia->irq);
 	}
 }
 
 
 /*-------------------------------------------------
-    timer_bump
+    is_timer_active
 -------------------------------------------------*/
 
-void mos6526_device::timer_bump(int timer)
+static int is_timer_active(emu_timer *timer)
 {
-	m_timer[timer].update(timer, -1);
+	attotime t = timer_firetime(timer);
+	return attotime_compare(t, attotime_never) != 0;
+}
 
-	if (m_timer[timer].m_count == 0x00)
+
+/*-------------------------------------------------
+    cia_timer_update - updates the count and
+    emu_timer for a given CIA timer
+-------------------------------------------------*/
+
+static void cia_timer_update(cia_timer *timer, INT32 new_count)
+{
+	int which = timer - timer->cia->timer;
+
+	/* sanity check arguments */
+	assert((new_count >= -1) && (new_count <= 0xffff));
+
+	/* update the timer count, if necessary */
+	if ((new_count == -1) && is_timer_active(timer->timer))
 	{
-		timer_underflow(timer);
+		UINT16 current_count = attotime_to_double(attotime_mul(timer_timeelapsed(timer->timer), timer->cia->device->clock));
+		timer->count = timer->count - MIN(timer->count, current_count);
+	}
+
+	/* set the timer if we are instructed to */
+	if (new_count != -1)
+		timer->count = new_count;
+
+	/* now update the MAME timer */
+	if ((timer->mode & 0x01) && ((timer->mode & (which ? 0x60 : 0x20)) == 0x00))
+	{
+		/* timer is on and is connected to clock */
+		attotime period = attotime_mul(ATTOTIME_IN_HZ(timer->cia->device->clock), (timer->count ? timer->count : 0x10000));
+		timer_adjust_oneshot(timer->timer, period, 0);
 	}
 	else
 	{
-		m_timer[timer].update(timer, m_timer[timer].m_count - 1);
+		/* timer is off or not connected to clock */
+		timer_adjust_oneshot(timer->timer, attotime_never, 0);
 	}
 }
+
+/*-------------------------------------------------
+    cia_get_timer - get the count
+    for a given CIA timer
+-------------------------------------------------*/
+
+static UINT16 cia_get_timer(cia_timer *timer)
+{
+	UINT16 count;
+
+	if (is_timer_active(timer->timer))
+	{
+		UINT16 current_count = attotime_to_double(attotime_mul(timer_timeelapsed(timer->timer), timer->cia->device->clock));
+		count = timer->count - MIN(timer->count, current_count);
+	}
+	else
+		count = timer->count;
+
+	return count;
+}
+
+/*-------------------------------------------------
+    cia_timer_bump
+-------------------------------------------------*/
+
+static void cia_timer_bump(const device_config *device, int timer)
+{
+	cia_state *cia = get_token(device);
+
+	cia_timer_update(&cia->timer[timer], -1);
+
+	if (cia->timer[timer].count == 0x00)
+		cia_timer_underflow(device, timer);
+	else
+		cia_timer_update(&cia->timer[timer], cia->timer[timer].count - 1);
+}
+
 
 /*-------------------------------------------------
     cia_timer_underflow
 -------------------------------------------------*/
 
-void mos6526_device::timer_underflow(int timer)
+static void cia_timer_underflow(const device_config *device, int timer)
 {
+	cia_state *cia = get_token(device);
+
 	assert((timer == 0) || (timer == 1));
 
 	/* set the status and update interrupts */
-	m_ics |= m_timer[timer].m_irq;
-	update_interrupts();
+	cia->ics |= cia->timer[timer].irq;
+	cia_update_interrupts(device);
 
 	/* if one-shot mode, turn it off */
-	if (m_timer[timer].m_mode & 0x08)
-	{
-		m_timer[timer].m_mode &= 0xfe;
-	}
+	if (cia->timer[timer].mode & 0x08)
+		cia->timer[timer].mode &= 0xfe;
 
 	/* reload the timer */
-	m_timer[timer].update(timer, m_timer[timer].m_latch);
+	cia_timer_update(&cia->timer[timer], cia->timer[timer].latch);
 
 	/* timer A has some interesting properties */
 	if (timer == 0)
 	{
 		/* such as cascading to timer B */
-		if ((m_timer[1].m_mode & 0x41) == 0x41)
+		if ((cia->timer[1].mode & 0x41) == 0x41)
 		{
-			if (m_cnt || !(m_timer[1].m_mode & 0x20))
-			{
-				timer_bump(1);
-			}
+			if (cia->cnt || !(cia->timer[1].mode & 0x20))
+				cia_timer_bump(device, 1);
 		}
 
 		/* also the serial line */
-		if ((m_timer[timer].m_irq == 0x01) && (m_timer[timer].m_mode & CIA_CRA_SPMODE))
+		if ((cia->timer[timer].irq == 0x01) && (cia->timer[timer].mode & 0x40))
 		{
-			if (m_loaded || m_shift)
+			if (cia->shift || cia->loaded)
 			{
-				/* falling edge */
-				if (m_cnt)
+				if (cia->cnt)
 				{
-					if (m_shift == 0)
+					if (cia->shift == 0)
 					{
-						/* load shift register */
-						m_loaded = 0;
-						m_serial = m_sdr;
+						cia->loaded = 0;
+						cia->serial = cia->sdr;
 					}
-
-					/* transmit MSB */
-					m_sp = BIT(m_serial, 7);
-					m_out_sp_func(m_sp);
-
-					/* toggle CNT */
-					m_cnt = !m_cnt;
-					m_out_cnt_func(m_cnt);
-
-					/* shift data */
-					m_serial <<= 1;
-					m_shift++;
-
-					if (m_shift == 8)
-					{
-						/* signal interrupt */
-						m_ics |= 0x08;
-						update_interrupts();
-					}
+					cia->sp = (cia->serial & 0x80) ? 1 : 0;
+					cia->shift++;
+					cia->serial <<= 1;
+					cia->cnt = 0;
 				}
 				else
 				{
-					/* toggle CNT */
-					m_cnt = !m_cnt;
-					m_out_cnt_func(m_cnt);
-
-					if (m_shift == 8)
+					cia->cnt = 1;
+					if (cia->shift == 8)
 					{
-						m_shift = 0;
+						cia->ics |= 0x08;
+						cia_update_interrupts(device);
 					}
 				}
 			}
@@ -374,16 +460,19 @@ void mos6526_device::timer_underflow(int timer)
 	}
 }
 
+
 /*-------------------------------------------------
     TIMER_CALLBACK( cia_timer_proc )
 -------------------------------------------------*/
 
-TIMER_CALLBACK( mos6526_device::timer_proc )
+static TIMER_CALLBACK( cia_timer_proc )
 {
-    mos6526_device *cia = reinterpret_cast<mos6526_device *>(ptr);
+	cia_timer *timer = (cia_timer *)ptr;
+	cia_state *cia = timer->cia;
 
-	cia->timer_underflow(param);
+	cia_timer_underflow(cia->device, timer - cia->timer);
 }
+
 
 /*-------------------------------------------------
     bcd_increment
@@ -397,24 +486,25 @@ static UINT8 bcd_increment(UINT8 value)
 	return value;
 }
 
+
 /*-------------------------------------------------
     cia6526_increment
 -------------------------------------------------*/
 
-void mos6526_device::increment()
+static void cia6526_increment(cia_state *cia)
 {
 	/* break down TOD value into components */
-	UINT8 subsecond	= (UINT8) (m_tod >>  0);
-	UINT8 second	= (UINT8) (m_tod >>  8);
-	UINT8 minute	= (UINT8) (m_tod >> 16);
-	UINT8 hour		= (UINT8) (m_tod >> 24);
+	UINT8 subsecond	= (UINT8) (cia->tod >>  0);
+	UINT8 second	= (UINT8) (cia->tod >>  8);
+	UINT8 minute	= (UINT8) (cia->tod >> 16);
+	UINT8 hour		= (UINT8) (cia->tod >> 24);
 
 	subsecond = bcd_increment(subsecond);
 	if (subsecond >= 0x10)
 	{
 		subsecond = 0x00;
 		second = bcd_increment(second);
-		if (second >= ((m_timer[0].m_mode & 0x80) ? 0x50 : 0x60))
+		if (second >= ((cia->timer[0].mode & 0x80) ? 0x50 : 0x60))
 		{
 			second = 0x00;
 			minute = bcd_increment(minute);
@@ -436,124 +526,133 @@ void mos6526_device::increment()
 	}
 
 	/* update the TOD with new value */
-	m_tod = (((UINT32) subsecond)	<<  0)
-		  | (((UINT32) second)		<<  8)
-		  | (((UINT32) minute)		<< 16)
-		  | (((UINT32) hour)		<< 24);
+	cia->tod = (((UINT32) subsecond)	<<  0)
+			 | (((UINT32) second)		<<  8)
+			 | (((UINT32) minute)		<< 16)
+			 | (((UINT32) hour)			<< 24);
 }
+
 
 /*-------------------------------------------------
     cia_clock_tod - Update TOD on CIA A
 -------------------------------------------------*/
 
-void mos6526_device::clock_tod()
+void cia_clock_tod(const device_config *device)
 {
-	if (m_tod_running)
+	cia_state *cia;
+
+	cia = get_token(device);
+
+	if (cia->tod_running)
 	{
-		if ((type() == MOS6526R1) || (type() == MOS6526R2))
+		if ((device->type == CIA6526R1) || (device->type == CIA6526R2))
 		{
 			/* The 6526 split the value into hours, minutes, seconds and
              * subseconds */
-			increment();
+			cia6526_increment(cia);
 		}
-		else if (type() == MOS8520)
+		else if (device->type == CIA8520)
 		{
 			/* the 8520 has a straight 24-bit counter */
-			m_tod++;
-			m_tod &= 0xffffff;
+			cia->tod++;
+			cia->tod &= 0xffffff;
 		}
 
-		if (m_tod == m_alarm)
+		if (cia->tod == cia->alarm)
 		{
-			m_ics |= 0x04;
-			update_interrupts();
+			cia->ics |= 0x04;
+			cia_update_interrupts(device);
 		}
 	}
 }
 
 
 /*-------------------------------------------------
-    clock_tod_callback
+    cia_clock_tod_callback
 -------------------------------------------------*/
 
-TIMER_CALLBACK( mos6526_device::clock_tod_callback )
+static TIMER_CALLBACK( cia_clock_tod_callback )
 {
-    mos6526_device *cia = reinterpret_cast<mos6526_device *>(ptr);
-	cia->clock_tod();
+	const device_config *device = (const device_config *)ptr;
+	cia_clock_tod(device);
 }
 
 
 /*-------------------------------------------------
-    cnt_w
+    cia_issue_index
 -------------------------------------------------*/
 
-void mos6526_device::cnt_w(UINT8 state)
+void cia_issue_index(const device_config *device)
 {
+	cia_state *cia = get_token(device);
+	cia->ics |= 0x10;
+	cia_update_interrupts(device);
+}
+
+
+/*-------------------------------------------------
+    cia_set_input_sp
+-------------------------------------------------*/
+
+void cia_set_input_sp(const device_config *device, int data)
+{
+	cia_state *cia = get_token(device);
+	cia->sp = data;
+}
+
+
+/*-------------------------------------------------
+    cia_set_input_cnt
+-------------------------------------------------*/
+
+void cia_set_input_cnt(const device_config *device, int data)
+{
+	cia_state *cia = get_token(device);
+
 	/* is this a rising edge? */
-	if (!m_cnt && state)
+	if (!cia->cnt && data)
 	{
-		if (m_timer[0].m_mode & CIA_CRA_START)
-		{
-			/* does timer #0 bump on CNT? */
-			if (m_timer[0].m_mode & CIA_CRA_INMODE)
-			{
-				timer_bump(0);
-			}
-		}
-
-		/* if the serial port is set to input, the CNT will shift the port */
-		if (!(m_timer[0].m_mode & CIA_CRA_SPMODE))
-		{
-			m_serial <<= 1;
-			m_shift++;
-
-			if (m_sp)
-			{
-				m_serial |= 0x01;
-			}
-
-			if (m_shift == 8)
-			{
-				m_sdr = m_serial;
-				m_serial = 0;
-				m_shift = 0;
-				m_ics |= 0x08;
-				update_interrupts();
-			}
-		}
+		/* does timer #0 bump on CNT? */
+		if ((cia->timer[0].mode & 0x21) == 0x21)
+			cia_timer_bump(device, 0);
 
 		/* does timer #1 bump on CNT? */
-		if ((m_timer[1].m_mode & 0x61) == 0x21)
+		if ((cia->timer[1].mode & 0x61) == 0x21)
+			cia_timer_bump(device, 1);
+
+		/* if the serial port is set to output, the CNT will shift the port */
+		if (!(cia->timer[0].mode & 0x40))
 		{
-			timer_bump(1);
+			cia->serial >>= 1;
+			if (cia->sp)
+				cia->serial |= 0x80;
+
+			if (++cia->shift == 8)
+			{
+				cia->sdr = cia->serial;
+				cia->serial = 0;
+				cia->shift = 0;
+				cia->ics |= 0x08;
+				cia_update_interrupts(device);
+			}
 		}
 	}
-
-	m_cnt = state;
+	cia->cnt = data ? 1 : 0;
 }
 
-void mos6526_device::flag_w(UINT8 state)
-{
-	/* falling edge */
-	if (m_flag && !state)
-	{
-		m_ics |= 0x10;
-		update_interrupts();
-	}
-
-	m_flag = state;
-}
 
 /*-------------------------------------------------
-    reg_r
+    cia_r
 -------------------------------------------------*/
 
-UINT8 mos6526_device::reg_r(UINT8 offset)
+READ8_DEVICE_HANDLER( cia_r )
 {
 	cia_timer *timer;
+	cia_state *cia;
 	cia_port *port;
 	UINT8 data = 0x00;
 
+	cia = get_token(device);
 	offset &= 0x0F;
 
 	switch(offset)
@@ -561,66 +660,58 @@ UINT8 mos6526_device::reg_r(UINT8 offset)
 		/* port A/B data */
 		case CIA_PRA:
 		case CIA_PRB:
-			port = &m_port[offset & 1];
-			data = port->m_read(0);
-			data = ((data & ~port->m_ddr) | (port->m_latch & port->m_ddr)) & port->m_mask_value;
+			port = &cia->port[offset & 1];
+			data = devcb_call_read8(&port->read, 0);
+			data = ((data & ~port->ddr) | (port->latch & port->ddr)) & port->mask_value;
 
-			port->m_in = data;
+			port->in = data;
 
 			if (offset == CIA_PRB)
 			{
 				/* timer #0 can change PB6 */
-				if (m_timer[0].m_mode & 0x02)
+				if (cia->timer[0].mode & 0x02)
 				{
-					m_timer[0].update(0, -1);
-					if (m_timer[0].m_count != 0)
-					{
+					cia_timer_update(&cia->timer[0], -1);
+					if (cia->timer[0].count != 0)
 						data |= 0x40;
-					}
 					else
-					{
 						data &= ~0x40;
-					}
 				}
 
 				/* timer #1 can change PB7 */
-				if (m_timer[1].m_mode & 0x02)
+				if (cia->timer[1].mode & 0x02)
 				{
-					m_timer[1].update(1, -1);
-					if (m_timer[1].m_count != 0)
-					{
+					cia_timer_update(&cia->timer[1], -1);
+					if (cia->timer[1].count != 0)
 						data |= 0x80;
-					}
 					else
-					{
 						data &= ~0x80;
-					}
 				}
 
 				/* pulse /PC following the read */
-				update_pc();
+				cia_update_pc(device);
 			}
 			break;
 
 		/* port A/B direction */
 		case CIA_DDRA:
 		case CIA_DDRB:
-			port = &m_port[offset & 1];
-			data = port->m_ddr;
+			port = &cia->port[offset & 1];
+			data = port->ddr;
 			break;
 
 		/* timer A/B low byte */
 		case CIA_TALO:
 		case CIA_TBLO:
-			timer = &m_timer[(offset >> 1) & 1];
-			data = timer->get_count() >> 0;
+			timer = &cia->timer[(offset >> 1) & 1];
+			data = cia_get_timer(timer) >> 0;
 			break;
 
 		/* timer A/B high byte */
 		case CIA_TAHI:
 		case CIA_TBHI:
-			timer = &m_timer[(offset >> 1) & 1];
-			data = timer->get_count() >> 8;
+			timer = &cia->timer[(offset >> 1) & 1];
+			data = cia_get_timer(timer) >> 8;
 			break;
 
 		/* TOD counter */
@@ -628,70 +719,67 @@ UINT8 mos6526_device::reg_r(UINT8 offset)
 		case CIA_TOD1:
 		case CIA_TOD2:
 		case CIA_TOD3:
-			if (type() == MOS8520)
+			if (device->type == CIA8520)
 			{
 				if (offset == CIA_TOD2)
 				{
-					m_tod_latch = m_tod;
-					m_tod_latched = TRUE;
+					cia->tod_latch = cia->tod;
+					cia->tod_latched = TRUE;
 				}
 			}
 			else
 			{
 				if (offset == CIA_TOD3)
 				{
-					m_tod_latch = m_tod;
-					m_tod_latched = TRUE;
+					cia->tod_latch = cia->tod;
+					cia->tod_latched = TRUE;
 				}
 			}
 			if (offset == CIA_TOD0)
-			{
-				m_tod_latched = FALSE;
-			}
+				cia->tod_latched = FALSE;
 
-			if (m_tod_latched)
-			{
-				data = m_tod_latch >> ((offset - CIA_TOD0) * 8);
-			}
+			if (cia->tod_latched)
+				data = cia->tod_latch >> ((offset - CIA_TOD0) * 8);
 			else
-			{
-				data = m_tod >> ((offset - CIA_TOD0) * 8);
-			}
+				data = cia->tod >> ((offset - CIA_TOD0) * 8);
 			break;
 
 		/* serial data ready */
 		case CIA_SDR:
-			data = m_sdr;
+			data = cia->sdr;
 			break;
 
 		/* interrupt status/clear */
 		case CIA_ICR:
-			data = m_ics;
-			m_ics = 0; /* clear on read */
-			update_interrupts();
+			data = cia->ics;
+			cia->ics = 0; /* clear on read */
+			cia_update_interrupts(device);
 			break;
 
 		/* timer A/B mode */
 		case CIA_CRA:
 		case CIA_CRB:
-			timer = &m_timer[offset & 1];
-			data = timer->m_mode;
+			timer = &cia->timer[offset & 1];
+			data = timer->mode;
 			break;
 	}
 
 	return data;
 }
 
+
 /*-------------------------------------------------
-    reg_w
+    cia_w
 -------------------------------------------------*/
 
-void mos6526_device::reg_w(UINT8 offset, UINT8 data)
+WRITE8_DEVICE_HANDLER( cia_w )
 {
 	cia_timer *timer;
+	cia_state *cia;
 	cia_port *port;
 	int shift;
 
+	cia = get_token(device);
 	offset &= 0x0F;
 
 	switch(offset)
@@ -699,52 +787,48 @@ void mos6526_device::reg_w(UINT8 offset, UINT8 data)
 		/* port A/B data */
 		case CIA_PRA:
 		case CIA_PRB:
-			port = &m_port[offset & 1];
-			port->m_latch = data;
-			port->m_out = (data & port->m_ddr) | (port->m_in & ~port->m_ddr);
-			port->m_write(0, port->m_out);
+			port = &cia->port[offset & 1];
+			port->latch = data;
+			port->out = (data & port->ddr) | (port->in & ~port->ddr);
+			devcb_call_write8(&port->write, 0, port->out);
 
 			/* pulse /PC following the write */
 			if (offset == CIA_PRB)
-			{
-				update_pc();
-			}
+				cia_update_pc(device);
 
 			break;
 
 		/* port A/B direction */
 		case CIA_DDRA:
 		case CIA_DDRB:
-			port = &m_port[offset & 1];
-			port->m_ddr = data;
+			port = &cia->port[offset & 1];
+			port->ddr = data;
 			break;
 
 		/* timer A/B latch low */
 		case CIA_TALO:
 		case CIA_TBLO:
-			timer = &m_timer[(offset >> 1) & 1];
-			timer->m_latch = (timer->m_latch & 0xff00) | (data << 0);
+			timer = &cia->timer[(offset >> 1) & 1];
+			timer->latch = (timer->latch & 0xff00) | (data << 0);
 			break;
 
 		/* timer A latch high */
 		case CIA_TAHI:
 		case CIA_TBHI:
-			timer = &m_timer[(offset >> 1) & 1];
-			timer->m_latch = (timer->m_latch & 0x00ff) | (data << 8);
+			timer = &cia->timer[(offset >> 1) & 1];
+			timer->latch = (timer->latch & 0x00ff) | (data << 8);
 
 			/* if the timer is one-shot, then force a start on it */
-			if (timer->m_mode & 0x08)
+			if (timer->mode & 0x08)
 			{
-				timer->m_mode |= 1;
-				timer->update((offset >> 1) & 1, timer->m_latch);
+				timer->mode |= 1;
+				cia_timer_update(timer, timer->latch);
 			}
 			else
 			{
 				/* if the timer is off, update the count */
-				if (!(timer->m_mode & 0x01))
-				{
-					timer->update((offset >> 1) & 1, timer->m_latch);
-				}
+				if (!(timer->mode & 0x01))
+					cia_timer_update(timer, timer->latch);
 			}
 			break;
 
@@ -756,166 +840,120 @@ void mos6526_device::reg_w(UINT8 offset, UINT8 data)
 			shift = 8 * ((offset - CIA_TOD0));
 
 			/* alarm setting mode? */
-			if (m_timer[1].m_mode & 0x80)
-			{
-				m_alarm = (m_alarm & ~(0xff << shift)) | (data << shift);
-			}
+			if (cia->timer[1].mode & 0x80)
+				cia->alarm = (cia->alarm & ~(0xff << shift)) | (data << shift);
 			/* counter setting mode */
 			else
-			{
-				m_tod = (m_tod & ~(0xff << shift)) | (data << shift);
-			}
+				cia->tod = (cia->tod & ~(0xff << shift)) | (data << shift);
 
-			if (type() == MOS8520)
+			if (device->type == CIA8520)
 			{
 				if (offset == CIA_TOD2)
-				{
-					m_tod_running = FALSE;
-				}
+					cia->tod_running = FALSE;
 			}
 			else
 			{
 				if (offset == CIA_TOD3)
-				{
-					m_tod_running = FALSE;
-				}
+					cia->tod_running = FALSE;
 			}
 			if (offset == CIA_TOD0)
-			{
-				m_tod_running = TRUE;
-			}
+				cia->tod_running = TRUE;
 			break;
 
 		/* serial data ready */
 		case CIA_SDR:
-			m_sdr = data;
-			if (m_timer[0].m_mode & 0x40)
-			{
-				m_loaded = 1;
-			}
+			cia->sdr = data;
+			if (cia->timer[0].mode & 0x40)
+				cia->loaded = 1;
 			break;
 
 		/* interrupt control register */
 		case CIA_ICR:
 			if (data & 0x80)
-			{
-				m_icr |= data & 0x7f;
-			}
+				cia->icr |= data & 0x7f;
 			else
-			{
-				m_icr &= ~(data & 0x7f);
-			}
-			update_interrupts();
+				cia->icr &= ~(data & 0x7f);
+			cia_update_interrupts(device);
 			break;
 
 		/* timer A/B modes */
 		case CIA_CRA:
 		case CIA_CRB:
-			timer = &m_timer[offset & 1];
-			timer->m_mode = data & 0xef;
+			timer = &cia->timer[offset & 1];
+			timer->mode = data & 0xef;
 
 			/* force load? */
 			if (data & 0x10)
-			{
-				timer->update(offset & 1, timer->m_latch);
-			}
+				cia_timer_update(timer, timer->latch);
 			else
-			{
-				timer->update(offset & 1, -1);
-			}
+				cia_timer_update(timer, -1);
 			break;
 	}
 }
 
-/*-------------------------------------------------
-    is_timer_active
--------------------------------------------------*/
 
-static int is_timer_active(emu_timer *timer)
-{
-	attotime t = timer->expire();
-	return (t != attotime::never);
-}
+
+UINT8 cia_get_output_a(const device_config *device)	{ return (get_token(device)->port[0].latch | ~get_token(device)->port[0].ddr); }
+UINT8 cia_get_output_b(const device_config *device)	{ return (get_token(device)->port[1].latch | ~get_token(device)->port[1].ddr); }
+int cia_get_irq(const device_config *device)		{ return get_token(device)->irq; }
+
 
 /*-------------------------------------------------
-    update - updates the count and emu_timer for
-    a given CIA timer
+    DEVICE_GET_INFO( cia6526r1 )
 -------------------------------------------------*/
 
-void mos6526_device::cia_timer::update(int which, INT32 new_count)
+DEVICE_GET_INFO(cia6526r1)
 {
-	/* sanity check arguments */
-	assert((new_count >= -1) && (new_count <= 0xffff));
+	switch (state)
+	{
+		/* --- the following bits of info are returned as 64-bit signed integers --- */
+		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(cia_state);				break;
+		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;								break;
+		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_PERIPHERAL;			break;
 
-	/* update the timer count, if necessary */
-	if ((new_count == -1) && is_timer_active(m_timer))
-	{
-		UINT16 current_count = (m_timer->elapsed() * m_clock).as_double();
-		m_count = m_count - MIN(m_count, current_count);
-	}
+		/* --- the following bits of info are returned as pointers to data or functions --- */
+		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(cia);		break;
+		case DEVINFO_FCT_STOP:							/* Nothing */								break;
+		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME(cia);		break;
+		case DEVINFO_FCT_VALIDITY_CHECK:				info->validity_check = DEVICE_VALIDITY_CHECK_NAME(cia); break;
 
-	/* set the timer if we are instructed to */
-	if (new_count != -1)
-	{
-		m_count = new_count;
-	}
-
-	/* now update the MAME timer */
-	if ((m_mode & 0x01) && ((m_mode & (which ? 0x60 : 0x20)) == 0x00))
-	{
-		/* timer is on and is connected to clock */
-		attotime period = attotime::from_hz(m_clock) * (m_count ? m_count : 0x10000);
-		m_timer->adjust(period, which);
-	}
-	else
-	{
-		/* timer is off or not connected to clock */
-		m_timer->adjust(attotime::never, which);
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "6526 CIA rev1");			break;
+		case DEVINFO_STR_FAMILY:						strcpy(info->s, "6526 CIA");				break;
+		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");						break;
+		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);					break;
+		case DEVINFO_STR_CREDITS:						/* Nothing */								break;
 	}
 }
 
+
 /*-------------------------------------------------
-    get_count - get the count for a given CIA
-    timer
+    DEVICE_GET_INFO( cia8520 )
 -------------------------------------------------*/
 
-UINT16 mos6526_device::cia_timer::get_count()
+DEVICE_GET_INFO(cia6526r2)
 {
-	UINT16 count;
-
-	if (is_timer_active(m_timer))
+	switch (state)
 	{
-		UINT16 current_count = (m_timer->elapsed() * m_clock).as_double();
-		count = m_count - MIN(m_count, current_count);
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "6526 CIA rev2");			break;
+		default:	DEVICE_GET_INFO_CALL(cia6526r1);	break;
 	}
-	else
-	{
-		count = m_count;
-	}
-
-	return count;
 }
 
-/***************************************************************************
-    TRAMPOLINES
-***************************************************************************/
 
-void cia_set_port_mask_value(device_t *device, int port, int data) { downcast<mos6526_device *>(device)->set_port_mask_value(port, data); }
+/*-------------------------------------------------
+    DEVICE_GET_INFO( cia8520 )
+-------------------------------------------------*/
 
-READ8_DEVICE_HANDLER( mos6526_r ) { return downcast<mos6526_device *>(device)->reg_r(offset); }
-WRITE8_DEVICE_HANDLER( mos6526_w ) { downcast<mos6526_device *>(device)->reg_w(offset, data); }
+DEVICE_GET_INFO(cia8520)
+{
+	switch (state)
+	{
+		/* --- the following bits of info are returned as NULL-terminated strings --- */
+		case DEVINFO_STR_NAME:							strcpy(info->s, "8520 CIA");				break;
+		default:	DEVICE_GET_INFO_CALL(cia6526r1);	break;
+	}
+}
 
-READ8_DEVICE_HANDLER( mos6526_pa_r ) { return downcast<mos6526_device *>(device)->pa_r(offset); }
-READ8_DEVICE_HANDLER( mos6526_pb_r ) { return downcast<mos6526_device *>(device)->pb_r(offset); }
 
-READ_LINE_DEVICE_HANDLER( mos6526_irq_r ) { return downcast<mos6526_device *>(device)->irq_r(); }
-
-WRITE_LINE_DEVICE_HANDLER( mos6526_tod_w ) { downcast<mos6526_device *>(device)->tod_w(state); }
-
-READ_LINE_DEVICE_HANDLER( mos6526_cnt_r ) { return downcast<mos6526_device *>(device)->cnt_r(); }
-WRITE_LINE_DEVICE_HANDLER( mos6526_cnt_w ) { downcast<mos6526_device *>(device)->cnt_w(state); }
-
-READ_LINE_DEVICE_HANDLER( mos6526_sp_r ) { return downcast<mos6526_device *>(device)->sp_r(); }
-WRITE_LINE_DEVICE_HANDLER( mos6526_sp_w ) { downcast<mos6526_device *>(device)->sp_w(state); }
-
-WRITE_LINE_DEVICE_HANDLER( mos6526_flag_w ) { downcast<mos6526_device *>(device)->flag_w(state); }

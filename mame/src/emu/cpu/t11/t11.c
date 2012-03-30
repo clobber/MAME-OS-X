@@ -11,7 +11,6 @@
 
 *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "t11.h"
 
@@ -32,18 +31,19 @@ struct _t11_state
     UINT8				wait_state;
     UINT8				irq_state;
     int					icount;
-	device_irq_callback	irq_callback;
-	legacy_cpu_device *		device;
-	address_space *program;
-	direct_read_data *direct;
+	cpu_irq_callback 	irq_callback;
+	const device_config *device;
+	const address_space *program;
 };
 
 
-INLINE t11_state *get_safe_token(device_t *device)
+INLINE t11_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == T11);
-	return (t11_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_T11);
+	return (t11_state *)device->token;
 }
 
 
@@ -60,8 +60,8 @@ INLINE t11_state *get_safe_token(device_t *device)
 #define REGB(x) reg[x].b.l
 
 /* PC, SP, and PSW definitions */
-#define SP		REGW(6)
-#define PC		REGW(7)
+#define SP 		REGW(6)
+#define PC 		REGW(7)
 #define SPD 	REGD(6)
 #define PCD 	REGD(7)
 #define PSW 	psw.b.l
@@ -75,8 +75,7 @@ INLINE t11_state *get_safe_token(device_t *device)
 
 INLINE int ROPCODE(t11_state *cpustate)
 {
-	cpustate->PC &= 0xfffe;
-	int val = cpustate->direct->read_decrypted_word(cpustate->PC);
+	int val = memory_decrypted_read_word(cpustate->program, cpustate->PC);
 	cpustate->PC += 2;
 	return val;
 }
@@ -84,25 +83,25 @@ INLINE int ROPCODE(t11_state *cpustate)
 
 INLINE int RBYTE(t11_state *cpustate, int addr)
 {
-	return cpustate->program->read_byte(addr);
+	return memory_read_byte_16le(cpustate->program, addr);
 }
 
 
 INLINE void WBYTE(t11_state *cpustate, int addr, int data)
 {
-	cpustate->program->write_byte(addr, data);
+	memory_write_byte_16le(cpustate->program, addr, data);
 }
 
 
 INLINE int RWORD(t11_state *cpustate, int addr)
 {
-	return cpustate->program->read_word(addr & 0xfffe);
+	return memory_read_word_16le(cpustate->program, addr & 0xfffe);
 }
 
 
 INLINE void WWORD(t11_state *cpustate, int addr, int data)
 {
-	cpustate->program->write_word(addr & 0xfffe, data);
+	memory_write_word_16le(cpustate->program, addr & 0xfffe, data);
 }
 
 
@@ -259,28 +258,27 @@ static CPU_INIT( t11 )
 		0xc000, 0x8000, 0x4000, 0x2000,
 		0x1000, 0x0000, 0xf600, 0xf400
 	};
-	const struct t11_setup *setup = (const struct t11_setup *)device->static_config();
+	const struct t11_setup *setup = (const struct t11_setup *)device->static_config;
 	t11_state *cpustate = get_safe_token(device);
 
 	cpustate->initial_pc = initial_pc[setup->mode >> 13];
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
 
-	device->save_item(NAME(cpustate->ppc.w.l));
-	device->save_item(NAME(cpustate->reg[0].w.l));
-	device->save_item(NAME(cpustate->reg[1].w.l));
-	device->save_item(NAME(cpustate->reg[2].w.l));
-	device->save_item(NAME(cpustate->reg[3].w.l));
-	device->save_item(NAME(cpustate->reg[4].w.l));
-	device->save_item(NAME(cpustate->reg[5].w.l));
-	device->save_item(NAME(cpustate->reg[6].w.l));
-	device->save_item(NAME(cpustate->reg[7].w.l));
-	device->save_item(NAME(cpustate->psw.w.l));
-	device->save_item(NAME(cpustate->initial_pc));
-	device->save_item(NAME(cpustate->wait_state));
-	device->save_item(NAME(cpustate->irq_state));
+	state_save_register_device_item(device, 0, cpustate->ppc.w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[0].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[1].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[2].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[3].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[4].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[5].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[6].w.l);
+	state_save_register_device_item(device, 0, cpustate->reg[7].w.l);
+	state_save_register_device_item(device, 0, cpustate->psw.w.l);
+	state_save_register_device_item(device, 0, cpustate->initial_pc);
+	state_save_register_device_item(device, 0, cpustate->wait_state);
+	state_save_register_device_item(device, 0, cpustate->irq_state);
 }
 
 
@@ -347,6 +345,7 @@ static CPU_EXECUTE( t11 )
 {
 	t11_state *cpustate = get_safe_token(device);
 
+	cpustate->icount = cycles;
 	t11_check_irqs(cpustate);
 
 	if (cpustate->wait_state)
@@ -369,7 +368,8 @@ static CPU_EXECUTE( t11 )
 	} while (cpustate->icount > 0);
 
 getout:
-	;
+
+	return cycles - cpustate->icount;
 }
 
 
@@ -391,7 +391,7 @@ static CPU_SET_INFO( t11 )
 		case CPUINFO_INT_INPUT_STATE + T11_IRQ3:		set_irq_line(cpustate, T11_IRQ3, info->i);		break;
 
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + T11_PC:				cpustate->PC = info->i; 						break;
+		case CPUINFO_INT_REGISTER + T11_PC:				cpustate->PC = info->i; 				 		break;
 		case CPUINFO_INT_SP:
 		case CPUINFO_INT_REGISTER + T11_SP:				cpustate->SP = info->i;							break;
 		case CPUINFO_INT_REGISTER + T11_PSW:			cpustate->PSW = info->i;						break;
@@ -412,7 +412,7 @@ static CPU_SET_INFO( t11 )
 
 CPU_GET_INFO( t11 )
 {
-	t11_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	t11_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -428,15 +428,15 @@ CPU_GET_INFO( t11 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 12;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 110;							break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 16;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = 0;					break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 0;					break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = 0;					break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 0;					break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + T11_IRQ0:		info->i = (cpustate->irq_state & 1) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + T11_IRQ1:		info->i = (cpustate->irq_state & 2) ? ASSERT_LINE : CLEAR_LINE; break;
@@ -493,9 +493,5 @@ CPU_GET_INFO( t11 )
 		case CPUINFO_STR_REGISTER + T11_R3:				sprintf(info->s, "R3:%04X", cpustate->reg[3].w.l); break;
 		case CPUINFO_STR_REGISTER + T11_R4:				sprintf(info->s, "R4:%04X", cpustate->reg[4].w.l); break;
 		case CPUINFO_STR_REGISTER + T11_R5:				sprintf(info->s, "R5:%04X", cpustate->reg[5].w.l); break;
-
-		case CPUINFO_IS_OCTAL:							info->i = true;							break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(T11, t11);

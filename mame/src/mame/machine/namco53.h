@@ -1,7 +1,7 @@
 #ifndef NAMCO53_H
 #define NAMCO53_H
 
-#include "devlegcy.h"
+#include "devcb.h"
 
 
 typedef struct _namco_53xx_interface namco_53xx_interface;
@@ -13,16 +13,18 @@ struct _namco_53xx_interface
 };
 
 
-#define MCFG_NAMCO_53XX_ADD(_tag, _clock, _interface) \
-	MCFG_DEVICE_ADD(_tag, NAMCO_53XX, _clock) \
-	MCFG_DEVICE_CONFIG(_interface)
+#define MDRV_NAMCO_53XX_ADD(_tag, _clock, _interface) \
+	MDRV_DEVICE_ADD(_tag, NAMCO_53XX, _clock) \
+	MDRV_DEVICE_CONFIG(_interface)
 
 
-void namco_53xx_read_request(device_t *device);
+void namco_53xx_read_request(const device_config *device);
 READ8_DEVICE_HANDLER( namco_53xx_read );
 
 
-DECLARE_LEGACY_DEVICE(NAMCO_53XX, namco_53xx);
+/* device get info callback */
+#define NAMCO_53XX DEVICE_GET_INFO_NAME(namco_53xx)
+DEVICE_GET_INFO( namco_53xx );
 
 
 #endif	/* NAMCO53_H */

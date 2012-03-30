@@ -221,12 +221,11 @@ Interrupts:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6805/m6805.h"
 #include "rendlay.h"
-#include "includes/qix.h"
+#include "qix.h"
 #include "cpu/m6809/m6809.h"
-#include "machine/nvram.h"
 
 #include "elecyoyo.lh"
 
@@ -238,30 +237,30 @@ Interrupts:
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("share1")
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x8400, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8bff) AM_READNOP   /* 6850 ACIA */
 	AM_RANGE(0x8c00, 0x8c00) AM_MIRROR(0x3fe) AM_READWRITE(qix_video_firq_r, qix_video_firq_w)
 	AM_RANGE(0x8c01, 0x8c01) AM_MIRROR(0x3fe) AM_READWRITE(qix_data_firq_ack_r, qix_data_firq_ack_w)
-	AM_RANGE(0x9000, 0x93ff) AM_DEVREADWRITE_MODERN("sndpia0", pia6821_device, read, write)
-	AM_RANGE(0x9400, 0x97ff) AM_DEVREAD_MODERN("pia0", pia6821_device, read) AM_DEVWRITE("pia0", qix_pia_w)
-	AM_RANGE(0x9800, 0x9bff) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
-	AM_RANGE(0x9c00, 0x9fff) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
+	AM_RANGE(0x9000, 0x93ff) AM_DEVREADWRITE("sndpia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x9400, 0x97ff) AM_DEVREADWRITE("pia0", pia6821_r, qix_pia_w)
+	AM_RANGE(0x9800, 0x9bff) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
+	AM_RANGE(0x9c00, 0x9fff) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( zoo_main_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE("share1")
+static ADDRESS_MAP_START( zoo_main_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_SHARE(1)
 	AM_RANGE(0x0400, 0x07ff) AM_RAM
 	AM_RANGE(0x0800, 0x0bff) AM_READNOP   /* ACIA */
 	AM_RANGE(0x0c00, 0x0c00) AM_MIRROR(0x3fe) AM_READWRITE(qix_video_firq_r, qix_video_firq_w)
 	AM_RANGE(0x0c01, 0x0c01) AM_MIRROR(0x3fe) AM_READWRITE(qix_data_firq_ack_r, qix_data_firq_ack_w)
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE_MODERN("sndpia0", pia6821_device, read, write)
-	AM_RANGE(0x1400, 0x17ff) AM_DEVREAD_MODERN("pia0", pia6821_device, read) AM_DEVWRITE("pia0", qix_pia_w)
-	AM_RANGE(0x1800, 0x1bff) AM_DEVREADWRITE_MODERN("pia1", pia6821_device, read, write)
-	AM_RANGE(0x1c00, 0x1fff) AM_DEVREADWRITE_MODERN("pia2", pia6821_device, read, write)
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("sndpia0", pia6821_r, pia6821_w)
+	AM_RANGE(0x1400, 0x17ff) AM_DEVREADWRITE("pia0", pia6821_r, qix_pia_w)
+	AM_RANGE(0x1800, 0x1bff) AM_DEVREADWRITE("pia1", pia6821_r, pia6821_w)
+	AM_RANGE(0x1c00, 0x1fff) AM_DEVREADWRITE("pia2", pia6821_r, pia6821_w)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -273,12 +272,12 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( mcu_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x7ff)
-	AM_RANGE(0x0000, 0x0000) AM_READWRITE(qix_68705_portA_r, qix_68705_portA_w) AM_BASE_MEMBER(qix_state, m_68705_port_out)
+	AM_RANGE(0x0000, 0x0000) AM_READWRITE(qix_68705_portA_r, qix_68705_portA_w) AM_BASE_MEMBER(qix_state, _68705_port_out)
 	AM_RANGE(0x0001, 0x0001) AM_READWRITE(qix_68705_portB_r, qix_68705_portB_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(qix_68705_portC_r, qix_68705_portC_w)
-	AM_RANGE(0x0004, 0x0007) AM_WRITEONLY AM_BASE_MEMBER(qix_state, m_68705_ddr)
+	AM_RANGE(0x0004, 0x0007) AM_WRITE(SMH_RAM) AM_BASE_MEMBER(qix_state, _68705_ddr)
 	AM_RANGE(0x0010, 0x007f) AM_RAM
 	AM_RANGE(0x0080, 0x07ff) AM_ROM
 ADDRESS_MAP_END
@@ -549,76 +548,82 @@ static const m6809_config encryption_config =
 	TRUE,		/* encrypt only the first byte in 10 xx and 11 xx opcodes */
 };
 
-static MACHINE_CONFIG_START( qix_base, qix_state )
+static MACHINE_DRIVER_START( qix_base )
+
+	MDRV_DRIVER_DATA(qix_state)
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, MAIN_CLOCK_OSC/4/4)	/* 1.25 MHz */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_CONFIG(encryption_config)	// for kram3
+	MDRV_CPU_ADD("maincpu", M6809, MAIN_CLOCK_OSC/4/4)	/* 1.25 MHz */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_CONFIG(encryption_config)	// for kram3
 
 	/* high interleave needed to ensure correct text in service mode */
 	/* Zookeeper settings and high score table seem especially sensitive to this */
-	MCFG_QUANTUM_PERFECT_CPU("maincpu")
+	MDRV_QUANTUM_PERFECT_CPU("maincpu")
 
-	MCFG_MACHINE_RESET(qix)
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_MACHINE_RESET(qix)
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
-	MCFG_PIA6821_ADD("pia0", qix_pia_0_intf)
-	MCFG_PIA6821_ADD("pia1", qix_pia_1_intf)
-	MCFG_PIA6821_ADD("pia2", qix_pia_2_intf)
-
-	/* video hardware */
-	MCFG_FRAGMENT_ADD(qix_video)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( qix, qix_base )
-	MCFG_FRAGMENT_ADD(qix_audio)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( mcu, qix )
-
-	/* basic machine hardware */
-
-	MCFG_CPU_ADD("mcu", M68705, COIN_CLOCK_OSC)	/* 1.00 MHz */
-	MCFG_CPU_PROGRAM_MAP(mcu_map)
-
-	MCFG_MACHINE_START(qixmcu)
-
-	MCFG_PIA6821_MODIFY("pia0", qixmcu_pia_0_intf)
-	MCFG_PIA6821_MODIFY("pia2", qixmcu_pia_2_intf)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( zookeep, mcu )
-
-	/* basic machine hardware */
-
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_PROGRAM_MAP(zoo_main_map)
+	MDRV_PIA6821_ADD("pia0", qix_pia_0_intf)
+	MDRV_PIA6821_ADD("pia1", qix_pia_1_intf)
+	MDRV_PIA6821_ADD("pia2", qix_pia_2_intf)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD(zookeep_video)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(qix_video)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_DERIVED( slither, qix_base )
+static MACHINE_DRIVER_START( qix )
+	MDRV_IMPORT_FROM(qix_base)
+	MDRV_IMPORT_FROM(qix_audio)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( mcu )
 
 	/* basic machine hardware */
+	MDRV_IMPORT_FROM(qix)
 
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_CLOCK(SLITHER_CLOCK_OSC/4/4)	/* 1.34 MHz */
+	MDRV_CPU_ADD("mcu", M68705, COIN_CLOCK_OSC)	/* 1.00 MHz */
+	MDRV_CPU_PROGRAM_MAP(mcu_map)
 
-	MCFG_PIA6821_MODIFY("pia1", slither_pia_1_intf)
-	MCFG_PIA6821_MODIFY("pia2", slither_pia_2_intf)
+	MDRV_MACHINE_START(qixmcu)
+
+	MDRV_PIA6821_MODIFY("pia0", qixmcu_pia_0_intf)
+	MDRV_PIA6821_MODIFY("pia2", qixmcu_pia_2_intf)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( zookeep )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(mcu)
+
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(zoo_main_map)
 
 	/* video hardware */
-	MCFG_FRAGMENT_ADD(slither_video)
+	MDRV_IMPORT_FROM(zookeep_video)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( slither )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM(qix_base)
+
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(SLITHER_CLOCK_OSC/4/4)	/* 1.34 MHz */
+
+	MDRV_PIA6821_MODIFY("pia1", slither_pia_1_intf)
+	MDRV_PIA6821_MODIFY("pia2", slither_pia_2_intf)
+
+	/* video hardware */
+	MDRV_IMPORT_FROM(slither_video)
 
 	/* audio hardware */
-	MCFG_FRAGMENT_ADD(slither_audio)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(slither_audio)
+MACHINE_DRIVER_END
 
 
 
@@ -1257,11 +1262,11 @@ static int kram3_decrypt(int address, int value)
 
 static DRIVER_INIT( kram3 )
 {
-	address_space *mainspace = machine.device("maincpu")->memory().space(AS_PROGRAM);
-	address_space *videospace = machine.device("videocpu")->memory().space(AS_PROGRAM);
-	//const UINT8 *patch;
+	const address_space *mainspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	const address_space *videospace = cputag_get_address_space(machine, "videocpu", ADDRESS_SPACE_PROGRAM);
+	const UINT8 *patch;
 	UINT8 *rom, *decrypted;
-	int i;
+	int i, size;
 
 	/********************************
 
@@ -1278,11 +1283,11 @@ static DRIVER_INIT( kram3 )
      ********************************/
 
 	i = 0;
-	//patch = machine.region("user1")->base();
-	rom = machine.region("maincpu")->base();
+	patch = memory_region(machine, "user1");
+	rom = memory_region(machine, "maincpu");
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
-	mainspace->set_decrypted_region(0xa000, 0xffff, decrypted);
+	memory_set_decrypted_region(mainspace, 0xa000, 0xffff, decrypted);
 
 	memcpy(decrypted,&rom[0xa000],0x6000);
 	for (i = 0xa000; i < 0x10000; ++i)
@@ -1291,11 +1296,12 @@ static DRIVER_INIT( kram3 )
 	}
 
 	i = 0;
-	//patch = machine.region("user2")->base();
-	rom = machine.region("videocpu")->base();
+	patch = memory_region(machine, "user2");
+	size = memory_region_length(machine, "user2");
+	rom = memory_region(machine, "videocpu");
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
-	videospace->set_decrypted_region(0xa000, 0xffff, decrypted);
+	memory_set_decrypted_region(videospace, 0xa000, 0xffff, decrypted);
 
 	memcpy(decrypted,&rom[0xa000],0x6000);
 	for (i = 0xa000; i < 0x10000; ++i)
@@ -1308,9 +1314,9 @@ static DRIVER_INIT( kram3 )
 static DRIVER_INIT( zookeep )
 {
 	/* configure the banking */
-	memory_configure_bank(machine, "bank1", 0, 1, machine.region("videocpu")->base() + 0xa000, 0);
-	memory_configure_bank(machine, "bank1", 1, 1, machine.region("videocpu")->base() + 0x10000, 0);
-	memory_set_bank(machine, "bank1", 0);
+	memory_configure_bank(machine, 1, 0, 1, memory_region(machine, "videocpu") + 0xa000, 0);
+	memory_configure_bank(machine, 1, 1, 1, memory_region(machine, "videocpu") + 0x10000, 0);
+	memory_set_bank(machine, 1, 0);
 }
 
 

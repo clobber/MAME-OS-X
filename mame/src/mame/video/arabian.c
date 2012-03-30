@@ -6,12 +6,25 @@
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/arabian.h"
+#include "driver.h"
+#include "arabian.h"
+
 
 /* Constants */
 #define BITMAP_WIDTH		256
 #define BITMAP_HEIGHT		256
+
+
+/* Local variables */
+static UINT8 *main_bitmap;
+static UINT8 *converted_gfx;
+
+
+/* Globals */
+UINT8 *arabian_blitter;
+UINT8 arabian_video_control;
+UINT8 arabian_flip_screen;
+
 
 
 /*************************************
@@ -153,17 +166,16 @@ PALETTE_INIT( arabian )
 
 VIDEO_START( arabian )
 {
-	arabian_state *state = machine.driver_data<arabian_state>();
-	UINT8 *gfxbase = machine.region("gfx1")->base();
+	UINT8 *gfxbase = memory_region(machine, "gfx1");
 	int offs;
 
 	/* allocate a common bitmap to use for both planes */
 	/* plane A (top plane with motion objects) is in the upper 4 bits */
 	/* plane B (bottom plane with playfield) is in the lower 4 bits */
-	state->m_main_bitmap = auto_alloc_array(machine, UINT8, BITMAP_WIDTH * BITMAP_HEIGHT);
+	main_bitmap = auto_alloc_array(machine, UINT8, BITMAP_WIDTH * BITMAP_HEIGHT);
 
 	/* allocate memory for the converted graphics data */
-	state->m_converted_gfx = auto_alloc_array(machine, UINT8, 0x8000 * 2);
+	converted_gfx = auto_alloc_array(machine, UINT8, 0x8000 * 2);
 
 	/*--------------------------------------------------
         transform graphics data into more usable format
@@ -200,16 +212,16 @@ VIDEO_START( arabian )
 		v2 >>= 1;
 		p4 = (v1 & 0x01) | ((v1 & 0x10) >> 3) | ((v2 & 0x01) << 2) | ((v2 & 0x10) >> 1);
 
-		state->m_converted_gfx[offs * 4 + 3] = p1;
-		state->m_converted_gfx[offs * 4 + 2] = p2;
-		state->m_converted_gfx[offs * 4 + 1] = p3;
-		state->m_converted_gfx[offs * 4 + 0] = p4;
+		converted_gfx[offs * 4 + 3] = p1;
+		converted_gfx[offs * 4 + 2] = p2;
+		converted_gfx[offs * 4 + 1] = p3;
+		converted_gfx[offs * 4 + 0] = p4;
 	}
 
-    state->save_pointer(NAME(state->m_main_bitmap), BITMAP_WIDTH * BITMAP_HEIGHT);
-    state->save_pointer(NAME(state->m_converted_gfx), 0x8000 * 2);
-    state->save_item(NAME(state->m_video_control));
-    state->save_item(NAME(state->m_flip_screen));
+    state_save_register_global_pointer(machine, main_bitmap, BITMAP_WIDTH * BITMAP_HEIGHT);
+    state_save_register_global_pointer(machine, converted_gfx, 0x8000 * 2);
+    state_save_register_global(machine, arabian_video_control);
+    state_save_register_global(machine, arabian_flip_screen);
 }
 
 
@@ -220,10 +232,9 @@ VIDEO_START( arabian )
  *
  *************************************/
 
-static void blit_area( running_machine &machine, UINT8 plane, UINT16 src, UINT8 x, UINT8 y, UINT8 sx, UINT8 sy )
+static void blit_area(UINT8 plane, UINT16 src, UINT8 x, UINT8 y, UINT8 sx, UINT8 sy)
 {
-	arabian_state *state = machine.driver_data<arabian_state>();
-	UINT8 *srcdata = &state->m_converted_gfx[src * 4];
+	UINT8 *srcdata = &converted_gfx[src * 4];
 	int i,j;
 
 	/* loop over X, then Y */
@@ -237,7 +248,7 @@ static void blit_area( running_machine &machine, UINT8 plane, UINT16 src, UINT8 
 			UINT8 *base;
 
 			/* get a pointer to the bitmap */
-			base = &state->m_main_bitmap[((y + j) & 0xff) * BITMAP_WIDTH + (x & 0xff)];
+			base = &main_bitmap[((y + j) & 0xff) * BITMAP_WIDTH + (x & 0xff)];
 
 			/* bit 0 means write to upper plane (upper 4 bits of our bitmap) */
 			if (plane & 0x01)
@@ -269,24 +280,22 @@ static void blit_area( running_machine &machine, UINT8 plane, UINT16 src, UINT8 
 
 WRITE8_HANDLER( arabian_blitter_w )
 {
-	arabian_state *state = space->machine().driver_data<arabian_state>();
-
 	/* write the data */
-	state->m_blitter[offset] = data;
+	arabian_blitter[offset] = data;
 
 	/* watch for a write to offset 6 -- that triggers the blit */
 	if (offset == 6)
 	{
 		/* extract the data */
-		int plane = state->m_blitter[0];
-		int src   = state->m_blitter[1] | (state->m_blitter[2] << 8);
-		int x     = state->m_blitter[4] << 2;
-		int y     = state->m_blitter[3];
-		int sx    = state->m_blitter[6];
-		int sy    = state->m_blitter[5];
+		int plane = arabian_blitter[0];
+		int src   = arabian_blitter[1] | (arabian_blitter[2] << 8);
+		int x     = arabian_blitter[4] << 2;
+		int y     = arabian_blitter[3];
+		int sx    = arabian_blitter[6];
+		int sy    = arabian_blitter[5];
 
 		/* blit it */
-		blit_area(space->machine(), plane, src, x, y, sx, sy);
+		blit_area(plane, src, x, y, sx, sy);
 	}
 }
 
@@ -300,7 +309,6 @@ WRITE8_HANDLER( arabian_blitter_w )
 
 WRITE8_HANDLER( arabian_videoram_w )
 {
-	arabian_state *state = space->machine().driver_data<arabian_state>();
 	UINT8 *base;
 	UINT8 x, y;
 
@@ -309,7 +317,7 @@ WRITE8_HANDLER( arabian_videoram_w )
 	y = offset & 0xff;
 
 	/* get a pointer to the pixels */
-	base = &state->m_main_bitmap[y * BITMAP_WIDTH + x];
+	base = &main_bitmap[y * BITMAP_WIDTH + x];
 
 	/* the data is written as 4 2-bit values, as follows:
 
@@ -324,7 +332,7 @@ WRITE8_HANDLER( arabian_videoram_w )
     */
 
 	/* enable writes to AZ/AR */
-	if (state->m_blitter[0] & 0x08)
+	if (arabian_blitter[0] & 0x08)
 	{
 		base[0] = (base[0] & ~0x03) | ((data & 0x10) >> 3) | ((data & 0x01) >> 0);
 		base[1] = (base[1] & ~0x03) | ((data & 0x20) >> 4) | ((data & 0x02) >> 1);
@@ -333,7 +341,7 @@ WRITE8_HANDLER( arabian_videoram_w )
 	}
 
 	/* enable writes to AG/AB */
-	if (state->m_blitter[0] & 0x04)
+	if (arabian_blitter[0] & 0x04)
 	{
 		base[0] = (base[0] & ~0x0c) | ((data & 0x10) >> 1) | ((data & 0x01) << 2);
 		base[1] = (base[1] & ~0x0c) | ((data & 0x20) >> 2) | ((data & 0x02) << 1);
@@ -342,7 +350,7 @@ WRITE8_HANDLER( arabian_videoram_w )
 	}
 
 	/* enable writes to BZ/BR */
-	if (state->m_blitter[0] & 0x02)
+	if (arabian_blitter[0] & 0x02)
 	{
 		base[0] = (base[0] & ~0x30) | ((data & 0x10) << 1) | ((data & 0x01) << 4);
 		base[1] = (base[1] & ~0x30) | ((data & 0x20) << 0) | ((data & 0x02) << 3);
@@ -351,7 +359,7 @@ WRITE8_HANDLER( arabian_videoram_w )
 	}
 
 	/* enable writes to BG/BB */
-	if (state->m_blitter[0] & 0x01)
+	if (arabian_blitter[0] & 0x01)
 	{
 		base[0] = (base[0] & ~0xc0) | ((data & 0x10) << 3) | ((data & 0x01) << 6);
 		base[1] = (base[1] & ~0xc0) | ((data & 0x20) << 2) | ((data & 0x02) << 5);
@@ -368,18 +376,17 @@ WRITE8_HANDLER( arabian_videoram_w )
  *
  *************************************/
 
-SCREEN_UPDATE_IND16( arabian )
+VIDEO_UPDATE( arabian )
 {
-	arabian_state *state = screen.machine().driver_data<arabian_state>();
-	const pen_t *pens = &screen.machine().pens[(state->m_video_control >> 3) << 8];
+	const pen_t *pens = &screen->machine->pens[(arabian_video_control >> 3) << 8];
 	int y;
 
 	/* render the screen from the bitmap */
 	for (y = 0; y < BITMAP_HEIGHT; y++)
 	{
 		/* non-flipped case */
-		if (!state->m_flip_screen)
-			draw_scanline8(bitmap, 0, y, BITMAP_WIDTH, &state->m_main_bitmap[y * BITMAP_WIDTH], pens);
+		if (!arabian_flip_screen)
+			draw_scanline8(bitmap, 0, y, BITMAP_WIDTH, &main_bitmap[y * BITMAP_WIDTH], pens);
 
 		/* flipped case */
 		else
@@ -387,7 +394,7 @@ SCREEN_UPDATE_IND16( arabian )
 			UINT8 scanline[BITMAP_WIDTH];
 			int x;
 			for (x = 0; x < BITMAP_WIDTH; x++)
-				scanline[BITMAP_WIDTH - 1 - x] = state->m_main_bitmap[y * BITMAP_WIDTH + x];
+				scanline[BITMAP_WIDTH - 1 - x] = main_bitmap[y * BITMAP_WIDTH + x];
 			draw_scanline8(bitmap, 0, BITMAP_HEIGHT - 1 - y, BITMAP_WIDTH, scanline, pens);
 		}
 	}

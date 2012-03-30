@@ -172,21 +172,17 @@
 
 #define MASTER_CLOCK	XTAL_16MHz
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "video/mc6845.h"
 #include "sound/ay8910.h"
-#include "machine/nvram.h"
-#include "includes/funworld.h"
 
-
-class _4roses_state : public funworld_state
-{
-public:
-	_4roses_state(const machine_config &mconfig, device_type type, const char *tag)
-		: funworld_state(mconfig, type, tag) { }
-
-};
+/* from video */
+WRITE8_HANDLER( funworld_videoram_w );
+WRITE8_HANDLER( funworld_colorram_w );
+PALETTE_INIT( funworld );
+VIDEO_START( funworld );
+VIDEO_UPDATE( funworld );
 
 
 /**********************
@@ -199,10 +195,10 @@ public:
 * Memory map information *
 *************************/
 
-static ADDRESS_MAP_START( 4roses_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM	// AM_SHARE("nvram")
-	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(funworld_videoram_w) AM_BASE_MEMBER(funworld_state, m_videoram)
-	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(funworld_colorram_w) AM_BASE_MEMBER(funworld_state, m_colorram)
+static ADDRESS_MAP_START( 4roses_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM	// AM_BASE(&generic_nvram) AM_SIZE(&generic_nvram_size)
+	AM_RANGE(0x6000, 0x6fff) AM_RAM_WRITE(funworld_videoram_w) AM_BASE(&videoram)
+	AM_RANGE(0x7000, 0x7fff) AM_RAM_WRITE(funworld_colorram_w) AM_BASE(&colorram)
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -380,38 +376,39 @@ static const mc6845_interface mc6845_intf =
 *     Machine Drivers     *
 **************************/
 
-static MACHINE_CONFIG_START( 4roses, _4roses_state )
+static MACHINE_DRIVER_START( 4roses )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz, guess */
-	MCFG_CPU_PROGRAM_MAP(4roses_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_ADD("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz, guess */
+	MDRV_CPU_PROGRAM_MAP(4roses_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-//  MCFG_NVRAM_ADD_0FILL("nvram")
+//  MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* video hardware */
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE((124+1)*4, (30+1)*8)				/* guess. taken from funworld games */
-	MCFG_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 29*8-1)	/* guess. taken from funworld games */
-	MCFG_SCREEN_UPDATE_STATIC(funworld)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE((124+1)*4, (30+1)*8)				/* guess. taken from funworld games */
+	MDRV_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 29*8-1)	/* guess. taken from funworld games */
 
-	MCFG_GFXDECODE(4roses)
+	MDRV_GFXDECODE(4roses)
 
-	MCFG_PALETTE_LENGTH(0x1000)
-	MCFG_PALETTE_INIT(funworld)
-	MCFG_VIDEO_START(funworld)
+	MDRV_PALETTE_LENGTH(0x1000)
+	MDRV_PALETTE_INIT(funworld)
+	MDRV_VIDEO_START(funworld)
+	MDRV_VIDEO_UPDATE(funworld)
 
-//  MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/8, mc6845_intf) /* 2MHz, guess */
+	MDRV_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/8, mc6845_intf) /* 2MHz, guess */
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz, guess */
-	MCFG_SOUND_CONFIG(ay8910_intf)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz, guess */
+	MDRV_SOUND_CONFIG(ay8910_intf)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)
+MACHINE_DRIVER_END
 
 
 /*************************

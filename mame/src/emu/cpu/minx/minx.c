@@ -42,9 +42,8 @@ TODO:
 
 */
 
-#include "emu.h"
-#include "debugger.h"
 #include "minx.h"
+#include "debugger.h"
 
 #define FLAG_I  0x80
 #define FLAG_D  0x40
@@ -83,22 +82,24 @@ typedef struct {
 	UINT8	YI;
 	UINT8	halted;
 	UINT8	interrupt_pending;
-	device_irq_callback irq_callback;
-	legacy_cpu_device *device;
-	address_space *program;
+	cpu_irq_callback irq_callback;
+	const device_config *device;
+	const address_space *program;
 	int icount;
 } minx_state;
 
-#define RD(offset)		minx->program->read_byte( offset )
-#define WR(offset,data)	minx->program->write_byte( offset, data )
+#define RD(offset)		memory_read_byte_8be( minx->program, offset )
+#define WR(offset,data)	memory_write_byte_8be( minx->program, offset, data )
 #define GET_MINX_PC		( ( minx->PC & 0x8000 ) ? ( minx->V << 15 ) | (minx->PC & 0x7FFF ) : minx->PC )
 
-INLINE minx_state *get_safe_token(device_t *device)
+INLINE minx_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == MINX);
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_MINX);
 
-	return (minx_state *)downcast<legacy_cpu_device *>(device)->token();
+	return (minx_state *)device->token;
 }
 
 INLINE UINT16 rd16( minx_state *minx, UINT32 offset )
@@ -119,8 +120,8 @@ static CPU_INIT( minx )
 	minx_state *minx = get_safe_token(device);
 	minx->irq_callback = irqcallback;
 	minx->device = device;
-	minx->program = device->space(AS_PROGRAM);
-	if ( device->static_config() != NULL )
+	minx->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	if ( device->static_config != NULL )
 	{
 	}
 	else
@@ -169,14 +170,16 @@ INLINE UINT16 rdop16( minx_state *minx )
 
 static CPU_EXECUTE( minx )
 {
-//  UINT32  oldpc;
+	UINT32	oldpc;
 	UINT8	op;
 	minx_state *minx = get_safe_token(device);
+
+	minx->icount = cycles;
 
 	do
 	{
 		debugger_instruction_hook(device, GET_MINX_PC);
-//      oldpc = GET_MINX_PC;
+		oldpc = GET_MINX_PC;
 
 		if ( minx->interrupt_pending )
 		{
@@ -207,6 +210,7 @@ static CPU_EXECUTE( minx )
 			minx->icount -= insnminx_cycles[op];
 		}
 	} while ( minx->icount > 0 );
+	return cycles - minx->icount;
 }
 
 
@@ -221,9 +225,9 @@ static unsigned minx_get_reg( minx_state *minx, int regnum )
 {
 	switch( regnum )
 	{
-	case STATE_GENPC:	return GET_MINX_PC;
+	case REG_GENPC:	return GET_MINX_PC;
 	case MINX_PC:	return minx->PC;
-	case STATE_GENSP:
+	case REG_GENSP:
 	case MINX_SP:	return minx->SP;
 	case MINX_BA:	return minx->BA;
 	case MINX_HL:	return minx->HL;
@@ -246,9 +250,9 @@ static void minx_set_reg( minx_state *minx, int regnum, unsigned val )
 {
 	switch( regnum )
 	{
-	case STATE_GENPC:	break;
+	case REG_GENPC:	break;
 	case MINX_PC:	minx->PC = val; break;
-	case STATE_GENSP:
+	case REG_GENSP:
 	case MINX_SP:	minx->SP = val; break;
 	case MINX_BA:	minx->BA = val; break;
 	case MINX_HL:	minx->HL = val; break;
@@ -308,7 +312,7 @@ static CPU_SET_INFO( minx )
 
 CPU_GET_INFO( minx )
 {
-	minx_state *minx = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	minx_state *minx = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 	switch( state )
 	{
 	case CPUINFO_INT_CONTEXT_SIZE:								info->i = sizeof(minx_state); break;
@@ -321,18 +325,18 @@ CPU_GET_INFO( minx )
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:						info->i = 5; break;
 	case CPUINFO_INT_MIN_CYCLES:								info->i = 1; break;
 	case CPUINFO_INT_MAX_CYCLES:								info->i = 4; break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:		info->i = 8; break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM:		info->i = 24; break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM:		info->i = 0; break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:		info->i = 0; break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:		info->i = 0; break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:		info->i = 0; break;
-	case DEVINFO_INT_DATABUS_WIDTH + AS_IO:			info->i = 0; break;
-	case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:			info->i = 0; break;
-	case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:			info->i = 0; break;
+	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:		info->i = 8; break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:		info->i = 24; break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:		info->i = 0; break;
+	case CPUINFO_INT_DATABUS_WIDTH_DATA:		info->i = 0; break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_DATA:		info->i = 0; break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_DATA:		info->i = 0; break;
+	case CPUINFO_INT_DATABUS_WIDTH_IO:			info->i = 0; break;
+	case CPUINFO_INT_ADDRBUS_WIDTH_IO:			info->i = 0; break;
+	case CPUINFO_INT_ADDRBUS_SHIFT_IO:			info->i = 0; break;
 	case CPUINFO_INT_INPUT_STATE + 0:							info->i = 0; break;
-	case CPUINFO_INT_REGISTER + STATE_GENPC:							info->i = GET_MINX_PC; break;
-	case CPUINFO_INT_REGISTER + STATE_GENSP:
+	case CPUINFO_INT_REGISTER + REG_GENPC:							info->i = GET_MINX_PC; break;
+	case CPUINFO_INT_REGISTER + REG_GENSP:
 	case CPUINFO_INT_REGISTER + MINX_PC:
 	case CPUINFO_INT_REGISTER + MINX_SP:
 	case CPUINFO_INT_REGISTER + MINX_BA:
@@ -394,4 +398,3 @@ CPU_GET_INFO( minx )
 	}
 }
 
-DEFINE_LEGACY_CPU_DEVICE(MINX, minx);

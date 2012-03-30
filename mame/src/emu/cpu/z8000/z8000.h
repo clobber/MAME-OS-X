@@ -3,6 +3,7 @@
 #ifndef __Z8000_H__
 #define __Z8000_H__
 
+#include "cpuintrf.h"
 
 enum
 {
@@ -24,8 +25,8 @@ enum
 #define Z8000_HALT		0x0100	/* halted flag  */
 
 /* PUBLIC FUNCTIONS */
-DECLARE_LEGACY_CPU_DEVICE(Z8001, z8001);
-DECLARE_LEGACY_CPU_DEVICE(Z8002, z8002);
+extern CPU_GET_INFO( z8000 );
+#define CPU_Z8000 CPU_GET_INFO_NAME( z8000 )
 
 CPU_DISASSEMBLE( z8000 );
 

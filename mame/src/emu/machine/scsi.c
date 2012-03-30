@@ -1,12 +1,11 @@
-#include "emu.h"
 #include "scsi.h"
 
-void SCSIAllocInstance( running_machine &machine, const SCSIClass *scsiClass, SCSIInstance **instance, const char *diskregion )
+void SCSIAllocInstance( running_machine *machine, const SCSIClass *scsiClass, SCSIInstance **instance, const char *diskregion )
 {
 	SCSIAllocInstanceParams params;
 	params.instance = NULL;
 	params.diskregion = diskregion;
-	params.m_machine = &machine;
+	params.machine = machine;
 	scsiClass->dispatch( SCSIOP_ALLOC_INSTANCE, (void *)scsiClass, 0, &params );
 	*instance = params.instance;
 }
@@ -104,11 +103,11 @@ int SCSIBase( const SCSIClass *scsiClass, int operation, void *file, INT64 intpa
 	return scsiClass->baseClass->dispatch( operation, file, intparm, ptrparm );
 }
 
-SCSIInstance *SCSIMalloc( running_machine &machine, const SCSIClass *scsiClass )
+SCSIInstance *SCSIMalloc( running_machine *machine, const SCSIClass *scsiClass )
 {
-	SCSIInstance *scsiInstance = (SCSIInstance *)auto_alloc_array(machine, UINT8, SCSISizeof( scsiClass ));
+	SCSIInstance *scsiInstance = (SCSIInstance *)alloc_array_or_die(UINT8, SCSISizeof( scsiClass ));
 	scsiInstance->scsiClass = scsiClass;
-	scsiInstance->m_machine = &machine;
+	scsiInstance->machine = machine;
 	return scsiInstance;
 }
 

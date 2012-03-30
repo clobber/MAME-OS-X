@@ -119,10 +119,10 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/pokey.h"
-#include "includes/ccastles.h"
+#include "ccastles.h"
 
 
 #define MASTER_CLOCK	(10000000)
@@ -133,38 +133,53 @@
 
 
 
-/************************************* *
+/*************************************
+ *
+ *  Globals
+ *
+ *************************************/
+
+static const UINT8 *syncprom;
+static emu_timer *irq_timer;
+
+static UINT8 irq_state;
+static UINT8 *nvram_stage;
+static UINT8 nvram_store[2];
+
+int ccastles_vblank_start;
+int ccastles_vblank_end;
+
+
+
+/*************************************
+ *
  *  VBLANK and IRQ generation
  *
  *************************************/
 
-INLINE void schedule_next_irq( running_machine &machine, int curscanline )
+INLINE void schedule_next_irq(running_machine *machine, int curscanline)
 {
-	ccastles_state *state = machine.driver_data<ccastles_state>();
-
 	/* scan for a rising edge on the IRQCK signal */
 	for (curscanline++; ; curscanline = (curscanline + 1) & 0xff)
-		if ((state->m_syncprom[(curscanline - 1) & 0xff] & 8) == 0 && (state->m_syncprom[curscanline] & 8) != 0)
+		if ((syncprom[(curscanline - 1) & 0xff] & 8) == 0 && (syncprom[curscanline] & 8) != 0)
 			break;
 
 	/* next one at the start of this scanline */
-	state->m_irq_timer->adjust(machine.primary_screen->time_until_pos(curscanline), curscanline);
+	timer_adjust_oneshot(irq_timer, video_screen_get_time_until_pos(machine->primary_screen, curscanline, 0), curscanline);
 }
 
 
 static TIMER_CALLBACK( clock_irq )
 {
-	ccastles_state *state = machine.driver_data<ccastles_state>();
-
 	/* assert the IRQ if not already asserted */
-	if (!state->m_irq_state)
+	if (!irq_state)
 	{
-		device_set_input_line(state->m_maincpu, 0, ASSERT_LINE);
-		state->m_irq_state = 1;
+		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+		irq_state = 1;
 	}
 
 	/* force an update now */
-	machine.primary_screen->update_partial(machine.primary_screen->vpos());
+	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
 
 	/* find the next edge */
 	schedule_next_irq(machine, param);
@@ -173,9 +188,8 @@ static TIMER_CALLBACK( clock_irq )
 
 static CUSTOM_INPUT( get_vblank )
 {
-	ccastles_state *state = field.machine().driver_data<ccastles_state>();
-	int scanline = field.machine().primary_screen->vpos();
-	return state->m_syncprom[scanline & 0xff] & 1;
+	int scanline = video_screen_get_vpos(field->port->machine->primary_screen);
+	return syncprom[scanline & 0xff] & 1;
 }
 
 
@@ -188,50 +202,55 @@ static CUSTOM_INPUT( get_vblank )
 
 static MACHINE_START( ccastles )
 {
-	ccastles_state *state = machine.driver_data<ccastles_state>();
 	rectangle visarea;
 
 	/* initialize globals */
-	state->m_syncprom = machine.region("proms")->base() + 0x000;
+	syncprom = memory_region(machine, "proms") + 0x000;
 
 	/* find the start of VBLANK in the SYNC PROM */
-	for (state->m_vblank_start = 0; state->m_vblank_start < 256; state->m_vblank_start++)
-		if ((state->m_syncprom[(state->m_vblank_start - 1) & 0xff] & 1) == 0 && (state->m_syncprom[state->m_vblank_start] & 1) != 0)
+	for (ccastles_vblank_start = 0; ccastles_vblank_start < 256; ccastles_vblank_start++)
+		if ((syncprom[(ccastles_vblank_start - 1) & 0xff] & 1) == 0 && (syncprom[ccastles_vblank_start] & 1) != 0)
 			break;
-	if (state->m_vblank_start == 0)
-		state->m_vblank_start = 256;
+	if (ccastles_vblank_start == 0)
+		ccastles_vblank_start = 256;
 
 	/* find the end of VBLANK in the SYNC PROM */
-	for (state->m_vblank_end = 0; state->m_vblank_end < 256; state->m_vblank_end++)
-		if ((state->m_syncprom[(state->m_vblank_end - 1) & 0xff] & 1) != 0 && (state->m_syncprom[state->m_vblank_end] & 1) == 0)
+	for (ccastles_vblank_end = 0; ccastles_vblank_end < 256; ccastles_vblank_end++)
+		if ((syncprom[(ccastles_vblank_end - 1) & 0xff] & 1) != 0 && (syncprom[ccastles_vblank_end] & 1) == 0)
 			break;
 
 	/* can't handle the wrapping case */
-	assert(state->m_vblank_end < state->m_vblank_start);
+	assert(ccastles_vblank_end < ccastles_vblank_start);
 
 	/* reconfigure the visible area to match */
-	visarea.set(0, 255, state->m_vblank_end, state->m_vblank_start - 1);
-	machine.primary_screen->configure(320, 256, visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
+	visarea.min_x = 0;
+	visarea.max_x = 255;
+	visarea.min_y = ccastles_vblank_end;
+	visarea.max_y = ccastles_vblank_start - 1;
+	video_screen_configure(machine->primary_screen, 320, 256, &visarea, HZ_TO_ATTOSECONDS(PIXEL_CLOCK) * VTOTAL * HTOTAL);
 
 	/* configure the ROM banking */
-	memory_configure_bank(machine, "bank1", 0, 2, machine.region("maincpu")->base() + 0xa000, 0x6000);
+	memory_configure_bank(machine, 1, 0, 2, memory_region(machine, "maincpu") + 0xa000, 0x6000);
 
 	/* create a timer for IRQs and set up the first callback */
-	state->m_irq_timer = machine.scheduler().timer_alloc(FUNC(clock_irq));
-	state->m_irq_state = 0;
+	irq_timer = timer_alloc(machine, clock_irq, NULL);
+	irq_state = 0;
 	schedule_next_irq(machine, 0);
 
+	/* allocate backing memory for the NVRAM */
+	generic_nvram = auto_alloc_array(machine, UINT8, generic_nvram_size);
+
 	/* setup for save states */
-	state->save_item(NAME(state->m_irq_state));
-	state->save_item(NAME(state->m_nvram_store));
+	state_save_register_global(machine, irq_state);
+	state_save_register_global_array(machine, nvram_store);
+	state_save_register_global_pointer(machine, generic_nvram, generic_nvram_size);
 }
 
 
 static MACHINE_RESET( ccastles )
 {
-	ccastles_state *state = machine.driver_data<ccastles_state>();
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	state->m_irq_state = 0;
+	irq_state = 0;
 }
 
 
@@ -244,30 +263,29 @@ static MACHINE_RESET( ccastles )
 
 static WRITE8_HANDLER( irq_ack_w )
 {
-	ccastles_state *state = space->machine().driver_data<ccastles_state>();
-	if (state->m_irq_state)
+	if (irq_state)
 	{
-		device_set_input_line(state->m_maincpu, 0, CLEAR_LINE);
-		state->m_irq_state = 0;
+		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
+		irq_state = 0;
 	}
 }
 
 
 static WRITE8_HANDLER( led_w )
 {
-	set_led_status(space->machine(), offset, ~data & 1);
+	set_led_status(offset, ~data & 1);
 }
 
 
 static WRITE8_HANDLER( ccounter_w )
 {
-	coin_counter_w(space->machine(), offset, data & 1);
+	coin_counter_w(offset, data & 1);
 }
 
 
 static WRITE8_HANDLER( bankswitch_w )
 {
-	memory_set_bank(space->machine(), "bank1", data & 1);
+	memory_set_bank(space->machine, 1, data & 1);
 }
 
 
@@ -275,7 +293,7 @@ static READ8_HANDLER( leta_r )
 {
 	static const char *const letanames[] = { "LETA0", "LETA1", "LETA2", "LETA3" };
 
-	return input_port_read(space->machine(), letanames[offset]);
+	return input_port_read(space->machine, letanames[offset]);
 }
 
 
@@ -286,39 +304,32 @@ static READ8_HANDLER( leta_r )
  *
  *************************************/
 
+static NVRAM_HANDLER( ccastles )
+{
+	if (read_or_write)
+	{
+		/* on power down, the EAROM is implicitly stored */
+		memcpy(generic_nvram, nvram_stage, generic_nvram_size);
+		mame_fwrite(file, generic_nvram, generic_nvram_size);
+	}
+	else if (file)
+		mame_fread(file, generic_nvram, generic_nvram_size);
+	else
+		memset(generic_nvram, 0, generic_nvram_size);
+}
+
+
 static WRITE8_HANDLER( nvram_recall_w )
 {
-	ccastles_state *state = space->machine().driver_data<ccastles_state>();
-	state->m_nvram_4b->recall(0);
-	state->m_nvram_4b->recall(1);
-	state->m_nvram_4b->recall(0);
-	state->m_nvram_4a->recall(0);
-	state->m_nvram_4a->recall(1);
-	state->m_nvram_4a->recall(0);
+	memcpy(nvram_stage, generic_nvram, generic_nvram_size);
 }
 
 
 static WRITE8_HANDLER( nvram_store_w )
 {
-	ccastles_state *state = space->machine().driver_data<ccastles_state>();
-	state->m_nvram_store[offset] = data & 1;
-	state->m_nvram_4b->store(~state->m_nvram_store[0] & state->m_nvram_store[1]);
-	state->m_nvram_4a->store(~state->m_nvram_store[0] & state->m_nvram_store[1]);
-}
-
-
-static READ8_HANDLER( nvram_r )
-{
-	ccastles_state *state = space->machine().driver_data<ccastles_state>();
-	return (state->m_nvram_4b->read(*space, offset) & 0x0f) | (state->m_nvram_4a->read(*space, offset) << 4);
-}
-
-
-static WRITE8_HANDLER( nvram_w )
-{
-	ccastles_state *state = space->machine().driver_data<ccastles_state>();
-	state->m_nvram_4b->write(*space, offset, data);
-	state->m_nvram_4a->write(*space, offset, data >> 4);
+	nvram_store[offset] = data & 1;
+	if (!nvram_store[0] && nvram_store[1])
+		memcpy(generic_nvram, nvram_stage, generic_nvram_size);
 }
 
 
@@ -330,13 +341,13 @@ static WRITE8_HANDLER( nvram_w )
  *************************************/
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0001) AM_WRITE(ccastles_bitmode_addr_w)
 	AM_RANGE(0x0002, 0x0002) AM_READWRITE(ccastles_bitmode_r, ccastles_bitmode_w)
-	AM_RANGE(0x0000, 0x7fff) AM_RAM_WRITE(ccastles_videoram_w) AM_BASE_MEMBER(ccastles_state, m_videoram)
+	AM_RANGE(0x0000, 0x7fff) AM_RAM_WRITE(ccastles_videoram_w) AM_BASE(&videoram)
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
-	AM_RANGE(0x8e00, 0x8fff) AM_BASE_MEMBER(ccastles_state, m_spriteram)
-	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0300) AM_READWRITE(nvram_r, nvram_w)
+	AM_RANGE(0x8e00, 0x8fff) AM_BASE(&spriteram)
+	AM_RANGE(0x9000, 0x90ff) AM_MIRROR(0x0300) AM_RAM AM_BASE(&nvram_stage) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0x9400, 0x9403) AM_MIRROR(0x01fc) AM_READ(leta_r)
 	AM_RANGE(0x9600, 0x97ff) AM_READ_PORT("IN0")
 	AM_RANGE(0x9800, 0x980f) AM_MIRROR(0x01f0) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
@@ -352,7 +363,7 @@ static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x9e87, 0x9e87) AM_MIRROR(0x0078) AM_WRITE(bankswitch_w)
 	AM_RANGE(0x9f00, 0x9f07) AM_MIRROR(0x0078) AM_WRITE(ccastles_video_control_w)
 	AM_RANGE(0x9f80, 0x9fbf) AM_MIRROR(0x0040) AM_WRITE(ccastles_paletteram_w)
-	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK(1)
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -406,7 +417,7 @@ static INPUT_PORTS_START( ccastles )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( ccastlesj )
+static INPUT_PORTS_START( ccastlej )
 	PORT_INCLUDE(ccastles)
 
 	PORT_MODIFY("LETA0")
@@ -475,39 +486,38 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_CONFIG_START( ccastles, ccastles_state )
+static MACHINE_DRIVER_START( ccastles )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
-	MCFG_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
+	MDRV_CPU_PROGRAM_MAP(main_map)
 
-	MCFG_MACHINE_START(ccastles)
-	MCFG_MACHINE_RESET(ccastles)
-	MCFG_WATCHDOG_VBLANK_INIT(8)
-
-	MCFG_X2212_ADD_AUTOSAVE("nvram_4b")
-	MCFG_X2212_ADD_AUTOSAVE("nvram_4a")
+	MDRV_MACHINE_START(ccastles)
+	MDRV_MACHINE_RESET(ccastles)
+	MDRV_NVRAM_HANDLER(ccastles)
+	MDRV_WATCHDOG_VBLANK_INIT(8)
 
 	/* video hardware */
-	MCFG_GFXDECODE(ccastles)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(ccastles)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, 0, HTOTAL - 1, VTOTAL, 0, VTOTAL - 1)	/* will be adjusted later */
-	MCFG_SCREEN_UPDATE_STATIC(ccastles)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, 0, HTOTAL - 1, VTOTAL, 0, VTOTAL - 1)	/* will be adjusted later */
 
-	MCFG_VIDEO_START(ccastles)
+	MDRV_VIDEO_START(ccastles)
+	MDRV_VIDEO_UPDATE(ccastles)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK/8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("pokey1", POKEY, MASTER_CLOCK/8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK/8)
-	MCFG_SOUND_CONFIG(pokey_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK/8)
+	MDRV_SOUND_CONFIG(pokey_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 
@@ -684,11 +694,11 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, ccastles,  0,        ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 4)", GAME_SUPPORTS_SAVE )
+GAME( 1983, ccastles, 0,        ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 4)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastlesg, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 3, German)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastlesp, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 3, Spanish)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastlesf, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 3, French)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastles3, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 3)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastles2, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 2)", GAME_SUPPORTS_SAVE )
 GAME( 1983, ccastles1, ccastles, ccastles, ccastles, 0, ROT0, "Atari", "Crystal Castles (version 1)", GAME_SUPPORTS_SAVE )
-GAME( 1983, ccastlesj, ccastles, ccastles, ccastlesj,0, ROT0, "Atari", "Crystal Castles (joystick version)", GAME_SUPPORTS_SAVE )
+GAME( 1983, ccastlesj, ccastles, ccastles, ccastlej, 0, ROT0, "Atari", "Crystal Castles (joystick version)", GAME_SUPPORTS_SAVE )

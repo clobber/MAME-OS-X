@@ -3,23 +3,21 @@
  *  emulate video hardware
  */
 
-#include "emu.h"
-#include "video/konicdev.h"
-#include "includes/djmain.h"
+#include "driver.h"
+#include "video/konamiic.h"
 
 #define NUM_SPRITES	(0x800 / 16)
 #define NUM_LAYERS	2
 
+UINT32 *djmain_obj_ram;
 
 
-static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine* machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
-	djmain_state *state = machine.driver_data<djmain_state>();
-	device_t *k055555 = machine.device("k055555");
 	int offs, pri_code;
 	int sortedlist[NUM_SPRITES];
 
-	machine.gfx[0]->color_base = k055555_read_register(k055555, K55_PALBASE_SUB2) * 0x400;
+	machine->gfx[0]->color_base = K055555_read_register(K55_PALBASE_SUB2) * 0x400;
 
 	for (offs = 0; offs < NUM_SPRITES; offs++)
 		sortedlist[offs] = -1;
@@ -27,12 +25,12 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 	/* prebuild a sorted table */
 	for (offs = 0; offs < NUM_SPRITES * 4; offs += 4)
 	{
-		if (state->m_obj_ram[offs] & 0x00008000)
+		if (djmain_obj_ram[offs] & 0x00008000)
 		{
-			if (state->m_obj_ram[offs] & 0x80000000)
+			if (djmain_obj_ram[offs] & 0x80000000)
 				continue;
 
-			pri_code = state->m_obj_ram[offs] & (NUM_SPRITES - 1);
+			pri_code = djmain_obj_ram[offs] & (NUM_SPRITES - 1);
 			sortedlist[pri_code] = offs;
 		}
 	}
@@ -53,16 +51,16 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 		offs = sortedlist[pri_code];
 		if (offs == -1) continue;
 
-		code = state->m_obj_ram[offs] >> 16;
-		flipx = (state->m_obj_ram[offs] >> 10) & 1;
-		flipy = (state->m_obj_ram[offs] >> 11) & 1;
-		size = sizetab[(state->m_obj_ram[offs] >> 8) & 3];
+		code = djmain_obj_ram[offs] >> 16;
+		flipx = (djmain_obj_ram[offs] >> 10) & 1;
+		flipy = (djmain_obj_ram[offs] >> 11) & 1;
+		size = sizetab[(djmain_obj_ram[offs] >> 8) & 3];
 
-		ox = (INT16)(state->m_obj_ram[offs + 1] & 0xffff);
-		oy = (INT16)(state->m_obj_ram[offs + 1] >> 16);
+		ox = (INT16)(djmain_obj_ram[offs + 1] & 0xffff);
+		oy = (INT16)(djmain_obj_ram[offs + 1] >> 16);
 
-		xscale = state->m_obj_ram[offs + 2] >> 16;
-		yscale = state->m_obj_ram[offs + 2] & 0xffff;
+		xscale = djmain_obj_ram[offs + 2] >> 16;
+		yscale = djmain_obj_ram[offs + 2] & 0xffff;
 
 		if (!xscale || !yscale)
 			continue;
@@ -72,7 +70,7 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 		ox -= (size * xscale) >> 13;
 		oy -= (size * yscale) >> 13;
 
-		color = (state->m_obj_ram[offs + 3] >> 16) & 15;
+		color = (djmain_obj_ram[offs + 3] >> 16) & 15;
 
 		for (x = 0; x < size; x++)
 			for (y = 0; y < size; y++)
@@ -98,7 +96,7 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 
 					drawgfxzoom_transpen(bitmap,
 					            cliprect,
-					            machine.gfx[0],
+					            machine->gfx[0],
 					            c,
 					            color,
 					            flipx,
@@ -116,7 +114,7 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 
 					drawgfx_transpen(bitmap,
 					        cliprect,
-					        machine.gfx[0],
+					        machine->gfx[0],
 					        c,
 					        color,
 					        flipx,
@@ -130,31 +128,35 @@ static void draw_sprites(running_machine& machine, bitmap_rgb32 &bitmap, const r
 }
 
 
-void djmain_tile_callback(running_machine& machine, int layer, int *code, int *color, int *flags)
+static void game_tile_callback(int layer, int *code, int *color, int *flags)
 {
 }
 
 VIDEO_START( djmain )
 {
-	device_t *k056832 = machine.device("k056832");
+	static int scrolld[NUM_LAYERS][4][2] = {
+	 	{{ 0, 0}, {0, 0}, {0, 0}, {0, 0}},
+	 	{{ 0, 0}, {0, 0}, {0, 0}, {0, 0}}
+	};
 
-	k056832_set_layer_offs(k056832, 0, -92, -27);
-	// k056832_set_layer_offs(k056832, 1, -87, -27);
-	k056832_set_layer_offs(k056832, 1, -88, -27);
+	K056832_vh_start(machine, "gfx2", K056832_BPP_4dj, 1, scrolld, game_tile_callback, 1);
+	K055555_vh_start(machine);
+
+	K056832_set_LayerOffset(0, -92, -27);
+	// K056832_set_LayerOffset(1, -87, -27);
+	K056832_set_LayerOffset(1, -88, -27);
 }
 
-SCREEN_UPDATE_RGB32( djmain )
+VIDEO_UPDATE( djmain )
 {
-	device_t *k056832 = screen.machine().device("k056832");
-	device_t *k055555 = screen.machine().device("k055555");
-	int enables = k055555_read_register(k055555, K55_INPUT_ENABLES);
+	int enables = K055555_read_register(K55_INPUT_ENABLES);
 	int pri[NUM_LAYERS + 1];
 	int order[NUM_LAYERS + 1];
 	int i, j;
 
 	for (i = 0; i < NUM_LAYERS; i++)
-		pri[i] = k055555_read_register(k055555, K55_PRIINP_0 + i * 3);
-	pri[i] = k055555_read_register(k055555, K55_PRIINP_10);
+		pri[i] = K055555_read_register(K55_PRIINP_0 + i * 3);
+	pri[i] = K055555_read_register(K55_PRIINP_10);
 
 	for (i = 0; i < NUM_LAYERS + 1; i++)
 		order[i] = i;
@@ -169,7 +171,7 @@ SCREEN_UPDATE_RGB32( djmain )
 				order[j] = temp;
 			}
 
-	bitmap.fill(screen.machine().pens[0], cliprect);
+	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]);
 
 	for (i = 0; i < NUM_LAYERS + 1; i++)
 	{
@@ -178,12 +180,12 @@ SCREEN_UPDATE_RGB32( djmain )
 		if (layer == NUM_LAYERS)
 		{
 			if (enables & K55_INP_SUB2)
-				draw_sprites(screen.machine(), bitmap, cliprect);
+				draw_sprites(screen->machine, bitmap, cliprect);
 		}
 		else
 		{
 			if (enables & (K55_INP_VRAM_A << layer))
-				k056832_tilemap_draw_dj(k056832, bitmap, cliprect, layer, 0, 1 << i);
+				K056832_tilemap_draw_dj(screen->machine, bitmap, cliprect, layer, 0, 1 << i);
 		}
 	}
 	return 0;

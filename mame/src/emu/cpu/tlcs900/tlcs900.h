@@ -1,6 +1,8 @@
 #ifndef __TLCS900_H__
 #define __TLCS900_H__
 
+#include "cpuintrf.h"
+#include "devcb.h"
 
 
 enum tlcs900_inputs
@@ -39,7 +41,8 @@ struct _tlcs900_interface
 };
 
 
-DECLARE_LEGACY_CPU_DEVICE(TLCS900H, tlcs900h);
+extern CPU_GET_INFO( tlcs900h );
+#define CPU_TLCS900H CPU_GET_INFO_NAME( tlcs900h )
 
 extern CPU_DISASSEMBLE( tlcs900 );
 

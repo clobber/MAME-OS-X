@@ -8,7 +8,7 @@
     MAME/M1 conversion and cleanup by R. Belmont
 */
 
-#define LFO_SHIFT	8
+#define LFO_SHIFT 	8
 
 struct _LFO
 {
@@ -21,7 +21,7 @@ struct _LFO
 #define LFIX(v)	((unsigned int) ((float) (1<<LFO_SHIFT)*(v)))
 
 //Convert DB to multiply amplitude
-#define DB(v)	LFIX(pow(10.0,v/20.0))
+#define DB(v) 	LFIX(pow(10.0,v/20.0))
 
 //Convert cents to step increment
 #define CENTS(v) LFIX(pow(2.0,v/1200.0))
@@ -38,7 +38,7 @@ static const float PSCALE[8]={0.0f,7.0f,13.5f,27.0f,55.0f,112.0f,230.0f,494.0f};
 static int PSCALES[8][256];
 static int ASCALES[8][256];
 
-static void LFO_Init(running_machine &machine)
+static void LFO_Init(running_machine *machine)
 {
     int i,s;
     for(i=0;i<256;++i)
@@ -50,7 +50,7 @@ static void LFO_Init(running_machine &machine)
 		if(i<128)
 			p=i;
 		else
-			p=i-256;
+ 			p=i-256;
 		ALFO_SAW[i]=a;
 		PLFO_SAW[i]=p;
 
@@ -86,7 +86,7 @@ static void LFO_Init(running_machine &machine)
 
 		//noise
 		//a=lfo_noise[i];
-		a=machine.rand()&0xff;
+		a=mame_rand(machine)&0xff;
 		p=128-a;
 		ALFO_NOI[i]=a;
 		PLFO_NOI[i]=p;

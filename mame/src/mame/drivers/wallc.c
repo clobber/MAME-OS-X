@@ -47,23 +47,12 @@ Thanks to HIGHWAYMAN for providing info on how to get to these epoxies
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "video/resnet.h"
 #include "sound/ay8910.h"
 
-
-class wallc_state : public driver_device
-{
-public:
-	wallc_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT8 *m_videoram;
-	tilemap_t *m_bg_tilemap;
-};
-
-
+static tilemap *bg_tilemap;
 
 /***************************************************************************
 
@@ -102,7 +91,7 @@ static PALETTE_INIT( wallc )
 			2,	resistances_rg,	weights_g,	330,	0,
 			3,	resistances_b,	weights_b,	330,	655+220);
 
-	for (i = 0;i < machine.total_colors();i++)
+	for (i = 0;i < machine->config->total_colors;i++)
 	{
 		int bit0,bit1,bit7,r,g,b;
 
@@ -128,40 +117,34 @@ static PALETTE_INIT( wallc )
 
 static WRITE8_HANDLER( wallc_videoram_w )
 {
-	wallc_state *state = space->machine().driver_data<wallc_state>();
-	UINT8 *videoram = state->m_videoram;
 	videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	tilemap_mark_tile_dirty(bg_tilemap, offset);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	wallc_state *state = machine.driver_data<wallc_state>();
-	UINT8 *videoram = state->m_videoram;
 	SET_TILE_INFO(0, videoram[tile_index] + 0x100, 1, 0);
 }
 
 static VIDEO_START( wallc )
 {
-	wallc_state *state = machine.driver_data<wallc_state>();
-	state->m_bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols_flip_y,	8, 8, 32, 32);
+	bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_cols_flip_y,	8, 8, 32, 32);
 }
 
-static SCREEN_UPDATE_IND16( wallc )
+static VIDEO_UPDATE( wallc )
 {
-	wallc_state *state = screen.machine().driver_data<wallc_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 	return 0;
 }
 
 static WRITE8_HANDLER( wallc_coin_counter_w )
 {
-	coin_counter_w(space->machine(), 0,data & 2);
+	coin_counter_w(0,data & 2);
 }
 
-static ADDRESS_MAP_START( wallc_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( wallc_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(wallc_videoram_w) AM_MIRROR(0xc00) AM_BASE_MEMBER(wallc_state, m_videoram)	/* 2114, 2114 */
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(wallc_videoram_w) AM_MIRROR(0xc00) AM_BASE(&videoram)	/* 2114, 2114 */
 	AM_RANGE(0xa000, 0xa3ff) AM_RAM		/* 2114, 2114 */
 
 	AM_RANGE(0xb000, 0xb000) AM_READ_PORT("DSW1")
@@ -172,8 +155,8 @@ static ADDRESS_MAP_START( wallc_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xb000, 0xb000) AM_WRITENOP
 	AM_RANGE(0xb100, 0xb100) AM_WRITE(wallc_coin_counter_w)
 	AM_RANGE(0xb200, 0xb200) AM_WRITENOP
-	AM_RANGE(0xb500, 0xb500) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0xb600, 0xb600) AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0xb500, 0xb500) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xb600, 0xb600) AM_DEVWRITE("ay", ay8910_data_w)
 ADDRESS_MAP_END
 
 
@@ -192,46 +175,46 @@ static INPUT_PORTS_START( wallc )
 	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(50) PORT_KEYDELTA(3) PORT_REVERSE PORT_PLAYER(1)
 
 	PORT_START("DSW1")		/* b000 */
-	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )			PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPNAME( 0x03, 0x01, DEF_STR( Lives ) )
 	PORT_DIPSETTING(	0x03, "5" )
 	PORT_DIPSETTING(	0x02, "4" )
 	PORT_DIPSETTING(	0x01, "3" )
 	PORT_DIPSETTING(	0x00, "2" )
-	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life) )		PORT_DIPLOCATION("SW1:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Bonus_Life) )
 	PORT_DIPSETTING(	0x0c, "100K/200K/400K/800K" )
 	PORT_DIPSETTING(	0x08, "80K/160K/320K/640K" )
 	PORT_DIPSETTING(	0x04, "60K/120K/240K/480K" )
 	PORT_DIPSETTING(	0x00, DEF_STR( Off ) )
-	PORT_DIPNAME( 0x10, 0x00, "Curve Effect" )			PORT_DIPLOCATION("SW3:1")
+	PORT_DIPNAME( 0x10, 0x00, "Curve Effect" )
 	PORT_DIPSETTING(	0x10, DEF_STR( Normal ) )
 	PORT_DIPSETTING(	0x00, "More" )
-	PORT_DIPNAME( 0x60, 0x60, "Timer Speed" )			PORT_DIPLOCATION("SW3:2,3")
+	PORT_DIPNAME( 0x60, 0x60, "Timer Speed" )
 	PORT_DIPSETTING(	0x60, "Slow" )
 	PORT_DIPSETTING(	0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING(	0x20, "Fast" )
 	PORT_DIPSETTING(	0x00, "Super Fast" )
-	PORT_DIPNAME( 0x80, 0x00, "Service" )				PORT_DIPLOCATION("SW3:4")
+	PORT_DIPNAME( 0x80, 0x00, "Service" )
 	PORT_DIPSETTING(	0x80, "Free Play With Level Select" )
 	PORT_DIPSETTING(	0x00, DEF_STR( Normal ) )
 
 	PORT_START("DSW2")		/* b600 */
-	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coin_A ) )			PORT_DIPLOCATION("SW2:1,2")
+	PORT_DIPNAME( 0x03, 0x00, DEF_STR( Coin_A ) )
 	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Coin_B ) )			PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPNAME( 0x0c, 0x00, DEF_STR( Coin_B ) )
 	PORT_DIPSETTING(    0x0c, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x04, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 1C_5C ) )
-	PORT_DIPNAME( 0x30, 0x00, "Coin C" )				PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPNAME( 0x30, 0x00, "Coin C" )
 	PORT_DIPSETTING(    0x30, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( 1C_2C ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( 1C_5C ) )
-	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW2:7" ) /* Shown as "Unused" in the manual */
-	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW2:8" ) /* Shown as "Unused" in the manual */
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -256,7 +239,7 @@ static DRIVER_INIT( wallc )
 	UINT8 c;
 	UINT32 i;
 
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	for (i=0; i<0x2000*2; i++)
 	{
@@ -271,7 +254,7 @@ static DRIVER_INIT( wallca )
 	UINT8 c;
 	UINT32 i;
 
-	UINT8 *ROM = machine.region("maincpu")->base();
+	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	for (i=0; i<0x4000; i++)
 	{
@@ -292,31 +275,32 @@ static DRIVER_INIT( wallca )
 
 
 
-static MACHINE_CONFIG_START( wallc, wallc_state )
+static MACHINE_DRIVER_START( wallc )
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 12288000 / 4)	/* 3.072 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(wallc_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, 12288000 / 4)	/* 3.072 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(wallc_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(wallc)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 32*8-1)
 
-	MCFG_GFXDECODE(wallc)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(wallc)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_PALETTE_INIT(wallc)
-	MCFG_VIDEO_START(wallc)
+	MDRV_PALETTE_INIT(wallc)
+	MDRV_VIDEO_START(wallc)
+	MDRV_VIDEO_UPDATE(wallc)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("aysnd", AY8910, 12288000 / 8)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ay", AY8910, 12288000 / 8)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 

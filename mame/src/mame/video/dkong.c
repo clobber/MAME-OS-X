@@ -7,7 +7,7 @@
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "video/resnet.h"
 #include "includes/dkong.h"
 #include "machine/latch8.h"
@@ -140,14 +140,14 @@ static const res_net_info radarscp_net_bck_info =
 };
 
 /*
-    radarscp1 interface
+    radarsc1 interface
 
     All outputs are open-collector. They are followed by inverters which
     drive the resistor network. All outputs are routed through a complimentary
     darlington.
 */
 
-static const res_net_info radarscp1_net_info =
+static const res_net_info radarsc1_net_info =
 {
 	RES_NET_VCC_5V | RES_NET_VBIAS_5V | RES_NET_VIN_TTL_OUT | RES_NET_MONITOR_SANYO_EZV20,
 	{
@@ -201,11 +201,11 @@ static const res_net_info radarscp_grid_net_info =
 
 PALETTE_INIT( dkong2b)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	rgb_t	*rgb;
 	int i;
 
-	rgb = compute_res_net_all(machine, color_prom, &dkong_decode_info, &dkong_net_info);
+	rgb = compute_res_net_all(color_prom, &dkong_decode_info, &dkong_net_info);
 	palette_set_colors(machine, 0, rgb, 256);
 
 	/* Now treat tri-state black background generation */
@@ -220,18 +220,18 @@ PALETTE_INIT( dkong2b)
 			palette_set_color_rgb(machine,i,r,g,b);
 		}
 
-	palette_normalize_range(machine.palette, 0, 255, 0, 255);
+	palette_normalize_range(machine->palette, 0, 255, 0, 255);
 
 	color_prom += 512;
 	/* color_prom now points to the beginning of the character color codes */
-	state->m_color_codes = color_prom;	/* we'll need it later */
-	auto_free(machine, rgb);
+	state->color_codes = color_prom;	/* we'll need it later */
+	free(rgb);
 }
 
 #ifdef UNUSED_FUNCTION
 PALETTE_INIT( dkong4b )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	int i;
 	int r,g,b;
 
@@ -260,17 +260,17 @@ PALETTE_INIT( dkong4b )
 			palette_set_color_rgb(machine,i,r,g,b);
 		}
 
-	palette_normalize_range(machine.palette, 0, 255, 0, 255);
+	palette_normalize_range(machine->palette, 0, 255, 0, 255);
 
 	color_prom += 256;
 	/* color_prom now points to the beginning of the character color codes */
-	state->m_color_codes = color_prom;	/* we'll need it later */
+	state->color_codes = color_prom;	/* we'll need it later */
 }
 #endif
 
 PALETTE_INIT( radarscp )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	int i;
 	int r,g,b;
 
@@ -325,16 +325,16 @@ PALETTE_INIT( radarscp )
 		palette_set_color_rgb(machine,RADARSCP_GRID_COL_OFFSET + i,r,g,b);
 	}
 
-	palette_normalize_range(machine.palette, 0, RADARSCP_GRID_COL_OFFSET+7, 0, 255);
+	palette_normalize_range(machine->palette, 0, RADARSCP_GRID_COL_OFFSET+7, 0, 255);
 
 	color_prom += 256;
 	/* color_prom now points to the beginning of the character color codes */
-	state->m_color_codes = color_prom;	/* we'll need it later */
+	state->color_codes = color_prom;	/* we'll need it later */
 }
 
-PALETTE_INIT( radarscp1 )
+PALETTE_INIT( radarsc1 )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	int i;
 	int r,g,b;
 
@@ -342,11 +342,11 @@ PALETTE_INIT( radarscp1 )
 	{
 
 		/* red component */
-		r = compute_res_net( color_prom[512], 0, &radarscp1_net_info );
+		r = compute_res_net( color_prom[512], 0, &radarsc1_net_info );
 		/* green component */
-		g = compute_res_net( color_prom[256], 1, &radarscp1_net_info );
+		g = compute_res_net( color_prom[256], 1, &radarsc1_net_info );
 		/* blue component */
-		b = compute_res_net( color_prom[0], 2, &radarscp1_net_info );
+		b = compute_res_net( color_prom[0], 2, &radarsc1_net_info );
 
 		palette_set_color_rgb(machine,i,r,g,b);
 		color_prom++;
@@ -357,9 +357,9 @@ PALETTE_INIT( radarscp1 )
 	for (i=0;i<256;i++)
 		if ( (i & 0x03) == 0x00 )  /*  NOR => CS=1 => Tristate => real black */
 		{
-			r = compute_res_net( 0, 0, &radarscp1_net_info );
-			g = compute_res_net( 0, 1, &radarscp1_net_info );
-			b = compute_res_net( 0, 2, &radarscp1_net_info );
+			r = compute_res_net( 0, 0, &radarsc1_net_info );
+			g = compute_res_net( 0, 1, &radarsc1_net_info );
+			b = compute_res_net( 0, 2, &radarsc1_net_info );
 			palette_set_color_rgb(machine,i,r,g,b);
 		}
 
@@ -388,11 +388,11 @@ PALETTE_INIT( radarscp1 )
 
 		palette_set_color_rgb(machine,RADARSCP_GRID_COL_OFFSET + i,r,g,b);
 	}
-	palette_normalize_range(machine.palette, 0, RADARSCP_GRID_COL_OFFSET+7, 0, 255);
+	palette_normalize_range(machine->palette, 0, RADARSCP_GRID_COL_OFFSET+7, 0, 255);
 
 	color_prom += 512;
 	/* color_prom now points to the beginning of the character color codes */
-	state->m_color_codes = color_prom;	/* we'll need it later */
+	state->color_codes = color_prom;	/* we'll need it later */
 }
 
 
@@ -434,34 +434,34 @@ PALETTE_INIT( radarscp1 )
 
 PALETTE_INIT( dkong3 )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	rgb_t	*rgb;
 
-	rgb = compute_res_net_all(machine, color_prom, &dkong3_decode_info, &dkong3_net_info);
+	rgb = compute_res_net_all(color_prom, &dkong3_decode_info, &dkong3_net_info);
 	palette_set_colors(machine, 0, rgb, 256);
-	palette_normalize_range(machine.palette, 0, 255, 0, 255);
-	auto_free(machine, rgb);
+	palette_normalize_range(machine->palette, 0, 255, 0, 255);
+	free(rgb);
 
 	color_prom += 1024;
 	/* color_prom now points to the beginning of the character color codes */
-	state->m_color_codes = color_prom;	/* we'll need it later */
+	state->color_codes = color_prom;	/* we'll need it later */
 }
 
 static TILE_GET_INFO( dkong_bg_tile_info )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
-	int code = state->m_video_ram[tile_index] + 256 * state->m_gfx_bank;
-	int color = (state->m_color_codes[tile_index % 32 + 32 * (tile_index / 32 / 4)] & 0x0f) + 0x10 * state->m_palette_bank;
+	dkong_state *state = (dkong_state *)machine->driver_data;
+	int code = state->video_ram[tile_index] + 256 * state->gfx_bank;
+	int color = (state->color_codes[tile_index % 32 + 32 * (tile_index / 32 / 4)] & 0x0f) + 0x10 * state->palette_bank;
 
 	SET_TILE_INFO(0, code, color, 0);
 }
 
-static TILE_GET_INFO( radarscp1_bg_tile_info )
+static TILE_GET_INFO( radarsc1_bg_tile_info )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
-	int code = state->m_video_ram[tile_index] + 256 * state->m_gfx_bank;
-	int color = (state->m_color_codes[tile_index % 32] & 0x0f);
-	color = color | (state->m_palette_bank<<4);
+	dkong_state *state = (dkong_state *)machine->driver_data;
+	int code = state->video_ram[tile_index] + 256 * state->gfx_bank;
+	int color = (state->color_codes[tile_index % 32] & 0x0f);
+	color = color | (state->palette_bank<<4);
 
 	SET_TILE_INFO(0, code, color, 0);
 }
@@ -474,98 +474,98 @@ static TILE_GET_INFO( radarscp1_bg_tile_info )
 
 WRITE8_HANDLER( dkong_videoram_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	if (state->m_video_ram[offset] != data)
+	if (state->video_ram[offset] != data)
 	{
-		state->m_video_ram[offset] = data;
-		state->m_bg_tilemap->mark_tile_dirty(offset);
+		state->video_ram[offset] = data;
+		tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 	}
 }
 
 WRITE8_HANDLER( dkongjr_gfxbank_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	if (state->m_gfx_bank != (data & 0x01))
+	if (state->gfx_bank != (data & 0x01))
 	{
-		state->m_gfx_bank = data & 0x01;
-		state->m_bg_tilemap->mark_all_dirty();
+		state->gfx_bank = data & 0x01;
+		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
 	}
 }
 
 WRITE8_HANDLER( dkong3_gfxbank_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	if (state->m_gfx_bank != (~data & 0x01))
+	if (state->gfx_bank != (~data & 0x01))
 	{
-		state->m_gfx_bank = ~data & 0x01;
-		state->m_bg_tilemap->mark_all_dirty();
+		state->gfx_bank = ~data & 0x01;
+		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
 	}
 }
 
 WRITE8_HANDLER( dkong_palettebank_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 	int newbank;
 
-	newbank = state->m_palette_bank;
+	newbank = state->palette_bank;
 
 	if (data & 1)
 		newbank |= 1 << offset;
 	else
 		newbank &= ~(1 << offset);
 
-	if (state->m_palette_bank != newbank)
+	if (state->palette_bank != newbank)
 	{
-		state->m_palette_bank = newbank;
-		state->m_bg_tilemap->mark_all_dirty();
+		state->palette_bank = newbank;
+		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
 	}
 }
 
 WRITE8_HANDLER( radarscp_grid_enable_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	state->m_grid_on = data & 0x01;
+	state->grid_on = data & 0x01;
 }
 
 WRITE8_HANDLER( radarscp_grid_color_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	state->m_grid_col = (data & 0x07) ^ 0x07;
-	/* popmessage("Gridcol: %d", state->m_grid_col); */
+	state->grid_col = (data & 0x07) ^ 0x07;
+	/* popmessage("Gridcol: %d", state->grid_col); */
 }
 
 WRITE8_HANDLER( dkong_flipscreen_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	state->m_flip = ~data & 0x01;
+	state->flip = ~data & 0x01;
 }
 
 WRITE8_HANDLER( dkong_spritebank_w )
 {
-	dkong_state *state = space->machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)space->machine->driver_data;
 
-	state->m_sprite_bank = data & 0x01;
+	state->sprite_bank = data & 0x01;
 }
 
 /***************************************************************************
 
-  Draw the game screen in the given bitmap_ind16.
+  Draw the game screen in the given bitmap_t.
 
 ***************************************************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, UINT32 mask_bank, UINT32 shift_bits)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT32 mask_bank, UINT32 shift_bits)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	int offs;
 	int scanline_vf;	/* buffering scanline including flip */
-	int scanline_vfc;	/* line buffering scanline including flip - this is the cached scanline_vf */
-	int scanline;		/* current scanline */
+	int scanline_vfc;  		/* line buffering scanline including flip - this is the cached scanline_vf*/
+	int scanline; 		/* current scanline */
 	int add_y;
 	int add_x;
 	int num_sprt;
@@ -607,11 +607,11 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
      *
      */
 
-	scanline_vf = (cliprect.max_y - 1) & 0xFF;
-	scanline_vfc = (cliprect.max_y - 1) & 0xFF;
-	scanline = cliprect.max_y & 0xFF;
+	scanline_vf = (cliprect->max_y - 1) & 0xFF;
+	scanline_vfc = (cliprect->max_y - 1) & 0xFF;
+	scanline = cliprect->max_y & 0xFF;
 
-	if (state->m_flip)
+	if (state->flip)
 	{
 		scanline_vf ^= 0xFF;
 		scanline_vfc ^= 0xFF;
@@ -624,9 +624,9 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 		add_x = 0xF7;
 	}
 
-	for (offs = state->m_sprite_bank<<9, num_sprt=0; (num_sprt < 16) && (offs < (state->m_sprite_bank<<9) + 0x200) /* sprite_ram_size */; offs += 4)
+	for (offs = state->sprite_bank<<9, num_sprt=0; (num_sprt < 16) && (offs < (state->sprite_bank<<9) + 0x200) /* sprite_ram_size */; offs += 4)
 	{
-		int y = state->m_sprite_ram[offs];
+		int y = state->sprite_ram[offs];
 		int do_draw = (((y + add_y + 1 + scanline_vf) & 0xF0) == 0xF0) ? 1 : 0;
 
 		if (do_draw)
@@ -637,29 +637,34 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			/* has similar hardware, uses a memory mapped port to change */
 			/* palette bank, so it's limited to 16 color codes) */
 
-			int code = (state->m_sprite_ram[offs + 1] & 0x7f) + ((state->m_sprite_ram[offs + 2] & mask_bank) << shift_bits);
-			int color = (state->m_sprite_ram[offs + 2] & 0x0f) + 16 * state->m_palette_bank;
-			int flipx = state->m_sprite_ram[offs + 2] & 0x80;
-			int flipy = state->m_sprite_ram[offs + 1] & 0x80;
+			int x = state->sprite_ram[offs + 3];
 
 			/* On the real board, the x and y are read inverted after the first
              * buffer stage. This due to the fact that the 82S09 delivers complements
              * of stored data on read!
              */
 
-			int x = (state->m_sprite_ram[offs + 3] + add_x + 1) & 0xFF;
-			if (state->m_flip)
+			x = (x + add_x + 1) & 0xFF;
+			if (state->flip)
+				x ^= 0xFF;
+			y = (y + add_y + 1 + scanline_vfc) & 0x0F;
+
+			if (state->flip)
 			{
-				x = (x ^ 0xFF) - 15;
-				flipx = !flipx;
+				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+						(state->sprite_ram[offs + 1] & 0x7f) + ((state->sprite_ram[offs + 2] & mask_bank) << shift_bits),
+						(state->sprite_ram[offs + 2] & 0x0f) + 16 * state->palette_bank,
+						!(state->sprite_ram[offs + 2] & 0x80),(state->sprite_ram[offs + 1] & 0x80),
+						x-15, scanline-y,0);
 			}
-			y = scanline - ((y + add_y + 1 + scanline_vfc) & 0x0F);
-
-			drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, x, y, 0);
-
-			// wraparound
-			drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, state->m_flip ? x + 256 : x - 256, y, 0);
-			drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, x, y - 256, 0);
+			else
+			{
+				drawgfx_transpen(bitmap,cliprect,machine->gfx[1],
+						(state->sprite_ram[offs + 1] & 0x7f) + ((state->sprite_ram[offs + 2] & mask_bank) << shift_bits),
+						(state->sprite_ram[offs + 2] & 0x0f) + 16 * state->palette_bank,
+						(state->sprite_ram[offs + 2] & 0x80),(state->sprite_ram[offs + 1] & 0x80),
+						x, scanline-y,0);
+			}
 
 			num_sprt++;
 		}
@@ -684,12 +689,12 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
  * TODO: This should be part of the vblank routine
  */
 
-INLINE double CD4049(running_machine &machine, double x)
+INLINE double CD4049(running_machine *machine, double x)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 
 	if (x>0)
-		return exp(-state->m_cd4049_a * pow(x,state->m_cd4049_b));
+	 	return exp(-state->cd4049_a * pow(x,state->cd4049_b));
 	else
 		return 1.0;
 }
@@ -706,15 +711,19 @@ INLINE double CD4049(running_machine &machine, double x)
 #define dt		(1./60./(double) VTOTAL)
 #define period2 (((INT64)(PIXEL_CLOCK) * ( 33L * 68L )) / (INT32)10000000L / 3)  /*  period/2 in pixel ... */
 
-static void radarscp_step(running_machine &machine, int line_cnt)
+static void radarscp_step(running_machine *machine, int line_cnt)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
+	const device_config *dev6h = devtag_get_device(machine, "ls259.6h");
+	const device_config *devvp2 = devtag_get_device(machine, "virtual_p2");
 
 	/* Condensator is illegible in schematics for TRS2 board.
      * TRS1 board states 3.3u.
      */
 
+	static double cv1=0,cv2=0,vg1=0,vg2=0,vg3=0,cv3=0,cv4=0;
 	double vg3i;
+	static int pixelcnt = 0;
 	double diff;
 	int sig;
 
@@ -731,177 +740,178 @@ static void radarscp_step(running_machine &machine, int line_cnt)
 	if (line_cnt>=512)
 		line_cnt=512-VTOTAL;
 
-	if ( ( !(line_cnt & 0x40) && ((line_cnt+1) & 0x40) ) && (machine.rand() > RAND_MAX/2))
-		state->m_sig30Hz = (1-state->m_sig30Hz);
+	if ( ( !(line_cnt & 0x40) && ((line_cnt+1) & 0x40) ) && (mame_rand(machine) > RAND_MAX/2))
+		state->sig30Hz = (1-state->sig30Hz);
 
 	/* Now mix with SND02 (sound 2) line - on 74ls259, bit2 */
-	state->m_rflip_sig = latch8_bit2_r(state->m_dev_6h, 0) & state->m_sig30Hz;
+	state->rflip_sig = latch8_bit2_r(dev6h, 0) & state->sig30Hz;
 
-	sig = state->m_rflip_sig ^ ((line_cnt & 0x80)>>7);
+	sig = state->rflip_sig ^ ((line_cnt & 0x80)>>7);
 
-	if (state->m_hardware_type == HARDWARE_TRS01)
-		state->m_rflip_sig = !state->m_rflip_sig;
+	if (state->hardware_type == HARDWARE_TRS01)
+		state->rflip_sig = !state->rflip_sig;
 
 	if  (sig) /*  128VF */
-		diff = (0.0 - state->m_cv1);
+		diff = (0.0 - cv1);
 	else
-		diff = (3.4 - state->m_cv1);
+		diff = (3.4 - cv1);
 	diff = diff - diff*exp(0.0 - (1.0/RC1 * dt) );
-	state->m_cv1 += diff;
+	cv1 += diff;
 
-	diff = (state->m_cv1 - state->m_cv2 - state->m_vg1);
+	diff = (cv1 - cv2 - vg1);
 	diff = diff - diff*exp(0.0 - (1.0/RC2 * dt) );
-	state->m_cv2 += diff;
+	cv2 += diff;
 
-	state->m_vg1 = (state->m_cv1 - state->m_cv2)*0.9 + 0.1 * state->m_vg2;
-	state->m_vg2 = 5*CD4049(machine, state->m_vg1/5);
+	vg1 = (cv1 - cv2)*0.9 + 0.1 * vg2;
+	vg2 = 5*CD4049(machine, vg1/5);
 
 	/* on the real hardware, the gain would be 1.
      * This will not work here.
      */
-	vg3i = 0.9*state->m_vg2 + 0.1 * state->m_vg3;
-	state->m_vg3 = 5*CD4049(machine, vg3i/5);
+	vg3i = 0.9*vg2 + 0.1 * vg3;
+	vg3 = 5*CD4049(machine, vg3i/5);
 
-	state->m_blue_level = (int)(state->m_vg3/5.0*255);
+	state->blue_level = (int)(vg3/5.0*255);
 
 	/*
      * Grid signal
      *
      * Mixed with ANS line (bit 5) from Port B of 8039
      */
-	if (state->m_grid_on && latch8_bit5_r(state->m_dev_vp2, 0))
+	if (state->grid_on && latch8_bit5_r(devvp2, 0))
 	{
-		diff = (0.0 - state->m_cv3);
+		diff = (0.0 - cv3);
 		diff = diff - diff*exp(0.0 - (1.0/RC32 * dt) );
 	}
 	else
 	{
-		diff = (5.0 - state->m_cv3);
+		diff = (5.0 - cv3);
 		diff = diff - diff*exp(0.0 - (1.0/RC31 * dt) );
 	}
-	state->m_cv3 += diff;
+	cv3 += diff;
 
-	diff = (state->m_vg2 - 0.8 * state->m_cv3 - state->m_cv4);
+	diff = (vg2 - 0.8 * cv3 - cv4);
 	diff = diff - diff*exp(0.0 - (1.0/RC4 * dt) );
-	state->m_cv4 += diff;
+	cv4 += diff;
 
-	if (CD4049(machine, CD4049(machine, state->m_vg2 - state->m_cv4))>2.4/5.0) /* TTL - Level */
-		state->m_grid_sig = 0;
+	if (CD4049(machine, CD4049(machine, vg2 - cv4))>2.4/5.0) /* TTL - Level */
+		state->grid_sig = 0;
 	else
-		state->m_grid_sig = 1;
+		state->grid_sig = 1;
 
 	/* stars */
-	state->m_pixelcnt += HTOTAL;
-	if (state->m_pixelcnt > period2 )
+	pixelcnt += HTOTAL;
+	if (pixelcnt > period2 )
 	{
-		state->m_star_ff = !state->m_star_ff;
-		state->m_pixelcnt = state->m_pixelcnt - period2;
+		state->star_ff = !state->star_ff;
+		pixelcnt = pixelcnt - period2;
 	}
 
 }
 
-static void radarscp_draw_background(running_machine &machine, dkong_state *state, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void radarscp_draw_background(running_machine *machine, dkong_state *state, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	const UINT8 	*htable = NULL;
 	int 			x,y;
-	UINT8			draw_ok;
-	UINT16			*pixel;
+	UINT8 			draw_ok;
+	UINT16 			*pixel;
 
-	if (state->m_hardware_type == HARDWARE_TRS01)
-		htable = state->m_gfx4;
+	if (state->hardware_type == HARDWARE_TRS01)
+		htable = state->gfx4;
 
-	y = cliprect.min_y;
-	while (y <= cliprect.max_y)
+	y = cliprect->min_y;
+	while (y <= cliprect->max_y)
 	{
-		x = cliprect.min_x;
-		while (x <= cliprect.max_x)
+		x = cliprect->min_x;
+		while (x <= cliprect->max_x)
 		{
-			pixel = &bitmap.pix16(y, x);
+			pixel = BITMAP_ADDR16(bitmap, y, x);
 			draw_ok = !(*pixel & 0x01) && !(*pixel & 0x02);
-			if (state->m_hardware_type == HARDWARE_TRS01) /*  Check again from schematics */
-				draw_ok = draw_ok  && !((htable[ (!state->m_rflip_sig<<7) | (x>>2)] >>2) & 0x01);
+			if (state->hardware_type == HARDWARE_TRS01) /*  Check again from schematics */
+				draw_ok = draw_ok  && !((htable[ (!state->rflip_sig<<7) | (x>>2)] >>2) & 0x01);
 			if (draw_ok)
-				*pixel = *(&state->m_bg_bits.pix16(y, x));
+				*pixel = *(BITMAP_ADDR16(state->bg_bits, y, x));
 			x++;
 		}
 		y++;
 	}
 }
 
-static void radarscp_scanline(running_machine &machine, int scanline)
+static void radarscp_scanline(running_machine *machine, int scanline)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
-	const UINT8 *table = state->m_gfx3;
-	int 		table_len = state->m_gfx3_len;
+	dkong_state *state = (dkong_state *)machine->driver_data;
+	const UINT8 *table = state->gfx3;
+	int 		table_len = state->gfx3_len;
 	int 			x,y,offset;
-	UINT16			*pixel;
-	const rectangle &visarea = machine.primary_screen->visible_area();
+	UINT16 			*pixel;
+	static int		counter=0;
+	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
 
 	y = scanline;
 	radarscp_step(machine, y);
-	if (y <= visarea.min_y || y > visarea.max_y)
-		state->m_counter = 0;
-	offset = (state->m_flip ^ state->m_rflip_sig) ? 0x000 : 0x400;
+	if (y <= visarea->min_y || y > visarea->max_y)
+		counter = 0;
+	offset = (state->flip ^ state->rflip_sig) ? 0x000 : 0x400;
 	x = 0;
-	while (x < machine.primary_screen->width())
+	while (x < video_screen_get_width(machine->primary_screen))
 	{
-		pixel = &state->m_bg_bits.pix16(y, x);
-		if ((state->m_counter < table_len) && (x == 4 * (table[state->m_counter|offset] & 0x7f)))
+		pixel = BITMAP_ADDR16(state->bg_bits, y, x);
+		if ((counter < table_len) && (x == 4 * (table[counter|offset] & 0x7f)))
 		{
-			if ( state->m_star_ff && (table[state->m_counter|offset] & 0x80) )	/* star */
+			if ( state->star_ff && (table[counter|offset] & 0x80) )	/* star */
 				*pixel = RADARSCP_STAR_COL;
-			else if (state->m_grid_sig && !(table[state->m_counter|offset] & 0x80))			/* radar */
-				*pixel = RADARSCP_GRID_COL_OFFSET+state->m_grid_col;
+			else if (state->grid_sig && !(table[counter|offset] & 0x80))			/* radar */
+				*pixel = RADARSCP_GRID_COL_OFFSET+state->grid_col;
 			else
-				*pixel = RADARSCP_BCK_COL_OFFSET + state->m_blue_level;
-			state->m_counter++;
+				*pixel = RADARSCP_BCK_COL_OFFSET + state->blue_level;
+			counter++;
 		}
 		else
-			*pixel = RADARSCP_BCK_COL_OFFSET + state->m_blue_level;
+			*pixel = RADARSCP_BCK_COL_OFFSET + state->blue_level;
 		x++;
 	}
-	while ((state->m_counter < table_len) && ( x < 4 * (table[state->m_counter|offset] & 0x7f)))
-		state->m_counter++;
+	while ((counter < table_len) && ( x < 4 * (table[counter|offset] & 0x7f)))
+		counter++;
 }
 
 static TIMER_CALLBACK( scanline_callback )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	int scanline = param;
 
-	if ((state->m_hardware_type == HARDWARE_TRS02) || (state->m_hardware_type == HARDWARE_TRS01))
+	if ((state->hardware_type == HARDWARE_TRS02) || (state->hardware_type == HARDWARE_TRS01))
 		radarscp_scanline(machine, scanline);
 
 	/* update any video up to the current scanline */
-	machine.primary_screen->update_now();
+	video_screen_update_now(machine->primary_screen);
 
 	scanline = (scanline+1) % VTOTAL;
 	/* come back at the next appropriate scanline */
-	state->m_scanline_timer->adjust(machine.primary_screen->time_until_pos(scanline), scanline);
+	timer_adjust_oneshot(state->scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
 }
 
-static void check_palette(running_machine &machine)
+static void check_palette(running_machine *machine)
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 	const input_port_config *port;
 	int newset;
 
-	port = machine.port("VIDHW");
+	port = input_port_by_tag(machine->portconfig, "VIDHW");
 	if (port != NULL)
 	{
 		newset = input_port_read_direct(port);
-		if (newset != state->m_vidhw)
+		if (newset != state->vidhw)
 		{
 			const UINT8 *color_prom;
-			state->m_vidhw = newset;
+			state->vidhw = newset;
 			switch (newset)
 			{
 				case 0x00:
-					color_prom = machine.region("proms")->base();
+					color_prom = memory_region(machine, "proms");
 					PALETTE_INIT_CALL(radarscp);
 					break;
 				case 0x01:
-					color_prom = machine.region("proms")->base();
+					color_prom = memory_region(machine, "proms");
 					PALETTE_INIT_CALL(dkong2b);
 					break;
 			}
@@ -911,54 +921,54 @@ static void check_palette(running_machine &machine)
 
 static VIDEO_START( dkong_base )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 
-	state->m_cd4049_b = (log(0.0 - log(cd4049_al)) - log(0.0 - log((1.0-cd4049_al))) ) / log(cd4049_vh/cd4049_vl);
-	state->m_cd4049_a = log(0.0 - log(cd4049_al)) - state->m_cd4049_b * log(cd4049_vh);
+	state->cd4049_b = (log(0.0 - log(cd4049_al)) - log(0.0 - log((1.0-cd4049_al))) ) / log(cd4049_vh/cd4049_vl);
+	state->cd4049_a = log(0.0 - log(cd4049_al)) - state->cd4049_b * log(cd4049_vh);
 
-	state->m_gfx_bank = 0;
-	state->m_palette_bank = 0;
-	state->m_sprite_bank = 0;
-	state->m_vidhw = -1;
+	state->gfx_bank = 0;
+	state->palette_bank = 0;
+	state->sprite_bank = 0;
+	state->vidhw = -1;
 
-	state->save_item(NAME(state->m_gfx_bank));
-	state->save_item(NAME(state->m_palette_bank));
-	state->save_item(NAME(state->m_sprite_bank));
-	state->save_item(NAME(state->m_grid_on));
+	state_save_register_global(machine, state->gfx_bank);
+	state_save_register_global(machine, state->palette_bank);
+	state_save_register_global(machine, state->sprite_bank);
+	state_save_register_global(machine, state->grid_on);
 
-	state->save_item(NAME(state->m_grid_col));
-	state->save_item(NAME(state->m_flip));
+	state_save_register_global(machine, state->grid_col);
+	state_save_register_global(machine, state->flip);
 }
 
 VIDEO_START( dkong )
 {
-	dkong_state *state = machine.driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)machine->driver_data;
 
 	VIDEO_START_CALL(dkong_base);
 
-	state->m_scanline_timer = machine.scheduler().timer_alloc(FUNC(scanline_callback));
-	state->m_scanline_timer->adjust(machine.primary_screen->time_until_pos(0));
+	state->scanline_timer = timer_alloc(machine, scanline_callback, NULL);
+	timer_adjust_oneshot(state->scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
 
-	switch (state->m_hardware_type)
+	switch (state->hardware_type)
 	{
 		case HARDWARE_TRS02:
-			machine.primary_screen->register_screen_bitmap(state->m_bg_bits);
-			state->m_gfx3 = machine.region("gfx3")->base();
-			state->m_gfx3_len = machine.region("gfx3")->bytes();
+			state->bg_bits = video_screen_auto_bitmap_alloc(machine->primary_screen);
+			state->gfx3 = memory_region(machine, "gfx3");
+			state->gfx3_len = memory_region_length(machine, "gfx3");
 		    /* fall through */
 		case HARDWARE_TKG04:
 		case HARDWARE_TKG02:
-			state->m_bg_tilemap = tilemap_create(machine, dkong_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
-			state->m_bg_tilemap->set_scrolldx(0, 128);
+			state->bg_tilemap = tilemap_create(machine, dkong_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+			tilemap_set_scrolldx(state->bg_tilemap, 0, 128);
 			break;
 		case HARDWARE_TRS01:
-			state->m_bg_tilemap = tilemap_create(machine, radarscp1_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
-			state->m_bg_tilemap->set_scrolldx(0, 128);
+			state->bg_tilemap = tilemap_create(machine, radarsc1_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+			tilemap_set_scrolldx(state->bg_tilemap, 0, 128);
 
-			machine.primary_screen->register_screen_bitmap(state->m_bg_bits);
-			state->m_gfx4 = machine.region("gfx4")->base();
-			state->m_gfx3 = machine.region("gfx3")->base();
-			state->m_gfx3_len = machine.region("gfx3")->bytes();
+			state->bg_bits = video_screen_auto_bitmap_alloc(machine->primary_screen);
+			state->gfx4 = memory_region(machine, "gfx4");
+			state->gfx3 = memory_region(machine, "gfx3");
+			state->gfx3_len = memory_region_length(machine, "gfx3");
 
 			break;
 		default:
@@ -966,27 +976,27 @@ VIDEO_START( dkong )
 	}
 }
 
-SCREEN_UPDATE_IND16( dkong )
+VIDEO_UPDATE( dkong )
 {
-	dkong_state *state = screen.machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)screen->machine->driver_data;
 
-	screen.machine().tilemap().set_flip_all(state->m_flip ? TILEMAP_FLIPX | TILEMAP_FLIPY : 0);
-	state->m_bg_tilemap->set_scrollx(0, state->m_flip ?  0 : 0);
-	state->m_bg_tilemap->set_scrolly(0, state->m_flip ? -8 : 0);
+	tilemap_set_flip_all(screen->machine, state->flip ? TILEMAP_FLIPX | TILEMAP_FLIPY : 0);
+	tilemap_set_scrollx(state->bg_tilemap, 0, state->flip ?  0 : 0);
+	tilemap_set_scrolly(state->bg_tilemap, 0, state->flip ? -8 : 0);
 
-	switch (state->m_hardware_type)
+	switch (state->hardware_type)
 	{
 		case HARDWARE_TKG02:
 		case HARDWARE_TKG04:
-			check_palette(screen.machine());
-			state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-			draw_sprites(screen.machine(), bitmap, cliprect, 0x40, 1);
+			check_palette(screen->machine);
+			tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+			draw_sprites(screen->machine, bitmap, cliprect, 0x40, 1);
 			break;
 		case HARDWARE_TRS01:
 		case HARDWARE_TRS02:
-			state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
-			draw_sprites(screen.machine(), bitmap, cliprect, 0x40, 1);
-			radarscp_draw_background(screen.machine(), state, bitmap, cliprect);
+			tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
+			draw_sprites(screen->machine, bitmap, cliprect, 0x40, 1);
+			radarscp_draw_background(screen->machine, state, bitmap, cliprect);
 			break;
 		default:
 			fatalerror("Invalid hardware type in dkong_video_update");
@@ -994,35 +1004,35 @@ SCREEN_UPDATE_IND16( dkong )
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( pestplce )
+VIDEO_UPDATE( pestplce )
 {
-	dkong_state *state = screen.machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)screen->machine->driver_data;
 	int offs;
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 
 	/* Draw the sprites. */
-	for (offs = 0;offs < state->m_sprite_ram_size;offs += 4)
+	for (offs = 0;offs < state->sprite_ram_size;offs += 4)
 	{
-		if (state->m_sprite_ram[offs])
+		if (state->sprite_ram[offs])
 		{
-			drawgfx_transpen(bitmap,cliprect,screen.machine().gfx[1],
-					state->m_sprite_ram[offs + 2],
-					(state->m_sprite_ram[offs + 1] & 0x0f) + 16 * state->m_palette_bank,
-					state->m_sprite_ram[offs + 1] & 0x80,state->m_sprite_ram[offs + 1] & 0x40,
-					state->m_sprite_ram[offs + 3] - 8,240 - state->m_sprite_ram[offs] + 8,0);
+			drawgfx_transpen(bitmap,cliprect,screen->machine->gfx[1],
+					state->sprite_ram[offs + 2],
+					(state->sprite_ram[offs + 1] & 0x0f) + 16 * state->palette_bank,
+					state->sprite_ram[offs + 1] & 0x80,state->sprite_ram[offs + 1] & 0x40,
+					state->sprite_ram[offs + 3] - 8,240 - state->sprite_ram[offs] + 8,0);
 		}
 	}
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( spclforc )
+VIDEO_UPDATE( spclforc )
 {
-	dkong_state *state = screen.machine().driver_data<dkong_state>();
+	dkong_state *state = (dkong_state *)screen->machine->driver_data;
 
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 
 	/* it uses sprite_ram[offs + 2] & 0x10 for sprite bank */
-	draw_sprites(screen.machine(), bitmap, cliprect, 0x10, 3);
+	draw_sprites(screen->machine, bitmap, cliprect, 0x10, 3);
 	return 0;
 }

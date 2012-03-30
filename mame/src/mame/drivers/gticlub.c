@@ -218,89 +218,89 @@ Hang Pilot (uses an unknown but similar video board)                12W         
 
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "cpu/powerpc/ppc.h"
 #include "cpu/sharc/sharc.h"
 #include "machine/konppc.h"
-#include "machine/adc1038.h"
-#include "machine/k056230.h"
-#include "machine/k033906.h"
+#include "machine/konamiic.h"
 #include "sound/rf5c400.h"
-#include "sound/k056800.h"
 #include "video/voodoo.h"
 #include "video/gticlub.h"
-#include "video/konicdev.h"
-
 #include "rendlay.h"
 
-class gticlub_state : public driver_device
-{
-public:
-	gticlub_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+static UINT32 *work_ram;
 
-	UINT32 *m_work_ram;
-	UINT32 *m_sharc_dataram_0;
-	UINT32 *m_sharc_dataram_1;
-};
+UINT8 gticlub_led_reg0;
+UINT8 gticlub_led_reg1;
+
+int K001604_vh_start(running_machine *machine, int chip);
+void K001604_draw_front_layer(int chip, bitmap_t *bitmap, const rectangle *cliprect);
+void K001604_draw_back_layer(int chip, bitmap_t *bitmap, const rectangle *cliprect);
+READ32_HANDLER(K001604_tile_r);
+READ32_HANDLER(K001604_char_r);
+WRITE32_HANDLER(K001604_tile_w);
+WRITE32_HANDLER(K001604_char_w);
+WRITE32_HANDLER(K001604_reg_w);
+READ32_HANDLER(K001604_reg_r);
+
 
 
 static WRITE32_HANDLER( paletteram32_w )
 {
-	COMBINE_DATA(&space->machine().generic.paletteram.u32[offset]);
-	data = space->machine().generic.paletteram.u32[offset];
-	palette_set_color_rgb(space->machine(), offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
+	COMBINE_DATA(&paletteram32[offset]);
+	data = paletteram32[offset];
+	palette_set_color_rgb(space->machine, offset, pal5bit(data >> 10), pal5bit(data >> 5), pal5bit(data >> 0));
 }
 
-static void voodoo_vblank_0(device_t *device, int param)
+static void voodoo_vblank_0(const device_config *device, int param)
 {
-	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_IRQ0, param ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_IRQ0, param ? ASSERT_LINE : CLEAR_LINE);
 }
 
-static void voodoo_vblank_1(device_t *device, int param)
+static void voodoo_vblank_1(const device_config *device, int param)
 {
-	cputag_set_input_line(device->machine(), "maincpu", INPUT_LINE_IRQ1, param ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_IRQ1, param ? ASSERT_LINE : CLEAR_LINE);
 }
 
-static READ32_HANDLER( gticlub_k001604_tile_r )
+static VIDEO_START( hangplt )
 {
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	return k001604_tile_r(k001604, offset, mem_mask);
+	K001604_vh_start(machine, 0);
+	K001604_vh_start(machine, 1);
 }
 
-static WRITE32_HANDLER( gticlub_k001604_tile_w )
+
+static VIDEO_UPDATE( hangplt )
 {
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	k001604_tile_w(k001604, offset, data, mem_mask);
+	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]);
+
+	if (strcmp(screen->tag, "lscreen") == 0)
+	{
+		const device_config *voodoo = devtag_get_device(screen->machine, "voodoo0");
+
+	//  K001604_draw_back_layer(bitmap, cliprect);
+
+		voodoo_update(voodoo, bitmap, cliprect);
+
+		K001604_draw_front_layer(0, bitmap, cliprect);
+	}
+	else if (strcmp(screen->tag, "rscreen") == 0)
+	{
+		const device_config *voodoo = devtag_get_device(screen->machine, "voodoo1");
+
+	//  K001604_draw_back_layer(bitmap, cliprect);
+
+		voodoo_update(voodoo, bitmap, cliprect);
+
+		K001604_draw_front_layer(1, bitmap, cliprect);
+	}
+
+	draw_7segment_led(bitmap, 3, 3, gticlub_led_reg0);
+	draw_7segment_led(bitmap, 9, 3, gticlub_led_reg1);
+
+	return 0;
 }
-
-
-static READ32_HANDLER( gticlub_k001604_char_r )
-{
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	return k001604_char_r(k001604, offset, mem_mask);
-}
-
-static WRITE32_HANDLER( gticlub_k001604_char_w )
-{
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	k001604_char_w(k001604, offset, data, mem_mask);
-}
-
-static READ32_HANDLER( gticlub_k001604_reg_r )
-{
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	return k001604_reg_r(k001604, offset, mem_mask);
-}
-
-static WRITE32_HANDLER( gticlub_k001604_reg_w )
-{
-	device_t *k001604 = space->machine().device(get_cgboard_id() ? "k001604_2" : "k001604_1");
-	k001604_reg_w(k001604, offset, data, mem_mask);
-}
-
 
 /******************************************************************/
 
@@ -318,21 +318,159 @@ static const eeprom_interface eeprom_intf =
 	0				/* reset_delay */
 };
 
+static void eeprom_handler(running_machine *machine, mame_file *file, int read_or_write)
+{
+	if (read_or_write)
+	{
+		if (file)
+		{
+			eeprom_save(file);
+		}
+	}
+	else
+	{
+		eeprom_init(machine, &eeprom_intf);
+		if (file)
+		{
+			eeprom_load(file);
+		}
+		else
+		{
+			// set default eeprom
+			UINT8 eepdata[0x200];
+			memset(eepdata, 0xff, 0x200);
+
+			if (mame_stricmp(machine->gamedrv->name, "slrasslt") == 0)
+			{
+				// magic number
+				eepdata[0x4] = 0x96;
+				eepdata[0x5] = 0x72;
+			}
+
+			eeprom_set_data(eepdata, 0x200);
+		}
+	}
+}
+
+static int adc1038_cycle;
+static int adc1038_clk;
+static int adc1038_adr;
+static int adc1038_data_in;
+static int adc1038_data_out;
+static int adc1038_adc_data;
+static int adc1038_sars;
+static int adc1038_gticlub_hack;
+
+static void adc1038_init(running_machine *machine)
+{
+	adc1038_cycle = 0;
+	adc1038_clk = 0;
+	adc1038_adr = 0;
+	adc1038_data_in = 0;
+	adc1038_data_out = 0;
+	adc1038_adc_data = 0;
+	adc1038_sars = 1;
+	adc1038_gticlub_hack = (mame_stricmp(machine->gamedrv->name, "gticlub") == 0 ||
+		mame_stricmp(machine->gamedrv->name, "gticlubj") == 0) ? 1 : 0;
+}
+
+static int adc1038_do_r(void)
+{
+	//printf("ADC DO\n");
+	return adc1038_data_out & 1;
+}
+
+static void adc1038_di_w(int bit)
+{
+	adc1038_data_in = bit & 1;
+}
+
+static void adc1038_clk_w(running_machine *machine, int bit)
+{
+	// GTI Club doesn't sync on SARS
+	if (adc1038_gticlub_hack)
+	{
+		if (adc1038_clk == 0 && bit == 0)
+		{
+			adc1038_cycle = 0;
+
+			switch (adc1038_adr)
+			{
+				case 0: adc1038_adc_data = input_port_read(machine, "AN0"); break;
+				case 1: adc1038_adc_data = input_port_read(machine, "AN1"); break;
+				case 2: adc1038_adc_data = input_port_read(machine, "AN2"); break;
+				case 3: adc1038_adc_data = input_port_read(machine, "AN3"); break;
+				case 4: adc1038_adc_data = 0x000; break;
+				case 5: adc1038_adc_data = 0x000; break;
+				case 6: adc1038_adc_data = 0x000; break;
+				case 7: adc1038_adc_data = 0x000; break;
+			}
+		}
+	}
+
+	if (bit == 1)
+	{
+		//printf("ADC CLK, DI = %d, cycle = %d\n", adc1038_data_in, adc1038_cycle);
+
+		if (adc1038_cycle == 0)			// A2
+		{
+			adc1038_adr = 0;
+			adc1038_adr |= (adc1038_data_in << 2);
+		}
+		else if (adc1038_cycle == 1)	// A1
+		{
+			adc1038_adr |= (adc1038_data_in << 1);
+		}
+		else if (adc1038_cycle == 2)	// A0
+		{
+			adc1038_adr |= (adc1038_data_in << 0);
+		}
+
+		adc1038_data_out = (adc1038_adc_data & 0x200) ? 1 : 0;
+		adc1038_adc_data <<= 1;
+
+		adc1038_cycle++;
+	}
+
+	adc1038_clk = bit;
+}
+
+static int adc1038_sars_r(running_machine *machine)
+{
+	adc1038_cycle = 0;
+
+	switch (adc1038_adr)
+	{
+		case 0: adc1038_adc_data = input_port_read(machine, "AN0"); break;
+		case 1: adc1038_adc_data = input_port_read(machine, "AN1"); break;
+		case 2: adc1038_adc_data = input_port_read(machine, "AN2"); break;
+		case 3: adc1038_adc_data = input_port_read(machine, "AN3"); break;
+		case 4: adc1038_adc_data = 0x000; break;
+		case 5: adc1038_adc_data = 0x000; break;
+		case 6: adc1038_adc_data = 0x000; break;
+		case 7: adc1038_adc_data = 0x000; break;
+	}
+
+	adc1038_data_out = (adc1038_adc_data & 0x200) ? 1 : 0;
+	adc1038_adc_data <<= 1;
+
+	adc1038_sars ^= 1;
+	return adc1038_sars;
+}
+
 static READ8_HANDLER( sysreg_r )
 {
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3" };
-	device_t *adc1038 = space->machine().device("adc1038");
-	eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
 
 	switch (offset)
 	{
 		case 0:
 		case 1:
 		case 3:
-			return input_port_read(space->machine(), portnames[offset]);
+			return input_port_read(space->machine, portnames[offset]);
 
 		case 2:
-			return adc1038_sars_read(adc1038) << 7;
+			return adc1038_sars_r(space->machine) << 7;
 
 		case 4:
 		{
@@ -342,8 +480,8 @@ static READ8_HANDLER( sysreg_r )
 			// a = ADC readout
 			// e = EEPROM data out
 
-			UINT32 eeprom_bit = (eeprom->read_bit() << 1);
-			UINT32 adc_bit = (adc1038_do_read(adc1038) << 2);
+			UINT32 eeprom_bit = (eeprom_read_bit() << 1);
+			UINT32 adc_bit = (adc1038_do_r() << 2);
 			return (eeprom_bit | adc_bit);
 		}
 
@@ -356,116 +494,178 @@ static READ8_HANDLER( sysreg_r )
 
 static WRITE8_HANDLER( sysreg_w )
 {
-	device_t *adc1038 = space->machine().device("adc1038");
-	eeprom_device *eeprom = space->machine().device<eeprom_device>("eeprom");
-
 	switch (offset)
 	{
 		case 0:
+			gticlub_led_reg0 = data;
+			break;
+
 		case 1:
-			gticlub_led_setreg(offset, data);
+			gticlub_led_reg1 = data;
 			break;
 
 		case 3:
-			eeprom->write_bit((data & 0x01) ? 1 : 0);
-			eeprom->set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
-			eeprom->set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
+			eeprom_write_bit((data & 0x01) ? 1 : 0);
+			eeprom_set_clock_line((data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
+			eeprom_set_cs_line((data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 4:
 			if (data & 0x80)	/* CG Board 1 IRQ Ack */
-				cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_IRQ1, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ1, CLEAR_LINE);
 
 			if (data & 0x40)	/* CG Board 0 IRQ Ack */
-				cputag_set_input_line(space->machine(), "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ0, CLEAR_LINE);
 
-			adc1038_di_write(adc1038, (data >> 0) & 1);
-			adc1038_clk_write(adc1038, (data >> 1) & 1);
+			adc1038_di_w((data >> 0) & 1);
+			adc1038_clk_w(space->machine, (data >> 1) & 1);
 
 			set_cgboard_id((data >> 4) & 0x3);
 			break;
 	}
 }
 
+/* Konami K056230 (LANC) */
+READ8_HANDLER( K056230_r )
+{
+	switch (offset)
+	{
+		case 0:		// Status register
+		{
+			return 0x08;
+		}
+	}
+
+//  mame_printf_debug("K056230_r: %d at %08X\n", offset, cpu_get_pc(space->cpu));
+
+	return 0;
+}
+
+static TIMER_CALLBACK( network_irq_clear )
+{
+	cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ2, CLEAR_LINE);
+}
+
+WRITE8_HANDLER( K056230_w )
+{
+	switch (offset)
+	{
+		case 0:		// Mode register
+		{
+			break;
+		}
+		case 1:		// Control register
+		{
+			if (data & 0x20)
+			{
+				// Thunder Hurricane breaks otherwise...
+				if (mame_stricmp(space->machine->gamedrv->name, "thunderh") != 0)
+				{
+					cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ2, ASSERT_LINE);
+					timer_set(space->machine, ATTOTIME_IN_USEC(10), NULL, 0, network_irq_clear);
+				}
+			}
+//          else
+//              cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_IRQ2, CLEAR_LINE);
+			break;
+		}
+		case 2:		// Sub ID register
+		{
+			break;
+		}
+	}
+//  mame_printf_debug("K056230_w: %d, %02X at %08X\n", offset, data, cpu_get_pc(space->cpu));
+}
+
+UINT32 *lanc_ram;
+READ32_HANDLER( lanc_ram_r )
+{
+//  mame_printf_debug("LANC_RAM_r: %08X, %08X at %08X\n", offset, mem_mask, cpu_get_pc(space->cpu));
+	return lanc_ram[offset & 0x7ff];
+}
+
+WRITE32_HANDLER( lanc_ram_w )
+{
+//  mame_printf_debug("LANC_RAM_w: %08X, %08X, %08X at %08X\n", data, offset, mem_mask, cpu_get_pc(space->cpu));
+	COMBINE_DATA(lanc_ram + (offset & 0x7ff));
+}
+
 /******************************************************************/
 
 static MACHINE_START( gticlub )
 {
-	gticlub_state *state = machine.driver_data<gticlub_state>();
-
 	/* set conservative DRC options */
-	ppcdrc_set_options(machine.device("maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
+	ppcdrc_set_options(cputag_get_cpu(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	ppcdrc_add_fastram(machine.device("maincpu"), 0x00000000, 0x000fffff, FALSE, state->m_work_ram);
+	ppcdrc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x000fffff, FALSE, work_ram);
 }
 
-static ADDRESS_MAP_START( gticlub_map, AS_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_BASE_MEMBER(gticlub_state, m_work_ram)		/* Work RAM */
-	AM_RANGE(0x74000000, 0x740000ff) AM_READWRITE(gticlub_k001604_reg_r, gticlub_k001604_reg_w)
-	AM_RANGE(0x74010000, 0x7401ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x74020000, 0x7403ffff) AM_READWRITE(gticlub_k001604_tile_r, gticlub_k001604_tile_w)
-	AM_RANGE(0x74040000, 0x7407ffff) AM_READWRITE(gticlub_k001604_char_r, gticlub_k001604_char_w)
+static ADDRESS_MAP_START( gticlub_map, ADDRESS_SPACE_PROGRAM, 32 )
+	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_BASE(&work_ram)		/* Work RAM */
+	AM_RANGE(0x74000000, 0x740000ff) AM_READWRITE(K001604_reg_r, K001604_reg_w)
+	AM_RANGE(0x74010000, 0x7401ffff) AM_RAM_WRITE(paletteram32_w) AM_BASE(&paletteram32)
+	AM_RANGE(0x74020000, 0x7403ffff) AM_READWRITE(K001604_tile_r, K001604_tile_w)
+	AM_RANGE(0x74040000, 0x7407ffff) AM_READWRITE(K001604_char_r, K001604_char_w)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)
 	AM_RANGE(0x78040000, 0x7804000f) AM_READWRITE(K001006_0_r, K001006_0_w)
 	AM_RANGE(0x78080000, 0x7808000f) AM_READWRITE(K001006_1_r, K001006_1_w)
 	AM_RANGE(0x780c0000, 0x780c0003) AM_READWRITE(cgboard_dsp_comm_r_ppc, cgboard_dsp_comm_w_ppc)
 	AM_RANGE(0x7e000000, 0x7e003fff) AM_READWRITE8(sysreg_r, sysreg_w, 0xffffffff)
-	AM_RANGE(0x7e008000, 0x7e009fff) AM_DEVREADWRITE8("k056230", k056230_r, k056230_w, 0xffffffff)
-	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_DEVREADWRITE("k056230", lanc_ram_r, lanc_ram_w)
-	AM_RANGE(0x7e00c000, 0x7e00c007) AM_DEVWRITE("k056800", k056800_host_w)
-	AM_RANGE(0x7e00c000, 0x7e00c007) AM_DEVREAD("k056800", k056800_host_r)		// Hang Pilot
-	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_DEVREAD("k056800", k056800_host_r)
+	AM_RANGE(0x7e008000, 0x7e009fff) AM_READWRITE8(K056230_r, K056230_w, 0xffffffff)
+	AM_RANGE(0x7e00a000, 0x7e00bfff) AM_READWRITE(lanc_ram_r, lanc_ram_w) AM_BASE(&lanc_ram)
+	AM_RANGE(0x7e00c000, 0x7e00c007) AM_WRITE(K056800_host_w)
+	AM_RANGE(0x7e00c000, 0x7e00c007) AM_READ(K056800_host_r)		// Hang Pilot
+	AM_RANGE(0x7e00c008, 0x7e00c00f) AM_READ(K056800_host_r)
 	AM_RANGE(0x7f000000, 0x7f3fffff) AM_ROM AM_REGION("user2", 0)	/* Data ROM */
-	AM_RANGE(0x7f800000, 0x7f9fffff) AM_ROM AM_SHARE("share2")
-	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE("share2")	/* Program ROM */
+	AM_RANGE(0x7f800000, 0x7f9fffff) AM_ROM AM_SHARE(2)
+	AM_RANGE(0x7fe00000, 0x7fffffff) AM_ROM AM_REGION("user1", 0) AM_SHARE(2)	/* Program ROM */
 ADDRESS_MAP_END
 
 /**********************************************************************/
 
-static ADDRESS_MAP_START( sound_memmap, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( sound_memmap, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM
-	AM_RANGE(0x300000, 0x30000f) AM_DEVREADWRITE("k056800", k056800_sound_r, k056800_sound_w)
-	AM_RANGE(0x400000, 0x400fff) AM_DEVREADWRITE("rfsnd", rf5c400_r, rf5c400_w)		/* Ricoh RF5C400 */
+	AM_RANGE(0x300000, 0x30000f) AM_READWRITE(K056800_sound_r, K056800_sound_w)
+	AM_RANGE(0x400000, 0x400fff) AM_DEVREADWRITE("rf", rf5c400_r, rf5c400_w)		/* Ricoh RF5C400 */
 	AM_RANGE(0x580000, 0x580001) AM_WRITENOP
 	AM_RANGE(0x600000, 0x600001) AM_WRITENOP
 ADDRESS_MAP_END
 
 /*****************************************************************************/
 
+static UINT32 *sharc_dataram_0;
+static UINT32 *sharc_dataram_1;
+
 static READ32_HANDLER( dsp_dataram0_r )
 {
-	gticlub_state *state = space->machine().driver_data<gticlub_state>();
-	return state->m_sharc_dataram_0[offset] & 0xffff;
+	return sharc_dataram_0[offset] & 0xffff;
 }
 
 static WRITE32_HANDLER( dsp_dataram0_w )
 {
-	gticlub_state *state = space->machine().driver_data<gticlub_state>();
-	state->m_sharc_dataram_0[offset] = data;
+	sharc_dataram_0[offset] = data;
 }
 
 static READ32_HANDLER( dsp_dataram1_r )
 {
-	gticlub_state *state = space->machine().driver_data<gticlub_state>();
-	return state->m_sharc_dataram_1[offset] & 0xffff;
+	return sharc_dataram_1[offset] & 0xffff;
 }
 
 static WRITE32_HANDLER( dsp_dataram1_w )
 {
-	gticlub_state *state = space->machine().driver_data<gticlub_state>();
-	state->m_sharc_dataram_1[offset] = data;
+	sharc_dataram_1[offset] = data;
 }
 
-static ADDRESS_MAP_START( sharc_map, AS_DATA, 32 )
+static ADDRESS_MAP_START( sharc_map, ADDRESS_SPACE_DATA, 32 )
 	AM_RANGE(0x400000, 0x41ffff) AM_READWRITE(cgboard_0_shared_sharc_r, cgboard_0_shared_sharc_w)
 	AM_RANGE(0x500000, 0x5fffff) AM_READWRITE(dsp_dataram0_r, dsp_dataram0_w)
 	AM_RANGE(0x600000, 0x6fffff) AM_READWRITE(K001005_r, K001005_w)
 	AM_RANGE(0x700000, 0x7000ff) AM_READWRITE(cgboard_0_comm_sharc_r, cgboard_0_comm_sharc_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hangplt_sharc0_map, AS_DATA, 32 )
+static ADDRESS_MAP_START( hangplt_sharc0_map, ADDRESS_SPACE_DATA, 32 )
 	AM_RANGE(0x0400000, 0x041ffff) AM_READWRITE(cgboard_0_shared_sharc_r, cgboard_0_shared_sharc_w)
 	AM_RANGE(0x0500000, 0x05fffff) AM_READWRITE(dsp_dataram0_r, dsp_dataram0_w)
 	AM_RANGE(0x1400000, 0x14fffff) AM_RAM
@@ -473,10 +673,10 @@ static ADDRESS_MAP_START( hangplt_sharc0_map, AS_DATA, 32 )
 	AM_RANGE(0x3400000, 0x34000ff) AM_READWRITE(cgboard_0_comm_sharc_r, cgboard_0_comm_sharc_w)
 	AM_RANGE(0x3401000, 0x34fffff) AM_DEVWRITE("voodoo0", nwk_fifo_0_w)
 	AM_RANGE(0x3500000, 0x3507fff) AM_READWRITE(K033906_0_r, K033906_0_w)
-	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK("bank5")
+	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK(5)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( hangplt_sharc1_map, AS_DATA, 32 )
+static ADDRESS_MAP_START( hangplt_sharc1_map, ADDRESS_SPACE_DATA, 32 )
 	AM_RANGE(0x0400000, 0x041ffff) AM_READWRITE(cgboard_1_shared_sharc_r, cgboard_1_shared_sharc_w)
 	AM_RANGE(0x0500000, 0x05fffff) AM_READWRITE(dsp_dataram1_r, dsp_dataram1_w)
 	AM_RANGE(0x1400000, 0x14fffff) AM_RAM
@@ -484,15 +684,21 @@ static ADDRESS_MAP_START( hangplt_sharc1_map, AS_DATA, 32 )
 	AM_RANGE(0x3400000, 0x34000ff) AM_READWRITE(cgboard_1_comm_sharc_r, cgboard_1_comm_sharc_w)
 	AM_RANGE(0x3401000, 0x34fffff) AM_DEVWRITE("voodoo1", nwk_fifo_1_w)
 	AM_RANGE(0x3500000, 0x3507fff) AM_READWRITE(K033906_1_r, K033906_1_w)
-	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK("bank6")
+	AM_RANGE(0x3600000, 0x37fffff) AM_ROMBANK(6)
 ADDRESS_MAP_END
 
 /*****************************************************************************/
 
+static NVRAM_HANDLER(gticlub)
+{
+	eeprom_handler(machine, file, read_or_write);
+}
+
+
 static INPUT_PORTS_START( gticlub )
 	PORT_START("IN0")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 )		// View switch
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 )		// Shift Down
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON2 ) 		// Shift Down
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON3 )		// Shift Up
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON4 )		// AT/MT switch
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE1 ) PORT_NAME("Service Button") PORT_CODE(KEYCODE_8)
@@ -683,7 +889,7 @@ INPUT_PORTS_END
 */
 static INTERRUPT_GEN( gticlub_vblank )
 {
-	device_set_input_line(device, INPUT_LINE_IRQ0, ASSERT_LINE);
+	cpu_set_input_line(device, INPUT_LINE_IRQ0, ASSERT_LINE);
 }
 
 
@@ -692,177 +898,49 @@ static const sharc_config sharc_cfg =
 	BOOT_MODE_EPROM
 };
 
-
-static TIMER_CALLBACK( irq_off )
-{
-	cputag_set_input_line(machine, "audiocpu", param, CLEAR_LINE);
-}
-
-static void sound_irq_callback( running_machine &machine, int irq )
-{
-	int line = (irq == 0) ? INPUT_LINE_IRQ1 : INPUT_LINE_IRQ2;
-
-	cputag_set_input_line(machine, "audiocpu", line, ASSERT_LINE);
-	machine.scheduler().timer_set(attotime::from_usec(1), FUNC(irq_off), line);
-}
-
-static const k056800_interface gticlub_k056800_interface =
-{
-	sound_irq_callback
-};
-
-
-static int adc1038_input_callback( device_t *device, int input )
-{
-	int value = 0;
-	switch (input)
-	{
-	case 0: value = input_port_read(device->machine(), "AN0"); break;
-	case 1: value = input_port_read(device->machine(), "AN1"); break;
-	case 2: value = input_port_read(device->machine(), "AN2"); break;
-	case 3: value = input_port_read(device->machine(), "AN3"); break;
-	case 4: value = 0x000; break;
-	case 5: value = 0x000; break;
-	case 6: value = 0x000; break;
-	case 7: value = 0x000; break;
-	}
-
-	return value;
-}
-
-static const adc1038_interface gticlub_adc1038_intf =
-{
-	1,
-	adc1038_input_callback
-};
-
-static const adc1038_interface thunderh_adc1038_intf =
-{
-	0,
-	adc1038_input_callback
-};
-
-static const k056230_interface gticlub_k056230_intf =
-{
-	"maincpu",
-	0
-};
-
-static const k056230_interface thunderh_k056230_intf =
-{
-	"maincpu",
-	1
-};
-
-static const k001604_interface gticlub_k001604_intf =
-{
-	1, 2,	/* gfx index 1 & 2 */
-	1, 1,		/* layer_size, roz_size */
-	0		/* slrasslt hack */
-};
-
-static const k001604_interface slrasslt_k001604_intf =
-{
-	1, 2,	/* gfx index 1 & 2 */
-	0, 0,		/* layer_size, roz_size */
-	1		/* slrasslt hack */
-};
-
-static const k001604_interface hangplt_k001604_intf_l =
-{
-	1, 2,	/* gfx index 1 & 2 */
-	0, 1,		/* layer_size, roz_size */
-	0		/* slrasslt hack */
-};
-
-static const k001604_interface hangplt_k001604_intf_r =
-{
-	3, 4,	/* gfx index 1 & 2 */
-	0, 1,		/* layer_size, roz_size */
-	0		/* slrasslt hack */
-};
-
-
 static MACHINE_RESET( gticlub )
 {
 	cputag_set_input_line(machine, "dsp", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
-static MACHINE_CONFIG_START( gticlub, gticlub_state )
+static MACHINE_DRIVER_START( gticlub )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", PPC403GA, 64000000/2)	/* PowerPC 403GA 32MHz */
-	MCFG_CPU_PROGRAM_MAP(gticlub_map)
-	MCFG_CPU_VBLANK_INT("screen", gticlub_vblank)
+	MDRV_CPU_ADD("maincpu", PPC403GA, 64000000/2)	/* PowerPC 403GA 32MHz */
+	MDRV_CPU_PROGRAM_MAP(gticlub_map)
+	MDRV_CPU_VBLANK_INT("screen", gticlub_vblank)
 
-	MCFG_CPU_ADD("audiocpu", M68000, 64000000/4)	/* 16MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_memmap)
+	MDRV_CPU_ADD("audiocpu", M68000, 64000000/4)	/* 16MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_memmap)
 
-	MCFG_CPU_ADD("dsp", ADSP21062, 36000000)
-	MCFG_CPU_CONFIG(sharc_cfg)
-	MCFG_CPU_DATA_MAP(sharc_map)
+	MDRV_CPU_ADD("dsp", ADSP21062, 36000000)
+	MDRV_CPU_CONFIG(sharc_cfg)
+	MDRV_CPU_DATA_MAP(sharc_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_NVRAM_HANDLER(gticlub)
+	MDRV_MACHINE_START(gticlub)
+	MDRV_MACHINE_RESET(gticlub)
 
-	MCFG_MACHINE_START(gticlub)
-	MCFG_MACHINE_RESET(gticlub)
+ 	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_SIZE(512, 384)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
 
-	MCFG_ADC1038_ADD("adc1038", gticlub_adc1038_intf)
+	MDRV_PALETTE_LENGTH(65536)
 
-	MCFG_K056230_ADD("k056230", gticlub_k056230_intf)
+	MDRV_VIDEO_START(gticlub)
+	MDRV_VIDEO_UPDATE(gticlub)
 
-	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(512, 384)
-	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
-	MCFG_SCREEN_UPDATE_STATIC(gticlub)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_PALETTE_LENGTH(65536)
-
-	MCFG_VIDEO_START(gticlub)
-
-	MCFG_K001604_ADD("k001604_1", gticlub_k001604_intf)
-
-	MCFG_K056800_ADD("k056800", gticlub_k056800_interface)
-
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("rfsnd", RF5C400, 64000000/4)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( thunderh, gticlub )
-
-	MCFG_DEVICE_REMOVE("adc1038")
-	MCFG_ADC1038_ADD("adc1038", thunderh_adc1038_intf)
-
-	MCFG_DEVICE_REMOVE("k056230")
-	MCFG_K056230_ADD("k056230", thunderh_k056230_intf)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( slrasslt, gticlub )
-
-	MCFG_DEVICE_REMOVE("adc1038")
-	MCFG_ADC1038_ADD("adc1038", thunderh_adc1038_intf)
-
-	MCFG_DEVICE_REMOVE("k001604_1")
-	MCFG_K001604_ADD("k001604_1", slrasslt_k001604_intf)
-MACHINE_CONFIG_END
-
-
-static const k033906_interface hangplt_k033906_intf_0 =
-{
-	"voodoo0"
-};
-
-static const k033906_interface hangplt_k033906_intf_1 =
-{
-	"voodoo1"
-};
+	MDRV_SOUND_ADD("rf", RF5C400, 64000000/4)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 static MACHINE_RESET( hangplt )
 {
@@ -870,74 +948,65 @@ static MACHINE_RESET( hangplt )
 	cputag_set_input_line(machine, "dsp2", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
-static MACHINE_CONFIG_START( hangplt, gticlub_state )
+static MACHINE_DRIVER_START( hangplt )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", PPC403GA, 64000000/2)	/* PowerPC 403GA 32MHz */
-	MCFG_CPU_PROGRAM_MAP(gticlub_map)
+	MDRV_CPU_ADD("maincpu", PPC403GA, 64000000/2)	/* PowerPC 403GA 32MHz */
+	MDRV_CPU_PROGRAM_MAP(gticlub_map)
 
-	MCFG_CPU_ADD("audiocpu", M68000, 64000000/4)	/* 16MHz */
-	MCFG_CPU_PROGRAM_MAP(sound_memmap)
+	MDRV_CPU_ADD("audiocpu", M68000, 64000000/4)	/* 16MHz */
+	MDRV_CPU_PROGRAM_MAP(sound_memmap)
 
-	MCFG_CPU_ADD("dsp", ADSP21062, 36000000)
-	MCFG_CPU_CONFIG(sharc_cfg)
-	MCFG_CPU_DATA_MAP(hangplt_sharc0_map)
+	MDRV_CPU_ADD("dsp", ADSP21062, 36000000)
+	MDRV_CPU_CONFIG(sharc_cfg)
+	MDRV_CPU_DATA_MAP(hangplt_sharc0_map)
 
-	MCFG_CPU_ADD("dsp2", ADSP21062, 36000000)
-	MCFG_CPU_CONFIG(sharc_cfg)
-	MCFG_CPU_DATA_MAP(hangplt_sharc1_map)
+	MDRV_CPU_ADD("dsp2", ADSP21062, 36000000)
+	MDRV_CPU_CONFIG(sharc_cfg)
+	MDRV_CPU_DATA_MAP(hangplt_sharc1_map)
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))
+	MDRV_QUANTUM_TIME(HZ(6000))
 
-	MCFG_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_NVRAM_HANDLER(gticlub)
+	MDRV_MACHINE_START(gticlub)
+	MDRV_MACHINE_RESET(hangplt)
 
-	MCFG_MACHINE_START(gticlub)
-	MCFG_MACHINE_RESET(hangplt)
+	MDRV_3DFX_VOODOO_1_ADD("voodoo0", STD_VOODOO_1_CLOCK, 2, "lscreen")
+	MDRV_3DFX_VOODOO_CPU("dsp")
+	MDRV_3DFX_VOODOO_TMU_MEMORY(0, 2)
+	MDRV_3DFX_VOODOO_TMU_MEMORY(1, 2)
+	MDRV_3DFX_VOODOO_VBLANK(voodoo_vblank_0)
 
-	MCFG_ADC1038_ADD("adc1038", thunderh_adc1038_intf)
-	MCFG_K056230_ADD("k056230", gticlub_k056230_intf)
+	MDRV_3DFX_VOODOO_1_ADD("voodoo1", STD_VOODOO_1_CLOCK, 2, "rscreen")
+	MDRV_3DFX_VOODOO_CPU("dsp2")
+	MDRV_3DFX_VOODOO_TMU_MEMORY(0, 2)
+	MDRV_3DFX_VOODOO_TMU_MEMORY(1, 2)
+	MDRV_3DFX_VOODOO_VBLANK(voodoo_vblank_1)
 
-	MCFG_3DFX_VOODOO_1_ADD("voodoo0", STD_VOODOO_1_CLOCK, 2, "lscreen")
-	MCFG_3DFX_VOODOO_CPU("dsp")
-	MCFG_3DFX_VOODOO_TMU_MEMORY(0, 2)
-	MCFG_3DFX_VOODOO_TMU_MEMORY(1, 2)
-	MCFG_3DFX_VOODOO_VBLANK(voodoo_vblank_0)
+ 	/* video hardware */
+	MDRV_PALETTE_LENGTH(65536)
 
-	MCFG_3DFX_VOODOO_1_ADD("voodoo1", STD_VOODOO_1_CLOCK, 2, "rscreen")
-	MCFG_3DFX_VOODOO_CPU("dsp2")
-	MCFG_3DFX_VOODOO_TMU_MEMORY(0, 2)
-	MCFG_3DFX_VOODOO_TMU_MEMORY(1, 2)
-	MCFG_3DFX_VOODOO_VBLANK(voodoo_vblank_1)
+	MDRV_SCREEN_ADD("lscreen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_SIZE(512, 384)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
 
-	MCFG_K033906_ADD("k033906_1", hangplt_k033906_intf_0)
-	MCFG_K033906_ADD("k033906_2", hangplt_k033906_intf_1)
+	MDRV_SCREEN_ADD("rscreen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_SIZE(512, 384)
+	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
 
-	/* video hardware */
-	MCFG_PALETTE_LENGTH(65536)
+	MDRV_VIDEO_START(hangplt)
+	MDRV_VIDEO_UPDATE(hangplt)
 
-	MCFG_SCREEN_ADD("lscreen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(512, 384)
-	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
-	MCFG_SCREEN_UPDATE_STATIC(hangplt)
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SCREEN_ADD("rscreen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_SIZE(512, 384)
-	MCFG_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
-	MCFG_SCREEN_UPDATE_STATIC(hangplt)
-
-	MCFG_K001604_ADD("k001604_1", hangplt_k001604_intf_l)
-	MCFG_K001604_ADD("k001604_2", hangplt_k001604_intf_r)
-
-	MCFG_K056800_ADD("k056800", gticlub_k056800_interface)
-
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-
-	MCFG_SOUND_ADD("rfsnd", RF5C400, 64000000/4)
-	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("rf", RF5C400, 64000000/4)
+	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 /*************************************************************************/
 
@@ -955,7 +1024,7 @@ ROM_START( gticlub ) /* Euro version EAA */
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program */
 	ROM_LOAD16_WORD_SWAP( "688a07.13k", 0x000000, 0x040000, CRC(f0805f06) SHA1(4b87e02b89e7ea812454498603767668e4619025) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "688a09.9s", 0x000000, 0x200000, CRC(fb582963) SHA1(ce8fe6a4d7ac7d7f4b6591f9150b1d351e636354) )
 	ROM_LOAD( "688a10.7s", 0x200000, 0x200000, CRC(b3ddc5f1) SHA1(a3f76c86e85eb17f20efb037c1ad64e9cb8566c8) )
 	ROM_LOAD( "688a11.5s", 0x400000, 0x200000, CRC(fc706183) SHA1(c8ce6de0588be1023ef48577bc88a4e5effdcd25) )
@@ -966,9 +1035,6 @@ ROM_START( gticlub ) /* Euro version EAA */
 	ROM_LOAD64_WORD( "688a14.13d", 0x000002, 0x200000, CRC(b9932735) SHA1(2492244d2acb350974202a6718bc7121325d2121) )
 	ROM_LOAD64_WORD( "688a15.9d",  0x000004, 0x200000, CRC(8aadee51) SHA1(be9020a47583da9d4ff586d227836dc5b7dc31f0) )
 	ROM_LOAD64_WORD( "688a16.4d",  0x000006, 0x200000, CRC(7f4e1893) SHA1(585be7b31ab7a48300c22b00443b00d631f4c49d) )
-
-	ROM_REGION16_BE( 0x200, "eeprom", 0 )
-	ROM_LOAD( "gticlub.nv", 0x0000, 0x0200, CRC(eca78a49) SHA1(3dcaccc4bee58f7ff5d6ecae551887cc967deaf7) )
 ROM_END
 
 ROM_START( gticluba ) /* Asia version AAA */
@@ -985,7 +1051,7 @@ ROM_START( gticluba ) /* Asia version AAA */
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program */
 	ROM_LOAD16_WORD_SWAP( "688a07.13k", 0x000000, 0x040000, CRC(f0805f06) SHA1(4b87e02b89e7ea812454498603767668e4619025) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "688a09.9s", 0x000000, 0x200000, CRC(fb582963) SHA1(ce8fe6a4d7ac7d7f4b6591f9150b1d351e636354) )
 	ROM_LOAD( "688a10.7s", 0x200000, 0x200000, CRC(b3ddc5f1) SHA1(a3f76c86e85eb17f20efb037c1ad64e9cb8566c8) )
 	ROM_LOAD( "688a11.5s", 0x400000, 0x200000, CRC(fc706183) SHA1(c8ce6de0588be1023ef48577bc88a4e5effdcd25) )
@@ -996,9 +1062,6 @@ ROM_START( gticluba ) /* Asia version AAA */
 	ROM_LOAD64_WORD( "688a14.13d", 0x000002, 0x200000, CRC(b9932735) SHA1(2492244d2acb350974202a6718bc7121325d2121) )
 	ROM_LOAD64_WORD( "688a15.9d",  0x000004, 0x200000, CRC(8aadee51) SHA1(be9020a47583da9d4ff586d227836dc5b7dc31f0) )
 	ROM_LOAD64_WORD( "688a16.4d",  0x000006, 0x200000, CRC(7f4e1893) SHA1(585be7b31ab7a48300c22b00443b00d631f4c49d) )
-
-	ROM_REGION16_BE( 0x200, "eeprom", 0 )
-	ROM_LOAD( "gticlub.nv", 0x0000, 0x0200, CRC(eca78a49) SHA1(3dcaccc4bee58f7ff5d6ecae551887cc967deaf7) )
 ROM_END
 
 ROM_START( gticlubj ) /* Japan version JAA */
@@ -1015,7 +1078,7 @@ ROM_START( gticlubj ) /* Japan version JAA */
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program */
 	ROM_LOAD16_WORD_SWAP( "688a07.13k", 0x000000, 0x040000, CRC(f0805f06) SHA1(4b87e02b89e7ea812454498603767668e4619025) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "688a09.9s", 0x000000, 0x200000, CRC(fb582963) SHA1(ce8fe6a4d7ac7d7f4b6591f9150b1d351e636354) )
 	ROM_LOAD( "688a10.7s", 0x200000, 0x200000, CRC(b3ddc5f1) SHA1(a3f76c86e85eb17f20efb037c1ad64e9cb8566c8) )
 	ROM_LOAD( "688a11.5s", 0x400000, 0x200000, CRC(fc706183) SHA1(c8ce6de0588be1023ef48577bc88a4e5effdcd25) )
@@ -1026,9 +1089,6 @@ ROM_START( gticlubj ) /* Japan version JAA */
 	ROM_LOAD64_WORD( "688a14.13d", 0x000002, 0x200000, CRC(b9932735) SHA1(2492244d2acb350974202a6718bc7121325d2121) )
 	ROM_LOAD64_WORD( "688a15.9d",  0x000004, 0x200000, CRC(8aadee51) SHA1(be9020a47583da9d4ff586d227836dc5b7dc31f0) )
 	ROM_LOAD64_WORD( "688a16.4d",  0x000006, 0x200000, CRC(7f4e1893) SHA1(585be7b31ab7a48300c22b00443b00d631f4c49d) )
-
-	ROM_REGION16_BE( 0x200, "eeprom", 0 )
-	ROM_LOAD( "gticlub.nv", 0x0000, 0x0200, CRC(eca78a49) SHA1(3dcaccc4bee58f7ff5d6ecae551887cc967deaf7) )
 ROM_END
 
 ROM_START( thunderh ) /* Euro version EAA */
@@ -1048,7 +1108,7 @@ ROM_START( thunderh ) /* Euro version EAA */
 	ROM_REGION(0x20000, "dsp", 0)		/* 68k program for outboard sound? network? board */
 	ROM_LOAD16_WORD_SWAP( "680c22.20k", 0x000000, 0x020000, CRC(d93c0ee2) SHA1(4b58418cbb01b51e12d6e7c86b2c81cd35d86248) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "680a09.9s", 0x000000, 0x200000, CRC(71c2b049) SHA1(ce360172c8774b31edf16a80104c35b1caf26cd9) )
 	ROM_LOAD( "680a10.7s", 0x200000, 0x200000, CRC(19882bf3) SHA1(7287da58853c84cbadbfb42bed37f2b0032c4b4d) )
 	ROM_LOAD( "680a11.5s", 0x400000, 0x200000, CRC(0c74fe3f) SHA1(2e69f8d37552a74bbda65b134f747b4380ed33b0) )
@@ -1078,7 +1138,7 @@ ROM_START( thunderhu ) /* USA version UAA */
 	ROM_REGION(0x20000, "dsp", 0)		/* 68k program for outboard sound? network? board */
 	ROM_LOAD16_WORD_SWAP( "680c22.20k", 0x000000, 0x020000, CRC(d93c0ee2) SHA1(4b58418cbb01b51e12d6e7c86b2c81cd35d86248) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "680a09.9s", 0x000000, 0x200000, CRC(71c2b049) SHA1(ce360172c8774b31edf16a80104c35b1caf26cd9) )
 	ROM_LOAD( "680a10.7s", 0x200000, 0x200000, CRC(19882bf3) SHA1(7287da58853c84cbadbfb42bed37f2b0032c4b4d) )
 	ROM_LOAD( "680a11.5s", 0x400000, 0x200000, CRC(0c74fe3f) SHA1(2e69f8d37552a74bbda65b134f747b4380ed33b0) )
@@ -1105,7 +1165,7 @@ ROM_START( slrasslt ) /* USA version UAA */
 	ROM_REGION(0x80000, "audiocpu", 0)		/* 68k program */
 	ROM_LOAD16_WORD_SWAP( "792a07.10k", 0x000000, 0x080000, CRC(89a65ad1) SHA1(d814ef0b560c8e68da57ad5c6096e4fc05e9913e) )
 
-	ROM_REGION(0x800000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x800000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "792a09.9s", 0x000000, 0x200000, CRC(7d7ea427) SHA1(a9a311a7c17223cc87140fe2890e20a321464831) )
 	ROM_LOAD( "792a10.7s", 0x200000, 0x200000, CRC(e585e5d9) SHA1(ec44ad324a66eeea4c45933dda5a8a9a4398879d) )
 	ROM_LOAD( "792a11.5s", 0x400000, 0x200000, CRC(c9c3a04c) SHA1(f834659f67712c9fcd93b7407669d7f35517b790) )
@@ -1116,9 +1176,6 @@ ROM_START( slrasslt ) /* USA version UAA */
 	ROM_LOAD64_WORD( "792a14.13d", 0x000002, 0x200000, CRC(cf57e830) SHA1(607b4dec3b8180a63e29d9dab1ca28d7226dda1e) )
 	ROM_LOAD64_WORD( "792a15.9d",  0x000004, 0x200000, CRC(1c5531cb) SHA1(1b514f181c92e16d07bfe4719604f1e4caf15377) )
 	ROM_LOAD64_WORD( "792a16.4d",  0x000006, 0x200000, CRC(df89e392) SHA1(af37c5460d43bf8d8a1ab4213c4528083a7363c2) )
-
-	ROM_REGION16_BE(0x200, "eeprom", 0) /* default eeprom with magic number */
-	ROM_LOAD16_WORD( "eeprom-slrasslt.bin", 0x0000, 0x0200, CRC(924b4ed8) SHA1(247bf0c1394cbab3af03c26b9c016302b9b5723c) )
 ROM_END
 
 ROM_START( hangplt ) /* Japan version JAB */
@@ -1135,47 +1192,63 @@ ROM_START( hangplt ) /* Japan version JAB */
 	ROM_REGION(0x80000, "audiocpu", 0)	/* 68k program */
 	ROM_LOAD16_WORD_SWAP( "685a07.13k", 0x000000, 0x080000, CRC(5b72fd80) SHA1(a150837fa0d66dc0c3832495a4c8ce4f9b92cd98) )
 
-	ROM_REGION(0x1000000, "rfsnd", 0)	/* sound roms */
+	ROM_REGION(0x1000000, "rf", 0)	/* sound roms */
 	ROM_LOAD( "685a09.9s", 0x000000, 0x400000, CRC(b8ae40aa) SHA1(eee27a8929e0e805f1045fd9638e661b36a1e3c7) )
 	ROM_LOAD( "685a10.7s", 0x400000, 0x400000, CRC(fef3dc36) SHA1(566c7469fc452b5965a31fa42291082ec8e48a24) )
 
 	ROM_REGION(0x800000, "user5", 0)	/* texture roms */
 	ROM_LOAD32_WORD( "685a13.4w",  0x000002, 0x400000, CRC(06329af4) SHA1(76cad9db604751ce48bb67bfd29e57bac0ee9a16) )
 	ROM_LOAD32_WORD( "685a14.12w", 0x000000, 0x400000, CRC(87437739) SHA1(0d45637af40938a54d5efd29c125b0fafd55f9a4) )
-
-	ROM_REGION16_BE( 0x200, "eeprom", 0 )
-	ROM_LOAD( "hangplt.nv", 0x0000, 0x0200, CRC(35f482c8) SHA1(445918156770449dce1a010aab9d310f15670092) )
 ROM_END
+
+static TIMER_CALLBACK( irq_off )
+{
+	cputag_set_input_line(machine, "audiocpu", param, CLEAR_LINE);
+}
+
+static void sound_irq_callback(running_machine *machine, int irq)
+{
+	int line = (irq == 0) ? INPUT_LINE_IRQ1 : INPUT_LINE_IRQ2;
+	cputag_set_input_line(machine, "audiocpu", line, ASSERT_LINE);
+	timer_set(machine, ATTOTIME_IN_USEC(1), NULL, line, irq_off);
+}
 
 static DRIVER_INIT(gticlub)
 {
-	gticlub_state *state = machine.driver_data<gticlub_state>();
-
 	init_konami_cgboard(machine, 1, CGBOARD_TYPE_GTICLUB);
 
-	state->m_sharc_dataram_0 = auto_alloc_array(machine, UINT32, 0x100000/4);
+	sharc_dataram_0 = auto_alloc_array(machine, UINT32, 0x100000/4);
+	gticlub_led_reg0 = gticlub_led_reg1 = 0x7f;
 
-	K001005_preprocess_texture_data(machine.region("gfx1")->base(), machine.region("gfx1")->bytes(), 1);
+	K001005_preprocess_texture_data(memory_region(machine, "gfx1"), memory_region_length(machine, "gfx1"), 1);
+
+	K056800_init(machine, sound_irq_callback);
+
+	adc1038_init(machine);
 }
 
 static DRIVER_INIT(hangplt)
 {
-	gticlub_state *state = machine.driver_data<gticlub_state>();
-
 	init_konami_cgboard(machine, 2, CGBOARD_TYPE_HANGPLT);
-	set_cgboard_texture_bank(machine, 0, "bank5", machine.region("user5")->base());
-	set_cgboard_texture_bank(machine, 1, "bank6", machine.region("user5")->base());
+	set_cgboard_texture_bank(machine, 0, 5, memory_region(machine, "user5"));
+	set_cgboard_texture_bank(machine, 1, 6, memory_region(machine, "user5"));
 
-	state->m_sharc_dataram_0 = auto_alloc_array(machine, UINT32, 0x100000/4);
-	state->m_sharc_dataram_1 = auto_alloc_array(machine, UINT32, 0x100000/4);
+	sharc_dataram_0 = auto_alloc_array(machine, UINT32, 0x100000/4);
+	sharc_dataram_1 = auto_alloc_array(machine, UINT32, 0x100000/4);
+	gticlub_led_reg0 = gticlub_led_reg1 = 0x7f;
+
+	K056800_init(machine, sound_irq_callback);
+	K033906_init(machine);
+
+	adc1038_init(machine);
 }
 
 /*************************************************************************/
 
-GAME( 1996, gticlub,  0,        gticlub,  gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver EAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1996, gticluba, gticlub,  gticlub,  gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver AAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1996, gticlubj, gticlub,  gticlub,  gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver JAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1996, thunderh, 0,        thunderh, thunderh, gticlub, ROT0, "Konami", "Operation Thunder Hurricane (ver EAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1996, thunderhu,thunderh, thunderh, thunderh, gticlub, ROT0, "Konami", "Operation Thunder Hurricane (ver UAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAME( 1997, slrasslt, 0,        slrasslt, slrasslt, gticlub, ROT0, "Konami", "Solar Assault (ver UAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
-GAMEL( 1997, hangplt, 0,        hangplt,  hangplt,  hangplt, ROT0, "Konami", "Hang Pilot", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND, layout_dualhovu )
+GAME( 1996, gticlub,  0,        gticlub, gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver EAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1996, gticluba, gticlub,  gticlub, gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver AAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1996, gticlubj, gticlub,  gticlub, gticlub,  gticlub, ROT0, "Konami", "GTI Club (ver JAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1996, thunderh, 0,        gticlub, thunderh, gticlub, ROT0, "Konami", "Operation Thunder Hurricane (ver EAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1996, thunderhu,thunderh, gticlub, thunderh, gticlub, ROT0, "Konami", "Operation Thunder Hurricane (ver UAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAME( 1997, slrasslt, 0,        gticlub, slrasslt, gticlub, ROT0, "Konami", "Solar Assault (ver UAA)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND )
+GAMEL( 1997, hangplt, 0,        hangplt, hangplt,  hangplt, ROT0, "Konami", "Hang Pilot", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND, layout_dualhovu )

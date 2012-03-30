@@ -8,7 +8,6 @@
 
 ***************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
 #include "ccpu.h"
 
@@ -43,19 +42,20 @@ struct _ccpu_state
 
 	int					icount;
 
-	legacy_cpu_device *device;
-	address_space *program;
-	direct_read_data *direct;
-	address_space *data;
-	address_space *io;
+	const device_config *device;
+	const address_space *program;
+	const address_space *data;
+	const address_space *io;
 };
 
 
-INLINE ccpu_state *get_safe_token(device_t *device)
+INLINE ccpu_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == CCPU);
-	return (ccpu_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_CCPU);
+	return (ccpu_state *)device->token;
 }
 
 
@@ -63,13 +63,13 @@ INLINE ccpu_state *get_safe_token(device_t *device)
     MACROS
 ***************************************************************************/
 
-#define READOP(C,a)			((C)->direct->read_decrypted_byte(a))
+#define READOP(C,a)			(memory_decrypted_read_byte((C)->program, a))
 
-#define RDMEM(C,a)			((C)->data->read_word((a) * 2) & 0xfff)
-#define WRMEM(C,a,v)		((C)->data->write_word((a) * 2, (v)))
+#define RDMEM(C,a)			(memory_read_word_16be((C)->data, (a) * 2) & 0xfff)
+#define WRMEM(C,a,v)		(memory_write_word_16be((C)->data, (a) * 2, (v)))
 
-#define READPORT(C,a)		((C)->io->read_byte(a))
-#define WRITEPORT(C,a,v)	((C)->io->write_byte((a), (v)))
+#define READPORT(C,a)		(memory_read_byte_8be((C)->io, a))
+#define WRITEPORT(C,a,v)	(memory_write_byte_8be((C)->io, (a), (v)))
 
 #define SET_A0(C)			do { (C)->a0flag = (C)->A; } while (0)
 #define SET_CMP_VAL(C,x)	do { (C)->cmpacc = *(C)->acc; (C)->cmpval = (x) & 0xfff; } while (0)
@@ -103,7 +103,7 @@ do { \
     INITIALIZATION AND SHUTDOWN
 ***************************************************************************/
 
-static UINT8 read_jmi(device_t *device)
+static UINT8 read_jmi(const device_config *device)
 {
 	/* this routine is called when there is no external input */
 	/* and the JMI jumper is present */
@@ -112,7 +112,7 @@ static UINT8 read_jmi(device_t *device)
 }
 
 
-void ccpu_wdt_timer_trigger(device_t *device)
+void ccpu_wdt_timer_trigger(const device_config *device)
 {
 	ccpu_state *cpustate = get_safe_token(device);
 	cpustate->waiting = FALSE;
@@ -124,37 +124,36 @@ void ccpu_wdt_timer_trigger(device_t *device)
 
 static CPU_INIT( ccpu )
 {
-	const ccpu_config *configdata = (const ccpu_config *)device->static_config();
+	const ccpu_config *configdata = (const ccpu_config *)device->static_config;
 	ccpu_state *cpustate = get_safe_token(device);
 
 	/* copy input params */
 	cpustate->external_input = configdata->external_input ? configdata->external_input : read_jmi;
 	cpustate->vector_callback = configdata->vector_callback;
 	cpustate->device = device;
-	cpustate->program = device->space(AS_PROGRAM);
-	cpustate->direct = &cpustate->program->direct();
-	cpustate->data = device->space(AS_DATA);
-	cpustate->io = device->space(AS_IO);
+	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
+	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
 
-	device->save_item(NAME(cpustate->PC));
-	device->save_item(NAME(cpustate->A));
-	device->save_item(NAME(cpustate->B));
-	device->save_item(NAME(cpustate->I));
-	device->save_item(NAME(cpustate->J));
-	device->save_item(NAME(cpustate->P));
-	device->save_item(NAME(cpustate->X));
-	device->save_item(NAME(cpustate->Y));
-	device->save_item(NAME(cpustate->T));
-	device->save_item(NAME(cpustate->a0flag));
-	device->save_item(NAME(cpustate->ncflag));
-	device->save_item(NAME(cpustate->cmpacc));
-	device->save_item(NAME(cpustate->cmpval));
-	device->save_item(NAME(cpustate->miflag));
-	device->save_item(NAME(cpustate->nextmiflag));
-	device->save_item(NAME(cpustate->nextnextmiflag));
-	device->save_item(NAME(cpustate->drflag));
-	device->save_item(NAME(cpustate->waiting));
-	device->save_item(NAME(cpustate->watchdog));
+	state_save_register_device_item(device, 0, cpustate->PC);
+	state_save_register_device_item(device, 0, cpustate->A);
+	state_save_register_device_item(device, 0, cpustate->B);
+	state_save_register_device_item(device, 0, cpustate->I);
+	state_save_register_device_item(device, 0, cpustate->J);
+	state_save_register_device_item(device, 0, cpustate->P);
+	state_save_register_device_item(device, 0, cpustate->X);
+	state_save_register_device_item(device, 0, cpustate->Y);
+	state_save_register_device_item(device, 0, cpustate->T);
+	state_save_register_device_item(device, 0, cpustate->a0flag);
+	state_save_register_device_item(device, 0, cpustate->ncflag);
+	state_save_register_device_item(device, 0, cpustate->cmpacc);
+	state_save_register_device_item(device, 0, cpustate->cmpval);
+	state_save_register_device_item(device, 0, cpustate->miflag);
+	state_save_register_device_item(device, 0, cpustate->nextmiflag);
+	state_save_register_device_item(device, 0, cpustate->nextnextmiflag);
+	state_save_register_device_item(device, 0, cpustate->drflag);
+	state_save_register_device_item(device, 0, cpustate->waiting);
+	state_save_register_device_item(device, 0, cpustate->watchdog);
 }
 
 
@@ -197,15 +196,14 @@ static CPU_EXECUTE( ccpu )
 	ccpu_state *cpustate = get_safe_token(device);
 
 	if (cpustate->waiting)
-	{
-		cpustate->icount = 0;
-		return;
-	}
+		return cycles;
+
+	cpustate->icount = cycles;
 
 	do
 	{
 		UINT16 tempval;
-		UINT8 opcode;
+   		UINT8 opcode;
 
 		/* update the delayed MI flag */
 		cpustate->miflag = cpustate->nextmiflag;
@@ -685,6 +683,8 @@ static CPU_EXECUTE( ccpu )
 				break;
 		}
 	} while (cpustate->icount > 0);
+
+	return cycles - cpustate->icount;
 }
 
 
@@ -730,7 +730,7 @@ static CPU_SET_INFO( ccpu )
 
 CPU_GET_INFO( ccpu )
 {
-	ccpu_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	ccpu_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -746,20 +746,20 @@ CPU_GET_INFO( ccpu )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;									break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;									break;
 
-		case DEVINFO_INT_DATABUS_WIDTH + AS_PROGRAM:	info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_PROGRAM: info->i = 15;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_PROGRAM: info->i = 0;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_DATA:	info->i = 16;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_DATA:	info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_DATA:	info->i = -1;							break;
-		case DEVINFO_INT_DATABUS_WIDTH + AS_IO:		info->i = 8;							break;
-		case DEVINFO_INT_ADDRBUS_WIDTH + AS_IO:		info->i = 5;							break;
-		case DEVINFO_INT_ADDRBUS_SHIFT + AS_IO:		info->i = 0;							break;
+		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;							break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 15;							break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;							break;
+		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 16;							break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_DATA: 	info->i = 8;							break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_DATA: 	info->i = -1;							break;
+		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;							break;
+		case CPUINFO_INT_ADDRBUS_WIDTH_IO: 		info->i = 5;							break;
+		case CPUINFO_INT_ADDRBUS_SHIFT_IO: 		info->i = 0;							break;
 
 		case CPUINFO_INT_PREVIOUSPC:					/* not implemented */							break;
 
 		case CPUINFO_INT_PC:
-		case CPUINFO_INT_REGISTER + CCPU_PC:			info->i = cpustate->PC;							break;
+		case CPUINFO_INT_REGISTER + CCPU_PC: 			info->i = cpustate->PC;							break;
 		case CPUINFO_INT_REGISTER + CCPU_FLAGS:			info->i = 0;
 				if (TEST_A0(cpustate)) info->i |= 0x01;
 				if (TEST_NC(cpustate)) info->i |= 0x02;
@@ -826,5 +826,3 @@ CPU_GET_INFO( ccpu )
 		case CPUINFO_STR_REGISTER + CCPU_T:				sprintf(info->s, "T:%03X",  cpustate->T);		break;
 	}
 }
-
-DEFINE_LEGACY_CPU_DEVICE(CCPU, ccpu);

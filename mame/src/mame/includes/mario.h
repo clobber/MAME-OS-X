@@ -8,7 +8,7 @@
  * 7C -> 100 => 256 - 124 = 132 ==> 264 Scanlines
  */
 
-#define MASTER_CLOCK			XTAL_24MHz
+#define MASTER_CLOCK		 	XTAL_24MHz
 #define PIXEL_CLOCK				(MASTER_CLOCK / 4)
 #define CLOCK_1H				(MASTER_CLOCK / 8)
 #define CLOCK_16H				(CLOCK_1H / 16)
@@ -30,36 +30,31 @@
 
 #define MARIO_PALETTE_LENGTH	(256)
 
-class mario_state : public driver_device
+typedef struct _mario_state mario_state;
+struct _mario_state
 {
-public:
-	mario_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
 	/* memory pointers */
 
 	/* machine states */
 
 	/* sound state */
-	UINT8	m_last;
-	UINT8	m_portT;
-	const char *m_eabank;
+	UINT8	last;
+	UINT8	portT;
+	UINT8	eabank;
 
 	/* video state */
-	UINT8	m_gfx_bank;
-	UINT8	m_palette_bank;
-	UINT16	m_gfx_scroll;
-	UINT8	m_flip;
+	UINT8	gfx_bank;
+	UINT8	palette_bank;
+	UINT16	gfx_scroll;
+	UINT8	flip;
 
 	/* driver general */
 
-	UINT8	*m_spriteram;
-	UINT8	*m_videoram;
-	size_t	m_spriteram_size;
-	tilemap_t *m_bg_tilemap;
-	int m_monitor;
-
-	UINT8   m_nmi_mask;
+	UINT8	*spriteram;
+	UINT8	*videoram;
+	size_t	spriteram_size;
+	tilemap *bg_tilemap;
+	int monitor;
 };
 
 /*----------- defined in video/mario.c -----------*/
@@ -72,7 +67,7 @@ WRITE8_HANDLER( mario_flip_w );
 
 PALETTE_INIT( mario );
 VIDEO_START( mario );
-SCREEN_UPDATE_IND16( mario );
+VIDEO_UPDATE( mario );
 
 
 /*----------- defined in audio/mario.c -----------*/
@@ -84,7 +79,7 @@ WRITE8_HANDLER( mario_sh3_w );
 WRITE8_HANDLER( mario_sh_tuneselect_w );
 WRITE8_HANDLER( masao_sh_irqtrigger_w );
 
-MACHINE_CONFIG_EXTERN( mario_audio );
-MACHINE_CONFIG_EXTERN( masao_audio );
+MACHINE_DRIVER_EXTERN( mario_audio );
+MACHINE_DRIVER_EXTERN( masao_audio );
 
 #endif /*MARIO_H_*/

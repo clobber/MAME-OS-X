@@ -7,7 +7,7 @@
     Games supported:
         * Screen Play
 
-    Other games on this hardware (incomplete dumps)
+    Other games on this hardware:
         * Believe it or not?
         * Caesar's Palace (reel to video)
         * Crossword Quiz
@@ -124,7 +124,7 @@ Todo:
 Find lamps/reels after UPD changes.
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "video/awpvid.h"
 #include "cpu/mcs51/mcs51.h"
@@ -132,8 +132,8 @@ Find lamps/reels after UPD changes.
 #include "machine/68681.h"
 #include "sound/2413intf.h"
 #include "sound/upd7759.h"
-#include "machine/nvram.h"
 
+//#include "deprecat.h"
 
 /*************************************
  *
@@ -152,6 +152,7 @@ Find lamps/reels after UPD changes.
  *
  *************************************/
 
+static int vsync_latch_preset;
 
 #define VREG(a)		i82716.r[a]
 
@@ -191,50 +192,23 @@ enum
 
 static const UINT32 banks[4] = { 0, 0x40000/2, 0x20000/2, 0x60000/2 };
 
+static struct
+{
+	const device_config *duart68681;
+} maygayv1_devices;
+
 #define DRAM_BANK_SEL		(banks[(VREG(DSBA) >> 7) & 3])
 
-typedef struct
+static struct
 {
 	UINT16	r[16];
 	UINT16	*dram;
 
 	UINT8	*line_buf;	// there's actually two
-} i82716_t;
-
-
-typedef struct
-{
-	UINT8	command;
-	UINT8	mode;
-	UINT8	prescale;
-	UINT8	inhibit;
-	UINT8	clear;
-	UINT8	fifo[8];
-	UINT8	ram[16];
-} i8279_t;
-
-class maygayv1_state : public driver_device
-{
-public:
-	maygayv1_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	int m_vsync_latch_preset;
-	UINT8 m_p1;
-	UINT8 m_p3;
-	int m_d68681_val;
-	device_t *m_duart68681;
-	i82716_t m_i82716;
-	i8279_t m_i8279;
-};
-
-
-
+} i82716;
 
 static WRITE16_HANDLER( i82716_w )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
-	i82716_t &i82716 = state->m_i82716;
 	// Accessing register window?
 	if ((VREG(RWBA) & 0xfff0) == (offset & 0xfff0))
 	{
@@ -253,8 +227,6 @@ static WRITE16_HANDLER( i82716_w )
 
 static READ16_HANDLER( i82716_r )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
-	i82716_t &i82716 = state->m_i82716;
 	// Accessing register window?
 	if ((VREG(RWBA) & ~0xf) == (offset & ~0xf))
 	{
@@ -280,14 +252,12 @@ static VIDEO_START( maygayv1 )
 }
 
 
-static SCREEN_UPDATE_IND16( maygayv1 )
+static VIDEO_UPDATE( maygayv1 )
 {
-	maygayv1_state *state = screen.machine().driver_data<maygayv1_state>();
-	i82716_t &i82716 = state->m_i82716;
 	UINT16 *atable = &i82716.dram[VREG(ATBA)];
 	UINT16 *otable = &i82716.dram[VREG(ODTBA) & 0xfc00];  // both must be bank 0
 
-	int sl, sx;
+    int sl, sx;
 	int slmask = 0xffff;     // TODO: Save if using scanline callbacks
 	int xbound = (VREG(DWBA) & 0x3f8) | 7;
 
@@ -297,18 +267,18 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 	/* If screen output is disabled, fill with black */
 	if (!(VREG(VCR0) & VCR0_DEN))
 	{
-		bitmap.fill(get_black_pen(screen.machine()), cliprect);
+		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 		return 0;
 	}
 
 	/* For every scanline... */
-	for (sl = cliprect.min_x; sl <= cliprect.max_y; ++sl)
+	for (sl = cliprect->min_x; sl <= cliprect->max_y; ++sl)
 	{
 		int obj;
 		UINT16 aflags = atable[sl];
 		UINT16 slmask_old = slmask;
 
-		UINT16 *bmp_ptr = &bitmap.pix16(sl);
+		UINT16 *bmp_ptr = BITMAP_ADDR16(bitmap, sl, 0);
 
 		slmask = 0xffff ^ (slmask ^ aflags);
 
@@ -316,15 +286,15 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 		/* 4bpp only ! */
 		memset(i82716.line_buf, 0x22, 512);
 
-		/* Parse the list of 16 objects */
+    	/* Parse the list of 16 objects */
 		for (obj = 0; obj < 16; ++obj)
 		{
 			int offs = obj * 4;
 
 			// Draw on this line?
 			if ( !BIT(slmask, obj) )
-			{
-				UINT32	objbase, trans, width;
+            {
+				UINT32	objbase, trans, width, res, cspec;
 				INT32	x, xpos;
 				UINT16	w0, w1, w2;
 				UINT16	*objptr;
@@ -332,7 +302,7 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 
 				/* Get object table entry words */
 				w0 = otable[offs];
-				w1 = otable[offs + 1];
+                w1 = otable[offs + 1];
 				w2 = otable[offs + 2];
 
 				/* Blanked */
@@ -343,11 +313,11 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 //                  printf("Blinking\n");
 
 				/* Resolution: either 4bpp or 2bpp */
-//              res = (w0 >> 9) & 3;
+				res = (w0 >> 9) & 3;
 
 
 				/* Expand 2bpp to 3bpp */
-				//cspec = (w0 & 3) << 2;
+				cspec = (w0 & 3) << 2;
 
 				if ( BIT(w0, 11) )
 				{
@@ -367,14 +337,14 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 
 				/* First scanline? Clear current object entry address */
 				if ( BIT(slmask_old, obj) )
-					otable[offs + 3] = 0;
+                	otable[offs + 3] = 0;
 
 				/* Bitmap data pointer */
 				objbase = ((w0 & 0x00c0) << 10) | w2;
 				objptr = &i82716.dram[objbase + ((4 * width) * otable[offs + 3])];
 
 				// endian alert
-				bmpptr = (UINT8*)objptr;
+                bmpptr = (UINT8*)objptr;
 
 				// 4bpp
 				for (x = xpos; x < MIN(xbound, xpos + width * 8); ++x)
@@ -385,10 +355,10 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 						UINT8 p2 = *bmpptr >> 4;
 
 						if (!trans || p1)
-							i82716.line_buf[x] = p1;
+					        i82716.line_buf[x] = p1;
 
 						if (!trans || p2)
-							i82716.line_buf[x] |= p2 << 4;
+					        i82716.line_buf[x] |= p2 << 4;
 					}
 					bmpptr++;
 				}
@@ -399,7 +369,7 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 		}
 
 		// Write it out
-		for (sx = cliprect.min_x; sx < cliprect.max_x; sx += 2)
+		for (sx = cliprect->min_x; sx < cliprect->max_x; sx += 2)
 		{
 			UINT8 pix = i82716.line_buf[sx / 2];
 
@@ -411,37 +381,31 @@ static SCREEN_UPDATE_IND16( maygayv1 )
 	return 0;
 }
 
-static SCREEN_VBLANK( maygayv1 )
+static VIDEO_EOF( maygayv1 )
 {
-	// rising edge
-	if (vblank_on)
+	// UCF
+	if (VREG(VCR0) & VCR0_UCF)
 	{
-		maygayv1_state *state = screen.machine().driver_data<maygayv1_state>();
-		i82716_t &i82716 = state->m_i82716;
-		// UCF
-		if (VREG(VCR0) & VCR0_UCF)
-		{
-			int i;
+		int i;
 
-			for (i = 0; i < 16; ++i)
-				VREG(i) = i82716.dram[i];
-		}
-		else
-		{
-			VREG(VCR0) = i82716.dram[VCR0];
-			VREG(ATBA) = i82716.dram[ATBA];
-		}
+		for (i = 0; i < 16; ++i)
+			VREG(i) = i82716.dram[i];
+	}
+	else
+	{
+    	VREG(VCR0) = i82716.dram[VCR0];
+    	VREG(ATBA) = i82716.dram[ATBA];
+	}
 
-		if (!(VREG(VCR0) & VCR0_DEI))
-		{
-			int i;
-			UINT16 *palbase = &i82716.dram[VREG(CTBA)];
+	if (!(VREG(VCR0) & VCR0_DEI))
+	{
+		int i;
+		UINT16 *palbase = &i82716.dram[VREG(CTBA)];
 
-			for (i = 0; i < 16; ++i)
-			{
-				UINT16 entry = *palbase++;
-				palette_set_color_rgb(screen.machine(), entry & 0xf, pal4bit(entry >> 12), pal4bit(entry >> 8), pal4bit(entry >> 4));
-			}
+		for (i = 0; i < 16; ++i)
+		{
+			UINT16 entry = *palbase++;
+			palette_set_color_rgb(machine, entry & 0xf, pal4bit(entry >> 12), pal4bit(entry >> 8), pal4bit(entry >> 4));
 		}
 	}
 }
@@ -480,8 +444,19 @@ static READ16_HANDLER( read_odd )
 }
 
 
+static struct _i8279_state
+{
+	UINT8	command;
+	UINT8	mode;
+	UINT8	prescale;
+	UINT8	inhibit;
+	UINT8	clear;
+	UINT8	fifo[8];
+	UINT8	ram[16];
+} i8279;
+
 /* TODO */
-static void update_outputs(i8279_t &i8279, UINT16 which)
+static void update_outputs(UINT16 which)
 {
 	int i;
 
@@ -511,8 +486,6 @@ static void update_outputs(i8279_t &i8279, UINT16 which)
 
 static READ16_HANDLER( maygay_8279_r )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
-	i8279_t &i8279 = state->m_i8279;
 	static const char *const portnames[] = { "STROBE1","STROBE2","STROBE3","STROBE4","STROBE5","STROBE6","STROBE7","STROBE8" };
 	UINT8 result = 0xff;
 	UINT8 addr;
@@ -526,7 +499,7 @@ static READ16_HANDLER( maygay_8279_r )
 			case 0x40:
 				addr = i8279.command & 0x07;
 
-				result = input_port_read(space->machine(), portnames[addr]);
+				result = input_port_read(space->machine, portnames[addr]);
 
 				/* handle autoincrement */
 				if (i8279.command & 0x10)
@@ -559,8 +532,6 @@ static READ16_HANDLER( maygay_8279_r )
 
 static WRITE16_HANDLER( maygay_8279_w )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
-	i8279_t &i8279 = state->m_i8279;
 	UINT8 addr;
 
 	data >>= 8;
@@ -579,7 +550,7 @@ static WRITE16_HANDLER( maygay_8279_w )
 					i8279.ram[addr] = (i8279.ram[addr] & 0xf0) | (data & 0x0f);
 				if (!(i8279.inhibit & 0x08))
 					i8279.ram[addr] = (i8279.ram[addr] & 0x0f) | (data & 0xf0);
-				update_outputs(i8279, 1 << addr);
+				update_outputs(1 << addr);
 
 				/* handle autoincrement */
 				if (i8279.command & 0x10)
@@ -637,7 +608,7 @@ static WRITE16_HANDLER( maygay_8279_w )
 			/* command 5: display write inhibit/blanking */
 			case 0xa0:
 				i8279.inhibit = data & 0x0f;
-				update_outputs(i8279, ~0);
+				update_outputs(~0);
 				logerror("8279: clock prescaler set to %02X\n", data & 0x1f);
 				break;
 
@@ -662,25 +633,24 @@ static WRITE16_HANDLER( maygay_8279_w )
 
 static WRITE16_HANDLER( vsync_int_ctrl )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
-	state->m_vsync_latch_preset = data & 0x0100;
+	vsync_latch_preset = data & 0x0100;
 
 	// Active low
-	if (!(state->m_vsync_latch_preset))
-		cputag_set_input_line(space->machine(), "maincpu", 3, CLEAR_LINE);
+	if (!(vsync_latch_preset))
+		cputag_set_input_line(space->machine, "maincpu", 3, CLEAR_LINE);
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x080000, 0x083fff) AM_RAM AM_BASE(&generic_nvram16) AM_SIZE(&generic_nvram_size)
 	AM_RANGE(0x100000, 0x17ffff) AM_ROM AM_REGION("maincpu", 0x80000)
 	AM_RANGE(0x820000, 0x820003) AM_READWRITE(maygay_8279_r, maygay_8279_w)
-	AM_RANGE(0x800000, 0x800003) AM_DEVWRITE8( "ymsnd", ym2413_w, 0xff00 )
+	AM_RANGE(0x800000, 0x800003) AM_DEVWRITE8( "ym", ym2413_w, 0xff00 )
 	AM_RANGE(0x860000, 0x86000d) AM_READWRITE(read_odd, write_odd)
 	AM_RANGE(0x86000e, 0x86000f) AM_WRITE(vsync_int_ctrl)
 	AM_RANGE(0x880000, 0x89ffff) AM_READWRITE(i82716_r, i82716_w)
 	AM_RANGE(0x8a0000, 0x8a001f) AM_DEVREADWRITE8( "duart68681", duart68681_r, duart68681_w, 0xff)
-	AM_RANGE(0x8c0000, 0x8c000f) AM_DEVREADWRITE8_MODERN("pia", pia6821_device, read, write, 0xff)
+	AM_RANGE(0x8c0000, 0x8c000f) AM_DEVREADWRITE8("pia", pia6821_r, pia6821_w, 0xff)
 ADDRESS_MAP_END
 
 
@@ -718,16 +688,17 @@ ADDRESS_MAP_END
 
 
 */
+static UINT8 p1; // save state
+static UINT8 p3; // save state
 
 static READ8_HANDLER( mcu_r )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
 	switch (offset)
 	{
 		case 1:
 		{
-			if ( !BIT(state->m_p3, 4) )
-				return (input_port_read(space->machine(), "REEL"));	// Reels???
+			if ( !BIT(p3, 4) )
+				return (input_port_read(space->machine, "REEL"));	// Reels???
 			else
 				return 0;
 		}
@@ -739,38 +710,37 @@ static READ8_HANDLER( mcu_r )
 
 static WRITE8_HANDLER( mcu_w )
 {
-	maygayv1_state *state = space->machine().driver_data<maygayv1_state>();
 			logerror("O %x D %x",offset,data);
 
 	switch (offset)
 	{
 		// Bottom nibble = UPD
 		case 1:
-			state->m_p1 = data;
+			p1 = data;
 //          upd7759_msg_w(0, data);//?
 			break;
 		case 3:
 			upd7759_reset_w (0, BIT(data, 2));
 			upd7759_start_w(0, BIT(data, 6));
 
-//          if ( !BIT(state->m_p3, 7) && BIT(data, 7) )
+//          if ( !BIT(p3, 7) && BIT(data, 7) )
 				// P1 propagates to outputs
 
-			state->m_p3 = data;
+			p3 = data;
 			break;
 	}
 }
 
 
-static ADDRESS_MAP_START( sound_prg, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_prg, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_data, AS_DATA, 8 )
+static ADDRESS_MAP_START( sound_data, ADDRESS_SPACE_DATA, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_RAM // nothing?
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0xff) AM_READWRITE(mcu_r, mcu_w)
 ADDRESS_MAP_END
 
@@ -815,13 +785,13 @@ static INPUT_PORTS_START( screenpl )
 	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("STROBE3")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Unknown 1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Unk Button")
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Nudge 1")
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Nudge 2")
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("Nudge 3")
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("Unknown 2")
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("?")
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("Collect")
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("Unknown 3")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("?")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON11 ) PORT_NAME("Spin")
 
 	PORT_START("STROBE4")
@@ -924,20 +894,20 @@ INPUT_PORTS_END
 
 ***************************************************************************/
 
-static void duart_irq_handler(device_t *device, UINT8 vector)
+static void duart_irq_handler(const device_config *device, UINT8 vector)
 {
-	cputag_set_input_line_and_vector(device->machine(), "maincpu", 5, ASSERT_LINE, vector);
-//  cputag_set_input_line(device->machine(), "maincpu", 5, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line_and_vector(device->machine, "maincpu", 5, ASSERT_LINE, vector);
+//  cputag_set_input_line(device->machine, "maincpu", 5, state ? ASSERT_LINE : CLEAR_LINE);
 };
 
+static int d68681_val;
 
-static void duart_tx(device_t *device, int channel, UINT8 data)
+static void duart_tx(const device_config *device, int channel, UINT8 data)
 {
-	maygayv1_state *state = device->machine().driver_data<maygayv1_state>();
 	if (channel == 0)
 	{
-		state->m_d68681_val = data;
-		cputag_set_input_line(device->machine(), "soundcpu", MCS51_RX_LINE, ASSERT_LINE);  // ?
+		d68681_val = data;
+		cputag_set_input_line(device->machine, "soundcpu", MCS51_RX_LINE, ASSERT_LINE);  // ?
 	}
 
 };
@@ -951,16 +921,14 @@ static const duart68681_config maygayv1_duart68681_config =
 };
 
 
-static int data_to_i8031(device_t *device)
+static int data_to_i8031(const device_config *device)
 {
-	maygayv1_state *state = device->machine().driver_data<maygayv1_state>();
-	return state->m_d68681_val;
+	return d68681_val;
 }
 
-static void data_from_i8031(device_t *device, int data)
+static void data_from_i8031(const device_config *device, int data)
 {
-	maygayv1_state *state = device->machine().driver_data<maygayv1_state>();
-	duart68681_rx_data(state->m_duart68681, 0, data);
+	duart68681_rx_data(maygayv1_devices.duart68681, 0, data);
 }
 
 static READ8_DEVICE_HANDLER( b_read )
@@ -995,8 +963,6 @@ static const pia6821_interface pia_intf =
 
 static MACHINE_START( maygayv1 )
 {
-	maygayv1_state *state = machine.driver_data<maygayv1_state>();
-	i82716_t &i82716 = state->m_i82716;
 	i82716.dram = auto_alloc_array(machine, UINT16, 0x80000/2);   // ???
 	i82716.line_buf = auto_alloc_array(machine, UINT8, 512);
 
@@ -1004,16 +970,14 @@ static MACHINE_START( maygayv1 )
 
 //  duart_68681_init(DUART_CLOCK, duart_irq_handler, duart_tx);
 
-	i8051_set_serial_tx_callback(machine.device("soundcpu"), data_from_i8031);
-	i8051_set_serial_rx_callback(machine.device("soundcpu"), data_to_i8031);
+	i8051_set_serial_tx_callback(cputag_get_cpu(machine, "soundcpu"), data_from_i8031);
+	i8051_set_serial_rx_callback(cputag_get_cpu(machine, "soundcpu"), data_to_i8031);
 }
 
 static MACHINE_RESET( maygayv1 )
 {
-	maygayv1_state *state = machine.driver_data<maygayv1_state>();
-	i82716_t &i82716 = state->m_i82716;
 	// ?
-	state->m_duart68681 = machine.device( "duart68681" );
+	maygayv1_devices.duart68681 = devtag_get_device( machine, "duart68681" );
 	memset(i82716.dram, 0, 0x40000);
 	i82716.r[RWBA] = 0x0200;
 }
@@ -1021,52 +985,52 @@ static MACHINE_RESET( maygayv1 )
 
 static INTERRUPT_GEN( vsync_interrupt )
 {
-	maygayv1_state *state = device->machine().driver_data<maygayv1_state>();
-	if (state->m_vsync_latch_preset)
-		cputag_set_input_line(device->machine(), "maincpu", 3, ASSERT_LINE);
+	if (vsync_latch_preset)
+		cputag_set_input_line(device->machine, "maincpu", 3, ASSERT_LINE);
 }
 
 
-static MACHINE_CONFIG_START( maygayv1, maygayv1_state )
-	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", vsync_interrupt)
+static MACHINE_DRIVER_START( maygayv1 )
+	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK / 2)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", vsync_interrupt)
 
-	MCFG_CPU_ADD("soundcpu", I8052, SOUND_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(sound_prg)
-	MCFG_CPU_DATA_MAP(sound_data)
-	MCFG_CPU_IO_MAP(sound_io)
+	MDRV_CPU_ADD("soundcpu", I8052, SOUND_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(sound_prg)
+	MDRV_CPU_DATA_MAP(sound_data)
+	MDRV_CPU_IO_MAP(sound_io)
 
-	MCFG_PIA6821_ADD("pia", pia_intf)
+	MDRV_PIA6821_ADD("pia", pia_intf)
 
-	MCFG_MACHINE_START(maygayv1)
-	MCFG_MACHINE_RESET(maygayv1)
+	MDRV_MACHINE_START(maygayv1)
+	MDRV_MACHINE_RESET(maygayv1)
 
-	MCFG_NVRAM_ADD_0FILL("nvram")
+	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	/* TODO: Use real video timings */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_SIZE(640, 300)
-	MCFG_SCREEN_VISIBLE_AREA(0, 640 - 1, 0, 300 - 1)
-	MCFG_SCREEN_UPDATE_STATIC(maygayv1)
-	MCFG_SCREEN_VBLANK_STATIC(maygayv1)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(640, 300)
+	MDRV_SCREEN_VISIBLE_AREA(0, 640 - 1, 0, 300 - 1)
 
-	MCFG_PALETTE_LENGTH(16)
+	MDRV_PALETTE_LENGTH(16)
 
-	MCFG_DUART68681_ADD("duart68681", DUART_CLOCK, maygayv1_duart68681_config)
+	MDRV_DUART68681_ADD("duart68681", DUART_CLOCK, maygayv1_duart68681_config)
 
-	MCFG_VIDEO_START(maygayv1)
+	MDRV_VIDEO_START(maygayv1)
+	MDRV_VIDEO_UPDATE(maygayv1)
+	MDRV_VIDEO_EOF(maygayv1)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("ymsnd",YM2413, MASTER_CLOCK / 4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
+	MDRV_SOUND_ADD("ym",YM2413, MASTER_CLOCK / 4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)
 
-	MCFG_SOUND_ADD("upd",UPD7759, UPD7759_STANDARD_CLOCK)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("upd",UPD7759, UPD7759_STANDARD_CLOCK)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 /*************************************
@@ -1113,26 +1077,7 @@ ROM_START( screenp1 )
 	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
 ROM_END
 
-ROM_START( screenp1a ) // the same as screenp1 apart from the rom at u15
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa4-378.u15", 0x00000, 0x20000, CRC(a5c0e623) SHA1(cd3215db924bbee80f5b3fbbd391c7246ad88c69) )
-	ROM_LOAD16_BYTE( "sa4-378.u16", 0x00001, 0x20000, CRC(b04588b7) SHA1(1f9b933e441969c95bbbabbfbe44349bd945c326) )
-	ROM_LOAD16_BYTE( "sa4-378.u17", 0x40000, 0x20000, CRC(4b6cdc43) SHA1(1d6a4796ce67d0d00fe74a6bafd8b731450cdaab) )
-	ROM_LOAD16_BYTE( "sa4-378.u18", 0x40001, 0x20000, CRC(d986355f) SHA1(86d3f1712cd1bcc90a54945a2baccae2596de691) )
-
-	ROM_LOAD16_BYTE( "sq3-458.u2",  0x80000, 0x20000, CRC(7091dfcd) SHA1(d28abd70db5c49baa93f0488e443f29c27a7a559) )
-	ROM_LOAD16_BYTE( "sq3-458.u1",  0x80001, 0x20000, CRC(1bb0efbf) SHA1(59d7e2e51928df149764502bc4bd5736463f40d7) )
-	ROM_LOAD16_BYTE( "sq3-458.u4",  0xc0000, 0x20000, CRC(0fb0fc84) SHA1(e7ef68130f9627a842849f41f67accf8593a0819) )
-	ROM_LOAD16_BYTE( "sq3-458.u3",  0xc0001, 0x20000, CRC(ef4617d8) SHA1(48231405a775585451bf970db5bb57ec2f238250) )
-
-	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "sr2-002", 0x0000, 0x10000, CRC(1319cf82) SHA1(7a233072890361bcf384de4f90170c2ca713b1de) )
-
-	ROM_REGION( 0x20000, "upd", 0 )
-	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
-ROM_END
-
-ROM_START( screenp2 ) // exactly the same set has been seen with code sa5-196
+ROM_START( screenp2 )
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "sa4-280.u15", 0x00000, 0x20000, CRC(d7206438) SHA1(70e7dc7d58bfa7dfe00250ab46fa71e951dbf901) )
 	ROM_LOAD16_BYTE( "sa4-280.u16", 0x00001, 0x20000, CRC(f99e972f) SHA1(b01c8796967ff7f27269b31ef983b5fb26b03aab) )
@@ -1151,238 +1096,6 @@ ROM_START( screenp2 ) // exactly the same set has been seen with code sa5-196
 	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
 ROM_END
 
-ROM_START( screenp2a ) // the same as screenp2 apart from the rom at u15
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa5-197.u15", 0x00000, 0x20000, CRC(4c067b11) SHA1(2364421b2f92669c3c164a170017bdf255134004) )
-	ROM_LOAD16_BYTE( "sa5-197.u16", 0x00001, 0x20000, CRC(f99e972f) SHA1(b01c8796967ff7f27269b31ef983b5fb26b03aab) )
-	ROM_LOAD16_BYTE( "sa5-197.u17", 0x40000, 0x20000, CRC(cbde5343) SHA1(e341d642d8537bc221b3ca9803c221dc0cdf86c3) )
-	ROM_LOAD16_BYTE( "sa5-197.u18", 0x40001, 0x20000, CRC(885b887b) SHA1(9cfb145c8cca49450fabbf4efab9c70f98ecd2af) )
-
-	ROM_LOAD16_BYTE( "u2.bin", 0x80000, 0x20000, CRC(7091dfcd) SHA1(d28abd70db5c49baa93f0488e443f29c27a7a559) )
-	ROM_LOAD16_BYTE( "u1.bin", 0x80001, 0x20000, CRC(1bb0efbf) SHA1(59d7e2e51928df149764502bc4bd5736463f40d7) )
-	ROM_LOAD16_BYTE( "u4.bin", 0xc0000, 0x20000, CRC(0fb0fc84) SHA1(e7ef68130f9627a842849f41f67accf8593a0819) )
-	ROM_LOAD16_BYTE( "u3.bin", 0xc0001, 0x20000, CRC(ef4617d8) SHA1(48231405a775585451bf970db5bb57ec2f238250) )
-
-	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "reels.bin", 0x00000, 0x10000, CRC(1319cf82) SHA1(7a233072890361bcf384de4f90170c2ca713b1de) )
-
-	ROM_REGION( 0x20000, "upd", 0 )
-	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
-ROM_END
-
-ROM_START( screenp3 )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa5-082.u15", 0x00000, 0x20000, CRC(ef98977d) SHA1(1cbbd4024b2076adc672b2a53fc8696615ce6eac) )
-	ROM_LOAD16_BYTE( "sa5-082.u16", 0x00001, 0x20000, CRC(214823be) SHA1(db98ff915f1956e275425b48c4d829c407c81ed6) )
-	ROM_LOAD16_BYTE( "sa5-082.u17", 0x40000, 0x20000, CRC(6e3b5259) SHA1(fb0e42a995768dfc08549a75021306978740ff85) )
-	ROM_LOAD16_BYTE( "sa5-082.u18", 0x40001, 0x20000, CRC(fb1af777) SHA1(afc4123bc61900d41bd321aa7eb7fb0f982a9501) )
-
-	ROM_LOAD16_BYTE( "u2.bin", 0x80000, 0x20000, CRC(7091dfcd) SHA1(d28abd70db5c49baa93f0488e443f29c27a7a559) )
-	ROM_LOAD16_BYTE( "u1.bin", 0x80001, 0x20000, CRC(1bb0efbf) SHA1(59d7e2e51928df149764502bc4bd5736463f40d7) )
-	ROM_LOAD16_BYTE( "u4.bin", 0xc0000, 0x20000, CRC(0fb0fc84) SHA1(e7ef68130f9627a842849f41f67accf8593a0819) )
-	ROM_LOAD16_BYTE( "u3.bin", 0xc0001, 0x20000, CRC(ef4617d8) SHA1(48231405a775585451bf970db5bb57ec2f238250) )
-
-	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "reels.bin", 0x00000, 0x10000, CRC(1319cf82) SHA1(7a233072890361bcf384de4f90170c2ca713b1de) )
-
-	ROM_REGION( 0x20000, "upd", 0 )
-	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
-ROM_END
-
-ROM_START( screenp3a )
-	ROM_REGION( 0x100000, "maincpu", 0 ) // only  u16 differs from above set
-	ROM_LOAD16_BYTE( "sa5-083.u15", 0x00000, 0x20000, CRC(ef98977d) SHA1(1cbbd4024b2076adc672b2a53fc8696615ce6eac) )
-	ROM_LOAD16_BYTE( "sa5-083.u16", 0x00001, 0x20000, CRC(84e17aa1) SHA1(cbc77315cb311a217d2b9092ffb3e3aee07a9633) )
-	ROM_LOAD16_BYTE( "sa5-083.u17", 0x40000, 0x20000, CRC(6e3b5259) SHA1(fb0e42a995768dfc08549a75021306978740ff85) )
-	ROM_LOAD16_BYTE( "sa5-083.u18", 0x40001, 0x20000, CRC(fb1af777) SHA1(afc4123bc61900d41bd321aa7eb7fb0f982a9501) )
-
-	ROM_LOAD16_BYTE( "u2.bin", 0x80000, 0x20000, CRC(7091dfcd) SHA1(d28abd70db5c49baa93f0488e443f29c27a7a559) )
-	ROM_LOAD16_BYTE( "u1.bin", 0x80001, 0x20000, CRC(1bb0efbf) SHA1(59d7e2e51928df149764502bc4bd5736463f40d7) )
-	ROM_LOAD16_BYTE( "u4.bin", 0xc0000, 0x20000, CRC(0fb0fc84) SHA1(e7ef68130f9627a842849f41f67accf8593a0819) )
-	ROM_LOAD16_BYTE( "u3.bin", 0xc0001, 0x20000, CRC(ef4617d8) SHA1(48231405a775585451bf970db5bb57ec2f238250) )
-
-	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "reels.bin", 0x00000, 0x10000, CRC(1319cf82) SHA1(7a233072890361bcf384de4f90170c2ca713b1de) )
-
-	ROM_REGION( 0x20000, "upd", 0 )
-	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
-ROM_END
-
-ROM_START( screenp4 )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sply5p15", 0x00000, 0x20000, CRC(c1e956d8) SHA1(364bfa7d3d90bcbb50720e02b3330503002e6fe3) )
-	ROM_LOAD16_BYTE( "sply5p16", 0x00001, 0x20000, CRC(e23e7e33) SHA1(0c73a5da1e52ae74427222acdbe81c16f0ba334c) )
-	// not sure which other roms these pair with.. but the ones below work
-	ROM_LOAD16_BYTE( "sa4-280.u17", 0x40000, 0x20000, CRC(cbde5343) SHA1(e341d642d8537bc221b3ca9803c221dc0cdf86c3) )
-	ROM_LOAD16_BYTE( "sa4-280.u18", 0x40001, 0x20000, CRC(885b887b) SHA1(9cfb145c8cca49450fabbf4efab9c70f98ecd2af) )
-
-	ROM_LOAD16_BYTE( "u2.bin", 0x80000, 0x20000, CRC(7091dfcd) SHA1(d28abd70db5c49baa93f0488e443f29c27a7a559) )
-	ROM_LOAD16_BYTE( "u1.bin", 0x80001, 0x20000, CRC(1bb0efbf) SHA1(59d7e2e51928df149764502bc4bd5736463f40d7) )
-	ROM_LOAD16_BYTE( "u4.bin", 0xc0000, 0x20000, CRC(0fb0fc84) SHA1(e7ef68130f9627a842849f41f67accf8593a0819) )
-	ROM_LOAD16_BYTE( "u3.bin", 0xc0001, 0x20000, CRC(ef4617d8) SHA1(48231405a775585451bf970db5bb57ec2f238250) )
-
-	ROM_REGION( 0x10000, "soundcpu", 0 )
-	ROM_LOAD( "reels.bin", 0x00000, 0x10000, CRC(1319cf82) SHA1(7a233072890361bcf384de4f90170c2ca713b1de) )
-
-	ROM_REGION( 0x20000, "upd", 0 )
-	ROM_LOAD( "dig2-001.u12", 0x00000, 0x20000, CRC(498dd74f) SHA1(80bb204b3e9cadcecbfa75c78c52fb9908566c5e) )
-ROM_END
-
-// are these actually missing from all the other sets, or not used by those games?
-#define MV1_MISSING_ROMS \
-	ROM_REGION( 0x10000, "soundcpu", 0 ) \
-	ROM_LOAD( "reels.bin", 0x00000, 0x10000, NO_DUMP ) \
-	ROM_REGION( 0x20000, "upd", 0 ) \
-	ROM_LOAD( "upd.bin", 0x00000, 0x20000, NO_DUMP ) \
-
-#define MV1_MISSING_ROMSU1U4 \
-	ROM_LOAD16_BYTE( "u2.bin", 0x80000, 0x20000, NO_DUMP ) \
-	ROM_LOAD16_BYTE( "u1.bin", 0x80001, 0x20000, NO_DUMP ) \
-	ROM_LOAD16_BYTE( "u4.bin", 0xc0000, 0x20000, NO_DUMP ) \
-	ROM_LOAD16_BYTE( "u3.bin", 0xc0001, 0x20000, NO_DUMP ) \
-
-
-ROM_START( mv1bon )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sw3-418.u15", 0x00000, 0x020000, CRC(0716a47b) SHA1(acbe903c270d2bb20c408d378007136803f96805) )
-	ROM_LOAD16_BYTE( "sw3-418.u16", 0x00001, 0x020000, CRC(0d02369b) SHA1(4acbffb31bf6e98156e0b581e4e81459b33a845e) )
-	ROM_LOAD16_BYTE( "sw3-418.u17", 0x40000, 0x020000, CRC(f1ddf287) SHA1(c1f7e92188995e9dbf47d50947bb7941b523b916) )
-	ROM_LOAD16_BYTE( "sw3-418.u18", 0x40001, 0x020000, CRC(b81dbac9) SHA1(9549596169cff9b2bbbe12db551122e4d874b274) )
-	MV1_MISSING_ROMSU1U4 // complains U1 is bad, so missing.
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-ROM_START( mv1cpc )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sc4-066.u15", 0x00000, 0x020000, CRC(05599f6c) SHA1(3e2d5bc12c61b23ffbce40fcb1612611241f6db3) )
-	ROM_LOAD16_BYTE( "sc4-066.u16", 0x00001, 0x020000, CRC(6e485115) SHA1(1288b83df9cbf8813ff07f53dcf03d3637d42f0e) )
-	ROM_LOAD16_BYTE( "sc4-066.u17", 0x40000, 0x020000, CRC(ee7894e6) SHA1(070e1fed8b1b0f2876dbb5ef70b439baf9bbd2d7) )
-	ROM_LOAD16_BYTE( "sc4-066.u18", 0x40001, 0x020000, CRC(a2320921) SHA1(424d26368b9452af9aa1760a98474c5b45edf6dd) )
-	ROM_LOAD16_BYTE( "sq3-432.u2", 0x80000, 0x020000, CRC(4918a9e1) SHA1(6599c5f0b2ce5dc78758917195c04ae4bb078e94) )
-	ROM_LOAD16_BYTE( "sq3-432.u1", 0x80001, 0x020000, CRC(2ee77952) SHA1(8f17d28220a25ad232aab029166a7535d5b5618b) )
-	ROM_LOAD16_BYTE( "sq3-432.u4", 0xc0000, 0x020000, CRC(abd2df4d) SHA1(16b3df060094bef0ac41cb3cc71e910323d687f2) )
-	ROM_LOAD16_BYTE( "sq3-432.u3", 0xc0001, 0x020000, CRC(7eb80747) SHA1(23158c400497f01ac7eddecf259ed988b6683eb9) )
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-
-ROM_START( mv1cpca )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sc4-067.u15", 0x00000, 0x020000, CRC(05599f6c) SHA1(3e2d5bc12c61b23ffbce40fcb1612611241f6db3) )
-	ROM_LOAD16_BYTE( "sc4-067.u16", 0x00001, 0x020000, CRC(4068eac8) SHA1(8c9a762c827118b96ec6d257ab828436224a2123) )
-	ROM_LOAD16_BYTE( "sc4-067.u17", 0x40000, 0x020000, CRC(ee7894e6) SHA1(070e1fed8b1b0f2876dbb5ef70b439baf9bbd2d7) )
-	ROM_LOAD16_BYTE( "sc4-067.u18", 0x40001, 0x020000, CRC(a2320921) SHA1(424d26368b9452af9aa1760a98474c5b45edf6dd) )
-	ROM_LOAD16_BYTE( "sq3-432.u2", 0x80000, 0x020000, CRC(4918a9e1) SHA1(6599c5f0b2ce5dc78758917195c04ae4bb078e94) )
-	ROM_LOAD16_BYTE( "sq3-432.u1", 0x80001, 0x020000, CRC(2ee77952) SHA1(8f17d28220a25ad232aab029166a7535d5b5618b) )
-	ROM_LOAD16_BYTE( "sq3-432.u4", 0xc0000, 0x020000, CRC(abd2df4d) SHA1(16b3df060094bef0ac41cb3cc71e910323d687f2) )
-	ROM_LOAD16_BYTE( "sq3-432.u3", 0xc0001, 0x020000, CRC(7eb80747) SHA1(23158c400497f01ac7eddecf259ed988b6683eb9) )
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-
-ROM_START( mv1cpcb )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sc5-007.u15", 0x00000, 0x020000, CRC(d7e969ff) SHA1(2cf7bd0b7ae55f5570b699ff1a3a325658409c5c) )
-	ROM_LOAD16_BYTE( "sc5-007.u16", 0x00001, 0x020000, CRC(bbc579c7) SHA1(ef1edd28f7015819f470cdf6736377268eee617c) )
-	ROM_LOAD16_BYTE( "sc5-007.u17", 0x40000, 0x020000, CRC(f69bbac9) SHA1(27c6d06673a349bd2d0cd44692e0a0482b37c29f) )
-	ROM_LOAD16_BYTE( "sc5-007.u18", 0x40001, 0x020000, CRC(6f3979b2) SHA1(09e74d05fb564293e0314e5dcdfb8edde4f1f9ec) )
-	ROM_LOAD16_BYTE( "sq3-432.u2", 0x80000, 0x020000, CRC(4918a9e1) SHA1(6599c5f0b2ce5dc78758917195c04ae4bb078e94) )
-	ROM_LOAD16_BYTE( "sq3-432.u1", 0x80001, 0x020000, CRC(2ee77952) SHA1(8f17d28220a25ad232aab029166a7535d5b5618b) )
-	ROM_LOAD16_BYTE( "sq3-432.u4", 0xc0000, 0x020000, CRC(abd2df4d) SHA1(16b3df060094bef0ac41cb3cc71e910323d687f2) )
-	ROM_LOAD16_BYTE( "sq3-432.u3", 0xc0001, 0x020000, CRC(7eb80747) SHA1(23158c400497f01ac7eddecf259ed988b6683eb9) )
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-
-ROM_START( mv1cwq )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sw2-319.u15", 0x00000, 0x020000, CRC(0a591eb7) SHA1(dad833711a5779300757e3e0fbe8f55073470724) )
-	ROM_LOAD16_BYTE( "sw2-319.u16", 0x00001, 0x020000, CRC(8460cb55) SHA1(793c7e31619e5a30ad8bf851253c8cfcbddefbd7) )
-	ROM_LOAD16_BYTE( "sw2-319.u17", 0x40000, 0x020000, CRC(f065c219) SHA1(b83a835a107740e2e846d31b4988237f1e60db78) )
-	ROM_LOAD16_BYTE( "sw2-319.u18", 0x40001, 0x020000, CRC(0c291cb3) SHA1(aa7740a7a34e653e9b39a0ce64b344ace9d74e19) )
-	MV1_MISSING_ROMSU1U4 // complains U1 is bad, so missing.
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-ROM_START( mv1cwqa )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sw2-320.u15", 0x00000, 0x020000, CRC(02679239) SHA1(9c3f2ca7048a6ef716dbdd20f9a921e1d505638f) )
-	ROM_LOAD16_BYTE( "sw2-320.u16", 0x00001, 0x020000, CRC(8460cb55) SHA1(793c7e31619e5a30ad8bf851253c8cfcbddefbd7) )
-	ROM_LOAD16_BYTE( "sw2-320.u17", 0x40000, 0x020000, CRC(f065c219) SHA1(b83a835a107740e2e846d31b4988237f1e60db78) )
-	ROM_LOAD16_BYTE( "sw2-320.u18", 0x40001, 0x020000, CRC(0c291cb3) SHA1(aa7740a7a34e653e9b39a0ce64b344ace9d74e19) )
-	MV1_MISSING_ROMSU1U4 // complains U1 is bad, so missing.
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-ROM_START( mv1guac )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sw3-146.u15", 0x00000, 0x020000, CRC(faa7ffa9) SHA1(db7e555727d126c266b6e973b61d1df205256c38) )
-	ROM_LOAD16_BYTE( "sw3-146.u16", 0x00001, 0x020000, CRC(1f7209d9) SHA1(b512e28cef973c9b6e0a8b630500a5de08206f32) )
-	ROM_LOAD16_BYTE( "sw3-146.u17", 0x40000, 0x020000, CRC(0ecdd43b) SHA1(f666281d4c2a67675d75fc07f7dfd6b53558468a) )
-	ROM_LOAD16_BYTE( "sw3-146.u18", 0x40001, 0x020000, CRC(a107f3a9) SHA1(35de6636f2ca07e5db0fc7527b6d94940242e2a3) )
-	MV1_MISSING_ROMSU1U4 // complains U1 is bad, so missing.
-
-	MV1_MISSING_ROMS
-
-ROM_END
-
-
-ROM_START( mv1guaca )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sw3-147.u15", 0x00000, 0x020000, CRC(c2d420ad) SHA1(3fe046fbb5eb51e85926707662e6009732f2d588) )
-	ROM_LOAD16_BYTE( "sw3-147.u16", 0x00001, 0x020000, CRC(1f7209d9) SHA1(b512e28cef973c9b6e0a8b630500a5de08206f32) )
-	ROM_LOAD16_BYTE( "sw3-147.u17", 0x40000, 0x020000, CRC(0ecdd43b) SHA1(f666281d4c2a67675d75fc07f7dfd6b53558468a) )
-	ROM_LOAD16_BYTE( "sw3-147.u18", 0x40001, 0x020000, CRC(a107f3a9) SHA1(35de6636f2ca07e5db0fc7527b6d94940242e2a3) )
-	MV1_MISSING_ROMSU1U4 // complains U1 is bad, so missing.
-
-	MV1_MISSING_ROMS
-ROM_END
-
-ROM_START( mv1sfx )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa4-005.u15", 0x00000, 0x020000, CRC(07d2cd6a) SHA1(97bf2384241cbd0df4a3a0878c6022bee392611b) )
-	ROM_LOAD16_BYTE( "sa4-005.u16", 0x00001, 0x020000, CRC(11c8f456) SHA1(81c6aa0b60c256236416a65c1199afa30b05ff1b) )
-	ROM_LOAD16_BYTE( "sa4-005.u17", 0x40000, 0x020000, CRC(f34a0d24) SHA1(377c067068f7a6a73d3c5c6cdb62409116246e71) )
-	ROM_LOAD16_BYTE( "sa4-005.u18", 0x40001, 0x020000, CRC(e13c544a) SHA1(206151ad83af5cf939f917bcec6600ca6ffb4544) )
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
-ROM_START( mv1sfxa )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa4-006.u15", 0x00000, 0x020000, CRC(3fa1126e) SHA1(1f94aa796b065f4b63aac31df5f8368623a587ef) )
-	ROM_LOAD16_BYTE( "sa4-006.u16", 0x00001, 0x020000, CRC(11c8f456) SHA1(81c6aa0b60c256236416a65c1199afa30b05ff1b) )
-	ROM_LOAD16_BYTE( "sa4-006.u17", 0x40000, 0x020000, CRC(f34a0d24) SHA1(377c067068f7a6a73d3c5c6cdb62409116246e71) )
-	ROM_LOAD16_BYTE( "sa4-006.u18", 0x40001, 0x020000, CRC(e13c544a) SHA1(206151ad83af5cf939f917bcec6600ca6ffb4544) )
-
-	MV1_MISSING_ROMS
-ROM_END
-
-ROM_START( mv1wc )
-	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "sa3-196.u15", 0x00000, 0x020000, CRC(ee78e8e6) SHA1(16cb3fb0ff23f054644d706583036dae44dac792) )
-	ROM_LOAD16_BYTE( "sa3-196.u16", 0x00001, 0x020000, CRC(96beaa01) SHA1(b61487fbe470c776076cbdf7cd68063b56fde81d) )
-	ROM_LOAD16_BYTE( "sa3-196.u17", 0x40000, 0x020000, CRC(d583ad06) SHA1(94d86d5481367624576bf489cd5347f1b4979646) )
-	ROM_LOAD16_BYTE( "sa3-196.u18", 0x40001, 0x020000, CRC(84739f41) SHA1(a26d4df72fe723fceaf8471cdf89e4bd77585f0f) )
-	MV1_MISSING_ROMSU1U4 // probably missing (no error, but hangs)
-
-	MV1_MISSING_ROMS
-ROM_END
-
-
 /*************************************
  *
  *  Game driver(s)
@@ -1391,30 +1104,9 @@ ROM_END
 
 static DRIVER_INIT( screenpl )
 {
-	maygayv1_state *state = machine.driver_data<maygayv1_state>();
-	state->m_p1 = state->m_p3 = 0xff;
+	p1 = p3 = 0xff;
 }
 
-#define GAME_FLAGS GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_REQUIRES_ARTWORK
-
-GAME( 1991, screenpl, 0,        maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. 4.0)",               GAME_FLAGS )
-GAME( 1991, screenp1, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. 1.9, set 1)",               GAME_FLAGS )
-GAME( 1991, screenp1a,screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. 1.9, set 2)",               GAME_FLAGS )
-GAME( 1991, screenp2, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. 1.9, Isle of Man, set 1)",  GAME_FLAGS )
-GAME( 1991, screenp2a,screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. 1.9, Isle of Man, set 2)",  GAME_FLAGS )
-GAME( 1991, screenp3, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, SA5-082)",  GAME_FLAGS )
-GAME( 1991, screenp3a,screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, SA5-083)",  GAME_FLAGS )
-GAME( 1991, screenp4 ,screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (Maygay, MV1 Video, ver. ?.?)",  GAME_FLAGS )
-
-// incomplete sets
-GAME( 199?, mv1bon	, 0			,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Believe It Or Not (Maygay, MV1 Video)",  GAME_FLAGS )
-GAME( 199?, mv1cpc	, 0			,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Caesar's Palace Club (Maygay, MV1 Video, set 1)",  GAME_FLAGS )
-GAME( 199?, mv1cpca	, mv1cpc	,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Caesar's Palace Club (Maygay, MV1 Video, set 2)",  GAME_FLAGS )
-GAME( 199?, mv1cpcb	, mv1cpc	,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Caesar's Palace Club (Maygay, MV1 Video, set 3)",  GAME_FLAGS )
-GAME( 199?, mv1cwq	, 0			,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Crossword Quiz (Maygay, MV1 Video, set 1)",  GAME_FLAGS )
-GAME( 199?, mv1cwqa	, mv1cwq	,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Crossword Quiz (Maygay, MV1 Video, set 2)",  GAME_FLAGS )
-GAME( 199?, mv1guac	, 0			,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Give Us A Clue (Maygay, MV1 Video, set 1)",  GAME_FLAGS )
-GAME( 199?, mv1guaca, mv1guac	,maygayv1, screenpl, screenpl, ROT0, "Maygay", "Give Us A Clue (Maygay, MV1 Video, set 2)",  GAME_FLAGS )
-GAME( 199?, mv1sfx	, 0			,maygayv1, screenpl, screenpl, ROT90, "Maygay", "Special Effects (Maygay, MV1 Video, set 1)",  GAME_FLAGS )
-GAME( 199?, mv1sfxa	, mv1sfx	,maygayv1, screenpl, screenpl, ROT90, "Maygay", "Special Effects (Maygay, MV1 Video, set 2)",  GAME_FLAGS )
-GAME( 199?, mv1wc	, 0			,maygayv1, screenpl, screenpl, ROT0, "Maygay", "World Cup (Maygay, MV1 Video)",  GAME_FLAGS )
+GAME( 1991, screenpl, 0,        maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 4.0)",               GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 1991, screenp1, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9)",               GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 1991, screenp2, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9, Isle of Man)",  GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )

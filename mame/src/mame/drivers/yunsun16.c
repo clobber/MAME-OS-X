@@ -85,12 +85,25 @@ Stephh's notes (based on the games M68000 code and some tests) :
 
 ***************************************************************************/
 
-#include "emu.h"
-#include "includes/yunsun16.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/3812intf.h"
+
+/* Variables defined in video: */
+
+extern UINT16 *yunsun16_vram_0,   *yunsun16_vram_1;
+extern UINT16 *yunsun16_scroll_0, *yunsun16_scroll_1;
+extern UINT16 *yunsun16_priority;
+
+/* Functions defined in video: */
+
+WRITE16_HANDLER( yunsun16_vram_0_w );
+WRITE16_HANDLER( yunsun16_vram_1_w );
+
+VIDEO_START( yunsun16 );
+VIDEO_UPDATE( yunsun16 );
 
 
 /***************************************************************************
@@ -106,40 +119,39 @@ static WRITE16_HANDLER( yunsun16_sound_bank_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		int bank = data & 3;
-		UINT8 *dst	= space->machine().region("oki")->base();
+		UINT8 *dst	= memory_region(space->machine, "oki");
 		UINT8 *src	= dst + 0x80000 + 0x20000 * bank;
 		memcpy(dst + 0x20000, src, 0x20000);
 	}
 }
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x800000, 0x800001) AM_READ_PORT("INPUTS")
 	AM_RANGE(0x800018, 0x800019) AM_READ_PORT("SYSTEM")
 	AM_RANGE(0x80001a, 0x80001b) AM_READ_PORT("DSW1")
 	AM_RANGE(0x80001c, 0x80001d) AM_READ_PORT("DSW2")
-	AM_RANGE(0x800030, 0x800031) AM_WRITENOP	// ? (value: don't care)
-	AM_RANGE(0x800100, 0x800101) AM_WRITENOP	// ? $9100
-	AM_RANGE(0x800102, 0x800103) AM_WRITENOP	// ? $9080
-	AM_RANGE(0x800104, 0x800105) AM_WRITENOP	// ? $90c0
-	AM_RANGE(0x80010a, 0x80010b) AM_WRITENOP	// ? $9000
-	AM_RANGE(0x80010c, 0x80010f) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_scrollram_1)	// Scrolling
-	AM_RANGE(0x800114, 0x800117) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_scrollram_0)	// Scrolling
-	AM_RANGE(0x800154, 0x800155) AM_RAM AM_BASE_MEMBER(yunsun16_state, m_priorityram)	// Priority
-	AM_RANGE(0x800180, 0x800181) AM_WRITE(yunsun16_sound_bank_w)	// Sound
-	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	// Sound
-	AM_RANGE(0x8001fe, 0x8001ff) AM_WRITENOP	// ? 0 (during int)
-	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
-	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(yunsun16_vram_1_w) AM_BASE_MEMBER(yunsun16_state, m_vram_1)	// Layer 1
-	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(yunsun16_vram_0_w) AM_BASE_MEMBER(yunsun16_state, m_vram_0)	// Layer 0
-	AM_RANGE(0x910000, 0x910fff) AM_RAM	AM_BASE_SIZE_MEMBER(yunsun16_state, m_spriteram, m_spriteram_size)	// Sprites
+	AM_RANGE(0x800030, 0x800031) AM_WRITE(SMH_NOP						)	// ? (value: don't care)
+	AM_RANGE(0x800100, 0x800101) AM_WRITE(SMH_NOP						)	// ? $9100
+	AM_RANGE(0x800102, 0x800103) AM_WRITE(SMH_NOP						)	// ? $9080
+	AM_RANGE(0x800104, 0x800105) AM_WRITE(SMH_NOP						)	// ? $90c0
+	AM_RANGE(0x80010a, 0x80010b) AM_WRITE(SMH_NOP						)	// ? $9000
+	AM_RANGE(0x80010c, 0x80010f) AM_RAM AM_BASE(&yunsun16_scroll_1				)	// Scrolling
+	AM_RANGE(0x800114, 0x800117) AM_RAM AM_BASE(&yunsun16_scroll_0				)	// Scrolling
+	AM_RANGE(0x800154, 0x800155) AM_RAM AM_BASE(&yunsun16_priority				)	// Priority
+	AM_RANGE(0x800180, 0x800181) AM_WRITE(yunsun16_sound_bank_w					)	// Sound
+	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff	)	// Sound
+	AM_RANGE(0x8001fe, 0x8001ff) AM_WRITE(SMH_NOP							)	// ? 0 (during int)
+	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)	// Palette
+	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(yunsun16_vram_1_w) AM_BASE(&yunsun16_vram_1	)	// Layer 1
+	AM_RANGE(0x90c000, 0x90ffff) AM_RAM_WRITE(yunsun16_vram_0_w) AM_BASE(&yunsun16_vram_0	)	// Layer 0
+	AM_RANGE(0x910000, 0x910fff) AM_RAM	AM_BASE(&spriteram16) AM_SIZE(&spriteram_size	)	// Sprites
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
 
 
 static WRITE16_HANDLER( magicbub_sound_command_w )
 {
-	yunsun16_state *state = space->machine().driver_data<yunsun16_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 /*
@@ -148,8 +160,8 @@ number 0 on each voice. That sample is 00000-00000.
 */
 		if ((data & 0xff) != 0x3a)
 		{
-			soundlatch_w(space, 0, data & 0xff);
-			device_set_input_line(state->m_audiocpu, INPUT_LINE_NMI, PULSE_LINE);
+		soundlatch_w(space, 0, data & 0xff);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 		}
 	}
 }
@@ -157,7 +169,7 @@ number 0 on each voice. That sample is 00000-00000.
 static DRIVER_INIT( magicbub )
 {
 //  remove_mem_write16_handler (0, 0x800180, 0x800181 );
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x800188, 0x800189, FUNC(magicbub_sound_command_w));
+	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x800188, 0x800189, 0, 0, magicbub_sound_command_w);
 }
 
 /***************************************************************************
@@ -168,16 +180,16 @@ static DRIVER_INIT( magicbub )
 
 ***************************************************************************/
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_port_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w )
+	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ym", ym3812_r, ym3812_w )
 	AM_RANGE(0x18, 0x18) AM_READ(soundlatch_r )						// From Main CPU
-	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)		// M6295
+	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w )		// M6295
 ADDRESS_MAP_END
 
 
@@ -410,22 +422,22 @@ static INPUT_PORTS_START( bombkick )
 	PORT_DIPSETTING(      0x0003, "3" )
 	PORT_DIPSETTING(      0x0002, "4" )
 	PORT_DIPSETTING(      0x0001, "5" )
-	PORT_DIPNAME( 0x0004, 0x0004, "DSW 2:3 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0004, 0x0004, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, "DSW 2:4 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0008, 0x0008, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0010, 0x0000, "DSW 2:5 - LEAVE ON!" )	/* Must be ON  ! - read notes */
+	PORT_DIPNAME( 0x0010, 0x0000, "DON'T CHANGE IT!" )      /* Must be ON  ! - read notes */
 	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0020, 0x0020, "DSW 2:6 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0020, 0x0020, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0040, 0x0000, "DSW 2:7 - LEAVE ON!" )	/* Must be ON  ! - read notes */
+	PORT_DIPNAME( 0x0040, 0x0000, "DON'T CHANGE IT!" )      /* Must be ON  ! - read notes */
 	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "DSW 2:8 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0080, 0x0080, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -471,7 +483,7 @@ static INPUT_PORTS_START( paprazzi )
 	PORT_DIPSETTING(      0x0002, DEF_STR( 1C_2C ) )
 	PORT_DIPUNKNOWN( 0x0004, 0x0004 )  // $25bc
 	PORT_DIPNAME( 0x0008, 0x0008, DEF_STR( Language ) )
-	PORT_DIPSETTING(      0x0000, DEF_STR( Korean ) )
+	PORT_DIPSETTING(      0x0000, "Korean" )
 	PORT_DIPSETTING(      0x0008, DEF_STR( English ) )
 	PORT_DIPNAME( 0x0010, 0x0010, "Enemies" ) // soemthing else.. but related to enemy types
 	PORT_DIPSETTING(      0x0000, "Type 1" )
@@ -555,32 +567,13 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static MACHINE_START( yunsun16 )
-{
-	yunsun16_state *state = machine.driver_data<yunsun16_state>();
-
-	state->m_audiocpu = machine.device("audiocpu");
-
-	state->save_item(NAME(state->m_sprites_scrolldx));
-	state->save_item(NAME(state->m_sprites_scrolldy));
-}
-
-static MACHINE_RESET( yunsun16 )
-{
-	yunsun16_state *state = machine.driver_data<yunsun16_state>();
-
-	state->m_sprites_scrolldx = -0x40;
-	state->m_sprites_scrolldy = -0x0f;
-}
-
 /***************************************************************************
                                 Magic Bubble
 ***************************************************************************/
 
-static void soundirq(device_t *device, int state)
+static void soundirq(const device_config *device, int state)
 {
-	yunsun16_state *yunsun16 = device->machine().driver_data<yunsun16_state>();
-	device_set_input_line(yunsun16->m_audiocpu, 0, state);
+	cputag_set_input_line(device->machine, "audiocpu", 0, state);
 }
 
 static const ym3812_interface magicbub_ym3812_intf =
@@ -588,81 +581,79 @@ static const ym3812_interface magicbub_ym3812_intf =
 	soundirq	/* IRQ Line */
 };
 
-static MACHINE_CONFIG_START( magicbub, yunsun16_state )
+static MACHINE_DRIVER_START( magicbub )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
+	MDRV_CPU_ADD("maincpu", M68000, 16000000)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80, 3000000)	/* ? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_port_map)
-
-	MCFG_MACHINE_START(yunsun16)
-	MCFG_MACHINE_RESET(yunsun16)
+	MDRV_CPU_ADD("audiocpu", Z80, 3000000)	/* ? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_port_map)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(0x180, 0xe0)
-	MCFG_SCREEN_VISIBLE_AREA(0+0x20, 0x180-1-0x20, 0, 0xe0-1)
-	MCFG_SCREEN_UPDATE_STATIC(yunsun16)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(0x180, 0xe0)
+	MDRV_SCREEN_VISIBLE_AREA(0+0x20, 0x180-1-0x20, 0, 0xe0-1)
 
-	MCFG_GFXDECODE(yunsun16)
-	MCFG_PALETTE_LENGTH(8192)
+	MDRV_GFXDECODE(yunsun16)
+	MDRV_PALETTE_LENGTH(8192)
 
-	MCFG_VIDEO_START(yunsun16)
+	MDRV_VIDEO_START(yunsun16)
+	MDRV_VIDEO_UPDATE(yunsun16)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM3812, 4000000)
-	MCFG_SOUND_CONFIG(magicbub_ym3812_intf)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+	MDRV_SOUND_ADD("ym", YM3812, 4000000)
+	MDRV_SOUND_CONFIG(magicbub_ym3812_intf)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.20)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.20)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+MACHINE_DRIVER_END
 
 
 /***************************************************************************
                                 Shocking
 ***************************************************************************/
 
-static MACHINE_CONFIG_START( shocking, yunsun16_state )
+static MACHINE_DRIVER_START( shocking )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq2_line_hold)
-
-	MCFG_MACHINE_START(yunsun16)
-	MCFG_MACHINE_RESET(yunsun16)
+	MDRV_CPU_ADD("maincpu", M68000, 16000000)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq2_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(0x180, 0xe0)
-	MCFG_SCREEN_VISIBLE_AREA(0, 0x180-1-4, 0, 0xe0-1)
-	MCFG_SCREEN_UPDATE_STATIC(yunsun16)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(0x180, 0xe0)
+	MDRV_SCREEN_VISIBLE_AREA(0, 0x180-1-4, 0, 0xe0-1)
 
-	MCFG_GFXDECODE(yunsun16)
-	MCFG_PALETTE_LENGTH(8192)
+	MDRV_GFXDECODE(yunsun16)
+	MDRV_PALETTE_LENGTH(8192)
 
-	MCFG_VIDEO_START(yunsun16)
+	MDRV_VIDEO_START(yunsun16)
+	MDRV_VIDEO_UPDATE(yunsun16)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -889,30 +880,6 @@ ROM_START( shocking )
 
 ROM_END
 
-ROM_START( shockingk )
-
-	ROM_REGION( 0x080000, "maincpu", 0 )		/* 68000 Code */
-	ROM_LOAD16_BYTE( "u33.bin", 0x000000, 0x040000, CRC(870108ad) SHA1(2d059ee0f189ed404211f6041cd382f90b53d0cd) )
-	ROM_LOAD16_BYTE( "u32.bin", 0x000001, 0x040000, CRC(be2125f4) SHA1(fab38697266a1f95b8ebfff0c692d8e8239710aa) )
-
-	ROM_REGION( 0x200000*8, "gfx1", ROMREGION_ERASEFF )	/* 16x16x8 */
-	ROMX_LOAD( "u67.bin", 0x000000, 0x080000, CRC(7b0f3944) SHA1(0954610e0a1b39e8e68411b98c3fe487da6bd77a) , ROM_GROUPWORD | ROM_SKIP(6))
-	ROMX_LOAD( "u68.bin", 0x000002, 0x080000, CRC(aa736da6) SHA1(0d8bbfc1fb014c6e662e4dc376bcd87b4157a7aa) , ROM_GROUPWORD | ROM_SKIP(6))
-	ROMX_LOAD( "u69.bin", 0x000004, 0x080000, CRC(292bb626) SHA1(78a7ecc72dde6d397d2137e528dabcd247d382bd) , ROM_GROUPWORD | ROM_SKIP(6))
-	ROMX_LOAD( "u70.bin", 0x000006, 0x080000, CRC(2f9eeb81) SHA1(4e84c4451cbe3feee95a828790830e95f278f2e7) , ROM_GROUPWORD | ROM_SKIP(6))
-
-	ROM_REGION( 0x100000, "gfx2", 0 )	/* 16x16x4 */
-	ROM_LOAD( "u20.bin", 0x000000, 0x040000, CRC(3502a477) SHA1(f317c12491b35470ceb178793c6e332c3afcf2b5) )
-	ROM_LOAD( "u21.bin", 0x040000, 0x040000, CRC(ffe0af85) SHA1(124d8375fd366333fb3cb16bb94d7fa3c79534b3) )
-	ROM_LOAD( "u22.bin", 0x080000, 0x040000, CRC(59260de1) SHA1(2dd2d7ab93fa751cb9142400a3ff91391477d555) )
-	ROM_LOAD( "u23.bin", 0x0c0000, 0x040000, CRC(00e4af23) SHA1(a4d23f16748385dd8c87cae3e16593e5a0195c24) )
-
-	ROM_REGION( 0x080000 * 2, "oki", 0 )	/* Samples */
-	ROM_LOAD( "yunsun16.131", 0x000000, 0x080000, CRC(d0a1bb8c) SHA1(10f33521bd6031ed73ee5c7be1382165925aa8f8) )
-	ROM_RELOAD(               0x080000, 0x080000 )
-
-ROM_END
-
 
 /***************************************************************************
 
@@ -953,9 +920,9 @@ ROM_END
 
 ***************************************************************************/
 
-GAME( 199?, magicbub,  0,        magicbub, magicbub, magicbub, ROT0,   "Yun Sung", "Magic Bubble",                 GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 199?, magicbuba, magicbub, magicbub, magicbua, magicbub, ROT0,   "Yun Sung", "Magic Bubble (Adult version)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1996, paprazzi,  0,        shocking, paprazzi, 0,        ROT270, "Yun Sung", "Paparazzi",                    GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1997, shocking,  0,        shocking, shocking, 0,        ROT0,   "Yun Sung", "Shocking",                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1997, shockingk, shocking, shocking, shocking, 0,        ROT0,   "Yun Sung", "Shocking (Korea)",             GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1998, bombkick,  0,        shocking, bombkick, 0,        ROT0,   "Yun Sung", "Bomb Kick",                    GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 199?, magicbub, 0,        magicbub, magicbub, magicbub, ROT0,   "Yun Sung", "Magic Bubble", GAME_NO_COCKTAIL )
+GAME( 199?, magicbuba,magicbub, magicbub, magicbua, magicbub, ROT0,   "Yun Sung", "Magic Bubble (Adult version)", GAME_NO_COCKTAIL )
+GAME( 1996, paprazzi, 0,        shocking, paprazzi, 0,        ROT270, "Yun Sung", "Paparazzi",    GAME_NO_COCKTAIL )
+GAME( 1997, shocking, 0,        shocking, shocking, 0,        ROT0,   "Yun Sung", "Shocking",     GAME_NO_COCKTAIL )
+GAME( 1998, bombkick, 0,        shocking, bombkick, 0,        ROT0,   "Yun Sung", "Bomb Kick",    GAME_NO_COCKTAIL )
+

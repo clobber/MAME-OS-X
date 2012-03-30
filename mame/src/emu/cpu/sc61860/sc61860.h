@@ -36,25 +36,27 @@
    only readable with special instructions and program execution
    64 kb external ram (first 8kbyte not seen for program execution?) */
 
+#include "cpuintrf.h"
 
 typedef struct _sc61860_cpu_core sc61860_cpu_core;
 struct _sc61860_cpu_core
 {
-    int (*reset)(device_t *device);
-    int (*brk)(device_t *device);
-    int (*x)(device_t *device);
-    int (*ina)(device_t *device);
-    void (*outa)(device_t *device, int);
-    int (*inb)(device_t *device);
-    void (*outb)(device_t *device, int);
-    void (*outc)(device_t *device, int);
+    int (*reset)(const device_config *device);
+    int (*brk)(const device_config *device);
+    int (*x)(const device_config *device);
+    int (*ina)(const device_config *device);
+    void (*outa)(const device_config *device, int);
+    int (*inb)(const device_config *device);
+    void (*outb)(const device_config *device, int);
+    void (*outc)(const device_config *device, int);
 };
 
 CPU_DISASSEMBLE( sc61860 );
 
 /* this is though for power on/off of the sharps */
-UINT8 *sc61860_internal_ram(device_t *device);
+UINT8 *sc61860_internal_ram(const device_config *device);
 
-DECLARE_LEGACY_CPU_DEVICE(SC61860, sc61860);
+CPU_GET_INFO( sc61860 );
+#define CPU_SC61860 CPU_GET_INFO_NAME( sc61860 )
 
 #endif /* __SC61860_H__ */

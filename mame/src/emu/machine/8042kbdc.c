@@ -173,7 +173,7 @@
 *********************************************************************/
 
 
-#include "emu.h"
+#include "driver.h"
 #include "memconv.h"
 
 #include "machine/pckeybrd.h"
@@ -204,10 +204,9 @@
 static struct
 {
 	kbdc8042_type_t type;
-	void (*set_gate_a20)(running_machine &machine, int a20);
-	void (*keyboard_interrupt)(running_machine &machine, int state);
-	void (*set_spkr)(running_machine &machine, int speaker);
-	int (*get_out2)(running_machine &machine);
+	void (*set_gate_a20)(running_machine *machine, int a20);
+	void (*keyboard_interrupt)(running_machine *machine, int state);
+	int (*get_out2)(running_machine *machine);
 
 	UINT8 inport, outport, data, command;
 
@@ -235,7 +234,7 @@ static struct
 
 static int poll_delay;
 
-static void at_8042_check_keyboard(running_machine &machine);
+static void at_8042_check_keyboard(running_machine *machine);
 
 
 
@@ -245,7 +244,7 @@ static void at_8042_check_keyboard(running_machine &machine);
 
 ***************************************************************************/
 
-static void at_8042_set_outport(running_machine &machine, UINT8 data, int initial)
+static void at_8042_set_outport(running_machine *machine, UINT8 data, int initial)
 {
 	UINT8 change;
 	change = initial ? 0xFF : (kbdc8042.outport ^ data);
@@ -265,15 +264,9 @@ static TIMER_CALLBACK( kbdc8042_time )
 	at_8042_check_keyboard(machine);
 }
 
-static TIMER_CALLBACK( kbdc8042_clr_int )
-{
-	/* Lets 8952's timers do their job before clear the interrupt line, */
-	/* else Keyboard interrupt never happens. */
-	kbdc8042.keyboard_interrupt(machine, 0);
-}
 
 
-void kbdc8042_init(running_machine &machine, const struct kbdc8042_interface *intf)
+void kbdc8042_init(running_machine *machine, const struct kbdc8042_interface *intf)
 {
 	poll_delay = 10;
 	memset(&kbdc8042, 0, sizeof(kbdc8042));
@@ -281,16 +274,15 @@ void kbdc8042_init(running_machine &machine, const struct kbdc8042_interface *in
 	kbdc8042.set_gate_a20 = intf->set_gate_a20;
 	kbdc8042.keyboard_interrupt = intf->keyboard_interrupt;
 	kbdc8042.get_out2 = intf->get_out2;
-	kbdc8042.set_spkr = intf->set_spkr;
 
 	/* ibmat bios wants 0x20 set! (keyboard locked when not set) 0x80 */
 	kbdc8042.inport = 0xa0;
 	at_8042_set_outport(machine, 0xfe, 1);
 
-	machine.scheduler().timer_pulse(attotime::from_hz(60), FUNC(kbdc8042_time));
+	timer_pulse(machine, ATTOTIME_IN_HZ(60), NULL, 0, kbdc8042_time);
 }
 
-static void at_8042_receive(running_machine &machine, UINT8 data)
+static void at_8042_receive(running_machine *machine, UINT8 data)
 {
 	if (LOG_KEYBOARD)
 		logerror("at_8042_receive Received 0x%02x\n", data);
@@ -301,13 +293,11 @@ static void at_8042_receive(running_machine &machine, UINT8 data)
 	if (kbdc8042.keyboard_interrupt)
 	{
 		kbdc8042.keyboard_interrupt(machine, 1);
-		/* Lets 8952's timers do their job before clear the interrupt line, */
-		/* else Keyboard interrupt never happens. */
-		machine.scheduler().timer_set( attotime::from_usec(2), FUNC(kbdc8042_clr_int),0,0 );
+		kbdc8042.keyboard_interrupt(machine, 0);
 	}
 }
 
-static void at_8042_check_keyboard(running_machine &machine)
+static void at_8042_check_keyboard(running_machine *machine)
 {
 	int data;
 
@@ -370,7 +360,7 @@ READ8_HANDLER(kbdc8042_8_r)
 			/* at386 self test doesn't like this */
 			at_8042_clear_keyboard_received();
 		}
-		at_8042_check_keyboard(space->machine());
+		at_8042_check_keyboard(space->machine);
 		break;
 
 	case 1:
@@ -398,14 +388,14 @@ READ8_HANDLER(kbdc8042_8_r)
 		break;
 
 	case 2:
-		if (kbdc8042.get_out2(space->machine()))
+		if (kbdc8042.get_out2(space->machine))
 			data |= 0x20;
 		else
 			data &= ~0x20;
 		break;
 
 	case 4:
-		at_8042_check_keyboard(space->machine());
+		at_8042_check_keyboard(space->machine);
 
 		if (kbdc8042.keyboard.received || kbdc8042.mouse.received)
 			data |= 1;
@@ -451,11 +441,11 @@ WRITE8_HANDLER(kbdc8042_8_w)
 			/* normal case */
 			kbdc8042.data = data;
 			kbdc8042.sending=1;
-			at_keyboard_write(space->machine(), data);
+			at_keyboard_write(data);
 			break;
 
 		case 1:
-			/* preceded by writing 0xD1 to port 60h
+			/* preceeded by writing 0xD1 to port 60h
              *  |7|6|5|4|3|2|1|0|  8042 Output Port
              *   | | | | | | | `---- system reset line
              *   | | | | | | `----- gate A20
@@ -465,28 +455,28 @@ WRITE8_HANDLER(kbdc8042_8_w)
              *   | `----------- keyboard clock (output)
              *   `------------ keyboard data (output)
              */
-			at_8042_set_outport(space->machine(), data, 0);
+			at_8042_set_outport(space->machine, data, 0);
 			break;
 
 		case 2:
-			/* preceded by writing 0xD2 to port 60h */
+			/* preceeded by writing 0xD2 to port 60h */
 			kbdc8042.data = data;
 			kbdc8042.sending=1;
-			at_keyboard_write(space->machine(), data);
+			at_keyboard_write(data);
 			break;
 
 		case 3:
-			/* preceded by writing 0xD3 to port 60h */
+			/* preceeded by writing 0xD3 to port 60h */
 			kbdc8042.data = data;
 			break;
 
 		case 4:
-			/* preceded by writing 0xD4 to port 60h */
+			/* preceeded by writing 0xD4 to port 60h */
 			kbdc8042.data = data;
 			break;
 
 		case 5:
-			/* preceded by writing 0x60 to port 60h */
+			/* preceeded by writing 0x60 to port 60h */
 			kbdc8042.command = data;
 			break;
 		}
@@ -495,9 +485,6 @@ WRITE8_HANDLER(kbdc8042_8_w)
 
 	case 1:
 		kbdc8042.speaker = data;
-		if (kbdc8042.set_spkr)
-					kbdc8042.set_spkr(space->machine(), kbdc8042.speaker);
-
 		break;
 
 	case 4:
@@ -519,13 +506,13 @@ WRITE8_HANDLER(kbdc8042_8_w)
 			kbdc8042.mouse.on = 1;
 			break;
 		case 0xa9:	/* test mouse */
-			at_8042_receive(space->machine(), PS2_MOUSE_ON ? 0x00 : 0xff);
+			at_8042_receive(space->machine, PS2_MOUSE_ON ? 0x00 : 0xff);
 			break;
 		case 0xaa:	/* selftest */
-			at_8042_receive(space->machine(), 0x55);
+			at_8042_receive(space->machine, 0x55);
 			break;
 		case 0xab:	/* test keyboard */
-			at_8042_receive(space->machine(), KEYBOARD_ON ? 0x00 : 0xff);
+			at_8042_receive(space->machine, KEYBOARD_ON ? 0x00 : 0xff);
 			break;
 		case 0xad:	/* disable keyboard interface */
 			kbdc8042.keyboard.on = 0;
@@ -543,7 +530,7 @@ WRITE8_HANDLER(kbdc8042_8_w)
              *   | `----------- 1=primary display is MDA, 0=CGA
              *   `------------ 1=keyboard not inhibited; 0=inhibited
              */
-			at_8042_receive(space->machine(), kbdc8042.inport);
+			at_8042_receive(space->machine, kbdc8042.inport);
 			break;
 		case 0xc1:	/* read input port 3..0 until write to 0x60 */
 			kbdc8042.status_read_mode = 1;
@@ -552,7 +539,7 @@ WRITE8_HANDLER(kbdc8042_8_w)
 			kbdc8042.status_read_mode = 2;
 			break;
 		case 0xd0:	/* read output port */
-			at_8042_receive(space->machine(), kbdc8042.outport);
+			at_8042_receive(space->machine, kbdc8042.outport);
 			break;
 		case 0xd1:
 			/* write output port; next byte written to port 60h is placed on
@@ -581,7 +568,7 @@ WRITE8_HANDLER(kbdc8042_8_w)
 			break;
 		case 0xe0:
 			/* read test inputs; read T1/T0 test inputs into bit 1/0 */
-			at_8042_receive(space->machine(), 0x00);
+			at_8042_receive(space->machine, 0x00);
 			break;
 
 		case 0xf0:
@@ -597,8 +584,8 @@ WRITE8_HANDLER(kbdc8042_8_w)
              * the bits low set in the command byte.  The only pulse that has
              * an effect currently is bit 0, which pulses the CPU's reset line
              */
-			device_set_input_line(space->machine().firstcpu, INPUT_LINE_RESET, PULSE_LINE);
-			at_8042_set_outport(space->machine(), kbdc8042.outport | 0x02, 0);
+			cpu_set_input_line(space->machine->firstcpu, INPUT_LINE_RESET, PULSE_LINE);
+			at_8042_set_outport(space->machine, kbdc8042.outport | 0x02, 0);
 			break;
 		}
 		kbdc8042.sending = 1;

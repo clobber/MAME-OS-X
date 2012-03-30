@@ -82,40 +82,49 @@ A                                                   12.000MHz
 
 */
 
-#include "emu.h"
+#include "driver.h"
+#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
-#include "includes/himesiki.h"
 
 #define MCLK	XTAL_12MHz
 
+VIDEO_START( himesiki );
+VIDEO_UPDATE( himesiki );
+
+WRITE8_HANDLER( himesiki_bg_ram_w );
+WRITE8_HANDLER( himesiki_scrollx_w );
+WRITE8_HANDLER( himesiki_flip_w );
+
+extern UINT8 *himesiki_bg_ram;
+
 static WRITE8_HANDLER( himesiki_rombank_w )
 {
-	memory_set_bank(space->machine(), "bank1", ((data & 0x08) >> 3));
+	UINT8 *ROM = memory_region(space->machine, "maincpu");
+	memory_set_bankptr(space->machine, 1, &ROM[0x10000 + 0x800 * (data & 8)]);
 
 	if (data & 0xf7)
-		logerror("p06_w %02x\n", data);
+		logerror("p06_w %02x\n",data);
 }
 
 static WRITE8_HANDLER( himesiki_sound_w )
 {
-	himesiki_state *state = space->machine().driver_data<himesiki_state>();
 	soundlatch_w(space, offset, data);
-	device_set_input_line(state->m_subcpu, INPUT_LINE_NMI, PULSE_LINE);
+	cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 /****************************************************************************/
 
-static ADDRESS_MAP_START( himesiki_prm0, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( himesiki_prm0, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
-	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE_MEMBER(himesiki_state, m_spriteram)
-	AM_RANGE(0xa800, 0xafff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0xb000, 0xbfff) AM_RAM_WRITE(himesiki_bg_ram_w) AM_BASE_MEMBER(himesiki_state, m_bg_ram)
-	AM_RANGE(0xc000, 0xffff) AM_ROMBANK("bank1")
+	AM_RANGE(0xa000, 0xa7ff) AM_RAM AM_BASE(&spriteram) AM_SIZE(&spriteram_size)
+	AM_RANGE(0xa800, 0xafff) AM_RAM AM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE(&paletteram)
+	AM_RANGE(0xb000, 0xbfff) AM_RAM AM_WRITE(himesiki_bg_ram_w) AM_BASE(&himesiki_bg_ram)
+	AM_RANGE(0xc000, 0xffff) AM_ROMBANK(1)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( himesiki_iom0, AS_IO, 8 )
+static ADDRESS_MAP_START( himesiki_iom0, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("1P")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("2P")
@@ -130,12 +139,12 @@ static ADDRESS_MAP_START( himesiki_iom0, AS_IO, 8 )
 	AM_RANGE(0x0b, 0x0b) AM_WRITE(himesiki_sound_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( himesiki_prm1, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( himesiki_prm1, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xf800, 0xffff) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( himesiki_iom1, AS_IO, 8 )
+static ADDRESS_MAP_START( himesiki_iom1, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVREADWRITE("ym2203", ym2203_r, ym2203_w)
 	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_r)
@@ -144,7 +153,7 @@ ADDRESS_MAP_END
 /****************************************************************************/
 
 static INPUT_PORTS_START( himesiki )
-	PORT_START("DSW1")
+	PORT_START("DSW1")	/* DSW1 (0) */
 	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW1:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -168,7 +177,7 @@ static INPUT_PORTS_START( himesiki )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_SERVICE_DIPLOC(0x80, IP_ACTIVE_LOW, "SW1:8" )
 
-	PORT_START("DSW2")
+	PORT_START("DSW2")	/* DSW2 (1) */
 	PORT_DIPNAME( 0x01, 0x01, "2-1" )					PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
@@ -194,7 +203,7 @@ static INPUT_PORTS_START( himesiki )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 
-	PORT_START("1P")
+	PORT_START("1P")  /* 1P (2) */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
@@ -204,7 +213,7 @@ static INPUT_PORTS_START( himesiki )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("2P")
+	PORT_START("2P")	/* 2P (3) */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )	PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )	PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )	PORT_PLAYER(2)
@@ -214,7 +223,7 @@ static INPUT_PORTS_START( himesiki )
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 )		PORT_PLAYER(2)
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
-	PORT_START("OTHERS")
+	PORT_START("OTHERS")	/* OTHERS (4) */
 	PORT_BIT(0x01, IP_ACTIVE_LOW, IPT_COIN1 )
 	PORT_BIT(0x02, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT(0x04, IP_ACTIVE_LOW, IPT_UNKNOWN )
@@ -261,71 +270,46 @@ static const gfx_layout layout3 =
 };
 
 static GFXDECODE_START( himesiki )
-	GFXDECODE_ENTRY( "bgtiles",   0, layout1, 0x000, 16 )
+	GFXDECODE_ENTRY( "bg",        0, layout1, 0x000, 16 )
 	GFXDECODE_ENTRY( "sprites_1", 0, layout2, 0x200, 16 )
 	GFXDECODE_ENTRY( "sprites_2", 0, layout3, 0x200, 16 )
 GFXDECODE_END
 
 
-static MACHINE_START( himesiki )
-{
-	himesiki_state *state = machine.driver_data<himesiki_state>();
-	UINT8 *ROM = machine.region("maincpu")->base();
-
-	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
-
-	state->m_subcpu = machine.device("sub");
-
-	state->save_item(NAME(state->m_scrollx));
-	state->save_item(NAME(state->m_flipscreen));
-}
-
-static MACHINE_RESET( himesiki )
-{
-	himesiki_state *state = machine.driver_data<himesiki_state>();
-
-	state->m_scrollx[0] = 0;
-	state->m_scrollx[1] = 0;
-	state->m_flipscreen = 0;
-}
-
-static MACHINE_CONFIG_START( himesiki, himesiki_state )
+static MACHINE_DRIVER_START( himesiki )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, MCLK/2) /* 6.000 MHz */
-	MCFG_CPU_PROGRAM_MAP(himesiki_prm0)
-	MCFG_CPU_IO_MAP(himesiki_iom0)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80, MCLK/2) /* 6.000 MHz */
+	MDRV_CPU_PROGRAM_MAP(himesiki_prm0)
+	MDRV_CPU_IO_MAP(himesiki_iom0)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MCFG_CPU_ADD("sub", Z80, MCLK/3) /* 4.000 MHz */
-	MCFG_CPU_PROGRAM_MAP(himesiki_prm1)
-	MCFG_CPU_IO_MAP(himesiki_iom1)
-
-	MCFG_MACHINE_START(himesiki)
-	MCFG_MACHINE_RESET(himesiki)
+	MDRV_CPU_ADD("sub", Z80, MCLK/3) /* 4.000 MHz */
+	MDRV_CPU_PROGRAM_MAP(himesiki_prm1)
+	MDRV_CPU_IO_MAP(himesiki_iom1)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 24*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(himesiki)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 0*8, 24*8-1)
+	MDRV_GFXDECODE(himesiki)
+	MDRV_PALETTE_LENGTH(1024)
 
-	MCFG_GFXDECODE(himesiki)
-	MCFG_PALETTE_LENGTH(1024)
-
-	MCFG_VIDEO_START(himesiki)
+	MDRV_VIDEO_START(himesiki)
+	MDRV_VIDEO_UPDATE(himesiki)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-	MCFG_SOUND_ADD("ym2203", YM2203, MCLK/4)
-	MCFG_SOUND_ROUTE(0, "mono", 0.10)
-	MCFG_SOUND_ROUTE(1, "mono", 0.10)
-	MCFG_SOUND_ROUTE(2, "mono", 0.10)
-	MCFG_SOUND_ROUTE(3, "mono", 0.50)
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("ym2203", YM2203, MCLK/4)
+	MDRV_SOUND_ROUTE(0, "mono", 0.10)
+	MDRV_SOUND_ROUTE(1, "mono", 0.10)
+	MDRV_SOUND_ROUTE(2, "mono", 0.10)
+	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-MACHINE_CONFIG_END
+MACHINE_DRIVER_END
 
 /****************************************************************************/
 
@@ -337,7 +321,7 @@ ROM_START( himesiki )
 	ROM_REGION( 0x010000, "sub", 0 ) /* z80 */
 	ROM_LOAD( "5.6n",  0x00000,  0x08000, CRC(b1214ac7) SHA1(ee5459c28d9c3c2eb3467261716b1259ec486534) )
 
-	ROM_REGION( 0x020000, "bgtiles", 0 ) /* bg */
+	ROM_REGION( 0x020000, "bg", 0 ) /* bg */
 	ROM_LOAD( "3.5f",  0x000000,  0x010000, CRC(73843e60) SHA1(0d8a397d8798e15f3fa7bf7a83e4c2ee44f6fa86) )
 	ROM_LOAD( "4.5d",  0x010000,  0x010000, CRC(443a3164) SHA1(08aa002214251a870581a01d775f497dd390957c) )
 
@@ -356,4 +340,4 @@ ROM_START( himesiki )
 	ROM_LOAD16_BYTE( "14.8c", 0x020001,  0x010000, CRC(8103a207) SHA1(0dde8a0aaf2618d9c1589f35841db210439d0388) )
 ROM_END
 
-GAME( 1989, himesiki, 0, himesiki, himesiki, 0, ROT90, "Hi-Soft", "Himeshikibu (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, himesiki, 0, himesiki, himesiki, 0, ROT90, "Hi-Soft", "Himeshikibu (Japan)", 0 )

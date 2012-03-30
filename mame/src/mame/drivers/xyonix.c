@@ -19,128 +19,134 @@ TODO:
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
-#include "includes/xyonix.h"
+
+UINT8 *xyonix_vidram;
+
+/* in video/xyonix.c */
+PALETTE_INIT( xyonix );
+WRITE8_HANDLER( xyonix_vidram_w );
+VIDEO_START(xyonix);
+VIDEO_UPDATE(xyonix);
 
 
 static WRITE8_HANDLER( xyonix_irqack_w )
 {
-	cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 
 /* Inputs ********************************************************************/
 
-static void handle_coins(running_machine &machine, int coin)
+static int e0_data,credits,coins;
+
+static void handle_coins(running_machine *machine, int coin)
 {
 	static const int coinage_table[4][2] = {{2,3},{2,1},{1,2},{1,1}};
-	xyonix_state *state = machine.driver_data<xyonix_state>();
 	int tmp = 0;
 
-	//popmessage("Coin %d", state->m_coin);
+//  popmessage("Coin %d",coin);
 
 	if (coin & 1)	// Coin 2 !
 	{
 		tmp = (input_port_read(machine, "DSW") & 0xc0) >> 6;
-		state->m_coins++;
-		if (state->m_coins >= coinage_table[tmp][0])
+		coins++;
+		if (coins >= coinage_table[tmp][0])
 		{
-			state->m_credits += coinage_table[tmp][1];
-			state->m_coins -= coinage_table[tmp][0];
+			credits += coinage_table[tmp][1];
+			coins -= coinage_table[tmp][0];
 		}
-		coin_lockout_global_w(machine, 0); /* Unlock all coin slots */
-		coin_counter_w(machine,1,1); coin_counter_w(machine,1,0); /* Count slot B */
+		coin_lockout_global_w(0); /* Unlock all coin slots */
+		coin_counter_w(1,1); coin_counter_w(1,0); /* Count slot B */
 	}
 
 	if (coin & 2)	// Coin 1 !
 	{
 		tmp = (input_port_read(machine, "DSW") & 0x30) >> 4;
-		state->m_coins++;
-		if (state->m_coins >= coinage_table[tmp][0])
+		coins++;
+		if (coins >= coinage_table[tmp][0])
 		{
-			state->m_credits += coinage_table[tmp][1];
-			state->m_coins -= coinage_table[tmp][0];
+			credits += coinage_table[tmp][1];
+			coins -= coinage_table[tmp][0];
 		}
-		coin_lockout_global_w(machine, 0); /* Unlock all coin slots */
-		coin_counter_w(machine,0,1); coin_counter_w(machine,0,0); /* Count slot A */
+		coin_lockout_global_w(0); /* Unlock all coin slots */
+		coin_counter_w(0,1); coin_counter_w(0,0); /* Count slot A */
 	}
 
-	if (state->m_credits >= 9)
-		state->m_credits = 9;
+	if (credits >= 9)
+		credits = 9;
 }
 
 
 static READ8_HANDLER ( xyonix_io_r )
 {
-	xyonix_state *state = space->machine().driver_data<xyonix_state>();
-	int regPC = cpu_get_pc(&space->device());
+	int regPC = cpu_get_pc(space->cpu);
 
 	if (regPC == 0x27ba)
 		return 0x88;
 
 	if (regPC == 0x27c2)
-		return state->m_e0_data;
+		return e0_data;
 
 	if (regPC == 0x27c7)
 	{
+		static int prev_coin;
 		int coin;
 
-		switch (state->m_e0_data)
+		switch (e0_data)
 		{
 			case 0x81 :
-				return input_port_read(space->machine(), "P1") & 0x7f;
+				return input_port_read(space->machine, "P1") & 0x7f;
 			case 0x82 :
-				return input_port_read(space->machine(), "P2") & 0x7f;
+				return input_port_read(space->machine, "P2") & 0x7f;
 			case 0x91:
 				/* check coin inputs */
-				coin = ((input_port_read(space->machine(), "P1") & 0x80) >> 7) | ((input_port_read(space->machine(), "P2") & 0x80) >> 6);
-				if (coin ^ state->m_prev_coin && coin != 3)
+				coin = ((input_port_read(space->machine, "P1") & 0x80) >> 7) | ((input_port_read(space->machine, "P2") & 0x80) >> 6);
+				if (coin ^ prev_coin && coin != 3)
 				{
-					if (state->m_credits < 9) handle_coins(space->machine(), coin);
+					if (credits < 9) handle_coins(space->machine, coin);
 				}
-				state->m_prev_coin = coin;
-				return state->m_credits;
+				prev_coin = coin;
+				return credits;
 			case 0x92:
-				return ((input_port_read(space->machine(), "P1") & 0x80) >> 7) | ((input_port_read(space->machine(), "P2") & 0x80) >> 6);
+				return ((input_port_read(space->machine, "P1") & 0x80) >> 7) | ((input_port_read(space->machine, "P2") & 0x80) >> 6);
 			case 0xe0:	/* reset? */
-				state->m_coins = 0;
-				state->m_credits = 0;
+				coins = 0;
+				credits = 0;
 				return 0xff;
 			case 0xe1:
-				state->m_credits--;
+				credits--;
 				return 0xff;
 			case 0xfe:	/* Dip Switches 1 to 4 */
-				return input_port_read(space->machine(), "DSW") & 0x0f;
+				return input_port_read(space->machine, "DSW") & 0x0f;
 			case 0xff:	/* Dip Switches 5 to 8 */
-				return input_port_read(space->machine(), "DSW") >> 4;
+				return input_port_read(space->machine, "DSW") >> 4;
 		}
 	}
 
-	//logerror ("xyonix_port_e0_r - PC = %04x - port = %02x\n", regPC, state->m_e0_data);
-	//popmessage("%02x",state->m_e0_data);
+//  logerror ("xyonix_port_e0_r - PC = %04x - port = %02x\n", regPC, e0_data);
+//  popmessage("%02x",e0_data);
 
 	return 0xff;
 }
 
 static WRITE8_HANDLER ( xyonix_io_w )
 {
-	xyonix_state *state = space->machine().driver_data<xyonix_state>();
-
-	//logerror ("xyonix_port_e0_w %02x - PC = %04x\n", data, cpu_get_pc(&space->device()));
-	state->m_e0_data = data;
+//  logerror ("xyonix_port_e0_w %02x - PC = %04x\n", data, cpu_get_pc(space->cpu));
+	e0_data = data;
 }
 
 /* Mem / Port Maps ***********************************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xdfff) AM_RAM
-	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(xyonix_vidram_w) AM_BASE_MEMBER(xyonix_state,m_vidram)
+	AM_RANGE(0xe000, 0xffff) AM_RAM_WRITE(xyonix_vidram_w) AM_BASE(&xyonix_vidram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( port_map, AS_IO, 8 )
+static ADDRESS_MAP_START( port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x20, 0x20) AM_READNOP AM_DEVWRITE("sn1", sn76496_w)	/* SN76496 ready signal */
 	AM_RANGE(0x21, 0x21) AM_READNOP AM_DEVWRITE("sn2", sn76496_w)
@@ -214,38 +220,39 @@ GFXDECODE_END
 
 /* MACHINE driver *************************************************************/
 
-static MACHINE_CONFIG_START( xyonix, xyonix_state )
+static MACHINE_DRIVER_START( xyonix )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,16000000 / 4)		 /* 4 MHz ? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(port_map)
-	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
-	MCFG_CPU_PERIODIC_INT(irq0_line_assert,4*60)	/* ?? controls music tempo */
+	MDRV_CPU_ADD("maincpu", Z80,16000000 / 4)		 /* 4 MHz ? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(port_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MDRV_CPU_PERIODIC_INT(irq0_line_assert,4*60)	/* ?? controls music tempo */
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(80*4, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0, 80*4-1, 0, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(xyonix)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(80*4, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0, 80*4-1, 0, 28*8-1)
 
-	MCFG_GFXDECODE(xyonix)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(xyonix)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(xyonix)
-	MCFG_VIDEO_START(xyonix)
+	MDRV_PALETTE_INIT(xyonix)
+	MDRV_VIDEO_START(xyonix)
+	MDRV_VIDEO_UPDATE(xyonix)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("sn1", SN76496, 16000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MDRV_SOUND_ADD("sn1", SN76496, 16000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MCFG_SOUND_ADD("sn2", SN76496, 16000000/4)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("sn2", SN76496, 16000000/4)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 /* ROM Loading ***************************************************************/
 

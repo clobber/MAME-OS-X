@@ -32,10 +32,10 @@ Merge with other Video System games ?
 
 ******************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "includes/gstriker.h"
+#include "gstriker.h"
 #include "sound/2610intf.h"
 
 /*** README INFO **************************************************************
@@ -127,6 +127,8 @@ c13_u17.u17     HN62418  - GFX   / note, contents of these are identical.
 c13_u11.u11     HN624116 - GFX
 c13_u12.u12     HN624116 - GFX
 
+              Screenshots and board pics are available here...
+              http://unemulated.emuunlim.com/shopraid/index.html
 
 *** ROMSET: vgoalsca
 
@@ -178,50 +180,52 @@ Frequencies: 68k is XTAL_32MHZ/2
 ******************************************************************************/
 
 
+//UINT16 *gs_videoram3;
+//UINT16 *gs_mixer_regs;
+static UINT16 dmmy_8f_ret;
+
+
 /*** MISC READ / WRITE HANDLERS **********************************************/
 
 static READ16_HANDLER(dmmy_8f)
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	state->m_dmmy_8f_ret = ~state->m_dmmy_8f_ret;
-	return state->m_dmmy_8f_ret;
+	dmmy_8f_ret = ~dmmy_8f_ret;
+	return dmmy_8f_ret;
 }
 
 /*** SOUND RELATED ***********************************************************/
 
+static int pending_command;
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
 	if (ACCESSING_BITS_0_7)
 	{
-		state->m_pending_command = 1;
+		pending_command = 1;
 		soundlatch_w(space, offset, data & 0xff);
-		cputag_set_input_line(space->machine(), "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
 
 #if 0
 static READ16_HANDLER( pending_command_r )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	return state->m_pending_command;
+	return pending_command;
 }
 #endif
 
 static WRITE8_HANDLER( gs_sh_pending_command_clear_w )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	state->m_pending_command = 0;
+	pending_command = 0;
 }
 
 static WRITE8_HANDLER( gs_sh_bankswitch_w )
 {
-	UINT8 *RAM = space->machine().region("audiocpu")->base();
+	UINT8 *RAM = memory_region(space->machine, "audiocpu");
 	int bankaddress;
 
 	bankaddress = 0x10000 + (data & 0x03) * 0x8000;
-	memory_set_bankptr(space->machine(), "bank1",&RAM[bankaddress]);
+	memory_set_bankptr(space->machine, 1,&RAM[bankaddress]);
 }
 
 /*** GFX DECODE **************************************************************/
@@ -263,12 +267,12 @@ GFXDECODE_END
 
 /*** MORE SOUND RELATED ******************************************************/
 
-static void gs_ym2610_irq(device_t *device, int irq)
+static void gs_ym2610_irq(const device_config *device, int irq)
 {
 	if (irq)
-		cputag_set_input_line(device->machine(), "audiocpu", 0, ASSERT_LINE);
+		cputag_set_input_line(device->machine, "audiocpu", 0, ASSERT_LINE);
 	else
-		cputag_set_input_line(device->machine(), "audiocpu", 0, CLEAR_LINE);
+		cputag_set_input_line(device->machine, "audiocpu", 0, CLEAR_LINE);
 }
 
 static const ym2610_interface ym2610_config =
@@ -278,15 +282,16 @@ static const ym2610_interface ym2610_config =
 
 /*** MEMORY LAYOUTS **********************************************************/
 
+static UINT16 *work_ram;
 
 
-static ADDRESS_MAP_START( gstriker_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( gstriker_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(MB60553_0_vram_w) AM_BASE_MEMBER(gstriker_state, m_MB60553[0].vram)
-	AM_RANGE(0x140000, 0x141fff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_CG10103[0].vram)
-	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(VS920A_0_vram_w) AM_BASE_MEMBER(gstriker_state, m_VS920A[0].vram)
-	AM_RANGE(0x181000, 0x181fff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_lineram)
-	AM_RANGE(0x1c0000, 0x1c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(MB60553_0_vram_w) AM_BASE(&MB60553_0_vram)
+	AM_RANGE(0x140000, 0x141fff) AM_RAM AM_BASE(&CG10103_0_vram)
+	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(VS920A_0_vram_w) AM_BASE(&VS920A_0_vram)
+	AM_RANGE(0x181000, 0x181fff) AM_RAM AM_BASE(&gstriker_lineram)
+	AM_RANGE(0x1c0000, 0x1c0fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
 
 	AM_RANGE(0x200000, 0x20000f) AM_RAM_WRITE(MB60553_0_regs_w)
 	AM_RANGE(0x200040, 0x20005f) AM_RAM //AM_BASE(&gs_mixer_regs)
@@ -299,31 +304,31 @@ static ADDRESS_MAP_START( gstriker_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x20008e, 0x20008f) AM_READ(dmmy_8f)
 	AM_RANGE(0x2000a0, 0x2000a1) AM_WRITE(sound_command_w)
 
-	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_work_ram)
+	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE(&work_ram)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x77ff) AM_ROM
 	AM_RANGE(0x7800, 0x7fff) AM_RAM
-	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK(1)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
+	AM_RANGE(0x00, 0x03) AM_DEVREADWRITE("ym", ym2610_r, ym2610_w)
 	AM_RANGE(0x04, 0x04) AM_WRITE(gs_sh_bankswitch_w)
 	AM_RANGE(0x08, 0x08) AM_WRITE(gs_sh_pending_command_clear_w)
 	AM_RANGE(0x0c, 0x0c) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( vgoal_map, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( vgoal_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
-	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(MB60553_0_vram_w) AM_BASE_MEMBER(gstriker_state, m_MB60553[0].vram)
-	AM_RANGE(0x140000, 0x141fff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_CG10103[0].vram)
-	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(VS920A_0_vram_w) AM_BASE_MEMBER(gstriker_state, m_VS920A[0].vram)
-	AM_RANGE(0x181000, 0x181fff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_lineram)
-	AM_RANGE(0x1c0000, 0x1c4fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x100000, 0x103fff) AM_RAM_WRITE(MB60553_0_vram_w) AM_BASE(&MB60553_0_vram)
+	AM_RANGE(0x140000, 0x141fff) AM_RAM AM_BASE(&CG10103_0_vram)
+	AM_RANGE(0x180000, 0x180fff) AM_RAM_WRITE(VS920A_0_vram_w) AM_BASE(&VS920A_0_vram)
+	AM_RANGE(0x181000, 0x181fff) AM_RAM AM_BASE(&gstriker_lineram)
+	AM_RANGE(0x1c0000, 0x1c4fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE(&paletteram16)
 	AM_RANGE(0x200000, 0x20000f) AM_RAM_WRITE(MB60553_0_regs_w)
 	AM_RANGE(0x200040, 0x20005f) AM_RAM //AM_BASE(&gs_mixer_regs)
 
@@ -335,7 +340,7 @@ static ADDRESS_MAP_START( vgoal_map, AS_PROGRAM, 16 )
 	AM_RANGE(0x20008e, 0x20008f) AM_READ(dmmy_8f)
 
 	AM_RANGE(0x2000a0, 0x2000a1) AM_WRITE(sound_command_w)
-	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE_MEMBER(gstriker_state, m_work_ram)
+	AM_RANGE(0xffc000, 0xffffff) AM_RAM AM_BASE(&work_ram)
 ADDRESS_MAP_END
 
 /*** INPUT PORTS *************************************************************/
@@ -543,76 +548,79 @@ INPUT_PORTS_END
 
 /*** MACHINE DRIVER **********************************************************/
 
-static MACHINE_CONFIG_START( gstriker, gstriker_state )
-	MCFG_CPU_ADD("maincpu", M68000, 10000000)
-	MCFG_CPU_PROGRAM_MAP(gstriker_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+static MACHINE_DRIVER_START( gstriker )
+	MDRV_CPU_ADD("maincpu", M68000, 10000000)
+	MDRV_CPU_PROGRAM_MAP(gstriker_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)	/* 4 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,8000000/2)	/* 4 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
 
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000) /* hand-tuned, it needs a bit */)
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(gstriker)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000) /* hand-tuned, it needs a bit */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(gstriker)
-	MCFG_PALETTE_LENGTH(0x800)
+	MDRV_GFXDECODE(gstriker)
+	MDRV_PALETTE_LENGTH(0x800)
 
-	MCFG_VIDEO_START(gstriker)
+	MDRV_VIDEO_START(gstriker)
+	MDRV_VIDEO_UPDATE(gstriker)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2610, 8000000)
-	MCFG_SOUND_CONFIG(ym2610_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.25)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.25)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_CONFIG(ym2610_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( twrldc94, gstriker )
-	MCFG_VIDEO_START( twrldc94 )
-MACHINE_CONFIG_END
+static MACHINE_DRIVER_START( twrldc94 )
+	MDRV_IMPORT_FROM( gstriker )
+	MDRV_VIDEO_START( twrldc94 )
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( vgoal, gstriker_state )
-	MCFG_CPU_ADD("maincpu", M68000, 16000000)
-	MCFG_CPU_PROGRAM_MAP(vgoal_map)
-	MCFG_CPU_VBLANK_INT("screen", irq1_line_hold)
+static MACHINE_DRIVER_START( vgoal )
+	MDRV_CPU_ADD("maincpu", M68000, 16000000)
+	MDRV_CPU_PROGRAM_MAP(vgoal_map)
+	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
-	MCFG_CPU_ADD("audiocpu", Z80,8000000/2)	/* 4 MHz ??? */
-	MCFG_CPU_PROGRAM_MAP(sound_map)
-	MCFG_CPU_IO_MAP(sound_io_map)
+	MDRV_CPU_ADD("audiocpu", Z80,8000000/2)	/* 4 MHz ??? */
+	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MDRV_CPU_IO_MAP(sound_io_map)
 
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000) /* hand-tuned, it needs a bit */)
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(gstriker)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(5000) /* hand-tuned, it needs a bit */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MCFG_GFXDECODE(gstriker)
-	MCFG_PALETTE_LENGTH(0x2000)
+	MDRV_GFXDECODE(gstriker)
+	MDRV_PALETTE_LENGTH(0x2000)
 
-	MCFG_VIDEO_START(vgoalsoc)
+	MDRV_VIDEO_START(vgoalsoc)
+	MDRV_VIDEO_UPDATE(gstriker)
 
-	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MCFG_SOUND_ADD("ymsnd", YM2610, 8000000)
-	MCFG_SOUND_CONFIG(ym2610_config)
-	MCFG_SOUND_ROUTE(0, "lspeaker",  0.25)
-	MCFG_SOUND_ROUTE(0, "rspeaker", 0.25)
-	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
-	MCFG_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ym", YM2610, 8000000)
+	MDRV_SOUND_CONFIG(ym2610_config)
+	MDRV_SOUND_ROUTE(0, "lspeaker",  0.25)
+	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
+	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
+MACHINE_DRIVER_END
 
 
 
@@ -641,10 +649,10 @@ ROM_START( gstriker )
 	ROM_LOAD( "human_scr-gs-104_m531602c-43_3405354.u22", 0x600000, 0x200000, CRC(0ac33e5a) SHA1(9d7717d80f2c6817bac3fad50c39e04f0aa94255) )
 	ROM_LOAD( "human-4_27c240.u6",   0xf80000, 0x080000, CRC(a990f9bb) SHA1(7ce31d4c650eb244e2ab285f253a98d6613b7dc8) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "human_scr-gs-106_m532001b-16_3402370.u93", 0x00000, 0x040000, CRC(93c9868c) SHA1(dcecb34e46405155e35aaf134b8547430d23f5a7) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_REGION( 0x100000, "ym", 0 )
 	ROM_LOAD( "scrgs107.u99", 0x00000, 0x100000, CRC(ecc0a01b) SHA1(239e832b7d22925460a8f44eb82e782cd13aba49) )
 
 	ROM_REGION( 0x1000, "plds", 0 )
@@ -677,10 +685,10 @@ ROM_START( gstrikera )
 	ROM_LOAD( "human_scr-gs-104_m531602c-43_3405354.u22", 0x600000, 0x200000, CRC(0ac33e5a) SHA1(9d7717d80f2c6817bac3fad50c39e04f0aa94255) )
 	ROM_LOAD( "human-4_27c240.u6",   0xf80000, 0x080000, CRC(a990f9bb) SHA1(7ce31d4c650eb244e2ab285f253a98d6613b7dc8) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "human_scr-gs-106_m532001b-16_3402370.u93", 0x00000, 0x040000, CRC(93c9868c) SHA1(dcecb34e46405155e35aaf134b8547430d23f5a7) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_REGION( 0x100000, "ym", 0 )
 	ROM_LOAD( "scrgs107.u99", 0x00000, 0x100000, CRC(ecc0a01b) SHA1(239e832b7d22925460a8f44eb82e782cd13aba49) )
 
       /* PALs were protected on this version, used the ones from the "gstriker" set */
@@ -715,10 +723,10 @@ ROM_START( vgoalsoc )
 	ROM_LOAD( "c13_u11.u11",  0x000000, 0x200000, CRC(76d09f27) SHA1(ffef83954426f9e56bbe2d98b32cea675c063fab) )
 	ROM_LOAD( "c13_u12.u12",  0x200000, 0x200000, CRC(a3874419) SHA1(c9fa283106ada3419e311f400fcf4251b32318c4) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "c13_u86.u86",  0x000000, 0x040000, CRC(4b76a162) SHA1(38dcb7536662f5f520e59f3ff746b42e9df789d2) )
 
-	ROM_REGION( 0x200000, "ymsnd", 0 )
+	ROM_REGION( 0x200000, "ym", 0 )
 	ROM_LOAD( "c13_u104.104", 0x000000, 0x200000, CRC(8437b6f8) SHA1(79f183dcbf3cde5c77e086e4fdd8341809396e37) )
 ROM_END
 
@@ -743,10 +751,10 @@ ROM_START( vgoalsca )
 	ROM_LOAD( "vgoalc16.u11", 0x000000, 0x200000, CRC(5bc3146c) SHA1(ede4def1ddc4390fed8fd89643900967faff3640) )
 	ROM_LOAD( "c13_u12.u12",  0x200000, 0x200000, CRC(a3874419) SHA1(c9fa283106ada3419e311f400fcf4251b32318c4) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "c13_u86.u86",  0x000000, 0x040000, CRC(4b76a162) SHA1(38dcb7536662f5f520e59f3ff746b42e9df789d2) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_REGION( 0x100000, "ym", 0 )
 	ROM_LOAD( "vgoalc16.104", 0x000000, 0x100000, CRC(6fb06e1b) SHA1(c4584b480fe1165f8e2f887acaa578690514d35d) )
 ROM_END
 
@@ -773,10 +781,10 @@ ROM_START( twrldc94 )
 	ROM_LOAD( "u13",          0x400000, 0x200000, CRC(8db6b3a9) SHA1(9422cd5d6fb57a7eaa7a13bdf4ccee1f8b57f773) )
 	ROM_LOAD( "u14",          0x600000, 0x200000, CRC(89739c31) SHA1(29cd779bfe93448fb6cbfe6f8e3661dd659c0d21) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "u86",          0x000000, 0x040000, CRC(775f45dc) SHA1(1a740dd880d9f873e93dfc096fbcae1784b4f522) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_REGION( 0x100000, "ym", 0 )
 	ROM_LOAD( "u104",         0x000000, 0x100000, CRC(df07d0af) SHA1(356560e164ff222bc9004fe202f829c93244a6c9) )
 ROM_END
 
@@ -803,10 +811,10 @@ ROM_START( twrldc94a )
 	ROM_LOAD( "u13",          0x400000, 0x200000, CRC(8db6b3a9) SHA1(9422cd5d6fb57a7eaa7a13bdf4ccee1f8b57f773) )
 	ROM_LOAD( "u14",          0x600000, 0x200000, CRC(89739c31) SHA1(29cd779bfe93448fb6cbfe6f8e3661dd659c0d21) )
 
-	ROM_REGION( 0x40000, "ymsnd.deltat", 0 )
+	ROM_REGION( 0x40000, "ym.deltat", 0 )
 	ROM_LOAD( "u86",          0x000000, 0x040000, CRC(775f45dc) SHA1(1a740dd880d9f873e93dfc096fbcae1784b4f522) )
 
-	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_REGION( 0x100000, "ym", 0 )
 	ROM_LOAD( "u104",         0x000000, 0x100000, CRC(df07d0af) SHA1(356560e164ff222bc9004fe202f829c93244a6c9) )
 ROM_END
 
@@ -825,34 +833,34 @@ the zooming.To use it,you should use Player 2 Start button to show the test scre
 or to advance into the tests.
 ******************************************************************************************/
 #define PC(_num_)\
-state->m_work_ram[0x000/2] = (_num_ & 0xffff0000) >> 16;\
-state->m_work_ram[0x002/2] = (_num_ & 0x0000ffff) >> 0;
+work_ram[0x000/2] = (_num_ & 0xffff0000) >> 16;\
+work_ram[0x002/2] = (_num_ & 0x0000ffff) >> 0;
 
+static int gametype = 0;
+static UINT16 mcu_data = 0;
 
 static WRITE16_HANDLER( twrldc94_mcu_w )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	state->m_mcu_data = data;
+	mcu_data = data;
 }
 
 static READ16_HANDLER( twrldc94_mcu_r )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	return state->m_mcu_data;
+	return mcu_data;
 }
 
+static UINT16 prot_reg[2] = {0,0}; // current,last
 static WRITE16_HANDLER( twrldc94_prot_reg_w )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
-	state->m_prot_reg[1] = state->m_prot_reg[0];
-	state->m_prot_reg[0] = data;
+	prot_reg[1] = prot_reg[0];
+	prot_reg[0] = data;
 
-	if( ((state->m_prot_reg[1] & 2) == 2) && ((state->m_prot_reg[0] & 2) == 0) )
+	if( ((prot_reg[1] & 2) == 2) && ((prot_reg[0] & 2) == 0) )
 	{
-		switch( state->m_gametype )
+		switch( gametype )
 		{
 			case 1:
-				switch(state->m_mcu_data)
+				switch(mcu_data)
 				{
 					#define NULL_SUB 0x0000828E
 					case 0x53: PC(0x0000a4c); break; // boot -> main loop
@@ -912,19 +920,19 @@ static WRITE16_HANDLER( twrldc94_prot_reg_w )
 					case 0x6f: PC(NULL_SUB); break;
 
 					default:
-						popmessage("Unknown MCU CMD %04x",state->m_mcu_data);
+						popmessage("Unknown MCU CMD %04x",mcu_data);
 						PC(NULL_SUB);
 						break;
 				}
 				break;
 
 			case 2:
-				switch(state->m_mcu_data)
+				switch(mcu_data)
 				{
 					case 0x53: PC(0x00000a5c); break; // POST
 
 					default:
-						popmessage("Unknown MCU CMD %04x",state->m_mcu_data);
+						popmessage("Unknown MCU CMD %04x",mcu_data);
 						PC(NULL_SUB);
 						break;
 				}
@@ -932,7 +940,7 @@ static WRITE16_HANDLER( twrldc94_prot_reg_w )
 
 
 			case 3:
-				switch(state->m_mcu_data)
+				switch(mcu_data)
 				{
 					case 0x33: PC(0x00063416); break; // *after game over, is this right?
 					case 0x3d: PC(0x0006275C); break; // after sprite ram init, team select
@@ -945,7 +953,7 @@ static WRITE16_HANDLER( twrldc94_prot_reg_w )
 					case 0x79: PC(0x0006072E); break; // after select, start match
 
 					default:
-						popmessage("Unknown MCU CMD %04x",state->m_mcu_data);
+						popmessage("Unknown MCU CMD %04x",mcu_data);
 						PC(0x00000586); // rts
 						break;
 				}
@@ -956,12 +964,11 @@ static WRITE16_HANDLER( twrldc94_prot_reg_w )
 
 static READ16_HANDLER( twrldc94_prot_reg_r )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
 	// bit 0 is for debugging vgoalsoc?
 	// Setting it results in a hang with a digit displayed on screen
 	// For twrldc94, it just disables sound.
 
-	return state->m_prot_reg[0];
+	return prot_reg[0];
 }
 
 /*
@@ -975,15 +982,15 @@ static READ16_HANDLER( twrldc94_prot_reg_r )
 
     The tick count is usually set to 0x3c => it's driven off vblank?
 */
-//state->m_work_ram[ (0xffe900 - 0xffc00) ]
-#define COUNTER1_ENABLE state->m_work_ram[0x2900/2] >> 8
-#define COUNTER2_ENABLE (state->m_work_ram[0x2900/2] & 0xff)
-#define TICK_1 state->m_work_ram[0x2908/2]
-#define TICKCOUNT_1 state->m_work_ram[0x290a/2]
-#define TICK_2 state->m_work_ram[0x290c/2]
-#define TICKCOUNT_3 state->m_work_ram[0x290e/2]
-#define COUNTER_1 state->m_work_ram[0x2928/2]
-#define COUNTER_2 state->m_work_ram[0x292a/2]
+//work_ram[ (0xffe900 - 0xffc00) ]
+#define COUNTER1_ENABLE work_ram[0x2900/2] >> 8
+#define COUNTER2_ENABLE (work_ram[0x2900/2] & 0xff)
+#define TICK_1 work_ram[0x2908/2]
+#define TICKCOUNT_1 work_ram[0x290a/2]
+#define TICK_2 work_ram[0x290c/2]
+#define TICKCOUNT_3 work_ram[0x290e/2]
+#define COUNTER_1 work_ram[0x2928/2]
+#define COUNTER_2 work_ram[0x292a/2]
 static READ16_HANDLER( vbl_toggle_r )
 {
 	return 0xff;
@@ -991,7 +998,6 @@ static READ16_HANDLER( vbl_toggle_r )
 
 static WRITE16_HANDLER( vbl_toggle_w )
 {
-	gstriker_state *state = space->machine().driver_data<gstriker_state>();
 	if( COUNTER1_ENABLE == 1 )
 	{
 		TICK_1 = (TICK_1 - 1) & 0xff;	// 8bit
@@ -1013,42 +1019,38 @@ static WRITE16_HANDLER( vbl_toggle_w )
 	}
 }
 
-static void mcu_init( running_machine &machine )
+static void mcu_init( running_machine *machine )
 {
-	gstriker_state *state = machine.driver_data<gstriker_state>();
-	state->m_dmmy_8f_ret = 0xFFFF;
-	state->m_pending_command = 0;
-	state->m_mcu_data = 0;
+	dmmy_8f_ret = 0xFFFF;
+	pending_command = 0;
+	mcu_data = 0;
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x20008a, 0x20008b, FUNC(twrldc94_mcu_w));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x20008a, 0x20008b, FUNC(twrldc94_mcu_r));
+	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20008a, 0x20008b, 0, 0, twrldc94_mcu_w);
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20008a, 0x20008b, 0, 0, twrldc94_mcu_r);
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x20008e, 0x20008f, FUNC(twrldc94_prot_reg_w));
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x20008e, 0x20008f, FUNC(twrldc94_prot_reg_r));
+	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20008e, 0x20008f, 0, 0, twrldc94_prot_reg_w);
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x20008e, 0x20008f, 0, 0, twrldc94_prot_reg_r);
 }
 
 static DRIVER_INIT( twrldc94 )
 {
-	gstriker_state *state = machine.driver_data<gstriker_state>();
-	state->m_gametype = 1;
+	gametype = 1;
 	mcu_init( machine );
 }
 
 static DRIVER_INIT( twrldc94a )
 {
-	gstriker_state *state = machine.driver_data<gstriker_state>();
-	state->m_gametype = 2;
+	gametype = 2;
 	mcu_init( machine );
 }
 
 static DRIVER_INIT( vgoalsoc )
 {
-	gstriker_state *state = machine.driver_data<gstriker_state>();
-	state->m_gametype = 3;
+	gametype = 3;
 	mcu_init( machine );
 
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_write_handler(0x200090, 0x200091, FUNC(vbl_toggle_w)); // vblank toggle
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x200090, 0x200091, FUNC(vbl_toggle_r));
+	memory_install_write16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x200090, 0x200091, 0, 0, vbl_toggle_w); // vblank toggle
+	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x200090, 0x200091, 0, 0, vbl_toggle_r);
 }
 
 /*** GAME DRIVERS ************************************************************/

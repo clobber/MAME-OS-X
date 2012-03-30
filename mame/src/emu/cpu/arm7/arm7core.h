@@ -33,9 +33,7 @@
 #ifndef __ARM7CORE_H__
 #define __ARM7CORE_H__
 
-#define ARM7_MMU_ENABLE_HACK 0
-#define ARM7_DEBUG_CORE 0
-
+#include "cpuintrf.h"
 
 /****************************************************************************************************
  *  INTERRUPT LINES/EXCEPTIONS
@@ -93,7 +91,7 @@ enum
 };
 
 /* Coprocessor-related macros */
-#define COPRO_TLB_BASE      	cpustate->tlbBase
+#define COPRO_TLB_BASE        	cpustate->tlbBase
 #define COPRO_TLB_BASE_MASK                 0xffffc000
 #define COPRO_TLB_VADDR_FLTI_MASK           0xfff00000
 #define COPRO_TLB_VADDR_FLTI_MASK_SHIFT     18
@@ -139,23 +137,10 @@ enum
 #define COPRO_CTRL_INTVEC_F                 1
 #define COPRO_CTRL_MASK                     0x0000338f
 
-#define COPRO_DOMAIN_ACCESS_CONTROL     	cpustate->domainAccessControl
-
-#define COPRO_FAULT_STATUS_D    	cpustate->faultStatus[0]
-#define COPRO_FAULT_STATUS_P    	cpustate->faultStatus[1]
-
-#define COPRO_FAULT_ADDRESS     	cpustate->faultAddress
-
-#define COPRO_FCSE_PID      	cpustate->fcsePID
-
 /* Coprocessor Registers */
 #define ARM7COPRO_REGS \
     UINT32 control; \
-    UINT32 tlbBase; \
-    UINT32 faultStatus[2]; \
-    UINT32 faultAddress; \
-    UINT32 fcsePID; \
-    UINT32 domainAccessControl;
+    UINT32 tlbBase;
 
 enum
 {
@@ -165,7 +150,6 @@ enum
 	eARM_ARCHFLAGS_MMU	= 8,		// has on-board MMU (traditional ARM style like the SA1110)
 	eARM_ARCHFLAGS_SA	= 16,		// StrongARM extensions (enhanced TLB)
 	eARM_ARCHFLAGS_XSCALE	= 32,		// XScale extensions (CP14, enhanced TLB)
-	eARM_ARCHFLAGS_MODE26	= 64,		// supports 26-bit backwards compatibility mode
 };
 
 #define ARM7CORE_REGS                   \
@@ -177,11 +161,9 @@ enum
     UINT8 pendingUnd;                   \
     UINT8 pendingSwi;                   \
     INT32 iCount;			\
-	endianness_t endian;				\
-    device_irq_callback irq_callback;		\
-    legacy_cpu_device *device;		\
-    address_space *program;			\
-    direct_read_data *direct;
+    cpu_irq_callback irq_callback;		\
+    const device_config *device;		\
+    const address_space *program;
 
 
 /* CPU state struct */
@@ -193,9 +175,6 @@ typedef struct
 	UINT8 archRev;			// ARM architecture revision (3, 4, and 5 are valid)
 	UINT8 archFlags;		// architecture flags
 
-#if ARM7_MMU_ENABLE_HACK
-	UINT32 mmu_enable_addr;	// workaround for "MMU is enabled when PA != VA" problem
-#endif
 } arm_state;
 
 /****************************************************************************************************
@@ -392,12 +371,12 @@ static const int sRegisterTable[ARM7_NUM_MODES][18] =
 #define THUMB_ADDSUB_RNIMM  ((UINT16)0x01c0)
 #define THUMB_ADDSUB_RS     ((UINT16)0x0038)
 #define THUMB_ADDSUB_RD     ((UINT16)0x0007)
+#define THUMB_INSN_ADDSUB   ((UINT16)0x0800)
 #define THUMB_INSN_CMP      ((UINT16)0x0800)
 #define THUMB_INSN_SUB      ((UINT16)0x0800)
 #define THUMB_INSN_IMM_RD   ((UINT16)0x0700)
 #define THUMB_INSN_IMM_S    ((UINT16)0x0080)
 #define THUMB_INSN_IMM      ((UINT16)0x00ff)
-#define THUMB_INSN_ADDSUB   ((UINT16)0x0800)
 #define THUMB_ADDSUB_TYPE   ((UINT16)0x0600)
 #define THUMB_HIREG_OP      ((UINT16)0x0300)
 #define THUMB_HIREG_H       ((UINT16)0x00c0)
@@ -493,7 +472,7 @@ enum
 #define R15                     ARM7REG(eR15)
 #define SPSR                    17                     // SPSR is always the 18th register in our 0 based array sRegisterTable[][18]
 #define GET_CPSR                ARM7REG(eCPSR)
-#define SET_CPSR(v)             set_cpsr(cpustate,v)
+#define SET_CPSR(v)             (GET_CPSR = (v))
 #define MODE_FLAG               0xF                    // Mode bits are 4:0 of CPSR, but we ignore bit 4.
 #define GET_MODE                (GET_CPSR & MODE_FLAG)
 #define SIGN_BIT                ((UINT32)(1 << 31))
@@ -502,20 +481,9 @@ enum
 #define THUMB_SIGN_BIT               ((UINT32)(1 << 31))
 #define THUMB_SIGN_BITS_DIFFER(a, b) (((a)^(b)) >> 31)
 
-#define MODE32					(GET_CPSR & 0x10)
-#define MODE26					(!(GET_CPSR & 0x10))
-#define GET_PC                  (MODE32 ? R15 : R15 & 0x03FFFFFC)
-
-#define ARM7_TLB_ABORT_D (1 << 0)
-#define ARM7_TLB_ABORT_P (1 << 1)
-#define ARM7_TLB_READ    (1 << 2)
-#define ARM7_TLB_WRITE   (1 << 3)
-
 /* At one point I thought these needed to be cpu implementation specific, but they don't.. */
 #define GET_REGISTER(state, reg)       GetRegister(state, reg)
 #define SET_REGISTER(state, reg, val)  SetRegister(state, reg, val)
-#define GET_MODE_REGISTER(state, mode, reg)       GetModeRegister(state, mode, reg)
-#define SET_MODE_REGISTER(state, mode, reg, val)  SetModeRegister(state, mode, reg, val)
 #define ARM7_CHECKIRQ           arm7_check_irq_state(cpustate)
 
 extern write32_device_func arm7_coproc_do_callback;

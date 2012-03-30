@@ -14,7 +14,7 @@
 
 ****************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "machine/8255ppi.h"
@@ -29,20 +29,12 @@
 #define NUM_PENS				(16)
 #define RAM_PALETTE_SIZE		(1024)
 
+static pen_t pens[NUM_PENS];
 
-class slotcarn_state : public driver_device
-{
-public:
-	slotcarn_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	pen_t m_pens[NUM_PENS];
-	UINT8 *m_ram_attr;
-	UINT8 *m_ram_video;
-	UINT8 *m_ram_palette;
-	UINT8 *m_backup_ram;
-};
-
+static UINT8 *ram_attr;
+static UINT8 *ram_video;
+static UINT8 *ram_palette;
+static UINT8 *backup_ram;
 
 /*
 
@@ -56,30 +48,27 @@ public:
 
 static READ8_HANDLER( palette_r )
 {
-	slotcarn_state *state = space->machine().driver_data<slotcarn_state>();
 	int co;
 
-	co = ((state->m_ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
-	return state->m_ram_palette[co];
+	co = ((ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
+	return ram_palette[co];
 }
 
 static WRITE8_HANDLER( palette_w )
 {
-	slotcarn_state *state = space->machine().driver_data<slotcarn_state>();
 	int co;
 
-	space->machine().primary_screen->update_now();
+	video_screen_update_now(space->machine->primary_screen);
 	data &= 0x0f;
 
-	co = ((state->m_ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
-	state->m_ram_palette[co] = data;
+	co = ((ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
+	ram_palette[co] = data;
 
 }
 
 
 static MC6845_BEGIN_UPDATE( begin_update )
 {
-	slotcarn_state *state = device->machine().driver_data<slotcarn_state>();
 	int i;
 	int dim, bit0, bit1, bit2;
 
@@ -89,16 +78,15 @@ static MC6845_BEGIN_UPDATE( begin_update )
 		bit0 = BIT(i,0);
 		bit1 = BIT(i,1);
 		bit2 = BIT(i,2);
-		state->m_pens[i] = MAKE_RGB(dim*bit0, dim*bit1, dim*bit2);
+		pens[i] = MAKE_RGB(dim*bit0, dim*bit1, dim*bit2);
 	}
 
-	return state->m_pens;
+	return pens;
 }
 
 
 static MC6845_UPDATE_ROW( update_row )
 {
-	slotcarn_state *state = device->machine().driver_data<slotcarn_state>();
 	int extra_video_bank_bit = 0; // not used?
 	int lscnblk = 0; // not used?
 
@@ -109,17 +97,17 @@ static MC6845_UPDATE_ROW( update_row )
 	UINT16 x = 0;
 	int rlen;
 
-	gfx[0] = device->machine().region("gfx1")->base();
-	gfx[1] = device->machine().region("gfx2")->base();
-	rlen = device->machine().region("gfx2")->bytes();
+	gfx[0] = memory_region(device->machine, "gfx1");
+	gfx[1] = memory_region(device->machine, "gfx2");
+	rlen = memory_region_length(device->machine, "gfx2");
 
 	//ma = ma ^ 0x7ff;
 	for (cx = 0; cx < x_count; cx++)
 	{
 		int i;
-		int attr = state->m_ram_attr[ma & 0x7ff];
+		int attr = ram_attr[ma & 0x7ff];
 		int region = (attr & 0x40) >> 6;
-		int addr = ((state->m_ram_video[ma & 0x7ff] | ((attr & 0x80) << 1) | (extra_video_bank_bit)) << 4) | (ra & 0x0f);
+		int addr = ((ram_video[ma & 0x7ff] | ((attr & 0x80) << 1) | (extra_video_bank_bit)) << 4) | (ra & 0x0f);
 		int colour = (attr & 0x7f) << 3;
 		UINT8	*data;
 
@@ -139,8 +127,8 @@ static MC6845_UPDATE_ROW( update_row )
 			else
 				col |= 0x03;
 
-			col = state->m_ram_palette[col & 0x3ff];
-			bitmap.pix32(y, x) = pens[col ? col : (lscnblk ? 8 : 0)];
+			col = ram_palette[col & 0x3ff];
+			*BITMAP_ADDR32(bitmap, y, x) = pens[col ? col : (lscnblk ? 8 : 0)];
 
 			x++;
 		}
@@ -152,12 +140,12 @@ static MC6845_UPDATE_ROW( update_row )
 static WRITE_LINE_DEVICE_HANDLER(hsync_changed)
 {
 	/* update any video up to the current scanline */
-	device->machine().primary_screen->update_now();
+	video_screen_update_now(device->machine->primary_screen);
 }
 
 static WRITE_LINE_DEVICE_HANDLER(vsync_changed)
 {
-	cputag_set_input_line(device->machine(), "maincpu", 0, state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 static const mc6845_interface mc6845_intf =
@@ -179,15 +167,15 @@ static const mc6845_interface mc6845_intf =
 *          Memory Map          *
 *******************************/
 
-static ADDRESS_MAP_START( slotcarn_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( slotcarn_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_backup_ram)
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_BASE(&backup_ram)
 	AM_RANGE(0x6800, 0x6fff) AM_RAM // spielbud
 	AM_RANGE(0x7000, 0xafff) AM_ROM // spielbud
 
 
-	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0xb100, 0xb100) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_data_w)
+	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xb100, 0xb100) AM_DEVREADWRITE("ay", ay8910_r, ay8910_data_w)
 
 	AM_RANGE(0xb800, 0xb803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* Input Ports */
 	AM_RANGE(0xba00, 0xba03) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)	/* Input Ports */
@@ -198,18 +186,18 @@ static ADDRESS_MAP_START( slotcarn_map, AS_PROGRAM, 8 )
 
 	AM_RANGE(0xd800, 0xd81f) AM_RAM // column scroll for reels?
 
-	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE_MODERN("crtc", mc6845_device, address_w)
-	AM_RANGE(0xe001, 0xe001) AM_DEVWRITE_MODERN("crtc", mc6845_device, register_w)
+	AM_RANGE(0xe000, 0xe000) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0xe001, 0xe001) AM_DEVWRITE("crtc", mc6845_register_w)
 
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_ram_attr)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE_MEMBER(slotcarn_state, m_ram_video)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&ram_attr)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&ram_video)
 	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(palette_r, palette_w)
 ADDRESS_MAP_END
 
 // spielbud - is the ay mirrored, or are there now 2?
-static ADDRESS_MAP_START( spielbud_io_map, AS_IO, 8 )
-	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("aysnd", ay8910_address_w)
-	AM_RANGE(0xb100, 0xb100) AM_DEVWRITE("aysnd", ay8910_data_w)
+static ADDRESS_MAP_START( spielbud_io_map, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(0xb000, 0xb000) AM_DEVWRITE("ay", ay8910_address_w)
+	AM_RANGE(0xb100, 0xb100) AM_DEVWRITE("ay", ay8910_data_w)
 ADDRESS_MAP_END
 
 /********************************
@@ -535,11 +523,19 @@ GFXDECODE_END
 
 
 
+static VIDEO_UPDATE( slotcarn )
+{
+	const device_config *mc6845 = devtag_get_device(screen->machine, "crtc");
+	mc6845_update(mc6845, bitmap, cliprect);
+
+	return 0;
+}
+
+
 static MACHINE_START(merit)
 {
-	slotcarn_state *state = machine.driver_data<slotcarn_state>();
-	state->m_ram_palette = auto_alloc_array(machine, UINT8, RAM_PALETTE_SIZE);
-	state_save_register_global_pointer(machine, state->m_ram_palette, RAM_PALETTE_SIZE);
+	ram_palette = auto_alloc_array(machine, UINT8, RAM_PALETTE_SIZE);
+	state_save_register_global_pointer(machine, ram_palette, RAM_PALETTE_SIZE);
 }
 
 
@@ -595,37 +591,38 @@ static const ay8910_interface scarn_ay8910_config =
 *          Machine Driver          *
 ***********************************/
 
-static MACHINE_CONFIG_START( slotcarn, slotcarn_state )
+static MACHINE_DRIVER_START( slotcarn )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, CPU_CLOCK) // 2.5 Mhz?
-	MCFG_CPU_PROGRAM_MAP(slotcarn_map)
-	MCFG_CPU_IO_MAP(spielbud_io_map)
+	MDRV_CPU_ADD("maincpu", Z80, CPU_CLOCK) // 2.5 Mhz?
+	MDRV_CPU_PROGRAM_MAP(slotcarn_map)
+	MDRV_CPU_IO_MAP(spielbud_io_map)
 
 	/* 3x 8255 */
-	MCFG_PPI8255_ADD( "ppi8255_0", scarn_ppi8255_intf[0] )
-	MCFG_PPI8255_ADD( "ppi8255_1", scarn_ppi8255_intf[1] )
-	MCFG_PPI8255_ADD( "ppi8255_2", scarn_ppi8255_intf[2] )
+	MDRV_PPI8255_ADD( "ppi8255_0", scarn_ppi8255_intf[0] )
+	MDRV_PPI8255_ADD( "ppi8255_1", scarn_ppi8255_intf[1] )
+	MDRV_PPI8255_ADD( "ppi8255_2", scarn_ppi8255_intf[2] )
 
-	MCFG_MACHINE_START(merit)
+	MDRV_MACHINE_START(merit)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 512, 0, 512, 256, 0, 256)	/* temporary, CRTC will configure screen */
-	MCFG_SCREEN_UPDATE_DEVICE("crtc", mc6845_device, screen_update)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 512, 0, 512, 256, 0, 256)	/* temporary, CRTC will configure screen */
 
-	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
+	MDRV_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
-	MCFG_GFXDECODE(slotcarn)
-	MCFG_PALETTE_LENGTH(0x400)
+	MDRV_GFXDECODE(slotcarn)
+	MDRV_PALETTE_LENGTH(0x400)
+	MDRV_VIDEO_UPDATE(slotcarn)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd",AY8910, SND_CLOCK)
-	MCFG_SOUND_CONFIG(scarn_ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay",AY8910, SND_CLOCK)
+	MDRV_SOUND_CONFIG(scarn_ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 /******************************
@@ -750,6 +747,6 @@ ROM_END
 *                Game Drivers                *
 **********************************************
 
-      YEAR  NAME      PARENT   MACHINE   INPUT     INIT   ROT    COMPANY           FULLNAME               FLAGS  */
-GAME( 1985, slotcarn, 0,       slotcarn, slotcarn, 0,     ROT0, "Wing Co., Ltd.", "Slot Carnival",        GAME_NOT_WORKING )
-GAME( 1985, spielbud, 0,       slotcarn, spielbud, 0,     ROT0, "ADP",            "Spiel Bude (German)",  GAME_NOT_WORKING )
+      YEAR  NAME      PARENT   MACHINE   INPUT     INIT   ROT    COMPANY        FULLNAME               FLAGS  */
+GAME( 1985, slotcarn, 0,       slotcarn, slotcarn, 0,     ROT0, "Wing Co.Ltd", "Slot Carnival",        GAME_NOT_WORKING )
+GAME( 1985, spielbud, 0,       slotcarn, spielbud, 0,     ROT0, "ADP",         "Spiel Bude (German)",  GAME_NOT_WORKING )

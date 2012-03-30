@@ -9,31 +9,6 @@
 #ifndef __H8PRIV_H__
 #define __H8PRIV_H__
 
-typedef struct
-{
-	UINT32 tgr, irq, out;
-} H8S2XXX_TPU_ITEM;
-
-typedef struct
-{
-	emu_timer *timer;
-	int cycles_per_tick;
-	UINT64 timer_cycles;
-} H8S2XXX_TPU;
-
-typedef struct
-{
-	emu_timer *timer;
-	UINT32 bitrate;
-} H8S2XXX_SCI;
-
-typedef struct
-{
-	emu_timer *timer;
-	int cycles_per_tick;
-	UINT64 timer_cycles;
-} H8S2XXX_TMR;
-
 typedef struct _h83xx_state h83xx_state;
 struct _h83xx_state
 {
@@ -42,23 +17,21 @@ struct _h83xx_state
 	UINT32 regs[8];
 	UINT32 pc, ppc;
 
-	UINT32 irq_req[3];
+	UINT32 h8_IRQrequestH, h8_IRQrequestL;
 	INT32 cyccnt;
 
 	UINT8  ccr;
 	UINT8  h8nflag, h8vflag, h8cflag, h8zflag, h8iflag, h8hflag;
 	UINT8  h8uflag, h8uiflag;
-	UINT8  incheckirqs;
 
-	device_irq_callback irq_cb;
-	legacy_cpu_device *device;
+	cpu_irq_callback irq_cb;
+	const device_config *device;
 
-	address_space *program;
-	direct_read_data *direct;
-	address_space *io;
+	const address_space *program;
+	const address_space *io;
 
 	// onboard peripherals stuff
-	UINT8 per_regs[0x1C0];
+	UINT8 per_regs[256];
 
 	UINT16 h8TCNT[5];
 	UINT8 h8TSTR;
@@ -69,32 +42,20 @@ struct _h83xx_state
 	emu_timer *timer[5];
 	emu_timer *frctimer;
 
-	H8S2XXX_TMR tmr[2];
-	H8S2XXX_TPU tpu[6];
-	H8S2XXX_SCI sci[3];
-
 	int mode_8bit;
-    bool has_h8speriphs;
 };
+extern h83xx_state h8;
 
-// defined in h8speriph.c
-extern void h8s_tmr_init(h83xx_state *h8);
-extern void h8s_tpu_init(h83xx_state *h8);
-extern void h8s_sci_init(h83xx_state *h8);
-extern void h8s_periph_reset(h83xx_state *h8);
-extern void h8s_dtce_check(h83xx_state *h8, int vecnum);
-
-INLINE h83xx_state *get_safe_token(device_t *device)
+INLINE h83xx_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
-	assert(device->type() == H83002 ||
-		   device->type() == H83007 ||
-		   device->type() == H83044 ||
-		   device->type() == H83334 ||
-		   device->type() == H8S2241 ||
-		   device->type() == H8S2246 ||
-		   device->type() == H8S2323);
-	return (h83xx_state *)downcast<legacy_cpu_device *>(device)->token();
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_H83002 ||
+		   cpu_get_type(device) == CPU_H83007 ||
+		   cpu_get_type(device) == CPU_H83044 ||
+		   cpu_get_type(device) == CPU_H83334);
+	return (h83xx_state *)device->token;
 }
 
 UINT8 h8_register_read8(h83xx_state *h8, UINT32 address);
@@ -111,21 +72,5 @@ UINT8 h8_itu_read8(h83xx_state *h8, UINT8 reg);
 UINT8 h8_3007_itu_read8(h83xx_state *h8, UINT8 reg);
 void h8_itu_write8(h83xx_state *h8, UINT8 reg, UINT8 val);
 void h8_3007_itu_write8(h83xx_state *h8, UINT8 reg, UINT8 val);
-
-UINT8 h8s2241_per_regs_read_8(h83xx_state *h8, int offset);
-UINT8 h8s2246_per_regs_read_8(h83xx_state *h8, int offset);
-UINT8 h8s2323_per_regs_read_8(h83xx_state *h8, int offset);
-
-UINT16 h8s2241_per_regs_read_16(h83xx_state *h8, int offset);
-UINT16 h8s2246_per_regs_read_16(h83xx_state *h8, int offset);
-UINT16 h8s2323_per_regs_read_16(h83xx_state *h8, int offset);
-
-void h8s2241_per_regs_write_8(h83xx_state *h8, int offset, UINT8 data);
-void h8s2246_per_regs_write_8(h83xx_state *h8, int offset, UINT8 data);
-void h8s2323_per_regs_write_8(h83xx_state *h8, int offset, UINT8 data);
-
-void h8s2241_per_regs_write_16(h83xx_state *h8, int offset, UINT16 data);
-void h8s2246_per_regs_write_16(h83xx_state *h8, int offset, UINT16 data);
-void h8s2323_per_regs_write_16(h83xx_state *h8, int offset, UINT16 data);
 
 #endif /* __H8PRIV_H__ */

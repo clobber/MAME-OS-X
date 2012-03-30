@@ -14,120 +14,277 @@ to switch between 8*8 tiles and 16*16 tiles.
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "includes/tumbleb.h"
-#include "video/decospr.h"
+
+
+static UINT16 tumblepb_control_0[8];
+UINT16 *tumblepb_pf1_data,*tumblepb_pf2_data;
+static tilemap *pf1_tilemap,*pf1_alt_tilemap,*pf2_tilemap,*pf2_alt_tilemap;
+static int flipscreen;
+static UINT16 bcstory_tilebank;
+static int sprite_xoffset;
+static int sprite_yoffset;
+
 
 /******************************************************************************/
 
+static void tumblepb_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+{
+	int offs;
+
+	for (offs = 0;offs < 0x400;offs += 4)
+	{
+		int x,y,sprite,colour,multi,fx,fy,inc,flash,mult;
+
+		sprite = spriteram16[offs+1] & 0x3fff;
+		if (!sprite) continue;
+
+		y = spriteram16[offs];
+		flash=y&0x1000;
+		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+
+		x = spriteram16[offs+2];
+		colour = (x >>9) & 0xf;
+
+		fx = y & 0x2000;
+		fy = y & 0x4000;
+		multi = (1 << ((y & 0x0600) >> 9)) - 1;	/* 1x, 2x, 4x, 8x height */
+
+		x = x & 0x01ff;
+		y = y & 0x01ff;
+		if (x >= 320) x -= 512;
+		if (y >= 256) y -= 512;
+		y = 240 - y;
+        x = 304 - x;
+
+		sprite &= ~multi;
+		if (fy)
+			inc = -1;
+		else
+		{
+			sprite += multi;
+			inc = 1;
+		}
+
+		if (flipscreen)
+		{
+			y=240-y;
+			x=304-x;
+			if (fx) fx=0; else fx=1;
+			if (fy) fy=0; else fy=1;
+			mult=16;
+		}
+		else mult=-16;
+
+		while (multi >= 0)
+		{
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[3],
+					sprite - multi * inc,
+					colour,
+					fx,fy,
+					sprite_xoffset + x,sprite_yoffset + y + mult * multi,0);
+
+			multi--;
+		}
+	}
+}
+
+static void jumpkids_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+{
+	int offs;
+
+	for (offs = 0;offs < spriteram_size/2;offs += 4)
+	{
+		int x,y,sprite,colour,multi,fx,fy,inc,flash,mult;
+
+		sprite = spriteram16[offs+1] & 0x7fff;
+		if (!sprite) continue;
+
+		y = spriteram16[offs];
+		flash=y&0x1000;
+		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+
+		x = spriteram16[offs+2];
+		colour = (x >>9) & 0xf;
+
+		fx = y & 0x2000;
+		fy = y & 0x4000;
+		multi = (1 << ((y & 0x0600) >> 9)) - 1;	/* 1x, 2x, 4x, 8x height */
+
+		x = x & 0x01ff;
+		y = y & 0x01ff;
+		if (x >= 320) x -= 512;
+		if (y >= 256) y -= 512;
+		y = 240 - y;
+        x = 304 - x;
+
+	//  sprite &= ~multi; /* Todo:  I bet TumblePop bootleg doesn't do this either */
+		if (fy)
+			inc = -1;
+		else
+		{
+			sprite += multi;
+			inc = 1;
+		}
+
+		if (flipscreen)
+		{
+			y=240-y;
+			x=304-x;
+			if (fx) fx=0; else fx=1;
+			if (fy) fy=0; else fy=1;
+			mult=16;
+		}
+		else mult=-16;
+
+		while (multi >= 0)
+		{
+			drawgfx_transpen(bitmap,// x-1 for bcstory .. realign other layers?
+					cliprect,machine->gfx[3],
+					sprite - multi * inc,
+					colour,
+					fx,fy,
+					sprite_xoffset+x,sprite_yoffset + y + mult * multi,0);
+
+			multi--;
+		}
+	}
+}
+
+static void fncywld_draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect)
+{
+	int offs;
+
+	for (offs = 0;offs < 0x400;offs += 4)
+	{
+		int x,y,sprite,colour,multi,fx,fy,inc,flash,mult;
+
+		sprite = spriteram16[offs+1] & 0x3fff;
+		if (!sprite) continue;
+
+		y = spriteram16[offs];
+		flash=y&0x1000;
+		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+
+		x = spriteram16[offs+2];
+		colour = (x >>9) & 0x3f;
+
+		fx = y & 0x2000;
+		fy = y & 0x4000;
+		multi = (1 << ((y & 0x0600) >> 9)) - 1;	/* 1x, 2x, 4x, 8x height */
+
+		x = x & 0x01ff;
+		y = y & 0x01ff;
+		if (x >= 320) x -= 512;
+		if (y >= 256) y -= 512;
+		y = 240 - y;
+        x = 304 - x;
+
+	//  sprite &= ~multi; /* Todo:  I bet TumblePop bootleg doesn't do this either */
+		if (fy)
+			inc = -1;
+		else
+		{
+			sprite += multi;
+			inc = 1;
+		}
+
+		if (flipscreen)
+		{
+			y=240-y;
+			x=304-x;
+			if (fx) fx=0; else fx=1;
+			if (fy) fy=0; else fy=1;
+			mult=16;
+		}
+		else mult=-16;
+
+		while (multi >= 0)
+		{
+			drawgfx_transpen(bitmap,cliprect,machine->gfx[3],
+					sprite - multi * inc,
+					colour,
+					fx,fy,
+					sprite_xoffset+x,sprite_yoffset+ y + mult * multi,15);
+
+			multi--;
+		}
+	}
+}
 
 /******************************************************************************/
 
 WRITE16_HANDLER( bcstory_tilebank_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	state->m_tilebank = data;
-	state->m_pf1_tilemap->mark_all_dirty();
-	state->m_pf1_alt_tilemap->mark_all_dirty();
-	state->m_pf2_tilemap->mark_all_dirty();
+	bcstory_tilebank = data;
+	tilemap_mark_all_tiles_dirty(pf1_tilemap);
+	tilemap_mark_all_tiles_dirty(pf1_alt_tilemap);
+	tilemap_mark_all_tiles_dirty(pf2_tilemap);
 }
 
 WRITE16_HANDLER( chokchok_tilebank_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	state->m_tilebank = data << 1;
-	state->m_pf1_tilemap->mark_all_dirty();
-	state->m_pf1_alt_tilemap->mark_all_dirty();
-	state->m_pf2_tilemap->mark_all_dirty();
+	bcstory_tilebank = data<<1;
+	tilemap_mark_all_tiles_dirty(pf1_tilemap);
+	tilemap_mark_all_tiles_dirty(pf1_alt_tilemap);
+	tilemap_mark_all_tiles_dirty(pf2_tilemap);
 }
 
 WRITE16_HANDLER( wlstar_tilebank_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
 	/* it just writes 0000 or ffff */
-	state->m_tilebank = data & 0x4000;
-	state->m_pf1_tilemap->mark_all_dirty();
-	state->m_pf1_alt_tilemap->mark_all_dirty();
-	state->m_pf2_tilemap->mark_all_dirty();
+	bcstory_tilebank = data&0x4000;
+	tilemap_mark_all_tiles_dirty(pf1_tilemap);
+	tilemap_mark_all_tiles_dirty(pf1_alt_tilemap);
+	tilemap_mark_all_tiles_dirty(pf2_tilemap);
 }
 
 
 WRITE16_HANDLER( suprtrio_tilebank_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	state->m_tilebank = data << 14; // shift it here, makes using bcstory_tilebank easier
-	state->m_pf1_tilemap->mark_all_dirty();
-	state->m_pf1_alt_tilemap->mark_all_dirty();
-	state->m_pf2_tilemap->mark_all_dirty();
+	bcstory_tilebank = data<<14; // shift it here, makes using bcstory_tilebank easier
+	tilemap_mark_all_tiles_dirty(pf1_tilemap);
+	tilemap_mark_all_tiles_dirty(pf1_alt_tilemap);
+	tilemap_mark_all_tiles_dirty(pf2_tilemap);
 }
+
+
+
 
 
 WRITE16_HANDLER( tumblepb_pf1_data_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	COMBINE_DATA(&state->m_pf1_data[offset]);
-	state->m_pf1_tilemap->mark_tile_dirty(offset);
-	state->m_pf1_alt_tilemap->mark_tile_dirty(offset);
+	COMBINE_DATA(&tumblepb_pf1_data[offset]);
+	tilemap_mark_tile_dirty(pf1_tilemap,offset);
+	tilemap_mark_tile_dirty(pf1_alt_tilemap,offset);
 }
 
 WRITE16_HANDLER( tumblepb_pf2_data_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
+	COMBINE_DATA(&tumblepb_pf2_data[offset]);
+	tilemap_mark_tile_dirty(pf2_tilemap,offset);
 
-	COMBINE_DATA(&state->m_pf2_data[offset]);
-	state->m_pf2_tilemap->mark_tile_dirty(offset);
-
-	if (state->m_pf2_alt_tilemap)
-		state->m_pf2_alt_tilemap->mark_tile_dirty(offset);
+	if (pf2_alt_tilemap)
+		tilemap_mark_tile_dirty(pf2_alt_tilemap,offset);
 }
 
 WRITE16_HANDLER( fncywld_pf1_data_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	COMBINE_DATA(&state->m_pf1_data[offset]);
-	state->m_pf1_tilemap->mark_tile_dirty(offset / 2);
-	state->m_pf1_alt_tilemap->mark_tile_dirty(offset / 2);
+	COMBINE_DATA(&tumblepb_pf1_data[offset]);
+	tilemap_mark_tile_dirty(pf1_tilemap,offset/2);
+	tilemap_mark_tile_dirty(pf1_alt_tilemap,offset/2);
 }
 
 WRITE16_HANDLER( fncywld_pf2_data_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	COMBINE_DATA(&state->m_pf2_data[offset]);
-	state->m_pf2_tilemap->mark_tile_dirty(offset / 2);
+	COMBINE_DATA(&tumblepb_pf2_data[offset]);
+	tilemap_mark_tile_dirty(pf2_tilemap,offset/2);
 }
 
 WRITE16_HANDLER( tumblepb_control_0_w )
 {
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-	COMBINE_DATA(&state->m_control_0[offset]);
-}
-
-
-WRITE16_HANDLER( pangpang_pf1_data_w )
-{
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	COMBINE_DATA(&state->m_pf1_data[offset]);
-	state->m_pf1_tilemap->mark_tile_dirty(offset / 2);
-	state->m_pf1_alt_tilemap->mark_tile_dirty(offset / 2);
-}
-
-WRITE16_HANDLER( pangpang_pf2_data_w )
-{
-	tumbleb_state *state = space->machine().driver_data<tumbleb_state>();
-
-	COMBINE_DATA(&state->m_pf2_data[offset]);
-	state->m_pf2_tilemap->mark_tile_dirty(offset / 2);
-
-	if (state->m_pf2_alt_tilemap)
-		state->m_pf2_alt_tilemap->mark_tile_dirty(offset / 2);
+	COMBINE_DATA(&tumblepb_control_0[offset]);
 }
 
 /******************************************************************************/
@@ -138,37 +295,35 @@ static TILEMAP_MAPPER( tumblep_scan )
 	return (col & 0x1f) + ((row & 0x1f) << 5) + ((col & 0x60) << 5);
 }
 
-INLINE void get_bg_tile_info( running_machine &machine, tile_data &tileinfo, int tile_index, int gfx_bank, UINT16 *gfx_base)
+INLINE void get_bg_tile_info(running_machine *machine,tile_data *tileinfo,int tile_index,int gfx_bank,UINT16 *gfx_base)
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
 	int data = gfx_base[tile_index];
 
 	SET_TILE_INFO(
 			gfx_bank,
-			(data & 0x0fff) | (state->m_tilebank >> 2),
+			(data & 0x0fff)|(bcstory_tilebank>>2),
 			data >> 12,
 			0);
 }
 
-static TILE_GET_INFO( get_bg1_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	get_bg_tile_info(machine, tileinfo, tile_index, 2, state->m_pf1_data); }
-static TILE_GET_INFO( get_bg2_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	get_bg_tile_info(machine, tileinfo, tile_index, 1, state->m_pf2_data); }
+static TILE_GET_INFO( get_bg1_tile_info ) { get_bg_tile_info(machine,tileinfo,tile_index,2,tumblepb_pf1_data); }
+static TILE_GET_INFO( get_bg2_tile_info ) { get_bg_tile_info(machine,tileinfo,tile_index,1,tumblepb_pf2_data); }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf1_data[tile_index];
+	int data = tumblepb_pf1_data[tile_index];
 
 	SET_TILE_INFO(
 			0,
-			(data & 0x0fff) | state->m_tilebank,
+			(data & 0x0fff)|bcstory_tilebank,
 			data >> 12,
 			0);
 }
 
-INLINE void get_fncywld_bg_tile_info( running_machine &machine, tile_data &tileinfo, int tile_index, int gfx_bank, UINT16 *gfx_base)
+INLINE void get_fncywld_bg_tile_info(running_machine *machine,tile_data *tileinfo,int tile_index,int gfx_bank,UINT16 *gfx_base)
 {
-	int data = gfx_base[tile_index * 2];
-	int attr = gfx_base[tile_index * 2 + 1];
+	int data = gfx_base[tile_index*2];
+	int attr = gfx_base[tile_index*2+1];
 
 	SET_TILE_INFO(
 			gfx_bank,
@@ -177,14 +332,13 @@ INLINE void get_fncywld_bg_tile_info( running_machine &machine, tile_data &tilei
 			0);
 }
 
-static TILE_GET_INFO( get_fncywld_bg1_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	get_fncywld_bg_tile_info(machine, tileinfo, tile_index, 2, state->m_pf1_data); }
-static TILE_GET_INFO( get_fncywld_bg2_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	get_fncywld_bg_tile_info(machine, tileinfo, tile_index, 1, state->m_pf2_data); }
+static TILE_GET_INFO( get_fncywld_bg1_tile_info ) { get_fncywld_bg_tile_info(machine,tileinfo,tile_index,2,tumblepb_pf1_data); }
+static TILE_GET_INFO( get_fncywld_bg2_tile_info ) { get_fncywld_bg_tile_info(machine,tileinfo,tile_index,1,tumblepb_pf2_data); }
 
 static TILE_GET_INFO( get_fncywld_fg_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf1_data[tile_index * 2];
-	int attr = state->m_pf1_data[tile_index * 2 + 1];
+	int data = tumblepb_pf1_data[tile_index*2];
+	int attr = tumblepb_pf1_data[tile_index*2+1];
 
 	SET_TILE_INFO(
 			0,
@@ -197,8 +351,7 @@ static TILE_GET_INFO( get_fncywld_fg_tile_info )
 /* jump pop */
 static TILE_GET_INFO( get_jumppop_bg1_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf1_data[tile_index];
+	int data = tumblepb_pf1_data[tile_index];
 
 	SET_TILE_INFO(
 			2,
@@ -209,8 +362,7 @@ static TILE_GET_INFO( get_jumppop_bg1_tile_info )
 
 static TILE_GET_INFO( get_jumppop_bg2_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf2_data[tile_index];
+	int data = tumblepb_pf2_data[tile_index];
 
 	SET_TILE_INFO(
 			1,
@@ -221,8 +373,7 @@ static TILE_GET_INFO( get_jumppop_bg2_tile_info )
 
 static TILE_GET_INFO( get_jumppop_bg2_alt_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf2_data[tile_index];
+	int data = tumblepb_pf2_data[tile_index];
 
 	SET_TILE_INFO(
 			0,
@@ -234,8 +385,7 @@ static TILE_GET_INFO( get_jumppop_bg2_alt_tile_info )
 
 static TILE_GET_INFO( get_jumppop_fg_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf1_data[tile_index];
+	int data = tumblepb_pf1_data[tile_index];
 
 	SET_TILE_INFO(
 			0,
@@ -244,10 +394,29 @@ static TILE_GET_INFO( get_jumppop_fg_tile_info )
 			0);
 }
 
-INLINE void pangpang_get_bg_tile_info( running_machine &machine, tile_data &tileinfo, int tile_index, int gfx_bank, UINT16 *gfx_base )
+
+WRITE16_HANDLER( pangpang_pf1_data_w )
 {
-	int data = gfx_base[tile_index * 2 + 1];
-	int attr = gfx_base[tile_index * 2];
+	COMBINE_DATA(&tumblepb_pf1_data[offset]);
+	tilemap_mark_tile_dirty(pf1_tilemap,offset/2);
+	tilemap_mark_tile_dirty(pf1_alt_tilemap,offset/2);
+}
+
+WRITE16_HANDLER( pangpang_pf2_data_w )
+{
+	COMBINE_DATA(&tumblepb_pf2_data[offset]);
+	tilemap_mark_tile_dirty(pf2_tilemap,offset/2);
+
+	if (pf2_alt_tilemap)
+		tilemap_mark_tile_dirty(pf2_alt_tilemap,offset/2);
+}
+
+
+
+INLINE void pangpang_get_bg_tile_info(running_machine *machine, tile_data *tileinfo, int tile_index,int gfx_bank,UINT16 *gfx_base)
+{
+	int data = gfx_base[tile_index*2+1];
+	int attr = gfx_base[tile_index*2];
 
 	SET_TILE_INFO(
 			gfx_bank,
@@ -256,27 +425,26 @@ INLINE void pangpang_get_bg_tile_info( running_machine &machine, tile_data &tile
 			0);
 }
 
-INLINE void pangpang_get_bg2x_tile_info( running_machine &machine, tile_data &tileinfo, int tile_index, int gfx_bank, UINT16 *gfx_base )
+INLINE void pangpang_get_bg2x_tile_info(running_machine *machine, tile_data *tileinfo, int tile_index,int gfx_bank,UINT16 *gfx_base)
 {
-	int data = gfx_base[tile_index * 2 + 1];
-	int attr = gfx_base[tile_index * 2];
+	int data = gfx_base[tile_index*2+1];
+	int attr = gfx_base[tile_index*2];
 
 	SET_TILE_INFO(
 			gfx_bank,
-			(data & 0xfff) + 0x1000,
+			(data & 0xfff)+0x1000,
 			(attr >>12) & 0xf,
 			0);
 }
 
 
-static TILE_GET_INFO( pangpang_get_bg1_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	pangpang_get_bg_tile_info(machine, tileinfo, tile_index, 2, state->m_pf1_data); }
-static TILE_GET_INFO( pangpang_get_bg2_tile_info ) { tumbleb_state *state = machine.driver_data<tumbleb_state>();	pangpang_get_bg2x_tile_info(machine, tileinfo, tile_index, 1, state->m_pf2_data); }
+static TILE_GET_INFO( pangpang_get_bg1_tile_info ) { pangpang_get_bg_tile_info(machine,tileinfo,tile_index,2,tumblepb_pf1_data); }
+static TILE_GET_INFO( pangpang_get_bg2_tile_info ) { pangpang_get_bg2x_tile_info(machine,tileinfo,tile_index,1,tumblepb_pf2_data); }
 
 static TILE_GET_INFO( pangpang_get_fg_tile_info )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-	int data = state->m_pf1_data[tile_index * 2 + 1];
-	int attr = state->m_pf1_data[tile_index * 2];
+	int data = tumblepb_pf1_data[tile_index*2+1];
+	int attr = tumblepb_pf1_data[tile_index*2];
 
 	SET_TILE_INFO(
 			0,
@@ -286,358 +454,385 @@ static TILE_GET_INFO( pangpang_get_fg_tile_info )
 }
 
 
-static void tumbleb_tilemap_redraw(running_machine &machine)
-{
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-
-	state->m_pf1_tilemap->mark_all_dirty();
-	state->m_pf1_alt_tilemap->mark_all_dirty();
-	state->m_pf2_tilemap->mark_all_dirty();
-	if (state->m_pf2_alt_tilemap)
-		state->m_pf2_alt_tilemap->mark_all_dirty();
-}
-
 VIDEO_START( pangpang )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	pf1_tilemap =     tilemap_create(machine, pangpang_get_fg_tile_info, tilemap_scan_rows, 8, 8,64,32);
+	pf1_alt_tilemap = tilemap_create(machine, pangpang_get_bg1_tile_info,tumblep_scan,16,16,64,32);
+	pf2_tilemap =     tilemap_create(machine, pangpang_get_bg2_tile_info,tumblep_scan,     16,16,64,32);
 
-	state->m_pf1_tilemap =     tilemap_create(machine, pangpang_get_fg_tile_info,  tilemap_scan_rows, 8,  8, 64, 32);
-	state->m_pf1_alt_tilemap = tilemap_create(machine, pangpang_get_bg1_tile_info, tumblep_scan,     16, 16, 64, 32);
-	state->m_pf2_tilemap =     tilemap_create(machine, pangpang_get_bg2_tile_info, tumblep_scan,     16, 16, 64, 32);
+	tilemap_set_transparent_pen(pf1_tilemap,0);
+	tilemap_set_transparent_pen(pf1_alt_tilemap,0);
+	bcstory_tilebank = 0;
 
-	state->m_pf1_tilemap->set_transparent_pen(0);
-	state->m_pf1_alt_tilemap->set_transparent_pen(0);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
+	sprite_xoffset = -1;
+	sprite_yoffset = 0;
 }
 
 
 VIDEO_START( tumblepb )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	pf1_tilemap =     tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8,64,32);
+	pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info,tumblep_scan,16,16,64,32);
+	pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info,tumblep_scan,     16,16,64,32);
 
-	state->m_pf1_tilemap =     tilemap_create(machine, get_fg_tile_info,  tilemap_scan_rows, 8,  8, 64, 32);
-	state->m_pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info, tumblep_scan,     16, 16, 64, 32);
-	state->m_pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info, tumblep_scan,     16, 16, 64, 32);
+	tilemap_set_transparent_pen(pf1_tilemap,0);
+	tilemap_set_transparent_pen(pf1_alt_tilemap,0);
+	bcstory_tilebank = 0;
 
-	state->m_pf1_tilemap->set_transparent_pen(0);
-	state->m_pf1_alt_tilemap->set_transparent_pen(0);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
+	sprite_xoffset = -1;
+	sprite_yoffset = 0;
 }
 
 VIDEO_START( sdfight )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	pf1_tilemap =     tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8,64,64); // 64*64 to prevent bad tilemap wrapping? - check real behavior
+	pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info,tumblep_scan,16,16,64,32);
+	pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info,tumblep_scan,     16,16,64,32);
 
-	state->m_pf1_tilemap =     tilemap_create(machine, get_fg_tile_info,  tilemap_scan_rows, 8,  8, 64, 64); // 64*64 to prevent bad tilemap wrapping? - check real behavior
-	state->m_pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info, tumblep_scan,     16, 16, 64, 32);
-	state->m_pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info, tumblep_scan,     16, 16, 64, 32);
+	tilemap_set_transparent_pen(pf1_tilemap,0);
+	tilemap_set_transparent_pen(pf1_alt_tilemap,0);
+	bcstory_tilebank = 0;
 
-	state->m_pf1_tilemap->set_transparent_pen(0);
-	state->m_pf1_alt_tilemap->set_transparent_pen(0);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
+	/* aligned to monitor test */
+	sprite_xoffset = 0;
+	sprite_yoffset = 1;
 }
 
 VIDEO_START( fncywld )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	pf1_tilemap =     tilemap_create(machine, get_fncywld_fg_tile_info, tilemap_scan_rows, 8, 8,64,32);
+	pf1_alt_tilemap = tilemap_create(machine, get_fncywld_bg1_tile_info,tumblep_scan,16,16,64,32);
+	pf2_tilemap =     tilemap_create(machine, get_fncywld_bg2_tile_info,tumblep_scan,     16,16,64,32);
 
-	state->m_pf1_tilemap =     tilemap_create(machine, get_fncywld_fg_tile_info,  tilemap_scan_rows, 8,  8, 64, 32);
-	state->m_pf1_alt_tilemap = tilemap_create(machine, get_fncywld_bg1_tile_info, tumblep_scan,     16, 16, 64, 32);
-	state->m_pf2_tilemap =     tilemap_create(machine, get_fncywld_bg2_tile_info, tumblep_scan,     16, 16, 64, 32);
+	tilemap_set_transparent_pen(pf1_tilemap,15);
+	tilemap_set_transparent_pen(pf1_alt_tilemap,15);
+	bcstory_tilebank = 0;
 
-	state->m_pf1_tilemap->set_transparent_pen(15);
-	state->m_pf1_alt_tilemap->set_transparent_pen(15);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
+	sprite_xoffset = -1;
+	sprite_yoffset = 0;
 }
 
 VIDEO_START( jumppop )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	pf1_tilemap =     tilemap_create(machine, get_jumppop_fg_tile_info, tilemap_scan_rows, 8, 8,128,64);
+	pf1_alt_tilemap = tilemap_create(machine, get_jumppop_bg1_tile_info,tilemap_scan_rows,16,16,64,64);
+	pf2_tilemap =     tilemap_create(machine, get_jumppop_bg2_tile_info,tilemap_scan_rows,     16,16,64,64);
+	pf2_alt_tilemap =     tilemap_create(machine, get_jumppop_bg2_alt_tile_info,tilemap_scan_rows,     8,8,128,64);
 
-	state->m_pf1_tilemap =     tilemap_create(machine, get_jumppop_fg_tile_info,      tilemap_scan_rows,     8,  8, 128, 64);
-	state->m_pf1_alt_tilemap = tilemap_create(machine, get_jumppop_bg1_tile_info,     tilemap_scan_rows,    16, 16,  64, 64);
-	state->m_pf2_tilemap =     tilemap_create(machine, get_jumppop_bg2_tile_info,     tilemap_scan_rows,    16, 16,  64, 64);
-	state->m_pf2_alt_tilemap = tilemap_create(machine, get_jumppop_bg2_alt_tile_info, tilemap_scan_rows,     8,  8, 128, 64);
+	tilemap_set_transparent_pen(pf1_tilemap,0);
+	tilemap_set_transparent_pen(pf1_alt_tilemap,0);
 
-	state->m_pf1_tilemap->set_transparent_pen(0);
-	state->m_pf1_alt_tilemap->set_transparent_pen(0);
+	tilemap_set_flip(pf1_tilemap, TILEMAP_FLIPX);
+	tilemap_set_flip(pf1_alt_tilemap, TILEMAP_FLIPX);
+	tilemap_set_flip(pf2_tilemap, TILEMAP_FLIPX);
+	tilemap_set_flip(pf2_alt_tilemap, TILEMAP_FLIPX);
+	bcstory_tilebank = 0;
 
-	state->m_pf1_tilemap->set_flip(TILEMAP_FLIPX);
-	state->m_pf1_alt_tilemap->set_flip(TILEMAP_FLIPX);
-	state->m_pf2_tilemap->set_flip(TILEMAP_FLIPX);
-	state->m_pf2_alt_tilemap->set_flip(TILEMAP_FLIPX);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
+	sprite_xoffset = -1;
+	sprite_yoffset = 0;
 }
 
-
-VIDEO_START( suprtrio )
-{
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
-
-	state->m_pf1_tilemap =     tilemap_create(machine, get_fg_tile_info,  tilemap_scan_rows, 8,  8, 64, 32);
-	state->m_pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info, tumblep_scan,     16, 16, 64, 32);
-	state->m_pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info, tumblep_scan,     16, 16, 64, 32);
-
-	state->m_pf1_alt_tilemap->set_transparent_pen(0);
-
-	machine.save().register_postload(save_prepost_delegate(FUNC(tumbleb_tilemap_redraw), &machine));
-}
 
 /******************************************************************************/
 
-void tumbleb_draw_common(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect, int pf1x_offs, int pf1y_offs, int pf2x_offs, int pf2y_offs)
+
+VIDEO_UPDATE( tumblepb )
 {
-	tumbleb_state *state = machine.driver_data<tumbleb_state>();
+	int offs,offs2;
 
-	state->m_pf1_tilemap->set_scrollx(0, state->m_control_0[1] + pf1x_offs);
-	state->m_pf1_tilemap->set_scrolly(0, state->m_control_0[2] + pf1y_offs);
-	state->m_pf1_alt_tilemap->set_scrollx(0, state->m_control_0[1] + pf1x_offs);
-	state->m_pf1_alt_tilemap->set_scrolly(0, state->m_control_0[2] + pf1y_offs);
-	state->m_pf2_tilemap->set_scrollx(0, state->m_control_0[3] + pf2x_offs);
-	state->m_pf2_tilemap->set_scrolly(0, state->m_control_0[4] + pf2y_offs);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=-1;
+	if (flipscreen) offs2=-3; else offs2=-5;
 
-	state->m_pf2_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
 
-	if (state->m_control_0[6] & 0x80)
-		state->m_pf1_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	else
-		state->m_pf1_alt_tilemap->draw(bitmap, cliprect, 0, 0);
-
-	machine.device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, state->m_spriteram_size/2);
-}
-
-SCREEN_UPDATE_IND16( tumblepb )
-{
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
-
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
-
-	if (state->m_flipscreen)
-		offs = 1;
-	else
-		offs = -1;
-
-	if (state->m_flipscreen)
-		offs2 = -3;
-	else
-		offs2 = -5;
-
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, 0, offs, 0);
-
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	tumblepb_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( jumpkids )
+VIDEO_UPDATE( jumpkids )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=-1;
+	if (flipscreen) offs2=-3; else offs2=-5;
 
-	if (state->m_flipscreen)
-		offs = 1;
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	else
-		offs = -1;
-
-	if (state->m_flipscreen)
-		offs2 = -3;
-	else
-		offs2 = -5;
-
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, 0, offs, 0);
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( semicom )
+VIDEO_UPDATE( semicom )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=-1;	/* fixed */
+	if (flipscreen) offs2=-3; else offs2=-5;	/* fixed */
 
-	if (state->m_flipscreen)
-		offs = 1;
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	else
-		offs = -1;
-
-	if (state->m_flipscreen)
-		offs2 = -3;
-	else
-		offs2 = -5;
-
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, 0, offs, 0);
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( semicom_altoffsets )
+VIDEO_UPDATE( semicom_altoffsets )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offsx, offsy, offsx2;
+	int offsx,offsy,offsx2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
+	flipscreen=tumblepb_control_0[0]&0x80;
 
 	offsx = -1;
 	offsy = 2;
 	offsx2 = -5;
 
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offsx2, 0, offsx, offsy);
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offsx2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offsx2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offsx );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4]+offsy );
 
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	else
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( bcstory )
+VIDEO_UPDATE( bcstory )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=8;	/* not sure of this */
+	if (flipscreen) offs2=-3; else offs2=8;	/* not sure of this */
 
-	/* not sure of this */
-	if (state->m_flipscreen)
-		offs = 1;
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	else
-		offs = 8;
-
-	/* not sure of this */
-	if (state->m_flipscreen)
-		offs2 = -3;
-	else
-		offs2 = 8;
-
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, 0, offs, 0);
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( semibase )
+VIDEO_UPDATE( semibase )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
-	offs = -1;
-	offs2 = -2;
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	offs=-1;
+	offs2=-2;
 
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, 0, offs, 0);
+	/* sprites need an offset too */
 
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	else
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( sdfight )
+VIDEO_UPDATE( sdfight )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
-	offs = -1;
-	offs2 = -5; // foreground scroll..
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	offs=-1;
+	offs2=-5; // foreground scroll..
 
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, -16, offs, 0);
+	/* sprites need an offset too */
 
-	screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, state->m_spriteram_size/2);
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2]-16 ); // needed for the ground ...
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2]-16 );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	else
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( fncywld )
+
+
+VIDEO_UPDATE( fncywld )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+	int offs,offs2;
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=-1;
+	if (flipscreen) offs2=-3; else offs2=-5;
 
-	if (state->m_flipscreen)
-		offs = 1;
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
+
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 	else
-		offs = -1;
-
-	if (state->m_flipscreen)
-		offs2 = -3;
-	else
-		offs2 = -5;
-
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, -16, offs, 0);
-
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	fncywld_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
-SCREEN_UPDATE_IND16( pangpang )
+
+VIDEO_UPDATE( jumppop )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
-	int offs, offs2;
+//  bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 
-	state->m_flipscreen = state->m_control_0[0] & 0x80;
-	screen.machine().tilemap().set_flip_all(state->m_flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	tilemap_set_scrollx( pf1_tilemap,0, jumppop_control[2]-0x3a0 );
+	tilemap_set_scrolly( pf1_tilemap,0, jumppop_control[3] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, jumppop_control[2]-0x3a0 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, jumppop_control[3] );
+	tilemap_set_scrollx( pf2_tilemap,0, jumppop_control[0]-0x3a2  );
+	tilemap_set_scrolly( pf2_tilemap,0, jumppop_control[1] );
+	tilemap_set_scrollx( pf2_alt_tilemap,0, jumppop_control[0]-0x3a2 );
+	tilemap_set_scrolly( pf2_alt_tilemap,0, jumppop_control[1] );
 
-	if (state->m_flipscreen)
-		offs = 1;
+	if (jumppop_control[7]&1)
+		tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
 	else
-		offs = -1;
+		tilemap_draw(bitmap,cliprect,pf2_alt_tilemap,0,0);
 
-	if (state->m_flipscreen)
-		offs2 = -3;
+	if (jumppop_control[7]&2)
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
 	else
-		offs2 = -5;
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
 
-	tumbleb_draw_common(screen.machine(),bitmap,cliprect, offs2, -16, offs, 0);
+//popmessage("%04x %04x %04x %04x %04x %04x %04x %04x", jumppop_control[0],jumppop_control[1],jumppop_control[2],jumppop_control[3],jumppop_control[4],jumppop_control[5],jumppop_control[6],jumppop_control[7]);
+
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
 
 
-
-SCREEN_UPDATE_IND16( jumppop )
+VIDEO_UPDATE( suprtrio )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
+	tilemap_set_scrollx( pf1_alt_tilemap,0, -suprtrio_control[1]-6 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, -suprtrio_control[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, -suprtrio_control[3]-2 );
+	tilemap_set_scrolly( pf2_tilemap,0, -suprtrio_control[4] );
 
-	state->m_pf1_tilemap->set_scrollx(0, state->m_control[2] - 0x3a0);
-	state->m_pf1_tilemap->set_scrolly(0, state->m_control[3]);
-	state->m_pf1_alt_tilemap->set_scrollx(0, state->m_control[2] - 0x3a0);
-	state->m_pf1_alt_tilemap->set_scrolly(0, state->m_control[3]);
-	state->m_pf2_tilemap->set_scrollx(0, state->m_control[0] - 0x3a2);
-	state->m_pf2_tilemap->set_scrolly(0, state->m_control[1]);
-	state->m_pf2_alt_tilemap->set_scrollx(0, state->m_control[0] - 0x3a2);
-	state->m_pf2_alt_tilemap->set_scrolly(0, state->m_control[1]);
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
 
-	if (state->m_control[7] & 1)
-		state->m_pf2_tilemap->draw(bitmap, cliprect, 0, 0);
-	else
-		state->m_pf2_alt_tilemap->draw(bitmap, cliprect, 0, 0);
-
-	if (state->m_control[7] & 2)
-		state->m_pf1_alt_tilemap->draw(bitmap, cliprect, 0, 0);
-	else
-		state->m_pf1_tilemap->draw(bitmap, cliprect, 0, 0);
-
-	screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, state->m_spriteram_size/2);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
+#if 0
+popmessage("%04x %04x %04x %04x %04x %04x %04x %04x",
+ suprtrio_control[0],
+ suprtrio_control[1],
+ suprtrio_control[2],
+ suprtrio_control[3],
+ suprtrio_control[4],
+ suprtrio_control[5],
+ suprtrio_control[6],
+ suprtrio_control[7]);
+#endif
 
 	return 0;
 }
 
-
-SCREEN_UPDATE_IND16( suprtrio )
+VIDEO_UPDATE( pangpang )
 {
-	tumbleb_state *state = screen.machine().driver_data<tumbleb_state>();
+	int offs,offs2;
 
-	state->m_pf1_alt_tilemap->set_scrollx(0, -state->m_control[1] - 6);
-	state->m_pf1_alt_tilemap->set_scrolly(0, -state->m_control[2]);
-	state->m_pf2_tilemap->set_scrollx(0, -state->m_control[3] - 2);
-	state->m_pf2_tilemap->set_scrolly(0, -state->m_control[4]);
+	flipscreen=tumblepb_control_0[0]&0x80;
+	tilemap_set_flip_all(screen->machine,flipscreen ? (TILEMAP_FLIPY | TILEMAP_FLIPX) : 0);
+	if (flipscreen) offs=1; else offs=-1;
+	if (flipscreen) offs2=-3; else offs2=-5;
 
-	state->m_pf2_tilemap->draw(bitmap, cliprect, 0, 0);
-	state->m_pf1_alt_tilemap->draw(bitmap, cliprect, 0, 0);
+	tilemap_set_scrollx( pf1_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf1_alt_tilemap,0, tumblepb_control_0[1]+offs2 );
+	tilemap_set_scrolly( pf1_alt_tilemap,0, tumblepb_control_0[2] );
+	tilemap_set_scrollx( pf2_tilemap,0, tumblepb_control_0[3]+offs );
+	tilemap_set_scrolly( pf2_tilemap,0, tumblepb_control_0[4] );
 
-	screen.machine().device<decospr_device>("spritegen")->draw_sprites(bitmap, cliprect, state->m_spriteram, state->m_spriteram_size/2);
+	tilemap_draw(bitmap,cliprect,pf2_tilemap,0,0);
+	if (tumblepb_control_0[6]&0x80)
+		tilemap_draw(bitmap,cliprect,pf1_tilemap,0,0);
+	else
+		tilemap_draw(bitmap,cliprect,pf1_alt_tilemap,0,0);
+	jumpkids_draw_sprites(screen->machine,bitmap,cliprect);
 	return 0;
 }
+
+VIDEO_START( suprtrio )
+{
+	pf1_tilemap =     tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8,64,32);
+	pf1_alt_tilemap = tilemap_create(machine, get_bg1_tile_info,tumblep_scan,16,16,64,32);
+	pf2_tilemap =     tilemap_create(machine, get_bg2_tile_info,tumblep_scan,     16,16,64,32);
+
+	tilemap_set_transparent_pen(pf1_alt_tilemap,0);
+	bcstory_tilebank = 0;
+}
+
 

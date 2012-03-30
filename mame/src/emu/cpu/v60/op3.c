@@ -9,14 +9,14 @@ static UINT32 opINCB(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		appb = (UINT8)cpustate->reg[cpustate->amout];
 	else
-		appb = cpustate->program->read_byte(cpustate->amout);
+		appb = MemRead8(cpustate->program, cpustate->amout);
 
 	ADDB(appb, 1);
 
 	if (cpustate->amflag)
 		SETREG8(cpustate->reg[cpustate->amout], appb);
 	else
-		cpustate->program->write_byte(cpustate->amout, appb);
+		MemWrite8(cpustate->program, cpustate->amout, appb);
 
 	return cpustate->amlength1 + 1;
 }
@@ -32,14 +32,14 @@ static UINT32 opINCH(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		apph = (UINT16)cpustate->reg[cpustate->amout];
 	else
-		apph = cpustate->program->read_word_unaligned(cpustate->amout);
+		apph = MemRead16(cpustate->program, cpustate->amout);
 
 	ADDW(apph, 1);
 
 	if (cpustate->amflag)
 		SETREG16(cpustate->reg[cpustate->amout], apph);
 	else
-		cpustate->program->write_word_unaligned(cpustate->amout, apph);
+		MemWrite16(cpustate->program, cpustate->amout, apph);
 
 	return cpustate->amlength1 + 1;
 }
@@ -55,14 +55,14 @@ static UINT32 opINCW(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		appw = cpustate->reg[cpustate->amout];
 	else
-		appw = cpustate->program->read_dword_unaligned(cpustate->amout);
+		appw = MemRead32(cpustate->program, cpustate->amout);
 
 	ADDL(appw, 1);
 
 	if (cpustate->amflag)
 		cpustate->reg[cpustate->amout] = appw;
 	else
-		cpustate->program->write_dword_unaligned(cpustate->amout, appw);
+		MemWrite32(cpustate->program, cpustate->amout, appw);
 
 	return cpustate->amlength1 + 1;
 }
@@ -78,14 +78,14 @@ static UINT32 opDECB(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		appb = (UINT8)cpustate->reg[cpustate->amout];
 	else
-		appb = cpustate->program->read_byte(cpustate->amout);
+		appb = MemRead8(cpustate->program, cpustate->amout);
 
 	SUBB(appb, 1);
 
 	if (cpustate->amflag)
 		SETREG8(cpustate->reg[cpustate->amout], appb);
 	else
-		cpustate->program->write_byte(cpustate->amout, appb);
+		MemWrite8(cpustate->program, cpustate->amout, appb);
 
 	return cpustate->amlength1 + 1;
 }
@@ -101,14 +101,14 @@ static UINT32 opDECH(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		apph = (UINT16)cpustate->reg[cpustate->amout];
 	else
-		apph = cpustate->program->read_word_unaligned(cpustate->amout);
+		apph = MemRead16(cpustate->program, cpustate->amout);
 
 	SUBW(apph, 1);
 
 	if (cpustate->amflag)
 		SETREG16(cpustate->reg[cpustate->amout], apph);
 	else
-		cpustate->program->write_word_unaligned(cpustate->amout, apph);
+		MemWrite16(cpustate->program, cpustate->amout, apph);
 
 	return cpustate->amlength1 + 1;
 }
@@ -124,14 +124,14 @@ static UINT32 opDECW(v60_state *cpustate) /* TRUSTED */
 	if (cpustate->amflag)
 		appw = cpustate->reg[cpustate->amout];
 	else
-		appw = cpustate->program->read_dword_unaligned(cpustate->amout);
+		appw = MemRead32(cpustate->program, cpustate->amout);
 
 	SUBL(appw, 1);
 
 	if (cpustate->amflag)
 		cpustate->reg[cpustate->amout] = appw;
 	else
-		cpustate->program->write_dword_unaligned(cpustate->amout, appw);
+		MemWrite32(cpustate->program, cpustate->amout, appw);
 
 	return cpustate->amlength1 + 1;
 }
@@ -166,7 +166,7 @@ static UINT32 opJSR(v60_state *cpustate) /* TRUSTED */
 
 	// Save NextPC into the stack
 	cpustate->SP -= 4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, cpustate->PC + cpustate->amlength1 + 1);
+	MemWrite32(cpustate->program, cpustate->SP, cpustate->PC + cpustate->amlength1 + 1);
 
 	// Jump there
 	cpustate->PC = cpustate->amout;
@@ -184,7 +184,7 @@ static UINT32 opPREPARE(v60_state *cpustate)	/* somewhat TRUSTED */
 
 	// step 1: save frame pointer on the stack
 	cpustate->SP -= 4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, cpustate->FP);
+	MemWrite32(cpustate->program, cpustate->SP, cpustate->FP);
 
 	// step 2: cpustate->FP = new cpustate->SP
 	cpustate->FP = cpustate->SP;
@@ -204,11 +204,11 @@ static UINT32 opRET(v60_state *cpustate) /* TRUSTED */
 	ReadAM(cpustate);
 
 	// Read return address from stack
-	cpustate->PC = cpustate->program->read_dword_unaligned(cpustate->SP);
+	cpustate->PC = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP +=4;
 
 	// Restore cpustate->AP from stack
-	cpustate->AP = cpustate->program->read_dword_unaligned(cpustate->SP);
+	cpustate->AP = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP +=4;
 
 	// Skip stack frame
@@ -284,13 +284,13 @@ static UINT32 opTRAP(v60_state *cpustate)
 
 	// Issue the software trap with interrupts
 	cpustate->SP -= 4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, EXCEPTION_CODE_AND_SIZE(0x3000 + 0x100 * (cpustate->amout & 0xF), 4));
+	MemWrite32(cpustate->program, cpustate->SP, EXCEPTION_CODE_AND_SIZE(0x3000 + 0x100 * (cpustate->amout & 0xF), 4));
 
 	cpustate->SP -= 4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, oldPSW);
+	MemWrite32(cpustate->program, cpustate->SP, oldPSW);
 
 	cpustate->SP -= 4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, cpustate->PC + cpustate->amlength1 + 1);
+	MemWrite32(cpustate->program, cpustate->SP, cpustate->PC + cpustate->amlength1 + 1);
 
 	cpustate->PC = GETINTVECT(cpustate, 48 + (cpustate->amout & 0xF));
 
@@ -307,10 +307,10 @@ static UINT32 opRETIU(v60_state *cpustate) /* TRUSTED */
 	ReadAM(cpustate);
 
 	// Restore cpustate->PC and cpustate->PSW from stack
-	cpustate->PC = cpustate->program->read_dword_unaligned(cpustate->SP);
+	cpustate->PC = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP += 4;
 
-	newPSW = cpustate->program->read_dword_unaligned(cpustate->SP);
+	newPSW = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP += 4;
 
 	// Destroy stack frame
@@ -332,10 +332,10 @@ static UINT32 opRETIS(v60_state *cpustate)
 	ReadAM(cpustate);
 
 	// Restore cpustate->PC and cpustate->PSW from stack
-	cpustate->PC = cpustate->program->read_dword_unaligned(cpustate->SP);
+	cpustate->PC = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP += 4;
 
-	newPSW = cpustate->program->read_dword_unaligned(cpustate->SP);
+	newPSW = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP += 4;
 
 	// Destroy stack frame
@@ -361,29 +361,29 @@ static UINT32 opSTTASK(v60_state *cpustate)
 	v60WritePSW(cpustate, v60ReadPSW(cpustate) | 0x10000000);
 	v60SaveStack(cpustate);
 
-	cpustate->program->write_dword_unaligned(adr, cpustate->TKCW);
+	MemWrite32(cpustate->program, adr, cpustate->TKCW);
 	adr += 4;
 	if(cpustate->SYCW & 0x100) {
-		cpustate->program->write_dword_unaligned(adr, cpustate->L0SP);
+		MemWrite32(cpustate->program, adr, cpustate->L0SP);
 		adr += 4;
 	}
 	if(cpustate->SYCW & 0x200) {
-		cpustate->program->write_dword_unaligned(adr, cpustate->L1SP);
+		MemWrite32(cpustate->program, adr, cpustate->L1SP);
 		adr += 4;
 	}
 	if(cpustate->SYCW & 0x400) {
-		cpustate->program->write_dword_unaligned(adr, cpustate->L2SP);
+		MemWrite32(cpustate->program, adr, cpustate->L2SP);
 		adr += 4;
 	}
 	if(cpustate->SYCW & 0x800) {
-		cpustate->program->write_dword_unaligned(adr, cpustate->L3SP);
+		MemWrite32(cpustate->program, adr, cpustate->L3SP);
 		adr += 4;
 	}
 
 	// 31 registers supported, _not_ 32
 	for(i = 0; i < 31; i++)
 		if(cpustate->amout & (1 << i)) {
-			cpustate->program->write_dword_unaligned(adr, cpustate->reg[i]);
+			MemWrite32(cpustate->program, adr, cpustate->reg[i]);
 			adr += 4;
 		}
 
@@ -417,7 +417,7 @@ static UINT32 opTASI(v60_state *cpustate)
 	if (cpustate->amflag)
 		appb = (UINT8)cpustate->reg[cpustate->amout & 0x1F];
 	else
-		appb = cpustate->program->read_byte(cpustate->amout);
+		appb = MemRead8(cpustate->program, cpustate->amout);
 
 	// Set the flags for SUB appb, FF
 	SUBB(appb, 0xff);
@@ -426,7 +426,7 @@ static UINT32 opTASI(v60_state *cpustate)
 	if (cpustate->amflag)
 		SETREG8(cpustate->reg[cpustate->amout & 0x1F], 0xFF);
 	else
-		cpustate->program->write_byte(cpustate->amout, 0xFF);
+		MemWrite8(cpustate->program, cpustate->amout, 0xFF);
 
 	return cpustate->amlength1 + 1;
 }
@@ -457,13 +457,13 @@ static UINT32 opPOPM(v60_state *cpustate)
 	for (i = 0;i < 31;i++)
 		if (cpustate->amout & (1 << i))
 		{
-			cpustate->reg[i] = cpustate->program->read_dword_unaligned(cpustate->SP);
+			cpustate->reg[i] = MemRead32(cpustate->program, cpustate->SP);
 			cpustate->SP += 4;
 		}
 
 	if (cpustate->amout & (1 << 31))
 	{
-		v60WritePSW(cpustate, (v60ReadPSW(cpustate) & 0xffff0000) | cpustate->program->read_word_unaligned(cpustate->SP));
+		v60WritePSW(cpustate, (v60ReadPSW(cpustate) & 0xffff0000) | MemRead16(cpustate->program, cpustate->SP));
 		cpustate->SP += 4;
 	}
 
@@ -483,14 +483,14 @@ static UINT32 opPUSHM(v60_state *cpustate)
 	if (cpustate->amout & (1 << 31))
 	{
 		cpustate->SP -= 4;
-		cpustate->program->write_dword_unaligned(cpustate->SP, v60ReadPSW(cpustate));
+		MemWrite32(cpustate->program, cpustate->SP, v60ReadPSW(cpustate));
 	}
 
 	for (i = 0;i < 31;i++)
 		if (cpustate->amout & (1 << (30 - i)))
 		{
 			cpustate->SP -= 4;
-			cpustate->program->write_dword_unaligned(cpustate->SP, cpustate->reg[(30 - i)]);
+			MemWrite32(cpustate->program, cpustate->SP, cpustate->reg[(30 - i)]);
 		}
 
 
@@ -553,7 +553,7 @@ static UINT32 opPUSH(v60_state *cpustate)
 	cpustate->amlength1 = ReadAM(cpustate);
 
 	cpustate->SP-=4;
-	cpustate->program->write_dword_unaligned(cpustate->SP, cpustate->amout);
+	MemWrite32(cpustate->program, cpustate->SP, cpustate->amout);
 
 	return cpustate->amlength1 + 1;
 }
@@ -562,7 +562,7 @@ static UINT32 opPOP(v60_state *cpustate)
 {
 	cpustate->modadd = cpustate->PC + 1;
 	cpustate->moddim = 2;
-	cpustate->modwritevalw = cpustate->program->read_dword_unaligned(cpustate->SP);
+	cpustate->modwritevalw = MemRead32(cpustate->program, cpustate->SP);
 	cpustate->SP +=4;
 	cpustate->amlength1 = WriteAM(cpustate);
 

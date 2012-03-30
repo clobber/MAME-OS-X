@@ -31,8 +31,8 @@ They can be divided in three "families":
    sprites are 4bpp instead of 2bpp, so the final stage of video generation is
    a little different as well, though the custom ICs are still the same.
    Dig Dig II and Motos are almost the same, apart from larger ROMs.
-   The Tower of Druaga also has 4x the amount of sprite color combinations so
-   it's the most different of the four.
+   Tower of Druaga also has 4x the amount of sprite color combinations so it's
+   the most different of the four.
 
 
 Custom ICs (Super Pacman and Mappy):
@@ -117,7 +117,7 @@ Address          Dir Data     Name      Description
 
 Mappy memory map
 ----------------
-The Tower of Druaga, Dig Dug 2, Motos are the same, with minor differences.
+Tower of Druaga, Dig Dug 2, Motos are the same, with minor differences.
 The main difference with Super Pac-Man is the increased video RAM, needed to
 implement a scrolling tilemap.
 
@@ -154,7 +154,7 @@ Address          Dir Data     Name      Description
 111xxxxxxxxxxxxx R   xxxxxxxx ROM 1B    program ROM [2]
 
 [1] only half of that space is actually used, because only 2 of the possible 4 I/O chips are present
-[2] The Tower of Druaga, Dig Dug 2, Motos have 2 128k ROMs instead of 3 64k:
+[2] Tower of Druaga, Dig Dug 2, Motos have 2 128k ROMs instead of 3 64k:
 10xxxxxxxxxxxxxx R   xxxxxxxx ROM 1D    program ROM
 11xxxxxxxxxxxxxx R   xxxxxxxx ROM 1B    program ROM
 [3] Overlaps the ROM region. Dig Dug 2 reads it.
@@ -446,7 +446,7 @@ S: service switch (the one that adds a credit, not the one to enter service mode
     (c) 1983 NAMCO
     ALL RIGHTS RESERVED
 
-- The Tower of Druaga
+- Tower of Druaga
   - enter service mode
   - select sound 19
   - press S to display the grid
@@ -518,7 +518,7 @@ Notes:
   99.99.999.9999.9999.9999
   99.99.999.9999.9999.0000
 
-- The Tower of Druaga: keep button 1 pressed while pressing the start button to
+- Tower of Druaga: keep button 1 pressed while pressing the start button to
   continue the previous game; you can choose which level to start from.
 
 - Grobda: when the Level Select dip switch is On, after inserting a coin press
@@ -546,12 +546,34 @@ TODO:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m6809/m6809.h"
+#include "machine/namcoio.h"
 #include "sound/dac.h"
 #include "sound/namco.h"
-#include "machine/namcoio.h"
-#include "includes/mappy.h"
+
+
+/* video functions */
+VIDEO_START( phozon );
+PALETTE_INIT( phozon );
+VIDEO_UPDATE( phozon );
+
+/* video driver data & functions */
+extern UINT8 *mappy_videoram;
+extern UINT8 *mappy_spriteram;
+PALETTE_INIT( superpac );
+PALETTE_INIT( mappy );
+VIDEO_START( superpac );
+VIDEO_START( mappy );
+VIDEO_UPDATE( superpac );
+VIDEO_UPDATE( mappy );
+WRITE8_HANDLER( superpac_videoram_w );
+WRITE8_HANDLER( mappy_videoram_w );
+WRITE8_HANDLER( mappy_scroll_w );
+READ8_HANDLER( superpac_flipscreen_r );
+WRITE8_HANDLER( superpac_flipscreen_w );
+
+
 
 /*************************************
  *
@@ -574,44 +596,137 @@ TODO:
 
 
 
+/***************************************************************************
+
+  Custom I/O initialization
+
+***************************************************************************/
+
+static int mux;
+static READ8_HANDLER( in0_l )	{ return input_port_read(space->machine, "IN0"); }		// P1 joystick
+static READ8_HANDLER( in0_h )	{ return input_port_read(space->machine, "IN0") >> 4; }	// P2 joystick
+static READ8_HANDLER( in1_l )	{ return input_port_read(space->machine, "IN1"); }		// fire and start buttons
+static READ8_HANDLER( in1_h )	{ return input_port_read(space->machine, "IN1") >> 4; }	// coins
+static READ8_HANDLER( in2 )		{ return input_port_read(space->machine, "DSW0"); }		// test, cocktail, optional buttons
+static READ8_HANDLER( dipA_l )	{ return input_port_read(space->machine, "DSW1"); }		// dips A
+static READ8_HANDLER( dipA_h )	{ return input_port_read(space->machine, "DSW1") >> 4; }	// dips A
+static READ8_HANDLER( dipB_mux )	{ return input_port_read(space->machine, "DSW2") >> (4*mux); }	// dips B
+static READ8_HANDLER( dipB_muxi )	// dips B
+{
+	// bits are interleaved in Phozon
+	return BITSWAP8(input_port_read(space->machine, "DSW2"),6,4,2,0,7,5,3,1) >> (4*mux);
+}
+static WRITE8_HANDLER( out_mux )	{ mux = data & 1; }
+static WRITE8_HANDLER( out_lamps )
+{
+	set_led_status(0,data & 1);
+	set_led_status(1,data & 2);
+	coin_lockout_global_w(data & 4);
+	coin_counter_w(0,~data & 8);
+}
+
+/* chip #0: player inputs, buttons, coins */
+static const struct namcoio_interface intf0 =
+{
+	{ in1_h, in0_l, in0_h, in1_l },	/* port read handlers */
+	{ NULL, NULL }					/* port write handlers */
+};
+static const struct namcoio_interface intf0_lamps =
+{
+	{ in1_h, in0_l, in0_h, in1_l },	/* port read handlers */
+	{ out_lamps, NULL }				/* port write handlers */
+};
+/* chip #1: dip switches, test/cocktail, optional buttons */
+static const struct namcoio_interface intf1 =
+{
+	{ dipB_mux, dipA_l, dipA_h, in2 },	/* port read handlers */
+	{ out_mux, NULL }					/* port write handlers */
+};
+static const struct namcoio_interface intf1_interleave =
+{
+	{ dipB_muxi, dipA_l, dipA_h, in2 },	/* port read handlers */
+	{ out_mux, NULL }					/* port write handlers */
+};
+
+static DRIVER_INIT( 56_56 )
+{
+	namcoio_init(machine, 0, NAMCOIO_56XX, &intf0, NULL);
+	namcoio_init(machine, 1, NAMCOIO_56XX, &intf1, NULL);
+}
+
+static DRIVER_INIT( 58_56i )
+{
+	namcoio_init(machine, 0, NAMCOIO_58XX, &intf0, NULL);
+	namcoio_init(machine, 1, NAMCOIO_56XX, &intf1_interleave, NULL);
+}
+
+static DRIVER_INIT( 56out_56 )
+{
+	namcoio_init(machine, 0, NAMCOIO_56XX, &intf0_lamps, NULL);
+	namcoio_init(machine, 1, NAMCOIO_56XX, &intf1, NULL);
+}
+
+static DRIVER_INIT( 56out_59 )
+{
+	namcoio_init(machine, 0, NAMCOIO_56XX, &intf0_lamps, NULL);
+	namcoio_init(machine, 1, NAMCOIO_59XX, &intf1, NULL);
+}
+
+static DRIVER_INIT( 58_58 )
+{
+	namcoio_init(machine, 0, NAMCOIO_58XX, &intf0, NULL);
+	namcoio_init(machine, 1, NAMCOIO_58XX, &intf1, NULL);
+}
+
+static DRIVER_INIT( 58_56 )
+{
+	namcoio_init(machine, 0, NAMCOIO_58XX, &intf0, NULL);
+	namcoio_init(machine, 1, NAMCOIO_56XX, &intf1, NULL);
+}
+
 /***************************************************************************/
 
 
+static WRITE8_DEVICE_HANDLER( mappy_snd_sharedram_w )
+{
+	if (offset < 0x40)
+		namco_15xx_w(device,offset,data);
+	else
+		namco_soundregs[offset] = data;
+}
+
 static WRITE8_HANDLER( superpac_latch_w )
 {
-	mappy_state *state = space->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = space->machine().device("namcoio_1");
-	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:	/* INT ON 2 */
-			state->m_sub_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:	/* INT ON */
-			state->m_main_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:	/* n.c. */
 			break;
 
 		case 0x06:	/* SOUND ON */
-			mappy_sound_enable(space->machine().device("namco"), bit);
+			mappy_sound_enable(devtag_get_device(space->machine, "namco"), bit);
 			break;
 
 		case 0x08:	/* 4 RESET */
-			namcoio_set_reset_line(namcoio_1, bit ? CLEAR_LINE : ASSERT_LINE);
-			namcoio_set_reset_line(namcoio_2, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(0, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(1, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0a:	/* SUB RESET */
-			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:	/* n.c. */
@@ -624,46 +739,43 @@ static WRITE8_HANDLER( superpac_latch_w )
 
 static WRITE8_HANDLER( phozon_latch_w )
 {
-	mappy_state *state = space->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = space->machine().device("namcoio_1");
-	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:
-			state->m_sub_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:
-			state->m_main_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:
-			state->m_sub2_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub2"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "sub2", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "sub2", 0, CLEAR_LINE);
 			break;
 
 		case 0x06:
-			mappy_sound_enable(space->machine().device("namco"), bit);
+			mappy_sound_enable(devtag_get_device(space->machine, "namco"), bit);
 			break;
 
 		case 0x08:
-			namcoio_set_reset_line(namcoio_1, bit ? CLEAR_LINE : ASSERT_LINE);
-			namcoio_set_reset_line(namcoio_2, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(0, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(1, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0a:
-			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:
-			cputag_set_input_line(space->machine(), "sub2", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine, "sub2", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0e:
@@ -673,40 +785,37 @@ static WRITE8_HANDLER( phozon_latch_w )
 
 static WRITE8_HANDLER( mappy_latch_w )
 {
-	mappy_state *state = space->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = space->machine().device("namcoio_1");
-	device_t *namcoio_2 = space->machine().device("namcoio_2");
 	int bit = offset & 1;
 
 	switch (offset & 0x0e)
 	{
 		case 0x00:	/* INT ON 2 */
-			state->m_sub_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "sub", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:	/* INT ON */
-			state->m_main_irq_mask = bit;
+			cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
 			if (!bit)
-				cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x04:	/* FLIP */
-			flip_screen_set(space->machine(), bit);
+			flip_screen_set(space->machine, bit);
 			break;
 
 		case 0x06:	/* SOUND ON */
-			mappy_sound_enable(space->machine().device("namco"), bit);
+			mappy_sound_enable(devtag_get_device(space->machine, "namco"), bit);
 			break;
 
 		case 0x08:	/* 4 RESET */
-			namcoio_set_reset_line(namcoio_1, bit ? CLEAR_LINE : ASSERT_LINE);
-			namcoio_set_reset_line(namcoio_2, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(0, bit ? CLEAR_LINE : ASSERT_LINE);
+			namcoio_set_reset_line(1, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0a:	/* SUB RESET */
-			cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
+			cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, bit ? CLEAR_LINE : ASSERT_LINE);
 			break;
 
 		case 0x0c:	/* n.c. */
@@ -720,239 +829,101 @@ static WRITE8_HANDLER( mappy_latch_w )
 
 static MACHINE_RESET( superpac )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	/* Reset all latches */
-	for (i = 0; i < 0x10; i += 2)
+	for (i = 0;i < 0x10;i += 2)
 		superpac_latch_w(space,i,0);
 }
 
 static MACHINE_RESET( phozon )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	/* Reset all latches */
-	for (i = 0; i < 0x10; i += 2)
-		phozon_latch_w(space, i, 0);
+	for (i = 0;i < 0x10;i += 2)
+		phozon_latch_w(space,i,0);
 }
 
 static MACHINE_RESET( mappy )
 {
-	address_space *space = machine.device("maincpu")->memory().space(AS_PROGRAM);
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	/* Reset all latches */
-	for (i = 0; i < 0x10; i += 2)
-		mappy_latch_w(space, i, 0);
+	for (i = 0;i < 0x10;i += 2)
+		mappy_latch_w(space,i,0);
 }
 
-/* different games need different interrupt generators & timers because they use different Namco I/O devices */
-
-static TIMER_CALLBACK( superpac_io_run )
+static INTERRUPT_GEN( mappy_interrupt_1 )
 {
-	device_t *io56xx_1 = machine.device("namcoio_1");
-	device_t *io56xx_2 = machine.device("namcoio_2");
+	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
+								// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 
-	switch (param)
-	{
-		case 0:
-			namco_customio_56xx_run(io56xx_1);
-			break;
-		case 1:
-			namco_customio_56xx_run(io56xx_2);
-			break;
-	}
+	namcoio_set_irq_line(device->machine, 0, PULSE_LINE);
+	namcoio_set_irq_line(device->machine, 1, PULSE_LINE);
 }
 
-static INTERRUPT_GEN( superpac_main_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = device->machine().device("namcoio_1");
-	device_t *namcoio_2 = device->machine().device("namcoio_2");
 
-	if (state->m_main_irq_mask)
-		cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
 
-	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(superpac_io_run));
-
-	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(superpac_io_run), 1);
-}
-
-static TIMER_CALLBACK( pacnpal_io_run )
-{
-	device_t *io56xx = machine.device("namcoio_1");
-	device_t *io59xx = machine.device("namcoio_2");
-
-	switch (param)
-	{
-		case 0:
-			namco_customio_56xx_run(io56xx);
-			break;
-		case 1:
-			namco_customio_59xx_run(io59xx);
-			break;
-	}
-}
-
-static INTERRUPT_GEN( pacnpal_main_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = device->machine().device("namcoio_1");
-	device_t *namcoio_2 = device->machine().device("namcoio_2");
-
-	if (state->m_main_irq_mask)
-		cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
-
-	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(pacnpal_io_run));
-
-	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(pacnpal_io_run), 1);
-}
-
-static TIMER_CALLBACK( phozon_io_run )
-{
-	device_t *io58xx = machine.device("namcoio_1");
-	device_t *io56xx = machine.device("namcoio_2");
-
-	switch (param)
-	{
-		case 0:
-			namco_customio_58xx_run(io58xx);
-			break;
-		case 1:
-			namco_customio_56xx_run(io56xx);
-			break;
-	}
-}
-
-static INTERRUPT_GEN( phozon_main_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = device->machine().device("namcoio_1");
-	device_t *namcoio_2 = device->machine().device("namcoio_2");
-
-	if (state->m_main_irq_mask)
-		cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
-
-	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(phozon_io_run));
-
-	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(phozon_io_run), 1);
-}
-
-static TIMER_CALLBACK( mappy_io_run )
-{
-	device_t *io58xx_1 = machine.device("namcoio_1");
-	device_t *io58xx_2 = machine.device("namcoio_2");
-
-	switch (param)
-	{
-		case 0:
-			namco_customio_58xx_run(io58xx_1);
-			break;
-		case 1:
-			namco_customio_58xx_run(io58xx_2);
-			break;
-	}
-}
-
-static INTERRUPT_GEN( mappy_main_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-	device_t *namcoio_1 = device->machine().device("namcoio_1");
-	device_t *namcoio_2 = device->machine().device("namcoio_2");
-
-	if(state->m_main_irq_mask)
-		cputag_set_input_line(device->machine(), "maincpu", 0, ASSERT_LINE);
-
-	if (!namcoio_read_reset_line(namcoio_1))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(mappy_io_run));
-
-	if (!namcoio_read_reset_line(namcoio_2))		/* give the cpu a tiny bit of time to write the command before processing it */
-		device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(mappy_io_run), 1);
-}
-
-static INTERRUPT_GEN( sub_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-
-	if(state->m_sub_irq_mask)
-		cputag_set_input_line(device->machine(), "sub", 0, ASSERT_LINE);
-}
-
-static INTERRUPT_GEN( sub2_vblank_irq )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-
-	if(state->m_sub2_irq_mask)
-		cputag_set_input_line(device->machine(), "sub2", 0, ASSERT_LINE);
-}
-
-static ADDRESS_MAP_START( superpac_cpu1_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_BASE_MEMBER(mappy_state,m_videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram)		/* work RAM with embedded sprite RAM */
+static ADDRESS_MAP_START( superpac_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_BASE(&mappy_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE(&mappy_spriteram)		/* work RAM with embedded sprite RAM */
 	AM_RANGE(0x2000, 0x2000) AM_READWRITE(superpac_flipscreen_r, superpac_flipscreen_w)
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
-	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
-	AM_RANGE(0x4810, 0x481f) AM_DEVREADWRITE("namcoio_2", namcoio_r, namcoio_w)		/* custom I/O chips interface */
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1)	/* shared RAM with the sound CPU */
+	AM_RANGE(0x4800, 0x4bff) AM_READWRITE(namcoio_r, namcoio_w)		/* custom I/O chips interface */
 	AM_RANGE(0x5000, 0x500f) AM_WRITE(superpac_latch_w)				/* various control bits */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( phozon_cpu1_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(mappy_state,m_videoram)	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram) AM_SHARE("share3") /* shared RAM with CPU #2/sprite RAM*/
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
-	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
-	AM_RANGE(0x4810, 0x481f) AM_DEVREADWRITE("namcoio_2", namcoio_r, namcoio_w)		/* custom I/O chips interface */
+static ADDRESS_MAP_START( phozon_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE(2) AM_BASE(&mappy_videoram)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_BASE(&mappy_spriteram) AM_SHARE(3) /* shared RAM with CPU #2/sprite RAM*/
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1)	/* shared RAM with the sound CPU */
+	AM_RANGE(0x4800, 0x4bff) AM_READWRITE(namcoio_r, namcoio_w)		/* custom I/O chips interface */
 	AM_RANGE(0x5000, 0x500f) AM_WRITE(phozon_latch_w)				/* various control bits */
-	AM_RANGE(0x7000, 0x7000) AM_WRITE(watchdog_reset_w)				/* watchdog reset */
+	AM_RANGE(0x7000, 0x7000) AM_WRITE(watchdog_reset_w)		 		/* watchdog reset */
 	AM_RANGE(0x8000, 0xffff) AM_ROM									/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mappy_cpu1_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x0fff) AM_RAM_WRITE(mappy_videoram_w) AM_BASE_MEMBER(mappy_state,m_videoram)		/* video RAM */
-	AM_RANGE(0x1000, 0x27ff) AM_RAM AM_BASE_MEMBER(mappy_state,m_spriteram)		/* work RAM with embedded sprite RAM */
+static ADDRESS_MAP_START( mappy_cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x0fff) AM_RAM_WRITE(mappy_videoram_w) AM_BASE(&mappy_videoram)		/* video RAM */
+	AM_RANGE(0x1000, 0x27ff) AM_RAM AM_BASE(&mappy_spriteram)		/* work RAM with embedded sprite RAM */
 	AM_RANGE(0x3800, 0x3fff) AM_WRITE(mappy_scroll_w)				/* scroll */
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the sound CPU */
-	AM_RANGE(0x4800, 0x480f) AM_DEVREADWRITE("namcoio_1", namcoio_r, namcoio_w)		/* custom I/O chips interface */
-	AM_RANGE(0x4810, 0x481f) AM_DEVREADWRITE("namcoio_2", namcoio_r, namcoio_w)		/* custom I/O chips interface */
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1)	/* shared RAM with the sound CPU */
+	AM_RANGE(0x4800, 0x4bff) AM_READWRITE(namcoio_r, namcoio_w)		/* custom I/O chips interface */
 	AM_RANGE(0x5000, 0x500f) AM_WRITE(mappy_latch_w)				/* various control bits */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(watchdog_reset_w)				/* watchdog reset */
 	AM_RANGE(0x8000, 0xffff) AM_ROM									/* ROM code (only a000-ffff in Mappy) */
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( superpac_cpu2_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU (also sound registers) */
+static ADDRESS_MAP_START( superpac_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1) AM_BASE(&namco_soundregs) /* shared RAM with the main CPU (also sound registers) */
 	AM_RANGE(0x2000, 0x200f) AM_WRITE(superpac_latch_w)                   /* various control bits */
 	AM_RANGE(0xe000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( phozon_cpu2_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU + sound registers */
+static ADDRESS_MAP_START( phozon_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1) AM_BASE(&namco_soundregs) /* shared RAM with the main CPU + sound registers */
 	AM_RANGE(0xe000, 0xffff) AM_ROM											/* ROM */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( mappy_cpu2_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x03ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with the main CPU (also sound registers) */
+static ADDRESS_MAP_START( mappy_cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x03ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1) AM_BASE(&namco_soundregs) /* shared RAM with the main CPU (also sound registers) */
 	AM_RANGE(0x2000, 0x200f) AM_WRITE(mappy_latch_w)						/* various control bits */
 	AM_RANGE(0xe000, 0xffff) AM_ROM											/* ROM code */
 ADDRESS_MAP_END
 
 
 /* extra CPU only present in Phozon */
-static ADDRESS_MAP_START( phozon_cpu3_map, AS_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE("share2")	/* video RAM */
-	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_SHARE("share3")			/* shared RAM with CPU #2/sprite RAM*/
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namco_snd_sharedram_r, namco_snd_sharedram_w)	/* shared RAM with CPU #2 */
+static ADDRESS_MAP_START( phozon_cpu3_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x07ff) AM_RAM_WRITE(superpac_videoram_w) AM_SHARE(2)	/* video RAM */
+	AM_RANGE(0x0800, 0x1fff) AM_RAM AM_SHARE(3) 			/* shared RAM with CPU #2/sprite RAM*/
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_DEVWRITE("namco", mappy_snd_sharedram_w) AM_SHARE(1)	/* shared RAM with CPU #2 */
 	AM_RANGE(0xa000, 0xa7ff) AM_RAM							/* RAM */
 	AM_RANGE(0xe000, 0xffff) AM_ROM							/* ROM */
 ADDRESS_MAP_END
@@ -960,40 +931,37 @@ ADDRESS_MAP_END
 
 
 #define NAMCO_56IN0\
-	PORT_START("P1")	/* 56XX #0 pins 22-29 */\
+	PORT_START("IN0")	/* 56XX #0 pins 22-29 */\
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY\
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY\
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY\
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY\
-	PORT_START("P2")	/* 56XX #0 pins 22-29 */\
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL\
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL\
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL\
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY PORT_COCKTAIL\
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY PORT_COCKTAIL\
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY PORT_COCKTAIL\
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY PORT_COCKTAIL
 
 #define NAMCO_5XIN0\
-	PORT_START("P1") /* 56XX #0 pins 22-29 */\
+	PORT_START("IN0") /* 56XX #0 pins 22-29 */\
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY\
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY\
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY\
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY\
-	PORT_START("P2") /* 56XX #0 pins 22-29 */\
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL\
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL\
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
 
 #define NAMCO_56IN1\
-	PORT_START("BUTTONS")	/* 56XX #0 pins 30-33 and 38-41 */\
+	PORT_START("IN1")	/* 56XX #0 pins 30-33 and 38-41 */\
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )\
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL\
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START1 )\
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START2 )\
-	PORT_START("COINS")	/* 56XX #0 pins 30-33 and 38-41 */\
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )\
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 )\
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )\
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE1 )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 )\
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_COIN2 )\
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )\
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SERVICE1 )
 
 #define NAMCO_56DSW0\
 	PORT_START("DSW0")	/* 56XX #1 pins 30-33 */\
@@ -1005,9 +973,9 @@ ADDRESS_MAP_END
 	PORT_SERVICE( 0x08, IP_ACTIVE_LOW )
 
 static INPUT_PORTS_START( superpac )
-	NAMCO_56IN0
-	NAMCO_56IN1
-	NAMCO_56DSW0
+NAMCO_56IN0
+NAMCO_56IN1
+NAMCO_56DSW0
 
 	PORT_START("DSW1")	/* 56XX #1 pins 22-29 */
 	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW1:1,2,3,4")
@@ -1074,9 +1042,9 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( pacnpal )
-	NAMCO_56IN0
-	NAMCO_56IN1
-	NAMCO_56DSW0
+NAMCO_56IN0
+NAMCO_56IN1
+NAMCO_56DSW0
 
 	PORT_START("DSW1")	/* ???? #1 pins ??-?? */
 	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:1,2,3")
@@ -1129,8 +1097,8 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( grobda )
-	NAMCO_5XIN0
-	NAMCO_56IN1
+NAMCO_5XIN0
+NAMCO_56IN1
 
 	PORT_START("DSW0")	/* 56XX #1 pins 30-33 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 )
@@ -1190,9 +1158,9 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( phozon )
-	NAMCO_5XIN0
-	NAMCO_56IN1
-	NAMCO_56DSW0
+NAMCO_5XIN0
+NAMCO_56IN1
+NAMCO_56DSW0
 
 	PORT_START("DSW1")	/* 56XX #1 pins 22-29 */
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )		PORT_DIPLOCATION("SW1:1")
@@ -1256,20 +1224,18 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( mappy )
-	PORT_START("P1")	/* 58XX #0 pins 22-29 */
+	PORT_START("IN0")	/* 58XX #0 pins 22-29 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_2WAY
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_2WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_COCKTAIL
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_COCKTAIL
 
-	PORT_START("P2")	/* 58XX #0 pins 22-29 */
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_COCKTAIL
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_COCKTAIL
-
-	NAMCO_56IN1
-	NAMCO_56DSW0
+NAMCO_56IN1
+NAMCO_56DSW0
 
 	PORT_START("DSW1")	/* 58XX #1 pins 22-29 */
 /* According to the manual, 0x04, 0x08 and 0x10 should always be off, but... */
@@ -1332,8 +1298,8 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( todruaga )
-	NAMCO_56IN0
-	NAMCO_56IN1
+NAMCO_56IN0
+NAMCO_56IN1
 
 	PORT_START("DSW0")	/* 56XX #1 pins 30-33 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
@@ -1377,8 +1343,8 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( digdug2 )
-	NAMCO_56IN0
-	NAMCO_56IN1
+NAMCO_56IN0
+NAMCO_56IN1
 
 	PORT_START("DSW0")	/* 56XX #1 pins 30-33 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 )
@@ -1423,8 +1389,8 @@ INPUT_PORTS_END
 
 
 static INPUT_PORTS_START( motos )
-	NAMCO_5XIN0
-	NAMCO_56IN1
+NAMCO_5XIN0
+NAMCO_56IN1
 
 	PORT_START("DSW0")	/* 56XX #1 pins 30-33 */
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON2 )
@@ -1541,12 +1507,6 @@ GFXDECODE_END
 
 
 
-/***************************************************************************
-
-  Sound interface
-
-***************************************************************************/
-
 static const namco_interface namco_config =
 {
 	8,				/* number of voices */
@@ -1554,278 +1514,147 @@ static const namco_interface namco_config =
 };
 
 
-/***************************************************************************
 
-  Custom I/O initialization
-
-***************************************************************************/
-
-static READ8_DEVICE_HANDLER( dipA_l )	{ return input_port_read(device->machine(), "DSW1"); }		// dips A
-static READ8_DEVICE_HANDLER( dipA_h )	{ return input_port_read(device->machine(), "DSW1") >> 4; }	// dips A
-
-static READ8_DEVICE_HANDLER( dipB_mux )	// dips B
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-
-	return input_port_read(device->machine(), "DSW2") >> (4 * state->m_mux);
-}
-
-static READ8_DEVICE_HANDLER( dipB_muxi )	// dips B
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-
-	// bits are interleaved in Phozon
-	return BITSWAP8(input_port_read(device->machine(), "DSW2"),6,4,2,0,7,5,3,1) >> (4 * state->m_mux);
-}
-
-static WRITE8_DEVICE_HANDLER( out_mux )
-{
-	mappy_state *state = device->machine().driver_data<mappy_state>();
-
-	state->m_mux = data & 1;
-}
-
-static WRITE8_DEVICE_HANDLER( out_lamps )
-{
-	set_led_status(device->machine(), 0, data & 1);
-	set_led_status(device->machine(), 1, data & 2);
-	coin_lockout_global_w(device->machine(), data & 4);
-	coin_counter_w(device->machine(), 0, ~data & 8);
-}
-
-/* chip #0: player inputs, buttons, coins */
-static const namcoio_interface intf0 =
-{
-	{ DEVCB_INPUT_PORT("COINS"), DEVCB_INPUT_PORT("P1"), DEVCB_INPUT_PORT("P2"), DEVCB_INPUT_PORT("BUTTONS") },	/* port read handlers */
-	{ DEVCB_NULL, DEVCB_NULL },					/* port write handlers */
-	NULL
-};
-
-static const namcoio_interface intf0_lamps =
-{
-	{ DEVCB_INPUT_PORT("COINS"), DEVCB_INPUT_PORT("P1"), DEVCB_INPUT_PORT("P2"), DEVCB_INPUT_PORT("BUTTONS") },	/* port read handlers */
-	{ DEVCB_HANDLER(out_lamps), DEVCB_NULL },					/* port write handlers */
-	NULL
-};
-
-/* chip #1: dip switches, test/cocktail, optional buttons */
-static const namcoio_interface intf1 =
-{
-	{ DEVCB_HANDLER(dipB_mux), DEVCB_HANDLER(dipA_l), DEVCB_HANDLER(dipA_h), DEVCB_INPUT_PORT("DSW0") },	/* port read handlers */
-	{ DEVCB_HANDLER(out_mux), DEVCB_NULL },					/* port write handlers */
-	NULL
-};
-
-static const namcoio_interface intf1_interleave =
-{
-	{ DEVCB_HANDLER(dipB_muxi), DEVCB_HANDLER(dipA_l), DEVCB_HANDLER(dipA_h), DEVCB_INPUT_PORT("DSW0") },	/* port read handlers */
-	{ DEVCB_HANDLER(out_mux), DEVCB_NULL },					/* port write handlers */
-	NULL
-};
-
-static MACHINE_START( mappy )
-{
-	mappy_state *state = machine.driver_data<mappy_state>();
-
-	state->save_item(NAME(state->m_main_irq_mask));
-	state->save_item(NAME(state->m_sub_irq_mask));
-	state->save_item(NAME(state->m_sub2_irq_mask));
-}
-
-
-static MACHINE_CONFIG_START( superpac, mappy_state )
+static MACHINE_DRIVER_START( superpac )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
-	MCFG_CPU_PROGRAM_MAP(superpac_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", superpac_main_vblank_irq)	// also update the custom I/O chips
+	MDRV_CPU_ADD("maincpu", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
+	MDRV_CPU_PROGRAM_MAP(superpac_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", mappy_interrupt_1)	// also update the custom I/O chips
 
-	MCFG_CPU_ADD("sub", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
-	MCFG_CPU_PROGRAM_MAP(superpac_cpu2_map)
-	MCFG_CPU_VBLANK_INT("screen", sub_vblank_irq)
+	MDRV_CPU_ADD("sub", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
+	MDRV_CPU_PROGRAM_MAP(superpac_cpu2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MDRV_WATCHDOG_VBLANK_INIT(8)
+	MDRV_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
-	MCFG_MACHINE_START(mappy)
-	MCFG_MACHINE_RESET(superpac)
-
-	MCFG_NAMCO56XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1)
+	MDRV_MACHINE_RESET(superpac)
 
 	/* video hardware */
-	MCFG_GFXDECODE(superpac)
-	MCFG_PALETTE_LENGTH(64*4+64*4)
+	MDRV_GFXDECODE(superpac)
+	MDRV_PALETTE_LENGTH(64*4+64*4)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(superpac)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_PALETTE_INIT(superpac)
-	MCFG_VIDEO_START(superpac)
-
-	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
-
-	MCFG_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
-	MCFG_SOUND_CONFIG(namco_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( pacnpal, superpac )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_VBLANK_INT("screen", pacnpal_main_vblank_irq)	// also update the custom I/O chips
-
-	MCFG_DEVICE_REMOVE("namcoio_1")
-	MCFG_DEVICE_REMOVE("namcoio_2")
-	MCFG_NAMCO56XX_ADD("namcoio_1", intf0_lamps)
-	MCFG_NAMCO59XX_ADD("namcoio_2", intf1)
-MACHINE_CONFIG_END
-
-
-static MACHINE_CONFIG_DERIVED( grobda, superpac )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_VBLANK_INT("screen", phozon_main_vblank_irq)	// also update the custom I/O chips
-
-	MCFG_DEVICE_REMOVE("namcoio_1")
-	MCFG_DEVICE_REMOVE("namcoio_2")
-	MCFG_NAMCO58XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1)
+	MDRV_PALETTE_INIT(superpac)
+	MDRV_VIDEO_START(superpac)
+	MDRV_VIDEO_UPDATE(superpac)
 
 	/* sound hardware */
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.55)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
+	MDRV_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
+	MDRV_SOUND_CONFIG(namco_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_START( phozon, mappy_state )
+static MACHINE_DRIVER_START( grobda )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809,	PIXEL_CLOCK/4)	/* MAIN CPU */
-	MCFG_CPU_PROGRAM_MAP(phozon_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", phozon_main_vblank_irq)	// also update the custom I/O chips
+	MDRV_IMPORT_FROM( superpac )
 
-	MCFG_CPU_ADD("sub", M6809,	PIXEL_CLOCK/4)	/* SOUND CPU */
-	MCFG_CPU_PROGRAM_MAP(phozon_cpu2_map)
-	MCFG_CPU_VBLANK_INT("screen", sub_vblank_irq)
+	/* sound hardware */
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.55)
+MACHINE_DRIVER_END
 
-	MCFG_CPU_ADD("sub2", M6809,	PIXEL_CLOCK/4)	/* SUB CPU */
-	MCFG_CPU_PROGRAM_MAP(phozon_cpu3_map)
-	MCFG_CPU_VBLANK_INT("screen", sub2_vblank_irq)
 
-	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+static MACHINE_DRIVER_START( phozon )
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("maincpu", M6809,	PIXEL_CLOCK/4)	/* MAIN CPU */
+	MDRV_CPU_PROGRAM_MAP(phozon_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", mappy_interrupt_1)	// also update the custom I/O chips
+
+	MDRV_CPU_ADD("sub", M6809,	PIXEL_CLOCK/4)	/* SOUND CPU */
+	MDRV_CPU_PROGRAM_MAP(phozon_cpu2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+
+	MDRV_CPU_ADD("sub2", M6809,	PIXEL_CLOCK/4)	/* SUB CPU */
+	MDRV_CPU_PROGRAM_MAP(phozon_cpu3_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+
+	MDRV_WATCHDOG_VBLANK_INIT(8)
+	MDRV_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
-	MCFG_MACHINE_START(mappy)
-	MCFG_MACHINE_RESET(phozon)
-
-	MCFG_NAMCO58XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1_interleave)
+	MDRV_MACHINE_RESET(phozon)
 
 	/* video hardware */
-	MCFG_GFXDECODE(phozon)
-	MCFG_PALETTE_LENGTH(64*4+64*4)
+	MDRV_GFXDECODE(phozon)
+	MDRV_PALETTE_LENGTH(64*4+64*4)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(phozon)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_PALETTE_INIT(phozon)
-	MCFG_VIDEO_START(phozon)
+	MDRV_PALETTE_INIT(phozon)
+	MDRV_VIDEO_START(phozon)
+	MDRV_VIDEO_UPDATE(phozon)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
-	MCFG_SOUND_CONFIG(namco_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
+	MDRV_SOUND_CONFIG(namco_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
-static MACHINE_CONFIG_START( mappy, mappy_state )
+static MACHINE_DRIVER_START( mappy )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
-	MCFG_CPU_PROGRAM_MAP(mappy_cpu1_map)
-	MCFG_CPU_VBLANK_INT("screen", mappy_main_vblank_irq)	// also update the custom I/O chips
+	MDRV_CPU_ADD("maincpu", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
+	MDRV_CPU_PROGRAM_MAP(mappy_cpu1_map)
+	MDRV_CPU_VBLANK_INT("screen", mappy_interrupt_1)	// also update the custom I/O chips
 
-	MCFG_CPU_ADD("sub", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
-	MCFG_CPU_PROGRAM_MAP(mappy_cpu2_map)
-	MCFG_CPU_VBLANK_INT("screen", sub_vblank_irq)
+	MDRV_CPU_ADD("sub", M6809, PIXEL_CLOCK/4)	/* 1.536 MHz */
+	MDRV_CPU_PROGRAM_MAP(mappy_cpu2_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MCFG_WATCHDOG_VBLANK_INIT(8)
-	MCFG_QUANTUM_TIME(attotime::from_hz(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
+	MDRV_WATCHDOG_VBLANK_INIT(8)
+	MDRV_QUANTUM_TIME(HZ(6000))    /* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
-	MCFG_MACHINE_START(mappy)
-	MCFG_MACHINE_RESET(mappy)
-
-	MCFG_NAMCO58XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO58XX_ADD("namcoio_2", intf1)
+	MDRV_MACHINE_RESET(mappy)
 
 	/* video hardware */
-	MCFG_GFXDECODE(mappy)
-	MCFG_PALETTE_LENGTH(64*4+16*16)
+	MDRV_GFXDECODE(mappy)
+	MDRV_PALETTE_LENGTH(64*4+16*16)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(mappy)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_PALETTE_INIT(mappy)
-	MCFG_VIDEO_START(mappy)
+	MDRV_PALETTE_INIT(mappy)
+	MDRV_VIDEO_START(mappy)
+	MDRV_VIDEO_UPDATE(mappy)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
-	MCFG_SOUND_CONFIG(namco_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("namco", NAMCO_15XX, 18432000/768)
+	MDRV_SOUND_CONFIG(namco_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
-static MACHINE_CONFIG_DERIVED( digdug2, mappy )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_VBLANK_INT("screen", phozon_main_vblank_irq)	// also update the custom I/O chips
-
-	MCFG_WATCHDOG_VBLANK_INIT(0)
-
-	MCFG_DEVICE_REMOVE("namcoio_1")
-	MCFG_DEVICE_REMOVE("namcoio_2")
-	MCFG_NAMCO58XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( todruaga, mappy )
+static MACHINE_DRIVER_START( digdug2 )
 
 	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_VBLANK_INT("screen", phozon_main_vblank_irq)	// also update the custom I/O chips
+	MDRV_IMPORT_FROM( mappy )
+	MDRV_WATCHDOG_VBLANK_INIT(0)
+MACHINE_DRIVER_END
 
-	MCFG_DEVICE_REMOVE("namcoio_1")
-	MCFG_DEVICE_REMOVE("namcoio_2")
-	MCFG_NAMCO58XX_ADD("namcoio_1", intf0)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1)
+static MACHINE_DRIVER_START( todruaga )
+
+	/* basic machine hardware */
+	MDRV_IMPORT_FROM( mappy )
 
 	/* video hardware */
-	MCFG_GFXDECODE(todruaga)
-	MCFG_PALETTE_LENGTH(64*4+64*16)
-MACHINE_CONFIG_END
-
-static MACHINE_CONFIG_DERIVED( motos, mappy )
-
-	/* basic machine hardware */
-	MCFG_CPU_MODIFY("maincpu")
-	MCFG_CPU_VBLANK_INT("screen", superpac_main_vblank_irq)	// also update the custom I/O chips
-
-	MCFG_DEVICE_REMOVE("namcoio_1")
-	MCFG_DEVICE_REMOVE("namcoio_2")
-	MCFG_NAMCO56XX_ADD("namcoio_1", intf0_lamps)
-	MCFG_NAMCO56XX_ADD("namcoio_2", intf1)
-MACHINE_CONFIG_END
+	MDRV_GFXDECODE(todruaga)
+	MDRV_PALETTE_LENGTH(64*4+64*16)
+MACHINE_DRIVER_END
 
 
 
@@ -2156,30 +1985,6 @@ ROM_START( todruagao )
 	ROM_LOAD( "td1-3.3m",	0x0000, 0x0100, CRC(07104c40) SHA1(16db55525034bacb71e7dc8bd2a7c3c4464d4808) )
 ROM_END
 
-ROM_START( todruagas )
-	ROM_REGION( 0x10000, "maincpu", 0 )     /* 64k for code for the first CPU  */
-	ROM_LOAD( "3b.bin",	0x8000, 0x4000, CRC(85d052d9) SHA1(03d4d4b5b0cd49d2a4acd8479bc9975a5fde6c4c) )
-	ROM_LOAD( "1b.bin",	0xc000, 0x4000, CRC(a5db267a) SHA1(f140fd7b4d7e939f3a20ca5a15c16e5b8999c47d) )
-
-	ROM_REGION( 0x10000, "sub", 0 )     /* 64k for the second CPU */
-	ROM_LOAD( "td1_4.1k",	0xe000, 0x2000, CRC(ae9d06d9) SHA1(3d8621fdd74fafa61f342886faa37f0aab50c5a7) )
-
-	ROM_REGION( 0x1000, "gfx1", ROMREGION_INVERT )
-	ROM_LOAD( "td1_5.3b",	0x0000, 0x1000, CRC(d32b249f) SHA1(7d7cee4101ef615fb92c3702f89a9823a6231195) )
-
-	ROM_REGION( 0x4000, "gfx2", 0 )
-	ROM_LOAD( "td1_6.3m",	0x0000, 0x2000, CRC(e827e787) SHA1(74e0af4c7d6e334bcd211a33eb18dddc8a182aa7) )
-	ROM_LOAD( "td1_7.3n",	0x2000, 0x2000, CRC(962bd060) SHA1(74cdcafc26475bda085bf62ed17e6474ed782453) )
-
-	ROM_REGION( 0x0520, "proms", 0 )
-	ROM_LOAD( "td1-5.5b",	0x0000, 0x0020, CRC(122cc395) SHA1(a648c53f2e95634bb5b27d79be3fd908021d056e) ) /* palette */
-	ROM_LOAD( "td1-6.4c",	0x0020, 0x0100, CRC(8c661d6a) SHA1(1340e4f657f4f2c4ef651a441c3b51632e757d0b) ) /* characters */
-	ROM_LOAD( "td1-7.5k",	0x0120, 0x0400, CRC(a86c74dd) SHA1(dfd7d6b2740761c3bcab4c7999d2699d920843e7) ) /* sprites */
-
-	ROM_REGION( 0x0100, "namco", 0 )	/* sound prom */
-	ROM_LOAD( "td1-3.3m",	0x0000, 0x0100, CRC(07104c40) SHA1(16db55525034bacb71e7dc8bd2a7c3c4464d4808) )
-ROM_END
-
 ROM_START( digdug2 )
 	ROM_REGION( 0x10000, "maincpu", 0 )     /* 64k for code for the first CPU  */
 	ROM_LOAD( "d23_3.1d",	0x8000, 0x4000, CRC(cc155338) SHA1(d6796479ebb00081e9ae281380a4ce75f730766e) )
@@ -2270,36 +2075,38 @@ static DRIVER_INIT( grobda )
        However, removing the 15XX from the board causes sound to disappear completely, so
        the DAC might be built-in after all.
       */
-	device_t *dac = machine.device("dac");
-	machine.device("sub")->memory().space(AS_PROGRAM)->install_legacy_write_handler(*dac, 0x0002, 0x0002, FUNC(grobda_DAC_w) );
+    const device_config *dac = devtag_get_device(machine, "dac");
+	memory_install_write8_device_handler(cputag_get_address_space(machine, "sub", ADDRESS_SPACE_PROGRAM), dac, 0x0002, 0x0002, 0, 0, grobda_DAC_w );
+
+	DRIVER_INIT_CALL(58_56);
 }
 
 static DRIVER_INIT( digdug2 )
 {
 	/* appears to not use the watchdog */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->nop_write(0x8000, 0x8000);
+	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x8000, 0, 0, (write8_space_func)SMH_NOP);
+	DRIVER_INIT_CALL(58_56);
 }
 
 
 /* 2x6809, static tilemap, 2bpp sprites (Super Pacman type)  */
-GAME( 1982, superpac, 0,        superpac, superpac, 0,        ROT90, "Namco", "Super Pac-Man", GAME_SUPPORTS_SAVE )
-GAME( 1982, superpacm,superpac, superpac, superpac, 0,        ROT90, "Namco (Bally Midway license)", "Super Pac-Man (Midway)", GAME_SUPPORTS_SAVE )
-GAME( 1983, pacnpal,  0,        pacnpal,  pacnpal,  0,        ROT90, "Namco", "Pac & Pal", GAME_SUPPORTS_SAVE )
-GAME( 1983, pacnpal2, pacnpal,  pacnpal,  pacnpal,  0,        ROT90, "Namco", "Pac & Pal (older)", GAME_SUPPORTS_SAVE )
-GAME( 1983, pacnchmp, pacnpal,  pacnpal,  pacnpal,  0,        ROT90, "Namco", "Pac-Man & Chomp Chomp", GAME_SUPPORTS_SAVE )
+GAME( 1982, superpac, 0,        superpac, superpac, 56_56,    ROT90, "Namco", "Super Pac-Man", GAME_SUPPORTS_SAVE )
+GAME( 1982, superpacm,superpac, superpac, superpac, 56_56,    ROT90, "[Namco] (Bally Midway license)", "Super Pac-Man (Midway)", GAME_SUPPORTS_SAVE )
+GAME( 1983, pacnpal,  0,        superpac, pacnpal,  56out_59, ROT90, "Namco", "Pac & Pal", GAME_SUPPORTS_SAVE )
+GAME( 1983, pacnpal2, pacnpal,  superpac, pacnpal,  56out_59, ROT90, "Namco", "Pac & Pal (older)", GAME_SUPPORTS_SAVE )
+GAME( 1983, pacnchmp, pacnpal,  superpac, pacnpal,  56out_59, ROT90, "Namco", "Pac-Man & Chomp Chomp", GAME_SUPPORTS_SAVE )
 GAME( 1984, grobda,   0,        grobda,   grobda,   grobda,   ROT90, "Namco", "Grobda (New Ver.)", GAME_SUPPORTS_SAVE )
 GAME( 1984, grobda2,  grobda,   grobda,   grobda,   grobda,   ROT90, "Namco", "Grobda (Old Ver. set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1984, grobda3,  grobda,   grobda,   grobda,   grobda,   ROT90, "Namco", "Grobda (Old Ver. set 2)", GAME_SUPPORTS_SAVE )
 
 /* 3x6809, static tilemap, 2bpp sprites (Gaplus type) */
-GAME( 1983, phozon,   0,        phozon,   phozon,   0,        ROT90, "Namco", "Phozon (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1983, phozon,   0,        phozon,   phozon,   58_56i,   ROT90, "Namco", "Phozon (Japan)", GAME_SUPPORTS_SAVE )
 
 /* 2x6809, scroling tilemap, 4bpp sprites (Super Pacman type) */
-GAME( 1983, mappy,    0,        mappy,    mappy,    0,        ROT90, "Namco", "Mappy (US)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mappyj,   mappy,    mappy,    mappy,    0,        ROT90, "Namco", "Mappy (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1984, todruaga, 0,        todruaga, todruaga, 0,        ROT90, "Namco", "The Tower of Druaga (New Ver.)", GAME_SUPPORTS_SAVE )
-GAME( 1984, todruagao,todruaga, todruaga, todruaga, 0,        ROT90, "Namco", "The Tower of Druaga (Old Ver.)", GAME_SUPPORTS_SAVE )
-GAME( 1984, todruagas,todruaga, todruaga, todruaga, 0,        ROT90, "bootleg? (Sidam)", "The Tower of Druaga (Sidam)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mappy,    0,        mappy,    mappy,    58_58,    ROT90, "Namco", "Mappy (US)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mappyj,   mappy,    mappy,    mappy,    58_58,    ROT90, "Namco", "Mappy (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1984, todruaga, 0,        todruaga, todruaga, 58_56,    ROT90, "Namco", "Tower of Druaga (New Ver.)", GAME_SUPPORTS_SAVE )
+GAME( 1984, todruagao,todruaga, todruaga, todruaga, 58_56,    ROT90, "Namco", "Tower of Druaga (Old Ver.)", GAME_SUPPORTS_SAVE )
 GAME( 1985, digdug2,  0,        digdug2,  digdug2,  digdug2,  ROT90, "Namco", "Dig Dug II (New Ver.)", GAME_SUPPORTS_SAVE )
 GAME( 1985, digdug2o, digdug2,  digdug2,  digdug2,  digdug2,  ROT90, "Namco", "Dig Dug II (Old Ver.)", GAME_SUPPORTS_SAVE )
-GAME( 1985, motos,    0,        motos,    motos,    0,        ROT90, "Namco", "Motos", GAME_SUPPORTS_SAVE )
+GAME( 1985, motos,    0,        mappy,    motos,    56out_56, ROT90, "Namco", "Motos", GAME_SUPPORTS_SAVE )

@@ -6,234 +6,40 @@
  *
  *****************************************************************************/
 
-#include "emu.h"
 #include "debugger.h"
+#include "cpuexec.h"
 #include "sh4.h"
 #include "sh4regs.h"
 #include "sh4comn.h"
-#include "sh3comn.h"
-#include "sh4tmu.h"
-#include "sh4dmac.h"
 
+static const int tcnt_div[8] = { 4, 16, 64, 256, 1024, 1, 1, 1 };
 static const int rtcnt_div[8] = { 0, 4, 16, 64, 256, 1024, 2048, 4096 };
 static const int daysmonth[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static const int dmasize[8] = { 8, 1, 2, 4, 32, 0, 0, 0 };
+static const UINT32 exception_priority_default[] = { EXPPRI(1,1,0,0), EXPPRI(1,2,0,1), EXPPRI(1,1,0,2), EXPPRI(1,3,0,3), EXPPRI(1,4,0,4),
+	EXPPRI(2,0,0,5), EXPPRI(2,1,0,6), EXPPRI(2,2,0,7), EXPPRI(2,3,0,8), EXPPRI(2,4,0,9), EXPPRI(2,4,0,10), EXPPRI(2,4,0,11), EXPPRI(2,4,0,12),
+	EXPPRI(2,5,0,13), EXPPRI(2,5,0,14), EXPPRI(2,6,0,15), EXPPRI(2,6,0,16), EXPPRI(2,7,0,17), EXPPRI(2,7,0,18), EXPPRI(2,8,0,19),
+	EXPPRI(2,9,0,20), EXPPRI(2,4,0,21), EXPPRI(2,10,0,22), EXPPRI(3,0,16,SH4_INTC_NMI) };
+static const int exception_codes[] = { 0x000, 0x020, 0x000, 0x140, 0x140, 0x1E0, 0x0E0, 0x040, 0x0A0, 0x180, 0x1A0, 0x800, 0x820, 0x0E0,
+	0x100, 0x040, 0x060, 0x0A0, 0x0C0, 0x120, 0x080, 0x160, 0x1E0, 0x1C0, 0x200, 0x220, 0x240, 0x260, 0x280, 0x2A0, 0x2C0, 0x2E0, 0x300,
+	0x320, 0x340, 0x360, 0x380, 0x3A0, 0x3C0, 0x240, 0x2A0, 0x300, 0x360, 0x600, 0x620, 0x640, 0x660, 0x680, 0x6A0, 0x780, 0x7A0, 0x7C0,
+	0x7E0, 0x6C0, 0xB00, 0xB80, 0x400, 0x420, 0x440, 0x460, 0x480, 0x4A0, 0x4C0, 0x4E0, 0x500, 0x520, 0x540, 0x700, 0x720, 0x740, 0x760,
+	0x560, 0x580, 0x5A0 };
 
+static const UINT16 tcnt[] = { TCNT0, TCNT1, TCNT2 };
+static const UINT16 tcor[] = { TCOR0, TCOR1, TCOR2 };
+static const UINT16 tcr[] = { TCR0, TCR1, TCR2 };
 
+INLINE SH4 *get_safe_token(const device_config *device)
+{
+	assert(device != NULL);
+	assert(device->token != NULL);
+	assert(device->type == CPU);
+	assert(cpu_get_type(device) == CPU_SH4);
+	return (SH4 *)device->token;
+}
 
-static const UINT32 exception_priority_default[] = {
-	EXPPRI(1,1,0,0),			 /* Power-on Reset */
-	EXPPRI(1,2,0,1),			 /* Manual Reset */
-	EXPPRI(1,1,0,2),			 /* H-UDI Reset */
-	EXPPRI(1,3,0,3),			 /* Inst TLB Multiple Hit */
-	EXPPRI(1,4,0,4),			 /* Data TLB Multiple Hit */
-
-	EXPPRI(2,0,0,5),			/* User break Before Instruction */
-	EXPPRI(2,1,0,6),			/* Inst Address Error */
-	EXPPRI(2,2,0,7),			/* Inst TLB Miss */
-	EXPPRI(2,3,0,8),			/* Inst TLB Protection Violation */
-	EXPPRI(2,4,0,9),			/* Illegal Instruction */
-	EXPPRI(2,4,0,10),			/* Slot Illegal Instruction */
-	EXPPRI(2,4,0,11),			/* FPU Disable */
-	EXPPRI(2,4,0,12),			/* Slot FPU Disable */
-	EXPPRI(2,5,0,13),			/* Data Address Error (Read) */
-	EXPPRI(2,5,0,14),			/* Data Address Error (Write) */
-	EXPPRI(2,6,0,15),			/* Data TBL Miss Read */
-	EXPPRI(2,6,0,16),			/* Data TBL Miss Write */
-	EXPPRI(2,7,0,17),			/* Data TBL Protection Violation Read */
-	EXPPRI(2,7,0,18),			/* Data TBL Protection Violation Write */
-	EXPPRI(2,8,0,19),			/* FPU Exception */
-	EXPPRI(2,9,0,20),			/* Initial Page Write exception */
-
-	EXPPRI(2,4,0,21),			/* Unconditional TRAP */
-	EXPPRI(2,10,0,22),			/* User break After Instruction */
-
-	EXPPRI(3,0,16,SH4_INTC_NMI)	/* NMI */
-	/* This is copied to a table, and the IRQ priorities filled in later */
-};
-
-static const int exception_codes[] =
-
-{ 0x000, /* Power-on Reset */
-  0x020, /* Manual Reset */
-  0x000, /* H-UDI Reset */
-  0x140, /* Inst TLB Multiple Hit */
-  0x140, /* Data TLB Multiple Hit */
-
-  0x1E0, /* User break Before Instruction */
-  0x0E0, /* Inst Address Error */
-  0x040, /* Inst TLB Miss */
-  0x0A0, /* Inst TLB Protection Violation */
-  0x180, /* Illegal Instruction */
-  0x1A0, /* Slot Illegal Instruction */
-  0x800, /* FPU Disable */
-  0x820, /* Slot FPU Disable */
-  0x0E0, /* Data Address Error (Read) */
-  0x100, /* Data Address Error (Write) */
-  0x040, /* Data TBL Miss Read */
-  0x060, /* Data TBL Miss Write */
-  0x0A0, /* Data TBL Protection Violation Read */
-  0x0C0, /* Data TBL Protection Violation Write */
-  0x120, /* FPU Exception */
-  0x080, /* Initial Page Write exception */
-
-  0x160, /* Unconditional TRAP */
-  0x1E0, /* User break After Instruction */
-
-  0x1C0, /* NMI */     /* SH4_INTC_NMI=23 represents this location in this list.. */
-
-  0x200, /* EX Irq 0 */
-  0x220, /*        1 */
-  0x240, /*        2 */
-  0x260, /*        3 */
-  0x280, /*        4 */
-  0x2A0, /*        5 */
-  0x2C0, /*        6 */
-  0x2E0, /*        7 */
-  0x300, /*        8 */
-  0x320, /*        9 */
-  0x340, /*        A */
-  0x360, /*        B */
-  0x380, /*        C */
-  0x3A0, /*        D */
-  0x3C0, /*        E */
-
-  0x240, /* SH4_INTC_IRL0 */
-  0x2A0, /* SH4_INTC_IRL1 */
-  0x300, /* SH4_INTC_IRL2 */
-  0x360, /* SH4_INTC_IRL3 */
-
-  0x600, /* HUDI */
-  0x620, /* SH4_INTC_GPOI */
-  0x640, /* SH4_INTC_DMTE0 */
-  0x660, /* SH4_INTC_DMTE1 */
-  0x680, /* SH4_INTC_DMTE2 */
-  0x6A0, /* SH4_INTC_DMTE3 */
-
-  0x780, /* SH4_INTC_DMTE4 */
-  0x7A0, /* SH4_INTC_DMTE5 */
-  0x7C0, /* SH4_INTC_DMTE6 */
-  0x7E0, /* SH4_INTC_DMTE7 */
-
-  0x6C0, /* SH4_INTC_DMAE */
-
-  0xB00, /* SH4_INTC_TUNI3 */
-  0xB80, /* SH4_INTC_TUNI4 */
-  0x400, /* SH4_INTC_TUNI0 */
-  0x420, /* SH4_INTC_TUNI1 */
-  0x440, /* SH4_INTC_TUNI2 */
-  0x460, /* SH4_INTC_TICPI2 */
-  0x480, /* SH4_INTC_ATI */
-  0x4A0, /* SH4_INTC_PRI */
-  0x4C0, /* SH4_INTC_CUI */
-  0x4E0, /* SH4_INTC_SCI1ERI */
-  0x500, /* SH4_INTC_SCI1RXI */
-  0x520, /* SH4_INTC_SCI1TXI */
-  0x540, /* SH4_INTC_SCI1TEI */
-
-  0x700, /* SH4_INTC_SCIFERI */
-  0x720, /* SH4_INTC_SCIFRXI */
-  0x740, /* SH4_INTC_SCIFBRI */
-  0x760, /* SH4_INTC_SCIFTXI */
-  0x560, /* SH4_INTC_ITI */
-  0x580, /* SH4_INTC_RCMI */
-  0x5A0 /* SH4_INTC_ROVI */
-};
-
-/* SH3 INTEVT2 uses a different table - values of -1 aren't filled in yet, some may not exist on the sh3. */
-/* The above table should differ too, some things depend on the interrupt level rather than beign fixed values */
-
-static const int sh3_intevt2_exception_codes[] =
-
-{ 0x000, /* Power-on Reset */
-  -1, /* Manual Reset */
-  -1, /* H-UDI Reset */
-  -1, /* Inst TLB Multiple Hit */
-  -1, /* Data TLB Multiple Hit */
-
-  -1, /* User break Before Instruction */
-  -1, /* Inst Address Error */
-  -1, /* Inst TLB Miss */
-  -1, /* Inst TLB Protection Violation */
-  -1, /* Illegal Instruction */
-  -1, /* Slot Illegal Instruction */
-  -1, /* FPU Disable */
-  -1, /* Slot FPU Disable */
-  -1, /* Data Address Error (Read) */
-  -1, /* Data Address Error (Write) */
-  -1, /* Data TBL Miss Read */
-  -1, /* Data TBL Miss Write */
-  -1, /* Data TBL Protection Violation Read */
-  -1, /* Data TBL Protection Violation Write */
-  -1, /* FPU Exception */
-  -1, /* Initial Page Write exception */
-
-  -1, /* Unconditional TRAP */
-  -1, /* User break After Instruction */
-
-  -1, /* NMI */     /* SH4_INTC_NMI=23 represents this location in this list.. */
-
-  -1, /* EX Irq 0 */
-  -1, /*        1 */
-  -1, /*        2 */
-  -1, /*        3 */
-  -1, /*        4 */
-  -1, /*        5 */
-  -1, /*        6 */
-  -1, /*        7 */
-  -1, /*        8 */
-  -1, /*        9 */
-  -1, /*        A */
-  -1, /*        B */
-  -1, /*        C */
-  -1, /*        D */
-  -1, /*        E */
-
-  0x600, /* SH4_INTC_IRL0 */
-  0x620, /* SH4_INTC_IRL1 */
-  0x640, /* SH4_INTC_IRL2 */
-  0x660, /* SH4_INTC_IRL3 */
-    /* todo: SH3 should have lines 4+5 too? */
-
-  -1, /* HUDI */
-  -1, /* SH4_INTC_GPOI */
-  -1, /* SH4_INTC_DMTE0 */
-  -1, /* SH4_INTC_DMTE1 */
-  -1, /* SH4_INTC_DMTE2 */
-  -1, /* SH4_INTC_DMTE3 */
-
-  -1, /* SH4_INTC_DMTE4 */
-  -1, /* SH4_INTC_DMTE5 */
-  -1, /* SH4_INTC_DMTE6 */
-  -1, /* SH4_INTC_DMTE7 */
-
-  -1, /* SH4_INTC_DMAE */
-
-  -1, /* SH4_INTC_TUNI3 */
-  -1, /* SH4_INTC_TUNI4 */
-  0x400, /* SH4_INTC_TUNI0 */
-  0x420, /* SH4_INTC_TUNI1 */
-  0x440, /* SH4_INTC_TUNI2 */
-  0x460, /* SH4_INTC_TICPI2 */
-  -1, /* SH4_INTC_ATI */
-  -1, /* SH4_INTC_PRI */
-  -1, /* SH4_INTC_CUI */
-  -1, /* SH4_INTC_SCI1ERI */
-  -1, /* SH4_INTC_SCI1RXI */
-  -1, /* SH4_INTC_SCI1TXI */
-  -1, /* SH4_INTC_SCI1TEI */
-
-  -1, /* SH4_INTC_SCIFERI */
-  -1, /* SH4_INTC_SCIFRXI */
-  -1, /* SH4_INTC_SCIFBRI */
-  -1, /* SH4_INTC_SCIFTXI */
-  -1, /* SH4_INTC_ITI */
-  -1, /* SH4_INTC_RCMI */
-  -1 /* SH4_INTC_ROVI */
-};
-
-
-
-void sh4_change_register_bank(sh4_state *sh4, int to)
+void sh4_change_register_bank(SH4 *sh4, int to)
 {
 int s;
 
@@ -255,7 +61,7 @@ int s;
 	}
 }
 
-void sh4_swap_fp_registers(sh4_state *sh4)
+void sh4_swap_fp_registers(SH4 *sh4)
 {
 int s;
 UINT32 z;
@@ -269,7 +75,7 @@ UINT32 z;
 }
 
 #ifdef LSB_FIRST
-void sh4_swap_fp_couples(sh4_state *sh4)
+void sh4_swap_fp_couples(SH4 *sh4)
 {
 int s;
 UINT32 z;
@@ -286,7 +92,7 @@ UINT32 z;
 }
 #endif
 
-void sh4_syncronize_register_bank(sh4_state *sh4, int to)
+void sh4_syncronize_register_bank(SH4 *sh4, int to)
 {
 int s;
 
@@ -296,7 +102,7 @@ int s;
 	}
 }
 
-void sh4_default_exception_priorities(sh4_state *sh4) // setup default priorities for exceptions
+void sh4_default_exception_priorities(SH4 *sh4) // setup default priorities for exceptions
 {
 int a;
 
@@ -312,7 +118,7 @@ int a;
 		sh4->exception_priority[a] = INTPRI(0, a);
 }
 
-void sh4_exception_recompute(sh4_state *sh4) // checks if there is any interrupt with high enough priority
+void sh4_exception_recompute(SH4 *sh4) // checks if there is any interrupt with high enough priority
 {
 	int a,z;
 
@@ -323,32 +129,25 @@ void sh4_exception_recompute(sh4_state *sh4) // checks if there is any interrupt
 	for (a=0;a <= SH4_INTC_ROVI;a++)
 	{
 		if (sh4->exception_requesting[a])
-		{
-			int pri = (((int)sh4->exception_priority[a] >> 8) & 255);
-			//logerror("pri is %02x z is %02x\n",pri,z);
-			if (pri > z)
+			if ((((int)sh4->exception_priority[a] >> 8) & 255) > z)
 			{
-				//logerror("will test\n");
 				sh4->test_irq = 1; // will check for exception at end of instructions
 				break;
 			}
-		}
 	}
 }
 
-void sh4_exception_request(sh4_state *sh4, int exception) // start requesting an exception
+void sh4_exception_request(SH4 *sh4, int exception) // start requesting an exception
 {
-	//logerror("sh4_exception_request a\n");
 	if (!sh4->exception_requesting[exception])
 	{
-		//logerror("sh4_exception_request b\n");
 		sh4->exception_requesting[exception] = 1;
 		sh4->pending_irq++;
 		sh4_exception_recompute(sh4);
 	}
 }
 
-void sh4_exception_unrequest(sh4_state *sh4, int exception) // stop requesting an exception
+void sh4_exception_unrequest(SH4 *sh4, int exception) // stop requesting an exception
 {
 	if (sh4->exception_requesting[exception])
 	{
@@ -358,7 +157,7 @@ void sh4_exception_unrequest(sh4_state *sh4, int exception) // stop requesting a
 	}
 }
 
-void sh4_exception_checkunrequest(sh4_state *sh4, int exception)
+void sh4_exception_checkunrequest(SH4 *sh4, int exception)
 {
 	if (exception == SH4_INTC_NMI)
 		sh4_exception_unrequest(sh4, exception);
@@ -367,79 +166,34 @@ void sh4_exception_checkunrequest(sh4_state *sh4, int exception)
 		sh4_exception_unrequest(sh4, exception);
 }
 
-void sh4_exception(sh4_state *sh4, const char *message, int exception) // handle exception
+void sh4_exception(SH4 *sh4, const char *message, int exception) // handle exception
 {
 	UINT32 vector;
 
-
-	if (sh4->cpu_type == CPU_TYPE_SH4)
-	{
-		if (exception < SH4_INTC_NMI)
-			return; // Not yet supported
-		if (exception == SH4_INTC_NMI) {
-			if ((sh4->sr & BL) && (!(sh4->m[ICR] & 0x200)))
-				return;
-
-			sh4->m[ICR] &= ~0x200;
-			sh4->m[INTEVT] = 0x1c0;
-
-
-			vector = 0x600;
-			sh4->irq_callback(sh4->device, INPUT_LINE_NMI);
-			LOG(("SH-4 '%s' nmi exception after [%s]\n", sh4->device->tag(), message));
-		} else {
-	//      if ((sh4->m[ICR] & 0x4000) && (sh4->nmi_line_state == ASSERT_LINE))
-	//          return;
-			if (sh4->sr & BL)
-				return;
-			if (((sh4->exception_priority[exception] >> 8) & 255) <= ((sh4->sr >> 4) & 15))
-				return;
-			sh4->m[INTEVT] = exception_codes[exception];
-			vector = 0x600;
-			if ((exception >= SH4_INTC_IRL0) && (exception <= SH4_INTC_IRL3))
-				sh4->irq_callback(sh4->device, SH4_INTC_IRL0-exception+SH4_IRL0);
-			else
-				sh4->irq_callback(sh4->device, SH4_IRL3+1);
-			LOG(("SH-4 '%s' interrupt exception #%d after [%s]\n", sh4->device->tag(), exception, message));
-		}
-	}
-	else /* SH3 exceptions */
-	{
-		/***** ASSUME THIS TO BE WRONG FOR NOW *****/
-
-		if (exception < SH4_INTC_NMI)
-			return; // Not yet supported
-		if (exception == SH4_INTC_NMI)
-		{
+	if (exception < SH4_INTC_NMI)
+		return; // Not yet supported
+	if (exception == SH4_INTC_NMI) {
+		if ((sh4->sr & BL) && (!(sh4->m[ICR] & 0x200)))
 			return;
-		}
+		sh4->m[ICR] &= ~0x200;
+		sh4->m[INTEVT] = 0x1c0;
+		vector = 0x600;
+		sh4->irq_callback(sh4->device, INPUT_LINE_NMI);
+		LOG(("SH-4 '%s' nmi exception after [%s]\n", sh4->device->tag, message));
+	} else {
+//      if ((sh4->m[ICR] & 0x4000) && (sh4->nmi_line_state == ASSERT_LINE))
+//          return;
+		if (sh4->sr & BL)
+			return;
+		if (((sh4->exception_priority[exception] >> 8) & 255) <= ((sh4->sr >> 4) & 15))
+			return;
+		sh4->m[INTEVT] = exception_codes[exception];
+		vector = 0x600;
+		if ((exception >= SH4_INTC_IRL0) && (exception <= SH4_INTC_IRL3))
+			sh4->irq_callback(sh4->device, SH4_INTC_IRL0-exception+SH4_IRL0);
 		else
-		{
-
-			if (sh4->sr & BL)
-				return;
-			if (((sh4->exception_priority[exception] >> 8) & 255) <= ((sh4->sr >> 4) & 15))
-				return;
-
-
-			vector = 0x600;
-
-			if ((exception >= SH4_INTC_IRL0) && (exception <= SH4_INTC_IRL3))
-				sh4->irq_callback(sh4->device, SH4_INTC_IRL0-exception+SH4_IRL0);
-			else
-				sh4->irq_callback(sh4->device, SH4_IRL3+1);
-
-			if (sh3_intevt2_exception_codes[exception]==-1)
-				fatalerror("sh3_intevt2_exception_codes unpopulated for exception %02x\n", exception);
-
-			sh4->m_sh3internal_lower[INTEVT2] = sh3_intevt2_exception_codes[exception];
-			sh4->m_sh3internal_upper[SH3_EXPEVT_ADDR] = exception_codes[exception];
-
-
-			LOG(("SH-3 '%s' interrupt exception #%d after [%s]\n", sh4->device->tag(), exception, message));
-		}
-
-		/***** END ASSUME THIS TO BE WRONG FOR NOW *****/
+			sh4->irq_callback(sh4->device, SH4_IRL3+1);
+		LOG(("SH-4 '%s' interrupt exception #%d after [%s]\n", sh4->device->tag, exception, message));
 	}
 	sh4_exception_checkunrequest(sh4, exception);
 
@@ -448,7 +202,7 @@ void sh4_exception(sh4_state *sh4, const char *message, int exception) // handle
 	sh4->sgr = sh4->r[15];
 
 	sh4->sr |= MD;
-	if ((sh4->device->machine().debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	if ((sh4->device->machine->debug_flags & DEBUG_FLAG_ENABLED) != 0)
 		sh4_syncronize_register_bank(sh4, (sh4->sr & sRB) >> 29);
 	if (!(sh4->sr & sRB))
 		sh4_change_register_bank(sh4, 1);
@@ -462,39 +216,56 @@ void sh4_exception(sh4_state *sh4, const char *message, int exception) // handle
 	if(sh4->sleep_mode == 1) { sh4->sleep_mode = 2; }
 }
 
-
 static UINT32 compute_ticks_refresh_timer(emu_timer *timer, int hertz, int base, int divisor)
 {
 	// elapsed:total = x : ticks
 	// x=elapsed*tics/total -> x=elapsed*(double)100000000/rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]
 	// ticks/total=ticks / ((rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] * ticks) / 100000000)=1/((rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] / 100000000)=100000000/rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]
-	return base + (UINT32)((timer->elapsed().as_double() * (double)hertz) / (double)divisor);
+	return base + (UINT32)((attotime_to_double(timer_timeelapsed(timer)) * (double)hertz) / (double)divisor);
 }
 
-static void sh4_refresh_timer_recompute(sh4_state *sh4)
+static void sh4_refresh_timer_recompute(SH4 *sh4)
 {
 UINT32 ticks;
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("sh4_refresh_timer_recompute uses sh4->m[] with SH3\n");
-
 
 	//if rtcnt < rtcor then rtcor-rtcnt
 	//if rtcnt >= rtcor then 256-rtcnt+rtcor=256+rtcor-rtcnt
 	ticks = sh4->m[RTCOR]-sh4->m[RTCNT];
 	if (ticks <= 0)
 		ticks = 256 + ticks;
-	sh4->refresh_timer->adjust(attotime::from_hz(sh4->bus_clock) * rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] * ticks);
+	timer_adjust_oneshot(sh4->refresh_timer, attotime_mul(attotime_mul(ATTOTIME_IN_HZ(sh4->bus_clock), rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]), ticks), 0);
 	sh4->refresh_timer_base = sh4->m[RTCNT];
 }
 
+/*-------------------------------------------------
+    sh4_scale_up_mame_time - multiply a attotime by
+    a (constant+1) where 0 <= constant < 2^32
+-------------------------------------------------*/
+
+INLINE attotime sh4_scale_up_mame_time(attotime _time1, UINT32 factor1)
+{
+	return attotime_add(attotime_mul(_time1, factor1), _time1);
+}
+
+static UINT32 compute_ticks_timer(emu_timer *timer, int hertz, int divisor)
+{
+	double ret;
+
+	ret=((attotime_to_double(timer_timeleft(timer)) * (double)hertz) / (double)divisor) - 1;
+	return (UINT32)ret;
+}
+
+static void sh4_timer_recompute(SH4 *sh4, int which)
+{
+	double ticks;
+
+	ticks = sh4->m[tcnt[which]];
+	timer_adjust_oneshot(sh4->timer[which], sh4_scale_up_mame_time(attotime_mul(ATTOTIME_IN_HZ(sh4->pm_clock), tcnt_div[sh4->m[tcr[which]] & 7]), ticks), which);
+}
 
 static TIMER_CALLBACK( sh4_refresh_timer_callback )
 {
-	sh4_state *sh4 = (sh4_state *)ptr;
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("sh4_refresh_timer_callback uses sh4->m[] with SH3\n");
+	SH4 *sh4 = (SH4 *)ptr;
 
 	sh4->m[RTCNT] = 0;
 	sh4_refresh_timer_recompute(sh4);
@@ -510,12 +281,9 @@ static TIMER_CALLBACK( sh4_refresh_timer_callback )
 	}
 }
 
-static void increment_rtc_time(sh4_state *sh4, int mode)
+static void increment_rtc_time(SH4 *sh4, int mode)
 {
 	int carry, year, leap, days;
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("increment_rtc_time uses sh4->m[] with SH3\n");
 
 	if (mode == 0)
 	{
@@ -608,15 +376,9 @@ static void increment_rtc_time(sh4_state *sh4, int mode)
 
 static TIMER_CALLBACK( sh4_rtc_timer_callback )
 {
-	sh4_state *sh4 = (sh4_state *)ptr;
+	SH4 *sh4 = (SH4 *)ptr;
 
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-	{
-		logerror("sh4_rtc_timer_callback uses sh4->m[] with SH3\n");
-		return;
-	}
-
-	sh4->rtc_timer->adjust(attotime::from_hz(128));
+	timer_adjust_oneshot(sh4->rtc_timer, ATTOTIME_IN_HZ(128), 0);
 	sh4->m[R64CNT] = (sh4->m[R64CNT]+1) & 0x7f;
 	if (sh4->m[R64CNT] == 64)
 	{
@@ -626,66 +388,263 @@ static TIMER_CALLBACK( sh4_rtc_timer_callback )
 	}
 }
 
-
-static void sh4_dmac_nmi(sh4_state *sh4) // manage dma when nmi gets asserted
+static TIMER_CALLBACK( sh4_timer_callback )
 {
-	int s;
+	static const UINT16 tuni[] = { SH4_INTC_TUNI0, SH4_INTC_TUNI1, SH4_INTC_TUNI2 };
+	SH4 *sh4 = (SH4 *)ptr;
+	int which = param;
+	int idx = tcr[which];
 
-	sh4->SH4_DMAOR |= DMAOR_NMIF;
+	sh4->m[tcnt[which]] = sh4->m[tcor[which]];
+	sh4_timer_recompute(sh4, which);
+	sh4->m[idx] = sh4->m[idx] | 0x100;
+	if (sh4->m[idx] & 0x20)
+		sh4_exception_request(sh4, tuni[which]);
+}
+
+static TIMER_CALLBACK( sh4_dmac_callback )
+{
+	SH4 *sh4 = (SH4 *)ptr;
+	int channel = param;
+
+	LOG(("SH4 '%s': DMA %d complete\n", sh4->device->tag, channel));
+	sh4->dma_timer_active[channel] = 0;
+	switch (channel)
+	{
+	case 0:
+		sh4->m[DMATCR0] = 0;
+		sh4->m[CHCR0] |= 2;
+		if (sh4->m[CHCR0] & 4)
+			sh4_exception_request(sh4, SH4_INTC_DMTE0);
+		break;
+	case 1:
+		sh4->m[DMATCR1] = 0;
+		sh4->m[CHCR1] |= 2;
+		if (sh4->m[CHCR1] & 4)
+			sh4_exception_request(sh4, SH4_INTC_DMTE1);
+		break;
+	case 2:
+		sh4->m[DMATCR2] = 0;
+		sh4->m[CHCR2] |= 2;
+		if (sh4->m[CHCR2] & 4)
+			sh4_exception_request(sh4, SH4_INTC_DMTE2);
+		break;
+	case 3:
+		sh4->m[DMATCR3] = 0;
+		sh4->m[CHCR3] |= 2;
+		if (sh4->m[CHCR3] & 4)
+			sh4_exception_request(sh4, SH4_INTC_DMTE3);
+		break;
+	}
+}
+
+static int sh4_dma_transfer(SH4 *sh4, int channel, int timermode, UINT32 chcr, UINT32 *sar, UINT32 *dar, UINT32 *dmatcr)
+{
+	int incs, incd, size;
+	UINT32 src, dst, count;
+
+	incd = (chcr >> 14) & 3;
+	incs = (chcr >> 12) & 3;
+	size = dmasize[(chcr >> 4) & 7];
+	if(incd == 3 || incs == 3)
+	{
+		logerror("SH4: DMA: bad increment values (%d, %d, %d, %04x)\n", incd, incs, size, chcr);
+		return 0;
+	}
+	src   = *sar;
+	dst   = *dar;
+	count = *dmatcr;
+	if (!count)
+		count = 0x1000000;
+
+	LOG(("SH4: DMA %d start %x, %x, %x, %04x, %d, %d, %d\n", channel, src, dst, count, chcr, incs, incd, size));
+
+	if (timermode == 1)
+	{
+		sh4->dma_timer_active[channel] = 1;
+		timer_adjust_oneshot(sh4->dma_timer[channel], cpu_clocks_to_attotime(sh4->device, 2*count+1), channel);
+	}
+	else if (timermode == 2)
+	{
+		sh4->dma_timer_active[channel] = 1;
+		timer_adjust_oneshot(sh4->dma_timer[channel], attotime_zero, channel);
+	}
+
+	src &= AM;
+	dst &= AM;
+
+	switch(size)
+	{
+	case 1: // 8 bit
+		for(;count > 0; count --)
+		{
+			if(incs == 2)
+				src --;
+			if(incd == 2)
+				dst --;
+			memory_write_byte_64le(sh4->program, dst, memory_read_byte_64le(sh4->program, src));
+			if(incs == 1)
+				src ++;
+			if(incd == 1)
+				dst ++;
+		}
+		break;
+	case 2: // 16 bit
+		src &= ~1;
+		dst &= ~1;
+		for(;count > 0; count --)
+		{
+			if(incs == 2)
+				src -= 2;
+			if(incd == 2)
+				dst -= 2;
+			memory_write_word_64le(sh4->program, dst, memory_read_word_64le(sh4->program, src));
+			if(incs == 1)
+				src += 2;
+			if(incd == 1)
+				dst += 2;
+		}
+		break;
+	case 8: // 64 bit
+		src &= ~7;
+		dst &= ~7;
+		for(;count > 0; count --)
+		{
+			if(incs == 2)
+				src -= 8;
+			if(incd == 2)
+				dst -= 8;
+			memory_write_qword_64le(sh4->program, dst, memory_read_qword_64le(sh4->program, src));
+			if(incs == 1)
+				src += 8;
+			if(incd == 1)
+				dst += 8;
+
+		}
+		break;
+	case 4: // 32 bit
+		src &= ~3;
+		dst &= ~3;
+		for(;count > 0; count --)
+		{
+			if(incs == 2)
+				src -= 4;
+			if(incd == 2)
+				dst -= 4;
+			memory_write_dword_64le(sh4->program, dst, memory_read_dword_64le(sh4->program, src));
+			if(incs == 1)
+				src += 4;
+			if(incd == 1)
+				dst += 4;
+
+		}
+		break;
+	case 32:
+		src &= ~31;
+		dst &= ~31;
+		for(;count > 0; count --)
+		{
+			if(incs == 2)
+				src -= 32;
+			if(incd == 2)
+				dst -= 32;
+			memory_write_qword_64le(sh4->program, dst, memory_read_qword_64le(sh4->program, src));
+			memory_write_qword_64le(sh4->program, dst+8, memory_read_qword_64le(sh4->program, src+8));
+			memory_write_qword_64le(sh4->program, dst+16, memory_read_qword_64le(sh4->program, src+16));
+			memory_write_qword_64le(sh4->program, dst+24, memory_read_qword_64le(sh4->program, src+24));
+			if(incs == 1)
+				src += 32;
+			if(incd == 1)
+				dst += 32;
+		}
+		break;
+	}
+	*sar    = (*sar & !AM) | src;
+	*dar    = (*dar & !AM) | dst;
+	*dmatcr = count;
+	return 1;
+}
+
+static void sh4_dmac_check(SH4 *sh4, int channel)
+{
+UINT32 dmatcr,chcr,sar,dar;
+
+	switch (channel)
+	{
+	case 0:
+		sar = sh4->m[SAR0];
+		dar = sh4->m[DAR0];
+		chcr = sh4->m[CHCR0];
+		dmatcr = sh4->m[DMATCR0];
+		break;
+	case 1:
+		sar = sh4->m[SAR1];
+		dar = sh4->m[DAR1];
+		chcr = sh4->m[CHCR1];
+		dmatcr = sh4->m[DMATCR1];
+		break;
+	case 2:
+		sar = sh4->m[SAR2];
+		dar = sh4->m[DAR2];
+		chcr = sh4->m[CHCR2];
+		dmatcr = sh4->m[DMATCR2];
+		break;
+	case 3:
+		sar = sh4->m[SAR3];
+		dar = sh4->m[DAR3];
+		chcr = sh4->m[CHCR3];
+		dmatcr = sh4->m[DMATCR3];
+		break;
+	default:
+		return;
+	}
+	if (chcr & sh4->m[DMAOR] & 1)
+	{
+		if ((((chcr >> 8) & 15) < 4) || (((chcr >> 8) & 15) > 6))
+			return;
+		if (!sh4->dma_timer_active[channel] && !(chcr & 2) && !(sh4->m[DMAOR] & 6))
+			sh4_dma_transfer(sh4, channel, 1, chcr, &sar, &dar, &dmatcr);
+	}
+	else
+	{
+		if (sh4->dma_timer_active[channel])
+		{
+			logerror("SH4: DMA %d cancelled in-flight but all data transferred", channel);
+			timer_adjust_oneshot(sh4->dma_timer[channel], attotime_never, channel);
+			sh4->dma_timer_active[channel] = 0;
+		}
+	}
+}
+
+static void sh4_dmac_nmi(SH4 *sh4) // manage dma when nmi
+{
+int s;
+
+	sh4->m[DMAOR] |= 2; // nmif = 1
 	for (s = 0;s < 4;s++)
 	{
 		if (sh4->dma_timer_active[s])
 		{
 			logerror("SH4: DMA %d cancelled due to NMI but all data transferred", s);
-			sh4->dma_timer[s]->adjust(attotime::never, s);
+			timer_adjust_oneshot(sh4->dma_timer[s], attotime_never, s);
 			sh4->dma_timer_active[s] = 0;
 		}
 	}
 }
 
-void sh4_handler_ipra_w(sh4_state *sh4, UINT32 data, UINT32 mem_mask)
-{
-	COMBINE_DATA(&sh4->SH4_IPRA);
-	/* 15 - 12 TMU0 */
-	/* 11 -  8 TMU1 */
-	/*  7 -  4 TMU2 */
-	/*  3 -  0 RTC  */
-	sh4->exception_priority[SH4_INTC_ATI]     = INTPRI(sh4->SH4_IPRA & 0x000f, SH4_INTC_ATI);
-	sh4->exception_priority[SH4_INTC_PRI]     = INTPRI(sh4->SH4_IPRA & 0x000f, SH4_INTC_PRI);
-	sh4->exception_priority[SH4_INTC_CUI]     = INTPRI(sh4->SH4_IPRA & 0x000f, SH4_INTC_CUI);
-
-	sh4->exception_priority[SH4_INTC_TUNI2]  = INTPRI((sh4->SH4_IPRA & 0x00f0) >> 4, SH4_INTC_TUNI2);
-	sh4->exception_priority[SH4_INTC_TICPI2] = INTPRI((sh4->SH4_IPRA & 0x00f0) >> 4, SH4_INTC_TICPI2);
-
-	sh4->exception_priority[SH4_INTC_TUNI1]  = INTPRI((sh4->SH4_IPRA & 0x0f00) >> 8, SH4_INTC_TUNI1);
-
-	sh4->exception_priority[SH4_INTC_TUNI0]  = INTPRI((sh4->SH4_IPRA & 0xf000) >> 12, SH4_INTC_TUNI0);
-
-	logerror("setting priorities TMU0 %01x TMU1 %01x TMU2 %01x RTC %01x\n", (sh4->SH4_IPRA & 0xf000)>>12, (sh4->SH4_IPRA & 0x0f00)>>8, (sh4->SH4_IPRA & 0x00f0)>>4, (sh4->SH4_IPRA & 0x000f)>>0);
-
-	sh4_exception_recompute(sh4);
-}
-
-
 WRITE32_HANDLER( sh4_internal_w )
 {
-	sh4_state *sh4 = get_safe_token(&space->device());
+	SH4 *sh4 = get_safe_token(space->cpu);
 	int a;
-	UINT32 addr = (offset << 2) + 0xfe000000;
-	offset = ((addr & 0xfc) >> 2) | ((addr & 0x1fe0000) >> 11);
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("sh4_internal_w uses sh4->m[] with SH3\n");
-
 	UINT32 old = sh4->m[offset];
 	COMBINE_DATA(sh4->m+offset);
 
-//  printf("sh4_internal_w:  Write %08x (%x), %08x @ %08x\n", 0xfe000000+((offset & 0x3fc0) << 11)+((offset & 0x3f) << 2), offset, data, mem_mask);
+	//  logerror("sh4_internal_w:  Write %08x (%x), %08x @ %08x\n", 0xfe000000+((offset & 0x3fc0) << 11)+((offset & 0x3f) << 2), offset, data, mem_mask);
 
 	switch( offset )
 	{
 	case MMUCR: // MMU Control
-		if (data & MMUCR_AT)
+		if (data & 1)
 		{
 			printf("SH4 MMU Enabled\n");
 			printf("If you're seeing this, but running something other than a Naomi GD-ROM game then chances are it won't work\n");
@@ -721,7 +680,7 @@ WRITE32_HANDLER( sh4_internal_w )
 		}
 		else
 		{
-			sh4->refresh_timer->adjust(attotime::never);
+			timer_adjust_oneshot(sh4->refresh_timer, attotime_never, 0);
 		}
 		break;
 
@@ -767,36 +726,114 @@ WRITE32_HANDLER( sh4_internal_w )
 		}
 		if ((sh4->m[RCR2] & 8) && (~old & 8))
 		{ // 0 -> 1
-			sh4->rtc_timer->adjust(attotime::from_hz(128));
+			timer_adjust_oneshot(sh4->rtc_timer, ATTOTIME_IN_HZ(128), 0);
 		}
 		else if (~(sh4->m[RCR2]) & 8)
 		{ // 0
-			sh4->rtc_timer->adjust(attotime::never);
+			timer_adjust_oneshot(sh4->rtc_timer, attotime_never, 0);
 		}
 		break;
 
-/*********************************************************************************************************************
-        TMU (Timer Unit)
-*********************************************************************************************************************/
-	case SH4_TSTR_ADDR:	sh4_handle_tstr_addr_w(sh4,data,mem_mask);   break;
-	case SH4_TCR0_ADDR:	sh4_handle_tcr0_addr_w(sh4,data,mem_mask);   break;
-	case SH4_TCR1_ADDR: sh4_handle_tcr1_addr_w(sh4,data,mem_mask);   break;
-	case SH4_TCR2_ADDR: sh4_handle_tcr2_addr_w(sh4,data,mem_mask);   break;
-	case SH4_TCOR0_ADDR: sh4_handle_tcor0_addr_w(sh4,data,mem_mask); break;
-	case SH4_TCNT0_ADDR: sh4_handle_tcnt0_addr_w(sh4,data,mem_mask); break;
-	case SH4_TCOR1_ADDR: sh4_handle_tcor1_addr_w(sh4,data,mem_mask); break;
-	case SH4_TCNT1_ADDR: sh4_handle_tcnt1_addr_w(sh4,data,mem_mask); break;
-	case SH4_TCOR2_ADDR: sh4_handle_tcor2_addr_w(sh4,data,mem_mask); break;
-	case SH4_TCNT2_ADDR: sh4_handle_tcnt2_addr_w(sh4,data,mem_mask); break;
-	case SH4_TOCR_ADDR: sh4_handle_tocr_addr_w(sh4,data,mem_mask);   break; // not supported
-	case SH4_TCPR2_ADDR: sh4_handle_tcpr2_addr_w(sh4,data,mem_mask); break; // not supported
-/*********************************************************************************************************************
-        INTC (Interrupt Controller)
-*********************************************************************************************************************/
+		// TMU
+	case TSTR:
+		if (old & 1)
+			sh4->m[TCNT0] = compute_ticks_timer(sh4->timer[0], sh4->pm_clock, tcnt_div[sh4->m[TCR0] & 7]);
+		if ((sh4->m[TSTR] & 1) == 0) {
+			timer_adjust_oneshot(sh4->timer[0], attotime_never, 0);
+		} else
+			sh4_timer_recompute(sh4, 0);
+
+		if (old & 2)
+			sh4->m[TCNT1] = compute_ticks_timer(sh4->timer[1], sh4->pm_clock, tcnt_div[sh4->m[TCR1] & 7]);
+		if ((sh4->m[TSTR] & 2) == 0) {
+			timer_adjust_oneshot(sh4->timer[1], attotime_never, 0);
+		} else
+			sh4_timer_recompute(sh4, 1);
+
+		if (old & 4)
+			sh4->m[TCNT2] = compute_ticks_timer(sh4->timer[2], sh4->pm_clock, tcnt_div[sh4->m[TCR2] & 7]);
+		if ((sh4->m[TSTR] & 4) == 0) {
+			timer_adjust_oneshot(sh4->timer[2], attotime_never, 0);
+		} else
+			sh4_timer_recompute(sh4, 2);
+		break;
+
+	case TCR0:
+		if (sh4->m[TSTR] & 1)
+		{
+			sh4->m[TCNT0] = compute_ticks_timer(sh4->timer[0], sh4->pm_clock, tcnt_div[old & 7]);
+			sh4_timer_recompute(sh4, 0);
+		}
+		if (!(sh4->m[TCR0] & 0x20) || !(sh4->m[TCR0] & 0x100))
+			sh4_exception_unrequest(sh4, SH4_INTC_TUNI0);
+		break;
+	case TCR1:
+		if (sh4->m[TSTR] & 2)
+		{
+			sh4->m[TCNT1] = compute_ticks_timer(sh4->timer[1], sh4->pm_clock, tcnt_div[old & 7]);
+			sh4_timer_recompute(sh4, 1);
+		}
+		if (!(sh4->m[TCR1] & 0x20) || !(sh4->m[TCR1] & 0x100))
+			sh4_exception_unrequest(sh4, SH4_INTC_TUNI1);
+		break;
+	case TCR2:
+		if (sh4->m[TSTR] & 4)
+		{
+			sh4->m[TCNT2] = compute_ticks_timer(sh4->timer[2], sh4->pm_clock, tcnt_div[old & 7]);
+			sh4_timer_recompute(sh4, 2);
+		}
+		if (!(sh4->m[TCR2] & 0x20) || !(sh4->m[TCR2] & 0x100))
+			sh4_exception_unrequest(sh4, SH4_INTC_TUNI2);
+		break;
+
+	case TCOR0:
+		if (sh4->m[TSTR] & 1)
+		{
+			sh4->m[TCNT0] = compute_ticks_timer(sh4->timer[0], sh4->pm_clock, tcnt_div[sh4->m[TCR0] & 7]);
+			sh4_timer_recompute(sh4, 0);
+		}
+		break;
+	case TCNT0:
+		if (sh4->m[TSTR] & 1)
+			sh4_timer_recompute(sh4, 0);
+		break;
+	case TCOR1:
+		if (sh4->m[TSTR] & 2)
+		{
+			sh4->m[TCNT1] = compute_ticks_timer(sh4->timer[1], sh4->pm_clock, tcnt_div[sh4->m[TCR1] & 7]);
+			sh4_timer_recompute(sh4, 1);
+		}
+		break;
+	case TCNT1:
+		if (sh4->m[TSTR] & 2)
+			sh4_timer_recompute(sh4, 1);
+		break;
+	case TCOR2:
+		if (sh4->m[TSTR] & 4)
+		{
+			sh4->m[TCNT2] = compute_ticks_timer(sh4->timer[2], sh4->pm_clock, tcnt_div[sh4->m[TCR2] & 7]);
+			sh4_timer_recompute(sh4, 2);
+		}
+		break;
+	case TCNT2:
+		if (sh4->m[TSTR] & 4)
+			sh4_timer_recompute(sh4, 2);
+		break;
+
+		// INTC
 	case ICR:
 		sh4->m[ICR] = (sh4->m[ICR] & 0x7fff) | (old & 0x8000);
 		break;
-	case IPRA: sh4_handler_ipra_w(sh4, data, mem_mask); break;
+	case IPRA:
+		sh4->exception_priority[SH4_INTC_ATI] = INTPRI(sh4->m[IPRA] & 0x000f, SH4_INTC_ATI);
+		sh4->exception_priority[SH4_INTC_PRI] = INTPRI(sh4->m[IPRA] & 0x000f, SH4_INTC_PRI);
+		sh4->exception_priority[SH4_INTC_CUI] = INTPRI(sh4->m[IPRA] & 0x000f, SH4_INTC_CUI);
+		sh4->exception_priority[SH4_INTC_TUNI2] = INTPRI((sh4->m[IPRA] & 0x00f0) >> 4, SH4_INTC_TUNI2);
+		sh4->exception_priority[SH4_INTC_TICPI2] = INTPRI((sh4->m[IPRA] & 0x00f0) >> 4, SH4_INTC_TICPI2);
+		sh4->exception_priority[SH4_INTC_TUNI1] = INTPRI((sh4->m[IPRA] & 0x0f00) >> 8, SH4_INTC_TUNI1);
+		sh4->exception_priority[SH4_INTC_TUNI0] = INTPRI((sh4->m[IPRA] & 0xf000) >> 12, SH4_INTC_TUNI0);
+		sh4_exception_recompute(sh4);
+		break;
 	case IPRB:
 		sh4->exception_priority[SH4_INTC_SCI1ERI] = INTPRI((sh4->m[IPRB] & 0x00f0) >> 4, SH4_INTC_SCI1ERI);
 		sh4->exception_priority[SH4_INTC_SCI1RXI] = INTPRI((sh4->m[IPRB] & 0x00f0) >> 4, SH4_INTC_SCI1RXI);
@@ -821,35 +858,50 @@ WRITE32_HANDLER( sh4_internal_w )
 		sh4->exception_priority[SH4_INTC_GPOI] = INTPRI((sh4->m[IPRC] & 0xf000) >> 12, SH4_INTC_GPOI);
 		sh4_exception_recompute(sh4);
 		break;
-/*********************************************************************************************************************
-        DMAC (DMA Controller)
-*********************************************************************************************************************/
-	case SH4_SAR0_ADDR: sh4_handle_sar0_addr_w(sh4,data,mem_mask);   break;
-	case SH4_SAR1_ADDR: sh4_handle_sar1_addr_w(sh4,data,mem_mask);   break;
-	case SH4_SAR2_ADDR: sh4_handle_sar2_addr_w(sh4,data,mem_mask);   break;
-	case SH4_SAR3_ADDR: sh4_handle_sar3_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DAR0_ADDR: sh4_handle_dar0_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DAR1_ADDR: sh4_handle_dar1_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DAR2_ADDR: sh4_handle_dar2_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DAR3_ADDR: sh4_handle_dar3_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DMATCR0_ADDR: sh4_handle_dmatcr0_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DMATCR1_ADDR: sh4_handle_dmatcr1_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DMATCR2_ADDR: sh4_handle_dmatcr2_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DMATCR3_ADDR: sh4_handle_dmatcr3_addr_w(sh4,data,mem_mask);   break;
-	case SH4_CHCR0_ADDR: sh4_handle_chcr0_addr_w(sh4,data,mem_mask);   break;
-	case SH4_CHCR1_ADDR: sh4_handle_chcr1_addr_w(sh4,data,mem_mask);   break;
-	case SH4_CHCR2_ADDR: sh4_handle_chcr2_addr_w(sh4,data,mem_mask);   break;
-	case SH4_CHCR3_ADDR: sh4_handle_chcr3_addr_w(sh4,data,mem_mask);   break;
-	case SH4_DMAOR_ADDR: sh4_handle_dmaor_addr_w(sh4,data,mem_mask);   break;
-/*********************************************************************************************************************
-        Store Queues
-*********************************************************************************************************************/
+
+		// DMA
+	case SAR0:
+	case SAR1:
+	case SAR2:
+	case SAR3:
+	case DAR0:
+	case DAR1:
+	case DAR2:
+	case DAR3:
+	case DMATCR0:
+	case DMATCR1:
+	case DMATCR2:
+	case DMATCR3:
+		break;
+	case CHCR0:
+		sh4_dmac_check(sh4, 0);
+		break;
+	case CHCR1:
+		sh4_dmac_check(sh4, 1);
+		break;
+	case CHCR2:
+		sh4_dmac_check(sh4, 2);
+		break;
+	case CHCR3:
+		sh4_dmac_check(sh4, 3);
+		break;
+	case DMAOR:
+		if ((sh4->m[DMAOR] & 4) && (~old & 4))
+			sh4->m[DMAOR] &= ~4;
+		if ((sh4->m[DMAOR] & 2) && (~old & 2))
+			sh4->m[DMAOR] &= ~2;
+		sh4_dmac_check(sh4, 0);
+		sh4_dmac_check(sh4, 1);
+		sh4_dmac_check(sh4, 2);
+		sh4_dmac_check(sh4, 3);
+		break;
+
+		// Store Queues
 	case QACR0:
 	case QACR1:
 		break;
-/*********************************************************************************************************************
-        I/O
-*********************************************************************************************************************/
+
+		// I/O ports
 	case PCTRA:
 		sh4->ioport16_pullup = 0;
 		sh4->ioport16_direction = 0;
@@ -860,11 +912,11 @@ WRITE32_HANDLER( sh4_internal_w )
 		sh4->ioport16_direction &= 0xffff;
 		sh4->ioport16_pullup = (sh4->ioport16_pullup | sh4->ioport16_direction) ^ 0xffff;
 		if (sh4->m[BCR2] & 1)
-			sh4->io->write_dword(SH4_IOPORT_16, (UINT64)(sh4->m[PDTRA] & sh4->ioport16_direction) | ((UINT64)sh4->m[PCTRA] << 16));
+			memory_write_dword_64le(sh4->io, SH4_IOPORT_16, (UINT64)(sh4->m[PDTRA] & sh4->ioport16_direction) | ((UINT64)sh4->m[PCTRA] << 16));
 		break;
 	case PDTRA:
 		if (sh4->m[BCR2] & 1)
-			sh4->io->write_dword(SH4_IOPORT_16, (UINT64)(sh4->m[PDTRA] & sh4->ioport16_direction) | ((UINT64)sh4->m[PCTRA] << 16));
+			memory_write_dword_64le(sh4->io, SH4_IOPORT_16, (UINT64)(sh4->m[PDTRA] & sh4->ioport16_direction) | ((UINT64)sh4->m[PCTRA] << 16));
 		break;
 	case PCTRB:
 		sh4->ioport4_pullup = 0;
@@ -876,17 +928,14 @@ WRITE32_HANDLER( sh4_internal_w )
 		sh4->ioport4_direction &= 0xf;
 		sh4->ioport4_pullup = (sh4->ioport4_pullup | sh4->ioport4_direction) ^ 0xf;
 		if (sh4->m[BCR2] & 1)
-			sh4->io->write_dword(SH4_IOPORT_4, (sh4->m[PDTRB] & sh4->ioport4_direction) | (sh4->m[PCTRB] << 16));
+			memory_write_dword_64le(sh4->io, SH4_IOPORT_4, (sh4->m[PDTRB] & sh4->ioport4_direction) | (sh4->m[PCTRB] << 16));
 		break;
 	case PDTRB:
 		if (sh4->m[BCR2] & 1)
-			sh4->io->write_dword(SH4_IOPORT_4, (sh4->m[PDTRB] & sh4->ioport4_direction) | (sh4->m[PCTRB] << 16));
+			memory_write_dword_64le(sh4->io, SH4_IOPORT_4, (sh4->m[PDTRB] & sh4->ioport4_direction) | (sh4->m[PCTRB] << 16));
 		break;
 
 	case SCBRR2:
-		break;
-
-	case SCSPTR2: //trips often in aristocrat mk-6
 		break;
 
 	default:
@@ -897,91 +946,48 @@ WRITE32_HANDLER( sh4_internal_w )
 
 READ32_HANDLER( sh4_internal_r )
 {
-	sh4_state *sh4 = get_safe_token(&space->device());
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("sh4_internal_r uses sh4->m[] with SH3\n");
-
-	UINT32 addr = (offset << 2) + 0xfe000000;
-	offset = ((addr & 0xfc) >> 2) | ((addr & 0x1fe0000) >> 11);
-
-//  printf("sh4_internal_r:  Read %08x (%x) @ %08x\n", 0xfe000000+((offset & 0x3fc0) << 11)+((offset & 0x3f) << 2), offset, mem_mask);
-
+	SH4 *sh4 = get_safe_token(space->cpu);
+	//  logerror("sh4_internal_r:  Read %08x (%x) @ %08x\n", 0xfe000000+((offset & 0x3fc0) << 11)+((offset & 0x3f) << 2), offset, mem_mask);
 	switch( offset )
 	{
-	case VERSION:
-		return PVR_SH7091;	// 0x040205c1, this is what a real SH7091 in a Dreamcast returns - the later Naomi BIOSes check and care!
-		break;
-	case PRR:
-		return 0;
-		break;
-	case IPRD:
-		return 0x00000000;	// SH7750 ignores writes here and always returns zero
-		break;
 	case RTCNT:
 		if ((sh4->m[RTCSR] >> 3) & 7)
 		{ // activated
 			//((double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7] / (double)100000000)
-			//return (refresh_timer_base + (sh4->refresh_timer->elapsed() * (double)100000000) / (double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
+			//return (refresh_timer_base + (timer_timeelapsed(sh4->refresh_timer) * (double)100000000) / (double)rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
 			return compute_ticks_refresh_timer(sh4->refresh_timer, sh4->bus_clock, sh4->refresh_timer_base, rtcnt_div[(sh4->m[RTCSR] >> 3) & 7]) & 0xff;
 		}
 		else
 			return sh4->m[RTCNT];
 		break;
 
-/*********************************************************************************************************************
-        INTC (Interrupt Controller)
-*********************************************************************************************************************/
+	case TCNT0:
+		if (sh4->m[TSTR] & 1)
+			return compute_ticks_timer(sh4->timer[0], sh4->pm_clock, tcnt_div[sh4->m[TCR0] & 7]);
+		else
+			return sh4->m[TCNT0];
+		break;
+	case TCNT1:
+		if (sh4->m[TSTR] & 2)
+			return compute_ticks_timer(sh4->timer[1], sh4->pm_clock, tcnt_div[sh4->m[TCR1] & 7]);
+		else
+			return sh4->m[TCNT1];
+		break;
+	case TCNT2:
+		if (sh4->m[TSTR] & 4)
+			return compute_ticks_timer(sh4->timer[2], sh4->pm_clock, tcnt_div[sh4->m[TCR2] & 7]);
+		else
+			return sh4->m[TCNT2];
+		break;
 
-	case IPRA:
-		return sh4->SH4_IPRA;
-
-/*********************************************************************************************************************
-        TMU (Timer Unit)
-*********************************************************************************************************************/
-	case SH4_TSTR_ADDR:  return sh4_handle_tstr_addr_r(sh4, mem_mask);
-	case SH4_TCR0_ADDR:  return sh4_handle_tcr0_addr_r(sh4, mem_mask);
-	case SH4_TCR1_ADDR:  return sh4_handle_tcr1_addr_r(sh4, mem_mask);
-	case SH4_TCR2_ADDR:  return sh4_handle_tcr2_addr_r(sh4, mem_mask);
-	case SH4_TCNT0_ADDR: return sh4_handle_tcnt0_addr_r(sh4, mem_mask);
-	case SH4_TCNT1_ADDR: return sh4_handle_tcnt1_addr_r(sh4, mem_mask);
-	case SH4_TCNT2_ADDR: return sh4_handle_tcnt2_addr_r(sh4, mem_mask);
-	case SH4_TCOR0_ADDR: return sh4_handle_tcor0_addr_r(sh4, mem_mask);
-	case SH4_TCOR1_ADDR: return sh4_handle_tcor1_addr_r(sh4, mem_mask);
-	case SH4_TCOR2_ADDR: return sh4_handle_tcor2_addr_r(sh4, mem_mask);
-	case SH4_TOCR_ADDR:  return sh4_handle_tocr_addr_r(sh4, mem_mask); // not supported
-	case SH4_TCPR2_ADDR: return sh4_handle_tcpr2_addr_r(sh4, mem_mask); // not supported
-/*********************************************************************************************************************
-        DMAC (DMA Controller)
-*********************************************************************************************************************/
-	case SH4_SAR0_ADDR: return sh4_handle_sar0_addr_r(sh4,mem_mask);
-	case SH4_SAR1_ADDR: return sh4_handle_sar1_addr_r(sh4,mem_mask);
-	case SH4_SAR2_ADDR: return sh4_handle_sar2_addr_r(sh4,mem_mask);
-	case SH4_SAR3_ADDR: return sh4_handle_sar3_addr_r(sh4,mem_mask);
-	case SH4_DAR0_ADDR: return sh4_handle_dar0_addr_r(sh4,mem_mask);
-	case SH4_DAR1_ADDR: return sh4_handle_dar1_addr_r(sh4,mem_mask);
-	case SH4_DAR2_ADDR: return sh4_handle_dar2_addr_r(sh4,mem_mask);
-	case SH4_DAR3_ADDR: return sh4_handle_dar3_addr_r(sh4,mem_mask);
-	case SH4_DMATCR0_ADDR: return sh4_handle_dmatcr0_addr_r(sh4,mem_mask);
-	case SH4_DMATCR1_ADDR: return sh4_handle_dmatcr1_addr_r(sh4,mem_mask);
-	case SH4_DMATCR2_ADDR: return sh4_handle_dmatcr2_addr_r(sh4,mem_mask);
-	case SH4_DMATCR3_ADDR: return sh4_handle_dmatcr3_addr_r(sh4,mem_mask);
-	case SH4_CHCR0_ADDR: return sh4_handle_chcr0_addr_r(sh4,mem_mask);
-	case SH4_CHCR1_ADDR: return sh4_handle_chcr1_addr_r(sh4,mem_mask);
-	case SH4_CHCR2_ADDR: return sh4_handle_chcr2_addr_r(sh4,mem_mask);
-	case SH4_CHCR3_ADDR: return sh4_handle_chcr3_addr_r(sh4,mem_mask);
-	case SH4_DMAOR_ADDR: return sh4_handle_dmaor_addr_r(sh4,mem_mask);
-/*********************************************************************************************************************
-        I/O Ports
-*********************************************************************************************************************/
-
+		// I/O ports
 	case PDTRA:
 		if (sh4->m[BCR2] & 1)
-			return (sh4->io->read_dword(SH4_IOPORT_16) & ~sh4->ioport16_direction) | (sh4->m[PDTRA] & sh4->ioport16_direction);
+			return (memory_read_dword_64le(sh4->io, SH4_IOPORT_16) & ~sh4->ioport16_direction) | (sh4->m[PDTRA] & sh4->ioport16_direction);
 		break;
 	case PDTRB:
 		if (sh4->m[BCR2] & 1)
-			return (sh4->io->read_dword(SH4_IOPORT_4) & ~sh4->ioport4_direction) | (sh4->m[PDTRB] & sh4->ioport4_direction);
+			return (memory_read_dword_64le(sh4->io, SH4_IOPORT_4) & ~sh4->ioport4_direction) | (sh4->m[PDTRB] & sh4->ioport4_direction);
 		break;
 
 		// SCIF (UART with FIFO)
@@ -991,12 +997,9 @@ READ32_HANDLER( sh4_internal_r )
 	return sh4->m[offset];
 }
 
-void sh4_set_frt_input(device_t *device, int state)
+void sh4_set_frt_input(const device_config *device, int state)
 {
-	sh4_state *sh4 = get_safe_token(device);
-
-	if (sh4->cpu_type != CPU_TYPE_SH4)
-		fatalerror("sh4_set_frt_input uses sh4->m[] with SH3\n");
+	SH4 *sh4 = get_safe_token(device);
 
 	if(state == PULSE_LINE)
 	{
@@ -1011,149 +1014,107 @@ void sh4_set_frt_input(device_t *device, int state)
 
 	sh4->frt_input = state;
 
-	if (sh4->cpu_type == CPU_TYPE_SH4)
-	{
-
-		if(sh4->m[5] & 0x8000) {
-			if(state == CLEAR_LINE) {
-				return;
-			}
-		} else {
-			if(state == ASSERT_LINE) {
-				return;
-			}
+	if(sh4->m[5] & 0x8000) {
+		if(state == CLEAR_LINE) {
+			return;
 		}
-	}
-	else
-	{
-		fatalerror("sh4_set_frt_input uses sh4->m[] with SH3\n");
+	} else {
+		if(state == ASSERT_LINE) {
+			return;
+		}
 	}
 
 #if 0
 	sh4_timer_resync();
 	sh4->icr = sh4->frc;
 	sh4->m[4] |= ICF;
-	logerror("SH4 '%s': ICF activated (%x)\n", sh4->device->tag(), sh4->pc & AM);
+	logerror("SH4 '%s': ICF activated (%x)\n", sh4->device->tag, sh4->pc & AM);
 	sh4_recalc_irq();
 #endif
 }
 
-void sh4_set_irln_input(device_t *device, int value)
+void sh4_set_irln_input(const device_config *device, int value)
 {
-	sh4_state *sh4 = get_safe_token(device);
+	SH4 *sh4 = get_safe_token(device);
 
 	if (sh4->irln == value)
 		return;
 	sh4->irln = value;
-	device_set_input_line(device, SH4_IRLn, ASSERT_LINE);
-	device_set_input_line(device, SH4_IRLn, CLEAR_LINE);
+	cpu_set_input_line(device, SH4_IRLn, ASSERT_LINE);
+	cpu_set_input_line(device, SH4_IRLn, CLEAR_LINE);
 }
 
-void sh4_set_irq_line(sh4_state *sh4, int irqline, int state) // set state of external interrupt line
+void sh4_set_irq_line(SH4 *sh4, int irqline, int state) // set state of external interrupt line
 {
-	if (sh4->cpu_type == CPU_TYPE_SH3)
-	{
-		/***** ASSUME THIS TO BE WRONG FOR NOW *****/
+	int s;
 
-		if (irqline == INPUT_LINE_NMI)
+	if (irqline == INPUT_LINE_NMI)
+    {
+		if (sh4->nmi_line_state == state)
+			return;
+		if (sh4->m[ICR] & 0x100)
 		{
-			fatalerror("SH3 NMI Unimplemented\n");
+			if ((state == CLEAR_LINE) && (sh4->nmi_line_state == ASSERT_LINE))  // rising
+			{
+				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag));
+				sh4_exception_request(sh4, SH4_INTC_NMI);
+				sh4_dmac_nmi(sh4);
+			}
 		}
 		else
 		{
-			//if (irqline > SH4_IRL3)
-			//  return;
+			if ((state == ASSERT_LINE) && (sh4->nmi_line_state == CLEAR_LINE)) // falling
+			{
+				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag));
+				sh4_exception_request(sh4, SH4_INTC_NMI);
+				sh4_dmac_nmi(sh4);
+			}
+		}
+		if (state == CLEAR_LINE)
+			sh4->m[ICR] ^= 0x8000;
+		else
+			sh4->m[ICR] |= 0x8000;
+		sh4->nmi_line_state = state;
+	}
+	else
+	{
+		if (sh4->m[ICR] & 0x80) // four independent external interrupt sources
+		{
+			if (irqline > SH4_IRL3)
+				return;
 			if (sh4->irq_line_state[irqline] == state)
 				return;
 			sh4->irq_line_state[irqline] = state;
 
 			if( state == CLEAR_LINE )
 			{
-				LOG(("SH-4 '%s' cleared external irq IRL%d\n", sh4->device->tag(), irqline));
+				LOG(("SH-4 '%s' cleared external irq IRL%d\n", sh4->device->tag, irqline));
 				sh4_exception_unrequest(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
 			}
 			else
 			{
-				LOG(("SH-4 '%s' assert external irq IRL%d\n", sh4->device->tag(), irqline));
+				LOG(("SH-4 '%s' assert external irq IRL%d\n", sh4->device->tag, irqline));
 				sh4_exception_request(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
 			}
-
 		}
-
-		/***** END ASSUME THIS TO BE WRONG FOR NOW *****/
-	}
-	else
-	{
-		int s;
-
-		if (irqline == INPUT_LINE_NMI)
+		else // level-encoded interrupt
 		{
-			if (sh4->nmi_line_state == state)
+			if (irqline != SH4_IRLn)
 				return;
-			if (sh4->m[ICR] & 0x100)
-			{
-				if ((state == CLEAR_LINE) && (sh4->nmi_line_state == ASSERT_LINE))  // rising
-				{
-					LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag()));
-					sh4_exception_request(sh4, SH4_INTC_NMI);
-					sh4_dmac_nmi(sh4);
-				}
-			}
-			else
-			{
-				if ((state == ASSERT_LINE) && (sh4->nmi_line_state == CLEAR_LINE)) // falling
-				{
-					LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag()));
-					sh4_exception_request(sh4, SH4_INTC_NMI);
-					sh4_dmac_nmi(sh4);
-				}
-			}
-			if (state == CLEAR_LINE)
-				sh4->m[ICR] ^= 0x8000;
-			else
-				sh4->m[ICR] |= 0x8000;
-			sh4->nmi_line_state = state;
+			if ((sh4->irln > 15) || (sh4->irln < 0))
+				return;
+			for (s = 0; s < 15; s++)
+				sh4_exception_unrequest(sh4, SH4_INTC_IRLn0+s);
+			if (sh4->irln < 15)
+				sh4_exception_request(sh4, SH4_INTC_IRLn0+sh4->irln);
+			LOG(("SH-4 '%s' IRLn0-IRLn3 level #%d\n", sh4->device->tag, sh4->irln));
 		}
-		else
-		{
-			if (sh4->m[ICR] & 0x80) // four independent external interrupt sources
-			{
-				if (irqline > SH4_IRL3)
-					return;
-				if (sh4->irq_line_state[irqline] == state)
-					return;
-				sh4->irq_line_state[irqline] = state;
-
-				if( state == CLEAR_LINE )
-				{
-					LOG(("SH-4 '%s' cleared external irq IRL%d\n", sh4->device->tag(), irqline));
-					sh4_exception_unrequest(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
-				}
-				else
-				{
-					LOG(("SH-4 '%s' assert external irq IRL%d\n", sh4->device->tag(), irqline));
-					sh4_exception_request(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
-				}
-			}
-			else // level-encoded interrupt
-			{
-				if (irqline != SH4_IRLn)
-					return;
-				if ((sh4->irln > 15) || (sh4->irln < 0))
-					return;
-				for (s = 0; s < 15; s++)
-					sh4_exception_unrequest(sh4, SH4_INTC_IRLn0+s);
-				if (sh4->irln < 15)
-					sh4_exception_request(sh4, SH4_INTC_IRLn0+sh4->irln);
-				LOG(("SH-4 '%s' IRLn0-IRLn3 level #%d\n", sh4->device->tag(), sh4->irln));
-			}
-		}
-		if (sh4->test_irq && (!sh4->delay))
-			sh4_check_pending_irq(sh4, "sh4_set_irq_line");
 	}
+	if (sh4->test_irq && (!sh4->delay))
+		sh4_check_pending_irq(sh4, "sh4_set_irq_line");
 }
 
-void sh4_parse_configuration(sh4_state *sh4, const struct sh4_config *conf)
+void sh4_parse_configuration(SH4 *sh4, const struct sh4_config *conf)
 {
 	if(conf)
 	{
@@ -1201,87 +1162,157 @@ void sh4_parse_configuration(sh4_state *sh4, const struct sh4_config *conf)
 	}
 }
 
-void sh4_common_init(device_t *device)
+void sh4_common_init(const device_config *device)
 {
-	sh4_state *sh4 = get_safe_token(device);
+	SH4 *sh4 = get_safe_token(device);
 	int i;
 
 	for (i=0; i<3; i++)
 	{
-		sh4->timer[i] = device->machine().scheduler().timer_alloc(FUNC(sh4_timer_callback), sh4);
-		sh4->timer[i]->adjust(attotime::never, i);
+		sh4->timer[i] = timer_alloc(device->machine, sh4_timer_callback, sh4);
+		timer_adjust_oneshot(sh4->timer[i], attotime_never, i);
 	}
 
 	for (i=0; i<4; i++)
 	{
-		sh4->dma_timer[i] = device->machine().scheduler().timer_alloc(FUNC(sh4_dmac_callback), sh4);
-		sh4->dma_timer[i]->adjust(attotime::never, i);
+		sh4->dma_timer[i] = timer_alloc(device->machine, sh4_dmac_callback, sh4);
+		timer_adjust_oneshot(sh4->dma_timer[i], attotime_never, i);
 	}
 
-	sh4->refresh_timer = device->machine().scheduler().timer_alloc(FUNC(sh4_refresh_timer_callback), sh4);
-	sh4->refresh_timer->adjust(attotime::never);
+	sh4->refresh_timer = timer_alloc(device->machine, sh4_refresh_timer_callback, sh4);
+	timer_adjust_oneshot(sh4->refresh_timer, attotime_never, 0);
 	sh4->refresh_timer_base = 0;
 
-	sh4->rtc_timer = device->machine().scheduler().timer_alloc(FUNC(sh4_rtc_timer_callback), sh4);
-	sh4->rtc_timer->adjust(attotime::never);
+	sh4->rtc_timer = timer_alloc(device->machine, sh4_rtc_timer_callback, sh4);
+	timer_adjust_oneshot(sh4->rtc_timer, attotime_never, 0);
 
-	sh4->m = auto_alloc_array(device->machine(), UINT32, 16384);
+	sh4->m = auto_alloc_array(device->machine, UINT32, 16384);
 }
 
-UINT32 sh4_getsqremap(sh4_state *sh4, UINT32 address)
+void sh4_dma_ddt(const device_config *device, struct sh4_ddt_dma *s)
 {
-	if (!sh4->sh4_mmu_enabled)
-		return address;
-	else
-	{
-		int i;
-		UINT32 topaddr = address&0xfff00000;
+	SH4 *sh4 = get_safe_token(device);
+	UINT32 chcr;
+	UINT32 *p32bits;
+	UINT64 *p32bytes;
+	UINT32 pos,len,siz;
 
-		for (i=0;i<64;i++)
+	if (sh4->dma_timer_active[s->channel])
+		return;
+	if (s->mode >= 0) {
+		switch (s->channel)
 		{
-			UINT32 topcmp = sh4->sh4_tlb_address[i]&0xfff00000;
-			if (topcmp==topaddr)
-				return (address&0x000fffff) | ((sh4->sh4_tlb_data[i])&0xfff00000);
+		case 0:
+			if (s->mode & 1)
+				s->source = sh4->m[SAR0];
+			if (s->mode & 2)
+				sh4->m[SAR0] = s->source;
+			if (s->mode & 4)
+				s->destination = sh4->m[DAR0];
+			if (s->mode & 8)
+				sh4->m[DAR0] = s->destination;
+			break;
+		case 1:
+			if (s->mode & 1)
+				s->source = sh4->m[SAR1];
+			if (s->mode & 2)
+				sh4->m[SAR1] = s->source;
+			if (s->mode & 4)
+				s->destination = sh4->m[DAR1];
+			if (s->mode & 8)
+				sh4->m[DAR1] = s->destination;
+			break;
+		case 2:
+			if (s->mode & 1)
+				s->source = sh4->m[SAR2];
+			if (s->mode & 2)
+				sh4->m[SAR2] = s->source;
+			if (s->mode & 4)
+				s->destination = sh4->m[DAR2];
+			if (s->mode & 8)
+				sh4->m[DAR2] = s->destination;
+			break;
+		case 3:
+		default:
+			if (s->mode & 1)
+				s->source = sh4->m[SAR3];
+			if (s->mode & 2)
+				sh4->m[SAR3] = s->source;
+			if (s->mode & 4)
+				s->destination = sh4->m[DAR3];
+			if (s->mode & 8)
+				sh4->m[DAR3] = s->destination;
+			break;
 		}
-
-	}
-
-	return address;
-}
-
-READ64_HANDLER( sh4_tlb_r )
-{
-	sh4_state *sh4 = get_safe_token(&space->device());
-
-	int offs = offset*8;
-
-	if (offs >= 0x01000000)
-	{
-		UINT8 i = (offs>>8)&63;
-		return sh4->sh4_tlb_data[i];
-	}
-	else
-	{
-		UINT8 i = (offs>>8)&63;
-		return sh4->sh4_tlb_address[i];
-	}
-}
-
-WRITE64_HANDLER( sh4_tlb_w )
-{
-	sh4_state *sh4 = get_safe_token(&space->device());
-
-	int offs = offset*8;
-
-	if (offs >= 0x01000000)
-	{
-		UINT8 i = (offs>>8)&63;
-		sh4->sh4_tlb_data[i]  = data&0xffffffff;
-	}
-	else
-	{
-		UINT8 i = (offs>>8)&63;
-		sh4->sh4_tlb_address[i] = data&0xffffffff;
+		switch (s->channel)
+		{
+		case 0:
+			chcr = sh4->m[CHCR0];
+			len = sh4->m[DMATCR0];
+			break;
+		case 1:
+			chcr = sh4->m[CHCR1];
+			len = sh4->m[DMATCR1];
+			break;
+		case 2:
+			chcr = sh4->m[CHCR2];
+			len = sh4->m[DMATCR2];
+			break;
+		case 3:
+		default:
+			chcr = sh4->m[CHCR3];
+			len = sh4->m[DMATCR3];
+			break;
+		}
+		if ((s->direction) == 0) {
+			chcr = (chcr & 0xffff3fff) | ((s->mode & 0x30) << 10);
+		} else {
+			chcr = (chcr & 0xffffcfff) | ((s->mode & 0x30) << 8);
+		}
+		siz = dmasize[(chcr >> 4) & 7];
+		if (siz && (s->size))
+			if ((len * siz) != (s->length * s->size))
+				return;
+		sh4_dma_transfer(sh4, s->channel, 0, chcr, &s->source, &s->destination, &len);
+	} else {
+		if (s->size == 4) {
+			if ((s->direction) == 0) {
+				len = s->length;
+				p32bits = (UINT32 *)(s->buffer);
+				for (pos = 0;pos < len;pos++) {
+					*p32bits = memory_read_dword_64le(sh4->program, s->source);
+					p32bits++;
+					s->source = s->source + 4;
+				}
+			} else {
+				len = s->length;
+				p32bits = (UINT32 *)(s->buffer);
+				for (pos = 0;pos < len;pos++) {
+					memory_write_dword_64le(sh4->program, s->destination, *p32bits);
+					p32bits++;
+					s->destination = s->destination + 4;
+				}
+			}
+		}
+		if (s->size == 32) {
+			if ((s->direction) == 0) {
+				len = s->length * 4;
+				p32bytes = (UINT64 *)(s->buffer);
+				for (pos = 0;pos < len;pos++) {
+					*p32bytes = memory_read_qword_64le(sh4->program, s->source);
+					p32bytes++;
+					s->destination = s->destination + 8;
+				}
+			} else {
+				len = s->length * 4;
+				p32bytes = (UINT64 *)(s->buffer);
+				for (pos = 0;pos < len;pos++) {
+					memory_write_qword_64le(sh4->program, s->destination, *p32bytes);
+					p32bytes++;
+					s->destination = s->destination + 8;
+				}
+			}
+		}
 	}
 }
 

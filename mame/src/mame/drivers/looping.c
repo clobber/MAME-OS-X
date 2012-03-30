@@ -52,7 +52,7 @@ L056-6    9A          "      "      VLI-8-4 7A         "
                                   LOG.3     8A         "    tiles
 */
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/tms9900/tms9900.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
@@ -87,6 +87,7 @@ L056-6    9A          "      "      VLI-8-4 7A         "
 #define VBEND				(16)
 #define VBSTART				(224+16)
 
+static UINT8 *cop_io;
 
 /*************************************
  *
@@ -94,25 +95,19 @@ L056-6    9A          "      "      VLI-8-4 7A         "
  *
  *************************************/
 
-class looping_state : public driver_device
+typedef struct _looping_state looping_state;
+struct _looping_state
 {
-public:
-	looping_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
 	/* memory pointers */
-	UINT8 *		m_videoram;
-	UINT8 *		m_colorram;
-	UINT8 *		m_spriteram;
-	UINT8 *		m_cop_io;
+	UINT8 *		videoram;
+	UINT8 *		colorram;
+	UINT8 *		spriteram;
 
 	/* tilemaps */
-	tilemap_t *	m_bg_tilemap;
+	tilemap *	bg_tilemap;
 
 	/* sound state */
-	UINT8		m_sound[8];
-
-	int		m_last;
+	UINT8		sound[8];
 };
 
 
@@ -171,20 +166,20 @@ static PALETTE_INIT( looping )
 
 static TILE_GET_INFO( get_tile_info )
 {
-	looping_state *state = machine.driver_data<looping_state>();
-	int tile_number = state->m_videoram[tile_index];
-	int color = state->m_colorram[(tile_index & 0x1f) * 2 + 1] & 0x07;
+	looping_state *state = (looping_state *)machine->driver_data;
+	int tile_number = state->videoram[tile_index];
+	int color = state->colorram[(tile_index & 0x1f) * 2 + 1] & 0x07;
 	SET_TILE_INFO(0, tile_number, color, 0);
 }
 
 
 static VIDEO_START( looping )
 {
-	looping_state *state = machine.driver_data<looping_state>();
+	looping_state *state = (looping_state *)machine->driver_data;
 
-	state->m_bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8,8, 32,32);
+	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8,8, 32,32);
 
-	state->m_bg_tilemap->set_scroll_cols(0x20);
+	tilemap_set_scroll_cols(state->bg_tilemap, 0x20);
 }
 
 
@@ -197,34 +192,34 @@ static VIDEO_START( looping )
 
 static WRITE8_HANDLER( flip_screen_x_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
-	flip_screen_x_set(space->machine(), ~data & 0x01);
-	state->m_bg_tilemap->set_scrollx(0, flip_screen_get(space->machine()) ? 128 : 0);
+	looping_state *state = (looping_state *)space->machine->driver_data;
+	flip_screen_x_set(space->machine, ~data & 0x01);
+	tilemap_set_scrollx(state->bg_tilemap, 0, flip_screen_get(space->machine) ? 128 : 0);
 }
 
 
 static WRITE8_HANDLER( flip_screen_y_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
-	flip_screen_y_set(space->machine(), ~data & 0x01);
-	state->m_bg_tilemap->set_scrollx(0, flip_screen_get(space->machine()) ? 128 : 0);
+	looping_state *state = (looping_state *)space->machine->driver_data;
+	flip_screen_y_set(space->machine, ~data & 0x01);
+	tilemap_set_scrollx(state->bg_tilemap, 0, flip_screen_get(space->machine) ? 128 : 0);
 }
 
 
 static WRITE8_HANDLER( looping_videoram_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
-	state->m_videoram[offset] = data;
-	state->m_bg_tilemap->mark_tile_dirty(offset);
+	looping_state *state = (looping_state *)space->machine->driver_data;
+	state->videoram[offset] = data;
+	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
 
 
 static WRITE8_HANDLER( looping_colorram_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
+	looping_state *state = (looping_state *)space->machine->driver_data;
 	int i;
 
-	state->m_colorram[offset] = data;
+	state->colorram[offset] = data;
 
 	/* odd bytes are column color attribute */
 	if (offset & 1)
@@ -232,12 +227,12 @@ static WRITE8_HANDLER( looping_colorram_w )
 		/* mark the whole column dirty */
 		offs_t offs = (offset/2);
 		for (i = 0; i < 0x20; i++)
-			state->m_bg_tilemap->mark_tile_dirty(i * 0x20 + offs);
+			tilemap_mark_tile_dirty(state->bg_tilemap, i * 0x20 + offs);
 	}
 
 	/* even bytes are column scroll */
 	else
-		state->m_bg_tilemap->set_scrolly(offset/2, data);
+		tilemap_set_scrolly(state->bg_tilemap, offset/2, data);
 }
 
 
@@ -248,12 +243,12 @@ static WRITE8_HANDLER( looping_colorram_w )
  *
  *************************************/
 
-static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const rectangle &cliprect)
+static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	const UINT8 *source;
-	looping_state *state = machine.driver_data<looping_state>();
+	looping_state *state = (looping_state *)machine->driver_data;
 
-	for (source = state->m_spriteram; source < state->m_spriteram + 0x40; source += 4)
+	for (source = state->spriteram; source < state->spriteram + 0x40; source += 4)
 	{
 		int sx = source[3];
 		int sy = 240 - source[0];
@@ -274,17 +269,17 @@ static void draw_sprites(running_machine &machine, bitmap_ind16 &bitmap, const r
 			flipy = !flipy;
 		}
 
-		drawgfx_transpen(bitmap, cliprect, machine.gfx[1], code, color, flipx, flipy, sx, sy, 0);
+		drawgfx_transpen(bitmap, cliprect, machine->gfx[1], code, color, flipx, flipy, sx, sy, 0);
 	}
 }
 
 
-static SCREEN_UPDATE_IND16( looping )
+static VIDEO_UPDATE( looping )
 {
-	looping_state *state = screen.machine().driver_data<looping_state>();
-	state->m_bg_tilemap->draw(bitmap, cliprect, 0, 0);
+	looping_state *state = (looping_state *)screen->machine->driver_data;
+	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 
-	draw_sprites(screen.machine(), bitmap, cliprect);
+	draw_sprites(screen->machine, bitmap, cliprect);
 	return 0;
 }
 
@@ -298,8 +293,8 @@ static SCREEN_UPDATE_IND16( looping )
 
 static MACHINE_START( looping )
 {
-	looping_state *state = machine.driver_data<looping_state>();
-	state->save_item(NAME(state->m_sound));
+	looping_state *state = (looping_state *)machine->driver_data;
+	state_save_register_global_array(machine, state->sound);
 }
 
 
@@ -312,41 +307,41 @@ static MACHINE_START( looping )
 
 static INTERRUPT_GEN( looping_interrupt )
 {
-	device_set_input_line_and_vector(device, 0, ASSERT_LINE, 4);
+	cpu_set_input_line_and_vector(device, 0, ASSERT_LINE, 4);
 }
 
 
 static WRITE8_HANDLER( level2_irq_set )
 {
 	if (!(data & 1))
-		cputag_set_input_line_and_vector(space->machine(), "maincpu", 0, ASSERT_LINE, 4);
+		cputag_set_input_line_and_vector(space->machine, "maincpu", 0, ASSERT_LINE, 4);
 }
 
 
 static WRITE8_HANDLER( main_irq_ack_w )
 {
 	if (data == 0)
-		cputag_set_input_line(space->machine(), "maincpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( looping_souint_clr )
 {
 	if (data == 0)
-		cputag_set_input_line(space->machine(), "audiocpu", 0, CLEAR_LINE);
+		cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
 }
 
 
 static WRITE_LINE_DEVICE_HANDLER( looping_spcint )
 {
-	cputag_set_input_line_and_vector(device->machine(), "audiocpu", 0, !state, 6);
+	cputag_set_input_line_and_vector(device->machine, "audiocpu", 0, !state, 6);
 }
 
 
 static WRITE8_HANDLER( looping_soundlatch_w )
 {
 	soundlatch_w(space, offset, data);
-	cputag_set_input_line_and_vector(space->machine(), "audiocpu", 0, ASSERT_LINE, 4);
+	cputag_set_input_line_and_vector(space->machine, "audiocpu", 0, ASSERT_LINE, 4);
 }
 
 
@@ -370,9 +365,9 @@ static WRITE8_DEVICE_HANDLER( looping_sound_sw )
         0007 = AFA
     */
 
-	looping_state *state = device->machine().driver_data<looping_state>();
-	state->m_sound[offset + 1] = data ^ 1;
-	dac_data_w(device, ((state->m_sound[2] << 7) + (state->m_sound[3] << 6)) * state->m_sound[7]);
+	looping_state *state = (looping_state *)device->machine->driver_data;
+	state->sound[offset + 1] = data ^ 1;
+	dac_data_w(device, ((state->sound[2] << 7) + (state->sound[3] << 6)) * state->sound[7]);
 }
 
 
@@ -387,27 +382,23 @@ static WRITE8_DEVICE_HANDLER( ay_enable_w )
 {
 	int output;
 
-	device_sound_interface *sound;
-	device->interface(sound);
 	for (output = 0; output < 3; output++)
-		sound->set_output_gain(output, (data & 1) ? 1.0 : 0.0);
+		sound_set_output_gain(device, output, (data & 1) ? 1.0 : 0.0);
 }
 
 
 static WRITE8_DEVICE_HANDLER( speech_enable_w )
 {
-	device_sound_interface *sound;
-	device->interface(sound);
-	sound->set_output_gain(0, (data & 1) ? 1.0 : 0.0);
+	sound_set_output_gain(device, 0, (data & 1) ? 1.0 : 0.0);
 }
 
 
 static WRITE8_HANDLER( ballon_enable_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
-	if (state->m_last != data)
+static int last;
+	if (last != data)
 		mame_printf_debug("ballon_enable_w = %d\n", data);
-	state->m_last = data;
+	last = data;
 }
 
 
@@ -421,8 +412,8 @@ static WRITE8_HANDLER( ballon_enable_w )
 static WRITE8_HANDLER( out_0_w ) { mame_printf_debug("out0 = %02X\n", data); }
 static WRITE8_HANDLER( out_2_w ) { mame_printf_debug("out2 = %02X\n", data); }
 
-static READ8_HANDLER( adc_r )  { mame_printf_debug("%04X:ADC read\n", cpu_get_pc(&space->device())); return 0xff; }
-static WRITE8_HANDLER( adc_w ) { mame_printf_debug("%04X:ADC write = %02X\n", cpu_get_pc(&space->device()), data); }
+static READ8_HANDLER( adc_r )  { mame_printf_debug("%04X:ADC read\n", cpu_get_pc(space->cpu)); return 0xff; }
+static WRITE8_HANDLER( adc_w ) { mame_printf_debug("%04X:ADC write = %02X\n", cpu_get_pc(space->cpu), data); }
 
 static WRITE8_HANDLER( plr2_w )
 {
@@ -440,21 +431,18 @@ static WRITE8_HANDLER( plr2_w )
 
 static READ8_HANDLER( cop_io_r )
 {
-	//looping_state *state = space->machine().driver_data<looping_state>();
-	// if (offset == 1) return space->machine().rand() & 0x01;
-	return 1; // state->m_cop_io[offset];
+	// if (offset == 1) return mame_rand(space->machine) & 0x01;
+	return 1; // cop_io[offset];
 }
 
 static WRITE8_HANDLER( cop_io_w )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
-	state->m_cop_io[offset] = data;
+	cop_io[offset] = data;
 if (offset == 0) logerror("%02x  ",data);
 }
 
 static READ8_HANDLER( protection_r )
 {
-	looping_state *state = space->machine().driver_data<looping_state>();
 //        The code reads ($7002) ($7004) alternately
 //        The result must change at least once every 10 reads
 //        A read from ($34b0 + result) must == $01
@@ -473,7 +461,7 @@ static READ8_HANDLER( protection_r )
 //        cop write randomly fc (unfortunatly) but 61,67,b7,bf,db,e1,f3,fd,ff too and only these values
 
 	// missing something
-	if(state->m_cop_io[0] != 0xfc) return state->m_cop_io[0];
+	if(cop_io[0] != 0xfc) return cop_io[0];
 	return 0xff;
 }
 
@@ -484,13 +472,13 @@ static READ8_HANDLER( protection_r )
  *
  *************************************/
 
-static ADDRESS_MAP_START( looping_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( looping_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 
-	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(looping_videoram_w) AM_BASE_MEMBER(looping_state, m_videoram)
+	AM_RANGE(0x9000, 0x93ff) AM_RAM_WRITE(looping_videoram_w) AM_BASE_MEMBER(looping_state, videoram)
 
-	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM_WRITE(looping_colorram_w) AM_BASE_MEMBER(looping_state, m_colorram)
-	AM_RANGE(0x9840, 0x987f) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(looping_state, m_spriteram)
+	AM_RANGE(0x9800, 0x983f) AM_MIRROR(0x0700) AM_RAM_WRITE(looping_colorram_w) AM_BASE_MEMBER(looping_state, colorram)
+	AM_RANGE(0x9840, 0x987f) AM_MIRROR(0x0700) AM_RAM AM_BASE_MEMBER(looping_state, spriteram)
 	AM_RANGE(0x9880, 0x98ff) AM_MIRROR(0x0700) AM_RAM
 
 	AM_RANGE(0xb001, 0xb001) AM_MIRROR(0x07f8) AM_WRITE(level2_irq_set)
@@ -504,7 +492,7 @@ static ADDRESS_MAP_START( looping_map, AS_PROGRAM, 8 )
 	AM_RANGE(0xf803, 0xf803) AM_MIRROR(0x03fc) AM_READWRITE(adc_r, adc_w)
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( looping_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( looping_io_map, ADDRESS_SPACE_IO, 8 )
 	/* 400 = A16 */
 	/* 401 = A17 */
 	/* 402 = COLOR 9 */
@@ -519,22 +507,22 @@ ADDRESS_MAP_END
 
 
 /* complete memory map derived from schematics */
-static ADDRESS_MAP_START( looping_sound_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( looping_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x37ff) AM_ROM
 	AM_RANGE(0x3800, 0x3bff) AM_RAM
-	AM_RANGE(0x3c00, 0x3c00) AM_MIRROR(0x00f4) AM_DEVREADWRITE("aysnd", ay8910_r, ay8910_address_w)
-	AM_RANGE(0x3c02, 0x3c02) AM_MIRROR(0x00f4) AM_READNOP AM_DEVWRITE("aysnd", ay8910_data_w)
+	AM_RANGE(0x3c00, 0x3c00) AM_MIRROR(0x00f4) AM_DEVREADWRITE("ay", ay8910_r, ay8910_address_w)
+	AM_RANGE(0x3c02, 0x3c02) AM_MIRROR(0x00f4) AM_READNOP AM_DEVWRITE("ay", ay8910_data_w)
 	AM_RANGE(0x3c03, 0x3c03) AM_MIRROR(0x00f6) AM_NOP
-	AM_RANGE(0x3e00, 0x3e00) AM_MIRROR(0x00f4) AM_READNOP AM_DEVWRITE("tms", tms5220_data_w)
-	AM_RANGE(0x3e02, 0x3e02) AM_MIRROR(0x00f4) AM_DEVREAD("tms", tms5220_status_r) AM_WRITENOP
+	AM_RANGE(0x3e00, 0x3e00) AM_MIRROR(0x00f4) AM_DEVREADWRITE("tms", SMH_NOP, tms5220_data_w)
+	AM_RANGE(0x3e02, 0x3e02) AM_MIRROR(0x00f4) AM_DEVREADWRITE("tms", tms5220_status_r, SMH_NOP)
 	AM_RANGE(0x3e03, 0x3e03) AM_MIRROR(0x00f6) AM_NOP
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( looping_sound_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( looping_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x000, 0x000) AM_WRITE(looping_souint_clr)
 	AM_RANGE(0x001, 0x007) AM_DEVWRITE("dac", looping_sound_sw)
-	AM_RANGE(0x008, 0x008) AM_DEVWRITE("aysnd", ay_enable_w)
+	AM_RANGE(0x008, 0x008) AM_DEVWRITE("ay", ay_enable_w)
 	AM_RANGE(0x009, 0x009) AM_DEVWRITE("tms", speech_enable_w)
 	AM_RANGE(0x00a, 0x00a) AM_WRITE(ballon_enable_w)
 	AM_RANGE(0x00b, 0x00f) AM_NOP
@@ -542,15 +530,15 @@ ADDRESS_MAP_END
 
 
 /* standard COP420 map */
-static ADDRESS_MAP_START( looping_cop_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( looping_cop_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x03ff) AM_ROM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( looping_cop_data_map, AS_DATA, 8 )
+static ADDRESS_MAP_START( looping_cop_data_map, ADDRESS_SPACE_DATA, 8 )
 	AM_RANGE(0x0000, 0x003f) AM_RAM
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( looping_cop_io_map, AS_IO, 8 )
+static ADDRESS_MAP_START( looping_cop_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0100, 0x0107) AM_READWRITE(cop_io_r, cop_io_w)
 ADDRESS_MAP_END
 
@@ -588,8 +576,7 @@ GFXDECODE_END
 
 static const tms5220_interface tms5220_config =
 {
-	DEVCB_LINE(looping_spcint),		// IRQ
-	DEVCB_NULL						// READYQ
+	DEVCB_LINE(looping_spcint)
 };
 
 static const ay8910_interface ay8910_config =
@@ -615,51 +602,53 @@ static COP400_INTERFACE( looping_cop_intf )
  *
  *************************************/
 
-static MACHINE_CONFIG_START( looping, looping_state )
+static MACHINE_DRIVER_START( looping )
+	MDRV_DRIVER_DATA(looping_state)
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", TMS9995, MAIN_CPU_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(looping_map)
-	MCFG_CPU_IO_MAP(looping_io_map)
-	MCFG_CPU_VBLANK_INT("screen", looping_interrupt)
+	MDRV_CPU_ADD("maincpu", TMS9995, MAIN_CPU_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(looping_map)
+	MDRV_CPU_IO_MAP(looping_io_map)
+	MDRV_CPU_VBLANK_INT("screen", looping_interrupt)
 
-	MCFG_CPU_ADD("audiocpu", TMS9980, SOUND_CLOCK/4)
-	MCFG_CPU_PROGRAM_MAP(looping_sound_map)
-	MCFG_CPU_IO_MAP(looping_sound_io_map)
+	MDRV_CPU_ADD("audiocpu", TMS9980, SOUND_CLOCK/4)
+	MDRV_CPU_PROGRAM_MAP(looping_sound_map)
+	MDRV_CPU_IO_MAP(looping_sound_io_map)
 
-	MCFG_CPU_ADD("mcu", COP420, COP_CLOCK)
-	MCFG_CPU_PROGRAM_MAP(looping_cop_map)
-	MCFG_CPU_DATA_MAP(looping_cop_data_map)
-	MCFG_CPU_IO_MAP(looping_cop_io_map)
-	MCFG_CPU_CONFIG(looping_cop_intf)
+	MDRV_CPU_ADD("mcu", COP420, COP_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(looping_cop_map)
+	MDRV_CPU_DATA_MAP(looping_cop_data_map)
+	MDRV_CPU_IO_MAP(looping_cop_io_map)
+	MDRV_CPU_CONFIG(looping_cop_intf)
 
-	MCFG_MACHINE_START(looping)
+	MDRV_MACHINE_START(looping)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
-	MCFG_SCREEN_UPDATE_STATIC(looping)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, HTOTAL, HBEND, HBSTART, VTOTAL, VBEND, VBSTART)
 
-	MCFG_GFXDECODE(looping)
-	MCFG_PALETTE_LENGTH(32)
+	MDRV_GFXDECODE(looping)
+	MDRV_PALETTE_LENGTH(32)
 
-	MCFG_PALETTE_INIT(looping)
-	MCFG_VIDEO_START(looping)
+	MDRV_PALETTE_INIT(looping)
+	MDRV_VIDEO_START(looping)
+	MDRV_VIDEO_UPDATE(looping)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, SOUND_CLOCK/4)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
+	MDRV_SOUND_ADD("ay", AY8910, SOUND_CLOCK/4)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MCFG_SOUND_ADD("tms", TMS5220, TMS_CLOCK)
-	MCFG_SOUND_CONFIG(tms5220_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MDRV_SOUND_ADD("tms", TMS5220, TMS_CLOCK)
+	MDRV_SOUND_CONFIG(tms5220_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MCFG_SOUND_ADD("dac", DAC, 0)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("dac", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_DRIVER_END
 
 
 
@@ -733,7 +722,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-ROM_START( loopingv )
+ROM_START( looping )
 	ROM_REGION( 0x8000, "maincpu", 0 ) /* TMS9995 code */
 	ROM_LOAD( "vli3.5a",		0x0000, 0x2000, CRC(1ac3ccdf) SHA1(9d1cde8bd4d0f12eaf06225b3ecc4a5c3e4f0c11) )
 	ROM_LOAD( "vli1.2a",		0x2000, 0x2000, CRC(97755fd4) SHA1(4a6ef02b0128cd516ff95083a7caaad8f3756f09) )
@@ -769,7 +758,7 @@ ROM_START( loopingv )
 	ROM_LOAD( "18s030.11b",		0x0000, 0x0020, CRC(6a0c7d87) SHA1(140335d85c67c75b65689d4e76d29863c209cf32) )
 ROM_END
 
-ROM_START( loopingva )
+ROM_START( loopinga )
 	ROM_REGION( 0x8000, "maincpu", 0 ) /* TMS9995 code */
 	ROM_LOAD( "vli3.5a",		0x0000, 0x2000, CRC(1ac3ccdf) SHA1(9d1cde8bd4d0f12eaf06225b3ecc4a5c3e4f0c11) )
 	ROM_LOAD( "vli-4-3",		0x2000, 0x1000, CRC(f32cae2b) SHA1(2c6ef82af438e588b56fd58b95cf969c97bb9a66) )
@@ -804,40 +793,6 @@ ROM_START( loopingva )
 
 	ROM_REGION( 0x0020, "proms", 0 ) /* color prom */
 	ROM_LOAD( "18s030.11b",		0x0000, 0x0020, CRC(6a0c7d87) SHA1(140335d85c67c75b65689d4e76d29863c209cf32) )
-ROM_END
-
-ROM_START( looping )
-	ROM_REGION( 0x8000, "maincpu", 0 ) /* TMS9995 code */
-	ROM_LOAD( "loop551.bin",		0x0000, 0x1000, CRC(d6bb6db6) SHA1(074eb3bc101096bfe67c3107f306df829ae38548) )
-	ROM_LOAD( "loop552.bin",		0x1000, 0x1000, CRC(bc32956d) SHA1(6ef8d76df1d5b1ed52a4057eae2bf4eb394e4c54) )
-	ROM_LOAD( "loop553.bin",		0x2000, 0x1000, CRC(5f8b9aed) SHA1(32be61788e3d54b23d1663025365b1ab6b96dc91) )
-	ROM_LOAD( "loop554b.bin",		0x3000, 0x1000, CRC(381a9625) SHA1(07d775125be1f761dad568f8ccce600414a9d15f) )
-	ROM_LOAD( "loop555.bin",		0x4000, 0x1000, CRC(0ef4c922) SHA1(df6db0897a51aa10e106865a643588d866ef8c4e) )
-	ROM_LOAD( "loop556.bin",		0x5000, 0x1000, CRC(3419a5d5) SHA1(2b0249c54985ab5e12de17c0e3d62caa0c7575e3) )
-	ROM_LOAD( "loop557.bin",		0x6000, 0x1000, CRC(d430e287) SHA1(b0edd25ef4d2468cc1f8c10ac49c545a89d398d7) )
-
-	ROM_REGION( 0x3800, "audiocpu", 0 ) /* TMS9980 code */
-	ROM_LOAD( "loopc13.bin",		0x0000, 0x1000, CRC(ff9ac4ec) SHA1(9f8df94cd79d86fe4c384df1d5d729b58a7ca7a8) )
-	ROM_LOAD( "loopa13.bin",		0x0800, 0x1000, CRC(1de29f25) SHA1(535acb132266d6137b0610ee9a9b946459ae44af) )
-	ROM_LOAD( "loopa11.bin",		0x2800, 0x1000, CRC(61c74c79) SHA1(9f34d18a919446dd76857b851cea23fc1526f3c2) ) /* speech */
-
-	ROM_REGION( 0x1000, "mcu", 0 ) /* COP420 microcontroller code */
-	/* taken from the other sets */
-	ROM_LOAD( "cop.bin",		0x00c2, 0x033e, CRC(bbfd26d5) SHA1(5f78b32b6e7c003841ef5b635084db2cdfebf0e1) ) // overdumped 4 times and shifted
-	ROM_CONTINUE(			0x0000, 0x00c2)
-	ROM_CONTINUE(			0x00c2, 0x033e)
-	ROM_CONTINUE(			0x0000, 0x00c2)
-	ROM_CONTINUE(			0x00c2, 0x033e)
-	ROM_CONTINUE(			0x0000, 0x00c2)
-	ROM_CONTINUE(			0x00c2, 0x033e)
-	ROM_CONTINUE(			0x0000, 0x00c2)
-
-	ROM_REGION( 0x1000, "gfx1", 0 )
-	ROM_LOAD( "loopaa8.bin",		0x0000, 0x800, CRC(ef3284ac) SHA1(8719c9df8c972a56c306b3c707aaa53092ffa2d6) )
-	ROM_LOAD( "loopaa6.bin",	0x0800, 0x800, CRC(c434c14c) SHA1(3669aaf7adc6b250378bcf62eb8e7058f55476ef) )
-
-	ROM_REGION( 0x0020, "proms", 0 ) /* color prom */
-	ROM_LOAD( "loopvp1.bin",		0x0000, 0x0020, CRC(6a0c7d87) SHA1(140335d85c67c75b65689d4e76d29863c209cf32) )
 ROM_END
 
 ROM_START( skybump )
@@ -886,19 +841,18 @@ ROM_END
 
 static DRIVER_INIT( looping )
 {
-	looping_state *state = machine.driver_data<looping_state>();
-	int length = machine.region("maincpu")->bytes();
-	UINT8 *rom = machine.region("maincpu")->base();
+	int length = memory_region_length(machine, "maincpu");
+	UINT8 *rom = memory_region(machine, "maincpu");
 	int i;
 
-	state->m_cop_io = auto_alloc_array(machine, UINT8, 0x08);
+	cop_io = auto_alloc_array(machine, UINT8, 0x08);
 
 	/* bitswap the TMS9995 ROMs */
 	for (i = 0; i < length; i++)
 		rom[i] = BITSWAP8(rom[i], 0,1,2,3,4,5,6,7);
 
 	/* install protection handlers */
-	machine.device("maincpu")->memory().space(AS_PROGRAM)->install_legacy_read_handler(0x7000, 0x7007, FUNC(protection_r));
+	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x7000, 0x7007, 0, 0, protection_r);
 }
 
 
@@ -909,7 +863,6 @@ static DRIVER_INIT( looping )
  *
  *************************************/
 
-GAME( 1982, looping,   0,        looping, looping, looping, ROT90, "Video Games GmbH", "Looping", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, loopingv,  looping,  looping, looping, looping, ROT90, "Video Games GmbH (Venture Line license)", "Looping (Venture Line license, set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, loopingva, looping,  looping, looping, looping, ROT90, "Video Games GmbH (Venture Line license)", "Looping (Venture Line license, set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, skybump,   0,        looping, skybump, looping, ROT90, "Venture Line", "Sky Bumper", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1982, looping,  0,        looping, looping, looping, ROT90, "Venture Line", "Looping (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1982, loopinga, looping,  looping, looping, looping, ROT90, "Venture Line", "Looping (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1982, skybump,  0,        looping, skybump, looping, ROT90, "Venture Line", "Sky Bumper", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

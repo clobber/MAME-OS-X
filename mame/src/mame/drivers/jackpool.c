@@ -9,71 +9,101 @@ Notes:
  this is actually the m68k C compiler used for doing this game.
 
 TODO:
--Correct NVRAM emulation (and default eeprom too?), you cannot save settings to the EEPROM
- right now, also remove the patch (it doesn't boot otherwise);
--UART;
+-Correct NVRAM emulation (and default eeprom too?);
+-Doesn't accept coins? (might be related to the eeprom);
+-Transparent pen issue on the text layer? (might be a btanb);
+-Understand master-slave comms properly;
 
 *******************************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "machine/eeprom.h"
+#include "rendlay.h"
 
 
-class jackpool_state : public driver_device
-{
-public:
-	jackpool_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
+static UINT16 *sc0_vram;
+static UINT16 *sc1_vram;
+static UINT16 *sc2_vram;
+static UINT16 *sc3_vram;
 
-	UINT16 *m_vram;
-	UINT8 m_map_vreg;
-	UINT16 *m_io;
-};
-
+static UINT16 *jackpool_io;
 
 static VIDEO_START(jackpool)
 {
 }
 
-static SCREEN_UPDATE_IND16(jackpool)
+static VIDEO_UPDATE(jackpool)
 {
-	jackpool_state *state = screen.machine().driver_data<jackpool_state>();
-	const gfx_element *gfx = screen.machine().gfx[0];
+	const device_config *left_screen  = devtag_get_device(screen->machine, "lscreen");
+	const device_config *right_screen = devtag_get_device(screen->machine, "rscreen");
+	const gfx_element *gfx = screen->machine->gfx[0];
 	int count;// = 0x00000/2;
 
 	int y,x;
 
+	if(screen == left_screen)
 	{
-		count = state->m_map_vreg*(0x4000/2);
+		count = 0x0000/2;
 		for (y=0;y<32;y++)
 		{
 			for (x=0;x<64;x++)
 			{
-				int tile = (state->m_vram[count+(0x2000/2)] & 0x7fff);
-				int attr = (state->m_vram[count+(0x2000/2)+0x800] & 0x1f00)>>8;
-
+				int tile = (sc1_vram[count] & 0x7fff);
+				int attr = (sc1_vram[count+0x800] & 0x1f00)>>8;
+				//int t_pen = (sc1_vram[count+0x800] & 0x2000);
+				//int colour = tile>>12;
 				drawgfx_opaque(bitmap,cliprect,gfx,tile,attr,0,0,x*8,y*8);
+
 				count++;
 			}
 		}
 
-		count = state->m_map_vreg*(0x4000/2);
+		count = 0x0000/2;
 		for (y=0;y<32;y++)
 		{
 			for (x=0;x<64;x++)
 			{
-				int tile = (state->m_vram[count] & 0x7fff);
+				int tile = (sc0_vram[count] & 0x7fff);
+				int attr = (sc0_vram[count+0x800] & 0x1f00)>>8;
+				/*might just be sloppy coding,colors are enabled as 0x20-0x3f*/
+				int t_pen = (sc0_vram[count+0x800] & 0x2000);
+				//int colour = tile>>12;
+				drawgfx_transpen(bitmap,cliprect,gfx,tile,attr,0,0,x*8,y*8,(t_pen) ? -1 : 0);
+				count++;
+			}
+		}
+	}
 
-				if(tile != 0)
-				{
-					int attr = (state->m_vram[count+0x800] & 0x1f00)>>8;
-					int t_pen = (state->m_vram[count+0x800] & 0x1000);
+	if(screen == right_screen)
+	{
+		count = 0x0000/2;
+		for (y=0;y<32;y++)
+		{
+			for (x=0;x<64;x++)
+			{
+				int tile = (sc2_vram[count] & 0x7fff);
+				int attr = (sc2_vram[count+0x800] & 0x1f00)>>8;
+				//int t_pen = (sc1_vram[count+0x800] & 0x2000);
+				//int colour = tile>>12;
+				drawgfx_opaque(bitmap,cliprect,gfx,tile,attr,0,0,x*8,y*8);
 
-					drawgfx_transpen(bitmap,cliprect,gfx,tile,attr,0,0,x*8,y*8,(t_pen) ? 0 : -1);
-				}
+				count++;
+			}
+		}
 
+		count = 0x0000/2;
+		for (y=0;y<32;y++)
+		{
+			for (x=0;x<64;x++)
+			{
+				int tile = (sc3_vram[count] & 0x7fff);
+				int attr = (sc3_vram[count+0x800] & 0x1f00)>>8;
+				/*might just be sloppy coding,colors are enabled as 0x20-0x3f*/
+				int t_pen = (sc3_vram[count+0x800] & 0x2000);
+				//int colour = tile>>12;
+				drawgfx_transpen(bitmap,cliprect,gfx,tile,attr,0,0,x*8,y*8,(t_pen) ? -1 : 0);
 				count++;
 			}
 		}
@@ -90,94 +120,71 @@ static READ16_HANDLER( jackpool_ff_r )
 
 static READ16_HANDLER( jackpool_io_r )
 {
-	jackpool_state *state = space->machine().driver_data<jackpool_state>();
 	switch(offset*2)
 	{
-		case 0x00: return input_port_read(space->machine(),"COIN1");
-		case 0x04: return input_port_read(space->machine(),"UNK1");
-		case 0x06: return input_port_read(space->machine(),"UNK2");
-		case 0x08: return input_port_read(space->machine(),"SERVICE1");
-		case 0x0a: return input_port_read(space->machine(),"SERVICE2");//probably not a button, remote?
-		case 0x0c: return input_port_read(space->machine(),"PAYOUT");
-		case 0x0e: return input_port_read(space->machine(),"START2");
-		case 0x10: return input_port_read(space->machine(),"HOLD3");
-		case 0x12: return input_port_read(space->machine(),"HOLD4");
-		case 0x14: return input_port_read(space->machine(),"HOLD2");
-		case 0x16: return input_port_read(space->machine(),"HOLD1");
-		case 0x18: return input_port_read(space->machine(),"HOLD5");
-		case 0x1a: return input_port_read(space->machine(),"START1");
-		case 0x1c: return input_port_read(space->machine(),"BET");
-		case 0x1e: return 0xff; //ticket motor
-		case 0x20: return 0xff; //hopper motor
-    	case 0x2c: return space->machine().device<eeprom_device>("eeprom")->read_bit();
-    	case 0x2e: return space->machine().device<eeprom_device>("eeprom")->read_bit();
-//      default: printf("R %02x\n",offset*2); break;
+		case 0x0: return input_port_read(space->machine,"COIN1");
+		case 0x8: return input_port_read(space->machine,"SERVICE1");
+		case 0xa: return input_port_read(space->machine,"SERVICE2");//probably not a button
+		case 0xc: return input_port_read(space->machine,"PAYOUT");
+		case 0xe: return input_port_read(space->machine,"START2");
+		case 0x10: return input_port_read(space->machine,"HOLD3");
+		case 0x12: return input_port_read(space->machine,"HOLD4");
+		case 0x14: return input_port_read(space->machine,"HOLD2");
+		case 0x16: return input_port_read(space->machine,"HOLD1");
+		case 0x18: return input_port_read(space->machine,"HOLD5");
+		case 0x1a: return input_port_read(space->machine,"START1");
+		case 0x1c: return input_port_read(space->machine,"BET");
+//      case 0x2c: eeprom 1 r?
+//      case 0x2e: eeprom 2 r?
 	}
 
 //  printf("R %02x\n",offset*2);
-	return state->m_io[offset];
+	return jackpool_io[offset];
 }
 
 static WRITE16_HANDLER( jackpool_io_w )
 {
-	jackpool_state *state = space->machine().driver_data<jackpool_state>();
-	COMBINE_DATA(&state->m_io[offset]);
-
-	switch(offset*2)
-	{
-		case 0x30: /* ---- ---x HOLD3 lamp */  break;
-		case 0x32: /* ---- ---x HOLD4 lamp */  break;
-		case 0x34: /* ---- ---x HOLD2 lamp */  break;
-		case 0x36: /* ---- ---x HOLD1 lamp */  break;
-		case 0x38: /* ---- ---x HOLD5 lamp */  break;
-		case 0x3a: /* ---- ---x START1 lamp */ break;
-		case 0x3c: /* ---- ---x BET lamp */    break;
-		case 0x3e: break;
-		case 0x40: /* ---- ---x PAYOUT lamp */ break;
-		case 0x46: /* ---- ---x coin counter */break;
-		case 0x4a: /* ---- ---x Ticket motor */break;
-		case 0x4c: /* ---- ---x Hopper motor */break;
-		case 0x4e: state->m_map_vreg = data & 1;        break;
-		case 0x50: space->machine().device<eeprom_device>("eeprom")->set_cs_line((data & 1) ? CLEAR_LINE : ASSERT_LINE ); break;
-		case 0x52: space->machine().device<eeprom_device>("eeprom")->set_clock_line((data & 1) ? ASSERT_LINE : CLEAR_LINE ); break;
-		case 0x54: space->machine().device<eeprom_device>("eeprom")->write_bit(data & 1); break;
-//      case 0x5a: space->machine().device<eeprom_device>("eeprom")->set_cs_line((data & 1) ? CLEAR_LINE : ASSERT_LINE ); break;
-//      case 0x5c: space->machine().device<eeprom_device>("eeprom")->set_cs_line((data & 1) ? CLEAR_LINE : ASSERT_LINE ); break;
-		case 0x60: break;
-//      default: printf("[%02x] <- %02x W\n",offset*2,data);      break;
-	}
+//  printf("W %02x %02x\n",offset*2,data);
+	COMBINE_DATA(&jackpool_io[offset]);
 
 	#if 0
 	if(offset*2 == 0x54)
 	{
 		printf("Write bit %02x\n",data);
-		space->machine().device<eeprom_device>("eeprom")->write_bit(data & 1);
+		eeprom_write_bit(data & 1);
 	}
 	if(offset*2 == 0x52)
 	{
 		printf("Clock bit %02x\n",data);
-		space->machine().device<eeprom_device>("eeprom")->set_clock_line((data & 1) ? ASSERT_LINE : CLEAR_LINE );
+		eeprom_set_clock_line((data & 1) ? ASSERT_LINE : CLEAR_LINE );
 	}
 	if(offset*2 == 0x50)
 	{
 		printf("chip select bit %02x\n",data);
-		space->machine().device<eeprom_device>("eeprom")->set_cs_line((data & 1) ? CLEAR_LINE : ASSERT_LINE );
+		eeprom_set_cs_line((data & 1) ? CLEAR_LINE : ASSERT_LINE );
 	}
 	#endif
 }
 
-static ADDRESS_MAP_START( jackpool_mem, AS_PROGRAM, 16 )
+static ADDRESS_MAP_START( jackpool_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
 	AM_RANGE(0x120000, 0x1200ff) AM_RAM
-	AM_RANGE(0x340000, 0x347fff) AM_RAM AM_BASE_MEMBER(jackpool_state, m_vram)
-	AM_RANGE(0x348000, 0x34ffff) AM_RAM //<- vram banks 2 & 3?
+	AM_RANGE(0x340000, 0x341fff) AM_RAM AM_BASE(&sc0_vram)
+	AM_RANGE(0x342000, 0x343fff) AM_RAM AM_BASE(&sc1_vram)
+	AM_RANGE(0x344000, 0x345fff) AM_RAM AM_BASE(&sc2_vram)
+	AM_RANGE(0x346000, 0x347fff) AM_RAM AM_BASE(&sc3_vram)
+	/* are the ones below used? */
+	AM_RANGE(0x348000, 0x349fff) AM_RAM
+	AM_RANGE(0x34a000, 0x34bfff) AM_RAM
+	AM_RANGE(0x34c000, 0x34dfff) AM_RAM
+	AM_RANGE(0x34e000, 0x34ffff) AM_RAM
 
-	AM_RANGE(0x360000, 0x3603ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x380000, 0x380061) AM_READWRITE(jackpool_io_r,jackpool_io_w) AM_BASE_MEMBER(jackpool_state, m_io)//AM_READ(jackpool_io_r)
+	AM_RANGE(0x360000, 0x3603ff) AM_RAM_WRITE(paletteram16_xxxxBBBBGGGGRRRR_word_w) AM_BASE(&paletteram16)
+	AM_RANGE(0x380000, 0x380061) AM_READWRITE(jackpool_io_r,jackpool_io_w) AM_BASE(&jackpool_io)//AM_READ(jackpool_io_r)
 
-	AM_RANGE(0x800000, 0x80000f) AM_READ(jackpool_ff_r) AM_WRITENOP //UART
-	AM_RANGE(0xa00000, 0xa00001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x800000, 0x80000f) AM_READ(jackpool_ff_r) AM_WRITENOP
+	AM_RANGE(0xa00000, 0xa00001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
 ADDRESS_MAP_END
 
 
@@ -195,34 +202,29 @@ static INPUT_PORTS_START( jackpool )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_GAMBLE_PAYOUT )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("START1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_GAMBLE_DEAL ) PORT_CODE(KEYCODE_1) PORT_NAME("Deal / W-Up")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("START2")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("BET")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_GAMBLE_BET ) PORT_NAME("Bet / Cancel / Take")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_GAMBLE_BET ) PORT_NAME("Bet / Cancel")
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("HOLD1")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD1 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("HOLD2")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD2 ) PORT_NAME("Hold 2 / Low")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD2 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("HOLD3")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD3 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("HOLD4")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD4 ) PORT_NAME("Hold 4 / High")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD4 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_START("HOLD5")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_POKER_HOLD5 )
 	PORT_BIT( 0xfe, IP_ACTIVE_LOW, IPT_UNUSED )
-	/* these two both crashes the CPU*/
-	PORT_START("UNK1")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_START("UNK2")
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 
@@ -245,35 +247,45 @@ GFXDECODE_END
 /*irq 2 used for communication stuff.3 is just a rte*/
 static INTERRUPT_GEN( jackpool_interrupt )
 {
-	device_set_input_line(device, 1, HOLD_LINE);
+	cpu_set_input_line(device, 1, HOLD_LINE);
 }
 
 
-static MACHINE_CONFIG_START( jackpool, jackpool_state )
-	MCFG_CPU_ADD("maincpu", M68000, 12000000) // ?
-	MCFG_CPU_PROGRAM_MAP(jackpool_mem)
-	MCFG_CPU_VBLANK_INT("screen",jackpool_interrupt)  // ?
+static MACHINE_DRIVER_START( jackpool )
+	MDRV_CPU_ADD("maincpu", M68000, 12000000) // ?
+	MDRV_CPU_PROGRAM_MAP(jackpool_mem)
+	MDRV_CPU_VBLANK_INT("lscreen",jackpool_interrupt)  // ?
 
-	MCFG_GFXDECODE(jackpool)
+	MDRV_GFXDECODE(jackpool)
+	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500))
-	MCFG_SCREEN_SIZE(64*8, 64*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(jackpool)
+	MDRV_SCREEN_ADD("lscreen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_EEPROM_93C46_ADD("eeprom")
+	MDRV_SCREEN_ADD("rscreen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(64*8, 64*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 64*8-1, 0*8, 32*8-1)
 
-	MCFG_PALETTE_LENGTH(0x200)
+	MDRV_NVRAM_HANDLER(93C46)
 
-	MCFG_VIDEO_START(jackpool)
+	MDRV_PALETTE_LENGTH(0x200)
 
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_VIDEO_START(jackpool)
+	MDRV_VIDEO_UPDATE(jackpool)
 
-	MCFG_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_CONFIG_END
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+MACHINE_DRIVER_END
 
 
 ROM_START( jackpool )
@@ -291,12 +303,4 @@ ROM_START( jackpool )
 	ROM_LOAD( "jpc7", 0xc0000, 0x40000,  CRC(b1d40623) SHA1(fb76ae6b53474bd4bee19dbce9537da0f2b63ff4) )
 ROM_END
 
-static DRIVER_INIT( jackpool )
-{
-	UINT16 *rom = (UINT16 *)machine.region("maincpu")->base();
-
-	/* patch NVRAM routine */
-	rom[0x9040/2] = 0x6602;
-}
-
-GAME( 1997, jackpool, 0, jackpool, jackpool, jackpool, ROT0, "Electronic Projects", "Jackpot Cards / Jackpot Pool (Italy)",GAME_NOT_WORKING )
+GAME( 1997, jackpool, 0, jackpool, jackpool, 0, ROT0, "Electronic Projects", "Jackpot Cards / Jackpot Pool (Italy)",GAME_NOT_WORKING )

@@ -61,10 +61,27 @@ write:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
+#include "deprecat.h"
 #include "sound/ay8910.h"
-#include "includes/vastar.h"
+
+
+extern UINT8 *vastar_bg1videoram,*vastar_bg2videoram,*vastar_fgvideoram;
+extern UINT8 *vastar_bg1_scroll,*vastar_bg2_scroll;
+extern UINT8 *vastar_sprite_priority;
+
+WRITE8_HANDLER( vastar_bg1videoram_w );
+WRITE8_HANDLER( vastar_bg2videoram_w );
+WRITE8_HANDLER( vastar_fgvideoram_w );
+READ8_HANDLER( vastar_bg1videoram_r );
+READ8_HANDLER( vastar_bg2videoram_r );
+VIDEO_START( vastar );
+VIDEO_UPDATE( vastar );
+
+static UINT8 *vastar_sharedram;
+
+
 
 static MACHINE_RESET( vastar )
 {
@@ -75,65 +92,58 @@ static MACHINE_RESET( vastar )
 static WRITE8_HANDLER( vastar_hold_cpu2_w )
 {
 	/* I'm not sure that this works exactly like this */
-	cputag_set_input_line(space->machine(), "sub", INPUT_LINE_RESET, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
+	if (data & 1)
+		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, CLEAR_LINE);
+	else
+		cputag_set_input_line(space->machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 static READ8_HANDLER( vastar_sharedram_r )
 {
-	vastar_state *state = space->machine().driver_data<vastar_state>();
-
-	return state->m_sharedram[offset];
+	return vastar_sharedram[offset];
 }
 
 static WRITE8_HANDLER( vastar_sharedram_w )
 {
-	vastar_state *state = space->machine().driver_data<vastar_state>();
-
-	state->m_sharedram[offset] = data;
+	vastar_sharedram[offset] = data;
 }
 
 static WRITE8_HANDLER( flip_screen_w )
 {
-	flip_screen_set(space->machine(), data);
-}
-
-static WRITE8_HANDLER( nmi_mask_w )
-{
-	vastar_state *state = space->machine().driver_data<vastar_state>();
-
-	state->m_nmi_mask = data & 1;
+	flip_screen_set(space->machine, data);
 }
 
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 8 )
+
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w) AM_BASE_MEMBER(vastar_state,m_bg2videoram)
-	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w) AM_BASE_MEMBER(vastar_state,m_bg1videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w) AM_BASE(&vastar_bg2videoram)
+	AM_RANGE(0x9000, 0x9fff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w) AM_BASE(&vastar_bg1videoram)
 	AM_RANGE(0xa000, 0xafff) AM_READWRITE(vastar_bg2videoram_r, vastar_bg2videoram_w)	/* mirror address */
 	AM_RANGE(0xb000, 0xbfff) AM_READWRITE(vastar_bg1videoram_r, vastar_bg1videoram_w)	/* mirror address */
-	AM_RANGE(0xc000, 0xc000) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_sprite_priority)	/* sprite/BG priority */
-	AM_RANGE(0xc400, 0xcfff) AM_RAM_WRITE(vastar_fgvideoram_w) AM_BASE_MEMBER(vastar_state,m_fgvideoram)
+	AM_RANGE(0xc000, 0xc000) AM_WRITE(SMH_RAM) AM_BASE(&vastar_sprite_priority)	/* sprite/BG priority */
+	AM_RANGE(0xc400, 0xcfff) AM_RAM_WRITE(vastar_fgvideoram_w) AM_BASE(&vastar_fgvideoram)
 	AM_RANGE(0xe000, 0xe000) AM_READWRITE(watchdog_reset_r, watchdog_reset_w)
-	AM_RANGE(0xf000, 0xf0ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w) AM_BASE_MEMBER(vastar_state,m_sharedram)
+	AM_RANGE(0xf000, 0xf0ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w) AM_BASE(&vastar_sharedram)
 	AM_RANGE(0xf100, 0xf7ff) AM_RAM
 
 	/* in hidden portions of video RAM: (fallthrough) */
-	AM_RANGE(0xc400, 0xc43f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram1)	/* actually c410-c41f and c430-c43f */
-	AM_RANGE(0xc7c0, 0xc7df) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_bg1_scroll)
-	AM_RANGE(0xc7e0, 0xc7ff) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_bg2_scroll)
-	AM_RANGE(0xc800, 0xc83f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram2)	/* actually c810-c81f and c830-c83f */
-	AM_RANGE(0xcc00, 0xcc3f) AM_WRITEONLY AM_BASE_MEMBER(vastar_state,m_spriteram3)	/* actually cc10-cc1f and cc30-cc3f */
+	AM_RANGE(0xc400, 0xc43f) AM_WRITE(SMH_RAM) AM_BASE(&spriteram) AM_SIZE(&spriteram_size)	/* actually c410-c41f and c430-c43f */
+	AM_RANGE(0xc7c0, 0xc7df) AM_WRITE(SMH_RAM) AM_BASE(&vastar_bg1_scroll)
+	AM_RANGE(0xc7e0, 0xc7ff) AM_WRITE(SMH_RAM) AM_BASE(&vastar_bg2_scroll)
+	AM_RANGE(0xc800, 0xc83f) AM_WRITE(SMH_RAM) AM_BASE(&spriteram_2)	/* actually c810-c81f and c830-c83f */
+	AM_RANGE(0xcc00, 0xcc3f) AM_WRITE(SMH_RAM) AM_BASE(&spriteram_3)	/* actually cc10-cc1f and cc30-cc3f */
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( main_port_map, AS_IO, 8 )
+static ADDRESS_MAP_START( main_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x00) AM_WRITE(nmi_mask_w)
+	AM_RANGE(0x00, 0x00) AM_WRITE(interrupt_enable_w)
 	AM_RANGE(0x01, 0x01) AM_WRITE(flip_screen_w)
 	AM_RANGE(0x02, 0x02) AM_WRITE(vastar_hold_cpu2_w)
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( cpu2_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( cpu2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x4000, 0x40ff) AM_READWRITE(vastar_sharedram_r, vastar_sharedram_w)
 	AM_RANGE(0x8000, 0x8000) AM_READ_PORT("P2")
@@ -141,10 +151,10 @@ static ADDRESS_MAP_START( cpu2_map, AS_PROGRAM, 8 )
 	AM_RANGE(0x8080, 0x8080) AM_READ_PORT("SYSTEM")
 ADDRESS_MAP_END
 
-static ADDRESS_MAP_START( cpu2_port_map, AS_IO, 8 )
+static ADDRESS_MAP_START( cpu2_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
-	AM_RANGE(0x00, 0x01) AM_DEVWRITE("aysnd", ay8910_address_data_w)
-	AM_RANGE(0x02, 0x02) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ay", ay8910_address_data_w)
+	AM_RANGE(0x02, 0x02) AM_DEVREAD("ay", ay8910_r)
 ADDRESS_MAP_END
 
 
@@ -292,52 +302,47 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL
 };
 
-static INTERRUPT_GEN( vblank_irq )
-{
-	vastar_state *state = device->machine().driver_data<vastar_state>();
 
-	if(state->m_nmi_mask)
-		device_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
-}
 
-static MACHINE_CONFIG_START( vastar, vastar_state )
+static MACHINE_DRIVER_START( vastar )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz ???? */
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_IO_MAP(main_port_map)
-	MCFG_CPU_VBLANK_INT("screen", vblank_irq)
+	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz ???? */
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_IO_MAP(main_port_map)
+	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MCFG_CPU_ADD("sub", Z80, 3072000)	/* 3.072 MHz ???? */
-	MCFG_CPU_PROGRAM_MAP(cpu2_map)
-	MCFG_CPU_IO_MAP(cpu2_port_map)
-	MCFG_CPU_PERIODIC_INT(irq0_line_hold,4*60)	/* ??? */
+	MDRV_CPU_ADD("sub", Z80, 3072000)	/* 3.072 MHz ???? */
+	MDRV_CPU_PROGRAM_MAP(cpu2_map)
+	MDRV_CPU_IO_MAP(cpu2_port_map)
+	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,4)	/* ??? */
 
-	MCFG_QUANTUM_TIME(attotime::from_hz(600))	/* 10 CPU slices per frame - seems enough to ensure proper */
+	MDRV_QUANTUM_TIME(HZ(600))	/* 10 CPU slices per frame - seems enough to ensure proper */
 						/* synchronization of the CPUs */
-	MCFG_MACHINE_RESET(vastar)
+	MDRV_MACHINE_RESET(vastar)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(32*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MCFG_SCREEN_UPDATE_STATIC(vastar)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MCFG_GFXDECODE(vastar)
-	MCFG_PALETTE_LENGTH(256)
+	MDRV_GFXDECODE(vastar)
+	MDRV_PALETTE_LENGTH(256)
 
-	MCFG_PALETTE_INIT(RRRR_GGGG_BBBB)
-	MCFG_VIDEO_START(vastar)
+	MDRV_PALETTE_INIT(RRRR_GGGG_BBBB)
+	MDRV_VIDEO_START(vastar)
+	MDRV_VIDEO_UPDATE(vastar)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 1500000)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay", AY8910, 1500000)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
 
 
 

@@ -128,7 +128,7 @@ Notes:
 
 ***************************************************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/mips/mips3.h"
 #include "cpu/adsp2100/adsp2100.h"
 #include "machine/idectrl.h"
@@ -136,24 +136,16 @@ Notes:
 #include "audio/dcs.h"
 
 
-class kinst_state : public driver_device
-{
-public:
-	kinst_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
-	UINT32 *m_rambase;
-	UINT32 *m_rambase2;
-	UINT32 *m_rombase;
-	UINT32 *m_video_base;
-	UINT32 *m_control;
-	const UINT8 *m_control_map;
-};
-
-
-
 /* constants */
 #define MASTER_CLOCK	XTAL_50MHz
+
+
+/* local variables */
+static UINT32 *rambase, *rambase2, *rombase;
+static UINT32 *video_base;
+static UINT32 *kinst_control;
+
+static const UINT8 *control_map;
 
 
 
@@ -165,11 +157,10 @@ public:
 
 static MACHINE_START( kinst )
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
-	device_t *ide = machine.device("ide");
-	UINT8 *features = ide_get_features(ide,0);
+	const device_config *ide = devtag_get_device(machine, "ide");
+	UINT8 *features = ide_get_features(ide);
 
-	if (strncmp(machine.system().name, "kinst2", 6) != 0)
+	if (strncmp(machine->gamedrv->name, "kinst2", 6) != 0)
 	{
 		/* kinst: tweak the model number so we pass the check */
 		features[27*2+0] = 0x54;
@@ -199,12 +190,12 @@ static MACHINE_START( kinst )
 	}
 
 	/* set the fastest DRC options */
-	mips3drc_set_options(machine.device("maincpu"), MIPS3DRC_FASTEST_OPTIONS);
+	mips3drc_set_options(cputag_get_cpu(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(machine.device("maincpu"), 0x08000000, 0x087fffff, FALSE, state->m_rambase2);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x00000000, 0x0007ffff, FALSE, state->m_rambase);
-	mips3drc_add_fastram(machine.device("maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  state->m_rombase);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x08000000, 0x087fffff, FALSE, rambase2);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x0007ffff, FALSE, rambase);
+	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  rombase);
 }
 
 
@@ -217,9 +208,8 @@ static MACHINE_START( kinst )
 
 static MACHINE_RESET( kinst )
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
 	/* set a safe base location for video */
-	state->m_video_base = &state->m_rambase[0x30000/4];
+	video_base = &rambase[0x30000/4];
 }
 
 
@@ -230,20 +220,19 @@ static MACHINE_RESET( kinst )
  *
  *************************************/
 
-static SCREEN_UPDATE_IND16( kinst )
+static VIDEO_UPDATE( kinst )
 {
-	kinst_state *state = screen.machine().driver_data<kinst_state>();
 	int y;
 
 	/* loop over rows and copy to the destination */
-	for (y = cliprect.min_y; y <= cliprect.max_y; y++)
+	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
 	{
-		UINT32 *src = &state->m_video_base[640/4 * y];
-		UINT16 *dest = &bitmap.pix16(y, cliprect.min_x);
+		UINT32 *src = &video_base[640/4 * y];
+		UINT16 *dest = BITMAP_ADDR16(bitmap, y, cliprect->min_x);
 		int x;
 
 		/* loop over columns */
-		for (x = cliprect.min_x; x < cliprect.max_x; x += 2)
+		for (x = cliprect->min_x; x < cliprect->max_x; x += 2)
 		{
 			UINT32 data = *src++;
 
@@ -271,14 +260,14 @@ static TIMER_CALLBACK( irq0_stop )
 
 static INTERRUPT_GEN( irq0_start )
 {
-	device_set_input_line(device, 0, ASSERT_LINE);
-	device->machine().scheduler().timer_set(attotime::from_usec(50), FUNC(irq0_stop));
+	cpu_set_input_line(device, 0, ASSERT_LINE);
+	timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, irq0_stop);
 }
 
 
-static void ide_interrupt(device_t *device, int state)
+static void ide_interrupt(const device_config *device, int state)
 {
-	cputag_set_input_line(device->machine(), "maincpu", 1, state);
+	cputag_set_input_line(device->machine, "maincpu", 1, state);
 }
 
 
@@ -322,33 +311,32 @@ static WRITE32_DEVICE_HANDLER( kinst_ide_extra_w )
 
 static READ32_HANDLER( kinst_control_r )
 {
-	kinst_state *state = space->machine().driver_data<kinst_state>();
 	UINT32 result;
 	static const char *const portnames[] = { "P1", "P2", "VOLUME", "UNUSED", "DSW" };
 
 	/* apply shuffling */
-	offset = state->m_control_map[offset / 2];
-	result = state->m_control[offset];
+	offset = control_map[offset / 2];
+	result = kinst_control[offset];
 
 	switch (offset)
 	{
 		case 2:		/* $90 -- sound return */
-			result = input_port_read(space->machine(), portnames[offset]);
+			result = input_port_read(space->machine, portnames[offset]);
 			result &= ~0x0002;
-			if (dcs_control_r(space->machine()) & 0x800)
+			if (dcs_control_r() & 0x800)
 				result |= 0x0002;
 			break;
 
 		case 0:		/* $80 */
 		case 1:		/* $88 */
 		case 3:		/* $98 */
-			result = input_port_read(space->machine(), portnames[offset]);
+			result = input_port_read(space->machine, portnames[offset]);
 			break;
 
 		case 4:		/* $a0 */
-			result = input_port_read(space->machine(), portnames[offset]);
-			if (cpu_get_pc(&space->device()) == 0x802d428)
-				device_spin_until_interrupt(&space->device());
+			result = input_port_read(space->machine, portnames[offset]);
+			if (cpu_get_pc(space->cpu) == 0x802d428)
+				cpu_spinuntil_int(space->cpu);
 			break;
 	}
 
@@ -358,30 +346,29 @@ static READ32_HANDLER( kinst_control_r )
 
 static WRITE32_HANDLER( kinst_control_w )
 {
-	kinst_state *state = space->machine().driver_data<kinst_state>();
 	UINT32 olddata;
 
 	/* apply shuffling */
-	offset = state->m_control_map[offset / 2];
-	olddata = state->m_control[offset];
-	COMBINE_DATA(&state->m_control[offset]);
+	offset = control_map[offset / 2];
+	olddata = kinst_control[offset];
+	COMBINE_DATA(&kinst_control[offset]);
 
 	switch (offset)
 	{
 		case 0:		/* $80 - VRAM buffer control */
 			if (data & 4)
-				state->m_video_base = &state->m_rambase[0x58000/4];
+				video_base = &rambase[0x58000/4];
 			else
-				state->m_video_base = &state->m_rambase[0x30000/4];
+				video_base = &rambase[0x30000/4];
 			break;
 
 		case 1:		/* $88 - sound reset */
-			dcs_reset_w(space->machine(), ~data & 0x01);
+			dcs_reset_w(~data & 0x01);
 			break;
 
 		case 2:		/* $90 - sound control */
-			if (!(olddata & 0x02) && (state->m_control[offset] & 0x02))
-				dcs_data_w(space->machine(), state->m_control[3]);
+			if (!(olddata & 0x02) && (kinst_control[offset] & 0x02))
+				dcs_data_w(kinst_control[3]);
 			break;
 
 		case 3:		/* $98 - sound data */
@@ -397,14 +384,14 @@ static WRITE32_HANDLER( kinst_control_w )
  *
  *************************************/
 
-static ADDRESS_MAP_START( main_map, AS_PROGRAM, 32 )
+static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 32 )
 	ADDRESS_MAP_UNMAP_HIGH
-	AM_RANGE(0x00000000, 0x0007ffff) AM_RAM AM_BASE_MEMBER(kinst_state, m_rambase)
-	AM_RANGE(0x08000000, 0x087fffff) AM_RAM AM_BASE_MEMBER(kinst_state, m_rambase2)
-	AM_RANGE(0x10000080, 0x100000ff) AM_READWRITE(kinst_control_r, kinst_control_w) AM_BASE_MEMBER(kinst_state, m_control)
+	AM_RANGE(0x00000000, 0x0007ffff) AM_RAM AM_BASE(&rambase)
+	AM_RANGE(0x08000000, 0x087fffff) AM_RAM AM_BASE(&rambase2)
+	AM_RANGE(0x10000080, 0x100000ff) AM_READWRITE(kinst_control_r, kinst_control_w) AM_BASE(&kinst_control)
 	AM_RANGE(0x10000100, 0x1000013f) AM_DEVREADWRITE("ide", kinst_ide_r, kinst_ide_w)
 	AM_RANGE(0x10000170, 0x10000173) AM_DEVREADWRITE("ide", kinst_ide_extra_r, kinst_ide_extra_w)
-	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_REGION("user1", 0) AM_BASE_MEMBER(kinst_state, m_rombase)
+	AM_RANGE(0x1fc00000, 0x1fc7ffff) AM_ROM AM_REGION("user1", 0) AM_BASE(&rombase)
 ADDRESS_MAP_END
 
 
@@ -642,42 +629,44 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const mips3_config r4600_config =
+static const mips3_config config =
 {
 	16384,				/* code cache size */
 	16384				/* data cache size */
 };
 
 
-static MACHINE_CONFIG_START( kinst, kinst_state )
+static MACHINE_DRIVER_START( kinst )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", R4600LE, MASTER_CLOCK*2)
-	MCFG_CPU_CONFIG(r4600_config)
-	MCFG_CPU_PROGRAM_MAP(main_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_start)
+	MDRV_CPU_ADD("maincpu", R4600LE, MASTER_CLOCK*2)
+	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_PROGRAM_MAP(main_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_start)
 
-	MCFG_MACHINE_START(kinst)
-	MCFG_MACHINE_RESET(kinst)
+	MDRV_MACHINE_START(kinst)
+	MDRV_MACHINE_RESET(kinst)
 
-	MCFG_IDE_CONTROLLER_ADD("ide", ide_interrupt)
+	MDRV_IDE_CONTROLLER_ADD("ide", ide_interrupt)
 
 	/* video hardware */
-	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
 
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MCFG_SCREEN_SIZE(320, 240)
-	MCFG_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
-	MCFG_SCREEN_UPDATE_STATIC(kinst)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(320, 240)
+	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
-	MCFG_PALETTE_INIT(BBBBB_GGGGG_RRRRR)
-	MCFG_PALETTE_LENGTH(32768)
+	MDRV_PALETTE_INIT(BBBBB_GGGGG_RRRRR)
+	MDRV_PALETTE_LENGTH(32768)
+
+	MDRV_VIDEO_UPDATE(kinst)
 
 	/* sound hardware */
-	MCFG_FRAGMENT_ADD(dcs_audio_2k)
-MACHINE_CONFIG_END
+	MDRV_IMPORT_FROM(dcs_audio_2k)
+MACHINE_DRIVER_END
 
 
 
@@ -886,19 +875,17 @@ ROM_END
 
 static DRIVER_INIT( kinst )
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
 	static const UINT8 kinst_control_map[8] = { 0,1,2,3,4,5,6,7 };
 
 	dcs_init(machine);
 
 	/* set up the control register mapping */
-	state->m_control_map = kinst_control_map;
+	control_map = kinst_control_map;
 }
 
 
 static DRIVER_INIT( kinst2 )
 {
-	kinst_state *state = machine.driver_data<kinst_state>();
 	static const UINT8 kinst2_control_map[8] = { 2,4,1,0,3,5,6,7 };
 
 	// read: $80 on ki2 = $90 on ki
@@ -911,7 +898,7 @@ static DRIVER_INIT( kinst2 )
 	dcs_init(machine);
 
 	/* set up the control register mapping */
-	state->m_control_map = kinst2_control_map;
+	control_map = kinst2_control_map;
 }
 
 

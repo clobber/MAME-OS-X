@@ -17,30 +17,24 @@
 #define QIX_CHARACTER_CLOCK		(20000000/2/16)
 
 
-#define NUM_PENS	(0x100)
-
-class qix_state : public driver_device
+typedef struct _qix_state qix_state;
+struct _qix_state
 {
-public:
-	qix_state(const machine_config &mconfig, device_type type, const char *tag)
-		: driver_device(mconfig, type, tag) { }
-
 	/* machine state */
-	UINT8 *m_68705_port_out;
-	UINT8 *m_68705_ddr;
-	UINT8  m_68705_port_in[3];
-	UINT8  m_coinctrl;
+	UINT8 *_68705_port_out;
+	UINT8 *_68705_ddr;
+	UINT8  _68705_port_in[3];
+	UINT8  coinctrl;
 
 	/* video state */
-	UINT8 *m_videoram;
-	UINT8 *m_videoram_address;
-	UINT8 *m_videoram_mask;
-	UINT8 *m_paletteram;
-	UINT8  m_flip;
-	UINT8  m_palette_bank;
-	UINT8  m_leds;
-	UINT8 *m_scanline_latch;
-	pen_t m_pens[NUM_PENS];
+	UINT8 *videoram;
+	UINT8 *videoram_address;
+	UINT8 *videoram_mask;
+	UINT8 *paletteram;
+	UINT8  flip;
+	UINT8  palette_bank;
+	UINT8  leds;
+	UINT8 *scanline_latch;
 };
 
 
@@ -83,9 +77,9 @@ WRITE_LINE_DEVICE_HANDLER( qix_vsync_changed );
 
 /*----------- defined in video/qix.c -----------*/
 
-MACHINE_CONFIG_EXTERN( qix_video );
-MACHINE_CONFIG_EXTERN( zookeep_video );
-MACHINE_CONFIG_EXTERN( slither_video );
+MACHINE_DRIVER_EXTERN( qix_video );
+MACHINE_DRIVER_EXTERN( zookeep_video );
+MACHINE_DRIVER_EXTERN( slither_video );
 
 WRITE8_DEVICE_HANDLER( qix_flip_screen_w );
 WRITE8_HANDLER( qix_palettebank_w );
@@ -93,5 +87,5 @@ WRITE8_HANDLER( qix_palettebank_w );
 
 /*----------- defined in audio/qix.c -----------*/
 
-MACHINE_CONFIG_EXTERN( qix_audio );
-MACHINE_CONFIG_EXTERN( slither_audio );
+MACHINE_DRIVER_EXTERN( qix_audio );
+MACHINE_DRIVER_EXTERN( slither_audio );

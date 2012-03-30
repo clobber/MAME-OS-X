@@ -6,8 +6,8 @@
  TODO:
  - colors (missing proms?)
  - dips
+ - proper video hw emulation
  - controls (is there START button ?)
- - when a car sprite goes outside of the screen it gets stuck for a split frame on top of screen
 
 HW info :
 
@@ -29,44 +29,51 @@ HW info :
 
 ************************************/
 
-#include "emu.h"
+#include "driver.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
-#include "includes/ssrj.h"
+
+extern UINT8 *ssrj_vram1,*ssrj_vram2,*ssrj_vram3,*ssrj_vram4,*ssrj_scrollram;
+
+WRITE8_HANDLER(ssrj_vram1_w);
+WRITE8_HANDLER(ssrj_vram2_w);
+WRITE8_HANDLER(ssrj_vram4_w);
+
+VIDEO_START( ssrj );
+VIDEO_UPDATE( ssrj );
+PALETTE_INIT( ssrj );
+
+static int oldport;
 
 static MACHINE_RESET(ssrj)
 {
-	ssrj_state *state = machine.driver_data<ssrj_state>();
-	UINT8 *rom = machine.region("maincpu")->base();
-
+	UINT8 *rom = memory_region(machine, "maincpu");
 	memset(&rom[0xc000], 0 ,0x3fff); /* req for some control types */
-	state->m_oldport = 0x80;
+	oldport = 0x80;
 }
 
 static READ8_HANDLER(ssrj_wheel_r)
 {
-	ssrj_state *state = space->machine().driver_data<ssrj_state>();
-	int port = input_port_read(space->machine(), "IN1") - 0x80;
-	int retval = port - state->m_oldport;
-
-	state->m_oldport = port;
+	int port = input_port_read(space->machine, "IN1") - 0x80;
+	int retval = port-oldport;
+	oldport = port;
 	return retval;
 }
 
-static ADDRESS_MAP_START( ssrj_map, AS_PROGRAM, 8 )
+static ADDRESS_MAP_START( ssrj_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(ssrj_vram1_w) AM_BASE_MEMBER(ssrj_state, m_vram1)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(ssrj_vram2_w) AM_BASE_MEMBER(ssrj_state, m_vram2)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE_MEMBER(ssrj_state, m_vram3)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(ssrj_vram4_w) AM_BASE_MEMBER(ssrj_state, m_vram4)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM_WRITE(ssrj_vram1_w) AM_BASE(&ssrj_vram1)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(ssrj_vram2_w) AM_BASE(&ssrj_vram2)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_BASE(&ssrj_vram3)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM_WRITE(ssrj_vram4_w) AM_BASE(&ssrj_vram4)
 	AM_RANGE(0xe000, 0xe7ff) AM_RAM
-	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE_MEMBER(ssrj_state, m_scrollram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&ssrj_scrollram)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("IN0")
 	AM_RANGE(0xf001, 0xf001) AM_READ(ssrj_wheel_r)
 	AM_RANGE(0xf002, 0xf002) AM_READ_PORT("IN2")
 	AM_RANGE(0xf003, 0xf003) AM_WRITENOP /* unknown */
-	AM_RANGE(0xf401, 0xf401) AM_DEVREAD("aysnd", ay8910_r)
-	AM_RANGE(0xf400, 0xf401) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xf401, 0xf401) AM_DEVREAD("ay", ay8910_r)
+	AM_RANGE(0xf400, 0xf401) AM_DEVWRITE("ay", ay8910_address_data_w)
 	AM_RANGE(0xf800, 0xf800) AM_WRITENOP /* wheel ? */
 	AM_RANGE(0xfc00, 0xfc00) AM_WRITENOP /* unknown */
 ADDRESS_MAP_END
@@ -121,8 +128,8 @@ static const gfx_layout charlayout =
 	RGN_FRAC(1,3),	/* 1024 characters */
 	3,	/* 3 bits per pixel */
 	{ 0, RGN_FRAC(2,3), RGN_FRAC(1,3) },	/* the bitplanes are separated */
-	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8 },
+	{ 0, 1, 2, 3, 4, 5, 6, 7 },
 	8*8	/* every char takes 8 consecutive bytes */
 };
 
@@ -141,37 +148,38 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_CONFIG_START( ssrj, ssrj_state )
+static MACHINE_DRIVER_START( ssrj )
 
 	/* basic machine hardware */
-	MCFG_CPU_ADD("maincpu", Z80,8000000/2)
-	MCFG_CPU_PROGRAM_MAP(ssrj_map)
-	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MDRV_CPU_ADD("maincpu", Z80,8000000/2)
+	MDRV_CPU_PROGRAM_MAP(ssrj_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MCFG_SCREEN_ADD("screen", RASTER)
-	MCFG_SCREEN_REFRESH_RATE(60)
-	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MCFG_SCREEN_SIZE(40*8, 32*8)
-	MCFG_SCREEN_VISIBLE_AREA(0*8, 34*8-1, 1*8, 31*8-1) // unknown res
-	MCFG_SCREEN_UPDATE_STATIC(ssrj)
-	MCFG_SCREEN_VBLANK_STATIC(ssrj)
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(2*8, 30*8-1, 3*8, 32*8-1)
 
-	MCFG_GFXDECODE(ssrj)
-	MCFG_PALETTE_LENGTH(128)
-	MCFG_PALETTE_INIT(ssrj)
+	MDRV_GFXDECODE(ssrj)
+	MDRV_PALETTE_LENGTH(128)
+	MDRV_PALETTE_INIT(ssrj)
 
-	MCFG_VIDEO_START(ssrj)
+	MDRV_VIDEO_START(ssrj)
+	MDRV_VIDEO_UPDATE(ssrj)
+//  MDRV_ASPECT_RATIO(3,4)
 
-	MCFG_MACHINE_RESET(ssrj)
+	MDRV_MACHINE_RESET(ssrj)
 
 	/* sound hardware */
-	MCFG_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MCFG_SOUND_ADD("aysnd", AY8910, 8000000/5)
-	MCFG_SOUND_CONFIG(ay8910_config)
-	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_CONFIG_END
+	MDRV_SOUND_ADD("ay", AY8910, 8000000/5)
+	MDRV_SOUND_CONFIG(ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+MACHINE_DRIVER_END
 
 /***************************************************************************
 
@@ -194,4 +202,4 @@ ROM_START( ssrj )
 
 ROM_END
 
-GAME( 1985, ssrj,  0,       ssrj,  ssrj,  0, ROT90, "Taito Corporation", "Super Speed Race Junior (Japan)",GAME_WRONG_COLORS|GAME_IMPERFECT_GRAPHICS )
+GAME( 1985, ssrj,  0,       ssrj,  ssrj,  0, ORIENTATION_FLIP_X, "Taito Corporation", "Super Speed Race Junior (Japan)",GAME_WRONG_COLORS|GAME_IMPERFECT_GRAPHICS )
