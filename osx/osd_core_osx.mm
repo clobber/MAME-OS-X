@@ -33,7 +33,7 @@
 #import "MameFileManager.h"
 #import <Foundation/Foundation.h>
 #import "JRLog.h"
-#import "MameChud.h"
+#import "MameChud.h"X
 
 #include <unistd.h>
 
@@ -291,6 +291,15 @@ int osd_is_absolute_path(const char *path)
     return result;
 }
 
+void *osd_malloc(size_t size)
+{
+    return malloc(size);
+}
+
+void osd_free(void *ptr)
+{
+    free(ptr);
+}
 
 /***************************************************************************
 MISCELLANEOUS INTERFACES

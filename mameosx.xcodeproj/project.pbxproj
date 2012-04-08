@@ -2873,7 +2873,7 @@
 		55754F610C5E3B570035DB3B /* statemap.m in Sources */ = {isa = PBXBuildFile; fileRef = 55754F5E0C5E3B570035DB3B /* statemap.m */; };
 		55754F630C5E3BD10035DB3B /* BackgroundUpdater.sm in Sources */ = {isa = PBXBuildFile; fileRef = 55754F620C5E3BB00035DB3B /* BackgroundUpdater.sm */; };
 		55801E7B0B530D4F00BB9851 /* JRLog.h in Headers */ = {isa = PBXBuildFile; fileRef = 55801E790B530D4F00BB9851 /* JRLog.h */; };
-		55801E7C0B530D4F00BB9851 /* JRLog.m in Sources */ = {isa = PBXBuildFile; fileRef = 55801E7A0B530D4F00BB9851 /* JRLog.m */; };
+		55801E7C0B530D4F00BB9851 /* JRLog.mm in Sources */ = {isa = PBXBuildFile; fileRef = 55801E7A0B530D4F00BB9851 /* JRLog.mm */; };
 		558D9F2A0AAE70B1007B2A32 /* cpu_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 558D9F290AAE70B1007B2A32 /* cpu_config.h */; };
 		558D9F2C0AAE70E9007B2A32 /* sound_config.h in Headers */ = {isa = PBXBuildFile; fileRef = 558D9F2B0AAE70E9007B2A32 /* sound_config.h */; };
 		558D9F2E0AAE7117007B2A32 /* config.h in Headers */ = {isa = PBXBuildFile; fileRef = 558D9F2D0AAE7117007B2A32 /* config.h */; };
@@ -3366,6 +3366,7 @@
 		55F4D7C30B86DAFC001EED08 /* manual in Resources */ = {isa = PBXBuildFile; fileRef = 55F4D7BD0B86DAFC001EED08 /* manual */; };
 		55FCC9FE0B0BD255003A5FB3 /* VersionChecker.h in Copy to Frameworks */ = {isa = PBXBuildFile; fileRef = 55FCC9FC0B0BD255003A5FB3 /* VersionChecker.h */; };
 		55FE26330AAD33AB00C4054A /* AudioUnit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 55FE26320AAD33AB00C4054A /* AudioUnit.framework */; };
+		8218679015314D79002986DD /* emualloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 94299936152A5D1900A214B6 /* emualloc.c */; };
 		942998C2152A397B00A214B6 /* ddribble.c in Sources */ = {isa = PBXBuildFile; fileRef = 942998C0152A397B00A214B6 /* ddribble.c */; };
 		942998C3152A397B00A214B6 /* micro3d.c in Sources */ = {isa = PBXBuildFile; fileRef = 942998C1152A397B00A214B6 /* micro3d.c */; };
 		942998C6152A3AB500A214B6 /* micro3d.c in Sources */ = {isa = PBXBuildFile; fileRef = 942998C5152A3AB500A214B6 /* micro3d.c */; };
@@ -6744,7 +6745,7 @@
 		55754F620C5E3BB00035DB3B /* BackgroundUpdater.sm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = BackgroundUpdater.sm; sourceTree = "<group>"; };
 		55785CC70AFAF55D000AE388 /* liblayouts.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblayouts.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		55801E790B530D4F00BB9851 /* JRLog.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = JRLog.h; sourceTree = "<group>"; };
-		55801E7A0B530D4F00BB9851 /* JRLog.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = JRLog.m; sourceTree = "<group>"; };
+		55801E7A0B530D4F00BB9851 /* JRLog.mm */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.objcpp; path = JRLog.mm; sourceTree = "<group>"; };
 		558D9F290AAE70B1007B2A32 /* cpu_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cpu_config.h; sourceTree = "<group>"; };
 		558D9F2B0AAE70E9007B2A32 /* sound_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sound_config.h; sourceTree = "<group>"; };
 		558D9F2D0AAE7117007B2A32 /* config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = config.h; sourceTree = "<group>"; };
@@ -7219,7 +7220,7 @@
 		9429992D152A5AE700A214B6 /* emucore.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = emucore.c; sourceTree = "<group>"; };
 		94299932152A5B8B00A214B6 /* emucore.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = emucore.h; sourceTree = "<group>"; };
 		94299935152A5D1900A214B6 /* emu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = emu.h; sourceTree = "<group>"; };
-		94299936152A5D1900A214B6 /* emualloc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = emualloc.c; sourceTree = "<group>"; };
+		94299936152A5D1900A214B6 /* emualloc.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = emualloc.c; sourceTree = "<group>"; };
 		94299937152A5D1900A214B6 /* emualloc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = emualloc.h; sourceTree = "<group>"; };
 		94299938152A5D1900A214B6 /* validity.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = validity.h; sourceTree = "<group>"; };
 		9429994B152A668900A214B6 /* sdlsync_ntc.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = sdlsync_ntc.c; sourceTree = "<group>"; };
@@ -10890,7 +10891,7 @@
 			isa = PBXGroup;
 			children = (
 				55801E790B530D4F00BB9851 /* JRLog.h */,
-				55801E7A0B530D4F00BB9851 /* JRLog.m */,
+				55801E7A0B530D4F00BB9851 /* JRLog.mm */,
 			);
 			path = JRLog;
 			sourceTree = "<group>";
@@ -15598,7 +15599,7 @@
 				55D4039A0B3664DF00E5E613 /* DDAudioUnitGraph.m in Sources */,
 				55D4039C0B3664DF00E5E613 /* DDAudioUnitNode.m in Sources */,
 				55D4039E0B3664DF00E5E613 /* DDAudioUnitPreset.m in Sources */,
-				55801E7C0B530D4F00BB9851 /* JRLog.m in Sources */,
+				55801E7C0B530D4F00BB9851 /* JRLog.mm in Sources */,
 				55193F4F0B93F5DC004C0C98 /* DDHidAppleRemote.m in Sources */,
 				55193F510B93F5DC004C0C98 /* DDHidDevice.m in Sources */,
 				55193F530B93F5DC004C0C98 /* DDHidElement.m in Sources */,
@@ -15627,6 +15628,7 @@
 				559025230CD613A100B34B42 /* MameMouse.m in Sources */,
 				5533C2FF0D0A7D6D0039BB42 /* MameJoystick.mm in Sources */,
 				9429994C152A668900A214B6 /* sdlsync_ntc.c in Sources */,
+				8218679015314D79002986DD /* emualloc.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
