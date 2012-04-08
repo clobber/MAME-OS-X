@@ -36,6 +36,8 @@
 #import "MameChud.h"X
 
 #include <unistd.h>
+#include <mach/mach.h>
+#include <sdlos.h> //not sure about this
 
 static void osd_set_use_autorelease(BOOL use_autorelease);
 static inline NSAutoreleasePool * allocPool();
@@ -343,3 +345,55 @@ int osd_uchar_from_osdchar(unicode_char *uchar, const char *osdchar, size_t coun
     return count;
 }
 
+//============================================================
+//  osd_get_clipboard_text
+//============================================================
+
+char *osd_get_clipboard_text(void)
+{
+	char *result = NULL;
+    
+	return result;
+}
+
+//============================================================
+//  osd_num_processors
+//============================================================
+
+int osd_num_processors(void)
+{
+	int processors = 1;
+    
+	struct host_basic_info host_basic_info;
+	unsigned int count;
+	kern_return_t r;
+	mach_port_t my_mach_host_self;
+    
+	count = HOST_BASIC_INFO_COUNT;
+	my_mach_host_self = mach_host_self();
+	if ( ( r = host_info(my_mach_host_self, HOST_BASIC_INFO, (host_info_t)(&host_basic_info), &count)) == KERN_SUCCESS )
+	{
+		processors = host_basic_info.avail_cpus;
+	}
+	mach_port_deallocate(mach_task_self(), my_mach_host_self);
+    
+	return processors;
+}
+
+//============================================================
+//  osd_getenv
+//============================================================
+
+char *osd_getenv(const char *name)
+{
+	return getenv(name);
+}
+
+
+//============================================================
+//  osd_wait_for_debugger
+//============================================================
+//void osd_wait_for_debugger(const device_config *device, int firststop)
+void osd_wait_for_debugger(running_device *device, int firststop)
+{
+}
