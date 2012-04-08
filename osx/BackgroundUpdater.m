@@ -34,7 +34,8 @@
 #import "JRLog.h"
 #import "MameVersion.h"
 
-#import "driver.h"
+//#include "driver.h"
+#include "emu.h"
 #import "audit.h"
 
 static NSString * kBackgroundUpdaterIdle = @"BackgroundUpdaterIdle";

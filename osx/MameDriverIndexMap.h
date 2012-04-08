@@ -7,7 +7,8 @@
 //
 
 #import <Cocoa/Cocoa.h>
-#import "driver.h"
+//#include "driver.h"
+#include "emu.h"
 
 @interface MameDriverIndexMap : NSObject
 {

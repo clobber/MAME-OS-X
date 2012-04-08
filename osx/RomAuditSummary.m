@@ -23,7 +23,8 @@
  */
 
 #import "RomAuditSummary.h"
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 
 @implementation RomAuditSummary
 

@@ -25,7 +25,8 @@
 #import "RomAuditWindowController.h"
 #import "RomAuditSummary.h"
 #import "MameConfiguration.h"
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 #include "audit.h"
 
 @interface RomAuditWindowController (Private)

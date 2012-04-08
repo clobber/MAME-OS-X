@@ -23,7 +23,8 @@
  */
 
 #import <Cocoa/Cocoa.h>
-#import "driver.h"
+//#include "driver.h"
+#include "emu.h"
 #import "audit.h"
 
 
