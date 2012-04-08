@@ -593,7 +593,7 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
 
 - (BOOL) isDoubleBuffered: (NSOpenGLPixelFormat *) pixelFormat;
 {
-    long value;
+    int value;
     [pixelFormat getValues: &value
               forAttribute: NSOpenGLPFADoubleBuffer
           forVirtualScreen: 0];
@@ -785,7 +785,7 @@ CVReturn static myCVDisplayLinkOutputCallback(CVDisplayLinkRef displayLink,
 
 - (void) updateSyncToRefreshOnContext: (NSOpenGLContext *) context;
 {
-    long swapInterval = mSyncToRefresh? 1 : 0;
+    int swapInterval = mSyncToRefresh? 1 : 0;
     [context setValues: &swapInterval forParameter: NSOpenGLCPSwapInterval];
 }
 

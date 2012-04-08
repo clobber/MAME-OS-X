@@ -563,7 +563,6 @@
 		550815CA10AD280E008142B8 /* astrof.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0510AD2809008142B8 /* astrof.c */; };
 		550815CB10AD280E008142B8 /* atarifb.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0610AD2809008142B8 /* atarifb.c */; };
 		550815CC10AD280E008142B8 /* atarijsa.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0710AD2809008142B8 /* atarijsa.c */; };
-		550815CD10AD280E008142B8 /* attckufo.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0810AD2809008142B8 /* attckufo.c */; };
 		550815CE10AD280E008142B8 /* avalnche.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0910AD2809008142B8 /* avalnche.c */; };
 		550815CF10AD280E008142B8 /* aztarac.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0A10AD2809008142B8 /* aztarac.c */; };
 		550815D010AD280E008142B8 /* blockade.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E0B10AD2809008142B8 /* blockade.c */; };
@@ -6738,13 +6737,13 @@
 		55744C190AAB4FC800EC1423 /* osinline.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = osinline.h; sourceTree = "<group>"; };
 		55754F430C5E32150035DB3B /* VirtualRingBuffer.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = VirtualRingBuffer.h; sourceTree = "<group>"; };
 		55754F440C5E32150035DB3B /* VirtualRingBuffer.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = VirtualRingBuffer.m; sourceTree = "<group>"; };
-		55754F500C5E348B0035DB3B /* DDCustomOpenGLView.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = DDCustomOpenGLView.h; sourceTree = "<group>"; };
-		55754F510C5E348B0035DB3B /* DDCustomOpenGLView.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = DDCustomOpenGLView.m; sourceTree = "<group>"; };
+		55754F500C5E348B0035DB3B /* DDCustomOpenGLView.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = DDCustomOpenGLView.h; sourceTree = "<group>"; };
+		55754F510C5E348B0035DB3B /* DDCustomOpenGLView.m */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 30; path = DDCustomOpenGLView.m; sourceTree = "<group>"; };
 		55754F5D0C5E3B570035DB3B /* statemap.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = statemap.h; sourceTree = "<group>"; };
 		55754F5E0C5E3B570035DB3B /* statemap.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = statemap.m; sourceTree = "<group>"; };
 		55754F620C5E3BB00035DB3B /* BackgroundUpdater.sm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = BackgroundUpdater.sm; sourceTree = "<group>"; };
 		55785CC70AFAF55D000AE388 /* liblayouts.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = liblayouts.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		55801E790B530D4F00BB9851 /* JRLog.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = JRLog.h; sourceTree = "<group>"; };
+		55801E790B530D4F00BB9851 /* JRLog.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = JRLog.h; sourceTree = "<group>"; };
 		55801E7A0B530D4F00BB9851 /* JRLog.mm */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.objcpp; path = JRLog.mm; sourceTree = "<group>"; };
 		558D9F290AAE70B1007B2A32 /* cpu_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cpu_config.h; sourceTree = "<group>"; };
 		558D9F2B0AAE70E9007B2A32 /* sound_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sound_config.h; sourceTree = "<group>"; };
@@ -13586,7 +13585,6 @@
 				550815CA10AD280E008142B8 /* astrof.c in Sources */,
 				550815CB10AD280E008142B8 /* atarifb.c in Sources */,
 				550815CC10AD280E008142B8 /* atarijsa.c in Sources */,
-				550815CD10AD280E008142B8 /* attckufo.c in Sources */,
 				550815CE10AD280E008142B8 /* avalnche.c in Sources */,
 				550815CF10AD280E008142B8 /* aztarac.c in Sources */,
 				550815D010AD280E008142B8 /* blockade.c in Sources */,
