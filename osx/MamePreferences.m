@@ -25,6 +25,8 @@
 #import "MamePreferences.h"
 #import "MameConfiguration.h"
 #import "MameVersion.h"
+#include <mach/mach_host.h>
+#include <mach/host_info.h>
 
 @interface MamePreferences (Private)
 

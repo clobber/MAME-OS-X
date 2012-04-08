@@ -22,7 +22,8 @@
  * SOFTWARE.
  */
 
-#include "mame.h"
+//#include "mame.h"
+#include "emu.h"
 #include "audit.h"
 
 void link_symbols(void)
