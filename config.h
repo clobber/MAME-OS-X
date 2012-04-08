@@ -22,4 +22,6 @@
 #define _scalb scalb
 #define CRLF 2
 
+#define PTR64 1
+
 #endif

@@ -16684,7 +16684,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 555329F30B027FBD0092FC09 /* versions.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
@@ -16711,6 +16711,7 @@
 				);
 				PER_ARCH_CFLAGS_ppc = "-mlong-branch";
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = x86_64;
 			};
 			name = "Debug [Instrumented]";
 		};
@@ -16718,7 +16719,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 555329F30B027FBD0092FC09 /* versions.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
@@ -16744,6 +16745,7 @@
 				);
 				PER_ARCH_CFLAGS_ppc = "-mlong-branch";
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = x86_64;
 			};
 			name = Debug;
 		};
@@ -16751,7 +16753,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 555329F30B027FBD0092FC09 /* versions.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
 				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
@@ -16772,8 +16774,9 @@
 					"$(SYMROOT)/layouts",
 				);
 				MY_SCRIPT_DIR = "${SRCROOT}/tools";
-				OTHER_CFLAGS = "";
+				OTHER_CFLAGS = "-DPTR64";
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = x86_64;
 			};
 			name = Release;
 		};
