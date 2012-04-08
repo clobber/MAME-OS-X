@@ -13,3 +13,8 @@ void *osd_malloc(size_t size)
 {
     return malloc(size);
 }
+
+void osd_free(void *ptr)
+{
+    free(ptr);
+}
