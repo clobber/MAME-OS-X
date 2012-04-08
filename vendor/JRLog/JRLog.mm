@@ -233,7 +233,7 @@ NSMapTable *gClassLoggingLevels = NULL;
 + (JRLogLevel)classJRLogLevel {
 	void *mapValue = NSMapGet(gClassLoggingLevels, self);
 	if (mapValue) {
-		return (JRLogLevel)(int)mapValue;
+		return (JRLogLevel)(NSInteger)mapValue;
 	} else {
 		Class superclass = [self superclass];
 		return superclass ? [superclass classJRLogLevel] : JRLogLevel_UNSET;

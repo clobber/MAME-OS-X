@@ -1288,7 +1288,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // Y-coordinate from Cocoa to CG screen coordinates.
     NSScreen * screen = [window screen];
     CGDirectDisplayID display =
-        (CGDirectDisplayID)[[[screen deviceDescription] objectForKey: @"NSScreenNumber"] pointerValue];
+        (CGDirectDisplayID)[[[screen deviceDescription] objectForKey: @"NSScreenNumber"] intValue];
     
     size_t height = CGDisplayPixelsHigh(display);
     CGPoint midpointInDisplayCoordinates =

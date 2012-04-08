@@ -161,7 +161,7 @@ static INT32 keyboardGetState(void *device_internal, void *item_internal)
     if (!(*keyboard->mEnabled))
         return 0;
     
-    int key = (int) item_internal;
+    int key = (NSInteger) item_internal;
     return keyboard->mKeyStates[key];
 }
 

@@ -27,6 +27,7 @@
 
 #include "osdepend.h"
 #include "eigccx86.h"
+#include "eminline.h"
 #include "attotime.h"
 //#include "uiinput.h"
 #include "unicode.h"

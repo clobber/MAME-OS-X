@@ -33,7 +33,7 @@
 #import "MameFileManager.h"
 #import <Foundation/Foundation.h>
 #import "JRLog.h"
-#import "MameChud.h"X
+#import "MameChud.h"
 
 #include <unistd.h>
 #include <mach/mach.h>

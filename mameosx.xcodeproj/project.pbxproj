@@ -2572,9 +2572,7 @@
 		5533C4540D0B41420039BB42 /* Vector.png in Resources */ = {isa = PBXBuildFile; fileRef = 5533C4530D0B41420039BB42 /* Vector.png */; };
 		5533C4550D0B41420039BB42 /* Vector.png in Resources */ = {isa = PBXBuildFile; fileRef = 5533C4530D0B41420039BB42 /* Vector.png */; };
 		5537EF490BBEACC2001A390F /* FrameMovieExporter.h in Headers */ = {isa = PBXBuildFile; fileRef = 5537EF470BBEACC2001A390F /* FrameMovieExporter.h */; };
-		5537EF4A0BBEACC2001A390F /* FrameMovieExporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 5537EF480BBEACC2001A390F /* FrameMovieExporter.m */; };
 		5537EF660BBEAD6C001A390F /* FrameCompressor.h in Headers */ = {isa = PBXBuildFile; fileRef = 5537EF640BBEAD6C001A390F /* FrameCompressor.h */; };
-		5537EF670BBEAD6C001A390F /* FrameCompressor.m in Sources */ = {isa = PBXBuildFile; fileRef = 5537EF650BBEAD6C001A390F /* FrameCompressor.m */; };
 		5537EFDB0BBEAE37001A390F /* QuickTime.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5537EF890BBEAE14001A390F /* QuickTime.framework */; };
 		5537F0F40BBEB35E001A390F /* FrameReader.h in Headers */ = {isa = PBXBuildFile; fileRef = 5537F0F20BBEB35E001A390F /* FrameReader.h */; };
 		5537F0F50BBEB35E001A390F /* FrameReader.m in Sources */ = {isa = PBXBuildFile; fileRef = 5537F0F30BBEB35E001A390F /* FrameReader.m */; };
@@ -15618,8 +15616,6 @@
 				55193F670B93F5EC004C0C98 /* NSXReturnThrowError.m in Sources */,
 				55CA69090BA3CF390012CF7B /* DDHidKeyboard.m in Sources */,
 				5567B2E40BBA336A00EA2072 /* osd_core_osx.mm in Sources */,
-				5537EF4A0BBEACC2001A390F /* FrameMovieExporter.m in Sources */,
-				5537EF670BBEAD6C001A390F /* FrameCompressor.m in Sources */,
 				5537F0F50BBEB35E001A390F /* FrameReader.m in Sources */,
 				55F15B750BC01B6400366C65 /* MameEffectFilter.m in Sources */,
 				55B8C6F70C2ADB3C00B1CD96 /* osxutils.m in Sources */,

@@ -41,7 +41,7 @@ static void cv_assert(CVReturn cr, NSString * message)
 {
     const render_texinfo * texinfo = &primitive->texture;
     UINT32 flags = primitive->flags;
-    return (UINT32)texinfo->base ^ (flags & (PRIMFLAG_BLENDMODE_MASK | PRIMFLAG_TEXFORMAT_MASK));
+    return ((UINT32*)texinfo->base)[0] ^ (flags & (PRIMFLAG_BLENDMODE_MASK | PRIMFLAG_TEXFORMAT_MASK));
 }
 
 - (id) initWithPrimitive: (const render_primitive *) primitive
