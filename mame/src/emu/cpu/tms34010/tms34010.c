@@ -7,6 +7,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "tms34010.h"
 
@@ -61,10 +62,10 @@ struct _tms34010_state
 	UINT8				external_host_access;
 	UINT8				executing;
 	cpu_irq_callback	irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const tms34010_config *config;
-	const device_config *screen;
+	running_device *screen;
 	emu_timer *			scantimer;
 	int					icount;
 
@@ -81,7 +82,7 @@ struct _tms34010_state
 	cpu_state_table		state;
 };
 
-INLINE tms34010_state *get_safe_token(const device_config *device)
+INLINE tms34010_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -598,7 +599,7 @@ static void check_interrupt(tms34010_state *tms)
 	/* check for NMI first */
 	if (IOREG(tms, REG_HSTCTLH) & 0x0100)
 	{
-		LOG(("TMS34010 '%s' takes NMI\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes NMI\n", tms->device->tag()));
 
 		/* ack the NMI */
 		IOREG(tms, REG_HSTCTLH) &= ~0x0100;
@@ -625,28 +626,28 @@ static void check_interrupt(tms34010_state *tms)
 	/* host interrupt */
 	if (irq & TMS34010_HI)
 	{
-		LOG(("TMS34010 '%s' takes HI\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes HI\n", tms->device->tag()));
 		vector = 0xfffffec0;
 	}
 
 	/* display interrupt */
 	else if (irq & TMS34010_DI)
 	{
-		LOG(("TMS34010 '%s' takes DI\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes DI\n", tms->device->tag()));
 		vector = 0xfffffea0;
 	}
 
 	/* window violation interrupt */
 	else if (irq & TMS34010_WV)
 	{
-		LOG(("TMS34010 '%s' takes WV\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes WV\n", tms->device->tag()));
 		vector = 0xfffffe80;
 	}
 
 	/* external 1 interrupt */
 	else if (irq & TMS34010_INT1)
 	{
-		LOG(("TMS34010 '%s' takes INT1\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes INT1\n", tms->device->tag()));
 		vector = 0xffffffc0;
 		irqline = 0;
 	}
@@ -654,7 +655,7 @@ static void check_interrupt(tms34010_state *tms)
 	/* external 2 interrupt */
 	else if (irq & TMS34010_INT2)
 	{
-		LOG(("TMS34010 '%s' takes INT2\n", tms->device->tag));
+		LOG(("TMS34010 '%s' takes INT2\n", tms->device->tag()));
 		vector = 0xffffffa0;
 		irqline = 1;
 	}
@@ -682,7 +683,7 @@ static void check_interrupt(tms34010_state *tms)
 
 static CPU_INIT( tms34010 )
 {
-	const tms34010_config *configdata = device->static_config ? (const tms34010_config *)device->static_config : &default_config;
+	const tms34010_config *configdata = device->baseconfig().static_config ? (const tms34010_config *)device->baseconfig().static_config : &default_config;
 	tms34010_state *tms = get_safe_token(device);
 
 	tms->external_host_access = FALSE;
@@ -690,8 +691,8 @@ static CPU_INIT( tms34010 )
 	tms->config = configdata;
 	tms->irq_callback = irqcallback;
 	tms->device = device;
-	tms->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	tms->screen = devtag_get_device(device->machine, configdata->screen_tag);
+	tms->program = device->space(AS_PROGRAM);
+	tms->screen = device->machine->device(configdata->screen_tag);
 
 	/* set up the state table */
 	tms->state = state_table_template;
@@ -724,7 +725,7 @@ static CPU_RESET( tms34010 )
 	/* zap the state and copy in the config pointer */
 	tms34010_state *tms = get_safe_token(device);
 	const tms34010_config *config = tms->config;
-	const device_config *screen = tms->screen;
+	running_device *screen = tms->screen;
 	UINT16 *shiftreg = tms->shiftreg;
 	cpu_irq_callback save_irqcallback = tms->irq_callback;
 	emu_timer *save_scantimer = tms->scantimer;
@@ -738,7 +739,7 @@ static CPU_RESET( tms34010 )
 	tms->irq_callback = save_irqcallback;
 	tms->scantimer = save_scantimer;
 	tms->device = device;
-	tms->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	tms->program = device->space(AS_PROGRAM);
 	tms->state = savetable;
 
 	/* fetch the initial PC and reset the state */
@@ -749,7 +750,7 @@ static CPU_RESET( tms34010 )
 	/* the first time we are run */
 	tms->reset_deferred = tms->config->halt_on_reset;
 	if (tms->config->halt_on_reset)
-		tms34010_io_register_w(memory_find_address_space(device, ADDRESS_SPACE_PROGRAM), REG_HSTCTLH, 0x8000, 0xffff);
+		tms34010_io_register_w(device->space(AS_PROGRAM), REG_HSTCTLH, 0x8000, 0xffff);
 }
 
 
@@ -780,7 +781,7 @@ static CPU_EXIT( tms34010 )
 
 static void set_irq_line(tms34010_state *tms, int irqline, int linestate)
 {
-	LOG(("TMS34010 '%s' set irq line %d state %d\n", tms->device->tag, irqline, linestate));
+	LOG(("TMS34010 '%s' set irq line %d state %d\n", tms->device->tag(), irqline, linestate));
 
 	/* set the pending interrupt */
 	switch (irqline)
@@ -814,7 +815,7 @@ static TIMER_CALLBACK( internal_interrupt_callback )
 
 	/* call through to the CPU to generate the int */
 	IOREG(tms, REG_INTPEND) |= type;
-	LOG(("TMS34010 '%s' set internal interrupt $%04x\n", tms->device->tag, type));
+	LOG(("TMS34010 '%s' set internal interrupt $%04x\n", tms->device->tag(), type));
 
 	/* generate triggers so that spin loops can key off them */
 	cpu_triggerint(tms->device);
@@ -1095,7 +1096,7 @@ static TIMER_CALLBACK( scanline_callback )
 }
 
 
-void tms34010_get_display_params(const device_config *cpu, tms34010_display_params *params)
+void tms34010_get_display_params(running_device *cpu, tms34010_display_params *params)
 {
 	tms34010_state *tms = get_safe_token(cpu);
 
@@ -1134,7 +1135,7 @@ VIDEO_UPDATE( tms340x0 )
 	pen_t blackpen = get_black_pen(screen->machine);
 	tms34010_display_params params;
 	tms34010_state *tms = NULL;
-	const device_config *cpu;
+	running_device *cpu;
 	int x;
 
 	/* find the owning CPU */
@@ -1150,7 +1151,7 @@ VIDEO_UPDATE( tms340x0 )
 		}
 	}
 	if (tms == NULL)
-		fatalerror("Unable to locate matching CPU for screen '%s'\n", screen->tag);
+		fatalerror("Unable to locate matching CPU for screen '%s'\n", screen->tag());
 
 	/* get the display parameters for the screen */
 	tms34010_get_display_params(tms->device, &params);
@@ -1247,7 +1248,7 @@ WRITE16_HANDLER( tms34010_io_register_w )
 			/* if the CPU is halting itself, stop execution right away */
 			if ((data & 0x8000) && !tms->external_host_access)
 				tms->icount = 0;
-			cputag_set_input_line(tms->device->machine, tms->device->tag, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
+			cpu_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
 
 			/* NMI issued? */
 			if (data & 0x0100)
@@ -1398,7 +1399,7 @@ WRITE16_HANDLER( tms34020_io_register_w )
 			/* if the CPU is halting itself, stop execution right away */
 			if ((data & 0x8000) && !tms->external_host_access)
 				tms->icount = 0;
-			cputag_set_input_line(tms->device->machine, tms->device->tag, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
+			cpu_set_input_line(tms->device, INPUT_LINE_HALT, (data & 0x8000) ? ASSERT_LINE : CLEAR_LINE);
 
 			/* NMI issued? */
 			if (data & 0x0100)
@@ -1608,7 +1609,7 @@ static STATE_POSTLOAD( tms34010_state_postload )
     HOST INTERFACE WRITES
 ***************************************************************************/
 
-void tms34010_host_w(const device_config *cpu, int reg, int data)
+void tms34010_host_w(running_device *cpu, int reg, int data)
 {
 	const address_space *space;
 	tms34010_state *tms = get_safe_token(cpu);
@@ -1645,7 +1646,7 @@ void tms34010_host_w(const device_config *cpu, int reg, int data)
 		/* control register */
 		case TMS34010_HOST_CONTROL:
 			tms->external_host_access = TRUE;
-			space = memory_find_address_space(tms->device, ADDRESS_SPACE_PROGRAM);
+			space = tms->device->space(AS_PROGRAM);
 			tms34010_io_register_w(space, REG_HSTCTLH, data & 0xff00, 0xffff);
 			tms34010_io_register_w(space, REG_HSTCTLL, data & 0x00ff, 0xffff);
 			tms->external_host_access = FALSE;
@@ -1664,7 +1665,7 @@ void tms34010_host_w(const device_config *cpu, int reg, int data)
     HOST INTERFACE READS
 ***************************************************************************/
 
-int tms34010_host_r(const device_config *cpu, int reg)
+int tms34010_host_r(running_device *cpu, int reg)
 {
 	tms34010_state *tms = get_safe_token(cpu);
 	unsigned int addr;
@@ -1757,9 +1758,9 @@ CPU_GET_INFO( tms34010 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10000;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 16;						break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;						break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 		info->i = 3;						break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 16;						break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;						break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 3;						break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = (IOREG(tms, REG_INTPEND) & TMS34010_INT1) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + 1:				info->i = (IOREG(tms, REG_INTPEND) & TMS34010_INT2) ? ASSERT_LINE : CLEAR_LINE; break;

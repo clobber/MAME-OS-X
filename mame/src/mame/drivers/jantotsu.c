@@ -94,14 +94,18 @@ dumped by sayu
 
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "sound/msm5205.h"
 
-typedef struct _jantotsu_state jantotsu_state;
-struct _jantotsu_state
+class jantotsu_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, jantotsu_state(machine)); }
+
+	jantotsu_state(running_machine &machine) { }
+
 	/* video-related */
 	UINT8    *bitmap;
 	UINT8    vram_bank, col_bank;
@@ -286,7 +290,7 @@ static WRITE8_DEVICE_HANDLER( jan_adpcm_w )
 	}
 }
 
-static void jan_adpcm_int( const device_config *device )
+static void jan_adpcm_int( running_device *device )
 {
 	jantotsu_state *state = (jantotsu_state *)device->machine->driver_data;
 

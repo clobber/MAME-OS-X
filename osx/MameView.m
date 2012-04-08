@@ -1648,6 +1648,7 @@ enum {
         //    Find out what IOKit knows about this display
         NSDictionary * displayDict = (NSDictionary *)
             IOCreateDisplayInfoDictionary(displayPort, 0);
+            //IODisplayCreateInfoDictionary(displayPort, 0);
         if (displayDict != nil)
         {
             JRLogDebug(@"displayDict: %@", displayDict);

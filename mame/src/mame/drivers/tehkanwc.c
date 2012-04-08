@@ -88,7 +88,7 @@ TO DO :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/msm5205.h"
@@ -208,7 +208,7 @@ static WRITE8_DEVICE_HANDLER( msm_reset_w )
 	msm5205_reset_w(device,data ? 0 : 1);
 }
 
-static void tehkanwc_adpcm_int(const device_config *device)
+static void tehkanwc_adpcm_int(running_device *device)
 {
 	static int toggle;
 

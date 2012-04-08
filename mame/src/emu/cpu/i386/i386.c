@@ -10,6 +10,7 @@
         Cyrix MediaGX
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "i386priv.h"
 #include "i386.h"
@@ -93,7 +94,7 @@ static UINT32 get_flags(i386_state *cpustate)
 	f |= cpustate->IOP1 << 12;
 	f |= cpustate->IOP2 << 13;
 	f |= cpustate->NT << 14;
-	return (cpustate->eflags & 0xFFFF0000) | (f & 0xFFFF);
+	return (cpustate->eflags & cpustate->eflags_mask) | (f & 0xffff);
 }
 
 static void set_flags(i386_state *cpustate, UINT32 f )
@@ -110,6 +111,7 @@ static void set_flags(i386_state *cpustate, UINT32 f )
 	cpustate->IOP1 = (f & 0x1000) ? 1 : 0;
 	cpustate->IOP2 = (f & 0x2000) ? 1 : 0;
 	cpustate->NT = (f & 0x4000) ? 1 : 0;
+	cpustate->eflags = f & cpustate->eflags_mask;
 }
 
 static void sib_byte(i386_state *cpustate,UINT8 mod, UINT32* out_ea, UINT8* out_segment)
@@ -461,7 +463,7 @@ static void I386OP(decode_two_byte)(i386_state *cpustate)
 
 static UINT64 i386_debug_segbase(void *globalref, void *ref, UINT32 params, const UINT64 *param)
 {
-	const device_config *device = (const device_config *)ref;
+	running_device *device = (running_device *)ref;
 	i386_state *cpustate = get_safe_token(device);
 	UINT32 result;
 	I386_SREG seg;
@@ -482,7 +484,7 @@ static UINT64 i386_debug_segbase(void *globalref, void *ref, UINT32 params, cons
 
 static UINT64 i386_debug_seglimit(void *globalref, void *ref, UINT32 params, const UINT64 *param)
 {
-	const device_config *device = (const device_config *)ref;
+	running_device *device = (running_device *)ref;
 	i386_state *cpustate = get_safe_token(device);
 	UINT32 result = 0;
 	I386_SREG seg;
@@ -507,7 +509,7 @@ static CPU_DEBUG_INIT( i386 )
 
 static STATE_POSTLOAD( i386_postload )
 {
-	const device_config *device = (const device_config *)param;
+	running_device *device = (running_device *)param;
 	i386_state *cpustate = get_safe_token(device);
 	int i;
 	for (i = 0; i < 6; i++)
@@ -546,8 +548,8 @@ static CPU_INIT( i386 )
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	state_save_register_device_item_array(device, 0,	cpustate->reg.d);
 	state_save_register_device_item(device, 0, cpustate->sreg[ES].selector);
@@ -645,8 +647,8 @@ static CPU_RESET( i386 )
 	memset( cpustate, 0, sizeof(*cpustate) );
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->sreg[CS].selector = 0xf000;
 	cpustate->sreg[CS].base		= 0xffff0000;
@@ -661,12 +663,17 @@ static CPU_RESET( i386 )
 
 	cpustate->a20_mask = ~0;
 
-	cpustate->cr[0] = 0;
+	cpustate->cr[0] = 0x7ffffff0; // reserved bits set to 1
 	cpustate->eflags = 0;
+	cpustate->eflags_mask = 0x00030000;
 	cpustate->eip = 0xfff0;
 
-	REG32(EAX) = 0x0308;	// Intel 386, stepping D1
-	REG32(EDX) = 0;
+	// [11:8] Family
+	// [ 7:4] Model
+	// [ 3:0] Stepping ID
+	// Family 3 (386), Model 0 (DX), Stepping 8 (D1)
+	REG32(EAX) = 0;
+	REG32(EDX) = (3 << 8) | (0 << 4) | (8);
 
 	build_opcode_table(cpustate, OP_I386);
 	cpustate->cycle_table_rm = cycle_table_rm[CPU_CYCLES_I386];
@@ -878,17 +885,17 @@ CPU_GET_INFO( i386 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 12;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
@@ -1093,8 +1100,8 @@ static CPU_RESET( i486 )
 	memset( cpustate, 0, sizeof(*cpustate) );
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->sreg[CS].selector = 0xf000;
 	cpustate->sreg[CS].base		= 0xffff0000;
@@ -1110,12 +1117,17 @@ static CPU_RESET( i486 )
 
 	cpustate->a20_mask = ~0;
 
-	cpustate->cr[0] = 0;
+	cpustate->cr[0] = 0x00000010;
 	cpustate->eflags = 0;
+	cpustate->eflags_mask = 0x00070000;
 	cpustate->eip = 0xfff0;
 
-	REG32(EAX) = 0x0308;	// Intel 386, stepping D1
-	REG32(EDX) = 0;
+	// [11:8] Family
+	// [ 7:4] Model
+	// [ 3:0] Stepping ID
+	// Family 4 (486), Model 0/1 (DX), Stepping 3
+	REG32(EAX) = 0;
+	REG32(EDX) = (4 << 8) | (0 << 4) | (3);
 
 	build_opcode_table(cpustate, OP_I386 | OP_FPU | OP_I486);
 	cpustate->cycle_table_rm = cycle_table_rm[CPU_CYCLES_I486];
@@ -1204,8 +1216,8 @@ static CPU_RESET( pentium )
 	memset( cpustate, 0, sizeof(*cpustate) );
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->sreg[CS].selector = 0xf000;
 	cpustate->sreg[CS].base		= 0xffff0000;
@@ -1221,12 +1233,17 @@ static CPU_RESET( pentium )
 
 	cpustate->a20_mask = ~0;
 
-	cpustate->cr[0] = 0;
+	cpustate->cr[0] = 0x00000010;
 	cpustate->eflags = 0;
+	cpustate->eflags_mask = 0x003b0000;
 	cpustate->eip = 0xfff0;
 
-	REG32(EAX) = 0x0308;	// Intel 386, stepping D1
-	REG32(EDX) = 0;
+	// [11:8] Family
+	// [ 7:4] Model
+	// [ 3:0] Stepping ID
+	// Family 5 (Pentium), Model 2 (75 - 200MHz), Stepping 5
+	REG32(EAX) = 0;
+	REG32(EDX) = (5 << 8) | (2 << 4) | (5);
 
 	build_opcode_table(cpustate, OP_I386 | OP_FPU | OP_I486 | OP_PENTIUM);
 	cpustate->cycle_table_rm = cycle_table_rm[CPU_CYCLES_PENTIUM];
@@ -1237,12 +1254,7 @@ static CPU_RESET( pentium )
 	cpustate->cpuid_id2 = 0x6c65746e;	// ntel
 
 	cpustate->cpuid_max_input_value_eax = 0x01;
-
-	// [11:8] Family
-	// [ 7:4] Model
-	// [ 3:0] Stepping ID
-	// Family 5 (Pentium), Model 2 (75 - 200MHz), Stepping 1
-	cpustate->cpu_version = (5 << 8) | (2 << 4) | (1);
+	cpustate->cpu_version = REG32(EDX);
 
 	// [ 0:0] FPU on chip
 	// [ 2:2] I/O breakpoints
@@ -1250,7 +1262,7 @@ static CPU_RESET( pentium )
 	// [ 5:5] Pentium CPU style model specific registers
 	// [ 7:7] Machine Check Exception
 	// [ 8:8] CMPXCHG8B instruction
-	cpustate->feature_flags = 0x00000000;
+	cpustate->feature_flags = 0x000001bf;
 
 	CHANGE_PC(cpustate,cpustate->eip);
 }
@@ -1335,8 +1347,8 @@ static CPU_RESET( mediagx )
 	memset( cpustate, 0, sizeof(*cpustate) );
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->sreg[CS].selector = 0xf000;
 	cpustate->sreg[CS].base		= 0xffff0000;
@@ -1352,12 +1364,17 @@ static CPU_RESET( mediagx )
 
 	cpustate->a20_mask = ~0;
 
-	cpustate->cr[0] = 0;
+	cpustate->cr[0] = 0x00000010;
 	cpustate->eflags = 0;
+	cpustate->eflags_mask = 0x00270000; /* TODO: is this correct? */
 	cpustate->eip = 0xfff0;
 
-	REG32(EAX) = 0x0308;	// Intel 386, stepping D1
-	REG32(EDX) = 0;
+	// [11:8] Family
+	// [ 7:4] Model
+	// [ 3:0] Stepping ID
+	// Family 4, Model 4 (MediaGX)
+	REG32(EAX) = 0;
+	REG32(EDX) = (4 << 8) | (4 << 4) | (1);	/* TODO: is this correct? */
 
 	build_opcode_table(cpustate, OP_I386 | OP_FPU | OP_I486 | OP_PENTIUM | OP_CYRIX);
 	cpustate->cycle_table_rm = cycle_table_rm[CPU_CYCLES_MEDIAGX];
@@ -1368,19 +1385,9 @@ static CPU_RESET( mediagx )
 	cpustate->cpuid_id2 = 0x6d616574;	// tead
 
 	cpustate->cpuid_max_input_value_eax = 0x01;
-
-	// [11:8] Family
-	// [ 7:4] Model
-	// [ 3:0] Stepping ID
-	// Family 4, Model 4 (MediaGX)
-	cpustate->cpu_version = (4 << 8) | (4 << 4) | (1);
+	cpustate->cpu_version = REG32(EDX);
 
 	// [ 0:0] FPU on chip
-	// [ 2:2] I/O breakpoints
-	// [ 4:4] Time Stamp Counter
-	// [ 5:5] Pentium CPU style model specific registers
-	// [ 7:7] Machine Check Exception
-	// [ 8:8] CMPXCHG8B instruction
 	cpustate->feature_flags = 0x00000001;
 
 	CHANGE_PC(cpustate,cpustate->eip);

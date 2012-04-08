@@ -4,7 +4,7 @@
  *
  *************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/atarig42.h"
 #include "cpu/tms32010/tms32010.h"
 #include "asic65.h"
@@ -31,7 +31,7 @@ static struct _asic65_t
 	UINT8	last_bank;
 
 	/* ROM-based interface states */
-	const device_config *cpu;
+	running_device *cpu;
 	UINT8	tfull;
 	UINT8	_68full;
 	UINT8	cmd;
@@ -131,7 +131,7 @@ void asic65_config(running_machine *machine, int asictype)
 	asic65.type = asictype;
 	asic65.yorigin = 0x1800;
 	if (asic65.type == ASIC65_ROMBASED)
-		asic65.cpu = cputag_get_cpu(machine, "asic65");
+		asic65.cpu = devtag_get_device(machine, "asic65");
 }
 
 

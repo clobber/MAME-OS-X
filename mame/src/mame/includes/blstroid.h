@@ -6,9 +6,13 @@
 
 #include "machine/atarigen.h"
 
-typedef struct _blstroid_state blstroid_state;
-struct _blstroid_state
+class blstroid_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, blstroid_state(machine)); }
+
+	blstroid_state(running_machine &machine) { }
+
 	atarigen_state	atarigen;
 
 	UINT16 *		priorityram;
@@ -20,4 +24,4 @@ struct _blstroid_state
 VIDEO_START( blstroid );
 VIDEO_UPDATE( blstroid );
 
-void blstroid_scanline_update(const device_config *screen, int scanline);
+void blstroid_scanline_update(running_device *screen, int scanline);

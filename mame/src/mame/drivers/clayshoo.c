@@ -12,14 +12,18 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
 
 
-typedef struct _clayshoo_state clayshoo_state;
-struct _clayshoo_state
+class clayshoo_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, clayshoo_state(machine)); }
+
+	clayshoo_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *   videoram;
 	size_t    videoram_size;
@@ -96,7 +100,7 @@ static TIMER_CALLBACK( reset_analog_bit )
 }
 
 
-static attotime compute_duration( const device_config *device, int analog_pos )
+static attotime compute_duration( running_device *device, int analog_pos )
 {
 	/* the 58 comes from the length of the loop used to
        read the analog position */

@@ -62,13 +62,17 @@ Notes:
 
 *********************************************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/h83002/h8.h"
 
-typedef struct _lastfght_state lastfght_state;
-struct _lastfght_state
+class lastfght_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, lastfght_state(machine)); }
+
+	lastfght_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  colorram;
 //  UINT8 *  nvram; // currently this uses generic nvram handling
@@ -84,7 +88,7 @@ struct _lastfght_state
 	UINT16 c00006;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

@@ -124,7 +124,7 @@ Todo:
 Find lamps/reels after UPD changes.
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "video/awpvid.h"
 #include "cpu/mcs51/mcs51.h"
@@ -193,7 +193,7 @@ static const UINT32 banks[4] = { 0, 0x40000/2, 0x20000/2, 0x60000/2 };
 
 static struct
 {
-	const device_config *duart68681;
+	running_device *duart68681;
 } maygayv1_devices;
 
 #define DRAM_BANK_SEL		(banks[(VREG(DSBA) >> 7) & 3])
@@ -893,7 +893,7 @@ INPUT_PORTS_END
 
 ***************************************************************************/
 
-static void duart_irq_handler(const device_config *device, UINT8 vector)
+static void duart_irq_handler(running_device *device, UINT8 vector)
 {
 	cputag_set_input_line_and_vector(device->machine, "maincpu", 5, ASSERT_LINE, vector);
 //  cputag_set_input_line(device->machine, "maincpu", 5, state ? ASSERT_LINE : CLEAR_LINE);
@@ -901,7 +901,7 @@ static void duart_irq_handler(const device_config *device, UINT8 vector)
 
 static int d68681_val;
 
-static void duart_tx(const device_config *device, int channel, UINT8 data)
+static void duart_tx(running_device *device, int channel, UINT8 data)
 {
 	if (channel == 0)
 	{
@@ -920,12 +920,12 @@ static const duart68681_config maygayv1_duart68681_config =
 };
 
 
-static int data_to_i8031(const device_config *device)
+static int data_to_i8031(running_device *device)
 {
 	return d68681_val;
 }
 
-static void data_from_i8031(const device_config *device, int data)
+static void data_from_i8031(running_device *device, int data)
 {
 	duart68681_rx_data(maygayv1_devices.duart68681, 0, data);
 }
@@ -969,8 +969,8 @@ static MACHINE_START( maygayv1 )
 
 //  duart_68681_init(DUART_CLOCK, duart_irq_handler, duart_tx);
 
-	i8051_set_serial_tx_callback(cputag_get_cpu(machine, "soundcpu"), data_from_i8031);
-	i8051_set_serial_rx_callback(cputag_get_cpu(machine, "soundcpu"), data_to_i8031);
+	i8051_set_serial_tx_callback(devtag_get_device(machine, "soundcpu"), data_from_i8031);
+	i8051_set_serial_rx_callback(devtag_get_device(machine, "soundcpu"), data_to_i8031);
 }
 
 static MACHINE_RESET( maygayv1 )
@@ -1106,6 +1106,6 @@ static DRIVER_INIT( screenpl )
 	p1 = p3 = 0xff;
 }
 
-GAME( 1991, screenpl, 0,        maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 4.0)",               GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )
-GAME( 1991, screenp1, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9)",               GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )
-GAME( 1991, screenp2, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9, Isle of Man)",  GAME_IMPERFECT_SOUND|GAME_REQUIRES_ARTWORK )
+GAME( 1991, screenpl, 0,        maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 4.0)",               GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_REQUIRES_ARTWORK )
+GAME( 1991, screenp1, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9)",               GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_REQUIRES_ARTWORK )
+GAME( 1991, screenp2, screenpl, maygayv1, screenpl, screenpl, ROT0, "Maygay", "Screen Play (ver. 1.9, Isle of Man)",  GAME_NOT_WORKING | GAME_IMPERFECT_SOUND | GAME_REQUIRES_ARTWORK )

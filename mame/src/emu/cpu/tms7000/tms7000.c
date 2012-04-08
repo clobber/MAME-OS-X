@@ -28,8 +28,7 @@
 // SJE: Fixed a mistake in tms70x0_pf_w where the wrong register was referenced
 // SJE: Implemented internal register file
 
-#include "cpuintrf.h"
-#include "cpuexec.h"
+#include "emu.h"
 #include "debugger.h"
 #include "tms7000.h"
 
@@ -46,7 +45,7 @@ static void tms7000_check_IRQ_lines(tms7000_state *cpustate);
 static void tms7000_do_interrupt( tms7000_state *cpustate, UINT16 address, UINT8 line );
 static CPU_EXECUTE( tms7000 );
 static CPU_EXECUTE( tms7000_exl );
-static void tms7000_service_timer1( const device_config *device );
+static void tms7000_service_timer1( running_device *device );
 static UINT16 bcd_add( UINT16 a, UINT16 b );
 static UINT16 bcd_tencomp( UINT16 a );
 static UINT16 bcd_sub( UINT16 a, UINT16 b);
@@ -74,7 +73,7 @@ struct _tms7000_state
 	UINT8		rf[0x80];	/* Register file (SJE) */
 	UINT8		pf[0x100];	/* Perpherial file */
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int			icount;
@@ -86,7 +85,7 @@ struct _tms7000_state
 	UINT8		idle_state;	/* Set after the execution of an idle instruction */
 };
 
-INLINE tms7000_state *get_safe_token(const device_config *device)
+INLINE tms7000_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -167,8 +166,8 @@ static CPU_INIT( tms7000 )
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	memset(cpustate->pf, 0, 0x100);
 	memset(cpustate->rf, 0, 0x80);
@@ -282,15 +281,15 @@ CPU_GET_INFO( tms7000 )
         case CPUINFO_INT_MIN_CYCLES:	info->i = 1;	break;
         case CPUINFO_INT_MAX_CYCLES:	info->i = 48;	break; /* 48 represents the multiply instruction, the next highest is 17 */
 
-        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;	break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:	info->i = 16;	break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:	info->i = 0;	break;
-        case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;	break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;	break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;	break;
-        case CPUINFO_INT_DATABUS_WIDTH_IO:	info->i = 8;	break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_IO:	info->i = 8;	break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_IO:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;	break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:	info->i = 8;	break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:	info->i = 0;	break;
 
         case CPUINFO_INT_INPUT_STATE + TMS7000_IRQ1_LINE:	info->i = cpustate->irq_state[TMS7000_IRQ1_LINE]; break;
         case CPUINFO_INT_INPUT_STATE + TMS7000_IRQ2_LINE:	info->i = cpustate->irq_state[TMS7000_IRQ2_LINE]; break;
@@ -316,7 +315,7 @@ CPU_GET_INFO( tms7000 )
         case CPUINFO_FCT_BURN:	info->burn = NULL;	/* Not supported */break;
         case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(tms7000);	break;
         case CPUINFO_PTR_INSTRUCTION_COUNTER:	info->icount = &cpustate->icount;	break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(tms7000_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(tms7000_mem); break;
 
         /* --- the following bits of info are returned as NULL-terminated strings --- */
         case DEVINFO_STR_NAME:	strcpy(info->s, "TMS7000"); break;
@@ -367,7 +366,7 @@ void tms7000_set_irq_line(tms7000_state *cpustate, int irqline, int state)
 	{	/* check for transition */
 		cpustate->irq_state[irqline] = state;
 
-		LOG(("tms7000: (cpu '%s') set_irq_line (INT%d, state %d)\n", cpustate->device->tag, irqline+1, state));
+		LOG(("tms7000: (cpu '%s') set_irq_line (INT%d, state %d)\n", cpustate->device->tag(), irqline+1, state));
 
 		if (state == CLEAR_LINE)
 		{
@@ -530,7 +529,7 @@ static CPU_EXECUTE( tms7000_exl )
 /****************************************************************************
  * Trigger the event counter
  ****************************************************************************/
-void tms7000_A6EC1( const device_config *device )
+void tms7000_A6EC1( running_device *device )
 {
 	tms7000_state *cpustate = get_safe_token(device);
     if( (cpustate->pf[0x03] & 0x80) == 0x80 ) /* Is timer system active? */
@@ -540,7 +539,7 @@ void tms7000_A6EC1( const device_config *device )
     }
 }
 
-static void tms7000_service_timer1( const device_config *device )
+static void tms7000_service_timer1( running_device *device )
 {
 	tms7000_state *cpustate = get_safe_token(device);
     if( --cpustate->t1_prescaler < 0 ) /* Decrement prescaler and check for underflow */

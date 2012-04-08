@@ -16,6 +16,7 @@
 
 *************************************************************************/
 
+#include "emu.h"
 #include "ldcore.h"
 #include "cpu/mcs48/mcs48.h"
 
@@ -48,8 +49,8 @@
 struct _ldplayer_data
 {
 	/* low-level emulation data */
-	const device_config *cpu;					/* CPU index of the 8049 */
-	const device_config *tracktimer;			/* timer device */
+	running_device *cpu;					/* CPU index of the 8049 */
+	running_device *tracktimer;			/* timer device */
 	vp931_data_ready_func data_ready_cb;		/* data ready callback */
 
 	/* I/O port states */
@@ -186,7 +187,7 @@ const ldplayer_interface vp931_interface =
     ready callback
 -------------------------------------------------*/
 
-void vp931_set_data_ready_callback(const device_config *device, vp931_data_ready_func callback)
+void vp931_set_data_ready_callback(running_device *device, vp931_data_ready_func callback)
 {
 	laserdisc_state *ld = ldcore_get_safe_token(device);
 	ld->player->data_ready_cb = callback;
@@ -204,7 +205,7 @@ void vp931_set_data_ready_callback(const device_config *device, vp931_data_ready
 
 static void vp931_init(laserdisc_state *ld)
 {
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 	ldplayer_data *player = ld->player;
 	vp931_data_ready_func cbsave;
 
@@ -214,10 +215,9 @@ static void vp931_init(laserdisc_state *ld)
 	player->data_ready_cb = cbsave;
 
 	/* find our devices */
-	player->cpu = cputag_get_cpu(ld->device->machine, device_build_tag(tempstring, ld->device, "vp931"));
-	player->tracktimer = devtag_get_device(ld->device->machine, device_build_tag(tempstring, ld->device, "tracktimer"));
+	player->cpu = ld->device->subdevice("vp931");
+	player->tracktimer = ld->device->subdevice("tracktimer");
 	timer_device_set_ptr(player->tracktimer, ld);
-	astring_free(tempstring);
 }
 
 

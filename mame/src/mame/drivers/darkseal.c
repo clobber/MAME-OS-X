@@ -13,7 +13,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/h6280/h6280.h"
 #include "sound/2203intf.h"
@@ -229,7 +229,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq(const device_config *device, int state)
+static void sound_irq(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 1, state); /* IRQ 2 */
 }

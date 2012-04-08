@@ -152,7 +152,7 @@ ToDo / Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "cpu/sh2/sh2.h"
@@ -481,7 +481,7 @@ static UINT8 stv_SMPC_r8 (const address_space *space, int offset)
 
 	if (cpu_get_pc(space->cpu)==0x060020E6) return_data = 0x10;//???
 
-	//if(LOG_SMPC) logerror ("cpu %s (PC=%08X) SMPC: Read from Byte Offset %02x Returns %02x\n", space->cpu->tag, cpu_get_pc(space->cpu), offset, return_data);
+	//if(LOG_SMPC) logerror ("cpu %s (PC=%08X) SMPC: Read from Byte Offset %02x Returns %02x\n", space->cpu->tag(), cpu_get_pc(space->cpu), offset, return_data);
 
 
 	return return_data;
@@ -498,7 +498,7 @@ static void stv_SMPC_w8 (const address_space *space, int offset, UINT8 data)
 
 	if(offset == 0x75)
 	{
-		const device_config *device = devtag_get_device(space->machine, "eeprom");
+		running_device *device = devtag_get_device(space->machine, "eeprom");
 		eeprom_set_clock_line(device, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
@@ -705,7 +705,7 @@ static void stv_SMPC_w8 (const address_space *space, int offset, UINT8 data)
 				smpc_ram[0x21] = (0x80) | ((NMI_reset & 1) << 6);
 				break;
 			default:
-				if(LOG_SMPC) logerror ("cpu '%s' (PC=%08X) SMPC: undocumented Command %02x\n", space->cpu->tag, cpu_get_pc(space->cpu), data);
+				if(LOG_SMPC) logerror ("cpu '%s' (PC=%08X) SMPC: undocumented Command %02x\n", space->cpu->tag(), cpu_get_pc(space->cpu), data);
 		}
 
 		// we've processed the command, clear status flag
@@ -895,7 +895,7 @@ static READ32_HANDLER ( stv_io_r32 )
 			return 0xffffffff;
 		}
 		case 0x1c/4:
-		if(LOG_IOGA) logerror("(PC %s=%06x) Warning: READ from PORT_AD\n", space->cpu->tag, cpu_get_pc(space->cpu));
+		if(LOG_IOGA) logerror("(PC %s=%06x) Warning: READ from PORT_AD\n", space->cpu->tag(), cpu_get_pc(space->cpu));
 		popmessage("Read from PORT_AD");
 		port_i++;
 		return port_ad[port_i & 7];
@@ -1357,7 +1357,7 @@ static WRITE32_HANDLER( stv_scu_w32 )
 		   stv_scu[40] != 0xffffffff)
 		{
 			if(LOG_SCU) logerror("cpu %s (PC=%08X) IRQ mask reg set %08x = %d%d%d%d|%d%d%d%d|%d%d%d%d|%d%d%d%d\n",
-			space->cpu->tag, cpu_get_pc(space->cpu),
+			space->cpu->tag(), cpu_get_pc(space->cpu),
 			stv_scu[offset],
 			stv_scu[offset] & 0x8000 ? 1 : 0, /*A-Bus irq*/
 			stv_scu[offset] & 0x4000 ? 1 : 0, /*<reserved>*/
@@ -1965,17 +1965,17 @@ static READ32_HANDLER( stv_sh2_soundram_r )
  * Enter into Radiant Silver Gun specific menu for a test...                       */
 static WRITE32_HANDLER( minit_w )
 {
-	logerror("cpu %s (PC=%08X) MINIT write = %08x\n", space->cpu->tag, cpu_get_pc(space->cpu),data);
+	logerror("cpu %s (PC=%08X) MINIT write = %08x\n", space->cpu->tag(), cpu_get_pc(space->cpu),data);
 	cpuexec_boost_interleave(space->machine, minit_boost_timeslice, ATTOTIME_IN_USEC(minit_boost));
 	cpuexec_trigger(space->machine, 1000);
-	sh2_set_frt_input(cputag_get_cpu(space->machine, "slave"), PULSE_LINE);
+	sh2_set_frt_input(devtag_get_device(space->machine, "slave"), PULSE_LINE);
 }
 
 static WRITE32_HANDLER( sinit_w )
 {
-	logerror("cpu %s (PC=%08X) SINIT write = %08x\n", space->cpu->tag, cpu_get_pc(space->cpu),data);
+	logerror("cpu %s (PC=%08X) SINIT write = %08x\n", space->cpu->tag(), cpu_get_pc(space->cpu),data);
 	cpuexec_boost_interleave(space->machine, sinit_boost_timeslice, ATTOTIME_IN_USEC(sinit_boost));
-	sh2_set_frt_input(cputag_get_cpu(space->machine, "maincpu"), PULSE_LINE);
+	sh2_set_frt_input(devtag_get_device(space->machine, "maincpu"), PULSE_LINE);
 }
 
 
@@ -2315,7 +2315,7 @@ static WRITE32_HANDLER ( w60ffc44_write )
 {
 	COMBINE_DATA(&stv_workram_h[0xffc44/4]);
 
-	logerror("cpu %s (PC=%08X): 60ffc44_write write = %08X & %08X\n", space->cpu->tag, cpu_get_pc(space->cpu), data, mem_mask);
+	logerror("cpu %s (PC=%08X): 60ffc44_write write = %08X & %08X\n", space->cpu->tag(), cpu_get_pc(space->cpu), data, mem_mask);
 	//sinit_w(offset,data,mem_mask);
 }
 
@@ -2323,7 +2323,7 @@ static WRITE32_HANDLER ( w60ffc48_write )
 {
 	COMBINE_DATA(&stv_workram_h[0xffc48/4]);
 
-	logerror("cpu %s (PC=%08X): 60ffc48_write write = %08X & %08X\n", space->cpu->tag, cpu_get_pc(space->cpu), data, mem_mask);
+	logerror("cpu %s (PC=%08X): 60ffc48_write write = %08X & %08X\n", space->cpu->tag(), cpu_get_pc(space->cpu), data, mem_mask);
 	//minit_w(offset,data,mem_mask);
 }
 
@@ -2352,8 +2352,8 @@ DRIVER_INIT ( stv )
 	// do strict overwrite verification - maruchan and rsgun crash after coinup without this.
 	// cottonbm needs strict PCREL
 	// todo: test what games need this and don't turn it on for them...
-	sh2drc_set_options(cputag_get_cpu(machine, "maincpu"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
-	sh2drc_set_options(cputag_get_cpu(machine, "slave"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
+	sh2drc_set_options(devtag_get_device(machine, "maincpu"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
+	sh2drc_set_options(devtag_get_device(machine, "slave"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
 
 	/* debug .. watch the command buffer rsgun, cottonbm etc. appear to use to communicate between cpus */
 	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60ffc44, 0x60ffc47, 0, 0, w60ffc44_write );
@@ -2494,7 +2494,7 @@ static const sh2_cpu_core sh2_conf_slave  = { 1, NULL };
 
 static int scsp_last_line = 0;
 
-static void scsp_irq(const device_config *device, int irq)
+static void scsp_irq(running_device *device, int irq)
 {
 	// don't bother the 68k if it's off
 	if (!en_68k)
@@ -2573,9 +2573,51 @@ SCU register[36] is the timer zero compare register.
 SCU register[40] is for IRQ masking.
 */
 
-/* to do, update bios idle skips so they work better with this arrangement.. */
+#ifdef UNUSED_FUNCTION
 
-static const device_config *vblank_out_timer,*scan_timer,*t1_timer;
+/* theoretical function about how this irq system should work, not yet implemented because the performance speed hits very very badly.
+   It's not tested much either, but I'm aware that timer 1 doesn't work with this for whatever reason ... */
+static TIMER_CALLBACK( stv_irq_callback )
+{
+	int hpos = video_screen_get_hpos(machine->primary_screen);
+	int vpos = video_screen_get_vpos(machine->primary_screen);
+	rectangle visarea = *video_screen_get_visible_area(machine->primary_screen);
+
+	h_sync = visarea.max_x+1;//horz
+	v_sync = visarea.max_y+1;//vert
+
+	if(vpos == v_sync && hpos == 0)
+		VBLANK_IN_IRQ;
+	if(hpos == 0 && vpos == 0)
+		VBLANK_OUT_IRQ;
+	if(hpos == h_sync)
+		TIMER_0_IRQ;
+	if(hpos == h_sync && (vpos != 0 && vpos != v_sync))
+	{
+		HBLANK_IN_IRQ;
+		timer_0++;
+	}
+
+	/*TODO: timing of this one (related to the VDP1 speed)*/
+	/*      (NOTE: value shouldn't be at h_sync/v_sync position (will break shienryu))*/
+	if(hpos == 40 && vpos == 0)
+		VDP1_IRQ;
+
+	if(hpos == timer_1)
+		TIMER_1_IRQ;
+
+	if(hpos <= h_sync)
+		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos, hpos+1), 0);
+	else if(vpos <= v_sync)
+		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos+1, 0), 0);
+	else
+		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+}
+
+#endif
+
+
+static running_device *vblank_out_timer,*scan_timer,*t1_timer;
 static int h_sync,v_sync;
 static int cur_scan;
 

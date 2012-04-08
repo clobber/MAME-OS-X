@@ -6,9 +6,13 @@
 
 #include "machine/atarigen.h"
 
-typedef struct _batman_state batman_state;
-struct _batman_state
+class batman_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, batman_state(machine)); }
+
+	batman_state(running_machine &machine) { }
+
 	atarigen_state	atarigen;
 
 	UINT16			latch_data;
@@ -22,4 +26,4 @@ struct _batman_state
 VIDEO_START( batman );
 VIDEO_UPDATE( batman );
 
-void batman_scanline_update(const device_config *screen, int scanline);
+void batman_scanline_update(running_device *screen, int scanline);

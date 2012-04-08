@@ -79,7 +79,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/namco06.h"
 #include "machine/namco50.h"
 #include "machine/namco51.h"
@@ -98,14 +98,14 @@ struct _namco_06xx_state
 {
 	UINT8 control;
 	emu_timer *nmi_timer;
-	const device_config *nmicpu;
-	const device_config *device[4];
+	running_device *nmicpu;
+	running_device *device[4];
 	read8_device_func read[4];
-	void (*readreq[4])(const device_config *device);
+	void (*readreq[4])(running_device *device);
 	write8_device_func write[4];
 };
 
-INLINE namco_06xx_state *get_safe_token(const device_config *device)
+INLINE namco_06xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -118,16 +118,16 @@ INLINE namco_06xx_state *get_safe_token(const device_config *device)
 
 static TIMER_CALLBACK( nmi_generate )
 {
-	namco_06xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_06xx_state *state = get_safe_token((running_device *)ptr);
 
 	if (!cpu_is_suspended(state->nmicpu, SUSPEND_REASON_HALT | SUSPEND_REASON_RESET | SUSPEND_REASON_DISABLE))
 	{
-		LOG(("NMI cpu '%s'\n",state->nmicpu->tag));
+		LOG(("NMI cpu '%s'\n",state->nmicpu->tag()));
 
 		cpu_set_input_line(state->nmicpu, INPUT_LINE_NMI, PULSE_LINE);
 	}
 	else
-		LOG(("NMI not generated because cpu '%s' is suspended\n",state->nmicpu->tag));
+		LOG(("NMI not generated because cpu '%s' is suspended\n",state->nmicpu->tag()));
 }
 
 
@@ -137,11 +137,11 @@ READ8_DEVICE_HANDLER( namco_06xx_data_r )
 	UINT8 result = 0xff;
 	int devnum;
 
-	LOG(("%s: 06XX '%s' read offset %d\n",cpuexec_describe_context(device->machine),device->tag,offset));
+	LOG(("%s: 06XX '%s' read offset %d\n",cpuexec_describe_context(device->machine),device->tag(),offset));
 
 	if (!(state->control & 0x10))
 	{
-		logerror("%s: 06XX '%s' read in write mode %02x\n",cpuexec_describe_context(device->machine),device->tag,state->control);
+		logerror("%s: 06XX '%s' read in write mode %02x\n",cpuexec_describe_context(device->machine),device->tag(),state->control);
 		return 0;
 	}
 
@@ -158,11 +158,11 @@ WRITE8_DEVICE_HANDLER( namco_06xx_data_w )
 	namco_06xx_state *state = get_safe_token(device);
 	int devnum;
 
-	LOG(("%s: 06XX '%s' write offset %d = %02x\n",cpuexec_describe_context(device->machine),device->tag,offset,data));
+	LOG(("%s: 06XX '%s' write offset %d = %02x\n",cpuexec_describe_context(device->machine),device->tag(),offset,data));
 
 	if (state->control & 0x10)
 	{
-		logerror("%s: 06XX '%s' write in read mode %02x\n",cpuexec_describe_context(device->machine),device->tag,state->control);
+		logerror("%s: 06XX '%s' write in read mode %02x\n",cpuexec_describe_context(device->machine),device->tag(),state->control);
 		return;
 	}
 
@@ -175,7 +175,7 @@ WRITE8_DEVICE_HANDLER( namco_06xx_data_w )
 READ8_DEVICE_HANDLER( namco_06xx_ctrl_r )
 {
 	namco_06xx_state *state = get_safe_token(device);
-	LOG(("%s: 06XX '%s' ctrl_r\n",cpuexec_describe_context(device->machine),device->tag));
+	LOG(("%s: 06XX '%s' ctrl_r\n",cpuexec_describe_context(device->machine),device->tag()));
 	return state->control;
 }
 
@@ -184,7 +184,7 @@ WRITE8_DEVICE_HANDLER( namco_06xx_ctrl_w )
 	namco_06xx_state *state = get_safe_token(device);
 	int devnum;
 
-	LOG(("%s: 06XX '%s' control %02x\n",cpuexec_describe_context(device->machine),device->tag,data));
+	LOG(("%s: 06XX '%s' control %02x\n",cpuexec_describe_context(device->machine),device->tag(),data));
 
 	state->control = data;
 
@@ -221,14 +221,14 @@ WRITE8_DEVICE_HANDLER( namco_06xx_ctrl_w )
 
 static DEVICE_START( namco_06xx )
 {
-	const namco_06xx_config *config = (const namco_06xx_config *)device->inline_config;
+	const namco_06xx_config *config = (const namco_06xx_config *)device->baseconfig().inline_config;
 	namco_06xx_state *state = get_safe_token(device);
 	int devnum;
 
 	assert(config != NULL);
 
 	/* resolve our CPU */
-	state->nmicpu = cputag_get_cpu(device->machine, config->nmicpu);
+	state->nmicpu = devtag_get_device(device->machine, config->nmicpu);
 	assert(state->nmicpu != NULL);
 
 	/* resolve our devices */
@@ -268,7 +268,7 @@ static DEVICE_START( namco_06xx )
 			else if (type == NAMCO_54XX)
 				state->write[devnum] = namco_54xx_write;
 			else
-				fatalerror("Unknown device type %s connected to Namco 06xx", devtype_get_name(type));
+				fatalerror("Unknown device type %s connected to Namco 06xx", state->device[devnum]->name());
 		}
 
 	/* allocate a timer */

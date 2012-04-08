@@ -60,9 +60,8 @@ the main program is 9th October 1990.
 
 ******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i86/i86.h"
-#include "video/generic.h"
 #include "machine/pit8253.h"
 #include "machine/8255ppi.h"
 #include "machine/8237dma.h"
@@ -317,11 +316,11 @@ static WRITE8_HANDLER( vga_vram_w )
 /*end of Video HW file*/
 
 static struct {
-	const device_config	*pit8253;
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
-	const device_config	*dma8237_1;
-	const device_config	*dma8237_2;
+	running_device	*pit8253;
+	running_device	*pic8259_1;
+	running_device	*pic8259_2;
+	running_device	*dma8237_1;
+	running_device	*dma8237_2;
 } filetto_devices;
 
 
@@ -395,23 +394,21 @@ static WRITE8_HANDLER( disk_iobank_w )
 Pit8253
 *********************************/
 
-static PIT8253_OUTPUT_CHANGED( pc_timer0_w )
-{
-    pic8259_set_irq_line(filetto_devices.pic8259_1, 0, state);
-}
-
 static const struct pit8253_config pc_pit8253_config =
 {
 	{
 		{
 			4772720/4,				/* heartbeat IRQ */
-			pc_timer0_w
+			DEVCB_NULL,
+			DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir0_w)
 		}, {
 			4772720/4,				/* dram refresh */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}, {
 			4772720/4,				/* pio port c pin 4, and speaker polling enough */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}
 	}
 };
@@ -457,8 +454,8 @@ static READ8_DEVICE_HANDLER( port_c_r )
 static WRITE8_DEVICE_HANDLER( port_b_w )
 {
 	port_b_data = data;
-// const device_config *beep = devtag_get_device(device->machine, "beep");
-// const device_config *cvsd = devtag_get_device(device->machine, "cvsd");
+// running_device *beep = devtag_get_device(device->machine, "beep");
+// running_device *cvsd = devtag_get_device(device->machine, "cvsd");
 //  hc55516_digit_w(cvsd, data);
 //  popmessage("%02x\n",data);
 //  beep_set_state(beep, 0);
@@ -620,7 +617,7 @@ static WRITE8_HANDLER(dma_page_select_w)
 	}
 }
 
-static void set_dma_channel(const device_config *device, int channel, int state)
+static void set_dma_channel(running_device *device, int channel, int state)
 {
 	if (!state) dma_channel = channel;
 }
@@ -645,20 +642,19 @@ static I8237_INTERFACE( dma8237_1_config )
 8259 IRQ controller
 ******************/
 
-static PIC8259_SET_INT_LINE( pic8259_1_set_int_line ) {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+static WRITE_LINE_DEVICE_HANDLER( pic8259_1_set_int_line )
+{
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-static const struct pic8259_interface pic8259_1_config = {
-	pic8259_1_set_int_line
+static const struct pic8259_interface pic8259_1_config =
+{
+	DEVCB_LINE(pic8259_1_set_int_line)
 };
 
-static PIC8259_SET_INT_LINE( pic8259_2_set_int_line ) {
-	pic8259_set_irq_line( filetto_devices.pic8259_1, 2, interrupt);
-}
-
-static const struct pic8259_interface pic8259_2_config = {
-	pic8259_2_set_int_line
+static const struct pic8259_interface pic8259_2_config =
+{
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w)
 };
 
 static IRQ_CALLBACK(irq_callback)
@@ -913,7 +909,7 @@ static MACHINE_RESET( filetto )
 	bank = -1;
 	lastvalue = -1;
 	hv_blank = 0;
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
 	filetto_devices.pit8253 = devtag_get_device( machine, "pit8253" );
 	filetto_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
 	filetto_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );

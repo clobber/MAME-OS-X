@@ -15,7 +15,7 @@
         fixed volume table
 */
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "rf5c400.h"
 
@@ -94,7 +94,7 @@ enum {
 };
 
 
-INLINE rf5c400_state *get_safe_token(const device_config *device)
+INLINE rf5c400_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -240,12 +240,12 @@ static STREAM_UPDATE( rf5c400_update )
 	}
 }
 
-static void rf5c400_init_chip(const device_config *device, rf5c400_state *info)
+static void rf5c400_init_chip(running_device *device, rf5c400_state *info)
 {
 	int i;
 
-	info->rom = (INT16*)device->region;
-	info->rom_length = device->regionbytes / 2;
+	info->rom = *device->region;
+	info->rom_length = device->region->bytes() / 2;
 
 	// init volume table
 	{

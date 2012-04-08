@@ -78,7 +78,7 @@ emulated now. ;)
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/samples.h"
 #include "includes/polyplay.h"
@@ -97,7 +97,7 @@ static int channel2_const;
 
 /* timer handling */
 static TIMER_DEVICE_CALLBACK( polyplay_timer_callback );
-static const device_config* polyplay_timer;
+static running_device* polyplay_timer;
 static WRITE8_HANDLER( polyplay_start_timer2 );
 static WRITE8_HANDLER( polyplay_sound_channel );
 

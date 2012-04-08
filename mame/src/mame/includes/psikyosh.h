@@ -9,20 +9,20 @@
 #define BG_LAYER_ENABLE(n) (((state->vidregs[7] << (4*n)) & 0x00008000 ) ? 1:0)
 
 #define BG_TYPE(n) (((state->vidregs[6] << (8*n)) & 0x7f000000 ) >> 24)
-#define BG_NORMAL      0x0a
-#define BG_NORMAL_ALT  0x0b /* Same as above but with different location for scroll/priority reg */
+#define BG_LINE(n) (((state->vidregs[6] << (8*n)) & 0x80000000 ) ? 1:0)
 
-/* All below have 0x80 bit set, probably row/linescroll enable/toggle */
-#define BG_SCROLL_0C   0x0c /* 224 v/h scroll values in bank 0x0c; Used in daraku, for text */
-#define BG_SCROLL_0D   0x0d /* 224 v/h scroll values in bank 0x0d; Used in daraku, for alternate characters of text */
-#define BG_SCROLL_ZOOM 0x0e /* 224 v/h scroll values in bank 0x0e-0x1f; Used in s1945ii, s1945iii */
+#define BG_TRANSPEN MAKE_ARGB(0x00,0xff,0x00,0xff) // used for representing transparency in temporary bitmaps
 
-enum { eeprom_0=0, eeprom_DEFAULT=1, eeprom_DARAKU, eeprom_S1945III, eeprom_DRAGNBLZ, eeprom_GNBARICH, eeprom_USER1, eeprom_MJGTASTE };
+#define SPRITE_PRI(n) (((state->vidregs[2] << (4*n)) & 0xf0000000 ) >> 28)
 
 
-typedef struct _psikyosh_state psikyosh_state;
-struct _psikyosh_state
+class psikyosh_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, psikyosh_state(machine)); }
+
+	psikyosh_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT32 *       bgram;
 	UINT32 *       zoomram;
@@ -33,14 +33,15 @@ struct _psikyosh_state
 //  size_t         spriteram_size;
 
 	/* video-related */
-	bitmap_t       *zoom_bitmap, *z_bitmap;
-//  UINT8          alphatable[256];
+	bitmap_t       *zoom_bitmap, *z_bitmap, *bg_bitmap;
+	UINT16         *bg_zoom;
+//  UINT8          *alphatable;
 
 	/* misc */
 	UINT32         sample_offs;	// only used if ROMTEST = 1
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 /*----------- defined in video/psikyosh.c -----------*/

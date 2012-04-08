@@ -49,7 +49,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2203intf.h"
 #include "sound/3526intf.h"
@@ -344,7 +344,7 @@ GFXDECODE_END
  *************************************/
 
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
-static void irqhandler( const device_config *device, int linestate )
+static void irqhandler( running_device *device, int linestate )
 {
 	brkthru_state *state = (brkthru_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, linestate);

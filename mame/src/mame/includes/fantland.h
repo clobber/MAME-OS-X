@@ -1,8 +1,12 @@
 
 
-typedef struct _fantland_state fantland_state;
-struct _fantland_state
+class fantland_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, fantland_state(machine)); }
+
+	fantland_state(running_machine &machine) { }
+
 	/* memory pointers */
 //  UINT8 *    spriteram;   // currently directly used in a 16bit map...
 //  UINT8 *    spriteram_2; // currently directly used in a 16bit map...
@@ -17,11 +21,11 @@ struct _fantland_state
 	int        adpcm_nibble[4];
 
 	/* devices */
-	const device_config *audio_cpu;
-	const device_config *msm1;
-	const device_config *msm2;
-	const device_config *msm3;
-	const device_config *msm4;
+	running_device *audio_cpu;
+	running_device *msm1;
+	running_device *msm2;
+	running_device *msm3;
+	running_device *msm4;
 };
 
 

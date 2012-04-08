@@ -178,7 +178,7 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "includes/slapstic.h"
 #include "cpu/m68000/m68000.h"
@@ -615,7 +615,7 @@ static const struct slapstic_data slapstic113 =
 };
 
 
-/* slapstic 137412-114: Unknown (Europe) (unconfirmed) */
+/* slapstic 137412-114: Pit Fighter (rev 9) (confirmed) */
 static const struct slapstic_data slapstic114 =
 {
 	/* basic banking */
@@ -807,7 +807,7 @@ static FILE *slapsticlog;
 
 void slapstic_init(running_machine *machine, int chip)
 {
-	cpu_type cputype = cpu_get_type(cputag_get_cpu(machine, "maincpu"));
+	cpu_type cputype = cpu_get_type(devtag_get_device(machine, "maincpu"));
 
 	/* only a small number of chips are known to exist */
 	if (chip < 101 || chip > 118)

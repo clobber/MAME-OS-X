@@ -9,7 +9,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/3526intf.h"
 #include "includes/battlane.h"
@@ -256,7 +256,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void irqhandler( const device_config *device, int irq )
+static void irqhandler( running_device *device, int irq )
 {
 	battlane_state *state = (battlane_state *)device->machine->driver_data;
 	cpu_set_input_line(state->maincpu, M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);

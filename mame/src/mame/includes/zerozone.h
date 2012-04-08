@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _zerozone_state zerozone_state;
-struct _zerozone_state
+class zerozone_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, zerozone_state(machine)); }
+
+	zerozone_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    videoram;
 //  UINT16 *    paletteram; // currently this uses generic palette handling
@@ -17,7 +21,7 @@ struct _zerozone_state
 	tilemap_t     *zz_tilemap;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 /*----------- defined in video/zerozone.c -----------*/

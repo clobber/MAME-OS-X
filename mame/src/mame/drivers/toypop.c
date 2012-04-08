@@ -29,7 +29,7 @@ TODO:
 
 ****************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/namcoio.h"
@@ -67,37 +67,37 @@ static WRITE16_HANDLER( toypop_m68000_sharedram_w )
 
 static READ8_HANDLER( toypop_main_interrupt_enable_r )
 {
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), 1);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), 1);
 	return 0;
 }
 
 static WRITE8_HANDLER( toypop_main_interrupt_enable_w )
 {
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), 1);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), 1);
 	cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_main_interrupt_disable_w )
 {
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), 0);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), 0);
 }
 
 static WRITE8_HANDLER( toypop_sound_interrupt_enable_acknowledge_w )
 {
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "audiocpu"), 1);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "audiocpu"), 1);
 	cputag_set_input_line(space->machine, "audiocpu", 0, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( toypop_sound_interrupt_disable_w )
 {
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "audiocpu"), 0);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "audiocpu"), 0);
 }
 
 static TIMER_CALLBACK( namcoio_run )
 {
-	const device_config *io58xx = devtag_get_device(machine, "58xx");
-	const device_config *io56xx_1 = devtag_get_device(machine, "56xx_1");
-	const device_config *io56xx_2 = devtag_get_device(machine, "56xx_2");
+	running_device *io58xx = devtag_get_device(machine, "58xx");
+	running_device *io56xx_1 = devtag_get_device(machine, "56xx_1");
+	running_device *io56xx_2 = devtag_get_device(machine, "56xx_2");
 
 	switch (param)
 	{
@@ -115,9 +115,9 @@ static TIMER_CALLBACK( namcoio_run )
 
 static INTERRUPT_GEN( toypop_main_interrupt )
 {
-	const device_config *namcoio_0 = devtag_get_device(device->machine, "58xx");
-	const device_config *namcoio_1 = devtag_get_device(device->machine, "56xx_1");
-	const device_config *namcoio_2 = devtag_get_device(device->machine, "56xx_2");
+	running_device *namcoio_0 = devtag_get_device(device->machine, "58xx");
+	running_device *namcoio_1 = devtag_get_device(device->machine, "56xx_1");
+	running_device *namcoio_2 = devtag_get_device(device->machine, "56xx_2");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 								// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
@@ -156,9 +156,9 @@ static WRITE8_HANDLER( toypop_m68000_assert_w )
 static TIMER_CALLBACK( disable_interrupts )
 {
 	toypop_state *state = (toypop_state *)machine->driver_data;
-	cpu_interrupt_enable(cputag_get_cpu(machine, "maincpu"), 0);
+	cpu_interrupt_enable(devtag_get_device(machine, "maincpu"), 0);
 	cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
-	cpu_interrupt_enable(cputag_get_cpu(machine, "audiocpu"), 0);
+	cpu_interrupt_enable(devtag_get_device(machine, "audiocpu"), 0);
 	cputag_set_input_line(machine, "audiocpu", 0, CLEAR_LINE);
 	state->interrupt_enable_68k = 0;
 }

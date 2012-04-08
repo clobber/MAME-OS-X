@@ -37,6 +37,7 @@
 
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "m65ce02.h"
 
@@ -74,13 +75,13 @@ struct	_m65ce02_Regs {
 	UINT8	irq_state;
 	int		icount;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *space;
 	read8_space_func rdmem_id;					/* readmem callback for indexed instructions */
 	write8_space_func wrmem_id;					/* writemem callback for indexed instructions */
 };
 
-INLINE m65ce02_Regs *get_safe_token(const device_config *device)
+INLINE m65ce02_Regs *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -101,13 +102,13 @@ static void default_wdmem_id(const address_space *space, offs_t address, UINT8 d
 static CPU_INIT( m65ce02 )
 {
 	m65ce02_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->static_config;
+	const m6502_interface *intf = (const m6502_interface *)device->baseconfig().static_config;
 
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wdmem_id;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->space = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->space = device->space(AS_PROGRAM);
 
 	if ( intf )
 	{
@@ -158,7 +159,7 @@ INLINE void m65ce02_take_irq(m65ce02_Regs *cpustate)
 		P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		LOG(("M65ce02 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
+		LOG(("M65ce02 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -188,7 +189,7 @@ static CPU_EXECUTE( m65ce02 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M65ce02 '%s' after_cli was >0", cpustate->device->tag));
+			LOG(("M65ce02 '%s' after_cli was >0", cpustate->device->tag()));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -217,7 +218,7 @@ static void m65ce02_set_irq_line(m65ce02_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(("M65ce02 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+			LOG(("M65ce02 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 			EAD = M65CE02_NMI_VEC;
 			cpustate->icount -= 7;
 			PUSH(PCH);
@@ -226,7 +227,7 @@ static void m65ce02_set_irq_line(m65ce02_Regs *cpustate, int irqline, int state)
 			P = (P & ~F_D) | F_I;		/* knock out D and set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			LOG(("M65ce02 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
+			LOG(("M65ce02 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
 		}
 	}
 	else
@@ -234,7 +235,7 @@ static void m65ce02_set_irq_line(m65ce02_Regs *cpustate, int irqline, int state)
 		cpustate->irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(("M65ce02 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
+			LOG(("M65ce02 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
 			cpustate->pending_irq = 1;
 		}
 	}
@@ -291,17 +292,17 @@ CPU_GET_INFO( m65ce02 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 20;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 16;					break;
 		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 13;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE+M65CE02_NMI_STATE: info->i = cpustate->nmi_state;			break;
 		case CPUINFO_INT_INPUT_STATE+M65CE02_IRQ_STATE: info->i = cpustate->irq_state;			break;

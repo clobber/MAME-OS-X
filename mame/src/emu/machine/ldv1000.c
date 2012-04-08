@@ -16,6 +16,7 @@
 
 *************************************************************************/
 
+#include "emu.h"
 #include "ldcore.h"
 #include "machine/8255ppi.h"
 #include "machine/z80ctc.h"
@@ -54,9 +55,9 @@
 struct _ldplayer_data
 {
 	/* low-level emulation data */
-	const device_config *cpu;					/* CPU index of the Z80 */
-	const device_config *ctc;					/* CTC device */
-	const device_config *multitimer;			/* multi-jump timer device */
+	running_device *cpu;					/* CPU index of the Z80 */
+	running_device *ctc;					/* CTC device */
+	running_device *multitimer;			/* multi-jump timer device */
 
 	/* communication status */
 	UINT8				command;				/* command byte to the player */
@@ -97,7 +98,7 @@ static TIMER_CALLBACK( vsync_off );
 static TIMER_CALLBACK( vbi_data_fetch );
 static TIMER_DEVICE_CALLBACK( multijump_timer );
 
-static void ctc_interrupt(const device_config *device, int state);
+static void ctc_interrupt(running_device *device, int state);
 
 static WRITE8_HANDLER( decoder_display_port_w );
 static READ8_HANDLER( decoder_display_port_r );
@@ -226,18 +227,17 @@ const ldplayer_interface ldv1000_interface =
 
 static void ldv1000_init(laserdisc_state *ld)
 {
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 	ldplayer_data *player = ld->player;
 
 	/* reset our state */
 	memset(player, 0, sizeof(*player));
 
 	/* find our devices */
-	player->cpu = cputag_get_cpu(ld->device->machine, device_build_tag(tempstring, ld->device, "ldv1000"));
-	player->ctc = devtag_get_device(ld->device->machine, device_build_tag(tempstring, ld->device, "ldvctc"));
-	player->multitimer = devtag_get_device(ld->device->machine, device_build_tag(tempstring, ld->device, "multitimer"));
+	player->cpu = ld->device->subdevice("ldv1000");
+	player->ctc = ld->device->subdevice("ldvctc");
+	player->multitimer = ld->device->subdevice("multitimer");
 	timer_device_set_ptr(player->multitimer, ld);
-	astring_free(tempstring);
 }
 
 

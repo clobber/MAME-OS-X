@@ -1,7 +1,11 @@
 
-typedef struct _flstory_state flstory_state;
-struct _flstory_state
+class flstory_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, flstory_state(machine)); }
+
+	flstory_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  workram;
@@ -35,9 +39,9 @@ struct _flstory_state
 	int      mcu_select;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *mcu;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *mcu;
 };
 
 

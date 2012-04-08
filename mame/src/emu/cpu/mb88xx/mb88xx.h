@@ -12,7 +12,6 @@
 #ifndef __MB88XX_H__
 #define	__MB88XX_H__
 
-#include "cpuintrf.h"
 
 /***************************************************************************
     PORT ENUMERATION
@@ -79,6 +78,6 @@ CPU_GET_INFO( mb8844 );
 
 CPU_DISASSEMBLE( mb88 );
 
-void mb88_external_clock_w(const device_config *device, int state);
+void mb88_external_clock_w(running_device *device, int state);
 
 #endif /* __MB88XX_H__ */

@@ -57,7 +57,7 @@ ___________________________________________________________________________
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "video/awpvid.h"
 #include "machine/6850acia.h"
@@ -226,7 +226,7 @@ static WRITE8_HANDLER( mmtr_w )
 	for (i=0; i<8; i++)
 	if ( changed & (1 << i) )	Mechmtr_update(i, cycles, data & (1 << i) );
 
-	if ( data ) generic_pulse_irq_line(cputag_get_cpu(space->machine, "maincpu"), M6809_FIRQ_LINE);
+	if ( data ) generic_pulse_irq_line(devtag_get_device(space->machine, "maincpu"), M6809_FIRQ_LINE);
 }
 ///////////////////////////////////////////////////////////////////////////
 
@@ -483,5 +483,4 @@ ROM_START( m_supcrd )
 	ROM_LOAD( "sc271.bin",  0x8000, 0x8000,  CRC(58e9c9df) SHA1(345c5aa279327d7142edc6823aad0cfd40cbeb73))
 ROM_END
 
-//    year,name,     parent, machine,  input,           init, monitor,     company,     fullname,            flags
 GAME( 1985,m_supcrd, 0, 	bfmsys85, bfmsys85, 		0,	  0,       "BFM/ELAM",   "Supercards (Dutch, Game Card 39-340-271?)", GAME_NOT_WORKING|GAME_SUPPORTS_SAVE|GAME_REQUIRES_ARTWORK )

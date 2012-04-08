@@ -4,7 +4,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/mb14241.h"
 
 typedef struct _mb14241_state  mb14241_state;
@@ -18,7 +18,7 @@ struct _mb14241_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE mb14241_state *get_safe_token( const device_config *device )
+INLINE mb14241_state *get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);

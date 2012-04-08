@@ -1,7 +1,11 @@
 
-typedef struct _bigevglf_state bigevglf_state;
-struct _bigevglf_state
+class bigevglf_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bigevglf_state(machine)); }
+
+	bigevglf_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  paletteram;
 	UINT8 *  spriteram1;
@@ -32,8 +36,8 @@ struct _bigevglf_state
 	UINT8    port_select;     /* for muxed controls */
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *mcu;
+	running_device *audiocpu;
+	running_device *mcu;
 };
 
 

@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _hcastle_state hcastle_state;
-struct _hcastle_state
+class hcastle_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, hcastle_state(machine)); }
+
+	hcastle_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    pf1_videoram;
 	UINT8 *    pf2_videoram;
@@ -21,9 +25,9 @@ struct _hcastle_state
 	int        gfx_bank;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k007121_1;
-	const device_config *k007121_2;
+	running_device *audiocpu;
+	running_device *k007121_1;
+	running_device *k007121_2;
 };
 
 

@@ -142,7 +142,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "memconv.h"
 #include "includes/jaguar.h"
 #include "cpu/jaguar/jaguar.h"
@@ -212,7 +212,7 @@ static void update_gpu_irq(running_machine *machine)
 }
 
 
-void jaguar_external_int(const device_config *device, int state)
+void jaguar_external_int(running_device *device, int state)
 {
 	if (state != CLEAR_LINE)
 		gpu_irq_state |= 1;
@@ -337,11 +337,11 @@ WRITE32_HANDLER( jaguar_jerry_regs32_w )
 static WRITE32_HANDLER( dsp_flags_w )
 {
 	/* write the data through */
-	jaguardsp_ctrl_w(cputag_get_cpu(space->machine, "audiocpu"), offset, data, mem_mask);
+	jaguardsp_ctrl_w(devtag_get_device(space->machine, "audiocpu"), offset, data, mem_mask);
 
 	/* if they were clearing the A2S interrupt, see if we are headed for the spin */
 	/* loop with R22 != 0; if we are, just start spinning again */
-	if (space->cpu == cputag_get_cpu(space->machine, "audiocpu") && ACCESSING_BITS_8_15 && (data & 0x400))
+	if (space->cpu == devtag_get_device(space->machine, "audiocpu") && ACCESSING_BITS_8_15 && (data & 0x400))
 	{
 		/* see if we're going back to the spin loop */
 		if (!(data & 0x04000) && cpu_get_reg(space->cpu, JAGUAR_R22) != 0)

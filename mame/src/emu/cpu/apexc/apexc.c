@@ -323,7 +323,7 @@ field:      X address   D           Function    Y address   D (part 2)
       another track.
 */
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "apexc.h"
 
@@ -356,8 +356,9 @@ struct _apexc_state
 
 	int running;	/* 1 flag: */
 				/* running: flag implied by the existence of the stop instruction */
+	UINT32 pc;	/* address of next instruction for the disassembler */
 
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int icount;
@@ -367,7 +368,7 @@ struct _apexc_state
 #define DELAY(n)	{cpustate->icount -= (n); cpustate->current_word = (cpustate->current_word + (n)) & 0x1f;}
 
 
-INLINE apexc_state *get_safe_token(const device_config *device)
+INLINE apexc_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -540,6 +541,7 @@ static void execute(apexc_state *cpustate)
 	function = (cpustate->cr >> 7) & 0x1F;
 	c6 = (cpustate->cr >> 1) & 0x3F;
 	vector = cpustate->cr & 1;
+	cpustate->pc = y<<2;
 
 	function &= 0x1E;	/* this is a mere guess - the LSBit is reserved for future additions */
 
@@ -595,6 +597,7 @@ static void execute(apexc_state *cpustate)
 			{
 				/* load ml with X */
 				delay1 = load_ml(cpustate, x, vector);
+				cpustate->pc = x<<2;
 				/* burn pre-fetch delay if needed */
 				if (delay1)
 				{
@@ -800,8 +803,8 @@ static CPU_INIT( apexc )
 	apexc_state *cpustate = get_safe_token(device);
 
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 }
 
 static CPU_RESET( apexc )
@@ -827,7 +830,7 @@ static CPU_EXECUTE( apexc )
 
 	do
 	{
-		debugger_instruction_hook(device, effective_address(cpustate, cpustate->ml));
+		debugger_instruction_hook(device, cpustate->pc);
 
 		if (cpustate->running)
 			execute(cpustate);
@@ -870,6 +873,7 @@ static CPU_SET_INFO( apexc )
 	case CPUINFO_INT_REGISTER + APEXC_A:		cpustate->a = info->i;							break;
 	case CPUINFO_INT_REGISTER + APEXC_R:		cpustate->r = info->i;							break;
 	case CPUINFO_INT_REGISTER + APEXC_ML:		cpustate->ml = info->i & 0x3ff;					break;
+	case CPUINFO_INT_REGISTER + APEXC_PC:		cpustate->pc = info->i;					break;
 	case CPUINFO_INT_REGISTER + APEXC_WS:		cpustate->working_store = info->i & 0xf;		break;
 	case CPUINFO_INT_REGISTER + APEXC_STATE:	cpustate->running = info->i ? TRUE : FALSE;		break;
 	}
@@ -892,23 +896,19 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_INT_MIN_CYCLES:					info->i = 2;	/* IIRC */				break;
 	case CPUINFO_INT_MAX_CYCLES:					info->i = 75;	/* IIRC */				break;
 
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 15;	/*13+2 ignored bits to make double word address*/	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = /*5*/8;	/* no I/O bus, but we use address 0 for punchtape I/O */	break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = /*0*/1;	/*0 is quite enough but the MAME core does not understand*/	break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 	case CPUINFO_INT_SP:							info->i = 0;	/* no SP */				break;
 	case CPUINFO_INT_PC:
-		/* no PC - return memory location register instead, this should be
-        equivalent unless executed in the midst of an instruction */
-		info->i = effective_address(cpustate, cpustate->ml);
-		break;
-	case CPUINFO_INT_PREVIOUSPC:					info->i = 0;	/* no PC */				break;
+	case CPUINFO_INT_PREVIOUSPC:					info->i = cpustate->pc;	/* psuedo-PC */				break;
 
 	/*case CPUINFO_INT_INPUT_STATE + ...:*/							/* no interrupts */
 
@@ -916,6 +916,7 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_INT_REGISTER + APEXC_A:			info->i = cpustate->a;						break;
 	case CPUINFO_INT_REGISTER + APEXC_R:			info->i = cpustate->r;						break;
 	case CPUINFO_INT_REGISTER + APEXC_ML:			info->i = cpustate->ml;						break;
+	case CPUINFO_INT_REGISTER + APEXC_PC:			info->i = cpustate->pc;						break;
 	case CPUINFO_INT_REGISTER + APEXC_WS:			info->i = cpustate->working_store;			break;
 	case CPUINFO_INT_REGISTER + APEXC_STATE:		info->i = cpustate->running;				break;
 	case CPUINFO_INT_REGISTER + APEXC_ML_FULL:		info->i = effective_address(cpustate, cpustate->ml);	break;
@@ -940,6 +941,7 @@ CPU_GET_INFO( apexc )
 	case CPUINFO_STR_REGISTER + APEXC_A:			sprintf(info->s, "A :%08X", cpustate->a); break;
 	case CPUINFO_STR_REGISTER + APEXC_R:			sprintf(info->s, "R :%08X", cpustate->r); break;
 	case CPUINFO_STR_REGISTER + APEXC_ML:			sprintf(info->s, "ML:%03X", cpustate->ml); break;
+	case CPUINFO_STR_REGISTER + APEXC_PC:			sprintf(info->s, "PC:%03X", cpustate->pc); break;
 	case CPUINFO_STR_REGISTER + APEXC_WS:			sprintf(info->s, "WS:%01X", cpustate->working_store); break;
 
 	case CPUINFO_STR_REGISTER + APEXC_STATE:		sprintf(info->s, "CPU state:%01X", cpustate->running ? TRUE : FALSE); break;

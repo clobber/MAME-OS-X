@@ -57,7 +57,7 @@ TODO:
 ===============================================================================
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i386/i386.h"
 #include "machine/pic8259.h"
 /* Insert IBM PC includes here */
@@ -72,8 +72,8 @@ static VIDEO_UPDATE(quake)
 }
 
 static struct {
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
+	running_device	*pic8259_1;
+	running_device	*pic8259_2;
 } quakeat_devices;
 
 static ADDRESS_MAP_START( quake_map, ADDRESS_SPACE_PROGRAM, 32 )
@@ -105,25 +105,19 @@ ADDRESS_MAP_END
  *
  *************************************************************/
 
-static PIC8259_SET_INT_LINE( quakeat_pic8259_1_set_int_line )
+static WRITE_LINE_DEVICE_HANDLER( quakeat_pic8259_1_set_int_line )
 {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-
-static PIC8259_SET_INT_LINE( quakeat_pic8259_2_set_int_line )
+static const struct pic8259_interface quakeat_pic8259_1_config =
 {
-	pic8259_set_irq_line( quakeat_devices.pic8259_1, 2, interrupt);
-}
-
-
-static const struct pic8259_interface quakeat_pic8259_1_config = {
-	quakeat_pic8259_1_set_int_line
+	DEVCB_LINE(quakeat_pic8259_1_set_int_line)
 };
 
-
-static const struct pic8259_interface quakeat_pic8259_2_config = {
-	quakeat_pic8259_2_set_int_line
+static const struct pic8259_interface quakeat_pic8259_2_config =
+{
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w)
 };
 
 /*************************************************************/
@@ -146,7 +140,7 @@ static IRQ_CALLBACK(irq_callback)
 
 static MACHINE_START(quakeat)
 {
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
 
 	quakeat_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
 	quakeat_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );

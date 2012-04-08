@@ -41,7 +41,7 @@ Shisensho II                            1993  Rev 3.34 M81  Yes
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/dac.h"
 #include "m72.h"
 
@@ -115,7 +115,7 @@ SOUND_RESET( m72 )
 	setvector_callback(machine, NULL, VECTOR_INIT);
 }
 
-void m72_ym2151_irq_handler(const device_config *device, int irq)
+void m72_ym2151_irq_handler(running_device *device, int irq)
 {
 	if (irq)
 		timer_call_after_resynch(device->machine, NULL, YM2151_ASSERT,setvector_callback);

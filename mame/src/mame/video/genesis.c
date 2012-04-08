@@ -1,19 +1,17 @@
 /***********************************************************************************************
 
-    Sega System C/C2 Driver
-    -----------------------
-    Version 0.54 - 02 Feb 2003
-    (for changes see drivers\segac2.c)
+    Old Genesis VDP emulation still used by System 18
+    -------------------------------------------------
+
+    (originally used for Sega System C/C2 Driver, source version 0.54 - 02 Feb 2003)
 
 ***********************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/sn76496.h"
-
 #include "includes/genesis.h"
 
-
-static const device_config *genesis_screen;
+static running_device *genesis_screen;
 
 
 /******************************************************************************
@@ -120,7 +118,7 @@ static UINT8		window_width;				/* window width */
 ******************************************************************************/
 
 
-static void start_genesis_vdp(const device_config *screen)
+static void start_genesis_vdp(running_device *screen)
 {
 	static const UINT8 vdp_init[24] =
 	{
@@ -195,27 +193,6 @@ static void start_genesis_vdp(const device_config *screen)
 	state_save_register_global(screen->machine, window_vpos);
 }
 
-VIDEO_START(genesis)
-{
-	start_genesis_vdp(machine->primary_screen);
-}
-
-
-VIDEO_START( segac2 )
-{
-	start_genesis_vdp(machine->primary_screen);
-
-	/* C2 has separate sprite/background palettes */
-	genesis_sp_pal_lookup[0] = 0x100;
-	genesis_sp_pal_lookup[1] = 0x110;
-	genesis_sp_pal_lookup[2] = 0x120;
-	genesis_sp_pal_lookup[3] = 0x130;
-}
-
-
-
-
-
 
 void system18_vdp_start(running_machine *machine)
 {
@@ -242,54 +219,6 @@ void system18_vdp_start(running_machine *machine)
     final remapped values.
 
 ******************************************************************************/
-
-/* set the display enable bit */
-void segac2_enable_display(running_machine *machine, int enable)
-{
-	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
-	display_enable = enable;
-}
-
-
-VIDEO_UPDATE( genesis )
-{
-	int y;
-
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		drawline(BITMAP_ADDR16(bitmap, y, 0), y, 0);
-	return 0;
-}
-
-
-VIDEO_UPDATE( segac2 )
-{
-	if (!display_enable)
-		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
-	else
-		VIDEO_UPDATE_CALL(genesis);
-	return 0;
-}
-
-
-
-
-/* megaplay, draws either Genesis or SMS (single screen display) */
-
-/* core refresh: computes the final screen */
-#if 0
-VIDEO_UPDATE( megaplay )
-{
-	int y;
-
-
-	for (y = cliprect->min_y; y <= cliprect->max_y; y++)
-		drawline(BITMAP_ADDR16(bitmap, y, 0), y, 0);
-
-	//VIDEO_UPDATE_CALL(megaplay_normal);
-
-	return 0;
-}
-#endif
 
 void system18_vdp_update( bitmap_t *bitmap, const rectangle *cliprect )
 {
@@ -362,7 +291,7 @@ READ16_HANDLER( genesis_vdp_r )
 
 WRITE16_HANDLER( genesis_vdp_w )
 {
-	const device_config *device;
+	running_device *device;
 	switch (offset)
 	{
 		case 0x00:	/* Write data */

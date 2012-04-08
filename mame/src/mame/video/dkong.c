@@ -7,7 +7,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/resnet.h"
 #include "includes/dkong.h"
 #include "machine/latch8.h"
@@ -140,14 +140,14 @@ static const res_net_info radarscp_net_bck_info =
 };
 
 /*
-    radarsc1 interface
+    radarscp1 interface
 
     All outputs are open-collector. They are followed by inverters which
     drive the resistor network. All outputs are routed through a complimentary
     darlington.
 */
 
-static const res_net_info radarsc1_net_info =
+static const res_net_info radarscp1_net_info =
 {
 	RES_NET_VCC_5V | RES_NET_VBIAS_5V | RES_NET_VIN_TTL_OUT | RES_NET_MONITOR_SANYO_EZV20,
 	{
@@ -205,7 +205,7 @@ PALETTE_INIT( dkong2b)
 	rgb_t	*rgb;
 	int i;
 
-	rgb = compute_res_net_all(color_prom, &dkong_decode_info, &dkong_net_info);
+	rgb = compute_res_net_all(machine, color_prom, &dkong_decode_info, &dkong_net_info);
 	palette_set_colors(machine, 0, rgb, 256);
 
 	/* Now treat tri-state black background generation */
@@ -225,7 +225,7 @@ PALETTE_INIT( dkong2b)
 	color_prom += 512;
 	/* color_prom now points to the beginning of the character color codes */
 	state->color_codes = color_prom;	/* we'll need it later */
-	free(rgb);
+	auto_free(machine, rgb);
 }
 
 #ifdef UNUSED_FUNCTION
@@ -332,7 +332,7 @@ PALETTE_INIT( radarscp )
 	state->color_codes = color_prom;	/* we'll need it later */
 }
 
-PALETTE_INIT( radarsc1 )
+PALETTE_INIT( radarscp1 )
 {
 	dkong_state *state = (dkong_state *)machine->driver_data;
 	int i;
@@ -342,11 +342,11 @@ PALETTE_INIT( radarsc1 )
 	{
 
 		/* red component */
-		r = compute_res_net( color_prom[512], 0, &radarsc1_net_info );
+		r = compute_res_net( color_prom[512], 0, &radarscp1_net_info );
 		/* green component */
-		g = compute_res_net( color_prom[256], 1, &radarsc1_net_info );
+		g = compute_res_net( color_prom[256], 1, &radarscp1_net_info );
 		/* blue component */
-		b = compute_res_net( color_prom[0], 2, &radarsc1_net_info );
+		b = compute_res_net( color_prom[0], 2, &radarscp1_net_info );
 
 		palette_set_color_rgb(machine,i,r,g,b);
 		color_prom++;
@@ -357,9 +357,9 @@ PALETTE_INIT( radarsc1 )
 	for (i=0;i<256;i++)
 		if ( (i & 0x03) == 0x00 )  /*  NOR => CS=1 => Tristate => real black */
 		{
-			r = compute_res_net( 0, 0, &radarsc1_net_info );
-			g = compute_res_net( 0, 1, &radarsc1_net_info );
-			b = compute_res_net( 0, 2, &radarsc1_net_info );
+			r = compute_res_net( 0, 0, &radarscp1_net_info );
+			g = compute_res_net( 0, 1, &radarscp1_net_info );
+			b = compute_res_net( 0, 2, &radarscp1_net_info );
 			palette_set_color_rgb(machine,i,r,g,b);
 		}
 
@@ -437,10 +437,10 @@ PALETTE_INIT( dkong3 )
 	dkong_state *state = (dkong_state *)machine->driver_data;
 	rgb_t	*rgb;
 
-	rgb = compute_res_net_all(color_prom, &dkong3_decode_info, &dkong3_net_info);
+	rgb = compute_res_net_all(machine, color_prom, &dkong3_decode_info, &dkong3_net_info);
 	palette_set_colors(machine, 0, rgb, 256);
 	palette_normalize_range(machine->palette, 0, 255, 0, 255);
-	free(rgb);
+	auto_free(machine, rgb);
 
 	color_prom += 1024;
 	/* color_prom now points to the beginning of the character color codes */
@@ -456,7 +456,7 @@ static TILE_GET_INFO( dkong_bg_tile_info )
 	SET_TILE_INFO(0, code, color, 0);
 }
 
-static TILE_GET_INFO( radarsc1_bg_tile_info )
+static TILE_GET_INFO( radarscp1_bg_tile_info )
 {
 	dkong_state *state = (dkong_state *)machine->driver_data;
 	int code = state->video_ram[tile_index] + 256 * state->gfx_bank;
@@ -894,7 +894,7 @@ static void check_palette(running_machine *machine)
 	const input_port_config *port;
 	int newset;
 
-	port = input_port_by_tag(&machine->portlist, "VIDHW");
+	port = machine->port("VIDHW");
 	if (port != NULL)
 	{
 		newset = input_port_read_direct(port);
@@ -960,7 +960,7 @@ VIDEO_START( dkong )
 			tilemap_set_scrolldx(state->bg_tilemap, 0, 128);
 			break;
 		case HARDWARE_TRS01:
-			state->bg_tilemap = tilemap_create(machine, radarsc1_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
+			state->bg_tilemap = tilemap_create(machine, radarscp1_bg_tile_info, tilemap_scan_rows,  8, 8, 32, 32);
 			tilemap_set_scrolldx(state->bg_tilemap, 0, 128);
 
 			state->bg_bits = video_screen_auto_bitmap_alloc(machine->primary_screen);

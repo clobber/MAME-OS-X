@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _karnov_state karnov_state;
-struct _karnov_state
+class karnov_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, karnov_state(machine)); }
+
+	karnov_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    videoram;
 	UINT16 *    ram;
@@ -26,8 +30,8 @@ struct _karnov_state
 	int         latch;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
+	running_device *maincpu;
+	running_device *audiocpu;
 };
 
 enum {

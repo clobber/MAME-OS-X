@@ -9,12 +9,12 @@
 
 static void illegal(upd7810_state *cpustate)
 {
-	logerror("uPD7810 '%s': illegal opcode %02x at PC:%04x\n", cpustate->device->tag, OP, PC);
+	logerror("uPD7810 '%s': illegal opcode %02x at PC:%04x\n", cpustate->device->tag(), OP, PC);
 }
 
 static void illegal2(upd7810_state *cpustate)
 {
-	logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag, OP, OP2, PC);
+	logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag(), OP, OP2, PC);
 }
 
 /* prefix 48 */
@@ -8648,7 +8648,7 @@ static void SKN_bit(upd7810_state *cpustate)
 			val = RP( cpustate, UPD7807_PORTT );
 			break;
 		default:
-			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag, OP, imm, PC);
+			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag(), OP, imm, PC);
 			val = 0;
 			break;
 	}
@@ -8702,7 +8702,7 @@ static void SETB(upd7810_state *cpustate)
 //          PT is input only
 //          break;
 		default:
-			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag, OP, imm, PC);
+			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag(), OP, imm, PC);
 			break;
 	}
 }
@@ -8752,7 +8752,7 @@ static void CLR(upd7810_state *cpustate)
 //          PT is input only
 //          break;
 		default:
-			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag, OP, imm, PC);
+			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag(), OP, imm, PC);
 			break;
 	}
 }
@@ -8801,7 +8801,7 @@ static void SK_bit(upd7810_state *cpustate)
 			val = RP( cpustate, UPD7807_PORTT );
 			break;
 		default:
-			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag, OP, imm, PC);
+			logerror("uPD7810 '%s': illegal opcode %02x %02x at PC:%04x\n", cpustate->device->tag(), OP, imm, PC);
 			val = 0;
 			break;
 	}
@@ -9456,4 +9456,15 @@ static void SKNIT_F0(upd7810_state *cpustate)
 static void STM(upd7810_state *cpustate)
 {
 	cpustate->ovc0 = ( ( TMM & 0x04 ) ? 16 * 8 : 8 ) * TM0;
+}
+
+static void STM_7801(upd7810_state *cpustate)
+{
+	/* Set the timer flip/fliop */
+	TO = 1;
+	if ( cpustate->config.io_callback)
+		(*cpustate->config.io_callback)(cpustate->device,UPD7810_TO,TO);
+
+	/* Reload the timer */
+	cpustate->ovc0 = 16 * ( TM0 + ( ( TM1 & 0x0f ) << 8 ) );
 }

@@ -115,15 +115,19 @@ Dip locations verified for:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
 
-typedef struct _m63_state m63_state;
-struct _m63_state
+class m63_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, m63_state(machine)); }
+
+	m63_state(running_machine &machine) { }
+
 	UINT8 *  videoram;
 	UINT8 *  colorram;
 	UINT8 *  spriteram;
@@ -142,10 +146,10 @@ struct _m63_state
 	INT16    *samplebuf;
 
 	/* sound devices */
-	const device_config *soundcpu;
-	const device_config *ay1;
-	const device_config *ay2;
-	const device_config *samples;
+	running_device *soundcpu;
+	running_device *ay1;
+	running_device *ay2;
+	running_device *samples;
 };
 
 

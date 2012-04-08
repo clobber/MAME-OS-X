@@ -65,7 +65,7 @@ On SegaC2 the VDP never turns on the IRQ6 enable register
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "sound/sn76496.h"
@@ -73,7 +73,7 @@ On SegaC2 the VDP never turns on the IRQ6 enable register
 #include "sound/upd7759.h"
 #include "sound/fm.h"
 #include "cpu/m68000/m68000.h"
-#include "megadriv.h"
+#include "includes/megadriv.h"
 #include "cpu/sh2/sh2.h"
 
 #define MEGADRIV_VDP_VRAM(address) megadrive_vdp_vram[(address)&0x7fff]
@@ -95,8 +95,8 @@ static int megadrive_irq6_pending = 0;
 static int megadrive_irq4_pending = 0;
 
 /* 32x! */
-static const device_config *_32x_master_cpu;
-static const device_config *_32x_slave_cpu;
+static running_device *_32x_master_cpu;
+static running_device *_32x_slave_cpu;
 static int _32x_is_connected;
 
 static int sh2_are_running;
@@ -129,12 +129,12 @@ static UINT16 *_32x_display_dram, *_32x_access_dram;
 static UINT16* _32x_palette;
 static UINT16* _32x_palette_lookup;
 /* SegaCD! */
-static const device_config *_segacd_68k_cpu;
+static running_device *_segacd_68k_cpu;
 /* SVP (virtua racing) */
-static const device_config *_svp_cpu;
+static running_device *_svp_cpu;
 
 
-static const device_config *_genesis_snd_z80_cpu;
+static running_device *_genesis_snd_z80_cpu;
 
 int segac2_bg_pal_lookup[4];
 int segac2_sp_pal_lookup[4];
@@ -163,10 +163,10 @@ static int megadrive_region_pal;
 static int megadrive_max_hposition;
 
 
-static const device_config* frame_timer;
-static const device_config* scanline_timer;
-static const device_config* irq6_on_timer;
-static const device_config* irq4_on_timer;
+static running_device* frame_timer;
+static running_device* scanline_timer;
+static running_device* irq6_on_timer;
+static running_device* irq4_on_timer;
 static bitmap_t* render_bitmap;
 //emu_timer* vblankirq_off_timer;
 
@@ -698,7 +698,7 @@ static void megadrive_do_insta_68k_to_vram_dma(running_machine *machine, UINT32 
 	if (length==0x00) length = 0xffff;
 
 	/* This is a hack until real DMA timings are implemented */
-	cpu_spinuntil_time(cputag_get_cpu(machine, "maincpu"), ATTOTIME_IN_NSEC(length * 1000 / 3500));
+	cpu_spinuntil_time(devtag_get_device(machine, "maincpu"), ATTOTIME_IN_NSEC(length * 1000 / 3500));
 
 	for (count = 0;count<(length>>1);count++)
 	{
@@ -1606,6 +1606,61 @@ INPUT_PORTS_START( ssf2ghw )
 //  PORT_DIPSETTING(    0x00, "10 (Fastest)" )
 INPUT_PORTS_END
 
+INPUT_PORTS_START(mk3ghw)
+	PORT_INCLUDE( md_common )
+
+	PORT_MODIFY("PAD1")
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
+
+	PORT_MODIFY("PAD2")
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
+
+	PORT_START("EXTRA1")	/* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("EXTRA2")	/* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_IMPULSE(1)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_IMPULSE(1)
+
+	PORT_START("DSWA")
+	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x07, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
+	PORT_BIT( 0xf8, 0x00, IPT_UNUSED )
+
+	PORT_START("DSWB")
+	PORT_DIPUNKNOWN( 0x01, 0x00 )
+	PORT_DIPUNKNOWN( 0x02, 0x00 )
+	PORT_DIPUNKNOWN( 0x04, 0x00 )
+	PORT_DIPUNKNOWN( 0x08, 0x00 )
+	PORT_DIPUNKNOWN( 0x10, 0x00 )
+	PORT_DIPUNKNOWN( 0x20, 0x00 )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
+	PORT_DIPUNKNOWN( 0x80, 0x00 )
+INPUT_PORTS_END
+
 
 INPUT_PORTS_START( aladbl )
 	PORT_INCLUDE( md_common )
@@ -1653,6 +1708,9 @@ static void megadrive_init_io(running_machine *machine)
 		init_megadri6_io(machine);
 
 	if (ipt == INPUT_PORTS_NAME(ssf2ghw))
+		init_megadri6_io(machine);
+
+	if (ipt == INPUT_PORTS_NAME(mk3ghw))
 		init_megadri6_io(machine);
 }
 
@@ -5680,7 +5738,7 @@ INLINE UINT16 get_hposition(void)
 
 static int irq4counter;
 
-static const device_config* render_timer;
+static running_device* render_timer;
 
 static TIMER_DEVICE_CALLBACK( render_timer_callback )
 {
@@ -5768,7 +5826,7 @@ static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 
 
 
-		if (cputag_get_cpu(timer->machine, "genesis_snd_z80") != NULL)
+		if (devtag_get_device(timer->machine, "genesis_snd_z80") != NULL)
 		{
 			if (genesis_scanline_counter == megadrive_z80irq_scanline)
 			{
@@ -5856,7 +5914,7 @@ MACHINE_RESET( megadriv )
 		break;
 	}
 
-	if (cputag_get_cpu(machine, "genesis_snd_z80") != NULL)
+	if (devtag_get_device(machine, "genesis_snd_z80") != NULL)
 	{
 		genz80.z80_is_reset = 1;
 		genz80.z80_has_bus = 1;
@@ -5882,8 +5940,8 @@ MACHINE_RESET( megadriv )
 	if (genesis_other_hacks)
 	{
 	//  set_refresh_rate(megadriv_framerate);
-		cpu_set_clockscale(cputag_get_cpu(machine, "maincpu"), 0.9950f); /* Fatal Rewind is very fussy... */
-	//  cpu_set_clockscale(cputag_get_cpu(machine, "maincpu"), 0.3800f); /* Fatal Rewind is very fussy... */
+		cpu_set_clockscale(devtag_get_device(machine, "maincpu"), 0.9950f); /* Fatal Rewind is very fussy... */
+	//  cpu_set_clockscale(devtag_get_device(machine, "maincpu"), 0.3800f); /* Fatal Rewind is very fussy... */
 
 		memset(megadrive_ram,0x00,0x10000);
 	}
@@ -6239,7 +6297,7 @@ static IRQ_CALLBACK(genesis_int_callback)
 	return (0x60+irqline*4)/4; // vector address
 }
 
-static int megadriv_tas_callback(const device_config *device)
+static int megadriv_tas_callback(running_device *device)
 {
 	return 0; // writeback not allowed
 }
@@ -6249,7 +6307,7 @@ static void megadriv_init_common(running_machine *machine)
 	const input_port_token *ipt = machine->gamedrv->ipt;
 
 	/* Look to see if this system has the standard Sound Z80 */
-	_genesis_snd_z80_cpu = cputag_get_cpu(machine, "genesis_snd_z80");
+	_genesis_snd_z80_cpu = devtag_get_device(machine, "genesis_snd_z80");
 	if (_genesis_snd_z80_cpu != NULL)
 	{
 		//printf("GENESIS Sound Z80 cpu found %d\n", cpu_get_index(_genesis_snd_z80_cpu) );
@@ -6259,14 +6317,14 @@ static void megadriv_init_common(running_machine *machine)
 	}
 
 	/* Look to see if this system has the 32x Master SH2 */
-	_32x_master_cpu = cputag_get_cpu(machine, "32x_master_sh2");
+	_32x_master_cpu = devtag_get_device(machine, "32x_master_sh2");
 	if (_32x_master_cpu != NULL)
 	{
 		printf("32x MASTER SH2 cpu found %d\n", cpu_get_index(_32x_master_cpu) );
 	}
 
 	/* Look to see if this system has the 32x Slave SH2 */
-	_32x_slave_cpu = cputag_get_cpu(machine, "32x_slave_sh2");
+	_32x_slave_cpu = devtag_get_device(machine, "32x_slave_sh2");
 	if (_32x_slave_cpu != NULL)
 	{
 		printf("32x SLAVE SH2 cpu found %d\n", cpu_get_index(_32x_slave_cpu) );
@@ -6281,28 +6339,28 @@ static void megadriv_init_common(running_machine *machine)
 		_32x_is_connected = 0;
 	}
 
-	_segacd_68k_cpu = cputag_get_cpu(machine, "segacd_68k");
+	_segacd_68k_cpu = devtag_get_device(machine, "segacd_68k");
 	if (_segacd_68k_cpu != NULL)
 	{
 		printf("Sega CD secondary 68k cpu found %d\n", cpu_get_index(_segacd_68k_cpu) );
 	}
 
-	_svp_cpu = cputag_get_cpu(machine, "svp");
+	_svp_cpu = devtag_get_device(machine, "svp");
 	if (_svp_cpu != NULL)
 	{
 		printf("SVP (cpu) found %d\n", cpu_get_index(_svp_cpu) );
 	}
 
 
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), genesis_int_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), genesis_int_callback);
 	megadriv_backupram = NULL;
 	megadriv_backupram_length = 0;
 
 	vdp_get_word_from_68k_mem = vdp_get_word_from_68k_mem_default;
 
-	m68k_set_tas_callback(cputag_get_cpu(machine, "maincpu"), megadriv_tas_callback);
+	m68k_set_tas_callback(devtag_get_device(machine, "maincpu"), megadriv_tas_callback);
 
-	if ((ipt == INPUT_PORTS_NAME(megadri6)) || (ipt == INPUT_PORTS_NAME(ssf2ghw)))
+	if ((ipt == INPUT_PORTS_NAME(megadri6)) || (ipt == INPUT_PORTS_NAME(ssf2ghw)) || (ipt == INPUT_PORTS_NAME(mk3ghw)))
 	{
 		megadrive_io_read_data_port_ptr	= megadrive_io_read_data_port_6button;
 		megadrive_io_write_data_port_ptr = megadrive_io_write_data_port_6button;
@@ -6427,7 +6485,7 @@ static WRITE8_HANDLER( z80_unmapped_w )
 /* sets the megadrive z80 to it's normal ports / map */
 void megatech_set_megadrive_z80_as_megadrive_z80(running_machine *machine, const char* tag)
 {
-	const device_config *ym = devtag_get_device(machine, "ymsnd");
+	running_device *ym = devtag_get_device(machine, "ymsnd");
 
 	/* INIT THE PORTS *********************************************************************************************/
 	memory_install_readwrite8_handler(cputag_get_address_space(machine, tag, ADDRESS_SPACE_IO), 0x0000, 0xffff, 0, 0, z80_unmapped_port_r, z80_unmapped_port_w);
@@ -6520,8 +6578,8 @@ DRIVER_INIT( _32x )
 	_32x_240mode = 0;
 
 // checking if these help brutal, they don't.
-	sh2drc_set_options(cputag_get_cpu(machine, "32x_master_sh2"), SH2DRC_COMPATIBLE_OPTIONS);
-	sh2drc_set_options(cputag_get_cpu(machine, "32x_slave_sh2"), SH2DRC_COMPATIBLE_OPTIONS);
+	sh2drc_set_options(devtag_get_device(machine, "32x_master_sh2"), SH2DRC_COMPATIBLE_OPTIONS);
+	sh2drc_set_options(devtag_get_device(machine, "32x_slave_sh2"), SH2DRC_COMPATIBLE_OPTIONS);
 
 	DRIVER_INIT_CALL(megadriv);
 }

@@ -694,7 +694,7 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mb88xx/mb88xx.h"
 #include "machine/atari_vg.h"
@@ -745,19 +745,19 @@ static WRITE8_HANDLER( bosco_latch_w )
 	switch (offset)
 	{
 		case 0x00:	/* IRQ1 */
-			cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
+			cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), bit);
 			if (!bit)
 				cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
 		case 0x01:	/* IRQ2 */
-			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub"), bit);
+			cpu_interrupt_enable(devtag_get_device(space->machine, "sub"), bit);
 			if (!bit)
 				cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
 			break;
 
 		case 0x02:	/* NMION */
-			cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub2"), !bit);
+			cpu_interrupt_enable(devtag_get_device(space->machine, "sub2"), !bit);
 			break;
 
 		case 0x03:	/* RESET */
@@ -866,7 +866,7 @@ static TIMER_CALLBACK( cpu3_interrupt_callback )
 {
 	int scanline = param;
 
-	nmi_line_pulse(cputag_get_cpu(machine, "sub2"));
+	nmi_line_pulse(devtag_get_device(machine, "sub2"));
 
 	scanline = scanline + 128;
 	if (scanline >= 272)
@@ -881,6 +881,8 @@ static MACHINE_START( galaga )
 {
 	/* create the interrupt timer */
 	cpu3_interrupt_timer = timer_alloc(machine, cpu3_interrupt_callback, NULL);
+	custom_mod = 0;
+	state_save_register_global(machine, custom_mod);
 }
 
 static void bosco_latch_reset(running_machine *machine)
@@ -2913,9 +2915,9 @@ ROM_END
 
 ROM_START( digdug1 )
 	ROM_REGION( 0x10000, "maincpu", 0 )	/* 64k for code for the first CPU  */
-	ROM_LOAD( "dd1a.1",       0x0000, 0x1000, CRC(b9198079) SHA1(1d3fe04020f584ed250e32fdc6f6a3b769342884) )
-	ROM_LOAD( "dd1a.2",       0x1000, 0x1000, CRC(b2acbe49) SHA1(c8f713e8cfa70d3bc64d3002ff7bffc65ee138e2) )
-	ROM_LOAD( "dd1a.3",       0x2000, 0x1000, CRC(d6407b49) SHA1(0e71a8f02778286488865e20439776dbb2a8ec78) )
+	ROM_LOAD( "dd1.1",        0x0000, 0x1000, CRC(b9198079) SHA1(1d3fe04020f584ed250e32fdc6f6a3b769342884) )
+	ROM_LOAD( "dd1.2",        0x1000, 0x1000, CRC(b2acbe49) SHA1(c8f713e8cfa70d3bc64d3002ff7bffc65ee138e2) )
+	ROM_LOAD( "dd1.3",        0x2000, 0x1000, CRC(d6407b49) SHA1(0e71a8f02778286488865e20439776dbb2a8ec78) )
 	ROM_LOAD( "dd1.4b",       0x3000, 0x1000, CRC(f4cebc16) SHA1(19b568f92069a1cfe1c07287408efe3b0e253375) )
 
 	ROM_REGION( 0x10000, "sub", 0 )	/* 64k for the second CPU */

@@ -7,7 +7,6 @@
 #ifndef __K033906_H__
 #define __K033906_H__
 
-#include "devcb.h"
 
 /***************************************************************************
     TYPE DEFINITIONS
@@ -43,7 +42,7 @@ DEVICE_GET_INFO( k033906 );
 
 extern READ32_DEVICE_HANDLER( k033906_r );
 extern WRITE32_DEVICE_HANDLER( k033906_w );
-extern void k033906_set_reg( const device_config *device, int state );
+extern void k033906_set_reg( running_device *device, int state );
 
 
 #endif	/* __K033906_H__ */

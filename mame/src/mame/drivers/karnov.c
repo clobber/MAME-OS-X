@@ -37,7 +37,7 @@
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/2203intf.h"
@@ -743,7 +743,7 @@ static INTERRUPT_GEN( karnov_interrupt )
 	cpu_set_input_line(device, 7, HOLD_LINE);	/* VBL */
 }
 
-static void sound_irq( const device_config *device, int linestate )
+static void sound_irq( running_device *device, int linestate )
 {
 	karnov_state *state = (karnov_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, linestate); /* IRQ */

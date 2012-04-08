@@ -9,7 +9,8 @@
 #import <Cocoa/Cocoa.h>
 
 // MAME headers
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 
 @class DDHidDevice;
 

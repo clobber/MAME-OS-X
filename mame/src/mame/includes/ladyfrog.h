@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _ladyfrog_state ladyfrog_state;
-struct _ladyfrog_state
+class ladyfrog_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ladyfrog_state(machine)); }
+
+	ladyfrog_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    spriteram;
@@ -26,7 +30,7 @@ struct _ladyfrog_state
 	UINT8      snd_data;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

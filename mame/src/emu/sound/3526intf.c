@@ -16,9 +16,8 @@
 * NOTES
 *
 ******************************************************************************/
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
 #include "3526intf.h"
 #include "fm.h"
 #include "sound/fmopl.h"
@@ -31,11 +30,11 @@ struct _ym3526_state
 	emu_timer *		timer[2];
 	void *			chip;
 	const ym3526_interface *intf;
-	const device_config *device;
+	running_device *device;
 };
 
 
-INLINE ym3526_state *get_safe_token(const device_config *device)
+INLINE ym3526_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -96,7 +95,7 @@ static DEVICE_START( ym3526 )
 	ym3526_state *info = get_safe_token(device);
 	int rate = device->clock/72;
 
-	info->intf = device->static_config ? (const ym3526_interface *)device->static_config : &dummy;
+	info->intf = device->baseconfig().static_config ? (const ym3526_interface *)device->baseconfig().static_config : &dummy;
 	info->device = device;
 
 	/* stream system initialize */

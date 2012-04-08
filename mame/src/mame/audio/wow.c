@@ -18,7 +18,7 @@ wow_sh_ update- Null
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/samples.h"
 #include "includes/astrocde.h"
@@ -108,7 +108,7 @@ static int plural;
 
 READ8_HANDLER( wow_speech_r )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 	int Phoneme,Intonation;
 	int i = 0;
 
@@ -177,6 +177,6 @@ READ8_HANDLER( wow_speech_r )
 
 CUSTOM_INPUT( wow_speech_status_r )
 {
-	const device_config *samples = devtag_get_device(field->port->machine, "samples");
+	running_device *samples = devtag_get_device(field->port->machine, "samples");
 	return !sample_playing(samples, 0);
 }

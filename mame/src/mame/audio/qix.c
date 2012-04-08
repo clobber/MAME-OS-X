@@ -4,7 +4,7 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6809/m6809.h"
 #include "includes/qix.h"
@@ -101,7 +101,7 @@ static WRITE8_DEVICE_HANDLER( sndpia_2_warning_w )
 
 static TIMER_CALLBACK( deferred_sndpia1_porta_w )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	pia6821_porta_w(device, 0, param);
 }
 

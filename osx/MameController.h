@@ -28,7 +28,7 @@
 #import "JRLog.h"
 
 #if defined(__cplusplus)
-extern "C" {
+extern "C++" {
 #endif
     
 #include "osdepend.h"

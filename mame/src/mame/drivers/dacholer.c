@@ -17,16 +17,20 @@
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
 #include "sound/msm5205.h"
 #include "sound/ay8910.h"
 
 
-typedef struct _dacholer_state dacholer_state;
-struct _dacholer_state
+class dacholer_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dacholer_state(machine)); }
+
+	dacholer_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  bgvideoram;
 	UINT8 *  fgvideoram;
@@ -45,7 +49,7 @@ struct _dacholer_state
 	UINT8 snd_ack;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 
@@ -406,7 +410,7 @@ static INTERRUPT_GEN( sound_irq )
 	}
 }
 
-static void adpcm_int( const device_config *device )
+static void adpcm_int( running_device *device )
 {
 	dacholer_state *state = (dacholer_state *)device->machine->driver_data;
 	if (state->snd_interrupt_enable == 1 || (state->snd_interrupt_enable == 0 && state->msm_toggle == 1))

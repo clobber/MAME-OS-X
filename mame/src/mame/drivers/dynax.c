@@ -71,7 +71,7 @@ TODO:
 
 *********************************************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "includes/dynax.h"
@@ -127,7 +127,7 @@ static INTERRUPT_GEN( sprtmtch_vblank_interrupt )
 	sprtmtch_update_irq(device->machine);
 }
 
-static void sprtmtch_sound_callback(const device_config *device, int state)
+static void sprtmtch_sound_callback(running_device *device, int state)
 {
 	dynax_sound_irq = state;
 	sprtmtch_update_irq(device->machine);
@@ -201,7 +201,7 @@ static WRITE8_HANDLER( jantouki_sound_vblank_ack_w )
 	jantouki_sound_update_irq(space->machine);
 }
 
-static void jantouki_sound_callback(const device_config *device, int state)
+static void jantouki_sound_callback(running_device *device, int state)
 {
 	dynax_sound_irq = state;
 	jantouki_sound_update_irq(device->machine);
@@ -348,7 +348,7 @@ static WRITE8_HANDLER( yarunara_palette_w )
 
 		case 0x1c:	// RTC
 		{
-			const device_config *rtc = devtag_get_device(space->machine, "rtc");
+			running_device *rtc = devtag_get_device(space->machine, "rtc");
 			msm6242_w(rtc, offset, data);
 		}
 		return;
@@ -398,7 +398,7 @@ static WRITE8_HANDLER( nanajign_palette_w )
 static int msm5205next;
 static int resetkludge;
 
-static void adpcm_int(const device_config *device)
+static void adpcm_int(running_device *device)
 {
 	static int toggle;
 
@@ -412,7 +412,7 @@ static void adpcm_int(const device_config *device)
 		cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
 }
-static void adpcm_int_cpu1(const device_config *device)
+static void adpcm_int_cpu1(running_device *device)
 {
 	static int toggle;
 
@@ -1426,7 +1426,7 @@ static READ8_HANDLER( tenkai_8000_r )
 	}
 	else if ( (rombank == 0x10) && (offset < 0x10) )
 	{
-		const device_config *rtc = devtag_get_device(space->machine, "rtc");
+		running_device *rtc = devtag_get_device(space->machine, "rtc");
 		return msm6242_r(rtc, offset);
 	}
 	else if (rombank == 0x12)
@@ -1442,7 +1442,7 @@ static WRITE8_HANDLER( tenkai_8000_w )
 {
 	if ( (rombank == 0x10) && (offset < 0x10) )
 	{
-		const device_config *rtc = devtag_get_device(space->machine, "rtc");
+		running_device *rtc = devtag_get_device(space->machine, "rtc");
 		msm6242_w(rtc, offset, data);
 		return;
 	}
@@ -4108,7 +4108,7 @@ static INPUT_PORTS_START( gekisha )
 	PORT_DIPNAME( 0x02, 0x02, "Unknown 4-1" )
 	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x04, 0x04, "Unknown 4-2" )
+	PORT_DIPNAME( 0x04, 0x04, "Auto Tsumo after Reach" )
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x08, 0x08, "Unknown 4-3" )
@@ -5094,6 +5094,21 @@ ROM_START( maya )
 	ROM_LOAD( "prom1.6b",  0x200, 0x200, CRC(e38eb360) SHA1(739960dd57ec3305edd57aa63816a81ddfbebf3e) )
 ROM_END
 
+ROM_START( mayaa )
+	ROM_REGION( 0x90000, "maincpu", 0 )	// Z80 Code
+	ROM_LOAD( "512-1.bin", 0x00000, 0x10000, CRC(8ac94f49) SHA1(3c1e86c1aad67fb8cb1eb534a272222b58f1ff0f) )
+	ROM_LOAD( "512-2.bin", 0x28000, 0x10000, CRC(7ea5b49a) SHA1(aaae848669d9f88c0660f46cc801e4eb0f5e3b89) )
+
+	ROM_REGION( 0xc0000, "gfx1", 0 )
+	ROM_LOAD( "27c020-1.bin", 0x00000, 0x40000, CRC(8d41d7ca) SHA1(7e28845457d00481b313ee52b8c7674f75b8c3c0) )
+	ROM_LOAD( "27c020-2.bin", 0x40000, 0x40000, CRC(ab85ce5e) SHA1(845b846e0fb8c9fcd1540960cda006fdac364fea) )
+	ROM_LOAD( "27c020-3.bin", 0x80000, 0x40000, CRC(c4316dec) SHA1(2e727a491a71eb1f4d9f338cc6ec76e03f7b46fd) )
+
+	ROM_REGION( 0x400, "proms", 0 )	// Color PROMs
+	ROM_LOAD( "promat01.bin",  0x000, 0x200, CRC(d276bf61) SHA1(987058b37182a54a360a80a2f073b000606a11c9) )	// FIXED BITS (0xxxxxxx)
+	ROM_LOAD( "promat02.bin",  0x200, 0x200, CRC(e38eb360) SHA1(739960dd57ec3305edd57aa63816a81ddfbebf3e) )
+ROM_END
+
 ROM_START( inca )
 	ROM_REGION( 0x90000, "maincpu", 0 )	// Z80 Code
 	ROM_LOAD( "am27c512.1", 0x00000, 0x10000, CRC(b0d513f7) SHA1(65ef4702302bbfc7c7a77f7353120ee3f5c94b31) )
@@ -5108,6 +5123,8 @@ ROM_START( inca )
 	ROM_LOAD( "n82s147n.2",  0x000, 0x200, CRC(268bd9d3) SHA1(1f77d9dc58ab29f013ee21d7ec521b90be72610d) )	// FIXED BITS (0xxxxxxx)
 	ROM_LOAD( "n82s147n.1",  0x200, 0x200, CRC(618dbeb3) SHA1(10c8a558430fd1c2cabf9133d3e4f0a5f80eab83) )
 ROM_END
+
+
 
 /*
 
@@ -5199,11 +5216,11 @@ static DRIVER_INIT( maya )
 	}
 
 	/* Address lines scrambling on the blitter data roms */
-	rom = alloc_array_or_die(UINT8, 0xc0000);
+	rom = auto_alloc_array(machine, UINT8, 0xc0000);
 	memcpy(rom, gfx, 0xc0000);
 	for (i = 0; i < 0xc0000; i++)
 		gfx[i] = rom[BITSWAP24(i,23,22,21,20,19,18,14,15, 16,17,13,12,11,10,9,8, 7,6,5,4,3,2,1,0)];
-	free(rom);
+	auto_free(machine, rom);
 }
 
 
@@ -5906,12 +5923,12 @@ static DRIVER_INIT( mjelct3 )
 	int i;
 	UINT8	*rom = memory_region(machine, "maincpu");
 	size_t  size = memory_region_length(machine, "maincpu");
-	UINT8	*rom1 = alloc_array_or_die(UINT8, size);
+	UINT8	*rom1 = auto_alloc_array(machine, UINT8, size);
 
-		memcpy(rom1,rom,size);
-		for (i = 0; i < size; i++)
-			rom[i] = BITSWAP8(rom1[BITSWAP24(i,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8, 1,6,5,4,3,2,7, 0)], 7,6, 1,4,3,2,5,0);
-		free(rom1);
+	memcpy(rom1,rom,size);
+	for (i = 0; i < size; i++)
+		rom[i] = BITSWAP8(rom1[BITSWAP24(i,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8, 1,6,5,4,3,2,7, 0)], 7,6, 1,4,3,2,5,0);
+	auto_free(machine, rom1);
 }
 
 static DRIVER_INIT( mjelct3a )
@@ -5919,37 +5936,37 @@ static DRIVER_INIT( mjelct3a )
 	int i,j;
 	UINT8	*rom = memory_region(machine, "maincpu");
 	size_t  size = memory_region_length(machine, "maincpu");
-	UINT8	*rom1 = alloc_array_or_die(UINT8, size);
+	UINT8	*rom1 = auto_alloc_array(machine, UINT8, size);
 
-		memcpy(rom1,rom,size);
-		for (i = 0; i < size; i++)
+	memcpy(rom1,rom,size);
+	for (i = 0; i < size; i++)
+	{
+		j = i & ~0x7e00;
+		switch(i & 0x7000)
 		{
-			j = i & ~0x7e00;
-			switch(i & 0x7000)
-			{
-				case 0x0000:	j |= 0x0400;	break;
-				case 0x1000:	j |= 0x4400;	break;
-				case 0x2000:	j |= 0x4200;	break;
-				case 0x3000:	j |= 0x0200;	break;
-				case 0x4000:	j |= 0x4600;	break;
-				case 0x5000:	j |= 0x4000;	break;
+			case 0x0000:	j |= 0x0400;	break;
+			case 0x1000:	j |= 0x4400;	break;
+			case 0x2000:	j |= 0x4200;	break;
+			case 0x3000:	j |= 0x0200;	break;
+			case 0x4000:	j |= 0x4600;	break;
+			case 0x5000:	j |= 0x4000;	break;
 //              case 0x6000:    j |= 0x0000;    break;
-				case 0x7000:	j |= 0x0600;	break;
-			}
-			switch(i & 0x0e00)
-			{
-				case 0x0000:	j |= 0x2000;	break;
-				case 0x0200:	j |= 0x3800;	break;
-				case 0x0400:	j |= 0x2800;	break;
-				case 0x0600:	j |= 0x0800;	break;
-				case 0x0800:	j |= 0x1800;	break;
-//              case 0x0a00:    j |= 0x0000;    break;
-				case 0x0c00:	j |= 0x1000;	break;
-				case 0x0e00:	j |= 0x3000;	break;
-			}
-			rom[j] = rom1[i];
+			case 0x7000:	j |= 0x0600;	break;
 		}
-		free(rom1);
+		switch(i & 0x0e00)
+		{
+			case 0x0000:	j |= 0x2000;	break;
+			case 0x0200:	j |= 0x3800;	break;
+			case 0x0400:	j |= 0x2800;	break;
+			case 0x0600:	j |= 0x0800;	break;
+			case 0x0800:	j |= 0x1800;	break;
+//              case 0x0a00:    j |= 0x0000;    break;
+			case 0x0c00:	j |= 0x1000;	break;
+			case 0x0e00:	j |= 0x3000;	break;
+		}
+		rom[j] = rom1[i];
+	}
+	auto_free(machine, rom1);
 
 	DRIVER_INIT_CALL(mjelct3);
 }
@@ -6960,10 +6977,12 @@ GAME( 1990, hjingi,   0,        hjingi,   hjingi,   0,        ROT180, "Dynax",  
 GAME( 1989, hnoridur, hjingi,   hnoridur, hnoridur, 0,        ROT180, "Dynax",                    "Hana Oriduru (Japan)",                                         0 )
 GAME( 1989, drgpunch, 0,        sprtmtch, sprtmtch, 0,        ROT0,   "Dynax",                    "Dragon Punch (Japan)",                                         0 )
 GAME( 1989, sprtmtch, drgpunch, sprtmtch, sprtmtch, 0,        ROT0,   "Dynax (Fabtek license)",   "Sports Match",                                                 0 )
-/* these 3 are Korean hacks / bootlegs of Dragon Punch / Sports Match */
-GAME( 1994, maya,     0,        sprtmtch, sprtmtch, maya,     ROT0,   "Promat",                   "Maya",                                                         0 )
+/* these 4 are Korean hacks / bootlegs of Dragon Punch / Sports Match */
+GAME( 1994, maya,     0,        sprtmtch, sprtmtch, maya,     ROT0,   "Promat",                   "Maya (set 1)",                                                 0 ) // this set has backgrounds blacked out in attract
+GAME( 1994, mayaa,    maya,     sprtmtch, sprtmtch, maya,     ROT0,   "Promat",                   "Maya (set 2)",                                                 0 )
 GAME( 199?, inca,     0,        sprtmtch, sprtmtch, maya,     ROT0,   "<unknown>",                "Inca",                                                         0 )
 GAME( 199?, blktouch, 0,        sprtmtch, sprtmtch, blktouch, ROT0,   "Yang Gi Co Ltd.",          "Black Touch (Korea)",                                          0 )
+
 GAME( 1989, mjfriday, 0,        mjfriday, mjfriday, 0,        ROT180, "Dynax",                    "Mahjong Friday (Japan)",                                       0 )
 GAME( 1989, gekisha,  0,        gekisha,  gekisha,  0,        ROT180, "Dynax",                    "Mahjong Gekisha",                                              0 )
 GAME( 1990, mcnpshnt, 0,        mcnpshnt, mcnpshnt, 0,        ROT0,   "Dynax",                    "Mahjong Campus Hunting (Japan)",                               0 )

@@ -4,7 +4,7 @@ Atari Wolf Pack (prototype) driver
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/s14001a.h"
 
@@ -61,7 +61,7 @@ static CUSTOM_INPUT( wolfpack_dial_r )
 
 static READ8_HANDLER( wolfpack_misc_r )
 {
-	const device_config *device = devtag_get_device(space->machine, "speech");
+	running_device *device = devtag_get_device(space->machine, "speech");
 	UINT8 val = 0;
 
 	/* BIT0 => SPEECH BUSY */

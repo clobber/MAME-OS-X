@@ -87,7 +87,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/ticket.h"
 #include "cpu/m6809/m6809.h"
 #include "includes/capbowl.h"
@@ -199,7 +199,7 @@ static WRITE8_HANDLER( capbowl_sndcmd_w )
  *
  *************************************/
 
-static void firqhandler( const device_config *device, int irq )
+static void firqhandler( running_device *device, int irq )
 {
 	capbowl_state *state = (capbowl_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 1, irq ? ASSERT_LINE : CLEAR_LINE);

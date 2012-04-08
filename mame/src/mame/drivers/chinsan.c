@@ -41,15 +41,19 @@ MM63.10N
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/mc8123.h"
 #include "sound/2203intf.h"
 #include "sound/msm5205.h"
 
-typedef struct _chinsan_state chinsan_state;
-struct _chinsan_state
+class chinsan_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, chinsan_state(machine)); }
+
+	chinsan_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  video;
 
@@ -523,7 +527,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void chin_adpcm_int( const device_config *device )
+static void chin_adpcm_int( running_device *device )
 {
 	chinsan_state *state = (chinsan_state *)device->machine->driver_data;
 

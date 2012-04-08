@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/amiga.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/6526cia.h"
@@ -291,7 +291,7 @@ void amiga_machine_config(running_machine *machine, const amiga_machine_interfac
 }
 
 
-static void amiga_m68k_reset(const device_config *device)
+static void amiga_m68k_reset(running_device *device)
 {
 	const address_space *space = cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM);
 
@@ -318,9 +318,9 @@ static void amiga_m68k_reset(const device_config *device)
 MACHINE_RESET( amiga )
 {
 	/* set m68k reset  function */
-	m68k_set_reset_callback(cputag_get_cpu(machine, "maincpu"), amiga_m68k_reset);
+	m68k_set_reset_callback(devtag_get_device(machine, "maincpu"), amiga_m68k_reset);
 
-	amiga_m68k_reset(cputag_get_cpu(machine, "maincpu"));
+	amiga_m68k_reset(devtag_get_device(machine, "maincpu"));
 
 	/* call the system-specific callback */
 	if (amiga_intf->reset_callback)
@@ -341,8 +341,8 @@ MACHINE_RESET( amiga )
 static TIMER_CALLBACK( scanline_callback )
 {
 	int scanline = param;
-	const device_config *cia_0 = devtag_get_device(machine, "cia_0");
-	const device_config *cia_1 = devtag_get_device(machine, "cia_1");
+	running_device *cia_0 = devtag_get_device(machine, "cia_0");
+	running_device *cia_1 = devtag_get_device(machine, "cia_1");
 
 	/* on the first scanline, we do some extra bookkeeping */
 	if (scanline == 0)
@@ -351,7 +351,7 @@ static TIMER_CALLBACK( scanline_callback )
 		amiga_custom_w(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), REG_INTREQ, 0x8000 | INTENA_VERTB, 0xffff);
 
 		/* clock the first CIA TOD */
-		cia_clock_tod(cia_0);
+		mos6526_tod_w(cia_0, 1);
 
 		/* call the system-specific callback */
 		if (amiga_intf->scanline0_callback != NULL)
@@ -359,7 +359,7 @@ static TIMER_CALLBACK( scanline_callback )
 	}
 
 	/* on every scanline, clock the second CIA TOD */
-	cia_clock_tod(cia_1);
+	mos6526_tod_w(cia_1, 1);
 
 	/* render up to this scanline */
 	if (!video_screen_update_partial(machine->primary_screen, scanline))
@@ -1041,7 +1041,7 @@ READ16_HANDLER( amiga_cia_r )
 {
 	UINT8 data;
 	int shift;
-	const device_config *cia;
+	running_device *cia;
 
 	/* offsets 0000-07ff reference CIA B, and are accessed via the MSB */
 	if ((offset & 0x0800) == 0)
@@ -1058,7 +1058,7 @@ READ16_HANDLER( amiga_cia_r )
 	}
 
 	/* handle the reads */
-	data = cia_r(cia, offset >> 7);
+	data = mos6526_r(cia, offset >> 7);
 
 	if (LOG_CIA)
 		logerror("%06x:cia_%c_read(%03x) = %04x & %04x\n", cpu_get_pc(space->cpu), 'A' + ((~offset & 0x0800) >> 11), offset * 2, data << shift, mem_mask);
@@ -1076,7 +1076,7 @@ READ16_HANDLER( amiga_cia_r )
 
 WRITE16_HANDLER( amiga_cia_w )
 {
-	const device_config *cia;
+	running_device *cia;
 
 	if (LOG_CIA)
 		logerror("%06x:cia_%c_write(%03x) = %04x & %04x\n", cpu_get_pc(space->cpu), 'A' + ((~offset & 0x0800) >> 11), offset * 2, data, mem_mask);
@@ -1100,7 +1100,7 @@ WRITE16_HANDLER( amiga_cia_w )
 	}
 
 	/* handle the writes */
-	cia_w(cia, offset >> 7, (UINT8) data);
+	mos6526_w(cia, offset >> 7, (UINT8) data);
 }
 
 
@@ -1111,13 +1111,13 @@ WRITE16_HANDLER( amiga_cia_w )
  *
  *************************************/
 
-void amiga_cia_0_irq(const device_config *device, int state)
+void amiga_cia_0_irq(running_device *device, int state)
 {
 	amiga_custom_w(cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM), REG_INTREQ, (state ? 0x8000 : 0x0000) | INTENA_PORTS, 0xffff);
 }
 
 
-void amiga_cia_1_irq(const device_config *device, int state)
+void amiga_cia_1_irq(running_device *device, int state)
 {
 	amiga_custom_w(cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM), REG_INTREQ, (state ? 0x8000 : 0x0000) | INTENA_EXTER, 0xffff);
 }
@@ -1281,8 +1281,8 @@ static TIMER_CALLBACK( finish_serial_write )
 
 WRITE16_HANDLER( amiga_custom_w )
 {
-	const device_config *cia_0;
-	const device_config *cia_1;
+	running_device *cia_0;
+	running_device *cia_1;
 	UINT16 temp;
 	offset &= 0xff;
 
@@ -1446,8 +1446,8 @@ WRITE16_HANDLER( amiga_custom_w )
 			data = (data & 0x8000) ? (CUSTOM_REG(offset) | (data & 0x7fff)) : (CUSTOM_REG(offset) & ~(data & 0x7fff));
 			cia_0 = devtag_get_device(space->machine, "cia_0");
 			cia_1 = devtag_get_device(space->machine, "cia_1");
-			if ( cia_get_irq( cia_0 ) ) data |= INTENA_PORTS;
-			if ( cia_get_irq( cia_1 ) )	data |= INTENA_EXTER;
+			if ( mos6526_irq_r( cia_0 ) ) data |= INTENA_PORTS;
+			if ( mos6526_irq_r( cia_1 ) ) data |= INTENA_EXTER;
 			CUSTOM_REG(offset) = data;
 
 			if ( temp & 0x8000  ) /* if we're generating irq's, delay a bit */

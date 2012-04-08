@@ -73,7 +73,7 @@ Side 2 = 0x8F7DDD (or 0x880000 | ( 0x77 << 12 ) | 0x0DDD)
 
 *********************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
 #include "machine/laserdsc.h"
@@ -83,7 +83,7 @@ Side 2 = 0x8F7DDD (or 0x880000 | ( 0x77 << 12 ) | 0x0DDD)
 #define CLIFF_ENABLE_SND_1	NODE_01
 #define CLIFF_ENABLE_SND_2	NODE_02
 
-static const device_config *laserdisc;
+static running_device *laserdisc;
 
 static int port_bank = 0;
 static int phillips_code = 0;
@@ -390,7 +390,7 @@ static INPUT_PORTS_START( cliffhgr )
 	PORT_BIT ( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( cliffhga )
+static INPUT_PORTS_START( cliffhgra )
 	PORT_START("BANK0")
 	PORT_BIT ( 0x3F, IP_ACTIVE_LOW, IPT_UNUSED )
 	PORT_BIT ( 0x40, IP_ACTIVE_LOW, IPT_SERVICE2 )	/* SW2 on CPU PCB */
@@ -783,6 +783,6 @@ static DRIVER_INIT( cliff )
  *
  *************************************/
 
-GAME( 1983, cliffhgr, 0,        cliffhgr, cliffhgr, cliff, ROT0, "Stern Electronics", "Cliff Hanger", 0)
-GAME( 1983, cliffhgra,cliffhgr, cliffhgr, cliffhga, cliff, ROT0, "Stern Electronics", "Cliff Hanger (Alt)", 0)
+GAME( 1983, cliffhgr, 0,        cliffhgr, cliffhgr,  cliff, ROT0, "Stern Electronics", "Cliff Hanger", 0)
+GAME( 1983, cliffhgra,cliffhgr, cliffhgr, cliffhgra, cliff, ROT0, "Stern Electronics", "Cliff Hanger (Alt)", 0)
 GAME( 1983, goaltogo, 0,        cliffhgr, goaltogo, cliff, ROT0, "Stern Electronics", "Goal To Go", GAME_NOT_WORKING)

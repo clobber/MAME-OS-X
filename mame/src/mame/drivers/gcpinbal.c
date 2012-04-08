@@ -30,7 +30,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/msm5205.h"
@@ -202,7 +202,7 @@ static WRITE16_HANDLER( ioc_w )
 
 
 /* Controlled through ioc? */
-static void gcp_adpcm_int( const device_config *device )
+static void gcp_adpcm_int( running_device *device )
 {
 	gcpinbal_state *state = (gcpinbal_state *)device->machine->driver_data;
 

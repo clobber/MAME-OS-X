@@ -7,13 +7,17 @@ similar hardware.
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
-typedef struct _drtomy_state drtomy_state;
-struct _drtomy_state
+class drtomy_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, drtomy_state(machine)); }
+
+	drtomy_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  spriteram;
 	UINT16 *  videoram_bg;

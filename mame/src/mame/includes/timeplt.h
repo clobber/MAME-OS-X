@@ -19,9 +19,13 @@ struct jungler_star
 
 #define JUNGLER_MAX_STARS 1000
 
-typedef struct _timeplt_state timeplt_state;
-struct _timeplt_state
+class timeplt_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, timeplt_state(machine)); }
+
+	timeplt_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;	// timeplt, tutankham, junofrst, rocnrope, pooyan, rallyx
 	UINT8 *  colorram;	// timeplt, rocnrope, pooyan
@@ -55,16 +59,16 @@ struct _timeplt_state
 	struct jungler_star stars[JUNGLER_MAX_STARS];	// jungler
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *soundcpu;
-	const device_config *i8039;		// junofrst
-	const device_config *samples;		// rallyx
-	const device_config *filter_0_0;
-	const device_config *filter_0_1;
-	const device_config *filter_0_2;
-	const device_config *filter_1_0;
-	const device_config *filter_1_1;
-	const device_config *filter_1_2;
+	running_device *maincpu;
+	running_device *soundcpu;
+	running_device *i8039;		// junofrst
+	running_device *samples;		// rallyx
+	running_device *filter_0_0;
+	running_device *filter_0_1;
+	running_device *filter_0_2;
+	running_device *filter_1_0;
+	running_device *filter_1_1;
+	running_device *filter_1_2;
 };
 
 

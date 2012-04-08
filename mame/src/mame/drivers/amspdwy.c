@@ -13,7 +13,7 @@ Sound:  YM2151
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
 #include "includes/amspdwy.h"
@@ -239,7 +239,7 @@ GFXDECODE_END
 ***************************************************************************/
 
 
-static void irq_handler( const device_config *device, int irq )
+static void irq_handler( running_device *device, int irq )
 {
 	amspdwy_state *state = (amspdwy_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);

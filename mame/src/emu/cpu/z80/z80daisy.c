@@ -6,23 +6,23 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "z80daisy.h"
 
 
 struct _z80_daisy_state
 {
 	z80_daisy_state *		next;			/* next device */
-	const device_config *	device;			/* associated device */
+	running_device *	device;			/* associated device */
 	z80_daisy_irq_state		irq_state;		/* IRQ state callback */
 	z80_daisy_irq_ack		irq_ack;		/* IRQ ack callback */
 	z80_daisy_irq_reti		irq_reti;		/* IRQ reti callback */
 };
 
 
-z80_daisy_state *z80daisy_init(const device_config *cpudevice, const z80_daisy_chain *daisy)
+z80_daisy_state *z80daisy_init(running_device *cpudevice, const z80_daisy_chain *daisy)
 {
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 	z80_daisy_state *head = NULL;
 	z80_daisy_state **tailptr = &head;
 
@@ -31,16 +31,15 @@ z80_daisy_state *z80daisy_init(const device_config *cpudevice, const z80_daisy_c
 	{
 		*tailptr = auto_alloc(cpudevice->machine, z80_daisy_state);
 		(*tailptr)->next = NULL;
-		(*tailptr)->device = devtag_get_device(cpudevice->machine, device_inherit_tag(tempstring, cpudevice->tag, daisy->devname));
+		(*tailptr)->device = cpudevice->machine->device(cpudevice->siblingtag(tempstring, daisy->devname));
 		if ((*tailptr)->device == NULL)
 			fatalerror("Unable to locate device '%s'", daisy->devname);
-		(*tailptr)->irq_state = (z80_daisy_irq_state)device_get_info_fct((*tailptr)->device, DEVINFO_FCT_IRQ_STATE);
-		(*tailptr)->irq_ack = (z80_daisy_irq_ack)device_get_info_fct((*tailptr)->device, DEVINFO_FCT_IRQ_ACK);
-		(*tailptr)->irq_reti = (z80_daisy_irq_reti)device_get_info_fct((*tailptr)->device, DEVINFO_FCT_IRQ_RETI);
+		(*tailptr)->irq_state = (z80_daisy_irq_state)(*tailptr)->device->get_config_fct(DEVINFO_FCT_IRQ_STATE);
+		(*tailptr)->irq_ack = (z80_daisy_irq_ack)(*tailptr)->device->get_config_fct(DEVINFO_FCT_IRQ_ACK);
+		(*tailptr)->irq_reti = (z80_daisy_irq_reti)(*tailptr)->device->get_config_fct(DEVINFO_FCT_IRQ_RETI);
 		tailptr = &(*tailptr)->next;
 	}
 
-	astring_free(tempstring);
 	return head;
 }
 
@@ -49,7 +48,7 @@ void z80daisy_reset(z80_daisy_state *daisy)
 {
 	/* loop over all devices and call their reset function */
 	for ( ; daisy != NULL; daisy = daisy->next)
-		device_reset(daisy->device);
+		daisy->device->reset();
 }
 
 

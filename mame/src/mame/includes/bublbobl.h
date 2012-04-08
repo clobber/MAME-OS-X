@@ -1,7 +1,11 @@
 
-typedef struct _bublbobl_state bublbobl_state;
-struct _bublbobl_state
+class bublbobl_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bublbobl_state(machine)); }
+
+	bublbobl_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  mcu_sharedram;
 	UINT8 *  videoram;
@@ -35,10 +39,10 @@ struct _bublbobl_state
 	int      ic43_a, ic43_b;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *mcu;
-	const device_config *audiocpu;
-	const device_config *slave;
+	running_device *maincpu;
+	running_device *mcu;
+	running_device *audiocpu;
+	running_device *slave;
 };
 
 

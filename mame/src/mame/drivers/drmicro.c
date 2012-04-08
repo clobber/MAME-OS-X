@@ -8,7 +8,7 @@ Quite similar to Appoooh
 
 *****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/msm5205.h"
 #include "sound/sn76496.h"
@@ -43,7 +43,7 @@ static WRITE8_HANDLER( nmi_enable_w )
 }
 
 
-static void pcm_w(const device_config *device)
+static void pcm_w(running_device *device)
 {
 	drmicro_state *state = (drmicro_state *)device->machine->driver_data;
 	UINT8 *PCM = memory_region(device->machine, "adpcm");

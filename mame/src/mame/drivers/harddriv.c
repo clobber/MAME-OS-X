@@ -319,7 +319,7 @@ Notes:
 ****************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/tms32010/tms32010.h"
@@ -356,7 +356,7 @@ static const tms34010_config gsp_config_driver =
 };
 
 
-/* used on the low-resolution multisync boards for harddrvc, racedrvc, steeltal */
+/* used on the low-resolution multisync boards for harddrivc, racedrivc, steeltal */
 static const tms34010_config gsp_config_multisync =
 {
 	TRUE,							/* halt on reset */
@@ -798,7 +798,7 @@ static INPUT_PORTS_START( racedriv )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( racedrvc )
+static INPUT_PORTS_START( racedrivc )
 	PORT_START("IN0")		/* 60c000 */
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_UNUSED )	/* diagnostic switch */
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_SPECIAL )	/* HBLANK */
@@ -1334,7 +1334,7 @@ static MACHINE_DRIVER_START( harddriv )
 MACHINE_DRIVER_END
 
 
-static MACHINE_DRIVER_START( harddrvc )
+static MACHINE_DRIVER_START( harddrivc )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM( multisync_msp )	/* multisync board with MSP */
@@ -1353,7 +1353,7 @@ static MACHINE_DRIVER_START( racedriv )
 MACHINE_DRIVER_END
 
 
-static MACHINE_DRIVER_START( racedrvc )
+static MACHINE_DRIVER_START( racedrivc )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM( multisync_nomsp )	/* multisync board without MSP */
@@ -3488,11 +3488,13 @@ ROM_START( racedrivpan )
 	ROM_LOAD16_BYTE( "088-2016.bin", 0x0e0000, 0x010000, CRC(6a42b7e2) SHA1(2e0ff4b7e391106a976cb872f6311f6d35dca5b0) )
 	ROM_LOAD16_BYTE( "088-2015.bin", 0x0e0001, 0x010000, CRC(334e2a3b) SHA1(a19bfa7652845b9453c722091c773819ba248569) )
 
-	ROM_REGION16_BE( 0x60000, "user1", 0 )	/* 384k for ADSP object ROM */
-	ROM_LOAD16_BYTE( "136077-1021.10h", 0x000000, 0x010000, CRC(9831fe73) SHA1(5215ee89a0014399b7d829e443b16590a4679844) )
-	ROM_LOAD16_BYTE( "136077-1023.10k", 0x000001, 0x010000, CRC(74bf0e0e) SHA1(a3d91ecf13c3619e073324517a4a5afaae831982) )
-	ROM_LOAD16_BYTE( "136077-1022.10j", 0x020000, 0x010000, CRC(c0393c31) SHA1(31726c01eb0d4650936908c90d45161197b7efba) )
-	ROM_LOAD16_BYTE( "136077-1024.10l", 0x020001, 0x010000, CRC(1e2fb25f) SHA1(4940091bbad6144bce091d2737191d266d4b0310) )
+	ROM_REGION( 0x60000, "user1", 0 )		/* 384k for object ROM */
+	ROM_LOAD16_BYTE( "088-1017.bin",  0x00000, 0x10000, CRC(d92251e8) SHA1(deeeec54c4a61c3adf62f6b1b910135559090ee5) )
+	ROM_LOAD16_BYTE( "088-1018.bin",  0x00001, 0x10000, CRC(11a0a8f5) SHA1(d4ccc83fc99331d741bc9b8027ef20d72e3ad71a) )
+	ROM_LOAD16_BYTE( "088-1019.bin",  0x20000, 0x10000, CRC(5bb00676) SHA1(cad1cea8e43f9590fc71c00fab4eff0d447f9296) ) // == 136091-0019.2k (strtdriv)
+	ROM_LOAD16_BYTE( "088-1020.bin",  0x20001, 0x10000, CRC(311cef99) SHA1(9c466aabad7e80581e477253ec6f2fd245f9b9fd) ) // == 136091-0020.2r (strtdriv)
+	ROM_LOAD16_BYTE( "088-1021.bin",  0x40000, 0x10000, CRC(ce8e4886) SHA1(d29cd4761deb80ed179d0e503243739eebc0edb4) )
+	ROM_LOAD16_BYTE( "088-1022.bin",  0x40001, 0x10000, CRC(4f1e1c5d) SHA1(3e72813129cae9e9bf084bfb1b747aa46b92591e) )
 
 	/* ----------------------- */
 
@@ -3633,14 +3635,14 @@ ROM_END
 static void find_cpus(running_machine *machine)
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
-	state->maincpu = cputag_get_cpu(machine, "maincpu");
-	state->gsp = cputag_get_cpu(machine, "gsp");
-	state->msp = cputag_get_cpu(machine, "msp");
-	state->adsp = cputag_get_cpu(machine, "adsp");
-	state->soundcpu = cputag_get_cpu(machine, "soundcpu");
-	state->sounddsp = cputag_get_cpu(machine, "sounddsp");
-	state->jsacpu = cputag_get_cpu(machine, "jsa");
-	state->dsp32 = cputag_get_cpu(machine, "dsp32");
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->gsp = devtag_get_device(machine, "gsp");
+	state->msp = devtag_get_device(machine, "msp");
+	state->adsp = devtag_get_device(machine, "adsp");
+	state->soundcpu = devtag_get_device(machine, "soundcpu");
+	state->sounddsp = devtag_get_device(machine, "sounddsp");
+	state->jsacpu = devtag_get_device(machine, "jsa");
+	state->dsp32 = devtag_get_device(machine, "dsp32");
 }
 
 
@@ -3733,10 +3735,10 @@ static void init_ds3(running_machine *machine)
 
 	/* if we have a sound DSP, boot it */
 	if (state->soundcpu != NULL && cpu_get_type(state->soundcpu) == CPU_ADSP2105)
-		adsp2105_load_boot_data((UINT8 *)(state->soundcpu->region + 0x10000), (UINT32 *)state->soundcpu->region);
+		adsp2105_load_boot_data(state->soundcpu->region->base.u8 + 0x10000, state->soundcpu->region->base.u32);
 
 	if (state->sounddsp != NULL && cpu_get_type(state->sounddsp) == CPU_ADSP2105)
-		adsp2105_load_boot_data((UINT8 *)(state->sounddsp->region + 0x10000), (UINT32 *)state->sounddsp->region);
+		adsp2105_load_boot_data(state->sounddsp->region->base.u8 + 0x10000, state->sounddsp->region->base.u32);
 
 /*
 
@@ -3936,7 +3938,7 @@ static DRIVER_INIT( harddriv )
 }
 
 
-static DRIVER_INIT( harddrvc )
+static DRIVER_INIT( harddrivc )
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
 
@@ -4030,7 +4032,7 @@ static DRIVER_INIT( racedriv )
 }
 
 
-static void racedrvc_init_common(running_machine *machine, offs_t gsp_protection)
+static void racedrivc_init_common(running_machine *machine, offs_t gsp_protection)
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
 
@@ -4064,8 +4066,8 @@ static void racedrvc_init_common(running_machine *machine, offs_t gsp_protection
 	state->rddsp32_speedup_pc = 0x6054b0;
 }
 
-static DRIVER_INIT( racedrvc ) { racedrvc_init_common(machine, 0xfff95cd0); }
-static DRIVER_INIT( racedrc1 ) { racedrvc_init_common(machine, 0xfff7ecd0); }
+static DRIVER_INIT( racedrivc ) { racedrivc_init_common(machine, 0xfff95cd0); }
+static DRIVER_INIT( racedrivc1 ) { racedrivc_init_common(machine, 0xfff7ecd0); }
 
 
 
@@ -4121,8 +4123,8 @@ static void steeltal_init_common(running_machine *machine, offs_t ds3_transfer_p
 
 
 static DRIVER_INIT( steeltal ) { steeltal_init_common(machine, 0x4fc18, 0); }
-static DRIVER_INIT( steelta1 ) { steeltal_init_common(machine, 0x4f9c6, 0); }
-static DRIVER_INIT( steeltap ) { steeltal_init_common(machine, 0x52290, 1); }
+static DRIVER_INIT( steeltal1 ) { steeltal_init_common(machine, 0x4f9c6, 0); }
+static DRIVER_INIT( steeltalp ) { steeltal_init_common(machine, 0x52290, 1); }
 
 
 static DRIVER_INIT( strtdriv )
@@ -4183,7 +4185,7 @@ static DRIVER_INIT( hdrivair )
 }
 
 
-static DRIVER_INIT( hdrivaip )
+static DRIVER_INIT( hdrivairp )
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
 
@@ -4229,10 +4231,10 @@ GAME( 1988, harddriv3,  harddriv, harddriv, harddriv, harddriv, ROT0, "Atari Gam
 GAME( 1988, harddriv2,  harddriv, harddriv, harddriv, harddriv, ROT0, "Atari Games", "Hard Drivin' (cockpit, rev 2)", 0 )
 GAME( 1988, harddriv1,  harddriv, harddriv, harddriv, harddriv, ROT0, "Atari Games", "Hard Drivin' (cockpit, rev 1)", GAME_NOT_WORKING )
 
-GAME( 1990, harddrivc,  harddriv, harddrvc, racedrvc, harddrvc, ROT0, "Atari Games", "Hard Drivin' (compact, rev 2)", 0 )
-GAME( 1990, harddrivcg, harddriv, harddrvc, racedrvc, harddrvc, ROT0, "Atari Games", "Hard Drivin' (compact, German, rev 2)", 0 )
-GAME( 1990, harddrivcb, harddriv, harddrvc, racedrvc, harddrvc, ROT0, "Atari Games", "Hard Drivin' (compact, British, rev 2)", 0 )
-GAME( 1990, harddrivc1, harddriv, harddrvc, racedrvc, harddrvc, ROT0, "Atari Games", "Hard Drivin' (compact, rev 1)", 0 )
+GAME( 1990, harddrivc,  harddriv, harddrivc, racedrivc, harddrivc, ROT0, "Atari Games", "Hard Drivin' (compact, rev 2)", 0 )
+GAME( 1990, harddrivcg, harddriv, harddrivc, racedrivc, harddrivc, ROT0, "Atari Games", "Hard Drivin' (compact, German, rev 2)", 0 )
+GAME( 1990, harddrivcb, harddriv, harddrivc, racedrivc, harddrivc, ROT0, "Atari Games", "Hard Drivin' (compact, British, rev 2)", 0 )
+GAME( 1990, harddrivc1, harddriv, harddrivc, racedrivc, harddrivc, ROT0, "Atari Games", "Hard Drivin' (compact, rev 1)", 0 )
 
 GAME( 1989, stunrun,   0,        stunrun,  stunrun,  stunrun,  ROT0, "Atari Games", "S.T.U.N. Runner (rev 6)", 0 )
 GAME( 1989, stunrunj,  stunrun,  stunrun,  stunrun,  stunrun,  ROT0, "Atari Games", "S.T.U.N. Runner (rev 7, Japan)", 0 )
@@ -4258,23 +4260,23 @@ GAME( 1990, racedriv1,  racedriv, racedriv, racedriv, racedriv, ROT0, "Atari Gam
 GAME( 1990, racedrivb1, racedriv, racedriv, racedriv, racedriv, ROT0, "Atari Games", "Race Drivin' (cockpit, British, rev 1)", GAME_NOT_WORKING )
 GAME( 1990, racedrivg1, racedriv, racedriv, racedriv, racedriv, ROT0, "Atari Games", "Race Drivin' (cockpit, German, rev 2)", GAME_NOT_WORKING )
 
-GAME( 1990, racedrivc,   racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, rev 5)", 0 )
-GAME( 1990, racedrivcb,  racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, British, rev 5)", 0 )
-GAME( 1990, racedrivcg,  racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, German, rev 5)", 0 )
-GAME( 1990, racedrivc4,  racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, rev 4)", 0 )
-GAME( 1990, racedrivcb4, racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, British, rev 4)", 0 )
-GAME( 1990, racedrivcg4, racedriv, racedrvc, racedrvc, racedrvc, ROT0, "Atari Games", "Race Drivin' (compact, German, rev 4)", 0 )
-GAME( 1990, racedrivc2,  racedriv, racedrvc, racedrvc, racedrc1, ROT0, "Atari Games", "Race Drivin' (compact, rev 2)", 0 )
-GAME( 1990, racedrivc1,  racedriv, racedrvc, racedrvc, racedrc1, ROT0, "Atari Games", "Race Drivin' (compact, rev 1)", 0 )
+GAME( 1990, racedrivc,   racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, rev 5)", 0 )
+GAME( 1990, racedrivcb,  racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, British, rev 5)", 0 )
+GAME( 1990, racedrivcg,  racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, German, rev 5)", 0 )
+GAME( 1990, racedrivc4,  racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, rev 4)", 0 )
+GAME( 1990, racedrivcb4, racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, British, rev 4)", 0 )
+GAME( 1990, racedrivcg4, racedriv, racedrivc, racedrivc, racedrivc, ROT0, "Atari Games", "Race Drivin' (compact, German, rev 4)", 0 )
+GAME( 1990, racedrivc2,  racedriv, racedrivc, racedrivc, racedrivc1,ROT0, "Atari Games", "Race Drivin' (compact, rev 2)", 0 )
+GAME( 1990, racedrivc1,  racedriv, racedrivc, racedrivc, racedrivc1,ROT0, "Atari Games", "Race Drivin' (compact, rev 1)", 0 )
 
 GAME( 1990, racedrivpan, racedriv, racedriv, racedriv, racedriv, ROT0, "Atari Games", "Race Drivin' Panorama (prototype, rev 2.1)", GAME_NOT_WORKING )
 
 GAME( 1991, steeltal,  0,        steeltal, steeltal, steeltal, ROT0, "Atari Games", "Steel Talons (rev 2)", 0 )
 GAME( 1991, steeltalg, steeltal, steeltal, steeltal, steeltal, ROT0, "Atari Games", "Steel Talons (German, rev 2)", 0 )
-GAME( 1991, steeltal1, steeltal, steeltal, steeltal, steelta1, ROT0, "Atari Games", "Steel Talons (rev 1)", 0 )
-GAME( 1991, steeltalp, steeltal, steeltal, steeltal, steeltap, ROT0, "Atari Games", "Steel Talons (prototype)", GAME_NOT_WORKING )
+GAME( 1991, steeltal1, steeltal, steeltal, steeltal, steeltal1,ROT0, "Atari Games", "Steel Talons (rev 1)", 0 )
+GAME( 1991, steeltalp, steeltal, steeltal, steeltal, steeltalp,ROT0, "Atari Games", "Steel Talons (prototype)", GAME_NOT_WORKING )
 
 GAME( 1993, strtdriv, 0,        strtdriv, strtdriv, strtdriv, ROT0, "Atari Games", "Street Drivin' (prototype)", GAME_NO_SOUND )
 
 GAME( 1993, hdrivair,  0,        hdrivair, hdrivair, hdrivair, ROT0, "Atari Games", "Hard Drivin's Airborne (prototype)", GAME_NO_SOUND )
-GAME( 1993, hdrivairp, hdrivair, hdrivair, hdrivair, hdrivaip, ROT0, "Atari Games", "Hard Drivin's Airborne (prototype, early rev)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1993, hdrivairp, hdrivair, hdrivair, hdrivair, hdrivairp,ROT0, "Atari Games", "Hard Drivin's Airborne (prototype, early rev)", GAME_NOT_WORKING | GAME_NO_SOUND )

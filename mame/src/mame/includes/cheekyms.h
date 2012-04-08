@@ -5,9 +5,13 @@
 *************************************************************************/
 
 
-typedef struct _cheekyms_state cheekyms_state;
-struct _cheekyms_state
+class cheekyms_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cheekyms_state(machine)); }
+
+	cheekyms_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        videoram;
 	UINT8 *        spriteram;
@@ -18,8 +22,8 @@ struct _cheekyms_state
 	bitmap_t       *bitmap_buffer;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *dac;
+	running_device *maincpu;
+	running_device *dac;
 };
 
 

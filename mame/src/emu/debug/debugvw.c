@@ -9,7 +9,7 @@
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "debugvw.h"
 #include "debugcmd.h"
 #include "debugcmt.h"
@@ -79,15 +79,15 @@ struct _debug_view_expression
 {
 	UINT64				result;					/* last result from the expression */
 	parsed_expression *	parsed;					/* parsed expression data */
-	astring *			string;					/* copy of the expression string */
+	astring				string;					/* copy of the expression string */
 	UINT8				dirty;					/* true if the expression needs to be re-evaluated */
 };
 
 
 /* debug_view describes a single text-based view */
-/* typedef struct _debug_view debug_view -- defined in debugvw.h */
-struct _debug_view
+class debug_view
 {
+public:
 	/* core view data */
 	debug_view *		next;					/* link to the next view */
 	running_machine *	machine;				/* machine associated with this view */
@@ -134,7 +134,7 @@ struct _debug_view_register
 typedef struct _debug_view_registers debug_view_registers;
 struct _debug_view_registers
 {
-	const device_config *device;				/* CPU device whose registers we are showing */
+	running_device *device;				/* CPU device whose registers we are showing */
 	int					divider;				/* dividing column */
 	UINT64				last_update;			/* execution counter at last update */
 	debug_view_register reg[MAX_REGS];			/* register data */
@@ -385,10 +385,7 @@ debug_view *debug_view_alloc(running_machine *machine, int type, debug_view_osd_
 	assert(type >= 0 && type < ARRAY_LENGTH(callback_table));
 
 	/* allocate memory for the view */
-	view = (debug_view *)malloc(sizeof(*view));
-	if (view == NULL)
-		return NULL;
-	memset(view, 0, sizeof(*view));
+	view = auto_alloc_clear(machine, debug_view);
 
 	/* set the view type information */
 	view->machine = machine;
@@ -403,18 +400,13 @@ debug_view *debug_view_alloc(running_machine *machine, int type, debug_view_osd_
 
 	/* allocate memory for the buffer */
 	view->viewdata_size = view->visible.y * view->visible.x;
-	view->viewdata = (debug_view_char *)malloc(sizeof(view->viewdata[0]) * view->viewdata_size);
-	if (view->viewdata == NULL)
-	{
-		free(view);
-		return NULL;
-	}
+	view->viewdata = auto_alloc_array(machine, debug_view_char, view->viewdata_size);
 
 	/* allocate extra memory */
 	if (view->cb.alloc != NULL && !(*view->cb.alloc)(view))
 	{
-		free(view->viewdata);
-		free(view);
+		auto_free(machine, view->viewdata);
+		auto_free(machine, view);
 		return NULL;
 	}
 
@@ -450,8 +442,8 @@ void debug_view_free(debug_view *view)
 			if (view->cb.free != NULL)
 				(*view->cb.free)(view);
 			if (view->viewdata != NULL)
-				free(view->viewdata);
-			free(view);
+				auto_free(view->machine, view->viewdata);
+			auto_free(view->machine, view);
 			break;
 		}
 }
@@ -497,7 +489,8 @@ void debug_view_end_update(debug_view *view)
 			if (size > view->viewdata_size)
 			{
 				view->viewdata_size = size;
-				view->viewdata = (debug_view_char *)realloc(view->viewdata, sizeof(view->viewdata[0]) * view->viewdata_size);
+				global_free(view->viewdata);
+				view->viewdata = auto_alloc_array(view->machine, debug_view_char, view->viewdata_size);
 			}
 
 			/* update the view */
@@ -794,7 +787,6 @@ void debug_view_set_cursor_visible(debug_view *view, int visible)
 
 static void debug_view_expression_alloc(debug_view_expression *expression)
 {
-	expression->string = astring_alloc();
 }
 
 
@@ -807,8 +799,6 @@ static void debug_view_expression_free(debug_view_expression *expression)
 {
 	if (expression->parsed != NULL)
 		expression_free(expression->parsed);
-	if (expression->string != NULL)
-		astring_free(expression->string);
 }
 
 
@@ -819,7 +809,7 @@ static void debug_view_expression_free(debug_view_expression *expression)
 
 static void debug_view_expression_set(debug_view_expression *expression, const char *string)
 {
-	astring_cpyc(expression->string, string);
+	expression->string.cpy(string);
 	expression->dirty = TRUE;
 }
 
@@ -830,7 +820,7 @@ static void debug_view_expression_set(debug_view_expression *expression, const c
     changed
 -------------------------------------------------*/
 
-static int debug_view_expression_changed_value(debug_view *view, debug_view_expression *expression, const device_config *cpu)
+static int debug_view_expression_changed_value(debug_view *view, debug_view_expression *expression, running_device *cpu)
 {
 	int changed = expression->dirty;
 	EXPRERR exprerr;
@@ -842,7 +832,7 @@ static int debug_view_expression_changed_value(debug_view *view, debug_view_expr
 		parsed_expression *expr;
 
 		/* parse the new expression */
-		exprerr = expression_parse(astring_c(expression->string), symtable, &debug_expression_callbacks, view->machine, &expr);
+		exprerr = expression_parse(expression->string, symtable, &debug_expression_callbacks, view->machine, &expr);
 
 		/* if it worked, update the expression */
 		if (exprerr == EXPRERR_NONE)
@@ -906,10 +896,7 @@ static int textbuf_view_alloc(debug_view *view, text_buffer *textbuf)
 	debug_view_textbuf *textdata;
 
 	/* allocate memory */
-	textdata = (debug_view_textbuf *)malloc(sizeof(*textdata));
-	if (textdata == NULL)
-		return FALSE;
-	memset(textdata, 0, sizeof(*textdata));
+	textdata = auto_alloc_clear(view->machine, debug_view_textbuf);
 
 	/* by default we track live */
 	textdata->textbuf = textbuf;
@@ -931,8 +918,7 @@ static void textbuf_view_free(debug_view *view)
 	debug_view_textbuf *textdata = (debug_view_textbuf *)view->extra_data;
 
 	/* free any memory we callocated */
-	if (textdata != NULL)
-		free(textdata);
+	auto_free(view->machine, textdata);
 	view->extra_data = NULL;
 }
 
@@ -1038,34 +1024,26 @@ static void textbuf_view_notify(debug_view *view, view_notification type)
 
 static const registers_subview_item *registers_view_enumerate_subviews(running_machine *machine)
 {
-	astring *tempstring = astring_alloc();
 	registers_subview_item *head = NULL;
 	registers_subview_item **tailptr = &head;
-	const device_config *cpu;
 	int curindex = 0;
 
 	/* iterate over CPUs with program address spaces */
-	for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
+	for (running_device *cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 	{
-		registers_subview_item *subview;
-
-		/* determine the string and allocate a subview large enough */
-		astring_printf(tempstring, "CPU '%s' (%s)", cpu->tag, cpu_get_name(cpu));
-		subview = (registers_subview_item *)auto_alloc_array_clear(machine, UINT8, sizeof(*subview) + astring_len(tempstring));
+		registers_subview_item *subview = auto_alloc(machine, registers_subview_item);
 
 		/* populate the subview */
 		subview->next = NULL;
 		subview->index = curindex++;
+		subview->name.printf("CPU '%s' (%s)", cpu->tag(), cpu->name());
 		subview->device = cpu;
-		strcpy(subview->name, astring_c(tempstring));
 
 		/* add to the list */
 		*tailptr = subview;
 		tailptr = &subview->next;
 	}
 
-	/* free the temporary string */
-	astring_free(tempstring);
 	return head;
 }
 
@@ -1077,17 +1055,12 @@ static const registers_subview_item *registers_view_enumerate_subviews(running_m
 
 static int registers_view_alloc(debug_view *view)
 {
-	debug_view_registers *regdata;
-
 	/* fail if no available subviews */
 	if (view->machine->debugvw_data->registers_subviews == NULL)
 		return FALSE;
 
 	/* allocate memory */
-	regdata = (debug_view_registers *)malloc(sizeof(*regdata));
-	if (regdata == NULL)
-		return FALSE;
-	memset(regdata, 0, sizeof(*regdata));
+	debug_view_registers *regdata = auto_alloc_clear(view->machine, debug_view_registers);
 
 	/* default to the first subview */
 	regdata->device = view->machine->debugvw_data->registers_subviews->device;
@@ -1109,7 +1082,7 @@ static void registers_view_free(debug_view *view)
 
 	/* free any memory we callocated */
 	if (regdata != NULL)
-		free(regdata);
+		auto_free(view->machine, regdata);
 	view->extra_data = NULL;
 }
 
@@ -1304,7 +1277,7 @@ static void registers_view_recompute(debug_view *view)
 
 static void registers_view_update(debug_view *view)
 {
-	const device_config *screen = view->machine->primary_screen;
+	running_device *screen = view->machine->primary_screen;
 	debug_view_registers *regdata = (debug_view_registers *)view->extra_data;
 	debug_view_char *dest = view->viewdata;
 	UINT64 total_cycles;
@@ -1504,29 +1477,23 @@ void registers_view_set_subview(debug_view *view, int index)
 
 static const disasm_subview_item *disasm_view_enumerate_subviews(running_machine *machine)
 {
-	astring *tempstring = astring_alloc();
 	disasm_subview_item *head = NULL;
 	disasm_subview_item **tailptr = &head;
-	const device_config *cpu;
 	int curindex = 0;
 
 	/* iterate over CPUs with program address spaces */
-	for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
+	for (running_device *cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 	{
 		const address_space *space = cpu_get_address_space(cpu, ADDRESS_SPACE_PROGRAM);
 		if (space != NULL)
 		{
-			disasm_subview_item *subview;
-
-			/* determine the string and allocate a subview large enough */
-			astring_printf(tempstring, "CPU '%s' (%s)", cpu->tag, cpu_get_name(cpu));
-			subview = (disasm_subview_item *)auto_alloc_array_clear(machine, UINT8, sizeof(*subview) + astring_len(tempstring));
+			disasm_subview_item *subview = auto_alloc(machine, disasm_subview_item);
 
 			/* populate the subview */
 			subview->next = NULL;
 			subview->index = curindex++;
+			subview->name.printf("CPU '%s' (%s)", cpu->tag(), cpu->name());
 			subview->space = space;
-			strcpy(subview->name, astring_c(tempstring));
 
 			/* add to the list */
 			*tailptr = subview;
@@ -1534,8 +1501,6 @@ static const disasm_subview_item *disasm_view_enumerate_subviews(running_machine
 		}
 	}
 
-	/* free the temporary string */
-	astring_free(tempstring);
 	return head;
 }
 
@@ -1549,17 +1514,14 @@ static int disasm_view_alloc(debug_view *view)
 {
 	debug_view_disasm *dasmdata;
 	int total_comments = 0;
-	const device_config *cpu;
+	running_device *cpu;
 
 	/* fail if no available subviews */
 	if (view->machine->debugvw_data->disasm_subviews == NULL)
 		return FALSE;
 
 	/* allocate disasm */
-	dasmdata = (debug_view_disasm *)malloc(sizeof(*dasmdata));
-	if (dasmdata == NULL)
-		return FALSE;
-	memset(dasmdata, 0, sizeof(*dasmdata));
+	dasmdata = auto_alloc_clear(view->machine, debug_view_disasm);
 
 	/* default to the first subview */
 	dasmdata->space = view->machine->debugvw_data->disasm_subviews->space;
@@ -1600,10 +1562,10 @@ static void disasm_view_free(debug_view *view)
 	{
 		debug_view_expression_free(&dasmdata->expression);
 		if (dasmdata->byteaddress != NULL)
-			free(dasmdata->byteaddress);
+			auto_free(view->machine, dasmdata->byteaddress);
 		if (dasmdata->dasm != NULL)
-			free(dasmdata->dasm);
-		free(dasmdata);
+			auto_free(view->machine, dasmdata->dasm);
+		auto_free(view->machine, dasmdata);
 	}
 	view->extra_data = NULL;
 }
@@ -1841,14 +1803,12 @@ static int disasm_view_recompute(debug_view *view, offs_t pc, int startline, int
 		dasmdata->allocated.y = view->total.y;
 
 		/* allocate address array */
-		if (dasmdata->byteaddress != NULL)
-			free(dasmdata->byteaddress);
-		dasmdata->byteaddress = alloc_array_or_die(offs_t, dasmdata->allocated.y);
+		auto_free(view->machine, dasmdata->byteaddress);
+		dasmdata->byteaddress = auto_alloc_array(view->machine, offs_t, dasmdata->allocated.y);
 
 		/* allocate disassembly buffer */
-		if (dasmdata->dasm != NULL)
-			free(dasmdata->dasm);
-		dasmdata->dasm = alloc_array_or_die(char, dasmdata->allocated.x * dasmdata->allocated.y);
+		auto_free(view->machine, dasmdata->dasm);
+		dasmdata->dasm = auto_alloc_array(view->machine, char, dasmdata->allocated.x * dasmdata->allocated.y);
 	}
 
 	/* iterate over lines */
@@ -1954,7 +1914,7 @@ static void disasm_view_update(debug_view *view)
 		parsed_expression *expr;
 
 		/* parse the new expression */
-		exprerr = expression_parse(astring_c(dasmdata->expression.string), debug_cpu_get_symtable(space->cpu), &debug_expression_callbacks, space->machine, &expr);
+		exprerr = expression_parse(dasmdata->expression.string, debug_cpu_get_symtable(space->cpu), &debug_expression_callbacks, space->machine, &expr);
 
 		/* if it worked, update the expression */
 		if (exprerr == EXPRERR_NONE)
@@ -2171,7 +2131,7 @@ const char *disasm_view_get_expression(debug_view *view)
 	assert(view->type == DVT_DISASSEMBLY);
 	debug_view_begin_update(view);
 	debug_view_end_update(view);
-	return astring_c(dasmdata->expression.string);
+	return dasmdata->expression.string;
 }
 
 
@@ -2388,38 +2348,29 @@ void disasm_view_set_selected_address(debug_view *view, offs_t address)
 
 static const memory_subview_item *memory_view_enumerate_subviews(running_machine *machine)
 {
-	astring *tempstring = astring_alloc();
 	memory_subview_item *head = NULL;
 	memory_subview_item **tailptr = &head;
-	const device_config *device;
-	int spacenum;
-	const char *rgntag;
 	int curindex = 0;
-	int itemnum;
 
 	/* first add all the device's address spaces */
-	for (device = machine->config->devicelist.head; device != NULL; device = device->next)
-		for (spacenum = 0; spacenum < ADDRESS_SPACES; spacenum++)
+	for (running_device *device = machine->devicelist.first(); device != NULL; device = device->next)
+		for (int spacenum = 0; spacenum < ADDRESS_SPACES; spacenum++)
 		{
-			const address_space *space = memory_find_address_space(device, spacenum);
+			const address_space *space = device->space(spacenum);
 			if (space != NULL)
 			{
-				memory_subview_item *subview;
-
-				/* determine the string and allocate a subview large enough */
-				if (device->type == CPU)
-					astring_printf(tempstring, "CPU '%s' (%s) %s memory", device->tag, device_get_name(device), space->name);
-				else
-					astring_printf(tempstring, "%s '%s' space #%d memory", device_get_name(device), device->tag, spacenum);
-				subview = (memory_subview_item *)alloc_array_clear_or_die(UINT8, sizeof(*subview) + astring_len(tempstring));
+				memory_subview_item *subview = auto_alloc(machine, memory_subview_item);
 
 				/* populate the subview */
 				subview->next = NULL;
 				subview->index = curindex++;
+				if (device->type == CPU)
+					subview->name.printf("CPU '%s' (%s) %s memory", device->tag(), device->name(), space->name);
+				else
+					subview->name.printf("%s '%s' space #%d memory", device->name(), device->tag(), spacenum);
 				subview->space = space;
 				subview->endianness = space->endianness;
 				subview->prefsize = space->dbits / 8;
-				strcpy(subview->name, astring_c(tempstring));
 
 				/* add to the list */
 				*tailptr = subview;
@@ -2428,66 +2379,47 @@ static const memory_subview_item *memory_view_enumerate_subviews(running_machine
 		}
 
 	/* then add all the memory regions */
-	for (rgntag = memory_region_next(machine, NULL); rgntag != NULL; rgntag = memory_region_next(machine, rgntag))
+	for (const region_info *region = machine->regionlist.first(); region != NULL; region = region->next)
 	{
-		UINT32 length = memory_region_length(machine, rgntag);
-		UINT32 flags = memory_region_flags(machine, rgntag);
-		if (length > 0 && (flags & ROMREGION_DATATYPEMASK) == ROMREGION_DATATYPEROM)
-		{
-			UINT8 little_endian = ((flags & ROMREGION_ENDIANMASK) == ROMREGION_LE);
-			UINT8 width = 1 << ((flags & ROMREGION_WIDTHMASK) >> 8);
-			memory_subview_item *subview;
+		memory_subview_item *subview = auto_alloc(machine, memory_subview_item);
 
-			/* determine the string and allocate a subview large enough */
-			astring_printf(tempstring, "Region '%s'", rgntag);
-			subview = (memory_subview_item *)alloc_array_clear_or_die(UINT8, sizeof(*subview) + astring_len(tempstring));
+		/* populate the subview */
+		subview->next = NULL;
+		subview->index = curindex++;
+		subview->name.printf("Region '%s'", region->name.cstr());
+		subview->base = *region;
+		subview->length = region->bytes();
+		subview->offsetxor = NATIVE_ENDIAN_VALUE_LE_BE(region->width() - 1, 0);
+		subview->endianness = region->endianness();
+		subview->prefsize = MIN(region->width(), 8);
 
-			/* populate the subview */
-			subview->next = NULL;
-			subview->index = curindex++;
-			subview->base = memory_region(machine, rgntag);
-			subview->length = memory_region_length(machine, rgntag);
-			subview->offsetxor = NATIVE_ENDIAN_VALUE_LE_BE(width - 1, 0);
-			subview->endianness = little_endian ? ENDIANNESS_LITTLE : ENDIANNESS_BIG;
-			subview->prefsize = MIN(width, 8);
-			strcpy(subview->name, astring_c(tempstring));
-
-			/* add to the list */
-			*tailptr = subview;
-			tailptr = &subview->next;
-		}
+		/* add to the list */
+		*tailptr = subview;
+		tailptr = &subview->next;
 	}
 
 	/* finally add all global array symbols */
-	for (itemnum = 0; itemnum < 10000; itemnum++)
+	for (int itemnum = 0; itemnum < 10000; itemnum++)
 	{
-		UINT32 valsize, valcount;
-		const char *name;
-		void *base;
-
 		/* stop when we run out of items */
-		name = state_save_get_indexed_item(machine, itemnum, &base, &valsize, &valcount);
+		UINT32 valsize, valcount;
+		void *base;
+		const char *name = state_save_get_indexed_item(machine, itemnum, &base, &valsize, &valcount);
 		if (name == NULL)
 			break;
 
 		/* if this is a single-entry global, add it */
 		if (valcount > 1 && strstr(name, "globals/"))
 		{
-			memory_subview_item *subview;
-
-			/* determine the string and allocate a subview large enough */
-			astring_printf(tempstring, "%s", strrchr(name, '/') + 1);
-			subview = (memory_subview_item *)alloc_array_clear_or_die(UINT8, sizeof(*subview) + astring_len(tempstring));
+			memory_subview_item *subview = auto_alloc(machine, memory_subview_item);
 
 			/* populate the subview */
 			subview->next = NULL;
 			subview->index = curindex++;
+			subview->name.cpy(strrchr(name, '/') + 1);
 			subview->base = base;
 			subview->length = valcount * valsize;
-			subview->offsetxor = 0;
-			subview->endianness = ENDIANNESS_NATIVE;
 			subview->prefsize = MIN(valsize, 8);
-			strcpy(subview->name, astring_c(tempstring));
 
 			/* add to the list */
 			*tailptr = subview;
@@ -2495,8 +2427,6 @@ static const memory_subview_item *memory_view_enumerate_subviews(running_machine
 		}
 	}
 
-	/* free the temporary string */
-	astring_free(tempstring);
 	return head;
 }
 
@@ -2516,7 +2446,7 @@ static int memory_view_alloc(debug_view *view)
 		return FALSE;
 
 	/* allocate memory */
-	memdata = alloc_clear_or_die(debug_view_memory);
+	memdata = auto_alloc_clear(view->machine, debug_view_memory);
 	memdata->subviewlist = subviews;
 
 	/* allocate the expression data */
@@ -2557,10 +2487,10 @@ static void memory_view_free(debug_view *view)
 		{
 			memory_subview_item *item = (memory_subview_item *)memdata->subviewlist;
 			memdata->subviewlist = item->next;
-			free(item);
+			auto_free(view->machine, item);
 		}
 		debug_view_expression_free(&memdata->expression);
-		free(memdata);
+		auto_free(view->machine, memdata);
 	}
 	view->extra_data = NULL;
 }
@@ -3137,7 +3067,7 @@ const char *memory_view_get_expression(debug_view *view)
 	assert(view->type == DVT_MEMORY);
 	debug_view_begin_update(view);
 	debug_view_end_update(view);
-	return astring_c(memdata->expression.string);
+	return memdata->expression.string;
 }
 
 

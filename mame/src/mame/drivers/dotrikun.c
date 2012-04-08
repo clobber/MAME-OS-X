@@ -20,13 +20,17 @@ SOUND : (none)
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 
 
-typedef struct _dotrikun_state dotrikun_state;
-struct _dotrikun_state
+class dotrikun_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dotrikun_state(machine)); }
+
+	dotrikun_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        videoram;
 	size_t         videoram_size;
@@ -186,5 +190,5 @@ ROM_START( dotrikun2 )
 ROM_END
 
 
-GAME( 1990, dotrikun, 0,        dotrikun, dotrikun, 0, ROT0, "Sega", "Dottori Kun (new version)", GAME_SUPPORTS_SAVE | GAME_NO_SOUND )
-GAME( 1990, dotrikun2,dotrikun, dotrikun, dotrikun, 0, ROT0, "Sega", "Dottori Kun (old version)", GAME_SUPPORTS_SAVE | GAME_NO_SOUND )
+GAME( 1990, dotrikun, 0,        dotrikun, dotrikun, 0, ROT0, "Sega", "Dottori Kun (new version)", GAME_SUPPORTS_SAVE | GAME_NO_SOUND_HW )
+GAME( 1990, dotrikun2,dotrikun, dotrikun, dotrikun, 0, ROT0, "Sega", "Dottori Kun (old version)", GAME_SUPPORTS_SAVE | GAME_NO_SOUND_HW )

@@ -4,7 +4,7 @@
 
 ****************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "ym2413.h"
 #include "2413intf.h"
@@ -19,7 +19,7 @@ struct _ym2413_state
 };
 
 
-INLINE ym2413_state *get_safe_token(const device_config *device)
+INLINE ym2413_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);

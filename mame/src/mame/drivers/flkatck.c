@@ -10,7 +10,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/hd6309/hd6309.h"
 #include "sound/2151intf.h"
@@ -183,7 +183,7 @@ static GFXDECODE_START( flkatck )
 	GFXDECODE_ENTRY( "gfx1", 0, gfxlayout, 0, 32 )
 GFXDECODE_END
 
-static void volume_callback0(const device_config *device, int v)
+static void volume_callback0(running_device *device, int v)
 {
 	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
 	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
@@ -305,5 +305,5 @@ ROM_END
 
 
 
-GAME( 1987, mx5000,  0, 	 flkatck, flkatck, 0, ROT90, "Konami", "MX5000", GAME_SUPPORTS_SAVE )
+GAME( 1987, mx5000,  0,      flkatck, flkatck, 0, ROT90, "Konami", "MX5000", GAME_SUPPORTS_SAVE )
 GAME( 1987, flkatck, mx5000, flkatck, flkatck, 0, ROT90, "Konami", "Flak Attack (Japan)", GAME_SUPPORTS_SAVE )

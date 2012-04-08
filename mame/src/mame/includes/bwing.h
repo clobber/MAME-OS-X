@@ -7,9 +7,13 @@
 #define BW_DEBUG 0
 #define MAX_SOUNDS 16
 
-typedef struct _bwing_state bwing_state;
-struct _bwing_state
+class bwing_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bwing_state(machine)); }
+
+	bwing_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    spriteram;
@@ -34,9 +38,9 @@ struct _bwing_state
 	int coin;
 
 	/* device */
-	const device_config *maincpu;
-	const device_config *subcpu;
-	const device_config *audiocpu;
+	running_device *maincpu;
+	running_device *subcpu;
+	running_device *audiocpu;
 };
 
 

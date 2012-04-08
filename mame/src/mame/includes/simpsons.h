@@ -1,16 +1,45 @@
-/*----------- defined in machine/simpsons.c -----------*/
 
-extern int simpsons_firq_enabled;
+class simpsons_state
+{
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, simpsons_state(machine)); }
+
+	simpsons_state(running_machine &machine) { }
+
+	/* memory pointers */
+	UINT8 *    ram;
+	UINT8 *    xtraram;
+	UINT16 *   spriteram;
+//  UINT8 *    paletteram;    // currently this uses generic palette handling
+
+	/* video-related */
+	int        sprite_colorbase, layer_colorbase[3];
+	int        layerpri[3];
+
+	/* misc */
+	int        firq_enabled;
+	int        video_bank;
+	//int        nmi_enabled;
+
+	/* devices */
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *k053260;
+	running_device *k052109;
+	running_device *k053246;
+	running_device *k053251;
+};
+
+/*----------- defined in machine/simpsons.c -----------*/
 
 WRITE8_HANDLER( simpsons_eeprom_w );
 WRITE8_HANDLER( simpsons_coin_counter_w );
 READ8_HANDLER( simpsons_sound_interrupt_r );
 READ8_DEVICE_HANDLER( simpsons_sound_r );
 MACHINE_RESET( simpsons );
+MACHINE_START( simpsons );
 
 /*----------- defined in video/simpsons.c -----------*/
-
-extern UINT8 *simpsons_xtraram;
 
 void simpsons_video_banking( running_machine *machine, int select );
 VIDEO_UPDATE( simpsons );

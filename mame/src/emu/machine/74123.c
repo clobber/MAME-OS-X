@@ -6,7 +6,7 @@
 
  *****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/74123.h"
 #include "machine/rescap.h"
 
@@ -28,7 +28,7 @@ struct _ttl74123_t
 
 /* ----------------------------------------------------------------------- */
 
-INLINE ttl74123_t *get_safe_token(const device_config *device) {
+INLINE ttl74123_t *get_safe_token(running_device *device) {
 	assert( device != NULL );
 	assert( device->token != NULL );
 	assert( device->type == TTL74123 );
@@ -73,27 +73,27 @@ static int timer_running(ttl74123_t *chip)
 
 static TIMER_CALLBACK( output_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	ttl74123_t *chip = get_safe_token(device);
 
 	chip->intf->output_changed_cb(device, 0, param);
 }
 
 
-static void set_output(const device_config *device)
+static void set_output(running_device *device)
 {
 	ttl74123_t *chip = get_safe_token(device);
 	int output = timer_running(chip);
 
 	timer_set( device->machine, attotime_zero, (void *) device, output, output_callback );
 
-	if (LOG) logerror("74123 %s:  Output: %d\n", device->tag, output);
+	if (LOG) logerror("74123 %s:  Output: %d\n", device->tag(), output);
 }
 
 
 static TIMER_CALLBACK( clear_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	ttl74123_t *chip = get_safe_token(device);
 	int output = timer_running(chip);
 
@@ -103,7 +103,7 @@ static TIMER_CALLBACK( clear_callback )
 
 
 
-static void start_pulse(const device_config *device)
+static void start_pulse(running_device *device)
 {
 	ttl74123_t *chip = get_safe_token(device);
 
@@ -118,11 +118,11 @@ static void start_pulse(const device_config *device)
 		{
 			timer_adjust_oneshot(chip->timer, duration, 0);
 
-			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", device->tag, attotime_to_double(duration));
+			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", device->tag(), attotime_to_double(duration));
 		}
 		else
 		{
-			if (LOG) logerror("74123 %s:  Retriggering failed.\n", device->tag);
+			if (LOG) logerror("74123 %s:  Retriggering failed.\n", device->tag());
 		}
 	}
 	else
@@ -132,7 +132,7 @@ static void start_pulse(const device_config *device)
 
 		set_output(device);
 
-		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", device->tag, attotime_to_double(duration));
+		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", device->tag(), attotime_to_double(duration));
 	}
 }
 
@@ -172,7 +172,7 @@ WRITE8_DEVICE_HANDLER( ttl74123_clear_w )
 	{
 		timer_adjust_oneshot(chip->timer, attotime_zero, 0);
 
-		if (LOG) logerror("74123 #%s:  Cleared\n", device->tag );
+		if (LOG) logerror("74123 #%s:  Cleared\n", device->tag() );
 	}
 	chip->clear = data;
 }
@@ -191,7 +191,7 @@ static DEVICE_START( ttl74123 )
 	ttl74123_t *chip = get_safe_token(device);
 
 	/* validate arguments */
-	chip->intf = (ttl74123_config *)device->static_config;
+	chip->intf = (ttl74123_config *)device->baseconfig().static_config;
 
 	assert_always(chip->intf, "No interface specified");
 	assert_always((chip->intf->connection_type != TTL74123_GROUNDED) || (chip->intf->cap >= CAP_U(0.01)), "Only capacitors >= 0.01uF supported for GROUNDED type");

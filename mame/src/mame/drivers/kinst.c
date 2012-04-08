@@ -128,7 +128,7 @@ Notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mips/mips3.h"
 #include "cpu/adsp2100/adsp2100.h"
 #include "machine/idectrl.h"
@@ -157,7 +157,7 @@ static const UINT8 *control_map;
 
 static MACHINE_START( kinst )
 {
-	const device_config *ide = devtag_get_device(machine, "ide");
+	running_device *ide = devtag_get_device(machine, "ide");
 	UINT8 *features = ide_get_features(ide);
 
 	if (strncmp(machine->gamedrv->name, "kinst2", 6) != 0)
@@ -190,12 +190,12 @@ static MACHINE_START( kinst )
 	}
 
 	/* set the fastest DRC options */
-	mips3drc_set_options(cputag_get_cpu(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS);
+	mips3drc_set_options(devtag_get_device(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x08000000, 0x087fffff, FALSE, rambase2);
-	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x0007ffff, FALSE, rambase);
-	mips3drc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  rombase);
+	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x08000000, 0x087fffff, FALSE, rambase2);
+	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, 0x0007ffff, FALSE, rambase);
+	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE,  rombase);
 }
 
 
@@ -265,7 +265,7 @@ static INTERRUPT_GEN( irq0_start )
 }
 
 
-static void ide_interrupt(const device_config *device, int state)
+static void ide_interrupt(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "maincpu", 1, state);
 }

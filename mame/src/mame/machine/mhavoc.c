@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/avgdvg.h"
 #include "sound/tms5220.h"
 #include "cpu/m6502/m6502.h"
@@ -102,7 +102,7 @@ MACHINE_START( mhavoc )
 MACHINE_RESET( mhavoc )
 {
 	const address_space *space = cputag_get_address_space(machine, "alpha", ADDRESS_SPACE_PROGRAM);
-	has_gamma_cpu = (cputag_get_cpu(machine, "gamma") != NULL);
+	has_gamma_cpu = (devtag_get_device(machine, "gamma") != NULL);
 
 	memory_configure_bank(machine, "bank1", 0, 1, mhavoc_zram0, 0);
 	memory_configure_bank(machine, "bank1", 1, 1, mhavoc_zram1, 0);
@@ -328,7 +328,7 @@ static WRITE8_HANDLER( mhavocrv_speech_data_w )
 
 static WRITE8_HANDLER( mhavocrv_speech_strobe_w )
 {
-	const device_config *tms = devtag_get_device(space->machine, "tms");
+	running_device *tms = devtag_get_device(space->machine, "tms");
 	tms5220_data_w(tms, 0, speech_write_buffer);
 }
 

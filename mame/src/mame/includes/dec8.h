@@ -1,7 +1,11 @@
 
-typedef struct _dec8_state dec8_state;
-struct _dec8_state
+class dec8_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dec8_state(machine)); }
+
+	dec8_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  pf0_data;
@@ -27,10 +31,10 @@ struct _dec8_state
 	int      toggle;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *subcpu;
-	const device_config *audiocpu;
-	const device_config *mcu;
+	running_device *maincpu;
+	running_device *subcpu;
+	running_device *audiocpu;
+	running_device *mcu;
 };
 
 /*----------- defined in video/dec8.c -----------*/
@@ -42,13 +46,13 @@ VIDEO_UPDATE( ghostb );
 VIDEO_UPDATE( srdarwin );
 VIDEO_UPDATE( gondo );
 VIDEO_UPDATE( garyoret );
-VIDEO_UPDATE( lastmiss );
+VIDEO_UPDATE( lastmisn );
 VIDEO_UPDATE( shackled );
 VIDEO_UPDATE( oscar );
 VIDEO_START( cobracom );
 VIDEO_START( oscar );
 VIDEO_START( ghostb );
-VIDEO_START( lastmiss );
+VIDEO_START( lastmisn );
 VIDEO_START( shackled );
 VIDEO_START( srdarwin );
 VIDEO_START( gondo );
@@ -65,7 +69,7 @@ WRITE8_HANDLER( dec8_scroll2_w );
 WRITE8_HANDLER( srdarwin_control_w );
 WRITE8_HANDLER( gondo_scroll_w );
 WRITE8_HANDLER( shackled_control_w );
-WRITE8_HANDLER( lastmiss_control_w );
-WRITE8_HANDLER( lastmiss_scrollx_w );
-WRITE8_HANDLER( lastmiss_scrolly_w );
+WRITE8_HANDLER( lastmisn_control_w );
+WRITE8_HANDLER( lastmisn_scrollx_w );
+WRITE8_HANDLER( lastmisn_scrolly_w );
 WRITE8_HANDLER( dec8_videoram_w );

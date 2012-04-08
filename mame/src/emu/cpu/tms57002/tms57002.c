@@ -1,5 +1,6 @@
-#include "tms57002.h"
+#include "emu.h"
 #include "debugger.h"
+#include "tms57002.h"
 
 CPU_DISASSEMBLE(tms57002);
 
@@ -108,7 +109,7 @@ typedef struct {
 	int unsupported_inst_warning;
 } tms57002_t;
 
-INLINE tms57002_t *get_safe_token(const device_config *device)
+INLINE tms57002_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -253,7 +254,7 @@ READ8_DEVICE_HANDLER(tms57002_dready_r)
 	return s->sti & S_HOST ? 0 : 1;
 }
 
-void tms57002_sync(const device_config *device)
+void tms57002_sync(running_device *device)
 {
 	tms57002_t *s = get_safe_token(device);
 
@@ -1030,8 +1031,8 @@ INLINE int xmode(UINT32 opcode, char type)
 			return 1;
 	} else if(opcode & 0x200)
 		return 2;
-	else
-		return 1;
+
+	return 1;
 }
 
 INLINE int sfao(UINT32 st1)
@@ -1342,8 +1343,8 @@ static CPU_INIT(tms57002)
 	tms57002_t *s = get_safe_token(device);
 	tms57002_cache_flush(s);
 	s->sti = S_IDLE;
-	s->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	s->data    = memory_find_address_space(device, ADDRESS_SPACE_DATA);
+	s->program = device->space(AS_PROGRAM);
+	s->data    = device->space(AS_DATA);
 }
 
 
@@ -1369,22 +1370,22 @@ CPU_GET_INFO(tms57002)
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:		info->i = 4; break;
 	case CPUINFO_INT_MIN_CYCLES:				info->i = 1; break;
 	case CPUINFO_INT_MAX_CYCLES:				info->i = 3; break;
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:		info->i = 32; break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:		info->i = 8; break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:		info->i = -2; break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:		info->i = 8; break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA:		info->i = 20; break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA:		info->i = 0; break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:			info->i = 0; break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO:			info->i = 0; break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO:			info->i = 0; break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:		info->i = 32; break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:		info->i = 8; break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:		info->i = -2; break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 8; break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 20; break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:		info->i = 0; break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:			info->i = 0; break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:			info->i = 0; break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:			info->i = 0; break;
 	case CPUINFO_FCT_SET_INFO:					info->setinfo = CPU_SET_INFO_NAME(tms57002); break;
 	case CPUINFO_FCT_INIT:						info->init = CPU_INIT_NAME(tms57002); break;
 	case CPUINFO_FCT_RESET:						info->reset = CPU_RESET_NAME(tms57002); break;
 	case CPUINFO_FCT_EXECUTE:					info->execute = CPU_EXECUTE_NAME(tms57002); break;
 	case CPUINFO_FCT_DISASSEMBLE:				info->disassemble = CPU_DISASSEMBLE_NAME(tms57002); break;
 	case CPUINFO_PTR_INSTRUCTION_COUNTER:		info->icount = &s->icount; break;
-	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:info->internal_map32 = ADDRESS_MAP_NAME(internal_pgm); break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:info->internal_map32 = ADDRESS_MAP_NAME(internal_pgm); break;
 	case DEVINFO_STR_NAME:						strcpy( info->s, "TMS57002" ); break;
 	case DEVINFO_STR_FAMILY:				strcpy( info->s, "Texas Instruments TMS57002 (DASP)" ); break;
 	case DEVINFO_STR_VERSION:				strcpy( info->s, "1.0" ); break;

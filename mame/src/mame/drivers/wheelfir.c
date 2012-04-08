@@ -49,7 +49,7 @@ something is missing, currently needs a hack to boot
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
 
@@ -540,8 +540,8 @@ static INPUT_PORTS_START( wheelfir )
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static const device_config* frame_timer;
-static const device_config* scanline_timer;
+static running_device* frame_timer;
+static running_device* scanline_timer;
 
 static TIMER_DEVICE_CALLBACK( frame_timer_callback )
 {

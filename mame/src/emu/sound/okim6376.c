@@ -10,9 +10,7 @@
  **********************************************************************************************/
 
 
-#include <math.h>
-
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "okim6376.h"
 
@@ -65,7 +63,7 @@ static const int volume_table[4] =
 static int tables_computed = 0;
 
 
-INLINE okim6376_state *get_safe_token(const device_config *device)
+INLINE okim6376_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -270,7 +268,7 @@ static STREAM_UPDATE( okim6376_update )
 
 ***********************************************************************************************/
 
-static void adpcm_state_save_register(struct ADPCMVoice *voice, const device_config *device, int index)
+static void adpcm_state_save_register(struct ADPCMVoice *voice, running_device *device, int index)
 {
 	state_save_register_device_item(device, index, voice->playing);
 	state_save_register_device_item(device, index, voice->sample);
@@ -281,7 +279,7 @@ static void adpcm_state_save_register(struct ADPCMVoice *voice, const device_con
 	state_save_register_device_item(device, index, voice->base_offset);
 }
 
-static void okim6376_state_save_register(okim6376_state *info, const device_config *device)
+static void okim6376_state_save_register(okim6376_state *info, running_device *device)
 {
 	int j;
 
@@ -307,7 +305,7 @@ static DEVICE_START( okim6376 )
 	compute_tables();
 
 	info->command = -1;
-	info->region_base = device->region;
+	info->region_base = *device->region;
 	info->master_clock = device->clock;
 
 	/* generate the name and create the stream */
@@ -431,7 +429,7 @@ WRITE8_DEVICE_HANDLER( okim6376_w )
 					}
 					else
 					{
-						logerror("OKIM6376:'%s' requested to play sample %02x on non-stopped voice\n",device->tag,info->command);
+						logerror("OKIM6376:'%s' requested to play sample %02x on non-stopped voice\n",device->tag(),info->command);
 					}
 				}
 			}

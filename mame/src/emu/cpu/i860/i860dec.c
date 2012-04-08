@@ -309,7 +309,7 @@ static int has_delay_slot(UINT32 insn)
 
 /* This is the external interface for asserting/deasserting pins on
    the i860.  */
-void i860_set_pin (const device_config *device, int pin, int val)
+void i860_set_pin (running_device *device, int pin, int val)
 {
 	i860s *cpustate = get_safe_token(device);
 	if (pin == DEC_PIN_BUS_HOLD)
@@ -4437,7 +4437,7 @@ void reset_i860 (i860s *cpustate)
 /* MAME execution hook for i860 emulator. */
 /*=================================================================*/
 
-#include "cpuintrf.h"
+#include "emu.h"
 
 static CPU_EXECUTE( i860 )
 {
@@ -4465,13 +4465,13 @@ static CPU_EXECUTE( i860 )
 		if (cpustate->pc == 0xfffc0370 ||
 			cpustate->pc == 0xfffc03a4)
 		{
-			fprintf(stderr, "(%s) 0x%08x: snag 0x20000000\n", cpustate->device->tag, cpustate->pc);
+			fprintf(stderr, "(%s) 0x%08x: snag 0x20000000\n", cpustate->device->tag(), cpustate->pc);
 			cpustate->single_stepping = 0;
 		}
 		else if (cpustate->pc == 0xfffc0384 ||
 				 cpustate->pc == 0xfffc03b8)
 		{
-			fprintf(stderr, "(%s) 0x%08x: passed 0x20000000\n", cpustate->device->tag, cpustate->pc);
+			fprintf(stderr, "(%s) 0x%08x: passed 0x20000000\n", cpustate->device->tag(), cpustate->pc);
 			cpustate->single_stepping = 0;
 		}
 #endif
@@ -4551,7 +4551,7 @@ static void disasm (i860s *cpustate, UINT32 addr, int len)
 
 		/* Note that we print the incoming (possibly virtual) address as the
            PC rather than the translated address.  */
-		fprintf (stderr, "  (%s) 0x%08x: ", cpustate->device->tag, addr);
+		fprintf (stderr, "  (%s) 0x%08x: ", cpustate->device->tag(), addr);
 		insn = memory_read_dword_64le(cpustate->program, phys_addr);
 #ifdef HOST_MSB
 		BYTE_REV32 (insn);

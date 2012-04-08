@@ -20,7 +20,7 @@
 
 **************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "render.h"
 #include "includes/amiga.h"
@@ -28,7 +28,7 @@
 #include "machine/6526cia.h"
 
 
-static const device_config *laserdisc;
+static running_device *laserdisc;
 static emu_timer *serial_timer;
 static UINT8 serial_timer_active;
 static UINT16 input_select;
@@ -43,12 +43,12 @@ static TIMER_CALLBACK( response_timer );
  *
  *************************************/
 
-static int get_lightgun_pos(const device_config *screen, int player, int *x, int *y)
+static int get_lightgun_pos(running_device *screen, int player, int *x, int *y)
 {
 	const rectangle *visarea = video_screen_get_visible_area(screen);
 
-	int xpos = input_port_read_safe(screen->machine, (player == 0) ? "GUN1X" : "GUN2X", -1);
-	int ypos = input_port_read_safe(screen->machine, (player == 0) ? "GUN1Y" : "GUN2Y", -1);
+	int xpos = input_port_read_safe(screen->machine, (player == 0) ? "GUN1X" : "GUN2X", 0xffffffff);
+	int ypos = input_port_read_safe(screen->machine, (player == 0) ? "GUN1Y" : "GUN2Y", 0xffffffff);
 
 	if (xpos == -1 || ypos == -1)
 		return FALSE;
@@ -377,26 +377,30 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const cia6526_interface cia_0_intf =
+static const mos6526_interface cia_0_intf =
 {
+	0,												/* tod_clock */
 	DEVCB_LINE(amiga_cia_0_irq),								/* irq_func */
 	DEVCB_NULL,	/* pc_func */
-	0,												/* tod_clock */
-	{
-		{ DEVCB_HANDLER(alg_cia_0_porta_r), DEVCB_HANDLER(alg_cia_0_porta_w) },	/* port A */
-		{ DEVCB_HANDLER(alg_cia_0_portb_r), DEVCB_HANDLER(alg_cia_0_portb_w) }	/* port B */
-	}
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_HANDLER(alg_cia_0_porta_r),
+	DEVCB_HANDLER(alg_cia_0_porta_w),	/* port A */
+	DEVCB_HANDLER(alg_cia_0_portb_r),
+	DEVCB_HANDLER(alg_cia_0_portb_w)	/* port B */
 };
 
-static const cia6526_interface cia_1_intf =
+static const mos6526_interface cia_1_intf =
 {
+	0,												/* tod_clock */
 	DEVCB_LINE(amiga_cia_1_irq),								/* irq_func */
 	DEVCB_NULL,	/* pc_func */
-	0,												/* tod_clock */
-	{
-		{ DEVCB_HANDLER(alg_cia_1_porta_r), DEVCB_HANDLER(alg_cia_1_porta_w), },	/* port A */
-		{ DEVCB_NULL, DEVCB_NULL }								/* port B */
-	}
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_HANDLER(alg_cia_1_porta_r),
+	DEVCB_HANDLER(alg_cia_1_porta_w),	/* port A */
+	DEVCB_NULL,
+	DEVCB_NULL								/* port B */
 };
 
 static MACHINE_DRIVER_START( alg_r1 )
@@ -438,8 +442,8 @@ static MACHINE_DRIVER_START( alg_r1 )
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
 
 	/* cia */
-	MDRV_CIA8520_ADD("cia_0", AMIGA_68000_NTSC_CLOCK / 10, cia_0_intf)
-	MDRV_CIA8520_ADD("cia_1", AMIGA_68000_NTSC_CLOCK / 10, cia_1_intf)
+	MDRV_MOS8520_ADD("cia_0", AMIGA_68000_NTSC_CLOCK / 10, cia_0_intf)
+	MDRV_MOS8520_ADD("cia_1", AMIGA_68000_NTSC_CLOCK / 10, cia_1_intf)
 MACHINE_DRIVER_END
 
 
@@ -685,7 +689,7 @@ static DRIVER_INIT( palr1 )
 {
 	UINT32 length = memory_region_length(machine, "user2");
 	UINT8 *rom = memory_region(machine, "user2");
-	UINT8 *original = alloc_array_or_die(UINT8, length);
+	UINT8 *original = auto_alloc_array(machine, UINT8, length);
 	UINT32 srcaddr;
 
 	memcpy(original, rom, length);
@@ -696,7 +700,7 @@ static DRIVER_INIT( palr1 )
 		if (srcaddr & 0x8000) dstaddr ^= 0x4000;
 		rom[dstaddr] = original[srcaddr];
 	}
-	free(original);
+	auto_free(machine, original);
 
 	alg_init(machine);
 }
@@ -705,7 +709,7 @@ static DRIVER_INIT( palr3 )
 {
 	UINT32 length = memory_region_length(machine, "user2");
 	UINT8 *rom = memory_region(machine, "user2");
-	UINT8 *original = alloc_array_or_die(UINT8, length);
+	UINT8 *original = auto_alloc_array(machine, UINT8, length);
 	UINT32 srcaddr;
 
 	memcpy(original, rom, length);
@@ -715,7 +719,7 @@ static DRIVER_INIT( palr3 )
 		if (srcaddr & 0x2000) dstaddr ^= 0x1000;
 		rom[dstaddr] = original[srcaddr];
 	}
-	free(original);
+	auto_free(machine, original);
 
 	alg_init(machine);
 }
@@ -724,7 +728,7 @@ static DRIVER_INIT( palr6 )
 {
 	UINT32 length = memory_region_length(machine, "user2");
 	UINT8 *rom = memory_region(machine, "user2");
-	UINT8 *original = alloc_array_or_die(UINT8, length);
+	UINT8 *original = auto_alloc_array(machine, UINT8, length);
 	UINT32 srcaddr;
 
 	memcpy(original, rom, length);
@@ -736,7 +740,7 @@ static DRIVER_INIT( palr6 )
 		dstaddr ^= 0x20000;
 		rom[dstaddr] = original[srcaddr];
 	}
-	free(original);
+	auto_free(machine, original);
 
 	alg_init(machine);
 }
@@ -791,14 +795,14 @@ GAME( 1990, maddog,   alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Las
   /* works ok but uses right player (2) controls only for trigger and holster */
 GAME( 1992, maddog2,  alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Mad Dog II: The Lost Gold v2.04", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1992, maddog22, alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Mad Dog II: The Lost Gold v2.02", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1992, maddog21, maddog2, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Mad Dog II: The Lost Gold v1.0", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1992, maddog21, maddog2,  alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Mad Dog II: The Lost Gold v1.0", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
   /* works ok but uses right player (2) controls only for trigger and holster */
 GAME( 1992, spacepir, alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Space Pirates v2.2", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1992, gallgall, alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Gallagher's Gallery v2.2", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
   /* all good, but no holster */
 GAME( 1993, crimepat, alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Crime Patrol v1.4", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1993, crimep2,  alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Crime Patrol 2: Drug Wars v1.3", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1993, crimep211,crimep2, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Crime Patrol 2: Drug Wars v1.1", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1993, crimep211,crimep2,  alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "Crime Patrol 2: Drug Wars v1.1", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1994, lastbh,   alg_bios, alg_r2,   alg_2p, palr6,    ROT0,  "American Laser Games", "The Last Bounty Hunter v0.06", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, fastdraw, alg_bios, alg_r2,   alg_2p, palr6,    ROT90, "American Laser Games", "Fast Draw Showdown v1.3", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
   /* works ok but uses right player (2) controls only for trigger and holster */

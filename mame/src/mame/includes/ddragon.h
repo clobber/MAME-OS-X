@@ -5,9 +5,13 @@
 *************************************************************************/
 
 
-typedef struct _ddragon_state ddragon_state;
-struct _ddragon_state
+class ddragon_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ddragon_state(machine)); }
+
+	ddragon_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        rambase;
 	UINT8 *        bgvideoram;
@@ -45,11 +49,11 @@ struct _ddragon_state
 #endif
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *snd_cpu;
-	const device_config *sub_cpu;
-	const device_config *adpcm_1;
-	const device_config *adpcm_2;
+	running_device *maincpu;
+	running_device *snd_cpu;
+	running_device *sub_cpu;
+	running_device *adpcm_1;
+	running_device *adpcm_2;
 };
 
 

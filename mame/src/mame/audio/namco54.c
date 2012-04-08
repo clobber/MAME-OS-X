@@ -47,20 +47,20 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "namco54.h"
 #include "cpu/mb88xx/mb88xx.h"
 
 typedef struct _namco_54xx_state namco_54xx_state;
 struct _namco_54xx_state
 {
-	const device_config *cpu;
-	const device_config *discrete;
+	running_device *cpu;
+	running_device *discrete;
 	int basenode;
 	UINT8 latched_cmd;
 };
 
-INLINE namco_54xx_state *get_safe_token(const device_config *device)
+INLINE namco_54xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -73,7 +73,7 @@ INLINE namco_54xx_state *get_safe_token(const device_config *device)
 
 static TIMER_CALLBACK( namco_54xx_latch_callback )
 {
-	namco_54xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_54xx_state *state = get_safe_token((running_device *)ptr);
 	state->latched_cmd = param;
 }
 
@@ -113,7 +113,7 @@ static WRITE8_HANDLER( namco_54xx_R1_w )
 
 static TIMER_CALLBACK( namco_54xx_irq_clear )
 {
-	namco_54xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_54xx_state *state = get_safe_token((running_device *)ptr);
 	cpu_set_input_line(state->cpu, 0, CLEAR_LINE);
 }
 
@@ -165,14 +165,13 @@ ROM_END
 
 static DEVICE_START( namco_54xx )
 {
-	namco_54xx_config *config = (namco_54xx_config *)device->inline_config;
+	namco_54xx_config *config = (namco_54xx_config *)device->baseconfig().inline_config;
 	namco_54xx_state *state = get_safe_token(device);
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 
 	/* find our CPU */
-	state->cpu = cputag_get_cpu(device->machine, device_build_tag(tempstring, device, "mcu"));
+	state->cpu = device->subdevice("mcu");
 	assert(state->cpu != NULL);
-	astring_free(tempstring);
 
 	/* find the attached discrete sound device */
 	assert(config->discrete != NULL);

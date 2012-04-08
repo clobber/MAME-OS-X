@@ -168,14 +168,12 @@
 
 ***************************************************************************/
 
+#include "emu.h"
+#include "debugger.h"
 #include "drcuml.h"
 #include "drcbeut.h"
-#include "debugger.h"
 #include "x86emit.h"
-#include "eminline.h"
 #include "x86log.h"
-#include <math.h>
-#include <stddef.h>
 
 
 
@@ -264,7 +262,7 @@ struct _opcode_table_entry
 /* internal backend-specific state */
 struct _drcbe_state
 {
-	const device_config *	device;					/* CPU device we are associated with */
+	running_device *	device;					/* CPU device we are associated with */
 	drcuml_state *			drcuml;					/* pointer back to our owner */
 	drccache *				cache;					/* pointer to the cache */
 	drcuml_machine_state	state;					/* state of the machine */
@@ -308,7 +306,7 @@ struct _drcbe_state
 ***************************************************************************/
 
 /* primary back-end callbacks */
-static drcbe_state *drcbex64_alloc(drcuml_state *drcuml, drccache *cache, const device_config *device, UINT32 flags, int modes, int addrbits, int ignorebits);
+static drcbe_state *drcbex64_alloc(drcuml_state *drcuml, drccache *cache, running_device *device, UINT32 flags, int modes, int addrbits, int ignorebits);
 static void drcbex64_free(drcbe_state *drcbe);
 static void drcbex64_reset(drcbe_state *drcbe);
 static int drcbex64_execute(drcbe_state *drcbe, drcuml_codehandle *entry);
@@ -327,7 +325,7 @@ static void debug_log_hashjmp(int mode, offs_t pc);
 ***************************************************************************/
 
 /* globally-accessible interface to the backend */
-const drcbe_interface drcbe_x64_be_interface =
+extern const drcbe_interface drcbe_x64_be_interface =
 {
 	drcbex64_alloc,
 	drcbex64_free,
@@ -687,7 +685,7 @@ INLINE void emit_smart_call_m64(drcbe_state *drcbe, x86code **dst, x86code **tar
     state
 -------------------------------------------------*/
 
-static drcbe_state *drcbex64_alloc(drcuml_state *drcuml, drccache *cache, const device_config *device, UINT32 flags, int modes, int addrbits, int ignorebits)
+static drcbe_state *drcbex64_alloc(drcuml_state *drcuml, drccache *cache, running_device *device, UINT32 flags, int modes, int addrbits, int ignorebits)
 {
 	/* SSE control register mapping */
 	static const UINT32 sse_control[4] =
@@ -716,7 +714,7 @@ static drcbe_state *drcbex64_alloc(drcuml_state *drcuml, drccache *cache, const 
 	/* get address spaces and accessors */
 	for (spacenum = 0; spacenum < ADDRESS_SPACES; spacenum++)
 	{
-		drcbe->space[spacenum] = memory_find_address_space(device, spacenum);
+		drcbe->space[spacenum] = device->space(spacenum);
 		if (drcbe->space[spacenum] != NULL)
 			drcbe->accessors[spacenum] = drcbe->space[spacenum]->accessors;
 	}

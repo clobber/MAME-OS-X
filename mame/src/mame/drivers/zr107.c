@@ -163,34 +163,20 @@ Check gticlub.c for details on the bottom board.
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/powerpc/ppc.h"
 #include "cpu/sharc/sharc.h"
-#include "sound/k054539.h"
 #include "machine/konppc.h"
 #include "machine/adc083x.h"
 #include "machine/k056230.h"
 #include "machine/eeprom.h"
+#include "sound/k056800.h"
+#include "sound/k054539.h"
 #include "video/konicdev.h"
 #include "video/gticlub.h"
-#include "sound/k056800.h"
 
 static UINT8 led_reg0, led_reg1;
-
-
-
-// defined in drivers/nwk-tr.c
-int K001604_vh_start(running_machine *machine, int chip);
-void K001604_draw_front_layer(int chip, bitmap_t *bitmap, const rectangle *cliprect);
-void K001604_draw_back_layer(int chip, bitmap_t *bitmap, const rectangle *cliprect);
-READ32_HANDLER(K001604_tile_r);
-READ32_HANDLER(K001604_char_r);
-WRITE32_HANDLER(K001604_tile_w);
-WRITE32_HANDLER(K001604_char_w);
-WRITE32_HANDLER(K001604_reg_w);
-READ32_HANDLER(K001604_reg_r);
-
 
 
 
@@ -198,22 +184,23 @@ static VIDEO_START( jetwave )
 {
 	K001005_init(machine);
 	K001006_init(machine);
-	K001604_vh_start(machine, 0);
 }
 
 
 static VIDEO_UPDATE( jetwave )
 {
+	running_device *k001604 = devtag_get_device(screen->machine, "k001604");
+
 	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]);
 
 	K001005_draw(bitmap, cliprect);
 
-	K001604_draw_front_layer(0, bitmap, cliprect);
+	k001604_draw_front_layer(k001604, bitmap, cliprect);
 
 	draw_7segment_led(bitmap, 3, 3, led_reg0);
 	draw_7segment_led(bitmap, 9, 3, led_reg1);
 
-	sharc_set_flag_input(cputag_get_cpu(screen->machine, "dsp"), 1, ASSERT_LINE);
+	sharc_set_flag_input(devtag_get_device(screen->machine, "dsp"), 1, ASSERT_LINE);
 	return 0;
 }
 
@@ -237,7 +224,7 @@ static void game_tile_callback(running_machine *machine, int layer, int *code, i
 
 static VIDEO_START( zr107 )
 {
-	const device_config *k056832 = devtag_get_device(machine, "k056832");
+	running_device *k056832 = devtag_get_device(machine, "k056832");
 
 	k056832_set_layer_offs(k056832, 0, -29, -27);
 	k056832_set_layer_offs(k056832, 1, -29, -27);
@@ -254,7 +241,7 @@ static VIDEO_START( zr107 )
 
 static VIDEO_UPDATE( zr107 )
 {
-	const device_config *k056832 = devtag_get_device(screen->machine, "k056832");
+	running_device *k056832 = devtag_get_device(screen->machine, "k056832");
 	bitmap_fill(bitmap, cliprect, screen->machine->pens[0]);
 
 	k056832_tilemap_draw(k056832, bitmap, cliprect, 1, 0, 0);
@@ -264,7 +251,7 @@ static VIDEO_UPDATE( zr107 )
 	draw_7segment_led(bitmap, 3, 3, led_reg0);
 	draw_7segment_led(bitmap, 9, 3, led_reg1);
 
-	sharc_set_flag_input(cputag_get_cpu(screen->machine, "dsp"), 1, ASSERT_LINE);
+	sharc_set_flag_input(devtag_get_device(screen->machine, "dsp"), 1, ASSERT_LINE);
 	return 0;
 }
 
@@ -392,10 +379,10 @@ static UINT32 *workram;
 static MACHINE_START( zr107 )
 {
 	/* set conservative DRC options */
-	ppcdrc_set_options(cputag_get_cpu(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
+	ppcdrc_set_options(devtag_get_device(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	ppcdrc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x000fffff, FALSE, workram);
+	ppcdrc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, 0x000fffff, FALSE, workram);
 }
 
 static ADDRESS_MAP_START( zr107_map, ADDRESS_SPACE_PROGRAM, 32 )
@@ -428,10 +415,10 @@ static WRITE32_HANDLER( jetwave_palette_w )
 
 static ADDRESS_MAP_START( jetwave_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_MIRROR(0x80000000) AM_RAM		/* Work RAM */
-	AM_RANGE(0x74000000, 0x740000ff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_reg_r, K001604_reg_w)
+	AM_RANGE(0x74000000, 0x740000ff) AM_MIRROR(0x80000000) AM_DEVREADWRITE("k001604", k001604_reg_r, k001604_reg_w)
 	AM_RANGE(0x74010000, 0x7401ffff) AM_MIRROR(0x80000000) AM_RAM_WRITE(jetwave_palette_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x74020000, 0x7403ffff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_tile_r, K001604_tile_w)
-	AM_RANGE(0x74040000, 0x7407ffff) AM_MIRROR(0x80000000) AM_READWRITE(K001604_char_r, K001604_char_w)
+	AM_RANGE(0x74020000, 0x7403ffff) AM_MIRROR(0x80000000) AM_DEVREADWRITE("k001604", k001604_tile_r, k001604_tile_w)
+	AM_RANGE(0x74040000, 0x7407ffff) AM_MIRROR(0x80000000) AM_DEVREADWRITE("k001604", k001604_char_r, k001604_char_w)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_MIRROR(0x80000000) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)		/* 21N 21K 23N 23K */
 	AM_RANGE(0x78010000, 0x7801ffff) AM_MIRROR(0x80000000) AM_WRITE(cgboard_dsp_shared_w_ppc)
 	AM_RANGE(0x78040000, 0x7804000f) AM_MIRROR(0x80000000) AM_READWRITE(K001006_0_r, K001006_0_w)
@@ -644,7 +631,7 @@ static const sharc_config sharc_cfg =
 
 /* ADC0838 Interface */
 
-static double adc0838_callback( const device_config *device, UINT8 input )
+static double adc0838_callback( running_device *device, UINT8 input )
 {
 	switch (input)
 	{
@@ -775,6 +762,14 @@ static MACHINE_DRIVER_START( zr107 )
 	MDRV_ADC0838_ADD("adc0838", zr107_adc_interface)
 MACHINE_DRIVER_END
 
+
+static const k001604_interface jetwave_k001604_intf =
+{
+	0, 1,	/* gfx index 1 & 2 */
+	0, 1,		/* layer_size, roz_size */
+	0		/* slrasslt hack */
+};
+
 static MACHINE_DRIVER_START( jetwave )
 
 	/* basic machine hardware */
@@ -808,6 +803,8 @@ static MACHINE_DRIVER_START( jetwave )
 
 	MDRV_VIDEO_START(jetwave)
 	MDRV_VIDEO_UPDATE(jetwave)
+
+	MDRV_K001604_ADD("k001604", jetwave_k001604_intf)
 
 	MDRV_K056800_ADD("k056800", zr107_k056800_interface)
 
@@ -872,9 +869,9 @@ ROM_START( midnrun )
 	ROM_LOAD32_BYTE( "477a16.2h", 0x000003, 0x200000, CRC(2c03ee63) SHA1(6b74d340dddf92bb4e4b1e037f003d58c65d8d9b) )
 
 	ROM_REGION(0x600000, "shared", 0)	/* Sound data */
-	ROM_LOAD( "477a09.3r", 0x000000, 0x200000, CRC(f431e29f) SHA1(e6082d88f86abb63d02ac34e70873b58f88b0ddc) )
-	ROM_LOAD( "477a10.5n", 0x200000, 0x200000, CRC(8db31bd4) SHA1(d662d3bb6e8b44a01ffa158f5d7425454aad49a3) )
-	ROM_LOAD( "477a08.5r", 0x400000, 0x200000, CRC(d320dbde) SHA1(eb602cad6ac7c7151c9f29d39b10041d5a354164) )
+	ROM_LOAD( "477a08.5r", 0x000000, 0x200000, CRC(d320dbde) SHA1(eb602cad6ac7c7151c9f29d39b10041d5a354164) )
+	ROM_LOAD( "477a09.3r", 0x200000, 0x200000, CRC(f431e29f) SHA1(e6082d88f86abb63d02ac34e70873b58f88b0ddc) )
+	ROM_LOAD( "477a10.5n", 0x400000, 0x200000, CRC(8db31bd4) SHA1(d662d3bb6e8b44a01ffa158f5d7425454aad49a3) )
 ROM_END
 
 ROM_START( windheat )
@@ -898,9 +895,9 @@ ROM_START( windheat )
 	ROM_LOAD32_BYTE( "677a16.2h", 0x000003, 0x200000, CRC(7cc75539) SHA1(4bd8d88debf7489f30008bd4cbded67cb1a20ab0) )
 
 	ROM_REGION(0x600000, "shared", 0)	/* Sound data */
-	ROM_LOAD( "677a09.3r", 0x000000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
-	ROM_LOAD( "677a10.5n", 0x200000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
-	ROM_LOAD( "677a08.5r", 0x400000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a08.5r", 0x000000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a09.3r", 0x200000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
+	ROM_LOAD( "677a10.5n", 0x400000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
 ROM_END
 
 ROM_START( windheatu )
@@ -924,9 +921,9 @@ ROM_START( windheatu )
 	ROM_LOAD32_BYTE( "677a16.2h", 0x000003, 0x200000, CRC(7cc75539) SHA1(4bd8d88debf7489f30008bd4cbded67cb1a20ab0) )
 
 	ROM_REGION(0x600000, "shared", 0)	/* Sound data */
-	ROM_LOAD( "677a09.3r", 0x000000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
-	ROM_LOAD( "677a10.5n", 0x200000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
-	ROM_LOAD( "677a08.5r", 0x400000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a08.5r", 0x000000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a09.3r", 0x200000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
+	ROM_LOAD( "677a10.5n", 0x400000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
 ROM_END
 
 ROM_START( windheatj )
@@ -950,12 +947,12 @@ ROM_START( windheatj )
 	ROM_LOAD32_BYTE( "677a16.2h", 0x000003, 0x200000, CRC(7cc75539) SHA1(4bd8d88debf7489f30008bd4cbded67cb1a20ab0) )
 
 	ROM_REGION(0x600000, "shared", 0)	/* Sound data */
-	ROM_LOAD( "677a09.3r", 0x000000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
-	ROM_LOAD( "677a10.5n", 0x200000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
-	ROM_LOAD( "677a08.5r", 0x400000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a08.5r", 0x000000, 0x200000, CRC(bde38850) SHA1(aaf1bdfc25ecdffc1f6076c9c1b2edbe263171d2) )
+	ROM_LOAD( "677a09.3r", 0x200000, 0x200000, CRC(4dfc1ea9) SHA1(4ab264c1902b522bc0589766e42f2b6ca276808d) )
+	ROM_LOAD( "677a10.5n", 0x400000, 0x200000, CRC(d8f77a68) SHA1(ff251863ef096f0864f6cbe6caa43b0aa299d9ee) )
 ROM_END
 
-ROM_START( jetwave )
+ROM_START( waveshrk )
 	ROM_REGION(0x200000, "user1", 0)	/* PowerPC program roms */
 	ROM_LOAD32_BYTE( "678uab01.20u", 0x000003, 0x080000, CRC(a9b9ceed) SHA1(36f0d18481d7c3e7358e02473e54bc6b52d5c26b) )
 	ROM_LOAD32_BYTE( "678uab02.17u", 0x000002, 0x080000, CRC(5ed24ac8) SHA1(d659c751558d4f8d89314466a37c04ac2df46879) )
@@ -970,15 +967,15 @@ ROM_START( jetwave )
 	ROM_LOAD32_WORD_SWAP( "685a06.8u",  0x000002, 0x200000, CRC(fc98c6a5) SHA1(a84583bb7296fa9e0c284b2ac59e2dc7b2689eee) )
 
 	ROM_REGION(0x800000, "gfx1", 0)	/* Texture data */
-	ROM_LOAD64_WORD( "678a13.18d", 0x000000, 0x200000, CRC(ccf75722) SHA1(f48d21dfc4f82adbb4c9c841a809267cfd028a3d) )
-	ROM_LOAD64_WORD( "678a14.13d", 0x000002, 0x200000, CRC(333a1ab4) SHA1(79df4a98b7871eba4157307a7709da8f8b5da39b) )
-	ROM_LOAD64_WORD( "678a15.9d",  0x000004, 0x200000, CRC(58b670f8) SHA1(5d4facb00e34de3ad11ed60c19835918a9cf6cb9) )
-	ROM_LOAD64_WORD( "678a16.4d",  0x000006, 0x200000, CRC(137b9bff) SHA1(5052c1fa30cc1d6affd78f48d483415dca89d10b) )
+	ROM_LOAD32_BYTE( "678a13.18d", 0x000000, 0x200000, CRC(ccf75722) SHA1(f48d21dfc4f82adbb4c9c841a809267cfd028a3d) )
+	ROM_LOAD32_BYTE( "678a14.13d", 0x000001, 0x200000, CRC(333a1ab4) SHA1(79df4a98b7871eba4157307a7709da8f8b5da39b) )
+	ROM_LOAD32_BYTE( "678a15.9d",  0x000002, 0x200000, CRC(58b670f8) SHA1(5d4facb00e34de3ad11ed60c19835918a9cf6cb9) )
+	ROM_LOAD32_BYTE( "678a16.4d",  0x000003, 0x200000, CRC(137b9bff) SHA1(5052c1fa30cc1d6affd78f48d483415dca89d10b) )
 
 	ROM_REGION(0x600000, "shared", 0)	/* Sound data */
-	ROM_LOAD( "678a09.3r", 0x000000, 0x200000, CRC(39baef23) SHA1(9f7bda0f9c06eee94703f9ceb06975c8e28338cc) )
-	ROM_LOAD( "678a10.5n", 0x200000, 0x200000, CRC(0508280e) SHA1(a36c5dc377b0ba597f131bd9dfc6019e7fc2d243) )
-	ROM_LOAD( "678a08.5r", 0x400000, 0x200000, CRC(4aeb61ad) SHA1(ec6872cb2e4776849963f48c1c245ca7697849e0) )
+	ROM_LOAD( "678a08.5r", 0x000000, 0x200000, CRC(4aeb61ad) SHA1(ec6872cb2e4776849963f48c1c245ca7697849e0) )
+	ROM_LOAD( "678a09.3r", 0x200000, 0x200000, CRC(39baef23) SHA1(9f7bda0f9c06eee94703f9ceb06975c8e28338cc) )
+	ROM_LOAD( "678a10.5n", 0x400000, 0x200000, CRC(0508280e) SHA1(a36c5dc377b0ba597f131bd9dfc6019e7fc2d243) )
 ROM_END
 
 /*****************************************************************************/
@@ -987,4 +984,4 @@ GAME( 1995, midnrun,  0,        zr107,   midnrun,  zr107,   ROT0, "Konami", "Mid
 GAME( 1996, windheat, 0,        zr107,   windheat, zr107,   ROT0, "Konami", "Winding Heat (EAA, Euro v2.11)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
 GAME( 1996, windheatu,windheat, zr107,   windheat, zr107,   ROT0, "Konami", "Winding Heat (UBC, USA v2.22)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
 GAME( 1996, windheatj,windheat, zr107,   windheat, zr107,   ROT0, "Konami", "Winding Heat (JAA, JPN v2.11)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
-GAME( 1996, jetwave,  0,        jetwave, jetwave,  jetwave, ROT0, "Konami", "Jet Wave (UAB, USA v1.04)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )
+GAME( 1996, waveshrk, 0,        jetwave, jetwave,  jetwave, ROT0, "Konami", "Wave Shark (UAB, USA v1.04)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND|GAME_NOT_WORKING )

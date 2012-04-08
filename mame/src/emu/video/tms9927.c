@@ -7,7 +7,7 @@
 
 **********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "tms9927.h"
 
 
@@ -35,7 +35,7 @@ struct _tms9927_state
 {
 	/* driver-controlled state */
 	const tms9927_interface *intf;
-	const device_config *screen;
+	running_device *screen;
 	const UINT8 *selfload;
 
 	/* live state */
@@ -60,7 +60,7 @@ tms9927_interface tms9927_null_interface = { 0 };
 
 
 /* makes sure that the passed in device is the right type */
-INLINE tms9927_state *get_safe_token(const device_config *device)
+INLINE tms9927_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -75,7 +75,7 @@ static STATE_POSTLOAD( tms9927_state_save_postload )
 }
 
 
-static void generic_access(const device_config *device, offs_t offset)
+static void generic_access(running_device *device, offs_t offset)
 {
 	tms9927_state *tms = get_safe_token(device);
 
@@ -175,21 +175,21 @@ READ8_DEVICE_HANDLER( tms9927_r )
 }
 
 
-int tms9927_screen_reset(const device_config *device)
+int tms9927_screen_reset(running_device *device)
 {
 	tms9927_state *tms = get_safe_token(device);
 	return tms->reset;
 }
 
 
-int tms9927_upscroll_offset(const device_config *device)
+int tms9927_upscroll_offset(running_device *device)
 {
 	tms9927_state *tms = get_safe_token(device);
 	return tms->start_datarow;
 }
 
 
-int tms9927_cursor_bounds(const device_config *device, rectangle *bounds)
+int tms9927_cursor_bounds(running_device *device, rectangle *bounds)
 {
 	tms9927_state *tms = get_safe_token(device);
 	int cursorx = CURSOR_CHAR_ADDRESS(tms);
@@ -259,9 +259,8 @@ static DEVICE_START( tms9927 )
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
 
-	tms->intf = (const tms9927_interface *)device->static_config;
+	tms->intf = (const tms9927_interface *)device->baseconfig().static_config;
 
 	if (tms->intf != NULL)
 	{
@@ -273,7 +272,7 @@ static DEVICE_START( tms9927 )
 		tms->hpixels_per_column = tms->intf->hpixels_per_column;
 
 		/* get the screen device */
-		tms->screen = devtag_get_device(device->machine, tms->intf->screen_tag);
+		tms->screen = device->machine->device(tms->intf->screen_tag);
 		assert(tms->screen != NULL);
 
 		/* get the self-load PROM */

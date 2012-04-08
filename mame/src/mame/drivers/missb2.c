@@ -13,7 +13,7 @@ OKI M6295 sound ROM dump is bad.
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/okim6295.h"
 #include "sound/3526intf.h"
@@ -335,7 +335,7 @@ GFXDECODE_END
 /* Sound Interfaces */
 
 // Handler called by the 3526 emulator when the internal timers cause an IRQ
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	logerror("YM3526 firing an IRQ\n");
 //  cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);

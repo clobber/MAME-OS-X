@@ -4,16 +4,20 @@ Atari Flyball Driver
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 
 #define MASTER_CLOCK ( XTAL_12_096MHz )
 
 
 
-typedef struct _flyball_state flyball_state;
-struct _flyball_state
+class flyball_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, flyball_state(machine)); }
+
+	flyball_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  rombase;
 	UINT8 *  playfield_ram;
@@ -31,7 +35,7 @@ struct _flyball_state
 	UINT8    potsense;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 
@@ -382,7 +386,7 @@ static MACHINE_RESET( flyball )
 	for (i = 0; i < 0x1000; i++)
 		state->rombase[i] = ROM[i ^ 0x1ff];
 
-	device_reset(devtag_get_device(machine, "maincpu"));
+	machine->device("maincpu")->reset();
 
 	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), NULL, 0, flyball_quarter_callback);
 

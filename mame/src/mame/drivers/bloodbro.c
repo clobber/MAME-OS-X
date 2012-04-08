@@ -55,7 +55,7 @@ Stephh's notes (based on the games M68000 code and some tests) :
     entering the initials (code at 0x004a1e, 0x014bb0 and 0x014c84)
 
 
-2) 'bloodbra'
+2) 'bloodbroa'
 
   - When "Starting Coin" Dip Switch is set to "x2", you need 2 coins to start
     a game (but 1 coin to join), then 1 coin to continue.
@@ -105,7 +105,7 @@ DIP locations verified for:
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "audio/seibu.h"
 #include "cpu/z80/z80.h"

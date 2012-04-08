@@ -57,7 +57,7 @@ Notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2151intf.h"
@@ -235,7 +235,7 @@ GFXDECODE_END
 
 
 
-static void irqhandler( const device_config *device, int linestate )
+static void irqhandler( running_device *device, int linestate )
 {
 	gotcha_state *state = (gotcha_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, linestate);

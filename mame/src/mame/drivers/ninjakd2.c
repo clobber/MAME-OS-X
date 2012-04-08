@@ -128,7 +128,7 @@ TODO:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 #include "sound/samples.h"
@@ -227,7 +227,7 @@ static SAMPLES_START( ninjakd2_init_samples )
 
 static WRITE8_HANDLER( ninjakd2_pcm_play_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "pcm");
+	running_device *samples = devtag_get_device(space->machine, "pcm");
 	const UINT8* const rom = memory_region(space->machine, "pcm");
 
 	// only Ninja Kid II uses this
@@ -874,7 +874,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	cputag_set_input_line(device->machine, "soundcpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -1404,7 +1404,7 @@ static void lineswap_gfx_roms(running_machine *machine, const char *region, cons
 
 	UINT8* const src = memory_region(machine, region);
 
-	UINT8* const temp = alloc_array_or_die(UINT8, length);
+	UINT8* const temp = auto_alloc_array(machine, UINT8, length);
 
 	const int mask = (1 << (bit + 1)) - 1;
 
@@ -1419,7 +1419,7 @@ static void lineswap_gfx_roms(running_machine *machine, const char *region, cons
 
 	memcpy(src, temp, length);
 
-	free(temp);
+	auto_free(machine, temp);
 }
 
 static void gfx_unscramble(running_machine *machine)

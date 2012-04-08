@@ -98,7 +98,7 @@ TP-S.1 TP-S.2 TP-S.3 TP-B.1  8212 TP-B.2 TP-B.3          TP-B.4
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
@@ -560,7 +560,7 @@ static WRITE8_DEVICE_HANDLER( rjammer_voice_frequency_select_w )
 }
 
 
-static void rjammer_adpcm_vck (const device_config *device)
+static void rjammer_adpcm_vck (running_device *device)
 {
 	ls74 = (ls74 + 1) & 1;
 

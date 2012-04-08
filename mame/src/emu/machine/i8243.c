@@ -8,6 +8,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "i8243.h"
 
 
@@ -31,7 +32,7 @@ struct _i8243_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE i8243_state *get_safe_token(const device_config *device)
+INLINE i8243_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->type == I8243);
@@ -39,11 +40,11 @@ INLINE i8243_state *get_safe_token(const device_config *device)
 }
 
 
-INLINE i8243_config *get_safe_config(const device_config *device)
+INLINE i8243_config *get_safe_config(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->type == I8243);
-	return (i8243_config *)device->inline_config;
+	return (i8243_config *)device->baseconfig().inline_config;
 }
 
 

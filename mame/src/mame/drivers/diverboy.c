@@ -46,23 +46,27 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
 
 
-typedef struct _diverboy_state diverboy_state;
-struct _diverboy_state
+class diverboy_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, diverboy_state(machine)); }
+
+	diverboy_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  spriteram;
 //  UINT16 *  paletteram;   // currently this uses generic palette handling
 	size_t    spriteram_size;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

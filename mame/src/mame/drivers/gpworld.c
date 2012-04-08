@@ -39,7 +39,7 @@ Dumping Notes:
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/laserdsc.h"
 
@@ -56,7 +56,7 @@ static UINT8* tile_RAM;
 static UINT8* sprite_RAM;
 static UINT8* palette_RAM;
 
-static const device_config *laserdisc;
+static running_device *laserdisc;
 
 
 /* VIDEO GOODS */

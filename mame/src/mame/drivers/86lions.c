@@ -27,7 +27,7 @@ Changes 02/06/2009 - Palindrome
 
 #define MAIN_CLOCK	XTAL_12MHz	/* guess */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "video/mc6845.h"
 #include "sound/ay8910.h"
@@ -76,13 +76,13 @@ static READ8_HANDLER( test_r )
 
 static READ8_HANDLER(lions_via_r)
 {
-	const device_config *via_0 = devtag_get_device(space->machine, "via6522_0");
+	running_device *via_0 = devtag_get_device(space->machine, "via6522_0");
 	return via_r(via_0, offset);
 }
 
 static WRITE8_HANDLER(lions_via_w)
 {
-	const device_config *via_0 = devtag_get_device(space->machine, "via6522_0");
+	running_device *via_0 = devtag_get_device(space->machine, "via6522_0");
 	via_w(via_0, offset, data);
 }
 

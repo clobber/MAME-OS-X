@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _lastduel_state lastduel_state;
-struct _lastduel_state
+class lastduel_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, lastduel_state(machine)); }
+
+	lastduel_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    vram;
 	UINT16 *    scroll1;
@@ -20,7 +24,7 @@ struct _lastduel_state
 	int         sprite_flipy_mask, sprite_pri_mask, tilemap_priority;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 /*----------- defined in video/lastduel.c -----------*/

@@ -22,7 +22,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/6821pia.h"
 #include "cpu/m6809/m6809.h"
 #include "williams.h"
@@ -52,8 +52,8 @@ static UINT8 williams_sound_int_state;
 static UINT8 audio_talkback;
 static UINT8 audio_sync;
 
-static const device_config *sound_cpu;
-static const device_config *soundalt_cpu;
+static running_device *sound_cpu;
+static running_device *soundalt_cpu;
 
 
 
@@ -63,8 +63,8 @@ static const device_config *soundalt_cpu;
 
 static void init_audio_state(running_machine *machine);
 
-static void cvsd_ym2151_irq(const device_config *device, int state);
-static void adpcm_ym2151_irq(const device_config *device, int state);
+static void cvsd_ym2151_irq(running_device *device, int state);
+static void adpcm_ym2151_irq(running_device *device, int state);
 static WRITE_LINE_DEVICE_HANDLER( cvsd_irqa );
 static WRITE_LINE_DEVICE_HANDLER( cvsd_irqb );
 
@@ -271,7 +271,7 @@ void williams_cvsd_init(running_machine *machine)
 	int bank;
 
 	/* configure the CPU */
-	sound_cpu = cputag_get_cpu(machine, "cvsdcpu");
+	sound_cpu = devtag_get_device(machine, "cvsdcpu");
 	soundalt_cpu = NULL;
 
 	/* configure master CPU banks */
@@ -303,8 +303,8 @@ void williams_narc_init(running_machine *machine)
 	int bank;
 
 	/* configure the CPU */
-	sound_cpu = cputag_get_cpu(machine, "narc1cpu");
-	soundalt_cpu = cputag_get_cpu(machine, "narc2cpu");
+	sound_cpu = devtag_get_device(machine, "narc1cpu");
+	soundalt_cpu = devtag_get_device(machine, "narc2cpu");
 
 	/* configure master CPU banks */
 	ROM = memory_region(machine, "narc1cpu");
@@ -346,7 +346,7 @@ void williams_adpcm_init(running_machine *machine)
 	UINT8 *ROM;
 
 	/* configure the CPU */
-	sound_cpu = cputag_get_cpu(machine, "adpcm");
+	sound_cpu = devtag_get_device(machine, "adpcm");
 	soundalt_cpu = NULL;
 
 	/* configure banks */
@@ -406,7 +406,7 @@ static void init_audio_state(running_machine *machine)
     CVSD IRQ GENERATION CALLBACKS
 ****************************************************************************/
 
-static void cvsd_ym2151_irq(const device_config *device, int state)
+static void cvsd_ym2151_irq(running_device *device, int state)
 {
 	pia6821_ca1_w(devtag_get_device(device->machine, "cvsdpia"), 0, !state);
 }
@@ -429,7 +429,7 @@ static WRITE_LINE_DEVICE_HANDLER( cvsd_irqb )
     ADPCM IRQ GENERATION CALLBACKS
 ****************************************************************************/
 
-static void adpcm_ym2151_irq(const device_config *device, int state)
+static void adpcm_ym2151_irq(running_device *device, int state)
 {
 	cpu_set_input_line(sound_cpu, M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -472,7 +472,7 @@ static WRITE8_DEVICE_HANDLER( cvsd_clock_set_w )
 
 static TIMER_CALLBACK( williams_cvsd_delayed_data_w )
 {
-	const device_config *pia = devtag_get_device(machine, "cvsdpia");
+	running_device *pia = devtag_get_device(machine, "cvsdpia");
 	pia6821_portb_w(pia, 0, param & 0xff);
 	pia6821_cb1_w(pia, 0, (param >> 8) & 1);
 	pia6821_cb2_w(pia, 0, (param >> 9) & 1);

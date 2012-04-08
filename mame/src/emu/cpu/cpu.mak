@@ -44,7 +44,7 @@ DRCDEPS = \
 # fixme - need to make this work for other target architectures (PPC)
 
 ifndef FORCE_DRC_C_BACKEND
-ifdef PTR64
+ifeq ($(PTR64),1)
 
 DRCOBJ += \
 	$(CPUOBJ)/drcbex64.o \
@@ -210,6 +210,22 @@ endif
 
 $(CPUOBJ)/asap/asap.o:	$(CPUSRC)/asap/asap.c \
 						$(CPUSRC)/asap/asap.h
+
+
+
+#-------------------------------------------------
+# AMD Am29000
+#-------------------------------------------------
+
+ifneq ($(filter AM29000,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/am29000
+CPUOBJS += $(CPUOBJ)/am29000/am29000.o
+DASMOBJS += $(CPUOBJ)/am29000/am29dasm.o
+endif
+
+$(CPUOBJ)/am29000/am29000.o:	$(CPUSRC)/am29000/am29000.c \
+								$(CPUSRC)/am29000/am29000.h \
+								$(CPUSRC)/am29000/am29ops.h \
 
 
 
@@ -1220,6 +1236,20 @@ $(CPUOBJ)/rsp/rspfe.o:	$(CPUSRC)/rsp/rspfe.c \
 
 
 #-------------------------------------------------
+# Panasonic MN10200
+#-------------------------------------------------
+
+ifneq ($(filter MN10200,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/mn10200
+CPUOBJS += $(CPUOBJ)/mn10200/mn10200.o
+DASMOBJS += $(CPUOBJ)/mn10200/mn102dis.o
+endif
+
+$(CPUOBJ)/mn10200/mn10200.o:	$(CPUSRC)/mn10200/mn10200.c \
+								$(CPUSRC)/mn10200/mn10200.h
+
+
+#-------------------------------------------------
 # Saturn
 #-------------------------------------------------
 
@@ -1313,6 +1343,21 @@ endif
 
 $(CPUOBJ)/ssp1610/ssp1601.o:	$(CPUSRC)/ssp1601/ssp1601.c \
 								$(CPUSRC)/ssp1610/ssp1601.h
+
+
+
+#-------------------------------------------------
+# SunPlus u'nSP
+#-------------------------------------------------
+
+ifneq ($(filter UNSP,$(CPUS)),)
+OBJDIRS += $(CPUOBJ)/unsp
+CPUOBJS += $(CPUOBJ)/unsp/unsp.o
+DASMOBJS += $(CPUOBJ)/unsp/unspdasm.o
+endif
+
+$(CPUOBJ)/unsp/unsp.o:	$(CPUSRC)/unsp/unsp.c \
+			$(CPUSRC)/unsp/unsp.h
 
 
 

@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _blockout_state blockout_state;
-struct _blockout_state
+class blockout_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, blockout_state(machine)); }
+
+	blockout_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 * videoram;
 	UINT16 * frontvideoram;
@@ -17,7 +21,7 @@ struct _blockout_state
 	UINT16   color;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

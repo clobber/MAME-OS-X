@@ -68,7 +68,7 @@ Dip locations verified with manual for ddragon & ddragon2
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/hd6309/hd6309.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6805/m6805.h"
@@ -341,7 +341,7 @@ static WRITE8_HANDLER( ddragon2_sub_irq_w )
 }
 
 
-static void irq_handler( const device_config *device, int irq )
+static void irq_handler( running_device *device, int irq )
 {
 	ddragon_state *state = (ddragon_state *)device->machine->driver_data;
 	cpu_set_input_line(state->snd_cpu, state->ym_irq , irq ? ASSERT_LINE : CLEAR_LINE );
@@ -436,7 +436,7 @@ static WRITE8_HANDLER( ddragon_spriteram_w )
 static WRITE8_HANDLER( dd_adpcm_w )
 {
 	ddragon_state *state = (ddragon_state *)space->machine->driver_data;
-	const device_config *adpcm = (offset & 1) ? state->adpcm_2 : state->adpcm_1;
+	running_device *adpcm = (offset & 1) ? state->adpcm_2 : state->adpcm_1;
 	int chip = (adpcm == state->adpcm_1) ? 0 : 1;
 
 	switch (offset / 2)
@@ -462,7 +462,7 @@ static WRITE8_HANDLER( dd_adpcm_w )
 }
 
 
-static void dd_adpcm_int( const device_config *device )
+static void dd_adpcm_int( running_device *device )
 {
 	ddragon_state *state = (ddragon_state *)device->machine->driver_data;
 	int chip = (device == state->adpcm_1) ? 0 : 1;
@@ -559,7 +559,7 @@ static ADDRESS_MAP_START( sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 
-static ADDRESS_MAP_START( ddragnba_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( ddragonba_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x8000, 0x8fff) AM_READWRITE(ddragon_spriteram_r, ddragon_spriteram_w)
 	AM_RANGE(0xc000, 0xffff) AM_ROM
@@ -574,15 +574,15 @@ static ADDRESS_MAP_START( dd2_sub_map, ADDRESS_SPACE_PROGRAM, 8 )
 ADDRESS_MAP_END
 
 /* might not be 100% accurate, check bits written */
-static WRITE8_HANDLER( ddragnba_port_w )
+static WRITE8_HANDLER( ddragonba_port_w )
 {
 	ddragon_state *state = (ddragon_state *)space->machine->driver_data;
 	cpu_set_input_line(state->maincpu, M6809_IRQ_LINE, ASSERT_LINE);
 	cpu_set_input_line(state->sub_cpu, state->sprite_irq, CLEAR_LINE );
 }
 
-static ADDRESS_MAP_START( ddragnba_sub_portmap, ADDRESS_SPACE_IO, 8 )
-	AM_RANGE(0x0000, 0xffff) AM_WRITE(ddragnba_port_w)
+static ADDRESS_MAP_START( ddragonba_sub_portmap, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(0x0000, 0xffff) AM_WRITE(ddragonba_port_w)
 ADDRESS_MAP_END
 
 
@@ -1033,17 +1033,17 @@ static MACHINE_DRIVER_START( ddragonb )
 MACHINE_DRIVER_END
 
 
-static MACHINE_DRIVER_START( ddragnba )
+static MACHINE_DRIVER_START( ddragonba )
 	MDRV_IMPORT_FROM(ddragon)
 
 	/* basic machine hardware */
 	MDRV_CPU_REPLACE("sub", M6803, MAIN_CLOCK / 2)	/* 6Mhz / 4 internally */
-	MDRV_CPU_PROGRAM_MAP(ddragnba_sub_map)
-	MDRV_CPU_IO_MAP(ddragnba_sub_portmap)
+	MDRV_CPU_PROGRAM_MAP(ddragonba_sub_map)
+	MDRV_CPU_IO_MAP(ddragonba_sub_portmap)
 MACHINE_DRIVER_END
 
 
-static MACHINE_DRIVER_START( ddgn6809 )
+static MACHINE_DRIVER_START( ddragon6809 )
 
 	/* driver data */
 	MDRV_DRIVER_DATA(ddragon_state)
@@ -1467,7 +1467,7 @@ ROM_START( ddragonb2 )
 	ROM_LOAD( "63701.bin",    0xc000, 0x4000, CRC(f5232d03) SHA1(e2a194e38633592fd6587690b3cb2669d93985c7) )
 
 	ROM_REGION( 0x10000, "soundcpu", 0 ) /* audio cpu */
-	ROM_LOAD( "3.bin",        0x08000, 0x08000, CRC(9efa95bb) SHA1(da997d9cc7b9e7b2c70a4b6d30db693086a6f7d8) )
+	ROM_LOAD( "b2_3.bin",     0x08000, 0x08000, CRC(9efa95bb) SHA1(da997d9cc7b9e7b2c70a4b6d30db693086a6f7d8) )
 
 	ROM_REGION( 0x08000, "gfx1", 0 )
 	ROM_LOAD( "8.bin",        0x00000, 0x08000, CRC(7a8b8db4) SHA1(8368182234f9d4d763d4714fd7567a9e31b7ebeb) )	/* chars */
@@ -1489,7 +1489,7 @@ ROM_START( ddragonb2 )
 	ROM_LOAD( "20.bin",       0x30000, 0x10000, CRC(5fb42e7c) SHA1(7953316712c56c6f8ca6bba127319e24b618b646) )
 
 	ROM_REGION( 0x20000, "adpcm", 0 ) /* adpcm samples */
-	ROM_LOAD( "1.bin",        0x00000, 0x10000, CRC(34755de3) SHA1(57c06d6ce9497901072fa50a92b6ed0d2d4d6528) )
+	ROM_LOAD( "b2_1.bin",     0x00000, 0x10000, CRC(34755de3) SHA1(57c06d6ce9497901072fa50a92b6ed0d2d4d6528) )
 	ROM_LOAD( "2.bin",        0x10000, 0x10000, CRC(904de6f8) SHA1(3623e5ea05fd7c455992b7ed87e605b87c3850aa) )
 
 	ROM_REGION( 0x0300, "proms", 0 )
@@ -1530,7 +1530,7 @@ ROM_START( ddragon6809 )
 	ROM_LOAD( "27.bin",        0x28000, 0x08000, CRC(15cd16cb) SHA1(ab2068ebba14da256e8f2600f34dca0e048a1de9) )
 	ROM_LOAD( "28.bin",        0x30000, 0x08000, CRC(51b8a217) SHA1(60c067cd7272f856e29cdb64312535236656891a) )
 	ROM_LOAD( "29.bin",        0x38000, 0x08000, CRC(e4ec2394) SHA1(43376ce2a07c1fc3053f7ac9b750e944d289105b) )
-	ROM_LOAD( "1.bin",         0x40000, 0x08000, CRC(2485a71d) SHA1(3e987a2f3e9a59da5fdc7bb779a43736ca67aac7) )
+	ROM_LOAD( "6809_1.bin",    0x40000, 0x08000, CRC(2485a71d) SHA1(3e987a2f3e9a59da5fdc7bb779a43736ca67aac7) )
 	ROM_LOAD( "2.bin",         0x48000, 0x08000, CRC(6940120d) SHA1(bbe94f095ef983f54658c936f916ba6a72a84ead) )
 	ROM_LOAD( "3.bin",         0x50000, 0x08000, CRC(c67aac12) SHA1(aab535507e3889bf1bdc2f4fe4828a70a350ba63) )
 	ROM_LOAD( "4.bin",         0x58000, 0x08000, CRC(941dcd08) SHA1(266dee264f28affe8c3f57fe569929817ae16508) )
@@ -1541,7 +1541,7 @@ ROM_START( ddragon6809 )
 
 	ROM_REGION( 0x40000, "gfx3", 0 )
 	ROM_LOAD( "9.bin",         0x00000, 0x10000, CRC(736eff0f) SHA1(ae2ec2d5c8ab1db579a08256d874426dc5d889c6) )
-	ROM_LOAD( "10.bin",        0x10000, 0x10000, CRC(a670d088) SHA1(27e7b49645753dd039f104c3e0a7e6513a98710d) )
+	ROM_LOAD( "6809_10.bin",   0x10000, 0x10000, CRC(a670d088) SHA1(27e7b49645753dd039f104c3e0a7e6513a98710d) )
 	ROM_LOAD( "11.bin",        0x20000, 0x10000, CRC(4171b70d) SHA1(dc300c9bca6481417e97ad03c973e47389f261c1) )
 	ROM_LOAD( "12.bin",        0x30000, 0x10000, CRC(5f6a6d6f) SHA1(7d546a226cda81c28e7ccfb4c5daebc65072198d) )
 
@@ -2033,7 +2033,7 @@ static DRIVER_INIT( toffy )
 	/* should the sound rom be bitswapped too? */
 }
 
-static DRIVER_INIT( ddgn6809 )
+static DRIVER_INIT( ddragon6809 )
 {
 	ddragon_state *state = (ddragon_state *)machine->driver_data;
 	/* Descramble GFX here */
@@ -2057,9 +2057,9 @@ GAME( 1987, ddragonu,    ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos
 GAME( 1987, ddragonua,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito America license)", "Double Dragon (US Set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1987, ddragonb2,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1987, ddragonb,    ddragon,  ddragonb, ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg with HD6309)", GAME_SUPPORTS_SAVE ) // according to dump notes
-GAME( 1987, ddragonba,   ddragon,  ddragnba, ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg with M6803)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragon6809, ddragon,  ddgn6809, ddragon,  ddgn6809, ROT0, "bootleg", "Double Dragon (bootleg with 3xM6809, set 1)", GAME_NOT_WORKING )
-GAME( 1987, ddragon6809a,ddragon,  ddgn6809, ddragon,  ddgn6809, ROT0, "bootleg", "Double Dragon (bootleg with 3xM6809, set 2)", GAME_NOT_WORKING )
+GAME( 1987, ddragonba,   ddragon,  ddragonba,   ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg with M6803)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragon6809, ddragon,  ddragon6809, ddragon,  ddragon6809, ROT0, "bootleg", "Double Dragon (bootleg with 3xM6809, set 1)", GAME_NOT_WORKING )
+GAME( 1987, ddragon6809a,ddragon,  ddragon6809, ddragon,  ddragon6809, ROT0, "bootleg", "Double Dragon (bootleg with 3xM6809, set 2)", GAME_NOT_WORKING )
 GAME( 1988, ddragon2,    0,        ddragon2, ddragon2, ddragon2, ROT0, "Technos Japan", "Double Dragon II - The Revenge (World)", GAME_SUPPORTS_SAVE )
 GAME( 1988, ddragon2u,   ddragon2, ddragon2, ddragon2, ddragon2, ROT0, "Technos Japan", "Double Dragon II - The Revenge (US)", GAME_SUPPORTS_SAVE )
 

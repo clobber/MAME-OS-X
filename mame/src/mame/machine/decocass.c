@@ -4,7 +4,7 @@
 
  ***********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/mcs48/mcs48.h"
 #include "machine/decocass.h"
@@ -47,9 +47,9 @@ enum {
 
 
 
-static UINT8 tape_get_status_bits(const device_config *device);
-static UINT8 tape_is_present(const device_config *device);
-static void tape_change_speed(const device_config *device, INT8 newspeed);
+static UINT8 tape_get_status_bits(running_device *device);
+static UINT8 tape_is_present(running_device *device);
+static void tape_change_speed(running_device *device, INT8 newspeed);
 
 
 WRITE8_HANDLER( decocass_coin_counter_w )
@@ -59,7 +59,7 @@ WRITE8_HANDLER( decocass_coin_counter_w )
 WRITE8_HANDLER( decocass_sound_command_w )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
-	LOG(2,("CPU %s sound command -> $%02x\n", space->cpu->tag, data));
+	LOG(2,("CPU %s sound command -> $%02x\n", space->cpu->tag(), data));
 	soundlatch_w(space, 0, data);
 	state->sound_ack |= 0x80;
 	/* remove snd cpu data ack bit. i don't see it in the schems, but... */
@@ -70,7 +70,7 @@ WRITE8_HANDLER( decocass_sound_command_w )
 READ8_HANDLER( decocass_sound_data_r )
 {
 	UINT8 data = soundlatch2_r(space, 0);
-	LOG(2,("CPU %s sound data    <- $%02x\n", space->cpu->tag, data));
+	LOG(2,("CPU %s sound data    <- $%02x\n", space->cpu->tag(), data));
 	return data;
 }
 
@@ -78,14 +78,14 @@ READ8_HANDLER( decocass_sound_ack_r )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
 	UINT8 data = state->sound_ack;	/* D6+D7 */
-	LOG(4,("CPU %s sound ack     <- $%02x\n", space->cpu->tag, data));
+	LOG(4,("CPU %s sound ack     <- $%02x\n", space->cpu->tag(), data));
 	return data;
 }
 
 WRITE8_HANDLER( decocass_sound_data_w )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
-	LOG(2,("CPU %s sound data    -> $%02x\n", space->cpu->tag, data));
+	LOG(2,("CPU %s sound data    -> $%02x\n", space->cpu->tag(), data));
 	soundlatch2_w(space, 0, data);
 	state->sound_ack |= 0x40;
 }
@@ -94,7 +94,7 @@ READ8_HANDLER( decocass_sound_command_r )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
 	UINT8 data = soundlatch_r(space, 0);
-	LOG(4,("CPU %s sound command <- $%02x\n", space->cpu->tag, data));
+	LOG(4,("CPU %s sound command <- $%02x\n", space->cpu->tag(), data));
 	cpu_set_input_line(state->audiocpu, M6502_IRQ_LINE, CLEAR_LINE);
 	state->sound_ack &= ~0x80;
 	return data;
@@ -127,7 +127,7 @@ READ8_HANDLER( decocass_sound_data_ack_reset_r )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
 	UINT8 data = 0xff;
-	LOG(2,("CPU %s sound ack rst <- $%02x\n", space->cpu->tag, data));
+	LOG(2,("CPU %s sound ack rst <- $%02x\n", space->cpu->tag(), data));
 	state->sound_ack &= ~0x40;
 	return data;
 }
@@ -135,7 +135,7 @@ READ8_HANDLER( decocass_sound_data_ack_reset_r )
 WRITE8_HANDLER( decocass_sound_data_ack_reset_w )
 {
 	decocass_state *state = (decocass_state *)space->machine->driver_data;
-	LOG(2,("CPU %s sound ack rst -> $%02x\n", space->cpu->tag, data));
+	LOG(2,("CPU %s sound ack rst -> $%02x\n", space->cpu->tag(), data));
 	state->sound_ack &= ~0x40;
 }
 
@@ -1570,7 +1570,7 @@ MACHINE_RESET( cgraplop )
 	state->type3_swap = TYPE3_SWAP_56;
 }
 
-MACHINE_RESET( cgraplp2 )
+MACHINE_RESET( cgraplop2 )
 {
 	decocass_state *state = (decocass_state *)machine->driver_data;
 	decocass_reset_common(machine);
@@ -1679,12 +1679,15 @@ MACHINE_RESET( czeroize )
 	/*
      * FIXME: remove if the original ROM is available.
      * The Zeroize 6502 code at 0x3707 issues LODCTRS with 0x8a,
-     * and expects to read 0x18 from 0x08a0 ff. within 7 bytes.
+     * and expects to read 0x18 from 0x08a0 ff. within 7 bytes
+     * and 0xf7 from 0x8a1 (which 0xd is subtracted from presumably in order
+     * to form a NOP of 0xea).
      * This hack seems to be sufficient to get around
      * the missing dongle ROM contents and play the game.
      */
 	memset(mem, 0x00, 0x1000);
 	mem[0x08a0] = 0x18;
+	mem[0x08a1] = 0xf7;
 }
 
 /***************************************************************************
@@ -1903,7 +1906,7 @@ struct _tape_state
     in device is, in fact, an IDE controller
 -------------------------------------------------*/
 
-INLINE tape_state *get_safe_token(const device_config *device)
+INLINE tape_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -2011,7 +2014,7 @@ static const char *tape_describe_state(tape_state *tape)
 
 static TIMER_CALLBACK( tape_clock_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	tape_state *tape = get_safe_token(device);
 
 	/* advance by one clock in the desired direction */
@@ -2068,7 +2071,7 @@ static TIMER_CALLBACK( tape_clock_callback )
     bits from the tape
 -------------------------------------------------*/
 
-static UINT8 tape_get_status_bits(const device_config *device)
+static UINT8 tape_get_status_bits(running_device *device)
 {
 	tape_state *tape = get_safe_token(device);
 	UINT8 tape_bits = 0;
@@ -2102,7 +2105,7 @@ static UINT8 tape_get_status_bits(const device_config *device)
 
 		/* data block bytes are data */
 		else if (tape->bytenum >= BYTE_DATA_0 && tape->bytenum <= BYTE_DATA_255)
-			byteval = device->region[blocknum * 256 + (tape->bytenum - BYTE_DATA_0)];
+			byteval = static_cast<UINT8 *>(*device->region)[blocknum * 256 + (tape->bytenum - BYTE_DATA_0)];
 
 		/* CRC MSB */
 		else if (tape->bytenum == BYTE_CRC16_MSB)
@@ -2125,7 +2128,7 @@ static UINT8 tape_get_status_bits(const device_config *device)
     present
 -------------------------------------------------*/
 
-static UINT8 tape_is_present(const device_config *device)
+static UINT8 tape_is_present(running_device *device)
 {
 	return device->region != NULL;
 }
@@ -2136,7 +2139,7 @@ static UINT8 tape_is_present(const device_config *device)
     playback
 -------------------------------------------------*/
 
-static void tape_change_speed(const device_config *device, INT8 newspeed)
+static void tape_change_speed(running_device *device, INT8 newspeed)
 {
 	tape_state *tape = get_safe_token(device);
 	attotime newperiod;
@@ -2170,8 +2173,8 @@ static DEVICE_START( decocass_tape )
 
 	/* validate some basic stuff */
 	assert(device != NULL);
-	assert(device->static_config == NULL);
-	assert(device->inline_config == NULL);
+	assert(device->baseconfig().static_config == NULL);
+	assert(device->baseconfig().inline_config == NULL);
 	assert(device->machine != NULL);
 	assert(device->machine->config != NULL);
 
@@ -2179,10 +2182,11 @@ static DEVICE_START( decocass_tape )
 	tape->timer = timer_alloc(device->machine, tape_clock_callback, (void *)device);
 	if (device->region == NULL)
 		return;
+	UINT8 *regionbase = *device->region;
 
 	/* scan for the first non-empty block in the image */
-	for (offs = device->regionbytes - 1; offs >= 0; offs--)
-		if (device->region[offs] != 0)
+	for (offs = device->region->bytes() - 1; offs >= 0; offs--)
+		if (regionbase[offs] != 0)
 			break;
 	numblocks = ((offs | 0xff) + 1) / 256;
 	assert(numblocks < ARRAY_LENGTH(tape->crc16));
@@ -2198,7 +2202,7 @@ static DEVICE_START( decocass_tape )
 
 		/* first CRC the 256 bytes of data */
 		for (offs = 256 * curblock; offs < 256 * curblock + 256; offs++)
-			crc = tape_crc16_byte(crc, device->region[offs]);
+			crc = tape_crc16_byte(crc, regionbase[offs]);
 
 		/* then find a pair of bytes that will bring the CRC to 0 (any better way than brute force?) */
 		for (testval = 0; testval < 0x10000; testval++)

@@ -5,7 +5,7 @@
  *
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "mathbox.h"
 
 #define REG0 mb->reg [0x00]
@@ -32,7 +32,7 @@
 typedef struct _mathbox_state mathbox_state;
 struct _mathbox_state
 {
-	const device_config *device;
+	running_device *device;
 	/* math box scratch registers */
 	INT16 reg[16];
 
@@ -51,7 +51,7 @@ struct _mathbox_state
     into a mathbox_state
 -------------------------------------------------*/
 
-INLINE mathbox_state *get_safe_token(const device_config *device)
+INLINE mathbox_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -320,8 +320,6 @@ static DEVICE_START( mathbox )
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
-	assert(strlen(device->tag) < 20);
 
 	/* set static values */
 	mb->device = device;

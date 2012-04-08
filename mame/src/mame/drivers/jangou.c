@@ -23,7 +23,7 @@ $c088-$c095 player tiles
 
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/ay8910.h"
@@ -33,9 +33,13 @@ $c088-$c095 player tiles
 
 #define MASTER_CLOCK	XTAL_19_968MHz
 
-typedef struct _jangou_state jangou_state;
-struct _jangou_state
+class jangou_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, jangou_state(machine)); }
+
+	jangou_state(running_machine &machine) { }
+
 	/* video-related */
 	UINT8        *blit_buffer;
 	UINT8        pen_data[0x10];
@@ -55,10 +59,10 @@ struct _jangou_state
 	UINT8        nsc_latch, z80_latch;
 
 	/* devices */
-	const device_config *cpu_0;
-	const device_config *cpu_1;
-	const device_config *cvsd;
-	const device_config *nsc;
+	running_device *cpu_0;
+	running_device *cpu_1;
+	running_device *cvsd;
+	running_device *nsc;
 };
 
 
@@ -327,7 +331,7 @@ static WRITE8_HANDLER( adpcm_w )
 	state->adpcm_byte = data;
 }
 
-static void jngolady_vclk_cb( const device_config *device )
+static void jngolady_vclk_cb( running_device *device )
 {
 	jangou_state *state = (jangou_state *)device->machine->driver_data;
 

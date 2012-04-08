@@ -95,9 +95,9 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "adsp2100.h"
-#include <stddef.h>
 
 
 /***************************************************************************
@@ -242,7 +242,7 @@ typedef struct
     UINT8   	irq_state[9];
     UINT8   	irq_latch[9];
     cpu_irq_callback irq_callback;
-    const device_config *device;
+    running_device *device;
 
 	/* other internal states */
     int			icount;
@@ -425,7 +425,7 @@ static void check_irqs(adsp2100_state *adsp);
     STATE ACCESSORS
 ***************************************************************************/
 
-INLINE adsp2100_state *get_safe_token(const device_config *device)
+INLINE adsp2100_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -691,9 +691,9 @@ static void set_irq_line(adsp2100_state *adsp, int irqline, int state)
     INITIALIZATION AND SHUTDOWN
 ***************************************************************************/
 
-static adsp2100_state *adsp21xx_init(const device_config *device, cpu_irq_callback irqcallback, int chiptype)
+static adsp2100_state *adsp21xx_init(running_device *device, cpu_irq_callback irqcallback, int chiptype)
 {
-	const adsp21xx_config *config = (const adsp21xx_config *)device->static_config;
+	const adsp21xx_config *config = (const adsp21xx_config *)device->baseconfig().static_config;
 	adsp2100_state *adsp = get_safe_token(device);
 
 	/* create the tables */
@@ -706,9 +706,9 @@ static adsp2100_state *adsp21xx_init(const device_config *device, cpu_irq_callba
 
 	/* fetch device parameters */
 	adsp->device = device;
-	adsp->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	adsp->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	adsp->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	adsp->program = device->space(AS_PROGRAM);
+	adsp->data = device->space(AS_DATA);
+	adsp->io = device->space(AS_IO);
 
 	/* copy function pointers from the config */
 	if (config != NULL)
@@ -924,11 +924,11 @@ static int create_tables(void)
 
 	/* allocate the tables */
 	if (!reverse_table)
-		reverse_table = (UINT16 *)malloc(0x4000 * sizeof(UINT16));
+		reverse_table = global_alloc_array(UINT16, 0x4000);
 	if (!mask_table)
-		mask_table = (UINT16 *)malloc(0x4000 * sizeof(UINT16));
+		mask_table = global_alloc_array(UINT16, 0x4000);
 	if (!condition_table)
-		condition_table = (UINT8 *)malloc(0x1000 * sizeof(UINT8));
+		condition_table = global_alloc_array(UINT8, 0x1000);
 
 	/* handle errors */
 	if (reverse_table == NULL || mask_table == NULL || condition_table == NULL)
@@ -1010,15 +1010,15 @@ static int create_tables(void)
 static CPU_EXIT( adsp21xx )
 {
 	if (reverse_table != NULL)
-		free(reverse_table);
+		global_free(reverse_table);
 	reverse_table = NULL;
 
 	if (mask_table != NULL)
-		free(mask_table);
+		global_free(mask_table);
 	mask_table = NULL;
 
 	if (condition_table != NULL)
-		free(condition_table);
+		global_free(condition_table);
 	condition_table = NULL;
 
 #if TRACK_HOTSPOTS
@@ -1900,12 +1900,12 @@ static CPU_GET_INFO( adsp21xx )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 32;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 14;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 		info->i = -2;							break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 16;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:			info->i = 14;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:			info->i = -1;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 14;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = -2;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 14;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = -1;							break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:
 		case CPUINFO_INT_INPUT_STATE + 1:
@@ -2155,9 +2155,9 @@ CPU_GET_INFO( adsp2181 )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case CPUINFO_INT_INPUT_LINES:					info->i = 9;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 16;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:				info->i = 11;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:				info->i = -1;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 11;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = -1;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(adsp2181);					break;
@@ -2171,20 +2171,20 @@ CPU_GET_INFO( adsp2181 )
 	}
 }
 
-void adsp2181_idma_addr_w(const device_config *device, UINT16 data)
+void adsp2181_idma_addr_w(running_device *device, UINT16 data)
 {
 	adsp2100_state *adsp = get_safe_token(device);
 	adsp->idma_addr = data;
 	adsp->idma_offs = 0;
 }
 
-UINT16 adsp2181_idma_addr_r(const device_config *device)
+UINT16 adsp2181_idma_addr_r(running_device *device)
 {
 	adsp2100_state *adsp = get_safe_token(device);
 	return adsp->idma_addr;
 }
 
-void adsp2181_idma_data_w(const device_config *device, UINT16 data)
+void adsp2181_idma_data_w(running_device *device, UINT16 data)
 {
 	adsp2100_state *adsp = get_safe_token(device);
 
@@ -2211,7 +2211,7 @@ void adsp2181_idma_data_w(const device_config *device, UINT16 data)
 		WWORD_DATA(adsp, adsp->idma_addr++ & 0x3fff, data);
 }
 
-UINT16 adsp2181_idma_data_r(const device_config *device)
+UINT16 adsp2181_idma_data_r(running_device *device)
 {
 	adsp2100_state *adsp = get_safe_token(device);
 	UINT16 result = 0xffff;

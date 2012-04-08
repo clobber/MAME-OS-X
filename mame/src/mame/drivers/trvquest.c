@@ -34,7 +34,7 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "machine/6522via.h"
 #include "sound/ay8910.h"
@@ -152,7 +152,7 @@ static TIMER_CALLBACK( via_irq_delayed )
 	cpu_set_input_line(state->maincpu, 0, param);
 }
 
-static void via_irq( const device_config *device, int state )
+static void via_irq( running_device *device, int state )
 {
 	// from gameplan.c
 
@@ -211,8 +211,8 @@ static MACHINE_RESET( trvquest )
 static INTERRUPT_GEN( trvquest_interrupt )
 {
 	gameplan_state *state = (gameplan_state *)device->machine->driver_data;
-	via_ca1_w(state->via_2, 0, 1);
-	via_ca1_w(state->via_2, 0, 0);
+	via_ca1_w(state->via_2, 1);
+	via_ca1_w(state->via_2, 0);
 }
 
 static MACHINE_DRIVER_START( trvquest )

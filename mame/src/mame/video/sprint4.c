@@ -4,7 +4,7 @@ Atari Sprint 4 video emulation
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "audio/sprint4.h"
 
 static tilemap_t* playfield;
@@ -94,7 +94,7 @@ VIDEO_EOF( sprint4 )
 
 	/* check for sprite-playfield collisions */
 
-	const device_config *discrete = devtag_get_device(machine, "discrete");
+	running_device *discrete = devtag_get_device(machine, "discrete");
 
 	for (i = 0; i < 4; i++)
 	{

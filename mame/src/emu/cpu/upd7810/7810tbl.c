@@ -1043,6 +1043,7 @@ static void INR_A_7801(upd7810_state *cpustate);
 static void INR_B_7801(upd7810_state *cpustate);
 static void INR_C_7801(upd7810_state *cpustate);
 static void INRW_wa_7801(upd7810_state *cpustate);
+static void STM_7801(upd7810_state *cpustate);
 
 
 static const struct opcode_s op48[256] =
@@ -3549,7 +3550,7 @@ static const struct opcode_s op48_7801[256] =
 	{illegal2,		2, 8, 8,L0|L1},	{illegal2,		2, 8, 8,L0|L1},
 	{SK_CY, 		2, 8, 8,L0|L1},	{illegal2,		2, 8, 8,L0|L1},
 	{SK_Z,			2, 8, 8,L0|L1},	{illegal2,		2, 8, 8,L0|L1},
-	{PUSH_VA,		2,15,15,L0|L1},	{POP_VA,		2,15,15,L0|L1},
+	{PUSH_VA,		2,17,17,L0|L1},	{POP_VA,		2,15,15,L0|L1},
 
 	{SKNIT_F0,		2, 8, 8,L0|L1},	{SKNIT_FT0,		2, 8, 8,L0|L1},
 	{SKNIT_F1,		2, 8, 8,L0|L1},	{SKNIT_F2,		2, 8, 8,L0|L1},
@@ -3575,7 +3576,7 @@ static const struct opcode_s op48_7801[256] =
 	{SLL_A,			2, 8, 8,L0|L1},	{SLR_A, 		2, 8, 8,L0|L1},
 	{SLL_C, 		2, 8, 8,L0|L1},	{SLR_C, 		2, 8, 8,L0|L1},
 	{RLD,			2,17,17,L0|L1},	{RRD,			2,17,17,L0|L1},
-	{illegal2,		2, 8, 8,L0|L1},	{illegal2,		2,12,12,L0|L1},
+	{illegal2,		2, 8, 8,L0|L1},	{illegal2,		2, 8, 8,L0|L1},
 	{PER,			2,11,11,L0|L1},	{illegal2,		2, 8, 8,L0|L1},
 	{PUSH_HL,		2,17,17,L0|L1},	{POP_HL,		2,15,15,L0|L1},
 
@@ -4645,7 +4646,7 @@ static const struct opcode_s opXX_7801[256] =
 	{INX_BC,		1, 7, 7,L0|L1},	{DCX_BC,		1, 7, 7,L0|L1},
 	{LXI_B_w,		3,10,10,L0|L1},	{ORIW_wa_xx,	3,16,16,L0|L1},
 	{XRI_A_xx,		2, 7, 7,L0|L1},	{ORI_A_xx,		2, 7, 7,L0|L1},
-	{RETS,			1,11,11,L0|L1},	{STM,			1, 4, 4,L0|L1},
+	{RETS,			1,11,11,L0|L1},	{STM_7801,		1, 4, 4,L0|L1},
 	{MOV_B_A,		1, 4, 4,L0|L1},	{MOV_C_A,		1, 4, 4,L0|L1},
 	{MOV_D_A,		1, 4, 4,L0|L1},	{MOV_E_A,		1, 4, 4,L0|L1},
 	{MOV_H_A,		1, 4, 4,L0|L1},	{MOV_L_A,		1, 4, 4,L0|L1},

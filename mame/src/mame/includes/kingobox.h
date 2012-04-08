@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _kingofb_state kingofb_state;
-struct _kingofb_state
+class kingofb_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, kingofb_state(machine)); }
+
+	kingofb_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    videoram2;
@@ -24,9 +28,9 @@ struct _kingofb_state
 	int        nmi_enable;
 
 	/* devices */
-	const device_config *video_cpu;
-	const device_config *sprite_cpu;
-	const device_config *audio_cpu;
+	running_device *video_cpu;
+	running_device *sprite_cpu;
+	running_device *audio_cpu;
 };
 
 

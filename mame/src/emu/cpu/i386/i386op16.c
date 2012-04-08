@@ -2639,6 +2639,10 @@ static void I386OP(groupF7_16)(i386_state *cpustate)		// Opcode 0xf7
 					} else {
 						REG16(DX) = (UINT16)remainder;
 						REG16(AX) = (UINT16)result;
+
+						// this flag is actually undefined, enable on non-cyrix
+						if (cpustate->cpuid_id0 != 0x69727943)
+							cpustate->CF = 1;
 					}
 				} else {
 					/* TODO: Divide by zero */
@@ -2667,6 +2671,10 @@ static void I386OP(groupF7_16)(i386_state *cpustate)		// Opcode 0xf7
 					} else {
 						REG16(DX) = (UINT16)remainder;
 						REG16(AX) = (UINT16)result;
+
+						// this flag is actually undefined, enable on non-cyrix
+						if (cpustate->cpuid_id0 != 0x69727943)
+							cpustate->CF = 1;
 					}
 				} else {
 					/* TODO: Divide by zero */
@@ -2805,6 +2813,7 @@ static void I386OP(group0F00_16)(i386_state *cpustate)			// Opcode 0x0f 00
 {
 	UINT32 address, ea;
 	UINT8 modrm = FETCH(cpustate);
+	I386_SREG seg;
 
 	switch( (modrm >> 3) & 0x7 )
 	{
@@ -2856,6 +2865,11 @@ static void I386OP(group0F00_16)(i386_state *cpustate)			// Opcode 0x0f 00
 					CYCLES(cpustate,CYCLES_LLDT_MEM);
 				}
 				cpustate->ldtr.segment = READ16(cpustate,ea);
+				memset(&seg, 0, sizeof(seg));
+				seg.selector = cpustate->ldtr.segment;
+				i386_load_protected_mode_segment(cpustate,&seg);
+				cpustate->ldtr.limit = seg.limit;
+				cpustate->ldtr.base = seg.base;
 			}
 			else
 			{

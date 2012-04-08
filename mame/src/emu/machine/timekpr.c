@@ -9,7 +9,7 @@
  *
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/timekpr.h"
 
 typedef struct
@@ -25,7 +25,7 @@ typedef struct
 	UINT8 century;
 	UINT8 *data;
 	UINT8 *default_data;
-	const device_config *device;
+	running_device *device;
 	int size;
 	int offset_control;
 	int offset_seconds;
@@ -222,7 +222,7 @@ static TIMER_CALLBACK( timekeeper_tick )
     in device is the right type
 -------------------------------------------------*/
 
-INLINE timekeeper_state *get_safe_token(const device_config *device)
+INLINE timekeeper_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -291,8 +291,8 @@ static DEVICE_START(timekeeper)
 
 	/* validate some basic stuff */
 	assert(device != NULL);
-//  assert(device->static_config != NULL);
-	assert(device->inline_config == NULL);
+//  assert(device->baseconfig().static_config != NULL);
+	assert(device->baseconfig().inline_config == NULL);
 	assert(device->machine != NULL);
 	assert(device->machine->config != NULL);
 
@@ -310,11 +310,8 @@ static DEVICE_START(timekeeper)
 	c->century = make_bcd( systime.local_time.year / 100 );
 	c->data = auto_alloc_array( device->machine, UINT8, c->size );
 
-	c->default_data = device->region;
-	if (c->default_data != NULL)
-	{
-		assert( device->regionbytes == c->size );
-	}
+	c->default_data = *device->region;
+	assert( device->region->bytes() == c->size );
 
 	state_save_register_device_item( device, 0, c->control );
 	state_save_register_device_item( device, 0, c->seconds );

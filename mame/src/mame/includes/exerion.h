@@ -18,9 +18,13 @@
 #define EXERION_VBSTART           (240)
 
 
-typedef struct _exerion_state exerion_state;
-struct _exerion_state
+class exerion_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, exerion_state(machine)); }
+
+	exerion_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  main_ram;
 	UINT8 *  videoram;
@@ -41,7 +45,7 @@ struct _exerion_state
 	UINT8 portb;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

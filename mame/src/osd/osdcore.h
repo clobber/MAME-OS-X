@@ -86,7 +86,6 @@ typedef enum _file_error file_error;
 /* osd_file is an opaque type which represents an open file */
 typedef struct _osd_file osd_file;
 
-
 /*-----------------------------------------------------------------------------
     osd_open: open a new file.
 
@@ -721,6 +720,39 @@ void osd_work_item_release(osd_work_item *item);
 ***************************************************************************/
 
 /*-----------------------------------------------------------------------------
+    osd_malloc: allocate memory that
+
+    Parameters:
+
+        size - the number of bytes to allocate
+
+    Return value:
+
+        a pointer to the allocated memory
+
+    Notes:
+
+        This is just a hook to do OS-specific allocation trickery.
+        It can be safely written as a wrapper to malloc().
+-----------------------------------------------------------------------------*/
+void *osd_malloc(size_t size);
+
+
+/*-----------------------------------------------------------------------------
+    osd_free: free memory allocated by osd_malloc
+
+    Parameters:
+
+        ptr - the pointer returned from osd_mallo
+
+    Return value:
+
+        None
+-----------------------------------------------------------------------------*/
+void osd_free(void *ptr);
+
+
+/*-----------------------------------------------------------------------------
     osd_alloc_executable: allocate memory that can contain executable code
 
     Parameters:
@@ -777,5 +809,79 @@ void osd_free_executable(void *ptr, size_t size);
 -----------------------------------------------------------------------------*/
 void osd_break_into_debugger(const char *message);
 
+
+/*-----------------------------------------------------------------------------
+  MESS specific code below
+-----------------------------------------------------------------------------*/
+
+/*-----------------------------------------------------------------------------
+    osd_get_clipboard_text: retrieves text from the clipboard
+
+    Return value:
+
+        the returned string needs to be free()-ed!
+
+-----------------------------------------------------------------------------*/
+char *osd_get_clipboard_text(void);
+
+
+#ifdef MESS
+/***************************************************************************
+    DIRECTORY INTERFACES
+***************************************************************************/
+
+/*-----------------------------------------------------------------------------
+    osd_stat: return a directory entry for a path
+
+    Parameters:
+
+        path - path in question
+
+    Return value:
+
+        an allocated pointer to an osd_directory_entry representing
+        info on the path; even if the file does not exist
+
+-----------------------------------------------------------------------------*/
+osd_directory_entry *osd_stat(const char *path);
+
+/***************************************************************************
+    PATH INTERFACES
+***************************************************************************/
+
+/*-----------------------------------------------------------------------------
+    osd_get_full_path: retrieves the full path
+
+    Parameters:
+
+        path - the path in question
+        dst - pointer to receive new path; the returned string needs to be free()-ed!
+
+    Return value:
+
+        file error
+
+-----------------------------------------------------------------------------*/
+file_error osd_get_full_path(char **dst, const char *path);
+
+
+/***************************************************************************
+    UNCATEGORIZED INTERFACES
+***************************************************************************/
+
+/*-----------------------------------------------------------------------------
+    osd_get_volume_name: retrieves the volume name
+
+    Parameters:
+
+        idx - order number of volume
+
+    Return value:
+
+        pointer to volume name
+
+-----------------------------------------------------------------------------*/
+const char *osd_get_volume_name(int idx);
+#endif
 
 #endif	/* __OSDEPEND_H__ */

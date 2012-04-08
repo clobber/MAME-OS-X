@@ -52,7 +52,7 @@ L056-6    9A          "      "      VLI-8-4 7A         "
                                   LOG.3     8A         "    tiles
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms9900/tms9900.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
@@ -95,9 +95,13 @@ static UINT8 *cop_io;
  *
  *************************************/
 
-typedef struct _looping_state looping_state;
-struct _looping_state
+class looping_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, looping_state(machine)); }
+
+	looping_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *		videoram;
 	UINT8 *		colorram;

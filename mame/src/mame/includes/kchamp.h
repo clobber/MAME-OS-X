@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _kchamp_state kchamp_state;
-struct _kchamp_state
+class kchamp_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, kchamp_state(machine)); }
+
+	kchamp_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    colorram;
@@ -24,7 +28,7 @@ struct _kchamp_state
 	int        counter;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

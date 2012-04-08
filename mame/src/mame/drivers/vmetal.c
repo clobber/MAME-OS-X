@@ -75,7 +75,7 @@ cleanup
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 #include "sound/es8712.h"
@@ -163,7 +163,7 @@ static WRITE8_DEVICE_HANDLER( vmetal_control_w )
 	coin_lockout_w(device->machine, 1,data & 0x02);	/* never activated in game mode?? */
 
 	if ((data & 0x40) == 0)
-		device_reset(device);
+		device->reset();
 	else
 		es8712_play(device);
 

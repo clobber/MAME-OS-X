@@ -32,7 +32,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "streams.h"
 #include "audio/seibu.h"
 #include "sound/3812intf.h"
@@ -253,7 +253,7 @@ WRITE8_DEVICE_HANDLER( seibu_adpcm_ctl_w )
 
 /***************************************************************************/
 
-static const device_config *sound_cpu;
+static running_device *sound_cpu;
 
 enum
 {
@@ -312,17 +312,17 @@ WRITE8_HANDLER( seibu_rst18_ack_w )
 	update_irq_lines(space->machine, RST18_CLEAR);
 }
 
-void seibu_ym3812_irqhandler(const device_config *device, int linestate)
+void seibu_ym3812_irqhandler(running_device *device, int linestate)
 {
 	update_irq_lines(device->machine, linestate ? RST10_ASSERT : RST10_CLEAR);
 }
 
-void seibu_ym2151_irqhandler(const device_config *device, int linestate)
+void seibu_ym2151_irqhandler(running_device *device, int linestate)
 {
 	update_irq_lines(device->machine, linestate ? RST10_ASSERT : RST10_CLEAR);
 }
 
-void seibu_ym2203_irqhandler(const device_config *device, int linestate)
+void seibu_ym2203_irqhandler(running_device *device, int linestate)
 {
 	update_irq_lines(device->machine, linestate ? RST10_ASSERT : RST10_CLEAR);
 }
@@ -334,7 +334,7 @@ MACHINE_RESET( seibu_sound )
 	int romlength = memory_region_length(machine, "audiocpu");
 	UINT8 *rom = memory_region(machine, "audiocpu");
 
-	sound_cpu=cputag_get_cpu(machine, "audiocpu");
+	sound_cpu = devtag_get_device(machine, "audiocpu");
 	update_irq_lines(machine, VECTOR_INIT);
 	if (romlength > 0x10000)
 		memory_configure_bank(machine, "bank1", 0, (romlength - 0x10000) / 0x8000, rom + 0x10000, 0x8000);

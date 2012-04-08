@@ -1,4 +1,4 @@
-#include "driver.h"
+#include "emu.h"
 #include "video/ppu2c0x.h"
 #include "machine/rp5h01.h"
 #include "includes/playch10.h"
@@ -51,7 +51,7 @@ static chr_bank chr_page[8];	// Simple wrapper for ROM/RAM, since we could be ba
 
 MACHINE_RESET( pc10 )
 {
-	const device_config *rp5h01 = devtag_get_device(machine, "rp5h01");
+	running_device *rp5h01 = devtag_get_device(machine, "rp5h01");
 
 	/* initialize latches and flip-flops */
 	pc10_nmi_enable = pc10_dog_di = pc10_dispmask = pc10_sdcs = pc10_int_detect = 0;
@@ -84,8 +84,8 @@ MACHINE_START( pc10 )
 	/* move to individual boards as documentation of actual boards allows */
 	nt_ram = auto_alloc_array(machine, UINT8, 0x1000);
 
-	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0, 0x1fff, 0, 0, pc10_chr_r, pc10_chr_w);
-	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, pc10_nt_r, pc10_nt_w);
+	memory_install_readwrite8_handler(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0, 0x1fff, 0, 0, pc10_chr_r, pc10_chr_w);
+	memory_install_readwrite8_handler(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, pc10_nt_r, pc10_nt_w);
 
 	if (NULL != vram)
 		set_videoram_bank(machine, 0, 8, 0, 8);
@@ -104,8 +104,8 @@ MACHINE_START( playch10_hboard )
 
 	vram = auto_alloc_array(machine, UINT8, 0x2000);
 
-	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0, 0x1fff, 0, 0, pc10_chr_r, pc10_chr_w);
-	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, pc10_nt_r, pc10_nt_w);
+	memory_install_readwrite8_handler(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0, 0x1fff, 0, 0, pc10_chr_r, pc10_chr_w);
+	memory_install_readwrite8_handler(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, pc10_nt_r, pc10_nt_w);
 }
 
 /*************************************
@@ -193,7 +193,7 @@ WRITE8_HANDLER( pc10_CARTSEL_w )
 
 READ8_HANDLER( pc10_prot_r )
 {
-	const device_config *rp5h01 = devtag_get_device(space->machine, "rp5h01");
+	running_device *rp5h01 = devtag_get_device(space->machine, "rp5h01");
 	int data = 0xe7;
 
 	/* we only support a single cart connected at slot 0 */
@@ -209,7 +209,7 @@ READ8_HANDLER( pc10_prot_r )
 
 WRITE8_HANDLER( pc10_prot_w )
 {
-	const device_config *rp5h01 = devtag_get_device(space->machine, "rp5h01");
+	running_device *rp5h01 = devtag_get_device(space->machine, "rp5h01");
 	/* we only support a single cart connected at slot 0 */
 	if (cart_sel == 0)
 	{
@@ -277,7 +277,7 @@ READ8_HANDLER( pc10_in1_r )
 	/* do the gun thing */
 	if (pc10_gun_controller)
 	{
-		const device_config *ppu = devtag_get_device(space->machine, "ppu");
+		running_device *ppu = devtag_get_device(space->machine, "ppu");
 		int trigger = input_port_read(space->machine, "P1");
 		int x = input_port_read(space->machine, "GUNX");
 		int y = input_port_read(space->machine, "GUNY");
@@ -723,28 +723,28 @@ DRIVER_INIT( pcdboard_2 )
 /* E Board games (Mike Tyson's Punchout) - BROKEN - FIX ME */
 
 /* callback for the ppu_latch */
-static void mapper9_latch( const device_config *ppu, offs_t offset )
+static void mapper9_latch( running_device *ppu, offs_t offset )
 {
 
 	if((offset & 0x1ff0) == 0x0fd0 && MMC2_bank_latch[0] != 0xfd)
 	{
 		MMC2_bank_latch[0] = 0xfd;
-		pc10_set_videorom_bank(ppu->space[0]->machine, 0, 4, MMC2_bank[0], 4);
+		pc10_set_videorom_bank(ppu->machine, 0, 4, MMC2_bank[0], 4);
 	}
 	else if((offset & 0x1ff0) == 0x0fe0 && MMC2_bank_latch[0] != 0xfe)
 	{
 		MMC2_bank_latch[0] = 0xfe;
-		pc10_set_videorom_bank(ppu->space[0]->machine, 0, 4, MMC2_bank[1], 4);
+		pc10_set_videorom_bank(ppu->machine, 0, 4, MMC2_bank[1], 4);
 	}
 	else if((offset & 0x1ff0) == 0x1fd0 && MMC2_bank_latch[1] != 0xfd)
 	{
 		MMC2_bank_latch[1] = 0xfd;
-		pc10_set_videorom_bank(ppu->space[0]->machine, 4, 4, MMC2_bank[2], 4);
+		pc10_set_videorom_bank(ppu->machine, 4, 4, MMC2_bank[2], 4);
 	}
 	else if((offset & 0x1ff0) == 0x1fe0 && MMC2_bank_latch[1] != 0xfe)
 	{
 		MMC2_bank_latch[1] = 0xfe;
-		pc10_set_videorom_bank(ppu->space[0]->machine, 4, 4, MMC2_bank[3], 4);
+		pc10_set_videorom_bank(ppu->machine, 4, 4, MMC2_bank[3], 4);
 	}
 }
 
@@ -862,21 +862,21 @@ static int gboard_4screen;
 static int gboard_last_bank;
 static int gboard_command;
 
-static void gboard_scanline_cb( const device_config *device, int scanline, int vblank, int blanked )
+static void gboard_scanline_cb( running_device *device, int scanline, int vblank, int blanked )
 {
 	if (!vblank && !blanked)
 	{
 		if (--gboard_scanline_counter == -1)
 		{
 			gboard_scanline_counter = gboard_scanline_latch;
-			generic_pulse_irq_line(cputag_get_cpu(device->machine, "cart"), 0);
+			generic_pulse_irq_line(devtag_get_device(device->machine, "cart"), 0);
 		}
 	}
 }
 
 static WRITE8_HANDLER( gboard_rom_switch_w )
 {
-	const device_config *ppu = devtag_get_device(space->machine, "ppu");
+	running_device *ppu = devtag_get_device(space->machine, "ppu");
 
 	/* basically, a MMC3 mapper from the nes */
 

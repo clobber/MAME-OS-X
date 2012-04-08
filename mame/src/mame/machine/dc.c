@@ -4,7 +4,7 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "debugger.h"
 #include "includes/dc.h"
 #include "cpu/sh4/sh4.h"
@@ -262,7 +262,7 @@ int level;
 	}
 
 	level=dc_compute_interrupt_level(machine);
-	sh4_set_irln_input(cputag_get_cpu(machine, "maincpu"), 15-level);
+	sh4_set_irln_input(devtag_get_device(machine, "maincpu"), 15-level);
 }
 
 /******************************************************
@@ -303,7 +303,9 @@ static int jvsboard_init(int pos)
 	maple0x86data2[pos+20]=8; // bits per channel
 	maple0x86data2[pos+21]=0;
 	//4 rotary
-	maple0x86data2[pos+22]=0;
+	maple0x86data2[pos+22]=4;
+	maple0x86data2[pos+23]=4; // channels
+	maple0x86data2[pos+24]=8; // bits per channel
 	//5 keyboard
 	//6 (touch?) screen
 	//7 card reader
@@ -476,7 +478,7 @@ WRITE64_HANDLER( dc_sysctrl_w )
 			ddtdata.direction=0;
 			ddtdata.channel=2;
 			ddtdata.mode=25; //011001
-			sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"),&ddtdata);
+			sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
 			#if DEBUG_SYSCTRL
 			if ((address >= 0x11000000) && (address <= 0x11FFFFFF))
 				if (dc_sysctrl_regs[SB_LMMODE0])
@@ -594,7 +596,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					ddtdata.direction=0;	// 0 source to buffer, 1 buffer to source
 					ddtdata.channel= -1;	// not used
 					ddtdata.mode= -1;		// copy from/to buffer
-					sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"), &ddtdata);
+					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
 
 					maple_regs[reg] = 0;
 					endflag=buff[0] & 0x80000000;
@@ -617,6 +619,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					{
 						if (port > 0)
 							buff[0]=0xffffffff;
+//                      printf("MAPLE: command %02x\n", command);
 						switch (command)
 						{
 							case 1:
@@ -632,7 +635,7 @@ WRITE64_HANDLER( naomi_maple_w )
 								ddtdata.direction=0;
 								ddtdata.channel= -1;
 								ddtdata.mode=-1;
-								sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"),&ddtdata);
+								sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
 								chk=0;
 								for (a=1;a < length;a++)
 								{
@@ -660,7 +663,7 @@ WRITE64_HANDLER( naomi_maple_w )
 								ddtdata.direction=0;
 								ddtdata.channel= -1;
 								ddtdata.mode=-1;
-								sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"),&ddtdata);
+								sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
 
 								subcommand = buff[0] & 0xff;
 								#if DEBUG_MAPLE
@@ -696,7 +699,7 @@ WRITE64_HANDLER( naomi_maple_w )
 									jvs_address = (buff[1] >> 16) & 0xff; // slave address
 									jvs_command = buff[2] & 0xff; // jvs command
 									#if DEBUG_MAPLE
-									printf("MAPLE: sent jvs command %x\n", jvs_command);
+									printf("MAPLE: sent jvs command %x to address %x\n", jvs_command, jvs_address);
 									#endif
 									//buff[1] = 0xe4e3e2e1;
 									ddtdata.length = 0;//2;
@@ -860,7 +863,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					ddtdata.destination=destination;
 					ddtdata.buffer=buff;
 					ddtdata.direction=1;
-					sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"),&ddtdata);
+					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
 
 					if (endflag)
 					{
@@ -942,7 +945,7 @@ WRITE64_HANDLER( dc_maple_w )
 					ddtdata.direction=0;	// 0 source to buffer, 1 buffer to source
 					ddtdata.channel= -1;	// not used
 					ddtdata.mode= -1;		// copy from/to buffer
-					sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"), &ddtdata);
+					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
 
 					maple_regs[reg] = 0;
 					endflag=buff[0] & 0x80000000;
@@ -1015,7 +1018,7 @@ WRITE64_HANDLER( dc_maple_w )
 					ddtdata.destination=destination;
 					ddtdata.buffer=buff;
 					ddtdata.direction=1;
-					sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"),&ddtdata);
+					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
 
 					if (endflag)
 					{
@@ -1127,8 +1130,8 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 				return;
 			}
 //          printf("ROM board DMA to %x len %x (PC %x)\n", g1bus_regs[SB_GDSTAR], g1bus_regs[SB_GDLEN], cpu_get_pc(space->cpu));
-			ROM = (UINT8 *)devtag_get_info_ptr(space->machine, "rom_board", DEVINFO_PTR_MEMORY);
-			dmaoffset = (UINT32)devtag_get_info_int(space->machine, "rom_board", DEVINFO_INT_DMAOFFSET);
+			ROM = (UINT8 *)space->machine->device("rom_board")->get_runtime_ptr(DEVINFO_PTR_MEMORY);
+			dmaoffset = (UINT32)space->machine->device("rom_board")->get_runtime_int(DEVINFO_INT_DMAOFFSET);
 			ddtdata.destination=g1bus_regs[SB_GDSTAR];		// destination address
 			ddtdata.length=g1bus_regs[SB_GDLEN] >> 5;		// words to transfer
 			ddtdata.size=32;			// bytes per word
@@ -1137,7 +1140,7 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 			ddtdata.channel= -1;	// not used
 			ddtdata.mode= -1;		// copy from/to buffer
 			mame_printf_verbose("G1CTRL: transfer %x from ROM %08x to sdram %08x\n", g1bus_regs[SB_GDLEN], dmaoffset, g1bus_regs[SB_GDSTAR]);
-			sh4_dma_ddt(cputag_get_cpu(space->machine, "maincpu"), &ddtdata);
+			sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
 			g1bus_regs[SB_GDST]=0;
 			dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_GDROM;
 			dc_update_interrupt_status(space->machine);

@@ -1,8 +1,12 @@
 
 
-typedef struct _appoooh_state appoooh_state;
-struct _appoooh_state
+class appoooh_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, appoooh_state(machine)); }
+
+	appoooh_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  bg_videoram;
 	UINT8 *  bg_colorram;
@@ -21,7 +25,7 @@ struct _appoooh_state
 	UINT32   adpcm_address;
 
 	/* devices */
-	const device_config *adpcm;
+	running_device *adpcm;
 };
 
 #define CHR1_OFST   0x00  /* palette page of char set #1 */

@@ -4,10 +4,8 @@
 
 *********************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
-#include "cpuexec.h"
 #include "k053260.h"
 
 /* 2004-02-28: Fixed ppcm decoding. Games sound much better now.*/
@@ -42,10 +40,10 @@ struct _k053260_state {
 	UINT32					*delta_table;
 	k053260_channel		channels[4];
 	const k053260_interface			*intf;
-	const device_config *device;
+	running_device *device;
 };
 
-INLINE k053260_state *get_safe_token(const device_config *device)
+INLINE k053260_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -217,16 +215,14 @@ static DEVICE_START( k053260 )
 
 	/* Initialize our chip structure */
 	ic->device = device;
-	ic->intf = (device->static_config != NULL) ? (const k053260_interface *)device->static_config : &defintrf;
+	ic->intf = (device->baseconfig().static_config != NULL) ? (const k053260_interface *)device->baseconfig().static_config : &defintrf;
 
 	ic->mode = 0;
-	ic->rom = device->region;
-	ic->rom_size = device->regionbytes;
-	if (ic->intf->rgnoverride != NULL)
-	{
-		ic->rom = memory_region(device->machine, ic->intf->rgnoverride);
-		ic->rom_size = memory_region_length(device->machine, ic->intf->rgnoverride);
-	}
+
+	const region_info *region = (ic->intf->rgnoverride != NULL) ? device->machine->region(ic->intf->rgnoverride) : device->region;
+
+	ic->rom = *region;
+	ic->rom_size = region->bytes();
 
 	DEVICE_RESET_CALL(k053260);
 

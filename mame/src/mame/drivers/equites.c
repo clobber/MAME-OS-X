@@ -363,7 +363,7 @@ D                                                                               
 *******************************************************************************/
 // Directives
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/alph8201/alph8201.h"
 #include "deprecat.h"
@@ -563,7 +563,7 @@ static WRITE8_HANDLER( equites_8155_portb_w )
 	equites_update_dac(space->machine);
 }
 
-static void equites_msm5232_gate( const device_config *device, int state )
+static void equites_msm5232_gate( running_device *device, int state )
 {
 }
 

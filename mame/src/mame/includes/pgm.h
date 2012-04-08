@@ -1,7 +1,11 @@
 
-typedef struct _pgm_state pgm_state;
-struct _pgm_state
+class pgm_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, pgm_state(machine)); }
+
+	pgm_state(running_machine &machine) { }
+
 	/* memory pointers */
 //  UINT16 *      mainram;  // currently this is also used by nvram handler
 	UINT16 *      bg_videoram;
@@ -61,9 +65,9 @@ struct _pgm_state
 	mame_system_time systime;
 
 	/* devices */
-	const device_config *soundcpu;
-	const device_config *prot;
-	const device_config *ics;
+	running_device *soundcpu;
+	running_device *prot;
+	running_device *ics;
 };
 
 extern UINT16 *pgm_mainram;	// used by nvram handler, we cannot move it to driver data struct

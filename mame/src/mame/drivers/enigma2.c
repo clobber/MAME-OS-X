@@ -18,7 +18,7 @@ TODO:
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
 #include "deprecat.h"
@@ -54,9 +54,13 @@ TODO:
 #define NUM_PENS	(8)
 
 
-typedef struct _enigma2_state enigma2_state;
-struct _enigma2_state
+class enigma2_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, enigma2_state(machine)); }
+
+	enigma2_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 
@@ -71,8 +75,8 @@ struct _enigma2_state
 	emu_timer *interrupt_assert_timer;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
+	running_device *maincpu;
+	running_device *audiocpu;
 };
 
 

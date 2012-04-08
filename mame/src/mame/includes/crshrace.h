@@ -1,7 +1,11 @@
 
-typedef struct _crshrace_state crshrace_state;
-struct _crshrace_state
+class crshrace_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, crshrace_state(machine)); }
+
+	crshrace_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  videoram1;
 	UINT16 *  videoram2;
@@ -17,8 +21,8 @@ struct _crshrace_state
 	int pending_command;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k053936;
+	running_device *audiocpu;
+	running_device *k053936;
 };
 
 /*----------- defined in video/crshrace.c -----------*/

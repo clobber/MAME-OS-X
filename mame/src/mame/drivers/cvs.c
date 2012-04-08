@@ -90,7 +90,7 @@ Todo & FIXME:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/s2650/s2650.h"
 #include "sound/dac.h"
 #include "sound/tms5110.h"
@@ -245,7 +245,7 @@ static INTERRUPT_GEN( cvs_main_cpu_interrupt )
 }
 
 
-static void cvs_slave_cpu_interrupt( const device_config *cpu, int state )
+static void cvs_slave_cpu_interrupt( running_device *cpu, int state )
 {
 	cpu_set_input_line_vector(cpu, 0, 0x03);
 	//cpu_set_input_line(cpu, 0, state ? ASSERT_LINE : CLEAR_LINE);
@@ -437,7 +437,7 @@ static WRITE8_DEVICE_HANDLER( cvs_tms5110_pdc_w )
 }
 
 
-static int speech_rom_read_bit( const device_config *device )
+static int speech_rom_read_bit( running_device *device )
 {
 	cvs_state *state = (cvs_state *)device->machine->driver_data;
 	running_machine *machine = device->machine;
@@ -895,7 +895,7 @@ static INPUT_PORTS_START( hunchbak )
 	PORT_DIPSETTING(    0x00, "80k only" )                  /* displays "80000" */
 
 	/* hunchbak : DSW2 bit 5 stored at 0x5e97 - code at 0x516c - read back code at 0x6054 */
-	/* hunchbka : DSW2 bit 5 stored at 0x1e97 - code at 0x0c0c - read back code at 0x6054 */
+	/* hunchbaka : DSW2 bit 5 stored at 0x1e97 - code at 0x0c0c - read back code at 0x6054 */
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( superbik )
@@ -1052,7 +1052,6 @@ MACHINE_RESET( cvs )
 	state->speech_rom_bit_address = 0;
 	state->cvs_393hz_clock = 0;
 	state->collision_register = 0;
-	state->total_stars = 0;
 	state->stars_on = 0;
 	state->scroll_reg = 0;
 	state->stars_scroll = 0;
@@ -1617,7 +1616,7 @@ static DRIVER_INIT( huncholy )
 }
 
 
-static DRIVER_INIT( hunchbka )
+static DRIVER_INIT( hunchbaka )
 {
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
@@ -1719,7 +1718,7 @@ GAME( 1982, goldbug,   0,        cvs,     goldbug,  0,        ROT90, "Century El
 GAME( 1982, diggerc,   0,        cvs,     diggerc,  0,        ROT90, "Century Electronics", "Digger (CVS)", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, heartatk,  0,        cvs,     heartatk, 0,        ROT90, "Century Electronics", "Heart Attack", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, hunchbak,  0,        cvs,     hunchbak, 0,        ROT90, "Century Electronics", "Hunchback (set 1)", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1983, hunchbaka, hunchbak, cvs,     hunchbak, hunchbka, ROT90, "Century Electronics", "Hunchback (set 2)", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, hunchbaka, hunchbak, cvs,     hunchbak, hunchbaka,ROT90, "Century Electronics", "Hunchback (set 2)", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, superbik,  0,        cvs,     superbik, superbik, ROT90, "Century Electronics", "Superbike", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, raiders,   0,        cvs,     raiders,  raiders,  ROT90, "Century Electronics", "Raiders", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, hero,      0,        cvs,     hero,     hero,     ROT90, "Seatongrove Ltd",     "Hero", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

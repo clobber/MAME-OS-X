@@ -73,7 +73,7 @@ Known issues:
 - the 8255 is not hooked up
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
@@ -83,9 +83,13 @@ Known issues:
 #define HLE_COM
 
 
-typedef struct _imolagp_state imolagp_state;
-struct _imolagp_state
+class imolagp_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, imolagp_state(machine)); }
+
+	imolagp_state(running_machine &machine) { }
+
 	UINT8 *slave_workram; // used only ifdef HLE_COM
 
 #ifdef HLE_COM
@@ -104,7 +108,7 @@ struct _imolagp_state
 	int   oldsteer;
 
 	/* devices */
-	const device_config *slavecpu;
+	running_device *slavecpu;
 };
 
 

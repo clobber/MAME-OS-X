@@ -11,9 +11,7 @@
 #ifndef __PPCCOM_H__
 #define __PPCCOM_H__
 
-#include "cpuintrf.h"
 #include "ppc.h"
-#include "timer.h"
 #include "cpu/vtlb.h"
 
 
@@ -553,7 +551,7 @@ struct _powerpc_state
 
 	/* internal stuff */
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	offs_t			codexor;
 	UINT32			irq_pending;
@@ -573,7 +571,7 @@ struct _powerpc_state
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-void ppccom_init(powerpc_state *ppc, powerpc_flavor flavor, UINT8 cap, int tb_divisor, const device_config *device, cpu_irq_callback irqcallback);
+void ppccom_init(powerpc_state *ppc, powerpc_flavor flavor, UINT8 cap, int tb_divisor, running_device *device, cpu_irq_callback irqcallback);
 void ppccom_exit(powerpc_state *ppc);
 
 void ppccom_reset(powerpc_state *ppc);

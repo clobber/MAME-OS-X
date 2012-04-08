@@ -7,9 +7,13 @@
 ***************************************************************************/
 
 
-typedef struct __20pacgal_state _20pacgal_state;
-struct __20pacgal_state
+class _20pacgal_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, _20pacgal_state(machine)); }
+
+	_20pacgal_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *char_gfx_ram;
 	UINT8 *sprite_gfx_ram;
@@ -22,8 +26,8 @@ struct __20pacgal_state
 	UINT8 game_selected;	/* 0 = Ms. Pac-Man, 1 = Galaga */
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *eeprom;
+	running_device *maincpu;
+	running_device *eeprom;
 };
 
 

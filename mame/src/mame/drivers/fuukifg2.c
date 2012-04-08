@@ -34,7 +34,7 @@ To Do:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2203intf.h"
@@ -226,7 +226,7 @@ static INPUT_PORTS_START( gogomile )
 INPUT_PORTS_END
 
 /* Same as gogomile, but the default country is different and the coinage settings too. */
-static INPUT_PORTS_START( gogomilj )
+static INPUT_PORTS_START( gogomilej )
 	PORT_INCLUDE( gogomile )
 
 	PORT_MODIFY("DSW")		// $880000.w
@@ -373,7 +373,7 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static void soundirq( const device_config *device, int state )
+static void soundirq( running_device *device, int state )
 {
 	fuuki16_state *fuuki16 = (fuuki16_state *)device->machine->driver_data;
 	cpu_set_input_line(fuuki16->audiocpu, 0, state);
@@ -668,5 +668,5 @@ ROM_END
 ***************************************************************************/
 
 GAME( 1995, gogomile, 0,        fuuki16, gogomile, 0, ROT0, "Fuuki", "Go Go! Mile Smile", GAME_IMPERFECT_SOUND )
-GAME( 1995, gogomilej,gogomile, fuuki16, gogomilj, 0, ROT0, "Fuuki", "Susume! Mile Smile (Japan)", GAME_IMPERFECT_SOUND )
+GAME( 1995, gogomilej,gogomile, fuuki16, gogomilej,0, ROT0, "Fuuki", "Susume! Mile Smile (Japan)", GAME_IMPERFECT_SOUND )
 GAME( 1996, pbancho,  0,        fuuki16, pbancho,  0, ROT0, "Fuuki", "Gyakuten!! Puzzle Bancho (Japan)", 0)

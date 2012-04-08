@@ -4,14 +4,18 @@ Atari Destroyer Driver
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "deprecat.h"
 
 
-typedef struct _destroyr_state destroyr_state;
-struct _destroyr_state
+class destroyr_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, destroyr_state(machine)); }
+
+	destroyr_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        major_obj_ram;
 	UINT8 *        minor_obj_ram;
@@ -29,7 +33,7 @@ struct _destroyr_state
 	int            noise;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 
@@ -449,7 +453,7 @@ static MACHINE_DRIVER_START( destroyr )
 	MDRV_DRIVER_DATA(destroyr_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6800, 12096000 / 16)
+	MDRV_CPU_ADD("maincpu", M6800, XTAL_12_096MHz / 16)
 	MDRV_CPU_PROGRAM_MAP(destroyr_map)
 	MDRV_CPU_VBLANK_INT_HACK(irq0_line_assert, 4)
 

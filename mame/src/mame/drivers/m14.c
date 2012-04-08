@@ -50,13 +50,17 @@ Dumped by Chackn
 
 **********************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i8085/i8085.h"
 
 
-typedef struct _m14_state m14_state;
-struct _m14_state
+class m14_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, m14_state(machine)); }
+
+	m14_state(running_machine &machine) { }
+
 	/* video-related */
 	tilemap_t  *m14_tilemap;
 	UINT8 *  video_ram;
@@ -66,7 +70,7 @@ struct _m14_state
 	UINT8 hop_mux;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

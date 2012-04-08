@@ -32,11 +32,12 @@ static const char copyright_notice[] =
 /* ================================ INCLUDES ============================== */
 /* ======================================================================== */
 
+#include "emu.h"
+#include "debugger.h"
 #include <setjmp.h>
 #include "m68kcpu.h"
 #include "m68kops.h"
 #include "m68kfpu.c"
-#include "debugger.h"
 
 #include "m68kmmu.h"
 
@@ -539,6 +540,17 @@ static const cpu_state_entry state_array[] =
 
 	M68K_STATE_ENTRY(CACR, "%08X", cacr, 0xffffffff, 0, MASK_020_OR_LATER)
 	M68K_STATE_ENTRY(CAAR, "%08X", caar, 0xffffffff, 0, MASK_020_OR_LATER)
+
+	M68K_STATE_ENTRY(FP0, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP1, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP2, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP3, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP4, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP5, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP6, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FP7, "%s", iotemp, 0xffffffff, CPUSTATE_EXPORT, MASK_030_OR_LATER)
+	M68K_STATE_ENTRY(FPSR, "%08X", fpsr, 0xffffffff, 0, MASK_040_OR_LATER)
+	M68K_STATE_ENTRY(FPCR, "%08X", fpcr, 0xffffffff, 0, MASK_040_OR_LATER)
 };
 
 static const cpu_state_table state_table_template =
@@ -551,7 +563,7 @@ static const cpu_state_table state_table_template =
 
 
 
-INLINE m68ki_cpu_core *get_safe_token(const device_config *device)
+INLINE m68ki_cpu_core *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -696,7 +708,7 @@ static CPU_INIT( m68k )
 	m68ki_cpu_core *m68k = get_safe_token(device);
 
 	m68k->device = device;
-	m68k->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	m68k->program = device->space(AS_PROGRAM);
 	m68k->int_ack_callback = irqcallback;
 
 	/* The first call to this function initializes the opcode handler jump table */
@@ -846,6 +858,16 @@ static CPU_EXPORT_STATE( m68k )
 			m68k->iotemp = (m68k->s_flag && m68k->m_flag) ? REG_SP : REG_MSP;
 			break;
 
+		case M68K_FP0:
+		case M68K_FP1:
+		case M68K_FP2:
+		case M68K_FP3:
+		case M68K_FP4:
+		case M68K_FP5:
+		case M68K_FP6:
+		case M68K_FP7:
+			break;
+
 		default:
 			fatalerror("CPU_EXPORT_STATE(m68k) called for unexpected value\n");
 			break;
@@ -872,6 +894,47 @@ static CPU_SET_INFO( m68k )
 	}
 }
 
+static CPU_EXPORT_STRING( m68k )
+{
+	m68ki_cpu_core *m68k = get_safe_token(device);
+
+	switch (entry->index)
+	{
+		case M68K_FP0:
+			sprintf(string, "%f", REG_FP[0].f);
+			break;
+
+		case M68K_FP1:
+			sprintf(string, "%f", REG_FP[1].f);
+			break;
+
+		case M68K_FP2:
+			sprintf(string, "%f", REG_FP[2].f);
+			break;
+
+		case M68K_FP3:
+			sprintf(string, "%f", REG_FP[3].f);
+			break;
+
+		case M68K_FP4:
+			sprintf(string, "%f", REG_FP[4].f);
+			break;
+
+		case M68K_FP5:
+			sprintf(string, "%f", REG_FP[5].f);
+			break;
+
+		case M68K_FP6:
+			sprintf(string, "%f", REG_FP[6].f);
+			break;
+
+		case M68K_FP7:
+			sprintf(string, "%f", REG_FP[7].f);
+			break;
+
+	}
+}
+
 static CPU_GET_INFO( m68k )
 {
 	m68ki_cpu_core *m68k = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
@@ -891,9 +954,9 @@ static CPU_GET_INFO( m68k )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 4;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 16;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 24;							break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 		info->i = 0;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 16;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 24;							break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;							break;
 
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = 0;  /* there is no level 0 */	break;
 		case CPUINFO_INT_INPUT_STATE + 1:				info->i = (m68k->virq_state >> 1) & 1;	break;
@@ -912,6 +975,7 @@ static CPU_GET_INFO( m68k )
 		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(m68k);			break;
 		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(m68k);		break;
 		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(m68k);		break;
+		case CPUINFO_FCT_EXPORT_STRING: info->export_string = CPU_EXPORT_STRING_NAME(m68k);		break;
 		case CPUINFO_FCT_TRANSLATE:	    	info->translate = CPU_TRANSLATE_NAME(m68k);		break;
 
 		/* --- the following bits of info are returned as pointers --- */
@@ -951,7 +1015,7 @@ static CPU_GET_INFO( m68k )
 
 /* global access */
 
-void m68k_set_encrypted_opcode_range(const device_config *device, offs_t start, offs_t end)
+void m68k_set_encrypted_opcode_range(running_device *device, offs_t start, offs_t end)
 {
 	m68ki_cpu_core *m68k = get_safe_token(device);
 	m68k->encrypted_start = start;
@@ -1220,25 +1284,25 @@ static const m68k_memory_interface interface_d32_mmu =
 };
 
 
-void m68k_set_reset_callback(const device_config *device, m68k_reset_func callback)
+void m68k_set_reset_callback(running_device *device, m68k_reset_func callback)
 {
 	m68ki_cpu_core *m68k = get_safe_token(device);
 	m68k->reset_instr_callback = callback;
 }
 
-void m68k_set_cmpild_callback(const device_config *device, m68k_cmpild_func callback)
+void m68k_set_cmpild_callback(running_device *device, m68k_cmpild_func callback)
 {
 	m68ki_cpu_core *m68k = get_safe_token(device);
 	m68k->cmpild_instr_callback = callback;
 }
 
-void m68k_set_rte_callback(const device_config *device, m68k_rte_func callback)
+void m68k_set_rte_callback(running_device *device, m68k_rte_func callback)
 {
 	m68ki_cpu_core *m68k = get_safe_token(device);
 	m68k->rte_instr_callback = callback;
 }
 
-void m68k_set_tas_callback(const device_config *device, m68k_tas_func callback)
+void m68k_set_tas_callback(running_device *device, m68k_tas_func callback)
 {
 	m68ki_cpu_core *m68k = get_safe_token(device);
 	m68k->tas_instr_callback = callback;
@@ -1323,8 +1387,8 @@ CPU_GET_INFO( m68008 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 8;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 22;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 8;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 22;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68008);						break;
@@ -1422,8 +1486,8 @@ CPU_GET_INFO( m68020 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 32;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68020);						break;
@@ -1515,7 +1579,7 @@ CPU_GET_INFO( m68ec020 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 24;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 24;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68ec020);					break;
@@ -1568,8 +1632,8 @@ CPU_GET_INFO( m68030 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 32;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68030);						break;
@@ -1687,8 +1751,8 @@ CPU_GET_INFO( m68040 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 158;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 32;							break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:			info->init = CPU_INIT_NAME(m68040);						break;
@@ -1825,7 +1889,7 @@ CPU_GET_INFO( scc68070 )
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;							break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;							break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(scc68070);	break;

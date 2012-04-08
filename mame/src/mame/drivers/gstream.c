@@ -122,13 +122,17 @@ RAM4 is HMC HM6264LP-70
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/e132xs/e132xs.h"
 #include "sound/okim6295.h"
 
-typedef struct _gstream_state gstream_state;
-struct _gstream_state
+class gstream_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, gstream_state(machine)); }
+
+	gstream_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT32 *  vram;
 	UINT32 *  workram;
@@ -144,8 +148,8 @@ struct _gstream_state
 	int       oki_bank_0, oki_bank_1;
 
 	/* devices */
-	const device_config *oki_1;
-	const device_config *oki_2;
+	running_device *oki_1;
+	running_device *oki_2;
 };
 
 

@@ -14,7 +14,6 @@
 #ifndef __EMUOPTS_H__
 #define __EMUOPTS_H__
 
-#include "mamecore.h"
 #include "options.h"
 
 
@@ -139,11 +138,13 @@
 #define OPTION_JOYSTICK_SATURATION	"joystick_saturation"
 #define OPTION_STEADYKEY			"steadykey"
 #define OPTION_OFFSCREEN_RELOAD		"offscreen_reload"
+#define OPTION_NATURAL_KEYBOARD		"natural"
 
 /* core debugging options */
 #define OPTION_VERBOSE				"verbose"
 #define OPTION_LOG					"log"
 #define OPTION_DEBUG				"debug"
+#define OPTION_DEBUG_INTERNAL		"debug_internal"
 #define OPTION_DEBUGSCRIPT			"debugscript"
 #define OPTION_UPDATEINPAUSE		"update_in_pause"
 

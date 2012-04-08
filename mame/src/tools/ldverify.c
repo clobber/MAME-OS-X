@@ -38,6 +38,7 @@
 ****************************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <ctype.h>
 #include "aviio.h"
 #include "bitmap.h"
@@ -270,7 +271,7 @@ static int read_chd(void *file, int frame, bitmap_t *bitmap, INT16 *lsound, INT1
 	for (fieldnum = 0; fieldnum < interlace_factor; fieldnum++)
 	{
 		/* make a fake bitmap for this field */
-		fakebitmap = *bitmap;
+		bitmap_clone_existing(&fakebitmap, bitmap);
 		fakebitmap.base = BITMAP_ADDR16(&fakebitmap, fieldnum, 0);
 		fakebitmap.rowpixels *= interlace_factor;
 		fakebitmap.height /= interlace_factor;

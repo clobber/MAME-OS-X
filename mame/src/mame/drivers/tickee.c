@@ -16,7 +16,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms34010/tms34010.h"
 #include "machine/ticket.h"
 #include "video/tlc34076.h"
@@ -128,7 +128,7 @@ static VIDEO_START( tickee )
  *
  *************************************/
 
-static void scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+static void scanline_update(running_device *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT16 *src = &tickee_vram[(params->rowaddr << 8) & 0x3ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
@@ -153,7 +153,7 @@ static void scanline_update(const device_config *screen, bitmap_t *bitmap, int s
 }
 
 
-static void rapidfir_scanline_update(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+static void rapidfir_scanline_update(running_device *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT16 *src = &tickee_vram[(params->rowaddr << 8) & 0x3ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
@@ -224,14 +224,14 @@ static READ16_HANDLER( rapidfir_transparent_r )
 }
 
 
-void rapidfir_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void rapidfir_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	if (address < 0x800000)
 		memcpy(shiftreg, &tickee_vram[TOWORD(address)], TOBYTE(0x2000));
 }
 
 
-void rapidfir_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void rapidfir_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	if (address < 0x800000)
 		memcpy(&tickee_vram[TOWORD(address)], shiftreg, TOBYTE(0x2000));

@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _labyrunr_state labyrunr_state;
-struct _labyrunr_state
+class labyrunr_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, labyrunr_state(machine)); }
+
+	labyrunr_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram1;
 	UINT8 *    videoram2;
@@ -19,7 +23,7 @@ struct _labyrunr_state
 	rectangle  clip0, clip1;
 
 	/* devices */
-	const device_config *k007121;
+	running_device *k007121;
 };
 
 

@@ -3,17 +3,20 @@
 King Derby (c) 1981 Tatsumi
 
 driver by Andrew Gardner, Angelo Salese & Roberto Fresca
+original cowrace.c by Luca Elia
 
 TODO:
 - remaining video issues, priorities, sprites etc.;
 - inputs;
 - Understand how tilemap color offsets really works;
 - Discrete sound part? There's a Rossini's "William Tell" bgm on the Chinese bootlegs,
-  I think it's tied with ay8910 port B.
+  I think it's tied with ay8910 port B. Update: the 1986 version sounds that just fine, could be
+  that this is a btanb;
 - unknown memories;
-- Garbage on the window tilemap if you win, it could be a BTANB (masked by the color prom).
+- Garbage on the window tilemap if you win, it could be a btanb (masked by the color prom).
 - the name "King Derby" is a raw guess, there's a chance that it uses a different name
-  (but there isn't any title screen on the game?)
+  (but there isn't any title screen in the game?)
+- Fix I/O in the 1986 bootleg version;
 
 ============================================================================================
 
@@ -60,11 +63,13 @@ sg1_b.e1       4096     0x92ef3c13      D2732D
 
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "video/mc6845.h"
 #include "machine/8255ppi.h"
 #include "sound/ay8910.h"
+#include "sound/okim6295.h"
+#include "sound/2203intf.h"
 
 #define CLK_1	XTAL_20MHz
 #define CLK_2	XTAL_3_579545MHz
@@ -364,6 +369,30 @@ static ADDRESS_MAP_START( slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("DSW")
 ADDRESS_MAP_END
 
+static WRITE8_HANDLER( kingdrbb_lamps_w )
+{
+	// (same as the inputs but active high)
+}
+
+static ADDRESS_MAP_START( slave_1986_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x2fff) AM_ROM
+	AM_RANGE(0x3000, 0x3fff) AM_ROM //sound rom tested for the post check
+	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram) //backup ram
+	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)	/* I/O Ports */
+//  AM_RANGE(0x6000, 0x6003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w) /* I/O Ports */
+	AM_RANGE(0x7000, 0x73ff) AM_RAM AM_SHARE("share1")
+	AM_RANGE(0x7400, 0x74ff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x7600, 0x7600) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0x7601, 0x7601) AM_DEVREADWRITE("crtc", mc6845_register_r, mc6845_register_w)
+	AM_RANGE(0x7800, 0x7800) AM_READ_PORT("KEY0")
+    AM_RANGE(0x7801, 0x7801) AM_READ_PORT("KEY1")
+	AM_RANGE(0x7802, 0x7802) AM_READ_PORT("KEY2")
+	AM_RANGE(0x7803, 0x7803) AM_READ_PORT("KEY3")
+	AM_RANGE(0x7800, 0x7803) AM_WRITE(kingdrbb_lamps_w)
+	AM_RANGE(0x7a00, 0x7a00) AM_READ_PORT("SYSTEM")
+	AM_RANGE(0x7c00, 0x7c00) AM_READ_PORT("DSW")
+ADDRESS_MAP_END
+
 static ADDRESS_MAP_START( slave_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_NOP //interrupt ack
@@ -379,6 +408,17 @@ static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x40, 0x40) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ay8910_data_address_w)
 ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( cowrace_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x1fff) AM_ROM
+	AM_RANGE(0x2000, 0x23ff) AM_RAM
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( cowrace_sound_io, ADDRESS_SPACE_IO, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0xff)
+	AM_RANGE(0x40, 0x41) AM_DEVWRITE("aysnd", ym2203_w)
+ADDRESS_MAP_END
+
 
 /*************************************
 *
@@ -409,6 +449,35 @@ static const ppi8255_interface ppi8255_intf[2] =
 		DEVCB_HANDLER(sound_cmd_w),  /* Port A write */
 		DEVCB_NULL,					/* Port B write */
 		DEVCB_HANDLER(outport2_w)	/* Port C write */
+	}
+};
+
+static WRITE8_DEVICE_HANDLER( outportb_w )
+{
+//  printf("%02x B\n",data);
+}
+
+
+static const ppi8255_interface ppi8255_1986_intf[2] =
+{
+	/* C as input, (all) as output */
+	{
+		DEVCB_NULL,	                        /* Port A read */
+		DEVCB_INPUT_PORT("IN0"),	        /* Port B read */
+		DEVCB_INPUT_PORT("IN1"),			/* Port C read */
+		DEVCB_HANDLER(sound_cmd_w),			/* Port A write */
+		DEVCB_HANDLER(outportb_w),			/* Port B write */
+		DEVCB_NULL						    /* Port C write */
+	},
+
+	/* actually unused */
+	{
+		DEVCB_NULL,					/* Port A read */
+		DEVCB_NULL,					/* Port B read */
+		DEVCB_NULL,					/* Port C read */
+		DEVCB_NULL, 				/* Port A write */
+		DEVCB_NULL,					/* Port B write */
+		DEVCB_NULL					/* Port C write */
 	}
 };
 
@@ -570,7 +639,158 @@ static INPUT_PORTS_START( kingdrby )
 	PORT_DIPNAME( 0x40, 0x40, "POST Check" )
 	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Reset Backup RAM" )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( kingdrbb )
+	/*this might be different.*/
+	PORT_START("HPIO")	// ppi0 (5000)
+	PORT_DIPNAME( 0x01, 0x01, "HPIO" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL ) //1p hopper i/o
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_SPECIAL ) //2p hopper i/o
+
+	PORT_START("IN0")	// ppi0 (5001)
+	PORT_DIPNAME( 0x01, 0x01, "IN0" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+	PORT_START("IN1")	// ppi0 (5001)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_VBLANK ) //?
+	PORT_DIPNAME( 0x02, 0x02, "IN1" )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+	PORT_START("SYSTEM")	// ppi0 (5001)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_DIPNAME( 0x02, 0x02, "SYSTEM" )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_GAMBLE_KEYOUT )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) ) //causes "hopper overpay" msg
+	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+
+	PORT_START("KEY0") // (7800)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("1P 1-2") PORT_CODE(KEYCODE_Q)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("1P 1-3") PORT_CODE(KEYCODE_W)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("1P 1-4") PORT_CODE(KEYCODE_E)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("1P 1-5") PORT_CODE(KEYCODE_R)
+	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("KEY1") // (7801)
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("1P 1-6") PORT_CODE(KEYCODE_T)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("1P 2-3") PORT_CODE(KEYCODE_A)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON7 ) PORT_NAME("1P 2-4") PORT_CODE(KEYCODE_S)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_NAME("1P 2-5") PORT_CODE(KEYCODE_D)
+	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("KEY2")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON9 ) PORT_NAME("1P 2-6") PORT_CODE(KEYCODE_F)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON10 ) PORT_NAME("1P 3-4") PORT_CODE(KEYCODE_G)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON11 ) PORT_NAME("1P 3-5") PORT_CODE(KEYCODE_H)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_BUTTON12 ) PORT_NAME("1P 3-6") PORT_CODE(KEYCODE_Z)
+	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("KEY3")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON13 ) PORT_NAME("1P 4-5") PORT_CODE(KEYCODE_X)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON14 ) PORT_NAME("1P 4-6") PORT_CODE(KEYCODE_C)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON15 ) PORT_NAME("1P 5-6") PORT_CODE(KEYCODE_V)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0xf0, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("DSW")
+	PORT_DIPNAME( 0x01, 0x01, "SYSTEM" )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, "Game Type?" ) //enables two new msgs "advance" and "exchange" in analyzer mode
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x40, 0x40, "POST Check" )
+	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Reset Backup RAM" )
 	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -609,9 +829,29 @@ static const gfx_layout layout16x16x2 =
 	16*16
 };
 
+/* seems more suitable with 2bpp?*/
+static const gfx_layout cowrace_layout16x16x2 =
+{
+	16,16,
+	RGN_FRAC(1,2),
+	2,
+	{
+		RGN_FRAC(1,2),
+		RGN_FRAC(0,2),
+	},
+	{ 16*8+0,16*8+1,16*8+2,16*8+3,16*8+4,16*8+5,16*8+6,16*8+7,0,1,2,3,4,5,6,7 },
+	{ 0*8,1*8,2*8,3*8,4*8,5*8,6*8,7*8,8*8,9*8,10*8,11*8,12*8,13*8,14*8,15*8  },
+	16*16
+};
+
 static GFXDECODE_START( kingdrby )
 	GFXDECODE_ENTRY( "gfx1", 0x0000, layout16x16x2, 0x080, 0x10 )
 	GFXDECODE_ENTRY( "gfx2", 0x0000, layout8x8x2,   0x000, 0x80 )
+GFXDECODE_END
+
+static GFXDECODE_START( cowrace )
+	GFXDECODE_ENTRY( "gfx1", 0x000000, cowrace_layout16x16x2, 0x080, 0x10 )
+	GFXDECODE_ENTRY( "gfx2", 0x000000, layout8x8x2, 0x000, 0x80 )
 GFXDECODE_END
 
 /**********************************************************************************************************
@@ -655,6 +895,19 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL /* discrete write? */
 };
 
+static const ym2203_interface cowrace_ym2203_interface =
+{
+	{
+		AY8910_LEGACY_OUTPUT,
+		AY8910_DEFAULT_LOADS,
+		DEVCB_HANDLER(sound_cmd_r),									// read A
+		DEVCB_DEVICE_HANDLER("oki", okim6295_r),					// read B
+		DEVCB_NULL,													// write A
+		DEVCB_DEVICE_HANDLER("oki", okim6295_w)						// write B
+	},
+	NULL
+};
+
 static PALETTE_INIT(kingdrby)
 {
 	int	bit0, bit1, bit2 , r, g, b;
@@ -677,6 +930,38 @@ static PALETTE_INIT(kingdrby)
 
 		palette_set_color(machine, i, MAKE_RGB(r, g, b));
 		color_prom++;
+	}
+}
+
+static PALETTE_INIT(kingdrbb)
+{
+	UINT8 *raw_prom = memory_region(machine, "raw_prom");
+	UINT8 *prom = memory_region(machine, "proms");
+	int	bit0, bit1, bit2 , r, g, b;
+	int	i;
+
+	for(i = 0; i < 0x200; i++)
+	{
+		/* this set has an extra address line shuffle applied on the prom */
+		prom[i] = raw_prom[BITSWAP16(i, 15,14,13,12,11,10,9,8,7,6,5,0,1,2,3,4)+0x1000];
+	}
+
+	for(i = 0; i < 0x200; i++)
+	{
+		bit0 = 0;
+		bit1 = (prom[i] >> 1) & 0x01;
+		bit2 = (prom[i] >> 0) & 0x01;
+		b = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
+		bit0 = (prom[i] >> 4) & 0x01;
+		bit1 = (prom[i] >> 3) & 0x01;
+		bit2 = (prom[i] >> 2) & 0x01;
+		g = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
+		bit0 = (prom[i] >> 7) & 0x01;
+		bit1 = (prom[i] >> 6) & 0x01;
+		bit2 = (prom[i] >> 5) & 0x01;
+		r = 0x21 * bit0 + 0x47 * bit1 + 0x97 * bit2;
+
+		palette_set_color(machine, i, MAKE_RGB(r, g, b));
 	}
 }
 
@@ -726,6 +1011,36 @@ static MACHINE_DRIVER_START( kingdrby )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
 
+static MACHINE_DRIVER_START( kingdrbb )
+	MDRV_IMPORT_FROM( kingdrby )
+
+	MDRV_CPU_MODIFY("slave")
+	MDRV_CPU_PROGRAM_MAP(slave_1986_map)
+
+	MDRV_PALETTE_INIT(kingdrbb)
+
+	MDRV_PPI8255_RECONFIG( "ppi8255_0", ppi8255_1986_intf[0] )
+	MDRV_PPI8255_RECONFIG( "ppi8255_1", ppi8255_1986_intf[1] )
+MACHINE_DRIVER_END
+
+static MACHINE_DRIVER_START( cowrace )
+	MDRV_IMPORT_FROM( kingdrbb )
+
+	MDRV_CPU_MODIFY("soundcpu")
+	MDRV_CPU_PROGRAM_MAP(cowrace_sound_map)
+	MDRV_CPU_IO_MAP(cowrace_sound_io)
+
+	MDRV_GFXDECODE(cowrace)
+	MDRV_PALETTE_INIT(kingdrby)
+
+	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
+	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+
+	MDRV_SOUND_REPLACE("aysnd", YM2203, 3000000)
+	MDRV_SOUND_CONFIG(cowrace_ym2203_interface)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+MACHINE_DRIVER_END
 
 ROM_START( kingdrby )
 	ROM_REGION( 0x3000, "master", 0 )
@@ -763,4 +1078,76 @@ ROM_START( kingdrby )
 	ROM_LOAD( "147.f8",  0x000, 0x200, CRC(9245c4af) SHA1(813d628ac55913542a4deabe6ac0a4f9db09cf19) )
 ROM_END
 
-GAME( 1981, kingdrby,  0,      kingdrby,   kingdrby,   0,       ROT0,   "Tazmi",    "King Derby",   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS| GAME_IMPERFECT_SOUND )
+// might be closer to the original than the cowrace bootleg even if it shares some roms with cowrace?
+ROM_START( kingdrbb ) // has 'Made in Taiwan' on the PCB.
+	ROM_REGION( 0x8000, "master", 0 )
+	ROM_LOAD( "kingdrbb_u3.bin", 0x0000, 0x4000, CRC(90a14686) SHA1(ce2ee8c0cbb4212aa8e71d7145b1eefb4f282590) )
+	ROM_CONTINUE(0x0000,0x4000)
+
+	ROM_REGION( 0x4000, "slave", 0 ) // slave z80?
+	ROM_LOAD( "kingdrbb_u30.bin", 0x0000, 0x4000, CRC(98717214) SHA1(70ca61c15f66642b85dd248b24638a95a8254bbb) )
+	ROM_CONTINUE(0x0000,0x4000)
+
+	ROM_REGION( 0x4000, "soundcpu", 0 ) // audio z80?
+	ROM_LOAD( "kingdrbb_u161.bin", 0x0000, 0x4000, CRC(7d84b577) SHA1(d230b49df19bf68793a561f4c07413d22fa8ff28) )
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "kingdrbb_u94.bin", 0x0000, 0x4000, CRC(ba59e4b8) SHA1(425dc4055d5ea400eeef33e26fcc73fa726f414d) )
+	ROM_LOAD( "kingdrbb_u95.bin", 0x4000, 0x4000, CRC(fa97deb6) SHA1(1630281f0cac3fe3bfaf924e1c6316107200eb4a) )
+
+	ROM_REGION( 0x4000, "gfx2", 0 )
+	ROM_LOAD( "kingdrbb_u39.bin", 0x0000, 0x2000, CRC(4a34cef0) SHA1(b54f1f2ccd3dd773e47bfb044c5aec15c11426c2) )
+	ROM_LOAD( "kingdrbb_u140.bin", 0x2000, 0x2000, CRC(7e24b674) SHA1(c774efeb8e4e833e73c29007d5294c93df1abef4) )
+
+	ROM_REGION( 0x4000, "raw_prom", 0 )
+	ROM_LOAD( "kingdrbb_u1.bin", 0x0000, 0x4000, CRC(97931952) SHA1(a0ef3be105f2ed7f744c73e92c583d25bb322e6a) ) // palette but in a normal rom?
+
+	ROM_REGION( 0x200, "proms", ROMREGION_ERASE00 ) // address shuffled, decoded inside PALETTE_INIT
+//  ROM_COPY( "raw_prom", 0x1000, 0x000, 0x200 )
+//  ROM_COPY( "raw_prom", 0x3000, 0x200, 0x200 ) //identical to 0x1000 bank
+
+	ROM_REGION( 0x4000, "pals", 0 ) // all read protected
+	ROM_LOAD( "palce16v.u101.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u113.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u160.bin", 0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u2.bin",   0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u29.bin",  0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u4.bin",   0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	ROM_LOAD( "palce16v.u75.bin",  0x0000, 0x117, CRC(c89d2f52) SHA1(f9d52d9c42ef95b7b85bbf6d09888ebdeac11fd3) )
+	// jedutil just complains these are invalid..
+	ROM_LOAD( "palce16v8q.u53.jed", 0x0000, 0x892, CRC(123d539a) SHA1(cccf0cbae3175b091a998eedf4aa44a55b679400) )
+	ROM_LOAD( "palce16v8q.u77.jed", 0x0000, 0x892, CRC(b7956421) SHA1(57db38b571adf6cf49d7c221cd65a068a9a3383a) )
+	ROM_LOAD( "palce16v8q.u87.jed", 0x0000, 0x892, CRC(b7956421) SHA1(57db38b571adf6cf49d7c221cd65a068a9a3383a) )
+ROM_END
+
+ROM_START( cowrace )
+	ROM_REGION( 0x8000, "master", 0 )
+	ROM_LOAD( "u3.bin", 0x0000, 0x8000, CRC(c05c3bd3) SHA1(b7199a069ab45edd25e021589b79105cdfa5511a) )
+
+	ROM_REGION( 0x8000, "slave", ROMREGION_ERASEFF ) // slave z80?
+	/* I've tried the kingdrbb slave CPU rom ... game works until the auto race in attract mode. We need to locate and dump this on the PCB. */
+	ROM_LOAD( "slave.bin", 0x0000, 0x8000, NO_DUMP )
+	ROM_FILL( 0x0000, 0x8000, 0xff ) // <- to remove once that the above is dumped
+
+	ROM_REGION( 0x2000, "soundcpu", 0 )
+	ROM_LOAD( "u164.bin", 0x0000, 0x2000, CRC(9affa1c8) SHA1(bfc07693e8f749cbf20ab8cda33975b66f567962) )
+
+	ROM_REGION( 0x10000, "gfx1", 0 )
+	ROM_LOAD( "u94.bin", 0x8000, 0x8000, CRC(945dc115) SHA1(bdd145234e6361c42ed20e8ca4cac64f07332748) )
+	ROM_LOAD( "u95.bin", 0x0000, 0x8000, CRC(fc1fc006) SHA1(326a67c1ea0f487ecc8b7aef2d90124a01e6dee3) )
+
+	ROM_REGION( 0x4000, "gfx2", 0 )
+	ROM_LOAD( "u139.bin", 0x2000, 0x2000, CRC(b746bb2f) SHA1(5f5f48752689079ed65fe7bb4a69512ada5db05d) )
+	ROM_LOAD( "u140.bin", 0x0000, 0x2000, CRC(7e24b674) SHA1(c774efeb8e4e833e73c29007d5294c93df1abef4) )
+
+	ROM_REGION( 0x40000, "oki", 0 )
+	ROM_LOAD( "u4.bin", 0x00000, 0x20000, CRC(f92a3ab5) SHA1(fc164492793597eadb8a50154410936edb74fa23) )
+
+	ROM_REGION( 0x20000, "proms", 0 )
+	ROM_LOAD( "u149.bin", 0x00000, 0x200, CRC(f41a5eca) SHA1(797f2d95d4e00f96e5a99604935810e1add59689) )
+ROM_END
+
+
+GAME( 1981, kingdrby,  0,             kingdrby,   kingdrby,   0,       ROT0,   "Tazmi",    "King Derby (1981)",   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_COLORS| GAME_IMPERFECT_SOUND )
+GAME( 1986, kingdrbb,  kingdrby,      kingdrbb,   kingdrbb,   0,       ROT0,   "bootleg",  "King Derby (1986 Taiwan bootleg)",   GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS )
+GAME( 2000, cowrace,   kingdrby,      cowrace,    kingdrbb,   0,       ROT0,   "bootleg",  "Cow Race (1986 King Derby hack)", GAME_NOT_WORKING | GAME_WRONG_COLORS )

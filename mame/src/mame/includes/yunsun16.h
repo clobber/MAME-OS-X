@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _yunsun16_state yunsun16_state;
-struct _yunsun16_state
+class yunsun16_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, yunsun16_state(machine)); }
+
+	yunsun16_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    vram_0;
 	UINT16 *    vram_1;
@@ -22,7 +26,7 @@ struct _yunsun16_state
 	int         sprites_scrolldx, sprites_scrolldy;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

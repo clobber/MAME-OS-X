@@ -83,7 +83,7 @@ Notes:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/konami1.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/sn76496.h"
@@ -280,7 +280,7 @@ static MACHINE_DRIVER_START( jailbrek )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("snsnd", SN76489, MASTER_CLOCK/12)
+	MDRV_SOUND_ADD("snsnd", SN76489A, MASTER_CLOCK/12)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("vlm", VLM5030, VOICE_CLOCK)

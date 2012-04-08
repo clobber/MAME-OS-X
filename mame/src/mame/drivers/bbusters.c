@@ -197,7 +197,7 @@ the entire size of the screen.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2608intf.h"
@@ -634,7 +634,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq( const device_config *device, int irq )
+static void sound_irq( running_device *device, int irq )
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }

@@ -104,10 +104,8 @@ has twice the steps, happening twice as fast.
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
-#include "cpuexec.h"
 #include "ay8910.h"
 
 /*************************************
@@ -166,7 +164,7 @@ struct _ay_ym_param
 typedef struct _ay8910_context ay8910_context;
 struct _ay8910_context
 {
-	const device_config *device;
+	running_device *device;
 	int streams;
 	int ready;
 	sound_stream *channel;
@@ -199,7 +197,7 @@ struct _ay8910_context
 	devcb_resolved_write8 portBwrite;
 };
 
-INLINE ay8910_context *get_safe_token(const device_config *device)
+INLINE ay8910_context *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -348,7 +346,7 @@ INLINE void build_3D_table(double rl, const ay_ym_param *par, const ay_ym_param 
 	double min = 10.0,  max = 0.0;
 	double *temp;
 
-	temp = (double *)malloc(8*32*32*32*sizeof(*temp));
+	temp = global_alloc_array(double, 8*32*32*32);
 
 	for (e=0; e < 8; e++)
 		for (j1=0; j1 < 32; j1++)
@@ -395,7 +393,7 @@ INLINE void build_3D_table(double rl, const ay_ym_param *par, const ay_ym_param 
 
 	/* for (e=0;e<16;e++) printf("%d %d\n",e<<10, tab[e<<10]); */
 
-	free(temp);
+	global_free(temp);
 }
 
 INLINE void build_single_table(double rl, const ay_ym_param *par, int normalize, INT32 *tab, int zero_is_off)
@@ -529,11 +527,11 @@ static void ay8910_write_reg(ay8910_context *psg, int r, int v)
 				if (psg->portAwrite.write)
 					devcb_call_write8(&psg->portAwrite, 0, psg->regs[AY_PORTA]);
 				else
-					logerror("warning - write %02x to 8910 '%s' Port A\n",psg->regs[AY_PORTA],psg->device->tag);
+					logerror("warning - write %02x to 8910 '%s' Port A\n",psg->regs[AY_PORTA],psg->device->tag());
 			}
 			else
 			{
-				logerror("warning: write to 8910 '%s' Port A set as input - ignored\n",psg->device->tag);
+				logerror("warning: write to 8910 '%s' Port A set as input - ignored\n",psg->device->tag());
 			}
 			break;
 		case AY_PORTB:
@@ -542,11 +540,11 @@ static void ay8910_write_reg(ay8910_context *psg, int r, int v)
 				if (psg->portBwrite.write)
 					devcb_call_write8(&psg->portBwrite, 0, psg->regs[AY_PORTB]);
 				else
-					logerror("warning - write %02x to 8910 '%s' Port B\n",psg->regs[AY_PORTB],psg->device->tag);
+					logerror("warning - write %02x to 8910 '%s' Port B\n",psg->regs[AY_PORTB],psg->device->tag());
 			}
 			else
 			{
-				logerror("warning: write to 8910 '%s' Port B set as input - ignored\n",psg->device->tag);
+				logerror("warning: write to 8910 '%s' Port B set as input - ignored\n",psg->device->tag());
 			}
 			break;
 	}
@@ -707,7 +705,7 @@ static void build_mixer_table(ay8910_context *psg)
 	build_3D_table(psg->intf->res_load[0], psg->par, psg->par_env, normalize, 3, psg->zero_is_off, psg->vol3d_table);
 }
 
-static void ay8910_statesave(ay8910_context *psg, const device_config *device)
+static void ay8910_statesave(ay8910_context *psg, running_device *device)
 {
 	state_save_register_device_item(device, 0, psg->register_latch);
 	state_save_register_device_item_array(device, 0, psg->regs);
@@ -738,7 +736,7 @@ static void ay8910_statesave(ay8910_context *psg, const device_config *device)
  *
  *************************************/
 
-void *ay8910_start_ym(void *infoptr, sound_type chip_type, const device_config *device, int clock, const ay8910_interface *intf)
+void *ay8910_start_ym(void *infoptr, sound_type chip_type, running_device *device, int clock, const ay8910_interface *intf)
 {
 	ay8910_context *info = (ay8910_context *)infoptr;
 
@@ -830,7 +828,7 @@ void ay8910_reset_ym(void *chip)
 #endif
 }
 
-void ay8910_set_volume(const device_config *device,int channel,int volume)
+void ay8910_set_volume(running_device *device,int channel,int volume)
 {
 	ay8910_context *psg = get_safe_token(device);
 	int ch;
@@ -883,7 +881,7 @@ int ay8910_read_ym(void *chip)
 	{
 	case AY_PORTA:
 		if ((psg->regs[AY_ENABLE] & 0x40) != 0)
-			logerror("warning: read from 8910 '%s' Port A set as output\n",psg->device->tag);
+			logerror("warning: read from 8910 '%s' Port A set as output\n",psg->device->tag());
 		/*
            even if the port is set as output, we still need to return the external
            data. Some games, like kidniki, need this to work.
@@ -891,15 +889,15 @@ int ay8910_read_ym(void *chip)
 		if (psg->portAread.read)
 			psg->regs[AY_PORTA] = devcb_call_read8(&psg->portAread, 0);
 		else
-			logerror("%s: warning - read 8910 '%s' Port A\n",cpuexec_describe_context(psg->device->machine),psg->device->tag);
+			logerror("%s: warning - read 8910 '%s' Port A\n",cpuexec_describe_context(psg->device->machine),psg->device->tag());
 		break;
 	case AY_PORTB:
 		if ((psg->regs[AY_ENABLE] & 0x80) != 0)
-			logerror("warning: read from 8910 '%s' Port B set as output\n",psg->device->tag);
+			logerror("warning: read from 8910 '%s' Port B set as output\n",psg->device->tag());
 		if (psg->portBread.read)
 			psg->regs[AY_PORTB] = devcb_call_read8(&psg->portBread, 0);
 		else
-			logerror("%s: warning - read 8910 '%s' Port B\n",cpuexec_describe_context(psg->device->machine),psg->device->tag);
+			logerror("%s: warning - read 8910 '%s' Port B\n",cpuexec_describe_context(psg->device->machine),psg->device->tag());
 		break;
 	}
 	return psg->regs[r];
@@ -919,7 +917,7 @@ static DEVICE_START( ay8910 )
 		AY8910_DEFAULT_LOADS,
 		DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL
 	};
-	const ay8910_interface *intf = (device->static_config ? (const ay8910_interface *)device->static_config : &generic_ay8910);
+	const ay8910_interface *intf = (device->baseconfig().static_config ? (const ay8910_interface *)device->baseconfig().static_config : &generic_ay8910);
 	ay8910_start_ym(get_safe_token(device), SOUND_AY8910, device, device->clock, intf);
 }
 
@@ -931,7 +929,7 @@ static DEVICE_START( ym2149 )
 		AY8910_DEFAULT_LOADS,
 		DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL
 	};
-	const ay8910_interface *intf = (device->static_config ? (const ay8910_interface *)device->static_config : &generic_ay8910);
+	const ay8910_interface *intf = (device->baseconfig().static_config ? (const ay8910_interface *)device->baseconfig().static_config : &generic_ay8910);
 	ay8910_start_ym(get_safe_token(device), SOUND_YM2149, device, device->clock, intf);
 }
 

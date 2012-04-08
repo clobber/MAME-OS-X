@@ -15,9 +15,13 @@ DEVICE_GET_INFO( decocass_tape );
 
 
 
-typedef struct _decocass_state decocass_state;
-struct _decocass_state
+class decocass_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, decocass_state(machine)); }
+
+	decocass_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *   rambase;
 	UINT8 *   charram;
@@ -98,10 +102,10 @@ struct _decocass_state
 	INT32     type5_latch;		/* latched enable PROM (1100xxxx written to E5x1) */
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *mcu;
-	const device_config *cassette;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *mcu;
+	running_device *cassette;
 };
 
 
@@ -149,7 +153,7 @@ extern MACHINE_RESET( cbnj );
 extern MACHINE_RESET( cburnrub );
 extern MACHINE_RESET( cbtime );
 extern MACHINE_RESET( cgraplop );
-extern MACHINE_RESET( cgraplp2 );
+extern MACHINE_RESET( cgraplop2 );
 extern MACHINE_RESET( clapapa );
 extern MACHINE_RESET( cfghtice );
 extern MACHINE_RESET( cprobowl );

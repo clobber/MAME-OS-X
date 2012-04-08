@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "debugger.h"
 #include "midwayic.h"
 #include "machine/idectrl.h"
@@ -69,7 +69,7 @@ struct ioasic_state
 	UINT32	reg[16];
 	UINT8	has_dcs;
 	UINT8	has_cage;
-	const device_config *dcs_cpu;
+	running_device *dcs_cpu;
 	UINT8	shuffle_type;
 	UINT8	shuffle_active;
 	const UINT8 *	shuffle_map;
@@ -558,8 +558,8 @@ enum
 	IOASIC_INTCTL		/* f: interrupt control */
 };
 
-static UINT16 ioasic_fifo_r(const device_config *device);
-static UINT16 ioasic_fifo_status_r(const device_config *device);
+static UINT16 ioasic_fifo_r(running_device *device);
+static UINT16 ioasic_fifo_status_r(running_device *device);
 static void ioasic_input_empty(running_machine *machine, int state);
 static void ioasic_output_full(running_machine *machine, int state);
 static void update_ioasic_irq(running_machine *machine);
@@ -600,13 +600,13 @@ void midway_ioasic_init(running_machine *machine, int shuffle, int upper, int ye
 	ioasic_register_state(machine);
 
 	/* do we have a DCS2 sound chip connected? (most likely) */
-	ioasic.has_dcs = (cputag_get_cpu(machine, "dcs2") != NULL || cputag_get_cpu(machine, "dsio") != NULL || cputag_get_cpu(machine, "denver") != NULL);
-	ioasic.has_cage = (cputag_get_cpu(machine, "cage") != NULL);
-	ioasic.dcs_cpu = cputag_get_cpu(machine, "dcs2");
+	ioasic.has_dcs = (devtag_get_device(machine, "dcs2") != NULL || devtag_get_device(machine, "dsio") != NULL || devtag_get_device(machine, "denver") != NULL);
+	ioasic.has_cage = (devtag_get_device(machine, "cage") != NULL);
+	ioasic.dcs_cpu = devtag_get_device(machine, "dcs2");
 	if (ioasic.dcs_cpu == NULL)
-		ioasic.dcs_cpu = cputag_get_cpu(machine, "dsio");
+		ioasic.dcs_cpu = devtag_get_device(machine, "dsio");
 	if (ioasic.dcs_cpu == NULL)
-		ioasic.dcs_cpu = cputag_get_cpu(machine, "denver");
+		ioasic.dcs_cpu = devtag_get_device(machine, "denver");
 	ioasic.shuffle_type = shuffle;
 	ioasic.shuffle_map = &shuffle_maps[shuffle][0];
 	ioasic.auto_ack = 0;
@@ -724,7 +724,7 @@ static void ioasic_output_full(running_machine *machine, int state)
  *
  *************************************/
 
-static UINT16 ioasic_fifo_r(const device_config *device)
+static UINT16 ioasic_fifo_r(running_device *device)
 {
 	UINT16 result = 0;
 
@@ -759,7 +759,7 @@ static UINT16 ioasic_fifo_r(const device_config *device)
 }
 
 
-static UINT16 ioasic_fifo_status_r(const device_config *device)
+static UINT16 ioasic_fifo_status_r(running_device *device)
 {
 	UINT16 result = 0;
 

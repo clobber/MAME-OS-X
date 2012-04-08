@@ -142,7 +142,7 @@ REF. 970429
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "includes/gaelco3d.h"
 #include "cpu/tms32031/tms32031.h"
@@ -164,14 +164,14 @@ static offs_t tms_offset_xor;
 static UINT8 analog_ports[4];
 static UINT8 framenum;
 
-static const device_config *adsp_autobuffer_timer;
+static running_device *adsp_autobuffer_timer;
 static UINT16 *adsp_control_regs;
 static UINT16 *adsp_fastram_base;
 static UINT8 adsp_ireg;
 static offs_t adsp_ireg_base, adsp_incs, adsp_size;
-static const device_config *dmadac[SOUND_CHANNELS];
+static running_device *dmadac[SOUND_CHANNELS];
 
-static void adsp_tx_callback(const device_config *device, int port, INT32 data);
+static void adsp_tx_callback(running_device *device, int port, INT32 data);
 
 
 /*************************************
@@ -429,7 +429,7 @@ static WRITE32_HANDLER( tms_m68k_ram_w )
 }
 
 
-static void iack_w(const device_config *device, UINT8 state, offs_t addr)
+static void iack_w(running_device *device, UINT8 state, offs_t addr)
 {
 	if (LOG)
 		logerror("iack_w(%d) - %06X\n", state, addr);
@@ -572,7 +572,7 @@ static WRITE16_HANDLER( adsp_rombank_w )
 static TIMER_DEVICE_CALLBACK( adsp_autobuffer_irq )
 {
 	/* get the index register */
-	int reg = cpu_get_reg(cputag_get_cpu(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg);
+	int reg = cpu_get_reg(devtag_get_device(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg);
 
 	/* copy the current data into the buffer */
 // logerror("ADSP buffer: I%d=%04X incs=%04X size=%04X\n", adsp_ireg, reg, adsp_incs, adsp_size);
@@ -589,15 +589,15 @@ static TIMER_DEVICE_CALLBACK( adsp_autobuffer_irq )
 		reg = adsp_ireg_base;
 
 		/* generate the (internal, thats why the pulse) irq */
-		generic_pulse_irq_line(cputag_get_cpu(timer->machine, "adsp"), ADSP2105_IRQ1);
+		generic_pulse_irq_line(devtag_get_device(timer->machine, "adsp"), ADSP2105_IRQ1);
 	}
 
 	/* store it */
-	cpu_set_reg(cputag_get_cpu(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg, reg);
+	cpu_set_reg(devtag_get_device(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg, reg);
 }
 
 
-static void adsp_tx_callback(const device_config *device, int port, INT32 data)
+static void adsp_tx_callback(running_device *device, int port, INT32 data)
 {
 	/* check if it's for SPORT1 */
 	if (port != 1)

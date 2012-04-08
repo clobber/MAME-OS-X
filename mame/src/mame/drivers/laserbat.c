@@ -16,7 +16,7 @@ TODO:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/s2650/s2650.h"
 #include "machine/6821pia.h"
@@ -599,7 +599,7 @@ static WRITE_LINE_DEVICE_HANDLER( zaccaria_irq0b )
 static READ8_DEVICE_HANDLER( zaccaria_port0a_r )
 {
 	laserbat_state *state = (laserbat_state *)device->machine->driver_data;
-	const device_config *ay = (state->active_8910 == 0) ? state->ay1 : state->ay2;
+	running_device *ay = (state->active_8910 == 0) ? state->ay1 : state->ay2;
 	return ay8910_r(ay, 0);
 }
 
@@ -669,7 +669,7 @@ static const ay8910_interface ay8910_config =
 
 static INTERRUPT_GEN( laserbat_interrupt )
 {
-	generic_pulse_irq_line_and_vector(device, 0, 0x0a);
+	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0x0a);
 }
 
 static INTERRUPT_GEN( zaccaria_cb1_toggle )
@@ -1031,7 +1031,7 @@ ROM_START( catnmousa )
 	ROM_LOAD( "catnmous.14l", 0x0000, 0x0800, CRC(af79179a) SHA1(de61af7d02c93be326a33ee51572e3da7a25dab0) )
 
 	ROM_REGION( 0x0100, "plds", 0 )
-	ROM_LOAD( "82s100.13m", 0x0000, 0x00f5, NO_DUMP )
+	ROM_LOAD( "catnmousa_82s100.13m", 0x0000, 0x00f5, NO_DUMP )
 ROM_END
 
 

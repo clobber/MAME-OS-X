@@ -4,9 +4,9 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "segaic16.h"
-#include "includes/system16.h"
+#include "emu.h"
+#include "video/segaic16.h"
+#include "includes/segas16.h"
 
 
 

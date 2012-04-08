@@ -66,10 +66,11 @@
 #ifndef __OSDEPEND_H__
 #define __OSDEPEND_H__
 
-#include "mamecore.h"
+#include "emucore.h"
 #include "osdcore.h"
-#include "inptport.h"
-#include "timer.h"
+
+class input_type_desc;
+class running_device;
 
 
 /*-----------------------------------------------------------------------------
@@ -124,8 +125,7 @@
 -----------------------------------------------------------------------------*/
 void osd_init(running_machine *machine);
 
-
-void osd_wait_for_debugger(const device_config *device, int firststop);
+void osd_wait_for_debugger(running_device *device, int firststop);
 
 
 

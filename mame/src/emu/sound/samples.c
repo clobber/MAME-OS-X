@@ -1,4 +1,5 @@
-#include "driver.h"
+#include "emu.h"
+#include "emuopts.h"
 #include "streams.h"
 #include "samples.h"
 
@@ -22,14 +23,14 @@ struct _sample_channel
 typedef struct _samples_info samples_info;
 struct _samples_info
 {
-	const device_config *device;
+	running_device *device;
 	int			numchannels;	/* how many channels */
 	sample_channel *channel;/* array of channels */
 	loaded_samples *samples;/* array of samples */
 };
 
 
-INLINE samples_info *get_safe_token(const device_config *device)
+INLINE samples_info *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -210,23 +211,20 @@ loaded_samples *readsamples(running_machine *machine, const char *const *samplen
 		{
 			file_error filerr;
 			mame_file *f;
-			astring *fname;
 
-			fname = astring_assemble_3(astring_alloc(), basename, PATH_SEPARATOR, samplenames[i+skipfirst]);
-			filerr = mame_fopen(SEARCHPATH_SAMPLE, astring_c(fname), OPEN_FLAG_READ, &f);
+			astring fname(basename, PATH_SEPARATOR, samplenames[i+skipfirst]);
+			filerr = mame_fopen(SEARCHPATH_SAMPLE, fname, OPEN_FLAG_READ, &f);
 
 			if (filerr != FILERR_NONE && skipfirst)
 			{
-				astring_assemble_3(fname, samplenames[0] + 1, PATH_SEPARATOR, samplenames[i+skipfirst]);
-				filerr = mame_fopen(SEARCHPATH_SAMPLE, astring_c(fname), OPEN_FLAG_READ, &f);
+				astring fname(samplenames[0] + 1, PATH_SEPARATOR, samplenames[i+skipfirst]);
+				filerr = mame_fopen(SEARCHPATH_SAMPLE, fname, OPEN_FLAG_READ, &f);
 			}
 			if (filerr == FILERR_NONE)
 			{
 				read_wav_sample(machine, f, &samples->sample[i]);
 				mame_fclose(f);
 			}
-
-			astring_free(fname);
 		}
 
 	return samples;
@@ -238,7 +236,7 @@ loaded_samples *readsamples(running_machine *machine, const char *const *samplen
 /* Start one of the samples loaded from disk. Note: channel must be in the range */
 /* 0 .. Samplesinterface->channels-1. It is NOT the discrete channel to pass to */
 /* mixer_play_sample() */
-void sample_start(const device_config *device,int channel,int samplenum,int loop)
+void sample_start(running_device *device,int channel,int samplenum,int loop)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -269,7 +267,7 @@ void sample_start(const device_config *device,int channel,int samplenum,int loop
 }
 
 
-void sample_start_raw(const device_config *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop)
+void sample_start_raw(running_device *device,int channel,const INT16 *sampledata,int samples,int frequency,int loop)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -293,7 +291,7 @@ void sample_start_raw(const device_config *device,int channel,const INT16 *sampl
 }
 
 
-void sample_set_freq(const device_config *device,int channel,int freq)
+void sample_set_freq(running_device *device,int channel,int freq)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -309,7 +307,7 @@ void sample_set_freq(const device_config *device,int channel,int freq)
 }
 
 
-void sample_set_volume(const device_config *device,int channel,float volume)
+void sample_set_volume(running_device *device,int channel,float volume)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -322,7 +320,7 @@ void sample_set_volume(const device_config *device,int channel,float volume)
 }
 
 
-void sample_set_pause(const device_config *device,int channel,int pause)
+void sample_set_pause(running_device *device,int channel,int pause)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -338,7 +336,7 @@ void sample_set_pause(const device_config *device,int channel,int pause)
 }
 
 
-void sample_stop(const device_config *device,int channel)
+void sample_stop(running_device *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -354,7 +352,7 @@ void sample_stop(const device_config *device,int channel)
 }
 
 
-int sample_get_base_freq(const device_config *device,int channel)
+int sample_get_base_freq(running_device *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -369,7 +367,7 @@ int sample_get_base_freq(const device_config *device,int channel)
 }
 
 
-int sample_playing(const device_config *device,int channel)
+int sample_playing(running_device *device,int channel)
 {
     samples_info *info = get_safe_token(device);
     sample_channel *chan;
@@ -474,7 +472,7 @@ static STATE_POSTLOAD( samples_postload )
 static DEVICE_START( samples )
 {
 	int i;
-	const samples_interface *intf = (const samples_interface *)device->static_config;
+	const samples_interface *intf = (const samples_interface *)device->baseconfig().static_config;
 	samples_info *info = get_safe_token(device);
 
 	info->device = device;

@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _esd16_state esd16_state;
-struct _esd16_state
+class esd16_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, esd16_state(machine)); }
+
+	esd16_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *       vram_0;
 	UINT16 *       vram_1;
@@ -25,8 +29,8 @@ struct _esd16_state
 	int           tilemap0_color;
 
 	/* devices */
-	const device_config *audio_cpu;
-	const device_config *eeprom;
+	running_device *audio_cpu;
+	running_device *eeprom;
 };
 
 

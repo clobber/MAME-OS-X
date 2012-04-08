@@ -26,14 +26,6 @@ looks like regs @460000 are used,  pairs at N, and N+8, so
 460004, 46000c
 460006, 46000e
 
-*/
-
-/*
-
-TWO MINUTE DRILL - Taito 1993?
-
-No idea what this game is... I do not have the pinout
-See pic for more details
 
  Brief hardware overview:
  ------------------------
@@ -48,18 +40,22 @@ See pic for more details
                   - TC0510NI0
 
 DAC               -26.6860Mhz
-                        -32.0000Mhz
+                  -32.0000Mhz
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2610intf.h"
 
 
-typedef struct __2mindril_state _2mindril_state;
-struct __2mindril_state
+class _2mindril_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, _2mindril_state(machine)); }
+
+	_2mindril_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *      map1ram;
 	UINT16 *      map2ram;
@@ -75,7 +71,7 @@ struct __2mindril_state
 	UINT16        defender_sensor, shutter_sensor;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 
@@ -417,7 +413,7 @@ static INTERRUPT_GEN( drill_interrupt )
 }
 
 /* WRONG,it does something with 60000c & 700002,likely to be called when the player throws the ball.*/
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 //  _2mindril_state *state = (_2mindril_state *)machine->driver_data;
 //  cpu_set_input_line(state->maincpu, 5, irq ? ASSERT_LINE : CLEAR_LINE);

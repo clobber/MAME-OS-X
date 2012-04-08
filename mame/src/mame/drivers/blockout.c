@@ -64,7 +64,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
@@ -193,7 +193,7 @@ static INPUT_PORTS_START( blockout )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_DIPLOCATION("SW2:8") /* Listed as "Unused" */
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( blckoutj )
+static INPUT_PORTS_START( blockoutj )
 	PORT_INCLUDE( blockout )
 
 	PORT_MODIFY("P1")
@@ -235,7 +235,7 @@ INPUT_PORTS_END
  *************************************/
 
 /* handler called by the 2151 emulator when the internal timers cause an IRQ */
-static void blockout_irq_handler(const device_config *device, int irq)
+static void blockout_irq_handler(running_device *device, int irq)
 {
 	blockout_state *state = (blockout_state *)device->machine->driver_data;
 	cpu_set_input_line_and_vector(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
@@ -405,6 +405,6 @@ ROM_END
 
 GAME( 1989, blockout, 0,        blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1989, blockout2,blockout, blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1989, blockoutj,blockout, blockout, blckoutj, 0, ROT0, "Technos Japan + California Dreams", "Block Out (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, blockoutj,blockout, blockout, blockoutj,0, ROT0, "Technos Japan + California Dreams", "Block Out (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1991, agress,   0,        blockout, agress,   0, ROT0, "Palco", "Agress", GAME_SUPPORTS_SAVE )
 GAME( 2003, agressb,  agress,   blockout, agress,   0, ROT0, "Palco", "Agress (English bootleg)", GAME_SUPPORTS_SAVE )

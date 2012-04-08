@@ -224,7 +224,7 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mips/psx.h"
 #include "cpu/m68000/m68000.h"
 #include "includes/psx.h"
@@ -668,7 +668,7 @@ ADDRESS_MAP_END
 
 /* SPU board */
 
-static void ide_interrupt(const device_config *device, int state)
+static void ide_interrupt(running_device *device, int state)
 {
 	if ((state) && (twinkle_spu_ctrl & 0x0400))
 	{
@@ -890,7 +890,7 @@ static MACHINE_RESET( twinkle )
 	cdda_set_cdrom(devtag_get_device(machine, "cdda"), am53cf96_get_device(SCSI_ID_4));
 }
 
-static void spu_irq(const device_config *device, UINT32 data)
+static void spu_irq(running_device *device, UINT32 data)
 {
 	psx_irq_set(device->machine, data);
 }

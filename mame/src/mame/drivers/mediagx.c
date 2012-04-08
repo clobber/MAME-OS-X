@@ -63,7 +63,7 @@
     ST ULN2064B (DIP16)
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i386/i386.h"
 #include "devconv.h"
 #include "machine/8237dma.h"
@@ -117,14 +117,14 @@ static UINT8 ad1847_regs[16];
 static UINT32 ad1847_sample_counter = 0;
 static UINT32 ad1847_sample_rate;
 
-static const device_config *dmadac[2];
+static running_device *dmadac[2];
 
 static struct {
-	const device_config	*pit8254;
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
-	const device_config	*dma8237_1;
-	const device_config	*dma8237_2;
+	running_device	*pit8254;
+	running_device	*pic8259_1;
+	running_device	*pic8259_2;
+	running_device	*dma8237_1;
+	running_device	*dma8237_2;
 } mediagx_devices;
 
 
@@ -157,7 +157,7 @@ static struct {
 #define DC_CFIFO_DIAG			0x7c/4
 
 
-static void ide_interrupt(const device_config *device, int state);
+static void ide_interrupt(running_device *device, int state);
 
 
 
@@ -614,7 +614,7 @@ static WRITE32_HANDLER( parallel_port_w )
 	}
 }
 
-static UINT32 cx5510_pci_r(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 mem_mask)
+static UINT32 cx5510_pci_r(running_device *busdevice, running_device *device, int function, int reg, UINT32 mem_mask)
 {
 //  mame_printf_debug("CX5510: PCI read %d, %02X, %08X\n", function, reg, mem_mask);
 
@@ -626,7 +626,7 @@ static UINT32 cx5510_pci_r(const device_config *busdevice, const device_config *
 	return cx5510_regs[reg/4];
 }
 
-static void cx5510_pci_w(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 data, UINT32 mem_mask)
+static void cx5510_pci_w(running_device *busdevice, running_device *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
 //  mame_printf_debug("CX5510: PCI write %d, %02X, %08X, %08X\n", function, reg, data, mem_mask);
 	COMBINE_DATA(cx5510_regs + (reg/4));
@@ -801,7 +801,7 @@ static WRITE8_HANDLER( pc_dma_write_byte )
 	memory_write_byte(space, page_offset + offset, data);
 }
 
-static void set_dma_channel(const device_config *device, int channel, int state)
+static void set_dma_channel(running_device *device, int channel, int state)
 {
 	if (!state) dma_channel = channel;
 }
@@ -973,10 +973,10 @@ static MACHINE_RESET(mediagx)
 {
 	UINT8 *rom = memory_region(machine, "bios");
 
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
 
 	memcpy(bios_ram, rom, 0x40000);
-	device_reset(cputag_get_cpu(machine, "maincpu"));
+	machine->device("maincpu")->reset();
 
 	timer_device_adjust_oneshot(devtag_get_device(machine, "sound_timer"), ATTOTIME_IN_MSEC(10), 0);
 
@@ -992,25 +992,19 @@ static MACHINE_RESET(mediagx)
  *
  *************************************************************/
 
-static PIC8259_SET_INT_LINE( mediagx_pic8259_1_set_int_line )
+static WRITE_LINE_DEVICE_HANDLER( mediagx_pic8259_1_set_int_line )
 {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-
-static PIC8259_SET_INT_LINE( mediagx_pic8259_2_set_int_line )
+static const struct pic8259_interface mediagx_pic8259_1_config =
 {
-	pic8259_set_irq_line( mediagx_devices.pic8259_1, 2, interrupt);
-}
-
-
-static const struct pic8259_interface mediagx_pic8259_1_config = {
-	mediagx_pic8259_1_set_int_line
+	DEVCB_LINE(mediagx_pic8259_1_set_int_line)
 };
 
-
-static const struct pic8259_interface mediagx_pic8259_2_config = {
-	mediagx_pic8259_2_set_int_line
+static const struct pic8259_interface mediagx_pic8259_2_config =
+{
+	DEVCB_DEVICE_LINE("pic8259_master", pic8259_ir2_w)
 };
 
 
@@ -1020,24 +1014,21 @@ static const struct pic8259_interface mediagx_pic8259_2_config = {
  *
  *************************************************************/
 
-static PIT8253_OUTPUT_CHANGED( pc_timer0_w )
-{
-	pic8259_set_irq_line( mediagx_devices.pic8259_1, 0, state);
-}
-
-
 static const struct pit8253_config mediagx_pit8254_config =
 {
 	{
 		{
 			4772720/4,				/* heartbeat IRQ */
-			pc_timer0_w
+			DEVCB_NULL,
+			DEVCB_DEVICE_LINE("pic8259_master", pic8259_ir0_w)
 		}, {
 			4772720/4,				/* dram refresh */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}, {
 			4772720/4,				/* pio port c pin 4, and speaker polling enough */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}
 	}
 };
@@ -1102,12 +1093,12 @@ static void set_gate_a20(running_machine *machine, int a20)
 
 static void keyboard_interrupt(running_machine *machine, int state)
 {
-	pic8259_set_irq_line(mediagx_devices.pic8259_1, 1, state);
+	pic8259_ir1_w(mediagx_devices.pic8259_1, state);
 }
 
-static void ide_interrupt(const device_config *device, int state)
+static void ide_interrupt(running_device *device, int state)
 {
-	pic8259_set_irq_line(mediagx_devices.pic8259_2, 6, state);
+	pic8259_ir6_w(mediagx_devices.pic8259_2, state);
 }
 
 static int mediagx_get_out2(running_machine *machine)
@@ -1122,7 +1113,7 @@ static const struct kbdc8042_interface at8042 =
 
 static void mediagx_set_keyb_int(running_machine *machine, int state)
 {
-	pic8259_set_irq_line(mediagx_devices.pic8259_1, 1, state);
+	pic8259_ir1_w(mediagx_devices.pic8259_1, state);
 }
 
 static void init_mediagx(running_machine *machine)

@@ -6,9 +6,13 @@
 
 #include "machine/atarigen.h"
 
-typedef struct _cyberbal_state cyberbal_state;
-struct _cyberbal_state
+class cyberbal_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cyberbal_state(machine)); }
+
+	cyberbal_state(running_machine &machine) { }
+
 	atarigen_state	atarigen;
 
 	UINT16 *		paletteram_0;
@@ -55,7 +59,7 @@ WRITE16_HANDLER( cyberbal_paletteram_0_w );
 WRITE16_HANDLER( cyberbal_paletteram_1_w );
 
 VIDEO_START( cyberbal );
-VIDEO_START( cyberb2p );
+VIDEO_START( cyberbal2p );
 VIDEO_UPDATE( cyberbal );
 
-void cyberbal_scanline_update(const device_config *screen, int scanline);
+void cyberbal_scanline_update(running_device *screen, int scanline);

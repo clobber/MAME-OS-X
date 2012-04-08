@@ -9,7 +9,8 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "emuopts.h"
 #include "uimenu.h"
 #include "cpu/mcs48/mcs48.h"
 #include "machine/laserdsc.h"
@@ -62,7 +63,7 @@ enum
  *
  *************************************/
 
-static astring *filename;
+static astring filename;
 
 static input_port_value last_controls;
 static UINT8 playing;
@@ -71,7 +72,7 @@ static emu_timer *pr8210_bit_timer;
 static UINT32 pr8210_command_buffer_in, pr8210_command_buffer_out;
 static UINT8 pr8210_command_buffer[10];
 
-static void (*execute_command)(const device_config *laserdisc, int command);
+static void (*execute_command)(running_device *laserdisc, int command);
 
 
 
@@ -83,11 +84,10 @@ static void (*execute_command)(const device_config *laserdisc, int command);
 
 static void free_string(running_machine *machine)
 {
-	astring_free(filename);
 }
 
 
-static chd_file *get_disc(const device_config *device)
+static chd_file *get_disc(running_device *device)
 {
 	mame_file *image_file = NULL;
 	chd_file *image_chd = NULL;
@@ -123,7 +123,7 @@ static chd_file *get_disc(const device_config *device)
 					if (chderr == CHDERR_NONE)
 					{
 						set_disk_handle(device->machine, "laserdisc", image_file, image_chd);
-						filename = astring_dupc(dir->name);
+						filename.cpy(dir->name);
 						add_exit_callback(device->machine, free_string);
 						break;
 					}
@@ -152,7 +152,7 @@ static chd_file *get_disc(const device_config *device)
  *
  *************************************/
 
-static void process_commands(const device_config *laserdisc)
+static void process_commands(running_device *laserdisc)
 {
 	input_port_value controls = input_port_read(laserdisc->machine, "controls");
 	int number;
@@ -227,7 +227,7 @@ static void process_commands(const device_config *laserdisc)
 
 static TIMER_CALLBACK( vsync_update )
 {
-	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
+	running_device *laserdisc = machine->devicelist.first(LASERDISC);
 	int vblank_scanline;
 	attotime target;
 
@@ -250,7 +250,7 @@ static MACHINE_START( ldplayer )
 
 static TIMER_CALLBACK( autoplay )
 {
-	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
+	running_device *laserdisc = machine->devicelist.first(LASERDISC);
 
 	/* start playing */
 	(*execute_command)(laserdisc, CMD_PLAY);
@@ -264,7 +264,7 @@ static MACHINE_RESET( ldplayer )
 	timer_set(machine, attotime_zero, NULL, 0, autoplay);
 
 	/* indicate the name of the file we opened */
-	popmessage("Opened %s\n", astring_c(filename));
+	popmessage("Opened %s\n", filename.cstr());
 }
 
 
@@ -284,7 +284,7 @@ INLINE void pr8210_add_command(UINT8 command)
 
 static TIMER_CALLBACK( pr8210_bit_off_callback )
 {
-	const device_config *laserdisc = ptr;
+	running_device *laserdisc = (running_device *)ptr;
 
 	/* deassert the control line */
 	laserdisc_line_w(laserdisc, LASERDISC_LINE_CONTROL, CLEAR_LINE);
@@ -294,7 +294,7 @@ static TIMER_CALLBACK( pr8210_bit_off_callback )
 static TIMER_CALLBACK( pr8210_bit_callback )
 {
 	attotime duration = ATTOTIME_IN_MSEC(30);
-	const device_config *laserdisc = ptr;
+	running_device *laserdisc = (running_device *)ptr;
 	UINT8 bitsleft = param >> 16;
 	UINT8 data = param;
 
@@ -323,7 +323,7 @@ static TIMER_CALLBACK( pr8210_bit_callback )
 
 static MACHINE_START( pr8210 )
 {
-	const device_config *laserdisc = device_list_first(&machine->config->devicelist, LASERDISC);
+	running_device *laserdisc = machine->devicelist.first(LASERDISC);
 	MACHINE_START_CALL(ldplayer);
 	pr8210_bit_timer = timer_alloc(machine, pr8210_bit_callback, (void *)laserdisc);
 }
@@ -336,7 +336,7 @@ static MACHINE_RESET( pr8210 )
 }
 
 
-static void pr8210_execute(const device_config *laserdisc, int command)
+static void pr8210_execute(running_device *laserdisc, int command)
 {
 	static const UINT8 digits[10] = { 0x01, 0x11, 0x09, 0x19, 0x05, 0x15, 0x0d, 0x1d, 0x03, 0x13 };
 
@@ -452,7 +452,7 @@ static void pr8210_execute(const device_config *laserdisc, int command)
  *
  *************************************/
 
-static void ldv1000_execute(const device_config *laserdisc, int command)
+static void ldv1000_execute(running_device *laserdisc, int command)
 {
 	static const UINT8 digits[10] = { 0x3f, 0x0f, 0x8f, 0x4f, 0x2f, 0xaf, 0x6f, 0x1f, 0x9f, 0x5f };
 	switch (command)

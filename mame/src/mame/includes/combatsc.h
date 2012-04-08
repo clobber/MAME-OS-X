@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _combatsc_state combatsc_state;
-struct _combatsc_state
+class combatsc_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, combatsc_state(machine)); }
+
+	combatsc_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    scrollram;
@@ -33,9 +37,9 @@ struct _combatsc_state
 
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k007121_1;
-	const device_config *k007121_2;
+	running_device *audiocpu;
+	running_device *k007121_1;
+	running_device *k007121_2;
 };
 
 

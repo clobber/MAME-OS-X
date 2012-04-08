@@ -4,7 +4,7 @@
     Written by MooglyGuy
 */
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "ssem.h"
 
@@ -21,12 +21,12 @@ struct _ssem_state
     UINT32 a;
     UINT32 halt;
 
-    const device_config *device;
+    running_device *device;
     const address_space *program;
     int icount;
 };
 
-INLINE ssem_state *get_safe_token(const device_config *device)
+INLINE ssem_state *get_safe_token(running_device *device)
 {
     assert(device != NULL);
     assert(device->token != NULL);
@@ -152,7 +152,7 @@ static CPU_INIT( ssem )
     cpustate->halt = 0;
 
     cpustate->device = device;
-    cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+    cpustate->program = device->space(AS_PROGRAM);
 }
 
 static CPU_EXIT( ssem )
@@ -272,15 +272,15 @@ CPU_GET_INFO( ssem )
         case CPUINFO_INT_MIN_CYCLES:            info->i = 1;                    break;
         case CPUINFO_INT_MAX_CYCLES:            info->i = 1;                    break;
 
-        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM: info->i = 8;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;                   break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 8;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;                   break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:      info->i = 0;                    break;
 
         case CPUINFO_INT_PC:    /* intentional fallthrough */
         case CPUINFO_INT_REGISTER + SSEM_PC:    info->i = cpustate->pc << 2;    break;

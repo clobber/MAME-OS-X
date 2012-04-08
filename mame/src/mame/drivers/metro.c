@@ -50,6 +50,7 @@ Year + Game                     PCB         Video Chip  Issues / Notes
 
 Not dumped yet:
 94  Toride II
+94  Mouse Shooter GoGo (might be a prequel to Bang Bang Ball)
 
 To Do:
 
@@ -80,7 +81,7 @@ Compared to the real PCB, MAME is too fast, so 60fps needs to be changed to 58fp
 driver modified by Eisuke Watanabe
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
@@ -196,7 +197,7 @@ static IRQ_CALLBACK(metro_irq_callback)
 static MACHINE_RESET( metro )
 {
 	if (irq_line == -1)
-		cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), metro_irq_callback);
+		cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), metro_irq_callback);
 }
 
 
@@ -319,7 +320,7 @@ static INTERRUPT_GEN( dokyusei_interrupt )
 	}
 }
 
-static void ymf278b_interrupt(const device_config *device, int active)
+static void ymf278b_interrupt(running_device *device, int active)
 {
 	cputag_set_input_line(device->machine, "maincpu", 2, active);
 }
@@ -335,7 +336,7 @@ static void ymf278b_interrupt(const device_config *device, int active)
 static UINT16 metro_soundstatus;
 static int porta, portb, busy_sndcpu;
 
-static int metro_io_callback(const device_config *device, int ioline, int state)
+static int metro_io_callback(running_device *device, int ioline, int state)
 {
 	const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
@@ -441,7 +442,7 @@ static WRITE8_HANDLER( metro_portb_w )
 	{
 		if (!BIT(data,2))
 		{
-			const device_config *ym = devtag_get_device(space->machine, "ymsnd");
+			running_device *ym = devtag_get_device(space->machine, "ymsnd");
 			ym2413_w(ym,BIT(data,1),porta);
 		}
 		portb = data;
@@ -480,7 +481,7 @@ static WRITE8_HANDLER( daitorid_portb_w )
 
 	if (BIT(portb,6) && !BIT(data,6))	/* clock 1->0 */
 	{
-		const device_config *ym = devtag_get_device(space->machine, "ymsnd");
+		running_device *ym = devtag_get_device(space->machine, "ymsnd");
 		if (!BIT(data,2))
 		{
 			/* write */
@@ -510,7 +511,7 @@ static WRITE8_HANDLER( daitorid_portb_w )
 	portb = data;
 }
 
-static void metro_sound_irq_handler(const device_config *device, int state)
+static void metro_sound_irq_handler(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "audiocpu", UPD7810_INTF2, state ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -1231,7 +1232,7 @@ ADDRESS_MAP_END
 
 static int gakusai_oki_bank_lo, gakusai_oki_bank_hi;
 
-static void gakusai_oki_bank_set(const device_config *device)
+static void gakusai_oki_bank_set(running_device *device)
 {
 	int bank = (gakusai_oki_bank_lo & 7) + (gakusai_oki_bank_hi & 1) * 8;
 	okim6295_set_bank_base(device, bank * 0x40000);
@@ -1660,7 +1661,7 @@ static WRITE8_HANDLER( blzntrnd_sh_bankswitch_w )
 	memory_set_bankptr(space->machine, "bank1", &RAM[bankaddress]);
 }
 
-static void blzntrnd_irqhandler(const device_config *device, int irq)
+static void blzntrnd_irqhandler(running_device *device, int irq)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }

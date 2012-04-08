@@ -39,32 +39,25 @@ behavior we use .
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2151intf.h"
 #include "sound/okim6295.h"
-
-UINT16 *mugsmash_videoram1, *mugsmash_videoram2, *mugs_spriteram;
-UINT16 *mugsmash_regs1, *mugsmash_regs2;
-
-VIDEO_START( mugsmash );
-VIDEO_UPDATE( mugsmash );
-
-WRITE16_HANDLER( mugsmash_reg_w );
-WRITE16_HANDLER( mugsmash_videoram2_w );
-WRITE16_HANDLER( mugsmash_videoram1_w );
+#include "includes/mugsmash.h"
 
 static WRITE16_HANDLER( mugsmash_reg2_w )
 {
-	mugsmash_regs2[offset] = data;
-//  popmessage ("Regs2 %04x, %04x, %04x, %04x", mugsmash_regs2[0], mugsmash_regs2[1],mugsmash_regs2[2], mugsmash_regs2[3]);
+	mugsmash_state *state = (mugsmash_state *)space->machine->driver_data;
+
+	state->regs2[offset] = data;
+	//popmessage ("Regs2 %04x, %04x, %04x, %04x", state->regs2[0], state->regs2[1], state->regs2[2], state->regs2[3]);
 
 	switch (offset)
 	{
 	case 1:
 		soundlatch_w(space, 1, data & 0xff);
-		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE );
+		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE );
 		break;
 
 	default:
@@ -181,14 +174,14 @@ static READ16_HANDLER ( mugsmash_input_ports_r )
 
 static ADDRESS_MAP_START( mugsmash_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(mugsmash_videoram1_w) AM_BASE(&mugsmash_videoram1)
-	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(mugsmash_videoram2_w) AM_BASE(&mugsmash_videoram2)
-	AM_RANGE(0x0c0000, 0x0c0007) AM_WRITE(mugsmash_reg_w) AM_BASE(&mugsmash_regs1)	/* video registers*/
+	AM_RANGE(0x080000, 0x080fff) AM_RAM_WRITE(mugsmash_videoram1_w) AM_BASE_MEMBER(mugsmash_state, videoram1)
+	AM_RANGE(0x082000, 0x082fff) AM_RAM_WRITE(mugsmash_videoram2_w) AM_BASE_MEMBER(mugsmash_state, videoram2)
+	AM_RANGE(0x0c0000, 0x0c0007) AM_WRITE(mugsmash_reg_w) AM_BASE_MEMBER(mugsmash_state, regs1)	/* video registers*/
 	AM_RANGE(0x100000, 0x1005ff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x140000, 0x140007) AM_WRITE(mugsmash_reg2_w) AM_BASE(&mugsmash_regs2) /* sound + ? */
+	AM_RANGE(0x140000, 0x140007) AM_WRITE(mugsmash_reg2_w) AM_BASE_MEMBER(mugsmash_state, regs2) /* sound + ? */
 	AM_RANGE(0x1c0000, 0x1c3fff) AM_RAM /* main ram? */
 	AM_RANGE(0x1c4000, 0x1cffff) AM_RAM
-	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_BASE(&mugs_spriteram) /* sprite ram */
+	AM_RANGE(0x200000, 0x203fff) AM_RAM AM_BASE_MEMBER(mugsmash_state, spriteram) /* sprite ram */
 #if USE_FAKE_INPUT_PORTS
 	AM_RANGE(0x180000, 0x180007) AM_READ(mugsmash_input_ports_r)
 #else
@@ -396,9 +389,10 @@ static GFXDECODE_START( mugsmash )
 	GFXDECODE_ENTRY( "gfx2", 0, mugsmash2_layout,  0x100, 256  ) /* bg tiles */
 GFXDECODE_END
 
-static void irq_handler(const device_config *device, int irq)
+static void irq_handler(running_device *device, int irq)
 {
-	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
+	mugsmash_state *state = (mugsmash_state *)device->machine->driver_data;
+	cpu_set_input_line(state->audiocpu, 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
 static const ym2151_interface ym2151_config =
@@ -406,13 +400,26 @@ static const ym2151_interface ym2151_config =
 	irq_handler
 };
 
+static MACHINE_START( mugsmash )
+{
+	mugsmash_state *state = (mugsmash_state *)machine->driver_data;
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->audiocpu = devtag_get_device(machine, "audiocpu");
+}
+
 static MACHINE_DRIVER_START( mugsmash )
+
+	MDRV_DRIVER_DATA( mugsmash_state )
+
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(mugsmash_map)
 	MDRV_CPU_VBLANK_INT("screen", irq6_line_hold)
 
 	MDRV_CPU_ADD("audiocpu", Z80, 4000000)	/* Guess */
 	MDRV_CPU_PROGRAM_MAP(mugsmash_sound_map)
+
+	MDRV_MACHINE_START(mugsmash)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
@@ -467,4 +474,4 @@ ROM_START( mugsmash )
 	ROM_LOAD( "mugs_15.bin", 0x180000, 0x080000, CRC(82e8187c) SHA1(c7a0e1b3d90dbbe2588886a27a07a9c336447ae3) )
 ROM_END
 
-GAME( 1990?, mugsmash, 0, mugsmash, mugsmash, 0, ROT0, "Electronic Devices Italy / 3D Games England", "Mug Smashers", 0 )
+GAME( 1990?, mugsmash, 0, mugsmash, mugsmash, 0, ROT0, "Electronic Devices Italy / 3D Games England", "Mug Smashers", GAME_SUPPORTS_SAVE )

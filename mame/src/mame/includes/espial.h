@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _espial_state espial_state;
-struct _espial_state
+class espial_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, espial_state(machine)); }
+
+	espial_state(running_machine &machine) { }
+
 	UINT8 *   videoram;	// espial, zodiack, marineb
 	UINT8 *   colorram;	// espial, marineb
 	UINT8 *   attributeram;	// espial, zodiack
@@ -36,8 +40,8 @@ struct _espial_state
 	int       percuss_hardware;	// zodiack
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
+	running_device *maincpu;
+	running_device *audiocpu;
 };
 
 /*----------- defined in drivers/espial.c -----------*/

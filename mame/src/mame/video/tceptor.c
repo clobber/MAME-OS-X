@@ -3,7 +3,7 @@
  *  emulate video hardware
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/namcoic.h"
 
 #define TX_TILE_OFFSET_CENTER	(32 * 2)
@@ -263,7 +263,7 @@ static void decode_bg(running_machine *machine, const char * region)
 	int len = 0x8000;
 	int i;
 
-	buffer = alloc_array_or_die(UINT8, len);
+	buffer = auto_alloc_array(machine, UINT8, len);
 
 	/* expand rom tc2-19.10d */
 	for (i = 0; i < len / 2; i++)
@@ -273,7 +273,7 @@ static void decode_bg(running_machine *machine, const char * region)
 	}
 
 	memcpy(src, buffer, len);
-	free(buffer);
+	auto_free(machine, buffer);
 
 	/* decode the graphics */
 	machine->gfx[gfx_index] = gfx_element_alloc(machine, &bg_layout, memory_region(machine, region), 64, 2048);
@@ -534,9 +534,9 @@ VIDEO_UPDATE( tceptor )
 	int pri;
 	int bg_center = 144 - ((((bg1_scroll_x + bg2_scroll_x ) & 0x1ff) - 288) / 2);
 
-	const device_config *_2d_screen       = devtag_get_device(screen->machine, "2dscreen");
-	const device_config *_3d_left_screen  = devtag_get_device(screen->machine, "3dleft");
-	const device_config *_3d_right_screen = devtag_get_device(screen->machine, "3dright");
+	running_device *_2d_screen       = devtag_get_device(screen->machine, "2dscreen");
+	running_device *_3d_left_screen  = devtag_get_device(screen->machine, "3dleft");
+	running_device *_3d_right_screen = devtag_get_device(screen->machine, "3dright");
 
 	if (screen != _2d_screen)
 	{

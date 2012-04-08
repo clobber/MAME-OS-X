@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _gotcha_state gotcha_state;
-struct _gotcha_state
+class gotcha_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, gotcha_state(machine)); }
+
+	gotcha_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    fgvideoram;
 	UINT16 *    bgvideoram;
@@ -20,7 +24,7 @@ struct _gotcha_state
 	UINT16      scroll[4];
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

@@ -1,7 +1,11 @@
 
-typedef struct _aerofgt_state aerofgt_state;
-struct _aerofgt_state
+class aerofgt_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, aerofgt_state(machine)); }
+
+	aerofgt_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  bg1videoram;
 	UINT16 *  bg2videoram;
@@ -29,7 +33,7 @@ struct _aerofgt_state
 	int       pending_command;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

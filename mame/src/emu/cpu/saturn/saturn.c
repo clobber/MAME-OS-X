@@ -22,6 +22,7 @@
  *
  *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 
 #include "saturn.h"
@@ -81,12 +82,12 @@ struct _saturn_state
 	int 	monitor_id;
 	int		monitor_in;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	int icount;
 };
 
-INLINE saturn_state *get_safe_token(const device_config *device)
+INLINE saturn_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -112,10 +113,10 @@ static CPU_INIT( saturn )
 {
 	saturn_state *cpustate = get_safe_token(device);
 
-	cpustate->config = (saturn_cpu_core *) device->static_config;
+	cpustate->config = (saturn_cpu_core *) device->baseconfig().static_config;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
 
 	state_save_register_device_item_array(device, 0,cpustate->reg[R0]);
 	state_save_register_device_item_array(device, 0,cpustate->reg[R1]);
@@ -161,7 +162,7 @@ INLINE void saturn_take_irq(saturn_state *cpustate)
 	saturn_push(cpustate, cpustate->pc);
 	cpustate->pc=IRQ_ADDRESS;
 
-	LOG(("Saturn '%s' takes IRQ ($%04x)\n", cpustate->device->tag, cpustate->pc));
+	LOG(("Saturn '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), cpustate->pc));
 
 	if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, SATURN_IRQ_LINE);
 }
@@ -205,7 +206,7 @@ static void saturn_set_nmi_line(saturn_state *cpustate, int state)
 	cpustate->nmi_state = state;
 	if ( state != CLEAR_LINE )
 	{
-		LOG(( "SATURN '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+		LOG(( "SATURN '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 		cpustate->pending_irq = 1;
 	}
 }
@@ -216,7 +217,7 @@ static void saturn_set_irq_line(saturn_state *cpustate, int state)
 	cpustate->irq_state = state;
 	if ( state != CLEAR_LINE && cpustate->irq_enable )
 	{
-		LOG(( "SATURN '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
+		LOG(( "SATURN '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
 		cpustate->pending_irq = 1;
 	}
 }
@@ -225,7 +226,7 @@ static void saturn_set_wakeup_line(saturn_state *cpustate, int state)
 {
 	if (cpustate->sleeping && state==1)
 	{
-		LOG(( "SATURN '%s' set_wakeup_line(ASSERT)\n", cpustate->device->tag));
+		LOG(( "SATURN '%s' set_wakeup_line(ASSERT)\n", cpustate->device->tag()));
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, SATURN_WAKEUP_LINE);
 		cpustate->sleeping = 0;
 	}
@@ -320,15 +321,15 @@ CPU_GET_INFO( saturn )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 21;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 20;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + SATURN_NMI_LINE:	        info->i = cpustate->nmi_state;				break;
 		case CPUINFO_INT_INPUT_STATE + SATURN_IRQ_LINE:	        info->i = cpustate->irq_state;				break;

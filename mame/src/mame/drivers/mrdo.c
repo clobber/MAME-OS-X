@@ -1,34 +1,32 @@
 /***************************************************************************
 
 Mr Do!
-
 driver by Nicola Salmoria
 
+Updated 02/2010 with proper XTAL values thanks to Oliver_A
 
-Video clock: XTAL = 20 MHz
-Horizontal video frequency: HSYNC = XTAL/4/312 = 16.02564103 kHz
-Video frequency: VSYNC = HSYNC/262 = 61.1665688 Hz
-VBlank duration: 1/VSYNC * (70/262) = 4368 us
+PCB Model: 8201
+Main Clock: XTAL = 8.2 MHz
+Video clock: XTAL = 19.6 MHz
+
+Horizontal video frequency: HSYNC = XTAL/4/312 = 15.7051282051 kHz
+Video frequency: VSYNC = HSYNC/262 = 59.94323742 Hz
+VBlank duration: 1/VSYNC * (70/262) = 4457 us
+
+
+The manual for this model clearly shows above values in 'Misc' parts listings.
+There's a chance that certain bootlegs might have the different 8/20 MHz XTALS.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
-
-#define MAIN_CLOCK		XTAL_8MHz
-#define VIDEO_CLOCK		XTAL_20MHz
+#include "includes/mrdo.h"
 
 
-extern UINT8 *mrdo_bgvideoram,*mrdo_fgvideoram;
-WRITE8_HANDLER( mrdo_bgvideoram_w );
-WRITE8_HANDLER( mrdo_fgvideoram_w );
-WRITE8_HANDLER( mrdo_scrollx_w );
-WRITE8_HANDLER( mrdo_scrolly_w );
-WRITE8_HANDLER( mrdo_flipscreen_w );
-PALETTE_INIT( mrdo );
-VIDEO_START( mrdo );
-VIDEO_UPDATE( mrdo );
+#define MAIN_CLOCK		XTAL_8_2MHz
+#define VIDEO_CLOCK		XTAL_19_6MHz
 
 
 
@@ -37,16 +35,16 @@ VIDEO_UPDATE( mrdo );
 static READ8_HANDLER( mrdo_SECRE_r )
 {
 	UINT8 *RAM = memory_region(space->machine, "maincpu");
-	return RAM[ cpu_get_reg(space->cpu, Z80_HL) ];
+	return RAM[cpu_get_reg(space->cpu, Z80_HL)];
 }
 
 
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE(&mrdo_bgvideoram)
-	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE(&mrdo_fgvideoram)
-	AM_RANGE(0x9000, 0x90ff) AM_WRITEONLY AM_BASE_SIZE_GENERIC(spriteram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(mrdo_bgvideoram_w) AM_BASE_MEMBER(mrdo_state, bgvideoram)
+	AM_RANGE(0x8800, 0x8fff) AM_RAM_WRITE(mrdo_fgvideoram_w) AM_BASE_MEMBER(mrdo_state, fgvideoram)
+	AM_RANGE(0x9000, 0x90ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(mrdo_state, spriteram, spriteram_size)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(mrdo_flipscreen_w)	/* screen flip + playfield priority */
 	AM_RANGE(0x9801, 0x9801) AM_DEVWRITE("sn1", sn76496_w)
 	AM_RANGE(0x9802, 0x9802) AM_DEVWRITE("sn2", sn76496_w)
@@ -169,8 +167,11 @@ GFXDECODE_END
 
 static MACHINE_DRIVER_START( mrdo )
 
+	/* driver data */
+	MDRV_DRIVER_DATA(mrdo_state)
+
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MAIN_CLOCK/2)	/* 4 MHz */
+	MDRV_CPU_ADD("maincpu", Z80, MAIN_CLOCK/2)	/* Verified */
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
@@ -189,10 +190,10 @@ static MACHINE_DRIVER_START( mrdo )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489, MAIN_CLOCK/2)
+	MDRV_SOUND_ADD("sn1", SN76489, MAIN_CLOCK/2)	/* Verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("sn2", SN76489, MAIN_CLOCK/2)
+	MDRV_SOUND_ADD("sn2", SN76489, MAIN_CLOCK/2)	/* Verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 

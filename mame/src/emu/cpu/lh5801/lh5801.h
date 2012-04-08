@@ -63,10 +63,9 @@ pb 8bit io
 pc 8bit
 */
 
-#include "cpuintrf.h"
 
 
-typedef UINT8 (*lh5801_in_func)(const device_config *device);
+typedef UINT8 (*lh5801_in_func)(running_device *device);
 
 typedef struct _lh5801_cpu_core lh5801_cpu_core;
 struct _lh5801_cpu_core

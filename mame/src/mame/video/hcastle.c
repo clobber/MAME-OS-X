@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/konicdev.h"
 #include "includes/hcastle.h"
 
@@ -213,11 +213,11 @@ WRITE8_HANDLER( hcastle_pf2_control_w )
 static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 *sbank, int bank )
 {
 	hcastle_state *state = (hcastle_state *)machine->driver_data;
-	const device_config *k007121 = bank ? state->k007121_2 : state->k007121_1;
+	running_device *k007121 = bank ? state->k007121_2 : state->k007121_1;
 	int base_color = (k007121_ctrlram_r(k007121, 6) & 0x30) * 2;
 	int bank_base = (bank == 0) ? 0x4000 * (state->gfx_bank & 1) : 0;
 
-	k007121_sprites_draw(k007121, bitmap, cliprect, machine->gfx[bank], machine->colortable, sbank, base_color, 0, bank_base, -1);
+	k007121_sprites_draw(k007121, bitmap, cliprect, machine->gfx[bank], machine->colortable, sbank, base_color, 0, bank_base, (UINT32)-1);
 }
 
 /*****************************************************************************/

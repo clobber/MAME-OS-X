@@ -10,7 +10,7 @@
 
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/2203intf.h"
 #include "includes/compgolf.h"
@@ -201,7 +201,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void sound_irq(const device_config *device, int linestate)
+static void sound_irq(running_device *device, int linestate)
 {
 	cputag_set_input_line(device->machine, "maincpu", 0, linestate);
 }

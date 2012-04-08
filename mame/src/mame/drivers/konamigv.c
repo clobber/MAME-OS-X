@@ -112,7 +112,7 @@ Notes:
         to that same game. It won't work with a blank EEPROM or a different games' EEPROM.
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cdrom.h"
 #include "cpu/mips/psx.h"
 #include "includes/psx.h"
@@ -314,7 +314,7 @@ static MACHINE_RESET( konamigv )
 	cdda_set_cdrom(devtag_get_device(machine, "cdda"), am53cf96_get_device(SCSI_ID_4));
 }
 
-static void spu_irq(const device_config *device, UINT32 data)
+static void spu_irq(running_device *device, UINT32 data)
 {
 	psx_irq_set(device->machine, data);
 }

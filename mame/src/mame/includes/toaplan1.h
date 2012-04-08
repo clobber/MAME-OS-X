@@ -18,9 +18,9 @@ WRITE16_HANDLER( demonwld_dsp_bio_w );
 WRITE16_HANDLER( demonwld_dsp_ctrl_w );
 READ16_HANDLER ( demonwld_BIO_r );
 READ16_HANDLER ( samesame_port_6_word_r );
+READ16_HANDLER ( vimana_system_port_r );
 READ16_HANDLER ( vimana_mcu_r );
 WRITE16_HANDLER( vimana_mcu_w );
-READ16_HANDLER ( vimana_input_port_5_word_r );
 
 WRITE8_HANDLER( rallybik_coin_w );
 WRITE8_HANDLER( toaplan1_coin_w );
@@ -29,7 +29,7 @@ WRITE16_HANDLER( samesame_coin_w );
 MACHINE_RESET( toaplan1 );
 MACHINE_RESET( demonwld );
 MACHINE_RESET( vimana );
-MACHINE_RESET( zerozone );	/* hack for ZeroWing/OutZone. See video */
+MACHINE_RESET( zerowing );	/* hack for ZeroWing/OutZone. See video */
 
 extern void toaplan1_driver_savestate(running_machine *machine);
 extern void demonwld_driver_savestate(running_machine *machine);

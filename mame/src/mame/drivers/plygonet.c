@@ -79,7 +79,7 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "video/konicdev.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
@@ -211,7 +211,7 @@ static READ32_HANDLER( dsp_host_interface_r )
 	if (mem_mask == 0x0000ff00)	{ hi_addr++; }	/* Low byte */
 	if (mem_mask == 0xff000000) {}				/* High byte */
 
-	value = dsp56k_host_interface_read(cputag_get_cpu(space->machine, "dsp"), hi_addr);
+	value = dsp56k_host_interface_read(devtag_get_device(space->machine, "dsp"), hi_addr);
 
 	if (mem_mask == 0x0000ff00)	{ value <<= 8;  }
 	if (mem_mask == 0xff000000) { value <<= 24; }
@@ -295,7 +295,7 @@ static WRITE32_HANDLER( dsp_host_interface_w )
 	if (mem_mask == 0xff000000) { hi_data = (data & 0xff000000) >> 24; }
 
 	logerror("write (host-side) %08x %08x %08x (HI %04x)\n", offset, mem_mask, data, hi_addr);
-	dsp56k_host_interface_write(cputag_get_cpu(space->machine, "dsp"), hi_addr, hi_data);
+	dsp56k_host_interface_write(devtag_get_device(space->machine, "dsp"), hi_addr, hi_data);
 }
 
 
@@ -369,7 +369,7 @@ static DIRECT_UPDATE_HANDLER( plygonet_dsp56k_direct_handler )
 */
 enum { BANK_GROUP_A, BANK_GROUP_B, INVALID_BANK_GROUP };
 
-static UINT8 dsp56k_bank_group(const device_config* cpu)
+static UINT8 dsp56k_bank_group(running_device* cpu)
 {
 	UINT16 portC = dsp56k_get_peripheral_memory(cpu, 0xffe3);
 
@@ -382,7 +382,7 @@ static UINT8 dsp56k_bank_group(const device_config* cpu)
 	return INVALID_BANK_GROUP;
 }
 
-static UINT8 dsp56k_bank_num(const device_config* cpu, UINT8 bank_group)
+static UINT8 dsp56k_bank_num(running_device* cpu, UINT8 bank_group)
 {
 	UINT16 portC = dsp56k_get_peripheral_memory(cpu, 0xffe3);
 
@@ -795,6 +795,9 @@ ROM_START( plygonet )
 	/* sound data */
 	ROM_REGION( 0x200000, "shared", 0 )
 	ROM_LOAD( "305b08.2e", 0x000000, 0x200000, CRC(874607df) SHA1(763b44a80abfbc355bcb9be8bf44373254976019) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "plygonet.nv", 0x0000, 0x0080, CRC(627748ac) SHA1(ea1b06739fee235b049ff8daffff7d43cb093112) )
 ROM_END
 
 ROM_START( polynetw )
@@ -822,6 +825,9 @@ ROM_START( polynetw )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "305a08.2e", 0x000000, 0x200000, CRC(7ddb8a52) SHA1(3199b347fc433ffe0de8521001df77672d40771e) )
 	ROM_LOAD( "305a09.3e", 0x200000, 0x200000, CRC(6da1be58) SHA1(d63ac16ac551193ff8a6036724fb59e1d702e06b) )
+
+	ROM_REGION16_BE( 0x80, "eeprom", 0 )
+	ROM_LOAD( "polynetw.nv", 0x0000, 0x0080, CRC(8f39d644) SHA1(8733e1a288ba20c4b04b3aedde52801d05cebdf9) )
 ROM_END
 
 /*          ROM       parent   machine   inp        init */

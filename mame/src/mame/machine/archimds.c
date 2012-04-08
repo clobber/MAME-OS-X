@@ -26,7 +26,7 @@
  *
  *****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/arm/arm.h"
 #include "sound/dac.h"
 #include "includes/archimds.h"
@@ -317,7 +317,7 @@ static void latch_timer_cnt(int tmr)
 READ32_HANDLER(archimedes_ioc_r)
 {
 	#ifdef MESS
-	const device_config *fdc = (const device_config *)devtag_get_device(space->machine, "wd1772");
+	running_device *fdc = (running_device *)devtag_get_device(space->machine, "wd1772");
 	#endif
 	if (offset >= 0x80000 && offset < 0xc0000)
 	{
@@ -367,7 +367,7 @@ READ32_HANDLER(archimedes_ioc_r)
 WRITE32_HANDLER(archimedes_ioc_w)
 {
 	#ifdef MESS
-	const device_config *fdc = (const device_config *)devtag_get_device(space->machine, "wd1772");
+	running_device *fdc = (running_device *)devtag_get_device(space->machine, "wd1772");
 	#endif
 
 	if (offset >= 0x80000 && offset < 0xc0000)
@@ -483,7 +483,7 @@ WRITE32_HANDLER(archimedes_ioc_w)
 	else if (offset == 0xd40010)
 	{
 		// latch B
-		wd17xx_set_density(fdc,(data & 2) ? DEN_MFM_LO : DEN_MFM_HI);
+		wd17xx_dden_w(fdc, BIT(data, 1));
 	}
 	#endif
 	else

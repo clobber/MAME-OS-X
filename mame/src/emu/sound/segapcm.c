@@ -2,7 +2,7 @@
 /*    SEGA 16ch 8bit PCM                                 */
 /*********************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "segapcm.h"
 
@@ -14,10 +14,11 @@ struct _segapcm_state
 	const UINT8 *rom;
 	int bankshift;
 	int bankmask;
+	int rgnmask;
 	sound_stream * stream;
 };
 
-INLINE segapcm_state *get_safe_token(const device_config *device)
+INLINE segapcm_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -29,6 +30,7 @@ INLINE segapcm_state *get_safe_token(const device_config *device)
 static STREAM_UPDATE( SEGAPCM_update )
 {
 	segapcm_state *spcm = (segapcm_state *)param;
+	int rgnmask = spcm->rgnmask;
 	int ch;
 
 	/* clear the buffers */
@@ -70,7 +72,7 @@ static STREAM_UPDATE( SEGAPCM_update )
 				}
 
 				/* fetch the sample */
-				v = rom[addr >> 8] - 0x80;
+				v = rom[(addr >> 8) & rgnmask] - 0x80;
 
 				/* apply panning and advance */
 				outputs[0][i] += v * voll;
@@ -88,11 +90,11 @@ static STREAM_UPDATE( SEGAPCM_update )
 
 static DEVICE_START( segapcm )
 {
-	const sega_pcm_interface *intf = (const sega_pcm_interface *)device->static_config;
+	const sega_pcm_interface *intf = (const sega_pcm_interface *)device->baseconfig().static_config;
 	int mask, rom_mask, len;
 	segapcm_state *spcm = get_safe_token(device);
 
-	spcm->rom = (const UINT8 *)device->region;
+	spcm->rom = *device->region;
 	spcm->ram = auto_alloc_array(device->machine, UINT8, 0x800);
 
 	memset(spcm->ram, 0xff, 0x800);
@@ -102,8 +104,11 @@ static DEVICE_START( segapcm )
 	if(!mask)
 		mask = BANK_MASK7>>16;
 
-	len = device->regionbytes;
+	len = device->region->bytes();
+	spcm->rgnmask = len - 1;
+
 	for(rom_mask = 1; rom_mask < len; rom_mask *= 2);
+
 	rom_mask--;
 
 	spcm->bankmask = mask & (rom_mask >> spcm->bankshift);

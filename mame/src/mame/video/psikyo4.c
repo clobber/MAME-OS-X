@@ -26,7 +26,7 @@ HotGmck:  86010000 1f201918 a0000000 Large Screen
 HgKairak: 86010000 1f201918 a0000000 Large Screen
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/psikyo4.h"
 
 
@@ -129,8 +129,8 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 VIDEO_UPDATE( psikyo4 )
 {
-	const device_config *left_screen  = devtag_get_device(screen->machine, "lscreen");
-	const device_config *right_screen = devtag_get_device(screen->machine, "rscreen");
+	running_device *left_screen  = devtag_get_device(screen->machine, "lscreen");
+	running_device *right_screen = devtag_get_device(screen->machine, "rscreen");
 
 	if (screen == left_screen)
 	{

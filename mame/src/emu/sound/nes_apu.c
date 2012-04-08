@@ -44,11 +44,9 @@
 
  *****************************************************************************/
 
-#include "sndintrf.h"
-#include "cpuexec.h"
+#include "emu.h"
 #include "streams.h"
 #include "nes_apu.h"
-#include "driver.h"
 #include "cpu/m6502/m6502.h"
 
 #include "nes_defs.h"
@@ -74,7 +72,7 @@ struct _nesapu_state
 };
 
 
-INLINE nesapu_state *get_safe_token(const device_config *device)
+INLINE nesapu_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -689,7 +687,7 @@ static STREAM_UPDATE( nes_psg_update_sound )
 /* INITIALIZE APU SYSTEM */
 static DEVICE_START( nesapu )
 {
-	const nes_interface *intf = (const nes_interface *)device->static_config;
+	const nes_interface *intf = (const nes_interface *)device->baseconfig().static_config;
 	nesapu_state *info = get_safe_token(device);
 	int rate = device->clock / 4;
 	int i;

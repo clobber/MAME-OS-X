@@ -10,7 +10,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/hd6309/hd6309.h"
 #include "sound/k007232.h"
@@ -176,13 +176,13 @@ GFXDECODE_END
 
 ***************************************************************************/
 
-static void volume_callback0(const device_config *device, int v)
+static void volume_callback0(running_device *device, int v)
 {
 	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
 	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);
 }
 
-static void volume_callback1(const device_config *device, int v)
+static void volume_callback1(running_device *device, int v)
 {
 	k007232_set_volume(device, 0, (v >> 4) * 0x11, 0);
 	k007232_set_volume(device, 1, 0, (v & 0x0f) * 0x11);

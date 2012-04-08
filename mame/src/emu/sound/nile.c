@@ -24,10 +24,8 @@
 
 ************************************/
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
 #include "nile.h"
 
 #define NILE_VOICES 8
@@ -65,7 +63,7 @@ struct _nile_state
 	UINT16 ctrl;
 };
 
-INLINE nile_state *get_safe_token(const device_config *device)
+INLINE nile_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -231,7 +229,7 @@ static DEVICE_START( nile )
 {
 	nile_state *info = get_safe_token(device);
 
-	info->sound_ram = device->region;
+	info->sound_ram = *device->region;
 
 	info->stream = stream_create(device, 0, 2, 44100, info, nile_update);
 }

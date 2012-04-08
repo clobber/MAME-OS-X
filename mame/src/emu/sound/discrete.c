@@ -33,12 +33,11 @@
  *
  ************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "inptport.h"
 #include "wavwrite.h"
 #include "discrete.h"
-#include "eminline.h"
+
 
 /*************************************
  *
@@ -82,7 +81,7 @@
  *
  *************************************/
 
-static void init_nodes(discrete_info *info, const linked_list_entry *block_list, const device_config *device);
+static void init_nodes(discrete_info *info, const linked_list_entry *block_list, running_device *device);
 static void find_input_nodes(const discrete_info *info);
 static node_description *discrete_find_node(const discrete_info *info, int node);
 static DEVICE_RESET( discrete );
@@ -479,7 +478,7 @@ static DEVICE_START( discrete )
 {
 	linked_list_entry **intf;
 	const linked_list_entry *entry;
-	const discrete_sound_block *intf_start = (discrete_sound_block *)device->static_config;
+	const discrete_sound_block *intf_start = (discrete_sound_block *)device->baseconfig().static_config;
 	discrete_info *info = get_safe_token(device);
 	char name[32];
 
@@ -497,7 +496,7 @@ static DEVICE_START( discrete )
 	info->total_stream_updates = 0;
 
 	/* create the logfile */
-	sprintf(name, "discrete%s.log", device->tag);
+	sprintf(name, "discrete%s.log", device->tag());
 	if (DISCRETE_DEBUGLOG)
 		info->disclogfile = fopen(name, "w");
 
@@ -806,7 +805,7 @@ static STREAM_UPDATE( discrete_stream_update )
  *************************************/
 
 
-static void init_nodes(discrete_info *info, const linked_list_entry *block_list, const device_config *device)
+static void init_nodes(discrete_info *info, const linked_list_entry *block_list, running_device *device)
 {
 	const linked_list_entry	*entry;
 	linked_list_entry	*task_node_list = NULL;

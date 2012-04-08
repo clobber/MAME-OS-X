@@ -34,7 +34,7 @@ lev 7 : 0x7c : 0000 0000 - x
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/pic16c5x/pic16c5x.h"
 #include "machine/eeprom.h"
@@ -116,7 +116,7 @@ Hollywood Action
 //static int state->melody;
 //static int kickgoal_snd_bank;
 
-static void kickgoal_play(const device_config *device, int melody, int data)
+static void kickgoal_play(running_device *device, int melody, int data)
 {
 	int status = okim6295_r(device,0);
 

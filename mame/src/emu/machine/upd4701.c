@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "upd4701.h"
 
 /***************************************************************************
@@ -45,7 +45,7 @@ struct _upd4701_state
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE upd4701_state *get_safe_token(const device_config *device)
+INLINE upd4701_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);

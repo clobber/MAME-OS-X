@@ -3,9 +3,8 @@
 #ifndef __LR35902_H__
 #define __LR35902_H__
 
-#include "cpuintrf.h"
 
-typedef void (*lr35902_timer_fired_func)(const device_config *device, int cycles);
+typedef void (*lr35902_timer_fired_func)(running_device *device, int cycles);
 
 typedef struct _lr35902_cpu_core lr35902_cpu_core;
 struct _lr35902_cpu_core

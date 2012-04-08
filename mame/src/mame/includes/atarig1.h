@@ -6,9 +6,13 @@
 
 #include "machine/atarigen.h"
 
-typedef struct _atarig1_state atarig1_state;
-struct _atarig1_state
+class atarig1_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, atarig1_state(machine)); }
+
+	atarig1_state(running_machine &machine) { }
+
 	atarigen_state	atarigen;
 	UINT8			is_pitfight;
 
@@ -35,4 +39,4 @@ WRITE16_HANDLER( atarig1_mo_control_w );
 VIDEO_START( atarig1 );
 VIDEO_UPDATE( atarig1 );
 
-void atarig1_scanline_update(const device_config *screen, int scanline);
+void atarig1_scanline_update(running_device *screen, int scanline);

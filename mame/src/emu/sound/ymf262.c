@@ -53,8 +53,7 @@ differences between OPL2 and OPL3 shown in datasheets:
 
 */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "ymf262.h"
 
 
@@ -268,6 +267,7 @@ typedef struct {
 	int rate;						/* sampling rate (Hz)           */
 	double freqbase;				/* frequency base               */
 	attotime TimerBase;			/* Timer base time (==sampling time)*/
+	running_device *device;
 } OPL3;
 
 
@@ -2243,7 +2243,7 @@ static TIMER_CALLBACK( cymfile_callback )
 }
 
 /* lock/unlock for common table */
-static int OPL3_LockTable(const device_config *device)
+static int OPL3_LockTable(running_device *device)
 {
 	num_lock++;
 	if(num_lock>1) return 0;
@@ -2330,21 +2330,16 @@ static void OPL3ResetChip(OPL3 *chip)
 /* Create one of virtual YMF262 */
 /* 'clock' is chip clock in Hz  */
 /* 'rate'  is sampling rate  */
-static OPL3 *OPL3Create(const device_config *device, int clock, int rate, int type)
+static OPL3 *OPL3Create(running_device *device, int clock, int rate, int type)
 {
 	OPL3 *chip;
 
 	if (OPL3_LockTable(device) == -1) return NULL;
 
 	/* allocate memory block */
-	chip = (OPL3 *)malloc(sizeof(OPL3));
+	chip = auto_alloc_clear(device->machine, OPL3);
 
-	if (chip==NULL)
-		return NULL;
-
-	/* clear */
-	memset(chip, 0, sizeof(OPL3));
-
+	chip->device = device;
 	chip->type  = type;
 	chip->clock = clock;
 	chip->rate  = rate;
@@ -2361,7 +2356,7 @@ static OPL3 *OPL3Create(const device_config *device, int clock, int rate, int ty
 static void OPL3Destroy(OPL3 *chip)
 {
 	OPL3_UnLockTable();
-	free(chip);
+	auto_free(chip->device->machine, chip);
 }
 
 
@@ -2462,7 +2457,7 @@ static int OPL3TimerOver(OPL3 *chip,int c)
 
 
 
-void * ymf262_init(const device_config *device, int clock, int rate)
+void * ymf262_init(running_device *device, int clock, int rate)
 {
 	return OPL3Create(device,clock,rate,OPL3_TYPE_YMF262);
 }

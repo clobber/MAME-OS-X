@@ -15,7 +15,6 @@
 #ifndef __MCS48_H__
 #define __MCS48_H__
 
-#include "cpuintrf.h"
 
 
 /***************************************************************************
@@ -88,6 +87,8 @@ enum
     MACROS
 ***************************************************************************/
 
+#define CPU_I8021 CPU_GET_INFO_NAME( i8021 )
+#define CPU_I8022 CPU_GET_INFO_NAME( i8022 )
 #define CPU_I8035 CPU_GET_INFO_NAME( i8035 )
 #define CPU_I8048 CPU_GET_INFO_NAME( i8048 )
 #define CPU_I8648 CPU_GET_INFO_NAME( i8648 )
@@ -115,6 +116,8 @@ enum
 ***************************************************************************/
 
 /* Official Intel MCS-48 parts */
+CPU_GET_INFO( i8021 );			/* 1k internal ROM,      64 bytes internal RAM */
+CPU_GET_INFO( i8022 );			/* 2k internal ROM,     128 bytes internal RAM */
 CPU_GET_INFO( i8035 );			/* external ROM,         64 bytes internal RAM */
 CPU_GET_INFO( i8048 );			/* 1k internal ROM,      64 bytes internal RAM */
 CPU_GET_INFO( i8648 );			/* 1k internal OTP ROM,  64 bytes internal RAM */
@@ -139,8 +142,8 @@ CPU_GET_INFO( m58715 );			/* 8049 clone */
 
 
 /* functions for talking to the input/output buffers on the UPI41-class chips */
-UINT8 upi41_master_r(const device_config *device, UINT8 a0);
-void upi41_master_w(const device_config *device, UINT8 a0, UINT8 data);
+UINT8 upi41_master_r(running_device *device, UINT8 a0);
+void upi41_master_w(running_device *device, UINT8 a0, UINT8 data);
 
 
 /* disassemblers */

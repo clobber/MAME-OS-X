@@ -4,7 +4,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/batman.h"
 #include "includes/thunderj.h"
 
@@ -121,7 +121,7 @@ VIDEO_START( batman )
  *
  *************************************/
 
-void batman_scanline_update(const device_config *screen, int scanline)
+void batman_scanline_update(running_device *screen, int scanline)
 {
 	batman_state *state = (batman_state *)screen->machine->driver_data;
 

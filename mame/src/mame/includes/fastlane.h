@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _fastlane_state fastlane_state;
-struct _fastlane_state
+class fastlane_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, fastlane_state(machine)); }
+
+	fastlane_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram1;
 	UINT8 *    videoram2;
@@ -19,8 +23,8 @@ struct _fastlane_state
 	rectangle  clip0, clip1;
 
 	/* devices */
-	const device_config *konami2;
-	const device_config *k007121;
+	running_device *konami2;
+	running_device *k007121;
 };
 
 

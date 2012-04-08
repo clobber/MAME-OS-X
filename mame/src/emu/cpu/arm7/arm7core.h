@@ -33,7 +33,6 @@
 #ifndef __ARM7CORE_H__
 #define __ARM7CORE_H__
 
-#include "cpuintrf.h"
 
 /****************************************************************************************************
  *  INTERRUPT LINES/EXCEPTIONS
@@ -162,7 +161,7 @@ enum
     UINT8 pendingSwi;                   \
     INT32 iCount;			\
     cpu_irq_callback irq_callback;		\
-    const device_config *device;		\
+    running_device *device;		\
     const address_space *program;
 
 

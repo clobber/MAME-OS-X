@@ -12,7 +12,7 @@
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/m6805/m6805.h"
@@ -31,7 +31,7 @@ static UINT8 portA_in,portA_out,ddrA;
 static UINT8 portB_in,portB_out,ddrB;
 static UINT8 portC_in,portC_out,ddrC;
 static UINT8 tdr,tcr;
-static const device_config *mcu_timer;
+static running_device *mcu_timer;
 
 /* Port A:
     0   (in)  DSW
@@ -154,7 +154,7 @@ static TIMER_DEVICE_CALLBACK( mcu_timer_proc )
 		if ( (tcr & 0x40) == 0 )
 		{
 			//timer interrupt!
-			generic_pulse_irq_line(cputag_get_cpu(timer->machine, "mcu"), M68705_INT_TIMER);
+			generic_pulse_irq_line(devtag_get_device(timer->machine, "mcu"), M68705_INT_TIMER);
 		}
 	}
 }

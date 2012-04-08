@@ -32,7 +32,7 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
 #include "cpu/z80/z80daisy.h"
@@ -65,7 +65,7 @@
  *
  *************************************/
 
-static const device_config *laserdisc;
+static running_device *laserdisc;
 static UINT8 last_misc;
 
 static UINT8 laserdisc_type;
@@ -82,7 +82,7 @@ static const UINT8 led_map[16] =
  *
  *************************************/
 
-static void dleuro_interrupt(const device_config *device, int state)
+static void dleuro_interrupt(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "maincpu", 0, state);
 }
@@ -94,7 +94,7 @@ static WRITE8_DEVICE_HANDLER( serial_transmit )
 }
 
 
-static int serial_receive(const device_config *device, int channel)
+static int serial_receive(running_device *device, int channel)
 {
 	/* if we still have data to send, do it now */
 	if (channel == 0 && laserdisc_line_r(laserdisc, LASERDISC_LINE_DATA_AVAIL) == ASSERT_LINE)
@@ -209,10 +209,10 @@ static MACHINE_RESET( dlair )
 static INTERRUPT_GEN( vblank_callback )
 {
 	/* also update the speaker on the European version */
-	const device_config *beep = devtag_get_device(device->machine, "beep");
+	running_device *beep = devtag_get_device(device->machine, "beep");
 	if (beep != NULL)
 	{
-		const device_config *ctc = devtag_get_device(device->machine, "ctc");
+		running_device *ctc = devtag_get_device(device->machine, "ctc");
 		beep_set_state(beep, 1);
 		beep_set_frequency(beep, ATTOSECONDS_TO_HZ(z80ctc_getperiod(ctc, 0).attoseconds));
 	}
@@ -346,28 +346,6 @@ static WRITE8_HANDLER( laserdisc_w )
 
 /*************************************
  *
- *  Z80 SIO/DART handlers
- *
- *************************************/
-
-static READ8_DEVICE_HANDLER( sio_r )
-{
-	return (offset & 1) ? z80sio_c_r(device, (offset >> 1) & 1) : z80sio_d_r(device, (offset >> 1) & 1);
-}
-
-
-static WRITE8_DEVICE_HANDLER( sio_w )
-{
-	if (offset & 1)
-		z80sio_c_w(device, (offset >> 1) & 1, data);
-	else
-		z80sio_d_w(device, (offset >> 1) & 1, data);
-}
-
-
-
-/*************************************
- *
  *  U.S. version memory map
  *
  *************************************/
@@ -420,7 +398,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( dleuro_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x03) AM_MIRROR(0x7c) AM_DEVREADWRITE("ctc", z80ctc_r, z80ctc_w)
-	AM_RANGE(0x80, 0x83) AM_MIRROR(0x7c) AM_DEVREADWRITE("sio", sio_r, sio_w)
+	AM_RANGE(0x80, 0x83) AM_MIRROR(0x7c) AM_DEVREADWRITE("sio", z80sio_ba_cd_r, z80sio_ba_cd_w)
 ADDRESS_MAP_END
 
 

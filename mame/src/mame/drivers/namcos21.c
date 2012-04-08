@@ -288,7 +288,7 @@ CPU68 PCB:
   JP2          /D-ST           /VBL
   JP3
 */
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/m6805/m6805.h"
 #include "deprecat.h"
@@ -331,8 +331,7 @@ static UINT16 pointram_control;
 
 
 #define DSP_BUF_MAX (4096*12)
-typedef struct _dsp_state dsp_state;
-struct _dsp_state
+struct dsp_state
 {
 	unsigned masterSourceAddr;
 	UINT16 slaveInputBuffer[DSP_BUF_MAX];
@@ -613,7 +612,7 @@ static WRITE16_HANDLER( dspram16_w )
 		}
 		else if (namcos2_gametype == NAMCOS21_SOLVALOU &&
 					offset == 0x103 &&
-					space->cpu == cputag_get_cpu(space->machine, "maincpu"))
+					space->cpu == devtag_get_device(space->machine, "maincpu"))
 		{ /* hack; synchronization for solvalou */
 			cpu_yield(space->cpu);
 		}

@@ -1,8 +1,12 @@
 
 
-typedef struct _fgoal_state fgoal_state;
-struct _fgoal_state
+class fgoal_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, fgoal_state(machine)); }
+
+	fgoal_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    video_ram;
 
@@ -17,8 +21,8 @@ struct _fgoal_state
 	int        prev_coin;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *mb14241;
+	running_device *maincpu;
+	running_device *mb14241;
 };
 
 

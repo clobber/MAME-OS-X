@@ -52,7 +52,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "namco53.h"
 #include "cpu/mb88xx/mb88xx.h"
 
@@ -64,14 +64,14 @@
 typedef struct _namco_53xx_state namco_53xx_state;
 struct _namco_53xx_state
 {
-	const device_config *	cpu;
+	running_device *	cpu;
 	UINT8					portO;
 	devcb_resolved_read8	k;
 	devcb_resolved_read8	in[4];
 	devcb_resolved_write8	p;
 };
 
-INLINE namco_53xx_state *get_safe_token(const device_config *device)
+INLINE namco_53xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -113,11 +113,11 @@ static WRITE8_HANDLER( namco_53xx_P_w )
 
 static TIMER_CALLBACK( namco_53xx_irq_clear )
 {
-	namco_53xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_53xx_state *state = get_safe_token((running_device *)ptr);
 	cpu_set_input_line(state->cpu, 0, CLEAR_LINE);
 }
 
-void namco_53xx_read_request(const device_config *device)
+void namco_53xx_read_request(running_device *device)
 {
 	namco_53xx_state *state = get_safe_token(device);
 	cpu_set_input_line(state->cpu, 0, ASSERT_LINE);
@@ -171,16 +171,15 @@ ROM_END
 
 static DEVICE_START( namco_53xx )
 {
-	const namco_53xx_interface *config = (const namco_53xx_interface *)device->static_config;
+	const namco_53xx_interface *config = (const namco_53xx_interface *)device->baseconfig().static_config;
 	namco_53xx_state *state = get_safe_token(device);
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 
 	assert(config != NULL);
 
 	/* find our CPU */
-	state->cpu = cputag_get_cpu(device->machine, device_build_tag(tempstring, device, "mcu"));
+	state->cpu = device->subdevice("mcu");
 	assert(state->cpu != NULL);
-	astring_free(tempstring);
 
 	/* resolve our read/write callbacks */
 	devcb_resolve_read8(&state->k, &config->k, device);
@@ -189,6 +188,8 @@ static DEVICE_START( namco_53xx )
 	devcb_resolve_read8(&state->in[2], &config->in[2], device);
 	devcb_resolve_read8(&state->in[3], &config->in[3], device);
 	devcb_resolve_write8(&state->p, &config->p, device);
+
+	state_save_register_device_item(device, 0, state->portO);
 }
 
 

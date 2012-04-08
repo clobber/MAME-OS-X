@@ -105,7 +105,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/fd1094.h"
 #include "cpu/m68000/m68kcpu.h"
 
@@ -258,7 +258,7 @@ static void set_default_key_params(running_machine *machine);
 static void load_overlay_file(running_machine *machine);
 static void save_overlay_file(running_machine *machine);
 
-static int instruction_hook(const device_config *device, offs_t curpc);
+static int instruction_hook(running_device *device, offs_t curpc);
 
 static void execute_fdsave(running_machine *machine, int ref, int params, const char **param);
 static void execute_fdoutput(running_machine *machine, int ref, int params, const char **param);
@@ -535,7 +535,7 @@ void fd1094_init_debugging(running_machine *machine, const char *cpureg, const c
 	debug_console_register_command(machine, "fdcsearch", CMDFLAG_NONE, 0, 0, 0, execute_fdcsearch);
 
 	/* set up the instruction hook */
-	debug_cpu_set_instruction_hook(cputag_get_cpu(machine, "maincpu"), instruction_hook);
+	debug_cpu_set_instruction_hook(devtag_get_device(machine, "maincpu"), instruction_hook);
 
 	/* regenerate the key */
 	if (keydirty)
@@ -688,7 +688,7 @@ void fd1094_regenerate_key(running_machine *machine)
     instruction_hook - per-instruction hook
 -----------------------------------------------*/
 
-static int instruction_hook(const device_config *device, offs_t curpc)
+static int instruction_hook(running_device *device, offs_t curpc)
 {
 	int curfdstate = fd1094_set_state(keyregion, -1);
 	UINT8 instrbuffer[10], keybuffer[5];
@@ -887,7 +887,7 @@ static void execute_fdeliminate(running_machine *machine, int ref, int params, c
 
 static void execute_fdunlock(running_machine *machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	running_device *cpu = debug_cpu_get_visible_cpu(machine);
 	int reps = keystatus_words / KEY_SIZE;
 	int keyaddr, repnum;
 	UINT64 offset;
@@ -925,7 +925,7 @@ static void execute_fdunlock(running_machine *machine, int ref, int params, cons
 
 static void execute_fdignore(running_machine *machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	running_device *cpu = debug_cpu_get_visible_cpu(machine);
 	UINT64 offset;
 
 	/* support 0 or 1 parameters */
@@ -1030,7 +1030,7 @@ static void execute_fdstate(running_machine *machine, int ref, int params, const
 
 static void execute_fdpc(running_machine *machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = debug_cpu_get_visible_cpu(machine);
+	running_device *cpu = debug_cpu_get_visible_cpu(machine);
 	UINT64 newpc;
 
 	/* support 0 or 1 parameters */

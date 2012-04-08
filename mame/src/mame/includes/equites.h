@@ -2,9 +2,13 @@
 #define POPDRUMKIT 0
 
 
-typedef struct _equites_state equites_state;
-struct _equites_state
+class equites_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, equites_state(machine)); }
+
+	equites_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  bg_videoram;
 	UINT8  *  fg_videoram;	// 8bits
@@ -34,11 +38,11 @@ struct _equites_state
 #endif
 
 	/* devices */
-	const device_config *mcu;
-	const device_config *audio_cpu;
-	const device_config *msm;
-	const device_config *dac_1;
-	const device_config *dac_2;
+	running_device *mcu;
+	running_device *audio_cpu;
+	running_device *msm;
+	running_device *dac_1;
+	running_device *dac_2;
 };
 
 

@@ -6,7 +6,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/tms5220.h"
 #include "sound/pokey.h"
@@ -147,7 +147,7 @@ static WRITE8_HANDLER( speech_strobe_w )
 
 	if ((new_speech_strobe_state != state->speech_strobe_state) && new_speech_strobe_state)
 	{
-		const device_config *tms = devtag_get_device(space->machine, "tms");
+		running_device *tms = devtag_get_device(space->machine, "tms");
 		tms5220_data_w(tms, 0, *state->speech_data);
 	}
 	state->speech_strobe_state = new_speech_strobe_state;

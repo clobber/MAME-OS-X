@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct __88games_state _88games_state;
-struct __88games_state
+class _88games_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, _88games_state(machine)); }
+
+	_88games_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *      ram;
 	UINT8 *      banked_rom;
@@ -21,12 +25,12 @@ struct __88games_state
 	int          speech_chip;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k052109;
-	const device_config *k051960;
-	const device_config *k051316;
-	const device_config *upd_1;
-	const device_config *upd_2;
+	running_device *audiocpu;
+	running_device *k052109;
+	running_device *k051960;
+	running_device *k051316;
+	running_device *upd_1;
+	running_device *upd_2;
 };
 
 

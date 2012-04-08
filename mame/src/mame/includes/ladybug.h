@@ -6,9 +6,13 @@
 
 *************************************************************************/
 
-typedef struct _ladybug_state ladybug_state;
-struct _ladybug_state
+class ladybug_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ladybug_state(machine)); }
+
+	ladybug_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    colorram;
@@ -35,7 +39,7 @@ struct _ladybug_state
 	UINT8      sraider_0x30, sraider_0x38;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

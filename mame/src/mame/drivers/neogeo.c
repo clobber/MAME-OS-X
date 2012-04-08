@@ -191,7 +191,7 @@ NOTE: On CTRG2-B, The "A" lines start at "A1". If you trace this on an
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "includes/neogeo.h"
 #include "machine/pd4990a.h"
@@ -390,7 +390,7 @@ static void start_interrupt_timers( running_machine *machine )
  *
  *************************************/
 
-static void audio_cpu_irq(const device_config *device, int assert)
+static void audio_cpu_irq(running_device *device, int assert)
 {
 	neogeo_state *state = (neogeo_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, assert ? ASSERT_LINE : CLEAR_LINE);
@@ -681,7 +681,7 @@ static CUSTOM_INPUT( get_audio_result )
 	neogeo_state *state = (neogeo_state *)field->port->machine->driver_data;
 	UINT32 ret = state->audio_result;
 
-//  if (LOG_CPU_COMM) logerror("MAIN CPU PC %06x: audio_result_r %02x\n", cpu_get_pc(cputag_get_cpu(field->port->machine, "maincpu")), ret);
+//  if (LOG_CPU_COMM) logerror("MAIN CPU PC %06x: audio_result_r %02x\n", cpu_get_pc(devtag_get_device(field->port->machine, "maincpu")), ret);
 
 	return ret;
 }
@@ -1123,7 +1123,7 @@ static MACHINE_RESET( neogeo )
 	for (offs = 0; offs < 8; offs++)
 		system_control_w(space, offs, 0, 0x00ff);
 
-	device_reset(cputag_get_cpu(machine, "maincpu"));
+	machine->device("maincpu")->reset();
 
 	neogeo_reset_rng(machine);
 
@@ -1194,7 +1194,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static ADDRESS_MAP_START( auido_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( audio_io_map, ADDRESS_SPACE_IO, 8 )
   /*AM_RANGE(0x00, 0x00) AM_MIRROR(0xff00) AM_READWRITE(audio_command_r, audio_cpu_clear_nmi_w);*/  /* may not and NMI clear */
 	AM_RANGE(0x00, 0x00) AM_MIRROR(0xff00) AM_READ(audio_command_r)
 	AM_RANGE(0x04, 0x07) AM_MIRROR(0xff00) AM_DEVREADWRITE("ymsnd", ym2610_r, ym2610_w)
@@ -1241,8 +1241,8 @@ static const ym2610_interface ym2610_config =
 	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )											\
 	PORT_DIPNAME( 0x0018, 0x0018, "COMM Setting (Cabinet No.)" ) PORT_DIPLOCATION("SW:4,5")	\
 	PORT_DIPSETTING(	  0x0018, "1" )														\
-	PORT_DIPSETTING(	  0x0008, "2" )														\
-	PORT_DIPSETTING(	  0x0010, "3" )														\
+	PORT_DIPSETTING(	  0x0010, "2" )														\
+	PORT_DIPSETTING(	  0x0008, "3" )														\
 	PORT_DIPSETTING(	  0x0000, "4" )														\
 	PORT_DIPNAME( 0x0020, 0x0020, "COMM Setting (Link Enable)" ) PORT_DIPLOCATION("SW:6")	\
 	PORT_DIPSETTING(	  0x0020, DEF_STR( Off ) )											\
@@ -1348,7 +1348,7 @@ static MACHINE_DRIVER_START( neogeo )
 
 	MDRV_CPU_ADD("audiocpu", Z80, NEOGEO_AUDIO_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(audio_map)
-	MDRV_CPU_IO_MAP(auido_io_map)
+	MDRV_CPU_IO_MAP(audio_io_map)
 
 	MDRV_WATCHDOG_TIME_INIT(USEC(128762))
 

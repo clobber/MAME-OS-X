@@ -4,7 +4,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/atarigen.h"
 #include "includes/blstroid.h"
 
@@ -100,12 +100,12 @@ static TIMER_CALLBACK( irq_off )
 static TIMER_CALLBACK( irq_on )
 {
 	/* generate the interrupt */
-	atarigen_scanline_int_gen(cputag_get_cpu(machine, "maincpu"));
+	atarigen_scanline_int_gen(devtag_get_device(machine, "maincpu"));
 	atarigen_update_interrupts(machine);
 }
 
 
-void blstroid_scanline_update(const device_config *screen, int scanline)
+void blstroid_scanline_update(running_device *screen, int scanline)
 {
 	blstroid_state *state = (blstroid_state *)screen->machine->driver_data;
 	int offset = (scanline / 8) * 64 + 40;

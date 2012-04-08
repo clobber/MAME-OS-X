@@ -23,7 +23,16 @@
  */
 
 #import <Cocoa/Cocoa.h>
+
+
 #include "osdepend.h"
+#include "attotime.h"
+//#include "uiinput.h"
+#include "ui.h"
+#include "emu.h"
+#include "eminline.h"
+//#include "inptport.h"
+//wtf not sure what's going on here
 
 // DLD Hack
 typedef osd_ticks_t cycles_t;

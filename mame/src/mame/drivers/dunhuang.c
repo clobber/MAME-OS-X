@@ -49,7 +49,7 @@ Notes:
 
 *********************************************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/okim6295.h"
@@ -58,9 +58,13 @@ Notes:
 #define DUNHUANG_DEBUG	0
 
 
-typedef struct _dunhuang_state dunhuang_state;
-struct _dunhuang_state
+class dunhuang_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dunhuang_state(machine)); }
+
+	dunhuang_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *        videoram;
 	UINT16 *        videoram2;

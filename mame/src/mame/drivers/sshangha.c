@@ -51,7 +51,7 @@ Stephh's notes (based on the games M68000 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2203intf.h"
@@ -338,7 +338,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void irqhandler(const device_config *device, int state)
+static void irqhandler(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, state);
 }

@@ -10,7 +10,7 @@
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
 #include "machine/laserdsc.h"
@@ -19,7 +19,7 @@
 
 extern const char layout_dlair[];
 
-static const device_config *laserdisc;
+static running_device *laserdisc;
 static UINT8 laserdisc_data;
 
 static int rx_bit;

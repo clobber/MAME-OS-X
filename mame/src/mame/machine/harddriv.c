@@ -4,7 +4,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/adsp2100/adsp2100.h"
 #include "cpu/m68000/m68000.h"
@@ -140,7 +140,7 @@ WRITE16_HANDLER( hd68k_irq_ack_w )
 }
 
 
-void hdgsp_irq_gen(const device_config *device, int irqstate)
+void hdgsp_irq_gen(running_device *device, int irqstate)
 {
 	harddriv_state *state = (harddriv_state *)device->machine->driver_data;
 	state->gsp_irq_state = irqstate;
@@ -148,7 +148,7 @@ void hdgsp_irq_gen(const device_config *device, int irqstate)
 }
 
 
-void hdmsp_irq_gen(const device_config *device, int irqstate)
+void hdmsp_irq_gen(running_device *device, int irqstate)
 {
 	harddriv_state *state = (harddriv_state *)device->machine->driver_data;
 	state->msp_irq_state = irqstate;
@@ -1153,7 +1153,7 @@ READ16_HANDLER( hd68k_ds3_gdata_r )
 	logerror("%06X:hd68k_ds3_gdata_r(%04X)\n", cpu_get_previouspc(space->cpu), state->ds3_gdata);
 
 	/* attempt to optimize the transfer if conditions are right */
-	if (space->cpu == cputag_get_cpu(space->machine, "maincpu") && pc == state->ds3_transfer_pc &&
+	if (space->cpu == devtag_get_device(space->machine, "maincpu") && pc == state->ds3_transfer_pc &&
 		!(!state->ds3_g68flag && state->ds3_g68irqs) && !(state->ds3_gflag && state->ds3_gfirqs))
 	{
 		UINT32 destaddr = cpu_get_reg(space->cpu, M68K_A1);
@@ -1375,7 +1375,7 @@ WRITE16_HANDLER( hd68k_ds3_program_w )
  *
  *************************************/
 
-void hddsk_update_pif(const device_config *device, UINT32 pins)
+void hddsk_update_pif(running_device *device, UINT32 pins)
 {
 	atarigen_state *atarigen = (atarigen_state *)device->machine->driver_data;
 	atarigen->sound_int_state = ((pins & DSP32_OUTPUT_PIF) != 0);

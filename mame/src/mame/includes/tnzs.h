@@ -15,9 +15,13 @@ enum
 	MCU_TNZS
 };
 
-typedef struct _tnzs_state tnzs_state;
-struct _tnzs_state
+class tnzs_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, tnzs_state(machine)); }
+
+	tnzs_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  objram;
 	UINT8 *  vdcram;
@@ -42,6 +46,8 @@ struct _tnzs_state
 	int      insertcoin;
 	UINT8    mcu_coinage[4];
 	UINT8    mcu_coins_a, mcu_coins_b, mcu_credits;
+	int      bank1;
+	int      bank2;
 
 	/* game-specific */
 	// champbwl
@@ -52,8 +58,9 @@ struct _tnzs_state
 
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *mcu;
+	running_device *audiocpu;
+	running_device *subcpu;
+	running_device *mcu;
 };
 
 

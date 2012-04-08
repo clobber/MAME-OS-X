@@ -36,7 +36,7 @@
 /*                                                                           */
 /*****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/mcs48/mcs48.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
@@ -127,7 +127,7 @@ static int psgData = 0;
 WRITE8_HANDLER( carnival_audio_1_w )
 {
 	static int port1State = 0;
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;
@@ -206,7 +206,7 @@ WRITE8_HANDLER( carnival_audio_1_w )
 
 WRITE8_HANDLER( carnival_audio_2_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 	int bitsChanged;
 	int bitsGoneHigh;
 	int bitsGoneLow;

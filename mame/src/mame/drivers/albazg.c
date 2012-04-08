@@ -53,7 +53,7 @@ Code disassembling
 [0312]-> Eeprom init msg
 *******************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/eeprom.h"
 #include "sound/ay8910.h"
@@ -61,9 +61,13 @@ Code disassembling
 #include "machine/8255ppi.h"
 
 
-typedef struct _albazg_state albazg_state;
-struct _albazg_state
+class albazg_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, albazg_state(machine)); }
+
+	albazg_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  cus_ram;
 	UINT8 *  videoram;

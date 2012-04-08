@@ -11,13 +11,86 @@
 
 #pragma once
 
+#ifndef __EMU_H__
+#error Dont include this file directly; include emu.h instead.
+#endif
+
 #ifndef __MCONFIG_H__
 #define __MCONFIG_H__
 
-#include "devintrf.h"
-#include "cpuexec.h"
-#include "sndintrf.h"
-#include <stddef.h>
+
+#define NVRAM_HANDLER_NAME(name)	nvram_handler_##name
+#define NVRAM_HANDLER(name)			void NVRAM_HANDLER_NAME(name)(running_machine *machine, mame_file *file, int read_or_write)
+#define NVRAM_HANDLER_CALL(name)	NVRAM_HANDLER_NAME(name)(machine, file, read_or_write)
+
+#define MEMCARD_HANDLER_NAME(name)	memcard_handler_##name
+#define MEMCARD_HANDLER(name)		void MEMCARD_HANDLER_NAME(name)(running_machine *machine, mame_file *file, int action)
+#define MEMCARD_HANDLER_CALL(name)	MEMCARD_HANDLER_NAME(name)(machine, file, action)
+
+#define MACHINE_START_NAME(name)	machine_start_##name
+#define MACHINE_START(name)			void MACHINE_START_NAME(name)(running_machine *machine)
+#define MACHINE_START_CALL(name)	MACHINE_START_NAME(name)(machine)
+
+#define MACHINE_RESET_NAME(name)	machine_reset_##name
+#define MACHINE_RESET(name)			void MACHINE_RESET_NAME(name)(running_machine *machine)
+#define MACHINE_RESET_CALL(name)	MACHINE_RESET_NAME(name)(machine)
+
+#define SOUND_START_NAME(name)		sound_start_##name
+#define SOUND_START(name)			void SOUND_START_NAME(name)(running_machine *machine)
+#define SOUND_START_CALL(name)		SOUND_START_NAME(name)(machine)
+
+#define SOUND_RESET_NAME(name)		sound_reset_##name
+#define SOUND_RESET(name)			void SOUND_RESET_NAME(name)(running_machine *machine)
+#define SOUND_RESET_CALL(name)		SOUND_RESET_NAME(name)(machine)
+
+#define VIDEO_START_NAME(name)		video_start_##name
+#define VIDEO_START(name)			void VIDEO_START_NAME(name)(running_machine *machine)
+#define VIDEO_START_CALL(name)		VIDEO_START_NAME(name)(machine)
+
+#define VIDEO_RESET_NAME(name)		video_reset_##name
+#define VIDEO_RESET(name)			void VIDEO_RESET_NAME(name)(running_machine *machine)
+#define VIDEO_RESET_CALL(name)		VIDEO_RESET_NAME(name)(machine)
+
+#define PALETTE_INIT_NAME(name)		palette_init_##name
+#define PALETTE_INIT(name)			void PALETTE_INIT_NAME(name)(running_machine *machine, const UINT8 *color_prom)
+#define PALETTE_INIT_CALL(name)		PALETTE_INIT_NAME(name)(machine, color_prom)
+
+#define VIDEO_EOF_NAME(name)		video_eof_##name
+#define VIDEO_EOF(name)				void VIDEO_EOF_NAME(name)(running_machine *machine)
+#define VIDEO_EOF_CALL(name)		VIDEO_EOF_NAME(name)(machine)
+
+#define VIDEO_UPDATE_NAME(name)		video_update_##name
+#define VIDEO_UPDATE(name)			UINT32 VIDEO_UPDATE_NAME(name)(running_device *screen, bitmap_t *bitmap, const rectangle *cliprect)
+#define VIDEO_UPDATE_CALL(name)		VIDEO_UPDATE_NAME(name)(screen, bitmap, cliprect)
+
+
+/* NULL versions */
+#define nvram_handler_0 			NULL
+#define memcard_handler_0			NULL
+#define machine_start_0 			NULL
+#define machine_reset_0 			NULL
+#define sound_start_0				NULL
+#define sound_reset_0				NULL
+#define video_start_0				NULL
+#define video_reset_0				NULL
+#define palette_init_0				NULL
+#define video_eof_0 				NULL
+#define video_update_0				NULL
+
+
+typedef void   (*nvram_handler_func)(running_machine *machine, mame_file *file, int read_or_write);
+typedef void   (*memcard_handler_func)(running_machine *machine, mame_file *file, int action);
+typedef void   (*machine_start_func)(running_machine *machine);
+typedef void   (*machine_reset_func)(running_machine *machine);
+typedef void   (*sound_start_func)(running_machine *machine);
+typedef void   (*sound_reset_func)(running_machine *machine);
+typedef void   (*video_start_func)(running_machine *machine);
+typedef void   (*video_reset_func)(running_machine *machine);
+typedef void   (*palette_init_func)(running_machine *machine, const UINT8 *color_prom);
+typedef void   (*video_eof_func)(running_machine *machine);
+typedef UINT32 (*video_update_func)(running_device *screen, bitmap_t *bitmap, const rectangle *cliprect);
+typedef void * (*driver_data_alloc_func)(running_machine &machine);
+
 
 
 /***************************************************************************
@@ -113,10 +186,14 @@ enum
     TYPE DEFINITIONS
 ***************************************************************************/
 
-/* In mamecore.h: typedef struct _machine_config machine_config; */
+// forward references
+struct gfx_decode_entry;
+
+
+typedef struct _machine_config machine_config;
 struct _machine_config
 {
-	UINT32					driver_data_size;		/* amount of memory needed for driver_data */
+	driver_data_alloc_func	driver_data_alloc;		/* allocator for driver data */
 
 	attotime				minimum_quantum;		/* minimum scheduling quantum */
 	const char *			perfect_cpu_quantum;	/* tag of CPU to use for "perfect" scheduling */
@@ -143,7 +220,7 @@ struct _machine_config
 	sound_start_func		sound_start;			/* one-time sound start callback */
 	sound_reset_func		sound_reset;			/* sound reset callback */
 
-	device_list				devicelist;				/* list head for devices */
+	device_config_list		devicelist;				/* list of device configs */
 };
 
 
@@ -153,15 +230,13 @@ struct _machine_config
 ***************************************************************************/
 
 /* this type is used to encode machine configuration definitions */
-typedef union _machine_config_token machine_config_token;
-union _machine_config_token
+union machine_config_token
 {
 	TOKEN_COMMON_FIELDS
 	const machine_config_token *tokenptr;
 	const gfx_decode_entry *gfxdecode;
 	const addrmap_token *addrmap;
 	device_type devtype;
-	driver_init_func driver_init;
 	nvram_handler_func nvram_handler;
 	memcard_handler_func memcard_handler;
 	machine_start_func machine_start;
@@ -173,6 +248,7 @@ union _machine_config_token
 	palette_init_func palette_init;
 	video_eof_func video_eof;
 	video_update_func video_update;
+	driver_data_alloc_func driver_data_alloc;
 };
 
 
@@ -202,8 +278,9 @@ union _machine_config_token
 
 
 /* core parameters */
-#define MDRV_DRIVER_DATA(_struct) \
-	TOKEN_UINT32_PACK2(MCONFIG_TOKEN_DRIVER_DATA, 8, sizeof(_struct), 24),
+#define MDRV_DRIVER_DATA(_class) \
+	TOKEN_UINT32_PACK1(MCONFIG_TOKEN_DRIVER_DATA, 8), \
+	TOKEN_PTR(driver_data_alloc, _class::alloc),
 
 #define MDRV_QUANTUM_TIME(_time) \
 	TOKEN_UINT32_PACK1(MCONFIG_TOKEN_QUANTUM_TIME, 8), \

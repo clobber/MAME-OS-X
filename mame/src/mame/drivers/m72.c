@@ -80,7 +80,7 @@ other supported games as well.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/nec/nec.h"
 #include "deprecat.h"
@@ -219,8 +219,8 @@ static WRITE16_HANDLER( m72_main_mcu_w)
 		protection_ram[offset] = val;
 		cputag_set_input_line(space->machine, "mcu", 0, ASSERT_LINE);
 		/* Line driven, most likely by write line */
-		//timer_set(space->machine, cpu_clocks_to_attotime(cputag_get_cpu(space->machine, "mcu"), 2), NULL, 0, mcu_irq0_clear);
-		//timer_set(space->machine, cpu_clocks_to_attotime(cputag_get_cpu(space->machine, "mcu"), 0), NULL, 0, mcu_irq0_raise);
+		//timer_set(space->machine, cpu_clocks_to_attotime(devtag_get_device(space->machine, "mcu"), 2), NULL, 0, mcu_irq0_clear);
+		//timer_set(space->machine, cpu_clocks_to_attotime(devtag_get_device(space->machine, "mcu"), 0), NULL, 0, mcu_irq0_raise);
 	}
 	else
 		timer_call_after_resynch( space->machine, protection_ram, (offset<<16) | val, delayed_ram16_w);
@@ -321,7 +321,7 @@ INLINE DRIVER_INIT( m72_8751 )
 	const address_space *program = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	const address_space *io = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 	const address_space *sndio = cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_IO);
-	const device_config *dac = devtag_get_device(machine, "dac");
+	running_device *dac = devtag_get_device(machine, "dac");
 
 	protection_ram = auto_alloc_array(machine, UINT16, 0x10000/2);
 	memory_install_read_bank(program, 0xb0000, 0xbffff, 0, 0, "bank1");

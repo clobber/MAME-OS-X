@@ -9,48 +9,14 @@
 
 ***************************************************************************/
 
-#include "driver.h"
-#include "devintrf.h"
+#include "emu.h"
 #include <ctype.h>
-
-#if defined(_MSC_VER)
-#pragma optimize ("", off)
-#endif
-
-
 
 /***************************************************************************
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
 static void machine_config_detokenize(machine_config *config, const machine_config_token *tokens, const device_config *owner, int depth);
-
-
-
-/***************************************************************************
-    MACHINE CONFIGURATIONS
-***************************************************************************/
-
-/*-------------------------------------------------
-    remove_device - remove the head device from
-    the given configuration
--------------------------------------------------*/
-
-INLINE void remove_device(device_list *list, const char *tag)
-{
-	device_config *device = (device_config *)device_list_find_by_tag(list, tag);
-	device_custom_config_func custom;
-
-	assert(device != NULL);
-
-	/* call the custom config free function first */
-	custom = (device_custom_config_func)devtype_get_info_fct(device->type, DEVINFO_FCT_CUSTOM_CONFIG);
-	if (custom != NULL)
-		(*custom)(device, MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_FREE, NULL);
-
-	/* remove the device from the list */
-	device_list_remove(list, tag);
-}
 
 
 
@@ -69,10 +35,7 @@ machine_config *machine_config_alloc(const machine_config_token *tokens)
 	machine_config *config;
 
 	/* allocate a new configuration object */
-	config = alloc_clear_or_die(machine_config);
-
-	/* initialize the device list */
-	device_list_init(&config->devicelist, TRUE);
+	config = global_alloc_clear(machine_config);
 
 	/* parse tokens into the config */
 	machine_config_detokenize(config, tokens, NULL, 0);
@@ -88,13 +51,8 @@ machine_config *machine_config_alloc(const machine_config_token *tokens)
 
 void machine_config_free(machine_config *config)
 {
-	/* release the device list */
-	while (config->devicelist.head != NULL)
-		remove_device(&config->devicelist, config->devicelist.head->tag);
-	device_list_deinit(&config->devicelist);
-
 	/* release the configuration itself */
-	free(config);
+	global_free(config);
 }
 
 
@@ -106,8 +64,8 @@ void machine_config_free(machine_config *config)
 static void machine_config_detokenize(machine_config *config, const machine_config_token *tokens, const device_config *owner, int depth)
 {
 	UINT32 entrytype = MCONFIG_TOKEN_INVALID;
-	astring *tempstring = astring_alloc();
 	device_config *device = NULL;
+	astring tempstring;
 
 	/* loop over tokens until we hit the end */
 	while (entrytype != MCONFIG_TOKEN_END)
@@ -137,21 +95,21 @@ static void machine_config_detokenize(machine_config *config, const machine_conf
 				TOKEN_UNGET_UINT32(tokens);
 				TOKEN_GET_UINT64_UNPACK2(tokens, entrytype, 8, clock, 32);
 				devtype = TOKEN_GET_PTR(tokens, devtype);
-				tag = TOKEN_GET_STRING(tokens);
-				device = device_list_add(&config->devicelist, owner, devtype, device_build_tag(tempstring, owner, tag), clock);
+				tag = owner->subtag(tempstring, TOKEN_GET_STRING(tokens));
+				device = config->devicelist.append(tag, global_alloc(device_config(owner, devtype, tag, clock)));
 				break;
 
 			case MCONFIG_TOKEN_DEVICE_REMOVE:
 				tag = TOKEN_GET_STRING(tokens);
-				remove_device(&config->devicelist, device_build_tag(tempstring, owner, tag));
+				config->devicelist.remove(owner->subtag(tempstring, tag));
 				device = NULL;
 				break;
 
 			case MCONFIG_TOKEN_DEVICE_MODIFY:
 				tag = TOKEN_GET_STRING(tokens);
-				device = (device_config *)device_list_find_by_tag(&config->devicelist, device_build_tag(tempstring, owner, tag));
+				device = config->devicelist.find(owner->subtag(tempstring, tag));
 				if (device == NULL)
-					fatalerror("Unable to find device: tag=%s\n", astring_c(tempstring));
+					fatalerror("Unable to find device: tag=%s\n", tempstring.cstr());
 				break;
 
 			case MCONFIG_TOKEN_DEVICE_CLOCK:
@@ -183,7 +141,7 @@ static void machine_config_detokenize(machine_config *config, const machine_conf
 			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_9:
 			case MCONFIG_TOKEN_DEVICE_CONFIG_CUSTOM_FREE:
 				assert(device != NULL);
-				custom = (device_custom_config_func)devtype_get_info_fct(device->type, DEVINFO_FCT_CUSTOM_CONFIG);
+				custom = (device_custom_config_func)device->get_config_fct(DEVINFO_FCT_CUSTOM_CONFIG);
 				assert(custom != NULL);
 				tokens = (*custom)(device, entrytype, tokens);
 				break;
@@ -230,8 +188,7 @@ static void machine_config_detokenize(machine_config *config, const machine_conf
 
 			/* core parameters */
 			case MCONFIG_TOKEN_DRIVER_DATA:
-				TOKEN_UNGET_UINT32(tokens);
-				TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, config->driver_data_size, 24);
+				config->driver_data_alloc = TOKEN_GET_PTR(tokens, driver_data_alloc);
 				break;
 
 			case MCONFIG_TOKEN_QUANTUM_TIME:
@@ -327,12 +284,10 @@ static void machine_config_detokenize(machine_config *config, const machine_conf
 
 	/* if we are the outermost level, process any device-specific machine configurations */
 	if (depth == 0)
-		for (device = config->devicelist.head; device != NULL; device = device->next)
+		for (device = config->devicelist.first(); device != NULL; device = device->next)
 		{
-			tokens = (const machine_config_token *)device_get_info_ptr(device, DEVINFO_PTR_MACHINE_CONFIG);
+			tokens = device->machine_config_tokens();
 			if (tokens != NULL)
 				machine_config_detokenize(config, tokens, device, depth + 1);
 		}
-
-	astring_free(tempstring);
 }

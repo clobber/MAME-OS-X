@@ -18,6 +18,7 @@
 
 *************************************************************************/
 
+#include "emu.h"
 #include "ldcore.h"
 #include "cpu/mcs48/mcs48.h"
 
@@ -87,7 +88,7 @@ struct _pioneer_pia
 typedef struct _simutrek_data simutrek_data;
 struct _simutrek_data
 {
-	const device_config *cpu;					/* 8748 CPU device */
+	running_device *cpu;					/* 8748 CPU device */
 	UINT8				audio_squelch;			/* audio squelch value */
 	UINT8				data;					/* parallel data for simutrek */
 	UINT8				data_ready;				/* ready flag for simutrek data */
@@ -108,7 +109,7 @@ struct _ldplayer_data
 	attotime			firstbittime;			/* time of first bit in command */
 
 	/* low-level emulation data */
-	const device_config *cpu;					/* 8049 CPU device */
+	running_device *cpu;					/* 8049 CPU device */
 	attotime			slowtrg;				/* time of the last SLOW TRG */
 	pioneer_pia			pia;					/* PIA state */
 	UINT8				vsync;					/* live VSYNC state */
@@ -338,7 +339,7 @@ const ldplayer_interface pr8210_interface =
 
 static void pr8210_init(laserdisc_state *ld)
 {
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 	attotime curtime = timer_get_time(ld->device->machine);
 	ldplayer_data *player = ld->player;
 
@@ -350,8 +351,8 @@ static void pr8210_init(laserdisc_state *ld)
 	player->slowtrg = curtime;
 
 	/* find our CPU */
-	player->cpu = cputag_get_cpu(ld->device->machine, device_build_tag(tempstring, ld->device, "pr8210"));
-	astring_free(tempstring);
+	player->cpu = ld->device->subdevice("pr8210");
+	assert(player->cpu != NULL);
 
 	/* we don't have the Simutrek player overrides */
 	player->simutrek.cpu = NULL;
@@ -1053,7 +1054,7 @@ const ldplayer_interface simutrek_interface =
     command to enable/disable audio squelch
 -------------------------------------------------*/
 
-void simutrek_set_audio_squelch(const device_config *device, int state)
+void simutrek_set_audio_squelch(running_device *device, int state)
 {
 	laserdisc_state *ld = ldcore_get_safe_token(device);
 	ldplayer_data *player = ld->player;
@@ -1071,7 +1072,7 @@ void simutrek_set_audio_squelch(const device_config *device, int state)
 
 static void simutrek_init(laserdisc_state *ld)
 {
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 	ldplayer_data *player = ld->player;
 
 	/* standard PR-8210 initialization */
@@ -1082,8 +1083,7 @@ static void simutrek_init(laserdisc_state *ld)
 	player->simutrek.data_ready = 1;
 
 	/* find the Simutrek CPU */
-	player->simutrek.cpu = cputag_get_cpu(ld->device->machine, device_build_tag(tempstring, ld->device, "simutrek"));
-	astring_free(tempstring);
+	player->simutrek.cpu = ld->device->subdevice("simutrek");
 }
 
 

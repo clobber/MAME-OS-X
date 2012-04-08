@@ -16,7 +16,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "machine/7474.h"
 #include "machine/74148.h"
@@ -233,7 +233,7 @@ GFXDECODE_END
 static MACHINE_DRIVER_START( carpolo )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6502,11289000/12)		/* 940.75 kHz */
+	MDRV_CPU_ADD("maincpu", M6502, XTAL_11_289MHz/12)		/* 940.75 kHz */
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT("screen", carpolo_timer_interrupt)	/* this not strictly VBLANK,
                                                        but it's supposed to happen 60

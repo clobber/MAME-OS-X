@@ -10,7 +10,7 @@
 
     This only loads the basic stuff - there needs to be more done to make this run.
 ******************************************************************************************/
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "video/awpvid.h"		//Fruit Machines Only
 #include "machine/6821pia.h"
@@ -21,7 +21,6 @@
 #include "sound/ay8910.h"
 #include "sound/2413intf.h"
 #include "sound/okim6376.h"
-#include "timer.h"
 
 #define VERBOSE 1
 #define LOG(x)	do { if (VERBOSE) logerror x; } while (0)
@@ -31,7 +30,7 @@
 
 static struct
 {
-	const device_config *duart68681;
+	running_device *duart68681;
 } maygaym1_devices;
 
 static UINT8  lamppos;
@@ -46,8 +45,7 @@ static int  SRSEL;
 static UINT8 Lamps[256];      // 256 multiplexed lamps
 static int optic_pattern;
 
-typedef struct _i8279_state i8279_state;
-struct _i8279_state
+struct i8279_state
 {
 	UINT8		command;
 	UINT8		mode;
@@ -463,7 +461,7 @@ static MACHINE_RESET( m1 )
 
 ///////////////////////////////////////////////////////////////////////////
 
-static void duart_irq_handler(const device_config *device, UINT8 state)
+static void duart_irq_handler(running_device *device, UINT8 state)
 {
 	cputag_set_input_line(device->machine, "maincpu", M6809_IRQ_LINE, state?ASSERT_LINE:CLEAR_LINE);
 	LOG(("6809 irq%d \n",state));
@@ -699,7 +697,7 @@ static WRITE8_HANDLER( reel56_w )
 	awp_draw_reel(5);
 }
 
-static UINT8 m1_duart_r (const device_config *device)
+static UINT8 m1_duart_r (running_device *device)
 {
 	return (optic_pattern);
 }

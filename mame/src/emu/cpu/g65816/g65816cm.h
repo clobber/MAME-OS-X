@@ -3,7 +3,6 @@
 #ifndef __G65816CM_H__
 #define __G65816CM_H__
 
-#include "cpuexec.h"
 
 #define g65816i_branching(A)
 #define g65816i_jumping(A)
@@ -95,7 +94,7 @@ struct _g65816i_cpu_struct
 	uint ir;			/* Instruction Register */
 	uint irq_delay;		/* delay 1 instruction before checking irq */
 	cpu_irq_callback int_ack; /* Interrupt Acknowledge */
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	read8_space_func read_vector;	/* Read vector override */
 	uint stopped;		/* Sets how the CPU is stopped */

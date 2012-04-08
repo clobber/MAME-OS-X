@@ -4,14 +4,14 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/vertigo.h"
 #include "includes/exidy440.h"
 #include "machine/74148.h"
 #include "machine/pit8253.h"
 
 
-static const device_config *ttl74148;
+static running_device *ttl74148;
 
 
 
@@ -21,8 +21,8 @@ static const device_config *ttl74148;
  *
  *************************************/
 
-static PIT8253_OUTPUT_CHANGED( v_irq4_w );
-static PIT8253_OUTPUT_CHANGED( v_irq3_w );
+static WRITE_LINE_DEVICE_HANDLER( v_irq4_w );
+static WRITE_LINE_DEVICE_HANDLER( v_irq3_w );
 
 
 
@@ -49,13 +49,16 @@ const struct pit8253_config vertigo_pit8254_config =
 	{
 		{
 			240000,
-			v_irq4_w
+			DEVCB_NULL,
+			DEVCB_LINE(v_irq4_w)
 		}, {
 			240000,
-			v_irq3_w
+			DEVCB_NULL,
+			DEVCB_LINE(v_irq3_w)
 		}, {
 			240000,
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}
 	}
 };
@@ -70,7 +73,7 @@ const struct pit8253_config vertigo_pit8254_config =
  *
  *************************************/
 
-void vertigo_update_irq(const device_config *device)
+void vertigo_update_irq(running_device *device)
 {
 	if (irq_state < 7)
 		cputag_set_input_line(device->machine, "maincpu", irq_state ^ 7, CLEAR_LINE);
@@ -89,7 +92,7 @@ static void update_irq_encoder(running_machine *machine, int line, int state)
 }
 
 
-static PIT8253_OUTPUT_CHANGED( v_irq4_w )
+static WRITE_LINE_DEVICE_HANDLER( v_irq4_w )
 {
 	update_irq_encoder(device->machine, INPUT_LINE_IRQ4, state);
 	vertigo_vproc(cputag_attotime_to_clocks(device->machine, "maincpu", attotime_sub(timer_get_time(device->machine), irq4_time)), state);
@@ -97,7 +100,7 @@ static PIT8253_OUTPUT_CHANGED( v_irq4_w )
 }
 
 
-static PIT8253_OUTPUT_CHANGED( v_irq3_w )
+static WRITE_LINE_DEVICE_HANDLER( v_irq3_w )
 {
 	if (state)
 		cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_IRQ0, ASSERT_LINE);

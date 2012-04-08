@@ -39,7 +39,7 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "cpu/pic16c5x/pic16c5x.h"
@@ -88,7 +88,7 @@ static WRITE16_HANDLER( wbeachvl_coin_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		const device_config *eeprom = devtag_get_device(space->machine, "eeprom");
+		running_device *eeprom = devtag_get_device(space->machine, "eeprom");
 
 		/* bits 0-3 are coin counters? (only 0 used?) */
 		coin_counter_w(space->machine, 0,data & 0x01);
@@ -107,7 +107,7 @@ static WRITE16_HANDLER( hotmind_coin_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		const device_config *eeprom = devtag_get_device(space->machine, "eeprom");
+		running_device *eeprom = devtag_get_device(space->machine, "eeprom");
 		coin_counter_w(space->machine, 0,data & 0x20);
 
 		eeprom_set_cs_line(eeprom, (data & 1) ? CLEAR_LINE : ASSERT_LINE);
@@ -1445,7 +1445,7 @@ static DRIVER_INIT( bigtwin )
 			data_lo = playmark_asciitohex((playmark_PICROM_HEX[src_pos + 3]));
 			data |= (data_hi << 12) | (data_lo << 8);
 
-			pic16c5x_set_config(cputag_get_cpu(machine, "audiocpu"), data);
+			pic16c5x_set_config(devtag_get_device(machine, "audiocpu"), data);
 
 			src_pos = 0x7fff;		/* Force Exit */
 		}

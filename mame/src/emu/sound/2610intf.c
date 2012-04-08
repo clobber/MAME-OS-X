@@ -11,7 +11,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "ay8910.h"
 #include "2610intf.h"
@@ -25,11 +25,11 @@ struct _ym2610_state
 	void *			chip;
 	void *			psg;
 	const ym2610_interface *intf;
-	const device_config *device;
+	running_device *device;
 };
 
 
-INLINE ym2610_state *get_safe_token(const device_config *device)
+INLINE ym2610_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -145,12 +145,12 @@ static DEVICE_START( ym2610 )
 		AY8910_DEFAULT_LOADS,
 		DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL
 	};
-	const ym2610_interface *intf = device->static_config ? (const ym2610_interface *)device->static_config : &generic_2610;
+	const ym2610_interface *intf = device->baseconfig().static_config ? (const ym2610_interface *)device->baseconfig().static_config : &generic_2610;
 	int rate = device->clock/72;
 	void *pcmbufa,*pcmbufb;
 	int  pcmsizea,pcmsizeb;
 	ym2610_state *info = get_safe_token(device);
-	astring *name = astring_alloc();
+	astring name;
 	sound_type type = sound_get_type(device);
 
 	info->intf = intf;
@@ -165,12 +165,11 @@ static DEVICE_START( ym2610 )
 	/* stream system initialize */
 	info->stream = stream_create(device,0,2,rate,info,(type == SOUND_YM2610) ? ym2610_stream_update : ym2610b_stream_update);
 	/* setup adpcm buffers */
-	pcmbufa  = device->region;
-	pcmsizea = device->regionbytes;
-	astring_printf(name, "%s.deltat", device->tag);
-	pcmbufb  = (void *)(memory_region(device->machine, astring_c(name)));
-	pcmsizeb = memory_region_length(device->machine, astring_c(name));
-	astring_free(name);
+	pcmbufa  = *device->region;
+	pcmsizea = device->region->bytes();
+	name.printf("%s.deltat", device->tag());
+	pcmbufb  = (void *)(memory_region(device->machine, name));
+	pcmsizeb = memory_region_length(device->machine, name);
 	if (pcmbufb == NULL || pcmsizeb == 0)
 	{
 		pcmbufb = pcmbufa;

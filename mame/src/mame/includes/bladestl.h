@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _bladestl_state bladestl_state;
-struct _bladestl_state
+class bladestl_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bladestl_state(machine)); }
+
+	bladestl_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    paletteram;
 
@@ -18,9 +22,9 @@ struct _bladestl_state
 	int        last_track[4];
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k007342;
-	const device_config *k007420;
+	running_device *audiocpu;
+	running_device *k007342;
+	running_device *k007420;
 };
 
 

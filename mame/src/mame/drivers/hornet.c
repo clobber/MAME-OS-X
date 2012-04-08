@@ -307,19 +307,20 @@
     21C  MC44200FT        Motorola, 3 Channel video D/A converter
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/powerpc/ppc.h"
 #include "cpu/sharc/sharc.h"
+#include "machine/adc1213x.h"
 #include "machine/eeprom.h"
+#include "machine/k033906.h"
 #include "machine/konppc.h"
-#include "video/voodoo.h"
 #include "machine/timekpr.h"
 #include "sound/rf5c400.h"
-#include "rendlay.h"
-#include "machine/adc1213x.h"
 #include "sound/k056800.h"
-#include "machine/k033906.h"
+#include "video/voodoo.h"
+#include "video/konicdev.h"
+#include "rendlay.h"
 
 static UINT8 led_reg0, led_reg1;
 static UINT32 *workram;
@@ -328,275 +329,61 @@ static UINT8 *jvs_sdata;
 static UINT32 jvs_sdata_ptr = 0;
 
 
-/* K037122 Tilemap chip (move to konamiic.c ?) */
-
-#define MAX_K037122_CHIPS	2
-
-static UINT32 *K037122_tile_ram[MAX_K037122_CHIPS];
-static UINT32 *K037122_char_ram[MAX_K037122_CHIPS];
-static int K037122_gfx_index[MAX_K037122_CHIPS];
-static tilemap_t *K037122_layer[MAX_K037122_CHIPS][2];
-static UINT32 *K037122_reg[MAX_K037122_CHIPS];
-
-#define K037122_NUM_TILES		16384
-
-static const gfx_layout K037122_char_layout =
+static READ32_HANDLER( hornet_k037122_sram_r )
 {
-	8, 8,
-	K037122_NUM_TILES,
-	8,
-	{ 0,1,2,3,4,5,6,7 },
-	{ 1*16, 0*16, 3*16, 2*16, 5*16, 4*16, 7*16, 6*16 },
-	{ 0*128, 1*128, 2*128, 3*128, 4*128, 5*128, 6*128, 7*128 },
-	8*128
-};
-
-static TILE_GET_INFO( K037122_0_tile_info_layer0 )
-{
-	UINT32 val = K037122_tile_ram[0][tile_index + (0x8000/4)];
-	int color = (val >> 17) & 0x1f;
-	int tile = val & 0x3fff;
-	int flags = 0;
-
-	if (val & 0x400000)
-		flags |= TILE_FLIPX;
-	if (val & 0x800000)
-		flags |= TILE_FLIPY;
-
-	SET_TILE_INFO(K037122_gfx_index[0], tile, color, flags);
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	return k037122_sram_r(k037122, offset, mem_mask);
 }
 
-static TILE_GET_INFO( K037122_0_tile_info_layer1 )
+static WRITE32_HANDLER( hornet_k037122_sram_w )
 {
-	UINT32 val = K037122_tile_ram[0][tile_index];
-	int color = (val >> 17) & 0x1f;
-	int tile = val & 0x3fff;
-	int flags = 0;
-
-	if (val & 0x400000)
-		flags |= TILE_FLIPX;
-	if (val & 0x800000)
-		flags |= TILE_FLIPY;
-
-	SET_TILE_INFO(K037122_gfx_index[0], tile, color, flags);
-}
-
-static TILE_GET_INFO( K037122_1_tile_info_layer0 )
-{
-	UINT32 val = K037122_tile_ram[1][tile_index + (0x8000/4)];
-	int color = (val >> 17) & 0x1f;
-	int tile = val & 0x3fff;
-	int flags = 0;
-
-	if (val & 0x400000)
-		flags |= TILE_FLIPX;
-	if (val & 0x800000)
-		flags |= TILE_FLIPY;
-
-	SET_TILE_INFO(K037122_gfx_index[1], tile, color, flags);
-}
-
-static TILE_GET_INFO( K037122_1_tile_info_layer1 )
-{
-	UINT32 val = K037122_tile_ram[1][tile_index];
-	int color = (val >> 17) & 0x1f;
-	int tile = val & 0x3fff;
-	int flags = 0;
-
-	if (val & 0x400000)
-		flags |= TILE_FLIPX;
-	if (val & 0x800000)
-		flags |= TILE_FLIPY;
-
-	SET_TILE_INFO(K037122_gfx_index[1], tile, color, flags);
-}
-
-static int K037122_vh_start(running_machine *machine, int chip)
-{
-	for(K037122_gfx_index[chip] = 0; K037122_gfx_index[chip] < MAX_GFX_ELEMENTS; K037122_gfx_index[chip]++)
-		if (machine->gfx[K037122_gfx_index[chip]] == 0)
-			break;
-	if(K037122_gfx_index[chip] == MAX_GFX_ELEMENTS)
-		return 1;
-
-	K037122_char_ram[chip] = auto_alloc_array(machine, UINT32, 0x200000/4);
-
-	K037122_tile_ram[chip] = auto_alloc_array(machine, UINT32, 0x20000/4);
-
-	K037122_reg[chip] = auto_alloc_array(machine, UINT32, 0x400/4);
-
-	if (chip == 0)
-	{
-		K037122_layer[chip][0] = tilemap_create(machine, K037122_0_tile_info_layer0, tilemap_scan_rows, 8, 8, 256, 64);
-		K037122_layer[chip][1] = tilemap_create(machine, K037122_0_tile_info_layer1, tilemap_scan_rows, 8, 8, 128, 64);
-	}
-	else
-	{
-		K037122_layer[chip][0] = tilemap_create(machine, K037122_1_tile_info_layer0, tilemap_scan_rows, 8, 8, 256, 64);
-		K037122_layer[chip][1] = tilemap_create(machine, K037122_1_tile_info_layer1, tilemap_scan_rows, 8, 8, 128, 64);
-	}
-
-	tilemap_set_transparent_pen(K037122_layer[chip][0], 0);
-	tilemap_set_transparent_pen(K037122_layer[chip][1], 0);
-
-	memset(K037122_char_ram[chip], 0, 0x200000);
-	memset(K037122_tile_ram[chip], 0, 0x20000);
-	memset(K037122_reg[chip], 0, 0x400);
-
-	machine->gfx[K037122_gfx_index[chip]] = gfx_element_alloc(machine, &K037122_char_layout, (UINT8*)K037122_char_ram[chip], machine->config->total_colors / 16, 0);
-
-	state_save_register_item_pointer(machine, "K037122", NULL, chip, K037122_reg[chip], 0x400/sizeof(K037122_reg[chip][0]));
-	state_save_register_item_pointer(machine, "K037122", NULL, chip, K037122_char_ram[chip], 0x200000/sizeof(K037122_char_ram[chip][0]));
-	state_save_register_item_pointer(machine, "K037122", NULL, chip, K037122_tile_ram[chip], 0x20000/sizeof(K037122_tile_ram[chip][0]));
-
-	return 0;
-}
-
-static void K037122_tile_draw(running_machine *machine, int chip, bitmap_t *bitmap, const rectangle *cliprect)
-{
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
-
-	if (K037122_reg[chip][0xc] & 0x10000)
-	{
-		tilemap_set_scrolldx(K037122_layer[chip][1], visarea->min_x, visarea->min_x);
-		tilemap_set_scrolldy(K037122_layer[chip][1], visarea->min_y, visarea->min_y);
-		tilemap_draw(bitmap, cliprect, K037122_layer[chip][1], 0,0);
-	}
-	else
-	{
-		tilemap_set_scrolldx(K037122_layer[chip][0], visarea->min_x, visarea->min_x);
-		tilemap_set_scrolldy(K037122_layer[chip][0], visarea->min_y, visarea->min_y);
-		tilemap_draw(bitmap, cliprect, K037122_layer[chip][0], 0,0);
-	}
-}
-
-static void update_palette_color(running_machine *machine, int chip, UINT32 palette_base, int color)
-{
-	UINT32 data = K037122_tile_ram[chip][(palette_base/4) + color];
-	palette_set_color_rgb(machine, color, pal5bit(data >> 6), pal6bit(data >> 0), pal5bit(data >> 11));
-}
-
-static READ32_HANDLER(K037122_sram_r)
-{
-	int chip = get_cgboard_id();
-
-	return K037122_tile_ram[chip][offset];
-}
-
-static WRITE32_HANDLER(K037122_sram_w)
-{
-	int chip = get_cgboard_id();
-
-	COMBINE_DATA(K037122_tile_ram[chip] + offset);
-
-	if (K037122_reg[chip][0xc] & 0x10000)
-	{
-		if (offset < 0x8000/4)
-		{
-			tilemap_mark_tile_dirty(K037122_layer[chip][1], offset);
-		}
-		else if (offset >= 0x8000/4 && offset < 0x18000/4)
-		{
-			tilemap_mark_tile_dirty(K037122_layer[chip][0], offset - (0x8000/4));
-		}
-		else if (offset >= 0x18000/4)
-		{
-			update_palette_color(space->machine, chip, 0x18000, offset - (0x18000/4));
-		}
-	}
-	else
-	{
-		if (offset < 0x8000/4)
-		{
-			update_palette_color(space->machine, chip, 0, offset);
-		}
-		else if (offset >= 0x8000/4 && offset < 0x18000/4)
-		{
-			tilemap_mark_tile_dirty(K037122_layer[chip][0], offset - (0x8000/4));
-		}
-		else if (offset >= 0x18000/4)
-		{
-			tilemap_mark_tile_dirty(K037122_layer[chip][1], offset - (0x18000/4));
-		}
-	}
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	k037122_sram_w(k037122, offset, data, mem_mask);
 }
 
 
-static READ32_HANDLER(K037122_char_r)
+static READ32_HANDLER( hornet_k037122_char_r )
 {
-	int chip = get_cgboard_id();
-
-	UINT32 addr;
-	int bank = K037122_reg[chip][0x30/4] & 0x7;
-
-	addr = offset + (bank * (0x40000/4));
-
-	return K037122_char_ram[chip][addr];
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	return k037122_char_r(k037122, offset, mem_mask);
 }
 
-static WRITE32_HANDLER(K037122_char_w)
+static WRITE32_HANDLER( hornet_k037122_char_w )
 {
-	int chip = get_cgboard_id();
-
-	UINT32 addr;
-	int bank = K037122_reg[chip][0x30/4] & 0x7;
-
-	addr = offset + (bank * (0x40000/4));
-
-	COMBINE_DATA(K037122_char_ram[chip] + addr);
-	gfx_element_mark_dirty(space->machine->gfx[K037122_gfx_index[chip]], addr / 32);
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	k037122_char_w(k037122, offset, data, mem_mask);
 }
 
-static READ32_HANDLER(K037122_reg_r)
+static READ32_HANDLER( hornet_k037122_reg_r )
 {
-	int chip = get_cgboard_id();
-
-	switch (offset)
-	{
-		case 0x14/4:
-		{
-			return 0x000003fa;
-		}
-	}
-	return K037122_reg[chip][offset];
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	return k037122_reg_r(k037122, offset, mem_mask);
 }
 
-static WRITE32_HANDLER(K037122_reg_w)
+static WRITE32_HANDLER( hornet_k037122_reg_w )
 {
-	int chip = get_cgboard_id();
-
-	COMBINE_DATA( K037122_reg[chip] + offset );
+	running_device *k037122 = devtag_get_device(space->machine, get_cgboard_id() ? "k037122_2" : "k037122_1");
+	k037122_reg_w(k037122, offset, data, mem_mask);
 }
 
-static void voodoo_vblank_0(const device_config *device, int param)
+static void voodoo_vblank_0(running_device *device, int param)
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_IRQ0, ASSERT_LINE);
 }
 
-static void voodoo_vblank_1(const device_config *device, int param)
+static void voodoo_vblank_1(running_device *device, int param)
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_IRQ1, ASSERT_LINE);
 }
 
-static VIDEO_START( hornet )
-{
-	K037122_vh_start(machine, 0);
-}
-
-static VIDEO_START( hornet_2board )
-{
-	K037122_vh_start(machine, 0);
-	K037122_vh_start(machine, 1);
-}
-
-
 static VIDEO_UPDATE( hornet )
 {
-	const device_config *voodoo = devtag_get_device(screen->machine, "voodoo0");
+	running_device *voodoo = devtag_get_device(screen->machine, "voodoo0");
+	running_device *k037122 = devtag_get_device(screen->machine, "k037122_1");
 
 	voodoo_update(voodoo, bitmap, cliprect);
 
-	K037122_tile_draw(screen->machine, 0, bitmap, cliprect);
+	k037122_tile_draw(k037122, bitmap, cliprect);
 
 	draw_7segment_led(bitmap, 3, 3, led_reg0);
 	draw_7segment_led(bitmap, 9, 3, led_reg1);
@@ -605,21 +392,23 @@ static VIDEO_UPDATE( hornet )
 
 static VIDEO_UPDATE( hornet_2board )
 {
-	if (strcmp(screen->tag, "lscreen") == 0)
+	if (strcmp(screen->tag(), "lscreen") == 0)
 	{
-		const device_config *voodoo = devtag_get_device(screen->machine, "voodoo0");
+		running_device *k037122 = devtag_get_device(screen->machine, "k037122_1");
+		running_device *voodoo = devtag_get_device(screen->machine, "voodoo0");
 		voodoo_update(voodoo, bitmap, cliprect);
 
 		/* TODO: tilemaps per screen */
-		K037122_tile_draw(screen->machine, 0, bitmap, cliprect);
+		k037122_tile_draw(k037122, bitmap, cliprect);
 	}
-	else if (strcmp(screen->tag, "rscreen") == 0)
+	else if (strcmp(screen->tag(), "rscreen") == 0)
 	{
-		const device_config *voodoo = devtag_get_device(screen->machine, "voodoo1");
+		running_device *k037122 = devtag_get_device(screen->machine, "k037122_2");
+		running_device *voodoo = devtag_get_device(screen->machine, "voodoo1");
 		voodoo_update(voodoo, bitmap, cliprect);
 
 		/* TODO: tilemaps per screen */
-		K037122_tile_draw(screen->machine, 1, bitmap, cliprect);
+		k037122_tile_draw(k037122, bitmap, cliprect);
 	}
 
 	draw_7segment_led(bitmap, 3, 3, led_reg0);
@@ -633,8 +422,8 @@ static READ8_HANDLER( sysreg_r )
 {
 	UINT8 r = 0;
 	static const char *const portnames[] = { "IN0", "IN1", "IN2" };
-	const device_config *adc12138 = devtag_get_device(space->machine, "adc12138");
-	const device_config *eeprom = devtag_get_device(space->machine, "eeprom");
+	running_device *adc12138 = devtag_get_device(space->machine, "adc12138");
+	running_device *eeprom = devtag_get_device(space->machine, "eeprom");
 
 	switch (offset)
 	{
@@ -667,7 +456,7 @@ static READ8_HANDLER( sysreg_r )
 
 static WRITE8_HANDLER( sysreg_w )
 {
-	const device_config *adc12138 = devtag_get_device(space->machine, "adc12138");
+	running_device *adc12138 = devtag_get_device(space->machine, "adc12138");
 
 	switch (offset)
 	{
@@ -798,9 +587,9 @@ static WRITE32_HANDLER(gun_w)
 
 static ADDRESS_MAP_START( hornet_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&workram)		/* Work RAM */
-	AM_RANGE(0x74000000, 0x740000ff) AM_READWRITE(K037122_reg_r, K037122_reg_w)
-	AM_RANGE(0x74020000, 0x7403ffff) AM_READWRITE(K037122_sram_r, K037122_sram_w)
-	AM_RANGE(0x74040000, 0x7407ffff) AM_READWRITE(K037122_char_r, K037122_char_w)
+	AM_RANGE(0x74000000, 0x740000ff) AM_READWRITE(hornet_k037122_reg_r, hornet_k037122_reg_w)
+	AM_RANGE(0x74020000, 0x7403ffff) AM_READWRITE(hornet_k037122_sram_r, hornet_k037122_sram_w)
+	AM_RANGE(0x74040000, 0x7407ffff) AM_READWRITE(hornet_k037122_char_r, hornet_k037122_char_w)
 	AM_RANGE(0x74080000, 0x7408000f) AM_READWRITE(gun_r, gun_w)
 	AM_RANGE(0x78000000, 0x7800ffff) AM_READWRITE(cgboard_dsp_shared_r_ppc, cgboard_dsp_shared_w_ppc)
 	AM_RANGE(0x780c0000, 0x780c0003) AM_READWRITE(cgboard_dsp_comm_r_ppc, cgboard_dsp_comm_w_ppc)
@@ -1047,10 +836,10 @@ static MACHINE_START( hornet )
 	jvs_sdata = auto_alloc_array_clear(machine, UINT8, 1024);
 
 	/* set conservative DRC options */
-	ppcdrc_set_options(cputag_get_cpu(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
+	ppcdrc_set_options(devtag_get_device(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	ppcdrc_add_fastram(cputag_get_cpu(machine, "maincpu"), 0x00000000, 0x003fffff, FALSE, workram);
+	ppcdrc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, 0x003fffff, FALSE, workram);
 
 	state_save_register_global(machine, led_reg0);
 	state_save_register_global(machine, led_reg1);
@@ -1074,7 +863,7 @@ static MACHINE_RESET( hornet )
 		memory_set_bankptr(machine, "bank5", usr5);
 }
 
-static double adc12138_input_callback( const device_config *device, UINT8 input )
+static double adc12138_input_callback( running_device *device, UINT8 input )
 {
 	return (double)0.0;
 }
@@ -1109,6 +898,21 @@ static const k033906_interface hornet_k033906_intf_0 =
 static const k033906_interface hornet_k033906_intf_1 =
 {
 	"voodoo1"
+};
+
+static const k037122_interface hornet_k037122_intf =
+{
+	"screen", 0
+};
+
+static const k037122_interface hornet_k037122_intf_l =
+{
+	"lscreen", 0
+};
+
+static const k037122_interface hornet_k037122_intf_r =
+{
+	"rscreen", 1
 };
 
 static MACHINE_DRIVER_START( hornet )
@@ -1147,8 +951,9 @@ static MACHINE_DRIVER_START( hornet )
 
 	MDRV_PALETTE_LENGTH(65536)
 
-	MDRV_VIDEO_START(hornet)
 	MDRV_VIDEO_UPDATE(hornet)
+
+	MDRV_K037122_ADD("k037122_1", hornet_k037122_intf)
 
 	MDRV_K056800_ADD("k056800", hornet_k056800_interface)
 
@@ -1191,8 +996,11 @@ static MACHINE_DRIVER_START( hornet_2board )
 
 	MDRV_MACHINE_RESET(hornet_2board)
 
-	MDRV_VIDEO_START(hornet_2board)
 	MDRV_VIDEO_UPDATE(hornet_2board)
+
+	MDRV_DEVICE_REMOVE("k037122_1")
+	MDRV_K037122_ADD("k037122_1", hornet_k037122_intf_l)
+	MDRV_K037122_ADD("k037122_2", hornet_k037122_intf_r)
 
 	MDRV_DEVICE_REMOVE("voodoo0")
 	MDRV_3DFX_VOODOO_1_ADD("voodoo0", STD_VOODOO_1_CLOCK, 2, "lscreen")
@@ -1253,7 +1061,7 @@ MACHINE_DRIVER_END
 
 static void jamma_jvs_cmd_exec(running_machine *machine);
 
-static void jamma_jvs_w(const device_config *device, UINT8 data)
+static void jamma_jvs_w(running_device *device, UINT8 data)
 {
 	if (jvs_sdata_ptr == 0 && data != 0xe0)
 		return;
@@ -1275,19 +1083,19 @@ static int jvs_encode_data(running_machine *machine, UINT8 *in, int length)
 		if (b == 0xe0)
 		{
 			sum += 0xd0 + 0xdf;
-			ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0xd0);
-			ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0xdf);
+			ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0xd0);
+			ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0xdf);
 		}
 		else if (b == 0xd0)
 		{
 			sum += 0xd0 + 0xcf;
-			ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0xd0);
-			ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0xcf);
+			ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0xd0);
+			ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0xcf);
 		}
 		else
 		{
 			sum += b;
-			ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), b);
+			ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), b);
 		}
 	}
 	return sum;
@@ -1380,11 +1188,11 @@ static void jamma_jvs_cmd_exec(running_machine *machine)
 
 	// write jvs return data
 	sum = 0x00 + (rdata_ptr+1);
-	ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0xe0);			// sync
-	ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), 0x00);			// node
-	ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), rdata_ptr + 1);	// num of bytes
+	ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0xe0);			// sync
+	ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), 0x00);			// node
+	ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), rdata_ptr + 1);	// num of bytes
 	sum += jvs_encode_data(machine, rdata, rdata_ptr);
-	ppc4xx_spu_receive_byte(cputag_get_cpu(machine, "maincpu"), sum - 1);		// checksum
+	ppc4xx_spu_receive_byte(devtag_get_device(machine, "maincpu"), sum - 1);		// checksum
 
 	jvs_sdata_ptr = 0;
 }
@@ -1399,7 +1207,7 @@ static DRIVER_INIT(hornet)
 
 	led_reg0 = led_reg1 = 0x7f;
 
-	ppc4xx_spu_set_tx_handler(cputag_get_cpu(machine, "maincpu"), jamma_jvs_w);
+	ppc4xx_spu_set_tx_handler(devtag_get_device(machine, "maincpu"), jamma_jvs_w);
 }
 
 static DRIVER_INIT(hornet_2board)
@@ -1410,7 +1218,7 @@ static DRIVER_INIT(hornet_2board)
 
 	led_reg0 = led_reg1 = 0x7f;
 
-	ppc4xx_spu_set_tx_handler(cputag_get_cpu(machine, "maincpu"), jamma_jvs_w);
+	ppc4xx_spu_set_tx_handler(devtag_get_device(machine, "maincpu"), jamma_jvs_w);
 }
 
 /*****************************************************************************/

@@ -9,9 +9,7 @@
 
 ***************************************************************************/
 
-#include "mamecore.h"
-#include "mame.h"
-#include "fileio.h"
+#include "emu.h"
 #include "emuopts.h"
 
 #include <ctype.h>
@@ -73,7 +71,7 @@ const options_entry mame_core_options[] =
 	/* performance options */
 	{ NULL,                          NULL,        OPTION_HEADER,     "CORE PERFORMANCE OPTIONS" },
 	{ "autoframeskip;afs",           "0",         OPTION_BOOLEAN,    "enable automatic frameskip selection" },
-	{ "frameskip;fs(0-10)",          "0",         0,                 "set frameskip to fixed value, 0-12 (autoframeskip must be disabled)" },
+	{ "frameskip;fs(0-10)",          "0",         0,                 "set frameskip to fixed value, 0-10 (autoframeskip must be disabled)" },
 	{ "seconds_to_run;str",          "0",         0,                 "number of emulated seconds to run before automatically exiting" },
 	{ "throttle",                    "1",         OPTION_BOOLEAN,    "enable throttling to keep game running in sync with real time" },
 	{ "sleep",                       "1",         OPTION_BOOLEAN,    "enable sleeping, which gives time back to other applications when idle" },
@@ -131,6 +129,9 @@ const options_entry mame_core_options[] =
 	{ "joystick_map;joymap",         "auto",      0,                 "explicit joystick map, or auto to auto-select" },
 	{ "joystick_deadzone;joy_deadzone;jdz",      "0.3",  0,          "center deadzone range for joystick where change is ignored (0.0 center, 1.0 end)" },
 	{ "joystick_saturation;joy_saturation;jsat", "0.85", 0,          "end of axis saturation range for joystick where change is ignored (0.0 center, 1.0 end)" },
+	{ "natural;nat",				 "0",		  OPTION_BOOLEAN,	 "specifies whether to use a natural keyboard or not" },
+	{ "uimodekey;umk",      		 "auto",	  0,    			 "specifies the key used to toggle between full and partial UI mode" },
+
 
 	/* input autoenable options */
 	{ NULL,                          NULL,        OPTION_HEADER,     "CORE INPUT AUTOMATIC ENABLE OPTIONS" },
@@ -150,6 +151,7 @@ const options_entry mame_core_options[] =
 	{ "update_in_pause",             "0",         OPTION_BOOLEAN,    "keep calling video updates while in pause" },
 	{ "debug;d",                     "0",         OPTION_BOOLEAN,    "enable/disable debugger" },
 	{ "debugscript",                 NULL,        0,                 "script for debugger" },
+	{ "debug_internal;di",           "0",         OPTION_BOOLEAN,    "use the internal debugger for debugging" },
 
 	/* misc options */
 	{ NULL,                          NULL,        OPTION_HEADER,     "CORE MISC OPTIONS" },

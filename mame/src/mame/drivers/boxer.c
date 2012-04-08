@@ -8,7 +8,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 
 
@@ -20,9 +20,13 @@
  *
  *************************************/
 
-typedef struct _boxer_state boxer_state;
-struct _boxer_state
+class boxer_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, boxer_state(machine)); }
+
+	boxer_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 * tile_ram;
 	UINT8 * sprite_ram;
@@ -32,7 +36,7 @@ struct _boxer_state
 	UINT8 pot_latch;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 /*************************************

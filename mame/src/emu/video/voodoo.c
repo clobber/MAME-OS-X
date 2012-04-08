@@ -134,8 +134,7 @@ bits(7:4) and bit(24)), X, and Y:
 #ifndef EXPAND_RASTERIZERS
 #define EXPAND_RASTERIZERS
 
-#include "driver.h"
-#include "eminline.h"
+#include "emu.h"
 #include "profiler.h"
 #include "video/poly.h"
 #include "video/rgbutil.h"
@@ -271,7 +270,7 @@ static const raster_info predef_raster_table[] =
     in device is, in fact, a voodoo device
 -------------------------------------------------*/
 
-INLINE voodoo_state *get_safe_token(const device_config *device)
+INLINE voodoo_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -288,7 +287,7 @@ INLINE voodoo_state *get_safe_token(const device_config *device)
  *
  *************************************/
 
-int voodoo_update(const device_config *device, bitmap_t *bitmap, const rectangle *cliprect)
+int voodoo_update(running_device *device, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	voodoo_state *v = get_safe_token(device);
 	int changed = v->fbi.video_changed;
@@ -425,21 +424,21 @@ int voodoo_update(const device_config *device, bitmap_t *bitmap, const rectangle
  *
  *************************************/
 
-int voodoo_get_type(const device_config *device)
+int voodoo_get_type(running_device *device)
 {
 	voodoo_state *v = get_safe_token(device);
 	return v->type;
 }
 
 
-int voodoo_is_stalled(const device_config *device)
+int voodoo_is_stalled(running_device *device)
 {
 	voodoo_state *v = get_safe_token(device);
 	return (v->pci.stall_state != NOT_STALLED);
 }
 
 
-void voodoo_set_init_enable(const device_config *device, UINT32 newval)
+void voodoo_set_init_enable(running_device *device, UINT32 newval)
 {
 	voodoo_state *v = get_safe_token(device);
 	v->pci.init_enable = newval;
@@ -614,7 +613,7 @@ static STATE_POSTLOAD( voodoo_postload )
 }
 
 
-static void init_save_state(const device_config *device)
+static void init_save_state(running_device *device)
 {
 	voodoo_state *v = get_safe_token(device);
 	int index, subindex;
@@ -4441,7 +4440,7 @@ WRITE32_DEVICE_HANDLER( banshee_io_w )
 
 static DEVICE_START( voodoo )
 {
-	const voodoo_config *config = (const voodoo_config *)device->inline_config;
+	const voodoo_config *config = (const voodoo_config *)device->baseconfig().inline_config;
 	voodoo_state *v = get_safe_token(device);
 	const raster_info *info;
 	void *fbmem, *tmumem[2];
@@ -4449,8 +4448,8 @@ static DEVICE_START( voodoo )
 	int val;
 
 	/* validate some basic stuff */
-	assert(device->static_config == NULL);
-	assert(device->inline_config != NULL);
+	assert(device->baseconfig().static_config == NULL);
+	assert(device->baseconfig().inline_config != NULL);
 	assert(device->machine != NULL);
 	assert(device->machine->config != NULL);
 
@@ -4539,10 +4538,10 @@ static DEVICE_START( voodoo )
 	}
 
 	/* set the type, and initialize the chip mask */
-	v->index = device_list_index(&device->machine->config->devicelist, device->type, device->tag);
-	v->screen = devtag_get_device(device->machine, config->screen);
+	v->index = device->machine->devicelist.index(device->type, device->tag());
+	v->screen = device->machine->device(config->screen);
 	assert_always(v->screen != NULL, "Unable to find screen attached to voodoo");
-	v->cpu = cputag_get_cpu(device->machine, config->cputag);
+	v->cpu = device->machine->device(config->cputag);
 	assert_always(v->cpu != NULL, "Unable to find CPU attached to voodoo");
 	v->type = config->type;
 	v->chipmask = 0x01;
@@ -4646,9 +4645,9 @@ static DEVICE_RESET( voodoo )
     device definition
 -------------------------------------------------*/
 
-INLINE const char *get_voodoo_name(const device_config *device)
+INLINE const char *get_voodoo_name(const device_config *devconfig)
 {
-	const voodoo_config *config = (device != NULL) ? (const voodoo_config *)device->inline_config : NULL;
+	const voodoo_config *config = (devconfig != NULL) ? (const voodoo_config *)devconfig->inline_config : NULL;
 	switch (config->type)
 	{
 		default:

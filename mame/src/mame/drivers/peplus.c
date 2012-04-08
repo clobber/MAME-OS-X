@@ -160,7 +160,7 @@ Stephh's log (2007.11.28) :
 
 ***********************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/ay8910.h"
 #include "cpu/mcs51/mcs51.h"
 #include "machine/i2cmem.h"
@@ -329,10 +329,10 @@ static WRITE8_DEVICE_HANDLER( peplus_crtc_mode_w )
 
 static TIMER_CALLBACK(assert_lp_cb)
 {
-	mc6845_assert_light_pen_input((const device_config *) ptr);
+	mc6845_assert_light_pen_input((running_device *) ptr);
 }
 
-static void handle_lightpen( const device_config *device )
+static void handle_lightpen( running_device *device )
 {
     int x_val = input_port_read_safe(device->machine, "TOUCH_X",0x00);
     int y_val = input_port_read_safe(device->machine, "TOUCH_Y",0x00);

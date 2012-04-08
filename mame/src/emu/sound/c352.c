@@ -13,8 +13,7 @@
     Output sample rate is the input clock / 384.
  */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "c352.h"
 
@@ -83,7 +82,7 @@ struct _c352_state
 	unsigned int mseq_reg;
 };
 
-INLINE c352_state *get_safe_token(const device_config *device)
+INLINE c352_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -491,7 +490,7 @@ static void c352_write_reg16(c352_state *info, unsigned long address, unsigned s
 	}
 }
 
-static void c352_init(c352_state *info, const device_config *device)
+static void c352_init(c352_state *info, running_device *device)
 {
 	int i;
 	double x_max = 32752.0;
@@ -544,8 +543,8 @@ static DEVICE_START( c352 )
 {
 	c352_state *info = get_safe_token(device);
 
-	info->c352_rom_samples = device->region;
-	info->c352_rom_length = device->regionbytes;
+	info->c352_rom_samples = *device->region;
+	info->c352_rom_length = device->region->bytes();
 
 	info->sample_rate_base = device->clock / 192;
 

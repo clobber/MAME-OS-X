@@ -88,7 +88,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "cpu/tlcs90/tlcs90.h"
@@ -1105,7 +1105,7 @@ static READ8_HANDLER( mjvegasa_rom_io_r )
 		case 0x800e:
 		case 0x800f:
 		{
-			const device_config *rtc = devtag_get_device(space->machine, "rtc");
+			running_device *rtc = devtag_get_device(space->machine, "rtc");
 			return msm6242_r(rtc, offset-0x8000);
 		}
 	}
@@ -1142,7 +1142,7 @@ static WRITE8_HANDLER( mjvegasa_rom_io_w )
 		case 0x800e:
 		case 0x800f:
 		{
-			const device_config *rtc = devtag_get_device(space->machine, "rtc");
+			running_device *rtc = devtag_get_device(space->machine, "rtc");
 			msm6242_w(rtc, offset-0x8000, data);
 			return;
 		}

@@ -187,7 +187,7 @@ Notes:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/system1.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
@@ -362,7 +362,7 @@ static MACHINE_START( system1 )
 		memory_configure_bank(machine, "bank1", 0, 1, memory_region(machine, "maincpu") + 0x8000, 0);
 	memory_set_bank(machine, "bank1", 0);
 
-	z80_set_cycle_tables(cputag_get_cpu(machine, "maincpu"), cc_op, cc_cb, cc_ed, cc_xy, cc_xycb, cc_ex);
+	z80_set_cycle_tables(devtag_get_device(machine, "maincpu"), cc_op, cc_cb, cc_ed, cc_xy, cc_xycb, cc_ex);
 
 	mute_xor = 0x00;
 
@@ -409,7 +409,7 @@ static void bank0c_custom_w(running_machine *machine, UINT8 data, UINT8 prevdata
 
 static WRITE8_HANDLER( videomode_w )
 {
-	const device_config *i8751 = cputag_get_cpu(space->machine, "mcu");
+	running_device *i8751 = devtag_get_device(space->machine, "mcu");
 
 	/* bit 6 is connected to the 8751 IRQ */
 	if (i8751 != NULL)
@@ -484,8 +484,8 @@ static WRITE8_DEVICE_HANDLER( sound_control_w )
 
 static READ8_HANDLER( sound_data_r )
 {
-	const device_config *ppi = devtag_get_device(space->machine, "ppi");
-	const device_config *pio = devtag_get_device(space->machine, "pio");
+	running_device *ppi = devtag_get_device(space->machine, "ppi");
+	running_device *pio = devtag_get_device(space->machine, "pio");
 
 	/* if we have an 8255 PPI, get the data from the port and toggle the ack */
 	if (ppi != NULL)
@@ -496,9 +496,14 @@ static READ8_HANDLER( sound_data_r )
 		return soundlatch_r(space, offset);
 	}
 
-	/* if we have a Z80 PIO, just do a port read which will auto-ack */
+	/* if we have a Z80 PIO, get the data from the port and toggle the strobe */
 	else if (pio != NULL)
-		return z80pio_p_r(pio, 0);
+	{
+		UINT8 data = z80pio_pa_r(pio, 0);
+		z80pio_astb_w(pio, 0);
+		z80pio_astb_w(pio, 1);
+		return data;
+	}
 
 	return 0xff;
 }
@@ -516,12 +521,6 @@ static TIMER_DEVICE_CALLBACK( soundirq_gen )
 {
 	/* sound IRQ is generated on 32V, 96V, ... and auto-acknowledged */
 	cputag_set_input_line(timer->machine, "soundcpu", 0, HOLD_LINE);
-}
-
-
-static WRITE_LINE_DEVICE_HANDLER( pio_ready_w )
-{
-	cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -608,7 +607,7 @@ static TIMER_DEVICE_CALLBACK( mcu_t0_callback )
        enough, the MCU will fail; on shtngmst this happens after 3
        VBLANKs without a tick */
 
-	const device_config *mcu = cputag_get_cpu(timer->machine, "mcu");
+	running_device *mcu = devtag_get_device(timer->machine, "mcu");
 	cpu_set_input_line(mcu, MCS51_T0_LINE, ASSERT_LINE);
 	cpu_set_input_line(mcu, MCS51_T0_LINE, CLEAR_LINE);
 }
@@ -756,7 +755,7 @@ static ADDRESS_MAP_START( system1_pio_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x0c, 0x0c) AM_MIRROR(0x02) AM_READ_PORT("SWA")	/* DIP2 */
 	AM_RANGE(0x0d, 0x0d) AM_MIRROR(0x02) AM_READ_PORT("SWB")	/* DIP1 some games read it from here... */
 	AM_RANGE(0x10, 0x10) AM_MIRROR(0x03) AM_READ_PORT("SWB")	/* DIP1 ... and some others from here but there are games which check BOTH! */
-	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("pio", z80pio_r, z80pio_w)
+	AM_RANGE(0x18, 0x1b) AM_DEVREADWRITE("pio", z80pio_cd_ba_r, z80pio_cd_ba_w)
 ADDRESS_MAP_END
 
 
@@ -2079,14 +2078,14 @@ static const ppi8255_interface ppi_interface =
 	DEVCB_HANDLER(sound_control_w)
 };
 
-static const z80pio_interface pio_interface =
+static Z80PIO_INTERFACE( pio_interface )
 {
 	DEVCB_NULL,
 	DEVCB_NULL,
-	DEVCB_NULL,
 	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, soundport_w),
+	DEVCB_CPU_INPUT_LINE("soundcpu", INPUT_LINE_NMI),
+	DEVCB_NULL,
 	DEVCB_MEMORY_HANDLER("maincpu", PROGRAM, videomode_w),
-	DEVCB_LINE(pio_ready_w),
 	DEVCB_NULL
 };
 
@@ -2158,7 +2157,7 @@ static MACHINE_DRIVER_START( sys1pio )
 	MDRV_CPU_IO_MAP(system1_pio_io_map)
 
 	MDRV_DEVICE_REMOVE("ppi")
-	MDRV_Z80PIO_ADD("pio", pio_interface)
+	MDRV_Z80PIO_ADD("pio", MASTER_CLOCK, pio_interface)
 MACHINE_DRIVER_END
 
 /* reduced visible area for scrolling games */

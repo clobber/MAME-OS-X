@@ -21,7 +21,7 @@ Year + Game                 By      Board      Hardware
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
@@ -920,7 +920,7 @@ MACHINE_DRIVER_END
                             Best Of Best
 ***************************************************************************/
 
-static void bestbest_ym3526_irqhandler(const device_config *device, int state)
+static void bestbest_ym3526_irqhandler(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_IRQ0, state);
 }

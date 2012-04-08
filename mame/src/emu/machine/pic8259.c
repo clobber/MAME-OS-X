@@ -11,7 +11,7 @@
 
 **********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "machine/pic8259.h"
 
 #define IRQ_COUNT	8
@@ -33,7 +33,7 @@ typedef struct pic8259	pic8259_t;
 
 struct pic8259
 {
-	const struct pic8259_interface	*intf;
+	devcb_resolved_write_line out_int_func;
 
 	emu_timer *timer;
 
@@ -70,7 +70,7 @@ struct pic8259
 };
 
 
-INLINE pic8259_t *get_safe_token(const device_config *device) {
+INLINE pic8259_t *get_safe_token(running_device *device) {
 	assert( device != NULL );
 	assert( device->token != NULL );
 	assert( device->type == DEVICE_GET_INFO_NAME(pic8259) );
@@ -80,7 +80,7 @@ INLINE pic8259_t *get_safe_token(const device_config *device) {
 
 static TIMER_CALLBACK( pic8259_timerproc )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	pic8259_t	*pic8259 = get_safe_token(device);
 	int irq;
 	UINT8 mask;
@@ -103,13 +103,13 @@ static TIMER_CALLBACK( pic8259_timerproc )
 		{
 			if (LOG_GENERAL)
 				logerror("pic8259_timerproc(): PIC triggering IRQ #%d\n", irq);
-			if ( ! ( pic8259->ocw3 & 0x04 ) && pic8259->intf->set_int_line)
-				pic8259->intf->set_int_line(device, 1);
+			if (!BIT(pic8259->ocw3, 2))
+				devcb_call_write_line(&pic8259->out_int_func, 1);
 			return;
 		}
 	}
-	if ( ! ( pic8259->ocw3 & 0x04 ) && pic8259->intf->set_int_line)
-		pic8259->intf->set_int_line(device, 0);
+	if (!BIT(pic8259->ocw3, 2))
+		devcb_call_write_line(&pic8259->out_int_func, 0);
 }
 
 
@@ -119,7 +119,7 @@ INLINE void pic8259_set_timer(pic8259_t *pic8259)
 }
 
 
-void pic8259_set_irq_line(const device_config *device, int irq, int state)
+static void pic8259_set_irq_line(running_device *device, int irq, int state)
 {
 	pic8259_t	*pic8259 = get_safe_token(device);
 	UINT8		old_irq_lines = pic8259->irq_lines;
@@ -149,9 +149,16 @@ void pic8259_set_irq_line(const device_config *device, int irq, int state)
 	pic8259_set_timer(pic8259);
 }
 
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir0_w ) { pic8259_set_irq_line(device, 0, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir1_w ) { pic8259_set_irq_line(device, 1, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir2_w ) { pic8259_set_irq_line(device, 2, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir3_w ) { pic8259_set_irq_line(device, 3, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir4_w ) { pic8259_set_irq_line(device, 4, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir5_w ) { pic8259_set_irq_line(device, 5, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir6_w ) { pic8259_set_irq_line(device, 6, state); }
+WRITE_LINE_DEVICE_HANDLER( pic8259_ir7_w ) { pic8259_set_irq_line(device, 7, state); }
 
-
-int pic8259_acknowledge(const device_config *device)
+int pic8259_acknowledge(running_device *device)
 {
 	pic8259_t	*pic8259 = get_safe_token(device);
 	UINT8 mask;
@@ -391,12 +398,17 @@ WRITE8_DEVICE_HANDLER( pic8259_w )
 
 
 
-static DEVICE_START( pic8259 ) {
+static DEVICE_START( pic8259 )
+{
 	pic8259_t	*pic8259 = get_safe_token(device);
+	const struct pic8259_interface *intf = (const struct pic8259_interface *)device->baseconfig().static_config;
 
-	pic8259->intf = (const struct pic8259_interface *)device->static_config;
+	assert(intf != NULL);
 
 	pic8259->timer = timer_alloc( device->machine, pic8259_timerproc, (void *)device );
+
+	/* resolve callbacks */
+	devcb_resolve_write_line(&pic8259->out_int_func, &intf->out_int_func, device);
 }
 
 

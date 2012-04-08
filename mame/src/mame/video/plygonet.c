@@ -7,7 +7,7 @@
     Needs: PSAC2 roz plane, polygons
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "video/konicdev.h"
 
 /* TTL text plane stuff */
@@ -123,7 +123,7 @@ VIDEO_START( polygonet )
 
 VIDEO_UPDATE( polygonet )
 {
-	const device_config *k053936 = devtag_get_device(screen->machine, "k053936");
+	running_device *k053936 = devtag_get_device(screen->machine, "k053936");
 	bitmap_fill(screen->machine->priority_bitmap, NULL, 0);
 	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 

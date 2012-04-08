@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "profiler.h"
 #include "cpu/tms34010/tms34010.h"
 #include "video/tlc34076.h"
@@ -351,7 +351,7 @@ WRITE16_HANDLER( artmagic_blitter_w )
  *
  *************************************/
 
-void artmagic_scanline(const device_config *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+void artmagic_scanline(running_device *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
 	offs_t offset = (params->rowaddr << 12) & 0x7ff000;
 	UINT16 *vram = address_to_vram(&offset);

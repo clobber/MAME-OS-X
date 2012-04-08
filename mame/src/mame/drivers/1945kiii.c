@@ -38,31 +38,22 @@ Notes:
     M6295 clocks : 1.000MHz (both), sample rate = 1000000 / 132
            VSync : 60Hz
 
-
-SAVE STATE (lee@lmservers.com):
-No code changes required to support save state
-1945kiii uses the 68000 and OKIM6295 which both support save state.
-The rationale for saving/not saving are as follows:
-
-static UINT16* k3_spriteram_1;  Saved via reference to AM_BASE
-static UINT16* k3_spriteram_2;  Saved via reference to AM_BASE
-static UINT16* k3_bgram;        Saved via reference to AM_BASE
-static tilemap_t *k3_bg_tilemap;  Saved due to tilemap supporting save
-
-There are no static local variables.
-
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
 #define MASTER_CLOCK	XTAL_16MHz
 
 
-typedef struct _k3_state k3_state;
-struct _k3_state
+class k3_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, k3_state(machine)); }
+
+	k3_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  spriteram_1;
 	UINT16 *  spriteram_2;
@@ -73,8 +64,8 @@ struct _k3_state
 	tilemap_t  *bg_tilemap;
 
 	/* devices */
-	const device_config *oki1;
-	const device_config *oki2;
+	running_device *oki1;
+	running_device *oki2;
 };
 
 

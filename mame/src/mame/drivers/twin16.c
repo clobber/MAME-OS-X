@@ -43,7 +43,7 @@ Known Issues:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/2151intf.h"
@@ -670,7 +670,7 @@ GFXDECODE_END
 
 /* Sound Interfaces */
 
-static void volume_callback(const device_config *device, int v)
+static void volume_callback(running_device *device, int v)
 {
 	k007232_set_volume(device,0,(v >> 4) * 0x11,0);
 	k007232_set_volume(device,1,0,(v & 0x0f) * 0x11);
@@ -1303,7 +1303,7 @@ static void gfx_untangle( running_machine *machine )
 {
 	// sprite, tile data
 	int i;
-	UINT16 *temp = alloc_array_or_die(UINT16, 0x200000/2);
+	UINT16 *temp = auto_alloc_array(machine, UINT16, 0x200000/2);
 
 	twin16_gfx_rom = (UINT16 *)memory_region(machine, "gfx2");
 	memcpy( temp, twin16_gfx_rom, 0x200000 );
@@ -1313,7 +1313,7 @@ static void gfx_untangle( running_machine *machine )
 		twin16_gfx_rom[i*2+0] = temp[i+0x080000];
 		twin16_gfx_rom[i*2+1] = temp[i];
 	}
-	free( temp );
+	auto_free( machine, temp );
 }
 
 static DRIVER_INIT( twin16 )

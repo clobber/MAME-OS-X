@@ -80,7 +80,7 @@ EB26IC73.BIN    27C240      /  Main Program
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "video/konicdev.h"
@@ -278,7 +278,7 @@ GFXDECODE_END
 
 /*** MORE SOUND **************************************************************/
 
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	suprslam_state *state = (suprslam_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);

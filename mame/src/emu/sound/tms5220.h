@@ -3,7 +3,6 @@
 #ifndef __TMS5220_H__
 #define __TMS5220_H__
 
-#include "devcb.h"
 
 /* clock rate = 80 * output sample rate,     */
 /* usually 640000 for 8000 Hz sample rate or */
@@ -14,9 +13,9 @@ struct _tms5220_interface
 {
 	devcb_write_line irq_func;		/* IRQ callback function */
 
-	int (*read)(const device_config *device, int count);			/* speech ROM read callback */
-	void (*load_address)(const device_config *device, int data);	/* speech ROM load address callback */
-	void (*read_and_branch)(const device_config *device);		/* speech ROM read and branch callback */
+	int (*read)(running_device *device, int count);			/* speech ROM read callback */
+	void (*load_address)(running_device *device, int data);	/* speech ROM load address callback */
+	void (*read_and_branch)(running_device *device);		/* speech ROM read and branch callback */
 };
 
 /* Control lines - once written to will switch interface into
@@ -35,9 +34,9 @@ READ_LINE_DEVICE_HANDLER( tms5220_readyq_r );
 READ_LINE_DEVICE_HANDLER( tms5220_intq_r );
 
 
-double tms5220_time_to_ready(const device_config *device);
+double tms5220_time_to_ready(running_device *device);
 
-void tms5220_set_frequency(const device_config *device, int frequency);
+void tms5220_set_frequency(running_device *device, int frequency);
 
 DEVICE_GET_INFO( tms5220c );
 DEVICE_GET_INFO( tms5220 );

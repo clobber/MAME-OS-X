@@ -2,7 +2,7 @@
  *  Invinco sound routines
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/samples.h"
 #include "includes/vicdual.h"
 
@@ -66,7 +66,7 @@ enum
 WRITE8_HANDLER( invinco_audio_w )
 {
 	static int port2State = 0;
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 	int bitsChanged;
 	//int bitsGoneHigh;
 	int bitsGoneLow;

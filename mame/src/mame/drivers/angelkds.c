@@ -126,7 +126,7 @@ Dumped by Chackn
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/segacrpt.h"
 #include "sound/2203intf.h"
@@ -514,7 +514,7 @@ static READ8_HANDLER( angelkds_sub_sound_r )
 }
 
 
-static void irqhandler( const device_config *device, int irq )
+static void irqhandler( running_device *device, int irq )
 {
 	angelkds_state *state = (angelkds_state *)device->machine->driver_data;
 	cpu_set_input_line(state->subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);

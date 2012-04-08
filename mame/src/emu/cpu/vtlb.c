@@ -10,8 +10,8 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "vtlb.h"
-#include "mame.h"
 
 
 
@@ -30,7 +30,7 @@
 /* VTLB state */
 struct _vtlb_state
 {
-	const device_config *device;			/* CPU device */
+	running_device *device;			/* CPU device */
 	int					space;				/* address space */
 	int 				dynamic;			/* number of dynamic entries */
 	int					fixed;				/* number of fixed entries */
@@ -55,12 +55,12 @@ struct _vtlb_state
     given CPU
 -------------------------------------------------*/
 
-vtlb_state *vtlb_alloc(const device_config *cpu, int space, int fixed_entries, int dynamic_entries)
+vtlb_state *vtlb_alloc(running_device *cpu, int space, int fixed_entries, int dynamic_entries)
 {
 	vtlb_state *vtlb;
 
 	/* allocate memory for the core structure */
-	vtlb = alloc_clear_or_die(vtlb_state);
+	vtlb = auto_alloc_clear(cpu->machine, vtlb_state);
 
 	/* fill in CPU information */
 	vtlb->device = cpu;
@@ -69,7 +69,7 @@ vtlb_state *vtlb_alloc(const device_config *cpu, int space, int fixed_entries, i
 	vtlb->fixed = fixed_entries;
 	vtlb->pageshift = cpu_get_page_shift(cpu, space);
 	vtlb->addrwidth = cpu_get_logaddr_width(cpu, space);
-	vtlb->translate = (cpu_translate_func)device_get_info_fct(cpu, CPUINFO_FCT_TRANSLATE);
+	vtlb->translate = (cpu_translate_func)cpu->get_config_fct(CPUINFO_FCT_TRANSLATE);
 
 	/* validate CPU information */
 	assert((1 << vtlb->pageshift) > VTLB_FLAGS_MASK);
@@ -77,17 +77,17 @@ vtlb_state *vtlb_alloc(const device_config *cpu, int space, int fixed_entries, i
 	assert(vtlb->addrwidth > vtlb->pageshift);
 
 	/* allocate the entry array */
-	vtlb->live = alloc_array_clear_or_die(offs_t, fixed_entries + dynamic_entries);
+	vtlb->live = auto_alloc_array_clear(cpu->machine, offs_t, fixed_entries + dynamic_entries);
 	state_save_register_device_item_pointer(cpu, space, vtlb->live, fixed_entries + dynamic_entries);
 
 	/* allocate the lookup table */
-	vtlb->table = alloc_array_clear_or_die(vtlb_entry, (size_t) 1 << (vtlb->addrwidth - vtlb->pageshift));
+	vtlb->table = auto_alloc_array_clear(cpu->machine, vtlb_entry, (size_t) 1 << (vtlb->addrwidth - vtlb->pageshift));
 	state_save_register_device_item_pointer(cpu, space, vtlb->table, 1 << (vtlb->addrwidth - vtlb->pageshift));
 
 	/* allocate the fixed page count array */
 	if (fixed_entries > 0)
 	{
-		vtlb->fixedpages = alloc_array_clear_or_die(int, fixed_entries);
+		vtlb->fixedpages = auto_alloc_array_clear(cpu->machine, int, fixed_entries);
 		state_save_register_device_item_pointer(cpu, space, vtlb->fixedpages, fixed_entries);
 	}
 	return vtlb;
@@ -102,16 +102,16 @@ void vtlb_free(vtlb_state *vtlb)
 {
 	/* free the fixed pages if allocated */
 	if (vtlb->fixedpages != NULL)
-		free(vtlb->fixedpages);
+		auto_free(vtlb->device->machine, vtlb->fixedpages);
 
 	/* free the table and array if they exist */
 	if (vtlb->live != NULL)
-		free(vtlb->live);
+		auto_free(vtlb->device->machine, vtlb->live);
 	if (vtlb->table != NULL)
-		free(vtlb->table);
+		auto_free(vtlb->device->machine, vtlb->table);
 
 	/* and then the VTLB object itself */
-	free(vtlb);
+	auto_free(vtlb->device->machine, vtlb);
 }
 
 

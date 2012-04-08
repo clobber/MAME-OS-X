@@ -7,7 +7,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/tms5220.h"
 #include "includes/starwars.h"
@@ -16,7 +16,7 @@
 static UINT8 sound_data;	/* data for the sound cpu */
 static UINT8 main_data;		/* data for the main  cpu */
 
-static const device_config *riot;
+static running_device *riot;
 
 
 SOUND_START( starwars )

@@ -33,7 +33,8 @@
 #include <mach/mach_time.h>
 #include <unistd.h>
 
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 
 #define OSX_LOG_SOUND 0
 

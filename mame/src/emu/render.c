@@ -37,12 +37,13 @@
 
 ***************************************************************************/
 
+#include "emu.h"
+#include "emuopts.h"
 #include "render.h"
 #include "rendfont.h"
 #include "rendlay.h"
 #include "rendutil.h"
 #include "config.h"
-#include "output.h"
 #include "xmlfile.h"
 
 
@@ -92,7 +93,6 @@ enum
 ***************************************************************************/
 
 /* typedef struct _render_texture render_texture; -- defined in render.h */
-/* typedef struct _render_target render_target; -- defined in render.h */
 /* typedef struct _render_container render_container; -- defined in render.h */
 typedef struct _object_transform object_transform;
 typedef struct _scaled_texture scaled_texture;
@@ -114,6 +114,7 @@ struct _object_transform
 	float				xscale, yscale;		/* scale transforms */
 	render_color		color;				/* color transform */
 	int					orientation;		/* orientation transform */
+	int					no_center;			/* center the container? */
 };
 
 
@@ -144,8 +145,9 @@ struct _render_texture
 
 
 /* a render_target describes a surface that is being rendered to */
-struct _render_target
+class render_target
 {
+public:
 	render_target *		next;				/* keep a linked list of targets */
 	running_machine *	machine;			/* pointer to the machine we are connected with */
 	layout_view *		curview;			/* current view */
@@ -165,6 +167,7 @@ struct _render_target
 	int					base_layerconfig;	/* the layer configuration at the time of first frame */
 	int					maxtexwidth;		/* maximum width of a texture */
 	int					maxtexheight;		/* maximum height of a texture */
+	render_container *	debug_containers;
 };
 
 
@@ -343,7 +346,7 @@ INLINE container_item *alloc_container_item(void)
 	if (result != NULL)
 		container_item_free_list = result->next;
 	else
-		result = alloc_or_die(container_item);
+		result = global_alloc(container_item);
 
 	memset(result, 0, sizeof(*result));
 	return result;
@@ -375,7 +378,7 @@ INLINE render_primitive *alloc_render_primitive(int type)
 	if (result != NULL)
 		render_primitive_free_list = result->next;
 	else
-		result = alloc_or_die(render_primitive);
+		result = global_alloc(render_primitive);
 
 	/* clear to 0 */
 	memset(result, 0, sizeof(*result));
@@ -426,7 +429,7 @@ INLINE void add_render_ref(render_ref **list, void *refptr)
 	if (ref != NULL)
 		render_ref_free_list = ref->next;
 	else
-		ref = alloc_or_die(render_ref);
+		ref = global_alloc(render_ref);
 
 	/* set the refptr and link us into the list */
 	ref->refptr = refptr;
@@ -620,7 +623,7 @@ static void render_exit(running_machine *machine)
 	{
 		render_texture *temp = render_texture_free_list;
 		render_texture_free_list = temp->next;
-		free(temp);
+		global_free(temp);
 	}
 
 	/* free the render primitives */
@@ -628,7 +631,7 @@ static void render_exit(running_machine *machine)
 	{
 		render_primitive *temp = render_primitive_free_list;
 		render_primitive_free_list = temp->next;
-		free(temp);
+		global_free(temp);
 	}
 
 	/* free the render refs */
@@ -636,7 +639,7 @@ static void render_exit(running_machine *machine)
 	{
 		render_ref *temp = render_ref_free_list;
 		render_ref_free_list = temp->next;
-		free(temp);
+		global_free(temp);
 	}
 
 	/* free the container items */
@@ -644,7 +647,7 @@ static void render_exit(running_machine *machine)
 	{
 		container_item *temp = container_item_free_list;
 		container_item_free_list = temp->next;
-		free(temp);
+		global_free(temp);
 	}
 
 	/* free the targets */
@@ -951,7 +954,7 @@ static void render_save(running_machine *machine, int config_type, xml_data_node
     is 'live'
 -------------------------------------------------*/
 
-int render_is_live_screen(const device_config *screen)
+int render_is_live_screen(running_device *screen)
 {
 	render_target *target;
 	int screen_index;
@@ -960,9 +963,8 @@ int render_is_live_screen(const device_config *screen)
 	assert(screen != NULL);
 	assert(screen->machine != NULL);
 	assert(screen->machine->config != NULL);
-	assert(screen->tag != NULL);
 
-	screen_index = device_list_index(&screen->machine->config->devicelist, VIDEO_SCREEN, screen->tag);
+	screen_index = screen->machine->devicelist.index(VIDEO_SCREEN, screen->tag());
 
 	assert(screen_index != -1);
 
@@ -1072,7 +1074,7 @@ render_target *render_target_alloc(running_machine *machine, const char *layoutf
 	int listnum;
 
 	/* allocate memory for the target */
-	target = alloc_clear_or_die(render_target);
+	target = global_alloc_clear(render_target);
 
 	/* add it to the end of the list */
 	for (nextptr = &targetlist; *nextptr != NULL; nextptr = &(*nextptr)->next) ;
@@ -1168,7 +1170,7 @@ void render_target_free(render_target *target)
 	}
 
 	/* free the target itself */
-	free(target);
+	global_free(target);
 }
 
 
@@ -1465,8 +1467,9 @@ void render_target_get_minimum_size(render_target *target, INT32 *minwidth, INT3
 		for (item = target->curview->itemlist[layer]; item != NULL; item = item->next)
 			if (item->element == NULL)
 			{
-				const device_config *screen = device_list_find_by_index(&target->machine->config->devicelist, VIDEO_SCREEN, item->index);
+				const device_config *screen = target->machine->config->devicelist.find(VIDEO_SCREEN, item->index);
 				const screen_config *scrconfig = (const screen_config *)screen->inline_config;
+				running_device *screendev = target->machine->device(screen->tag());
 				const rectangle vectorvis = { 0, 639, 0, 479 };
 				const rectangle *visarea = NULL;
 				render_container *container = get_screen_container_by_index(item->index);
@@ -1476,8 +1479,8 @@ void render_target_get_minimum_size(render_target *target, INT32 *minwidth, INT3
 				/* we may be called very early, before machine->visible_area is initialized; handle that case */
 				if (scrconfig->type == SCREEN_TYPE_VECTOR)
 					visarea = &vectorvis;
-				else if (screen->token != NULL)
-					visarea = video_screen_get_visible_area(screen);
+				else if (screendev != NULL && screendev->started)
+					visarea = video_screen_get_visible_area(screendev);
 				else
 					visarea = &scrconfig->visarea;
 
@@ -1597,7 +1600,7 @@ const render_primitive_list *render_target_get_primitives(render_target *target)
 							state = output_get_value(item->output_name);
 						else if (item->input_tag[0] != 0)
 						{
-							const input_field_config *field = input_field_by_tag_and_mask(&target->machine->portlist, item->input_tag, item->input_mask);
+							const input_field_config *field = input_field_by_tag_and_mask(target->machine->portlist, item->input_tag, item->input_mask);
 							if (field != NULL)
 								state = ((input_port_read_safe(target->machine, item->input_tag, 0) ^ field->defvalue) & item->input_mask) ? 1 : 0;
 						}
@@ -1636,6 +1639,22 @@ const render_primitive_list *render_target_get_primitives(render_target *target)
 			prim->flags = PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA);
 			append_render_primitive(&target->primlist[listnum], prim);
 		}
+	}
+
+	/* process the debug containers */
+	for (render_container *debug = target->debug_containers; debug != NULL; debug = debug->next)
+	{
+		ui_xform.xoffs = 0;
+		ui_xform.yoffs = 0;
+		ui_xform.xscale = (float) target->width;
+		ui_xform.yscale = (float) target->height;
+		ui_xform.color.r = ui_xform.color.g = ui_xform.color.b = ui_xform.color.a = 1.0f;
+		ui_xform.color.a = 0.9f;
+		ui_xform.orientation = target->orientation;
+		ui_xform.no_center = TRUE;
+
+		/* add UI elements */
+		add_container_primitives(target, &target->primlist[listnum], &ui_xform, debug, BLENDMODE_ALPHA);
 	}
 
 	/* process the UI if we are the UI target */
@@ -1907,8 +1926,16 @@ static void add_container_primitives(render_target *target, render_primitive_lis
 		if (container_xform.orientation & ORIENTATION_FLIP_Y) yoffs = -yoffs;
 		container_xform.xscale = xform->xscale * xscale;
 		container_xform.yscale = xform->yscale * yscale;
-		container_xform.xoffs = xform->xscale * (0.5f - 0.5f * xscale + xoffs) + xform->xoffs;
-		container_xform.yoffs = xform->yscale * (0.5f - 0.5f * yscale + yoffs) + xform->yoffs;
+		if (xform->no_center)
+		{
+			container_xform.xoffs = xform->xscale * (xoffs) + xform->xoffs;
+			container_xform.yoffs = xform->yscale * (yoffs) + xform->yoffs;
+		}
+		else
+		{
+			container_xform.xoffs = xform->xscale * (0.5f - 0.5f * xscale + xoffs) + xform->xoffs;
+			container_xform.yoffs = xform->yscale * (0.5f - 0.5f * yscale + yoffs) + xform->yoffs;
+		}
 		container_xform.color = xform->color;
 	}
 
@@ -2431,7 +2458,7 @@ render_texture *render_texture_alloc(texture_scaler_func scaler, void *param)
 		int texnum;
 
 		/* allocate a new group */
-		texture = alloc_array_clear_or_die(render_texture, TEXTURE_GROUP_SIZE);
+		texture = global_alloc_array_clear(render_texture, TEXTURE_GROUP_SIZE);
 
 		/* add them to the list */
 		for (texnum = 0; texnum < TEXTURE_GROUP_SIZE; texnum++)
@@ -2482,7 +2509,7 @@ void render_texture_free(render_texture *texture)
 
 	/* free any B/C/G lookup tables */
 	if (texture->bcglookup != NULL)
-		free(texture->bcglookup);
+		global_free(texture->bcglookup);
 
 	/* add ourself back to the free list */
 	base_save = texture->base;
@@ -2669,7 +2696,10 @@ static const rgb_t *texture_get_adjusted_palette(render_texture *texture, render
 			numentries = palette_get_num_colors(texture->palette) * palette_get_num_groups(texture->palette);
 			if (texture->bcglookup == NULL || texture->bcglookup_entries < numentries)
 			{
-				texture->bcglookup = (rgb_t *)realloc(texture->bcglookup, numentries * sizeof(*texture->bcglookup));
+				rgb_t *newlookup = global_alloc_array(rgb_t, numentries);
+				memcpy(newlookup, texture->bcglookup, texture->bcglookup_entries * sizeof(rgb_t));
+				global_free(texture->bcglookup);
+				texture->bcglookup = newlookup;
 				texture->bcglookup_entries = numentries;
 			}
 			for (index = 0; index < numentries; index++)
@@ -2696,7 +2726,10 @@ static const rgb_t *texture_get_adjusted_palette(render_texture *texture, render
 			adjusted = palette_entry_list_adjusted(texture->palette);
 			if (texture->bcglookup == NULL || texture->bcglookup_entries < 4 * 32)
 			{
-				texture->bcglookup = (rgb_t *)realloc(texture->bcglookup, 4 * 32 * sizeof(*texture->bcglookup));
+				rgb_t *newlookup = global_alloc_array(rgb_t, 4 * 32);
+				memcpy(newlookup, texture->bcglookup, texture->bcglookup_entries * sizeof(rgb_t));
+				global_free(texture->bcglookup);
+				texture->bcglookup = newlookup;
 				texture->bcglookup_entries = 4 * 32;
 			}
 
@@ -2728,7 +2761,10 @@ static const rgb_t *texture_get_adjusted_palette(render_texture *texture, render
 			adjusted = palette_entry_list_adjusted(texture->palette);
 			if (texture->bcglookup == NULL || texture->bcglookup_entries < 4 * 256)
 			{
-				texture->bcglookup = (rgb_t *)realloc(texture->bcglookup, 4 * 256 * sizeof(*texture->bcglookup));
+				rgb_t *newlookup = global_alloc_array(rgb_t, 4 * 256);
+				memcpy(newlookup, texture->bcglookup, texture->bcglookup_entries * sizeof(rgb_t));
+				global_free(texture->bcglookup);
+				texture->bcglookup = newlookup;
 				texture->bcglookup_entries = 4 * 256;
 			}
 
@@ -2767,7 +2803,7 @@ static render_container *render_container_alloc(running_machine *machine)
 	int color;
 
 	/* allocate and clear memory */
-	container = alloc_clear_or_die(render_container);
+	container = global_alloc_clear(render_container);
 
 	/* default values */
 	container->brightness = 1.0f;
@@ -2810,7 +2846,7 @@ static void render_container_free(render_container *container)
 		palette_client_free(container->palclient);
 
 	/* free the container itself */
-	free(container);
+	global_free(container);
 }
 
 
@@ -2933,6 +2969,12 @@ render_container *render_container_get_screen(const device_config *screen)
 	assert(container != NULL);
 
 	return container;
+}
+
+
+render_container *render_container_get_screen(running_device *screen)
+{
+	return render_container_get_screen(&screen->baseconfig());
 }
 
 
@@ -3135,3 +3177,67 @@ static void render_container_update_palette(render_container *container)
 		}
 	}
 }
+
+
+render_container *render_debug_alloc(render_target *target)
+{
+	render_container *container = render_container_alloc(target->machine);
+
+	container->next = target->debug_containers;
+	target->debug_containers = container;
+
+	return container;
+}
+
+
+void render_debug_free(render_target *target, render_container *container)
+{
+	if (container == target->debug_containers)
+	{
+		target->debug_containers = container->next;
+	}
+	else
+	{
+		render_container *c;
+
+		for (c = target->debug_containers; c != NULL; c = c->next)
+			if (c->next == container)
+				break;
+		c->next = container->next;
+	}
+	render_container_free(container);
+}
+
+
+void render_debug_top(render_target *target, render_container *container)
+{
+	/* remove */
+	if (container == target->debug_containers)
+	{
+		target->debug_containers = container->next;
+	}
+	else
+	{
+		render_container *c;
+
+		for (c = target->debug_containers; c != NULL; c = c->next)
+			if (c->next == container)
+				break;
+		c->next = container->next;
+	}
+	/* add to end */
+	if (target->debug_containers == NULL)
+		target->debug_containers = container;
+	else
+	{
+		render_container *c;
+
+		for (c = target->debug_containers; c != NULL; c = c->next)
+			if (c->next == NULL)
+				break;
+		c->next = container;
+	}
+	container->next = NULL;
+}
+
+

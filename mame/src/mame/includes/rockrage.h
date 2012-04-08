@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _rockrage_state rockrage_state;
-struct _rockrage_state
+class rockrage_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, rockrage_state(machine)); }
+
+	rockrage_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    paletteram;
 
@@ -15,9 +19,9 @@ struct _rockrage_state
 	int        vreg;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k007342;
-	const device_config *k007420;
+	running_device *audiocpu;
+	running_device *k007342;
+	running_device *k007420;
 };
 
 

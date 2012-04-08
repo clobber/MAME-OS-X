@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _kyugo_state kyugo_state;
-struct _kyugo_state
+class kyugo_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, kyugo_state(machine)); }
+
+	kyugo_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *     fgvideoram;
 	UINT8 *     bgvideoram;
@@ -23,8 +27,8 @@ struct _kyugo_state
 	const UINT8 *color_codes;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *subcpu;
+	running_device *maincpu;
+	running_device *subcpu;
 };
 
 

@@ -18,12 +18,12 @@
 typedef struct _z80sio_interface z80sio_interface;
 struct _z80sio_interface
 {
-	void (*irq_cb)(const device_config *device, int state);
+	void (*irq_cb)(running_device *device, int state);
 	write8_device_func dtr_changed_cb;
 	write8_device_func rts_changed_cb;
 	write8_device_func break_changed_cb;
 	write8_device_func transmit_cb;
-	int (*receive_poll_cb)(const device_config *device, int channel);
+	int (*receive_poll_cb)(running_device *device, int channel);
 };
 
 
@@ -39,21 +39,22 @@ struct _z80sio_interface
 
 
 /***************************************************************************
-    CONTROL REGISTER READ/WRITE
+    CONTROL/DATA REGISTER READ/WRITE
 ***************************************************************************/
+
+/* register access (A1=C/_D A0=B/_A) */
+READ8_DEVICE_HANDLER( z80sio_cd_ba_r );
+WRITE8_DEVICE_HANDLER( z80sio_cd_ba_w );
+
+/* register access (A1=B/_A A0=C/_D) */
+READ8_DEVICE_HANDLER( z80sio_ba_cd_r );
+WRITE8_DEVICE_HANDLER( z80sio_ba_cd_w );
 
 WRITE8_DEVICE_HANDLER( z80sio_c_w );
 READ8_DEVICE_HANDLER( z80sio_c_r );
 
-
-
-/***************************************************************************
-    DATA REGISTER READ/WRITE
-***************************************************************************/
-
 WRITE8_DEVICE_HANDLER( z80sio_d_w );
 READ8_DEVICE_HANDLER( z80sio_d_r );
-
 
 
 /***************************************************************************

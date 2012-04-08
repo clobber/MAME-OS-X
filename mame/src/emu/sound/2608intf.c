@@ -11,7 +11,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "ay8910.h"
 #include "2608intf.h"
@@ -25,11 +25,11 @@ struct _ym2608_state
 	void *			chip;
 	void *			psg;
 	const ym2608_interface *intf;
-	const device_config *device;
+	running_device *device;
 };
 
 
-INLINE ym2608_state *get_safe_token(const device_config *device)
+INLINE ym2608_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -140,7 +140,7 @@ static DEVICE_START( ym2608 )
 		},
 		NULL
 	};
-	const ym2608_interface *intf = device->static_config ? (const ym2608_interface *)device->static_config : &generic_2608;
+	const ym2608_interface *intf = device->baseconfig().static_config ? (const ym2608_interface *)device->baseconfig().static_config : &generic_2608;
 	int rate = device->clock/72;
 	void *pcmbufa;
 	int  pcmsizea;
@@ -161,8 +161,8 @@ static DEVICE_START( ym2608 )
 	/* stream system initialize */
 	info->stream = stream_create(device,0,2,rate,info,ym2608_stream_update);
 	/* setup adpcm buffers */
-	pcmbufa  = device->region;
-	pcmsizea = device->regionbytes;
+	pcmbufa  = *device->region;
+	pcmsizea = device->region->bytes();
 
 	/* initialize YM2608 */
 	info->chip = ym2608_init(info,device,device->clock,rate,

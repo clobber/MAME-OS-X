@@ -308,7 +308,7 @@ outputs:
 control registers
 000:          scroll x (low 8 bits)
 001: -------x scroll x (high bit)
-     ------x- enable rowscroll? (combasc)
+     ------x- enable rowscroll? (combatsc)
      ----x--- this probably selects an alternate screen layout used in combat
               school where tilemap #2 is overlayed on front and doesn't scroll.
               The 32 lines of the front layer can be individually turned on or
@@ -332,10 +332,10 @@ control registers
      --x----- might be sprite / tilemap priority (0 = sprites have priority)
               (combat school, contra, haunted castle(0/1), labyrunr)
      -x------ Chops away the leftmost and rightmost columns, switching the
-              visible area from 256 to 240 pixels. This is used by combasc on
+              visible area from 256 to 240 pixels. This is used by combatsc on
               the scrolling stages, and by labyrunr on the title screen.
               At first I thought that this enabled an extra bank of 0x40
-              sprites, needed by combasc, but labyrunr proves that this is not
+              sprites, needed by combatsc, but labyrunr proves that this is not
               the case
      x------- unknown (contra)
 004: ----xxxx bits 9-12 of the tile code. Only the bits enabled by the following
@@ -355,15 +355,15 @@ control registers
               same ones indexed by register 005). Note that an attribute bit
               can therefore be used at the same time to be BOTH a tile code bit
               and an additional effect.
-     -------x bit 3 of attribute is bit 3 of color (combasc, fastlane, flkatck)
+     -------x bit 3 of attribute is bit 3 of color (combatsc, fastlane, flkatck)
      ------x- bit 4 of attribute is tile flip X (assumption - no game uses this)
      -----x-- bit 5 of attribute is tile flip Y (flkatck)
-     ----x--- bit 6 of attribute is tile priority over sprites (combasc, hcastle,
+     ----x--- bit 6 of attribute is tile priority over sprites (combatsc, hcastle,
               labyrunr)
               Note that hcastle sets this bit for layer 0, and bit 6 of the
               attribute is also used as bit 12 of the tile code, however that
               bit is ALWAYS set throughout the game.
-              combasc uses the bit in the "graduation" scene during attract mode,
+              combatsc uses the bit in the "graduation" scene during attract mode,
               to place soldiers behind the stand.
               Use in labyrunr has not been investigated yet.
      --xx---- palette bank (both tiles and sprites, see contra)
@@ -1149,7 +1149,7 @@ Registers (word-wise):
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/konicdev.h"
 
 #define VERBOSE 0
@@ -1262,6 +1262,68 @@ static void deinterleave_gfx(running_machine *machine, const char *gfx_memory_re
 	}
 }
 
+/* useful function to sort three tile layers by priority order */
+void konami_sortlayers3( int *layer, int *pri )
+{
+#define SWAP(a,b) \
+	if (pri[a] < pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
+
+	SWAP(0,1)
+	SWAP(0,2)
+	SWAP(1,2)
+#undef  SWAP
+}
+
+/* useful function to sort four tile layers by priority order */
+void konami_sortlayers4( int *layer, int *pri )
+{
+#define SWAP(a,b) \
+	if (pri[a] <= pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
+
+	SWAP(0, 1)
+	SWAP(0, 2)
+	SWAP(0, 3)
+	SWAP(1, 2)
+	SWAP(1, 3)
+	SWAP(2, 3)
+#undef  SWAP
+}
+
+/* useful function to sort five tile layers by priority order */
+void konami_sortlayers5( int *layer, int *pri )
+{
+#define SWAP(a,b) \
+	if (pri[a] <= pri[b]) \
+	{ \
+		int t; \
+		t = pri[a]; pri[a] = pri[b]; pri[b] = t; \
+		t = layer[a]; layer[a] = layer[b]; layer[b] = t; \
+	}
+
+	SWAP(0, 1)
+	SWAP(0, 2)
+	SWAP(0, 3)
+	SWAP(0, 4)
+	SWAP(1, 2)
+	SWAP(1, 3)
+	SWAP(1, 4)
+	SWAP(2, 3)
+	SWAP(2, 4)
+	SWAP(3, 4)
+#undef  SWAP
+}
+
+
 /***************************************************************************/
 /*                                                                         */
 /*                                 007121                                  */
@@ -1280,7 +1342,7 @@ struct _k007121_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k007121_state *k007121_get_safe_token( const device_config *device )
+INLINE k007121_state *k007121_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -1370,7 +1432,7 @@ WRITE8_DEVICE_HANDLER( k007121_ctrl_w )
  *
  */
 
-void k007121_sprites_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, gfx_element *gfx, colortable_t *ctable,
+void k007121_sprites_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, gfx_element *gfx, colortable_t *ctable,
 						  const UINT8 *source, int base_color, int global_x_offset, int bank_base, UINT32 pri_mask )
 {
 	k007121_state *k007121 = k007121_get_safe_token(device);
@@ -1393,8 +1455,8 @@ void k007121_sprites_draw( const device_config *device, bitmap_t *bitmap, const 
 	}
 	else	/* all others */
 	{
-		//num = (k007121->ctrlram[0x03] & 0x40) ? 0x80 : 0x40; /* WRONG!!! (needed by combasc)  */
-		num = 0x40; // Combasc writes 70 sprites to VRAM at peak but the chip only processes the first 64.
+		//num = (k007121->ctrlram[0x03] & 0x40) ? 0x80 : 0x40; /* WRONG!!! (needed by combatsc)  */
+		num = 0x40; // combatsc writes 70 sprites to VRAM at peak but the chip only processes the first 64.
 
 		inc = 5;
 		offs[0] = 0x00;
@@ -1554,7 +1616,7 @@ struct _k007342_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k007342_state *k007342_get_safe_token( const device_config *device )
+INLINE k007342_state *k007342_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -1563,11 +1625,11 @@ INLINE k007342_state *k007342_get_safe_token( const device_config *device )
 	return (k007342_state *)device->token;
 }
 
-INLINE const k007342_interface *k007342_get_interface( const device_config *device )
+INLINE const k007342_interface *k007342_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K007342));
-	return (const k007342_interface *) device->static_config;
+	return (const k007342_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -1639,7 +1701,7 @@ WRITE8_DEVICE_HANDLER( k007342_vreg_w )
 	k007342->regs[offset] = data;
 }
 
-void k007342_tilemap_update( const device_config *device )
+void k007342_tilemap_update( running_device *device )
 {
 	k007342_state *k007342 = k007342_get_safe_token(device);
 	int offs;
@@ -1697,19 +1759,19 @@ void k007342_tilemap_update( const device_config *device )
 #endif
 }
 
-void k007342_tilemap_set_enable( const device_config *device, int tmap, int enable )
+void k007342_tilemap_set_enable( running_device *device, int tmap, int enable )
 {
 	k007342_state *k007342 = k007342_get_safe_token(device);
 	tilemap_set_enable(k007342->tilemap[tmap], enable);
 }
 
-void k007342_tilemap_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int num, int flags, UINT32 priority )
+void k007342_tilemap_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int num, int flags, UINT32 priority )
 {
 	k007342_state *k007342 = k007342_get_safe_token(device);
 	tilemap_draw(bitmap, cliprect, k007342->tilemap[num], flags, priority);
 }
 
-int k007342_is_int_enabled( const device_config *device )
+int k007342_is_int_enabled( running_device *device )
 {
 	k007342_state *k007342 = k007342_get_safe_token(device);
 	return k007342->int_enabled;
@@ -1738,7 +1800,7 @@ static TILEMAP_MAPPER( k007342_scan )
 	return (col & 0x1f) + ((row & 0x1f) << 5) + ((col & 0x20) << 5);
 }
 
-INLINE void k007342_get_tile_info( const device_config *device, tile_data *tileinfo, int tile_index, int layer, UINT8 *cram, UINT8 *vram )
+INLINE void k007342_get_tile_info( running_device *device, tile_data *tileinfo, int tile_index, int layer, UINT8 *cram, UINT8 *vram )
 {
 	k007342_state *k007342 = k007342_get_safe_token(device);
 	int color, code, flags;
@@ -1845,7 +1907,7 @@ struct _k007420_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k007420_state *k007420_get_safe_token( const device_config *device )
+INLINE k007420_state *k007420_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -1854,11 +1916,11 @@ INLINE k007420_state *k007420_get_safe_token( const device_config *device )
 	return (k007420_state *)device->token;
 }
 
-INLINE const k007420_interface *k007420_get_interface( const device_config *device )
+INLINE const k007420_interface *k007420_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K007420));
-	return (const k007420_interface *) device->static_config;
+	return (const k007420_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -1897,7 +1959,7 @@ WRITE8_DEVICE_HANDLER( k007420_w )
  *   7  | xxxxxxxx | unused
  */
 
-void k007420_sprites_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, gfx_element *gfx )
+void k007420_sprites_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, gfx_element *gfx )
 {
 	k007420_state *k007420 = k007420_get_safe_token(device);
 	int offs;
@@ -2108,7 +2170,7 @@ struct _k052109_state
 	UINT8    charrombank[4];
 	UINT8    charrombank_2[4];
 	UINT8    has_extra_video_ram;
-	INT32    RMRD_line;
+	INT32    rmrd_line;
 	UINT8    irq_enabled;
 	INT32    dx[3], dy[3];
 	UINT8    romsubbank, scrollctrl;
@@ -2123,7 +2185,7 @@ struct _k052109_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k052109_state *k052109_get_safe_token( const device_config *device )
+INLINE k052109_state *k052109_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -2132,11 +2194,11 @@ INLINE k052109_state *k052109_get_safe_token( const device_config *device )
 	return (k052109_state *)device->token;
 }
 
-INLINE const k052109_interface *k052109_get_interface( const device_config *device )
+INLINE const k052109_interface *k052109_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K052109));
-	return (const k052109_interface *) device->static_config;
+	return (const k052109_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -2147,7 +2209,7 @@ READ8_DEVICE_HANDLER( k052109_r )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 
-	if (k052109->RMRD_line == CLEAR_LINE)
+	if (k052109->rmrd_line == CLEAR_LINE)
 	{
 		if ((offset & 0x1fff) >= 0x1800)
 		{
@@ -2344,27 +2406,27 @@ WRITE16_DEVICE_HANDLER( k052109_lsb_w )
 		k052109_w(device, offset, data & 0xff);
 }
 
-void k052109_set_rmrd_line( const device_config *device, int state )
+void k052109_set_rmrd_line( running_device *device, int state )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
-	k052109->RMRD_line = state;
+	k052109->rmrd_line = state;
 }
 
-int k052109_get_rmrd_line(const device_config *device )
+int k052109_get_rmrd_line(running_device *device )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
-	return k052109->RMRD_line;
+	return k052109->rmrd_line;
 }
 
 
-void k052109_tilemap_mark_dirty( const device_config *device, int tmap_num )
+void k052109_tilemap_mark_dirty( running_device *device, int tmap_num )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 	tilemap_mark_all_tiles_dirty(k052109->tilemap[tmap_num]);
 }
 
 
-void k052109_tilemap_update( const device_config *device )
+void k052109_tilemap_update( running_device *device )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 	int xscroll, yscroll, offs;
@@ -2517,20 +2579,20 @@ if (input_code_pressed(machine, KEYCODE_F))
 #endif
 }
 
-void k052109_tilemap_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int tmap_num, UINT32 flags, UINT8 priority )
+void k052109_tilemap_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int tmap_num, UINT32 flags, UINT8 priority )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 	tilemap_draw(bitmap, cliprect, k052109->tilemap[tmap_num], flags, priority);
 }
 
-int k052109_is_irq_enabled( const device_config *device )
+int k052109_is_irq_enabled( running_device *device )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 
 	return k052109->irq_enabled;
 }
 
-void k052109_set_layer_offsets( const device_config *device, int layer, int dx, int dy )
+void k052109_set_layer_offsets( running_device *device, int layer, int dx, int dy )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 
@@ -2556,7 +2618,7 @@ void k052109_set_layer_offsets( const device_config *device, int layer, int dx, 
   color RAM    ------xx  depends on external connections (usually banking, flip)
 */
 
-INLINE void k052109_get_tile_info( const device_config *device, tile_data *tileinfo, int tile_index, int layer, UINT8 *cram, UINT8 *vram1, UINT8 *vram2 )
+INLINE void k052109_get_tile_info( running_device *device, tile_data *tileinfo, int tile_index, int layer, UINT8 *cram, UINT8 *vram1, UINT8 *vram2 )
 {
 	k052109_state *k052109 = k052109_get_safe_token(device);
 	int flipy = 0;
@@ -2694,7 +2756,7 @@ static DEVICE_START( k052109 )
 	tilemap_set_transparent_pen(k052109->tilemap[2], 0);
 
 	state_save_register_device_item_pointer(device, 0, k052109->ram, 0x6000);
-	state_save_register_device_item(device, 0, k052109->RMRD_line);
+	state_save_register_device_item(device, 0, k052109->rmrd_line);
 	state_save_register_device_item(device, 0, k052109->romsubbank);
 	state_save_register_device_item(device, 0, k052109->scrollctrl);
 	state_save_register_device_item(device, 0, k052109->irq_enabled);
@@ -2711,15 +2773,22 @@ static DEVICE_RESET( k052109 )
 	k052109_state *k052109 = k052109_get_safe_token(device);
 	int i;
 
-	k052109->RMRD_line = CLEAR_LINE;
+	k052109->rmrd_line = CLEAR_LINE;
 	k052109->irq_enabled = 0;
+	k052109->romsubbank = 0;
+	k052109->scrollctrl = 0;
 
 	k052109->has_extra_video_ram = 0;
 
 	for (i = 0; i < 3; i++)
 		k052109->dx[i] = k052109->dy[i] = 0;
-}
 
+	for (i = 0; i < 4; i++)
+	{
+		k052109->charrombank[i] = 0;
+		k052109->charrombank_2[i] = 0;
+	}
+}
 
 /***************************************************************************/
 /*                                                                         */
@@ -2752,7 +2821,7 @@ struct _k051960_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k051960_state *k051960_get_safe_token( const device_config *device )
+INLINE k051960_state *k051960_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -2761,18 +2830,18 @@ INLINE k051960_state *k051960_get_safe_token( const device_config *device )
 	return (k051960_state *)device->token;
 }
 
-INLINE const k051960_interface *k051960_get_interface( const device_config *device )
+INLINE const k051960_interface *k051960_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K051960));
-	return (const k051960_interface *) device->static_config;
+	return (const k051960_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-static int k051960_fetchromdata( const device_config *device, int byte )
+static int k051960_fetchromdata( running_device *device, int byte )
 {
 	k051960_state *k051960 = k051960_get_safe_token(device);
 	int code, color, pri, shadow, off1, addr;
@@ -2843,6 +2912,8 @@ READ8_DEVICE_HANDLER( k051937_r )
 		//logerror("%04x: read unknown 051937 address %x\n", cpu_get_pc(device->cpu), offset);
 		return 0;
 	}
+
+	return 0;
 }
 
 WRITE8_DEVICE_HANDLER( k051937_w )
@@ -2887,19 +2958,19 @@ WRITE8_DEVICE_HANDLER( k051937_w )
 	}
 }
 
-int k051960_is_irq_enabled( const device_config *device )
+int k051960_is_irq_enabled( running_device *device )
 {
 	k051960_state *k051960 = k051960_get_safe_token(device);
 	return k051960->irq_enabled;
 }
 
-int k051960_is_nmi_enabled( const device_config *device )
+int k051960_is_nmi_enabled( running_device *device )
 {
 	k051960_state *k051960 = k051960_get_safe_token(device);
 	return k051960->nmi_enabled;
 }
 
-void k051960_set_sprite_offsets( const device_config *device, int dx, int dy )
+void k051960_set_sprite_offsets( running_device *device, int dx, int dy )
 {
 	k051960_state *k051960 = k051960_get_safe_token(device);
 	k051960->dx = dx;
@@ -2952,7 +3023,7 @@ WRITE16_DEVICE_HANDLER( k051937_word_w )
  * Note that Aliens also uses the shadow bit to select the second sprite bank.
  */
 
-void k051960_sprites_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int min_priority, int max_priority )
+void k051960_sprites_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int min_priority, int max_priority )
 {
 #define NUM_SPRITES 128
 	k051960_state *k051960 = k051960_get_safe_token(device);
@@ -3245,35 +3316,17 @@ static DEVICE_RESET( k051960 )
 
 	k051960->dx = k051960->dy = 0;
 	k051960->k051937_counter = 0;
+
+	k051960->romoffset = 0;
+	k051960->spriteflip = 0;
+	k051960->readroms = 0;
+	k051960->irq_enabled = 0;
+	k051960->nmi_enabled = 0;
+
+	k051960->spriterombank[0] = 0;
+	k051960->spriterombank[1] = 0;
+	k051960->spriterombank[2] = 0;
 }
-
-
-#if 0 // to be moved in the specific drivers!
-READ8_DEVICE_HANDLER( k052109_051960_r )
-{
-	if (k052109_RMRD_line == CLEAR_LINE)
-	{
-		if (offset >= 0x3800 && offset < 0x3808)
-			return k051937_r(space,offset - 0x3800);
-		else if (offset < 0x3c00)
-			return k052109_r(space,offset);
-		else
-			return k051960_r(space,offset - 0x3c00);
-	}
-	else return k052109_r(space,offset);
-}
-
-WRITE8_DEVICE_HANDLER( k052109_051960_w )
-{
-	if (offset >= 0x3800 && offset < 0x3808)
-		k051937_w(space,offset - 0x3800,data);
-	else if (offset < 0x3c00)
-		k052109_w(space,offset,data);
-	else
-		k051960_w(space,offset - 0x3c00,data);
-}
-#endif
-
 
 /***************************************************************************/
 /*                                                                         */
@@ -3311,7 +3364,7 @@ struct _k05324x_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k05324x_state *k05324x_get_safe_token( const device_config *device )
+INLINE k05324x_state *k05324x_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -3320,18 +3373,18 @@ INLINE k05324x_state *k05324x_get_safe_token( const device_config *device )
 	return (k05324x_state *)device->token;
 }
 
-INLINE const k05324x_interface *k05324x_get_interface( const device_config *device )
+INLINE const k05324x_interface *k05324x_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K053244 || device->type == K053245));
-	return (const k05324x_interface *) device->static_config;
+	return (const k05324x_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-void k053245_set_sprite_offs( const device_config *device, int offsx, int offsy )
+void k053245_set_sprite_offs( running_device *device, int offsx, int offsy )
 {
 	k05324x_state *k053245 = k05324x_get_safe_token(device);
 	k053245->dx = offsx;
@@ -3371,7 +3424,7 @@ WRITE8_DEVICE_HANDLER( k053245_w )
 		k053245->ram[offset >> 1] = (k053245->ram[offset >> 1] & 0x00ff) | (data << 8);
 }
 
-void k053245_clear_buffer( const device_config *device )
+void k053245_clear_buffer( running_device *device )
 {
 	k05324x_state *k053245 = k05324x_get_safe_token(device);
 	int i, e;
@@ -3380,7 +3433,7 @@ void k053245_clear_buffer( const device_config *device )
 		k053245->buffer[i] = 0;
 }
 
-INLINE void k053245_update_buffer( const device_config *device )
+INLINE void k053245_update_buffer( running_device *device )
 {
 	k05324x_state *k053245 = k05324x_get_safe_token(device);
 	memcpy(k053245->buffer, k053245->ram, k053245->ramsize);
@@ -3463,7 +3516,7 @@ WRITE16_DEVICE_HANDLER( k053244_word_w )
 		k053244_w(device, offset * 2 + 1, data & 0xff);
 }
 
-void k053244_bankselect( const device_config *device, int bank )
+void k053244_bankselect( running_device *device, int bank )
 {
 	k05324x_state *k053244 = k05324x_get_safe_token(device);
 	k053244->rombank = bank;
@@ -3497,7 +3550,7 @@ void k053244_bankselect( const device_config *device, int bank )
  * The rest of the sprite remains normal.
  */
 
-void k053245_sprites_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k053245_sprites_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 #define NUM_SPRITES 128
 	k05324x_state *k053245 = k05324x_get_safe_token(device);
@@ -3751,7 +3804,7 @@ if (input_code_pressed(machine, KEYCODE_D))
 
 /* Lethal Enforcers has 2 of these chips hooked up in parallel to give 6bpp gfx.. lets cheat a
   bit and make emulating it a little less messy by using a custom function instead */
-void k053245_sprites_draw_lethal( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k053245_sprites_draw_lethal( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 #define NUM_SPRITES 128
 	k05324x_state *k053245 = k05324x_get_safe_token(device);
@@ -4084,8 +4137,8 @@ struct _k053247_state
 
 	gfx_element *gfx;
 
-	UINT8    Kx46_regs[8];
-	UINT16   Kx47_regs[16];
+	UINT8    kx46_regs[8];
+	UINT16   kx47_regs[16];
 	int      dx, dy, wraparound;
 	UINT8    objcha_line;
 	int      z_rejection;
@@ -4093,7 +4146,7 @@ struct _k053247_state
 	k05324x_callback callback;
 
 	const char *memory_region;
-	const device_config *screen;
+	running_device *screen;
 };
 
 
@@ -4102,7 +4155,7 @@ struct _k053247_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k053247_state *k053247_get_safe_token( const device_config *device )
+INLINE k053247_state *k053247_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -4111,11 +4164,11 @@ INLINE k053247_state *k053247_get_safe_token( const device_config *device )
 	return (k053247_state *)device->token;
 }
 
-INLINE const k053247_interface *k053247_get_interface( const device_config *device )
+INLINE const k053247_interface *k053247_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K053246 || device->type == K053247 || device->type == K055673));
-	return (const k053247_interface *) device->static_config;
+	return (const k053247_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -4123,13 +4176,13 @@ INLINE const k053247_interface *k053247_get_interface( const device_config *devi
 *****************************************************************************/
 
 #if 0
-void k053247_get_gfx( const device_config *device, gfx_element **gfx )
+void k053247_get_gfx( running_device *device, gfx_element **gfx )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	*gfx = k053247->gfx;
 }
 
-void k053247_get_cb( const device_config *device, void (**callback)(int *, int *, int *) )
+void k053247_get_cb( running_device *device, void (**callback)(int *, int *, int *) )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	*callback = k053247->callback;
@@ -4137,44 +4190,44 @@ void k053247_get_cb( const device_config *device, void (**callback)(int *, int *
 
 #endif
 
-void k053247_get_ram( const device_config *device, UINT16 **ram )
+void k053247_get_ram( running_device *device, UINT16 **ram )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	*ram = k053247->ram;
 }
 
-int k053247_get_dx( const device_config *device )
+int k053247_get_dx( running_device *device )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	return k053247->dx;
 }
 
-int k053247_get_dy( const device_config *device )
+int k053247_get_dy( running_device *device )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	return k053247->dy;
 }
 
-int k053246_read_register( const device_config *device, int regnum )
+int k053246_read_register( running_device *device, int regnum )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	return(k053247->Kx46_regs[regnum]);
+	return(k053247->kx46_regs[regnum]);
 }
 
-int k053247_read_register( const device_config *device, int regnum )
+int k053247_read_register( running_device *device, int regnum )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	return(k053247->Kx47_regs[regnum]);
+	return(k053247->kx47_regs[regnum]);
 }
 
-void k053247_set_sprite_offs( const device_config *device, int offsx, int offsy )
+void k053247_set_sprite_offs( running_device *device, int offsx, int offsy )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	k053247->dx = offsx;
 	k053247->dy = offsy;
 }
 
-void k053247_wraparound_enable( const device_config *device, int status )
+void k053247_wraparound_enable( running_device *device, int status )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	k053247->wraparound = status;
@@ -4183,17 +4236,17 @@ void k053247_wraparound_enable( const device_config *device, int status )
 WRITE16_DEVICE_HANDLER( k053247_reg_word_w ) // write-only OBJSET2 registers (see p.43 table 6.1)
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	COMBINE_DATA(k053247->Kx47_regs + offset);
+	COMBINE_DATA(k053247->kx47_regs + offset);
 }
 
 WRITE32_DEVICE_HANDLER( k053247_reg_long_w )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	offset <<= 1;
-	COMBINE_DATA(k053247->Kx47_regs + offset + 1);
+	COMBINE_DATA(k053247->kx47_regs + offset + 1);
 	mem_mask >>= 16;
 	data >>= 16;
-	COMBINE_DATA(k053247->Kx47_regs + offset);
+	COMBINE_DATA(k053247->kx47_regs + offset);
 }
 
 READ16_DEVICE_HANDLER( k053247_word_r )
@@ -4261,7 +4314,7 @@ READ16_DEVICE_HANDLER( k055673_rom_word_r )	// 5bpp
 	size4 *= 4 * 1024 * 1024;	// get offset to 5th bit
 	ROM8 += size4;
 
-	romofs = k053246->Kx46_regs[6] << 16 | k053246->Kx46_regs[7] << 8 | k053246->Kx46_regs[4];
+	romofs = k053246->kx46_regs[6] << 16 | k053246->kx46_regs[7] << 8 | k053246->kx46_regs[4];
 
 	switch (offset)
 	{
@@ -4295,7 +4348,7 @@ READ16_DEVICE_HANDLER( k055673_GX6bpp_rom_word_r )
 	UINT16 *ROM = (UINT16 *)memory_region(device->machine, k053246->memory_region);
 	int romofs;
 
-	romofs = k053246->Kx46_regs[6] << 16 | k053246->Kx46_regs[7] << 8 | k053246->Kx46_regs[4];
+	romofs = k053246->kx46_regs[6] << 16 | k053246->kx46_regs[7] << 8 | k053246->kx46_regs[4];
 
 	romofs /= 4;	// romofs increments 4 at a time
 	romofs *= 12 / 2;	// each increment of romofs = 12 new bytes (6 new words)
@@ -4331,7 +4384,7 @@ READ8_DEVICE_HANDLER( k053246_r )
 	{
 		int addr;
 
-		addr = (k053246->Kx46_regs[6] << 17) | (k053246->Kx46_regs[7] << 9) | (k053246->Kx46_regs[4] << 1) | ((offset & 1) ^ 1);
+		addr = (k053246->kx46_regs[6] << 17) | (k053246->kx46_regs[7] << 9) | (k053246->kx46_regs[4] << 1) | ((offset & 1) ^ 1);
 		addr &= memory_region_length(device->machine, k053246->memory_region) - 1;
 //      if (VERBOSE)
 //          popmessage("%04x: offset %02x addr %06x", cpu_get_pc(space->cpu), offset, addr);
@@ -4347,7 +4400,7 @@ READ8_DEVICE_HANDLER( k053246_r )
 WRITE8_DEVICE_HANDLER( k053246_w )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	k053247->Kx46_regs[offset] = data;
+	k053247->kx46_regs[offset] = data;
 }
 
 READ16_DEVICE_HANDLER( k053246_word_r )
@@ -4377,17 +4430,17 @@ WRITE32_DEVICE_HANDLER( k053246_long_w )
 	k053246_word_w(device, offset + 1, data, mem_mask);
 }
 
-void k053246_set_objcha_line( const device_config *device, int state )
+void k053246_set_objcha_line( running_device *device, int state )
 {
 	k053247_state *k053246 = k053247_get_safe_token(device);
 	k053246->objcha_line = state;
 }
 
-int k053246_is_irq_enabled( const device_config *device )
+int k053246_is_irq_enabled( running_device *device )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	// This bit enables obj DMA rather than obj IRQ even though the two functions usually coincide.
-	return k053247->Kx46_regs[5] & 0x10;
+	return k053247->kx46_regs[5] & 0x10;
 }
 
 /*
@@ -4419,7 +4472,7 @@ int k053246_is_irq_enabled( const device_config *device )
  * The rest of the sprite remains normal.
  */
 
-void k053247_sprites_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k053247_sprites_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 #define NUM_SPRITES 256
 	k053247_state *k053246 = k053247_get_safe_token(device);
@@ -4443,10 +4496,10 @@ void k053247_sprites_draw( const device_config *device, bitmap_t *bitmap, const 
 	int ox, oy, color, code, size, w, h, x, y, xa, ya, flipx, flipy, mirrorx, mirrory, shadow, zoomx, zoomy, primask;
 	int shdmask, nozoom, count, temp;
 
-	int flipscreenx = k053246->Kx46_regs[5] & 0x01;
-	int flipscreeny = k053246->Kx46_regs[5] & 0x02;
-	int offx = (short)((k053246->Kx46_regs[0] << 8) | k053246->Kx46_regs[1]);
-	int offy = (short)((k053246->Kx46_regs[2] << 8) | k053246->Kx46_regs[3]);
+	int flipscreenx = k053246->kx46_regs[5] & 0x01;
+	int flipscreeny = k053246->kx46_regs[5] & 0x02;
+	int offx = (short)((k053246->kx46_regs[0] << 8) | k053246->kx46_regs[1]);
+	int offy = (short)((k053246->kx46_regs[2] << 8) | k053246->kx46_regs[3]);
 
 	int screen_width = video_screen_get_width(k053246->screen);
 	UINT8 drawmode_table[256];
@@ -4519,7 +4572,7 @@ void k053247_sprites_draw( const device_config *device, bitmap_t *bitmap, const 
 	count--;
 	h = count;
 
-	if (!(k053246->Kx47_regs[0xc / 2] & 0x10))
+	if (!(k053246->kx47_regs[0xc / 2] & 0x10))
 	{
 		// sort objects in decending order(smaller z closer) when OPSET PRI is clear
 		for (y = 0; y < h; y++)
@@ -4633,7 +4686,7 @@ void k053247_sprites_draw( const device_config *device, bitmap_t *bitmap, const 
 //    Below 7 lines supports this 053246's(???) function.
 //    Don't rely on it, Please.  But, Escape Kids works correctly!
 // ************************************************************************************
-		if ( k053246->Kx46_regs[5] & 0x08 ) // Check only "Bit #3 is '1'?" (NOTE: good guess)
+		if ( k053246->kx46_regs[5] & 0x08 ) // Check only "Bit #3 is '1'?" (NOTE: good guess)
 		{
 			zoomx >>= 1;		// Fix sprite width to HALF size
 			ox = (ox >> 1) + 1;	// Fix sprite draw position
@@ -4878,11 +4931,11 @@ static DEVICE_START( k053247 )
 	k053247->gfx = machine->gfx[intf->gfx_num];
 	k053247->callback = intf->callback;
 
-	k053247->ram = auto_alloc_array(machine, UINT16, 0x1000/2);
+	k053247->ram = auto_alloc_array_clear(machine, UINT16, 0x1000 / 2);
 
-	state_save_register_device_item_pointer(device, 0, k053247->ram, 0x800);
-	state_save_register_device_item_array(device, 0, k053247->Kx46_regs);
-	state_save_register_device_item_array(device, 0, k053247->Kx47_regs);
+	state_save_register_device_item_pointer(device, 0, k053247->ram, 0x1000 / 2);
+	state_save_register_device_item_array(device, 0, k053247->kx46_regs);
+	state_save_register_device_item_array(device, 0, k053247->kx47_regs);
 	state_save_register_device_item(device, 0, k053247->objcha_line);
 	state_save_register_device_item(device, 0, k053247->wraparound);
 	state_save_register_device_item(device, 0, k053247->z_rejection);
@@ -5004,8 +5057,8 @@ static DEVICE_START( k055673 )
 	k053247->ram = auto_alloc_array(machine, UINT16, 0x1000 / 2);
 
 	state_save_register_device_item_pointer(device, 0, k053247->ram, 0x800);
-	state_save_register_device_item_array(device, 0, k053247->Kx46_regs);
-	state_save_register_device_item_array(device, 0, k053247->Kx47_regs);
+	state_save_register_device_item_array(device, 0, k053247->kx46_regs);
+	state_save_register_device_item_array(device, 0, k053247->kx47_regs);
 	state_save_register_device_item(device, 0, k053247->objcha_line);
 	state_save_register_device_item(device, 0, k053247->wraparound);
 	state_save_register_device_item(device, 0, k053247->z_rejection);
@@ -5019,8 +5072,8 @@ static DEVICE_RESET( k053247 )
 	k053247->z_rejection = -1;
 	k053247->objcha_line = CLEAR_LINE;
 
-	memset(k053247->Kx46_regs, 0, 8);
-	memset(k053247->Kx47_regs, 0, 32);
+	memset(k053247->kx46_regs, 0, 8);
+	memset(k053247->kx47_regs, 0, 32);
 }
 
 /*
@@ -5041,13 +5094,13 @@ static DEVICE_RESET( k053247 )
 */
 
 
-void k05324x_set_z_rejection( const device_config *device, int zcode )
+void k05324x_set_z_rejection( running_device *device, int zcode )
 {
 	k05324x_state *k05324x = k05324x_get_safe_token(device);
 	k05324x->z_rejection = zcode;
 }
 
-void k053247_set_z_rejection( const device_config *device, int zcode )
+void k053247_set_z_rejection( running_device *device, int zcode )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
 	k053247->z_rejection = zcode;
@@ -5079,7 +5132,7 @@ struct _k051316_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k051316_state *k051316_get_safe_token( const device_config *device )
+INLINE k051316_state *k051316_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -5088,11 +5141,11 @@ INLINE k051316_state *k051316_get_safe_token( const device_config *device )
 	return (k051316_state *)device->token;
 }
 
-INLINE const k051316_interface *k051316_get_interface( const device_config *device )
+INLINE const k051316_interface *k051316_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->type == K051316);
-	return (const k051316_interface *) device->static_config;
+	return (const k051316_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -5144,7 +5197,7 @@ WRITE8_DEVICE_HANDLER( k051316_ctrl_w )
 }
 
 // a few games (ajax, rollerg, ultraman, etc.) can enable and disable wraparound after start
-void k051316_wraparound_enable( const device_config *device, int status )
+void k051316_wraparound_enable( running_device *device, int status )
 {
 	k051316_state *k051316= k051316_get_safe_token(device);
 	k051316->wraparound = status;
@@ -5156,7 +5209,7 @@ void k051316_wraparound_enable( const device_config *device, int status )
 
 ***************************************************************************/
 
-INLINE void k051316_get_tile_info( const device_config *device, tile_data *tileinfo, int tile_index )
+INLINE void k051316_get_tile_info( running_device *device, tile_data *tileinfo, int tile_index )
 {
 	k051316_state *k051316 = k051316_get_safe_token(device);
 	int code = k051316->ram[tile_index];
@@ -5176,7 +5229,7 @@ INLINE void k051316_get_tile_info( const device_config *device, tile_data *tilei
 static TILE_GET_INFO_DEVICE( k051316_get_tile_info0 ) { k051316_get_tile_info(device, tileinfo, tile_index); }
 
 
-void k051316_zoom_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int flags, UINT32 priority )
+void k051316_zoom_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int flags, UINT32 priority )
 {
 	k051316_state *k051316= k051316_get_safe_token(device);
 	UINT32 startx, starty;
@@ -5368,7 +5421,7 @@ struct _k053936_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k053936_state *k053936_get_safe_token( const device_config *device )
+INLINE k053936_state *k053936_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -5377,11 +5430,11 @@ INLINE k053936_state *k053936_get_safe_token( const device_config *device )
 	return (k053936_state *)device->token;
 }
 
-INLINE const k053936_interface *k053936_get_interface( const device_config *device )
+INLINE const k053936_interface *k053936_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->type == K053936);
-	return (const k053936_interface *) device->static_config;
+	return (const k053936_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -5415,7 +5468,7 @@ READ16_DEVICE_HANDLER( k053936_linectrl_r )
 
 // there is another implementation of this in  video/konamigx.c (!)
 //  why? shall they be merged?
-void k053936_zoom_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, tilemap_t *tmap, int flags, UINT32 priority, int glfgreat_hack )
+void k053936_zoom_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, tilemap_t *tmap, int flags, UINT32 priority, int glfgreat_hack )
 {
 	k053936_state *k053936= k053936_get_safe_token(device);
 	if (!tmap)
@@ -5594,7 +5647,7 @@ struct _k053251_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k053251_state *k053251_get_safe_token( const device_config *device )
+INLINE k053251_state *k053251_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -5664,26 +5717,26 @@ WRITE16_DEVICE_HANDLER( k053251_msb_w )
 		k053251_w(device, offset, (data >> 8) & 0xff);
 }
 
-int k053251_get_priority( const device_config *device, int ci )
+int k053251_get_priority( running_device *device, int ci )
 {
 	k053251_state *k053251 = k053251_get_safe_token(device);
 	return k053251->ram[ci];
 }
 
-int k053251_get_palette_index( const device_config *device, int ci )
+int k053251_get_palette_index( running_device *device, int ci )
 {
 	k053251_state *k053251 = k053251_get_safe_token(device);
 	return k053251->palette_index[ci];
 }
 
-int k053251_get_tmap_dirty( const device_config *device, int tmap_num )
+int k053251_get_tmap_dirty( running_device *device, int tmap_num )
 {
 	k053251_state *k053251 = k053251_get_safe_token(device);
 	assert(tmap_num < 5);
 	return k053251->dirty_tmap[tmap_num];
 }
 
-void k053251_set_tmap_dirty( const device_config *device, int tmap_num, int data )
+void k053251_set_tmap_dirty( running_device *device, int tmap_num, int data )
 {
 	k053251_state *k053251 = k053251_get_safe_token(device);
 	assert(tmap_num < 5);
@@ -5722,6 +5775,8 @@ static DEVICE_RESET( k053251 )
 	k053251_state *k053251 = k053251_get_safe_token(device);
 	int i;
 
+	k053251->tilemaps_set = 0;
+
 	for (i = 0; i < 0x10; i++)
 		k053251->ram[i] = 0;
 
@@ -5746,7 +5801,7 @@ struct _k054000_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k054000_state *k054000_get_safe_token( const device_config *device )
+INLINE k054000_state *k054000_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -5858,7 +5913,7 @@ struct _k051733_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k051733_state *k051733_get_safe_token( const device_config *device )
+INLINE k051733_state *k051733_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -6056,14 +6111,14 @@ struct _k056832_state
 
 	k056832_callback  callback;
 
-	const device_config *k055555;	/* used to choose colorbase */
+	running_device *k055555;	/* used to choose colorbase */
 };
 
 /*****************************************************************************
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k056832_state *k056832_get_safe_token( const device_config *device )
+INLINE k056832_state *k056832_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -6072,11 +6127,11 @@ INLINE k056832_state *k056832_get_safe_token( const device_config *device )
 	return (k056832_state *)device->token;
 }
 
-INLINE const k056832_interface *k056832_get_interface( const device_config *device )
+INLINE const k056832_interface *k056832_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->type == K056832);
-	return (const k056832_interface *) device->static_config;
+	return (const k056832_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -6094,7 +6149,7 @@ static void k056832_mark_page_dirty( k056832_state *k056832, int page )
 		k056832_mark_all_lines_dirty(page);
 }
 
-void k056832_mark_plane_dirty( const device_config *device, int layer )
+void k056832_mark_plane_dirty( running_device *device, int layer )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	int tilemode, i;
@@ -6126,7 +6181,7 @@ static void k056832_mark_all_tilemaps_dirty( k056832_state *k056832 )
 }
 
 /* moo.c needs to call this in its VIDEO_UPDATE */
-void k056832_mark_all_tmaps_dirty( const device_config *device )
+void k056832_mark_all_tmaps_dirty( running_device *device )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832_mark_all_tilemaps_dirty(k056832);
@@ -6185,7 +6240,7 @@ static void k056832_update_page_layout( k056832_state *k056832 )
 	k056832_mark_all_tilemaps_dirty(k056832);
 }
 
-int k056832_get_lookup( const device_config *device, int bits )
+int k056832_get_lookup( running_device *device, int bits )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	int res;
@@ -6198,7 +6253,7 @@ int k056832_get_lookup( const device_config *device, int bits )
 	return res;
 }
 
-INLINE void k056832_get_tile_info( const device_config *device, tile_data *tileinfo, int tile_index, int pageIndex )
+INLINE void k056832_get_tile_info( running_device *device, tile_data *tileinfo, int tile_index, int pageIndex )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	static const struct K056832_SHIFTMASKS
@@ -6279,7 +6334,7 @@ static void k056832_change_rambank( k056832_state *k056832 )
 	k056832_mark_all_tilemaps_dirty(k056832);
 }
 
-int k056832_get_current_rambank( const device_config *device )
+int k056832_get_current_rambank( running_device *device )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	int bank = k056832->regs[0x19];
@@ -6299,7 +6354,7 @@ static void k056832_change_rombank( k056832_state *k056832 )
 	k056832->cur_gfx_banks = bank % k056832->num_gfx_banks;
 }
 
-void k056832_set_tile_bank( const device_config *device, int bank )
+void k056832_set_tile_bank( running_device *device, int bank )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->uses_tile_banks = 1;
@@ -6318,14 +6373,14 @@ void k056832_set_tile_bank( const device_config *device, int bank )
 }
 
 /* call if a game uses external linescroll */
-void k056832_SetExtLinescroll( const device_config *device )
+void k056832_SetExtLinescroll( running_device *device )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->use_ext_linescroll = 1;
 }
 
 /* generic helper routine for ROM checksumming */
-static int k056832_rom_read_b( const device_config *device, int offset, int blksize, int blksize2, int zerosec )
+static int k056832_rom_read_b( running_device *device, int offset, int blksize, int blksize2, int zerosec )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	UINT8 *rombase;
@@ -6910,7 +6965,7 @@ WRITE32_DEVICE_HANDLER( k056832_b_long_w )
 	}
 }
 
-static int k056832_update_linemap( const device_config *device, bitmap_t *bitmap, int page, int flags )
+static int k056832_update_linemap( running_device *device, bitmap_t *bitmap, int page, int flags )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 
@@ -7034,7 +7089,7 @@ static int k056832_update_linemap( const device_config *device, bitmap_t *bitmap
 	return(0);
 }
 
-void k056832_tilemap_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int layer, UINT32 flags, UINT32 priority )
+void k056832_tilemap_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int layer, UINT32 flags, UINT32 priority )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	UINT32 last_dx, last_visible, new_colorbase, last_active;
@@ -7341,7 +7396,7 @@ void k056832_tilemap_draw( const device_config *device, bitmap_t *bitmap, const 
 } // end of function
 
 
-void k056832_tilemap_draw_dj( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int layer, UINT32 flags, UINT32 priority )
+void k056832_tilemap_draw_dj( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int layer, UINT32 flags, UINT32 priority )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	UINT32 last_dx, last_visible, new_colorbase, last_active;
@@ -7616,52 +7671,52 @@ void k056832_tilemap_draw_dj( const device_config *device, bitmap_t *bitmap, con
 } // end of function
 
 
-void k056832_set_layer_association( const device_config *device, int status )
+void k056832_set_layer_association( running_device *device, int status )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->default_layer_association = status;
 }
 
-int k056832_get_layer_association( const device_config *device )
+int k056832_get_layer_association( running_device *device )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	return(k056832->layer_association);
 }
 
-void k056832_set_layer_offs( const device_config *device, int layer, int offsx, int offsy )
+void k056832_set_layer_offs( running_device *device, int layer, int offsx, int offsy )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->layer_offs[layer][0] = offsx;
 	k056832->layer_offs[layer][1] = offsy;
 }
 
-void k056832_set_lsram_page( const device_config *device, int logical_page, int physical_page, int physical_offset )
+void k056832_set_lsram_page( running_device *device, int logical_page, int physical_page, int physical_offset )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->lsram_page[logical_page][0] = physical_page;
 	k056832->lsram_page[logical_page][1] = physical_offset;
 }
 
-void k056832_linemap_enable( const device_config *device, int enable )
+void k056832_linemap_enable( running_device *device, int enable )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	k056832->linemap_enabled = enable;
 }
 
-int k056832_is_irq_enabled( const device_config *device, int irqline )
+int k056832_is_irq_enabled( running_device *device, int irqline )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	return(k056832->regs[0x06/2] & (1 << irqline & 7));
 }
 
-void k056832_read_avac( const device_config *device, int *mode, int *data )
+void k056832_read_avac( running_device *device, int *mode, int *data )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	*mode = k056832->regs[0x04/2] & 7;
 	*data = k056832->regs[0x38/2];
 }
 
-int k056832_read_register( const device_config *device, int regnum )
+int k056832_read_register( running_device *device, int regnum )
 {
 	k056832_state *k056832 = k056832_get_safe_token(device);
 	return(k056832->regs[regnum]);
@@ -7934,7 +7989,7 @@ struct _k055555_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k055555_state *k055555_get_safe_token( const device_config *device )
+INLINE k055555_state *k055555_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -7947,7 +8002,7 @@ INLINE k055555_state *k055555_get_safe_token( const device_config *device )
     DEVICE HANDLERS
 *****************************************************************************/
 
-void k055555_write_reg( const device_config *device, UINT8 regnum, UINT8 regdat )
+void k055555_write_reg( running_device *device, UINT8 regnum, UINT8 regdat )
 {
 	k055555_state *k055555 = k055555_get_safe_token(device);
 
@@ -8007,13 +8062,13 @@ WRITE16_DEVICE_HANDLER( k055555_word_w )
 	}
 }
 
-int k055555_read_register( const device_config *device, int regnum )
+int k055555_read_register( running_device *device, int regnum )
 {
 	k055555_state *k055555 = k055555_get_safe_token(device);
 	return k055555->regs[regnum];
 }
 
-int k055555_get_palette_index( const device_config *device, int idx )
+int k055555_get_palette_index( running_device *device, int idx )
 {
 	k055555_state *k055555 = k055555_get_safe_token(device);
 	return k055555->regs[K55_PALBASE_A + idx];
@@ -8054,15 +8109,15 @@ struct _k054338_state
 	int       shd_rgb[9];
 	int       alphainverted;
 
-	const device_config *screen;
-	const device_config *k055555;	/* used to fill BG color */
+	running_device *screen;
+	running_device *k055555;	/* used to fill BG color */
 };
 
 /*****************************************************************************
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k054338_state *k054338_get_safe_token( const device_config *device )
+INLINE k054338_state *k054338_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -8071,11 +8126,11 @@ INLINE k054338_state *k054338_get_safe_token( const device_config *device )
 	return (k054338_state *)device->token;
 }
 
-INLINE const k054338_interface *k054338_get_interface( const device_config *device )
+INLINE const k054338_interface *k054338_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->type == K054338);
-	return (const k054338_interface *) device->static_config;
+	return (const k054338_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -8096,13 +8151,13 @@ WRITE32_DEVICE_HANDLER( k054338_long_w )
 }
 
 // returns a 16-bit '338 register
-int  k054338_register_r( const device_config *device, int reg )
+int  k054338_register_r( running_device *device, int reg )
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	return k054338->regs[reg];
 }
 
-void k054338_update_all_shadows( const device_config *device, int rushingheroes_hack )
+void k054338_update_all_shadows( running_device *device, int rushingheroes_hack )
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	running_machine *machine = device->machine;
@@ -8132,7 +8187,7 @@ void k054338_update_all_shadows( const device_config *device, int rushingheroes_
 }
 
 // k054338 BG color fill
-void k054338_fill_solid_bg( const device_config *device, bitmap_t *bitmap )
+void k054338_fill_solid_bg( running_device *device, bitmap_t *bitmap )
 {
 	UINT32 bgcolor;
 	UINT32 *pLine;
@@ -8152,7 +8207,7 @@ void k054338_fill_solid_bg( const device_config *device, bitmap_t *bitmap )
 }
 
 // Unified k054338/K055555 BG color fill
-void k054338_fill_backcolor( const device_config *device, bitmap_t *bitmap, int mode ) // (see p.67)
+void k054338_fill_backcolor( running_device *device, bitmap_t *bitmap, int mode ) // (see p.67)
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	int clipx, clipy, clipw, cliph, i, dst_pitch;
@@ -8251,7 +8306,7 @@ void k054338_fill_backcolor( const device_config *device, bitmap_t *bitmap, int 
 }
 
 // addition blending unimplemented (requires major changes to drawgfx and tilemap.c)
-int k054338_set_alpha_level( const device_config *device, int pblend )
+int k054338_set_alpha_level( running_device *device, int pblend )
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	UINT16 *regs;
@@ -8299,7 +8354,7 @@ int k054338_set_alpha_level( const device_config *device, int pblend )
 	return mixlv;
 }
 
-void k054338_invert_alpha( const device_config *device, int invert )
+void k054338_invert_alpha( running_device *device, int invert )
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	k054338->alphainverted = invert;
@@ -8308,7 +8363,7 @@ void k054338_invert_alpha( const device_config *device, int invert )
 
 #if 0
 // FIXME
-void k054338->export_config( const device_config *device, int **shd_rgb )
+void k054338->export_config( running_device *device, int **shd_rgb )
 {
 	k054338_state *k054338 = k054338_get_safe_token(device);
 	*shd_rgb = k054338->shd_rgb;
@@ -8359,14 +8414,14 @@ struct _k053250_state
 	int         page;
 	int         frame, offsx, offsy;
 
-	const device_config *screen;
+	running_device *screen;
 };
 
 /*****************************************************************************
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k053250_state *k053250_get_safe_token( const device_config *device )
+INLINE k053250_state *k053250_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -8375,11 +8430,11 @@ INLINE k053250_state *k053250_get_safe_token( const device_config *device )
 	return (k053250_state *)device->token;
 }
 
-INLINE const k053250_interface *k053250_get_interface( const device_config *device )
+INLINE const k053250_interface *k053250_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K053250));
-	return (const k053250_interface *) device->static_config;
+	return (const k053250_interface *) device->baseconfig().static_config;
 }
 
 
@@ -8389,7 +8444,7 @@ INLINE const k053250_interface *k053250_get_interface( const device_config *devi
 
 // The DMA process should be instantaneous but since rendering in MAME is performed at VIDEO_UPDATE()
 // the k053250 memory must be buffered to maintain visual integrity.
-void k053250_dma( const device_config *device, int limiter )
+void k053250_dma( running_device *device, int limiter )
 {
 	k053250_state *k053250 = k053250_get_safe_token(device);
 	int last_frame, current_frame;
@@ -8634,7 +8689,7 @@ INLINE void k053250_pdraw_scanline32(bitmap_t *bitmap, const pen_t *palette, UIN
 #undef FIXPOINT_PRECISION_HALF
 }
 
-void k053250_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect, int colorbase, int flags, int priority )
+void k053250_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect, int colorbase, int flags, int priority )
 {
 	k053250_state *k053250 = k053250_get_safe_token(device);
 	UINT16 *line_ram;
@@ -8910,7 +8965,7 @@ struct _k053252_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k053252_state *k053252_get_safe_token( const device_config *device )
+INLINE k053252_state *k053252_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -8981,7 +9036,7 @@ static DEVICE_RESET( k053252 )
 typedef struct _k001006_state k001006_state;
 struct _k001006_state
 {
-	const device_config *screen;
+	running_device *screen;
 
 	UINT16 *     pal_ram;
 	UINT16 *     unknown_ram;
@@ -8997,7 +9052,7 @@ struct _k001006_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k001006_state *k001006_get_safe_token( const device_config *device )
+INLINE k001006_state *k001006_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -9006,11 +9061,11 @@ INLINE k001006_state *k001006_get_safe_token( const device_config *device )
 	return (k001006_state *)device->token;
 }
 
-INLINE const k001006_interface *k001006_get_interface( const device_config *device )
+INLINE const k001006_interface *k001006_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K001006));
-	return (const k001006_interface *) device->static_config;
+	return (const k001006_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -9102,7 +9157,7 @@ WRITE32_DEVICE_HANDLER( k001006_w )
 	}
 }
 
-UINT32 k001006_get_palette( const device_config *device, int index )
+UINT32 k001006_get_palette( running_device *device, int index )
 {
 	k001006_state *k001006 = k001006_get_safe_token(device);
 	return k001006->palette[index];
@@ -9166,11 +9221,11 @@ struct _poly_extra_data
 typedef struct _k001005_state k001005_state;
 struct _k001005_state
 {
-	const device_config *screen;
-	const device_config *cpu;
-	const device_config *dsp;
-	const device_config *k001006_1;
-	const device_config *k001006_2;
+	running_device *screen;
+	running_device *cpu;
+	running_device *dsp;
+	running_device *k001006_1;
+	running_device *k001006_2;
 
 	UINT8  *     texture;
 	UINT16 *     ram[2];
@@ -9208,7 +9263,7 @@ static const int decode_y_zr107[16] = {  0, 8, 32, 40, 4, 12, 36, 44, 64, 72, 96
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k001005_state *k001005_get_safe_token( const device_config *device )
+INLINE k001005_state *k001005_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -9217,18 +9272,18 @@ INLINE k001005_state *k001005_get_safe_token( const device_config *device )
 	return (k001005_state *)device->token;
 }
 
-INLINE const k001005_interface *k001005_get_interface( const device_config *device )
+INLINE const k001005_interface *k001005_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K001005));
-	return (const k001005_interface *) device->static_config;
+	return (const k001005_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
     DEVICE HANDLERS
 *****************************************************************************/
 
-static void k001005_render_polygons( const device_config *device );
+static void k001005_render_polygons( running_device *device );
 
 // rearranges the texture data to a more practical order
 void k001005_preprocess_texture_data( UINT8 *rom, int length, int gticlub )
@@ -9282,7 +9337,7 @@ void k001005_preprocess_texture_data( UINT8 *rom, int length, int gticlub )
 	}
 }
 
-void k001005_swap_buffers( const device_config *device )
+void k001005_swap_buffers( running_device *device )
 {
 	k001005_state *k001005 = k001005_get_safe_token(device);
 
@@ -9461,7 +9516,7 @@ WRITE32_DEVICE_HANDLER( k001005_w )
 #define POLY_DEVICE 0
 
 #if POLY_DEVICE
-static void draw_scanline( const device_config *device, void *dest, INT32 scanline, const poly_extent *extent, const void *extradata, int threadid )
+static void draw_scanline( running_device *device, void *dest, INT32 scanline, const poly_extent *extent, const void *extradata, int threadid )
 {
 	k001005_state *k001005 = k001005_get_safe_token(device);
 	const poly_extra_data *extra = (const poly_extra_data *)extradata;
@@ -9492,13 +9547,13 @@ static void draw_scanline( const device_config *device, void *dest, INT32 scanli
 #endif
 
 #if POLY_DEVICE
-static void draw_scanline_tex( const device_config *device, void *dest, INT32 scanline, const poly_extent *extent, const void *extradata, int threadid )
+static void draw_scanline_tex( running_device *device, void *dest, INT32 scanline, const poly_extent *extent, const void *extradata, int threadid )
 {
 	k001005_state *k001005 = k001005_get_safe_token(device);
 	const poly_extra_data *extra = (const poly_extra_data *)extradata;
 	bitmap_t *destmap = (bitmap_t *)dest;
 	UINT8 *texrom = k001005->gfxrom + (extra->texture_page * 0x40000);
-	const device_config *pal_device = (extra->texture_palette & 0x8) ? k001005->k001006_2 : k001005->k001006_1;
+	running_device *pal_device = (extra->texture_palette & 0x8) ? k001005->k001006_2 : k001005->k001006_1;
 	int palette_index = (extra->texture_palette & 0x7) * 256;
 	float z = extent->param[0].start;
 	float u = extent->param[1].start;
@@ -9554,7 +9609,7 @@ static void draw_scanline_tex( const device_config *device, void *dest, INT32 sc
 #endif
 
 
-static void k001005_render_polygons( const device_config *device )
+static void k001005_render_polygons( running_device *device )
 {
 	k001005_state *k001005 = k001005_get_safe_token(device);
 	int i, j;
@@ -9959,7 +10014,7 @@ static void k001005_render_polygons( const device_config *device )
 	}
 }
 
-void k001005_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k001005_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	k001005_state *k001005 = k001005_get_safe_token(device);
 	int i, j;
@@ -10067,8 +10122,6 @@ static DEVICE_STOP( k001005 )
 }
 
 
-// from drivers/nwk-tr
-
 /***************************************************************************/
 /*                                                                         */
 /*                                  001604                                 */
@@ -10079,7 +10132,7 @@ static DEVICE_STOP( k001005 )
 typedef struct _k001604_state k001604_state;
 struct _k001604_state
 {
-	const device_config *screen;
+	running_device *screen;
 	tilemap_t        *layer_8x8[2];
 	tilemap_t        *layer_roz[2];
 	int            gfx_index[2];
@@ -10100,7 +10153,7 @@ struct _k001604_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k001604_state *k001604_get_safe_token( const device_config *device )
+INLINE k001604_state *k001604_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -10109,11 +10162,11 @@ INLINE k001604_state *k001604_get_safe_token( const device_config *device )
 	return (k001604_state *)device->token;
 }
 
-INLINE const k001604_interface *k001604_get_interface( const device_config *device )
+INLINE const k001604_interface *k001604_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K001604));
-	return (const k001604_interface *) device->static_config;
+	return (const k001604_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -10241,7 +10294,7 @@ static TILE_GET_INFO_DEVICE( k001604_tile_info_layer_roz )
 }
 
 
-void k001604_draw_back_layer( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k001604_draw_back_layer( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	k001604_state *k001604 = k001604_get_safe_token(device);
 	int layer;
@@ -10276,7 +10329,7 @@ void k001604_draw_back_layer( const device_config *device, bitmap_t *bitmap, con
 	}
 }
 
-void k001604_draw_front_layer( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k001604_draw_front_layer( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
@@ -10286,7 +10339,6 @@ void k001604_draw_front_layer( const device_config *device, bitmap_t *bitmap, co
 
 READ32_DEVICE_HANDLER( k001604_tile_r )
 {
-//  int chip = get_cgboard_id();
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
 	return k001604->tile_ram[offset];
@@ -10294,7 +10346,6 @@ READ32_DEVICE_HANDLER( k001604_tile_r )
 
 READ32_DEVICE_HANDLER( k001604_char_r )
 {
-//  int chip = get_cgboard_id();
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
 	int set, bank;
@@ -10312,9 +10363,21 @@ READ32_DEVICE_HANDLER( k001604_char_r )
 	return k001604->char_ram[addr];
 }
 
+READ32_DEVICE_HANDLER( k001604_reg_r )
+{
+	k001604_state *k001604 = k001604_get_safe_token(device);
+
+	switch (offset)
+	{
+		case 0x54/4:	return mame_rand(device->machine) << 16; break;
+		case 0x5c/4:	return mame_rand(device->machine) << 16 | mame_rand(device->machine); break;
+	}
+
+	return k001604->reg[offset];
+}
+
 WRITE32_DEVICE_HANDLER( k001604_tile_w )
 {
-//  int chip = get_cgboard_id();
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
 	int x, y;
@@ -10367,7 +10430,6 @@ WRITE32_DEVICE_HANDLER( k001604_tile_w )
 
 WRITE32_DEVICE_HANDLER( k001604_char_w )
 {
-//  int chip = get_cgboard_id();
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
 	int set, bank;
@@ -10390,7 +10452,6 @@ WRITE32_DEVICE_HANDLER( k001604_char_w )
 
 WRITE32_DEVICE_HANDLER( k001604_reg_w )
 {
-//  int chip = get_cgboard_id();
 	k001604_state *k001604 = k001604_get_safe_token(device);
 
 	COMBINE_DATA(k001604->reg + offset);
@@ -10408,20 +10469,6 @@ WRITE32_DEVICE_HANDLER( k001604_reg_w )
 	{
 		//printf("K001604_reg_w (%d), %02X, %08X, %08X at %08X\n", chip, offset, data, mem_mask, cpu_get_pc(space->cpu));
 	}
-}
-
-READ32_DEVICE_HANDLER( k001604_reg_r )
-{
-//  int chip = get_cgboard_id();
-	k001604_state *k001604 = k001604_get_safe_token(device);
-
-	switch (offset)
-	{
-		case 0x54/4:	return mame_rand(device->machine) << 16; break;
-		case 0x5c/4:	return mame_rand(device->machine) << 16 | mame_rand(device->machine); break;
-	}
-
-	return k001604->reg[offset];
 }
 
 
@@ -10504,7 +10551,7 @@ static DEVICE_RESET( k001604 )
 typedef struct _k037122_state k037122_state;
 struct _k037122_state
 {
-	const device_config *screen;
+	running_device *screen;
 	tilemap_t        *layer[2];
 	int            gfx_index;
 
@@ -10520,7 +10567,7 @@ struct _k037122_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE k037122_state *k037122_get_safe_token( const device_config *device )
+INLINE k037122_state *k037122_get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -10529,11 +10576,11 @@ INLINE k037122_state *k037122_get_safe_token( const device_config *device )
 	return (k037122_state *)device->token;
 }
 
-INLINE const k037122_interface *k037122_get_interface( const device_config *device )
+INLINE const k037122_interface *k037122_get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == K037122));
-	return (const k037122_interface *) device->static_config;
+	return (const k037122_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************
@@ -10584,7 +10631,7 @@ static TILE_GET_INFO_DEVICE( k037122_tile_info_layer1 )
 }
 
 
-void k037122_tile_draw( const device_config *device, bitmap_t *bitmap, const rectangle *cliprect )
+void k037122_tile_draw( running_device *device, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	k037122_state *k037122 = k037122_get_safe_token(device);
 	const rectangle *visarea = video_screen_get_visible_area(k037122->screen);
@@ -10603,7 +10650,7 @@ void k037122_tile_draw( const device_config *device, bitmap_t *bitmap, const rec
 	}
 }
 
-static void update_palette_color( const device_config *device, UINT32 palette_base, int color )
+static void update_palette_color( running_device *device, UINT32 palette_base, int color )
 {
 	k037122_state *k037122 = k037122_get_safe_token(device);
 	UINT32 data = k037122->tile_ram[(palette_base / 4) + color];
@@ -10613,7 +10660,6 @@ static void update_palette_color( const device_config *device, UINT32 palette_ba
 
 READ32_DEVICE_HANDLER( k037122_sram_r )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 
 	return k037122->tile_ram[offset];
@@ -10621,7 +10667,6 @@ READ32_DEVICE_HANDLER( k037122_sram_r )
 
 WRITE32_DEVICE_HANDLER( k037122_sram_w )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 
 	COMBINE_DATA(k037122->tile_ram + offset);
@@ -10661,7 +10706,6 @@ WRITE32_DEVICE_HANDLER( k037122_sram_w )
 
 READ32_DEVICE_HANDLER( k037122_char_r )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 	int bank = k037122->reg[0x30 / 4] & 0x7;
 
@@ -10670,7 +10714,6 @@ READ32_DEVICE_HANDLER( k037122_char_r )
 
 WRITE32_DEVICE_HANDLER( k037122_char_w )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 	int bank = k037122->reg[0x30 / 4] & 0x7;
 	UINT32 addr = offset + (bank * (0x40000/4));
@@ -10681,7 +10724,6 @@ WRITE32_DEVICE_HANDLER( k037122_char_w )
 
 READ32_DEVICE_HANDLER( k037122_reg_r )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 
 	switch (offset)
@@ -10696,7 +10738,6 @@ READ32_DEVICE_HANDLER( k037122_reg_r )
 
 WRITE32_DEVICE_HANDLER( k037122_reg_w )
 {
-//  int chip = get_cgboard_id();
 	k037122_state *k037122 = k037122_get_safe_token(device);
 
 	COMBINE_DATA(k037122->reg + offset);
@@ -10762,13 +10803,13 @@ READ16_DEVICE_HANDLER( k056832_b_word_r )
 READ16_DEVICE_HANDLER( k053246_reg_word_r )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	return(k053247->Kx46_regs[offset * 2] << 8 | k053247->Kx46_regs[offset * 2 + 1]);
+	return(k053247->kx46_regs[offset * 2] << 8 | k053247->kx46_regs[offset * 2 + 1]);
 }	// OBJSET1
 
 READ16_DEVICE_HANDLER( k053247_reg_word_r )
 {
 	k053247_state *k053247 = k053247_get_safe_token(device);
-	return(k053247->Kx47_regs[offset]);
+	return(k053247->kx47_regs[offset]);
 }	// OBJSET2
 
 READ16_DEVICE_HANDLER( k054338_word_r )

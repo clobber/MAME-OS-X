@@ -14,7 +14,7 @@ preliminary driver by Angelo Salese
 
 ********************************************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i386/i386.h"
 #include "memconv.h"
 #include "devconv.h"
@@ -107,11 +107,11 @@ static VIDEO_UPDATE(pcat_dyn)
 }
 
 static struct {
-	const device_config	*pit8253;
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
-	const device_config	*dma8237_1;
-	const device_config	*dma8237_2;
+	running_device	*pit8253;
+	running_device	*pic8259_1;
+	running_device	*pic8259_2;
+	running_device	*dma8237_1;
+	running_device	*dma8237_2;
 } pcat_dyn_devices;
 
 /******************
@@ -194,7 +194,7 @@ static WRITE8_HANDLER( pc_dma_write_byte )
 	memory_write_byte(space, page_offset + offset, data);
 }
 
-static void set_dma_channel(const device_config *device, int channel, int state)
+static void set_dma_channel(running_device *device, int channel, int state)
 {
 	if (!state) dma_channel = channel;
 }
@@ -231,22 +231,19 @@ static I8237_INTERFACE( dma8237_2_config )
 8259 IRQ controller
 ******************/
 
-static PIC8259_SET_INT_LINE( pic8259_1_set_int_line )
+static WRITE_LINE_DEVICE_HANDLER( pic8259_1_set_int_line )
 {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-static const struct pic8259_interface pic8259_1_config = {
-	pic8259_1_set_int_line
+static const struct pic8259_interface pic8259_1_config =
+{
+	DEVCB_LINE(pic8259_1_set_int_line)
 };
 
-static PIC8259_SET_INT_LINE( pic8259_2_set_int_line )
+static const struct pic8259_interface pic8259_2_config =
 {
-	pic8259_set_irq_line( pcat_dyn_devices.pic8259_1, 2, interrupt);
-}
-
-static const struct pic8259_interface pic8259_2_config = {
-	pic8259_2_set_int_line
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w)
 };
 
 static IRQ_CALLBACK(irq_callback)
@@ -260,16 +257,16 @@ static IRQ_CALLBACK(irq_callback)
 	return r;
 }
 
-static PIT8253_OUTPUT_CHANGED( at_pit8254_out0_changed )
+static WRITE_LINE_DEVICE_HANDLER( at_pit8254_out0_changed )
 {
 	if ( pcat_dyn_devices.pic8259_1 )
 	{
-		pic8259_set_irq_line(pcat_dyn_devices.pic8259_1, 0, state);
+		pic8259_ir0_w(pcat_dyn_devices.pic8259_1, state);
 	}
 }
 
 
-static PIT8253_OUTPUT_CHANGED( at_pit8254_out2_changed )
+static WRITE_LINE_DEVICE_HANDLER( at_pit8254_out2_changed )
 {
 	//at_speaker_set_input( state ? 1 : 0 );
 }
@@ -280,13 +277,16 @@ static const struct pit8253_config at_pit8254_config =
 	{
 		{
 			4772720/4,				/* heartbeat IRQ */
-			at_pit8254_out0_changed
+			DEVCB_NULL,
+			DEVCB_LINE(at_pit8254_out0_changed)
 		}, {
 			4772720/4,				/* dram refresh */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}, {
 			4772720/4,				/* pio port c pin 4, and speaker polling enough */
-			at_pit8254_out2_changed
+			DEVCB_NULL,
+			DEVCB_LINE(at_pit8254_out2_changed)
 		}
 	}
 };
@@ -472,7 +472,7 @@ static PALETTE_INIT(pcat_286)
 
 static void pcat_dyn_set_keyb_int(running_machine *machine, int state)
 {
-	pic8259_set_irq_line(pcat_dyn_devices.pic8259_1, 1, state);
+	pic8259_ir1_w(pcat_dyn_devices.pic8259_1, state);
 }
 
 
@@ -481,7 +481,7 @@ static MACHINE_START( pcat_dyn )
 //  bank = -1;
 //  lastvalue = -1;
 //  hv_blank = 0;
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
 	pcat_dyn_devices.pit8253 = devtag_get_device( machine, "pit8254" );
 	pcat_dyn_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
 	pcat_dyn_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );

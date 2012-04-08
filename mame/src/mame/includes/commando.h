@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _commando_state commando_state;
-struct _commando_state
+class commando_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, commando_state(machine)); }
+
+	commando_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  colorram;
@@ -20,7 +24,7 @@ struct _commando_state
 	UINT8 scroll_y[2];
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

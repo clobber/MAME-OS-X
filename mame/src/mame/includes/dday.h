@@ -5,9 +5,13 @@
 *************************************************************************/
 
 
-typedef struct _dday_state dday_state;
-struct _dday_state
+class dday_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dday_state(machine)); }
+
+	dday_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        bgvideoram;
 	UINT8 *        fgvideoram;
@@ -23,7 +27,7 @@ struct _dday_state
 	int            timer_value;
 
 	/* devices */
-	const device_config *ay1;
+	running_device *ay1;
 };
 
 

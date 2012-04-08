@@ -30,7 +30,7 @@ Static Program ROM (48K bytes)            4000-FFFF   R    D0-D7
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/tms5220.h"
 #include "sound/2151intf.h"
@@ -49,15 +49,15 @@ static UINT8 *bank_source_data;
 static UINT8 speech_data;
 static UINT8 last_ctl;
 
-static const device_config *jsacpu;
+static running_device *jsacpu;
 static const char *test_port;
 static UINT16 test_mask;
 
-static const device_config *pokey;
-static const device_config *ym2151;
-static const device_config *tms5220;
-static const device_config *oki6295;
-static const device_config *oki6295_l, *oki6295_r;
+static running_device *pokey;
+static running_device *ym2151;
+static running_device *tms5220;
+static running_device *oki6295;
+static running_device *oki6295_l, *oki6295_r;
 
 static UINT8 overall_volume;
 static UINT8 pokey_volume;
@@ -124,7 +124,7 @@ void atarijsa_init(running_machine *machine, const char *testport, int testmask)
 	UINT8 *rgn;
 
 	/* copy in the parameters */
-	jsacpu = cputag_get_cpu(machine, "jsa");
+	jsacpu = devtag_get_device(machine, "jsa");
 	assert_always(jsacpu != NULL, "Could not find JSA CPU!");
 	test_port = testport;
 	test_mask = testmask;

@@ -37,7 +37,7 @@
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "includes/wwfwfest.h"
@@ -369,7 +369,7 @@ static TIMER_DEVICE_CALLBACK( wwfwfest_scanline )
  Straight from Ddragon 3 with some adjusted volumes
 *******************************************************************************/
 
-static void dd3_ymirq_handler(const device_config *device, int irq)
+static void dd3_ymirq_handler(running_device *device, int irq)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }

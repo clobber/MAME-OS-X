@@ -10,6 +10,7 @@ TODO:
 
  */
 
+#include "emu.h"
 #include "debugger.h"
 #include "mc68hc11.h"
 
@@ -60,7 +61,7 @@ struct _hc11_state
 
 	cpu_irq_callback irq_callback;
 	UINT8 irq_state[2];
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int icount;
@@ -77,7 +78,7 @@ struct _hc11_state
 	UINT8 tflg1;
 };
 
-INLINE hc11_state *get_safe_token(const device_config *device)
+INLINE hc11_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -369,7 +370,7 @@ static CPU_INIT( hc11 )
 	hc11_state *cpustate = get_safe_token(device);
 	int i;
 
-	const hc11_config *conf = (const hc11_config *)device->static_config;
+	const hc11_config *conf = (const hc11_config *)device->baseconfig().static_config;
 
 	/* clear the opcode tables */
 	for(i=0; i < 256; i++) {
@@ -416,8 +417,8 @@ static CPU_INIT( hc11 )
 	cpustate->ram_position = 0x100;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 }
 
 static CPU_RESET( hc11 )
@@ -553,15 +554,15 @@ CPU_GET_INFO( mc68hc11 )
 		case CPUINFO_INT_MIN_CYCLES:						info->i = 1;					break;
 		case CPUINFO_INT_MAX_CYCLES:						info->i = 41;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:				info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 			info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 			info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:				info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:				info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:				info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:					info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:					info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:					info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:				info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 			info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 			info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:				info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:					info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:					info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:					info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + MC68HC11_IRQ_LINE:	info->i = cpustate->irq_state[MC68HC11_IRQ_LINE]; break;
 

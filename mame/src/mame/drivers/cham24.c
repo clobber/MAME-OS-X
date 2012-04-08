@@ -54,7 +54,7 @@ Notes:
        U3 is 27C512 EPROM
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/dac.h"
 #include "sound/nes_apu.h"
@@ -251,7 +251,7 @@ static PALETTE_INIT( cham24 )
 	ppu2c0x_init_palette(machine, 0);
 }
 
-static void ppu_irq( const device_config *device, int *ppu_regs )
+static void ppu_irq( running_device *device, int *ppu_regs )
 {
 	cputag_set_input_line(device->machine, "maincpu", INPUT_LINE_NMI, PULSE_LINE);
 }
@@ -287,7 +287,7 @@ static MACHINE_START( cham24 )
 	memcpy(&dst[0xc000], &src[0x0f8000], 0x4000);
 
 	/* uses 8K swapping, all ROM!*/
-	memory_install_read_bank(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x0000, 0x1fff, 0, 0, "bank1");
+	memory_install_read_bank(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x0000, 0x1fff, 0, 0, "bank1");
 	memory_set_bankptr(machine, "bank1", memory_region(machine, "gfx1"));
 
 	/* need nametable ram, though. I doubt this uses more than 2k, but it starts up configured for 4 */
@@ -298,7 +298,7 @@ static MACHINE_START( cham24 )
 	nt_page[3] = nt_ram + 0xc00;
 
 	/* and read/write handlers */
-	memory_install_readwrite8_handler(cpu_get_address_space(cputag_get_cpu(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, nt_r, nt_w);
+	memory_install_readwrite8_handler(cpu_get_address_space(devtag_get_device(machine, "ppu"), ADDRESS_SPACE_PROGRAM), 0x2000, 0x3eff, 0, 0, nt_r, nt_w);
 }
 
 static DRIVER_INIT( cham24 )

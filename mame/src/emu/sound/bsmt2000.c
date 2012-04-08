@@ -11,9 +11,7 @@
 
 ***************************************************************************/
 
-#include <math.h>
-
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "bsmt2000.h"
 
@@ -97,7 +95,7 @@ static void set_regmap(bsmt2000_chip *chip, UINT8 posbase, UINT8 ratebase, UINT8
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE bsmt2000_chip *get_safe_token(const device_config *device)
+INLINE bsmt2000_chip *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -126,8 +124,8 @@ static DEVICE_START( bsmt2000 )
 	chip->clock = device->clock;
 
 	/* initialize the regions */
-	chip->region_base = (INT8 *)device->region;
-	chip->total_banks = device->regionbytes / 0x10000;
+	chip->region_base = *device->region;
+	chip->total_banks = device->region->bytes() / 0x10000;
 
 	/* register chip-wide data for save states */
 	state_save_register_device_item(device, 0, chip->last_register);

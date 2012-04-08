@@ -138,7 +138,7 @@ ROMs (All ROMs are 27C010 EPROM. - means not populated)
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2151intf.h"
@@ -437,7 +437,7 @@ static INPUT_PORTS_START( ctribe )
 	PORT_BIT( 0xfc00, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( ddrago3b )
+static INPUT_PORTS_START( ddragon3b )
 	PORT_INCLUDE( ctribe )
 
 	PORT_MODIFY("IN0")
@@ -513,7 +513,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void dd3_ymirq_handler(const device_config *device, int irq)
+static void dd3_ymirq_handler(running_device *device, int irq)
 {
 	ddragon3_state *state = (ddragon3_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0 , irq ? ASSERT_LINE : CLEAR_LINE );
@@ -630,7 +630,7 @@ static MACHINE_DRIVER_START( ddragon3 )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.50)
 MACHINE_DRIVER_END
 
-static MACHINE_DRIVER_START( ddrago3b )
+static MACHINE_DRIVER_START( ddragon3b )
 	MDRV_IMPORT_FROM(ddragon3)
 
 	MDRV_CPU_MODIFY("maincpu")
@@ -714,7 +714,7 @@ ROM_START( ddragon3j )
 	ROM_LOAD( "30j-2.ic11",   0x100000, 0x80000, CRC(41c6fb08) SHA1(9fb6105bdc9ff8eeaacf378d208cf6d32a09401b) )
 	ROM_LOAD( "30j11-0.ic10", 0x180000, 0x10000, CRC(99195b2a) SHA1(d1c0e1855aed22f169717f94d78bc326e68e3064) )
 	ROM_LOAD( "30j-1.ic13",   0x200000, 0x80000, CRC(67a6f114) SHA1(7d0f3cd6376128ddfcd13f2ec683ec270e95c19c) )
-	ROM_LOAD( "30a10-0.ic12", 0x280000, 0x10000, CRC(e3879b5d) SHA1(fc87aedb0f4964a8d261d86121fe8544b330bed9) )
+	ROM_LOAD( "30j10-0.ic12", 0x280000, 0x10000, CRC(e3879b5d) SHA1(fc87aedb0f4964a8d261d86121fe8544b330bed9) )
 	ROM_LOAD( "30j-0.ic15",   0x300000, 0x80000, CRC(f15dafbe) SHA1(68049c4542e1c7119bbf1be1fa44e3eea9c11b6e) )
 	ROM_LOAD( "30j9-0.ic14",  0x380000, 0x10000, CRC(2759ae84) SHA1(02c70958259f56174ce2ba2db56040dad72be02b) )
 
@@ -861,8 +861,8 @@ ROM_END
 
 ROM_START( ctribe1 )
 	ROM_REGION( 0x80000, "maincpu", 0 )	/* 64k for cpu code */
-	ROM_LOAD16_BYTE( "28a16-2.ic26", 0x00001, 0x20000, CRC(f00f8443) SHA1(3c099b6bea9956cc60ce4a9a5d790ac2bf7d77bd) )
-	ROM_LOAD16_BYTE( "28a15-2.ic25", 0x00000, 0x20000, CRC(dd70079f) SHA1(321b523fefec2a962d0afa20b33428e7caea8958) )
+	ROM_LOAD16_BYTE( "1_28a16-2.ic26", 0x00001, 0x20000, CRC(f00f8443) SHA1(3c099b6bea9956cc60ce4a9a5d790ac2bf7d77bd) )
+	ROM_LOAD16_BYTE( "1_28a15-2.ic25", 0x00000, 0x20000, CRC(dd70079f) SHA1(321b523fefec2a962d0afa20b33428e7caea8958) )
 	ROM_LOAD16_BYTE( "28j17-0.104", 0x40001, 0x10000, CRC(8c2c6dbd) SHA1(b99b9be6e0bdc8340fedd258819c4df587926a84) )
 	/* No EVEN rom! */
 
@@ -1014,7 +1014,7 @@ ROM_END
 GAME( 1990, ddragon3, 0,        ddragon3, ddragon3, 0, ROT0, "Technos Japan", "Double Dragon 3 - The Rosetta Stone (US)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ddragon3j,ddragon3, ddragon3, ddragon3, 0, ROT0, "Technos Japan", "Double Dragon 3 - The Rosetta Stone (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ddragon3p,ddragon3, ddragon3, ddragon3, 0, ROT0, "Technos Japan", "Double Dragon 3 - The Rosetta Stone (prototype)", GAME_SUPPORTS_SAVE )
-GAME( 1990, ddragon3b,ddragon3, ddrago3b, ddrago3b, 0, ROT0, "bootleg", "Double Dragon 3 - The Rosetta Stone (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1990, ddragon3b,ddragon3, ddragon3b,ddragon3b,0, ROT0, "bootleg", "Double Dragon 3 - The Rosetta Stone (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ctribe,   0,        ctribe,   ctribe,   0, ROT0, "Technos Japan", "The Combatribes (US)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ctribe1,  ctribe,   ctribe,   ctribe,   0, ROT0, "Technos Japan", "The Combatribes (US Set 1?)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ctribej,  ctribe,   ctribe,   ctribe,   0, ROT0, "Technos Japan", "The Combatribes (Japan)", GAME_SUPPORTS_SAVE )

@@ -49,7 +49,7 @@
 #endif
 
 // MAME headers
-#include "driver.h"
+#include "emu.h"
 #include "uiinput.h"
 #include "debug/debugvw.h"
 #include "debug/debugcon.h"
@@ -246,7 +246,7 @@ static void disasm_update_caption(running_machine *machine, HWND wnd);
 static void console_create_window(running_machine *machine);
 static void console_recompute_children(debugwin_info *info);
 static void console_process_string(debugwin_info *info, const char *string);
-static void console_set_cpu(const device_config *device);
+static void console_set_cpu(running_device *device);
 
 static HMENU create_standard_menubar(void);
 static int global_handle_command(debugwin_info *info, WPARAM wparam, LPARAM lparam);
@@ -261,7 +261,7 @@ static void smart_show_all(BOOL show);
 //  osd_wait_for_debugger
 //============================================================
 
-void osd_wait_for_debugger(const device_config *device, int firststop)
+void osd_wait_for_debugger(running_device *device, int firststop)
 {
 	MSG message;
 
@@ -430,7 +430,7 @@ void debugwin_init_windows(void)
 			t_face = tstring_from_utf8(options_get_string(mame_options(), WINOPTION_DEBUGGER_FONT));
 			debug_font = CreateFont(-MulDiv(size, GetDeviceCaps(temp_dc, LOGPIXELSY), 72), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
 						ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, t_face);
-			free(t_face);
+			global_free(t_face);
 
 			// fall back to Lucida Console 8
 			if (debug_font == NULL)
@@ -535,7 +535,7 @@ static debugwin_info *debugwin_window_create(running_machine *machine, LPCSTR ti
 	RECT work_bounds;
 
 	// allocate memory
-	info = alloc_clear_or_die(debugwin_info);
+	info = global_alloc_clear(debugwin_info);
 
 	// create the window
 	info->handler = handler;
@@ -567,7 +567,7 @@ static debugwin_info *debugwin_window_create(running_machine *machine, LPCSTR ti
 cleanup:
 	if (info->wnd != NULL)
 		DestroyWindow(info->wnd);
-	free(info);
+	global_free(info);
 	return NULL;
 }
 
@@ -599,7 +599,7 @@ static void debugwin_window_free(debugwin_info *info)
 		}
 
 	// free our memory
-	free(info);
+	global_free(info);
 }
 
 
@@ -1574,7 +1574,7 @@ static LRESULT CALLBACK debugwin_edit_proc(HWND wnd, UINT message, WPARAM wparam
 							if (utf8_buffer != NULL)
 							{
 								(*info->process_string)(info, utf8_buffer);
-								free(utf8_buffer);
+								global_free(utf8_buffer);
 							}
 						}
 						break;
@@ -1719,7 +1719,7 @@ static void log_create_window(running_machine *machine)
 
 static void memory_create_window(running_machine *machine)
 {
-	const device_config *curcpu = debug_cpu_get_visible_cpu(machine);
+	running_device *curcpu = debug_cpu_get_visible_cpu(machine);
 	const memory_subview_item *subview;
 	debugwin_info *info;
 	HMENU optionsmenu;
@@ -1777,7 +1777,7 @@ static void memory_create_window(running_machine *machine)
 	{
 		TCHAR *t_name = tstring_from_utf8(subview->name);
 		int item = SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
-		free(t_name);
+		global_free(t_name);
 		if (cursel == -1 && subview->space != NULL && subview->space->cpu == curcpu)
 			cursel = item;
 	}
@@ -2022,7 +2022,7 @@ static void memory_update_caption(running_machine *machine, HWND wnd)
 	const memory_subview_item *subview = memory_view_get_current_subview(info->view[0].view);
 	char title[256];
 
-	sprintf(title, "Memory: %s", subview->name);
+	sprintf(title, "Memory: %s", subview->name.cstr());
 	win_set_window_text_utf8(wnd, title);
 }
 
@@ -2034,7 +2034,7 @@ static void memory_update_caption(running_machine *machine, HWND wnd)
 
 static void disasm_create_window(running_machine *machine)
 {
-	const device_config *curcpu = debug_cpu_get_visible_cpu(machine);
+	running_device *curcpu = debug_cpu_get_visible_cpu(machine);
 	const disasm_subview_item *subview;
 	debugwin_info *info;
 	HMENU optionsmenu;
@@ -2086,7 +2086,7 @@ static void disasm_create_window(running_machine *machine)
 	{
 		TCHAR *t_name = tstring_from_utf8(subview->name);
 		int item = SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
-		free(t_name);
+		global_free(t_name);
 		if (cursel == 0 && subview->space->cpu == curcpu)
 			cursel = item;
 	}
@@ -2347,7 +2347,7 @@ static void disasm_update_caption(running_machine *machine, HWND wnd)
 	const disasm_subview_item *subview = disasm_view_get_current_subview(info->view[0].view);
 	char title[256];
 
-	sprintf(title, "Disassembly: %s", subview->name);
+	sprintf(title, "Disassembly: %s", subview->name.cstr());
 	win_set_window_text_utf8(wnd, title);
 }
 
@@ -2562,7 +2562,7 @@ static void console_process_string(debugwin_info *info, const char *string)
 //  console_set_cpu
 //============================================================
 
-static void console_set_cpu(const device_config *device)
+static void console_set_cpu(running_device *device)
 {
 	const registers_subview_item *regsubitem = NULL;
 	const disasm_subview_item *dasmsubitem;
@@ -2587,7 +2587,7 @@ static void console_set_cpu(const device_config *device)
 	// then update the caption
 	if (regsubitem != NULL)
 	{
-		snprintf(title, ARRAY_LENGTH(title), "Debug: %s - %s", device->machine->gamedrv->name, regsubitem->name);
+		snprintf(title, ARRAY_LENGTH(title), "Debug: %s - %s", device->machine->gamedrv->name, regsubitem->name.cstr());
 		win_get_window_text_utf8(main_console->wnd, curtitle, ARRAY_LENGTH(curtitle));
 		if (strcmp(title, curtitle) != 0)
 			win_set_window_text_utf8(main_console->wnd, title);

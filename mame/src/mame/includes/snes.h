@@ -23,10 +23,12 @@
 #define DOTCLK_NTSC	(MCLK_NTSC/4)
 #define DOTCLK_PAL	(MCLK_PAL/4)
 
+#define SNES_LAYER_DEBUG  0
+
 /* Debug definitions */
 #ifdef MAME_DEBUG
 /* #define SNES_DBG_GENERAL*/		/* Display general debug info */
-/* #define SNES_DBG_video*/		/* Display video debug info */
+/* #define SNES_DBG_VIDEO */		/* Display video debug info */
 /* #define SNES_DBG_GDMA*/			/* Display GDMA debug info */
 /* #define SNES_DBG_HDMA*/			/* Display HDMA debug info */
 /* #define SNES_DBG_REG_R*/			/* Display register read info */
@@ -34,220 +36,220 @@
 #endif /* MAME_DEBUG */
 
 /* Useful definitions */
-#define SNES_SCR_WIDTH		256		/* 32 characters 8 pixels wide */
-#define SNES_SCR_HEIGHT_NTSC	224		/* Can be 224 or 240 height */
-#define SNES_SCR_HEIGHT_PAL	274		/* ??? */
-#define SNES_VTOTAL_NTSC	262		/* Maximum number of lines for NTSC systems */
-#define SNES_VTOTAL_PAL		312		/* Maximum number of lines for PAL systems */
-#define SNES_HTOTAL			341		/* Maximum number pixels per line (incl. hblank) */
-#define SNES_DMA_BASE		0x4300	/* Base DMA register address */
-#define SNES_MODE_20		0x1		/* Lo-ROM cart */
-#define SNES_MODE_21		0x2		/* Hi-ROM cart */
-#define SNES_MODE_22		0x4		/* Extended Lo-ROM cart - SDD-1 */
-#define SNES_MODE_25		0x8		/* Extended Hi-ROM cart */
-#define SNES_NTSC			0x00
-#define SNES_PAL			0x10
-#define SNES_VRAM_SIZE		0x20000	/* 128kb of video ram */
-#define SNES_CGRAM_SIZE		0x202	/* 256 16-bit colours + 1 tacked on 16-bit colour for fixed colour */
-#define SNES_OAM_SIZE		0x440	/* 1088 bytes of Object Attribute Memory */
-#define SNES_SPCRAM_SIZE	0x10000	/* 64kb of spc700 ram */
-#define SNES_EXROM_START	0x1000000
-#define FIXED_COLOUR		256		/* Position in cgram for fixed colour */
+#define SNES_SCR_WIDTH        256		/* 32 characters 8 pixels wide */
+#define SNES_SCR_HEIGHT_NTSC  224		/* Can be 224 or 240 height */
+#define SNES_SCR_HEIGHT_PAL   274		/* ??? */
+#define SNES_VTOTAL_NTSC      262		/* Maximum number of lines for NTSC systems */
+#define SNES_VTOTAL_PAL       312		/* Maximum number of lines for PAL systems */
+#define SNES_HTOTAL           341		/* Maximum number pixels per line (incl. hblank) */
+#define SNES_DMA_BASE         0x4300	/* Base DMA register address */
+#define SNES_MODE_20          0x1		/* Lo-ROM cart */
+#define SNES_MODE_21          0x2		/* Hi-ROM cart */
+#define SNES_MODE_22          0x4		/* Extended Lo-ROM cart - SDD-1 */
+#define SNES_MODE_25          0x8		/* Extended Hi-ROM cart */
+#define SNES_NTSC             0x00
+#define SNES_PAL              0x10
+#define SNES_VRAM_SIZE        0x20000	/* 128kb of video ram */
+#define SNES_CGRAM_SIZE       0x202		/* 256 16-bit colours + 1 tacked on 16-bit colour for fixed colour */
+#define SNES_OAM_SIZE         0x440		/* 1088 bytes of Object Attribute Memory */
+#define SNES_SPCRAM_SIZE      0x10000	/* 64kb of spc700 ram */
+#define SNES_EXROM_START      0x1000000
+#define FIXED_COLOUR          256		/* Position in cgram for fixed colour */
 /* Definitions for PPU Memory-Mapped registers */
-#define INIDISP			0x2100
-#define OBSEL			0x2101
-#define OAMADDL			0x2102
-#define OAMADDH			0x2103
-#define OAMDATA			0x2104
-#define BGMODE			0x2105	/* abcdefff = abcd: bg4-1 tile size | e: BG3 high priority | f: mode */
-#define MOSAIC			0x2106	/* xxxxabcd = x: pixel size | abcd: affects bg 1-4 */
-#define BG1SC			0x2107
-#define BG2SC			0x2108
-#define BG3SC			0x2109
-#define BG4SC			0x210A
-#define BG12NBA			0x210B
-#define BG34NBA			0x210C
-#define BG1HOFS			0x210D
-#define BG1VOFS			0x210E
-#define BG2HOFS			0x210F
-#define BG2VOFS			0x2110
-#define BG3HOFS			0x2111
-#define BG3VOFS			0x2112
-#define BG4HOFS			0x2113
-#define BG4VOFS			0x2114
-#define VMAIN			0x2115	/* i---ffrr = i: Increment timing | f: Full graphic | r: increment rate */
-#define VMADDL			0x2116	/* aaaaaaaa = a: LSB of vram address */
-#define VMADDH			0x2117	/* aaaaaaaa = a: MSB of vram address */
-#define VMDATAL			0x2118	/* dddddddd = d: data to be written */
-#define VMDATAH			0x2119	/* dddddddd = d: data to be written */
-#define M7SEL			0x211A	/* ab----yx = a: screen over | y: vertical flip | x: horizontal flip */
-#define M7A				0x211B	/* aaaaaaaa = a: COSINE rotate angle / X expansion */
-#define M7B				0x211C	/* aaaaaaaa = a: SINE rotate angle / X expansion */
-#define M7C				0x211D	/* aaaaaaaa = a: SINE rotate angle / Y expansion */
-#define M7D				0x211E	/* aaaaaaaa = a: COSINE rotate angle / Y expansion */
-#define M7X				0x211F
-#define M7Y				0x2120
-#define CGADD			0x2121
-#define CGDATA			0x2122
-#define W12SEL			0x2123
-#define W34SEL			0x2124
-#define WOBJSEL			0x2125
-#define WH0				0x2126	/* pppppppp = p: Left position of window 1 */
-#define WH1				0x2127	/* pppppppp = p: Right position of window 1 */
-#define WH2				0x2128	/* pppppppp = p: Left position of window 2 */
-#define WH3				0x2129	/* pppppppp = p: Right position of window 2 */
-#define WBGLOG			0x212A	/* aabbccdd = a: BG4 params | b: BG3 params | c: BG2 params | d: BG1 params */
-#define WOBJLOG			0x212B	/* ----ccoo = c: Colour window params | o: Object window params */
-#define TM				0x212C
-#define TS				0x212D
-#define TMW				0x212E
-#define TSW				0x212F
-#define CGWSEL			0x2130
-#define CGADSUB			0x2131
-#define COLDATA			0x2132
-#define SETINI			0x2133
-#define MPYL			0x2134
-#define MPYM			0x2135
-#define MPYH			0x2136
-#define SLHV			0x2137
-#define ROAMDATA		0x2138
-#define RVMDATAL		0x2139
-#define RVMDATAH		0x213A
-#define RCGDATA			0x213B
-#define OPHCT			0x213C
-#define OPVCT			0x213D
-#define STAT77			0x213E
-#define STAT78			0x213F
-#define APU00			0x2140
-#define APU01			0x2141
-#define APU02			0x2142
-#define APU03			0x2143
-#define WMDATA			0x2180
-#define WMADDL			0x2181
-#define WMADDM			0x2182
-#define WMADDH			0x2183
+#define INIDISP        0x2100
+#define OBSEL          0x2101
+#define OAMADDL        0x2102
+#define OAMADDH        0x2103
+#define OAMDATA        0x2104
+#define BGMODE         0x2105	/* abcdefff = abcd: bg4-1 tile size | e: BG3 high priority | f: mode */
+#define MOSAIC         0x2106	/* xxxxabcd = x: pixel size | abcd: affects bg 1-4 */
+#define BG1SC          0x2107
+#define BG2SC          0x2108
+#define BG3SC          0x2109
+#define BG4SC          0x210A
+#define BG12NBA        0x210B
+#define BG34NBA        0x210C
+#define BG1HOFS        0x210D
+#define BG1VOFS        0x210E
+#define BG2HOFS        0x210F
+#define BG2VOFS        0x2110
+#define BG3HOFS        0x2111
+#define BG3VOFS        0x2112
+#define BG4HOFS        0x2113
+#define BG4VOFS        0x2114
+#define VMAIN          0x2115	/* i---ffrr = i: Increment timing | f: Full graphic | r: increment rate */
+#define VMADDL         0x2116	/* aaaaaaaa = a: LSB of vram address */
+#define VMADDH         0x2117	/* aaaaaaaa = a: MSB of vram address */
+#define VMDATAL        0x2118	/* dddddddd = d: data to be written */
+#define VMDATAH        0x2119	/* dddddddd = d: data to be written */
+#define M7SEL          0x211A	/* ab----yx = a: screen over | y: vertical flip | x: horizontal flip */
+#define M7A            0x211B	/* aaaaaaaa = a: COSINE rotate angle / X expansion */
+#define M7B            0x211C	/* aaaaaaaa = a: SINE rotate angle / X expansion */
+#define M7C            0x211D	/* aaaaaaaa = a: SINE rotate angle / Y expansion */
+#define M7D            0x211E	/* aaaaaaaa = a: COSINE rotate angle / Y expansion */
+#define M7X            0x211F
+#define M7Y            0x2120
+#define CGADD          0x2121
+#define CGDATA         0x2122
+#define W12SEL         0x2123
+#define W34SEL         0x2124
+#define WOBJSEL        0x2125
+#define WH0            0x2126	/* pppppppp = p: Left position of window 1 */
+#define WH1            0x2127	/* pppppppp = p: Right position of window 1 */
+#define WH2            0x2128	/* pppppppp = p: Left position of window 2 */
+#define WH3            0x2129	/* pppppppp = p: Right position of window 2 */
+#define WBGLOG         0x212A	/* aabbccdd = a: BG4 params | b: BG3 params | c: BG2 params | d: BG1 params */
+#define WOBJLOG        0x212B	/* ----ccoo = c: Colour window params | o: Object window params */
+#define TM             0x212C
+#define TS             0x212D
+#define TMW            0x212E
+#define TSW            0x212F
+#define CGWSEL         0x2130
+#define CGADSUB        0x2131
+#define COLDATA        0x2132
+#define SETINI         0x2133
+#define MPYL           0x2134
+#define MPYM           0x2135
+#define MPYH           0x2136
+#define SLHV           0x2137
+#define ROAMDATA       0x2138
+#define RVMDATAL       0x2139
+#define RVMDATAH       0x213A
+#define RCGDATA        0x213B
+#define OPHCT          0x213C
+#define OPVCT          0x213D
+#define STAT77         0x213E
+#define STAT78         0x213F
+#define APU00          0x2140
+#define APU01          0x2141
+#define APU02          0x2142
+#define APU03          0x2143
+#define WMDATA         0x2180
+#define WMADDL         0x2181
+#define WMADDM         0x2182
+#define WMADDH         0x2183
 /* Definitions for CPU Memory-Mapped registers */
-#define OLDJOY1			0x4016
-#define OLDJOY2			0x4017
-#define NMITIMEN		0x4200
-#define WRIO			0x4201
-#define WRMPYA			0x4202
-#define WRMPYB			0x4203
-#define WRDIVL			0x4204
-#define WRDIVH			0x4205
-#define WRDVDD			0x4206
-#define HTIMEL			0x4207
-#define HTIMEH			0x4208
-#define VTIMEL			0x4209
-#define VTIMEH			0x420A
-#define MDMAEN			0x420B
-#define HDMAEN			0x420C
-#define MEMSEL			0x420D
-#define RDNMI			0x4210
-#define TIMEUP			0x4211
-#define HVBJOY			0x4212
-#define RDIO			0x4213
-#define RDDIVL			0x4214
-#define RDDIVH			0x4215
-#define RDMPYL			0x4216
-#define RDMPYH			0x4217
-#define JOY1L			0x4218
-#define JOY1H			0x4219
-#define JOY2L			0x421A
-#define JOY2H			0x421B
-#define JOY3L			0x421C
-#define JOY3H			0x421D
-#define JOY4L			0x421E
-#define JOY4H			0x421F
+#define OLDJOY1        0x4016
+#define OLDJOY2        0x4017
+#define NMITIMEN       0x4200
+#define WRIO           0x4201
+#define WRMPYA         0x4202
+#define WRMPYB         0x4203
+#define WRDIVL         0x4204
+#define WRDIVH         0x4205
+#define WRDVDD         0x4206
+#define HTIMEL         0x4207
+#define HTIMEH         0x4208
+#define VTIMEL         0x4209
+#define VTIMEH         0x420A
+#define MDMAEN         0x420B
+#define HDMAEN         0x420C
+#define MEMSEL         0x420D
+#define RDNMI          0x4210
+#define TIMEUP         0x4211
+#define HVBJOY         0x4212
+#define RDIO           0x4213
+#define RDDIVL         0x4214
+#define RDDIVH         0x4215
+#define RDMPYL         0x4216
+#define RDMPYH         0x4217
+#define JOY1L          0x4218
+#define JOY1H          0x4219
+#define JOY2L          0x421A
+#define JOY2H          0x421B
+#define JOY3L          0x421C
+#define JOY3H          0x421D
+#define JOY4L          0x421E
+#define JOY4H          0x421F
 /* DMA */
-#define DMAP0			0x4300
-#define BBAD0			0x4301
-#define A1T0L			0x4302
-#define A1T0H			0x4303
-#define A1B0			0x4304
-#define DAS0L			0x4305
-#define DAS0H			0x4306
-#define DSAB0			0x4307
-#define A2A0L			0x4308
-#define A2A0H			0x4309
-#define NTRL0			0x430A
-#define DMAP1			0x4310
-#define BBAD1			0x4311
-#define A1T1L			0x4312
-#define A1T1H			0x4313
-#define A1B1			0x4314
-#define DAS1L			0x4315
-#define DAS1H			0x4316
-#define DSAB1			0x4317
-#define A2A1L			0x4318
-#define A2A1H			0x4319
-#define NTRL1			0x431A
-#define DMAP2			0x4320
-#define BBAD2			0x4321
-#define A1T2L			0x4322
-#define A1T2H			0x4323
-#define A1B2			0x4324
-#define DAS2L			0x4325
-#define DAS2H			0x4326
-#define DSAB2			0x4327
-#define A2A2L			0x4328
-#define A2A2H			0x4329
-#define NTRL2			0x432A
-#define DMAP3			0x4330
-#define BBAD3			0x4331
-#define A1T3L			0x4332
-#define A1T3H			0x4333
-#define A1B3			0x4334
-#define DAS3L			0x4335
-#define DAS3H			0x4336
-#define DSAB3			0x4337
-#define A2A3L			0x4338
-#define A2A3H			0x4339
-#define NTRL3			0x433A
-#define DMAP4			0x4340
-#define BBAD4			0x4341
-#define A1T4L			0x4342
-#define A1T4H			0x4343
-#define A1B4			0x4344
-#define DAS4L			0x4345
-#define DAS4H			0x4346
-#define DSAB4			0x4347
-#define A2A4L			0x4348
-#define A2A4H			0x4349
-#define NTRL4			0x434A
-#define DMAP5			0x4350
-#define BBAD5			0x4351
-#define A1T5L			0x4352
-#define A1T5H			0x4353
-#define A1B5			0x4354
-#define DAS5L			0x4355
-#define DAS5H			0x4356
-#define DSAB5			0x4357
-#define A2A5L			0x4358
-#define A2A5H			0x4359
-#define NTRL5			0x435A
-#define DMAP6			0x4360
-#define BBAD6			0x4361
-#define A1T6L			0x4362
-#define A1T6H			0x4363
-#define A1B6			0x4364
-#define DAS6L			0x4365
-#define DAS6H			0x4366
-#define DSAB6			0x4367
-#define A2A6L			0x4368
-#define A2A6H			0x4369
-#define NTRL6			0x436A
-#define DMAP7			0x4370
-#define BBAD7			0x4371
-#define A1T7L			0x4372
-#define A1T7H			0x4373
-#define A1B7			0x4374
-#define DAS7L			0x4375
-#define DAS7H			0x4376
-#define DSAB7			0x4377
-#define A2A7L			0x4378
-#define A2A7H			0x4379
-#define NTRL7			0x437A
+#define DMAP0          0x4300
+#define BBAD0          0x4301
+#define A1T0L          0x4302
+#define A1T0H          0x4303
+#define A1B0           0x4304
+#define DAS0L          0x4305
+#define DAS0H          0x4306
+#define DSAB0          0x4307
+#define A2A0L          0x4308
+#define A2A0H          0x4309
+#define NTRL0          0x430A
+#define DMAP1          0x4310
+#define BBAD1          0x4311
+#define A1T1L          0x4312
+#define A1T1H          0x4313
+#define A1B1           0x4314
+#define DAS1L          0x4315
+#define DAS1H          0x4316
+#define DSAB1          0x4317
+#define A2A1L          0x4318
+#define A2A1H          0x4319
+#define NTRL1          0x431A
+#define DMAP2          0x4320
+#define BBAD2          0x4321
+#define A1T2L          0x4322
+#define A1T2H          0x4323
+#define A1B2           0x4324
+#define DAS2L          0x4325
+#define DAS2H          0x4326
+#define DSAB2          0x4327
+#define A2A2L          0x4328
+#define A2A2H          0x4329
+#define NTRL2          0x432A
+#define DMAP3          0x4330
+#define BBAD3          0x4331
+#define A1T3L          0x4332
+#define A1T3H          0x4333
+#define A1B3           0x4334
+#define DAS3L          0x4335
+#define DAS3H          0x4336
+#define DSAB3          0x4337
+#define A2A3L          0x4338
+#define A2A3H          0x4339
+#define NTRL3          0x433A
+#define DMAP4          0x4340
+#define BBAD4          0x4341
+#define A1T4L          0x4342
+#define A1T4H          0x4343
+#define A1B4           0x4344
+#define DAS4L          0x4345
+#define DAS4H          0x4346
+#define DSAB4          0x4347
+#define A2A4L          0x4348
+#define A2A4H          0x4349
+#define NTRL4          0x434A
+#define DMAP5          0x4350
+#define BBAD5          0x4351
+#define A1T5L          0x4352
+#define A1T5H          0x4353
+#define A1B5           0x4354
+#define DAS5L          0x4355
+#define DAS5H          0x4356
+#define DSAB5          0x4357
+#define A2A5L          0x4358
+#define A2A5H          0x4359
+#define NTRL5          0x435A
+#define DMAP6          0x4360
+#define BBAD6          0x4361
+#define A1T6L          0x4362
+#define A1T6H          0x4363
+#define A1B6           0x4364
+#define DAS6L          0x4365
+#define DAS6H          0x4366
+#define DSAB6          0x4367
+#define A2A6L          0x4368
+#define A2A6H          0x4369
+#define NTRL6          0x436A
+#define DMAP7          0x4370
+#define BBAD7          0x4371
+#define A1T7L          0x4372
+#define A1T7H          0x4373
+#define A1B7           0x4374
+#define DAS7L          0x4375
+#define DAS7H          0x4376
+#define DSAB7          0x4377
+#define A2A7L          0x4378
+#define A2A7H          0x4379
+#define NTRL7          0x437A
 /* Definitions for sound DSP */
 #define DSP_V0_VOLL		0x00
 #define DSP_V0_VOLR		0x01
@@ -353,6 +355,50 @@
 #define DSP_FIR_C6		0x6F
 #define DSP_FIR_C7		0x7F
 
+struct snes_joypad
+{
+	UINT16 buttons;
+};
+
+struct snes_mouse
+{
+	INT16 x, y, oldx, oldy;
+	UINT8 buttons;
+	UINT8 deltax, deltay;
+	int speed;
+};
+
+struct snes_superscope
+{
+	INT16 x, y;
+	UINT8 buttons;
+	int turbo_lock, pause_lock, fire_lock;
+	int offscreen;
+};
+
+typedef void (*snes_io_read)(running_machine *machine);
+typedef UINT8 (*snes_oldjoy_read)(running_machine *machine);
+
+class snes_state
+{
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, snes_state(machine)); }
+
+	snes_state(running_machine &machine) { }
+
+	/* input-related */
+	UINT8                 joy1l, joy1h, joy2l, joy2h, joy3l, joy3h, joy4l, joy4h;
+	UINT16                data1[2], data2[2];
+	UINT8                 read_idx[2];
+	snes_joypad           joypad[2];
+	snes_mouse            mouse[2];
+	snes_superscope       scope[2];
+
+	/* input callbacks (to allow MESS to have its own input handlers) */
+	snes_io_read          io_read;
+	snes_oldjoy_read      oldjoy1_read, oldjoy2_read;
+};
+
 /* Special chips, checked at init and used in memory handlers */
 enum
 {
@@ -374,6 +420,26 @@ HAS_ST018,
 HAS_SPC7110,
 HAS_SPC7110_RTC,
 HAS_UNK
+};
+
+/* offset-per-tile modes */
+enum
+{
+	SNES_OPT_NONE = 0,
+	SNES_OPT_MODE2,
+	SNES_OPT_MODE4,
+	SNES_OPT_MODE6
+};
+
+/* layers */
+enum
+{
+	SNES_BG1 = 0,
+	SNES_BG2,
+	SNES_BG3,
+	SNES_BG4,
+	SNES_OAM,
+	SNES_COLOR
 };
 
 /*----------- defined in machine/snes.c -----------*/
@@ -414,9 +480,10 @@ extern UINT8 snes_has_addon_chip;
 extern UINT32 snes_rom_size;
 extern UINT16 snes_htmult;
 
-extern void snes_gdma( const address_space *space, UINT8 channels );
+extern void snes_gdma(const address_space *space, UINT8 channels);
 extern void snes_hdma_init(void);
 extern void snes_hdma(const address_space *space);
+extern void snes_latch_counters(running_machine *machine);
 
 /* (PPU) Video related */
 extern UINT8  *snes_vram;			/* Video RAM (Should be 16-bit, but it's easier this way) */
@@ -430,33 +497,29 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
 {
 	struct
 	{
-		UINT8 blend;
-		UINT32 data;
-		UINT32 map;
-		UINT8 map_size;
+		/* clipmasks */
+		UINT8 window1_enabled, window1_invert;
+		UINT8 window2_enabled, window2_invert;
+		UINT8 wlog_mask;
+		/* color math enabled */
+		UINT8 color_math;
+
+		UINT8 charmap;
+		UINT8 tilemap;
+		UINT8 tilemap_size;
+
 		UINT8 tile_size;
 		UINT8 mosaic_enabled;	// actually used only for layers 0->3!
+
 		UINT8 main_window_enabled;
 		UINT8 sub_window_enabled;
-		UINT8 window1_enabled, window1_invert;
-		UINT8 window2_enabled, window2_invert;
-		UINT8 wlog_mask;
-		struct
-		{
-			UINT16 horizontal;
-			UINT16 vertical;
-			UINT16 tile_horz;
-			UINT8 shift_horz;
-			UINT16 tile_vert;
-			UINT16 shift_vert;
-		} offset;
-	} layer[5];	// this is for the BG1 - BG2 - BG3 - BG4 - OBJ layers
-	struct
-	{
-		UINT8 window1_enabled, window1_invert;
-		UINT8 window2_enabled, window2_invert;
-		UINT8 wlog_mask;
-	} colour;	// this is for the color (which is 'seen' as a layer by the window masking code)
+		UINT8 main_bg_enabled;
+		UINT8 sub_bg_enabled;
+
+		UINT16 hoffs;
+		UINT16 voffs;
+	} layer[6];	// this is for the BG1 - BG2 - BG3 - BG4 - OBJ - color layers
+
 	struct
 	{
 		UINT8 address_low;
@@ -465,17 +528,23 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
 		UINT8 saved_address_high;
 		UINT16 address;
 		UINT16 priority_rotation;
+		UINT8 next_charmap;
+		UINT8 next_size;
+		UINT8 size_;
 		UINT8 size[2];
+		UINT32 next_name_select;
 		UINT32 name_select;
 		UINT8 first_sprite;
 		UINT8 flip;
 		UINT16 write_latch;
 	} oam;
+
 	struct
 	{
 		UINT16 horizontal[4];
 		UINT16 vertical[4];
 	} bgd_offset;
+
 	struct
 	{
 		UINT16 latch_horz;
@@ -485,6 +554,7 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
 		UINT8 last_visible_line;
 		UINT8 interlace_count;
 	} beam;
+
 	struct
 	{
 		UINT8 repeat;
@@ -498,10 +568,12 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
 		INT16 origin_y;
 		UINT16 hor_offset;
 		UINT16 ver_offset;
+		UINT8 extbg;
 	} mode7;
+
 	UINT8 mosaic_size;
-	UINT8 main_color_mask;
-	UINT8 sub_color_mask;
+	UINT8 clip_to_black;
+	UINT8 prevent_color_math;
 	UINT8 sub_add_mode;
 	UINT8 bg3_priority_bit;
 	UINT8 direct_color;
@@ -509,19 +581,23 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
                                     'previous' scroll value */
 	UINT8 mode7_last_scroll;	/* as per Anomie's doc mode 7 scroll regs use a different value, shared with mode 7 matrix! */
 
-	UINT8 main_bg_enabled[5];	// these would probably better fit the layer struct, but it would make worse the code in snes_update_mode_X()
-	UINT8 sub_bg_enabled[5];
 	UINT8 ppu1_open_bus, ppu2_open_bus;
 	UINT8 ppu1_version, ppu2_version;
 	UINT8 window1_left, window1_right, window2_left, window2_right;
 
 	UINT16 mosaic_table[16][4096];
-	UINT8 clipmasks[6][SNES_SCR_WIDTH + 8];
+	UINT8 clipmasks[6][SNES_SCR_WIDTH];
 	UINT8 update_windows;
 	UINT8 update_offsets;
+	UINT8 update_oam_list;
 	UINT8 mode;
 	UINT8 interlace; //doubles the visible resolution
 	UINT8 obj_interlace;
+	UINT8 screen_brightness;
+	UINT8 screen_disabled;
+	UINT8 pseudo_hires;
+	UINT8 color_modes;
+	UINT8 stat77_flags;
 };
 
 struct snes_cart_info

@@ -6,8 +6,8 @@
 
 *************************************************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
-#include "cpuexec.h"
 #include "tlcs90.h"
 
 typedef enum					{	UNKNOWN,	NOP,	EX,		EXX,	LD,		LDW,	LDA,	LDI,	LDIR,	LDD,	LDDR,	CPI,	CPIR,	CPD,	CPDR,	PUSH,	POP,	JP,		JR,		CALL,	CALLR,		RET,	RETI,	HALT,	DI,		EI,		SWI,	DAA,	CPL,	NEG,	LDAR,	RCF,	SCF,	CCF,	TSET,	BIT,	SET,	RES,	INC,	DEC,	INCX,	DECX,	INCW,	DECW,	ADD,	ADC,	SUB,	SBC,	AND,	XOR,	OR,		CP,		RLC,	RRC,	RL,		RR,		SLA,	SRA,	SLL,	SRL,	RLD,	RRD,	DJNZ,	MUL,	DIV		}	_e_op;
@@ -31,7 +31,7 @@ typedef struct
 	UINT8		halt, after_EI;
 	UINT16		irq_state, irq_mask;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int		icount;
@@ -60,7 +60,7 @@ typedef struct
 
 }	t90_Regs;
 
-INLINE t90_Regs *get_safe_token(const device_config *device)
+INLINE t90_Regs *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -1132,6 +1132,7 @@ INLINE UINT8 Read##N##_8(t90_Regs *cpustate)	{ \
 INLINE UINT16 Read##N##_16(t90_Regs *cpustate)	{ \
 	switch ( cpustate->mode##N )	{ \
 		case MODE_I16:		return cpustate->r##N; \
+		case MODE_D16:		return cpustate->r##N - 1; \
 		case MODE_R16:		return r16(cpustate, cpustate->r##N); \
 		case MODE_R16D8:	return r16(cpustate, cpustate->r##N) + (INT8)cpustate->r##N##b; \
 		case MODE_R16R8:	return r16(cpustate, cpustate->r##N) + (INT8)r8(cpustate, cpustate->r##N##b); \
@@ -2669,8 +2670,8 @@ static CPU_INIT( t90 )
 	memset(cpustate, 0, sizeof(t90_Regs));
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->timer_period = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(device)), 8);
 
@@ -2761,17 +2762,17 @@ CPU_GET_INFO( tmp90840 )
 		case CPUINFO_INT_MIN_CYCLES:								info->i = 2;					break;
 		case CPUINFO_INT_MAX_CYCLES:								info->i = 26;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:		info->i = 20;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:		info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:		info->i = 0;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:		info->i = 0;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_IO:			info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:			info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:			info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:			info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:			info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:			info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:				info->i = cpustate->irq_state & (1 << INTNMI);	break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_IRQ0:				info->i = cpustate->irq_state & (1 << INT0);		break;
@@ -2807,7 +2808,7 @@ CPU_GET_INFO( tmp90840 )
 		case CPUINFO_FCT_BURN:										info->burn = CPU_BURN_NAME(t90);				break;
 		case CPUINFO_FCT_DISASSEMBLE:								info->disassemble = CPU_DISASSEMBLE_NAME(t90);		break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:						info->icount = &cpustate->icount;			break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp90840_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp90840_mem); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 
@@ -2853,7 +2854,7 @@ CPU_GET_INFO( tmp90841 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp90841_mem); return;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp90841_mem); return;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 
@@ -2869,7 +2870,7 @@ CPU_GET_INFO( tmp91640 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp91640_mem); return;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp91640_mem); return;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 
@@ -2885,7 +2886,7 @@ CPU_GET_INFO( tmp91641 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp91641_mem); return;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(tmp91641_mem); return;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 

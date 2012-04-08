@@ -60,7 +60,7 @@ DIP locations verified for:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/tms5110.h"
@@ -72,7 +72,7 @@ static int speech_rom_address = 0;
 static UINT8 ls259_buf[8] = {0,0,0,0,0,0,0,0};
 
 
-static void start_talking (const device_config *tms)
+static void start_talking (running_device *tms)
 {
 	speech_rom_address = 0x0;
 	tms5110_ctl_w(tms,0,TMS5110_CMD_SPEAK);
@@ -81,7 +81,7 @@ static void start_talking (const device_config *tms)
 	tms5110_pdc_w(tms,0,0);
 }
 
-static void reset_talking (const device_config *tms)
+static void reset_talking (running_device *tms)
 {
 /*To be extremely accurate there should be a delays between each of
   the function calls below. In real they happen with the frequency of 160 kHz.
@@ -104,7 +104,7 @@ static void reset_talking (const device_config *tms)
 }
 
 
-static int bagman_speech_rom_read_bit(const device_config *device)
+static int bagman_speech_rom_read_bit(running_device *device)
 {
 	UINT8 *ROM = memory_region(device->machine, "speech");
 	int bit_no = (ls259_buf[0]<<2) | (ls259_buf[1]<<1) | (ls259_buf[2]<<0);
@@ -151,7 +151,7 @@ static WRITE8_HANDLER( bagman_ls259_w )
 
 		if (offset==3)
 		{
-			const device_config *tms = devtag_get_device(space->machine, "tms");
+			running_device *tms = devtag_get_device(space->machine, "tms");
 			if (ls259_buf[3] == 0)	/* 1->0 transition */
 			{
 				reset_talking(tms);
@@ -957,14 +957,14 @@ static DRIVER_INIT( bagnarda )
 	*bagman_video_enable = 1;
 }
 
-GAME( 1982, bagman,	  0,	   bagman,  bagman,  0,        ROT270, "Valadon Automation", "Bagman", 0 )
+GAME( 1982, bagman,	   0,  bagman,  bagman,  0,        ROT270, "Valadon Automation", "Bagman", 0 )
 GAME( 1982, bagnard,  bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation", "Le Bagnard (set 1)", 0 )
 GAME( 1982, bagnarda, bagman,  bagman,  bagman,  bagnarda, ROT270, "Valadon Automation", "Le Bagnard (set 2)", 0 )
 GAME( 1982, bagmans,  bagman,  bagman,  bagmans, 0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 1)", 0 )
 GAME( 1982, bagmans2, bagman,  bagman,  bagman,  0,        ROT270, "Valadon Automation (Stern license)", "Bagman (Stern set 2)", 0 )
-GAME( 1984, sbagman,  0,	   bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
+GAME( 1984, sbagman,       0,  bagman,  sbagman, 0,        ROT270, "Valadon Automation", "Super Bagman", 0 )
 GAME( 1984, sbagmans, sbagman, bagman,  sbagman, 0,        ROT270, "Valadon Automation (Stern license)", "Super Bagman (Stern)", 0 )
-GAME( 1983, pickin,	  0,	   pickin,  pickin,  0,        ROT270, "Valadon Automation", "Pickin'", 0 )
-GAME( 1984, botanic,  0,       botanic, botanic, 0,        ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
-GAME( 1984, squaitsa, 0,       squaitsa,squaitsa,0,        ROT0,   "Itisa",              "Squash (Itisa)", 0 )
+GAME( 1983, pickin,	   0,  pickin,  pickin,  0,        ROT270, "Valadon Automation", "Pickin'", 0 )
+GAME( 1984, botanic,       0,  botanic, botanic, 0,        ROT270, "Valadon Automation (Itisa license)", "Botanic", 0 )
+GAME( 1984, squaitsa,      0,  squaitsa,squaitsa,0,        ROT0,   "Itisa",              "Squash (Itisa)", 0 )
 

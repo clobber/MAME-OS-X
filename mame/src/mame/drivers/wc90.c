@@ -74,7 +74,7 @@ voice.ic82     CRC32 abc61f3d   SHA1 c6f123d16a26c4d77c635617dd97bb4b906c463a
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2608intf.h"
 #include "includes/wc90.h"
@@ -291,7 +291,7 @@ GFXDECODE_END
 
 
 /* handler called by the 2608 emulator when the internal timers cause an IRQ */
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -309,21 +309,21 @@ static const ym2608_interface ym2608_config =
 static MACHINE_DRIVER_START( wc90 )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 6000000)	/* 6.0 MHz ??? */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_8MHz)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(wc90_map_1)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("sub", Z80, 6000000)	/* 6.0 MHz ??? */
+	MDRV_CPU_ADD("sub", Z80, XTAL_8MHz)		/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(wc90_map_2)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80, 4000000)	/* 4 MHz ???? */
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_8MHz/2)	/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	/* NMIs are triggered by the main CPU */
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_REFRESH_RATE(59.17)			/* verified on pcb */
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(32*8, 32*8)
@@ -338,7 +338,7 @@ static MACHINE_DRIVER_START( wc90 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymsnd", YM2608, 8000000)
+	MDRV_SOUND_ADD("ymsnd", YM2608, XTAL_8MHz)	/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2608_config)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)

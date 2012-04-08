@@ -1,4 +1,4 @@
-#include "driver.h"
+#include "emu.h"
 #include "sound/samples.h"
 #include "includes/senjyo.h"
 
@@ -10,7 +10,7 @@
 static INT16 *_single;
 static int single_rate = 0;
 static int single_volume = 0;
-
+UINT8 senjyo_sound_cmd;
 
 const z80_daisy_chain senjyo_daisy_chain[] =
 {
@@ -22,10 +22,15 @@ const z80_daisy_chain senjyo_daisy_chain[] =
 
 /* z80 pio */
 
-const z80pio_interface senjyo_pio_intf =
+READ8_DEVICE_HANDLER( pio_pa_r )
+{
+	return senjyo_sound_cmd;
+}
+
+Z80PIO_INTERFACE( senjyo_pio_intf )
 {
 	DEVCB_CPU_INPUT_LINE("sub", INPUT_LINE_IRQ0),
-	DEVCB_NULL,
+	DEVCB_HANDLER(pio_pa_r),
 	DEVCB_NULL,
 	DEVCB_NULL,
 	DEVCB_NULL,
@@ -46,7 +51,7 @@ Z80CTC_INTERFACE( senjyo_ctc_intf )
 
 WRITE8_HANDLER( senjyo_volume_w )
 {
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 	single_volume = data & 0x0f;
 	sample_set_volume(samples,0,single_volume / 15.0);
 }
@@ -54,7 +59,7 @@ WRITE8_HANDLER( senjyo_volume_w )
 
 static TIMER_CALLBACK( senjyo_sh_update )
 {
-	const device_config *samples = devtag_get_device(machine, "samples");
+	running_device *samples = devtag_get_device(machine, "samples");
 
 	/* ctc2 timer single tone generator frequency */
 	attotime period = z80ctc_getperiod (devtag_get_device(machine, "z80ctc"), 2);

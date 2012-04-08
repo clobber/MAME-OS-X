@@ -10,10 +10,11 @@
 ***************************************************************************/
 
 #include "unzip.h"
-#include "osdepend.h"	/* for CLIB_DECL */
 #include "osdcore.h"
+#include "osdcomm.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 
 
 #define MAX_FILES 100

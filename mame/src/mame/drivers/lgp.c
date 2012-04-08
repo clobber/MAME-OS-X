@@ -63,7 +63,7 @@ Dumping Notes:
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "render.h"
 #include "machine/laserdsc.h"
@@ -73,7 +73,7 @@ Dumping Notes:
 #define SOUND_PCB_CLOCK (6000000)
 
 /* Misc variables */
-static const device_config *laserdisc;
+static running_device *laserdisc;
 
 static UINT8 *tile_ram;
 static UINT8 *tile_control_ram;

@@ -1,7 +1,11 @@
 
-typedef struct _homedata_state homedata_state;
-struct _homedata_state
+class homedata_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, homedata_state(machine)); }
+
+	homedata_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  vreg;
 	UINT8 *  videoram;
@@ -27,11 +31,11 @@ struct _homedata_state
 	int      to_cpu, from_cpu;
 
 	/* device */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *dac;
-	const device_config *ym;
-	const device_config *sn;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *dac;
+	running_device *ym;
+	running_device *sn;
 };
 
 

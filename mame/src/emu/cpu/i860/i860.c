@@ -18,6 +18,7 @@ TODO: Separate out i860XR and i860XP (make different types, etc).
       Hook IRQ lines into MAME core (they're custom functions atm).
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "i860.h"
 
@@ -29,7 +30,7 @@ static CPU_INIT( i860 )
 {
 	i860_state_t *cpustate = get_safe_token(device);
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
 	reset_i860(cpustate);
 	i860_set_pin(device, DEC_PIN_BUS_HOLD, 0);
 	i860_set_pin(device, DEC_PIN_RESET, 0);
@@ -191,15 +192,15 @@ CPU_GET_INFO( i860 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;						break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 8;						break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:			info->i = 64;	break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: 		info->i = 32;	break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: 		info->i = 0;	break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:			info->i = 0;	break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:			info->i = 0;	break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:			info->i = 0;	break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:				info->i = 0;	break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:				info->i = 0;	break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:				info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:			info->i = 64;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: 		info->i = 32;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: 		info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:			info->i = 0;	break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:				info->i = 0;	break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:				info->i = 0;	break;
 
 		case CPUINFO_INT_PC:
 		case CPUINFO_INT_REGISTER + I860_PC:			info->i = cpustate->pc;					break;

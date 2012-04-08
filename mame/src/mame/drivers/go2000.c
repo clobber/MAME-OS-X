@@ -29,21 +29,25 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/z80/z80.h"
 #include "sound/dac.h"
 
-typedef struct _go2000_state go2000_state;
-struct _go2000_state
+class go2000_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, go2000_state(machine)); }
+
+	go2000_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  videoram;
 	UINT16 *  videoram2;
 //  UINT16 *  paletteram;   // currently this uses generic palette handling
 
 	/* devices */
-	const device_config *soundcpu;
+	running_device *soundcpu;
 };
 
 

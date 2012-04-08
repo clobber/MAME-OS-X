@@ -57,10 +57,8 @@
             not being addressed properly, causing pitch fluctuation.
 */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
 #include "ymf278b.h"
 
 #define VERBOSE 0
@@ -118,8 +116,8 @@ typedef struct
 	int irq_line;
 
 	UINT8 port_A, port_B, port_C;
-	void (*irq_callback)(const device_config *, int);
-	const device_config *device;
+	void (*irq_callback)(running_device *, int);
+	running_device *device;
 
 	const UINT8 *rom;
 	int clock;
@@ -131,7 +129,7 @@ typedef struct
 	sound_stream * stream;
 } YMF278BChip;
 
-INLINE YMF278BChip *get_safe_token(const device_config *device)
+INLINE YMF278BChip *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -288,6 +286,21 @@ static STREAM_UPDATE( ymf278b_pcm_update )
 
 			for (j = 0; j < samples; j++)
 			{
+				if(slot->stepptr >= slot->endaddr)
+				{
+					slot->stepptr = slot->stepptr - slot->endaddr + slot->loopaddr;
+					// If the step is bigger than the loop, finish the sample forcibly
+					if(slot->stepptr >= slot->endaddr)
+					{
+						slot->env_vol = 256U<<23;
+						slot->env_vol_step = 0;
+						slot->env_vol_lim = 0;
+						slot->active = 0;
+						slot->stepptr = 0;
+						slot->step = 0;
+					}
+				}
+
 				switch (slot->bits)
 				{
 					case 8: 	// 8 bit
@@ -312,20 +325,6 @@ static STREAM_UPDATE( ymf278b_pcm_update )
 
 				// update frequency
 				slot->stepptr += slot->step;
-				if(slot->stepptr >= slot->endaddr)
-				{
-					slot->stepptr = slot->stepptr - slot->endaddr + slot->loopaddr;
-					// If the step is bigger than the loop, finish the sample forcibly
-					if(slot->stepptr >= slot->endaddr)
-					{
-						slot->env_vol = 256U<<23;
-						slot->env_vol_step = 0;
-						slot->env_vol_lim = 0;
-						slot->active = 0;
-						slot->stepptr = 0;
-						slot->step = 0;
-					}
-				}
 
 				// update envelope
 				slot->env_vol += slot->env_vol_step;
@@ -667,9 +666,9 @@ WRITE8_DEVICE_HANDLER( ymf278b_w )
 	}
 }
 
-static void ymf278b_init(const device_config *device, YMF278BChip *chip, void (*cb)(const device_config *, int))
+static void ymf278b_init(running_device *device, YMF278BChip *chip, void (*cb)(running_device *, int))
 {
-	chip->rom = device->region;
+	chip->rom = *device->region;
 	chip->irq_callback = cb;
 	chip->timer_a = timer_alloc(device->machine, ymf278b_timer_a_tick, chip);
 	chip->timer_b = timer_alloc(device->machine, ymf278b_timer_b_tick, chip);
@@ -687,7 +686,7 @@ static DEVICE_START( ymf278b )
 	YMF278BChip *chip = get_safe_token(device);
 
 	chip->device = device;
-	intf = (device->static_config != NULL) ? (const ymf278b_interface *)device->static_config : &defintrf;
+	intf = (device->baseconfig().static_config != NULL) ? (const ymf278b_interface *)device->baseconfig().static_config : &defintrf;
 
 	ymf278b_init(device, chip, intf->irq_callback);
 	chip->stream = stream_create(device, 0, 2, device->clock/768, chip, ymf278b_pcm_update);

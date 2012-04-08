@@ -31,15 +31,19 @@ dy_5.bin
 dy_6.bin (near Z80)
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/i8085/i8085.h"
 #include "sound/ay8910.h"
 
 
-typedef struct _dynadice_state dynadice_state;
-struct _dynadice_state
+class dynadice_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dynadice_state(machine)); }
+
+	dynadice_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 //  UINT8 *  nvram;     // currently this uses generic nvram handling

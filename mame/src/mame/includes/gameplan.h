@@ -21,9 +21,13 @@ driver by Chris Moore
 #define LEPRECHAUN_MAIN_CPU_CLOCK        (LEPRECHAUN_MAIN_MASTER_CLOCK / 4)
 
 
-typedef struct _gameplan_state gameplan_state;
-struct _gameplan_state
+class gameplan_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, gameplan_state(machine)); }
+
+	gameplan_state(running_machine &machine) { }
+
 	/* machine state */
 	UINT8   current_port;
 	UINT8   *trvquest_question;
@@ -38,12 +42,12 @@ struct _gameplan_state
 	emu_timer *via_0_ca1_timer;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *riot;
-	const device_config *via_0;
-	const device_config *via_1;
-	const device_config *via_2;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *riot;
+	running_device *via_0;
+	running_device *via_1;
+	running_device *via_2;
 };
 
 

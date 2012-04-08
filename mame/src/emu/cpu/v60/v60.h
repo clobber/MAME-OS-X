@@ -3,7 +3,6 @@
 #ifndef __V60_H__
 #define __V60_H__
 
-#include "cpuintrf.h"
 
 enum
 {
@@ -78,7 +77,7 @@ enum
 	V60_REGMAX
 };
 
-void v60_stall(const device_config *device);
+void v60_stall(running_device *device);
 
 CPU_GET_INFO( v60 );
 #define CPU_V60 CPU_GET_INFO_NAME( v60 )

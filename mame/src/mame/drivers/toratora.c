@@ -17,15 +17,19 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "machine/6821pia.h"
 #include "sound/sn76477.h"
 
 
-typedef struct _toratora_state toratora_state;
-struct _toratora_state
+class toratora_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, toratora_state(machine)); }
+
+	toratora_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	size_t     videoram_size;
@@ -36,10 +40,10 @@ struct _toratora_state
 	UINT8      clear_tv;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *pia_u1;
-	const device_config *pia_u2;
-	const device_config *pia_u3;
+	running_device *maincpu;
+	running_device *pia_u1;
+	running_device *pia_u2;
+	running_device *pia_u3;
 };
 
 

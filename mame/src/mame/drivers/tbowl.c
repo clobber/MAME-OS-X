@@ -12,7 +12,7 @@ Might be some priority glitches
 
 ***/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/3812intf.h"
 #include "sound/msm5205.h"
@@ -163,7 +163,7 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( tbowl_adpcm_start_w )
 {
-	const device_config *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
+	running_device *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
 	adpcm_pos[offset & 1] = data << 8;
 	msm5205_reset_w(adpcm,0);
 }
@@ -175,13 +175,13 @@ static WRITE8_HANDLER( tbowl_adpcm_end_w )
 
 static WRITE8_HANDLER( tbowl_adpcm_vol_w )
 {
-	const device_config *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
+	running_device *adpcm = devtag_get_device(space->machine, (offset & 1) ? "msm2" : "msm1");
 	msm5205_set_volume(adpcm, (data & 0x7f) * 100 / 0x7f);
 }
 
-static void tbowl_adpcm_int(const device_config *device)
+static void tbowl_adpcm_int(running_device *device)
 {
-	int num = (strcmp(device->tag, "msm1") == 0) ? 0 : 1;
+	int num = (strcmp(device->tag(), "msm1") == 0) ? 0 : 1;
 	if (adpcm_pos[num] >= adpcm_end[num] ||
 				adpcm_pos[num] >= memory_region_length(device->machine, "adpcm")/2)
 		msm5205_reset_w(device,1);
@@ -442,7 +442,7 @@ GFXDECODE_END
 
 */
 
-static void irqhandler(const device_config *device, int linestate)
+static void irqhandler(running_device *device, int linestate)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, linestate);
 }

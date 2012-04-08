@@ -6,7 +6,7 @@ Based on drivers from Juno First emulator by Chris Hardy (chrish@kcbbs.gen.nz)
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/m6809/m6809.h"
@@ -583,4 +583,4 @@ GAME( 1984, hyperspt,  0,        hyperspt,  hyperspt, hyperspt, ROT0,  "Konami (
 GAME( 1984, hypersptb, hyperspt, hypersptb, hyperspt, hyperspt, ROT0,  "bootleg", "Hyper Sports (bootleg)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // has ADPCM vis MSM5205 instead of VLM
 GAME( 1984, hpolym84,  hyperspt, hyperspt,  hyperspt, hyperspt, ROT0,  "Konami",  "Hyper Olympic '84", GAME_SUPPORTS_SAVE )
 GAME( 1984, roadf,     0,        roadf,     roadf,    hyperspt, ROT90, "Konami",  "Road Fighter (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1984, roadf2,    roadf,	   roadf,     roadf,    hyperspt, ROT90, "Konami",  "Road Fighter (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1984, roadf2,    roadf,    roadf,     roadf,    hyperspt, ROT90, "Konami",  "Road Fighter (set 2)", GAME_SUPPORTS_SAVE )

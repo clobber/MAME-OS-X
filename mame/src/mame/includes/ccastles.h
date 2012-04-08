@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _ccastles_state ccastles_state;
-struct _ccastles_state
+class ccastles_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ccastles_state(machine)); }
+
+	ccastles_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  spriteram;
@@ -32,7 +36,7 @@ struct _ccastles_state
 	UINT8    nvram_store[2];
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

@@ -56,9 +56,9 @@
 /* 21 Nov 1999 - added spacewar3 [LT]                                       */
 /*                                                                          */
 /* 26 May 2001 - added galxwars                                             */
-/*                     galxwar2                                             */
-/*                     jspectr2                                             */
-/*                     ozmawar2                                             */
+/*                     galxwar2 (galxwars2)                                 */
+/*                     jspectr2 (jspecter2)                                 */
+/*                     ozmawar2 (ozmawars2)                                 */
 /*                     spaceatt                                             */
 /*                     sstrangr                                             */
 /*                                                                          */
@@ -67,17 +67,18 @@
 /* 30 Jul 2001 - added sstrngr2                                             */
 /*                                                                          */
 /* 17 Jul 2006 - schaser - connect up prom - fix dipswitches                */
-/*               schasrcv - allow bottom line to show on screen             */
+/*               schasrcv (schasercv) - allow bottom line to show on screen */
 /*                                                                          */
 /*                                                                          */
 /* 10 Sep 2006 - invadpt2 - add name reset button                           */
 /*               spcewars - add bitstream circuit, fix dipswitches          */
 /*                                                                          */
 /*                                                                          */
-/* 13 Dec 2006 - add PRELIMINARY sound support and documentation to         */
-/*               rollingc, spcenctr, gunfight, m4, gmissile, schasrcv,      */
-/*               280zzzap, lagunar, lupin3, phantom2, blueshrk, desertgu,   */
-/*               ballbomb, yasokdon/yosakdoa, shuttlei, invrvnge/invrvnga.  */
+/* 13 Dec 2006 - add PRELIMINARY sound support and documentation to:        */
+/*               rollingc, spcenctr, gunfight, m4, gmissile,                */
+/*               schasrcv (schasercv), 280zzzap, lagunar, lupin3, phantom2, */
+/*       blueshrk, desertgu, ballbomb, yosakdon/yosakdoa (yosakdona)*/
+/*               shuttlei, invrvnge/invrvnga (invrvngea).                   */
 /*               Documented indianbt sound. Removed NO_SOUND flag from      */
 /*               cosmo and dogpatch as the sound was already working.       */
 /*               [Robert]                                                   */
@@ -86,7 +87,7 @@
 /*                                                                          */
 /****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 #include "cpu/i8085/i8085.h"
 #include "machine/mb14241.h"
@@ -178,6 +179,53 @@ static INPUT_PORTS_START( sitv )
 
 	PORT_MODIFY("IN1")
 	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+INPUT_PORTS_END
+
+/*******************************************************/
+/*                                                     */
+/* Alien Invasion                                      */
+/*                                                     */
+/*******************************************************/
+
+static INPUT_PORTS_START( alieninv )
+	PORT_START("IN0")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x80, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+
+	PORT_START("IN1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW,  IPT_COIN1 )
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_START2 )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_START1 )
+	PORT_BIT( 0x08, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY
+	PORT_BIT( 0x80, IP_ACTIVE_LOW,  IPT_UNKNOWN )
+
+	PORT_START("IN2")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW1:1")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x01, "3" )
+	PORT_DIPNAME( 0x02, 0x02, "Pence Coinage" )		PORT_DIPLOCATION("SW1:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_COIN2 )		PORT_DIPLOCATION("SW1:3") /* Pence Coin */
+	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW1:4" )	/* Not bonus */
+	PORT_BIT( 0x10, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(2)			PORT_DIPLOCATION("SW1:5")
+	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_JOYSTICK_LEFT ) PORT_2WAY PORT_PLAYER(2)	PORT_DIPLOCATION("SW1:6")
+	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_JOYSTICK_RIGHT ) PORT_2WAY PORT_PLAYER(2)	PORT_DIPLOCATION("SW1:7")
+	PORT_DIPNAME( 0x80, 0x00, DEF_STR( Coinage ) )					PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x00, "2C/1C 50p/3C (+ Bonus Life)" )
+	PORT_DIPSETTING(    0x80, "1C/1C 50p/5C" )
+
+	/* Dummy port for cocktail mode */
+	INVADERS_CAB_TYPE_PORT
 INPUT_PORTS_END
 
 /*******************************************************/
@@ -900,14 +948,14 @@ static INPUT_PORTS_START( schaser )
 	PORT_ADJUSTER( 70, "VR3 - Dot Volume" )
 INPUT_PORTS_END
 
-MACHINE_START( schaser )
+static MACHINE_START( schaser )
 {
 	MACHINE_START_CALL(schaser_sh);
 	MACHINE_START_CALL(extra_8080bw_vh);
 	MACHINE_START_CALL(mw8080bw);
 }
 
-MACHINE_RESET( schaser )
+static MACHINE_RESET( schaser )
 {
 	MACHINE_RESET_CALL(schaser_sh);
 	MACHINE_RESET_CALL(mw8080bw);
@@ -950,17 +998,17 @@ MACHINE_DRIVER_END
 /*                                                     */
 /*******************************************************/
 
-static ADDRESS_MAP_START( schasrcv_io_map, ADDRESS_SPACE_IO, 8 )
+static ADDRESS_MAP_START( schasercv_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_READ_PORT("IN0")
 	AM_RANGE(0x01, 0x01) AM_READ_PORT("IN1")
 	AM_RANGE(0x02, 0x02) AM_READ_PORT("IN2") AM_DEVWRITE("mb14241", mb14241_shift_count_w)
-	AM_RANGE(0x03, 0x03) AM_DEVREAD("mb14241", mb14241_shift_result_r) AM_WRITE(schasrcv_sh_port_1_w)
+	AM_RANGE(0x03, 0x03) AM_DEVREAD("mb14241", mb14241_shift_result_r) AM_WRITE(schasercv_sh_port_1_w)
 	AM_RANGE(0x04, 0x04) AM_DEVWRITE("mb14241", mb14241_shift_data_w)
-	AM_RANGE(0x05, 0x05) AM_WRITE(schasrcv_sh_port_2_w)
+	AM_RANGE(0x05, 0x05) AM_WRITE(schasercv_sh_port_2_w)
 ADDRESS_MAP_END
 
 
-static INPUT_PORTS_START( schasrcv )
+static INPUT_PORTS_START( schasercv )
 	PORT_INCLUDE( invrvnge )
 
 	PORT_MODIFY("IN1")
@@ -984,20 +1032,20 @@ static INPUT_PORTS_START( schasrcv )
 	PORT_DIPUNKNOWN_DIPLOC( 0x80, 0x00, "SW1:8" )
 INPUT_PORTS_END
 
-static MACHINE_DRIVER_START( schasrcv )
+static MACHINE_DRIVER_START( schasercv )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(mw8080bw_root)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(schaser_map)
-	MDRV_CPU_IO_MAP(schasrcv_io_map)
+	MDRV_CPU_IO_MAP(schasercv_io_map)
 	MDRV_MACHINE_START(extra_8080bw)
 
 	/* add shifter */
 	MDRV_MB14241_ADD("mb14241")
 
 	/* video hardware */
-	MDRV_VIDEO_UPDATE(schasrcv)
+	MDRV_VIDEO_UPDATE(schasercv)
 
 	/* sound hardware */
 	MDRV_IMPORT_FROM(invaders_samples_audio)
@@ -2037,13 +2085,21 @@ ROM_END
 
 ROM_START( tst_invd )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "test.h",   0x0000, 0x0800, CRC(f86a2eea) SHA1(4a72ff01f3e6d16bbe9bf7f123cd98895bfbed9a) )   /*  The Test ROM */
+	ROM_LOAD( "test.h",       0x0000, 0x0800, CRC(f86a2eea) SHA1(4a72ff01f3e6d16bbe9bf7f123cd98895bfbed9a) )   /*  The Test ROM */
 	ROM_LOAD( "invaders.g",   0x0800, 0x0800, CRC(6bfaca4a) SHA1(16f48649b531bdef8c2d1446c429b5f414524350) )
 	ROM_LOAD( "invaders.f",   0x1000, 0x0800, CRC(0ccead96) SHA1(537aef03468f63c5b9e11dd61e253f7ae17d9743) )
 	ROM_LOAD( "invaders.e",   0x1800, 0x0800, CRC(14e538b0) SHA1(1d6ca0c99f9df71e2990b610deb9d7da0125e2d8) )
 ROM_END
 
 ROM_START( alieninv )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "alieninv.h",   0x0000, 0x0800, CRC(6ad601c3) SHA1(9fc88698f98ce43992a5044d28d3e19751f82772) )
+	ROM_LOAD( "alieninv.g",   0x0800, 0x0800, CRC(c6bb6fb3) SHA1(01a12163309f967dcffce19890b1e0d079021fc2) )
+	ROM_LOAD( "alieninv.f",   0x1000, 0x0800, CRC(1d2ff324) SHA1(209766a981fdd3a68e36da3d8122a244c883cae7) )
+	ROM_LOAD( "alieninv.e",   0x1800, 0x0800, CRC(2f2e6791) SHA1(08a1f17bcfec598182386f1c43e4fc7b476212de) )
+ROM_END
+
+ROM_START( alieninvp2 )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "1h.bin",       0x0000, 0x0800, CRC(c46df7f4) SHA1(eec34b3d5585bae03c7b80585daaa05ddfcc2164) )
 	ROM_LOAD( "1g.bin",       0x0800, 0x0800, CRC(4b1112d6) SHA1(b693667656e5d8f44eeb2ea730f4d4db436da579) )
@@ -2179,6 +2235,17 @@ ROM_START( invaddlx )
 	ROM_LOAD( "invdelux.f",   0x1000, 0x0800, CRC(f4aa1880) SHA1(995d77b67cb4f2f3781c2c8747cb058b7c1b3412) )
 	ROM_LOAD( "invdelux.e",   0x1800, 0x0800, CRC(408849c1) SHA1(f717e81017047497a2e9f33f0aafecfec5a2ed7d) )
 	ROM_LOAD( "invdelux.d",   0x4000, 0x0800, CRC(e8d5afcd) SHA1(91fde9a9e7c3dd53aac4770bd169721a79b41ed1) )
+ROM_END
+
+/* Runs on a Space Invaders Part II boardset with an epoxy module in place of the 8080 CPU */
+ROM_START( vortex )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "1.t36",        0x0000, 0x0800, CRC(577417a6) SHA1(13ed1b989b8ea27cea88be7872921ff9283b5dd6) )
+	ROM_LOAD( "2.t35",        0x0800, 0x0800, CRC(126d0049) SHA1(4c189a2364bca8682543d605e84d458bf81ee489) )
+	ROM_LOAD( "3.t34",        0x1000, 0x0800, CRC(4a2510b3) SHA1(1c62583b7baf8ee2b6014a6e5dfc7e2d516886d1) )
+	ROM_LOAD( "4.t33",        0x1800, 0x0800, CRC(da0274fe) SHA1(b8ab1b16d66700f9ca6a2380a5b6796eaef6e1bd) )
+	ROM_LOAD( "5.t32",        0x4000, 0x0800, CRC(a3de49d6) SHA1(e302c6fd2705c6e7f9125b52b2dcb034cc88a90e) )
+	ROM_LOAD( "6.t31",        0x4800, 0x0800, CRC(271085d0) SHA1(a772cec8135bc746f6c56aa294eb22c0604e16f9) )
 ROM_END
 
 ROM_START( moonbase )
@@ -2847,9 +2914,10 @@ GAME( 1979, grescue,  lrescue,  lrescue,  lrescue,  0, ROT270, "Taito (Universal
 GAME( 1979, desterth, lrescue,  lrescue,  invrvnge, 0, ROT270, "bootleg", "Destination Earth", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1979, invadpt2, 0,        invadpt2, invadpt2, 0, ROT270, "Taito", "Space Invaders Part II (Taito)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1980, invaddlx, invadpt2, invaders, invadpt2, 0, ROT270, "Midway", "Space Invaders Deluxe", GAME_SUPPORTS_SAVE )
+GAME( 1980, vortex,   0,        invaders, invadpt2, 0, ROT270, "Zilec Electronics Ltd.", "Vortex", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND ) /* Encrypted 8080 */
 GAME( 1979, cosmo,    0,        cosmo,    cosmo,    0, ROT90,  "TDS & Mints", "Cosmo", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1979, schaser,  0,        schaser,  schaser,  0, ROT270, "Taito", "Space Chaser", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_COLORS )
-GAME( 1979, schasercv,schaser,  schasrcv, schasrcv, 0, ROT270, "Taito", "Space Chaser (CV version)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND | GAME_IMPERFECT_COLORS )
+GAME( 1979, schasercv,schaser,  schasercv,schasercv,0, ROT270, "Taito", "Space Chaser (CV version)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND | GAME_IMPERFECT_COLORS )
 GAME( 1979, sflush,   0,        sflush,   sflush,   0, ROT270, "Taito", "Straight Flush",GAME_SUPPORTS_SAVE | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_NO_COCKTAIL)
 GAME( 1980, lupin3,   0,        lupin3,   lupin3,   0, ROT270, "Taito", "Lupin III (set 1)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1980, lupin3a,  lupin3,   lupin3a,  lupin3a,  0, ROT270, "Taito", "Lupin III (set 2)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
@@ -2869,7 +2937,8 @@ GAMEL(1980, spaceat2, invaders, invaders, spaceatt, 0, ROT270, "Zenitone-Microse
 GAMEL(19??, sinvzen,  invaders, invaders, spaceatt, 0, ROT270, "Zenitone-Microsec Ltd", "Super Invaders (Zenitone-Microsec)", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(19??, sinvemag, invaders, invaders, sinvemag, 0, ROT270, "bootleg", "Super Invaders (EMAG)", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(19??, tst_invd, invaders, invaders, sicv,     0, ROT0,   "Test ROM", "Space Invaders Test ROM", GAME_SUPPORTS_SAVE, layout_invaders )
-GAMEL(19??, alieninv, invaders, invaders, searthin, 0, ROT270, "bootleg", "Alien Invasion Part II", GAME_SUPPORTS_SAVE, layout_invaders )
+GAMEL(19??, alieninv, invaders, invaders, alieninv, 0, ROT270, "Margamatics", "Alien Invasion", GAME_SUPPORTS_SAVE, layout_invaders )
+GAMEL(19??, alieninvp2,invaders, invaders, searthin, 0, ROT270, "bootleg", "Alien Invasion Part II", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(1978, spceking, invaders, invaders, sicv,     0, ROT270, "Leijac Corporation (Konami)","Space King", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(1978, spcewars, invaders, spcewars, spcewars, 0, ROT270, "Sanritsu", "Space War (Sanritsu)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_invaders )
 GAME (19??, astropal, 0,        astropal, astropal, 0, ROT0,   "Sidam?", "Astropal", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )

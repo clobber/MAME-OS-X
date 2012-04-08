@@ -33,8 +33,7 @@ Registers per channel:
 
 ***************************************************************************/
 
-#include "sndintrf.h"
-#include "cpuintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "gaelco.h"
 #include "wavwrite.h"
@@ -79,7 +78,7 @@ struct _gaelco_sound_state
 
 static wav_file *	wavraw;					/* raw waveform */
 
-INLINE gaelco_sound_state *get_safe_token(const device_config *device)
+INLINE gaelco_sound_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -256,7 +255,7 @@ WRITE16_DEVICE_HANDLER( gaelcosnd_w )
 static DEVICE_START( gaelco )
 {
 	int j, vol;
-	const gaelcosnd_interface *intf = (const gaelcosnd_interface *)device->static_config;
+	const gaelcosnd_interface *intf = (const gaelcosnd_interface *)device->baseconfig().static_config;
 
 	gaelco_sound_state *info = get_safe_token(device);
 
@@ -269,7 +268,7 @@ static DEVICE_START( gaelco )
 	info->stream = stream_create(device, 0, 2, 8000, info, gaelco_update);
 	info->snd_data = (UINT8 *)memory_region(device->machine, intf->gfxregion);
 	if (info->snd_data == NULL)
-		info->snd_data = device->region;
+		info->snd_data = *device->region;
 
 	/* init volume table */
 	for (vol = 0; vol < VOLUME_LEVELS; vol++){

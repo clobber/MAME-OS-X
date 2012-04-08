@@ -5,7 +5,7 @@
     Updated by Jonathan Gevaryahu AKA Lord Nightmare
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "68681.h"
 
 #define VERBOSE 1
@@ -74,7 +74,7 @@ typedef struct
 typedef struct
 {
 	/* device */
-	const device_config *device;
+	running_device *device;
 
 	/* config */
 	const duart68681_config *duart_config;
@@ -99,7 +99,7 @@ typedef struct
 
 } duart68681_state;
 
-INLINE duart68681_state *get_safe_token(const device_config *device)
+INLINE duart68681_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -238,7 +238,7 @@ static void duart68681_update_interrupts(duart68681_state *duart68681)
 
 static TIMER_CALLBACK( duart_timer_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	duart68681_state	*duart68681 = get_safe_token(device);
 
 	duart68681->ISR |= INT_COUNTER_READY;
@@ -396,7 +396,7 @@ static UINT8 duart68681_read_rx_fifo(duart68681_state *duart68681, int ch)
 
 static TIMER_CALLBACK( tx_timer_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	duart68681_state	*duart68681 = get_safe_token(device);
 	int ch = param & 1;
 
@@ -462,7 +462,7 @@ READ8_DEVICE_HANDLER(duart68681_r)
 
 	offset &= 0xf;
 
-	LOG(( "Reading 68681 (%s) reg %x (%s) ", device->tag, offset, duart68681_reg_read_names[offset] ));
+	LOG(( "Reading 68681 (%s) reg %x (%s) ", device->tag(), offset, duart68681_reg_read_names[offset] ));
 
 	switch (offset)
 	{
@@ -582,7 +582,7 @@ WRITE8_DEVICE_HANDLER(duart68681_w)
 	duart68681_state* duart68681 = get_safe_token(device);
 
 	offset &= 0x0f;
-	LOG(( "Writing 68681 (%s) reg %x (%s) with %04x\n", device->tag, offset, duart68681_reg_write_names[offset], data ));
+	LOG(( "Writing 68681 (%s) reg %x (%s) with %04x\n", device->tag(), offset, duart68681_reg_write_names[offset], data ));
 
 	switch(offset)
 	{
@@ -605,7 +605,7 @@ WRITE8_DEVICE_HANDLER(duart68681_w)
 			switch ((data >> 4) & 0x07)
 			{
 				case 0: case 1: case 2: case 4: case 5: // TODO: handle these cases!
-				logerror( "68681 (%s): Unhandled timer/counter mode %d\n", device->tag, (data >> 4) & 0x07);
+				logerror( "68681 (%s): Unhandled timer/counter mode %d\n", device->tag(), (data >> 4) & 0x07);
 				break;
 				case 3: case 6: case 7:
 				break;
@@ -641,7 +641,7 @@ WRITE8_DEVICE_HANDLER(duart68681_w)
 			break;
 		case 0x0d: /* OPCR */
 			if (data != 0x00)
-				logerror( "68681 (%s): Unhandled OPCR value: %02x\n", device->tag, data);
+				logerror( "68681 (%s): Unhandled OPCR value: %02x\n", device->tag(), data);
 			duart68681->OPCR = data;
 			break;
 		case 0x0e: /* Set Output Port Bits */
@@ -657,7 +657,7 @@ WRITE8_DEVICE_HANDLER(duart68681_w)
 	}
 }
 
-void duart68681_rx_data( const device_config* device, int ch, UINT8 data )
+void duart68681_rx_data( running_device* device, int ch, UINT8 data )
 {
 	duart68681_state *duart68681 = get_safe_token(device);
 
@@ -689,9 +689,8 @@ static DEVICE_START(duart68681)
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
 
-	duart68681->duart_config = (const duart68681_config *)device->static_config;
+	duart68681->duart_config = (const duart68681_config *)device->baseconfig().static_config;
 	duart68681->device = device;
 
 	duart68681->channel[0].tx_timer = timer_alloc(device->machine, tx_timer_callback, (void*)device);

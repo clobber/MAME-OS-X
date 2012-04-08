@@ -77,8 +77,6 @@
     By Bryan McPhail (bmcphail@tendril.co.uk) and Phil Stroffolino
 *****************************************************************************/
 
-#include <stdarg.h>
-
 #define ARM7_DEBUG_CORE 0
 
 /* Prototypes */
@@ -531,7 +529,7 @@ static int storeDec(arm_state *cpustate, UINT32 pat, UINT32 rbv)
  ***************************************************************************/
 
 // CPU INIT
-static void arm7_core_init(const device_config *device, const char *cpuname)
+static void arm7_core_init(running_device *device, const char *cpuname)
 {
     arm_state *cpustate = get_safe_token(device);
 
@@ -545,7 +543,7 @@ static void arm7_core_init(const device_config *device, const char *cpuname)
 }
 
 // CPU RESET
-static void arm7_core_reset(const device_config *device)
+static void arm7_core_reset(running_device *device)
 {
     arm_state *cpustate = get_safe_token(device);
 
@@ -554,7 +552,7 @@ static void arm7_core_reset(const device_config *device)
     memset(cpustate, 0, sizeof(arm_state));
     cpustate->irq_callback = save_irqcallback;
     cpustate->device = device;
-    cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+    cpustate->program = device->space(AS_PROGRAM);
 
     /* start up in SVC mode with interrupts disabled. */
     SwitchMode(cpustate, eARM7_MODE_SVC);
@@ -793,7 +791,7 @@ static void HandleCoProcDT(arm_state *cpustate, UINT32 insn)
         SET_REGISTER(cpustate, rn, ornv);
 }
 
-static void HandleBranch(arm_state *cpustate, UINT32 insn)
+INLINE void HandleBranch(arm_state *cpustate, UINT32 insn)
 {
     UINT32 off = (insn & INSN_BRANCH) << 2;
 

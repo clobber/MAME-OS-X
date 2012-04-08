@@ -83,7 +83,7 @@ all files across to new HDD, boots up fine.
 
 ************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/i386/i386.h"
 #include "memconv.h"
 #include "devconv.h"
@@ -97,17 +97,17 @@ all files across to new HDD, boots up fine.
 #include "machine/pckeybrd.h"
 #include "machine/idectrl.h"
 
-static void ide_interrupt(const device_config *device, int state);
+static void ide_interrupt(running_device *device, int state);
 
 static UINT32 *bios_ram;
 static UINT32 *vga_vram;
 
 static struct {
-	const device_config	*pit8254;
-	const device_config	*pic8259_1;
-	const device_config	*pic8259_2;
-	const device_config	*dma8237_1;
-	const device_config	*dma8237_2;
+	running_device	*pit8254;
+	running_device	*pic8259_1;
+	running_device	*pic8259_2;
+	running_device	*dma8237_1;
+	running_device	*dma8237_2;
 } calchase_devices;
 
 
@@ -240,7 +240,7 @@ static WRITE8_HANDLER( pc_dma_write_byte )
 	memory_write_byte(space, page_offset + offset, data);
 }
 
-static void set_dma_channel(const device_config *device, int channel, int state)
+static void set_dma_channel(running_device *device, int channel, int state)
 {
 	if (!state) dma_channel = channel;
 }
@@ -307,14 +307,14 @@ static WRITE32_DEVICE_HANDLER( fdc_w )
 // Intel 82439TX System Controller (MXTC)
 static UINT8 mxtc_config_reg[256];
 
-static UINT8 mxtc_config_r(const device_config *busdevice, const device_config *device, int function, int reg)
+static UINT8 mxtc_config_r(running_device *busdevice, running_device *device, int function, int reg)
 {
 //  mame_printf_debug("MXTC: read %d, %02X\n", function, reg);
 
 	return mxtc_config_reg[reg];
 }
 
-static void mxtc_config_w(const device_config *busdevice, const device_config *device, int function, int reg, UINT8 data)
+static void mxtc_config_w(running_device *busdevice, running_device *device, int function, int reg, UINT8 data)
 {
 //  mame_printf_debug("%s:MXTC: write %d, %02X, %02X\n", cpuexec_describe_context(machine), function, reg, data);
 
@@ -347,7 +347,7 @@ static void intel82439tx_init(void)
 	mxtc_config_reg[0x65] = 0x02;
 }
 
-static UINT32 intel82439tx_pci_r(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 mem_mask)
+static UINT32 intel82439tx_pci_r(running_device *busdevice, running_device *device, int function, int reg, UINT32 mem_mask)
 {
 	UINT32 r = 0;
 	if (ACCESSING_BITS_24_31)
@@ -369,7 +369,7 @@ static UINT32 intel82439tx_pci_r(const device_config *busdevice, const device_co
 	return r;
 }
 
-static void intel82439tx_pci_w(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 data, UINT32 mem_mask)
+static void intel82439tx_pci_w(running_device *busdevice, running_device *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
 	if (ACCESSING_BITS_24_31)
 	{
@@ -392,19 +392,19 @@ static void intel82439tx_pci_w(const device_config *busdevice, const device_conf
 // Intel 82371AB PCI-to-ISA / IDE bridge (PIIX4)
 static UINT8 piix4_config_reg[4][256];
 
-static UINT8 piix4_config_r(const device_config *busdevice, const device_config *device, int function, int reg)
+static UINT8 piix4_config_r(running_device *busdevice, running_device *device, int function, int reg)
 {
 //  mame_printf_debug("PIIX4: read %d, %02X\n", function, reg);
 	return piix4_config_reg[function][reg];
 }
 
-static void piix4_config_w(const device_config *busdevice, const device_config *device, int function, int reg, UINT8 data)
+static void piix4_config_w(running_device *busdevice, running_device *device, int function, int reg, UINT8 data)
 {
 //  mame_printf_debug("%s:PIIX4: write %d, %02X, %02X\n", cpuexec_describe_context(machine), function, reg, data);
 	piix4_config_reg[function][reg] = data;
 }
 
-static UINT32 intel82371ab_pci_r(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 mem_mask)
+static UINT32 intel82371ab_pci_r(running_device *busdevice, running_device *device, int function, int reg, UINT32 mem_mask)
 {
 	UINT32 r = 0;
 	if (ACCESSING_BITS_24_31)
@@ -426,7 +426,7 @@ static UINT32 intel82371ab_pci_r(const device_config *busdevice, const device_co
 	return r;
 }
 
-static void intel82371ab_pci_w(const device_config *busdevice, const device_config *device, int function, int reg, UINT32 data, UINT32 mem_mask)
+static void intel82371ab_pci_w(running_device *busdevice, running_device *device, int function, int reg, UINT32 data, UINT32 mem_mask)
 {
 	if (ACCESSING_BITS_24_31)
 	{
@@ -558,7 +558,7 @@ static IRQ_CALLBACK(irq_callback)
 
 static MACHINE_START(calchase)
 {
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
 
 	calchase_devices.pit8254 = devtag_get_device( machine, "pit8254" );
 	calchase_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
@@ -573,23 +573,19 @@ static MACHINE_START(calchase)
  *
  *************************************************************/
 
-static PIC8259_SET_INT_LINE( calchase_pic8259_1_set_int_line ) {
-	cputag_set_input_line(device->machine, "maincpu", 0, interrupt ? HOLD_LINE : CLEAR_LINE);
+static WRITE_LINE_DEVICE_HANDLER( calchase_pic8259_1_set_int_line )
+{
+	cputag_set_input_line(device->machine, "maincpu", 0, state ? HOLD_LINE : CLEAR_LINE);
 }
 
-
-static PIC8259_SET_INT_LINE( calchase_pic8259_2_set_int_line ) {
-	pic8259_set_irq_line( calchase_devices.pic8259_1, 2, interrupt);
-}
-
-
-static const struct pic8259_interface calchase_pic8259_1_config = {
-	calchase_pic8259_1_set_int_line
+static const struct pic8259_interface calchase_pic8259_1_config =
+{
+	DEVCB_LINE(calchase_pic8259_1_set_int_line)
 };
 
-
-static const struct pic8259_interface calchase_pic8259_2_config = {
-	calchase_pic8259_2_set_int_line
+static const struct pic8259_interface calchase_pic8259_2_config =
+{
+	DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir2_w)
 };
 
 
@@ -599,23 +595,21 @@ static const struct pic8259_interface calchase_pic8259_2_config = {
  *
  *************************************************************/
 
-static PIT8253_OUTPUT_CHANGED( pc_timer0_w )
-{
-	pic8259_set_irq_line(calchase_devices.pic8259_1, 0, state);
-}
-
 static const struct pit8253_config calchase_pit8254_config =
 {
 	{
 		{
 			4772720/4,				/* heartbeat IRQ */
-			pc_timer0_w
+			DEVCB_NULL,
+			DEVCB_DEVICE_LINE("pic8259_1", pic8259_ir0_w)
 		}, {
 			4772720/4,				/* dram refresh */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}, {
 			4772720/4,				/* pio port c pin 4, and speaker polling enough */
-			NULL
+			DEVCB_NULL,
+			DEVCB_NULL
 		}
 	}
 };
@@ -632,12 +626,12 @@ static void set_gate_a20(running_machine *machine, int a20)
 
 static void keyboard_interrupt(running_machine *machine, int state)
 {
-	pic8259_set_irq_line(calchase_devices.pic8259_1, 1, state);
+	pic8259_ir1_w(calchase_devices.pic8259_1, state);
 }
 
-static void ide_interrupt(const device_config *device, int state)
+static void ide_interrupt(running_device *device, int state)
 {
-	pic8259_set_irq_line(calchase_devices.pic8259_2, 6, state);
+	pic8259_ir6_w(calchase_devices.pic8259_2, state);
 }
 
 static int calchase_get_out2(running_machine *machine) {
@@ -650,7 +644,7 @@ static const struct kbdc8042_interface at8042 =
 };
 
 static void calchase_set_keyb_int(running_machine *machine, int state) {
-	pic8259_set_irq_line(calchase_devices.pic8259_1, 1, state);
+	pic8259_ir1_w(calchase_devices.pic8259_1, state);
 }
 
 

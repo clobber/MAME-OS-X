@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _contra_state contra_state;
-struct _contra_state
+class contra_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, contra_state(machine)); }
+
+	contra_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        spriteram;
 	UINT8 *        spriteram_2;
@@ -24,9 +28,9 @@ struct _contra_state
 	rectangle bg_clip, fg_clip, tx_clip;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k007121_1;
-	const device_config *k007121_2;
+	running_device *audiocpu;
+	running_device *k007121_1;
+	running_device *k007121_2;
 };
 
 

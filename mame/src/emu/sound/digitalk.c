@@ -1,5 +1,4 @@
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "digitalk.h"
 
@@ -241,7 +240,7 @@ complete set of waveforms is repeated R times.
 
 typedef struct {
 	const UINT8 *rom;
-	const device_config *device;
+	running_device *device;
 	sound_stream *stream;
 
 	// Port/lines state
@@ -286,7 +285,7 @@ static const int pitch_vals[32] = {
 };
 
 
-INLINE digitalker *get_safe_token(const device_config *device)
+INLINE digitalker *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -652,7 +651,7 @@ static DEVICE_START(digitalker)
 {
 	digitalker *dg = get_safe_token(device);
 	dg->device = device;
-	dg->rom = memory_region(device->machine, device->tag);
+	dg->rom = memory_region(device->machine, device->tag());
 	dg->stream = stream_create(device, 0, 1, device->clock/4, dg, digitalker_update);
 	dg->dac_index = 128;
 	dg->data = 0xff;
@@ -678,25 +677,25 @@ DEVICE_GET_INFO(digitalker)
 	}
 }
 
-void digitalker_0_cs_w(const device_config *device, int line)
+void digitalker_0_cs_w(running_device *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_cs_w(dg, line);
 }
 
-void digitalker_0_cms_w(const device_config *device, int line)
+void digitalker_0_cms_w(running_device *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_cms_w(dg, line);
 }
 
-void digitalker_0_wr_w(const device_config *device, int line)
+void digitalker_0_wr_w(running_device *device, int line)
 {
 	digitalker *dg = get_safe_token(device);
 	digitalker_wr_w(dg, line);
 }
 
-int digitalker_0_intr_r(const device_config *device)
+int digitalker_0_intr_r(running_device *device)
 {
 	digitalker *dg = get_safe_token(device);
 	return digitalker_intr_r(dg);

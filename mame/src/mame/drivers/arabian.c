@@ -66,13 +66,13 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "includes/arabian.h"
 #include "sound/ay8910.h"
 
 /* constants */
-#define MAIN_OSC		12000000
+#define MAIN_OSC		XTAL_12MHz
 
 
 /*************************************

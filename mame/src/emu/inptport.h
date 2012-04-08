@@ -11,17 +11,14 @@
 
 #pragma once
 
+#ifndef __EMU_H__
+#error Dont include this file directly; include emu.h instead.
+#endif
+
 #ifndef __INPTPORT_H__
 #define __INPTPORT_H__
 
 #include <time.h>
-
-#include "devcb.h"
-#include "memory.h"
-#include "inputseq.h"
-#include "tokenize.h"
-#include "unicode.h"
-#include "tagmap.h"
 
 
 
@@ -550,6 +547,27 @@ enum
 };
 
 
+/* input classes */
+enum
+{
+	INPUT_CLASS_INTERNAL,
+	INPUT_CLASS_KEYBOARD,
+	INPUT_CLASS_CONTROLLER,
+	INPUT_CLASS_CONFIG,
+	INPUT_CLASS_DIPSWITCH,
+	INPUT_CLASS_CATEGORIZED,
+	INPUT_CLASS_MISC
+};
+
+#define UCHAR_PRIVATE		(0x100000)
+#define UCHAR_SHIFT_1		(UCHAR_PRIVATE + 0)
+#define UCHAR_SHIFT_2		(UCHAR_PRIVATE + 1)
+#define UCHAR_MAMEKEY_BEGIN	(UCHAR_PRIVATE + 2)
+#define UCHAR_MAMEKEY_END	(UCHAR_MAMEKEY_BEGIN + __code_key_last)
+#define UCHAR_MAMEKEY(code)	(UCHAR_MAMEKEY_BEGIN + KEYCODE_##code)
+
+#define UCHAR_SHIFT_BEGIN	(UCHAR_SHIFT_1)
+#define UCHAR_SHIFT_END		(UCHAR_SHIFT_2)
 
 /***************************************************************************
     TYPE DEFINITIONS
@@ -565,8 +583,12 @@ typedef struct _input_field_state input_field_state;
 
 
 /* forward declarations */
-typedef struct _input_port_config input_port_config;
+class input_port_config;
 typedef struct _input_field_config input_field_config;
+
+
+/* template specializations */
+typedef tagged_list<input_port_config> ioport_list;
 
 
 /* custom input port callback function */
@@ -692,9 +714,15 @@ struct _input_field_user_settings
 
 
 /* a single input port configuration */
-struct _input_port_config
+class input_port_config
 {
-	const input_port_config *	next;			/* pointer to next port */
+	DISABLE_COPYING(input_port_config);
+
+public:
+	input_port_config(const char *tag);
+	~input_port_config();
+
+	input_port_config *			next;			/* pointer to next port */
 	const char *				tag;			/* pointer to this port's tag */
 	const input_field_config *	fieldlist;		/* list of input_field_configs */
 
@@ -704,19 +732,10 @@ struct _input_port_config
 };
 
 
-/* an object that contains a list of port configurations */
-typedef struct _input_port_list input_port_list;
-struct _input_port_list
-{
-	const input_port_config *	head;			/* head of the list */
-	tagmap *					map;			/* map for fast lookups */
-};
-
-
 /* describes a fundamental input type, including default input sequences */
-typedef struct _input_type_desc input_type_desc;
-struct _input_type_desc
+class input_type_desc
 {
+public:
 	input_type_desc *			next;			/* next description in the list */
 	UINT32						type;			/* IPT_* for this entry */
 	UINT8						group;			/* which group the port belongs to */
@@ -1033,16 +1052,10 @@ time_t input_port_init(running_machine *machine, const input_port_token *tokens)
 /* ----- port configurations ----- */
 
 /* initialize an input port list structure and allocate ports according to the given tokens */
-void input_port_list_init(input_port_list *portlist, const input_port_token *tokens, char *errorbuf, int errorbuflen, int allocmap);
-
-/* free memory attached to an input port list and clear out the structure */
-void input_port_list_deinit(input_port_list *portlist);
-
-/* return the config that matches the given tag */
-const input_port_config *input_port_by_tag_slow(const input_port_list *portlist, const char *tag);
+void input_port_list_init(ioport_list &portlist, const input_port_token *tokens, char *errorbuf, int errorbuflen, int allocmap);
 
 /* return the field that matches the given tag and mask */
-const input_field_config *input_field_by_tag_and_mask(const input_port_list *portlist, const char *tag, input_port_value mask);
+const input_field_config *input_field_by_tag_and_mask(const ioport_list &portlist, const char *tag, input_port_value mask);
 
 
 
@@ -1142,26 +1155,35 @@ int input_condition_true(running_machine *machine, const input_condition *condit
 /* convert an input_port_token to a default string */
 const char *input_port_string_from_token(const input_port_token token);
 
+/* return TRUE if machine use full keyboard emulation */
+int input_machine_has_keyboard(running_machine *machine);
 
+/* these are called by the core; they should not be called from FEs */
+void inputx_init(running_machine *machine);
 
-/***************************************************************************
-    INLINE FUNCTIONS
-***************************************************************************/
+/* called by drivers to setup natural keyboard support */
+void inputx_setup_natural_keyboard(
+	int (*queue_chars)(const unicode_char *text, size_t text_len),
+	int (*accept_char)(unicode_char ch),
+	int (*charqueue_empty)(void));
 
-/*-------------------------------------------------
-    input_port_by_tag - return the config that
-    matches the given tag
--------------------------------------------------*/
+/* validity checks */
+int validate_natural_keyboard_statics(void);
 
-INLINE const input_port_config *input_port_by_tag(const input_port_list *portlist, const char *tag)
-{
-	/* use the map if we have it */
-	if (portlist->map != NULL)
-		return (const input_port_config *)tagmap_find_hash_only(portlist->map, tag);
+/* these can be called from FEs */
+int inputx_can_post(running_machine *machine);
 
-	/* otherwise, do it the slow way */
-	return input_port_by_tag_slow(portlist, tag);
-}
+/* various posting functions; can be called from FEs */
+void inputx_postc(running_machine *machine, unicode_char ch);
+void inputx_post_utf8(running_machine *machine, const char *text);
+void inputx_post_utf8_rate(running_machine *machine, const char *text, attotime rate);
+int inputx_is_posting(running_machine *machine);
 
+/* miscellaneous functions */
+int input_classify_port(const input_field_config *field);
+int input_has_input_class(running_machine *machine, int inputclass);
+int input_player_number(const input_field_config *field);
+int input_count_players(running_machine *machine);
+int input_category_active(running_machine *machine, int category);
 
 #endif	/* __INPTPORT_H__ */

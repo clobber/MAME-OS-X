@@ -9,7 +9,8 @@
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "emuopts.h"
 #include "debugcmd.h"
 #include "debugcmt.h"
 #include "debugcon.h"
@@ -228,7 +229,7 @@ INLINE UINT64 cheat_read_extended(const cheat_system *cheatsys, const address_sp
 void debug_command_init(running_machine *machine)
 {
 	symbol_table *symtable = debug_cpu_get_global_symtable(machine);
-	const device_config *cpu;
+	running_device *cpu;
 	const char *name;
 	int itemnum;
 
@@ -369,7 +370,7 @@ void debug_command_init(running_machine *machine)
 	for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 	{
 		cpu_debug_init_func debug_init;
-		debug_init = (cpu_debug_init_func)device_get_info_fct(cpu, CPUINFO_FCT_DEBUG_INIT);
+		debug_init = (cpu_debug_init_func)cpu->get_config_fct(CPUINFO_FCT_DEBUG_INIT);
 		if (debug_init != NULL)
 			(*debug_init)(cpu);
 	}
@@ -389,14 +390,14 @@ void debug_command_init(running_machine *machine)
 
 static void debug_command_exit(running_machine *machine)
 {
-	const device_config *cpu;
+	running_device *cpu;
 
 	/* turn off all traces */
 	for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 		debug_cpu_trace(cpu, NULL, 0, NULL);
 
 	if (cheat.length)
-		free(cheat.cheatmap);
+		auto_free(machine, cheat.cheatmap);
 }
 
 
@@ -511,7 +512,7 @@ int debug_command_parameter_number(running_machine *machine, const char *param, 
     parameter as a cpu
 -------------------------------------------------*/
 
-int debug_command_parameter_cpu(running_machine *machine, const char *param, const device_config **result)
+int debug_command_parameter_cpu(running_machine *machine, const char *param, running_device **result)
 {
 	UINT64 cpunum;
 	EXPRERR err;
@@ -529,7 +530,7 @@ int debug_command_parameter_cpu(running_machine *machine, const char *param, con
 	}
 
 	/* first look for a tag match */
-	*result = cputag_get_cpu(machine, param);
+	*result = machine->device(param);
 	if (*result != NULL)
 		return TRUE;
 
@@ -542,7 +543,7 @@ int debug_command_parameter_cpu(running_machine *machine, const char *param, con
 	}
 
 	/* if we got a valid one, return */
-	*result = device_list_find_by_index(&machine->config->devicelist, CPU, cpunum);
+	*result = machine->devicelist.find(CPU, cpunum);
 	if (*result != NULL)
 		return TRUE;
 
@@ -560,7 +561,7 @@ int debug_command_parameter_cpu(running_machine *machine, const char *param, con
 
 int debug_command_parameter_cpu_space(running_machine *machine, const char *param, int spacenum, const address_space **result)
 {
-	const device_config *cpu;
+	running_device *cpu;
 
 	/* first do the standard CPU thing */
 	if (!debug_command_parameter_cpu(machine, param, &cpu))
@@ -570,7 +571,7 @@ int debug_command_parameter_cpu_space(running_machine *machine, const char *para
 	*result = cpu_get_address_space(cpu, spacenum);
 	if (*result == NULL)
 	{
-		debug_console_printf(machine, "No %s memory space found for CPU '%s'\n", address_space_names[spacenum], cpu->tag);
+		debug_console_printf(machine, "No %s memory space found for CPU '%s'\n", address_space_names[spacenum], cpu->tag());
 		return FALSE;
 	}
 	return TRUE;
@@ -972,8 +973,8 @@ static void execute_next(running_machine *machine, int ref, int params, const ch
 
 static void execute_focus(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *scancpu;
-	const device_config *cpu;
+	running_device *scancpu;
+	running_device *cpu;
 
 	/* validate params */
 	if (!debug_command_parameter_cpu(machine, param[0], &cpu))
@@ -986,7 +987,7 @@ static void execute_focus(running_machine *machine, int ref, int params, const c
 	for (scancpu = machine->firstcpu; scancpu != NULL; scancpu = cpu_next(scancpu))
 		if (scancpu != cpu)
 			debug_cpu_ignore_cpu(scancpu, 1);
-	debug_console_printf(machine, "Now focused on CPU '%s'\n", cpu->tag);
+	debug_console_printf(machine, "Now focused on CPU '%s'\n", cpu->tag());
 }
 
 
@@ -996,8 +997,8 @@ static void execute_focus(running_machine *machine, int ref, int params, const c
 
 static void execute_ignore(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpuwhich[MAX_COMMAND_PARAMS];
-	const device_config *cpu;
+	running_device *cpuwhich[MAX_COMMAND_PARAMS];
+	running_device *cpu;
 	int paramnum;
 	char buffer[100];
 	int buflen = 0;
@@ -1014,9 +1015,9 @@ static void execute_ignore(running_machine *machine, int ref, int params, const 
 			if ((cpuinfo->flags & DEBUG_FLAG_OBSERVING) == 0)
 			{
 				if (buflen == 0)
-					buflen += sprintf(&buffer[buflen], "Currently ignoring CPU '%s'", cpu->tag);
+					buflen += sprintf(&buffer[buflen], "Currently ignoring CPU '%s'", cpu->tag());
 				else
-					buflen += sprintf(&buffer[buflen], ", '%s'", cpu->tag);
+					buflen += sprintf(&buffer[buflen], ", '%s'", cpu->tag());
 			}
 		}
 
@@ -1048,7 +1049,7 @@ static void execute_ignore(running_machine *machine, int ref, int params, const 
 			}
 
 			debug_cpu_ignore_cpu(cpuwhich[paramnum], 1);
-			debug_console_printf(machine, "Now ignoring CPU '%s'\n", cpuwhich[paramnum]->tag);
+			debug_console_printf(machine, "Now ignoring CPU '%s'\n", cpuwhich[paramnum]->tag());
 		}
 	}
 }
@@ -1060,8 +1061,8 @@ static void execute_ignore(running_machine *machine, int ref, int params, const 
 
 static void execute_observe(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpuwhich[MAX_COMMAND_PARAMS];
-	const device_config *cpu;
+	running_device *cpuwhich[MAX_COMMAND_PARAMS];
+	running_device *cpu;
 	int paramnum;
 	char buffer[100];
 	int buflen = 0;
@@ -1078,9 +1079,9 @@ static void execute_observe(running_machine *machine, int ref, int params, const
 			if ((cpuinfo->flags & DEBUG_FLAG_OBSERVING) != 0)
 			{
 				if (buflen == 0)
-					buflen += sprintf(&buffer[buflen], "Currently observing CPU '%s'", cpu->tag);
+					buflen += sprintf(&buffer[buflen], "Currently observing CPU '%s'", cpu->tag());
 				else
-					buflen += sprintf(&buffer[buflen], ", '%s'", cpu->tag);
+					buflen += sprintf(&buffer[buflen], ", '%s'", cpu->tag());
 			}
 		}
 
@@ -1102,7 +1103,7 @@ static void execute_observe(running_machine *machine, int ref, int params, const
 		for (paramnum = 0; paramnum < params; paramnum++)
 		{
 			debug_cpu_ignore_cpu(cpuwhich[paramnum], 0);
-			debug_console_printf(machine, "Now observing CPU '%s'\n", cpuwhich[paramnum]->tag);
+			debug_console_printf(machine, "Now observing CPU '%s'\n", cpuwhich[paramnum]->tag());
 		}
 	}
 }
@@ -1114,7 +1115,7 @@ static void execute_observe(running_machine *machine, int ref, int params, const
 
 static void execute_comment(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpu;
+	running_device *cpu;
 	UINT64 address;
 
 	/* param 1 is the address for the comment */
@@ -1144,7 +1145,7 @@ static void execute_comment(running_machine *machine, int ref, int params, const
 
 static void execute_comment_del(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpu;
+	running_device *cpu;
 	UINT64 address;
 
 	/* param 1 can either be a command or the address for the comment */
@@ -1181,7 +1182,7 @@ static void execute_comment_save(running_machine *machine, int ref, int params, 
 static void execute_bpset(running_machine *machine, int ref, int params, const char *param[])
 {
 	parsed_expression *condition = NULL;
-	const device_config *cpu;
+	running_device *cpu;
 	const char *action = NULL;
 	UINT64 address;
 	int bpnum;
@@ -1220,7 +1221,7 @@ static void execute_bpclear(running_machine *machine, int ref, int params, const
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		const device_config *cpu;
+		running_device *cpu;
 
 		for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 		{
@@ -1258,7 +1259,7 @@ static void execute_bpdisenable(running_machine *machine, int ref, int params, c
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		const device_config *cpu;
+		running_device *cpu;
 
 		for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 		{
@@ -1294,7 +1295,7 @@ static void execute_bpdisenable(running_machine *machine, int ref, int params, c
 
 static void execute_bplist(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpu;
+	running_device *cpu;
 	int printed = 0;
 	char buffer[256];
 
@@ -1308,7 +1309,7 @@ static void execute_bplist(running_machine *machine, int ref, int params, const 
 		{
 			debug_cpu_breakpoint *bp;
 
-			debug_console_printf(machine, "CPU '%s' breakpoints:\n", cpu->tag);
+			debug_console_printf(machine, "CPU '%s' breakpoints:\n", cpu->tag());
 
 			/* loop over the breakpoints */
 			for (bp = cpuinfo->bplist; bp != NULL; bp = bp->next)
@@ -1395,7 +1396,7 @@ static void execute_wpclear(running_machine *machine, int ref, int params, const
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		const device_config *cpu;
+		running_device *cpu;
 
 		for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 		{
@@ -1438,7 +1439,7 @@ static void execute_wpdisenable(running_machine *machine, int ref, int params, c
 	/* if 0 parameters, clear all */
 	if (params == 0)
 	{
-		const device_config *cpu;
+		running_device *cpu;
 
 		for (cpu = machine->firstcpu; cpu != NULL; cpu = cpu_next(cpu))
 		{
@@ -1479,7 +1480,7 @@ static void execute_wpdisenable(running_machine *machine, int ref, int params, c
 
 static void execute_wplist(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpu;
+	running_device *cpu;
 	int printed = 0;
 	char buffer[256];
 
@@ -1496,7 +1497,7 @@ static void execute_wplist(running_machine *machine, int ref, int params, const 
 				const address_space *space = cpu_get_address_space(cpu, spacenum);
 				debug_cpu_watchpoint *wp;
 
-				debug_console_printf(machine, "CPU '%s' %s space watchpoints:\n", cpu->tag, address_space_names[spacenum]);
+				debug_console_printf(machine, "CPU '%s' %s space watchpoints:\n", cpu->tag(), address_space_names[spacenum]);
 
 				/* loop over the watchpoints */
 				for (wp = cpuinfo->wplist[spacenum]; wp != NULL; wp = wp->next)
@@ -1528,7 +1529,7 @@ static void execute_wplist(running_machine *machine, int ref, int params, const 
 
 static void execute_hotspot(running_machine *machine, int ref, int params, const char *param[])
 {
-	const device_config *cpu;
+	running_device *cpu;
 	UINT64 threshhold;
 	UINT64 count;
 
@@ -1545,7 +1546,7 @@ static void execute_hotspot(running_machine *machine, int ref, int params, const
 			if (cpuinfo->hotspots != NULL)
 			{
 				debug_cpu_hotspot_track(cpuinfo->device, 0, 0);
-				debug_console_printf(machine, "Cleared hotspot tracking on CPU '%s'\n", cpu->tag);
+				debug_console_printf(machine, "Cleared hotspot tracking on CPU '%s'\n", cpu->tag());
 				cleared = TRUE;
 			}
 		}
@@ -1567,7 +1568,7 @@ static void execute_hotspot(running_machine *machine, int ref, int params, const
 
 	/* attempt to install */
 	if (debug_cpu_hotspot_track(cpu, count, threshhold))
-		debug_console_printf(machine, "Now tracking hotspots on CPU '%s' using %d slots with a threshhold of %d\n", cpu->tag, (int)count, (int)threshhold);
+		debug_console_printf(machine, "Now tracking hotspots on CPU '%s' using %d slots with a threshhold of %d\n", cpu->tag(), (int)count, (int)threshhold);
 	else
 		debug_console_printf(machine, "Error setting up the hotspot tracking\n");
 }
@@ -1831,13 +1832,8 @@ static void execute_cheatinit(running_machine *machine, int ref, int params, con
 	{
 		/* initialize new cheat system */
 		if (cheat.cheatmap != NULL)
-			free(cheat.cheatmap);
-		cheat.cheatmap = (cheat_map *)malloc(real_length * sizeof(cheat_map));
-		if (cheat.cheatmap == NULL)
-		{
-			debug_console_printf(machine, "Unable of allocate the necessary memory\n");
-			return;
-		}
+			auto_free(machine, cheat.cheatmap);
+		cheat.cheatmap = auto_alloc_array(machine, cheat_map, real_length);
 
 		cheat.length = real_length;
 		cheat.undo = 0;
@@ -1846,8 +1842,6 @@ static void execute_cheatinit(running_machine *machine, int ref, int params, con
 	else
 	{
 		/* add range to cheat system */
-		cheat_map * cheatmap_bak = cheat.cheatmap;
-
 		if (cheat.cpu == 0)
 		{
 			debug_console_printf(machine, "Use cheatinit before cheatrange\n");
@@ -1857,13 +1851,11 @@ static void execute_cheatinit(running_machine *machine, int ref, int params, con
 		if (!debug_command_parameter_cpu_space(machine, &cheat.cpu, ADDRESS_SPACE_PROGRAM, &space))
 			return;
 
-		cheat.cheatmap = (cheat_map *)realloc(cheat.cheatmap, (cheat.length + real_length) * sizeof(cheat_map));
-		if (cheat.cheatmap == NULL)
-		{
-			cheat.cheatmap = cheatmap_bak;
-			debug_console_printf(machine, "Unable of allocate the necessary memory\n");
-			return;
-		}
+		cheat_map *newmap = auto_alloc_array(machine, cheat_map, cheat.length + real_length);
+		for (int item = 0; item < cheat.length; item++)
+			newmap[item] = cheat.cheatmap[item];
+		auto_free(machine, cheat.cheatmap);
+		cheat.cheatmap = newmap;
 
 		active_cheat = cheat.length;
 		cheat.length += real_length;
@@ -2063,7 +2055,7 @@ static void execute_cheatlist(running_machine *machine, int ref, int params, con
 {
 	char spaceletter, sizeletter;
 	const address_space *space;
-	const device_config *cpu;
+	running_device *cpu;
 	UINT32 active_cheat = 0;
 	UINT64 cheatindex;
 	UINT64 sizemask;
@@ -2108,7 +2100,7 @@ static void execute_cheatlist(running_machine *machine, int ref, int params, con
 				active_cheat++;
 				fprintf(f, "  <cheat desc=\"Possibility %d : %s (%s)\">\n", active_cheat, core_i64_hex_format(address, space->logaddrchars), core_i64_hex_format(value, cheat.width * 2));
 				fprintf(f, "    <script state=\"run\">\n");
-				fprintf(f, "      <action>%s.p%c%c@%s=%s</action>\n", cpu->tag, spaceletter, sizeletter, core_i64_hex_format(address, space->logaddrchars), core_i64_hex_format(cheat_byte_swap(&cheat, cheat.cheatmap[cheatindex].first_value) & sizemask, cheat.width * 2));
+				fprintf(f, "      <action>%s.p%c%c@%s=%s</action>\n", cpu->tag(), spaceletter, sizeletter, core_i64_hex_format(address, space->logaddrchars), core_i64_hex_format(cheat_byte_swap(&cheat, cheat.cheatmap[cheatindex].first_value) & sizemask, cheat.width * 2));
 				fprintf(f, "    </script>\n");
 				fprintf(f, "  </cheat>\n\n");
 			}
@@ -2370,7 +2362,7 @@ static void execute_dasm(running_machine *machine, int ref, int params, const ch
 static void execute_trace_internal(running_machine *machine, int ref, int params, const char *param[], int trace_over)
 {
 	const char *action = NULL, *filename = param[0];
-	const device_config *cpu;
+	running_device *cpu;
 	FILE *f = NULL;
 	const char *mode;
 
@@ -2407,9 +2399,9 @@ static void execute_trace_internal(running_machine *machine, int ref, int params
 	/* do it */
 	debug_cpu_trace(cpu, f, trace_over, action);
 	if (f)
-		debug_console_printf(machine, "Tracing CPU '%s' to file %s\n", cpu->tag, filename);
+		debug_console_printf(machine, "Tracing CPU '%s' to file %s\n", cpu->tag(), filename);
 	else
-		debug_console_printf(machine, "Stopped tracing on CPU '%s'\n", cpu->tag);
+		debug_console_printf(machine, "Stopped tracing on CPU '%s'\n", cpu->tag());
 }
 
 
@@ -2511,9 +2503,8 @@ static void execute_snap(running_machine *machine, int ref, int params, const ch
 		mame_file *fp;
 		const char *filename = param[0];
 		int scrnum = (params > 1) ? atoi(param[1]) : 0;
-		astring *fname;
 
-		const device_config *screen = device_list_find_by_index(&machine->config->devicelist, VIDEO_SCREEN, scrnum);
+		running_device *screen = machine->devicelist.find(VIDEO_SCREEN, scrnum);
 
 		if ((screen == NULL) || !render_is_live_screen(screen))
 		{
@@ -2521,11 +2512,10 @@ static void execute_snap(running_machine *machine, int ref, int params, const ch
 			return;
 		}
 
-		fname = astring_dupc(filename);
-		if (astring_findc(fname, 0, ".png") == -1)
-			astring_catc(fname, ".png");
-		filerr = mame_fopen(SEARCHPATH_SCREENSHOT, astring_c(fname), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &fp);
-		astring_free(fname);
+		astring fname(filename);
+		if (fname.find(0, ".png") == -1)
+			fname.cat(".png");
+		filerr = mame_fopen(SEARCHPATH_SCREENSHOT, fname, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &fp);
 
 		if (filerr != FILERR_NONE)
 		{
@@ -2620,7 +2610,7 @@ static int CLIB_DECL symbol_sort_compare(const void *item1, const void *item2)
 
 static void execute_symlist(running_machine *machine, int ref, int params, const char **param)
 {
-	const device_config *cpu = NULL;
+	running_device *cpu = NULL;
 	const char *namelist[1000];
 	symbol_table *symtable;
 	int symnum, count = 0;
@@ -2632,7 +2622,7 @@ static void execute_symlist(running_machine *machine, int ref, int params, const
 	if (cpu != NULL)
 	{
 		symtable = debug_cpu_get_symtable(cpu);
-		debug_console_printf(machine, "CPU '%s' symbols:\n", cpu->tag);
+		debug_console_printf(machine, "CPU '%s' symbols:\n", cpu->tag());
 	}
 	else
 	{

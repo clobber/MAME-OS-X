@@ -11,7 +11,8 @@
 #include <IOKit/hid/IOHIDUsageTables.h>
 
 // MAME headers
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 
 typedef struct _os_code_info os_code_info;
 struct _os_code_info

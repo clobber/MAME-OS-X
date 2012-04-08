@@ -1,3 +1,4 @@
+#include "emu.h"
 #include "debugger.h"
 #include "se3208.h"
 
@@ -22,7 +23,7 @@ struct _se3208_state_t
 	UINT32 PPC;
 
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	UINT8 IRQ;
 	UINT8 NMI;
@@ -57,7 +58,7 @@ typedef void (*_OP)(se3208_state_t *se3208_state, UINT16 Opcode);
 #define INST(a) static void a(se3208_state_t *se3208_state, UINT16 Opcode)
 static _OP *OpTable=NULL;
 
-INLINE se3208_state_t *get_safe_token(const device_config *device)
+INLINE se3208_state_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -1705,7 +1706,7 @@ static void BuildTable(void)
 {
 	int i;
 	if(!OpTable)
-		OpTable=alloc_array_or_die(_OP, 0x10000);
+		OpTable=global_alloc_array(_OP, 0x10000);
 	for(i=0;i<0x10000;++i)
 		OpTable[i]=DecodeOp(i);
 }
@@ -1718,7 +1719,7 @@ static CPU_RESET( se3208 )
 	memset(se3208_state,0,sizeof(se3208_state_t));
 	se3208_state->irq_callback = save_irqcallback;
 	se3208_state->device = device;
-	se3208_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	se3208_state->program = device->space(AS_PROGRAM);
 	se3208_state->PC=SE3208_Read32(se3208_state, 0);
 	se3208_state->SR=0;
 	se3208_state->IRQ=CLEAR_LINE;
@@ -1791,13 +1792,15 @@ static CPU_INIT( se3208 )
 
 	se3208_state->irq_callback = irqcallback;
 	se3208_state->device = device;
-	se3208_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	se3208_state->program = device->space(AS_PROGRAM);
 }
 
 static CPU_EXIT( se3208 )
 {
-	if(OpTable)
-		free(OpTable);
+	if(OpTable) {
+		global_free(OpTable);
+		OpTable = NULL;
+	}
 }
 
 
@@ -1856,15 +1859,15 @@ CPU_GET_INFO( se3208 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 1;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + SE3208_INT:		info->i = se3208_state->IRQ;					break;
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = se3208_state->NMI;					break;

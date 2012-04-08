@@ -6,8 +6,8 @@
  *
  *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
-#include "cpuexec.h"
 #include "sh4.h"
 #include "sh4regs.h"
 #include "sh4comn.h"
@@ -30,7 +30,7 @@ static const UINT16 tcnt[] = { TCNT0, TCNT1, TCNT2 };
 static const UINT16 tcor[] = { TCOR0, TCOR1, TCOR2 };
 static const UINT16 tcr[] = { TCR0, TCR1, TCR2 };
 
-INLINE SH4 *get_safe_token(const device_config *device)
+INLINE SH4 *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -179,7 +179,7 @@ void sh4_exception(SH4 *sh4, const char *message, int exception) // handle excep
 		sh4->m[INTEVT] = 0x1c0;
 		vector = 0x600;
 		sh4->irq_callback(sh4->device, INPUT_LINE_NMI);
-		LOG(("SH-4 '%s' nmi exception after [%s]\n", sh4->device->tag, message));
+		LOG(("SH-4 '%s' nmi exception after [%s]\n", sh4->device->tag(), message));
 	} else {
 //      if ((sh4->m[ICR] & 0x4000) && (sh4->nmi_line_state == ASSERT_LINE))
 //          return;
@@ -193,7 +193,7 @@ void sh4_exception(SH4 *sh4, const char *message, int exception) // handle excep
 			sh4->irq_callback(sh4->device, SH4_INTC_IRL0-exception+SH4_IRL0);
 		else
 			sh4->irq_callback(sh4->device, SH4_IRL3+1);
-		LOG(("SH-4 '%s' interrupt exception #%d after [%s]\n", sh4->device->tag, exception, message));
+		LOG(("SH-4 '%s' interrupt exception #%d after [%s]\n", sh4->device->tag(), exception, message));
 	}
 	sh4_exception_checkunrequest(sh4, exception);
 
@@ -407,7 +407,7 @@ static TIMER_CALLBACK( sh4_dmac_callback )
 	SH4 *sh4 = (SH4 *)ptr;
 	int channel = param;
 
-	LOG(("SH4 '%s': DMA %d complete\n", sh4->device->tag, channel));
+	LOG(("SH4 '%s': DMA %d complete\n", sh4->device->tag(), channel));
 	sh4->dma_timer_active[channel] = 0;
 	switch (channel)
 	{
@@ -997,7 +997,7 @@ READ32_HANDLER( sh4_internal_r )
 	return sh4->m[offset];
 }
 
-void sh4_set_frt_input(const device_config *device, int state)
+void sh4_set_frt_input(running_device *device, int state)
 {
 	SH4 *sh4 = get_safe_token(device);
 
@@ -1028,12 +1028,12 @@ void sh4_set_frt_input(const device_config *device, int state)
 	sh4_timer_resync();
 	sh4->icr = sh4->frc;
 	sh4->m[4] |= ICF;
-	logerror("SH4 '%s': ICF activated (%x)\n", sh4->device->tag, sh4->pc & AM);
+	logerror("SH4 '%s': ICF activated (%x)\n", sh4->device->tag(), sh4->pc & AM);
 	sh4_recalc_irq();
 #endif
 }
 
-void sh4_set_irln_input(const device_config *device, int value)
+void sh4_set_irln_input(running_device *device, int value)
 {
 	SH4 *sh4 = get_safe_token(device);
 
@@ -1056,7 +1056,7 @@ void sh4_set_irq_line(SH4 *sh4, int irqline, int state) // set state of external
 		{
 			if ((state == CLEAR_LINE) && (sh4->nmi_line_state == ASSERT_LINE))  // rising
 			{
-				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag));
+				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag()));
 				sh4_exception_request(sh4, SH4_INTC_NMI);
 				sh4_dmac_nmi(sh4);
 			}
@@ -1065,7 +1065,7 @@ void sh4_set_irq_line(SH4 *sh4, int irqline, int state) // set state of external
 		{
 			if ((state == ASSERT_LINE) && (sh4->nmi_line_state == CLEAR_LINE)) // falling
 			{
-				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag));
+				LOG(("SH-4 '%s' assert nmi\n", sh4->device->tag()));
 				sh4_exception_request(sh4, SH4_INTC_NMI);
 				sh4_dmac_nmi(sh4);
 			}
@@ -1088,12 +1088,12 @@ void sh4_set_irq_line(SH4 *sh4, int irqline, int state) // set state of external
 
 			if( state == CLEAR_LINE )
 			{
-				LOG(("SH-4 '%s' cleared external irq IRL%d\n", sh4->device->tag, irqline));
+				LOG(("SH-4 '%s' cleared external irq IRL%d\n", sh4->device->tag(), irqline));
 				sh4_exception_unrequest(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
 			}
 			else
 			{
-				LOG(("SH-4 '%s' assert external irq IRL%d\n", sh4->device->tag, irqline));
+				LOG(("SH-4 '%s' assert external irq IRL%d\n", sh4->device->tag(), irqline));
 				sh4_exception_request(sh4, SH4_INTC_IRL0+irqline-SH4_IRL0);
 			}
 		}
@@ -1107,7 +1107,7 @@ void sh4_set_irq_line(SH4 *sh4, int irqline, int state) // set state of external
 				sh4_exception_unrequest(sh4, SH4_INTC_IRLn0+s);
 			if (sh4->irln < 15)
 				sh4_exception_request(sh4, SH4_INTC_IRLn0+sh4->irln);
-			LOG(("SH-4 '%s' IRLn0-IRLn3 level #%d\n", sh4->device->tag, sh4->irln));
+			LOG(("SH-4 '%s' IRLn0-IRLn3 level #%d\n", sh4->device->tag(), sh4->irln));
 		}
 	}
 	if (sh4->test_irq && (!sh4->delay))
@@ -1162,7 +1162,7 @@ void sh4_parse_configuration(SH4 *sh4, const struct sh4_config *conf)
 	}
 }
 
-void sh4_common_init(const device_config *device)
+void sh4_common_init(running_device *device)
 {
 	SH4 *sh4 = get_safe_token(device);
 	int i;
@@ -1189,7 +1189,7 @@ void sh4_common_init(const device_config *device)
 	sh4->m = auto_alloc_array(device->machine, UINT32, 16384);
 }
 
-void sh4_dma_ddt(const device_config *device, struct sh4_ddt_dma *s)
+void sh4_dma_ddt(running_device *device, struct sh4_ddt_dma *s)
 {
 	SH4 *sh4 = get_safe_token(device);
 	UINT32 chcr;

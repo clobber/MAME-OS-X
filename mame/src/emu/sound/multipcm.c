@@ -31,8 +31,7 @@
  *
  */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "multipcm.h"
 
@@ -127,7 +126,7 @@ static const int val2chan[] =
 #define MULTIPCM_RATE	44100.0
 
 
-INLINE MultiPCM *get_safe_token(const device_config *device)
+INLINE MultiPCM *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -503,7 +502,7 @@ static DEVICE_START( multipcm )
 	MultiPCM *ptChip = get_safe_token(device);
 	int i;
 
-	ptChip->ROM=(INT8 *)device->region;
+	ptChip->ROM=*device->region;
 	ptChip->Rate=(float) device->clock / MULTIPCM_CLOCKDIV;
 
 	ptChip->stream = stream_create(device, 0, 2, ptChip->Rate, ptChip, MultiPCM_update);
@@ -668,7 +667,7 @@ WRITE8_DEVICE_HANDLER( multipcm_w )
 
 /* MAME/M1 access functions */
 
-void multipcm_set_bank(const device_config *device, UINT32 leftoffs, UINT32 rightoffs)
+void multipcm_set_bank(running_device *device, UINT32 leftoffs, UINT32 rightoffs)
 {
 	MultiPCM *ptChip = get_safe_token(device);
 	ptChip->BankL = leftoffs;

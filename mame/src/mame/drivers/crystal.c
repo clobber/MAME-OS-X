@@ -116,7 +116,7 @@ Notes:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/se3208/se3208.h"
 #include "video/vrender0.h"
 #include "machine/ds1302.h"
@@ -337,13 +337,13 @@ static READ32_HANDLER(PIO_r)
 
 static WRITE32_HANDLER(PIO_w)
 {
-	const device_config *ds1302 = devtag_get_device(space->machine, "rtc");
+	running_device *ds1302 = devtag_get_device(space->machine, "rtc");
 	UINT32 RST = data & 0x01000000;
 	UINT32 CLK = data & 0x02000000;
 	UINT32 DAT = data & 0x10000000;
 
 	if (!RST)
-		device_reset(ds1302);
+		ds1302->reset();
 
 	ds1302_dat_w(ds1302, 0, DAT ? 1 : 0);
 	ds1302_clk_w(ds1302, 0, CLK ? 1 : 0);
@@ -504,7 +504,7 @@ static MACHINE_START(crystal)
 {
 	int i;
 
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), icallback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), icallback);
 	for (i = 0; i < 4; i++)
 		Timer[i] = timer_alloc(machine, Timercb, (void*)(FPTR)i);
 
@@ -519,7 +519,7 @@ static MACHINE_RESET(crystal)
 	memset(vidregs, 0, 0x10000);
 	FlipCount = 0;
 	IntHigh = 0;
-	cpu_set_irq_callback(cputag_get_cpu(machine, "maincpu"), icallback);
+	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), icallback);
 	Bank = 0;
 	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1") + 0);
 	FlashCmd = 0xff;

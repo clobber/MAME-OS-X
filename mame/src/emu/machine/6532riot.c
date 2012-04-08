@@ -11,7 +11,7 @@ The timer seems to follow these rules:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "6532riot.h"
 
 
@@ -49,7 +49,7 @@ struct _riot6532_port
 typedef struct _riot6532_state riot6532_state;
 struct _riot6532_state
 {
-	const device_config *device;
+	running_device *device;
 	const riot6532_interface *intf;
 	int				index;
 
@@ -79,7 +79,7 @@ struct _riot6532_state
     into a riot6532_state
 -------------------------------------------------*/
 
-INLINE riot6532_state *get_safe_token(const device_config *device)
+INLINE riot6532_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -93,7 +93,7 @@ INLINE riot6532_state *get_safe_token(const device_config *device)
     based on interrupt enables
 -------------------------------------------------*/
 
-INLINE void update_irqstate(const device_config *device)
+INLINE void update_irqstate(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	int state = (riot->irqstate & riot->irqenable);
@@ -121,7 +121,7 @@ INLINE UINT8 apply_ddr(const riot6532_port *port)
     and signal appropriately
 -------------------------------------------------*/
 
-INLINE void update_pa7_state(const device_config *device)
+INLINE void update_pa7_state(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	UINT8 data = apply_ddr(&riot->port[0]) & 0x80;
@@ -168,7 +168,7 @@ INLINE UINT8 get_timer(riot6532_state *riot)
 
 static TIMER_CALLBACK( timer_end_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	riot6532_state *riot = get_safe_token(device);
 
 	assert(riot->timerstate != TIMER_IDLE);
@@ -262,7 +262,7 @@ WRITE8_DEVICE_HANDLER( riot6532_w )
 			if (port->out_func.write != NULL)
 				devcb_call_write8(&port->out_func, 0, data);
 			else
-				logerror("%s:6532RIOT chip %s: Port %c is being written to but has no handler. %02X\n", cpuexec_describe_context(device->machine), device->tag, 'A' + (offset & 1), data);
+				logerror("%s:6532RIOT chip %s: Port %c is being written to but has no handler. %02X\n", cpuexec_describe_context(device->machine), device->tag(), 'A' + (offset & 1), data);
 		}
 
 		/* writes to port A need to update the PA7 state */
@@ -331,7 +331,7 @@ READ8_DEVICE_HANDLER( riot6532_r )
 					update_pa7_state(device);
 			}
 			else
-				logerror("%s:6532RIOT chip %s: Port %c is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag, 'A' + (offset & 1));
+				logerror("%s:6532RIOT chip %s: Port %c is being read but has no handler\n", cpuexec_describe_context(device->machine), device->tag(), 'A' + (offset & 1));
 
 			/* apply the DDR to the result */
 			val = apply_ddr(port);
@@ -346,7 +346,7 @@ READ8_DEVICE_HANDLER( riot6532_r )
     value
 -------------------------------------------------*/
 
-void riot6532_porta_in_set(const device_config *device, UINT8 data, UINT8 mask)
+void riot6532_porta_in_set(running_device *device, UINT8 data, UINT8 mask)
 {
 	riot6532_state *riot = get_safe_token(device);
 	riot->port[0].in = (riot->port[0].in & ~mask) | (data & mask);
@@ -359,7 +359,7 @@ void riot6532_porta_in_set(const device_config *device, UINT8 data, UINT8 mask)
     value
 -------------------------------------------------*/
 
-void riot6532_portb_in_set(const device_config *device, UINT8 data, UINT8 mask)
+void riot6532_portb_in_set(running_device *device, UINT8 data, UINT8 mask)
 {
 	riot6532_state *riot = get_safe_token(device);
 	riot->port[1].in = (riot->port[1].in & ~mask) | (data & mask);
@@ -371,7 +371,7 @@ void riot6532_portb_in_set(const device_config *device, UINT8 data, UINT8 mask)
     value
 -------------------------------------------------*/
 
-UINT8 riot6532_porta_in_get(const device_config *device)
+UINT8 riot6532_porta_in_get(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	return riot->port[0].in;
@@ -383,7 +383,7 @@ UINT8 riot6532_porta_in_get(const device_config *device)
     value
 -------------------------------------------------*/
 
-UINT8 riot6532_portb_in_get(const device_config *device)
+UINT8 riot6532_portb_in_get(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	return riot->port[1].in;
@@ -395,7 +395,7 @@ UINT8 riot6532_portb_in_get(const device_config *device)
     value
 -------------------------------------------------*/
 
-UINT8 riot6532_porta_out_get(const device_config *device)
+UINT8 riot6532_porta_out_get(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	return riot->port[0].out;
@@ -407,7 +407,7 @@ UINT8 riot6532_porta_out_get(const device_config *device)
     value
 -------------------------------------------------*/
 
-UINT8 riot6532_portb_out_get(const device_config *device)
+UINT8 riot6532_portb_out_get(running_device *device)
 {
 	riot6532_state *riot = get_safe_token(device);
 	return riot->port[1].out;
@@ -429,13 +429,11 @@ static DEVICE_START( riot6532 )
 
 	/* validate arguments */
 	assert(device != NULL);
-	assert(device->tag != NULL);
-	assert(strlen(device->tag) < 20);
 
 	/* set static values */
 	riot->device = device;
-	riot->intf = (riot6532_interface *)device->static_config;
-	riot->index = device_list_index(&device->machine->config->devicelist, RIOT6532, device->tag);
+	riot->intf = (riot6532_interface *)device->baseconfig().static_config;
+	riot->index = device->machine->devicelist.index(RIOT6532, device->tag());
 
 	/* configure the ports */
 	devcb_resolve_read8(&riot->port[0].in_func, &riot->intf->in_a_func, device);

@@ -6,9 +6,13 @@
 
 #define PROT_OUTPUT_BUFFER_SIZE 8
 
-typedef struct _djboy_state djboy_state;
-struct _djboy_state
+class djboy_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, djboy_state(machine)); }
+
+	djboy_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    paletteram;
@@ -33,10 +37,10 @@ struct _djboy_state
 	int        prot_mode;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *cpu1;
-	const device_config *cpu2;
-	const device_config *pandora;
+	running_device *maincpu;
+	running_device *cpu1;
+	running_device *cpu2;
+	running_device *pandora;
 };
 
 

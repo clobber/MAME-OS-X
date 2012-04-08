@@ -30,9 +30,13 @@
 #define MW8080BW_HPIXCOUNT                (MW8080BW_HBSTART + 4)
 
 
-typedef struct _mw8080bw_state mw8080bw_state;
-struct _mw8080bw_state
+class mw8080bw_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mw8080bw_state(machine)); }
+
+	mw8080bw_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *     main_ram;
 	UINT8 *     colorram;
@@ -78,16 +82,16 @@ struct _mw8080bw_state
 	emu_timer   *interrupt_timer;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *mb14241;
-	const device_config *samples;
-	const device_config *samples1;
-	const device_config *samples2;
-	const device_config *speaker;
-	const device_config *sn1;
-	const device_config *sn2;
-	const device_config *sn;
-	const device_config *discrete;
+	running_device *maincpu;
+	running_device *mb14241;
+	running_device *samples;
+	running_device *samples1;
+	running_device *samples2;
+	running_device *speaker;
+	running_device *sn1;
+	running_device *sn2;
+	running_device *sn;
+	running_device *discrete;
 };
 
 
@@ -168,7 +172,7 @@ WRITE8_HANDLER( zzzap_audio_1_w );
 WRITE8_HANDLER( zzzap_audio_2_w );
 
 MACHINE_DRIVER_EXTERN( maze_audio );
-void maze_write_discrete(const device_config *device, UINT8 maze_tone_timing_state);
+void maze_write_discrete(running_device *device, UINT8 maze_tone_timing_state);
 
 MACHINE_DRIVER_EXTERN( boothill_audio );
 WRITE8_DEVICE_HANDLER( boothill_audio_w );
@@ -280,8 +284,8 @@ WRITE8_HANDLER( invrvnge_sh_port_w );
 WRITE8_HANDLER( lupin3_sh_port_1_w );
 WRITE8_HANDLER( lupin3_sh_port_2_w );
 
-WRITE8_HANDLER( schasrcv_sh_port_1_w );
-WRITE8_HANDLER( schasrcv_sh_port_2_w );
+WRITE8_HANDLER( schasercv_sh_port_1_w );
+WRITE8_HANDLER( schasercv_sh_port_2_w );
 
 WRITE8_HANDLER( yosakdon_sh_port_1_w );
 WRITE8_HANDLER( yosakdon_sh_port_2_w );
@@ -309,7 +313,7 @@ MACHINE_START( extra_8080bw_vh );
 VIDEO_UPDATE( invadpt2 );
 VIDEO_UPDATE( ballbomb );
 VIDEO_UPDATE( schaser );
-VIDEO_UPDATE( schasrcv );
+VIDEO_UPDATE( schasercv );
 VIDEO_UPDATE( rollingc );
 VIDEO_UPDATE( polaris );
 VIDEO_UPDATE( lupin3 );

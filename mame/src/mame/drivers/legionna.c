@@ -70,7 +70,7 @@ Preliminary COP MCU memory map
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "audio/seibu.h"
 #include "sound/3812intf.h"
@@ -958,13 +958,13 @@ static const gfx_layout legionna_new_charlayout =
 };
 
 
-static void descramble_legionnaire_gfx(UINT8* src)
+static void descramble_legionnaire_gfx(running_machine *machine, UINT8* src)
 {
 	UINT8 *buffer;
 	int len = 0x10000;
 
 	/*  rearrange gfx */
-	buffer = alloc_array_or_die(UINT8, len);
+	buffer = auto_alloc_array(machine, UINT8, len);
 	{
 		int i;
 		for (i = 0;i < len; i++)
@@ -978,7 +978,7 @@ static void descramble_legionnaire_gfx(UINT8* src)
 			3,2,1,0)];
 		}
 		memcpy(src,buffer,len);
-		free(buffer);
+		auto_free(machine, buffer);
 	}
 
 }
@@ -1847,10 +1847,10 @@ ROM_END
 
 ROM_START( cupsoca )
 	ROM_REGION( 0x100000, "maincpu", 0 )	/* 68000 code */
-	ROM_LOAD32_BYTE( "1.bin",   0x000000, 0x040000, CRC(d5f76bd6) SHA1(5e7c3843f6f497a24b8236a9307d347fb24dd0d5) )
-	ROM_LOAD32_BYTE( "2.bin",   0x000001, 0x040000, CRC(34966aa1) SHA1(f07bca19bd92a60c04aa9b23e5d2d2eac073d2e4) )
-	ROM_LOAD32_BYTE( "3.bin",   0x000002, 0x040000, CRC(2b7934ec) SHA1(b78e7079e03b23853397a3848c93f60702ac1c33) )
-	ROM_LOAD32_BYTE( "4.bin",   0x000003, 0x040000, CRC(f4aa1d90) SHA1(eb94efc8cc623434b4c9a22e63d262e80ca84d83) )
+	ROM_LOAD32_BYTE( "soca_1.bin",   0x000000, 0x040000, CRC(d5f76bd6) SHA1(5e7c3843f6f497a24b8236a9307d347fb24dd0d5) )
+	ROM_LOAD32_BYTE( "soca_2.bin",   0x000001, 0x040000, CRC(34966aa1) SHA1(f07bca19bd92a60c04aa9b23e5d2d2eac073d2e4) )
+	ROM_LOAD32_BYTE( "soca_3.bin",   0x000002, 0x040000, CRC(2b7934ec) SHA1(b78e7079e03b23853397a3848c93f60702ac1c33) )
+	ROM_LOAD32_BYTE( "soca_4.bin",   0x000003, 0x040000, CRC(f4aa1d90) SHA1(eb94efc8cc623434b4c9a22e63d262e80ca84d83) )
 
 	ROM_REGION( 0x20000, "audiocpu", 0 )	/* Z80 code, banked data */
 	ROM_LOAD( "seibu7.8a",    0x000000, 0x08000, CRC(f63329f9) SHA1(51736de48efc14415cfdf169b43623d4c95fde2b) )
@@ -1858,8 +1858,8 @@ ROM_START( cupsoca )
 	ROM_COPY( "audiocpu", 0, 0x018000, 0x08000 )
 
 	ROM_REGION( 0x020000, "gfx1", 0 )
-	ROM_LOAD16_BYTE( "6.bin",   0x000000, 0x010000, CRC(a9e15910) SHA1(305541b16a87d0e38871240fa2e111bb9332e93c) )
-	ROM_LOAD16_BYTE( "5.bin",   0x000001, 0x010000, CRC(73a3e024) SHA1(aeb359dd2dc9eb96330f494c44123bab3f5986a4) )
+	ROM_LOAD16_BYTE( "soca_6.bin",   0x000000, 0x010000, CRC(a9e15910) SHA1(305541b16a87d0e38871240fa2e111bb9332e93c) )
+	ROM_LOAD16_BYTE( "soca_5.bin",   0x000001, 0x010000, CRC(73a3e024) SHA1(aeb359dd2dc9eb96330f494c44123bab3f5986a4) )
 
 	ROM_REGION( 0x200000, "gfx2", 0 )
 	ROM_LOAD( "obj.8c",       0x000000, 0x100000, CRC(e2377895) SHA1(1d1c7f31a08a464139cdaf383a5e1ade0717dc9f) )
@@ -2102,7 +2102,7 @@ static DRIVER_INIT( denjinmk )
 
 static DRIVER_INIT( legiongfx )
 {
-	descramble_legionnaire_gfx( memory_region(machine, "gfx5") );
+	descramble_legionnaire_gfx( machine, memory_region(machine, "gfx5") );
 }
 
 

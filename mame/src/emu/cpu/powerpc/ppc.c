@@ -1,8 +1,9 @@
 /* IBM/Motorola PowerPC 4xx/6xx Emulator */
 
 #include <setjmp.h>
-#include "ppc.h"
+#include "emu.h"
 #include "debugger.h"
+#include "ppc.h"
 
 // PLL Configuration based on the table in MPC603EUM page 7-31
 static const int mpc603e_pll_config[12][9] =
@@ -305,7 +306,7 @@ typedef struct {
 	UINT64 tb;			/* 56-bit timebase register */
 
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 
 	// STUFF added for the 6xx series
@@ -928,7 +929,7 @@ static void ppc_init(void)
 // !!! probably should move this stuff elsewhere !!!
 static CPU_INIT( ppc403 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 
 	ppc_init();
 
@@ -962,7 +963,7 @@ static CPU_INIT( ppc403 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 }
@@ -974,7 +975,7 @@ static CPU_EXIT( ppc403 )
 
 static CPU_INIT( ppc603 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 	int pll_config = 0;
 	float multiplier;
 	int i ;
@@ -1087,7 +1088,7 @@ static CPU_INIT( ppc603 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1119,7 +1120,7 @@ static CPU_EXIT( ppc603 )
 static CPU_INIT( ppc602 )
 {
 	float multiplier;
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 
 	int i ;
 
@@ -1235,7 +1236,7 @@ static CPU_INIT( ppc602 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1262,7 +1263,7 @@ static void mpc8240_tlbld(UINT32 op)
 static CPU_INIT( mpc8240 )
 {
 	float multiplier;
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 
 	int i ;
 
@@ -1376,7 +1377,7 @@ static CPU_INIT( mpc8240 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1392,7 +1393,7 @@ static CPU_EXIT( mpc8240 )
 
 static CPU_INIT( ppc601 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 	float multiplier;
 	int i ;
 
@@ -1502,7 +1503,7 @@ static CPU_INIT( ppc601 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1520,7 +1521,7 @@ static CPU_EXIT( ppc601 )
 
 static CPU_INIT( ppc604 )
 {
-	const ppc_config *configdata = device->static_config;
+	const ppc_config *configdata = device->baseconfig().static_config;
 	float multiplier;
 	int i ;
 
@@ -1632,7 +1633,7 @@ static CPU_INIT( ppc604 )
 
 	ppc.irq_callback = irqcallback;
 	ppc.device = device;
-	ppc.program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	ppc.program = device->space(AS_PROGRAM);
 
 	ppc.pvr = configdata->pvr;
 
@@ -1749,15 +1750,15 @@ static CPU_GET_INFO( ppc )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE:					info->i = CLEAR_LINE;					break;
 
@@ -1900,8 +1901,8 @@ CPU_GET_INFO( ppc603 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_LOGADDR_WIDTH_PROGRAM: info->i = 32;					break;
 		case CPUINFO_INT_PAGE_SHIFT_PROGRAM:	info->i = 17;					break;
 		case CPUINFO_INT_REGISTER + PPC_DEC:			info->i = read_decrementer();			break;
@@ -1948,8 +1949,8 @@ CPU_GET_INFO( ppc602 )
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 		case CPUINFO_INT_REGISTER + PPC_IBR:			info->i = ppc.ibr;						break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc602);		break;
@@ -1992,8 +1993,8 @@ CPU_GET_INFO( mpc8240 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(mpc8240);		break;
@@ -2033,8 +2034,8 @@ CPU_GET_INFO( ppc601 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc601);		break;
@@ -2074,8 +2075,8 @@ CPU_GET_INFO( ppc604 )
 		case CPUINFO_INT_INPUT_LINES:					info->i = 5;							break;
 		case DEVINFO_INT_ENDIANNESS:					info->i = ENDIANNESS_BIG;					break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 64;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 64;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(ppc604);		break;

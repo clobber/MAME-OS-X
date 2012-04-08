@@ -9,7 +9,7 @@
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "drawgfxm.h"
 
 
@@ -92,8 +92,8 @@ void gfx_init(running_machine *machine)
 	for (curgfx = 0; curgfx < MAX_GFX_ELEMENTS && gfxdecodeinfo[curgfx].gfxlayout != NULL; curgfx++)
 	{
 		const gfx_decode_entry *gfxdecode = &gfxdecodeinfo[curgfx];
-		UINT32 region_length = 8 * memory_region_length(machine, gfxdecode->memory_region);
-		const UINT8 *region_base = memory_region(machine, gfxdecode->memory_region);
+		UINT32 region_length = (gfxdecode->memory_region != NULL) ? (8 * memory_region_length(machine, gfxdecode->memory_region)) : 0;
+		const UINT8 *region_base = (gfxdecode->memory_region != NULL) ? memory_region(machine, gfxdecode->memory_region) : NULL;
 		UINT32 xscale = (gfxdecode->xscale == 0) ? 1 : gfxdecode->xscale;
 		UINT32 yscale = (gfxdecode->yscale == 0) ? 1 : gfxdecode->yscale;
 		UINT32 *extpoffs, extxoffs[MAX_ABS_GFX_SIZE], extyoffs[MAX_ABS_GFX_SIZE];
@@ -153,32 +153,32 @@ void gfx_init(running_machine *machine)
 			/* loop over all the planes, converting fractions */
 			for (j = 0; j < planes; j++)
 			{
-				UINT32 value = extpoffs[j];
-				if (IS_FRAC(value))
+				UINT32 value1 = extpoffs[j];
+				if (IS_FRAC(value1))
 				{
 					assert(region_length != 0);
-					extpoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
+					extpoffs[j] = FRAC_OFFSET(value1) + region_length * FRAC_NUM(value1) / FRAC_DEN(value1);
 				}
 			}
 
 			/* loop over all the X/Y offsets, converting fractions */
 			for (j = 0; j < width; j++)
 			{
-				UINT32 value = extxoffs[j];
-				if (IS_FRAC(value))
+				UINT32 value2 = extxoffs[j];
+				if (IS_FRAC(value2))
 				{
 					assert(region_length != 0);
-					extxoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
+					extxoffs[j] = FRAC_OFFSET(value2) + region_length * FRAC_NUM(value2) / FRAC_DEN(value2);
 				}
 			}
 
 			for (j = 0; j < height; j++)
 			{
-				UINT32 value = extyoffs[j];
-				if (IS_FRAC(value))
+				UINT32 value3 = extyoffs[j];
+				if (IS_FRAC(value3))
 				{
 					assert(region_length != 0);
-					extyoffs[j] = FRAC_OFFSET(value) + region_length * FRAC_NUM(value) / FRAC_DEN(value);
+					extyoffs[j] = FRAC_OFFSET(value3) + region_length * FRAC_NUM(value3) / FRAC_DEN(value3);
 				}
 			}
 		}
@@ -226,7 +226,7 @@ gfx_element *gfx_element_alloc(running_machine *machine, const gfx_layout *gl, c
 	gfx_element *gfx;
 
 	/* allocate memory for the gfx_element structure */
-	gfx = alloc_clear_or_die(gfx_element);
+	gfx = auto_alloc_clear(machine, gfx_element);
 
 	/* fill in the data */
 	gfx->width = width;
@@ -255,7 +255,7 @@ gfx_element *gfx_element_alloc(running_machine *machine, const gfx_layout *gl, c
 		}
 		else
 		{
-			UINT32 *buffer = alloc_array_or_die(UINT32, gfx->layout.width);
+			UINT32 *buffer = auto_alloc_array(machine, UINT32, gfx->layout.width);
 			memcpy(buffer, gfx->layout.extxoffs, sizeof(gfx->layout.extxoffs[0]) * gfx->layout.width);
 			gfx->layout.extxoffs = buffer;
 		}
@@ -270,7 +270,7 @@ gfx_element *gfx_element_alloc(running_machine *machine, const gfx_layout *gl, c
 		}
 		else
 		{
-			UINT32 *buffer = alloc_array_or_die(UINT32, gfx->layout.height);
+			UINT32 *buffer = auto_alloc_array(machine, UINT32, gfx->layout.height);
 			memcpy(buffer, gfx->layout.extyoffs, sizeof(gfx->layout.extyoffs[0]) * gfx->layout.height);
 			gfx->layout.extyoffs = buffer;
 		}
@@ -278,10 +278,10 @@ gfx_element *gfx_element_alloc(running_machine *machine, const gfx_layout *gl, c
 
 	/* allocate a pen usage array for entries with 32 pens or less */
 	if (gfx->color_depth <= 32)
-		gfx->pen_usage = alloc_array_or_die(UINT32, gfx->total_elements);
+		gfx->pen_usage = auto_alloc_array(machine, UINT32, gfx->total_elements);
 
 	/* allocate a dirty array */
-	gfx->dirty = alloc_array_or_die(UINT8, gfx->total_elements);
+	gfx->dirty = auto_alloc_array(machine, UINT8, gfx->total_elements);
 	memset(gfx->dirty, 1, gfx->total_elements * sizeof(*gfx->dirty));
 
 	/* raw graphics case */
@@ -308,7 +308,7 @@ gfx_element *gfx_element_alloc(running_machine *machine, const gfx_layout *gl, c
 		gfx->char_modulo = gfx->line_modulo * gfx->origheight;
 
 		/* allocate memory for the data */
-		gfx->gfxdata = alloc_array_or_die(UINT8, gfx->total_elements * gfx->char_modulo);
+		gfx->gfxdata = auto_alloc_array(machine, UINT8, gfx->total_elements * gfx->char_modulo);
 	}
 
 	return gfx;
@@ -337,17 +337,12 @@ void gfx_element_free(gfx_element *gfx)
 		return;
 
 	/* free our data */
-	if (gfx->layout.extyoffs != NULL)
-		free((void *)gfx->layout.extyoffs);
-	if (gfx->layout.extxoffs != NULL)
-		free((void *)gfx->layout.extxoffs);
-	if (gfx->pen_usage != NULL)
-		free(gfx->pen_usage);
-	if (gfx->dirty != NULL)
-		free(gfx->dirty);
-	if (!(gfx->flags & GFX_ELEMENT_DONT_FREE))
-		free(gfx->gfxdata);
-	free(gfx);
+	auto_free(gfx->machine, gfx->layout.extyoffs);
+	auto_free(gfx->machine, gfx->layout.extxoffs);
+	auto_free(gfx->machine, gfx->pen_usage);
+	auto_free(gfx->machine, gfx->dirty);
+	auto_free(gfx->machine, gfx->gfxdata);
+	auto_free(gfx->machine, gfx);
 }
 
 

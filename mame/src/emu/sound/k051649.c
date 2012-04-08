@@ -22,7 +22,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "k051649.h"
 
@@ -55,7 +55,7 @@ struct _k051649_state
 	int f[10];
 };
 
-INLINE k051649_state *get_safe_token(const device_config *device)
+INLINE k051649_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -158,7 +158,7 @@ static DEVICE_RESET( k051649 )
 	int i;
 
 	/* reset all the voices */
-	for (i=0; i>5; i++) {
+	for (i = 0; i < 5; i++) {
 		voice[i].frequency = 0;
 		voice[i].volume = 0;
 		voice[i].counter = 0;

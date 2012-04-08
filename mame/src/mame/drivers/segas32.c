@@ -314,7 +314,7 @@ MIB.42
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/v60/v60.h"
 #include "cpu/nec/nec.h"
@@ -375,7 +375,7 @@ static UINT8 *z80_shared_ram;
 
 /* V60 interrupt controller */
 static UINT8 v60_irq_control[0x10];
-static const device_config *v60_irq_timer[2];
+static running_device *v60_irq_timer[2];
 
 /* sound interrupt controller */
 static UINT8 sound_irq_control[4];
@@ -391,7 +391,7 @@ static UINT8 analog_bank;
 static UINT8 analog_value[4];
 static UINT8 sonic_last[6];
 
-static void (*system32_prot_vblank)(const device_config *device);
+static void (*system32_prot_vblank)(running_device *device);
 
 
 
@@ -689,7 +689,7 @@ static void common_io_chip_w(const address_space *space, int which, offs_t offse
 		case 0x06/2:
 			if (which == 0)
 			{
-				const device_config *device = devtag_get_device(space->machine, "eeprom");
+				running_device *device = devtag_get_device(space->machine, "eeprom");
 				eeprom_write_bit(device, data & 0x80);
 				eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
 				eeprom_set_clock_line(device, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
@@ -707,7 +707,7 @@ static void common_io_chip_w(const address_space *space, int which, offs_t offse
 			else
 			{
 				/* multi-32 EEPROM access */
-				const device_config *device = devtag_get_device(space->machine, "eeprom");
+				running_device *device = devtag_get_device(space->machine, "eeprom");
 				eeprom_write_bit(device, data & 0x80);
 				eeprom_set_cs_line(device, (data & 0x20) ? CLEAR_LINE : ASSERT_LINE);
 				eeprom_set_clock_line(device, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
@@ -1117,7 +1117,7 @@ static WRITE8_HANDLER( sound_int_control_hi_w )
 }
 
 
-static void ym3438_irq_handler(const device_config *device, int state)
+static void ym3438_irq_handler(running_device *device, int state)
 {
 	if (state)
 		signal_sound_irq(device->machine, SOUND_IRQ_YM3438);
@@ -1877,15 +1877,15 @@ static INPUT_PORTS_START( scross )
 	PORT_INCLUDE( multi32_generic )
 
 	PORT_MODIFY("P1_A")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_SPACE)	/*  */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_LSHIFT)	/*  */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_LALT)		/* brake */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_SPACE)		/* P1 Attack */
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_LSHIFT)		/* P1 Wheelie */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1) PORT_CODE(KEYCODE_LALT)		/* P1 Brake */
 	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_MODIFY("P1_B")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_Q)		/*  */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_W)		/*  */
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_S)		/* brake */
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_Q)		/* P2 Attack */
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_W)		/* P2 Wheelie */
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2) PORT_CODE(KEYCODE_S)		/* P2 Brake */
 	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_MODIFY("P2_A")
@@ -1894,13 +1894,13 @@ static INPUT_PORTS_START( scross )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_UNUSED )
 
 	PORT_START("ANALOG1")
-	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_PLAYER(1)
+	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_REVERSE PORT_PLAYER(1)
 
 	PORT_START("ANALOG2")
 	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_PLAYER(1)
 
 	PORT_START("ANALOG3")
-	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_PLAYER(2)
+	PORT_BIT( 0xff, 0x80, IPT_PADDLE ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_REVERSE PORT_PLAYER(2)
 
 	PORT_START("ANALOG4")
 	PORT_BIT( 0xff, 0x00, IPT_PEDAL ) PORT_SENSITIVITY(30) PORT_KEYDELTA(10) PORT_PLAYER(2)
@@ -3926,7 +3926,7 @@ static DRIVER_INIT( radr )
 
 static DRIVER_INIT( scross )
 {
-	const device_config *multipcm = devtag_get_device(machine, "sega");
+	running_device *multipcm = devtag_get_device(machine, "sega");
 	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 	memory_install_write8_device_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), multipcm, 0xb0, 0xbf, 0, 0, scross_bank_w);
 }

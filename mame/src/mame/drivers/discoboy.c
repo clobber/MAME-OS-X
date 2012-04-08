@@ -35,7 +35,7 @@ Notes:
 */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "sound/msm5205.h"
@@ -43,9 +43,13 @@ Notes:
 
 
 
-typedef struct _discoboy_state discoboy_state;
-struct _discoboy_state
+class discoboy_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, discoboy_state(machine)); }
+
+	discoboy_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  ram_1;
 	UINT8 *  ram_2;
@@ -60,7 +64,7 @@ struct _discoboy_state
 	int      adpcm_data;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 
@@ -318,7 +322,7 @@ ADDRESS_MAP_END
 //  state->adpcm_data = data;
 //}
 
-static void splash_msm5205_int( const device_config *device )
+static void splash_msm5205_int( running_device *device )
 {
 	discoboy_state *state = (discoboy_state *)device->machine->driver_data;
 	msm5205_data_w(device, state->adpcm_data >> 4);

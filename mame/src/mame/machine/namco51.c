@@ -54,7 +54,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "namco51.h"
 #include "cpu/mb88xx/mb88xx.h"
 
@@ -70,7 +70,7 @@
 typedef struct _namco_51xx_state namco_51xx_state;
 struct _namco_51xx_state
 {
-	const device_config *	cpu;
+	running_device *	cpu;
 	devcb_resolved_read8 in[4];
 	devcb_resolved_write8 out[2];
 	INT32 lastcoins,lastbuttons;
@@ -82,7 +82,7 @@ struct _namco_51xx_state
 	INT32 mode,coincred_mode,remap_joy;
 };
 
-INLINE namco_51xx_state *get_safe_token(const device_config *device)
+INLINE namco_51xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -377,16 +377,15 @@ ROM_END
 
 static DEVICE_START( namco_51xx )
 {
-	const namco_51xx_interface *config = (const namco_51xx_interface *)device->static_config;
+	const namco_51xx_interface *config = (const namco_51xx_interface *)device->baseconfig().static_config;
 	namco_51xx_state *state = get_safe_token(device);
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 
 	assert(config != NULL);
 
 	/* find our CPU */
-	state->cpu = cputag_get_cpu(device->machine, device_build_tag(tempstring, device, "mcu"));
+	state->cpu = device->subdevice("mcu");
 	assert(state->cpu != NULL);
-	astring_free(tempstring);
 
 	/* resolve our read callbacks */
 	devcb_resolve_read8(&state->in[0], &config->in[0], device);
@@ -397,7 +396,15 @@ static DEVICE_START( namco_51xx )
 	/* resolve our write callbacks */
 	devcb_resolve_write8(&state->out[0], &config->out[0], device);
 	devcb_resolve_write8(&state->out[1], &config->out[1], device);
-
+#if 0
+	INT32 lastcoins,lastbuttons;
+	INT32 credits;
+	INT32 coins[2];
+	INT32 coins_per_cred[2];
+	INT32 creds_per_coin[2];
+	INT32 in_count;
+	INT32 mode,coincred_mode,remap_joy;
+#endif
 	state_save_register_device_item(device, 0, state->lastcoins);
 	state_save_register_device_item(device, 0, state->lastbuttons);
 	state_save_register_device_item(device, 0, state->credits);
@@ -405,6 +412,9 @@ static DEVICE_START( namco_51xx )
 	state_save_register_device_item_array(device, 0, state->coins_per_cred);
 	state_save_register_device_item_array(device, 0, state->creds_per_coin);
 	state_save_register_device_item(device, 0, state->in_count);
+	state_save_register_device_item(device, 0, state->mode);
+	state_save_register_device_item(device, 0, state->coincred_mode);
+	state_save_register_device_item(device, 0, state->remap_joy);
 }
 
 

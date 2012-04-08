@@ -51,13 +51,17 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 
 
-typedef struct _beaminv_state beaminv_state;
-struct _beaminv_state
+class beaminv_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, beaminv_state(machine)); }
+
+	beaminv_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	size_t     videoram_size;
@@ -69,7 +73,7 @@ struct _beaminv_state
 	UINT8      controller_select;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 

@@ -344,7 +344,7 @@ Notes:
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms32031/tms32031.h"
 #include "cpu/m6800/m6800.h"
 #include "deprecat.h"
@@ -4005,7 +4005,7 @@ static DRIVER_INIT( wcbowln )	/* PIC 16C54 labeled as ITBWL-3 */
 
 static void install_timekeeper(running_machine *machine)
 {
-	const device_config *device = devtag_get_device(machine, "m48t02");
+	running_device *device = devtag_get_device(machine, "m48t02");
 	memory_install_readwrite32_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), device, 0x681000, 0x6817ff, 0, 0, timekeeper_32be_r, timekeeper_32be_w);
 }
 
@@ -4094,7 +4094,7 @@ static DRIVER_INIT( gt3dl )
 }
 
 
-static DRIVER_INIT( gtclassp )
+static DRIVER_INIT( gtclasscp )
 {
 	/* a little extra protection */
 	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x680000, 0x680003, 0, 0, gtclass_prot_result_r);
@@ -4227,6 +4227,6 @@ GAME( 2000, gt2ks100, gt2k,     sftm,    s_ver, s_ver,    ROT0, "Incredible Tech
 GAME( 2000, gt2kt500, gt2k,     tourny,  gt98s, aamat,    ROT0, "Incredible Technologies", "Golden Tee 2K Tournament (v5.00)" , 0) /* PIC 16C54 labeled as ITGF2K */
 GAME( 2002, gtsuprem, gt2k,     tourny,  gt98s, aamat,    ROT0, "Incredible Technologies", "Golden Tee Supreme Edition Tournament (v5.10)" , 0) /* PIC 16C54 labeled as ITGF2K-I */
 
-GAME( 2001, gtclassc, 0,        sftm,    aama,  aama,     ROT0, "Incredible Technologies", "Golden Tee Classic (v1.00)" , 0) /* PIC 16C54 labeled as ITGFCL */
-GAME( 2001, gtclasscp, gtclassc, sftm,    aama,  gtclassp, ROT0, "Incredible Technologies", "Golden Tee Classic (v1.00) with Infinite Loop Protection" , 0) /* PIC 16C54 labeled as ITGFCL */
+GAME( 2001, gtclassc,  0,        sftm,    aama,  aama,      ROT0, "Incredible Technologies", "Golden Tee Classic (v1.00)" , 0) /* PIC 16C54 labeled as ITGFCL */
+GAME( 2001, gtclasscp, gtclassc, sftm,    aama,  gtclasscp, ROT0, "Incredible Technologies", "Golden Tee Classic (v1.00) with Infinite Loop Protection" , 0) /* PIC 16C54 labeled as ITGFCL */
 GAME( 2001, gtclasscs, gtclassc, sftm,    s_ver, s_ver,    ROT0, "Incredible Technologies", "Golden Tee Classic (v1.00S)" , 0) /* PIC 16C54 labeled as ITGFCL-M */

@@ -16,7 +16,7 @@ DIP locations verified for:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/8255ppi.h"
 #include "sound/samples.h"
@@ -41,9 +41,13 @@ enum
 };
 
 
-typedef struct _astinvad_state astinvad_state;
-struct _astinvad_state
+class astinvad_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, astinvad_state(machine)); }
+
+	astinvad_state(running_machine &machine) { }
+
 	UINT8 *    colorram;
 	UINT8 *    videoram;
 	size_t     videoram_size;
@@ -55,10 +59,10 @@ struct _astinvad_state
 	UINT8      flip_yoffs;
 	UINT8      color_latch;
 
-	const device_config *maincpu;
-	const device_config *ppi8255_0;
-	const device_config *ppi8255_1;
-	const device_config *samples;
+	running_device *maincpu;
+	running_device *ppi8255_0;
+	running_device *ppi8255_1;
+	running_device *samples;
 };
 
 
@@ -533,7 +537,7 @@ static INPUT_PORTS_START( spaceint )
 	PORT_DIPSETTING(    0xff, DEF_STR( Cocktail ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( spaceinj )
+static INPUT_PORTS_START( spaceintj )
 	PORT_INCLUDE( spaceint )
 
 	PORT_MODIFY("IN1")
@@ -776,4 +780,4 @@ GAME( 1980, astinvad, kamikaze, kamikaze, astinvad, kamikaze, ROT270, "Stern",  
 GAME( 19??, kosmokil, kamikaze, kamikaze, kamikaze, kamikaze, ROT270, "bootleg",            "Kosmo Killer",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // says >BEM< Mi Italy but it looks hacked in, dif revision of game tho.
 GAME( 1979, spcking2, 0,        spcking2, spcking2, spcking2, ROT270, "Konami",             "Space King 2",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1980, spaceint, 0,        spaceint, spaceint, 0,        ROT90,  "Shoei",              "Space Intruder", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1980, spaceintj,spaceint, spaceint, spaceinj, 0,        ROT90,  "Shoei",              "Space Intruder (Japan)", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1980, spaceintj,spaceint, spaceint, spaceintj,0,        ROT90,  "Shoei",              "Space Intruder (Japan)", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

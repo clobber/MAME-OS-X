@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _alpha68k_state alpha68k_state;
-struct _alpha68k_state
+class alpha68k_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, alpha68k_state(machine)); }
+
+	alpha68k_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    videoram;
 	UINT16 *    spriteram;
@@ -29,7 +33,7 @@ struct _alpha68k_state
 	unsigned    game_id;	// see below
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 /* game_id - used to deal with a few game specific situations */

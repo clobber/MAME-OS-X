@@ -84,15 +84,19 @@ Stephh's notes (based on the game M68EC020 code and some tests) :
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
 #define MASTER_CLOCK 32000000
 
-typedef struct _dreamwld_state dreamwld_state;
-struct _dreamwld_state
+class dreamwld_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dreamwld_state(machine)); }
+
+	dreamwld_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT32 *  bg_videoram;
 	UINT32 *  bg2_videoram;

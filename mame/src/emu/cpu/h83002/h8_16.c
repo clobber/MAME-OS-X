@@ -13,6 +13,7 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "h8.h"
 #include "h8priv.h"
@@ -137,7 +138,7 @@ static void h8_set_ccr(h83xx_state *h8, UINT8 data)
 	if(h8->ccr & UIFLAG) h8->h8uiflag = 1;
 	if(h8->ccr & IFLAG) h8->h8iflag = 1;
 
-	h8_check_irqs(h8);
+	if (!h8->incheckirqs) h8_check_irqs(h8);
 }
 
 static INT16 h8_getreg16(h83xx_state *h8, UINT8 reg)
@@ -219,8 +220,8 @@ static CPU_INIT(h8)
 
 	h8->mode_8bit = 0;
 
-	h8->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	h8->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	h8->program = device->space(AS_PROGRAM);
+	h8->io = device->space(AS_IO);
 
 	state_save_register_device_item(device, 0, h8->h8err);
 	state_save_register_device_item_array(device, 0, h8->regs);
@@ -254,6 +255,8 @@ static CPU_RESET(h8)
 
 	h8->h8err = 0;
 	h8->pc = h8_mem_read32(h8, 0) & 0xffffff;
+
+	h8->incheckirqs = 0;
 
 	// disable timers
 	h8->h8TSTR = 0;
@@ -322,6 +325,9 @@ static int h8_get_priority(h83xx_state *h8, UINT8 bit)
 static void h8_check_irqs(h83xx_state *h8)
 {
 	int lv = -1;
+
+	h8->incheckirqs = 1;
+
 	if (h8->h8iflag == 0)
 	{
 		lv = 0;
@@ -376,6 +382,8 @@ static void h8_check_irqs(h83xx_state *h8)
 		if (source != 0xff)
 			h8_GenException(h8, source);
 	}
+
+	h8->incheckirqs = 0;
 }
 
 #define H8_ADDR_MASK 0xffffff
@@ -579,20 +587,20 @@ CPU_GET_INFO( h8_3002 )
 	case CPUINFO_INT_MAX_INSTRUCTION_BYTES:		info->i           = 10;							break;
 
 		// Bus sizes
-	case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;						break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM:	info->i = 24;						break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM:	info->i = 0;						break;
-	case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;						break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;						break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;						break;
-	case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;						break;
-	case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 16;						break;
-	case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 24;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;						break;
+	case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;						break;
+	case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;						break;
+	case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;						break;
 
 		// Internal maps
-	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3002_internal_map); break;
-	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_DATA:    info->internal_map16 = NULL;	break;
-	case CPUINFO_PTR_INTERNAL_MEMORY_MAP_IO:      info->internal_map16 = NULL;	break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3002_internal_map); break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_DATA:    info->internal_map16 = NULL;	break;
+	case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_IO:      info->internal_map16 = NULL;	break;
 
 		// CPU misc parameters
 	case DEVINFO_STR_NAME:						strcpy(info->s, "H8/3002");						break;
@@ -639,7 +647,7 @@ CPU_GET_INFO( h8_3044 )
 {
 	switch (state)
 	{
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3044_internal_map);  break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3044_internal_map);  break;
 		case CPUINFO_FCT_DISASSEMBLE:				info->disassemble = CPU_DISASSEMBLE_NAME(h8_24);					break;
 		case DEVINFO_STR_NAME:				strcpy(info->s, "H8/3044");	 break;
 		default:
@@ -651,7 +659,7 @@ CPU_GET_INFO( h8_3007 )
 {
 	switch (state)
 	{
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3007_internal_map);  break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map16 = ADDRESS_MAP_NAME(h8_3007_internal_map);  break;
 		case CPUINFO_FCT_INIT:				info->init = CPU_INIT_NAME(h8_3007);		break;
 		case DEVINFO_STR_NAME:				strcpy(info->s, "H8/3007");		break;
 		default:

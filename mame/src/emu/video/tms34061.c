@@ -10,7 +10,7 @@
  *                                                                          *
  ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "tms34061.h"
 
 
@@ -35,7 +35,7 @@ struct tms34061_data
 	UINT8 *				shiftreg;
 	emu_timer *			timer;
 	struct tms34061_interface intf;
-	const device_config *screen;
+	running_device *screen;
 };
 
 
@@ -80,7 +80,7 @@ void tms34061_start(running_machine *machine, const struct tms34061_interface *i
 	/* reset the data */
 	memset(&tms34061, 0, sizeof(tms34061));
 	tms34061.intf = *interface;
-	tms34061.screen = devtag_get_device(machine, tms34061.intf.screen_tag);
+	tms34061.screen = machine->device(tms34061.intf.screen_tag);
 	tms34061.vrammask = tms34061.intf.vramsize - 1;
 
 	/* allocate memory for VRAM */

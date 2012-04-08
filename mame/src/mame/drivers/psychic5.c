@@ -309,7 +309,7 @@ The first sprite data is located at f20b,then f21b and so on.
         C= Color palette selector
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "sound/2203intf.h"
@@ -662,7 +662,7 @@ GFXDECODE_END
 
 
 
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }

@@ -266,7 +266,7 @@ TODO:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6800/m6800.h"
 #include "deprecat.h"
@@ -697,7 +697,7 @@ GFXDECODE_END
  *************************************/
 
 // handler called by the 2203 emulator when the internal timers cause an IRQ
-static void irqhandler(const device_config *device, int irq)
+static void irqhandler(running_device *device, int irq)
 {
 	bublbobl_state *state = (bublbobl_state *)device->machine->driver_data;
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);

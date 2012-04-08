@@ -4,7 +4,7 @@ Atari Ultra Tank video emulation
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/ultratnk.h"
 #include "audio/sprint4.h"
 
@@ -96,7 +96,7 @@ VIDEO_EOF( ultratnk )
 {
 	int i;
 	UINT16 BG = colortable_entry_get_value(machine->colortable, 0);
-	const device_config *discrete = devtag_get_device(machine, "discrete");
+	running_device *discrete = devtag_get_device(machine, "discrete");
 	UINT8 *videoram = machine->generic.videoram.u8;
 
 	/* check for sprite-playfield collisions */

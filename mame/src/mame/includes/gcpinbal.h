@@ -1,7 +1,11 @@
 
-typedef struct _gcpinbal_state gcpinbal_state;
-struct _gcpinbal_state
+class gcpinbal_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, gcpinbal_state(machine)); }
+
+	gcpinbal_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    tilemapram;
 	UINT16 *    ioc_ram;
@@ -23,9 +27,9 @@ struct _gcpinbal_state
 	UINT8       adpcm_trigger, adpcm_data;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *oki;
-	const device_config *msm;
+	running_device *maincpu;
+	running_device *oki;
+	running_device *msm;
 };
 
 

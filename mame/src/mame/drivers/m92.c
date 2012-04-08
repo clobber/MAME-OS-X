@@ -193,7 +193,7 @@ psoldier dip locations still need veritication.
 
 *****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/nec/nec.h"
 #include "includes/m92.h"
 #include "includes/iremipt.h"
@@ -333,9 +333,9 @@ static TIMER_CALLBACK( setvector_callback )
 	}
 
 	if (irqvector & 0x2)		/* YM2151 has precedence */
-		cpu_set_input_line_vector(cputag_get_cpu(machine, "soundcpu"), 0, 0x18);
+		cpu_set_input_line_vector(devtag_get_device(machine, "soundcpu"), 0, 0x18);
 	else if (irqvector & 0x1)	/* V30 */
-		cpu_set_input_line_vector(cputag_get_cpu(machine, "soundcpu"), 0, 0x19);
+		cpu_set_input_line_vector(devtag_get_device(machine, "soundcpu"), 0, 0x19);
 
 	if (irqvector == 0)	/* no IRQs pending */
 		cputag_set_input_line(machine, "soundcpu", 0, CLEAR_LINE);
@@ -897,7 +897,7 @@ GFXDECODE_END
 
 /***************************************************************************/
 
-static void sound_irq(const device_config *device, int state)
+static void sound_irq(running_device *device, int state)
 {
 	if (state)
 		timer_call_after_resynch(device->machine, NULL, YM2151_ASSERT, setvector_callback);

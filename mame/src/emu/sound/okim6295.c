@@ -21,9 +21,7 @@
  **********************************************************************************************/
 
 
-#include <math.h>
-
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "okim6295.h"
 
@@ -48,7 +46,7 @@ struct _okim6295_state
 {
 	#define OKIM6295_VOICES		4
 	struct ADPCMVoice voice[OKIM6295_VOICES];
-	const device_config *device;
+	running_device *device;
 	INT32 command;
 	UINT8 bank_installed;
 	INT32 bank_offs;
@@ -98,7 +96,7 @@ static ADDRESS_MAP_START( okim6295, 0, 8 )
 ADDRESS_MAP_END
 
 
-INLINE okim6295_state *get_safe_token(const device_config *device)
+INLINE okim6295_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -216,7 +214,7 @@ static void generate_adpcm(okim6295_state *chip, struct ADPCMVoice *voice, INT16
 		while (samples)
 		{
 			/* compute the new amplitude and update the current step */
-			int nibble = memory_raw_read_byte(chip->device->space[0], base + sample / 2) >> (((sample & 1) << 2) ^ 4);
+			int nibble = memory_raw_read_byte(chip->device->space(), base + sample / 2) >> (((sample & 1) << 2) ^ 4);
 
 			/* output to the buffer, scaling by the volume */
 			/* signal in range -2048..2047, volume in range 2..32 => signal * volume / 2 in range -32768..32767 */
@@ -304,7 +302,7 @@ static STREAM_UPDATE( okim6295_update )
 
 ***********************************************************************************************/
 
-static void adpcm_state_save_register(struct ADPCMVoice *voice, const device_config *device, int index)
+static void adpcm_state_save_register(struct ADPCMVoice *voice, running_device *device, int index)
 {
 	state_save_register_device_item(device, index, voice->playing);
 	state_save_register_device_item(device, index, voice->sample);
@@ -317,12 +315,12 @@ static void adpcm_state_save_register(struct ADPCMVoice *voice, const device_con
 
 static STATE_POSTLOAD( okim6295_postload )
 {
-	const device_config *device = (const device_config *)param;
+	running_device *device = (running_device *)param;
 	okim6295_state *info = get_safe_token(device);
 	okim6295_set_bank_base(device, info->bank_offs);
 }
 
-static void okim6295_state_save_register(okim6295_state *info, const device_config *device)
+static void okim6295_state_save_register(okim6295_state *info, running_device *device)
 {
 	int j;
 
@@ -344,7 +342,7 @@ static void okim6295_state_save_register(okim6295_state *info, const device_conf
 
 static DEVICE_START( okim6295 )
 {
-	const okim6295_interface *intf = (const okim6295_interface *)device->static_config;
+	const okim6295_interface *intf = (const okim6295_interface *)device->baseconfig().static_config;
 	okim6295_state *info = get_safe_token(device);
 	int divisor = intf->pin7 ? 132 : 165;
 	int voice;
@@ -398,7 +396,7 @@ static DEVICE_RESET( okim6295 )
 
 ***********************************************************************************************/
 
-void okim6295_set_bank_base(const device_config *device, int base)
+void okim6295_set_bank_base(running_device *device, int base)
 {
 	okim6295_state *info = get_safe_token(device);
 	stream_update(info->stream);
@@ -407,7 +405,7 @@ void okim6295_set_bank_base(const device_config *device, int base)
 	if (!info->bank_installed && base != 0)
 	{
 		/* override our memory map with a bank */
-		memory_install_read_bank(device->space[0], 0x00000, 0x3ffff, 0, 0, device->tag);
+		memory_install_read_bank(device->space(), 0x00000, 0x3ffff, 0, 0, device->tag());
 		info->bank_installed = TRUE;
 	}
 
@@ -415,7 +413,7 @@ void okim6295_set_bank_base(const device_config *device, int base)
 	if (info->bank_installed)
 	{
 		info->bank_offs = base;
-		memory_set_bankptr(device->machine, device->tag, device->region + base);
+		memory_set_bankptr(device->machine, device->tag(), device->region->base.u8 + base);
 	}
 }
 
@@ -427,7 +425,7 @@ void okim6295_set_bank_base(const device_config *device, int base)
 
 ***********************************************************************************************/
 
-void okim6295_set_pin7(const device_config *device, int pin7)
+void okim6295_set_pin7(running_device *device, int pin7)
 {
 	okim6295_state *info = get_safe_token(device);
 	int divisor = pin7 ? 132 : 165;
@@ -498,14 +496,14 @@ WRITE8_DEVICE_HANDLER( okim6295_w )
 				/* determine the start/stop positions */
 				base = info->command * 8;
 
-				start  = memory_raw_read_byte(device->space[0], base + 0) << 16;
-				start |= memory_raw_read_byte(device->space[0], base + 1) << 8;
-				start |= memory_raw_read_byte(device->space[0], base + 2) << 0;
+				start  = memory_raw_read_byte(device->space(), base + 0) << 16;
+				start |= memory_raw_read_byte(device->space(), base + 1) << 8;
+				start |= memory_raw_read_byte(device->space(), base + 2) << 0;
 				start &= 0x3ffff;
 
-				stop  = memory_raw_read_byte(device->space[0], base + 3) << 16;
-				stop |= memory_raw_read_byte(device->space[0], base + 4) << 8;
-				stop |= memory_raw_read_byte(device->space[0], base + 5) << 0;
+				stop  = memory_raw_read_byte(device->space(), base + 3) << 16;
+				stop |= memory_raw_read_byte(device->space(), base + 4) << 8;
+				stop |= memory_raw_read_byte(device->space(), base + 5) << 0;
 				stop &= 0x3ffff;
 
 				/* set up the voice to play this sample */
@@ -524,13 +522,13 @@ WRITE8_DEVICE_HANDLER( okim6295_w )
 					}
 					else
 					{
-						logerror("OKIM6295:'%s' requested to play sample %02x on non-stopped voice\n",device->tag,info->command);
+						logerror("OKIM6295:'%s' requested to play sample %02x on non-stopped voice\n",device->tag(),info->command);
 					}
 				}
 				/* invalid samples go here */
 				else
 				{
-					logerror("OKIM6295:'%s' requested to play invalid sample %02x\n",device->tag,info->command);
+					logerror("OKIM6295:'%s' requested to play invalid sample %02x\n",device->tag(),info->command);
 					voice->playing = 0;
 				}
 			}

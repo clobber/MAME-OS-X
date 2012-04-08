@@ -4,7 +4,7 @@
 
 *************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "streams.h"
 #include "includes/gridlee.h"
 #include "sound/samples.h"
@@ -91,7 +91,7 @@ DEVICE_GET_INFO( gridlee_sound )
 WRITE8_HANDLER( gridlee_sound_w )
 {
 	static UINT8 sound_data[24];
-	const device_config *samples = devtag_get_device(space->machine, "samples");
+	running_device *samples = devtag_get_device(space->machine, "samples");
 
 	stream_update(gridlee_stream);
 

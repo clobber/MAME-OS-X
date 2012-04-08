@@ -73,6 +73,7 @@ TODO:
 
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "m6800.h"
 
@@ -112,7 +113,7 @@ struct _m6800_state
 	UINT8	ic_eddge;		/* InputCapture eddge , b.0=fall,b.1=raise */
 
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 
 	/* Memory spaces */
     const address_space *program;
@@ -152,7 +153,7 @@ struct _m6800_state
 
 };
 
-INLINE m6800_state *get_safe_token(const device_config *device)
+INLINE m6800_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -545,7 +546,7 @@ INLINE void WM16(m6800_state *cpustate, UINT32 Addr, PAIR *p )
 /* IRQ enter */
 static void enter_interrupt(m6800_state *cpustate, const char *message,UINT16 irq_vector)
 {
-	LOG((message, cpustate->device->tag));
+	LOG((message, cpustate->device->tag()));
 	if( cpustate->wai_state & (M6800_WAI|M6800_SLP) )
 	{
 		if( cpustate->wai_state & M6800_WAI )
@@ -897,9 +898,9 @@ static CPU_INIT( m6800 )
 {
 	m6800_state *cpustate = get_safe_token(device);
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	//  cpustate->subtype   = SUBTYPE_M6800;
 	cpustate->insn = m6800_insn;
@@ -964,7 +965,7 @@ static void set_irq_line(m6800_state *cpustate, int irqline, int state)
 	{
 		//int eddge;
 
-		LOG(("M6800 '%s' set_irq_line %d,%d\n", cpustate->device->tag, irqline, state));
+		LOG(("M6800 '%s' set_irq_line %d,%d\n", cpustate->device->tag(), irqline, state));
 		cpustate->irq_state[irqline] = state;
 
 		if (irqline == M6800_TIN_LINE && state != cpustate->irq_state[irqline])
@@ -1293,9 +1294,9 @@ static CPU_INIT( m6801 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->clock = device->clock / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
@@ -1316,9 +1317,9 @@ static CPU_INIT( m6802 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	state_register(cpustate, "m6802");
 }
@@ -1335,9 +1336,9 @@ static CPU_INIT( m6803 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->clock = device->clock / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
@@ -1669,9 +1670,9 @@ static CPU_INIT( m6808 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	state_register(cpustate, "m6808");
 }
@@ -1689,9 +1690,9 @@ static CPU_INIT( hd63701 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->clock = device->clock / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
@@ -2037,9 +2038,9 @@ static CPU_INIT( nsc8105 )
 	//  cpustate->subtype = SUBTYPE_NSC8105;
 	cpustate->device = device;
 
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->data = memory_find_address_space(device, ADDRESS_SPACE_DATA);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->data = device->space(AS_DATA);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->insn = nsc8105_insn;
 	cpustate->cycles = cycles_nsc8105;
@@ -2410,7 +2411,7 @@ static READ8_HANDLER( m6803_internal_registers_r )
 		case 0x0e:
 			return (cpustate->input_capture >> 8) & 0xff;
 		case 0x0f:
-			logerror("CPU '%s' PC %04x: warning - read from unsupported register %02x\n",space->cpu->tag,cpu_get_pc(space->cpu),offset);
+			logerror("CPU '%s' PC %04x: warning - read from unsupported register %02x\n",space->cpu->tag(),cpu_get_pc(space->cpu),offset);
 			return 0;
 		case 0x10:
 			return cpustate->rmcr;
@@ -2427,7 +2428,7 @@ static READ8_HANDLER( m6803_internal_registers_r )
 		case 0x13:
 			return cpustate->tdr;
 		case 0x14:
-			logerror("CPU '%s' PC %04x: read RAM control register\n",space->cpu->tag,cpu_get_pc(space->cpu));
+			logerror("CPU '%s' PC %04x: read RAM control register\n",space->cpu->tag(),cpu_get_pc(space->cpu));
 			return cpustate->ram_ctrl;
 		case 0x15:
 		case 0x16:
@@ -2441,7 +2442,7 @@ static READ8_HANDLER( m6803_internal_registers_r )
 		case 0x1e:
 		case 0x1f:
 		default:
-			logerror("CPU '%s' PC %04x: warning - read from reserved internal register %02x\n",space->cpu->tag,cpu_get_pc(space->cpu),offset);
+			logerror("CPU '%s' PC %04x: warning - read from reserved internal register %02x\n",space->cpu->tag(),cpu_get_pc(space->cpu),offset);
 			return 0;
 	}
 }
@@ -2474,7 +2475,7 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 						| (memory_read_byte_8be(cpustate->io, M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
 
 				if (cpustate->port2_ddr & 2)
-					logerror("CPU '%s' PC %04x: warning - port 2 bit 1 set as output (OLVL) - not supported\n",space->cpu->tag,cpu_get_pc(space->cpu));
+					logerror("CPU '%s' PC %04x: warning - port 2 bit 1 set as output (OLVL) - not supported\n",space->cpu->tag(),cpu_get_pc(space->cpu));
 			}
 			break;
 		case 0x02:
@@ -2573,10 +2574,10 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 		case 0x0d:
 		case 0x0e:
 		case 0x12:
-			logerror("CPU '%s' PC %04x: warning - write %02x to read only internal register %02x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+			logerror("CPU '%s' PC %04x: warning - write %02x to read only internal register %02x\n",space->cpu->tag(),cpu_get_pc(space->cpu),data,offset);
 			break;
 		case 0x0f:
-			logerror("CPU '%s' PC %04x: warning - write %02x to unsupported internal register %02x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+			logerror("CPU '%s' PC %04x: warning - write %02x to unsupported internal register %02x\n",space->cpu->tag(),cpu_get_pc(space->cpu),data,offset);
 			break;
 		case 0x10:
 			cpustate->rmcr = data & 0x0f;
@@ -2616,7 +2617,7 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 			cpustate->tdr = data;
 			break;
 		case 0x14:
-			logerror("CPU '%s' PC %04x: write %02x to RAM control register\n",space->cpu->tag,cpu_get_pc(space->cpu),data);
+			logerror("CPU '%s' PC %04x: write %02x to RAM control register\n",space->cpu->tag(),cpu_get_pc(space->cpu),data);
 			cpustate->ram_ctrl = data;
 			break;
 		case 0x15:
@@ -2631,7 +2632,7 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 		case 0x1e:
 		case 0x1f:
 		default:
-			logerror("CPU '%s' PC %04x: warning - write %02x to reserved internal register %02x\n",space->cpu->tag,cpu_get_pc(space->cpu),data,offset);
+			logerror("CPU '%s' PC %04x: warning - write %02x to reserved internal register %02x\n",space->cpu->tag(),cpu_get_pc(space->cpu),data,offset);
 			break;
 	}
 }
@@ -2686,15 +2687,15 @@ CPU_GET_INFO( m6800 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 12;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 9;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 9;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6800_IRQ_LINE:	info->i = cpustate->irq_state[M6800_IRQ_LINE]; break;
 		case CPUINFO_INT_INPUT_STATE + M6800_TIN_LINE:	info->i = cpustate->irq_state[M6800_TIN_LINE]; break;
@@ -2762,8 +2763,8 @@ CPU_GET_INFO( m6801 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case CPUINFO_INT_CLOCK_DIVIDER:							info->i = 4;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 9;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 9;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6801);				break;
@@ -2811,15 +2812,15 @@ CPU_GET_INFO( m6803 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case CPUINFO_INT_CLOCK_DIVIDER:							info->i = 4;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 9;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 9;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6803);				break;
 		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(m6803);			break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6803);			break;
 
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(m6803_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(m6803_mem); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "M6803");				break;
@@ -2862,8 +2863,8 @@ CPU_GET_INFO( hd63701 )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case CPUINFO_INT_CLOCK_DIVIDER:							info->i = 4;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 9;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 9;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(hd63701);				break;

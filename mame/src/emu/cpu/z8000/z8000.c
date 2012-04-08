@@ -43,6 +43,7 @@
  *
  *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "z8000.h"
 
@@ -77,7 +78,7 @@ struct _z8000_state
 	int nmi_state;		/* NMI line state */
 	int irq_state[2];	/* IRQ line states (NVI, VI) */
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int icount;
@@ -85,7 +86,7 @@ struct _z8000_state
 
 #include "z8000cpu.h"
 
-INLINE z8000_state *get_safe_token(const device_config *device)
+INLINE z8000_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -232,7 +233,7 @@ INLINE void set_irq(z8000_state *cpustate, int type)
             cpustate->irq_req = type;
             break;
         case Z8000_SYSCALL >> 8:
-            LOG(("Z8K '%s' SYSCALL $%02x\n", cpustate->device->tag, type & 0xff));
+            LOG(("Z8K '%s' SYSCALL $%02x\n", cpustate->device->tag(), type & 0xff));
             cpustate->irq_req = type;
             break;
         default:
@@ -270,7 +271,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->irq_srv = cpustate->irq_req;
         cpustate->irq_req &= ~Z8000_TRAP;
         cpustate->pc = TRAP;
-        LOG(("Z8K '%s' trap $%04x\n", cpustate->device->tag, cpustate->pc));
+        LOG(("Z8K '%s' trap $%04x\n", cpustate->device->tag(), cpustate->pc));
     }
     else
     if (cpustate->irq_req & Z8000_SYSCALL)
@@ -282,7 +283,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->irq_srv = cpustate->irq_req;
         cpustate->irq_req &= ~Z8000_SYSCALL;
         cpustate->pc = SYSCALL;
-        LOG(("Z8K '%s' syscall $%04x\n", cpustate->device->tag, cpustate->pc));
+        LOG(("Z8K '%s' syscall $%04x\n", cpustate->device->tag(), cpustate->pc));
     }
     else
     if (cpustate->irq_req & Z8000_SEGTRAP)
@@ -294,7 +295,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->irq_srv = cpustate->irq_req;
         cpustate->irq_req &= ~Z8000_SEGTRAP;
         cpustate->pc = SEGTRAP;
-        LOG(("Z8K '%s' segtrap $%04x\n", cpustate->device->tag, cpustate->pc));
+        LOG(("Z8K '%s' segtrap $%04x\n", cpustate->device->tag(), cpustate->pc));
     }
     else
     if (cpustate->irq_req & Z8000_NMI)
@@ -309,7 +310,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->irq_req &= ~Z8000_NMI;
         CHANGE_FCW(cpustate, fcw);
         cpustate->pc = NMI;
-        LOG(("Z8K '%s' NMI $%04x\n", cpustate->device->tag, cpustate->pc));
+        LOG(("Z8K '%s' NMI $%04x\n", cpustate->device->tag(), cpustate->pc));
     }
     else
     if ((cpustate->irq_req & Z8000_NVI) && (cpustate->fcw & F_NVIE))
@@ -323,7 +324,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->pc = RDMEM_W(cpustate,  NVI + 2);
         cpustate->irq_req &= ~Z8000_NVI;
         CHANGE_FCW(cpustate, fcw);
-        LOG(("Z8K '%s' NVI $%04x\n", cpustate->device->tag, cpustate->pc));
+        LOG(("Z8K '%s' NVI $%04x\n", cpustate->device->tag(), cpustate->pc));
     }
     else
     if ((cpustate->irq_req & Z8000_VI) && (cpustate->fcw & F_VIE))
@@ -337,7 +338,7 @@ INLINE void Interrupt(z8000_state *cpustate)
         cpustate->pc = RDMEM_W(cpustate,  VEC00 + 2 * (cpustate->irq_req & 0xff));
         cpustate->irq_req &= ~Z8000_VI;
         CHANGE_FCW(cpustate, fcw);
-        LOG(("Z8K '%s' VI [$%04x/$%04x] fcw $%04x, pc $%04x\n", cpustate->device->tag, cpustate->irq_vec, VEC00 + VEC00 + 2 * (cpustate->irq_req & 0xff), cpustate->fcw, cpustate->pc));
+        LOG(("Z8K '%s' VI [$%04x/$%04x] fcw $%04x, pc $%04x\n", cpustate->device->tag(), cpustate->irq_vec, VEC00 + VEC00 + 2 * (cpustate->irq_req & 0xff), cpustate->fcw, cpustate->pc));
     }
 }
 
@@ -347,8 +348,8 @@ static CPU_INIT( z8000 )
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	/* already initialized? */
 	if(z8000_exec == NULL)
@@ -363,8 +364,8 @@ static CPU_RESET( z8000 )
 	memset(cpustate, 0, sizeof(*cpustate));
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 	cpustate->fcw = RDMEM_W(cpustate,  2); /* get reset cpustate->fcw */
 	cpustate->pc	= RDMEM_W(cpustate,  4); /* get reset cpustate->pc  */
 }
@@ -531,15 +532,15 @@ CPU_GET_INFO( z8000 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 744;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = cpustate->nmi_state;					break;
 		case CPUINFO_INT_INPUT_STATE + 0:				info->i = cpustate->irq_state[0];				break;

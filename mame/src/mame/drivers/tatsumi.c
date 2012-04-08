@@ -137,7 +137,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/nec/nec.h"
 #include "cpu/m68000/m68000.h"
@@ -826,7 +826,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq(const device_config *device, int state)
+static void sound_irq(running_device *device, int state)
 {
 	cputag_set_input_line(device->machine, "audiocpu", INPUT_LINE_IRQ0, state);
 }
@@ -841,7 +841,7 @@ static INTERRUPT_GEN( roundup5_interrupt )
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xc8/4);	/* VBL */
 }
 
-static void apache3_68000_reset(const device_config *device)
+static void apache3_68000_reset(running_device *device)
 {
 	cputag_set_input_line(device->machine, "sub2", INPUT_LINE_RESET, PULSE_LINE);
 }
@@ -851,7 +851,7 @@ static MACHINE_RESET( apache3 )
 	cputag_set_input_line(machine, "sub2", INPUT_LINE_RESET, ASSERT_LINE); // TODO
 
 	/* Hook the RESET line, which resets the Z80 */
-	m68k_set_reset_callback(cputag_get_cpu(machine, "sub"), apache3_68000_reset);
+	m68k_set_reset_callback(devtag_get_device(machine, "sub"), apache3_68000_reset);
 }
 
 

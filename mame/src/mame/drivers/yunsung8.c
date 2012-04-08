@@ -29,7 +29,7 @@ To Do:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/3812intf.h"
 #include "sound/msm5205.h"
@@ -446,7 +446,7 @@ GFXDECODE_END
 ***************************************************************************/
 
 
-static void yunsung8_adpcm_int( const device_config *device )
+static void yunsung8_adpcm_int( running_device *device )
 {
 	yunsung8_state *state = (yunsung8_state *)device->machine->driver_data;
 

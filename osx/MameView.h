@@ -31,6 +31,7 @@
 
 #include "osdepend.h"
 #include "render.h"
+#include "emu.h"
 
 @class MameController;
 @class MameRenderer;

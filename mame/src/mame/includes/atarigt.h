@@ -11,9 +11,13 @@
 #define TRAM_ENTRIES		0x4000
 #define MRAM_ENTRIES		0x8000
 
-typedef struct _atarigt_state atarigt_state;
-struct _atarigt_state
+class atarigt_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, atarigt_state(machine)); }
+
+	atarigt_state(running_machine &machine) { }
+
 	atarigen_state	atarigen;
 	UINT8			is_primrage;
 	UINT16 *		colorram;
@@ -45,4 +49,4 @@ UINT16 atarigt_colorram_r(atarigt_state *state, offs_t address);
 VIDEO_START( atarigt );
 VIDEO_UPDATE( atarigt );
 
-void atarigt_scanline_update(const device_config *screen, int scanline);
+void atarigt_scanline_update(running_device *screen, int scanline);

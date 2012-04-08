@@ -48,7 +48,7 @@
     2C needs DSP still
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "machine/eeprom.h"
 #include "video/segaic24.h"
@@ -72,7 +72,7 @@ static UINT16 *model2_soundram = NULL;
 
 static UINT32 model2_timervals[4], model2_timerorig[4];
 static int      model2_timerrun[4];
-static const device_config *model2_timers[4];
+static running_device *model2_timers[4];
 static int model2_ctrlmode;
 static int analog_channel;
 
@@ -92,7 +92,7 @@ static int dsp_type;
 static int copro_fifoin_rpos, copro_fifoin_wpos;
 static UINT32 copro_fifoin_data[COPRO_FIFOIN_SIZE];
 static int copro_fifoin_num = 0;
-static int copro_fifoin_pop(const device_config *device, UINT32 *result)
+static int copro_fifoin_pop(running_device *device, UINT32 *result)
 {
 	UINT32 r;
 
@@ -130,7 +130,7 @@ static int copro_fifoin_pop(const device_config *device, UINT32 *result)
 	return 1;
 }
 
-static void copro_fifoin_push(const device_config *device, UINT32 data)
+static void copro_fifoin_push(running_device *device, UINT32 data)
 {
 	if (copro_fifoin_num == COPRO_FIFOIN_SIZE)
 	{
@@ -191,18 +191,18 @@ static UINT32 copro_fifoout_pop(const address_space *space)
 	{
 		if (copro_fifoout_num == COPRO_FIFOOUT_SIZE)
 		{
-			sharc_set_flag_input(cputag_get_cpu(space->machine, "dsp"), 1, ASSERT_LINE);
+			sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, ASSERT_LINE);
 		}
 		else
 		{
-			sharc_set_flag_input(cputag_get_cpu(space->machine, "dsp"), 1, CLEAR_LINE);
+			sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, CLEAR_LINE);
 		}
 	}
 
 	return r;
 }
 
-static void copro_fifoout_push(const device_config *device, UINT32 data)
+static void copro_fifoout_push(running_device *device, UINT32 data)
 {
 	//if (copro_fifoout_wpos == copro_fifoout_rpos)
 	if (copro_fifoout_num == COPRO_FIFOOUT_SIZE)
@@ -353,7 +353,7 @@ static MACHINE_RESET(model2_scsp)
 
 	// copy the 68k vector table into RAM
 	memcpy(model2_soundram, memory_region(machine, "audiocpu") + 0x80000, 16);
-	device_reset(cputag_get_cpu(machine, "audiocpu"));
+	machine->device("audiocpu")->reset();
 }
 
 static MACHINE_RESET(model2)
@@ -408,7 +408,7 @@ static WRITE32_HANDLER( ctrl0_w )
 {
 	if(ACCESSING_BITS_0_7)
 	{
-		const device_config *device = devtag_get_device(space->machine, "eeprom");
+		running_device *device = devtag_get_device(space->machine, "eeprom");
 		model2_ctrlmode = data & 0x01;
 		eeprom_write_bit(device, data & 0x20);
 		eeprom_set_clock_line(device, (data & 0x80) ? ASSERT_LINE : CLEAR_LINE);
@@ -523,9 +523,9 @@ static WRITE32_HANDLER(copro_function_port_w)
 
 	//logerror("copro_function_port_w: %08X, %08X, %08X\n", data, offset, mem_mask);
 	if (dsp_type == DSP_TYPE_SHARC)
-		copro_fifoin_push(cputag_get_cpu(space->machine, "dsp"), d);
+		copro_fifoin_push(devtag_get_device(space->machine, "dsp"), d);
 	else
-		copro_fifoin_push(cputag_get_cpu(space->machine, "tgp"), d);
+		copro_fifoin_push(devtag_get_device(space->machine, "tgp"), d);
 }
 
 static READ32_HANDLER(copro_fifo_r)
@@ -540,7 +540,7 @@ static WRITE32_HANDLER(copro_fifo_w)
 	{
 		if (dsp_type == DSP_TYPE_SHARC)
 		{
-			sharc_external_dma_write(cputag_get_cpu(space->machine, "dsp"), model2_coprocnt, data & 0xffff);
+			sharc_external_dma_write(devtag_get_device(space->machine, "dsp"), model2_coprocnt, data & 0xffff);
 		}
 		else if (dsp_type == DSP_TYPE_TGP)
 		{
@@ -553,9 +553,9 @@ static WRITE32_HANDLER(copro_fifo_w)
 	{
 		//mame_printf_debug("copro_fifo_w: %08X, %08X, %08X at %08X\n", data, offset, mem_mask, cpu_get_pc(space->cpu));
 		if (dsp_type == DSP_TYPE_SHARC)
-			copro_fifoin_push(cputag_get_cpu(space->machine, "dsp"), data);
+			copro_fifoin_push(devtag_get_device(space->machine, "dsp"), data);
 		else
-			copro_fifoin_push(cputag_get_cpu(space->machine, "tgp"), data);
+			copro_fifoin_push(devtag_get_device(space->machine, "tgp"), data);
 	}
 }
 
@@ -568,7 +568,7 @@ static WRITE32_HANDLER(copro_sharc_iop_w)
 		(strcmp(space->machine->gamedrv->name, "vstriker" ) == 0) ||
 		(strcmp(space->machine->gamedrv->name, "gunblade" ) == 0))
 	{
-		sharc_external_iop_write(cputag_get_cpu(space->machine, "dsp"), offset, data);
+		sharc_external_iop_write(devtag_get_device(space->machine, "dsp"), offset, data);
 	}
 	else
 	{
@@ -579,7 +579,7 @@ static WRITE32_HANDLER(copro_sharc_iop_w)
 		else
 		{
 			iop_data |= (data & 0xffff) << 16;
-			sharc_external_iop_write(cputag_get_cpu(space->machine, "dsp"), offset, iop_data);
+			sharc_external_iop_write(devtag_get_device(space->machine, "dsp"), offset, iop_data);
 		}
 		iop_write_num++;
 	}
@@ -654,7 +654,7 @@ static WRITE32_HANDLER(geo_sharc_fifo_w)
 {
     if (model2_geoctl & 0x80000000)
     {
-        sharc_external_dma_write(cputag_get_cpu(space->machine, "dsp2"), model2_geocnt, data & 0xffff);
+        sharc_external_dma_write(devtag_get_device(space->machine, "dsp2"), model2_geocnt, data & 0xffff);
 
         model2_geocnt++;
     }
@@ -670,7 +670,7 @@ static WRITE32_HANDLER(geo_sharc_iop_w)
 {
     if ((strcmp(space->machine->gamedrv->name, "schamp" ) == 0))
     {
-        sharc_external_iop_write(cputag_get_cpu(space->machine, "dsp2"), offset, data);
+        sharc_external_iop_write(devtag_get_device(space->machine, "dsp2"), offset, data);
     }
     else
     {
@@ -681,7 +681,7 @@ static WRITE32_HANDLER(geo_sharc_iop_w)
         else
         {
             geo_iop_data |= (data & 0xffff) << 16;
-            sharc_external_iop_write(cputag_get_cpu(space->machine, "dsp2"), offset, geo_iop_data);
+            sharc_external_iop_write(devtag_get_device(space->machine, "dsp2"), offset, geo_iop_data);
         }
         geo_iop_write_num++;
     }
@@ -858,7 +858,7 @@ static int to_68k;
 
 static int snd_68k_ready_r(const address_space *space)
 {
-	int sr = cpu_get_reg(cputag_get_cpu(space->machine, "audiocpu"), M68K_SR);
+	int sr = cpu_get_reg(devtag_get_device(space->machine, "audiocpu"), M68K_SR);
 
 	if ((sr & 0x0700) > 0x0100)
 	{
@@ -1737,7 +1737,7 @@ ADDRESS_MAP_END
 
 static int scsp_last_line = 0;
 
-static void scsp_irq(const device_config *device, int irq)
+static void scsp_irq(running_device *device, int irq)
 {
 	if (irq > 0)
 	{
@@ -1764,14 +1764,14 @@ static READ32_HANDLER(copro_sharc_input_fifo_r)
 	UINT32 result = 0;
 	//mame_printf_debug("SHARC FIFOIN pop at %08X\n", cpu_get_pc(space->cpu));
 
-	copro_fifoin_pop(cputag_get_cpu(space->machine, "dsp"), &result);
+	copro_fifoin_pop(devtag_get_device(space->machine, "dsp"), &result);
 	return result;
 }
 
 static WRITE32_HANDLER(copro_sharc_output_fifo_w)
 {
 	//mame_printf_debug("SHARC FIFOOUT push %08X\n", data);
-	copro_fifoout_push(cputag_get_cpu(space->machine, "dsp"), data);
+	copro_fifoout_push(devtag_get_device(space->machine, "dsp"), data);
 }
 
 static READ32_HANDLER(copro_sharc_buffer_r)
@@ -3316,18 +3316,18 @@ ROM_START( pltkids ) /* Pilot Kids Revision A, Model 2B */
 	ROM_LOAD("mpr-21280.sd4", 0x0600000, 0x200000, CRC(aa548124) SHA1(a94adfe16b5c3236746451c181ccd3e1c27432f4) )
 ROM_END
 
-ROM_START( indy500 ) /* Defaults to Twin (Stand Alone) Cab version.  2 credits to start - Can be set to Deluxe setting in service mode */
+ROM_START( indy500 ) /* Defaults to Twin (Stand Alone) Cab version.  2 credits to start - Can be set to Deluxe setting in service mode, Sega ID# 834-12362 */
 	ROM_REGION( 0x200000, "maincpu", 0 ) // i960 program
-	ROM_LOAD32_WORD("epr-18254a.15", 0x000000, 0x080000, CRC(ad0f1fc5) SHA1(0bff35fc1d892aaffbf1a3965bf3109c54839f4b) )
-	ROM_LOAD32_WORD("epr-18255a.16", 0x000002, 0x080000, CRC(784daab8) SHA1(299e87f8ec7bdefa6f94f4ab65e29e91f290611e) )
+	ROM_LOAD32_WORD("epr-18598a.15", 0x000000, 0x080000, CRC(3cdcac0f) SHA1(2f616e363f4d246fece309e81325e5e3c4e9d9f8) ) /* Higher rom numbers indicate a newer version */
+	ROM_LOAD32_WORD("epr-18599a.16", 0x000002, 0x080000, CRC(32bde9a2) SHA1(0982952ab3c5b035f37beb9304ac950c0e78aea8) ) /* Different attract mode... what else??? */
 
 	ROM_REGION32_LE( 0x2000000, "user1", 0 ) // Data
 	ROM_LOAD32_WORD("mpr-18237.11",    0x0000000, 0x400000, CRC(37e4255a) SHA1(3ee69a5b9364048dfab242773d97f3af430845b7) )
 	ROM_LOAD32_WORD("mpr-18238.12",    0x0000002, 0x400000, CRC(bf837bac) SHA1(6624417b65f15f20427bc42c27283f10342c76b5) )
 	ROM_LOAD32_WORD("mpr-18239.9",     0x0800000, 0x400000, CRC(9a2db86e) SHA1(0b81f6037657af7d96ed5e9bfef407d87cbcc294) )
 	ROM_LOAD32_WORD("mpr-18240.10",    0x0800002, 0x400000, CRC(ab46a35f) SHA1(67da857db7155a858a1fa575b6c50f4be3c9ab7c) )
-	ROM_LOAD32_WORD("epr-18389.7",     0x1000000, 0x080000, CRC(d22ea019) SHA1(ef10bb0ffcb1bbcf4672bb5f705a27679a793764) )
-	ROM_LOAD32_WORD("epr-18390.8",     0x1000002, 0x080000, CRC(38e796e5) SHA1(b23cfe45c363d616a65decd57aeb8ae61d5370e9) )
+	ROM_LOAD32_WORD("epr-18596.7",     0x1000000, 0x080000, CRC(8be1a5cd) SHA1(56ed21234c6494d95b4efda6c3374199c5ac65db) )
+	ROM_LOAD32_WORD("epr-18597.8",     0x1000002, 0x080000, CRC(44824e38) SHA1(f0fb0d73c1e72ce77c3931d436c54c034d2107a8) )
 	ROM_COPY( "user1", 0x1000000, 0x1100000, 0x100000 )
 	ROM_COPY( "user1", 0x1000000, 0x1200000, 0x100000 )
 	ROM_COPY( "user1", 0x1000000, 0x1300000, 0x100000 )
@@ -3359,7 +3359,7 @@ ROM_START( indy500 ) /* Defaults to Twin (Stand Alone) Cab version.  2 credits t
 	ROM_LOAD32_WORD("mpr-18231.25", 0x000002, 0x400000, CRC(673d5338) SHA1(ce592857496ccc0a51efb377cf7cccc000b4296b) )
 
 	ROM_REGION( 0x100000, "audiocpu", 0 ) // Sound program
-	ROM_LOAD16_WORD_SWAP("epr-18391.31", 0x080000,  0x40000, CRC(79579b72) SHA1(36fed8a9eeb34968b2852ea8fc9198427f0d27c6) )
+	ROM_LOAD16_WORD_SWAP("epr-18600.31", 0x080000,  0x40000, CRC(269ee4a0) SHA1(8ebabfcd27d634ff0bead0a1f138efc8708575e7) )
 
 	ROM_REGION( 0x800000, "scsp", 0 ) // Samples
 	ROM_LOAD("mpr-18241.32", 0x0000000, 0x200000, CRC(3a380ae1) SHA1(114113325e9e5262af8750c05089f24818943cde) )
@@ -3412,6 +3412,58 @@ ROM_START( indy500d ) /* Defaults to Deluxe (Stand Alone) Cab version.  3 credit
 
 	ROM_REGION( 0x100000, "audiocpu", 0 ) // Sound program
 	ROM_LOAD16_WORD_SWAP("epr-18253.31", 0x080000,  0x40000, CRC(2934e034) SHA1(4a3037b69c4835ef16a20c5573de32a862f0b13e) )
+
+	ROM_REGION( 0x800000, "scsp", 0 ) // Samples
+	ROM_LOAD("mpr-18241.32", 0x0000000, 0x200000, CRC(3a380ae1) SHA1(114113325e9e5262af8750c05089f24818943cde) )
+	ROM_LOAD("mpr-18242.33", 0x0200000, 0x200000, CRC(1cc3deae) SHA1(5c9cb8ce43a909b25b4e734c6a4ffd786f4dde31) )
+	ROM_LOAD("mpr-18243.34", 0x0400000, 0x200000, CRC(a00a0053) SHA1(9c24fbcd0318c7e195dd153d6ba05e8c1e052968) )
+	ROM_LOAD("mpr-18244.35", 0x0600000, 0x200000, CRC(bfa75beb) SHA1(fec89260d887e90ee9c2803e2eaf937cf9bfa10b) )
+ROM_END
+
+ROM_START( indy500to ) /* Defaults to Twin (Stand Alone) Cab version.  2 credits to start - Can be set to Deluxe setting in service mode */
+	ROM_REGION( 0x200000, "maincpu", 0 ) // i960 program
+	ROM_LOAD32_WORD("epr-18254a.15", 0x000000, 0x080000, CRC(ad0f1fc5) SHA1(0bff35fc1d892aaffbf1a3965bf3109c54839f4b) )
+	ROM_LOAD32_WORD("epr-18255a.16", 0x000002, 0x080000, CRC(784daab8) SHA1(299e87f8ec7bdefa6f94f4ab65e29e91f290611e) )
+
+	ROM_REGION32_LE( 0x2000000, "user1", 0 ) // Data
+	ROM_LOAD32_WORD("mpr-18237.11",    0x0000000, 0x400000, CRC(37e4255a) SHA1(3ee69a5b9364048dfab242773d97f3af430845b7) )
+	ROM_LOAD32_WORD("mpr-18238.12",    0x0000002, 0x400000, CRC(bf837bac) SHA1(6624417b65f15f20427bc42c27283f10342c76b5) )
+	ROM_LOAD32_WORD("mpr-18239.9",     0x0800000, 0x400000, CRC(9a2db86e) SHA1(0b81f6037657af7d96ed5e9bfef407d87cbcc294) )
+	ROM_LOAD32_WORD("mpr-18240.10",    0x0800002, 0x400000, CRC(ab46a35f) SHA1(67da857db7155a858a1fa575b6c50f4be3c9ab7c) )
+	ROM_LOAD32_WORD("epr-18389.7",     0x1000000, 0x080000, CRC(d22ea019) SHA1(ef10bb0ffcb1bbcf4672bb5f705a27679a793764) )
+	ROM_LOAD32_WORD("epr-18390.8",     0x1000002, 0x080000, CRC(38e796e5) SHA1(b23cfe45c363d616a65decd57aeb8ae61d5370e9) )
+	ROM_COPY( "user1", 0x1000000, 0x1100000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1200000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1300000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1400000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1500000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1600000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1700000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1800000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1900000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1a00000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1b00000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1c00000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1d00000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1e00000, 0x100000 )
+	ROM_COPY( "user1", 0x1000000, 0x1f00000, 0x100000 )
+
+	ROM_REGION( 0x800000, "user5", 0 ) // Coprocessor Data ROM
+	ROM_LOAD32_WORD("epr-18249.29", 0x000000, 0x080000, CRC(a399f023) SHA1(8b453313c16d935701ed7dbf71c1607c40aede63) )
+	ROM_LOAD32_WORD("epr-18250.30", 0x000002, 0x080000, CRC(7479ad52) SHA1(d453e25709cd5970cd21bdc8b4785bc8eb5a50d7) )
+
+	ROM_REGION( 0x1000000, "user2", 0 ) // Models
+	ROM_LOAD32_WORD("mpr-18233.17", 0x000000, 0x400000, CRC(48a024d3) SHA1(501c6ab969713187025331942f922cb0e8efa69a) )
+	ROM_LOAD32_WORD("mpr-18234.21", 0x000002, 0x400000, CRC(1178bfc8) SHA1(4a9982fdce08f9d375371763dd5287e8485c24b1) )
+	ROM_LOAD32_WORD("mpr-18235.18", 0x800000, 0x400000, CRC(e7d70d59) SHA1(6081739c15a634d5cc7680a4fc7decead93540ed) )
+	ROM_LOAD32_WORD("mpr-18236.22", 0x800002, 0x400000, CRC(6ca29e0e) SHA1(5de8b569d2a91047836f4a251c21db82fd7841c9) )
+
+	ROM_REGION( 0x800000, "user3", 0 ) // Textures
+	ROM_LOAD32_WORD("mpr-18232.27", 0x000000, 0x400000, CRC(f962347d) SHA1(79f07ee6b821724294ca9e7a079cb33249102508) )
+	ROM_LOAD32_WORD("mpr-18231.25", 0x000002, 0x400000, CRC(673d5338) SHA1(ce592857496ccc0a51efb377cf7cccc000b4296b) )
+
+	ROM_REGION( 0x100000, "audiocpu", 0 ) // Sound program
+	ROM_LOAD16_WORD_SWAP("epr-18391.31", 0x080000,  0x40000, CRC(79579b72) SHA1(36fed8a9eeb34968b2852ea8fc9198427f0d27c6) )
 
 	ROM_REGION( 0x800000, "scsp", 0 ) // Samples
 	ROM_LOAD("mpr-18241.32", 0x0000000, 0x200000, CRC(3a380ae1) SHA1(114113325e9e5262af8750c05089f24818943cde) )
@@ -4606,8 +4658,9 @@ GAME( 1994, vstriker,        0, model2b, model2, 0,       ROT0, "Sega", "Virtua 
 GAME( 1994, vstrikero,vstriker, model2b, model2, 0,       ROT0, "Sega", "Virtua Striker", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, fvipers,         0, model2b, model2, 0,       ROT0, "Sega", "Fighting Vipers (Revision D)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, gunblade,        0, model2b, model2, 0,       ROT0, "Sega", "Gunblade NY (Revision A)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
-GAME( 1995, indy500,         0, model2b, model2, 0,       ROT0, "Sega", "INDY 500 Twin (Revision A)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, indy500,         0, model2b, model2, 0,       ROT0, "Sega", "INDY 500 Twin (Revision A, Newer)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, indy500d,  indy500, model2b, model2, 0,       ROT0, "Sega", "INDY 500 Deluxe (Revision A)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
+GAME( 1995, indy500to, indy500, model2b, model2, 0,       ROT0, "Sega", "INDY 500 Twin (Revision A)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1996, schamp,          0, model2b, model2, 0,       ROT0, "Sega", "Sonic Championship", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1996, sfight,     schamp, model2b, model2, 0,       ROT0, "Sega", "Sonic The Fighters", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )
 GAME( 1996, lastbrnx,        0, model2b, model2, 0,       ROT0, "Sega", "Last Bronx (Export, Revision A)", GAME_NOT_WORKING|GAME_IMPERFECT_GRAPHICS )

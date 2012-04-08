@@ -1,7 +1,11 @@
 
-typedef struct _btime_state btime_state;
-struct _btime_state
+class btime_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, btime_state(machine)); }
+
+	btime_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  colorram;
@@ -37,8 +41,8 @@ struct _btime_state
 	int      protection_ret;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
+	running_device *maincpu;
+	running_device *audiocpu;
 };
 
 

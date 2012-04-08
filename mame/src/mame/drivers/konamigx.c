@@ -94,7 +94,7 @@
  *
  */
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 
 #include "video/konamiic.h"
@@ -851,7 +851,7 @@ static WRITE32_HANDLER( sound020_w )
 
 /* National Semiconductor ADC0834 4-channel serial ADC emulation */
 
-static double adc0834_callback( const device_config *device, UINT8 input )
+static double adc0834_callback( running_device *device, UINT8 input )
 {
 	switch (input)
 	{
@@ -1004,6 +1004,8 @@ static int last_prot_op, last_prot_clk;
     move.l  #$C10400,($C102EC).l       move.l  #$C10400,($C102EC).l
 */
 
+//static int cc=0;
+
 static WRITE32_HANDLER( type4_prot_w )
 {
 	int clk;
@@ -1086,15 +1088,19 @@ static WRITE32_HANDLER( type4_prot_w )
 
 					//maybe here there's a [$d8001f] <- 0x31 write too?
 				}
-				else if(last_prot_op == 0x515) // vsnetscr
+				else if(last_prot_op == 0x515) // vsnetscr screen 1
 				{
-					//...
-
-					/* are these correct? Investigate... */
-					//memory_write_byte(space, 0xc01d00, ~memory_read_byte(space, 0xc00d07));
-					//memory_write_byte(space, 0xc01d01, ~memory_read_byte(space, 0xc00d27));
-					//memory_write_byte(space, 0xc01d04, ~memory_read_byte(space, 0xc00d47));
-					//memory_write_byte(space, 0xc01d05, ~memory_read_byte(space, 0xc00d67));
+					int adr;
+					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
+					for (adr = 0; adr < 0x400; adr += 2)
+						memory_write_word(space, 0xc01c00+adr, memory_read_word(space, 0xc01800+adr));
+				}
+				else if(last_prot_op == 0x115d) // vsnetscr screen 2
+				{
+					int adr;
+					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
+					for (adr = 0; adr < 0x400; adr += 2)
+						memory_write_word(space, 0xc18c00+adr, memory_read_word(space, 0xc18800+adr));
 				}
 				else
 				{
@@ -1253,27 +1259,27 @@ static INTERRUPT_GEN(tms_sync)
 
 static READ16_HANDLER(tms57002_data_word_r)
 {
-	return tms57002_data_r(cputag_get_cpu(space->machine, "dasp"), 0);
+	return tms57002_data_r(devtag_get_device(space->machine, "dasp"), 0);
 }
 
 static WRITE16_HANDLER(tms57002_data_word_w)
 {
 	if (ACCESSING_BITS_0_7)
-		tms57002_data_w(cputag_get_cpu(space->machine, "dasp"), 0, data);
+		tms57002_data_w(devtag_get_device(space->machine, "dasp"), 0, data);
 }
 
 static READ16_HANDLER(tms57002_status_word_r)
 {
-	return (tms57002_dready_r(cputag_get_cpu(space->machine, "dasp"), 0) ? 4 : 0) |
-		(tms57002_empty_r(cputag_get_cpu(space->machine, "dasp"), 0) ? 1 : 0);
+	return (tms57002_dready_r(devtag_get_device(space->machine, "dasp"), 0) ? 4 : 0) |
+		(tms57002_empty_r(devtag_get_device(space->machine, "dasp"), 0) ? 1 : 0);
 }
 
 static WRITE16_HANDLER(tms57002_control_word_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		tms57002_pload_w(cputag_get_cpu(space->machine, "dasp"), 0, data & 4);
-		tms57002_cload_w(cputag_get_cpu(space->machine, "dasp"), 0, data & 8);
+		tms57002_pload_w(devtag_get_device(space->machine, "dasp"), 0, data & 4);
+		tms57002_cload_w(devtag_get_device(space->machine, "dasp"), 0, data & 8);
 		cputag_set_input_line(space->machine, "dasp", INPUT_LINE_RESET, !(data & 16) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
@@ -1503,6 +1509,17 @@ static INPUT_PORTS_START( le2 )
 
 	PORT_START("LIGHT1_Y")
 	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(35) PORT_KEYDELTA(15) PORT_PLAYER(2)
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( le2_flip )
+	PORT_INCLUDE( le2 )
+
+	PORT_MODIFY("LIGHT0_Y")
+	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(35) PORT_KEYDELTA(15) PORT_PLAYER(1) PORT_REVERSE
+
+	PORT_MODIFY("LIGHT1_Y")
+	PORT_BIT( 0xff, 0x80, IPT_LIGHTGUN_Y ) PORT_CROSSHAIR(Y, 1.0, 0.0, 0) PORT_SENSITIVITY(35) PORT_KEYDELTA(15) PORT_PLAYER(2) PORT_REVERSE
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( gokuparo )
@@ -1896,7 +1913,7 @@ static MACHINE_DRIVER_START( gxtype4 )
 	MDRV_VIDEO_START(konamigx_type4)
 MACHINE_DRIVER_END
 
-static MACHINE_DRIVER_START( gxtype4vsnet )
+static MACHINE_DRIVER_START( gxtype4_vsn )
 	MDRV_IMPORT_FROM(gxtype4)
 
 	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
@@ -1908,6 +1925,8 @@ static MACHINE_DRIVER_START( gxtype4vsnet )
 	MDRV_SCREEN_MODIFY("screen2")
 	MDRV_SCREEN_SIZE(128*8, 32*8)
 	MDRV_SCREEN_VISIBLE_AREA(0, 576-1, 16, 32*8-1-16)
+
+	MDRV_VIDEO_START(konamigx_type4_vsn)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( gxtype4sd2 )
@@ -1915,6 +1934,7 @@ static MACHINE_DRIVER_START( gxtype4sd2 )
 
 	MDRV_VIDEO_START(konamigx_type4_sd2)
 MACHINE_DRIVER_END
+
 
 
 static MACHINE_DRIVER_START( winspike )
@@ -1961,64 +1981,103 @@ ROM_END
 #define _64_WORD_ROM_LOAD(name,offset,length,crc)	ROMX_LOAD(name, offset, length, crc, ROM_GROUPWORD | ROM_SKIP(6))
 
 
-/* Gokujou Parodius */
+/* Gokujou Parodius version JAD (Japan) */
 ROM_START( gokuparo )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	GX_BIOS
-	ROM_LOAD32_WORD_SWAP( "321jad02.31b", 0x200002, 512*1024, CRC(c2e548c0) SHA1(48fbcc96d1f56bb3abb5098400536a18a676d934) )
+	ROM_LOAD32_WORD_SWAP( "321jad02.21b", 0x200002, 512*1024, CRC(c2e548c0) SHA1(48fbcc96d1f56bb3abb5098400536a18a676d934) )
 	ROM_LOAD32_WORD_SWAP( "321jad04.27b", 0x200000, 512*1024, CRC(916a7951) SHA1(d6f56ff5f6c6708939767e69a3ebc7c7eddb6003) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE("321_b06.9c", 0x000000, 128*1024, CRC(da810554) SHA1(f253e1aa137eecf283d8b083ef2b3b049e8366f4) )
-	ROM_LOAD16_BYTE("321_b07.7c", 0x000001, 128*1024, CRC(c47634c0) SHA1(20e4105df5bbc33edd01894e78f74ed5f173576e) )
+	ROM_LOAD16_BYTE("321b06.9c", 0x000000, 128*1024, CRC(da810554) SHA1(f253e1aa137eecf283d8b083ef2b3b049e8366f4) )
+	ROM_LOAD16_BYTE("321b07.7c", 0x000001, 128*1024, CRC(c47634c0) SHA1(20e4105df5bbc33edd01894e78f74ed5f173576e) )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
-	TILE_WORD_ROM_LOAD( "fj-jap.17h", 0x000000, 2*1024*1024, CRC(437d0057) SHA1(30c449200e0510dc664289b527bade6e10dbe57a) )
+	TILE_WORD_ROM_LOAD( "321b14.17h", 0x000000, 2*1024*1024, CRC(437d0057) SHA1(30c449200e0510dc664289b527bade6e10dbe57a) )
 	TILE_BYTE_ROM_LOAD( "321b12.13g", 0x000004, 512*1024, CRC(5f9edfa0) SHA1(36d54c5fe498a4d0fa64757cef11c56c67518258) )
 
 	/* sprites */
 	ROM_REGION( 0x500000, "gfx2", ROMREGION_ERASE00 )
-	ROM_LOAD32_WORD( "fj-jap.25g", 0x000000, 2*1024*1024, CRC(c6e2e74d) SHA1(3875a50923e46e2986dbe2573453af5c7fa726f7) )
-	ROM_LOAD32_WORD( "fj-jap.28g", 0x000002, 2*1024*1024, CRC(ea9f8c48) SHA1(b5e880015887308a5f1c1c623011d9b0903e848f) )
+	ROM_LOAD32_WORD( "321b11.25g", 0x000000, 2*1024*1024, CRC(c6e2e74d) SHA1(3875a50923e46e2986dbe2573453af5c7fa726f7) )
+	ROM_LOAD32_WORD( "321b10.28g", 0x000002, 2*1024*1024, CRC(ea9f8c48) SHA1(b5e880015887308a5f1c1c623011d9b0903e848f) )
 	ROM_LOAD( "321b09.30g", 0x400000, 1*1024*1024, CRC(94add237) SHA1(9a6d0a9727e7fa02d91ece220b145074a6741a95) )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "321b17.9g", 0x000000, 2*1024*1024, CRC(b3e8d5d8) SHA1(6644a414e7f0e69ded9aa1bf892566002cebae26) )
 	ROM_LOAD( "321b18.7g", 0x200000, 2*1024*1024, CRC(2c561ad0) SHA1(6265054072ba1c2837dd96e0259b20bc50457160) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "gokuparo.nv", 0x0000, 0x080, CRC(15c0f2d9) SHA1(57c7462e3b1e15652ec5d682a1be3786926ddecd) )
 ROM_END
 
-/* Fantastic Journey (version) */
+/* Fantastic Journey version EAA (Euro) */
 ROM_START( fantjour )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	GX_BIOS
-	ROM_LOAD32_WORD_SWAP( "fsus31b.bin", 0x200002, 512*1024, CRC(afaf9d17) SHA1(a12214c6e634862d6507f56719b55d4a23a0ef0f) )
-	ROM_LOAD32_WORD_SWAP( "fsus27b.bin", 0x200000, 512*1024, CRC(b2cfe225) SHA1(7fd43acb1dd853a7980e7fcf48971ae28175e421) )
+	ROM_LOAD32_WORD_SWAP( "321eaa02.21b", 0x200002, 512*1024, CRC(afaf9d17) SHA1(a12214c6e634862d6507f56719b55d4a23a0ef0f) )
+	ROM_LOAD32_WORD_SWAP( "321eaa04.27b", 0x200000, 512*1024, CRC(b2cfe225) SHA1(7fd43acb1dd853a7980e7fcf48971ae28175e421) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
-	ROM_LOAD16_BYTE("321_b06.9c", 0x000000, 128*1024, CRC(da810554) SHA1(f253e1aa137eecf283d8b083ef2b3b049e8366f4) )
-	ROM_LOAD16_BYTE("321_b07.7c", 0x000001, 128*1024, CRC(c47634c0) SHA1(20e4105df5bbc33edd01894e78f74ed5f173576e) )
+	ROM_LOAD16_BYTE("321b06.9c", 0x000000, 128*1024, CRC(da810554) SHA1(f253e1aa137eecf283d8b083ef2b3b049e8366f4) )
+	ROM_LOAD16_BYTE("321b07.7c", 0x000001, 128*1024, CRC(c47634c0) SHA1(20e4105df5bbc33edd01894e78f74ed5f173576e) )
 
 	/* tiles */
 	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
-	TILE_WORD_ROM_LOAD( "fj-jap.17h", 0x000000, 2*1024*1024, CRC(437d0057) SHA1(30c449200e0510dc664289b527bade6e10dbe57a) )
+	TILE_WORD_ROM_LOAD( "321b14.17h", 0x000000, 2*1024*1024, CRC(437d0057) SHA1(30c449200e0510dc664289b527bade6e10dbe57a) )
 	TILE_BYTE_ROM_LOAD( "321b12.13g", 0x000004, 512*1024, CRC(5f9edfa0) SHA1(36d54c5fe498a4d0fa64757cef11c56c67518258) )
 
 	/* sprites */
 	ROM_REGION( 0x500000, "gfx2", ROMREGION_ERASE00 )
-	ROM_LOAD32_WORD( "fj-jap.25g", 0x000000, 2*1024*1024, CRC(c6e2e74d) SHA1(3875a50923e46e2986dbe2573453af5c7fa726f7) )
-	ROM_LOAD32_WORD( "fj-jap.28g", 0x000002, 2*1024*1024, CRC(ea9f8c48) SHA1(b5e880015887308a5f1c1c623011d9b0903e848f) )
+	ROM_LOAD32_WORD( "321b11.25g", 0x000000, 2*1024*1024, CRC(c6e2e74d) SHA1(3875a50923e46e2986dbe2573453af5c7fa726f7) )
+	ROM_LOAD32_WORD( "321b10.28g", 0x000002, 2*1024*1024, CRC(ea9f8c48) SHA1(b5e880015887308a5f1c1c623011d9b0903e848f) )
 	ROM_LOAD( "321b09.30g", 0x400000, 1*1024*1024, CRC(94add237) SHA1(9a6d0a9727e7fa02d91ece220b145074a6741a95) )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "321b17.9g", 0x000000, 2*1024*1024, CRC(b3e8d5d8) SHA1(6644a414e7f0e69ded9aa1bf892566002cebae26) )
 	ROM_LOAD( "321b18.7g", 0x200000, 2*1024*1024, CRC(2c561ad0) SHA1(6265054072ba1c2837dd96e0259b20bc50457160) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "fantjour.nv", 0x0000, 0x080, CRC(35b7d8e1) SHA1(5f0e3799ff9c63af3e55b040cc52b2a9e7a76168) )
+ROM_END
+
+/* Fantastic Journey version AAA (Asia) */
+ROM_START( fantjoura )
+	/* main program */
+	ROM_REGION( 0x800000, "maincpu", 0 )
+	GX_BIOS
+	ROM_LOAD32_WORD_SWAP( "321aaa02.21b", 0x200002, 512*1024, CRC(5efb62f8) SHA1(637ea9809bd49c865f6d565d2707ddb110f9bea2) )
+	ROM_LOAD32_WORD_SWAP( "321aaa04.27b", 0x200000, 512*1024, CRC(507becce) SHA1(feaced6562569679ea3813546cbcb8fa40709dd5) )
+
+	/* sound program */
+	ROM_REGION( 0x40000, "soundcpu", 0 )
+	ROM_LOAD16_BYTE("321b06.9c", 0x000000, 128*1024, CRC(da810554) SHA1(f253e1aa137eecf283d8b083ef2b3b049e8366f4) )
+	ROM_LOAD16_BYTE("321b07.7c", 0x000001, 128*1024, CRC(c47634c0) SHA1(20e4105df5bbc33edd01894e78f74ed5f173576e) )
+
+	/* tiles */
+	ROM_REGION( 0x600000, "gfx1", ROMREGION_ERASE00 )
+	TILE_WORD_ROM_LOAD( "321b14.17h", 0x000000, 2*1024*1024, CRC(437d0057) SHA1(30c449200e0510dc664289b527bade6e10dbe57a) )
+	TILE_BYTE_ROM_LOAD( "321b12.13g", 0x000004, 512*1024, CRC(5f9edfa0) SHA1(36d54c5fe498a4d0fa64757cef11c56c67518258) )
+
+	/* sprites */
+	ROM_REGION( 0x500000, "gfx2", ROMREGION_ERASE00 )
+	ROM_LOAD32_WORD( "321b11.25g", 0x000000, 2*1024*1024, CRC(c6e2e74d) SHA1(3875a50923e46e2986dbe2573453af5c7fa726f7) )
+	ROM_LOAD32_WORD( "321b10.28g", 0x000002, 2*1024*1024, CRC(ea9f8c48) SHA1(b5e880015887308a5f1c1c623011d9b0903e848f) )
+	ROM_LOAD( "321b09.30g", 0x400000, 1*1024*1024, CRC(94add237) SHA1(9a6d0a9727e7fa02d91ece220b145074a6741a95) )
+
+	/* sound data */
+	ROM_REGION( 0x400000, "shared", 0 )
+	ROM_LOAD( "321b17.9g", 0x000000, 2*1024*1024, CRC(b3e8d5d8) SHA1(6644a414e7f0e69ded9aa1bf892566002cebae26) )
+	ROM_LOAD( "321b18.7g", 0x200000, 2*1024*1024, CRC(2c561ad0) SHA1(6265054072ba1c2837dd96e0259b20bc50457160) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "fantjoura.nv", 0x0000, 0x080, CRC(d13b1ec1) SHA1(0f4aedd0aa9682b0b68b9f7745946a3bc1e76714) )
 ROM_END
 
 /* Salamander 2 version JAA (Japan) */
@@ -2050,6 +2109,9 @@ ROM_START( salmndr2 )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "521-a12.9g", 0x000000, 2*1024*1024, CRC(66614d3b) SHA1(e1e5ebe546bced6ab74b0af500acf0f3308902a4) )
 	ROM_LOAD( "521-a13.7g", 0x200000, 1*1024*1024, CRC(c3322475) SHA1(1774524ff031e0c4a7f3432810e968d37f9c6331) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "salmndr2.nv", 0x0000, 0x080, CRC(60cdea03) SHA1(6aa597d391b5d7db67e599ec54d98600983966fc) )
 ROM_END
 
 /* Salamander 2 version AAB (Asia) */
@@ -2081,9 +2143,12 @@ ROM_START( salmndr2a )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "521-a12.9g", 0x000000, 2*1024*1024, CRC(66614d3b) SHA1(e1e5ebe546bced6ab74b0af500acf0f3308902a4) )
 	ROM_LOAD( "521-a13.7g", 0x200000, 1*1024*1024, CRC(c3322475) SHA1(1774524ff031e0c4a7f3432810e968d37f9c6331) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "salmndr2a.nv", 0x0000, 0x080, CRC(3a98a8f9) SHA1(08c2d164620a4d8ad902d502acea8ad621931198) )
 ROM_END
 
-/* Twinbee Yahoo! */
+/* Twinbee Yahhoo! */
 ROM_START( tbyahhoo )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
@@ -2111,6 +2176,10 @@ ROM_START( tbyahhoo )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "424a17.9g", 0x000000, 2*1024*1024, CRC(e9dd9692) SHA1(c289019c8d1dd71b3cec26479c39b649de804707) )
 	ROM_LOAD( "424a18.7g", 0x200000, 2*1024*1024, CRC(0f0d9f3a) SHA1(57f6b113b80f06964b7e672ad517c1654c5569c5) )
+
+	// reports RAMs as bad on first boot due to TMS emulation problems, but automatically resets
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "tbyahhoo.nv", 0x0000, 0x080, CRC(1e6fa2f8) SHA1(fceb6617a4e02babfc1678bae9f6a131c1d759f5) )
 ROM_END
 
 /* Daisu-Kiss */
@@ -2344,6 +2413,9 @@ ROM_START( tokkae )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "615a22.9g", 0x000000, 2*1024*1024, CRC(ea7e47dd) SHA1(5bf5bad9427b083757c400eaf58c63a6267c1caf) )
 	ROM_LOAD( "615a23.7g", 0x200000, 2*1024*1024, CRC(22d71f36) SHA1(3f24bb4cd8e1d693b42219e05960ad0c756b08cb) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "tokkae.nv", 0x0000, 0x080, CRC(5a6f8da6) SHA1(f68c67c98e99669904e23d5eac7e13a9c57bc394) )
 ROM_END
 
 /* Tokimeki Memorial Taisen Puzzle-dama */
@@ -2376,6 +2448,9 @@ ROM_START( tkmmpzdm )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "515a13.9g", 0x000000, 2*1024*1024, CRC(4b066b00) SHA1(874dd49847b10e6d9c39decb81557534baa36d79) )
 	ROM_LOAD( "515a14.7g", 0x200000, 2*1024*1024, CRC(128cc944) SHA1(b0cd2ec1b9a2ac936d57b6d6c2a70f9c13dc97a5) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "tkmmpzdm.nv", 0x0000, 0x080, CRC(850ab8c4) SHA1(fea5ceb3f2cea61fb19bdb1b8f1496d1c06bfff1) )
 ROM_END
 
 /* Winning Spike - Version EAA (Euro) */
@@ -2394,15 +2469,15 @@ ROM_START( winspike )
 	/* tiles: length of 1 meg each is TRUSTED by the internal checksum code */
 	/* do NOT change these to the 4 meg dumps again, those are WRONG!!!!!!! */
 	ROM_REGION( 0x800000, "gfx1", ROMREGION_ERASE00 )
-    	ROM_LOAD16_BYTE( "705a19.17h", 0x000000, 0x100000, CRC(bab84b30) SHA1(8522a0dc5e37524f51d632e9d975e949a14c0dc3) )
+	ROM_LOAD16_BYTE( "705a19.17h", 0x000000, 0x100000, CRC(bab84b30) SHA1(8522a0dc5e37524f51d632e9d975e949a14c0dc3) )
 	ROM_LOAD16_BYTE( "705a18.22h", 0x000001, 0x100000, CRC(eb97fb5f) SHA1(13de0ad060fd6f1312fa10edde1fef6481e8df64) )
 
 	/* sprites */
 	ROM_REGION( 0x1000000, "gfx2", ROMREGION_ERASE00 )
-        _64_WORD_ROM_LOAD( "705a10.33g",   0x000000, 0x400000, CRC(fc4dc78b) SHA1(520cdcf9ca20ec1c84be734e06e183e7a871090b) )
-        _64_WORD_ROM_LOAD( "705a11.30g",   0x000002, 0x400000, CRC(68542ce9) SHA1(a4294da1d1026e3a9d070575e5855935389a705f) )
-        _64_WORD_ROM_LOAD( "705a13.28g",   0x000004, 0x400000, CRC(3b62584b) SHA1(69718f47ff1e8d65a11972af1ed5068db175f625) )
-        _64_WORD_ROM_LOAD( "705a17.25g",   0x000006, 0x400000, CRC(971d2812) SHA1(ee0819faf6f6c8420d5d3742cb39dfb76b9ce7a4) )
+	_64_WORD_ROM_LOAD( "705a10.33g",   0x000000, 0x400000, CRC(fc4dc78b) SHA1(520cdcf9ca20ec1c84be734e06e183e7a871090b) )
+	_64_WORD_ROM_LOAD( "705a11.30g",   0x000002, 0x400000, CRC(68542ce9) SHA1(a4294da1d1026e3a9d070575e5855935389a705f) )
+	_64_WORD_ROM_LOAD( "705a13.28g",   0x000004, 0x400000, CRC(3b62584b) SHA1(69718f47ff1e8d65a11972af1ed5068db175f625) )
+	_64_WORD_ROM_LOAD( "705a17.25g",   0x000006, 0x400000, CRC(971d2812) SHA1(ee0819faf6f6c8420d5d3742cb39dfb76b9ce7a4) )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
@@ -2453,15 +2528,15 @@ ROM_START( winspikej )
 	/* tiles: length of 1 meg each is TRUSTED by the internal checksum code */
 	/* do NOT change these to the 4 meg dumps again, those are WRONG!!!!!!! */
 	ROM_REGION( 0x800000, "gfx1", ROMREGION_ERASE00 )
-    	ROM_LOAD16_BYTE( "705a19.17h", 0x000000, 0x100000, CRC(bab84b30) SHA1(8522a0dc5e37524f51d632e9d975e949a14c0dc3) )
+	ROM_LOAD16_BYTE( "705a19.17h", 0x000000, 0x100000, CRC(bab84b30) SHA1(8522a0dc5e37524f51d632e9d975e949a14c0dc3) )
 	ROM_LOAD16_BYTE( "705a18.22h", 0x000001, 0x100000, CRC(eb97fb5f) SHA1(13de0ad060fd6f1312fa10edde1fef6481e8df64) )
 
 	/* sprites */
 	ROM_REGION( 0x1000000, "gfx2", ROMREGION_ERASE00 )
-        _64_WORD_ROM_LOAD( "705a10.33g",   0x000000, 0x400000, CRC(fc4dc78b) SHA1(520cdcf9ca20ec1c84be734e06e183e7a871090b) )
-        _64_WORD_ROM_LOAD( "705a11.30g",   0x000002, 0x400000, CRC(68542ce9) SHA1(a4294da1d1026e3a9d070575e5855935389a705f) )
-        _64_WORD_ROM_LOAD( "705a13.28g",   0x000004, 0x400000, CRC(3b62584b) SHA1(69718f47ff1e8d65a11972af1ed5068db175f625) )
-        _64_WORD_ROM_LOAD( "705a17.25g",   0x000006, 0x400000, CRC(971d2812) SHA1(ee0819faf6f6c8420d5d3742cb39dfb76b9ce7a4) )
+	_64_WORD_ROM_LOAD( "705a10.33g",   0x000000, 0x400000, CRC(fc4dc78b) SHA1(520cdcf9ca20ec1c84be734e06e183e7a871090b) )
+	_64_WORD_ROM_LOAD( "705a11.30g",   0x000002, 0x400000, CRC(68542ce9) SHA1(a4294da1d1026e3a9d070575e5855935389a705f) )
+	_64_WORD_ROM_LOAD( "705a13.28g",   0x000004, 0x400000, CRC(3b62584b) SHA1(69718f47ff1e8d65a11972af1ed5068db175f625) )
+	_64_WORD_ROM_LOAD( "705a17.25g",   0x000006, 0x400000, CRC(971d2812) SHA1(ee0819faf6f6c8420d5d3742cb39dfb76b9ce7a4) )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
@@ -2496,6 +2571,10 @@ ROM_START( puzldama )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "315a17.9g", 0x000000, 2*1024*1024, CRC(ea763d61) SHA1(2a7dcb2a2a23c9fea62fb82ffc18949bf15b9f6f) )
 	ROM_LOAD( "315a18.7g", 0x200000, 2*1024*1024, CRC(6e416cee) SHA1(145a766ad2fa2b692692053dd36e0caf51d67a56) )
+
+	// the TMS emulation is causing problems which means you have to reset this one anyway
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with error
+	ROM_LOAD( "puzldama.nv", 0x0000, 0x080, CRC(bda98b84) SHA1(f4b03130bdc2a5bc6f0fc9ca21603109d82703b4) )
 ROM_END
 
 /* Dragoon Might */
@@ -2533,6 +2612,10 @@ ROM_START( dragoonj )
 	/* sound data */
 	ROM_REGION( 0x200000, "shared", 0 )
 	ROM_LOAD( "417a17.9g", 0x000000, 2*1024*1024, CRC(88d47dfd) SHA1(b5d6dd7ee9ac0c427dc3e714a97945c954260913) )
+
+	// game is currently broken due to TMS emulation anyway..
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "dragoonj.nv", 0x0000, 0x080, CRC(cbe16082) SHA1(da48893f3584ae2e034c73d4338b220107a884da) )
 ROM_END
 
 /* Dragoon Might (Asia) */
@@ -2570,6 +2653,10 @@ ROM_START( dragoona )
 	/* sound data */
 	ROM_REGION( 0x200000, "shared", 0 )
 	ROM_LOAD( "417a17.9g", 0x000000, 2*1024*1024, CRC(88d47dfd) SHA1(b5d6dd7ee9ac0c427dc3e714a97945c954260913) )
+
+	// game is currently broken due to TMS emulation anyway..
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "dragoona.nv", 0x0000, 0x080, CRC(7980ad2b) SHA1(dccaab02d23edbd81ae13441fbac0dbd7112c258) )
 ROM_END
 
 /* Soccer Superstars (Europe ver EAA)*/
@@ -2626,6 +2713,9 @@ ROM_START( soccerss )
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "427a16.9r", 0x000000, 2*1024*1024,  CRC(39547265) SHA1(c0efd68c0c1ea59141045150842f36d43e1f01d8) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "soccerss.nv", 0x0000, 0x080, CRC(f222dae4) SHA1(fede48a4e1fe91cf2b17ff3f3996bca4816fc283) )
 ROM_END
 
 /* Soccer Superstars (Japan ver JAC)*/
@@ -2670,6 +2760,9 @@ ROM_START( soccerssj )
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "427a16.9r", 0x000000, 2*1024*1024,  CRC(39547265) SHA1(c0efd68c0c1ea59141045150842f36d43e1f01d8) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "soccerssj.nv", 0x0000, 0x080, CRC(7440255e) SHA1(af379b5b1f765f9050f18fbd41c5031c5ad4918b) )
 ROM_END
 
 /* Soccer Superstars (Japan ver JAA)*/
@@ -2714,6 +2807,9 @@ ROM_START( soccerssja )
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "427a16.9r", 0x000000, 2*1024*1024,  CRC(39547265) SHA1(c0efd68c0c1ea59141045150842f36d43e1f01d8) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "soccerssja.nv", 0x0000, 0x080, CRC(60dba700) SHA1(087b086b29748727b41fdd4c154ff9b4bef42959) )
 ROM_END
 
 /* Soccer Superstars (Asian ver AAA) */
@@ -2758,7 +2854,18 @@ ROM_START( soccerssa )
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "427a16.9r", 0x000000, 2*1024*1024,  CRC(39547265) SHA1(c0efd68c0c1ea59141045150842f36d43e1f01d8) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "soccerssa.nv", 0x0000, 0x080, CRC(e3a3f3d5) SHA1(374cf5bbcc459c56ebbba5068406f6d767bcb608) )
 ROM_END
+
+/* Vs. Net Soccer TODO:
+
+ Redump sound ROM
+ Hook up ROM tests.
+
+*/
+
 
 /* Vs. Net Soccer (ver EAD) */
 ROM_START( vsnetscr )
@@ -2768,9 +2875,8 @@ ROM_START( vsnetscr )
 	ROM_LOAD32_WORD_SWAP( "627ead03.29m", 0x200000, 0x080000, CRC(2da707e2) SHA1(3273c671e417abc4e82cd0d4f5d01dd4c9c432f9) )
 	ROM_LOAD32_WORD_SWAP( "627ead02.31m", 0x200002, 0x080000, CRC(01ab336a) SHA1(6e7ab03a82548cc5bd17938df0baf47381dd86aa) )
 
-	/* data roms */
-	ROM_LOAD32_WORD_SWAP( "627a04.29r", 0x400000, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
-	ROM_LOAD32_WORD_SWAP( "627a05.31r", 0x400002, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a05.29r", 0x400000, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a04.31r", 0x400002, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
@@ -2782,14 +2888,13 @@ ROM_START( vsnetscr )
 	ROM_LOAD16_BYTE( "627a21.11r", 0x000000, 1024*1024, CRC(d0755fb8) SHA1(de37ea2a7969a97b6f2abccb7dc2a58950482bf0) )
 	ROM_LOAD16_BYTE( "627a20.11m", 0x000001, 1024*1024, CRC(f68b28f2) SHA1(1463717ed581494fcab77a80dc6ffd3ab82ab1fa) )
 
-	/* sprites */
-	ROM_REGION( 0xc00000, "gfx2", ROMREGION_ERASE00 )
-	_48_WORD_ROM_LOAD( "627a19.14r", 0x000000, 2*1024*1024, CRC(5efaa3bc) SHA1(95314c1054ccf5b9626f0b06f9e1c857a127e2ca) )
-	_48_WORD_ROM_LOAD( "627a15.18r", 0x000002, 2*1024*1024, CRC(5180ca06) SHA1(d5569f6fc6b0374cd111f8313f635e4b7c49351f) )
-	_48_WORD_ROM_LOAD( "627a11.23r", 0x000004, 2*1024*1024, CRC(a2e507f2) SHA1(ceaaccbac22fecef32fa34f887568bb18464265d) )
-	_48_WORD_ROM_LOAD( "627a17.16r", 0x600000, 2*1024*1024, CRC(ca99d29c) SHA1(919dfb029dbc7d2c5e420d54df36eef3ec3bb1a2) )
-	_48_WORD_ROM_LOAD( "627a13.21r", 0x600002, 2*1024*1024, CRC(af48849d) SHA1(c43981883ef042968444b6d993a640edc429daae) )
-	_48_WORD_ROM_LOAD( "627a09.25r", 0x600004, 2*1024*1024, CRC(312cf8a4) SHA1(107456fc1a1906a60b5b50f4ca6b7e8cd258e6ee) )
+	ROM_REGION( 0x1800000, "gfx2", ROMREGION_ERASEFF )
+	_48_WORD_ROM_LOAD( "627a19.14r", 0x0000000, 4*1024*1024, CRC(39989087) SHA1(9a1da422cc71c2e9512361511b8482a33ada6396) )
+	_48_WORD_ROM_LOAD( "627a15.18r", 0x0000002, 4*1024*1024, CRC(94c557e9) SHA1(3eb2b47d4143b1caeaaf529b5843d6cb0b517eb2) )
+	_48_WORD_ROM_LOAD( "627a11.23r", 0x0000004, 4*1024*1024, CRC(8185b19f) SHA1(4a8cc3613e743b2de786663f4f7097e7236a8b74) )
+	_48_WORD_ROM_LOAD( "627a17.16r", 0x0c00000, 4*1024*1024, CRC(5c79a0a5) SHA1(a96740d9c5901f2533415985fc83a05c6b562727) )
+	_48_WORD_ROM_LOAD( "627a13.21r", 0x0c00002, 4*1024*1024, CRC(934c758b) SHA1(f33f0c337038e50386ea2dbaa0e0b1480c413720) )
+	_48_WORD_ROM_LOAD( "627a09.25r", 0x0c00004, 4*1024*1024, CRC(980b0f87) SHA1(137cc79d75881ddbabb90f0a1622bda9caf475ca) )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", ROMREGION_ERASE00)
@@ -2797,7 +2902,7 @@ ROM_START( vsnetscr )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
-	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) )
+	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, BAD_DUMP CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) ) // seems to have many bad sounds
 ROM_END
 
 /* Vs. Net Soccer (ver EAB) */
@@ -2808,9 +2913,8 @@ ROM_START( vsnetscreb )
 	ROM_LOAD32_WORD_SWAP( "627eab03.29m", 0x200000, 0x080000, CRC(878b2369) SHA1(c92783ef1eb33c0596a9354e97f30f8c017e842c) )
 	ROM_LOAD32_WORD_SWAP( "627eab02.31m", 0x200002, 0x080000, CRC(cc76bce8) SHA1(54a4047412a98a5c4f64a8bc2fd3cda9c07e58b3) )
 
-	/* data roms */
-	ROM_LOAD32_WORD_SWAP( "627a04.29r", 0x400000, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
-	ROM_LOAD32_WORD_SWAP( "627a05.31r", 0x400002, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a05.29r", 0x400000, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a04.31r", 0x400002, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
@@ -2822,14 +2926,13 @@ ROM_START( vsnetscreb )
 	ROM_LOAD16_BYTE( "627a21.11r", 0x000000, 1024*1024, CRC(d0755fb8) SHA1(de37ea2a7969a97b6f2abccb7dc2a58950482bf0) )
 	ROM_LOAD16_BYTE( "627a20.11m", 0x000001, 1024*1024, CRC(f68b28f2) SHA1(1463717ed581494fcab77a80dc6ffd3ab82ab1fa) )
 
-	/* sprites */
-	ROM_REGION( 0xc00000, "gfx2", ROMREGION_ERASE00 )
-	_48_WORD_ROM_LOAD( "627a19.14r", 0x000000, 2*1024*1024, CRC(5efaa3bc) SHA1(95314c1054ccf5b9626f0b06f9e1c857a127e2ca) )
-	_48_WORD_ROM_LOAD( "627a15.18r", 0x000002, 2*1024*1024, CRC(5180ca06) SHA1(d5569f6fc6b0374cd111f8313f635e4b7c49351f) )
-	_48_WORD_ROM_LOAD( "627a11.23r", 0x000004, 2*1024*1024, CRC(a2e507f2) SHA1(ceaaccbac22fecef32fa34f887568bb18464265d) )
-	_48_WORD_ROM_LOAD( "627a17.16r", 0x600000, 2*1024*1024, CRC(ca99d29c) SHA1(919dfb029dbc7d2c5e420d54df36eef3ec3bb1a2) )
-	_48_WORD_ROM_LOAD( "627a13.21r", 0x600002, 2*1024*1024, CRC(af48849d) SHA1(c43981883ef042968444b6d993a640edc429daae) )
-	_48_WORD_ROM_LOAD( "627a09.25r", 0x600004, 2*1024*1024, CRC(312cf8a4) SHA1(107456fc1a1906a60b5b50f4ca6b7e8cd258e6ee) )
+	ROM_REGION( 0x1800000, "gfx2", ROMREGION_ERASEFF )
+	_48_WORD_ROM_LOAD( "627a19.14r", 0x0000000, 4*1024*1024, CRC(39989087) SHA1(9a1da422cc71c2e9512361511b8482a33ada6396) )
+	_48_WORD_ROM_LOAD( "627a15.18r", 0x0000002, 4*1024*1024, CRC(94c557e9) SHA1(3eb2b47d4143b1caeaaf529b5843d6cb0b517eb2) )
+	_48_WORD_ROM_LOAD( "627a11.23r", 0x0000004, 4*1024*1024, CRC(8185b19f) SHA1(4a8cc3613e743b2de786663f4f7097e7236a8b74) )
+	_48_WORD_ROM_LOAD( "627a17.16r", 0x0c00000, 4*1024*1024, CRC(5c79a0a5) SHA1(a96740d9c5901f2533415985fc83a05c6b562727) )
+	_48_WORD_ROM_LOAD( "627a13.21r", 0x0c00002, 4*1024*1024, CRC(934c758b) SHA1(f33f0c337038e50386ea2dbaa0e0b1480c413720) )
+	_48_WORD_ROM_LOAD( "627a09.25r", 0x0c00004, 4*1024*1024, CRC(980b0f87) SHA1(137cc79d75881ddbabb90f0a1622bda9caf475ca) )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", ROMREGION_ERASE00)
@@ -2837,7 +2940,7 @@ ROM_START( vsnetscreb )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
-	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) )
+	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, BAD_DUMP CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) ) // seems to have many bad sounds
 ROM_END
 
 /* Vs. Net Soccer (ver UAB) */
@@ -2848,9 +2951,8 @@ ROM_START( vsnetscru )
 	ROM_LOAD32_WORD_SWAP( "627uab03.29m", 0x200000, 512*1024, CRC(53ca7eec) SHA1(d2d5a491417849c31aaff61a93da4ab2e94495d4) )
 	ROM_LOAD32_WORD_SWAP( "627uab02.31m", 0x200002, 512*1024, CRC(c352cc6f) SHA1(d8d0d802eb6bd0910e35dcc6b81b7ac9036e32ea) )
 
-	/* data roms */
-	ROM_LOAD32_WORD_SWAP( "627a04.29r", 0x400000, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
-	ROM_LOAD32_WORD_SWAP( "627a05.31r", 0x400002, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a05.29r", 0x400000, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a04.31r", 0x400002, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
@@ -2862,14 +2964,13 @@ ROM_START( vsnetscru )
 	ROM_LOAD16_BYTE( "627a21.11r", 0x000000, 1024*1024, CRC(d0755fb8) SHA1(de37ea2a7969a97b6f2abccb7dc2a58950482bf0) )
 	ROM_LOAD16_BYTE( "627a20.11m", 0x000001, 1024*1024, CRC(f68b28f2) SHA1(1463717ed581494fcab77a80dc6ffd3ab82ab1fa) )
 
-	/* sprites */
-	ROM_REGION( 0xc00000, "gfx2", ROMREGION_ERASE00 )
-	_48_WORD_ROM_LOAD( "627a19.14r", 0x000000, 2*1024*1024, CRC(5efaa3bc) SHA1(95314c1054ccf5b9626f0b06f9e1c857a127e2ca) )
-	_48_WORD_ROM_LOAD( "627a15.18r", 0x000002, 2*1024*1024, CRC(5180ca06) SHA1(d5569f6fc6b0374cd111f8313f635e4b7c49351f) )
-	_48_WORD_ROM_LOAD( "627a11.23r", 0x000004, 2*1024*1024, CRC(a2e507f2) SHA1(ceaaccbac22fecef32fa34f887568bb18464265d) )
-	_48_WORD_ROM_LOAD( "627a17.16r", 0x600000, 2*1024*1024, CRC(ca99d29c) SHA1(919dfb029dbc7d2c5e420d54df36eef3ec3bb1a2) )
-	_48_WORD_ROM_LOAD( "627a13.21r", 0x600002, 2*1024*1024, CRC(af48849d) SHA1(c43981883ef042968444b6d993a640edc429daae) )
-	_48_WORD_ROM_LOAD( "627a09.25r", 0x600004, 2*1024*1024, CRC(312cf8a4) SHA1(107456fc1a1906a60b5b50f4ca6b7e8cd258e6ee) )
+	ROM_REGION( 0x1800000, "gfx2", ROMREGION_ERASEFF )
+	_48_WORD_ROM_LOAD( "627a19.14r", 0x0000000, 4*1024*1024, CRC(39989087) SHA1(9a1da422cc71c2e9512361511b8482a33ada6396) )
+	_48_WORD_ROM_LOAD( "627a15.18r", 0x0000002, 4*1024*1024, CRC(94c557e9) SHA1(3eb2b47d4143b1caeaaf529b5843d6cb0b517eb2) )
+	_48_WORD_ROM_LOAD( "627a11.23r", 0x0000004, 4*1024*1024, CRC(8185b19f) SHA1(4a8cc3613e743b2de786663f4f7097e7236a8b74) )
+	_48_WORD_ROM_LOAD( "627a17.16r", 0x0c00000, 4*1024*1024, CRC(5c79a0a5) SHA1(a96740d9c5901f2533415985fc83a05c6b562727) )
+	_48_WORD_ROM_LOAD( "627a13.21r", 0x0c00002, 4*1024*1024, CRC(934c758b) SHA1(f33f0c337038e50386ea2dbaa0e0b1480c413720) )
+	_48_WORD_ROM_LOAD( "627a09.25r", 0x0c00004, 4*1024*1024, CRC(980b0f87) SHA1(137cc79d75881ddbabb90f0a1622bda9caf475ca) )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", ROMREGION_ERASE00)
@@ -2877,7 +2978,7 @@ ROM_START( vsnetscru )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
-	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) )
+	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, BAD_DUMP CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) ) // seems to have many bad sounds
 ROM_END
 
 
@@ -3014,9 +3115,8 @@ ROM_START( vsnetscrj )
 	ROM_LOAD32_WORD_SWAP( "627jab03.29m", 0x200000, 512*1024, CRC(68c4bb17) SHA1(db109998221d0cc41d3fd5c9339773c7077edbf4) )
 	ROM_LOAD32_WORD_SWAP( "627jab02.31m", 0x200002, 512*1024, CRC(f10929d7) SHA1(304001d44ed762682a4606a849305a9352e9bec3) )
 
-	/* data roms */
-	ROM_LOAD32_WORD_SWAP( "627a04.29r", 0x400000, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
-	ROM_LOAD32_WORD_SWAP( "627a05.31r", 0x400002, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a05.29r", 0x400000, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a04.31r", 0x400002, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
@@ -3028,14 +3128,13 @@ ROM_START( vsnetscrj )
 	ROM_LOAD16_BYTE( "627a21.11r", 0x000000, 1024*1024, CRC(d0755fb8) SHA1(de37ea2a7969a97b6f2abccb7dc2a58950482bf0) )
 	ROM_LOAD16_BYTE( "627a20.11m", 0x000001, 1024*1024, CRC(f68b28f2) SHA1(1463717ed581494fcab77a80dc6ffd3ab82ab1fa) )
 
-	/* sprites */
-	ROM_REGION( 0xc00000, "gfx2", ROMREGION_ERASE00 )
-	_48_WORD_ROM_LOAD( "627a19.14r", 0x000000, 2*1024*1024, CRC(5efaa3bc) SHA1(95314c1054ccf5b9626f0b06f9e1c857a127e2ca) )
-	_48_WORD_ROM_LOAD( "627a15.18r", 0x000002, 2*1024*1024, CRC(5180ca06) SHA1(d5569f6fc6b0374cd111f8313f635e4b7c49351f) )
-	_48_WORD_ROM_LOAD( "627a11.23r", 0x000004, 2*1024*1024, CRC(a2e507f2) SHA1(ceaaccbac22fecef32fa34f887568bb18464265d) )
-	_48_WORD_ROM_LOAD( "627a17.16r", 0x600000, 2*1024*1024, CRC(ca99d29c) SHA1(919dfb029dbc7d2c5e420d54df36eef3ec3bb1a2) )
-	_48_WORD_ROM_LOAD( "627a13.21r", 0x600002, 2*1024*1024, CRC(af48849d) SHA1(c43981883ef042968444b6d993a640edc429daae) )
-	_48_WORD_ROM_LOAD( "627a09.25r", 0x600004, 2*1024*1024, CRC(312cf8a4) SHA1(107456fc1a1906a60b5b50f4ca6b7e8cd258e6ee) )
+	ROM_REGION( 0x1800000, "gfx2", ROMREGION_ERASEFF )
+	_48_WORD_ROM_LOAD( "627a19.14r", 0x0000000, 4*1024*1024, CRC(39989087) SHA1(9a1da422cc71c2e9512361511b8482a33ada6396) )
+	_48_WORD_ROM_LOAD( "627a15.18r", 0x0000002, 4*1024*1024, CRC(94c557e9) SHA1(3eb2b47d4143b1caeaaf529b5843d6cb0b517eb2) )
+	_48_WORD_ROM_LOAD( "627a11.23r", 0x0000004, 4*1024*1024, CRC(8185b19f) SHA1(4a8cc3613e743b2de786663f4f7097e7236a8b74) )
+	_48_WORD_ROM_LOAD( "627a17.16r", 0x0c00000, 4*1024*1024, CRC(5c79a0a5) SHA1(a96740d9c5901f2533415985fc83a05c6b562727) )
+	_48_WORD_ROM_LOAD( "627a13.21r", 0x0c00002, 4*1024*1024, CRC(934c758b) SHA1(f33f0c337038e50386ea2dbaa0e0b1480c413720) )
+	_48_WORD_ROM_LOAD( "627a09.25r", 0x0c00004, 4*1024*1024, CRC(980b0f87) SHA1(137cc79d75881ddbabb90f0a1622bda9caf475ca) )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", ROMREGION_ERASE00)
@@ -3043,7 +3142,7 @@ ROM_START( vsnetscrj )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
-	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) )
+	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, BAD_DUMP CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) ) // seems to have many bad sounds
 ROM_END
 
 /* Vs. Net Soccer (ver AAA) */
@@ -3051,14 +3150,13 @@ ROM_START( vsnetscra )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	GX_BIOS
-    ROM_LOAD32_WORD_SWAP( "627aaa03.29m", 0x200000, 0x080000, CRC(50e23a50) SHA1(82cf1b051cfb2f94567c5a4199802960798c1152) )
-    ROM_LOAD32_WORD_SWAP( "627aaa02.31m", 0x200002, 0x080000, CRC(e3d21afe) SHA1(28c213106087da425f85bb7f3398aca98964ea38) )
+	ROM_LOAD32_WORD_SWAP( "627aaa03.29m", 0x200000, 0x080000, CRC(50e23a50) SHA1(82cf1b051cfb2f94567c5a4199802960798c1152) )
+	ROM_LOAD32_WORD_SWAP( "627aaa02.31m", 0x200002, 0x080000, CRC(e3d21afe) SHA1(28c213106087da425f85bb7f3398aca98964ea38) )
 
-	/* data roms */
-	ROM_LOAD32_WORD_SWAP( "627a04.29r", 0x400000, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
-	ROM_LOAD32_WORD_SWAP( "627a05.31r", 0x400002, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a05.29r", 0x400000, 1024*1024, CRC(be4e7b3c) SHA1(f44e7b1913aa54f759bd31bb86fdedbb9747b2d5) )
+	ROM_LOAD32_WORD_SWAP( "627a04.31r", 0x400002, 1024*1024, CRC(17334e9a) SHA1(82cdba016c29160550c43feee7a4feff6e1184aa) )
 
-	/* sound program */
+	/* sound program - this is version AAA, should it really be using B revision sound program? */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
 	ROM_LOAD16_BYTE("627b06.9m", 0x000000, 128*1024, CRC(c8337b9d) SHA1(574c674676f493ca4b5a135728ce01e664d1293d) )
 	ROM_LOAD16_BYTE("627b07.7m", 0x000001, 128*1024, CRC(d7d92579) SHA1(929b8e90cfef2ef14d84173267b637e4efdb6867) )
@@ -3068,14 +3166,13 @@ ROM_START( vsnetscra )
 	ROM_LOAD16_BYTE( "627a21.11r", 0x000000, 1024*1024, CRC(d0755fb8) SHA1(de37ea2a7969a97b6f2abccb7dc2a58950482bf0) )
 	ROM_LOAD16_BYTE( "627a20.11m", 0x000001, 1024*1024, CRC(f68b28f2) SHA1(1463717ed581494fcab77a80dc6ffd3ab82ab1fa) )
 
-	/* sprites */
-	ROM_REGION( 0xc00000, "gfx2", ROMREGION_ERASE00 )
-	_48_WORD_ROM_LOAD( "627a19.14r", 0x000000, 2*1024*1024, CRC(5efaa3bc) SHA1(95314c1054ccf5b9626f0b06f9e1c857a127e2ca) )
-	_48_WORD_ROM_LOAD( "627a15.18r", 0x000002, 2*1024*1024, CRC(5180ca06) SHA1(d5569f6fc6b0374cd111f8313f635e4b7c49351f) )
-	_48_WORD_ROM_LOAD( "627a11.23r", 0x000004, 2*1024*1024, CRC(a2e507f2) SHA1(ceaaccbac22fecef32fa34f887568bb18464265d) )
-	_48_WORD_ROM_LOAD( "627a17.16r", 0x600000, 2*1024*1024, CRC(ca99d29c) SHA1(919dfb029dbc7d2c5e420d54df36eef3ec3bb1a2) )
-	_48_WORD_ROM_LOAD( "627a13.21r", 0x600002, 2*1024*1024, CRC(af48849d) SHA1(c43981883ef042968444b6d993a640edc429daae) )
-	_48_WORD_ROM_LOAD( "627a09.25r", 0x600004, 2*1024*1024, CRC(312cf8a4) SHA1(107456fc1a1906a60b5b50f4ca6b7e8cd258e6ee) )
+	ROM_REGION( 0x1800000, "gfx2", ROMREGION_ERASEFF )
+	_48_WORD_ROM_LOAD( "627a19.14r", 0x0000000, 4*1024*1024, CRC(39989087) SHA1(9a1da422cc71c2e9512361511b8482a33ada6396) )
+	_48_WORD_ROM_LOAD( "627a15.18r", 0x0000002, 4*1024*1024, CRC(94c557e9) SHA1(3eb2b47d4143b1caeaaf529b5843d6cb0b517eb2) )
+	_48_WORD_ROM_LOAD( "627a11.23r", 0x0000004, 4*1024*1024, CRC(8185b19f) SHA1(4a8cc3613e743b2de786663f4f7097e7236a8b74) )
+	_48_WORD_ROM_LOAD( "627a17.16r", 0x0c00000, 4*1024*1024, CRC(5c79a0a5) SHA1(a96740d9c5901f2533415985fc83a05c6b562727) )
+	_48_WORD_ROM_LOAD( "627a13.21r", 0x0c00002, 4*1024*1024, CRC(934c758b) SHA1(f33f0c337038e50386ea2dbaa0e0b1480c413720) )
+	_48_WORD_ROM_LOAD( "627a09.25r", 0x0c00004, 4*1024*1024, CRC(980b0f87) SHA1(137cc79d75881ddbabb90f0a1622bda9caf475ca) )
 
 	/* PSAC2 tiles */
 	ROM_REGION( 0x200000, "gfx3", ROMREGION_ERASE00)
@@ -3083,7 +3180,7 @@ ROM_START( vsnetscra )
 
 	/* sound data */
 	ROM_REGION( 0x400000, "shared", 0 )
-	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) )
+	ROM_LOAD( "627a23.7r", 0x000000, 0x400000, BAD_DUMP CRC(0917d7de) SHA1(f2447637b396a9c92553b2c1dbf4edecc55ccc24) ) // seems to have many bad sounds
 ROM_END
 
 /* Lethal Enforcers II */
@@ -3119,6 +3216,9 @@ ROM_START( le2 )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "312a17.9g", 0x000000, 2*1024*1024, CRC(ed101448) SHA1(ef1342f37fbbb092eddee0c237b40989ad42cf26) )
 	ROM_LOAD( "312a18.7g", 0x200000, 1*1024*1024, CRC(5717abd7) SHA1(d304d733e7fca0363ea6b3872c2d3bbe4edf1179) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with invisible error
+	ROM_LOAD( "le2.nv", 0x0000, 0x080, CRC(fec3bc2e) SHA1(64040364d7db12f54e5c11f28a28e030bcf9a0f7) )
 ROM_END
 
 /* Lethal Enforcers II (US Version) */
@@ -3154,17 +3254,21 @@ ROM_START( le2u )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "312a17.9g", 0x000000, 2*1024*1024, CRC(ed101448) SHA1(ef1342f37fbbb092eddee0c237b40989ad42cf26) )
 	ROM_LOAD( "312a18.7g", 0x200000, 1*1024*1024, CRC(5717abd7) SHA1(d304d733e7fca0363ea6b3872c2d3bbe4edf1179) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with invisible error
+	ROM_LOAD( "le2u.nv", 0x0000, 0x080, CRC(d46b3878) SHA1(81bf4331547ce977eaa185f7281625fb695f6deb) )
 ROM_END
 
-/* Lethal Enforcers II (version) */
+/* Lethal Enforcers II (Japan version) */
 ROM_START( le2j )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	GX_BIOS
-        ROM_LOAD32_BYTE( "312jaa05.26b", 0x200000, 0x020000, BAD_DUMP CRC(7eaa6ce2) SHA1(59d3460be98ac32ebea0422c2a9962556a9e964e) )
-        ROM_LOAD32_BYTE( "312jaa04.28b", 0x200001, 0x020000, BAD_DUMP CRC(c3d19ddc) SHA1(3bc3e705567e8e59e56a40ae64381082c4f22271) )
-        ROM_LOAD32_BYTE( "312jaa03.30b", 0x200002, 0x020000, BAD_DUMP CRC(465e3d03) SHA1(8efeb775f6d9f1dfcebdbc79d0c832107278c063) )
-        ROM_LOAD32_BYTE( "312jaa02.33b", 0x200003, 0x020000, BAD_DUMP CRC(e971cb87) SHA1(53e2e7c4b96e4331df27d4788aa1bb81efddf9f0) )
+
+	ROM_LOAD32_BYTE( "312jaa05.26b", 0x200000, 0x020000, CRC(7eaa6ce2) SHA1(59d3460be98ac32ebea0422c2a9962556a9e964e) )
+    ROM_LOAD32_BYTE( "312jaa04.28b", 0x200001, 0x020000, CRC(c3d19ddc) SHA1(3bc3e705567e8e59e56a40ae64381082c4f22271) )
+    ROM_LOAD32_BYTE( "312jaa03.30b", 0x200002, 0x020000, CRC(9ad95a7c) SHA1(397b301f8bc4d5f039f47263ad73da5afc14712c) )
+    ROM_LOAD32_BYTE( "312jaa02.33b", 0x200003, 0x020000, CRC(e971cb87) SHA1(53e2e7c4b96e4331df27d4788aa1bb81efddf9f0) )
 
 	/* sound program */
 	ROM_REGION( 0x40000, "soundcpu", 0 )
@@ -3189,6 +3293,9 @@ ROM_START( le2j )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "312a17.9g", 0x000000, 2*1024*1024, CRC(ed101448) SHA1(ef1342f37fbbb092eddee0c237b40989ad42cf26) )
 	ROM_LOAD( "312a18.7g", 0x200000, 1*1024*1024, CRC(5717abd7) SHA1(d304d733e7fca0363ea6b3872c2d3bbe4edf1179) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting upside down with invisible error
+	ROM_LOAD( "le2j.nv", 0x0000, 0x080, CRC(f6790425) SHA1(f233f3c09c4cdbd1c6e5204fc6554a4826b44c59) )
 ROM_END
 
 /* Racin' Force */
@@ -3236,6 +3343,10 @@ ROM_START( racinfrc )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "250a17.14y", 0x000000, 2*1024*1024, CRC(adefa079) SHA1(d25911e3a02d92dc936c3d7e9d76fc270bd1a75a) )
 	ROM_LOAD( "250a18.12y", 0x200000, 2*1024*1024, CRC(8014a2eb) SHA1(d82f0a7d559340ae05a78ecc8bb69bb35b9c0658) )
+
+	// note, it seems impossible to calibrate the controls (again!), this has nothing to do with the default eeprom!
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "racinfrc.nv", 0x0000, 0x080, CRC(dc88c693) SHA1(a7967f390db043570803c79edf984a3e6bdbd172) )
 ROM_END
 
 
@@ -3284,6 +3395,10 @@ ROM_START( racinfrcu )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "250a17.14y", 0x000000, 2*1024*1024, CRC(adefa079) SHA1(d25911e3a02d92dc936c3d7e9d76fc270bd1a75a) )
 	ROM_LOAD( "250a18.12y", 0x200000, 2*1024*1024, CRC(8014a2eb) SHA1(d82f0a7d559340ae05a78ecc8bb69bb35b9c0658) )
+
+	// note, it seems impossible to calibrate the controls (again!), this has nothing to do with the default eeprom!
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "racinfrcu.nv", 0x0000, 0x080, CRC(369e1a84) SHA1(bfed0145d89550b1a1661f3ccc612505053063f8) )
 ROM_END
 
 
@@ -3367,6 +3482,9 @@ ROM_START( opengolf )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "218a17.14y", 0x000000, 2*1024*1024, CRC(0b525127) SHA1(218b306c12e1094a676815b7dddaf13bf19be2d5) )
 	ROM_LOAD( "218a18.12y", 0x200000, 1*1024*1024, CRC(98ec4cfb) SHA1(638753f9d9269719a37133b9c39c242507fdd8ac) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "opengolf.nv", 0x0000, 0x080, CRC(d49bf7c3) SHA1(294c772a2f562c01e7c4d15068ba4e80e9522f9f) )
 ROM_END
 
 /* Konami's Open Golf Championship - version EAD */
@@ -3419,6 +3537,9 @@ ROM_START( opengolf2 )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "218a17.14y", 0x000000, 2*1024*1024, CRC(0b525127) SHA1(218b306c12e1094a676815b7dddaf13bf19be2d5) )
 	ROM_LOAD( "218a18.12y", 0x200000, 1*1024*1024, CRC(98ec4cfb) SHA1(638753f9d9269719a37133b9c39c242507fdd8ac) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "opengolf2.nv", 0x0000, 0x080, CRC(c09fc0e6) SHA1(32807752344763613440bee46da24d605e62eace) )
 ROM_END
 
 /* Golfing Greats 2 */
@@ -3426,8 +3547,9 @@ ROM_START( ggreats2 )
 	/* main program */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	GX_BIOS
-        ROM_LOAD32_WORD_SWAP( "218jac02.34n", 0x200000, 0x080000, CRC(e4d47f92) SHA1(4761cf69670d97db548b146b127c9af04f8809d6) )
-        ROM_LOAD32_WORD_SWAP( "218jac03.31n", 0x200002, 0x080000, CRC(ec10c0b2) SHA1(4084d8420c53e73630786adf1a4f0fde548fa212) )
+
+	ROM_LOAD32_WORD_SWAP( "218jac02.34n", 0x200000, 0x080000, CRC(e4d47f92) SHA1(4761cf69670d97db548b146b127c9af04f8809d6) )
+	ROM_LOAD32_WORD_SWAP( "218jac03.31n", 0x200002, 0x080000, CRC(ec10c0b2) SHA1(4084d8420c53e73630786adf1a4f0fde548fa212) )
 
 	/* data roms */
 	ROM_LOAD32_WORD_SWAP( "218a04.34s", 0x400000, 512*1024, CRC(e50043a7) SHA1(d3a8e214362c34c4151408f422c9b1c723f7f01c) )
@@ -3469,6 +3591,9 @@ ROM_START( ggreats2 )
 	ROM_REGION( 0x400000, "shared", 0 )
 	ROM_LOAD( "218a17.14y", 0x000000, 2*1024*1024, CRC(0b525127) SHA1(218b306c12e1094a676815b7dddaf13bf19be2d5) )
 	ROM_LOAD( "218a18.12y", 0x200000, 1*1024*1024, CRC(98ec4cfb) SHA1(638753f9d9269719a37133b9c39c242507fdd8ac) )
+
+	ROM_REGION( 0x80, "eeprom", 0 ) // default eeprom to prevent game booting with error
+	ROM_LOAD( "ggreats2.nv", 0x0000, 0x080, CRC(4db10b5c) SHA1(29e3a59e4101349ace33d49b5fe59f0c785979b3) )
 ROM_END
 
 /**********************************************************************************/
@@ -3483,7 +3608,7 @@ static MACHINE_START( konamigx )
 
 static MACHINE_RESET(konamigx)
 {
-	const device_config *k054539_2 = devtag_get_device(machine, "konami2");
+	running_device *k054539_2 = devtag_get_device(machine, "konami2");
 	int i;
 
 	konamigx_wrport1_0 = konamigx_wrport1_1 = 0;
@@ -3544,8 +3669,10 @@ static const GXGameInfoT gameDefs[] =
 	{ "ggreats2", 11, 12, 0, BPP4 },
 	{ "le2",      13, 1, 1, BPP4 },
 	{ "le2u",     13, 1, 1, BPP4 },
+	{ "le2j",     13, 1, 1, BPP4 },
 	{ "gokuparo",  7, 0, 0, BPP5 },
 	{ "fantjour",  7, 0, 9, BPP5 },
+	{ "fantjoura", 7, 0, 9, BPP5 },
 	{ "puzldama",  7, 0, 0, BPP5 },
 	{ "tbyahhoo",  7, 0, 8, BPP5 },
 	{ "tkmmpzdm",  7, 0, 2, BPP6 },
@@ -3681,51 +3808,75 @@ static DRIVER_INIT(konamigx)
 /* dummy parent for the BIOS */
 GAME( 1994, konamigx, 0, konamigx, konamigx, konamigx, ROT0, "Konami", "System GX", GAME_IS_BIOS_ROOT )
 
-
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Type 1: standard with an add-on 53936 on the ROM board, analog inputs, */
 /* and optional LAN capability (only on Racin' Force - chips aren't present on the golf games) */
 /* needs the ROZ layer to be playable */
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
 GAME( 1994, racinfrc, konamigx, racinfrc,  racinfrc, konamigx, ROT0, "Konami", "Racin' Force (ver EAC)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING  )
 GAME( 1994, racinfrcu,racinfrc, racinfrc,  racinfrc, konamigx, ROT0, "Konami", "Racin' Force (ver UAB)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING  )
+
 GAME( 1994, opengolf, konamigx, opengolf,  racinfrc, konamigx, ROT0, "Konami", "Konami's Open Golf Championship (ver EAE)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING  )
 GAME( 1994, opengolf2,opengolf, opengolf,  racinfrc, konamigx, ROT0, "Konami", "Konami's Open Golf Championship (ver EAD)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING  )
 GAME( 1994, ggreats2, opengolf, opengolf,  racinfrc, konamigx, ROT0, "Konami", "Golfing Greats 2 (ver JAC)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
 
-
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Type 2: totally stock, sometimes with funny protection chips on the ROM board */
 /* these games work and are playable with minor graphics glitches */
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
 GAME( 1994, le2,      konamigx, le2,      le2,      konamigx, ROT0, "Konami", "Lethal Enforcers II: Gun Fighters (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, le2u,     le2,      le2,      le2,      konamigx, ROT0, "Konami", "Lethal Enforcers II: Gun Fighters (ver UAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, le2j,     le2,      le2,      le2,      konamigx, ROT0, "Konami", "Lethal Enforcers II: Gun Fighters (ver JAA)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING)
-GAME( 1994, gokuparo, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Gokujyou Parodius (ver JAD)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, fantjour, gokuparo, konamigx, gokuparo, konamigx, ROT0, "Konami", "Fantastic Journey", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, le2u,     le2,      le2,      le2_flip, konamigx, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers II: Gun Fighters (ver UAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, le2j,     le2,      le2,      le2_flip, konamigx, ORIENTATION_FLIP_Y, "Konami", "Lethal Enforcers II: The Western (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
+GAME( 1994, fantjour, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Fantastic Journey (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, fantjoura,fantjour, konamigx, gokuparo, konamigx, ROT0, "Konami", "Fantastic Journey (ver AAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, gokuparo, fantjour, konamigx, gokuparo, konamigx, ROT0, "Konami", "Gokujyou Parodius (ver JAD)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1994, puzldama, konamigx, konamigx, puzldama, konamigx, ROT0, "Konami", "Taisen Puzzle-dama (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1995, tbyahhoo, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Twin Bee Yahhoo! (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1995, tkmmpzdm, konamigx, konamigx_6bpp, puzldama, konamigx, ROT0, "Konami", "Tokimeki Memorial Taisen Puzzle-dama (ver JAB)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1995, dragoona, konamigx, dragoonj, dragoonj, konamigx, ROT0, "Konami", "Dragoon Might (ver AAB)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, dragoonj, dragoona, dragoonj, dragoonj, konamigx, ROT0, "Konami", "Dragoon Might (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1996, sexyparo, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Sexy Parodius (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1996, daiskiss, konamigx, konamigx, gokuparo, konamigx, ROT0, "Konami", "Daisu-Kiss (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 GAME( 1996, tokkae,   konamigx, konamigx_6bpp, puzldama, konamigx, ROT0, "Konami", "Taisen Tokkae-dama (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
 /* protection controls player ship direction in attract mode - doesn't impact playability */
 GAME( 1996, salmndr2, konamigx, konamigx_6bpp_2, gokuparo, konamigx, ROT0, "Konami", "Salamander 2 (ver JAA)", GAME_IMPERFECT_GRAPHICS|GAME_UNEMULATED_PROTECTION )
 GAME( 1996, salmndr2a,salmndr2, konamigx_6bpp_2, gokuparo, konamigx, ROT0, "Konami", "Salamander 2 (ver AAB)", GAME_IMPERFECT_GRAPHICS|GAME_UNEMULATED_PROTECTION )
+
 /* bad sprite colours, part of tilemap gets blanked out when a game starts (might be more protection) */
 GAME( 1997, winspike, konamigx, winspike, konamigx, konamigx, ROT0, "Konami", "Winning Spike (ver EAA)", GAME_UNEMULATED_PROTECTION | GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, winspikej,winspike, winspike, konamigx, konamigx, ROT0, "Konami", "Winning Spike (ver JAA)", GAME_UNEMULATED_PROTECTION | GAME_IMPERFECT_GRAPHICS )
 
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Type 3: dual monitor output and 53936 on the ROM board, external palette RAM */
-GAME( 1994, soccerss, konamigx, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver EAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, soccerssj,soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver JAC)", GAME_IMPERFECT_GRAPHICS ) // writes JAB to EEPROM, but should be version JAC according to labels
-GAME( 1994, soccerssja,soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver JAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, soccerssa,soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver AAA)", GAME_IMPERFECT_GRAPHICS )
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 
+GAME( 1994, soccerss,  konamigx, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver EAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, soccerssj, soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver JAC)", GAME_IMPERFECT_GRAPHICS ) // writes JAB to EEPROM, but should be version JAC according to labels
+GAME( 1994, soccerssja,soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, soccerssa, soccerss, gxtype3,  type3, konamigx, ROT0, "Konami", "Soccer Superstars (ver AAA)", GAME_IMPERFECT_GRAPHICS )
+
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 /* Type 4: dual monitor output and 53936 on the ROM board, external palette RAM, DMA protection */
-GAME( 1996, vsnetscr,  konamigx, gxtype4vsnet, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver EAD)", GAME_NOT_WORKING|GAME_UNEMULATED_PROTECTION )
-GAME( 1996, vsnetscreb,vsnetscr, gxtype4vsnet, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver EAB)", GAME_NOT_WORKING|GAME_UNEMULATED_PROTECTION )
-GAME( 1996, vsnetscru, vsnetscr, gxtype4vsnet, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver UAB)", GAME_NOT_WORKING|GAME_UNEMULATED_PROTECTION )
-GAME( 1996, vsnetscra, vsnetscr, gxtype4vsnet, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver AAA)", GAME_NOT_WORKING|GAME_UNEMULATED_PROTECTION )
-GAME( 1996, vsnetscrj, vsnetscr, gxtype4vsnet, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver JAB)", GAME_NOT_WORKING|GAME_UNEMULATED_PROTECTION )
-GAME( 1996, rungun2,   konamigx, gxtype4sd2, type3, konamigx, ROT0, "Konami", "Run and Gun 2 (ver UAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1996, slamdnk2,  rungun2,  gxtype4sd2, type3, konamigx, ROT0, "Konami", "Slam Dunk 2 (ver JAA)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1996, rushhero,  konamigx, gxtype4, type3, konamigx, ROT0, "Konami", "Rushing Heroes (ver UAB)", GAME_IMPERFECT_GRAPHICS  )
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
+
+GAME( 1996, vsnetscr,  konamigx, gxtype4_vsn, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver EAD)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+GAME( 1996, vsnetscreb,vsnetscr, gxtype4_vsn, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver EAB)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+GAME( 1996, vsnetscru, vsnetscr, gxtype4_vsn, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver UAB)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+GAME( 1996, vsnetscra, vsnetscr, gxtype4_vsn, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver AAA)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+GAME( 1996, vsnetscrj, vsnetscr, gxtype4_vsn, type3, konamigx, ROT0, "Konami", "Versus Net Soccer (ver JAB)", GAME_IMPERFECT_GRAPHICS|GAME_IMPERFECT_SOUND )
+
+GAME( 1996, rungun2,   konamigx, gxtype4sd2,  type3, konamigx, ROT0, "Konami", "Run and Gun 2 (ver UAA)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, slamdnk2,  rungun2,  gxtype4sd2,  type3, konamigx, ROT0, "Konami", "Slam Dunk 2 (ver JAA)", GAME_IMPERFECT_GRAPHICS )
+
+GAME( 1996, rushhero,  konamigx, gxtype4,     type3, konamigx, ROT0, "Konami", "Rushing Heroes (ver UAB)", GAME_IMPERFECT_GRAPHICS  )

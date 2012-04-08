@@ -9,7 +9,7 @@
 #define LOG_32031_IOPORTS	(0)
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/tms32031/tms32031.h"
 #include "sound/dmadac.h"
 #include "cage.h"
@@ -33,7 +33,7 @@
  *
  *************************************/
 
-static const device_config *cage_cpu;
+static running_device *cage_cpu;
 static attotime cage_cpu_h1_clock_period;
 
 static UINT8 cpu_to_cage_ready;
@@ -45,10 +45,10 @@ static attotime serial_period_per_word;
 
 static UINT8 dma_enabled;
 static UINT8 dma_timer_enabled;
-static const device_config *dma_timer;
+static running_device *dma_timer;
 
 static UINT8 cage_timer_enabled[2];
-static const device_config *timer[2];
+static running_device *timer[2];
 
 static UINT32 *tms32031_io_regs;
 
@@ -57,7 +57,7 @@ static UINT16 cage_control;
 
 static UINT32 *speedup_ram;
 
-static const device_config *dmadac[DAC_BUFFER_CHANNELS];
+static running_device *dmadac[DAC_BUFFER_CHANNELS];
 
 
 
@@ -163,7 +163,7 @@ void cage_init(running_machine *machine, offs_t speedup)
 	memory_set_bankptr(machine, "bank10", memory_region(machine, "cageboot"));
 	memory_set_bankptr(machine, "bank11", memory_region(machine, "cage"));
 
-	cage_cpu = cputag_get_cpu(machine, "cage");
+	cage_cpu = devtag_get_device(machine, "cage");
 	cage_cpu_clock_period = ATTOTIME_IN_HZ(cpu_get_clock(cage_cpu));
 	cage_cpu_h1_clock_period = attotime_mul(cage_cpu_clock_period, 2);
 

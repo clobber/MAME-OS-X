@@ -4,10 +4,10 @@
 
 ***************************************************************************/
 
+#include "emu.h"
 #include "scsidev.h"
 #include "cdrom.h"
 #include "sound/cdda.h"
-#include "state.h"
 #ifdef MESS
 #include "devices/chd_cd.h"
 #endif
@@ -45,7 +45,7 @@ static int scsicd_exec_command( SCSIInstance *scsiInstance, UINT8 *statusCode )
 	SCSICd *our_this = (SCSICd *)SCSIThis( &SCSIClassCDROM, scsiInstance );
 
 	cdrom_file *cdrom = our_this->cdrom;
-	const device_config *cdda;
+	running_device *cdda;
 	int trk;
 
 	SCSIGetCommand( scsiInstance, &command, &commandLength );
@@ -317,7 +317,7 @@ static void scsicd_read_data( SCSIInstance *scsiInstance, UINT8 *data, int dataL
 	cdrom_file *cdrom = our_this->cdrom;
 	UINT32 temp;
 	UINT8 tmp_buffer[2048];
-	const device_config *cdda;
+	running_device *cdda;
 
 	SCSIGetCommand( scsiInstance, &command, &commandLength );
 
@@ -693,7 +693,7 @@ static void scsicd_alloc_instance( SCSIInstance *scsiInstance, const char *diskr
 
 #ifdef MESS
 	/* TODO: get rid of this ifdef MESS section */
-	our_this->cdrom = mess_cd_get_cdrom_file( devtag_get_device( machine, diskregion ) );
+	our_this->cdrom = mess_cd_get_cdrom_file( machine->device( diskregion ) );
 #else
 	our_this->cdrom = cdrom_open(get_disk_handle( machine, diskregion ));
 

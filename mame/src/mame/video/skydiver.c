@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/skydiver.h"
 #include "sound/discrete.h"
 
@@ -130,7 +130,7 @@ WRITE8_HANDLER( skydiver_lamp_d_w )
 
 WRITE8_HANDLER( skydiver_2000_201F_w )
 {
-	const device_config *discrete = devtag_get_device(space->machine, "discrete");
+	running_device *discrete = devtag_get_device(space->machine, "discrete");
 	int bit = offset & 0x01;
 
 	watchdog_reset_w(space,0,0);

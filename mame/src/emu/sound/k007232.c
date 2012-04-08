@@ -23,10 +23,9 @@ added external port callback, and functions to set the volume of the channels
 */
 
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "k007232.h"
-#include <math.h>
 
 
 #define  KDAC_A_PCM_MAX    (2)		/* Channels per chip */
@@ -56,7 +55,7 @@ typedef struct kdacApcm
 #define   BASE_SHIFT    (12)
 
 
-INLINE KDAC_A_PCM *get_safe_token(const device_config *device)
+INLINE KDAC_A_PCM *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -308,13 +307,13 @@ static DEVICE_START( k007232 )
 	int i;
 	KDAC_A_PCM *info = get_safe_token(device);
 
-	info->intf = (device->static_config != NULL) ? (const k007232_interface *)device->static_config : &defintrf;
+	info->intf = (device->baseconfig().static_config != NULL) ? (const k007232_interface *)device->baseconfig().static_config : &defintrf;
 
 	/* Set up the chips */
 
-	info->pcmbuf[0] = device->region;
-	info->pcmbuf[1] = device->region;
-	info->pcmlimit  = device->regionbytes;
+	info->pcmbuf[0] = *device->region;
+	info->pcmbuf[1] = *device->region;
+	info->pcmlimit  = device->region->bytes();
 
 	info->clock = device->clock;
 
@@ -431,14 +430,14 @@ READ8_DEVICE_HANDLER( k007232_r )
 
 /*****************************************************************************/
 
-void k007232_set_volume(const device_config *device,int channel,int volumeA,int volumeB)
+void k007232_set_volume(running_device *device,int channel,int volumeA,int volumeB)
 {
   KDAC_A_PCM *info = get_safe_token(device);
   info->vol[channel][0] = volumeA;
   info->vol[channel][1] = volumeB;
 }
 
-void k007232_set_bank( const device_config *device, int chABank, int chBBank )
+void k007232_set_bank( running_device *device, int chABank, int chBBank )
 {
   KDAC_A_PCM *info = get_safe_token(device);
   info->bank[0] = chABank<<17;

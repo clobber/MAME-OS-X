@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _circusc_state circusc_state;
-struct _circusc_state
+class circusc_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, circusc_state(machine)); }
+
+	circusc_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *        videoram;
 	UINT8 *        colorram;
@@ -23,11 +27,11 @@ struct _circusc_state
 	UINT8          sn_latch;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *sn1;
-	const device_config *sn2;
-	const device_config *dac;
-	const device_config *discrete;
+	running_device *audiocpu;
+	running_device *sn1;
+	running_device *sn2;
+	running_device *dac;
+	running_device *discrete;
 };
 
 

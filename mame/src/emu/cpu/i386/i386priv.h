@@ -4,7 +4,6 @@
 #define __I386_H__
 
 #include "i386.h"
-#include "cpuintrf.h"
 
 #define I386OP(XX)		i386_##XX
 #define I486OP(XX)		i486_##XX
@@ -188,6 +187,7 @@ struct _i386_state
 	UINT32 pc;
 	UINT32 prev_eip;
 	UINT32 eflags;
+	UINT32 eflags_mask;
 	UINT8 CF;
 	UINT8 DF;
 	UINT8 SF;
@@ -226,7 +226,7 @@ struct _i386_state
 
 	UINT8 irq_state;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	UINT32 a20_mask;
@@ -256,7 +256,7 @@ struct _i386_state
 	UINT8 *cycle_table_rm;
 };
 
-INLINE i386_state *get_safe_token(const device_config *device)
+INLINE i386_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);

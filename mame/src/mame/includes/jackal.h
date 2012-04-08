@@ -4,9 +4,13 @@
 
 
 
-typedef struct _jackal_state jackal_state;
-struct _jackal_state
+class jackal_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, jackal_state(machine)); }
+
+	jackal_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoctrl;
 	UINT8 *  scrollram;
@@ -21,8 +25,8 @@ struct _jackal_state
 	UINT8    *spritebank;
 
 	/* devices */
-	const device_config *mastercpu;
-	const device_config *slavecpu;
+	running_device *mastercpu;
+	running_device *slavecpu;
 };
 
 

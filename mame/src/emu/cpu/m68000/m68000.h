@@ -3,7 +3,6 @@
 #ifndef __M68000_H__
 #define __M68000_H__
 
-#include "cpuintrf.h"
 
 /* There are 7 levels of interrupt to the 68K.
  * A transition from < 7 to 7 will cause a non-maskable interrupt (NMI).
@@ -59,17 +58,19 @@ enum
 	M68K_SFC, M68K_DFC, M68K_CACR, M68K_CAAR, M68K_PREF_ADDR, M68K_PREF_DATA,
 	M68K_D0, M68K_D1, M68K_D2, M68K_D3, M68K_D4, M68K_D5, M68K_D6, M68K_D7,
 	M68K_A0, M68K_A1, M68K_A2, M68K_A3, M68K_A4, M68K_A5, M68K_A6, M68K_A7,
+	M68K_FP0, M68K_FP1, M68K_FP2, M68K_FP3, M68K_FP4, M68K_FP5, M68K_FP6, M68K_FP7,
+	M68K_FPSR, M68K_FPCR,
 
 	M68K_GENPC = REG_GENPC,
 	M68K_GENSP = REG_GENSP,
 	M68K_GENPCBASE = REG_GENPCBASE
 };
 
-typedef void (*m68k_bkpt_ack_func)(const device_config *device, UINT32 data);
-typedef void (*m68k_reset_func)(const device_config *device);
-typedef void (*m68k_cmpild_func)(const device_config *device, UINT32 data, UINT8 reg);
-typedef void (*m68k_rte_func)(const device_config *device);
-typedef int (*m68k_tas_func)(const device_config *device);
+typedef void (*m68k_bkpt_ack_func)(running_device *device, UINT32 data);
+typedef void (*m68k_reset_func)(running_device *device);
+typedef void (*m68k_cmpild_func)(running_device *device, UINT32 data, UINT8 reg);
+typedef void (*m68k_rte_func)(running_device *device);
+typedef int (*m68k_tas_func)(running_device *device);
 
 
 CPU_GET_INFO( m68000 );
@@ -99,13 +100,13 @@ CPU_GET_INFO( scc68070 );
 
 #define CPU_SCC68070 CPU_GET_INFO_NAME( scc68070 )
 
-void m68k_set_encrypted_opcode_range(const device_config *device, offs_t start, offs_t end);
+void m68k_set_encrypted_opcode_range(running_device *device, offs_t start, offs_t end);
 
 unsigned int m68k_disassemble_raw(char* str_buff, unsigned int pc, const unsigned char* opdata, const unsigned char* argdata, unsigned int cpu_type);
 
-void m68k_set_reset_callback(const device_config *device, m68k_reset_func callback);
-void m68k_set_cmpild_callback(const device_config *device, m68k_cmpild_func callback);
-void m68k_set_rte_callback(const device_config *device, m68k_rte_func callback);
-void m68k_set_tas_callback(const device_config *device, m68k_tas_func callback);
+void m68k_set_reset_callback(running_device *device, m68k_reset_func callback);
+void m68k_set_cmpild_callback(running_device *device, m68k_cmpild_func callback);
+void m68k_set_rte_callback(running_device *device, m68k_rte_func callback);
+void m68k_set_tas_callback(running_device *device, m68k_tas_func callback);
 
 #endif /* __M68000_H__ */

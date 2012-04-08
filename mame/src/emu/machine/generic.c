@@ -9,9 +9,9 @@
 
 *********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "emuopts.h"
 #include "config.h"
-#include "generic.h"
 
 
 
@@ -55,7 +55,7 @@ struct _generic_machine_private
     are enabled for the given CPU
 -------------------------------------------------*/
 
-INLINE int interrupt_enabled(const device_config *device)
+INLINE int interrupt_enabled(running_device *device)
 {
 	generic_machine_private *state = device->machine->generic_machine_data;
 	int cpunum = cpu_get_index(device);
@@ -313,11 +313,9 @@ mame_file *nvram_fopen(running_machine *machine, UINT32 openflags)
 {
 	file_error filerr;
 	mame_file *file;
-	astring *fname;
 
-	fname = astring_assemble_2(astring_alloc(), machine->basename, ".nv");
-	filerr = mame_fopen(SEARCHPATH_NVRAM, astring_c(fname), openflags, &file);
-	astring_free(fname);
+	astring fname(machine->basename, ".nv");
+	filerr = mame_fopen(SEARCHPATH_NVRAM, fname, openflags, &file);
 
 	return (filerr == FILERR_NONE) ? file : NULL;
 }
@@ -330,7 +328,7 @@ mame_file *nvram_fopen(running_machine *machine, UINT32 openflags)
 void nvram_load(running_machine *machine)
 {
 	mame_file *nvram_file = NULL;
-	const device_config *device;
+	running_device *device;
 
 	/* read data from general NVRAM handler first */
 	if (machine->config->nvram_handler != NULL)
@@ -340,9 +338,9 @@ void nvram_load(running_machine *machine)
 	}
 
 	/* find all devices with NVRAM handlers, and read from them next */
-	for (device = machine->config->devicelist.head; device != NULL; device = device->next)
+	for (device = machine->devicelist.first(); device != NULL; device = device->next)
 	{
-		device_nvram_func nvram = (device_nvram_func)device_get_info_fct(device, DEVINFO_FCT_NVRAM);
+		device_nvram_func nvram = (device_nvram_func)device->get_config_fct(DEVINFO_FCT_NVRAM);
 		if (nvram != NULL)
 		{
 			if (nvram_file == NULL)
@@ -363,7 +361,7 @@ void nvram_load(running_machine *machine)
 void nvram_save(running_machine *machine)
 {
 	mame_file *nvram_file = NULL;
-	const device_config *device;
+	running_device *device;
 
 	/* write data from general NVRAM handler first */
 	if (machine->config->nvram_handler != NULL)
@@ -373,9 +371,9 @@ void nvram_save(running_machine *machine)
 	}
 
 	/* find all devices with NVRAM handlers, and write them next */
-	for (device = machine->config->devicelist.head; device != NULL; device = device->next)
+	for (device = machine->devicelist.first(); device != NULL; device = device->next)
 	{
-		device_nvram_func nvram = (device_nvram_func)device_get_info_fct(device, DEVINFO_FCT_NVRAM);
+		device_nvram_func nvram = (device_nvram_func)device->get_config_fct(DEVINFO_FCT_NVRAM);
 		if (nvram != NULL)
 		{
 			if (nvram_file == NULL)
@@ -473,28 +471,25 @@ int memcard_create(running_machine *machine, int index, int overwrite)
 {
 	file_error filerr;
 	mame_file *file;
-	astring *fname;
 	char name[16];
 
 	/* create a name */
 	memcard_name(index, name);
 
 	/* if we can't overwrite, fail if the file already exists */
-	fname = astring_assemble_3(astring_alloc(), machine->basename, PATH_SEPARATOR, name);
+	astring fname(machine->basename, PATH_SEPARATOR, name);
 	if (!overwrite)
 	{
-		filerr = mame_fopen(SEARCHPATH_MEMCARD, astring_c(fname), OPEN_FLAG_READ, &file);
+		filerr = mame_fopen(SEARCHPATH_MEMCARD, fname, OPEN_FLAG_READ, &file);
 		if (filerr == FILERR_NONE)
 		{
 			mame_fclose(file);
-			astring_free(fname);
 			return 1;
 		}
 	}
 
 	/* create a new file */
-	filerr = mame_fopen(SEARCHPATH_MEMCARD, astring_c(fname), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
-	astring_free(fname);
+	filerr = mame_fopen(SEARCHPATH_MEMCARD, fname, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
 	if (filerr != FILERR_NONE)
 		return 1;
 
@@ -519,7 +514,6 @@ int memcard_insert(running_machine *machine, int index)
 	file_error filerr;
 	mame_file *file;
 	char name[16];
-	astring *fname;
 
 	/* if a card is already inserted, eject it first */
 	if (state->memcard_inserted != -1)
@@ -528,11 +522,10 @@ int memcard_insert(running_machine *machine, int index)
 
 	/* create a name */
 	memcard_name(index, name);
-	fname = astring_assemble_3(astring_alloc(), machine->basename, PATH_SEPARATOR, name);
+	astring fname(machine->basename, PATH_SEPARATOR, name);
 
 	/* open the file; if we can't, it's an error */
-	filerr = mame_fopen(SEARCHPATH_MEMCARD, astring_c(fname), OPEN_FLAG_READ, &file);
-	astring_free(fname);
+	filerr = mame_fopen(SEARCHPATH_MEMCARD, fname, OPEN_FLAG_READ, &file);
 	if (filerr != FILERR_NONE)
 		return 1;
 
@@ -558,7 +551,6 @@ void memcard_eject(running_machine *machine)
 	file_error filerr;
 	mame_file *file;
 	char name[16];
-	astring *fname;
 
 	/* if no card is preset, just ignore */
 	if (state->memcard_inserted == -1)
@@ -566,11 +558,10 @@ void memcard_eject(running_machine *machine)
 
 	/* create a name */
 	memcard_name(state->memcard_inserted, name);
-	fname = astring_assemble_3(astring_alloc(), machine->basename, PATH_SEPARATOR, name);
+	astring fname(machine->basename, PATH_SEPARATOR, name);
 
 	/* open the file; if we can't, it's an error */
-	filerr = mame_fopen(SEARCHPATH_MEMCARD, astring_c(fname), OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
-	astring_free(fname);
+	filerr = mame_fopen(SEARCHPATH_MEMCARD, fname, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
 	if (filerr != FILERR_NONE)
 	{
 		mame_fclose(file);
@@ -642,7 +633,7 @@ static void interrupt_reset(running_machine *machine)
 
 static TIMER_CALLBACK( clear_all_lines )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	int inputcount = cpu_get_input_lines(device);
 	int line;
 
@@ -659,7 +650,7 @@ static TIMER_CALLBACK( clear_all_lines )
 
 static TIMER_CALLBACK( irq_pulse_clear )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	int irqline = param;
 	cpu_set_input_line(device, irqline, CLEAR_LINE);
 }
@@ -671,7 +662,7 @@ static TIMER_CALLBACK( irq_pulse_clear )
     later
 -------------------------------------------------*/
 
-void generic_pulse_irq_line(const device_config *device, int irqline)
+void generic_pulse_irq_line(running_device *device, int irqline)
 {
 	int multiplier = cpu_get_clock_multiplier(device);
 	int clocks = (cpu_get_min_cycles(device) * cpu_get_clock_divider(device) + multiplier - 1) / multiplier;
@@ -687,7 +678,7 @@ void generic_pulse_irq_line(const device_config *device, int irqline)
     1 cycle later, specifying a vector
 -------------------------------------------------*/
 
-void generic_pulse_irq_line_and_vector(const device_config *device, int irqline, int vector)
+void generic_pulse_irq_line_and_vector(running_device *device, int irqline, int vector)
 {
 	assert(irqline != INPUT_LINE_NMI && irqline != INPUT_LINE_RESET);
 	cpu_set_input_line_and_vector(device, irqline, ASSERT_LINE, vector);
@@ -700,7 +691,7 @@ void generic_pulse_irq_line_and_vector(const device_config *device, int irqline,
     disable value for global interrupts
 -------------------------------------------------*/
 
-void cpu_interrupt_enable(const device_config *device, int enabled)
+void cpu_interrupt_enable(running_device *device, int enabled)
 {
 	generic_machine_private *state = device->machine->generic_machine_data;
 	int cpunum = cpu_get_index(device);

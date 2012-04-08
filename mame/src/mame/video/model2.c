@@ -85,8 +85,7 @@
     to display more detail when a texture is real close to the viewer. This is currently unemulated.
 
 *********************************************************************************************************************************/
-#include "driver.h"
-#include "eminline.h"
+#include "emu.h"
 #include "video/segaic24.h"
 #include "video/poly.h"
 #include "includes/model2.h"
@@ -137,7 +136,7 @@ typedef struct
 	UINT16				z;
 	UINT16				texheader[4];
 	UINT8				luma;
-} _quad;
+} _quad_m2;
 
 typedef struct _poly_extra_data poly_extra_data;
 struct _poly_extra_data
@@ -361,7 +360,7 @@ void model2_3d_set_zclip( UINT8 clip )
 
 static void model2_3d_process_quad( UINT32 attr )
 {
-	_quad		object;
+	_quad_m2	object;
 	UINT16		*th, *tp;
 	INT32		tho;
 	UINT32		cull, i;

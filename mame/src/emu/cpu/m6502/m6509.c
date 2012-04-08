@@ -37,6 +37,7 @@ addresses take place.
 
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "m6509.h"
 
@@ -77,7 +78,7 @@ struct _m6509_Regs {
 	UINT8	irq_state;
 	UINT8	so_state;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *space;
 
 	int 	icount;
@@ -86,7 +87,7 @@ struct _m6509_Regs {
 	write8_space_func wrmem_id;					/* writemem callback for indexed instructions */
 };
 
-INLINE m6509_Regs *get_safe_token(const device_config *device)
+INLINE m6509_Regs *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -141,13 +142,13 @@ static void default_wdmem_id(const address_space *space, offs_t address, UINT8 d
 static CPU_INIT( m6509 )
 {
 	m6509_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->static_config;
+	const m6502_interface *intf = (const m6502_interface *)device->baseconfig().static_config;
 
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wdmem_id;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->space = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->space = device->space(AS_PROGRAM);
 
 	if ( intf )
 	{
@@ -199,7 +200,7 @@ INLINE void m6509_take_irq(	m6509_Regs *cpustate)
 		P |= F_I;		/* knock out D and set I flag */
 		PCL = RDMEM(EAD);
 		PCH = RDMEM(EAD+1);
-		LOG(("M6509 '%s' takes IRQ ($%04x)\n", cpustate->device->tag, PCD));
+		LOG(("M6509 '%s' takes IRQ ($%04x)\n", cpustate->device->tag(), PCD));
 		/* call back the cpuintrf to let it clear the line */
 		if (cpustate->irq_callback) (*cpustate->irq_callback)(cpustate->device, 0);
 	}
@@ -229,7 +230,7 @@ static CPU_EXECUTE( m6509 )
 		/* check if the I flag was just reset (interrupts enabled) */
 		if( cpustate->after_cli )
 		{
-			LOG(("M6509 '%s' after_cli was >0", cpustate->device->tag));
+			LOG(("M6509 '%s' after_cli was >0", cpustate->device->tag()));
 			cpustate->after_cli = 0;
 			if (cpustate->irq_state != CLEAR_LINE)
 			{
@@ -258,7 +259,7 @@ static void m6509_set_irq_line(m6509_Regs *cpustate, int irqline, int state)
 		cpustate->nmi_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6509 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6509 '%s' set_nmi_line(ASSERT)\n", cpustate->device->tag()));
 			EAD = M6509_NMI_VEC;
 			EAWH = PBWH;
 			cpustate->icount -= 2;
@@ -268,7 +269,7 @@ static void m6509_set_irq_line(m6509_Regs *cpustate, int irqline, int state)
 			P |= F_I;		/* knock out D and set I flag */
 			PCL = RDMEM(EAD);
 			PCH = RDMEM(EAD+1);
-			LOG(("M6509 '%s' takes NMI ($%04x)\n", cpustate->device->tag, PCD));
+			LOG(("M6509 '%s' takes NMI ($%04x)\n", cpustate->device->tag(), PCD));
 		}
 	}
 	else
@@ -277,7 +278,7 @@ static void m6509_set_irq_line(m6509_Regs *cpustate, int irqline, int state)
 		{
 			if( cpustate->so_state && !state )
 			{
-				LOG(( "M6509 '%s' set overflow\n", cpustate->device->tag));
+				LOG(( "M6509 '%s' set overflow\n", cpustate->device->tag()));
 				P|=F_V;
 			}
 			cpustate->so_state=state;
@@ -286,7 +287,7 @@ static void m6509_set_irq_line(m6509_Regs *cpustate, int irqline, int state)
 		cpustate->irq_state = state;
 		if( state != CLEAR_LINE )
 		{
-			LOG(( "M6509 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag));
+			LOG(( "M6509 '%s' set_irq_line(ASSERT)\n", cpustate->device->tag()));
 			cpustate->pending_irq = 1;
 		}
 	}
@@ -346,15 +347,15 @@ CPU_GET_INFO( m6509 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 10;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 20;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 20;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6509_IRQ_LINE:	info->i = cpustate->irq_state;				break;
 		case CPUINFO_INT_INPUT_STATE + M6509_SET_OVERFLOW:info->i = cpustate->so_state;				break;
@@ -384,7 +385,7 @@ CPU_GET_INFO( m6509 )
 		case CPUINFO_FCT_BURN:							info->burn = NULL;						break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6502);			break;
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &cpustate->icount;			break;
-		case CPUINFO_PTR_INTERNAL_MEMORY_MAP_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6509_mem); break;
+		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM:	info->internal_map8 = ADDRESS_MAP_NAME(m6509_mem); break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "M6509");				break;

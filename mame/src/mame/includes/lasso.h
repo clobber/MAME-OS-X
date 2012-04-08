@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _lasso_state lasso_state;
-struct _lasso_state
+class lasso_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, lasso_state(machine)); }
+
+	lasso_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  colorram;
@@ -24,10 +28,10 @@ struct _lasso_state
 	UINT8    track_enable;	/* used by wwjgtin */
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *sn_1;
-	const device_config *sn_2;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *sn_1;
+	running_device *sn_2;
 };
 
 

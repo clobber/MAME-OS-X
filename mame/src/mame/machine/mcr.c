@@ -4,7 +4,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "machine/z80ctc.h"
 #include "machine/z80pio.h"
@@ -253,7 +253,7 @@ Z80CTC_INTERFACE( nflfoot_ctc_intf )
 };
 
 
-const z80pio_interface nflfoot_pio_intf =
+Z80PIO_INTERFACE( nflfoot_pio_intf )
 {
 	DEVCB_CPU_INPUT_LINE("ipu", INPUT_LINE_IRQ0),  /* interrupt handler */
 	DEVCB_NULL,
@@ -420,7 +420,7 @@ MACHINE_RESET( zwackery )
 
 INTERRUPT_GEN( mcr_interrupt )
 {
-	const device_config *ctc = devtag_get_device(device->machine, "ctc");
+	running_device *ctc = devtag_get_device(device->machine, "ctc");
 
 	/* CTC line 2 is connected to VBLANK, which is once every 1/2 frame */
 	/* for the 30Hz interlaced display */
@@ -439,7 +439,7 @@ INTERRUPT_GEN( mcr_interrupt )
 
 INTERRUPT_GEN( mcr_ipu_interrupt )
 {
-	const device_config *ctc = devtag_get_device(device->machine, "ipu_ctc");
+	running_device *ctc = devtag_get_device(device->machine, "ipu_ctc");
 
 	/* CTC line 3 is connected to 493, which is signalled once every */
 	/* frame at 30Hz */
@@ -606,14 +606,14 @@ static WRITE_LINE_DEVICE_HANDLER( zwackery_pia_irq )
 
 static TIMER_CALLBACK( zwackery_493_off_callback )
 {
-	const device_config *pia = devtag_get_device(machine, "pia0");
+	running_device *pia = devtag_get_device(machine, "pia0");
 	pia6821_ca1_w(pia, 0, 0);
 }
 
 
 static TIMER_CALLBACK( zwackery_493_callback )
 {
-	const device_config *pia = devtag_get_device(machine, "pia0");
+	running_device *pia = devtag_get_device(machine, "pia0");
 
 	pia6821_ca1_w(pia, 0, 1);
 	timer_set(machine, video_screen_get_scan_period(machine->primary_screen), NULL, 0, zwackery_493_off_callback);
@@ -937,21 +937,6 @@ static WRITE8_DEVICE_HANDLER( ipu_break_changed )
 		if (data == 1)
 			z80sio_receive_data(device, 1, 0);
 	}
-}
-
-
-READ8_DEVICE_HANDLER( mcr_ipu_sio_r )
-{
-	return (offset & 2) ? z80sio_c_r(device, offset & 1) : z80sio_d_r(device, offset & 1);
-}
-
-
-WRITE8_DEVICE_HANDLER( mcr_ipu_sio_w )
-{
-	if (offset & 2)
-		z80sio_c_w(device, offset & 1, data);
-	else
-		z80sio_d_w(device, offset & 1, data);
 }
 
 

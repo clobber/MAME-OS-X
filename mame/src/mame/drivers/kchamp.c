@@ -62,7 +62,7 @@ IO ports and memory map changes. Dip switches differ too.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
@@ -353,7 +353,7 @@ static INTERRUPT_GEN( kc_interrupt )
 		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static void msmint( const device_config *device )
+static void msmint( running_device *device )
 {
 	kchamp_state *state = (kchamp_state *)device->machine->driver_data;
 

@@ -14,7 +14,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "includes/crbaloon.h"
 
@@ -159,11 +159,11 @@ static READ8_HANDLER( pc3259_r )
 
 static WRITE8_HANDLER( port_sound_w )
 {
-	const device_config *discrete = devtag_get_device(space->machine, "discrete");
-	const device_config *sn = devtag_get_device(space->machine, "snsnd");
+	running_device *discrete = devtag_get_device(space->machine, "discrete");
+	running_device *sn = devtag_get_device(space->machine, "snsnd");
 
 	/* D0 - interrupt enable - also goes to PC3259 as /HTCTRL */
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), (data & 0x01) ? TRUE : FALSE);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), (data & 0x01) ? TRUE : FALSE);
 	crbaloon_set_clear_collision_address((data & 0x01) ? TRUE : FALSE);
 
 	/* D1 - SOUND STOP */
@@ -343,7 +343,7 @@ GFXDECODE_END
 static MACHINE_RESET( crballoon )
 {
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	const device_config *discrete = devtag_get_device(machine, "discrete");
+	running_device *discrete = devtag_get_device(machine, "discrete");
 
 	pc3092_reset();
 	port_sound_w(space, 0, 0);
@@ -438,5 +438,5 @@ ROM_END
  *
  *************************************/
 
-GAME( 1980, crbaloon, 0,		crbaloon, crbaloon, 0, ROT90, "Taito Corporation", "Crazy Balloon (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, crbaloon, 0,        crbaloon, crbaloon, 0, ROT90, "Taito Corporation", "Crazy Balloon (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1980, crbaloon2,crbaloon, crbaloon, crbaloon, 0, ROT90, "Taito Corporation", "Crazy Balloon (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

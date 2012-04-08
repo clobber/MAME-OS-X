@@ -25,7 +25,7 @@
 
 ***************************************************************************/
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
 #include "k005289.h"
 
@@ -61,7 +61,7 @@ struct _k005289_state
 	int k005289_A_latch,k005289_B_latch;
 };
 
-INLINE k005289_state *get_safe_token(const device_config *device)
+INLINE k005289_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -176,7 +176,7 @@ static DEVICE_START( k005289 )
 	/* build the mixer table */
 	make_mixer_table(device->machine, info, 2);
 
-	info->sound_prom = device->region;
+	info->sound_prom = *device->region;
 
 	/* reset all the voices */
 	voice[0].frequency = 0;

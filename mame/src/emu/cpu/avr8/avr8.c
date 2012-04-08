@@ -17,7 +17,7 @@
     Written by MooglyGuy
 */
 
-#include "cpuintrf.h"
+#include "emu.h"
 #include "debugger.h"
 #include "avr8.h"
 
@@ -26,7 +26,7 @@ struct _avr8_state
 {
     UINT32 pc;
 
-    const device_config *device;
+    running_device *device;
     const address_space *program;
     const address_space *io;
     int icount;
@@ -75,7 +75,7 @@ enum
 #define ZREG            ((READ_IO_8(cpustate, 31) << 8) | READ_IO_8(cpustate, 30))
 #define SPREG           ((READ_IO_8(cpustate, AVR8_IO_SPH) << 8) | READ_IO_8(cpustate, AVR8_IO_SPL))
 
-INLINE avr8_state *get_safe_token(const device_config *device)
+INLINE avr8_state *get_safe_token(running_device *device)
 {
     assert(device != NULL);
     assert(device->token != NULL);
@@ -92,6 +92,28 @@ static void unimplemented_opcode(avr8_state *cpustate, UINT32 op)
 }
 
 /*****************************************************************************/
+
+INLINE bool avr8_is_long_opcode(UINT16 op)
+{
+	if((op & 0xf000) == 0x9000)
+	{
+		if((op & 0x0f00) < 0x0400)
+		{
+			if((op & 0x000f) == 0x0000)
+			{
+				return true;
+			}
+		}
+		else if((op & 0x0f00) < 0x0600)
+		{
+			if((op & 0x000f) >= 0x000c)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 INLINE UINT8 READ_PRG_8(avr8_state *cpustate, UINT32 address)
 {
@@ -149,10 +171,13 @@ static void avr8_set_irq_line(avr8_state *cpustate, UINT16 vector, int state)
     // Horrible hack, not accurate
     if(state)
     {
-        SREG_W(AVR8_SREG_I, 0);
-        PUSH(cpustate, (cpustate->pc >> 8) & 0x00ff);
-        PUSH(cpustate, cpustate->pc & 0x00ff);
-        cpustate->pc = vector;
+		if(SREG_R(AVR8_SREG_I))
+		{
+			SREG_W(AVR8_SREG_I, 0);
+			PUSH(cpustate, (cpustate->pc >> 8) & 0x00ff);
+			PUSH(cpustate, cpustate->pc & 0x00ff);
+			cpustate->pc = vector;
+		}
     }
 }
 
@@ -165,8 +190,8 @@ static CPU_INIT( avr8 )
     cpustate->pc = 0;
 
     cpustate->device = device;
-    cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-    cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+    cpustate->program = device->space(AS_PROGRAM);
+    cpustate->io = device->space(AS_IO);
 
     WRITE_IO_8(cpustate, AVR8_IO_SREG, 0);
 }
@@ -828,8 +853,11 @@ static CPU_EXECUTE( avr8 )
                         opcycles = 2;
                         break;
                     case 0x0900:    // SBIC A,b
-                        //output += sprintf( output, "SBIC    0x%02x, %d", ACONST5(op), RR3(op) );
-                        unimplemented_opcode(cpustate, op);
+                   		if(!(READ_IO_8(cpustate, ACONST5(op)) & (1 << RR3(op))))
+                   		{
+							opcycles += avr8_is_long_opcode(op) ? 2 : 1;
+                            cpustate->pc += avr8_is_long_opcode(op) ? 2 : 1;
+						}
                         break;
                     case 0x0a00:    // SBI A,b
                         //output += sprintf( output, "SBI     0x%02x, %d", ACONST5(op), RR3(op) );
@@ -844,8 +872,13 @@ static CPU_EXECUTE( avr8 )
                     case 0x0d00:
                     case 0x0e00:
                     case 0x0f00:    // MUL Rd,Rr
+                        sd = (UINT8)READ_IO_8(cpustate, RD5(op)) * (UINT8)READ_IO_8(cpustate, RR5(op));
+                        WRITE_IO_8(cpustate, 1, (sd >> 8) & 0x00ff);
+                        WRITE_IO_8(cpustate, 0, sd & 0x00ff);
+                        SREG_W(AVR8_SREG_C, (sd & 0x8000) ? 1 : 0);
+                        SREG_W(AVR8_SREG_Z, (sd == 0) ? 1 : 0);
+                        opcycles = 2;
                         //output += sprintf( output, "MUL     R%d, R%d", RD5(op), RR5(op) );
-                        unimplemented_opcode(cpustate, op);
                         break;
                 }
                 break;
@@ -1055,15 +1088,15 @@ CPU_GET_INFO( avr8 )
         case CPUINFO_INT_MIN_CYCLES:            info->i = 1;                    break;
         case CPUINFO_INT_MAX_CYCLES:            info->i = 4;                    break;
 
-        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM: info->i = 8;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 22;                   break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_IO:      info->i = 8;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_IO:      info->i = 11;                   break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 8;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 22;                   break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 8;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 11;                   break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:      info->i = 0;                    break;
 
         case CPUINFO_INT_PC:    /* intentional fallthrough */
         case CPUINFO_INT_REGISTER + AVR8_PC:    info->i = cpustate->pc << 1;                    break;

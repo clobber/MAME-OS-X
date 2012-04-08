@@ -7,7 +7,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "z80sio.h"
 #include "cpu/z80/z80.h"
 #include "cpu/z80/z80daisy.h"
@@ -179,12 +179,12 @@ struct _z80sio
 	sio_channel	chan[2];			/* 2 channels */
 	UINT8		int_state[8];		/* interrupt states */
 
-	void (*irq_cb)(const device_config *device, int state);
+	void (*irq_cb)(running_device *device, int state);
 	write8_device_func dtr_changed_cb;
 	write8_device_func rts_changed_cb;
 	write8_device_func break_changed_cb;
 	write8_device_func transmit_cb;
-	int (*receive_poll_cb)(const device_config *device, int channel);
+	int (*receive_poll_cb)(running_device *device, int channel);
 };
 
 
@@ -253,9 +253,9 @@ static TIMER_CALLBACK( serial_callback );
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static int z80sio_irq_state(const device_config *device);
-static int z80sio_irq_ack(const device_config *device);
-static void z80sio_irq_reti(const device_config *device);
+static int z80sio_irq_state(running_device *device);
+static int z80sio_irq_ack(running_device *device);
+static void z80sio_irq_reti(running_device *device);
 
 
 
@@ -263,7 +263,7 @@ static void z80sio_irq_reti(const device_config *device);
     INLINE FUNCTIONS
 ***************************************************************************/
 
-INLINE z80sio *get_safe_token(const device_config *device)
+INLINE z80sio *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -272,7 +272,7 @@ INLINE z80sio *get_safe_token(const device_config *device)
 }
 
 
-INLINE void interrupt_check(const device_config *device)
+INLINE void interrupt_check(running_device *device)
 {
 	/* if we have a callback, update it with the current state */
 	z80sio *sio = get_safe_token(device);
@@ -297,7 +297,7 @@ INLINE attotime compute_time_per_character(z80sio *sio, int which)
     reset_channel - reset a single SIO channel
 -------------------------------------------------*/
 
-static void reset_channel(const device_config *device, int ch)
+static void reset_channel(running_device *device, int ch)
 {
 	z80sio *sio = get_safe_token(device);
 	attotime tpc = compute_time_per_character(sio, ch);
@@ -486,6 +486,58 @@ READ8_DEVICE_HANDLER( z80sio_d_r )
 }
 
 
+/***************************************************************************
+    CONTROL/DATA REGISTER
+***************************************************************************/
+
+READ8_DEVICE_HANDLER( z80sio_cd_ba_r )
+{
+	switch (offset & 3)
+	{
+	case 0: return z80sio_d_r(device, 0);
+	case 1: return z80sio_d_r(device, 1);
+	case 2: return z80sio_c_r(device, 0);
+	case 3: return z80sio_c_r(device, 1);
+	}
+
+	return 0xff;
+}
+
+WRITE8_DEVICE_HANDLER( z80sio_cd_ba_w )
+{
+	switch (offset & 3)
+	{
+	case 0: z80sio_d_w(device, 0, data); break;
+	case 1: z80sio_d_w(device, 1, data); break;
+	case 2: z80sio_c_w(device, 0, data); break;
+	case 3: z80sio_c_w(device, 1, data); break;
+	}
+}
+
+READ8_DEVICE_HANDLER( z80sio_ba_cd_r )
+{
+	switch (offset & 3)
+	{
+	case 0: return z80sio_d_r(device, 0);
+	case 1: return z80sio_c_r(device, 0);
+	case 2: return z80sio_d_r(device, 1);
+	case 3: return z80sio_c_r(device, 1);
+	}
+
+	return 0xff;
+}
+
+WRITE8_DEVICE_HANDLER( z80sio_ba_cd_w )
+{
+	switch (offset & 3)
+	{
+	case 0: z80sio_d_w(device, 0, data); break;
+	case 1: z80sio_c_w(device, 0, data); break;
+	case 2: z80sio_d_w(device, 1, data); break;
+	case 3: z80sio_c_w(device, 1, data); break;
+	}
+}
+
 
 /***************************************************************************
     CONTROL LINE READ/WRITE
@@ -524,7 +576,7 @@ READ8_DEVICE_HANDLER( z80sio_get_rts )
 
 static TIMER_CALLBACK( change_input_line )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	z80sio *sio = get_safe_token(device);
 	sio_channel *chan = &sio->chan[param & 1];
 	UINT8 line = (param >> 8) & 0xff;
@@ -607,7 +659,7 @@ WRITE8_DEVICE_HANDLER( z80sio_receive_data )
 
 static TIMER_CALLBACK( serial_callback )
 {
-	const device_config *device = (const device_config *)ptr;
+	running_device *device = (running_device *)ptr;
 	z80sio *sio = get_safe_token(device);
 	sio_channel *chan = &sio->chan[param];
 	int ch = param;
@@ -699,7 +751,7 @@ static const UINT8 int_priority[] =
 };
 
 
-static int z80sio_irq_state(const device_config *device)
+static int z80sio_irq_state(running_device *device)
 {
 	z80sio *sio = get_safe_token(device);
 	int state = 0;
@@ -727,7 +779,7 @@ static int z80sio_irq_state(const device_config *device)
 }
 
 
-static int z80sio_irq_ack(const device_config *device)
+static int z80sio_irq_ack(running_device *device)
 {
 	z80sio *sio = get_safe_token(device);
 	int i;
@@ -754,7 +806,7 @@ static int z80sio_irq_ack(const device_config *device)
 }
 
 
-static void z80sio_irq_reti(const device_config *device)
+static void z80sio_irq_reti(running_device *device)
 {
 	z80sio *sio = get_safe_token(device);
 	int i;
@@ -782,10 +834,10 @@ static void z80sio_irq_reti(const device_config *device)
 
 static DEVICE_START( z80sio )
 {
-	const z80sio_interface *intf = (const z80sio_interface *)device->static_config;
-	astring *tempstring = astring_alloc();
+	const z80sio_interface *intf = (const z80sio_interface *)device->baseconfig().static_config;
 	z80sio *sio = get_safe_token(device);
 	void *ptr = (void *)device;
+	astring tempstring;
 
 	sio->chan[0].receive_timer = timer_alloc(device->machine, serial_callback, ptr);
 	sio->chan[1].receive_timer = timer_alloc(device->machine, serial_callback, ptr);
@@ -796,8 +848,6 @@ static DEVICE_START( z80sio )
 	sio->break_changed_cb = intf->break_changed_cb;
 	sio->transmit_cb = intf->transmit_cb;
 	sio->receive_poll_cb = intf->receive_poll_cb;
-
-	astring_free(tempstring);
 }
 
 

@@ -87,13 +87,13 @@ Turbo Outrun               171-5782    837-6963-61       610-0239-61         MPR
 Sonic Hedgehog 2           171-6215A   837-6963-62       610-0239-62         MPR-15000A-F   (838200)      EPR-12368-62   (27256)   n/a
 
 */
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "rendlay.h"
 
-#include "segamsys.h"
-#include "megadriv.h"
+#include "includes/segamsys.h"
+#include "includes/megadriv.h"
 
 static struct _mtech_bios mtech_bios;
 
@@ -488,8 +488,8 @@ static VIDEO_START(mtnew)
 //attotime_never
 static VIDEO_UPDATE(mtnew)
 {
-	const device_config *megadriv_screen = devtag_get_device(screen->machine, "megadriv");
-	const device_config *menu_screen     = devtag_get_device(screen->machine, "menu");
+	running_device *megadriv_screen = devtag_get_device(screen->machine, "megadriv");
+	running_device *menu_screen     = devtag_get_device(screen->machine, "menu");
 
 	if (screen == megadriv_screen)
 	{
@@ -1211,7 +1211,7 @@ ROM_END
 /* 52 */ GAME( 1991, mt_sonic, megatech, megatech, megatech, mtnew, ROT0, "Sega",                  "Sonic The Hedgehog (Mega-Tech, set 1)", GAME_NOT_WORKING )
 /*    */ GAME( 1991, mt_sonia, mt_sonic, megatech, megatech, mtnew, ROT0, "Sega",                  "Sonic The Hedgehog (Mega-Tech, set 2)", GAME_NOT_WORKING )
 /* 53 */ GAME( 1990, mt_fshrk, megatech, megatech, megatech, mtnew, ROT0, "Toaplan / Sega",        "Fire Shark (Mega-Tech)", GAME_NOT_WORKING )
-/* 54 */ // unknown
+/* 54 */ // Spider-Man
 /* 55 */ // unknown
 /* 56 */ // unknown
 /* 57 */ GAME( 1991, mt_gaxe2, megatech, megatech, megatech, mtnew, ROT0, "Sega",                  "Golden Axe II (Mega-Tech)", GAME_NOT_WORKING )

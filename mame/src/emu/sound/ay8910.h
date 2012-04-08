@@ -3,8 +3,6 @@
 #ifndef __AY8910_H__
 #define __AY8910_H__
 
-#include "devcb.h"
-
 /*
 AY-3-8910A: 2 I/O ports
 AY-3-8912A: 1 I/O port
@@ -75,7 +73,7 @@ struct _ay8910_interface
 };
 
 
-void ay8910_set_volume(const device_config *device,int channel,int volume);
+void ay8910_set_volume(running_device *device,int channel,int volume);
 
 READ8_DEVICE_HANDLER( ay8910_r );
 WRITE8_DEVICE_HANDLER( ay8910_address_w );
@@ -90,7 +88,7 @@ WRITE8_DEVICE_HANDLER( ay8910_address_data_w );
 
 /*********** An interface for SSG of YM2203 ***********/
 
-void *ay8910_start_ym(void *infoptr, sound_type chip_type, const device_config *device, int clock, const ay8910_interface *intf);
+void *ay8910_start_ym(void *infoptr, sound_type chip_type, running_device *device, int clock, const ay8910_interface *intf);
 
 void ay8910_stop_ym(void *chip);
 void ay8910_reset_ym(void *chip);

@@ -51,7 +51,7 @@ Note:   if MAME_DEBUG is defined, pressing Z with:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "video/konicdev.h"
 
 /* Variables that driver has access to: */
@@ -848,7 +848,7 @@ static void dirty_tiles(int layer,UINT16 *vram)
 
 VIDEO_UPDATE( metro )
 {
-	const device_config *k053936 = devtag_get_device(screen->machine, "k053936");
+	running_device *k053936 = devtag_get_device(screen->machine, "k053936");
 	int i,pri,layers_ctrl = -1;
 	UINT16 screenctrl = *metro_screenctrl;
 

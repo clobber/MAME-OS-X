@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _ashnojoe_state ashnojoe_state;
-struct _ashnojoe_state
+class ashnojoe_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ashnojoe_state(machine)); }
+
+	ashnojoe_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    tileram;
 	UINT16 *    tileram_1;
@@ -28,7 +32,7 @@ struct _ashnojoe_state
 	int         msm5205_vclk_toggle;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

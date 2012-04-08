@@ -45,15 +45,15 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "namco52.h"
 #include "cpu/mb88xx/mb88xx.h"
 
 typedef struct _namco_52xx_state namco_52xx_state;
 struct _namco_52xx_state
 {
-	const device_config *cpu;
-	const device_config *discrete;
+	running_device *cpu;
+	running_device *discrete;
 	int basenode;
 	devcb_resolved_read8 romread;
 	devcb_resolved_read8 si;
@@ -61,7 +61,7 @@ struct _namco_52xx_state
 	UINT32 address;
 };
 
-INLINE namco_52xx_state *get_safe_token(const device_config *device)
+INLINE namco_52xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -74,7 +74,7 @@ INLINE namco_52xx_state *get_safe_token(const device_config *device)
 
 static TIMER_CALLBACK( namco_52xx_latch_callback )
 {
-	namco_52xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_52xx_state *state = get_safe_token((running_device *)ptr);
 	state->latched_cmd = param;
 }
 
@@ -135,7 +135,7 @@ static WRITE8_HANDLER( namco_52xx_O_w )
 
 static TIMER_CALLBACK( namco_52xx_irq_clear )
 {
-	namco_52xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_52xx_state *state = get_safe_token((running_device *)ptr);
 	cpu_set_input_line(state->cpu, 0, CLEAR_LINE);
 }
 
@@ -161,7 +161,7 @@ WRITE8_DEVICE_HANDLER( namco_52xx_write )
 
 static TIMER_CALLBACK( external_clock_pulse )
 {
-	namco_52xx_state *state = get_safe_token((const device_config *)ptr);
+	namco_52xx_state *state = get_safe_token((running_device *)ptr);
 	mb88_external_clock_w(state->cpu, 1);
 	mb88_external_clock_w(state->cpu, 0);
 }
@@ -201,14 +201,13 @@ ROM_END
 
 static DEVICE_START( namco_52xx )
 {
-	namco_52xx_interface *intf = (namco_52xx_interface *)device->static_config;
+	namco_52xx_interface *intf = (namco_52xx_interface *)device->baseconfig().static_config;
 	namco_52xx_state *state = get_safe_token(device);
-	astring *tempstring = astring_alloc();
+	astring tempstring;
 
 	/* find our CPU */
-	state->cpu = cputag_get_cpu(device->machine, device_build_tag(tempstring, device, "mcu"));
+	state->cpu = device->subdevice("mcu");
 	assert(state->cpu != NULL);
-	astring_free(tempstring);
 
 	/* find the attached discrete sound device */
 	assert(intf->discrete != NULL);

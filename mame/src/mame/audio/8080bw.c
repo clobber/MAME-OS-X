@@ -1,6 +1,6 @@
 /* 8080bw.c *******************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "sound/samples.h"
 #include "sound/sn76477.h"
 #include "sound/discrete.h"
@@ -1057,7 +1057,7 @@ WRITE8_HANDLER( lupin3_sh_port_2_w )
 /* Much more work needs to be done       */
 /*****************************************/
 
-WRITE8_HANDLER( schasrcv_sh_port_1_w )
+WRITE8_HANDLER( schasercv_sh_port_1_w )
 {
 
 	/* bit 2 = 2nd speedup
@@ -1073,7 +1073,7 @@ WRITE8_HANDLER( schasrcv_sh_port_1_w )
 	state->port_1_last_extra = data;
 }
 
-WRITE8_HANDLER( schasrcv_sh_port_2_w )
+WRITE8_HANDLER( schasercv_sh_port_2_w )
 {
 	mw8080bw_state *state = (mw8080bw_state *)space->machine->driver_data;
 

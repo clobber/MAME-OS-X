@@ -10,11 +10,10 @@
 
 ***************************************************************************/
 
+#include "emu.h"
+#include "debugger.h"
 #include "drcuml.h"
 #include "drcbeut.h"
-#include "eminline.h"
-#include "debugger.h"
-#include <math.h>
 
 #ifdef _MSC_VER
 #include <float.h>
@@ -213,7 +212,7 @@ enum
 /* internal backend-specific state */
 struct _drcbe_state
 {
-	const device_config *	device;					/* CPU device we are associated with */
+	running_device *	device;					/* CPU device we are associated with */
 	const address_space *	space[ADDRESS_SPACES];	/* pointers to CPU's address space */
 	drcuml_state *			drcuml;					/* pointer back to our owner */
 	drccache *				cache;					/* pointer to the cache */
@@ -255,7 +254,7 @@ union _drcbec_instruction
 ***************************************************************************/
 
 /* primary back-end callbacks */
-static drcbe_state *drcbec_alloc(drcuml_state *drcuml, drccache *cache, const device_config *device, UINT32 flags, int modes, int addrbits, int ignorebits);
+static drcbe_state *drcbec_alloc(drcuml_state *drcuml, drccache *cache, running_device *device, UINT32 flags, int modes, int addrbits, int ignorebits);
 static void drcbec_free(drcbe_state *drcbe);
 static void drcbec_reset(drcbe_state *drcbe);
 static int drcbec_execute(drcbe_state *state, drcuml_codehandle *entry);
@@ -319,8 +318,7 @@ static const UINT32 condition_map[] =
 
 static UINT64 immediate_zero = 0;
 
-extern const drcbe_interface drcbe_c_be_interface;
-const drcbe_interface drcbe_c_be_interface =
+extern const drcbe_interface drcbe_c_be_interface =
 {
 	drcbec_alloc,
 	drcbec_free,
@@ -342,7 +340,7 @@ const drcbe_interface drcbe_c_be_interface =
     state
 -------------------------------------------------*/
 
-static drcbe_state *drcbec_alloc(drcuml_state *drcuml, drccache *cache, const device_config *device, UINT32 flags, int modes, int addrbits, int ignorebits)
+static drcbe_state *drcbec_alloc(drcuml_state *drcuml, drccache *cache, running_device *device, UINT32 flags, int modes, int addrbits, int ignorebits)
 {
 	int spacenum;
 
@@ -355,7 +353,7 @@ static drcbe_state *drcbec_alloc(drcuml_state *drcuml, drccache *cache, const de
 	/* remember our pointers */
 	drcbe->device = device;
 	for (spacenum = 0; spacenum < ARRAY_LENGTH(drcbe->space); spacenum++)
-		drcbe->space[spacenum] = memory_find_address_space(device, spacenum);
+		drcbe->space[spacenum] = device->space(spacenum);
 	drcbe->drcuml = drcuml;
 	drcbe->cache = cache;
 

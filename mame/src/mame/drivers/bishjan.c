@@ -30,7 +30,7 @@ To do:
 
 ************************************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "memconv.h"
 #include "cpu/h83002/h8.h"
@@ -1021,4 +1021,4 @@ static DRIVER_INIT(saklove)
 
 
 GAME( 1998, saklove, 0, saklove, saklove, saklove, ROT0, "Subsino", "Ying Hua Lian 2.0 (China 1.02)", 0 )
-GAME( 1999, bishjan, 0, bishjan, bishjan, bishjan, ROT0, "Subsino", "Bishou Jan (Japan 203)",         GAME_NO_SOUND )
+GAME( 1999, bishjan, 0, bishjan, bishjan, bishjan, ROT0, "Subsino", "Bishou Jan (Japan 203)", GAME_NO_SOUND )

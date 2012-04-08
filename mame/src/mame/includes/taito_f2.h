@@ -1,7 +1,82 @@
-/*----------- defined in video/taito_f2.c -----------*/
 
-extern UINT16 *f2_sprite_extension;
-extern size_t f2_spriteext_size;
+struct f2_tempsprite
+{
+	int code, color;
+	int flipx, flipy;
+	int x, y;
+	int zoomx, zoomy;
+	int primask;
+};
+
+class taitof2_state
+{
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, taitof2_state(machine)); }
+
+	taitof2_state(running_machine &machine) { }
+
+	/* memory pointers */
+	UINT16 *        sprite_extension;
+	UINT16 *        spriteram;
+	UINT16 *        spriteram_buffered;
+	UINT16 *        spriteram_delayed;
+	UINT16 *        cchip2_ram;	// for megablst only
+//  UINT16 *        paletteram;    // currently this uses generic palette handling
+	size_t          spriteram_size;
+	size_t          spriteext_size;
+
+
+	/* video-related */
+	struct f2_tempsprite *spritelist;
+	int             sprite_type;
+
+	UINT16          spritebank[8];
+//  UINT16          spritebank_eof[8];
+	UINT16          spritebank_buffered[8];
+
+	INT32           sprites_disabled, sprites_active_area, sprites_master_scrollx, sprites_master_scrolly;
+	/* remember flip status over frames because driftout can fail to set it */
+	INT32           sprites_flipscreen;
+
+	/* On the left hand screen edge (assuming horiz screen, no
+       screenflip: in screenflip it is the right hand edge etc.)
+       there may be 0-3 unwanted pixels in both tilemaps *and*
+       sprites. To erase this we use f2_hide_pixels (0 to +3). */
+
+	INT32           hide_pixels;
+	INT32           flip_hide_pixels;	/* Different in some games */
+
+	INT32           pivot_xdisp;	/* Needed in games with a pivot layer */
+	INT32           pivot_ydisp;
+
+	INT32           game;
+
+	UINT8           tilepri[6]; // todo - move into taitoic.c
+	UINT8           spritepri[6]; // todo - move into taitoic.c
+	UINT8           spriteblendmode; // todo - move into taitoic.c
+
+	int             prepare_sprites;
+
+	/* misc */
+	INT32           mjnquest_input;
+	int             last[2], nibble;
+	INT32           driveout_sound_latch;
+	INT32           oki_bank;
+
+	/* devices */
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *oki;
+	running_device *tc0100scn;
+	running_device *tc0100scn_1;
+	running_device *tc0100scn_2;
+	running_device *tc0360pri;
+	running_device *tc0280grd;
+	running_device *tc0430grw;
+	running_device *tc0480scp;
+};
+
+/*----------- defined in video/taito_f2.c -----------*/
 
 VIDEO_START( taitof2_default );
 VIDEO_START( taitof2_quiz );

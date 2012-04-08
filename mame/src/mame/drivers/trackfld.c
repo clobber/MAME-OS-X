@@ -1,3 +1,164 @@
+/*
+
+Track & Field / Hyper Olympic
+Konami 1983
+
+PCB Layouts
+-----------
+
+Top board
+
+GX361 PWB(B)3000151A
+|----------------------------------------|
+|     Z80A                    3.579545MHz|
+|              14.31818MHz        VLM5030|
+|CN1                            SN76489  |
+|                                        |
+|   361D13.2C                            |
+|                               361D15.9C|
+|                                        |
+|                                        |
+|                  LA4460                |
+|1                                       |
+|8              VOL                      |
+|W    2114  2114                    4066 |
+|A                                       |
+|Y                            M5224      |
+|                                        |
+|CN2         DSW1 DSW2            LM358  |
+|----------------------------------------|
+Notes:
+      Z80A    - Clock input 3.579545MHz [14.31818/4]
+      VLM5030 - Clock input 3.579545MHz
+      SN76489 - Texas Instruments Digital Complex Sound Generator, clock input 1.7897725MHz [3.579545/2]
+      361*    - 2764 EPROMs
+      2114    - 1k x4 SRAM with multiplexed I/O
+      M5224   - Mitsubishi M5224 Quad Operational Amplifier (compatible with LM324)
+      LM358   - Dual Operational Amplifier
+      CN1     - Flat cable joining to main board
+      CN2     - 2-pin power connector for +5V/GND
+      DSW1/2  - 8-position DIP switches
+      Note: On most original boards the Z80, VLM and 76489 have their part numbers scratched off. The
+            76489 might be a 76496? The schematics say '76489'
+
+      Measurements
+      ------------
+      VSync - 60.6035Hz
+      HSync - 15.5176kHz
+      XTAL1 - 3.57884MHz
+      XTAL2 - 14.31959MHz
+
+Bottom Board
+
+GX361 PWB(A)2000103B
+|---------------------------------------------------------------------|
+| 361F01.1A   361F04.4A  6116   BATTERY  2114  2114   2148            |
+|  361F02.2A   361F05.5A                                      DIP28(1)|
+|   361F03.3A                            2114  2114   2148            |
+|                                                          361B17.16B |
+|CN1                                                                  |
+|           CPU                                                       |
+|                                    361D06.C12   361D08.C13  DIP28(4)|
+|                                        361D07.C13   361D09.C15      |
+|                                                                     |
+|                                                                     |
+|                                                                     |
+|                                                                     |
+|                                                                     |
+|      18.432MHz                                                      |
+|               DIP28(3)               DIP40            361B18.15E    |
+|     361B16.1F                                                       |
+|                                                                     |
+|                                                                     |
+|   NE555                                                             |
+|                                                                     |
+|                                                     361E11.15H      |
+|CN2      DIP28(2)                   6116 6116  361E10.14H  361E12.16H|
+|---------------------------------------------------------------------|
+Notes:
+      CPU      - Konami-1 Custom Encrypted CPU, clock input 1.536MHz [18.432/12]
+      2114     - 1k x4 SRAM with multiplexed I/O
+      2148     - 1k x4 SRAM
+      6116     - 2k x8 SRAM
+      361B*    - TBP18S030/MMI6301 Bipolar PROMs
+      361D*    - 2764 EPROM
+      361E*    - 2764 EPROM
+      361F*    - 2764 EPROM
+      NE555    - General Purpose Timer IC
+      CN1      - Flat cable joining to top board
+      CN2      - 2-pin power connector for +5V/GND
+      DIP28(1) - Konami custom chip marked '502' or logic board KONAMI PWB4000231
+      DIP28(2) - Konami custom chip marked '082'
+      DIP28(3) - Konami custom chip marked '504' or logic board KONAMI PWB4000206A
+      DIP28(4) - Konami custom chip marked '083'
+      DIP40    - Konami custom chip marked '503' or logic board KONAMI KC001
+      Note: On most original boards the 6116 and all Konami custom chips have their part numbers scratched off.
+            On some PCBs the custom 50x/08x chips have been replaced with a small daughterboard containing only
+            logic chips (all of the custom chips are really just logic ICs inside a single plastic DIP package)
+
+DIP Switch Settings
+-------------------
+
+DIP SW1
+|------------------------------------------|
+|            1   2   3   4   5   6   7   8 |
+|------------------------------------------|
+|Coins/Plays                               |
+|1/1        Off Off Off Off Off Off Off Off|
+|1/2        On  Off Off Off On  Off Off Off|
+|1/3        Off On  Off Off Off On  Off Off|
+|1/4        On  On  Off Off On  On  Off Off|
+|1/5        Off Off On  Off Off Off On  Off|
+|1/6        On  Off On  Off On  Off On  Off|
+|1/7        Off On  On  Off Off On  On  Off|
+|2/1        On  On  On  Off On  On  On  Off|
+|2/3        Off Off Off On  Off Off Off On |
+|2/5        On  Off Off On  On  Off Off On |
+|3/1        Off On  Off On  Off On  Off On |
+|3/2        On  On  Off On  On  On  Off On |
+|3/4        Off Off On  On  Off Off On  On |
+|4/1        On  Off On  On  On  Off On  On |
+|4/3        Off On  On  On  Off On  On  On |
+|Freeplay   On  On  On  On  On  On  On  On |
+|------------------------------------------|
+
+DIP SW2
+|----------------------------------------------|
+|                1   2   3   4   5   6   7   8 |
+|----------------------------------------------|
+|Lives                                         |
+|1              Off                            |
+|2              On                             |
+|----------------------------------------------|
+|At Last Event....                             |
+|End Game           Off                        |
+|Continue           On                         |
+|----------------------------------------------|
+|Cabinet                                       |
+|Table                  Off                    |
+|Upright                On                     |
+|----------------------------------------------|
+|Bonus Player                                  |
+|None                       Off                |
+|100,000 and every 100,000  On                 |
+|----------------------------------------------|
+|World Records                                 |
+|Keep                           Off            |
+|Clear At Power On              On             |
+|----------------------------------------------|
+|Difficulty                                    |
+|Easy                               Off Off    |
+|Normal                             On  Off    |
+|Hard                               Off On     |
+|Difficult                          On  On     |
+|----------------------------------------------|
+|Attract Sound                                 |
+|Sound On                                   On |
+|Sound Off                                  Off|
+|----------------------------------------------|
+
+*/
+
 /***************************************************************************
 
 Konami games memory map (preliminary)
@@ -17,7 +178,7 @@ MAIN BOARD:
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6800/m6800.h"
 #include "machine/konami1.h"
@@ -678,7 +839,7 @@ static GFXDECODE_START( trackfld )
 GFXDECODE_END
 
 
-static void adpcm_vck_callback( const device_config *device )
+static void adpcm_vck_callback( running_device *device )
 {
 	trackfld_state *state = (trackfld_state *)device->machine->driver_data;
 	state->hyprolyb_vck_ready = 0x80;
@@ -879,6 +1040,39 @@ ROM_START( trackfld )
 	ROM_REGION( 0x10000, "vlm", 0 )	/* 64k for speech rom */
 	ROM_LOAD( "c9_d15.bin",   0x0000, 0x2000, CRC(f546a56b) SHA1(caee3d8546eb7a75ce2a578c6a1a630246aec6b8) )
 ROM_END
+
+
+ROM_START( trackfldnz )
+	ROM_REGION( 0x10000, "maincpu", 0 )     /* 64k for code + 64k for decrypted opcodes */
+	ROM_LOAD( "gold.7a",  0x6000, 0x2000, CRC(77ea4509) SHA1(3f537cc674859fad385032fded59ac6e10b2ffff) )
+	ROM_LOAD( "gold.6a",  0x8000, 0x2000, CRC(a13f3131) SHA1(07617f409741b67f747fe01314147a074f462f16) )
+	ROM_LOAD( "gold.5a",  0xa000, 0x2000, CRC(b0abe171) SHA1(33360c434f1d46e6b6635c72f0c8686e627d14dd) )
+	ROM_LOAD( "gold.4a",  0xc000, 0x2000, CRC(fee9b922) SHA1(4950c0274e03622b078656405d43ddff65360eee) )
+	ROM_LOAD( "gold.2a",  0xe000, 0x2000, CRC(ad6dc048) SHA1(982cb3fa90b622f056069d2ebd9d351d5c20e44c) )
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "gold.2d",   0x0000, 0x2000, CRC(95bf79b6) SHA1(ea9135acd7ad162c19c5cdde356e69792d61b675) )
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "gold.20a",  0x0000, 0x2000, CRC(82e2185a) SHA1(1da9ea20e7af0b49c62fb39834a7ec686491af04) )
+	ROM_LOAD( "gold.21a",  0x2000, 0x2000, CRC(800ff1f1) SHA1(33d73b18903e3e6bfb30f1a06db4b8105d4040d8) )
+	ROM_LOAD( "gold.17a",  0x4000, 0x2000, CRC(d9faf183) SHA1(4448b6242790783d37acf50704d597af5878c2ab) )
+	ROM_LOAD( "gold.19a",  0x6000, 0x2000, CRC(5886c802) SHA1(884a12a8f63600da4f23b29be6dbaacef37add20) )
+
+	ROM_REGION( 0x6000, "gfx2", 0 )
+	ROM_LOAD( "gold.2k",  0x0000, 0x2000, CRC(50075768) SHA1(dfff92c0f59dd3d8d3d6256944bfd48792cef6a9) )
+	ROM_LOAD( "gold.4k",  0x2000, 0x2000, CRC(dda9e29f) SHA1(0f41cde82bb60c3f1591ee14dc3cff4642bbddc1) )
+	ROM_LOAD( "gold.5k",  0x4000, 0x2000, CRC(c2166a5c) SHA1(5ba25900e653ce4edcf35f1fbce758a327a715ce) )
+
+	ROM_REGION( 0x0220, "proms", 0 )
+	ROM_LOAD( "gold.2g",    0x0000, 0x0020, CRC(d55f30b5) SHA1(4d6a851f4886778307f75771645078b97ad55f5f) ) /* palette */
+	ROM_LOAD( "gold.18d",   0x0020, 0x0100, CRC(d2ba4d32) SHA1(894b5cedf01ba9225a0d6215291857e455b84903) ) /* sprite lookup table */
+	ROM_LOAD( "gold.4j",   0x0120, 0x0100, CRC(053e5861) SHA1(6740a62cf7b6938a4f936a2fed429704612060a5) ) /* char lookup table */
+
+	ROM_REGION( 0x10000, "vlm", 0 )	/* 64k for speech rom */
+	ROM_LOAD( "gold.d9",   0x0000, 0x2000, CRC(f546a56b) SHA1(caee3d8546eb7a75ce2a578c6a1a630246aec6b8) )
+ROM_END
+
 
 ROM_START( trackfldc )
 	ROM_REGION( 0x10000, "maincpu", 0 )     /* 64k for code + 64k for decrypted opcodes */
@@ -1249,6 +1443,7 @@ GAME( 1983, hyprolym,  trackfld, trackfld, trackfld, trackfld, ROT0,  "Konami", 
 GAME( 1983, hyprolymb, trackfld, hyprolyb, trackfld, trackfld, ROT0,  "bootleg", "Hyper Olympic (bootleg)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1996, atlantol,  trackfld, hyprolyb, atlantol, atlantol, ROT0,  "bootleg", "Atlant Olimpic", GAME_SUPPORTS_SAVE )
 GAME( 1988, mastkin,   0,        mastkin,  mastkin,  mastkin,  ROT0,  "Du Tech", "The Masters of Kin", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1982, trackfldnz,trackfld, trackfld, trackfld, trackfld, ROT0,  "Goldberg Enterprizes Inc.", "Track & Field (NZ Bootleg?)", GAME_NOT_WORKING)
 GAME( 1985, wizzquiz,  0,        wizzquiz, wizzquiz, wizzquiz, ROT0,  "Konami", "Wizz Quiz (Konami version)", GAME_SUPPORTS_SAVE )
 GAME( 1985, wizzquiza, wizzquiz, wizzquiz, wizzquiz, wizzquiz, ROT0,  "Zilec - Zenitone", "Wizz Quiz (version 4)", GAME_SUPPORTS_SAVE )
 GAME( 1987, reaktor,   0,        reaktor,  reaktor,  0,        ROT90, "Zilec", "Reaktor (Track & Field conversion)", GAME_SUPPORTS_SAVE )

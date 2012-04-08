@@ -47,7 +47,7 @@ The 6809 NMI is used for sound timing.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/sn76496.h"
 #include "sound/vlm5030.h"
@@ -246,7 +246,7 @@ static MACHINE_DRIVER_START( yiear )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("snsnd", SN76496, XTAL_18_432MHz/16)   /* verified on pcb */
+	MDRV_SOUND_ADD("snsnd", SN76489A, XTAL_18_432MHz/16)   /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_SOUND_ADD("vlm", VLM5030, XTAL_3_579545MHz)   /* verified on pcb */

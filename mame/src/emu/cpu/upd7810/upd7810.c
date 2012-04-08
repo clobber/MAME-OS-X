@@ -404,6 +404,7 @@ STOP            01001000  10111011          12  stop
 
 */
 
+#include "emu.h"
 #include "debugger.h"
 #include "upd7810.h"
 
@@ -472,6 +473,8 @@ struct _upd7810_state
 	UINT8	co1;
 	UINT16	irr;	/* interrupt request register */
 	UINT16	itf;	/* interrupt test flag register */
+	int		int1;	/* keep track of current int1 state. Needed for 7801 irq checking. */
+	int		int2;	/* keep track to current int2 state. Needed for 7801 irq checking. */
 
 /* internal helper variables */
 	UINT16	txs;	/* transmitter shift register */
@@ -496,13 +499,13 @@ struct _upd7810_state
 	void (*handle_timers)(upd7810_state *cpustate, int cycles);
 	UPD7810_CONFIG config;
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const address_space *program;
 	const address_space *io;
 	int icount;
 };
 
-INLINE upd7810_state *get_safe_token(const device_config *device)
+INLINE upd7810_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -538,6 +541,7 @@ INLINE upd7810_state *get_safe_token(const device_config *device)
 #define INTFST	0x0400
 #define INTER	0x0800
 #define INTOV	0x1000
+#define INTF0	0x2000
 
 /* ITF flags */
 #define INTAN4	0x0001
@@ -843,97 +847,140 @@ static void upd7810_take_irq(upd7810_state *cpustate)
 	if (0 == IFF)
 		return;
 
-	/* check the interrupts in priority sequence */
-	if ((IRR & INTFT0)	&& 0 == (MKL & 0x02))
+	switch ( cpustate->config.type )
 	{
-	    switch (cpustate->config.type)
+	case TYPE_7801:
+		/* 1 - SOFTI - vector at 0x0060 */
+		/* 2 - INT0 - Masked by MK0 bit */
+		if ( IRR & INTF0 && 0 == (MKL & 0x01 ) )
 		{
-			case TYPE_7810_GAMEMASTER:
-				vector = 0xff2a;
-				break;
-			default:
-				vector = 0x0008;
+			irqline = UPD7810_INTF0;
+			vector = 0x0004;
+			IRR &= ~INTF0;
 		}
-	    if (!((IRR & INTFT1)	&& 0 == (MKL & 0x04)))
-		IRR&=~INTFT0;
-	}
-	else
-	if ((IRR & INTFT1)	&& 0 == (MKL & 0x04))
-	{
-	    switch (cpustate->config.type)
+		/* 3 - INTT - Masked by MKT bit */
+		if ( IRR & INTFT0 && 0 == ( MKL & 0x02 ) )
 		{
-			case TYPE_7810_GAMEMASTER:
-				vector = 0xff2a;
-				break;
-			default:
-				vector = 0x0008;
+			vector = 0x0008;
+			IRR &= ~INTFT0;
 		}
-	    IRR&=~INTFT1;
-	}
-	else
-	if ((IRR & INTF1)	&& 0 == (MKL & 0x08))
-	{
-		irqline = UPD7810_INTF1;
-		vector = 0x0010;
-		if (!((IRR & INTF2)	&& 0 == (MKL & 0x10)))
-		    IRR&=~INTF1;
-	}
-	else
-	if ((IRR & INTF2)	&& 0 == (MKL & 0x10))
-	{
-		irqline = UPD7810_INTF2;
-		vector = 0x0010;
-		IRR&=~INTF2;
-	}
-	else
-	if ((IRR & INTFE0)	&& 0 == (MKL & 0x20))
-	{
-	    switch (cpustate->config.type)
+		/* 4 - INT1 - Masked by MK1 bit */
+		if ( IRR & INTF1 && 0 == ( MKL & 0x04 ) )
 		{
-			case TYPE_7810_GAMEMASTER:
-				vector = 0xff2d;
-				break;
-			default:
-				vector = 0x0018;
+			irqline = UPD7810_INTF1;
+			vector = 0x0010;
+			IRR &= ~INTF1;
 		}
-	    if (!((IRR & INTFE1)	&& 0 == (MKL & 0x40)))
-		IRR&=~INTFE0;
-	}
-	else
-	if ((IRR & INTFE1)	&& 0 == (MKL & 0x40))
-	{
-	    switch (cpustate->config.type)
+		/* 5 - INT2 - Masked by MK2 bit */
+		if ( IRR & INTF2 && 0 == ( MKL & 0x08 ) )
 		{
-		    case TYPE_7810_GAMEMASTER:
-				vector = 0xff2d;
-				break;
-		    default:
-				vector = 0x0018;
+			irqline = UPD7810_INTF2;
+			vector = 0x0020;
+			IRR &= ~INTF2;
 		}
-	    IRR&=~INTFE1;
+		/* 6 - INTS - Masked by MKS bit */
+		if ( IRR & INTFST && 0 == ( MKL & 0x10 ) )
+		{
+			vector = 0x0040;
+			IRR &= ~INTFST;
+		}
+		break;
+
+	default:
+		/* check the interrupts in priority sequence */
+		if ((IRR & INTFT0)	&& 0 == (MKL & 0x02))
+		{
+		    switch (cpustate->config.type)
+			{
+				case TYPE_7810_GAMEMASTER:
+					vector = 0xff2a;
+					break;
+				default:
+					vector = 0x0008;
+			}
+		    if (!((IRR & INTFT1)	&& 0 == (MKL & 0x04)))
+			IRR&=~INTFT0;
+		}
+		else
+		if ((IRR & INTFT1)	&& 0 == (MKL & 0x04))
+		{
+		    switch (cpustate->config.type)
+			{
+				case TYPE_7810_GAMEMASTER:
+					vector = 0xff2a;
+					break;
+				default:
+					vector = 0x0008;
+			}
+		    IRR&=~INTFT1;
+		}
+		else
+		if ((IRR & INTF1)	&& 0 == (MKL & 0x08))
+		{
+			irqline = UPD7810_INTF1;
+			vector = 0x0010;
+			if (!((IRR & INTF2)	&& 0 == (MKL & 0x10)))
+			    IRR&=~INTF1;
+		}
+		else
+		if ((IRR & INTF2)	&& 0 == (MKL & 0x10))
+		{
+			irqline = UPD7810_INTF2;
+			vector = 0x0010;
+			IRR&=~INTF2;
+		}
+		else
+		if ((IRR & INTFE0)	&& 0 == (MKL & 0x20))
+		{
+		    switch (cpustate->config.type)
+			{
+				case TYPE_7810_GAMEMASTER:
+					vector = 0xff2d;
+					break;
+				default:
+					vector = 0x0018;
+			}
+		    if (!((IRR & INTFE1)	&& 0 == (MKL & 0x40)))
+			IRR&=~INTFE0;
+		}
+		else
+		if ((IRR & INTFE1)	&& 0 == (MKL & 0x40))
+		{
+		    switch (cpustate->config.type)
+			{
+			    case TYPE_7810_GAMEMASTER:
+					vector = 0xff2d;
+					break;
+			    default:
+					vector = 0x0018;
+			}
+		    IRR&=~INTFE1;
+		}
+		else
+		if ((IRR & INTFEIN) && 0 == (MKL & 0x80))
+		{
+			vector = 0x0020;
+		}
+		else
+		if ((IRR & INTFAD)	&& 0 == (MKH & 0x01))
+		{
+			vector = 0x0020;
+		}
+		else
+		if ((IRR & INTFSR)	&& 0 == (MKH & 0x02))
+		{
+			vector = 0x0028;
+		    IRR&=~INTFSR;
+		}
+		else
+		if ((IRR & INTFST)	&& 0 == (MKH & 0x04))
+		{
+			vector = 0x0028;
+		    IRR&=~INTFST;
+		}
+		break;
 	}
-	else
-	if ((IRR & INTFEIN) && 0 == (MKL & 0x80))
-	{
-		vector = 0x0020;
-	}
-	else
-	if ((IRR & INTFAD)	&& 0 == (MKH & 0x01))
-	{
-		vector = 0x0020;
-	}
-	else
-	if ((IRR & INTFSR)	&& 0 == (MKH & 0x02))
-	{
-		vector = 0x0028;
-	    IRR&=~INTFSR;
-	}
-	else
-	if ((IRR & INTFST)	&& 0 == (MKH & 0x04))
-	{
-		vector = 0x0028;
-	    IRR&=~INTFST;
-	}
+
 	if (vector)
 	{
 		/* acknowledge external IRQ */
@@ -1608,9 +1655,27 @@ static void upd7810_timers(upd7810_state *cpustate, int cycles)
 	}
 }
 
-//static void upd7801_timers(upd7810_state *cpustate, int cycles)
-//{
-//}
+static void upd7801_timers(upd7810_state *cpustate, int cycles)
+{
+	if ( cpustate->ovc0 )
+	{
+		cpustate->ovc0 -= cycles;
+
+		/* Check if timer expired */
+		if ( cpustate->ovc0 <= 0 )
+		{
+			IRR |= INTFT0;
+
+			/* Reset the timer flip/fliop */
+			TO = 0;
+			if ( cpustate->config.io_callback)
+				(*cpustate->config.io_callback)(cpustate->device,UPD7810_TO,TO);
+
+			/* Reload the timer */
+			cpustate->ovc0 = 16 * ( TM0 + ( ( TM1 & 0x0f ) << 8 ) );
+		}
+	}
+}
 
 static void upd78c05_timers(upd7810_state *cpustate, int cycles)
 {
@@ -1636,11 +1701,11 @@ static CPU_INIT( upd7810 )
 {
 	upd7810_state *cpustate = get_safe_token(device);
 
-	cpustate->config = *(const UPD7810_CONFIG*) device->static_config;
+	cpustate->config = *(const UPD7810_CONFIG*) device->baseconfig().static_config;
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	state_save_register_device_item(device, 0, cpustate->ppc.w.l);
 	state_save_register_device_item(device, 0, cpustate->pc.w.l);
@@ -1704,6 +1769,8 @@ static CPU_INIT( upd7810 )
 	state_save_register_device_item(device, 0, cpustate->ovcf);
 	state_save_register_device_item(device, 0, cpustate->ovcs);
 	state_save_register_device_item(device, 0, cpustate->edges);
+	state_save_register_device_item(device, 0, cpustate->int1);
+	state_save_register_device_item(device, 0, cpustate->int2);
 }
 
 #include "7810tbl.c"
@@ -1721,8 +1788,8 @@ static CPU_RESET( upd7810 )
 	cpustate->config = save_config;
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
-	cpustate->io = memory_find_address_space(device, ADDRESS_SPACE_IO);
+	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->io = device->space(AS_IO);
 
 	cpustate->opXX = opXX_7810;
 	cpustate->op48 = op48;
@@ -1773,6 +1840,9 @@ static CPU_RESET( upd7801 )
 	cpustate->op70 = op70_7801;
 	cpustate->op74 = op74_7801;
 	cpustate->opXX = opXX_7801;
+	cpustate->handle_timers = upd7801_timers;
+	MA = 0;		/* Port A is output port on the uPD7801 */
+	cpustate->ovc0 = 0;
 }
 
 static CPU_RESET( upd78c05 )
@@ -1898,39 +1968,85 @@ static CPU_EXECUTE( upd7810 )
 
 static void set_irq_line(upd7810_state *cpustate, int irqline, int state)
 {
-	if (state != CLEAR_LINE)
+	/* The uPD7801 can check for falling and rising edges changes on the INT2 input */
+	switch ( cpustate->config.type )
 	{
-		if (irqline == INPUT_LINE_NMI)
+	case TYPE_7801:
+		switch ( irqline )
 		{
-			/* no nested NMIs ? */
-//          if (0 == (IRR & INTNMI))
+		case UPD7810_INTF0:
+			/* INT0 is level sensitive */
+			if ( state == ASSERT_LINE )
+				IRR |= INTF0;
+			else
+				IRR &= INTF0;
+			break;
+
+		case UPD7810_INTF1:
+			/* INT1 is rising edge sensitive */
+			if ( cpustate->int1 == CLEAR_LINE && state == ASSERT_LINE )
+				IRR |= INTF1;
+
+			cpustate->int1 = state;
+			break;
+
+		case UPD7810_INTF2:
+			/* INT2 is rising or falling edge sensitive */
+			/* Check if the ES bit is set then check for rising edge, otherwise falling edge */
+			if ( MKL & 0x20 )
 			{
-	            IRR |= INTNMI;
-				SP--;
-				WM( SP, PSW );
-				SP--;
-				WM( SP, PCH );
-				SP--;
-				WM( SP, PCL );
-				IFF = 0;
-				PSW &= ~(SK|L0|L1);
-				PC = 0x0004;
+				if ( cpustate->int2 == CLEAR_LINE && state == ASSERT_LINE )
+				{
+					IRR |= INTF2;
+				}
 			}
+			else
+			{
+				if ( cpustate->int2 == ASSERT_LINE && state == CLEAR_LINE )
+				{
+					IRR |= INTF2;
+				}
+			}
+			cpustate->int2 = state;
+			break;
 		}
-		else
-		if (irqline == UPD7810_INTF1)
-			IRR |= INTF1;
-		else
-		if (irqline == UPD7810_INTF2)
-			IRR |= INTF2;
-		// gamemaster hack
-		else
-		if (irqline == UPD7810_INTFE1)
-			IRR |= INTFE1;
-		else
-			logerror("upd7810_set_irq_line invalid irq line #%d\n", irqline);
+		break;
+
+	default:
+		if (state != CLEAR_LINE)
+		{
+			if (irqline == INPUT_LINE_NMI)
+			{
+				/* no nested NMIs ? */
+//              if (0 == (IRR & INTNMI))
+				{
+					IRR |= INTNMI;
+					SP--;
+					WM( SP, PSW );
+					SP--;
+					WM( SP, PCH );
+					SP--;
+					WM( SP, PCL );
+					IFF = 0;
+					PSW &= ~(SK|L0|L1);
+					PC = 0x0004;
+				}
+			}
+			else
+			if (irqline == UPD7810_INTF1)
+				IRR |= INTF1;
+			else
+			if ( irqline == UPD7810_INTF2 && ( MKL & 0x20 ) )
+				IRR |= INTF2;
+			// gamemaster hack
+			else
+			if (irqline == UPD7810_INTFE1)
+				IRR |= INTFE1;
+			else
+				logerror("upd7810_set_irq_line invalid irq line #%d\n", irqline);
+		}
+		/* resetting interrupt requests is done with the SKIT/SKNIT opcodes only! */
 	}
-	/* resetting interrupt requests is done with the SKIT/SKNIT opcodes only! */
 }
 
 
@@ -2029,15 +2145,15 @@ CPU_GET_INFO( upd7810 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 40;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:	info->i = (IRR & INTNMI) ? ASSERT_LINE : CLEAR_LINE; break;
 		case CPUINFO_INT_INPUT_STATE + UPD7810_INTF1:	info->i = (IRR & INTF1) ? ASSERT_LINE : CLEAR_LINE; break;

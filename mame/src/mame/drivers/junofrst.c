@@ -77,7 +77,7 @@ Blitter source graphics
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/mcs48/mcs48.h"
 #include "cpu/z80/z80.h"
@@ -115,7 +115,7 @@ static READ8_DEVICE_HANDLER( junofrst_portA_r )
 static WRITE8_DEVICE_HANDLER( junofrst_portB_w )
 {
 	timeplt_state *state = (timeplt_state *)device->machine->driver_data;
-	const device_config *filter[3] = { state->filter_0_0, state->filter_0_1, state->filter_0_2 };
+	running_device *filter[3] = { state->filter_0_0, state->filter_0_1, state->filter_0_2 };
 	int i;
 
 	for (i = 0; i < 3; i++)

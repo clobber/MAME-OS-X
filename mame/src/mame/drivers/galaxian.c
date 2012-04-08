@@ -226,7 +226,7 @@ TO DO :
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/s2650/s2650.h"
 #include "includes/galaxian.h"
@@ -423,7 +423,7 @@ static READ8_DEVICE_HANDLER( konami_sound_timer_r )
 
 static WRITE8_HANDLER( konami_sound_filter_w )
 {
-	const device_config *discrete = devtag_get_device(space->machine, "konami");
+	running_device *discrete = devtag_get_device(space->machine, "konami");
 	static const char *const ayname[2] = { "8910.0", "8910.1" };
 	int which, chan;
 
@@ -803,7 +803,7 @@ static WRITE8_DEVICE_HANDLER( scorpion_protection_w )
 
 static READ8_HANDLER( scorpion_digitalker_intr_r )
 {
-	const device_config *digitalker = devtag_get_device(space->machine, "digitalker");
+	running_device *digitalker = devtag_get_device(space->machine, "digitalker");
 	return digitalker_0_intr_r(digitalker);
 }
 
@@ -2332,7 +2332,7 @@ static void decode_anteater_gfx(running_machine *machine)
 {
 	UINT32 romlength = memory_region_length(machine, "gfx1");
 	UINT8 *rombase = memory_region(machine, "gfx1");
-	UINT8 *scratch = alloc_array_or_die(UINT8, romlength);
+	UINT8 *scratch = auto_alloc_array(machine, UINT8, romlength);
 	UINT32 offs;
 
 	memcpy(scratch, rombase, romlength);
@@ -2344,7 +2344,7 @@ static void decode_anteater_gfx(running_machine *machine)
 		srcoffs |= (BIT(offs,0) ^ BIT(offs,6) ^ 1) << 10;
 		rombase[offs] = scratch[srcoffs];
 	}
-	free(scratch);
+	auto_free(machine, scratch);
 }
 
 
@@ -2352,7 +2352,7 @@ static void decode_losttomb_gfx(running_machine *machine)
 {
 	UINT32 romlength = memory_region_length(machine, "gfx1");
 	UINT8 *rombase = memory_region(machine, "gfx1");
-	UINT8 *scratch = alloc_array_or_die(UINT8, romlength);
+	UINT8 *scratch = auto_alloc_array(machine, UINT8, romlength);
 	UINT32 offs;
 
 	memcpy(scratch, rombase, romlength);
@@ -2364,7 +2364,7 @@ static void decode_losttomb_gfx(running_machine *machine)
 		srcoffs |= ((BIT(offs,1) & BIT(offs,7)) | ((1 ^ BIT(offs,1)) & (BIT(offs,8)))) << 10;
 		rombase[offs] = scratch[srcoffs];
 	}
-	free(scratch);
+	auto_free(machine, scratch);
 }
 
 
@@ -2484,7 +2484,7 @@ static DRIVER_INIT( gmgalax )
 	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 
 	/* callback when the game select is toggled */
-	gmgalax_game_changed(machine->portlist.head->fieldlist, NULL, 0, 0);
+	gmgalax_game_changed(machine->portlist.first()->fieldlist, NULL, 0, 0);
 	state_save_register_global(machine, gmgalax_selected_game);
 }
 
@@ -2834,7 +2834,7 @@ static DRIVER_INIT( mshuttlj )
 	irq_line = 0;
 
 	/* decrypt the code */
-	cclimbrj_decode(machine);
+	cclimberj_decode(machine);
 }
 
 
@@ -2876,7 +2876,23 @@ static DRIVER_INIT( scorpnmc )
 	memory_unmap_readwrite(space, 0x8000, 0x87ff, 0, 0);
 }
 
+static DRIVER_INIT( thepitm )
+{
+	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
+	/* video extensions */
+	common_init(machine, galaxian_draw_bullet, galaxian_draw_background, mooncrst_extend_tile_info, mooncrst_extend_sprite_info);
+
+	/* move the interrupt enable from $b000 to $b001 */
+	memory_unmap_write(space, 0xb000, 0xb000, 0, 0x7f8);
+	memory_install_write8_handler(space, 0xb001, 0xb001, 0, 0x7f8, irq_enable_w);
+
+	/* disable the stars */
+	memory_unmap_write(space, 0xb004, 0xb004, 0, 0x07f8);
+
+	/* extend ROM */
+	memory_install_rom(space, 0x0000, 0x47ff, 0, 0, memory_region(machine, "maincpu"));
+}
 
 /*************************************
  *

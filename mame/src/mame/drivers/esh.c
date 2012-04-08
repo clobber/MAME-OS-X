@@ -22,7 +22,7 @@ Todo:
     - Hook up LED's to the MAME lamp system.
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/laserdsc.h"
 
@@ -31,7 +31,7 @@ Todo:
 
 
 /* Misc variables */
-static const device_config *laserdisc;
+static running_device *laserdisc;
 
 static UINT8 *tile_ram;
 static UINT8 *tile_control_ram;

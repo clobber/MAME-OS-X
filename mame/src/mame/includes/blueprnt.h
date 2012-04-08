@@ -4,9 +4,13 @@
 
 ***************************************************************************/
 
-typedef struct _blueprnt_state blueprnt_state;
-struct _blueprnt_state
+class blueprnt_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, blueprnt_state(machine)); }
+
+	blueprnt_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 * videoram;
 	UINT8 * colorram;
@@ -22,7 +26,7 @@ struct _blueprnt_state
 	int     dipsw;
 
 	/* devices */
-	const device_config *audiocpu;
+	running_device *audiocpu;
 };
 
 

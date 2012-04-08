@@ -666,7 +666,7 @@
 #define C_06B49P_CLKOUT_19	(MASTER_CLOCK/200000)	/* 60 Hz. (V-Sync) */
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/sn76496.h"
@@ -1122,7 +1122,7 @@ static SOUND_START( lucky74 )
 	lucky74_adpcm_busy_line = 0x01;	/* free and ready */
 }
 
-static void lucky74_adpcm_int(const device_config *device)
+static void lucky74_adpcm_int(running_device *device)
 {
 	if (lucky74_adpcm_reg[05] == 0x01)	/* register 0x05 (bit 0 activated), trigger the sample */
 	{

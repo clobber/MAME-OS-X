@@ -4,7 +4,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "includes/eprom.h"
 #include "includes/thunderj.h"
 
@@ -210,7 +210,7 @@ VIDEO_START( guts )
  *
  *************************************/
 
-void eprom_scanline_update(const device_config *screen, int scanline)
+void eprom_scanline_update(running_device *screen, int scanline)
 {
 	eprom_state *state = (eprom_state *)screen->machine->driver_data;
 

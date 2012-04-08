@@ -5,9 +5,13 @@
 **************************************************************************/
 
 
-typedef struct _dcheese_state dcheese_state;
-struct _dcheese_state
+class dcheese_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dcheese_state(machine)); }
+
+	dcheese_state(running_machine &machine) { }
+
 	/* video-related */
 	UINT16   blitter_color[2];
 	UINT16   blitter_xparam[16];
@@ -24,9 +28,9 @@ struct _dcheese_state
 	UINT8    sound_msb_latch;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *bsmt;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *bsmt;
 };
 
 

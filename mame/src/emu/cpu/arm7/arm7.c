@@ -34,8 +34,9 @@
        See the notes in the arm7core.c file itself regarding issues/limitations of the arm7 core.
     **
 *****************************************************************************/
-#include "arm7.h"
+#include "emu.h"
 #include "debugger.h"
+#include "arm7.h"
 #include "arm7core.h"   //include arm7 core
 
 #if 0
@@ -67,7 +68,7 @@ void arm7_dt_w_callback(arm_state *cpustate, UINT32 insn, UINT32 *prn, void (*wr
 #define ARM7REG(reg)        cpustate->sArmRegister[reg]
 #define ARM7_ICOUNT         cpustate->iCount
 
-INLINE arm_state *get_safe_token(const device_config *device)
+INLINE arm_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -216,7 +217,7 @@ static CPU_INIT( arm7 )
 
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
-	cpustate->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	cpustate->program = device->space(AS_PROGRAM);
 
 	// setup co-proc callbacks
 	arm7_coproc_do_callback = arm7_do_callback;
@@ -257,6 +258,17 @@ static CPU_RESET( pxa255 )
 
 	cpustate->archRev = 5;	// ARMv5
 	cpustate->archFlags = eARM_ARCHFLAGS_T | eARM_ARCHFLAGS_E | eARM_ARCHFLAGS_XSCALE;	// has TE and XScale extensions
+}
+
+static CPU_RESET( sa1110 )
+{
+	arm_state *cpustate = get_safe_token(device);
+
+	// must call core reset
+	arm7_core_reset(device);
+
+	cpustate->archRev = 4;	// ARMv4
+	cpustate->archFlags = eARM_ARCHFLAGS_SA;	// has StrongARM, no Thumb, no Enhanced DSP
 }
 
 static CPU_EXIT( arm7 )
@@ -391,15 +403,15 @@ CPU_GET_INFO( arm7 )
         case CPUINFO_INT_MIN_CYCLES:                    info->i = 3;                            break;
         case CPUINFO_INT_MAX_CYCLES:                    info->i = 4;                            break;
 
-        case CPUINFO_INT_DATABUS_WIDTH_PROGRAM: info->i = 32;                   break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 32;                   break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_DATA:    info->i = 0;                    break;
-        case CPUINFO_INT_DATABUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_WIDTH_IO:      info->i = 0;                    break;
-        case CPUINFO_INT_ADDRBUS_SHIFT_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;                   break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 32;                   break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:    info->i = 0;                    break;
+        case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:      info->i = 0;                    break;
+        case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:      info->i = 0;                    break;
 
         /* interrupt lines/exceptions */
         case CPUINFO_INT_INPUT_STATE + ARM7_IRQ_LINE:                   info->i = cpustate->pendingIrq; break;
@@ -565,6 +577,17 @@ CPU_GET_INFO( pxa255 )
     }
 }
 
+CPU_GET_INFO( sa1110 )
+{
+    switch (state)
+    {
+        case CPUINFO_FCT_RESET:            info->reset = CPU_RESET_NAME(sa1110);                       break;
+        case DEVINFO_STR_NAME:             strcpy(info->s, "SA1110");                        break;
+	default:	CPU_GET_INFO_CALL(arm7);
+		break;
+    }
+}
+
 /* ARM system coprocessor support */
 
 static WRITE32_DEVICE_HANDLER( arm7_do_callback )
@@ -637,7 +660,17 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
 				break;
 
 			case 4: // ARM7/SA11xx
-				data = 0x41 | (1 << 23) | (7 << 12);
+				if (cpustate->archFlags & eARM_ARCHFLAGS_SA)
+				{
+					// ARM Architecture Version 4
+					// Part Number 0xB11 (SA1110)
+					// Stepping B5
+			        	data = 0x69 | ( 0x01 << 16 ) | ( 0xB11 << 4 ) | 0x9;
+				}
+				else
+				{
+					data = 0x41 | (1 << 23) | (7 << 12);
+				}
 				break;
 
 			case 5:	// ARM9/10/XScale

@@ -39,7 +39,7 @@ Memo:
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/2413intf.h"
@@ -145,7 +145,7 @@ static WRITE8_HANDLER( fromance_adpcm_w )
 }
 
 
-static void fromance_adpcm_int( const device_config *device )
+static void fromance_adpcm_int( running_device *device )
 {
 	fromance_state *state = (fromance_state *)device->machine->driver_data;
 

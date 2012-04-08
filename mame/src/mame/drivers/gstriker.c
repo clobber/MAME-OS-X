@@ -32,7 +32,7 @@ Merge with other Video System games ?
 
 ******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "includes/gstriker.h"
@@ -267,7 +267,7 @@ GFXDECODE_END
 
 /*** MORE SOUND RELATED ******************************************************/
 
-static void gs_ym2610_irq(const device_config *device, int irq)
+static void gs_ym2610_irq(running_device *device, int irq)
 {
 	if (irq)
 		cputag_set_input_line(device->machine, "audiocpu", 0, ASSERT_LINE);

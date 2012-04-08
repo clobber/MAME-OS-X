@@ -22,17 +22,20 @@
 
 ***************************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "cpu/m6809/m6809.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
-#include <math.h>
 
 
-typedef struct _cntsteer_state cntsteer_state;
-struct _cntsteer_state
+class cntsteer_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cntsteer_state(machine)); }
+
+	cntsteer_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  videoram2;
@@ -52,9 +55,9 @@ struct _cntsteer_state
 	int      nmimask;	// zerotrgt only
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *audiocpu;
-	const device_config *subcpu;
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *subcpu;
 };
 
 

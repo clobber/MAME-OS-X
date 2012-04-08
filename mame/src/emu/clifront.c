@@ -9,17 +9,18 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "emuopts.h"
-#include "clifront.h"
 #include "hash.h"
 #include "jedparse.h"
 #include "audit.h"
 #include "info.h"
 #include "unzip.h"
-#include "romload.h"
+#include "validity.h"
 #include "sound/samples.h"
+#include "clifront.h"
 
+#include <new>
 #include <ctype.h>
 
 #ifdef MESS
@@ -94,6 +95,9 @@ static const options_entry cli_options[] =
 	{ "verifysamples",            "0",        OPTION_COMMAND,    "report samplesets that have problems" },
 	{ "romident",                 "0",        OPTION_COMMAND,    "compare files with known MAME roms" },
 	{ "listdevices;ld",           "0",        OPTION_COMMAND,    "list available devices" },
+#ifdef MESS
+	{ "listmedia;lm",             "0",        OPTION_COMMAND,    "list available media for the system" },
+#endif
 
 	{ NULL }
 };
@@ -111,69 +115,92 @@ static const options_entry cli_options[] =
 
 int cli_execute(int argc, char **argv, const options_entry *osd_options)
 {
-	core_options *options;
-	astring *gamename = astring_alloc();
-	astring *exename = astring_alloc();
+	core_options *options = NULL;
 	const char *gamename_option;
 	const game_driver *driver;
-	int result;
+	int result = MAMERR_FATALERROR;
+	astring gamename;
+	astring exename;
 
-	/* initialize the options manager and add the CLI-specific options */
-	options = mame_options_init(osd_options);
-	options_add_entries(options, cli_options);
-
-	/* parse the command line first; if we fail here, we're screwed */
-	if (options_parse_command_line(options, argc, argv, OPTION_PRIORITY_CMDLINE))
+	try
 	{
-		result = MAMERR_INVALID_CONFIG;
-		goto error;
+		/* initialize the options manager and add the CLI-specific options */
+		options = mame_options_init(osd_options);
+		options_add_entries(options, cli_options);
+
+		/* parse the command line first; if we fail here, we're screwed */
+		if (options_parse_command_line(options, argc, argv, OPTION_PRIORITY_CMDLINE))
+		{
+			result = MAMERR_INVALID_CONFIG;
+			goto error;
+		}
+
+		/* parse the simple commmands before we go any further */
+		core_filename_extract_base(&exename, argv[0], TRUE);
+		result = execute_simple_commands(options, exename);
+		if (result != -1)
+			goto error;
+
+		/* find out what game we might be referring to */
+		gamename_option = options_get_string(options, OPTION_GAMENAME);
+		core_filename_extract_base(&gamename, gamename_option, TRUE);
+		driver = driver_get_name(gamename);
+
+		/* execute any commands specified */
+		result = execute_commands(options, exename, driver);
+		if (result != -1)
+			goto error;
+
+		/* if we don't have a valid driver selected, offer some suggestions */
+		if (strlen(gamename_option) > 0 && driver == NULL)
+		{
+			const game_driver *matches[10];
+			int drvnum;
+
+			/* get the top 10 approximate matches */
+			driver_list_get_approx_matches(drivers, gamename_option, ARRAY_LENGTH(matches), matches);
+
+			/* print them out */
+			fprintf(stderr, "\n\"%s\" approximately matches the following\n"
+					"supported " GAMESNOUN " (best match first):\n\n", gamename_option);
+			for (drvnum = 0; drvnum < ARRAY_LENGTH(matches); drvnum++)
+				if (matches[drvnum] != NULL)
+					fprintf(stderr, "%-18s%s\n", matches[drvnum]->name, matches[drvnum]->description);
+
+			/* exit with an error */
+			result = MAMERR_NO_SUCH_GAME;
+			goto error;
+		}
+
+		/* run the game */
+		result = mame_execute(options);
 	}
-
-	/* parse the simple commmands before we go any further */
-	core_filename_extract_base(exename, argv[0], TRUE);
-	result = execute_simple_commands(options, astring_c(exename));
-	if (result != -1)
-		goto error;
-
-	/* find out what game we might be referring to */
-	gamename_option = options_get_string(options, OPTION_GAMENAME);
-	core_filename_extract_base(gamename, gamename_option, TRUE);
-	driver = driver_get_name(astring_c(gamename));
-
-	/* execute any commands specified */
-	result = execute_commands(options, astring_c(exename), driver);
-	if (result != -1)
-		goto error;
-
-	/* if we don't have a valid driver selected, offer some suggestions */
-	if (strlen(gamename_option) > 0 && driver == NULL)
+	catch (emu_fatalerror &fatal)
 	{
-		const game_driver *matches[10];
-		int drvnum;
-
-		/* get the top 10 approximate matches */
-		driver_list_get_approx_matches(drivers, gamename_option, ARRAY_LENGTH(matches), matches);
-
-		/* print them out */
-		fprintf(stderr, "\n\"%s\" approximately matches the following\n"
-				"supported " GAMESNOUN " (best match first):\n\n", gamename_option);
-		for (drvnum = 0; drvnum < ARRAY_LENGTH(matches); drvnum++)
-			if (matches[drvnum] != NULL)
-				fprintf(stderr, "%-18s%s\n", matches[drvnum]->name, matches[drvnum]->description);
-
-		/* exit with an error */
-		result = MAMERR_NO_SUCH_GAME;
-		goto error;
+		fprintf(stderr, "%s\n", fatal.string());
+		if (fatal.exitcode() != 0)
+			result = fatal.exitcode();
 	}
-
-	/* run the game */
-	result = mame_execute(options);
+	catch (emu_exception &)
+	{
+		fprintf(stderr, "Caught unhandled emulator exception\n");
+	}
+	catch (std::bad_alloc &)
+	{
+		fprintf(stderr, "Out of memory!\n");
+	}
+	catch (...)
+	{
+		fprintf(stderr, "Caught unhandled exception\n");
+	}
 
 error:
 	/* free our options and exit */
-	options_free(options);
-	astring_free(gamename);
-	astring_free(exename);
+	if (options != NULL)
+		options_free(options);
+
+	/* report any unfreed memory */
+	dump_unfreed_mem();
 	return result;
 }
 
@@ -214,7 +241,6 @@ static int execute_simple_commands(core_options *options, const char *exename)
 	/* validate? */
 	if (options_get_bool(options, CLIOPTION_VALIDATE))
 	{
-		extern int mame_validitychecks(const game_driver *driver);
 		return mame_validitychecks(NULL);
 	}
 
@@ -246,6 +272,9 @@ static int execute_commands(core_options *options, const char *exename, const ga
 		{ CLIOPTION_LISTSAMPLES,	cli_info_listsamples },
 		{ CLIOPTION_VERIFYROMS,		info_verifyroms },
 		{ CLIOPTION_VERIFYSAMPLES,	info_verifysamples },
+#ifdef MESS
+		{ CLIOPTION_LISTMEDIA,		info_listmedia },
+#endif
 		{ CLIOPTION_ROMIDENT,		info_romident }
 	};
 	int i;
@@ -333,13 +362,7 @@ static void display_help(void)
 
 int cli_info_listxml(core_options *options, const char *gamename)
 {
-	/* since print_mame_xml expands the machine driver, we need to set things up */
-	init_resource_tracking();
-
 	print_mame_xml(stdout, drivers, gamename);
-
-	/* clean up our tracked resources */
-	exit_resource_tracking();
 	return MAMERR_NONE;
 }
 
@@ -378,20 +401,19 @@ int cli_info_listfull(core_options *options, const char *gamename)
 
 int cli_info_listsource(core_options *options, const char *gamename)
 {
-	astring *filename = astring_alloc();
 	int drvindex, count = 0;
+	astring filename;
 
 	/* iterate over drivers */
 	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			/* output the remaining information */
-			mame_printf_info("%-16s %s\n", drivers[drvindex]->name, astring_c(core_filename_extract_base(filename, drivers[drvindex]->source_file, FALSE)));
+			mame_printf_info("%-16s %s\n", drivers[drvindex]->name, core_filename_extract_base(&filename, drivers[drvindex]->source_file, FALSE)->cstr());
 			count++;
 		}
 
 	/* return an error if none found */
-	astring_free(filename);
 	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
 }
 
@@ -436,11 +458,9 @@ int cli_info_listclones(core_options *options, const char *gamename)
 
 int cli_info_listbrothers(core_options *options, const char *gamename)
 {
-	UINT8 *didit = alloc_array_or_die(UINT8, driver_list_get_count(drivers));
-	astring *filename = astring_alloc();
+	UINT8 *didit = global_alloc_array_clear(UINT8, driver_list_get_count(drivers));
 	int drvindex, count = 0;
-
-	memset(didit, 0, driver_list_get_count(drivers));
+	astring filename;
 
 	/* iterate over drivers */
 	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
@@ -451,7 +471,7 @@ int cli_info_listbrothers(core_options *options, const char *gamename)
 			didit[drvindex] = TRUE;
 			if (count > 0)
 				mame_printf_info("\n");
-			mame_printf_info("%s ... other drivers in %s:\n", drivers[drvindex]->name, astring_c(core_filename_extract_base(filename, drivers[drvindex]->source_file, FALSE)));
+			mame_printf_info("%s ... other drivers in %s:\n", drivers[drvindex]->name, core_filename_extract_base(&filename, drivers[drvindex]->source_file, FALSE)->cstr());
 
 			/* now iterate again over drivers, finding those with the same source file */
 			for (matchindex = 0; drivers[matchindex]; matchindex++)
@@ -471,8 +491,7 @@ int cli_info_listbrothers(core_options *options, const char *gamename)
 		}
 
 	/* return an error if none found */
-	astring_free(filename);
-	free(didit);
+	global_free(didit);
 	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
 }
 
@@ -593,25 +612,20 @@ int cli_info_listroms(core_options *options, const char *gamename)
 int cli_info_listsamples(core_options *options, const char *gamename)
 {
 	int count = 0;
-
-#if (HAS_SAMPLES)
 	int drvindex;
-
-	/* since we expand the machine driver, we need to set things up */
-	init_resource_tracking();
 
 	/* iterate over drivers */
 	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			machine_config *config = machine_config_alloc(drivers[drvindex]->machine_config);
-			const device_config *device;
+			const device_config *devconfig;
 
 			/* find samples interfaces */
-			for (device = sound_first(config); device != NULL; device = sound_next(device))
-				if (sound_get_type(device) == SOUND_SAMPLES)
+			for (devconfig = sound_first(config); devconfig != NULL; devconfig = sound_next(devconfig))
+				if (sound_get_type(devconfig) == SOUND_SAMPLES)
 				{
-					const char *const *samplenames = ((const samples_interface *)device->static_config)->samplenames;
+					const char *const *samplenames = ((const samples_interface *)devconfig->static_config)->samplenames;
 					int sampnum;
 
 					/* if the list is legit, walk it and print the sample info */
@@ -623,12 +637,6 @@ int cli_info_listsamples(core_options *options, const char *gamename)
 			count++;
 			machine_config_free(config);
 		}
-
-	/* clean up our tracked resources */
-	exit_resource_tracking();
-#else
-	mame_printf_error("Samples not supported in this build\n");
-#endif
 
 	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
 }
@@ -645,24 +653,21 @@ int cli_info_listdevices(core_options *options, const char *gamename)
 	int count = 0;
 	int drvindex;
 
-	/* since we expand the machine driver, we need to set things up */
-	init_resource_tracking();
-
 	/* iterate over drivers */
 	for (drvindex = 0; drivers[drvindex] != NULL; drvindex++)
 		if (mame_strwildcmp(gamename, drivers[drvindex]->name) == 0)
 		{
 			machine_config *config = machine_config_alloc(drivers[drvindex]->machine_config);
-			const device_config *device;
+			const device_config *devconfig;
 
 			if (count != 0)
 				printf("\n");
 			printf("Driver %s (%s):\n", drivers[drvindex]->name, drivers[drvindex]->description);
 
 			/* iterate through devices */
-			for (device = config->devicelist.head; device != NULL; device = device->next)
+			for (devconfig = config->devicelist.first(); devconfig != NULL; devconfig = devconfig->next)
 			{
-				switch (device->devclass)
+				switch (devconfig->devclass)
 				{
 					case DEVICE_CLASS_AUDIO:		printf("  Audio: ");	break;
 					case DEVICE_CLASS_VIDEO:		printf("  Video: ");	break;
@@ -671,15 +676,15 @@ int cli_info_listdevices(core_options *options, const char *gamename)
 					case DEVICE_CLASS_TIMER:		printf("  Timer: ");	break;
 					default:						printf("  Other: ");	break;
 				}
-				printf("%s ('%s')", device_get_name(device), device->tag);
-				if (device->clock >= 1000000000)
-					printf(" @ %d.%02d GHz\n", device->clock / 1000000000, (device->clock / 10000000) % 100);
-				else if (device->clock >= 1000000)
-					printf(" @ %d.%02d MHz\n", device->clock / 1000000, (device->clock / 10000) % 100);
-				else if (device->clock >= 1000)
-					printf(" @ %d.%02d kHz\n", device->clock / 1000, (device->clock / 10) % 100);
-				else if (device->clock > 0)
-					printf(" @ %d Hz\n", device->clock);
+				printf("%s ('%s')", devconfig->name(), devconfig->tag());
+				if (devconfig->clock >= 1000000000)
+					printf(" @ %d.%02d GHz\n", devconfig->clock / 1000000000, (devconfig->clock / 10000000) % 100);
+				else if (devconfig->clock >= 1000000)
+					printf(" @ %d.%02d MHz\n", devconfig->clock / 1000000, (devconfig->clock / 10000) % 100);
+				else if (devconfig->clock >= 1000)
+					printf(" @ %d.%02d kHz\n", devconfig->clock / 1000, (devconfig->clock / 10) % 100);
+				else if (devconfig->clock > 0)
+					printf(" @ %d Hz\n", devconfig->clock);
 				else
 					printf("\n");
 			}
@@ -687,9 +692,6 @@ int cli_info_listdevices(core_options *options, const char *gamename)
 			count++;
 			machine_config_free(config);
 		}
-
-	/* clean up our tracked resources */
-	exit_resource_tracking();
 
 	return (count > 0) ? MAMERR_NONE : MAMERR_NO_SUCH_GAME;
 }
@@ -719,7 +721,7 @@ static int info_verifyroms(core_options *options, const char *gamename)
 			audit_records = audit_images(options, drivers[drvindex], AUDIT_VALIDATE_FAST, &audit);
 			res = audit_summary(drivers[drvindex], audit_records, audit, TRUE);
 			if (audit_records > 0)
-				free(audit);
+				global_free(audit);
 
 			/* if not found, count that and leave it at that */
 			if (res == NOTFOUND)
@@ -803,7 +805,7 @@ static int info_verifysamples(core_options *options, const char *gamename)
 			audit_records = audit_samples(options, drivers[drvindex], &audit);
 			res = audit_summary(drivers[drvindex], audit_records, audit, TRUE);
 			if (audit_records > 0)
-				free(audit);
+				global_free(audit);
 			else
 				continue;
 
@@ -917,9 +919,8 @@ static void romident(const char *filename, romident_status *status)
 		while ((entry = osd_readdir(directory)) != NULL)
 			if (entry->type == ENTTYPE_FILE)
 			{
-				astring *curfile = astring_assemble_3(astring_alloc(), filename, PATH_SEPARATOR, entry->name);
-				identify_file(astring_c(curfile), status);
-				astring_free(curfile);
+				astring curfile(filename, PATH_SEPARATOR, entry->name);
+				identify_file(curfile, status);
 			}
 		osd_closedir(directory);
 	}
@@ -938,14 +939,14 @@ static void romident(const char *filename, romident_status *status)
 			for (entry = zip_file_first_file(zip); entry; entry = zip_file_next_file(zip))
 				if (entry->uncompressed_length != 0)
 				{
-					UINT8 *data = (UINT8 *)malloc(entry->uncompressed_length);
+					UINT8 *data = global_alloc_array(UINT8, entry->uncompressed_length);
 					if (data != NULL)
 					{
 						/* decompress data into RAM and identify it */
 						ziperr = zip_file_decompress(zip, data, entry->uncompressed_length);
 						if (ziperr == ZIPERR_NONE)
 							identify_data(entry->filename, data, entry->uncompressed_length, status);
-						free(data);
+						global_free(data);
 					}
 				}
 
@@ -976,7 +977,7 @@ static void identify_file(const char *name, romident_status *status)
 	filerr = osd_open(name, OPEN_FLAG_READ, &file, &length);
 	if (filerr == FILERR_NONE && length > 0 && (UINT32)length == length)
 	{
-		UINT8 *data = (UINT8 *)malloc(length);
+		UINT8 *data = global_alloc_array(UINT8, length);
 		if (data != NULL)
 		{
 			UINT32 bytes;
@@ -985,7 +986,7 @@ static void identify_file(const char *name, romident_status *status)
 			filerr = osd_read(file, data, 0, length, &bytes);
 			if (filerr == FILERR_NONE)
 				identify_data(name, data, bytes, status);
-			free(data);
+			global_free(data);
 		}
 		osd_close(file);
 	}
@@ -1002,7 +1003,7 @@ static void identify_data(const char *name, const UINT8 *data, int length, romid
 {
 	char hash[HASH_BUF_SIZE];
 	UINT8 *tempjed = NULL;
-	astring *basename;
+	astring basename;
 	int found = 0;
 	jed_data jed;
 
@@ -1011,7 +1012,7 @@ static void identify_data(const char *name, const UINT8 *data, int length, romid
 	{
 		/* now determine the new data length and allocate temporary memory for it */
 		length = jedbin_output(&jed, NULL, 0);
-		tempjed = (UINT8 *)malloc(length);
+		tempjed = global_alloc_array(UINT8, length);
 		if (tempjed == NULL)
 			return;
 
@@ -1026,9 +1027,8 @@ static void identify_data(const char *name, const UINT8 *data, int length, romid
 
 	/* output the name */
 	status->total++;
-	basename = core_filename_extract_base(astring_alloc(), name, FALSE);
-	mame_printf_info("%-20s", astring_c(basename));
-	astring_free(basename);
+	core_filename_extract_base(&basename, name, FALSE);
+	mame_printf_info("%-20s", basename.cstr());
 
 	/* see if we can find a match in the ROMs */
 	match_roms(hash, length, &found);
@@ -1054,7 +1054,7 @@ static void identify_data(const char *name, const UINT8 *data, int length, romid
 
 	/* free any temporary JED data */
 	if (tempjed != NULL)
-		free(tempjed);
+		global_free(tempjed);
 }
 
 

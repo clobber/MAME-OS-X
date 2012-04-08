@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _suprslam_state suprslam_state;
-struct _suprslam_state
+class suprslam_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, suprslam_state(machine)); }
+
+	suprslam_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *    screen_videoram;
 	UINT16 *    bg_videoram;
@@ -24,8 +28,8 @@ struct _suprslam_state
 	int         pending_command;
 
 	/* devices */
-	const device_config *audiocpu;
-	const device_config *k053936;
+	running_device *audiocpu;
+	running_device *k053936;
 };
 
 

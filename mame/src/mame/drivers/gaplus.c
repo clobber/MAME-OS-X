@@ -144,12 +144,12 @@ TODO:
 
 - Add 62XX custom to machine/namcoio.c (though it's quite different from 56XX and 58XX).
 
-- Is the spirte generator the same as Phozon? This isn't clear yet. They are
+- Is the sprite generator the same as Phozon? This isn't clear yet. They are
   very similar, especially in the way the size flags are layed out.
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "machine/namcoio.h"
 #include "sound/namco.h"
@@ -184,7 +184,7 @@ static WRITE8_DEVICE_HANDLER( gaplus_snd_sharedram_w )
 static WRITE8_HANDLER( gaplus_irq_1_ctrl_w )
 {
 	int bit = !BIT(offset, 11);
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "maincpu"), bit);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), bit);
 	if (!bit)
 		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
@@ -192,7 +192,7 @@ static WRITE8_HANDLER( gaplus_irq_1_ctrl_w )
 static WRITE8_HANDLER( gaplus_irq_3_ctrl_w )
 {
 	int bit = !BIT(offset, 13);
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub2"), bit);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "sub2"), bit);
 	if (!bit)
 		cputag_set_input_line(space->machine, "sub2", 0, CLEAR_LINE);
 }
@@ -200,7 +200,7 @@ static WRITE8_HANDLER( gaplus_irq_3_ctrl_w )
 static WRITE8_HANDLER( gaplus_irq_2_ctrl_w )
 {
 	int bit = offset & 1;
-	cpu_interrupt_enable(cputag_get_cpu(space->machine, "sub"), bit);
+	cpu_interrupt_enable(devtag_get_device(space->machine, "sub"), bit);
 	if (!bit)
 		cputag_set_input_line(space->machine, "sub", 0, CLEAR_LINE);
 }
@@ -215,8 +215,8 @@ static WRITE8_HANDLER( gaplus_sreset_w )
 
 static WRITE8_HANDLER( gaplus_freset_w )
 {
-	const device_config *io58xx = devtag_get_device(space->machine, "58xx");
-	const device_config *io56xx = devtag_get_device(space->machine, "56xx");
+	running_device *io58xx = devtag_get_device(space->machine, "58xx");
+	running_device *io56xx = devtag_get_device(space->machine, "56xx");
 	int bit = !BIT(offset, 11);
 
 	logerror("%04x: freset %d\n",cpu_get_pc(space->cpu), bit);
@@ -228,14 +228,14 @@ static WRITE8_HANDLER( gaplus_freset_w )
 static MACHINE_RESET( gaplus )
 {
 	/* on reset, VINTON is reset, while the other flags don't seem to be affected */
-	cpu_interrupt_enable(cputag_get_cpu(machine, "sub"), 0);
+	cpu_interrupt_enable(devtag_get_device(machine, "sub"), 0);
 	cputag_set_input_line(machine, "sub", 0, CLEAR_LINE);
 }
 
 static TIMER_CALLBACK( namcoio_run )
 {
-	const device_config *io58xx = devtag_get_device(machine, "58xx");
-	const device_config *io56xx = devtag_get_device(machine, "56xx");
+	running_device *io58xx = devtag_get_device(machine, "58xx");
+	running_device *io56xx = devtag_get_device(machine, "56xx");
 
 	switch (param)
 	{
@@ -250,8 +250,8 @@ static TIMER_CALLBACK( namcoio_run )
 
 static INTERRUPT_GEN( gaplus_interrupt_1 )
 {
-	const device_config *io58xx = devtag_get_device(device->machine, "58xx");
-	const device_config *io56xx = devtag_get_device(device->machine, "56xx");
+	running_device *io58xx = devtag_get_device(device->machine, "58xx");
+	running_device *io56xx = devtag_get_device(device->machine, "56xx");
 
 	irq0_line_assert(device);	// this also checks if irq is enabled - IMPORTANT!
 								// so don't replace with cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);

@@ -15,7 +15,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/2151intf.h"
@@ -244,7 +244,7 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static void sound_irq( const device_config *device, int state )
+static void sound_irq( running_device *device, int state )
 {
 	lemmings_state *lemmings = (lemmings_state *)device->machine->driver_data;
 	cpu_set_input_line(lemmings->audiocpu, 0, state);

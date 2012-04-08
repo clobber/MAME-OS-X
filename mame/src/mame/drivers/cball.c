@@ -4,13 +4,17 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6800/m6800.h"
 
 
-typedef struct _cball_state cball_state;
-struct _cball_state
+class cball_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cball_state(machine)); }
+
+	cball_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  video_ram;
 
@@ -18,7 +22,7 @@ struct _cball_state
 	tilemap_t* bg_tilemap;
 
 	/* devices */
-	const device_config *maincpu;
+	running_device *maincpu;
 };
 
 
@@ -226,7 +230,7 @@ static MACHINE_DRIVER_START( cball )
 	MDRV_DRIVER_DATA(cball_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6800, 12096000 / 16) /* ? */
+	MDRV_CPU_ADD("maincpu", M6800, XTAL_12_096MHz / 16) /* ? */
 	MDRV_CPU_PROGRAM_MAP(cpu_map)
 
 	MDRV_MACHINE_START(cball)

@@ -160,7 +160,7 @@ Added Multiple Coin Feature:
 ***************************************************************************/
 
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2608intf.h"
 #include "sound/2610intf.h"
@@ -556,7 +556,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static void irqhandler( const device_config *device, int irq )
+static void irqhandler( running_device *device, int irq )
 {
 	fromance_state *state = (fromance_state *)device->machine->driver_data;
 	cpu_set_input_line(state->subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);

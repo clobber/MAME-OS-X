@@ -1,4 +1,4 @@
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "machine/6522via.h"
 #include "includes/beezer.h"
@@ -8,8 +8,8 @@ static int pbus;
 static READ8_DEVICE_HANDLER( b_via_0_pb_r );
 static WRITE8_DEVICE_HANDLER( b_via_0_pa_w );
 static WRITE8_DEVICE_HANDLER( b_via_0_pb_w );
-static READ8_DEVICE_HANDLER( b_via_0_ca2_r );
-static WRITE8_DEVICE_HANDLER( b_via_0_ca2_w );
+static READ_LINE_DEVICE_HANDLER( b_via_0_ca2_r );
+static WRITE_LINE_DEVICE_HANDLER( b_via_0_ca2_w );
 
 static READ8_DEVICE_HANDLER( b_via_1_pa_r );
 static READ8_DEVICE_HANDLER( b_via_1_pb_r );
@@ -19,27 +19,27 @@ static WRITE8_DEVICE_HANDLER( b_via_1_pb_w );
 const via6522_interface b_via_0_interface =
 {
 	/*inputs : A/B         */ DEVCB_NULL, DEVCB_HANDLER(b_via_0_pb_r),
-	/*inputs : CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_DEVICE_HANDLER("via6522_1", via_ca2_r), DEVCB_HANDLER(b_via_0_ca2_r), DEVCB_DEVICE_HANDLER("via6522_1", via_ca1_r),
+	/*inputs : CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_DEVICE_LINE("via6522_1", via_ca2_r), DEVCB_LINE(b_via_0_ca2_r), DEVCB_DEVICE_LINE("via6522_1", via_ca1_r),
 	/*outputs: A/B         */ DEVCB_HANDLER(b_via_0_pa_w), DEVCB_HANDLER(b_via_0_pb_w),
-	/*outputs: CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_HANDLER(b_via_0_ca2_w), DEVCB_DEVICE_HANDLER("via6522_1", via_ca1_w),
+	/*outputs: CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_LINE(b_via_0_ca2_w), DEVCB_DEVICE_LINE("via6522_1", via_ca1_w),
 	/*irq                  */ DEVCB_CPU_INPUT_LINE("maincpu", M6809_IRQ_LINE)
 };
 
 const via6522_interface b_via_1_interface =
 {
 	/*inputs : A/B         */ DEVCB_HANDLER(b_via_1_pa_r), DEVCB_HANDLER(b_via_1_pb_r),
-	/*inputs : CA/B1,CA/B2 */ DEVCB_DEVICE_HANDLER("via6522_0", via_cb2_r), DEVCB_NULL, DEVCB_DEVICE_HANDLER("via6522_0", via_cb1_r), DEVCB_NULL,
+	/*inputs : CA/B1,CA/B2 */ DEVCB_DEVICE_LINE("via6522_0", via_cb2_r), DEVCB_NULL, DEVCB_DEVICE_LINE("via6522_0", via_cb1_r), DEVCB_NULL,
 	/*outputs: A/B         */ DEVCB_HANDLER(b_via_1_pa_w), DEVCB_HANDLER(b_via_1_pb_w),
-	/*outputs: CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_DEVICE_HANDLER("via6522_0", via_cb1_w), DEVCB_NULL,
+	/*outputs: CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_DEVICE_LINE("via6522_0", via_cb1_w), DEVCB_NULL,
 	/*irq                  */ DEVCB_CPU_INPUT_LINE("audiocpu", M6809_IRQ_LINE)
 };
 
-static READ8_DEVICE_HANDLER( b_via_0_ca2_r )
+static READ_LINE_DEVICE_HANDLER( b_via_0_ca2_r )
 {
 	return 0;
 }
 
-static WRITE8_DEVICE_HANDLER( b_via_0_ca2_w )
+static WRITE_LINE_DEVICE_HANDLER( b_via_0_ca2_w )
 {
 }
 
@@ -108,7 +108,7 @@ WRITE8_HANDLER( beezer_bankswitch_w )
 {
 	if ((data & 0x07) == 0)
 	{
-		const device_config *via_0 = devtag_get_device(space->machine, "via6522_0");
+		running_device *via_0 = devtag_get_device(space->machine, "via6522_0");
 		memory_install_write8_handler(space, 0xc600, 0xc7ff, 0, 0, watchdog_reset_w);
 		memory_install_write8_handler(space, 0xc800, 0xc9ff, 0, 0, beezer_map_w);
 		memory_install_read8_handler(space, 0xca00, 0xcbff, 0, 0, beezer_line_r);

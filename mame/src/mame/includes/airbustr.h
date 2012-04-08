@@ -4,9 +4,13 @@
 
 *************************************************************************/
 
-typedef struct _airbustr_state airbustr_state;
-struct _airbustr_state
+class airbustr_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, airbustr_state(machine)); }
+
+	airbustr_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *    videoram;
 	UINT8 *    videoram2;
@@ -26,10 +30,10 @@ struct _airbustr_state
 	int        slave_addr;
 
 	/* devices */
-	const device_config *master;
-	const device_config *slave;
-	const device_config *audiocpu;
-	const device_config *pandora;
+	running_device *master;
+	running_device *slave;
+	running_device *audiocpu;
+	running_device *pandora;
 };
 
 

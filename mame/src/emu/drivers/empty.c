@@ -9,7 +9,8 @@
 
 **************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
+#include "render.h"
 #include "uimenu.h"
 
 
@@ -22,7 +23,7 @@
 static MACHINE_START( empty )
 {
 	/* force the UI to show the game select screen */
-	ui_menu_force_game_select(machine);
+	ui_menu_force_game_select(machine, render_container_get_ui());
 }
 
 

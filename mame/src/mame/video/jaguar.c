@@ -134,7 +134,7 @@
 
 ****************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "memconv.h"
 #include "profiler.h"
 #include "machine/atarigen.h"
@@ -334,14 +334,14 @@ static void update_cpu_irq(running_machine *machine)
 }
 
 
-void jaguar_gpu_cpu_int(const device_config *device)
+void jaguar_gpu_cpu_int(running_device *device)
 {
 	cpu_irq_state |= 2;
 	update_cpu_irq(device->machine);
 }
 
 
-void jaguar_dsp_cpu_int(const device_config *device)
+void jaguar_dsp_cpu_int(running_device *device)
 {
 	cpu_irq_state |= 16;
 	update_cpu_irq(device->machine);
@@ -655,7 +655,7 @@ static TIMER_CALLBACK( jaguar_pit )
 
 	if (gpu_regs[PIT0])
 	{
-		sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(cputag_get_cpu(machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
+		sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(devtag_get_device(machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
 //      timer_set(machine, sample_period, NULL, 0, jaguar_pit);
 	}
 }
@@ -675,7 +675,7 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 			case PIT1:
 				if (gpu_regs[PIT0])
 				{
-					sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(cputag_get_cpu(space->machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
+					sample_period = ATTOTIME_IN_NSEC(cpu_get_clock(devtag_get_device(space->machine,"gpu")) / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
 					timer_set(space->machine, sample_period, NULL, 0, jaguar_pit);
 				}
 				break;

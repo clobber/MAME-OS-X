@@ -37,8 +37,7 @@ to do:
 
 */
 
-#include <math.h>
-#include "sndintrf.h"
+#include "emu.h"
 #include "ym2413.h"
 
 
@@ -263,6 +262,7 @@ typedef struct {
 	int clock;						/* master clock  (Hz)           */
 	int rate;						/* sampling rate (Hz)           */
 	double freqbase;				/* frequency base               */
+	running_device *device;
 } YM2413;
 
 /* key scale level */
@@ -1248,7 +1248,7 @@ static void OPLCloseTable( void )
 }
 
 
-static void OPLL_init_save(YM2413 *chip, const device_config *device)
+static void OPLL_init_save(YM2413 *chip, running_device *device)
 {
 	int chnum;
 
@@ -1320,7 +1320,7 @@ static void OPLL_init_save(YM2413 *chip, const device_config *device)
 }
 
 
-static void OPLL_initalize(YM2413 *chip, const device_config *device)
+static void OPLL_initalize(YM2413 *chip, running_device *device)
 {
 	int i;
 
@@ -1916,7 +1916,7 @@ static TIMER_CALLBACK( cymfile_callback )
 }
 
 /* lock/unlock for common table */
-static int OPLL_LockTable(const device_config *device)
+static int OPLL_LockTable(running_device *device)
 {
 	num_lock++;
 	if(num_lock>1) return 0;
@@ -2000,28 +2000,16 @@ static void OPLLResetChip(YM2413 *chip)
 /* Create one of virtual YM2413 */
 /* 'clock' is chip clock in Hz  */
 /* 'rate'  is sampling rate  */
-static YM2413 *OPLLCreate(const device_config *device, int clock, int rate)
+static YM2413 *OPLLCreate(running_device *device, int clock, int rate)
 {
-	char *ptr;
 	YM2413 *chip;
-	int state_size;
 
 	if (OPLL_LockTable(device) == -1) return NULL;
 
-	/* calculate chip state size */
-	state_size  = sizeof(YM2413);
-
 	/* allocate memory block */
-	ptr = (char *)malloc(state_size);
+	chip = auto_alloc_clear(device->machine, YM2413);
 
-	if (ptr==NULL)
-		return NULL;
-
-	/* clear */
-	memset(ptr,0,state_size);
-
-	chip  = (YM2413 *)ptr;
-
+	chip->device = device;
 	chip->clock = clock;
 	chip->rate  = rate;
 
@@ -2037,7 +2025,7 @@ static YM2413 *OPLLCreate(const device_config *device, int clock, int rate)
 static void OPLLDestroy(YM2413 *chip)
 {
 	OPLL_UnLockTable();
-	free(chip);
+	auto_free(chip->device->machine, chip);
 }
 
 /* Option handlers */
@@ -2076,7 +2064,7 @@ static unsigned char OPLLRead(YM2413 *chip,int a)
 
 
 
-void * ym2413_init(const device_config *device, int clock, int rate)
+void * ym2413_init(running_device *device, int clock, int rate)
 {
 	/* emulator create */
 	return OPLLCreate(device, clock, rate);

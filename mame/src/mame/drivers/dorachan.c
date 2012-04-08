@@ -8,7 +8,7 @@ Todo:
 - dips (if any) - bits 5,6,7 of input port 0 ?
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 
@@ -16,9 +16,13 @@ Todo:
 #define NUM_PENS	(8)
 
 
-typedef struct _dorachan_state dorachan_state;
-struct _dorachan_state
+class dorachan_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dorachan_state(machine)); }
+
+	dorachan_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	size_t   videoram_size;
@@ -27,7 +31,7 @@ struct _dorachan_state
 	UINT8    flip_screen;
 
 	/* devices */
-	const device_config *main_cpu;
+	running_device *main_cpu;
 };
 
 

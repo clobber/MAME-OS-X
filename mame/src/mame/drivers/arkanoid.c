@@ -8,18 +8,18 @@
     Here are the versions we have:
 
     arkanoid    World version, probably an earlier revision
-    arknoidu    USA version, probably a later revision; There has been code
+    arkanoidu   USA version, probably a later revision; There has been code
                 inserted, NOT patched, so I don't think it's a bootleg
                 The 68705 code for this one was not available; I made it up from
                 the World version changing the level data pointer table.
-    arknoiuo    USA version, probably an earlier revision
+    arkanoiduo  USA version, probably an earlier revision
                 ROM a75-10.bin should be identical to the real World one.
                 (It only differs in the country byte from A75-11.ROM)
                 This version works fine with the real MCU ROM
     arkatour    Tournament version
                 The 68705 code for this one was not available; I made it up from
                 the World version changing the level data pointer table.
-    arknoidj    Japanese version with level selector.
+    arkanoidj   Japanese version with level selector.
                 The 68705 code for this one was not available; I made it up from
                 the World version changing the level data pointer table.
     arkbl2      Bootleg of the early Japanese version.
@@ -224,7 +224,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
       * affects ball speed at start of level (0x06 or 0x08)
       * affects level 2 (same as normal version or same as level 30)
   - You can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
   - Level 30 differs from original Japanese version
   - There seems to be code to edit levels (check code at 0x8082), but the routines
     don't seem to be called anymore.
@@ -247,7 +247,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
       * affects ball speed at start of level (0x04 or 0x06)
       * affects level 2 (same as normal version or same as level 30)
   - You can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
     No "What round do you want to start from ?" message though.
   - Level 30 differs from original Japanese version (it also differs from 'arkangc')
   - The routine to handle the paddle is completely different as in 'arkangc'
@@ -278,11 +278,11 @@ Stephh's notes (based on the games Z80 code and some tests) :
   - "Continue" Dip Switch has been replaced by sort of "Debug" Dip Switch as in 'arkangc';
     however, this has no effect due to newly patched code at 0x06e9 !
   - You can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
   - Levels 1, 2, 3, 4, 6, 7, 11, 14, 30, 31 and 32 differ from original Japanese version;
     level 1 starts at a different offset (0x90a8 instead of 0xbf15).
   - Complerely different initials on high-scores table, but scores and rounds
-    are the same as in the original Japanese set we have ('arknoidj').
+    are the same as in the original Japanese set we have ('arkanoidj').
   - There seems to be code to edit levels (check code at 0x8082), but the routines
     don't seem to be called anymore.
   - Known bugs :
@@ -317,12 +317,12 @@ Stephh's notes (based on the games Z80 code and some tests) :
   - All reads from 0xf002 are patched.
   - Reads bit 5 from 0xd008.
   - You can select your starting level (between 1 and 30) but they aren't displayed
-    like in the original Japanese set we have ('arknoidj').
+    like in the original Japanese set we have ('arkanoidj').
   - "Continue" Dip Switch has been replaced by sort of "Debug" Dip Switch :
       * affects ball speed at start of level (0x06 or 0x08)
       * affects level 2 (same as normal version or same as level 30)
   - You can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
   - Level 30 differs from original Japanese version (same as the one from 'arkangc2')
   - Known bugs :
       * You can go from one side of the screen to the other through the walls
@@ -345,7 +345,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
   - Different "Lives" Dip Switch (check table at 0x9a28)
   - Specific coinage (always 2C_1C)
   - If Dip Switch is set, you can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
   - Same level 30 as original Japanese version
   - Known bugs :
       * You can go from one side of the screen to the other through the walls
@@ -373,7 +373,7 @@ Stephh's notes (based on the games Z80 code and some tests) :
       * "20K 60K 60K+"  or "20K" when you continue
   - Different "Lives" Dip Switch (check table at 0x9a28)
   - If Dip Switch is set, you can select your starting level (between 1 and 30)
-    but they aren't displayed like in the original Japanese set we have ('arknoidj').
+    but they aren't displayed like in the original Japanese set we have ('arkanoidj').
   - Levels are based on the ones from "Arkanoid II".
   - Known bugs :
       * You can go from one side of the screen to the other through the walls
@@ -424,9 +424,9 @@ Stephh's notes (based on the games Z80 code and some tests) :
 TO DO (2006.09.12) :
 
   - Check the following Taito sets (adresses, routines and Dip Switches) :
-      * 'arkanoid' = 'arknoiuo'
-      * 'arknoidj'
-      * 'arknoidu'
+      * 'arkanoid' = 'arkanoiduo'
+      * 'arkanoidj'
+      * 'arkanoidu'
       * 'arkatour'
   - Add more notes about main addresses and routines in the Z80
   - Try to understand the problem with the MCU in the following sets :
@@ -495,15 +495,59 @@ Stephh's notes on 'tetrsark' (based on the game Z80 code and some tests) :
   - Known bugs :
       * Coins "buttons" don't work - we need to use fake BUTTON2 for each player
 
+****************************************************************************
+
+    HEXA
+
+    This hardware is derived from Arkanoid's hardware.  The 1986 date found in
+    the roms probably comes from Arkanoid.  This is a Columns style game and
+    the original Columns wasn't released until 1990 and I find it hard to
+    believe that this would pre-date Columns.
+
+    driver by Howie Cohen
+
+    Memory map (prelim)
+    0000 7fff ROM
+    8000 bfff bank switch rom space??
+    c000 c7ff RAM
+    e000 e7ff video ram
+    e800-efff unused RAM
+
+    read:
+    d001      AY8910 read
+    f000      ???????
+
+    write:
+    d000      AY8910 control
+    d001      AY8910 write
+    d008      bit0/1 = flip screen x/y
+              bit 4 = ROM bank??
+              bit 5 = char bank
+              other bits????????
+    d010      watchdog reset, or IRQ acknowledge, or both
+    f000      ????????
+
+    main hardware consists of.....
+
+    sub board with Z80 x2, 2 ROMs and a scratched 18 pin chip (probably a PIC)
+
+    main board has....
+    12MHz xtal
+    ay3-8910
+    8 position DSW x1
+    ROMs x4
+    6116 SRAM x3
+    82S123 PROMs x3
+
 ***************************************************************************
 
 DIP locations verified for:
-  - arknoidj
+  - arkanoidj
   - arkanoid
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "includes/arkanoid.h"
 #include "sound/ay8910.h"
@@ -541,6 +585,17 @@ static ADDRESS_MAP_START( bootleg_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe800, 0xe83f) AM_RAM AM_BASE_SIZE_MEMBER(arkanoid_state, spriteram, spriteram_size)
 	AM_RANGE(0xe840, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xffff) AM_READNOP	/* fixes instant death in final level */
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( hexa_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
+	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM
+	AM_RANGE(0xd001, 0xd001) AM_DEVREAD("aysnd", ay8910_r)
+	AM_RANGE(0xd000, 0xd001) AM_DEVWRITE("aysnd", ay8910_address_data_w)
+	AM_RANGE(0xd008, 0xd008) AM_WRITE(hexa_d008_w)
+	AM_RANGE(0xd010, 0xd010) AM_WRITE(watchdog_reset_w)	/* or IRQ acknowledge, or both */
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(arkanoid_videoram_w) AM_BASE_SIZE_MEMBER(arkanoid_state, videoram, videoram_size)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -613,7 +668,7 @@ static INPUT_PORTS_START( arkanoid )
 INPUT_PORTS_END
 
 /* Different coinage and additional "Cabinet" Dip Switch */
-static INPUT_PORTS_START( arknoidj )
+static INPUT_PORTS_START( arkanoidj )
 	PORT_INCLUDE( arkanoid )
 
 	PORT_MODIFY("DSW")
@@ -626,7 +681,7 @@ static INPUT_PORTS_START( arknoidj )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( ark1ball )
-	PORT_INCLUDE( arknoidj )
+	PORT_INCLUDE( arkanoidj )
 
 	PORT_MODIFY("DSW")
 	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Bonus_Life ) )	PORT_DIPLOCATION("SW1:4") /* "ld a,$60" at 0x93bd and "ld a,$60" at 0x9c7f and 0x9c9b */
@@ -639,7 +694,7 @@ INPUT_PORTS_END
 
 /* Bootlegs do not read from the MCU */
 static INPUT_PORTS_START( arkatayt )
-	PORT_INCLUDE( arknoidj )
+	PORT_INCLUDE( arkanoidj )
 
 	PORT_MODIFY("SYSTEM")
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SPECIAL )		/* Some bootlegs need it to be 1 */
@@ -761,6 +816,42 @@ static INPUT_PORTS_START( tetrsark )
 INPUT_PORTS_END
 
 
+static INPUT_PORTS_START( hexa )
+	PORT_START("INPUTS")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_BUTTON2 )
+
+	PORT_START("DSW")
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )  PORT_DIPLOCATION("SW1:1,2")
+	PORT_DIPSETTING(    0x00, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x03, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
+	PORT_DIPNAME( 0x04, 0x00, "Naughty Pics" )  PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Flip_Screen ) )  PORT_DIPLOCATION("SW1:4")
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x30, 0x30, "Difficulty?" )  PORT_DIPLOCATION("SW1:5,6")
+	PORT_DIPSETTING(    0x30, "Easy?" )
+	PORT_DIPSETTING(    0x20, "Medium?" )
+	PORT_DIPSETTING(    0x10, "Hard?" )
+	PORT_DIPSETTING(    0x00, "Hardest?" )
+	PORT_DIPNAME( 0x40, 0x40, "Pobys" )  PORT_DIPLOCATION("SW1:7")
+	PORT_DIPSETTING(    0x40, "2" )
+	PORT_DIPSETTING(    0x00, "4" )
+	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Demo_Sounds ) )  PORT_DIPLOCATION("SW1:8")
+	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
+INPUT_PORTS_END
+
 /***************************************************************************/
 
 /* Graphics Layouts */
@@ -783,6 +874,11 @@ static GFXDECODE_START( arkanoid )
 	// sprites use the same characters above, but are 16x8
 GFXDECODE_END
 
+static GFXDECODE_START( hexa )
+	GFXDECODE_ENTRY( "gfx1", 0x0000, charlayout,  0 , 32 )
+GFXDECODE_END
+
+
 /* Sound Interfaces */
 
 static const ay8910_interface ay8910_config =
@@ -794,6 +890,19 @@ static const ay8910_interface ay8910_config =
 	DEVCB_NULL,
 	DEVCB_NULL
 };
+
+
+static const ay8910_interface hexa_ay8910_config =
+{
+	AY8910_LEGACY_OUTPUT,
+	AY8910_DEFAULT_LOADS,
+	DEVCB_INPUT_PORT("INPUTS"),
+	DEVCB_INPUT_PORT("DSW"),
+	DEVCB_NULL,
+	DEVCB_NULL
+};
+
+
 
 /* Machine Drivers */
 
@@ -847,7 +956,7 @@ static MACHINE_DRIVER_START( arkanoid )
 	/* driver data */
 	MDRV_DRIVER_DATA(arkanoid_state)
 
-	// basic machine hardware
+	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(arkanoid_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
@@ -860,7 +969,7 @@ static MACHINE_DRIVER_START( arkanoid )
 	MDRV_MACHINE_START(arkanoid)
 	MDRV_MACHINE_RESET(arkanoid)
 
-	// video hardware
+	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
@@ -874,18 +983,54 @@ static MACHINE_DRIVER_START( arkanoid )
 	MDRV_VIDEO_START(arkanoid)
 	MDRV_VIDEO_UPDATE(arkanoid)
 
-	// sound hardware
+	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_12MHz/4/2) /* YM2149 clock is 3mhz, pin 26 is low so 3mhz/2 */
+	MDRV_SOUND_ADD("aysnd", YM2149, XTAL_12MHz/4/2) /* YM2149 clock is 3mhz, pin 26 is low so 3mhz/2 */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 MACHINE_DRIVER_END
 
+
+static MACHINE_DRIVER_START( hexa )
+	/* driver data */
+	MDRV_DRIVER_DATA(arkanoid_state)
+
+	/* basic machine hardware */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* Imported from arkanoid - correct? */
+	MDRV_CPU_PROGRAM_MAP(hexa_map)
+	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+
+	MDRV_MACHINE_START(arkanoid)
+	MDRV_MACHINE_RESET(arkanoid)
+
+	/* video hardware */
+	MDRV_SCREEN_ADD("screen", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(32*8, 32*8)
+	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+
+	MDRV_GFXDECODE(hexa)
+	MDRV_PALETTE_LENGTH(256)
+
+	MDRV_PALETTE_INIT(RRRR_GGGG_BBBB)
+	MDRV_VIDEO_START(arkanoid)
+	MDRV_VIDEO_UPDATE(hexa)
+
+	/* sound hardware */
+	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_12MHz/4/2)	/* Imported from arkanoid - correct? */
+	MDRV_SOUND_CONFIG(hexa_ay8910_config)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+MACHINE_DRIVER_END
+
+
 static MACHINE_DRIVER_START( bootleg )
 	MDRV_IMPORT_FROM(arkanoid)
 
-	// basic machine hardware
+	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bootleg_map)
 
@@ -1255,7 +1400,6 @@ ROM_START( arktayt2 )
 	ROM_LOAD( "ic75.13e",    0x0400, 0x0200, CRC(a7c6c277) SHA1(adaa003dcd981576ea1cc5f697d709b2d6b2ea29) )	/* blue component */
 ROM_END
 
-/* the other Dr. Korea game (Hexa, hexa.c) also appears to be derived from Arkanoid hardware */
 
 ROM_START( tetrsark )
 	ROM_REGION( 0x18000, "maincpu", 0 )
@@ -1271,6 +1415,23 @@ ROM_START( tetrsark )
 	ROM_LOAD( "a75-07.bpr",    0x0000, 0x0200, CRC(0af8b289) SHA1(6bc589e8a609b4cf450aebedc8ce02d5d45c970f) )	/* red component */
 	ROM_LOAD( "a75-08.bpr",    0x0200, 0x0200, CRC(abb002fb) SHA1(c14f56b8ef103600862e7930709d293b0aa97a73) )	/* green component */
 	ROM_LOAD( "a75-09.bpr",    0x0400, 0x0200, CRC(a7c6c277) SHA1(adaa003dcd981576ea1cc5f697d709b2d6b2ea29) )	/* blue component */
+ROM_END
+
+
+ROM_START( hexa )
+	ROM_REGION( 0x18000, "maincpu", 0 )		/* 64k for code + 32k for banked ROM */
+	ROM_LOAD( "hexa.20",      0x00000, 0x8000, CRC(98b00586) SHA1(3591a3b0486d720f0aaa9f0bf4be352cd0ffcbc7) )
+	ROM_LOAD( "hexa.21",      0x10000, 0x8000, CRC(3d5d006c) SHA1(ad4eadab82024b122182eacb5a322cfd6e476a70) )
+
+	ROM_REGION( 0x18000, "gfx1", 0 )
+	ROM_LOAD( "hexa.17",      0x00000, 0x8000, CRC(f6911dd6) SHA1(b12ea27ecddd60820a32d4346afab0cc9d06fa57) )
+	ROM_LOAD( "hexa.18",      0x08000, 0x8000, CRC(6e3d95d2) SHA1(6399b7b5d088ceda08fdea9cf650f6b405f038e7) )
+	ROM_LOAD( "hexa.19",      0x10000, 0x8000, CRC(ffe97a31) SHA1(f16b5d2b9ace09bcbbfe3dfb73db7fa377d1af7f) )
+
+	ROM_REGION( 0x0300, "proms", 0 )
+	ROM_LOAD( "hexa.001",     0x0000, 0x0100, CRC(88a055b4) SHA1(eee86a7930d0a251f3e5c2134532cd1dede2026c) )
+	ROM_LOAD( "hexa.003",     0x0100, 0x0100, CRC(3e9d4932) SHA1(9a336dba7134400312985b9902c77b4141105853) )
+	ROM_LOAD( "hexa.002",     0x0200, 0x0100, CRC(ff15366c) SHA1(7feaf1c768bfe76432fb80991585e13d95960b34) )
 ROM_END
 
 
@@ -1304,7 +1465,7 @@ static DRIVER_INIT( block2 )
 	// the graphics on this bootleg have the data scrambled
 	int tile;
 	UINT8* srcgfx = memory_region(machine,"gfx1");
-	UINT8* buffer = alloc_array_or_die(UINT8, 0x18000);
+	UINT8* buffer = auto_alloc_array(machine, UINT8, 0x18000);
 
 	for (tile = 0; tile < 0x3000; tile++)
 	{
@@ -1328,7 +1489,7 @@ static DRIVER_INIT( block2 )
 
 	memcpy(srcgfx, buffer, 0x18000);
 
-	free(buffer);
+	auto_free(machine, buffer);
 
 	state->bootleg_id = BLOCK2;
 	arkanoid_bootleg_init(machine);
@@ -1377,13 +1538,33 @@ static DRIVER_INIT( tetrsark )
 }
 
 
+static DRIVER_INIT( hexa )
+{
+	UINT8 *RAM = memory_region(machine, "maincpu");
+#if 0
+
+
+	/* Hexa is not protected or anything, but it keeps writing 0x3f to register */
+	/* 0x07 of the AY8910, to read the input ports. This causes clicks in the */
+	/* music since the output channels are continuously disabled and reenabled. */
+	/* To avoid that, we just NOP out the 0x3f write. */
+
+	RAM[0x0124] = 0x00;
+	RAM[0x0125] = 0x00;
+	RAM[0x0126] = 0x00;
+#endif
+
+	memory_configure_bank(machine, "bank1", 0, 2, &RAM[0x10000], 0x4000);
+}
+
+
 /* Game Drivers */
 
 GAME( 1986, arkanoid,   0,        arkanoid, arkanoid, 0,        ROT90, "Taito Corporation Japan", "Arkanoid (World)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkanoidu,  arkanoid, arkanoid, arkanoid, 0,        ROT90, "Taito America Corporation (Romstar license)", "Arkanoid (US)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkanoiduo, arkanoid, arkanoid, arkanoid, 0,        ROT90, "Taito America Corporation (Romstar license)", "Arkanoid (US, older)", GAME_SUPPORTS_SAVE )
-GAME( 1986, arkanoidj,  arkanoid, arkanoid, arknoidj, 0,        ROT90, "Taito Corporation", "Arkanoid (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1986, arkmcubl,   arkanoid, arkanoid, arknoidj, 0,        ROT90, "bootleg", "Arkanoid (bootleg with MCU)", GAME_SUPPORTS_SAVE )
+GAME( 1986, arkanoidj,  arkanoid, arkanoid, arkanoidj,0,        ROT90, "Taito Corporation", "Arkanoid (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1986, arkmcubl,   arkanoid, arkanoid, arkanoidj,0,        ROT90, "bootleg", "Arkanoid (bootleg with MCU)", GAME_SUPPORTS_SAVE )
 GAME( 1986, ark1ball,   arkanoid, arkanoid, ark1ball, 0,        ROT90, "bootleg", "Arkanoid (bootleg with MCU, harder)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkangc,    arkanoid, bootleg,  arkangc,  arkangc,  ROT90, "bootleg", "Arkanoid (Game Corporation bootleg, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1986, arkangc2,   arkanoid, bootleg,  arkangc2, arkangc2, ROT90, "bootleg", "Arkanoid (Game Corporation bootleg, set 2)", GAME_SUPPORTS_SAVE )
@@ -1398,3 +1579,4 @@ GAME( 1986, arkatayt,   arkanoid, bootleg,  arkatayt, 0,        ROT90, "bootleg"
 GAME( 1986, arktayt2,   arkanoid, bootleg,  arktayt2, 0,        ROT90, "bootleg", "Arkanoid (Tayto bootleg, harder)", GAME_SUPPORTS_SAVE )
 GAME( 1987, arkatour,   arkanoid, arkanoid, arkanoid, 0,        ROT90, "Taito America Corporation (Romstar license)", "Tournament Arkanoid (US)", GAME_SUPPORTS_SAVE )
 GAME( 19??, tetrsark,   0,        bootleg,  tetrsark, tetrsark, ROT0,  "D.R. Korea", "Tetris (D.R. Korea)", GAME_SUPPORTS_SAVE )
+GAME( 199?, hexa,       0,        hexa,     hexa,     hexa,     ROT0,  "D.R. Korea", "Hexa", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

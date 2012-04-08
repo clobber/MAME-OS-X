@@ -25,10 +25,8 @@
     * January 5, 2008   (kingshriek+RB) Working, good-sounding FM, removed obsolete non-USEDSP code.
 */
 
-#include "sndintrf.h"
+#include "emu.h"
 #include "streams.h"
-#include "cpuintrf.h"
-#include "cpuexec.h"
 #include "scsp.h"
 #include "scspdsp.h"
 
@@ -195,7 +193,7 @@ struct _SCSP
 	unsigned char *SCSPRAM;
 	UINT32 SCSPRAM_LENGTH;
 	char Master;
-	void (*Int68kCB)(const device_config *device, int irq);
+	void (*Int68kCB)(running_device *device, int irq);
 	sound_stream * stream;
 
 	INT32 *buffertmpl,*buffertmpr;
@@ -226,7 +224,7 @@ struct _SCSP
 
 	struct _SCSPDSP DSP;
 
-	const device_config *device;
+	running_device *device;
 };
 
 static void dma_scsp(const address_space *space, struct _SCSP *SCSP);		/*SCSP DMA transfer function*/
@@ -246,7 +244,7 @@ static int length;
 static signed short *RBUFDST;	//this points to where the sample will be stored in the RingBuf
 
 
-INLINE SCSP *get_safe_token(const device_config *device)
+INLINE SCSP *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -518,7 +516,7 @@ static void SCSP_StopSlot(struct _SLOT *slot,int keyoff)
 
 #define log_base_2(n) (log((double)(n))/log(2.0))
 
-static void SCSP_Init(const device_config *device, struct _SCSP *SCSP, const scsp_interface *intf)
+static void SCSP_Init(running_device *device, struct _SCSP *SCSP, const scsp_interface *intf)
 {
 	int i;
 
@@ -530,7 +528,7 @@ static void SCSP_Init(const device_config *device, struct _SCSP *SCSP, const scs
 	SCSP->MidiOutR=SCSP->MidiOutW=0;
 
 	// get SCSP RAM
-	if (strcmp(device->tag, "scsp") == 0 || strcmp(device->tag, "scsp1") == 0)
+	if (strcmp(device->tag(), "scsp") == 0 || strcmp(device->tag(), "scsp1") == 0)
 	{
 		SCSP->Master=1;
 	}
@@ -539,10 +537,10 @@ static void SCSP_Init(const device_config *device, struct _SCSP *SCSP, const scs
 		SCSP->Master=0;
 	}
 
-	SCSP->SCSPRAM = device->region;
+	SCSP->SCSPRAM = *device->region;
 	if (SCSP->SCSPRAM)
 	{
-		SCSP->SCSPRAM_LENGTH = device->regionbytes;
+		SCSP->SCSPRAM_LENGTH = device->region->bytes();
 		SCSP->DSP.SCSPRAM = (UINT16 *)SCSP->SCSPRAM;
 		SCSP->DSP.SCSPRAM_LENGTH = SCSP->SCSPRAM_LENGTH/2;
 		SCSP->SCSPRAM += intf->roffset;
@@ -705,7 +703,7 @@ static void SCSP_UpdateSlotReg(struct _SCSP *SCSP,int s,int r)
 static void SCSP_UpdateReg(struct _SCSP *SCSP, int reg)
 {
 	/* temporary hack until this is converted to a device */
-	const address_space *space = memory_find_address_space(SCSP->device->machine->firstcpu, ADDRESS_SPACE_PROGRAM);
+	const address_space *space = SCSP->device->machine->firstcpu->space(AS_PROGRAM);
 	switch(reg&0x3f)
 	{
 		case 0x2:
@@ -725,7 +723,7 @@ static void SCSP_UpdateReg(struct _SCSP *SCSP, int reg)
 			break;
 		case 0x6:
 		case 0x7:
-			scsp_midi_in(devtag_get_device(space->machine, "scsp"), 0, SCSP->udata.data[0x6/2]&0xff, 0);
+			scsp_midi_in(space->machine->device("scsp"), 0, SCSP->udata.data[0x6/2]&0xff, 0);
 			break;
 		case 0x12:
 		case 0x13:
@@ -1208,7 +1206,7 @@ static void dma_scsp(const address_space *space, struct _SCSP *SCSP)
 
 	/*Job done,request a dma end irq*/
 	if(scsp_regs[0x1e/2] & 0x10)
-		cpu_set_input_line(device_list_find_by_index(&space->machine->config->devicelist, CPU, 2),dma_transfer_end,HOLD_LINE);
+		cpu_set_input_line(space->machine->devicelist.find(CPU, 2),dma_transfer_end,HOLD_LINE);
 }
 
 #ifdef UNUSED_FUNCTION
@@ -1234,7 +1232,7 @@ static DEVICE_START( scsp )
 
 	struct _SCSP *SCSP = get_safe_token(device);
 
-	intf = (const scsp_interface *)device->static_config;
+	intf = (const scsp_interface *)device->baseconfig().static_config;
 
 	// init the emulation
 	SCSP_Init(device, SCSP, intf);
@@ -1248,7 +1246,7 @@ static DEVICE_START( scsp )
 }
 
 
-void scsp_set_ram_base(const device_config *device, void *base)
+void scsp_set_ram_base(running_device *device, void *base)
 {
 	struct _SCSP *SCSP = get_safe_token(device);
 	if (SCSP)

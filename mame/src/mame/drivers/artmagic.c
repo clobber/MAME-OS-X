@@ -21,7 +21,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "cpu/tms34010/tms34010.h"
 #include "video/tlc34076.h"
@@ -62,7 +62,7 @@ static void update_irq_state(running_machine *machine)
 }
 
 
-static void m68k_gen_int(const device_config *device, int state)
+static void m68k_gen_int(running_device *device, int state)
 {
 	tms_irq = state;
 	update_irq_state(device->machine);
@@ -106,13 +106,13 @@ static MACHINE_RESET( artmagic )
 
 static READ16_HANDLER( tms_host_r )
 {
-	return tms34010_host_r(cputag_get_cpu(space->machine, "tms"), offset);
+	return tms34010_host_r(devtag_get_device(space->machine, "tms"), offset);
 }
 
 
 static WRITE16_HANDLER( tms_host_w )
 {
-	tms34010_host_w(cputag_get_cpu(space->machine, "tms"), offset, data);
+	tms34010_host_w(devtag_get_device(space->machine, "tms"), offset, data);
 }
 
 

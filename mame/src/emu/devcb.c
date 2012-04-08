@@ -9,8 +9,7 @@
 
 ***************************************************************************/
 
-#include "devcb.h"
-#include "driver.h"
+#include "emu.h"
 
 
 
@@ -31,10 +30,10 @@ static READ_LINE_DEVICE_HANDLER( trampoline_read_port_to_read_line )
 static READ_LINE_DEVICE_HANDLER( trampoline_read8_to_read_line )
 {
 	const devcb_resolved_read_line *resolved = (const devcb_resolved_read_line *)device;
-	return ((*resolved->real.readdevice)((const device_config *)resolved->realtarget, 0) & 1) ? ASSERT_LINE : CLEAR_LINE;
+	return ((*resolved->real.readdevice)((running_device *)resolved->realtarget, 0) & 1) ? ASSERT_LINE : CLEAR_LINE;
 }
 
-void devcb_resolve_read_line(devcb_resolved_read_line *resolved, const devcb_read_line *config, const device_config *device)
+void devcb_resolve_read_line(devcb_resolved_read_line *resolved, const devcb_read_line *config, running_device *device)
 {
 	/* reset the resolved structure */
 	memset(resolved, 0, sizeof(*resolved));
@@ -42,30 +41,30 @@ void devcb_resolve_read_line(devcb_resolved_read_line *resolved, const devcb_rea
 	/* input port handlers */
 	if (config->type == DEVCB_TYPE_INPUT)
 	{
-		resolved->target = input_port_by_tag(&device->machine->portlist, config->tag);
+		resolved->target = device->machine->port(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->read = trampoline_read_port_to_read_line;
 	}
 
 	/* address space handlers */
 	else if (config->type >= DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM) && config->type < DEVCB_TYPE_MEMORY(ADDRESS_SPACES) && config->readspace != NULL)
 	{
-		FPTR space = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
-		const device_config *cpu;
+		FPTR spacenum = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
+		running_device *cpu;
 
 		if (device->owner != NULL)
-			cpu = device_find_child_by_tag(device->owner, config->tag);
+			cpu = device->owner->subdevice(config->tag);
 		else
-			cpu = cputag_get_cpu(device->machine, config->tag);
+			cpu = device->machine->device(config->tag);
 
 		if (cpu == NULL)
-			fatalerror("devcb_resolve_read_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->target = resolved;
 		resolved->read = trampoline_read8_to_read_line;
-		resolved->realtarget = memory_find_address_space(cpu, space);
+		resolved->realtarget = cpu->space(spacenum);
 		if (resolved->realtarget == NULL)
-			fatalerror("devcb_resolve_read_line: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[space], device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read_line: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[spacenum], device->name(), device->tag());
 		resolved->real.readspace = config->readspace;
 	}
 
@@ -76,12 +75,12 @@ void devcb_resolve_read_line(devcb_resolved_read_line *resolved, const devcb_rea
 		if (config->type == DEVCB_TYPE_SELF)
 			resolved->target = device;
 		else if (device->owner != NULL)
-			resolved->target = device_find_child_by_tag(device->owner, config->tag);
+			resolved->target = device->owner->subdevice(config->tag);
 		else
-			resolved->target = devtag_get_device(device->machine, config->tag);
+			resolved->target = device->machine->device(config->tag);
 
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read_line: unable to find device '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read_line: unable to find device '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 
 		/* read_line to read_line is direct */
 		if (config->readline != NULL)
@@ -112,47 +111,47 @@ static WRITE_LINE_DEVICE_HANDLER( trampoline_write_port_to_write_line )
 static WRITE_LINE_DEVICE_HANDLER( trampoline_write8_to_write_line )
 {
 	const devcb_resolved_write_line *resolved = (const devcb_resolved_write_line *)device;
-	(*resolved->real.writedevice)((const device_config *)resolved->realtarget, 0, state);
+	(*resolved->real.writedevice)((running_device *)resolved->realtarget, 0, state);
 }
 
 static WRITE_LINE_DEVICE_HANDLER( trampoline_writecpu_to_write_line )
 {
 	const devcb_resolved_write_line *resolved = (const devcb_resolved_write_line *)device;
-	const device_config *cpu = (const device_config *)resolved->realtarget;
+	running_device *cpu = (running_device *)resolved->realtarget;
 	cpu_set_input_line(cpu, resolved->real.writeline, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
-void devcb_resolve_write_line(devcb_resolved_write_line *resolved, const devcb_write_line *config, const device_config *device)
+void devcb_resolve_write_line(devcb_resolved_write_line *resolved, const devcb_write_line *config, running_device *device)
 {
 	/* reset the resolved structure */
 	memset(resolved, 0, sizeof(*resolved));
 
 	if (config->type == DEVCB_TYPE_INPUT)
 	{
-		resolved->target = input_port_by_tag(&device->machine->portlist, config->tag);
+		resolved->target = device->machine->port(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_write_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->write = trampoline_write_port_to_write_line;
 	}
 
 	/* address space handlers */
 	else if (config->type >= DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM) && config->type < DEVCB_TYPE_MEMORY(ADDRESS_SPACES) && config->writespace != NULL)
 	{
-		FPTR space = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
-		const device_config *cpu;
+		FPTR spacenum = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
+		running_device *cpu;
 
 		if (device->owner != NULL)
-			cpu = device_find_child_by_tag(device->owner, config->tag);
+			cpu = device->owner->subdevice(config->tag);
 		else
-			cpu = cputag_get_cpu(device->machine, config->tag);
+			cpu = device->machine->device(config->tag);
 
 		if (cpu == NULL)
-			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->target = resolved;
 		resolved->write = trampoline_write8_to_write_line;
-		resolved->realtarget = memory_find_address_space(cpu, space);
+		resolved->realtarget = cpu->space(spacenum);
 		if (resolved->realtarget == NULL)
-			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[space], device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[spacenum], device->name(), device->tag());
 		resolved->real.writespace = config->writespace;
 	}
 
@@ -160,15 +159,15 @@ void devcb_resolve_write_line(devcb_resolved_write_line *resolved, const devcb_w
 	else if (config->type >= DEVCB_TYPE_CPU_LINE(0) && config->type < DEVCB_TYPE_CPU_LINE(MAX_INPUT_LINES))
 	{
 		FPTR line = (FPTR)config->type - (FPTR)DEVCB_TYPE_CPU_LINE(0);
-		const device_config *cpu;
+		running_device *cpu;
 
 		if (device->owner != NULL)
-			cpu = device_find_child_by_tag(device->owner, config->tag);
+			cpu = device->owner->subdevice(config->tag);
 		else
-			cpu = cputag_get_cpu(device->machine, config->tag);
+			cpu = device->machine->device(config->tag);
 
 		if (cpu == NULL)
-			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write_line: unable to find CPU '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->target = resolved;
 		resolved->write = trampoline_writecpu_to_write_line;
 		resolved->realtarget = cpu;
@@ -182,12 +181,12 @@ void devcb_resolve_write_line(devcb_resolved_write_line *resolved, const devcb_w
 		if (config->type == DEVCB_TYPE_SELF)
 			resolved->target = device;
 		else if (device->owner != NULL)
-			resolved->target = device_find_child_by_tag(device->owner, config->tag);
+			resolved->target = device->owner->subdevice(config->tag);
 		else
-			resolved->target = devtag_get_device(device->machine, config->tag);
+			resolved->target = device->machine->device(config->tag);
 
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_write_line: unable to find device '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write_line: unable to find device '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 
 		/* write_line to write_line is direct */
 		if (config->writeline != NULL)
@@ -218,10 +217,10 @@ static READ8_DEVICE_HANDLER( trampoline_read_port_to_read8 )
 static READ8_DEVICE_HANDLER( trampoline_read_line_to_read8 )
 {
 	const devcb_resolved_read8 *resolved = (const devcb_resolved_read8 *)device;
-	return (*resolved->real.readline)((const device_config *)resolved->realtarget);
+	return (*resolved->real.readline)((running_device *)resolved->realtarget);
 }
 
-void devcb_resolve_read8(devcb_resolved_read8 *resolved, const devcb_read8 *config, const device_config *device)
+void devcb_resolve_read8(devcb_resolved_read8 *resolved, const devcb_read8 *config, running_device *device)
 {
 	/* reset the resolved structure */
 	memset(resolved, 0, sizeof(*resolved));
@@ -229,37 +228,37 @@ void devcb_resolve_read8(devcb_resolved_read8 *resolved, const devcb_read8 *conf
 	/* input port handlers */
 	if (config->type == DEVCB_TYPE_INPUT)
 	{
-		resolved->target = input_port_by_tag(&device->machine->portlist, config->tag);
+		resolved->target = device->machine->port(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read8: unable to find input port '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read8: unable to find input port '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->read = trampoline_read_port_to_read8;
 	}
 
 	/* address space handlers */
 	else if (config->type >= DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM) && config->type < DEVCB_TYPE_MEMORY(ADDRESS_SPACES) && config->readspace != NULL)
 	{
-		FPTR space = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
-		const device_config *cpu;
+		FPTR spacenum = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
+		running_device *cpu;
 
 		if (device->owner != NULL)
-			cpu = device_find_child_by_tag(device->owner, config->tag);
+			cpu = device->owner->subdevice(config->tag);
 		else
-			cpu = cputag_get_cpu(device->machine, config->tag);
+			cpu = device->machine->device(config->tag);
 
 		if (cpu == NULL)
-			fatalerror("devcb_resolve_read8: unable to find CPU '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
-		resolved->target = memory_find_address_space(cpu, space);
+			fatalerror("devcb_resolve_read8: unable to find CPU '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
+		resolved->target = cpu->space(spacenum);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read8: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[space], device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read8: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[spacenum], device->name(), device->tag());
 		resolved->read = (read8_device_func)config->readspace;
 	}
 
 	/* device handlers */
 	else if ((config->type == DEVCB_TYPE_DEVICE || config->type == DEVCB_TYPE_SELF) && (config->readline != NULL || config->readdevice != NULL))
 	{
-		resolved->target = (config->type == DEVCB_TYPE_SELF) ? device : devtag_get_device(device->machine, config->tag);
+		resolved->target = (config->type == DEVCB_TYPE_SELF) ? device : device->machine->device(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read8: unable to find device '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read8: unable to find device '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 
 		/* read8 to read8 is direct */
 		if (config->readdevice != NULL)
@@ -290,47 +289,47 @@ static WRITE8_DEVICE_HANDLER( trampoline_write_port_to_write8 )
 static WRITE8_DEVICE_HANDLER( trampoline_write_line_to_write8 )
 {
 	const devcb_resolved_write8 *resolved = (const devcb_resolved_write8 *)device;
-	(*resolved->real.writeline)((const device_config *)resolved->realtarget, (data & 1) ? ASSERT_LINE : CLEAR_LINE);
+	(*resolved->real.writeline)((running_device *)resolved->realtarget, (data & 1) ? ASSERT_LINE : CLEAR_LINE);
 }
 
-void devcb_resolve_write8(devcb_resolved_write8 *resolved, const devcb_write8 *config, const device_config *device)
+void devcb_resolve_write8(devcb_resolved_write8 *resolved, const devcb_write8 *config, running_device *device)
 {
 	/* reset the resolved structure */
 	memset(resolved, 0, sizeof(*resolved));
 
 	if (config->type == DEVCB_TYPE_INPUT)
 	{
-		resolved->target = input_port_by_tag(&device->machine->portlist, config->tag);
+		resolved->target = device->machine->port(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_read_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_read_line: unable to find input port '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 		resolved->write = trampoline_write_port_to_write8;
 	}
 
 	/* address space handlers */
 	else if (config->type >= DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM) && config->type < DEVCB_TYPE_MEMORY(ADDRESS_SPACES) && config->writespace != NULL)
 	{
-		FPTR space = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
-		const device_config *cpu;
+		FPTR spacenum = (FPTR)config->type - (FPTR)DEVCB_TYPE_MEMORY(ADDRESS_SPACE_PROGRAM);
+		running_device *cpu;
 
 		if (device->owner != NULL)
-			cpu = device_find_child_by_tag(device->owner, config->tag);
+			cpu = device->owner->subdevice(config->tag);
 		else
-			cpu = cputag_get_cpu(device->machine, config->tag);
+			cpu = device->machine->device(config->tag);
 
 		if (cpu == NULL)
-			fatalerror("devcb_resolve_write8: unable to find CPU '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
-		resolved->target = memory_find_address_space(cpu, space);
+			fatalerror("devcb_resolve_write8: unable to find CPU '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
+		resolved->target = cpu->space(spacenum);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_write8: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[space], device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write8: unable to find CPU '%s' %s space (requested by %s '%s')", config->tag, address_space_names[spacenum], device->name(), device->tag());
 		resolved->write = (write8_device_func)config->writespace;
 	}
 
 	/* device handlers */
 	else if ((config->type == DEVCB_TYPE_DEVICE || config->type == DEVCB_TYPE_SELF) && (config->writeline != NULL || config->writedevice != NULL))
 	{
-		resolved->target = (config->type == DEVCB_TYPE_SELF) ? device : devtag_get_device(device->machine, config->tag);
+		resolved->target = (config->type == DEVCB_TYPE_SELF) ? device : device->machine->device(config->tag);
 		if (resolved->target == NULL)
-			fatalerror("devcb_resolve_write8: unable to find device '%s' (requested by %s '%s')", config->tag, device_get_name(device), device->tag);
+			fatalerror("devcb_resolve_write8: unable to find device '%s' (requested by %s '%s')", config->tag, device->name(), device->tag());
 
 		/* write8 to write8 is direct */
 		if (config->writedevice != NULL)

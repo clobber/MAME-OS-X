@@ -4,9 +4,13 @@
 
 ****************************************************************************/
 
-typedef struct _astrof_state astrof_state;
-struct _astrof_state
+class astrof_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, astrof_state(machine)); }
+
+	astrof_state(running_machine &machine) { }
+
 	/* video-related */
 	UINT8 *    videoram;
 	size_t     videoram_size;
@@ -29,9 +33,9 @@ struct _astrof_state
 	UINT8      astrof_bosskill_playing;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *samples;	// astrof & abattle
-	const device_config *sn;	// tomahawk
+	running_device *maincpu;
+	running_device *samples;	// astrof & abattle
+	running_device *sn;	// tomahawk
 };
 
 /*----------- defined in audio/astrof.c -----------*/

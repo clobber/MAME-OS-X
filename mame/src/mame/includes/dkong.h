@@ -69,19 +69,23 @@ enum
 #define DK3_PALETTE_LENGTH		(256+256+8+1) /*  (256) */
 #define RS_PALETTE_LENGTH		(256+256+8+1)
 
-typedef struct _dkong_state dkong_state;
-struct _dkong_state
+class dkong_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dkong_state(machine)); }
+
+	dkong_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *           video_ram;
 	UINT8 *           sprite_ram;
 	size_t            sprite_ram_size;
 
 	/* devices */
-	const device_config *dev_n2a03a;
-	const device_config *dev_n2a03b;
-	const device_config *dev_vp2;		/* virtual port 2 */
-	const device_config *dev_6h;
+	running_device *dev_n2a03a;
+	running_device *dev_n2a03b;
+	running_device *dev_vp2;		/* virtual port 2 */
+	running_device *dev_6h;
 
 #if 0
 	/* machine states */
@@ -195,7 +199,7 @@ WRITE8_HANDLER( dkong_videoram_w );
 
 PALETTE_INIT( dkong2b );
 PALETTE_INIT( radarscp );
-PALETTE_INIT( radarsc1 );
+PALETTE_INIT( radarscp1 );
 PALETTE_INIT( dkong3 );
 
 VIDEO_START( dkong );
@@ -211,5 +215,5 @@ MACHINE_DRIVER_EXTERN( radarscp_audio );
 MACHINE_DRIVER_EXTERN( dkong2b_audio );
 MACHINE_DRIVER_EXTERN( dkongjr_audio );
 MACHINE_DRIVER_EXTERN( dkong3_audio );
-MACHINE_DRIVER_EXTERN( radarsc1_audio );
+MACHINE_DRIVER_EXTERN( radarscp1_audio );
 

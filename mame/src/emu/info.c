@@ -9,13 +9,14 @@
 
 ***************************************************************************/
 
-#include <ctype.h>
-
-#include "driver.h"
+#include "emu.h"
 #include "sound/samples.h"
 #include "info.h"
 #include "xmlfile.h"
 #include "hash.h"
+#include "config.h"
+
+#include <ctype.h>
 
 #ifdef MESS
 #include "infomess.h"
@@ -36,13 +37,13 @@
     settings for a game
 -------------------------------------------------*/
 
-static void print_game_switches(FILE *out, const game_driver *game, const input_port_list *portlist)
+static void print_game_switches(FILE *out, const game_driver *game, const ioport_list &portlist)
 {
 	const input_port_config *port;
 	const input_field_config *field;
 
 	/* iterate looking for DIP switches */
-	for (port = portlist->head; port != NULL; port = port->next)
+	for (port = portlist.first(); port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->type == IPT_DIPSWITCH)
 			{
@@ -74,13 +75,13 @@ static void print_game_switches(FILE *out, const game_driver *game, const input_
     settings for a game
 -------------------------------------------------*/
 
-static void print_game_configs(FILE *out, const game_driver *game, const input_port_list *portlist)
+static void print_game_configs(FILE *out, const game_driver *game, const ioport_list &portlist)
 {
 	const input_port_config *port;
 	const input_field_config *field;
 
 	/* iterate looking for configurations */
-	for (port = portlist->head; port != NULL; port = port->next)
+	for (port = portlist.first(); port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->type == IPT_CONFIG)
 			{
@@ -112,13 +113,13 @@ static void print_game_configs(FILE *out, const game_driver *game, const input_p
     Adjusters for a game
 -------------------------------------------------*/
 
-static void print_game_adjusters(FILE *out, const game_driver *game, const input_port_list *portlist)
+static void print_game_adjusters(FILE *out, const game_driver *game, const ioport_list &portlist)
 {
 	const input_port_config *port;
 	const input_field_config *field;
 
 	/* iterate looking for Adjusters */
-	for (port = portlist->head; port != NULL; port = port->next)
+	for (port = portlist.first(); port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 			if (field->type == IPT_ADJUSTER)
 			{
@@ -132,7 +133,7 @@ static void print_game_adjusters(FILE *out, const game_driver *game, const input
     input
 -------------------------------------------------*/
 
-static void print_game_input(FILE *out, const game_driver *game, const input_port_list *portlist)
+static void print_game_input(FILE *out, const game_driver *game, const ioport_list &portlist)
 {
 	/* fix me -- this needs to be cleaned up to match the core style */
 
@@ -172,7 +173,7 @@ enum {cjoy, cdoublejoy, cAD_stick, cdial, ctrackball, cpaddle, clightgun, cpedal
 		control[i].reverse = 0;
 	}
 
-	for (port = portlist->head; port != NULL; port = port->next)
+	for (port = portlist.first(); port != NULL; port = port->next)
 		for (field = port->fieldlist; field != NULL; field = field->next)
 		{
 			if (nplayer < field->player+1)
@@ -551,13 +552,12 @@ static void print_game_rom(FILE *out, const game_driver *game, const machine_con
 
 static void print_game_sampleof(FILE *out, const game_driver *game, const machine_config *config)
 {
-#if (HAS_SAMPLES)
-	const device_config *device;
+	const device_config *devconfig;
 
-	for (device = sound_first(config); device != NULL; device = sound_next(device))
-		if (sound_get_type(device) == SOUND_SAMPLES)
+	for (devconfig = sound_first(config); devconfig != NULL; devconfig = sound_next(devconfig))
+		if (sound_get_type(devconfig) == SOUND_SAMPLES)
 		{
-			const char *const *samplenames = ((const samples_interface *)device->static_config)->samplenames;
+			const char *const *samplenames = ((const samples_interface *)devconfig->static_config)->samplenames;
 			if (samplenames != NULL)
 			{
 				int sampnum;
@@ -573,7 +573,6 @@ static void print_game_sampleof(FILE *out, const game_driver *game, const machin
 				}
 			}
 		}
-#endif
 }
 
 
@@ -584,14 +583,13 @@ static void print_game_sampleof(FILE *out, const game_driver *game, const machin
 
 static void print_game_sample(FILE *out, const game_driver *game, const machine_config *config)
 {
-#if (HAS_SAMPLES)
-	const device_config *device;
+	const device_config *devconfig;
 
 	/* iterate over sound chips looking for samples */
-	for (device = sound_first(config); device != NULL; device = sound_next(device))
-		if (sound_get_type(device) == SOUND_SAMPLES)
+	for (devconfig = sound_first(config); devconfig != NULL; devconfig = sound_next(devconfig))
+		if (sound_get_type(devconfig) == SOUND_SAMPLES)
 		{
-			const char *const *samplenames = ((const samples_interface *)device->static_config)->samplenames;
+			const char *const *samplenames = ((const samples_interface *)devconfig->static_config)->samplenames;
 			if (samplenames != NULL)
 			{
 				int sampnum;
@@ -618,7 +616,6 @@ static void print_game_sample(FILE *out, const game_driver *game, const machine_
 				}
 			}
 		}
-#endif
 }
 
 
@@ -629,28 +626,28 @@ static void print_game_sample(FILE *out, const game_driver *game, const machine_
 
 static void print_game_chips(FILE *out, const game_driver *game, const machine_config *config)
 {
-	const device_config *device;
+	const device_config *devconfig;
 
 	/* iterate over CPUs */
-	for (device = cpu_first(config); device != NULL; device = cpu_next(device))
+	for (devconfig = cpu_first(config); devconfig != NULL; devconfig = cpu_next(devconfig))
 	{
 		fprintf(out, "\t\t<chip");
 		fprintf(out, " type=\"cpu\"");
-		fprintf(out, " tag=\"%s\"", xml_normalize_string(device->tag));
-		fprintf(out, " name=\"%s\"", xml_normalize_string(device_get_name(device)));
-		fprintf(out, " clock=\"%d\"", device->clock);
+		fprintf(out, " tag=\"%s\"", xml_normalize_string(devconfig->tag()));
+		fprintf(out, " name=\"%s\"", xml_normalize_string(devconfig->name()));
+		fprintf(out, " clock=\"%d\"", devconfig->clock);
 		fprintf(out, "/>\n");
 	}
 
 	/* iterate over sound chips */
-	for (device = sound_first(config); device != NULL; device = sound_next(device))
+	for (devconfig = sound_first(config); devconfig != NULL; devconfig = sound_next(devconfig))
 	{
 		fprintf(out, "\t\t<chip");
 		fprintf(out, " type=\"audio\"");
-		fprintf(out, " tag=\"%s\"", xml_normalize_string(device->tag));
-		fprintf(out, " name=\"%s\"", xml_normalize_string(device_get_name(device)));
-		if (device->clock != 0)
-			fprintf(out, " clock=\"%d\"", device->clock);
+		fprintf(out, " tag=\"%s\"", xml_normalize_string(devconfig->tag()));
+		fprintf(out, " name=\"%s\"", xml_normalize_string(devconfig->name()));
+		if (devconfig->clock != 0)
+			fprintf(out, " clock=\"%d\"", devconfig->clock);
 		fprintf(out, "/>\n");
 	}
 }
@@ -663,12 +660,12 @@ static void print_game_chips(FILE *out, const game_driver *game, const machine_c
 
 static void print_game_display(FILE *out, const game_driver *game, const machine_config *config)
 {
-	const device_config *screen;
+	const device_config *devconfig;
 
 	/* iterate over screens */
-	for (screen = video_screen_first(config); screen != NULL; screen = video_screen_next(screen))
+	for (devconfig = video_screen_first(config); devconfig != NULL; devconfig = video_screen_next(devconfig))
 	{
-		const screen_config *scrconfig = (const screen_config *)screen->inline_config;
+		const screen_config *scrconfig = (const screen_config *)devconfig->inline_config;
 
 		fprintf(out, "\t\t<display");
 
@@ -821,6 +818,39 @@ static void print_game_driver(FILE *out, const game_driver *game, const machine_
 	fprintf(out, "/>\n");
 }
 
+/*-------------------------------------------------
+    print_game_categories - print the Categories
+    settings for a system
+-------------------------------------------------*/
+
+void print_game_categories(FILE *out, const game_driver *game, const ioport_list &portlist)
+{
+	const input_port_config *port;
+	const input_field_config *field;
+
+	/* iterate looking for Categories */
+	for (port = portlist.first(); port != NULL; port = port->next)
+		for (field = port->fieldlist; field != NULL; field = field->next)
+			if (field->type == IPT_CATEGORY)
+			{
+				const input_setting_config *setting;
+
+				/* output the category name information */
+				fprintf(out, "\t\t<category name=\"%s\">\n", xml_normalize_string(input_field_name(field)));
+
+				/* loop over item settings */
+				for (setting = field->settinglist; setting != NULL; setting = setting->next)
+				{
+					fprintf(out, "\t\t\t<item name=\"%s\"", xml_normalize_string(setting->name));
+					if (setting->value == field->defvalue)
+						fprintf(out, " default=\"yes\"");
+					fprintf(out, "/>\n");
+				}
+
+				/* terminate the category entry */
+				fprintf(out, "\t\t</category>\n");
+			}
+}
 
 /*-------------------------------------------------
     print_game_info - print the XML information
@@ -830,8 +860,8 @@ static void print_game_driver(FILE *out, const game_driver *game, const machine_
 static void print_game_info(FILE *out, const game_driver *game)
 {
 	const game_driver *clone_of;
-	input_port_list portlist;
 	machine_config *config;
+	ioport_list portlist;
 	const char *start;
 
 	/* no action if not a game */
@@ -840,7 +870,7 @@ static void print_game_info(FILE *out, const game_driver *game)
 
 	/* start tracking resources and allocate the machine and input configs */
 	config = machine_config_alloc(game->machine_config);
-	input_port_list_init(&portlist, game->ipt, NULL, 0, FALSE);
+	input_port_list_init(portlist, game->ipt, NULL, 0, FALSE);
 
 	/* print the header and the game name */
 	fprintf(out, "\t<" XML_TOP);
@@ -890,13 +920,11 @@ static void print_game_info(FILE *out, const game_driver *game)
 	print_game_chips(out, game, config);
 	print_game_display(out, game, config);
 	print_game_sound(out, game, config);
-	print_game_input(out, game, &portlist);
-	print_game_switches(out, game, &portlist);
-	print_game_configs(out, game, &portlist);
-#ifdef MESS
-	print_game_categories(out, game, &portlist);
-#endif /* MESS */
-	print_game_adjusters(out, game, &portlist);
+	print_game_input(out, game, portlist);
+	print_game_switches(out, game, portlist);
+	print_game_configs(out, game, portlist);
+	print_game_categories(out, game, portlist);
+	print_game_adjusters(out, game, portlist);
 	print_game_driver(out, game, config);
 #ifdef MESS
 	print_game_device(out, game, config);
@@ -906,7 +934,6 @@ static void print_game_info(FILE *out, const game_driver *game)
 	/* close the topmost tag */
 	fprintf(out, "\t</" XML_TOP ">\n");
 
-	input_port_list_deinit(&portlist);
 	machine_config_free(config);
 }
 
@@ -926,10 +953,11 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 		"<!ELEMENT " XML_ROOT " (" XML_TOP "+)>\n"
 		"\t<!ATTLIST " XML_ROOT " build CDATA #IMPLIED>\n"
 		"\t<!ATTLIST " XML_ROOT " debug (yes|no) \"no\">\n"
+		"\t<!ATTLIST " XML_ROOT " mameconfig CDATA #REQUIRED>\n"
 #ifdef MESS
 		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, category*, adjuster*, driver?, device*, ramoption*)>\n"
 #else
-		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, adjuster*, driver?)>\n"
+		"\t<!ELEMENT " XML_TOP " (description, year?, manufacturer, biosset*, rom*, disk*, sample*, chip*, display*, sound?, input?, dipswitch*, configuration*, category*, adjuster*, driver?)>\n"
 #endif
 		"\t\t<!ATTLIST " XML_TOP " name CDATA #REQUIRED>\n"
 		"\t\t<!ATTLIST " XML_TOP " sourcefile CDATA #IMPLIED>\n"
@@ -1018,13 +1046,11 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 		"\t\t\t\t<!ATTLIST confsetting name CDATA #REQUIRED>\n"
 		"\t\t\t\t<!ATTLIST confsetting value CDATA #REQUIRED>\n"
 		"\t\t\t\t<!ATTLIST confsetting default (yes|no) \"no\">\n"
-#ifdef MESS
 		"\t\t<!ELEMENT category (item*)>\n"
 		"\t\t\t<!ATTLIST category name CDATA #REQUIRED>\n"
 		"\t\t\t<!ELEMENT item EMPTY>\n"
 		"\t\t\t\t<!ATTLIST item name CDATA #REQUIRED>\n"
 		"\t\t\t\t<!ATTLIST item default (yes|no) \"no\">\n"
-#endif
 		"\t\t<!ELEMENT adjuster EMPTY>\n"
 		"\t\t\t<!ATTLIST adjuster name CDATA #REQUIRED>\n"
 		"\t\t\t<!ATTLIST adjuster default CDATA #REQUIRED>\n"
@@ -1058,8 +1084,9 @@ void print_mame_xml(FILE *out, const game_driver *const games[], const char *gam
 #else
 		"no"
 #endif
-		"\">\n",
-		xml_normalize_string(build_version)
+		"\" mameconfig=\"%d\">\n",
+		xml_normalize_string(build_version),
+		CONFIG_VERSION
 	);
 
 	for (drvnum = 0; games[drvnum] != NULL; drvnum++)

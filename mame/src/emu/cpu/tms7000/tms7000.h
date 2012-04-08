@@ -22,7 +22,6 @@
 #ifndef __TMS7000_H__
 #define __TMS7000_H__
 
-#include "cpuintrf.h"
 
 enum { TMS7000_PC=1, TMS7000_SP, TMS7000_ST, TMS7000_IDLE, TMS7000_T1_CL, TMS7000_T1_PS, TMS7000_T1_DEC };
 
@@ -47,7 +46,7 @@ enum
 };
 
 /* PUBLIC FUNCTIONS */
-extern void tms7000_A6EC1( const device_config *device ); /* External event counter */
+extern void tms7000_A6EC1( running_device *device ); /* External event counter */
 extern CPU_GET_INFO( tms7000 );
 extern CPU_GET_INFO( tms7000_exl );
 

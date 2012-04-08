@@ -70,6 +70,7 @@
 
 *****************************************************************************/
 
+#include "emu.h"
 #include "debugger.h"
 #include "m6809.h"
 
@@ -98,7 +99,7 @@ struct _m68_state_t
 
 	int 	extra_cycles; /* cycles used up by interrupts */
 	cpu_irq_callback irq_callback;
-	const device_config *device;
+	running_device *device;
 	const m6809_config *config;
 	int		icount;
 	PAIR	ea;			/* effective address */
@@ -110,7 +111,7 @@ struct _m68_state_t
 	UINT8	nmi_state;
 };
 
-INLINE m68_state_t *get_safe_token(const device_config *device)
+INLINE m68_state_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -376,14 +377,14 @@ static CPU_INIT( m6809 )
 		0
 	};
 
-	const m6809_config *configdata = device->static_config ? (const m6809_config *)device->static_config : &default_config;
+	const m6809_config *configdata = device->baseconfig().static_config ? (const m6809_config *)device->baseconfig().static_config : &default_config;
 	m68_state_t *m68_state = get_safe_token(device);
 
 	m68_state->config = configdata;
 	m68_state->irq_callback = irqcallback;
 	m68_state->device = device;
 
-	m68_state->program = memory_find_address_space(device, ADDRESS_SPACE_PROGRAM);
+	m68_state->program = device->space(AS_PROGRAM);
 
 	/* setup regtable */
 
@@ -437,7 +438,7 @@ static void set_irq_line(m68_state_t *m68_state, int irqline, int state)
 	{
 		if (m68_state->nmi_state == state) return;
 		m68_state->nmi_state = state;
-		LOG(("M6809 '%s' set_irq_line (NMI) %d\n", m68_state->device->tag, state));
+		LOG(("M6809 '%s' set_irq_line (NMI) %d\n", m68_state->device->tag(), state));
 		if( state == CLEAR_LINE ) return;
 
 		/* if the stack was not yet initialized */
@@ -468,7 +469,7 @@ static void set_irq_line(m68_state_t *m68_state, int irqline, int state)
 	}
 	else if (irqline < 2)
 	{
-	    LOG(("M6809 '%s' set_irq_line %d, %d\n", m68_state->device->tag, irqline, state));
+	    LOG(("M6809 '%s' set_irq_line %d, %d\n", m68_state->device->tag(), irqline, state));
 		m68_state->irq_state[irqline] = state;
 		if (state == CLEAR_LINE) return;
 		check_irq_lines(m68_state);
@@ -1117,15 +1118,15 @@ CPU_GET_INFO( m6809 )
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 2;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 19;							break;
 
-		case CPUINFO_INT_DATABUS_WIDTH_PROGRAM:	info->i = 8;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_PROGRAM: info->i = 16;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_PROGRAM: info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_DATA:	info->i = 0;					break;
-		case CPUINFO_INT_DATABUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_WIDTH_IO:		info->i = 0;					break;
-		case CPUINFO_INT_ADDRBUS_SHIFT_IO:		info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_PROGRAM:	info->i = 8;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_PROGRAM: info->i = 16;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_PROGRAM: info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_DATA:	info->i = 0;					break;
+		case DEVINFO_INT_DATABUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_WIDTH + ADDRESS_SPACE_IO:		info->i = 0;					break;
+		case DEVINFO_INT_ADDRBUS_SHIFT + ADDRESS_SPACE_IO:		info->i = 0;					break;
 
 		case CPUINFO_INT_INPUT_STATE + M6809_IRQ_LINE:	info->i = m68_state->irq_state[M6809_IRQ_LINE]; break;
 		case CPUINFO_INT_INPUT_STATE + M6809_FIRQ_LINE:	info->i = m68_state->irq_state[M6809_FIRQ_LINE]; break;

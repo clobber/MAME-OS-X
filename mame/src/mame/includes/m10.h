@@ -27,9 +27,13 @@
 #define IREMM15_VBSTART			(240)
 #define IREMM15_VBEND			(16)
 
-typedef struct _m10_state m10_state;
-struct _m10_state
+class m10_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, m10_state(machine)); }
+
+	m10_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *             chargen;
 	UINT8 *             memory;
@@ -53,10 +57,10 @@ struct _m10_state
 	int                 last;
 
 	/* devices */
-	const device_config *maincpu;
-	const device_config *ic8j1;
-	const device_config *ic8j2;
-	const device_config *samples;
+	running_device *maincpu;
+	running_device *ic8j1;
+	running_device *ic8j2;
+	running_device *samples;
 };
 
 

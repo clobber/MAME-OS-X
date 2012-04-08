@@ -1,11 +1,41 @@
-/*----------- defined in drivers/xmen.c -----------*/
 
-extern UINT16 xmen_current_frame;
-extern UINT16 *xmen6p_spriteramleft;
-extern UINT16 *xmen6p_spriteramright;
-extern UINT16 *xmen6p_tilemapleft;
-extern UINT16 *xmen6p_tilemapright;
+class xmen_state
+{
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, xmen_state(machine)); }
 
+	xmen_state(running_machine &machine) { }
+
+	/* memory pointers */
+//  UINT16 *   paletteram;    // currently this uses generic palette handling
+
+	/* video-related */
+	int        layer_colorbase[3], sprite_colorbase;
+	int        layerpri[3];
+
+	/* for xmen6p */
+	bitmap_t   *screen_right;
+	bitmap_t   *screen_left;
+	UINT16 *   xmen6p_spriteramleft;
+	UINT16 *   xmen6p_spriteramright;
+	UINT16 *   xmen6p_tilemapleft;
+	UINT16 *   xmen6p_tilemapright;
+	UINT16 *   k053247_ram;
+	UINT16     current_frame;
+
+	/* misc */
+	UINT8       sound_curbank;
+
+	/* devices */
+	running_device *maincpu;
+	running_device *audiocpu;
+	running_device *k054539;
+	running_device *k052109;
+	running_device *k053246;
+	running_device *k053251;
+	running_device *lscreen;
+	running_device *rscreen;
+};
 
 /*----------- defined in video/xmen.c -----------*/
 

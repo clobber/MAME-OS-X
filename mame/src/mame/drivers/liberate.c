@@ -14,35 +14,10 @@
 
 *******************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6502/m6502.h"
 #include "sound/ay8910.h"
-
-extern UINT8 *liberate_videoram;
-extern UINT8 *liberate_colorram;
-
-PALETTE_INIT( liberate );
-VIDEO_UPDATE( prosoccr );
-VIDEO_UPDATE( prosport );
-VIDEO_UPDATE( liberate );
-VIDEO_UPDATE( boomrang );
-VIDEO_START( prosoccr );
-VIDEO_START( prosport );
-VIDEO_START( boomrang );
-VIDEO_START( liberate );
-
-static int deco16_bank;
-static UINT8 *scratchram;
-UINT8 *prosoccr_charram;
-UINT8 *prosport_bg_vram;
-
-WRITE8_HANDLER( deco16_io_w );
-WRITE8_HANDLER( prosoccr_io_w );
-WRITE8_HANDLER( prosport_io_w );
-WRITE8_HANDLER( prosport_paletteram_w );
-WRITE8_HANDLER( prosport_bg_vram_w );
-WRITE8_HANDLER( liberate_videoram_w );
-WRITE8_HANDLER( liberate_colorram_w );
+#include "includes/liberate.h"
 
 /*************************************
  *
@@ -52,140 +27,163 @@ WRITE8_HANDLER( liberate_colorram_w );
 
 static READ8_HANDLER( deco16_bank_r )
 {
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
 	const UINT8 *ROM = memory_region(space->machine, "user1");
 
 	/* The tilemap bank can be swapped into main memory */
-	if (deco16_bank)
+	if (state->bank)
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return liberate_colorram[offset];
-	if (offset<0x800) return liberate_videoram[offset-0x400];
-	if (offset<0x1000) return space->machine->generic.spriteram.u8[offset-0x800];
-	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
-	if (offset<0x2800) return scratchram[offset-0x2200];
+	if (offset < 0x400)
+		return state->colorram[offset];
+	if (offset < 0x800)
+		return state->videoram[offset - 0x400];
+	if (offset < 0x1000)
+		return state->spriteram[offset - 0x800];
+	if (offset < 0x2200)
+	{
+		logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(space->cpu), offset);
+		return 0;
+	}
+	if (offset < 0x2800)
+		return state->scratchram[offset - 0x2200];
 
-	logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(space->cpu), offset);
 	return 0;
 }
 
 static READ8_HANDLER( deco16_io_r )
 {
-	if (offset==0) return input_port_read(space->machine, "IN1"); /* Player 1 controls */
-	if (offset==1) return input_port_read(space->machine, "IN2"); /* Player 2 controls */
-	if (offset==2) return input_port_read(space->machine, "IN3"); /* Vblank, coins */
-	if (offset==3) return input_port_read(space->machine, "DSW1"); /* Dip 1 */
-	if (offset==4) return input_port_read(space->machine, "DSW2"); /* Dip 2 */
+	if (offset == 0) return input_port_read(space->machine, "IN1"); /* Player 1 controls */
+	if (offset == 1) return input_port_read(space->machine, "IN2"); /* Player 2 controls */
+	if (offset == 2) return input_port_read(space->machine, "IN3"); /* Vblank, coins */
+	if (offset == 3) return input_port_read(space->machine, "DSW1"); /* Dip 1 */
+	if (offset == 4) return input_port_read(space->machine, "DSW2"); /* Dip 2 */
 
-	logerror("%04x:  Read input %d\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x:  Read input %d\n", cpu_get_pc(space->cpu), offset);
 	return 0xff;
 }
 
 static WRITE8_HANDLER( deco16_bank_w )
 {
-	deco16_bank = data;
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	state->bank = data;
 
-	if (deco16_bank)
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
+	if (state->bank)
+		memory_install_read8_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
 	else
-		memory_install_read_bank(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, "bank1");
+		memory_install_read_bank(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, "bank1");
 }
-
-static UINT8 gfx_rom_readback;
 
 static READ8_HANDLER( prosoccr_bank_r )
 {
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
 	const UINT8 *ROM = memory_region(space->machine, "user1");
 
 	/* The tilemap bank can be swapped into main memory */
-	if (deco16_bank)
+	if (state->bank)
 		return ROM[offset];
 
 	/* Else the handler falls through to read the usual address */
-	if (offset<0x400) return liberate_colorram[offset];
-	if (offset<0x800) return liberate_videoram[offset-0x400];
-	if (offset<0xc00) return liberate_colorram[offset-0x800];
-	if (offset<0x1000) return space->machine->generic.spriteram.u8[offset-0xc00];
-	if (offset<0x2200) { logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset); return 0; }
-	if (offset<0x2800) return scratchram[offset-0x2200];
+	if (offset < 0x400)
+		return state->colorram[offset];
+	if (offset < 0x800)
+		return state->videoram[offset - 0x400];
+	if (offset < 0xc00)
+		return state->colorram[offset - 0x800];
+	if (offset < 0x1000)
+		return state->spriteram[offset - 0xc00];
+	if (offset < 0x2200)
+	{
+		logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(space->cpu), offset);
+		return 0;
+	}
+	if (offset < 0x2800)
+		return state->scratchram[offset - 0x2200];
 
-	logerror("%04x: Unmapped bank read %04x\n",cpu_get_pc(space->cpu),offset);
+	logerror("%04x: Unmapped bank read %04x\n", cpu_get_pc(space->cpu), offset);
 	return 0;
 }
 
 static READ8_HANDLER( prosoccr_charram_r )
 {
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
 	UINT8 *SRC_GFX = memory_region(space->machine, "shared_gfx");
 
-	if(gfx_rom_readback)
+	if (state->gfx_rom_readback)
 	{
-		switch(offset & 0x1800)
+		switch (offset & 0x1800)
 		{
 			case 0x0000:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x0000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x0000];
 			case 0x0800:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x2000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x2000];
 			case 0x1000:
-				return SRC_GFX[(offset & 0x7ff)+(0x0000)+0x4000];
+				return SRC_GFX[(offset & 0x7ff) + (0x0000) + 0x4000];
 		}
 	}
 
 	/* note: gfx_rom_readback == 1 never happens. */
-	return prosoccr_charram[offset+gfx_rom_readback*0x1800];
+	return state->charram[offset + state->gfx_rom_readback * 0x1800];
 }
 
 static WRITE8_HANDLER( prosoccr_charram_w )
 {
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
 	UINT8 *FG_GFX = memory_region(space->machine, "fg_gfx");
 
-	if(deco16_bank)
+	if (state->bank)
 	{
-		prosoccr_io_w(space,offset & 0xf,data);
+		prosoccr_io_w(space, offset & 0x0f, data);
 	}
 	else
 	{
 		/* note: gfx_rom_readback == 1 never happens. */
-		prosoccr_charram[offset+gfx_rom_readback*0x1800] = data;
+		state->charram[offset + state->gfx_rom_readback * 0x1800] = data;
 
-		switch(offset & 0x1800)
+		switch (offset & 0x1800)
 		{
 			case 0x0000:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x0000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x0000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 				break;
 			case 0x0800:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x2000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x2000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 				break;
 			case 0x1000:
-				FG_GFX[(offset & 0x7ff)+(0x0000)+0x4000] = data;
-				//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+				FG_GFX[(offset & 0x7ff) + (0x0000) + 0x4000] = data;
+				//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 				break;
 		}
 	}
 
-	offset&=0x7ff;
+	offset &= 0x7ff;
 
 	/* dirty char */
-    gfx_element_mark_dirty(space->machine->gfx[0], offset >> 3);
-//  gfx_element_mark_dirty(space->machine->gfx[0], (offset|0x1800) >> 3);
+	gfx_element_mark_dirty(space->machine->gfx[0], offset >> 3);
+//  gfx_element_mark_dirty(space->machine->gfx[0], (offset | 0x1800) >> 3);
 }
 
 static WRITE8_HANDLER( prosoccr_char_bank_w )
 {
-	gfx_rom_readback = data & 1; //enable GFX rom read-back
-	if(data & 0xfe)
-		printf("%02x\n",data);
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	state->gfx_rom_readback = data & 1; //enable GFX rom read-back
+
+	if (data & 0xfe)
+		printf("%02x\n", data);
 }
 
 static WRITE8_HANDLER( prosoccr_io_bank_w )
 {
-	deco16_bank = data & 1;
+	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	state->bank = data & 1;
 
-	if (deco16_bank)
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
+	if (state->bank)
+		memory_install_read8_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, deco16_io_r);
 	else
-		memory_install_read8_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, prosoccr_charram_r);
+		memory_install_read8_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x8000, 0x800f, 0, 0, prosoccr_charram_r);
 
 }
 
@@ -193,17 +191,17 @@ static READ8_HANDLER( prosport_charram_r )
 {
 	UINT8 *FG_GFX = memory_region(space->machine, "progolf_fg_gfx");
 
-	switch(offset & 0x1800)
+	switch (offset & 0x1800)
 	{
 		case 0x0000:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x0000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x0000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 		case 0x0800:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x2000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x2000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 		case 0x1000:
-			return FG_GFX[(offset & 0x7ff)+(0x0800)+0x4000];
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+			return FG_GFX[(offset & 0x7ff) + (0x0800) + 0x4000];
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 	}
 
 	return 0;
@@ -213,27 +211,27 @@ static WRITE8_HANDLER( prosport_charram_w )
 {
 	UINT8 *FG_GFX = memory_region(space->machine, "progolf_fg_gfx");
 
-	switch(offset & 0x1800)
+	switch (offset & 0x1800)
 	{
 		case 0x0000:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x0000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x0000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x0000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x0000] = data;
 			break;
 		case 0x0800:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x2000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x2000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x2000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x2000] = data;
 			break;
 		case 0x1000:
-			FG_GFX[(offset & 0x7ff)+(0x0800)+0x4000] = data;
-			//FG_GFX[(offset & 0x7ff)+(0x1800)+0x4000] = data;
+			FG_GFX[(offset & 0x7ff) + (0x0800) + 0x4000] = data;
+			//FG_GFX[(offset & 0x7ff) + (0x1800) + 0x4000] = data;
 			break;
 	}
 
-	offset&=0x7ff;
+	offset &= 0x7ff;
 
 	/* dirty char */
-    gfx_element_mark_dirty(space->machine->gfx[3], (offset+0x800) >> 3);
-    gfx_element_mark_dirty(space->machine->gfx[3+4], (offset+0x800) >> 5);
+	gfx_element_mark_dirty(space->machine->gfx[3], (offset + 0x800) >> 3);
+	gfx_element_mark_dirty(space->machine->gfx[3 + 4], (offset + 0x800) >> 5);
 }
 
 
@@ -244,14 +242,14 @@ static WRITE8_HANDLER( prosport_charram_w )
  *************************************/
 
 static ADDRESS_MAP_START( prosport_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0x0200, 0x021f) AM_RAM_WRITE(prosport_paletteram_w) AM_BASE_MEMBER(liberate_state, paletteram)
 	AM_RANGE(0x0000, 0x03ff) AM_MIRROR(0x2000) AM_RAM
-	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(prosport_bg_vram_w) AM_BASE(&prosport_bg_vram)
+	AM_RANGE(0x0400, 0x07ff) AM_RAM_WRITE(prosport_bg_vram_w) AM_BASE_MEMBER(liberate_state, bg_vram)
 	AM_RANGE(0x0800, 0x1fff) AM_READWRITE(prosport_charram_r,prosport_charram_w) //0x1e00-0x1fff isn't charram!
 	AM_RANGE(0x2400, 0x2fff) AM_RAM
-	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
-	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
-	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_GENERIC(spriteram)
+	AM_RANGE(0x3000, 0x33ff) AM_RAM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, colorram)
+	AM_RANGE(0x3400, 0x37ff) AM_RAM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, videoram)
+	AM_RANGE(0x3800, 0x3fff) AM_RAM AM_BASE_MEMBER(liberate_state, spriteram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(prosport_io_w)
 	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0xffff) AM_ROM
@@ -261,10 +259,10 @@ static ADDRESS_MAP_START( liberate_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE_MEMBER(liberate_state, scratchram)
 	AM_RANGE(0x8000, 0x800f) AM_WRITE(deco16_io_w)
 	AM_RANGE(0x8000, 0x800f) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0xffff) AM_ROM
@@ -274,11 +272,11 @@ static ADDRESS_MAP_START( prosoccr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(prosoccr_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
-	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE(&scratchram)
-	AM_RANGE(0x8000, 0x97ff) AM_READWRITE(prosoccr_charram_r,prosoccr_charram_w)
+	AM_RANGE(0x4000, 0x43ff) AM_MIRROR(0x800) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, videoram)
+	AM_RANGE(0x4c00, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_RAM AM_BASE_MEMBER(liberate_state, scratchram)
+	AM_RANGE(0x8000, 0x97ff) AM_READWRITE(prosoccr_charram_r, prosoccr_charram_w)
 	AM_RANGE(0x9800, 0x9800) AM_WRITE(prosoccr_char_bank_w)
 	AM_RANGE(0xa000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -298,10 +296,10 @@ static ADDRESS_MAP_START( liberatb_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM
 	AM_RANGE(0x1000, 0x3fff) AM_ROM /* Mirror of main rom */
 	AM_RANGE(0x4000, 0x7fff) AM_READ(deco16_bank_r)
-	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE(&liberate_colorram)
-	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE(&liberate_videoram)
-	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0x6200, 0x67ff) AM_WRITEONLY AM_BASE(&scratchram)
+	AM_RANGE(0x4000, 0x43ff) AM_WRITE(liberate_colorram_w) AM_BASE_MEMBER(liberate_state, colorram)
+	AM_RANGE(0x4400, 0x47ff) AM_WRITE(liberate_videoram_w) AM_BASE_MEMBER(liberate_state, videoram)
+	AM_RANGE(0x4800, 0x4fff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, spriteram)
+	AM_RANGE(0x6200, 0x67ff) AM_WRITEONLY AM_BASE_MEMBER(liberate_state, scratchram)
 	AM_RANGE(0xf000, 0xf00f) AM_WRITE(deco16_io_w)
 	AM_RANGE(0xf000, 0xf000) AM_READ_PORT("IN1")
 	AM_RANGE(0xf001, 0xf001) AM_READ_PORT("IN2")
@@ -771,17 +769,17 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( deco16_interrupt )
 {
-	static int latch = 0;
+	liberate_state *state = (liberate_state *)device->machine->driver_data;
 	int p = ~input_port_read(device->machine, "IN3");
-	if ((p & 0x43) && !latch)
+	if ((p & 0x43) && !state->latch)
 	{
 		cpu_set_input_line(device, DECO16_IRQ_LINE, ASSERT_LINE);
-		latch = 1;
+		state->latch = 1;
 	}
 	else
 	{
 		if (!(p & 0x43))
-			latch=0;
+			state->latch = 0;
 	}
 }
 
@@ -799,7 +797,38 @@ static INTERRUPT_GEN( prosport_interrupt )
  *
  *************************************/
 
+static MACHINE_START( liberate )
+{
+	liberate_state *state = (liberate_state *)machine->driver_data;
+
+	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->audiocpu = devtag_get_device(machine, "audiocpu");
+
+	state_save_register_global(machine, state->background_disable);
+	state_save_register_global(machine, state->background_color);
+	state_save_register_global(machine, state->gfx_rom_readback);
+	state_save_register_global(machine, state->latch);
+	state_save_register_global(machine, state->bank);
+
+	state_save_register_global_array(machine, state->io_ram);
+}
+
+static MACHINE_RESET( liberate )
+{
+	liberate_state *state = (liberate_state *)machine->driver_data;
+
+	memset(state->io_ram, 0, ARRAY_LENGTH(state->io_ram));
+
+	state->background_disable = 0;
+	state->background_color = 0;
+	state->gfx_rom_readback = 0;
+	state->latch = 0;
+	state->bank = 0;
+}
+
 static MACHINE_DRIVER_START( liberate )
+
+	MDRV_DRIVER_DATA(liberate_state)
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",DECO16, 2000000)
@@ -812,6 +841,9 @@ static MACHINE_DRIVER_START( liberate )
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
 
 	MDRV_QUANTUM_TIME(HZ(12000))
+
+	MDRV_MACHINE_START(liberate)
+	MDRV_MACHINE_RESET(liberate)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -883,6 +915,8 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( prosport )
 
+	MDRV_DRIVER_DATA(liberate_state)
+
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", DECO16, 2000000)
 	MDRV_CPU_PROGRAM_MAP(prosport_map)
@@ -894,6 +928,9 @@ static MACHINE_DRIVER_START( prosport )
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,16*60) /* ??? */
 
 //  MDRV_QUANTUM_TIME(HZ(12000))
+
+	MDRV_MACHINE_START(liberate)
+	MDRV_MACHINE_RESET(liberate)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -1335,8 +1372,8 @@ static void sound_cpu_decrypt(running_machine *machine)
 	int i;
 
 	/* Bit swapping on sound cpu - Opcodes only */
-	for (i=0xc000; i<0x10000; i++)
-		decrypted[i-0xc000]=((rom[i] & 0x20) << 1) | ((rom[i] & 0x40) >> 1) | (rom[i] & 0x9f);
+	for (i = 0xc000; i < 0x10000; i++)
+		decrypted[i - 0xc000] = ((rom[i] & 0x20) << 1) | ((rom[i] & 0x40) >> 1) | (rom[i] & 0x9f);
 
 	memory_set_decrypted_region(space, 0xc000, 0xffff, decrypted);
 }
@@ -1347,8 +1384,8 @@ static DRIVER_INIT( prosport )
 	int i;
 
 	/* Main cpu has the nibbles swapped */
-	for (i=0; i<0x10000; i++)
-		RAM[i]=((RAM[i] & 0x0f) << 4) | ((RAM[i] & 0xf0) >> 4);
+	for (i = 0; i < 0x10000; i++)
+		RAM[i] = ((RAM[i] & 0x0f) << 4) | ((RAM[i] & 0xf0) >> 4);
 
 	sound_cpu_decrypt(machine);
 }
@@ -1370,7 +1407,7 @@ static DRIVER_INIT( liberate )
 	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypted);
 
 	/* Swap bits for opcodes only, not data */
-	for (A = 0;A < 0x10000;A++) {
+	for (A = 0; A < 0x10000; A++) {
 		decrypted[A] = (ROM[A] & 0xd7) | ((ROM[A] & 0x08) << 2) | ((ROM[A] & 0x20) >> 2);
 		decrypted[A] = (decrypted[A] & 0xbb) | ((decrypted[A] & 0x04) << 4) | ((decrypted[A] & 0x40) >> 4);
 		decrypted[A] = (decrypted[A] & 0x7d) | ((decrypted[A] & 0x02) << 6) | ((decrypted[A] & 0x80) >> 6);
@@ -1387,14 +1424,14 @@ static DRIVER_INIT( liberate )
  *
  *************************************/
 
-GAME( 1983, prosoccr,  0,        prosoccr,  prosoccr, prosport, ROT270, "Data East Corporation", "Pro Soccer", 0 )
-GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1983, boomrang,  0,        boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 1)", 0 )
-GAME( 1983, boomranga, boomrang, boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 2)", 0 )
-GAME( 1984, kamikcab,  0,        boomrang,  kamikcab, prosport, ROT270, "Data East Corporation", "Kamikaze Cabbie", 0 )
-GAME( 1984, yellowcbj, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "Data East Corporation", "Yellow Cab (Japan)", 0 )
-GAME( 1984, yellowcbb, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "bootleg",               "Yellow Cab (bootleg)", 0 )
-GAME( 1984, liberate,  0,        liberate,  liberate, liberate, ROT270, "Data East Corporation", "Liberation", 0 )
-GAME( 1984, dualaslt,  liberate, liberate,  dualaslt, liberate, ROT270, "Data East USA",         "Dual Assault", 0 )
-GAME( 1984, liberateb, liberate, liberatb,  liberatb, prosport, ROT270, "bootleg",               "Liberation (bootleg)", 0 )
+GAME( 1983, prosoccr,  0,        prosoccr,  prosoccr, prosport, ROT270, "Data East Corporation", "Pro Soccer", GAME_SUPPORTS_SAVE )
+GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, boomrang,  0,        boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, boomranga, boomrang, boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1984, kamikcab,  0,        boomrang,  kamikcab, prosport, ROT270, "Data East Corporation", "Kamikaze Cabbie", GAME_SUPPORTS_SAVE )
+GAME( 1984, yellowcbj, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "Data East Corporation", "Yellow Cab (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1984, yellowcbb, kamikcab, boomrang,  yellowcb, yellowcb, ROT270, "bootleg",               "Yellow Cab (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1984, liberate,  0,        liberate,  liberate, liberate, ROT270, "Data East Corporation", "Liberation", GAME_SUPPORTS_SAVE )
+GAME( 1984, dualaslt,  liberate, liberate,  dualaslt, liberate, ROT270, "Data East USA",         "Dual Assault", GAME_SUPPORTS_SAVE )
+GAME( 1984, liberateb, liberate, liberatb,  liberatb, prosport, ROT270, "bootleg",               "Liberation (bootleg)", GAME_SUPPORTS_SAVE )

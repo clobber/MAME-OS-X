@@ -23,6 +23,7 @@ OBJDIRS += \
 	$(EMUOBJ)/cpu \
 	$(EMUOBJ)/sound \
 	$(EMUOBJ)/debug \
+	$(EMUOBJ)/debugint \
 	$(EMUOBJ)/audio \
 	$(EMUOBJ)/drivers \
 	$(EMUOBJ)/machine \
@@ -48,6 +49,8 @@ EMUOBJS = \
 	$(EMUOBJ)/devintrf.o \
 	$(EMUOBJ)/drawgfx.o \
 	$(EMUOBJ)/driver.o \
+	$(EMUOBJ)/emualloc.o \
+	$(EMUOBJ)/emucore.o \
 	$(EMUOBJ)/emuopts.o \
 	$(EMUOBJ)/emupal.o \
 	$(EMUOBJ)/fileio.o \
@@ -57,7 +60,6 @@ EMUOBJS = \
 	$(EMUOBJ)/inputseq.o \
 	$(EMUOBJ)/inptport.o \
 	$(EMUOBJ)/mame.o \
-	$(EMUOBJ)/mamecore.o \
 	$(EMUOBJ)/mconfig.o \
 	$(EMUOBJ)/memory.o \
 	$(EMUOBJ)/output.o \
@@ -65,7 +67,6 @@ EMUOBJS = \
 	$(EMUOBJ)/rendfont.o \
 	$(EMUOBJ)/rendlay.o \
 	$(EMUOBJ)/rendutil.o \
-	$(EMUOBJ)/restrack.o \
 	$(EMUOBJ)/romload.o \
 	$(EMUOBJ)/sound.o \
 	$(EMUOBJ)/state.o \
@@ -86,7 +87,8 @@ EMUOBJS = \
 	$(EMUOBJ)/debug/debughlp.o \
 	$(EMUOBJ)/debug/debugvw.o \
 	$(EMUOBJ)/debug/express.o \
-	$(EMUOBJ)/debug/textbuf.o
+	$(EMUOBJ)/debug/textbuf.o \
+	$(EMUOBJ)/debugint/debugint.o
 
 ifdef PROFILER
 EMUOBJS += \
@@ -140,6 +142,7 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/i2cmem.o \
 	$(EMUMACHINE)/i2cmemdev.o \
 	$(EMUMACHINE)/idectrl.o \
+	$(EMUMACHINE)/ins8154.o	\
 	$(EMUMACHINE)/intelfsh.o \
 	$(EMUMACHINE)/k033906.o \
 	$(EMUMACHINE)/k056230.o \
@@ -176,12 +179,15 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/x76f041.o \
 	$(EMUMACHINE)/x76f100.o \
 	$(EMUMACHINE)/z80ctc.o \
+	$(EMUMACHINE)/z80dart.o \
 	$(EMUMACHINE)/z80dma.o \
 	$(EMUMACHINE)/z80pio.o \
 	$(EMUMACHINE)/z80sio.o \
+	$(EMUMACHINE)/z80sti.o \
 
 EMUVIDEOOBJS = \
 	$(EMUVIDEO)/generic.o \
+	$(EMUVIDEO)/hd63484.o \
 	$(EMUVIDEO)/mc6845.o \
 	$(EMUVIDEO)/poly.o \
 	$(EMUVIDEO)/resnet.o \

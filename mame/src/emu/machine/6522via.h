@@ -14,7 +14,6 @@
 #ifndef __6522VIA_H__
 #define __6522VIA_H__
 
-#include "devcb.h"
 
 
 /***************************************************************************
@@ -82,16 +81,16 @@ WRITE8_DEVICE_HANDLER(via_porta_w);
 READ8_DEVICE_HANDLER(via_portb_r);
 WRITE8_DEVICE_HANDLER(via_portb_w);
 
-READ8_DEVICE_HANDLER(via_ca1_r);
-WRITE8_DEVICE_HANDLER(via_ca1_w);
+READ_LINE_DEVICE_HANDLER(via_ca1_r);
+WRITE_LINE_DEVICE_HANDLER(via_ca1_w);
 
-READ8_DEVICE_HANDLER(via_ca2_r);
-WRITE8_DEVICE_HANDLER(via_ca2_w);
+READ_LINE_DEVICE_HANDLER(via_ca2_r);
+WRITE_LINE_DEVICE_HANDLER(via_ca2_w);
 
-READ8_DEVICE_HANDLER(via_cb1_r);
-WRITE8_DEVICE_HANDLER(via_cb1_w);
+READ_LINE_DEVICE_HANDLER(via_cb1_r);
+WRITE_LINE_DEVICE_HANDLER(via_cb1_w);
 
-READ8_DEVICE_HANDLER(via_cb2_r);
-WRITE8_DEVICE_HANDLER(via_cb2_w);
+READ_LINE_DEVICE_HANDLER(via_cb2_r);
+WRITE_LINE_DEVICE_HANDLER(via_cb2_w);
 
 #endif /* __6522VIA_H__ */

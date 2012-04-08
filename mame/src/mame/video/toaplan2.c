@@ -144,7 +144,7 @@ Pipi & Bibis     | Fix Eight        | V-Five           | Snow Bros. 2     |
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/3812intf.h"
 #include "includes/toaplan2.h"
@@ -1023,7 +1023,7 @@ static void toaplan2_scroll_reg_data_w(running_machine *machine, offs_t offset, 
 					if ((toaplan2_sub_cpu == CPU_2_Z80) && (data == 3))
 					{
 						/* HACK! When tilted, sound CPU needs to be reset. */
-						const device_config *ym = devtag_get_device(machine, "ymsnd");
+						running_device *ym = devtag_get_device(machine, "ymsnd");
 
 						if (ym && (sound_get_type(ym) == SOUND_YM3812))
 						{

@@ -7,7 +7,7 @@
     with the sample data.  This allows each of the four voices on the chip
     to play a sample from a different bank at the same time. */
 
-#include "driver.h"
+#include "emu.h"
 #include "nmk112.h"
 
 #define TABLESIZE   0x100
@@ -30,7 +30,7 @@ struct _nmk112_state
     INLINE FUNCTIONS
 *****************************************************************************/
 
-INLINE nmk112_state *get_safe_token( const device_config *device )
+INLINE nmk112_state *get_safe_token( running_device *device )
 {
 	assert(device != NULL);
 	assert(device->token != NULL);
@@ -39,11 +39,11 @@ INLINE nmk112_state *get_safe_token( const device_config *device )
 	return (nmk112_state *)device->token;
 }
 
-INLINE const nmk112_interface *get_interface( const device_config *device )
+INLINE const nmk112_interface *get_interface( running_device *device )
 {
 	assert(device != NULL);
 	assert((device->type == NMK112));
-	return (const nmk112_interface *) device->static_config;
+	return (const nmk112_interface *) device->baseconfig().static_config;
 }
 
 /*****************************************************************************

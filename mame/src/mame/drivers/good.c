@@ -30,14 +30,18 @@ Silk screened under the roms:
 voice.rom - VOICE ROM
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
 
 
-typedef struct _good_state good_state;
-struct _good_state
+class good_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, good_state(machine)); }
+
+	good_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT16 *  bg_tilemapram;
 	UINT16 *  fg_tilemapram;

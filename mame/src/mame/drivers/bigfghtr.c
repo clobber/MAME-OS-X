@@ -108,7 +108,7 @@ Notes:
 
 
 **********************************************************************/
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
 #include "deprecat.h"
@@ -117,9 +117,13 @@ Notes:
 #include "sound/3812intf.h"
 
 
-typedef struct _bigfghtr_state bigfghtr_state;
-struct _bigfghtr_state
+class bigfghtr_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bigfghtr_state(machine)); }
+
+	bigfghtr_state(running_machine &machine) { }
+
 	/* video-related */
 	UINT16 *      text_videoram;
 	UINT16 *      bg_videoram;

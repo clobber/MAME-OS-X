@@ -49,13 +49,13 @@ Bugs:
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 
 #include "deprecat.h"
-#include "megadriv.h"
-#include "segamsys.h"
+#include "includes/megadriv.h"
+#include "includes/segamsys.h"
 
 #define MASTER_CLOCK		53693100
 

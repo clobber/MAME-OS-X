@@ -40,7 +40,12 @@ endif
 #-------------------------------------------------
 
 ifndef OSD
+ifeq ($(OS),Windows_NT)
 OSD = windows
+TARGETOS = win32
+else
+OSD = sdl
+endif
 endif
 
 ifndef CROSS_BUILD_OSD
@@ -56,11 +61,77 @@ endif
 #-------------------------------------------------
 
 ifndef TARGETOS
-ifeq ($(OSD),windows)
+
+ifeq ($(OS),Windows_NT)
 TARGETOS = win32
 else
+
+ifneq ($(CROSSBUILD),1)
+
+ifneq ($(OS2_SHELL),)
+TARGETOS = os2
+else
+
+UNAME = $(shell uname -a)
+
+ifeq ($(firstword $(filter Linux,$(UNAME))),Linux)
 TARGETOS = unix
 endif
+ifeq ($(firstword $(filter Solaris,$(UNAME))),Solaris)
+TARGETOS = solaris
+endif
+ifeq ($(firstword $(filter FreeBSD,$(UNAME))),FreeBSD)
+TARGETOS = freebsd
+endif
+ifeq ($(firstword $(filter OpenBSD,$(UNAME))),OpenBSD)
+TARGETOS = openbsd
+endif
+ifeq ($(firstword $(filter Darwin,$(UNAME))),Darwin)
+TARGETOS = macosx
+endif
+
+ifndef TARGETOS
+$(error Unable to detect TARGETOS from uname -a: $(UNAME))
+endif
+
+# Autodetect PTR64
+ifndef PTR64
+ifeq ($(firstword $(filter x86_64,$(UNAME))),x86_64)
+PTR64 = 1
+endif
+ifeq ($(firstword $(filter amd64,$(UNAME))),amd64)
+PTR64 = 1
+endif
+endif
+
+# Autodetect BIGENDIAN 
+# MacOSX
+ifndef BIGENDIAN
+ifneq (,$(findstring Power,$(UNAME)))
+BIGENDIAN=1
+endif
+# Linux
+ifneq (,$(findstring ppc,$(UNAME)))
+BIGENDIAN=1
+endif
+endif # BIGENDIAN
+
+endif # OS/2
+endif # CROSS_BUILD	
+endif # Windows_NT
+
+endif # TARGET_OS
+
+
+ifeq ($(TARGETOS),win32)
+
+# Autodetect PTR64
+ifndef PTR64
+ifneq (,$(findstring mingw64-w64,$(PATH)))
+PTR64=1
+endif
+endif
+
 endif
 
 
@@ -108,6 +179,10 @@ endif
 # a native backend
 # FORCE_DRC_C_BACKEND = 1
 
+# uncomment next line to build using unix-style libsdl on Mac OS X
+# (vs. the native framework port).  Normal users should not enable this.
+# MACOSX_USE_LIBSDL = 1
+
 
 
 #-------------------------------------------------
@@ -142,9 +217,6 @@ BUILD_ZLIB = 1
 # specify optimization level or leave commented to use the default
 # (default is OPTIMIZE = 3 normally, or OPTIMIZE = 0 with symbols)
 # OPTIMIZE = 3
-
-# experimental: uncomment to compile everything as C++ for stricter type checking
-# CPP_COMPILE = 1
 
 
 ###########################################################################
@@ -195,7 +267,7 @@ endif
 # compiler, linker and utilities
 AR = @ar
 CC = @gcc
-LD = @gcc
+LD = @g++
 MD = -mkdir$(EXE)
 RM = @rm -f
 
@@ -205,14 +277,26 @@ RM = @rm -f
 # form the name of the executable
 #-------------------------------------------------
 
-# debug builds just get the 'd' suffix and nothing more
-ifdef DEBUG
-DEBUGSUFFIX = d
+# reset all internal prefixes/suffixes
+PREFIXSDL =
+SUFFIX64 =
+SUFFIXDEBUG =
+
+# Windows SDL builds get an SDL prefix
+ifeq ($(OSD),sdl)
+ifeq ($(TARGETOS),win32)
+PREFIXSDL = sdl
+endif
 endif
 
-# cpp builds get a 'pp' suffix
-ifdef CPP_COMPILE
-CPPSUFFIX = pp
+# 64-bit builds get a '64' suffix
+ifeq ($(PTR64),1)
+SUFFIX64 = 64
+endif
+
+# debug builds just get the 'd' suffix and nothing more
+ifdef DEBUG
+SUFFIXDEBUG = d
 endif
 
 # the name is just 'target' if no subtarget; otherwise it is
@@ -223,8 +307,8 @@ else
 NAME = $(TARGET)$(SUBTARGET)
 endif
 
-# fullname is prefix+name+suffix+debugsuffix
-FULLNAME = $(PREFIX)$(NAME)$(CPPSUFFIX)$(SUFFIX)$(DEBUGSUFFIX)
+# fullname is prefix+name+suffix+suffix64+suffixdebug
+FULLNAME = $(PREFIX)$(PREFIXSDL)$(NAME)$(SUFFIX)$(SUFFIX64)$(SUFFIXDEBUG)
 
 # add an EXE suffix to get the final emulator name
 EMULATOR = $(FULLNAME)$(EXE)
@@ -258,7 +342,7 @@ DEFS = -DCRLF=3
 endif
 
 # map the INLINE to something digestible by GCC
-DEFS += -DINLINE="static __inline__"
+DEFS += -DINLINE="static inline"
 
 # define LSB_FIRST if we are a little-endian target
 ifndef BIGENDIAN
@@ -266,7 +350,7 @@ DEFS += -DLSB_FIRST
 endif
 
 # define PTR64 if we are a 64-bit target
-ifdef PTR64
+ifeq ($(PTR64),1)
 DEFS += -DPTR64
 endif
 
@@ -289,25 +373,24 @@ endif
 # CCOMFLAGS are common flags
 # CONLYFLAGS are flags only used when compiling for C
 # CPPONLYFLAGS are flags only used when compiling for C++
+# COBJFLAGS are flags only used when compiling for Objective-C(++)
 #-------------------------------------------------
 
 # start with empties for everything
 CCOMFLAGS =
 CONLYFLAGS =
+COBJFLAGS =
 CPPONLYFLAGS =
 
 # CFLAGS is defined based on C or C++ targets
 # (remember, expansion only happens when used, so doing it here is ok)
-ifdef CPP_COMPILE
 CFLAGS = $(CCOMFLAGS) $(CPPONLYFLAGS)
-else
-CFLAGS = $(CCOMFLAGS) $(CONLYFLAGS)
-endif
 
 # we compile C-only to C89 standard with GNU extensions
 # we compile C++ code to C++98 standard with GNU extensions
 CONLYFLAGS += -std=gnu89
 CPPONLYFLAGS += -x c++ -std=gnu++98
+COBJFLAGS += -x objective-c++
 
 # this speeds it up a bit by piping between the preprocessor/compiler/assembler
 CCOMFLAGS += -pipe
@@ -333,7 +416,15 @@ CCOMFLAGS += -O$(OPTIMIZE)
 # if we are optimizing, include optimization options
 # and make all errors into warnings
 ifneq ($(OPTIMIZE),0)
+ifneq ($(TARGETOS),os2)
+ifndef NOWERROR
 CCOMFLAGS += -Werror -fno-strict-aliasing $(ARCHOPTS)
+else
+CCOMFLAGS += -fno-strict-aliasing $(ARCHOPTS)
+endif
+else
+CCOMFLAGS += -fno-strict-aliasing $(ARCHOPTS)
+endif
 endif
 
 # add a basic set of warnings
@@ -351,11 +442,9 @@ CONLYFLAGS += \
 	-Wbad-function-cast \
 	-Wstrict-prototypes
 
-# this warning is not supported on the os2 compilers
-ifneq ($(TARGETOS),os2)
-CONLYFLAGS += -Wdeclaration-after-statement
-endif
-
+# warnings only applicable to OBJ-C compiles
+COBJFLAGS += \
+	-Wpointer-arith 
 
 
 #-------------------------------------------------
@@ -365,7 +454,6 @@ endif
 # add core include paths
 CCOMFLAGS += \
 	-I$(SRC)/$(TARGET) \
-	-I$(SRC)/$(TARGET)/includes \
 	-I$(OBJ)/$(TARGET)/layout \
 	-I$(SRC)/emu \
 	-I$(OBJ)/emu \
@@ -375,6 +463,19 @@ CCOMFLAGS += \
 	-I$(SRC)/osd/$(OSD) \
 
 
+#-------------------------------------------------
+# archiving flags
+#-------------------------------------------------
+# Default to something reasonable for all platforms
+ARFLAGS = -cr
+# Deal with macosx brain damage if COMMAND_MODE is in
+# the luser's environment:
+ifeq ($(TARGETOS),macosx)
+ifeq ($(COMMAND_MODE),"legacy")
+ARFLAGS = -crs
+endif
+endif
+
 
 #-------------------------------------------------
 # linking flags
@@ -382,7 +483,14 @@ CCOMFLAGS += \
 
 # LDFLAGS are used generally; LDFLAGSEMULATOR are additional
 # flags only used when linking the core emulator
+LDFLAGS =
+ifneq ($(TARGETOS),macosx)
+ifneq ($(TARGETOS),os2)
+ifneq ($(TARGETOS),solaris)
 LDFLAGS = -Wl,--warn-common
+endif
+endif
+endif
 LDFLAGSEMULATOR =
 
 # add profiling information for the linker
@@ -393,7 +501,9 @@ endif
 # strip symbols and other metadata in non-symbols and non profiling builds
 ifndef SYMBOLS
 ifndef PROFILE
+ifneq ($(TARGETOS),macosx)
 LDFLAGS += -s
+endif
 endif
 endif
 
@@ -439,7 +549,7 @@ VERSIONOBJ = $(OBJ)/version.o
 LIBS = 
 
 # add expat XML library
-ifdef BUILD_EXPAT
+ifeq ($(BUILD_EXPAT),1)
 CCOMFLAGS += -I$(SRC)/lib/expat
 EXPAT = $(OBJ)/libexpat.a
 else
@@ -448,7 +558,7 @@ EXPAT =
 endif
 
 # add ZLIB compression library
-ifdef BUILD_ZLIB
+ifeq ($(BUILD_ZLIB),1)
 CCOMFLAGS += -I$(SRC)/lib/zlib
 ZLIB = $(OBJ)/libz.a
 else
@@ -456,14 +566,17 @@ LIBS += -lz
 ZLIB =
 endif
 
-
+# add SoftFloat floating point emulation library
+SOFTFLOAT = $(OBJ)/libsoftfloat.a
 
 #-------------------------------------------------
-# 'all' target needs to go here, before the 
+# 'default' target needs to go here, before the 
 # include files which define additional targets
 #-------------------------------------------------
 
-all: maketree buildtools emulator tools
+default: maketree buildtools emulator
+
+all: default tools
 
 
 
@@ -493,7 +606,7 @@ include $(SRC)/build/build.mak
 include $(SRC)/tools/tools.mak
 
 # combine the various definitions to one
-CDEFS = $(DEFS) $(COREDEFS) $(SOUNDDEFS)
+CDEFS = $(DEFS)
 
 
 
@@ -521,6 +634,11 @@ ifdef MAP
 	$(RM) $(FULLNAME).map
 endif
 
+checkautodetect:
+	@echo TARGETOS=$(TARGETOS) 
+	@echo PTR64=$(PTR64) 
+	@echo BIGENDIAN=$(BIGENDIAN) 
+	@echo UNAME="$(UNAME)"
 
 
 #-------------------------------------------------
@@ -538,9 +656,10 @@ $(sort $(OBJDIRS)):
 
 ifndef EXECUTABLE_DEFINED
 
-$(EMULATOR): $(VERSIONOBJ) $(DRVLIBS) $(LIBOSD) $(LIBEMU) $(LIBCPU) $(LIBDASM) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(ZLIB) $(LIBOCORE) $(RESFILE)
 # always recompile the version string
-	$(CC) $(CDEFS) $(CFLAGS) -c $(SRC)/version.c -o $(VERSIONOBJ)
+$(VERSIONOBJ): $(DRVLIBS) $(LIBOSD) $(LIBEMU) $(LIBCPU) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(ZLIB) $(SOFTFLOAT) $(LIBOCORE) $(RESFILE)
+
+$(EMULATOR): $(VERSIONOBJ) $(DRVLIBS) $(LIBOSD) $(LIBEMU) $(LIBCPU) $(LIBDASM) $(LIBSOUND) $(LIBUTIL) $(EXPAT) $(SOFTFLOAT) $(ZLIB) $(LIBOCORE) $(RESFILE)
 	@echo Linking $@...
 	$(LD) $(LDFLAGS) $(LDFLAGSEMULATOR) $^ $(LIBS) -o $@
 
@@ -576,10 +695,11 @@ $(OBJ)/%.fh: $(SRC)/%.png $(PNG2BDC) $(FILE2STR)
 $(OBJ)/%.a:
 	@echo Archiving $@...
 	$(RM) $@
-	$(AR) -cr $@ $^
+	$(AR) $(ARFLAGS) $@ $^
 
 ifeq ($(TARGETOS),macosx)
 $(OBJ)/%.o: $(SRC)/%.m | $(OSPREBUILD)
 	@echo Objective-C compiling $<...
-	$(CC) $(CDEFS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CDEFS) $(COBJFLAGS) $(CCOMFLAGS) -c $< -o $@
 endif
+

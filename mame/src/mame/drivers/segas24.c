@@ -331,14 +331,13 @@ Notes:
    just made a copy & renamed them for now to avoid any conflicts
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "deprecat.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/ym2151.h"
 #include "sound/dac.h"
 #include "sound/2151intf.h"
 #include "video/segaic24.h"
-#include "includes/system16.h"
 #include "includes/segas24.h"
 
 #define MASTER_CLOCK		XTAL_20MHz
@@ -700,7 +699,7 @@ static void reset_reset(running_machine *machine)
 static void resetcontrol_w(const address_space *space, UINT8 data)
 {
 	resetcontrol = data;
-	logerror("Reset control %02x ('%s':%x)\n", resetcontrol, space->cpu->tag, cpu_get_pc(space->cpu));
+	logerror("Reset control %02x ('%s':%x)\n", resetcontrol, space->cpu->tag(), cpu_get_pc(space->cpu));
 	reset_reset(space->machine);
 }
 
@@ -757,7 +756,7 @@ static WRITE16_HANDLER( mlatch_w )
 		int i;
 		UINT8 mxor = 0;
 		if(!mlatch_table) {
-			logerror("Protection: magic latch accessed but no table loaded (%s:%x)\n", space->cpu->tag, cpu_get_pc(space->cpu));
+			logerror("Protection: magic latch accessed but no table loaded (%s:%x)\n", space->cpu->tag(), cpu_get_pc(space->cpu));
 			return;
 		}
 
@@ -768,9 +767,9 @@ static WRITE16_HANDLER( mlatch_w )
 				if(mlatch & (1<<i))
 					mxor |= 1 << mlatch_table[i];
 			mlatch = data ^ mxor;
-			logerror("Magic latching %02x ^ %02x as %02x (%s:%x)\n", data & 0xff, mxor, mlatch, space->cpu->tag, cpu_get_pc(space->cpu));
+			logerror("Magic latching %02x ^ %02x as %02x (%s:%x)\n", data & 0xff, mxor, mlatch, space->cpu->tag(), cpu_get_pc(space->cpu));
 		} else {
-			logerror("Magic latch reset (%s:%x)\n", space->cpu->tag, cpu_get_pc(space->cpu));
+			logerror("Magic latch reset (%s:%x)\n", space->cpu->tag(), cpu_get_pc(space->cpu));
 			mlatch = 0x00;
 		}
 	}
@@ -790,7 +789,7 @@ static UINT16 irq_timera;
 static UINT8  irq_timerb;
 static UINT8  irq_allow0, irq_allow1;
 static int    irq_timer_pend0, irq_timer_pend1, irq_yms, irq_vblank, irq_sprite;
-static const device_config *irq_timer, *irq_timer_clear;
+static running_device *irq_timer, *irq_timer_clear;
 
 static TIMER_DEVICE_CALLBACK( irq_timer_cb )
 {
@@ -936,7 +935,7 @@ static INTERRUPT_GEN(irq_vbl)
 	}
 }
 
-static void irq_ym(const device_config *device, int irq)
+static void irq_ym(running_device *device, int irq)
 {
 	irq_yms = irq;
 	cputag_set_input_line(device->machine, "maincpu", IRQ_YM2151+1, irq_yms && (irq_allow0 & (1 << IRQ_YM2151)) ? ASSERT_LINE : CLEAR_LINE);

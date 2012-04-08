@@ -181,7 +181,7 @@ ae500w07.ad1 - M6295 Samples (23c4001)
 
 */
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "machine/eeprom.h"
 #include "includes/tecmosys.h"
@@ -864,7 +864,7 @@ static VIDEO_UPDATE(deroon)
 */
 
 
-static void sound_irq(const device_config *device, int irq)
+static void sound_irq(running_device *device, int irq)
 {
 	/* IRQ */
 	cputag_set_input_line(device->machine, "audiocpu", 0, irq ? ASSERT_LINE : CLEAR_LINE);

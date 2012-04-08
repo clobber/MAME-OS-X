@@ -22,7 +22,7 @@ Credits:
 
 ******************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
@@ -75,12 +75,12 @@ enum
 	kTalkTrack, kCrashTrack
 };
 
-static void tape_set_audio( const device_config *samples, int track, int bOn )
+static void tape_set_audio( running_device *samples, int track, int bOn )
 {
 	sample_set_volume(samples, track, bOn ? 1.0 : 0.0 );
 }
 
-static void tape_set_motor( const device_config *samples, int bOn )
+static void tape_set_motor( running_device *samples, int bOn )
 {
 	if( bOn )
 	{

@@ -71,7 +71,7 @@
 
 ***************************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "sound/sn76496.h"
@@ -418,7 +418,7 @@ static MACHINE_DRIVER_START( gberet )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("snsnd", SN76489, MASTER_CLOCK/12) /* type verified on real and bootleg pcb */
+	MDRV_SOUND_ADD("snsnd", SN76489A, MASTER_CLOCK/12) /* type verified on real and bootleg pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

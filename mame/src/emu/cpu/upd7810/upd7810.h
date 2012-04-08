@@ -3,7 +3,6 @@
 #ifndef __UPD7810_H__
 #define __UPD7810_H__
 
-#include "cpuintrf.h"
 
 /*
   all types have internal ram at 0xff00-0xffff
@@ -31,7 +30,7 @@ typedef enum
  * It will be called whenever an output signal changes or a new
  * input line state is to be sampled.
  */
-typedef int (*upd7810_io_callback)(const device_config *device, int ioline, int state);
+typedef int (*upd7810_io_callback)(running_device *device, int ioline, int state);
 
 // use it as reset parameter in the Machine struct
 typedef struct {
@@ -69,6 +68,7 @@ enum
 /* IRQ lines */
 #define UPD7810_INTF1		0
 #define UPD7810_INTF2		1
+#define UPD7810_INTF0		2
 #define UPD7810_INTFE1      4
 
 CPU_GET_INFO( upd7810 );

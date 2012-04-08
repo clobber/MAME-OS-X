@@ -338,7 +338,7 @@ C - uses sub board with support for player 3 and 4 controls
 
 ***********************************************************************/
 
-#include "driver.h"
+#include "emu.h"
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/2151intf.h"
@@ -1055,7 +1055,7 @@ GFXDECODE_END
 
 
 
-static void namcos1_sound_interrupt( const device_config *device, int irq )
+static void namcos1_sound_interrupt( running_device *device, int irq )
 {
 	cputag_set_input_line(device->machine, "audiocpu", M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }

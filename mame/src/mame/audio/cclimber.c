@@ -1,4 +1,4 @@
-#include "driver.h"
+#include "emu.h"
 #include "sound/ay8910.h"
 #include "sound/samples.h"
 #include "includes/cclimber.h"
@@ -27,7 +27,7 @@ static void cclimber_play_sample(running_machine *machine, int start,int freq,in
 	int len;
 	int romlen = memory_region_length(machine, "samples");
 	const UINT8 *rom = memory_region(machine, "samples");
-	const device_config *samples = devtag_get_device(machine, "samples");
+	running_device *samples = devtag_get_device(machine, "samples");
 
 
 	if (!rom) return;

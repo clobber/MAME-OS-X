@@ -1,7 +1,11 @@
 
-typedef struct _gotya_state gotya_state;
-struct _gotya_state
+class gotya_state
 {
+public:
+	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, gotya_state(machine)); }
+
+	gotya_state(running_machine &machine) { }
+
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  videoram2;
@@ -17,7 +21,7 @@ struct _gotya_state
 	int      theme_playing;
 
 	/* devices */
-	const device_config *samples;
+	running_device *samples;
 };
 
 
