@@ -24,6 +24,7 @@
 
 #import "MameTimingController.h"
 #import "MameController.h"
+#include "uiinput.h"
 #include <mach/mach_time.h>
 #import "JRLog.h"
 

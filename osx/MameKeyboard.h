@@ -13,6 +13,7 @@
 
 @class DDHidKeyboard;
 
+
 @interface MameKeyboard : MameInputDevice
 {
     uint32_t mKeyStates[MameKeyboardMaxKeys];

@@ -77,10 +77,11 @@ static INT32 mouseButtonGetState(void *device_internal, void *item_internal)
         
         NSString * name = [self format: @"Button %d", i+1];
         int * buttonState = &mButtons[i];
+
         input_device_item_add(device,
                               [name UTF8String],
                               buttonState,
-                              ITEM_ID_BUTTON1 + i,
+                              (input_item_id)(ITEM_ID_BUTTON1 + i),
                               mouseButtonGetState);
     }
 }

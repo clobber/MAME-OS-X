@@ -23,7 +23,7 @@
  */
 
 #import <Cocoa/Cocoa.h>
-#include "mame.h"
+#include "emu.h"
 #include <emu/emuopts.h>
 
 

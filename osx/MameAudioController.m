@@ -442,7 +442,7 @@ OSStatus static MyRenderer(void	* inRefCon,
     else
     {
         bytesToRead = bytesAvailable;
-        bzero(ioData->mBuffers[0].mData + bytesToRead,
+        bzero((char*)ioData->mBuffers[0].mData + bytesToRead,
               ioData->mBuffers[0].mDataByteSize - bytesToRead);
         mUnderflows++;
     }

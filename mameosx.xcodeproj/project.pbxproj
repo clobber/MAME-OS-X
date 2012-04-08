@@ -2570,7 +2570,7 @@
 		5530FE110ACA42270083BB04 /* express.h in Headers */ = {isa = PBXBuildFile; fileRef = 5530FE000ACA42270083BB04 /* express.h */; };
 		5530FE130ACA42270083BB04 /* textbuf.h in Headers */ = {isa = PBXBuildFile; fileRef = 5530FE020ACA42270083BB04 /* textbuf.h */; };
 		5533C2FE0D0A7D6D0039BB42 /* MameJoystick.h in Headers */ = {isa = PBXBuildFile; fileRef = 5533C2FC0D0A7D6D0039BB42 /* MameJoystick.h */; };
-		5533C2FF0D0A7D6D0039BB42 /* MameJoystick.m in Sources */ = {isa = PBXBuildFile; fileRef = 5533C2FD0D0A7D6D0039BB42 /* MameJoystick.m */; };
+		5533C2FF0D0A7D6D0039BB42 /* MameJoystick.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5533C2FD0D0A7D6D0039BB42 /* MameJoystick.mm */; };
 		5533C4540D0B41420039BB42 /* Vector.png in Resources */ = {isa = PBXBuildFile; fileRef = 5533C4530D0B41420039BB42 /* Vector.png */; };
 		5533C4550D0B41420039BB42 /* Vector.png in Resources */ = {isa = PBXBuildFile; fileRef = 5533C4530D0B41420039BB42 /* Vector.png */; };
 		5537EF490BBEACC2001A390F /* FrameMovieExporter.h in Headers */ = {isa = PBXBuildFile; fileRef = 5537EF470BBEACC2001A390F /* FrameMovieExporter.h */; };
@@ -2658,7 +2658,7 @@
 		5567B2AD0BBA328C00EA2072 /* liblocalexpat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 556A49BB0AA4F86600602CC5 /* liblocalexpat.a */; };
 		5567B2AE0BBA329000EA2072 /* liblocalzlib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 556A4A010AA4F8EC00602CC5 /* liblocalzlib.a */; };
 		5567B2BA0BBA32E300EA2072 /* libosd.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 55BEF9F00AEC618D00357340 /* libosd.a */; };
-		5567B2E40BBA336A00EA2072 /* osd_core_osx.m in Sources */ = {isa = PBXBuildFile; fileRef = 5567B2E30BBA336A00EA2072 /* osd_core_osx.m */; };
+		5567B2E40BBA336A00EA2072 /* osd_core_osx.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5567B2E30BBA336A00EA2072 /* osd_core_osx.mm */; };
 		5567B3630BBA347C00EA2072 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 556A4ACF0AA4FBA000602CC5 /* Foundation.framework */; };
 		5567B3EB0BBA3BE100EA2072 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5567B3EA0BBA3BE100EA2072 /* Carbon.framework */; };
 		5567B4C20BBB34A000EA2072 /* libutil.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5567B25F0BBA322700EA2072 /* libutil.a */; };
@@ -2909,7 +2909,7 @@
 		559020140CD396A000B34B42 /* emupal.h in Headers */ = {isa = PBXBuildFile; fileRef = 559020120CD396A000B34B42 /* emupal.h */; };
 		559020B70CD3A0BD00B34B42 /* emuopts.c in Sources */ = {isa = PBXBuildFile; fileRef = 5567B5200BBB39EE00EA2072 /* emuopts.c */; };
 		559020B80CD3A0BE00B34B42 /* emuopts.c in Sources */ = {isa = PBXBuildFile; fileRef = 5567B5200BBB39EE00EA2072 /* emuopts.c */; };
-		559020BD0CD3A0E400B34B42 /* MameConfiguration.m in Sources */ = {isa = PBXBuildFile; fileRef = 55BB89340AB90EAB00B7933B /* MameConfiguration.m */; };
+		559020BD0CD3A0E400B34B42 /* MameConfiguration.mm in Sources */ = {isa = PBXBuildFile; fileRef = 55BB89340AB90EAB00B7933B /* MameConfiguration.mm */; };
 		5590221F0CD3D55900B34B42 /* MameInputDevice.h in Headers */ = {isa = PBXBuildFile; fileRef = 5590221D0CD3D55900B34B42 /* MameInputDevice.h */; };
 		559022200CD3D55900B34B42 /* MameInputDevice.m in Sources */ = {isa = PBXBuildFile; fileRef = 5590221E0CD3D55900B34B42 /* MameInputDevice.m */; };
 		5590237F0CD3E3FE00B34B42 /* MameKeyboard.h in Headers */ = {isa = PBXBuildFile; fileRef = 5590237D0CD3E3FE00B34B42 /* MameKeyboard.h */; };
@@ -6353,7 +6353,7 @@
 		5530FE010ACA42270083BB04 /* textbuf.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = textbuf.c; sourceTree = "<group>"; };
 		5530FE020ACA42270083BB04 /* textbuf.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = textbuf.h; sourceTree = "<group>"; };
 		5533C2FC0D0A7D6D0039BB42 /* MameJoystick.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = MameJoystick.h; sourceTree = "<group>"; };
-		5533C2FD0D0A7D6D0039BB42 /* MameJoystick.m */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = MameJoystick.m; sourceTree = "<group>"; };
+		5533C2FD0D0A7D6D0039BB42 /* MameJoystick.mm */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = MameJoystick.mm; sourceTree = "<group>"; };
 		5533C4530D0B41420039BB42 /* Vector.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Vector.png; sourceTree = "<group>"; };
 		5537EF470BBEACC2001A390F /* FrameMovieExporter.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = FrameMovieExporter.h; sourceTree = "<group>"; };
 		5537EF480BBEACC2001A390F /* FrameMovieExporter.m */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.objc; path = FrameMovieExporter.m; sourceTree = "<group>"; };
@@ -6386,7 +6386,7 @@
 		5548ECDE0ABCB463008D1F74 /* MameFileManagerTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MameFileManagerTest.m; sourceTree = "<group>"; };
 		5548EDCA0ABE3CEF008D1F74 /* file.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = file.txt; sourceTree = "<group>"; };
 		554E945A0C6439010093B617 /* file2str.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = file2str.c; sourceTree = "<group>"; };
-		554E945B0C6439010093B617 /* png2bdc.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = png2bdc.c; sourceTree = "<group>"; };
+		554E945B0C6439010093B617 /* png2bdc.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; path = png2bdc.c; sourceTree = "<group>"; };
 		554E94860C64397A0093B617 /* astring.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = astring.c; sourceTree = "<group>"; };
 		554E94870C64397A0093B617 /* astring.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = astring.h; sourceTree = "<group>"; };
 		554E94B80C643D420093B617 /* empty.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; name = empty.c; path = drivers/empty.c; sourceTree = "<group>"; };
@@ -6411,7 +6411,7 @@
 		55662A010C5D2CA700B5EF08 /* info.tiff */ = {isa = PBXFileReference; lastKnownFileType = image.tiff; path = info.tiff; sourceTree = "<group>"; };
 		5567B2420BBA30C600EA2072 /* png2bdc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = png2bdc; sourceTree = BUILT_PRODUCTS_DIR; };
 		5567B25F0BBA322700EA2072 /* libutil.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libutil.a; sourceTree = BUILT_PRODUCTS_DIR; };
-		5567B2E30BBA336A00EA2072 /* osd_core_osx.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = osd_core_osx.m; sourceTree = "<group>"; };
+		5567B2E30BBA336A00EA2072 /* osd_core_osx.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = osd_core_osx.mm; sourceTree = "<group>"; };
 		5567B3EA0BBA3BE100EA2072 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = /System/Library/Frameworks/Carbon.framework; sourceTree = "<absolute>"; };
 		5567B5200BBB39EE00EA2072 /* emuopts.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = emuopts.c; sourceTree = "<group>"; };
 		5567C3630BBC56D100EA2072 /* MameOSXSharkEvents.text */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = MameOSXSharkEvents.text; sourceTree = "<group>"; };
@@ -6863,14 +6863,14 @@
 		55BB74A60BB5D4ED00B857B3 /* avcomp.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = avcomp.h; sourceTree = "<group>"; };
 		55BB74A70BB5D4ED00B857B3 /* aviio.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = aviio.c; sourceTree = "<group>"; };
 		55BB74A80BB5D4ED00B857B3 /* aviio.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = aviio.h; sourceTree = "<group>"; };
-		55BB74A90BB5D4ED00B857B3 /* bitmap.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = bitmap.c; sourceTree = "<group>"; };
-		55BB74AA0BB5D4ED00B857B3 /* bitmap.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = bitmap.h; sourceTree = "<group>"; };
+		55BB74A90BB5D4ED00B857B3 /* bitmap.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; path = bitmap.c; sourceTree = "<group>"; };
+		55BB74AA0BB5D4ED00B857B3 /* bitmap.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = bitmap.h; sourceTree = "<group>"; };
 		55BB74AB0BB5D4ED00B857B3 /* cdrom.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = cdrom.c; sourceTree = "<group>"; };
 		55BB74AC0BB5D4EE00B857B3 /* cdrom.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = cdrom.h; sourceTree = "<group>"; };
 		55BB74AD0BB5D4EE00B857B3 /* chd.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = chd.c; sourceTree = "<group>"; };
 		55BB74AE0BB5D4EE00B857B3 /* chd.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = chd.h; sourceTree = "<group>"; };
-		55BB74AF0BB5D4EE00B857B3 /* corefile.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = corefile.c; sourceTree = "<group>"; };
-		55BB74B00BB5D4EE00B857B3 /* corefile.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = corefile.h; sourceTree = "<group>"; };
+		55BB74AF0BB5D4EE00B857B3 /* corefile.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; path = corefile.c; sourceTree = "<group>"; };
+		55BB74B00BB5D4EE00B857B3 /* corefile.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = corefile.h; sourceTree = "<group>"; };
 		55BB74B10BB5D4EE00B857B3 /* corestr.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = corestr.c; sourceTree = "<group>"; };
 		55BB74B20BB5D4EE00B857B3 /* corestr.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = corestr.h; sourceTree = "<group>"; };
 		55BB74B30BB5D4EE00B857B3 /* coreutil.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = coreutil.c; sourceTree = "<group>"; };
@@ -6885,8 +6885,8 @@
 		55BB74BC0BB5D4EE00B857B3 /* md5.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = md5.h; sourceTree = "<group>"; };
 		55BB74BD0BB5D4EE00B857B3 /* options.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = options.c; sourceTree = "<group>"; };
 		55BB74BE0BB5D4EE00B857B3 /* options.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = options.h; sourceTree = "<group>"; };
-		55BB74BF0BB5D4EE00B857B3 /* png.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = png.c; sourceTree = "<group>"; };
-		55BB74C00BB5D4EE00B857B3 /* png.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = png.h; sourceTree = "<group>"; };
+		55BB74BF0BB5D4EE00B857B3 /* png.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 30; path = png.c; sourceTree = "<group>"; };
+		55BB74C00BB5D4EE00B857B3 /* png.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 30; path = png.h; sourceTree = "<group>"; };
 		55BB74C10BB5D4EE00B857B3 /* pool.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = pool.c; sourceTree = "<group>"; };
 		55BB74C20BB5D4EE00B857B3 /* pool.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = pool.h; sourceTree = "<group>"; };
 		55BB74C30BB5D4EE00B857B3 /* sha1.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = sha1.c; sourceTree = "<group>"; };
@@ -6898,7 +6898,7 @@
 		55BB74C90BB5D4EE00B857B3 /* xmlfile.c */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.c; path = xmlfile.c; sourceTree = "<group>"; };
 		55BB74CA0BB5D4EE00B857B3 /* xmlfile.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = xmlfile.h; sourceTree = "<group>"; };
 		55BB89330AB90EAB00B7933B /* MameConfiguration.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MameConfiguration.h; sourceTree = "<group>"; };
-		55BB89340AB90EAB00B7933B /* MameConfiguration.m */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = MameConfiguration.m; sourceTree = "<group>"; };
+		55BB89340AB90EAB00B7933B /* MameConfiguration.mm */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = MameConfiguration.mm; sourceTree = "<group>"; };
 		55BE02E10AEC757100357340 /* arkanoid.h */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.c.h; path = arkanoid.h; sourceTree = "<group>"; };
 		55BEF9A00AEC5E5C00357340 /* MameKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = MameKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		55BEF9A10AEC5E5C00357340 /* MameKit-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "MameKit-Info.plist"; path = "../MameKit-Info.plist"; sourceTree = "<group>"; };
@@ -10907,7 +10907,7 @@
 				559025200CD613A100B34B42 /* MameMouse.h */,
 				559025210CD613A100B34B42 /* MameMouse.m */,
 				5533C2FC0D0A7D6D0039BB42 /* MameJoystick.h */,
-				5533C2FD0D0A7D6D0039BB42 /* MameJoystick.m */,
+				5533C2FD0D0A7D6D0039BB42 /* MameJoystick.mm */,
 			);
 			name = Input;
 			sourceTree = "<group>";
@@ -11151,7 +11151,7 @@
 				556A51150AA54C4600602CC5 /* MameView.h */,
 				556A51160AA54C4600602CC5 /* MameView.m */,
 				55BB89330AB90EAB00B7933B /* MameConfiguration.h */,
-				55BB89340AB90EAB00B7933B /* MameConfiguration.m */,
+				55BB89340AB90EAB00B7933B /* MameConfiguration.mm */,
 				55F15B720BC01B6400366C65 /* MameEffectFilter.h */,
 				55F15B730BC01B6400366C65 /* MameEffectFilter.m */,
 				553A072E0AFD9E2700531E1F /* MameFilter.h */,
@@ -11178,7 +11178,7 @@
 				5574492D0AAB28D900EC1423 /* osd_cpu.h */,
 				55CDE8D70AAC93E90021CEA0 /* osd_osx.h */,
 				556A4D890AA514C300602CC5 /* osd_osx.m */,
-				5567B2E30BBA336A00EA2072 /* osd_core_osx.m */,
+				5567B2E30BBA336A00EA2072 /* osd_core_osx.mm */,
 				5537F2BD0BBED584001A390F /* exporter */,
 			);
 			name = osd;
@@ -15611,7 +15611,7 @@
 				55193F620B93F5DC004C0C98 /* NSDictionary+DDHidExtras.m in Sources */,
 				55193F670B93F5EC004C0C98 /* NSXReturnThrowError.m in Sources */,
 				55CA69090BA3CF390012CF7B /* DDHidKeyboard.m in Sources */,
-				5567B2E40BBA336A00EA2072 /* osd_core_osx.m in Sources */,
+				5567B2E40BBA336A00EA2072 /* osd_core_osx.mm in Sources */,
 				5537EF4A0BBEACC2001A390F /* FrameMovieExporter.m in Sources */,
 				5537EF670BBEAD6C001A390F /* FrameCompressor.m in Sources */,
 				5537F0F50BBEB35E001A390F /* FrameReader.m in Sources */,
@@ -15621,11 +15621,11 @@
 				55ACAB880C35435D00F647CE /* sdldir.c in Sources */,
 				55754F460C5E32150035DB3B /* VirtualRingBuffer.m in Sources */,
 				55754F530C5E348B0035DB3B /* DDCustomOpenGLView.m in Sources */,
-				559020BD0CD3A0E400B34B42 /* MameConfiguration.m in Sources */,
+				559020BD0CD3A0E400B34B42 /* MameConfiguration.mm in Sources */,
 				559022200CD3D55900B34B42 /* MameInputDevice.m in Sources */,
 				559023800CD3E3FE00B34B42 /* MameKeyboard.m in Sources */,
 				559025230CD613A100B34B42 /* MameMouse.m in Sources */,
-				5533C2FF0D0A7D6D0039BB42 /* MameJoystick.m in Sources */,
+				5533C2FF0D0A7D6D0039BB42 /* MameJoystick.mm in Sources */,
 				9429994C152A668900A214B6 /* sdlsync_ntc.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -16187,6 +16187,7 @@
 				FRAMEWORK_SEARCH_PATHS_QUOTED_1 = "\"$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks\"";
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "$(HOME)/bin";
@@ -16205,6 +16206,7 @@
 				);
 				FRAMEWORK_SEARCH_PATHS_QUOTED_1 = "\"$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks\"";
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = "$(HOME)/bin";
 				PRODUCT_NAME = png2bdc;
@@ -16218,6 +16220,7 @@
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = /usr/local/lib;
@@ -16231,6 +16234,7 @@
 			buildSettings = {
 				COPY_PHASE_STRIP = YES;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				INSTALL_PATH = /usr/local/lib;
 				PRODUCT_NAME = util;
@@ -16385,6 +16389,7 @@
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = /usr/local/lib;
@@ -16658,6 +16663,7 @@
 				FRAMEWORK_SEARCH_PATHS_QUOTED_1 = "\"$(SYSTEM_LIBRARY_DIR)/PrivateFrameworks\"";
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_INPUT_FILETYPE = sourcecode.cpp.cpp;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				INSTALL_PATH = "$(HOME)/bin";

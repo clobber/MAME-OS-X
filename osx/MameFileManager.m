@@ -27,6 +27,7 @@
 #import "osdepend.h"
 #import "MameFileManager.h"
 #import "JRLog.h"
+#import "osd_osx.h"
 
 struct _osd_file
 {
@@ -167,7 +168,7 @@ static MameFileManager * sInstance = nil;
         return FILERR_FAILURE;
     }
     
-    *file = malloc(sizeof(*file));
+    *file = (osd_file*)malloc(sizeof(*file));
     if (*file == 0)
     {
         fclose(handle);

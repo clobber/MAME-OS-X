@@ -22,79 +22,6 @@ struct _os_code_info
     input_item_id itemId;
 };
 
-static os_code_info sKeyboardTranslationTable[];
-
-@interface MameKeyboard (DDHidKeyboardDelegate)
-
-- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
-               keyDown: (unsigned) usageId;
-
-- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
-                 keyUp: (unsigned) usageId;
-@end
-
-@implementation MameKeyboard
-
-static INT32 keyboardGetState(void *device_internal, void *item_internal)
-{
-    MameKeyboard * keyboard = (MameKeyboard *) device_internal;
-    if (!(*keyboard->mEnabled))
-        return 0;
-    
-    int key = (int) item_internal;
-    return keyboard->mKeyStates[key];
-}
-
-- (void) osd_init: (running_machine*) machine;
-{
-    DDHidKeyboard * keyboard = (DDHidKeyboard *) mDevice;
-    [keyboard setDelegate: self];
-    
-    NSString * name = [NSString stringWithFormat: @"Keyboard %d", mMameTag];
-    JRLogInfo(@"Adding keyboard device: %@", name);
-    input_device * device = input_device_add(machine,
-											 DEVICE_CLASS_KEYBOARD,
-                                             [name UTF8String],
-                                             self);
-    
-    
-    int i = 0;
-    while (sKeyboardTranslationTable[i].name != 0)
-    {
-        os_code_info * currentKey = &sKeyboardTranslationTable[i];
-        input_device_item_add(device,
-                              currentKey->name,
-                              (void *) currentKey->oscode,
-                              currentKey->itemId,
-                              keyboardGetState);
-        
-        i++;
-    }
-    
-    for (i = 0; i < MameKeyboardMaxKeys; i++)
-    {
-        mKeyStates[i] = 0;
-    }
-}
-
-@end
-
-@implementation MameKeyboard (DDHidKeyboardDelegate)
-
-- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
-               keyDown: (unsigned) usageId;
-{
-    mKeyStates[usageId] = 1;
-}
-
-- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
-                 keyUp: (unsigned) usageId;
-{
-    mKeyStates[usageId] = 0;
-}
-
-@end
-
 static os_code_info sKeyboardTranslationTable[] =
 {
     {"1",       kHIDUsage_Keyboard1,    ITEM_ID_1},
@@ -213,5 +140,77 @@ static os_code_info sKeyboardTranslationTable[] =
     // {"R. Command",  kHIDUsage_KeyboardRightGUI,     ITEM_ID_RWIN},
     {"R. Shift",    kHIDUsage_KeyboardRightShift,   ITEM_ID_RSHIFT},
     
-    {0,         0,      0}
+    {0,         0,      (input_item_id)0}
 };
+
+
+@interface MameKeyboard (DDHidKeyboardDelegate)
+
+- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
+               keyDown: (unsigned) usageId;
+
+- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
+                 keyUp: (unsigned) usageId;
+@end
+
+@implementation MameKeyboard
+
+static INT32 keyboardGetState(void *device_internal, void *item_internal)
+{
+    MameKeyboard * keyboard = (MameKeyboard *) device_internal;
+    if (!(*keyboard->mEnabled))
+        return 0;
+    
+    int key = (int) item_internal;
+    return keyboard->mKeyStates[key];
+}
+
+- (void) osd_init: (running_machine*) machine;
+{
+    DDHidKeyboard * keyboard = (DDHidKeyboard *) mDevice;
+    [keyboard setDelegate: self];
+    
+    NSString * name = [NSString stringWithFormat: @"Keyboard %d", mMameTag];
+    JRLogInfo(@"Adding keyboard device: %@", name);
+    input_device * device = input_device_add(machine,
+											 DEVICE_CLASS_KEYBOARD,
+                                             [name UTF8String],
+                                             self);
+    
+    
+    int i = 0;
+    while (sKeyboardTranslationTable[i].name != 0)
+    {
+        os_code_info * currentKey = &sKeyboardTranslationTable[i];
+        input_device_item_add(device,
+                              currentKey->name,
+                              (void *) currentKey->oscode,
+                              currentKey->itemId,
+                              keyboardGetState);
+        
+        i++;
+    }
+    
+    for (i = 0; i < MameKeyboardMaxKeys; i++)
+    {
+        mKeyStates[i] = 0;
+    }
+}
+
+@end
+
+@implementation MameKeyboard (DDHidKeyboardDelegate)
+
+- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
+               keyDown: (unsigned) usageId;
+{
+    mKeyStates[usageId] = 1;
+}
+
+- (void) ddhidKeyboard: (DDHidKeyboard *) keyboard
+                 keyUp: (unsigned) usageId;
+{
+    mKeyStates[usageId] = 0;
+}
+
+@end

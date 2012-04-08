@@ -35,6 +35,9 @@
 #import "MameChud.h"
 #import "MameEffectFilter.h"
 #import <Quartz/Quartz.h>
+#import <mach/mach_host.h>
+#import <IOKit/graphics/IOGraphicsLib.h>
+#import "osd_osx.h"
 
 #define MAME_EXPORT_MOVIE 0
 
@@ -211,7 +214,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
 
 - (void) prepareOpenGL: (NSOpenGLContext *) context;
 {
-    long swapInterval;
+    int swapInterval;
     swapInterval = 1;
     
     [context setValues: &swapInterval
@@ -403,7 +406,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     CFIndex index;
     for (index = 0; index < count; index++)
     {
-        CFDictionaryRef mode = CFArrayGetValueAtIndex(modeList, index);
+        CFDictionaryRef mode = (CFDictionaryRef)CFArrayGetValueAtIndex(modeList, index);
         NSNumber * number = (NSNumber *)
             CFDictionaryGetValue(mode, kCGDisplayBitsPerPixel);
         int modeBitDepth = [number intValue];
@@ -528,7 +531,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // determine the refresh rate of the primary screen
     if (primaryScreen != NULL)
     {
-        const screen_config * config = primaryScreen->inline_config;
+        const screen_config * config = (const screen_config*)primaryScreen->inline_config;
         targetRefresh = ATTOSECONDS_TO_HZ(config->refresh);
     }
     JRLogInfo(@"Target refresh: %.3f", targetRefresh);
@@ -1131,8 +1134,9 @@ NSString * MameExitStatusKey = @"MameExitStatus";
 	mach_msg_type_number_t infoCount;
 	
 	infoCount = HOST_BASIC_INFO_COUNT;
-	host_info(mach_host_self(), HOST_BASIC_INFO, 
-			  (host_info_t)&hostInfo, &infoCount);
+    
+	host_info((host_t)mach_host_self(), (host_flavor_t)HOST_BASIC_INFO, 
+			  (host_info_t)&hostInfo, (mach_msg_type_number_t*)&infoCount);
     if (hostInfo.avail_cpus > 1)
         return YES;
     else
@@ -1284,7 +1288,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     // Y-coordinate from Cocoa to CG screen coordinates.
     NSScreen * screen = [window screen];
     CGDirectDisplayID display =
-        [[[screen deviceDescription] objectForKey: @"NSScreenNumber"] pointerValue];
+        (CGDirectDisplayID)[[[screen deviceDescription] objectForKey: @"NSScreenNumber"] pointerValue];
     
     size_t height = CGDisplayPixelsHigh(display);
     CGPoint midpointInDisplayCoordinates =
@@ -1647,7 +1651,7 @@ enum {
     {
         //    Find out what IOKit knows about this display
         NSDictionary * displayDict = (NSDictionary *)
-            IOCreateDisplayInfoDictionary(displayPort, 0);
+            IODisplayCreateInfoDictionary(displayPort, 0);
             //IODisplayCreateInfoDictionary(displayPort, 0);
         if (displayDict != nil)
         {
