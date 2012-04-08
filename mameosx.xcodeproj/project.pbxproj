@@ -6779,7 +6779,7 @@
 		559025200CD613A100B34B42 /* MameMouse.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = MameMouse.h; sourceTree = "<group>"; };
 		559025210CD613A100B34B42 /* MameMouse.m */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = MameMouse.m; sourceTree = "<group>"; };
 		55917B080B52787C005308AC /* mameosx.pch */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mameosx.pch; sourceTree = "<group>"; };
-		5595EEEF0B1AC6B200631777 /* symbols.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = symbols.c; sourceTree = "<group>"; };
+		5595EEEF0B1AC6B200631777 /* symbols.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = symbols.c; sourceTree = "<group>"; };
 		5595EFA10B1BC84600631777 /* RomAuditWindowController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RomAuditWindowController.h; sourceTree = "<group>"; };
 		5595EFA20B1BC84600631777 /* RomAuditWindowController.m */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.objcpp; fileEncoding = 4; path = RomAuditWindowController.m; sourceTree = "<group>"; };
 		5595EFA80B1BC91200631777 /* English */ = {isa = PBXFileReference; lastKnownFileType = wrapper.nib; name = English; path = English.lproj/RomAudit.nib; sourceTree = "<group>"; };
