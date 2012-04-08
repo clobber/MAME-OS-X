@@ -25,7 +25,8 @@
 #import "MameUtilApp.h"
 
 // MAME headers
-#include "driver.h"
+//#include "driver.h"
+#include "emu.h"
 #include "clifront.h"
 
 @implementation MameUtilApp
@@ -104,7 +105,8 @@
         game = [[arguments objectAtIndex: 0] UTF8String];
     }
     
-    core_options * options = mame_options_init(NULL);
+    //core_options * options = mame_options_init(NULL);
+    core_options * options = mame_options();
     if (_listxml)
         cli_info_listxml(options, game);
     else if (_listfull)
