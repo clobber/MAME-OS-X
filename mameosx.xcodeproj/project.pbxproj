@@ -3465,6 +3465,7 @@
 		948F54C11525A1E000F2ACB1 /* nbmj8900.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F54AF1525A1E000F2ACB1 /* nbmj8900.c */; };
 		948F54ED152613ED00F2ACB1 /* n64.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F54EC152613ED00F2ACB1 /* n64.c */; };
 		948F54EF1526140A00F2ACB1 /* n64.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F54EE1526140A00F2ACB1 /* n64.c */; };
+		94F5C3B515321CBE0023432B /* osdmalloc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 94F5C3B415321CBE0023432B /* osdmalloc.cpp */; };
 		B779812D0FC91135009F0EBB /* m68kops.c in Sources */ = {isa = PBXBuildFile; fileRef = 555590860AF9B51A001ADC6D /* m68kops.c */; };
 		B77981A70FC91B0C009F0EBB /* vbiparse.c in Sources */ = {isa = PBXBuildFile; fileRef = B77981A50FC91B0C009F0EBB /* vbiparse.c */; };
 		B77981A80FC91B0C009F0EBB /* vbiparse.h in Headers */ = {isa = PBXBuildFile; fileRef = B77981A60FC91B0C009F0EBB /* vbiparse.h */; };
@@ -7258,6 +7259,7 @@
 		948F54AF1525A1E000F2ACB1 /* nbmj8900.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = nbmj8900.c; path = mame/video/nbmj8900.c; sourceTree = "<group>"; };
 		948F54EC152613ED00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/machine/n64.c; sourceTree = "<group>"; };
 		948F54EE1526140A00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/video/n64.c; sourceTree = "<group>"; };
+		94F5C3B415321CBE0023432B /* osdmalloc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = osdmalloc.cpp; sourceTree = "<group>"; };
 		B77981A50FC91B0C009F0EBB /* vbiparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = vbiparse.c; sourceTree = "<group>"; };
 		B77981A60FC91B0C009F0EBB /* vbiparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = vbiparse.h; sourceTree = "<group>"; };
 		B793CEBF0FC70E9700E11A30 /* tmsmake.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = tmsmake.c; path = mame/src/emu/cpu/tms57002/tmsmake.c; sourceTree = SOURCE_ROOT; };
@@ -11183,6 +11185,7 @@
 				556A4D890AA514C300602CC5 /* osd_osx.m */,
 				5567B2E30BBA336A00EA2072 /* osd_core_osx.mm */,
 				5537F2BD0BBED584001A390F /* exporter */,
+				94F5C3B415321CBE0023432B /* osdmalloc.cpp */,
 			);
 			name = osd;
 			path = osx;
@@ -15631,6 +15634,7 @@
 				5533C2FF0D0A7D6D0039BB42 /* MameJoystick.mm in Sources */,
 				9429994C152A668900A214B6 /* sdlsync_ntc.c in Sources */,
 				8218679015314D79002986DD /* emualloc.c in Sources */,
+				94F5C3B515321CBE0023432B /* osdmalloc.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

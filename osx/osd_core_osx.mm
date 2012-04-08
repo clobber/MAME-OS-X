@@ -293,10 +293,10 @@ int osd_is_absolute_path(const char *path)
     return result;
 }
 
-void *osd_malloc(size_t size)
-{
-    return malloc(size);
-}
+//void *osd_malloc(size_t size)
+//{
+//    return malloc(size);
+//}
 
 void osd_free(void *ptr)
 {
