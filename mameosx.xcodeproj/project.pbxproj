@@ -16768,6 +16768,7 @@
 					"$(SYMROOT)/layouts",
 				);
 				MY_SCRIPT_DIR = "${SRCROOT}/tools";
+				OTHER_CFLAGS = "";
 				SDKROOT = macosx10.6;
 			};
 			name = Release;
