@@ -150,7 +150,7 @@
                                 command: (NSString *) command;
 {
     int argc = [arguments count];
-    char ** argv = alloca(sizeof(char *) * argc);
+    char ** argv = (char **) alloca(sizeof(char *) * argc); //hope this is okay
     int i;
     for (i = 0; i < argc; i++)
     {
@@ -231,13 +231,13 @@
 
 - (struct option *) firstOption;
 {
-    struct option * options = [mOptionsData mutableBytes];
+    struct option * options = (struct option *) [mOptionsData mutableBytes];
     return options;
 }
 
 - (struct option *) currentOption;
 {
-    struct option * options = [mOptionsData mutableBytes];
+    struct option * options = (struct option *) [mOptionsData mutableBytes];
     return &options[mCurrentOption];
 }
 

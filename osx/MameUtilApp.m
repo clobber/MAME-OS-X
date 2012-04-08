@@ -70,7 +70,7 @@
 
         {@"version",    0,      DDGetoptNoArgument},
         {@"help",       'h',    DDGetoptNoArgument},
-        {nil,           0,      0},
+        {nil,           0,      (DDGetoptArgumentOptions)0},
     };
     [optionsParser addOptionsFromTable: optionTable];
 }
