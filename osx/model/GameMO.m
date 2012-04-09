@@ -64,7 +64,7 @@
 
 + (id) createInContext: (NSManagedObjectContext *) context;
 {
-    [NSEntityDescription insertNewObjectForEntityForName: [self entityName]
+    return [NSEntityDescription insertNewObjectForEntityForName: [self entityName]
                                   inManagedObjectContext: context];
 }
 

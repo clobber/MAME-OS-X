@@ -24,13 +24,6 @@
 
 #import "AOSegmentedControl.h"
 
-#define NormalSegmentedCellStyle 1
-#define FlatSegmentedCellStyle 2
-
-@interface NSSegmentedCell ( PrivateMethod )
-- (void)_setSegmentedCellStyle:(int)style;
-@end
-
 @implementation AOSegmentedControl
 
 - (id) initWithFrame: (NSRect) frame;
@@ -53,7 +46,7 @@
 - (NSCell *)cell
 {
     NSSegmentedCell *cell = [super cell];
-    [cell _setSegmentedCellStyle:FlatSegmentedCellStyle];
+    [cell setSegmentStyle:NSSegmentStyleTexturedRounded];
     return cell;
 }
 

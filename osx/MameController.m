@@ -2149,6 +2149,7 @@ Performs the save action for the application, which is to send the save:
 - (void) importFavoritesFromFile: (NSString *) file;
 {
     NSArray * favoriteNames = [NSArray arrayWithContentsOfFile: file];
+    if(!favoriteNames) favoriteNames = [NSArray array];
     NSManagedObjectContext * context = [self managedObjectContext];
     NSArray * favoriteGames = [GameMO gamesWithShortNames: favoriteNames
                                                 inContext: context];
