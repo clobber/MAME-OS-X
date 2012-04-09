@@ -196,7 +196,6 @@
 		55080B8810AD1D44008142B8 /* cubeqcpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9810AD1D44008142B8 /* cubeqcpu.c */; };
 		55080B8910AD1D44008142B8 /* drcbec.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9910AD1D44008142B8 /* drcbec.c */; };
 		55080B8A10AD1D44008142B8 /* drcbeut.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9A10AD1D44008142B8 /* drcbeut.c */; };
-		55080B8B10AD1D44008142B8 /* drcbex86.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9B10AD1D44008142B8 /* drcbex86.c */; };
 		55080B8C10AD1D44008142B8 /* drccache.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9C10AD1D44008142B8 /* drccache.c */; };
 		55080B8D10AD1D44008142B8 /* drcfe.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9D10AD1D44008142B8 /* drcfe.c */; };
 		55080B8E10AD1D44008142B8 /* drcuml.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080A9E10AD1D44008142B8 /* drcuml.c */; };
@@ -3464,6 +3463,7 @@
 		948F54ED152613ED00F2ACB1 /* n64.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F54EC152613ED00F2ACB1 /* n64.c */; };
 		948F54EF1526140A00F2ACB1 /* n64.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F54EE1526140A00F2ACB1 /* n64.c */; };
 		94F5C3B515321CBE0023432B /* osdmalloc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 94F5C3B415321CBE0023432B /* osdmalloc.cpp */; };
+		94F5C431153258EB0023432B /* drcbex64.c in Sources */ = {isa = PBXBuildFile; fileRef = 94F5C430153258EB0023432B /* drcbex64.c */; };
 		B779812D0FC91135009F0EBB /* m68kops.c in Sources */ = {isa = PBXBuildFile; fileRef = 555590860AF9B51A001ADC6D /* m68kops.c */; };
 		B77981A70FC91B0C009F0EBB /* vbiparse.c in Sources */ = {isa = PBXBuildFile; fileRef = B77981A50FC91B0C009F0EBB /* vbiparse.c */; };
 		B77981A80FC91B0C009F0EBB /* vbiparse.h in Headers */ = {isa = PBXBuildFile; fileRef = B77981A60FC91B0C009F0EBB /* vbiparse.h */; };
@@ -7258,6 +7258,7 @@
 		948F54EC152613ED00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/machine/n64.c; sourceTree = "<group>"; };
 		948F54EE1526140A00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/video/n64.c; sourceTree = "<group>"; };
 		94F5C3B415321CBE0023432B /* osdmalloc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = osdmalloc.cpp; sourceTree = "<group>"; };
+		94F5C430153258EB0023432B /* drcbex64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = drcbex64.c; sourceTree = "<group>"; };
 		B77981A50FC91B0C009F0EBB /* vbiparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = vbiparse.c; sourceTree = "<group>"; };
 		B77981A60FC91B0C009F0EBB /* vbiparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = vbiparse.h; sourceTree = "<group>"; };
 		B793CEBF0FC70E9700E11A30 /* tmsmake.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = tmsmake.c; path = mame/src/emu/cpu/tms57002/tmsmake.c; sourceTree = SOURCE_ROOT; };
@@ -7616,6 +7617,7 @@
 				55080A9810AD1D44008142B8 /* cubeqcpu.c */,
 				55080A9910AD1D44008142B8 /* drcbec.c */,
 				55080A9A10AD1D44008142B8 /* drcbeut.c */,
+				94F5C430153258EB0023432B /* drcbex64.c */,
 				55080A9B10AD1D44008142B8 /* drcbex86.c */,
 				55080A9C10AD1D44008142B8 /* drccache.c */,
 				55080A9D10AD1D44008142B8 /* drcfe.c */,
@@ -12919,7 +12921,6 @@
 				55080B8810AD1D44008142B8 /* cubeqcpu.c in Sources */,
 				55080B8910AD1D44008142B8 /* drcbec.c in Sources */,
 				55080B8A10AD1D44008142B8 /* drcbeut.c in Sources */,
-				55080B8B10AD1D44008142B8 /* drcbex86.c in Sources */,
 				55080B8C10AD1D44008142B8 /* drccache.c in Sources */,
 				55080B8D10AD1D44008142B8 /* drcfe.c in Sources */,
 				55080B8E10AD1D44008142B8 /* drcuml.c in Sources */,
@@ -13032,6 +13033,7 @@
 				9429990A152A434B00A214B6 /* am29000.c in Sources */,
 				945DE2CF153179DC009E2300 /* rspdrc.c in Sources */,
 				945DE2D0153179DC009E2300 /* rspfe.c in Sources */,
+				94F5C431153258EB0023432B /* drcbex64.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
