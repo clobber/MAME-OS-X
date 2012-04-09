@@ -2087,24 +2087,24 @@ Performs the save action for the application, which is to send the save:
     mLogAttributes = [[NSDictionary alloc] initWithObjectsAndKeys:
         monaco, NSFontAttributeName,
         [NSColor blackColor], NSForegroundColorAttributeName,
-        0];
+        nil];
     
     mLogErrorAttributes = [[NSDictionary alloc] initWithObjectsAndKeys:
         monaco, NSFontAttributeName,
         [NSColor redColor], NSForegroundColorAttributeName,
-        0];
+        nil];
     mLogWarningAttributes = [[NSDictionary alloc] initWithObjectsAndKeys:
         monaco, NSFontAttributeName,
         [NSColor yellowColor], NSForegroundColorAttributeName,
-        0];
+        nil];
     mLogInfoAttributes = [[NSDictionary alloc] initWithObjectsAndKeys:
         monaco, NSFontAttributeName,
         [NSColor blackColor], NSForegroundColorAttributeName,
-        0];
+        nil];
     mLogDebugAttributes = [[NSDictionary alloc] initWithObjectsAndKeys:
         monaco, NSFontAttributeName,
         [NSColor blueColor], NSForegroundColorAttributeName,
-        0];
+        nil];
 }
 
 - (void) registerForUrls;
