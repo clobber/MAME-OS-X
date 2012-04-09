@@ -64,7 +64,9 @@
     NSEnumerator * i = [mTextures objectEnumerator];
     while (texture = [i nextObject])
     {
-        if ([texture isEqualToPrimitive: primitive])
+        //if ([texture isEqualToPrimitive: primitive])
+        //this fixed the game launch crash for 64-bit
+        if (primitive->texture.base != NULL && [texture isEqualToPrimitive: primitive])
             return texture;
     }
     return nil;
