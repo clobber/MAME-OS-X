@@ -1,9 +1,9 @@
 //
-//  RBSplitSubview.m version 1.1.4
+//  RBSplitSubview.m version 1.2
 //  RBSplitView
 //
 //  Created by Rainer Brockerhoff on 19/11/2004.
-//  Copyright 2004-2006 Rainer Brockerhoff.
+//  Copyright 2004-2009 Rainer Brockerhoff.
 //	Some Rights Reserved under the Creative Commons Attribution License, version 2.5, and/or the MIT License.
 //
 
@@ -76,7 +76,6 @@ static animationData* currentAnimation = NULL;
 }
 
 // A hidden RBSplitSubview is not redrawn and is not considered for drawing dividers.
-// This won't work before 10.3, though.
 - (void)setHidden:(BOOL)flag {
 	if ([self isHidden]!=flag) {
 		RBSplitView* sv = [self splitView];
@@ -93,19 +92,6 @@ static animationData* currentAnimation = NULL;
 - (BOOL)acceptsFirstResponder {
 	return NO;
 }
-
-// Mousing down should move the window only for a completely transparent background. This might have
-// unintended side effects in metal windows, so for those you might want to use a background color
-// with a very low alpha (0.01 for instance).
-// This is commented out as I'm still experimenting with it.
-/*- (BOOL)mouseDownCanMoveWindow {
-	RBSplitView* sv = [self asSplitView];
-	if (!sv) {
-		sv = [self couplingSplitView];
-	}
-	return [sv background]==nil;
-	return YES;
-}*/
 
 // This returns the owning splitview. It's guaranteed to return a RBSplitView or nil.
 // You should avoid having "orphan" RBSplitSubviews, or at least manipulating
@@ -142,13 +128,13 @@ static animationData* currentAnimation = NULL;
 	return [[self splitView] isHorizontal];
 }
 
-// You can use either tags (ints) or identifiers (NSStrings) to identify individual subviews.
+// You can use either tags (NSIntegers) or identifiers (NSStrings) to identify individual subviews.
 // We take care not to have nil identifiers.
-- (void)setTag:(int)theTag {
+- (void)setTag:(NSInteger)theTag {
 	tag = theTag;
 }
 
-- (int)tag {
+- (NSInteger)tag {
 	return tag;
 }
 
@@ -169,12 +155,12 @@ static animationData* currentAnimation = NULL;
 
 // This pair of methods allows you to get and change the position of a subview (within the split view);
 // this counts from zero from the left or top of the split view.
-- (unsigned)position {
+- (NSUInteger)position {
 	RBSplitView* sv = [self splitView];
 	return sv?[[sv subviews] indexOfObjectIdenticalTo:self]:0;
 }
 
-- (void)setPosition:(unsigned)newPosition {
+- (void)setPosition:(NSUInteger)newPosition {
 	RBSplitView* sv = [self splitView];
 	if (sv) {
 		[self retain];
@@ -239,7 +225,7 @@ static animationData* currentAnimation = NULL;
 // As a convenience to other methods, it returns the subview's dimension after expanding (this may be
 // off by 1 pixel due to rounding) or 0.0 if it couldn't be expanded.
 // The delegate should not change the subview's frame.
-- (float)expand {
+- (CGFloat)expand {
 	return [self RB___expandAndSetToMinimum:NO];
 }
 
@@ -248,7 +234,7 @@ static animationData* currentAnimation = NULL;
 // As a convenience to other methods, it returns the negative of the subview's dimension before
 // collapsing (or 0.0 if it couldn't be collapsed).
 // The delegate should not change the subview's frame.
-- (float)collapse {
+- (CGFloat)collapse {
 	return [self RB___collapse];
 }
 
@@ -294,26 +280,25 @@ static animationData* currentAnimation = NULL;
 	return NO;
 }
 
-
 // These 3 methods get and set the view's minimum and maximum dimensions.
 // The minimum dimension ought to be an integer at least equal to 1.0 but we make sure.
 // The maximum dimension ought to be an integer at least equal to the minimum. As a convenience,
 // pass in zero to set it to some huge number.
-- (float)minDimension {
+- (CGFloat)minDimension {
 	return minDimension;
 }
 
-- (float)maxDimension {
+- (CGFloat)maxDimension {
 	return maxDimension;
 }
 
-- (void)setMinDimension:(float)newMinDimension andMaxDimension:(float)newMaxDimension {
-	minDimension = MAX(1.0,floorf(newMinDimension));
+- (void)setMinDimension:(CGFloat)newMinDimension andMaxDimension:(CGFloat)newMaxDimension {
+	minDimension = MAX(1.0,floor(newMinDimension));
 	if (newMaxDimension<1.0) {
 		newMaxDimension = WAYOUT;
 	}
-	maxDimension = MAX(minDimension,floorf(newMaxDimension));
-	float dim = [self dimension];
+	maxDimension = MAX(minDimension,floor(newMaxDimension));
+	CGFloat dim = [self dimension];
 	if ((dim<minDimension)||(dim>maxDimension)) {
 		[[self splitView] setMustAdjust];
 	}
@@ -321,8 +306,8 @@ static animationData* currentAnimation = NULL;
 
 // This returns the subview's dimension. If it's collapsed, it returns the dimension it would have
 // after expanding.
-- (float)dimension {
-	float dim = [self RB___visibleDimension];
+- (CGFloat)dimension {
+	CGFloat dim = [self RB___visibleDimension];
 	if (dim<=0.0) {
 		dim = [[self splitView] RB___dimensionWithoutDividers]*fraction;
 		if (dim<minDimension) {
@@ -336,7 +321,12 @@ static animationData* currentAnimation = NULL;
 
 // Sets the current dimension of the subview, subject to the current maximum and minimum.
 // If the subview is collapsed, this will have an effect only after reexpanding.
-- (void)setDimension:(float)value {
+- (void)setDimension:(CGFloat)value {
+	if (value<minDimension) {
+		value = minDimension;
+	} else if (value>maxDimension) {
+		value = maxDimension;
+	}
 	RBSplitView* sv = [self splitView];
 	NSSize size = [self frame].size;
 	BOOL ishor = [sv isHorizontal];
@@ -385,14 +375,18 @@ static animationData* currentAnimation = NULL;
 	return YES;
 }
 
+// ...and we don't want that to change under any circumstances.
+- (void)setAutoresizesSubviews:(BOOL)flag {
+}
+
 // This is method is called automatically when the subview is resized; don't call it yourself.
 - (void)resizeSubviewsWithOldSize:(NSSize)oldBoundsSize {
 	RBSplitView* sv = [self splitView];
 	if (sv) {
 		BOOL ishor = [sv isHorizontal];
 		NSRect frame = [self frame];
-		float dim = DIM(frame.size);
-		float other = OTHER(frame.size);
+		CGFloat dim = DIM(frame.size);
+		CGFloat other = OTHER(frame.size);
 // We resize subviews only when we're inside the subview's limits and the containing splitview's limits.
 		animationData* anim = [self RB___animationData:NO resize:NO];
 		if ((dim>=(anim&&!anim->resizing?anim->dimension:minDimension))&&(dim<=maxDimension)&&(other>=[sv minDimension])&&(other<=[sv maxDimension])) {
@@ -413,15 +407,15 @@ static animationData* currentAnimation = NULL;
 // This method is used internally when a divider is dragged. It tries to change the subview's dimension
 // and returns the actual change, collapsing or expanding whenever possible. You usually won't need
 // to call this directly.
-- (float)changeDimensionBy:(float)increment mayCollapse:(BOOL)mayCollapse move:(BOOL)move {
+- (CGFloat)changeDimensionBy:(CGFloat)increment mayCollapse:(BOOL)mayCollapse move:(BOOL)move {
 	RBSplitView* sv = [self splitView];
-	if (!sv||(fabsf(increment)<1.0)) {
+	if (!sv||(fabs(increment)<1.0)) {
 		return 0.0;
 	}
 	BOOL ishor = [sv isHorizontal];
 	NSRect frame = [self frame];
-	float olddim = DIM(frame.size);
-	float newdim = MAX(0.0,olddim+increment);
+	CGFloat olddim = DIM(frame.size);
+	CGFloat newdim = MAX(0.0,olddim+increment);
 	if (newdim<olddim) {
 		if (newdim<minDimension) {
 // Collapse if needed
@@ -460,25 +454,25 @@ static animationData* currentAnimation = NULL;
 }
 
 // This convenience method returns the number of subviews (surprise!)
-- (unsigned)numberOfSubviews {
+- (NSUInteger)numberOfSubviews {
 	return [[self subviews] count];
 }
 
 // We return the deepest subview that's hit by aPoint. We also check with the delegate if aPoint is
 // within an alternate drag view.
 - (NSView*)hitTest:(NSPoint)aPoint {
-	RBSplitView* sv = [self splitView];
 	if ([self mouse:aPoint inRect:[self frame]]) {
+		RBSplitView* sv = [self splitView];
 		id delegate = [sv delegate];
 		if ([delegate respondsToSelector:@selector(splitView:dividerForPoint:inSubview:)]) {
 			actDivider = [delegate splitView:sv dividerForPoint:aPoint inSubview:self];
-			if ((int)actDivider<(int)([sv RB___numberOfSubviews]-1)) {
+			if ((actDivider+1)<[sv RB___numberOfSubviews]) {
 				return self;
 			}
 		}
 		actDivider = NSNotFound;
 		NSView* result = [super hitTest:aPoint];
-		canDragWindow = ![result isOpaque];
+		canDragWindow = ![[result opaqueAncestor] isDescendantOf:[[result window] contentView]];
 		return result;
 	}
 	return nil;
@@ -490,13 +484,15 @@ static animationData* currentAnimation = NULL;
 	NSWindow* window = [self window];
 	NSPoint where = [theEvent locationInWindow];
 	if (actDivider<NSNotFound) {
+		// Cache divider# here for the loop
+		NSUInteger thediv = actDivider;
 // The mouse down was inside an alternate drag view; actDivider was just set in hitTest.
 		RBSplitView* sv = [self splitView];
 		NSPoint point = [sv convertPoint:where fromView:nil];
 		[[RBSplitView cursor:RBSVDragCursor] push];
 		NSPoint base = NSZeroPoint;
 // Record the current divider coordinate.
-		float divc = [sv RB___dividerOrigin:actDivider];
+		CGFloat divc = [sv RB___dividerOrigin:thediv];
 		BOOL ishor = [sv isHorizontal];
 		[sv RB___setDragging:YES];
 // Loop while the button is down.
@@ -505,18 +501,18 @@ static animationData* currentAnimation = NULL;
 			NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
 			NSDisableScreenUpdates();
 // This does the actual movement.
-			[sv RB___trackMouseEvent:theEvent from:point withBase:base inDivider:actDivider];
+			[sv RB___trackMouseEvent:theEvent from:point withBase:base inDivider:thediv];
 			if ([sv mustAdjust]) {
 // If something changed, we clear fractions and redisplay.
 				[sv RB___setMustClearFractions];
 				[sv display];
 			}
 // Change the drag point by the actual amount moved.
-			float newc = [sv RB___dividerOrigin:actDivider];
+			CGFloat newc = [sv RB___dividerOrigin:thediv];
 			DIM(point) += newc-divc;
 			divc = newc;
 			NSEnableScreenUpdates();
-			[pool release];
+			[pool drain];
 		}
 		[sv RB___setDragging:NO];
 		[NSCursor pop];
@@ -540,7 +536,7 @@ static animationData* currentAnimation = NULL;
 // Move the window by the mouse displacement since the last event.
 			[window setFrameOrigin:origin];
 			where = now;
-			[pool release];
+			[pool drain];
 		}
 	}
 }
@@ -564,9 +560,9 @@ static animationData* currentAnimation = NULL;
 	}
 	if ([coder allowsKeyedCoding]) {
 		[coder encodeObject:identifier forKey:@"identifier"];
-		[coder encodeInt:tag forKey:@"tag"];
-		[coder encodeFloat:minDimension forKey:@"minDimension"];
-		[coder encodeFloat:maxDimension forKey:@"maxDimension"];
+		[coder encodeInteger:tag forKey:@"tag"];
+		[coder encodeDouble:minDimension forKey:@"minDimension"];
+		[coder encodeDouble:maxDimension forKey:@"maxDimension"];
 		[coder encodeDouble:fraction forKey:@"fraction"];
 		[coder encodeBool:canCollapse forKey:@"canCollapse"];
 	} else {
@@ -602,9 +598,9 @@ static animationData* currentAnimation = NULL;
 		previous = NSZeroRect;
 		if ([coder allowsKeyedCoding]) {
 			[self setIdentifier:[coder decodeObjectForKey:@"identifier"]];
-			tag = [coder decodeIntForKey:@"tag"];
-			minDimension = [coder decodeFloatForKey:@"minDimension"];
-			maxDimension = [coder decodeFloatForKey:@"maxDimension"];
+			tag = [coder decodeIntegerForKey:@"tag"];
+			minDimension = [coder decodeDoubleForKey:@"minDimension"];
+			maxDimension = [coder decodeDoubleForKey:@"maxDimension"];
 			fraction = [coder decodeDoubleForKey:@"fraction"];
 			canCollapse = [coder decodeBoolForKey:@"canCollapse"];
 		} else {
@@ -623,7 +619,7 @@ static animationData* currentAnimation = NULL;
 
 @implementation RBSplitSubview (RB___SubviewAdditions)
 
-// This hides/shows the subview without calling adjustSubview.
+// This hides/shows the subview without calling adjustSubviews.
 - (void)RB___setHidden:(BOOL)flag {
 	[super setHidden:flag];
 }
@@ -641,7 +637,7 @@ static animationData* currentAnimation = NULL;
 // We want to start (or restart) an animation.
 		RBSplitView* sv = [self splitView];
 		if (sv) {
-			float dim = [self dimension];
+			CGFloat dim = [self dimension];
 // First assume the default time, then ask the delegate.
 			NSTimeInterval total = dim*(0.2/150.0);
 			id delegate = [sv delegate];
@@ -684,8 +680,7 @@ static animationData* currentAnimation = NULL;
 		BOOL ishor = [sv isHorizontal];
 // Continuing animation only makes sense if we still have at least FRAMETIME available.
 		if (remain>=FRAMETIME) {
-			float dim = DIM(frame.size);
-			float avg = anim->elapsedTime;
+			CGFloat avg = anim->elapsedTime;
 // We try to keep a record of how long it takes, on the average, to resize and adjust
 // one animation frame.
 			if (anim->stepsDone) {
@@ -693,7 +688,7 @@ static animationData* currentAnimation = NULL;
 			}
 			NSTimeInterval delay = MIN(0.0,FRAMETIME-avg);
 // We adjust the new dimension proportionally to how much of the designated time has passed.
-			dim = floorf(anim->dimension*(remain-avg)/anim->totalTime);
+			CGFloat dim = floor(anim->dimension*(remain-avg)/anim->totalTime);
 			if (dim>4.0) {
 				if (!anim->collapsing) {
 					dim = anim->dimension-dim;
@@ -715,8 +710,8 @@ static animationData* currentAnimation = NULL;
 			DIM(frame.size) = 0.0;
 			[self RB___finishCollapse:frame withFraction:anim->dimension/[sv RB___dimensionWithoutDividers]];
 		} else {
-			float savemin,savemax;
-			float dim = [self RB___setMinAndMaxTo:anim->dimension savingMin:&savemin andMax:&savemax];
+			CGFloat savemin,savemax;
+			CGFloat dim = [self RB___setMinAndMaxTo:anim->dimension savingMin:&savemin andMax:&savemax];
 			DIM(frame.size) = dim;
 			[self RB___finishExpand:frame withFraction:0.0];
 			minDimension = savemin;
@@ -740,7 +735,7 @@ static animationData* currentAnimation = NULL;
 
 // This internal method returns the actual visible dimension of the subview. Differs from -dimension in
 // that it returns 0.0 if the subview is collapsed.
-- (float)RB___visibleDimension {
+- (CGFloat)RB___visibleDimension {
 	BOOL ishor = [self splitViewIsHorizontal];
 	NSRect frame = [self frame];
 	return MAX(0.0,DIM(frame.size));
@@ -756,8 +751,8 @@ static animationData* currentAnimation = NULL;
 	cache->constrain = NO;
 }
 
-- (void)RB___updateFromCache:(subviewCache*)cache withTotalDimension:(float)value {
-	float dim = [self RB___visibleDimension];
+- (void)RB___updateFromCache:(subviewCache*)cache withTotalDimension:(CGFloat)value {
+	CGFloat dim = [self RB___visibleDimension];
 	if (cache->size>=1.0) {
 // New state is not collapsed.
 		if (dim>=1.0) {
@@ -782,7 +777,7 @@ static animationData* currentAnimation = NULL;
 
 // This internal method sets minimum and maximum values to the same value, saves the old values,
 // and returns the new value (which will be limited to the old values).
-- (float)RB___setMinAndMaxTo:(float)value savingMin:(float*)oldmin andMax:(float*)oldmax {
+- (CGFloat)RB___setMinAndMaxTo:(CGFloat)value savingMin:(CGFloat*)oldmin andMax:(CGFloat*)oldmax {
 	*oldmin = [self minDimension];
 	*oldmax = [self maxDimension];
 	if (value<*oldmin) {
@@ -816,8 +811,8 @@ static animationData* currentAnimation = NULL;
 
 // This internal method collapses a subview.
 // It returns the negative of the size of the subview before collapsing, or 0.0 if it wasn't collapsed.
-- (float)RB___collapse {
-	float result = 0.0;
+- (CGFloat)RB___collapse {
+	CGFloat result = 0.0;
 	if (![self isCollapsed]) {
 		RBSplitView* sv = [self splitView];
 		if (sv&&[self canCollapse]) {
@@ -851,8 +846,8 @@ static animationData* currentAnimation = NULL;
 
 // This internal method expands a subview. setToMinimum will usually be YES during a divider drag.
 // It returns the size of the subview after expanding, or 0.0 if it wasn't expanded.
-- (float)RB___expandAndSetToMinimum:(BOOL)setToMinimum {
-	float result = 0.0;
+- (CGFloat)RB___expandAndSetToMinimum:(BOOL)setToMinimum {
+	CGFloat result = 0.0;
 	RBSplitView* sv = [self splitView];
 	if (sv&&[self isCollapsed]) {
 		NSRect frame = [super frame];
@@ -863,9 +858,9 @@ static animationData* currentAnimation = NULL;
 		} else {
 			result = [sv RB___dimensionWithoutDividers]*frac;
 // We need to apply a compensation factor for proportional resizing in adjustSubviews.
-			float newdim = floorf((frac>=1.0)?result:result/(1.0-frac));
+			CGFloat newdim = floor((frac>=1.0)?result:result/(1.0-frac));
 			DIM(frame.size) = newdim;
-			result = floorf(result);
+			result = floor(result);
 		}
 		[self RB___finishExpand:frame withFraction:0.0];
 	}
