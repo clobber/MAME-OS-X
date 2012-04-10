@@ -610,7 +610,7 @@ static MACHINE_DRIVER_START( fsharkbt )
 	MDRV_CPU_ADD("mcu", I8741, XTAL_28MHz/16)
 	/* Program Map is internal to the CPU */
 	MDRV_CPU_IO_MAP(fsharkbt_i8741_io_map)
-	MDRV_CPU_FLAGS(CPU_DISABLE)		/* Internal program code is not dumped */
+	MDRV_DEVICE_DISABLE()		/* Internal program code is not dumped */
 
 	MDRV_MACHINE_RESET(fsharkbt)	/* Reset fshark bootleg 8741 MCU data */
 MACHINE_DRIVER_END
@@ -1019,11 +1019,11 @@ static DRIVER_INIT( twincobr )
 }
 
 
-GAME( 1987, fshark,    0,        twincobr, fshark,    twincobr, ROT270, "[Toaplan] Taito Corporation", "Flying Shark (World)", 0 )
-GAME( 1987, skyshark,  fshark,   twincobr, skyshark,  twincobr, ROT270, "[Toaplan] Taito America Corporation (Romstar license)", "Sky Shark (US)", 0 )
-GAME( 1987, hishouza,  fshark,   twincobr, hishouza,  twincobr, ROT270, "[Toaplan] Taito Corporation", "Hishou Zame (Japan)", 0 )
+GAME( 1987, fshark,    0,        twincobr, fshark,    twincobr, ROT270, "Toaplan / Taito Corporation", "Flying Shark (World)", 0 )
+GAME( 1987, skyshark,  fshark,   twincobr, skyshark,  twincobr, ROT270, "Toaplan / Taito America Corporation (Romstar license)", "Sky Shark (US)", 0 )
+GAME( 1987, hishouza,  fshark,   twincobr, hishouza,  twincobr, ROT270, "Toaplan / Taito Corporation", "Hishou Zame (Japan)", 0 )
 GAME( 1987, fsharkbt,  fshark,   fsharkbt, skyshark,  twincobr, ROT270, "bootleg", "Flying Shark (bootleg)", 0 )
-GAME( 1987, twincobr,  0,        twincobr, twincobr,  twincobr, ROT270, "[Toaplan] Taito Corporation", "Twin Cobra (World)", 0 )
-GAME( 1987, twincobru, twincobr, twincobr, twincobru, twincobr, ROT270, "[Toaplan] Taito America Corporation (Romstar license)", "Twin Cobra (US)", 0 )
-GAME( 1987, ktiger,    twincobr, twincobr, ktiger,    twincobr, ROT270, "[Toaplan] Taito Corporation", "Kyukyoku Tiger (Japan)", 0 )
+GAME( 1987, twincobr,  0,        twincobr, twincobr,  twincobr, ROT270, "Toaplan / Taito Corporation", "Twin Cobra (World)", 0 )
+GAME( 1987, twincobru, twincobr, twincobr, twincobru, twincobr, ROT270, "Toaplan / Taito America Corporation (Romstar license)", "Twin Cobra (US)", 0 )
+GAME( 1987, ktiger,    twincobr, twincobr, ktiger,    twincobr, ROT270, "Toaplan / Taito Corporation", "Kyukyoku Tiger (Japan)", 0 )
 GAME( 1991, gulfwar2,  0,        twincobr, gulfwar2,  twincobr, ROT270, "Comad", "Gulf War II", 0 )

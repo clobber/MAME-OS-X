@@ -60,7 +60,7 @@ static READ8_DEVICE_HANDLER( timer_r )
 
 	/* wrong! there should be no need for timer_rate, the same function */
 	/* should work for both games */
-	return cpu_get_total_cycles(state->audiocpu) / state->timer_rate;
+	return state->audiocpu->total_cycles() / state->timer_rate;
 }
 
 
@@ -796,7 +796,7 @@ static MACHINE_START( jack )
 {
 	jack_state *state = (jack_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device<cpu_device>("audiocpu");
 
 	state_save_register_global(machine, state->joinem_snd_bit);
 	state_save_register_global(machine, state->question_address);
@@ -1437,10 +1437,10 @@ static DRIVER_INIT( striv )
 GAME( 1982, jack,     0,        jack,    jack,     jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1982, jack2,    jack,     jack,    jack2,    jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1982, jack3,    jack,     jack,    jack3,    jack,     ROT90,  "Cinematronics",               "Jack the Giantkiller (set 3)", GAME_SUPPORTS_SAVE )
-GAME( 1982, treahunt, jack,     jack,    treahunt, treahunt, ROT90,  "Hara Industries",             "Treasure Hunt (bootleg?)", GAME_SUPPORTS_SAVE )
-GAME( 1982, zzyzzyxx, 0,        jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1982, zzyzzyxx2,zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Zzyzzyxx (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1982, brix,     zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics + Advanced Microcomputer Systems", "Brix", GAME_SUPPORTS_SAVE )
+GAME( 1982, treahunt, jack,     jack,    treahunt, treahunt, ROT90,  "bootleg? (Hara Industries)",  "Treasure Hunt (bootleg?)", GAME_SUPPORTS_SAVE )
+GAME( 1982, zzyzzyxx, 0,        jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics / Advanced Microcomputer Systems", "Zzyzzyxx (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1982, zzyzzyxx2,zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics / Advanced Microcomputer Systems", "Zzyzzyxx (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1982, brix,     zzyzzyxx, jack,    zzyzzyxx, zzyzzyxx, ROT90,  "Cinematronics / Advanced Microcomputer Systems", "Brix", GAME_SUPPORTS_SAVE )
 GAME( 1984, freeze,   0,        jack,    freeze,   jack,     ROT90,  "Cinematronics",               "Freeze", GAME_SUPPORTS_SAVE )
 GAME( 1984, sucasino, 0,        jack,    sucasino, jack,     ROT90,  "Data Amusement",              "Super Casino", GAME_SUPPORTS_SAVE )
 GAME( 1981, tripool,  0,        tripool, tripool,  jack,     ROT90,  "Noma (Casino Tech license)",  "Tri-Pool (Casino Tech)", GAME_SUPPORTS_SAVE )

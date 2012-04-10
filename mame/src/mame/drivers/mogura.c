@@ -82,21 +82,21 @@ static VIDEO_START( mogura )
 static VIDEO_UPDATE( mogura )
 {
 	mogura_state *state = (mogura_state *)screen->machine->driver_data;
-	const rectangle *visarea = video_screen_get_visible_area(screen);
+	const rectangle &visarea = screen->visible_area();
 
 	/* tilemap layout is a bit strange ... */
 	rectangle clip;
-	clip.min_x = visarea->min_x;
+	clip.min_x = visarea.min_x;
 	clip.max_x = 256 - 1;
-	clip.min_y = visarea->min_y;
-	clip.max_y = visarea->max_y;
+	clip.min_y = visarea.min_y;
+	clip.max_y = visarea.max_y;
 	tilemap_set_scrollx(state->tilemap, 0, 256);
 	tilemap_draw(bitmap, &clip, state->tilemap, 0, 0);
 
 	clip.min_x = 256;
 	clip.max_x = 512 - 1;
-	clip.min_y = visarea->min_y;
-	clip.max_y = visarea->max_y;
+	clip.min_y = visarea.min_y;
+	clip.max_y = visarea.max_y;
 	tilemap_set_scrollx(state->tilemap, 0, -128);
 	tilemap_draw(bitmap, &clip, state->tilemap, 0, 0);
 
@@ -195,9 +195,9 @@ static MACHINE_START( mogura )
 {
 	mogura_state *state = (mogura_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->dac1 = devtag_get_device(machine, "dac1");
-	state->dac2 = devtag_get_device(machine, "dac2");
+	state->maincpu = machine->device("maincpu");
+	state->dac1 = machine->device("dac1");
+	state->dac2 = machine->device("dac2");
 }
 
 static MACHINE_DRIVER_START( mogura )

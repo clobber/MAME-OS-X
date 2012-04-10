@@ -99,7 +99,7 @@ PALETTE_INIT( carpolo )
 	};
 
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		UINT8 pen, r, g, b;
 
@@ -151,7 +151,7 @@ PALETTE_INIT( carpolo )
 
 VIDEO_START( carpolo )
 {
-	bitmap_format format = video_screen_get_format(machine->primary_screen);
+	bitmap_format format = machine->primary_screen->format();
 
 	sprite_sprite_collision_bitmap1 = auto_bitmap_alloc(machine, SPRITE_WIDTH*2, SPRITE_HEIGHT*2, format);
 	sprite_sprite_collision_bitmap2 = auto_bitmap_alloc(machine, SPRITE_WIDTH*2, SPRITE_HEIGHT*2, format);

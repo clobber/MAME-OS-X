@@ -400,7 +400,7 @@ static void outrun_generic_init(running_machine *machine)
 	workram              = auto_alloc_array(machine, UINT16, 0x08000/2);
 
 	/* init the memory mapper */
-	segaic16_memory_mapper_init(devtag_get_device(machine, "maincpu"), outrun_info, sound_data_w, NULL);
+	segaic16_memory_mapper_init(machine->device("maincpu"), outrun_info, sound_data_w, NULL);
 
 	/* init the FD1094 */
 	fd1094_driver_init(machine, "maincpu", segaic16_memory_mapper_set_decrypted);
@@ -410,10 +410,10 @@ static void outrun_generic_init(running_machine *machine)
 	state->custom_io_w = NULL;
 	state->custom_map = NULL;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->ppi8255 = devtag_get_device(machine, "ppi8255");
+	state->maincpu = machine->device("maincpu");
+	state->soundcpu = machine->device("soundcpu");
+	state->subcpu = machine->device("sub");
+	state->ppi8255 = machine->device("ppi8255");
 
 	state_save_register_global(machine, state->adc_select);
 	state_save_register_global(machine, state->vblank_irq_state);
@@ -469,7 +469,7 @@ static TIMER_CALLBACK( scanline_callback )
 		case 65:
 		case 129:
 		case 193:
-			timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, video_screen_get_visible_area(machine->primary_screen)->max_x + 1), NULL, 0, irq2_gen);
+			timer_set(machine, machine->primary_screen->time_until_pos(scanline, machine->primary_screen->visible_area().max_x + 1), NULL, 0, irq2_gen);
 			next_scanline = scanline + 1;
 			break;
 
@@ -500,7 +500,7 @@ static TIMER_CALLBACK( scanline_callback )
 	update_main_irqs(machine);
 
 	/* come back at the next targeted scanline */
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, next_scanline, 0), NULL, next_scanline, scanline_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(next_scanline), NULL, next_scanline, scanline_callback);
 }
 
 
@@ -521,7 +521,7 @@ static void outrun_reset(running_device *device)
 static MACHINE_RESET( outrun )
 {
 	segas1x_state *state = (segas1x_state *)machine->driver_data;
-	fd1094_machine_init(devtag_get_device(machine, "maincpu"));
+	fd1094_machine_init(machine->device("maincpu"));
 
 	/* reset misc components */
 	segaic16_memory_mapper_reset(machine);
@@ -530,10 +530,10 @@ static MACHINE_RESET( outrun )
 	segaic16_tilemap_reset(machine, 0);
 
 	/* hook the RESET line, which resets CPU #1 */
-	m68k_set_reset_callback(devtag_get_device(machine, "maincpu"), outrun_reset);
+	m68k_set_reset_callback(machine->device("maincpu"), outrun_reset);
 
 	/* start timers to track interrupts */
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 223, 0), NULL, 223, scanline_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(223), NULL, 223, scanline_callback);
 }
 
 

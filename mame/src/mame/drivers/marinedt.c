@@ -283,7 +283,7 @@ static WRITE8_HANDLER( marinedt_pf_w )
 
 	//if (data & 0xf0)
 	//    logerror("pf:%02x %d\n", state->pf);
-	//logerror("pd:%02x %d\n", state->pd, video_screen_get_frame_number(space->machine->primary_screen));
+	//logerror("pd:%02x %d\n", state->pd, space->machine->primary_screen->frame_number());
 
 }
 
@@ -426,7 +426,7 @@ static PALETTE_INIT( marinedt )
 {
 	int i,r,b,g;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2;
 
@@ -474,9 +474,9 @@ static VIDEO_START( marinedt )
 	tilemap_set_scrolldx(state->tx_tilemap, 0, 4*8);
 	tilemap_set_scrolldy(state->tx_tilemap, 0, -4*8);
 
-	state->tile = auto_bitmap_alloc(machine, 32 * 8, 32 * 8, video_screen_get_format(machine->primary_screen));
-	state->obj1 = auto_bitmap_alloc(machine, 32, 32, video_screen_get_format(machine->primary_screen));
-	state->obj2 = auto_bitmap_alloc(machine, 32, 32, video_screen_get_format(machine->primary_screen));
+	state->tile = auto_bitmap_alloc(machine, 32 * 8, 32 * 8, machine->primary_screen->format());
+	state->obj1 = auto_bitmap_alloc(machine, 32, 32, machine->primary_screen->format());
+	state->obj2 = auto_bitmap_alloc(machine, 32, 32, machine->primary_screen->format());
 }
 
 

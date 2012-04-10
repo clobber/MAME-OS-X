@@ -645,8 +645,7 @@ static MACHINE_DRIVER_START( darkhors )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 528000)	// ??
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 528000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -662,7 +661,7 @@ static VIDEO_START(jclub2)
 	assert(jclub2_gfx_index != MAX_GFX_ELEMENTS);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)jclub2_tileram, machine->config->total_colors / 16, 0);
+	machine->gfx[jclub2_gfx_index] = gfx_element_alloc(machine, &layout_16x16x8_jclub2, (UINT8 *)jclub2_tileram, machine->total_colors() / 16, 0);
 
 
 }

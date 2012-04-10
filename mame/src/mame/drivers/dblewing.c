@@ -116,7 +116,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 		y = spriteram[offs];
 		flash = y & 0x1000;
 		xsize = y & 0x0800;
-		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1))
+		if (flash && (machine->primary_screen->frame_number() & 1))
 			continue;
 
 		x = spriteram[offs + 2];
@@ -661,9 +661,9 @@ static MACHINE_START( dblewing )
 {
 	dblewing_state *state = (dblewing_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->deco16ic = machine->device("deco_custom");
 
 	state_save_register_global(machine, state->_008_data);
 	state_save_register_global(machine, state->_104_data);
@@ -772,8 +772,7 @@ static MACHINE_DRIVER_START( dblewing )
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 MACHINE_DRIVER_END
 

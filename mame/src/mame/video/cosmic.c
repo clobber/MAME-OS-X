@@ -166,7 +166,7 @@ PALETTE_INIT( cosmicg )
 	cosmic_state *state = (cosmic_state *)machine->driver_data;
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int r = (i > 8) ? 0xff : 0xaa * ((i >> 0) & 1);
 		int g = 0xaa * ((i >> 1) & 1);
@@ -317,7 +317,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 }
 
 
-static void cosmica_draw_starfield( running_device *screen, bitmap_t *bitmap, const rectangle *cliprect )
+static void cosmica_draw_starfield( screen_device *screen, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	UINT8 y = 0;
 	UINT8 map = 0;
@@ -336,9 +336,9 @@ static void cosmica_draw_starfield( running_device *screen, bitmap_t *bitmap, co
 			int hc, hb_;
 
 			if (flip_screen_get(screen->machine))
-				x1 = x - video_screen_get_frame_number(screen);
+				x1 = x - screen->frame_number();
 			else
-				x1 = x + video_screen_get_frame_number(screen);
+				x1 = x + screen->frame_number();
 
 			hc  = (x1 >> 2) & 0x01;
 			hb_ = (x  >> 5) & 0x01;  /* not a bug, this one is the real x */
@@ -424,10 +424,10 @@ static void devzone_draw_grid( running_machine *machine, bitmap_t *bitmap, const
 }
 
 
-static void nomnlnd_draw_background( running_device *screen, bitmap_t *bitmap, const rectangle *cliprect )
+static void nomnlnd_draw_background( screen_device *screen, bitmap_t *bitmap, const rectangle *cliprect )
 {
 	UINT8 y = 0;
-	UINT8 water = video_screen_get_frame_number(screen);
+	UINT8 water = screen->frame_number();
 	UINT8 *PROM = memory_region(screen->machine, "user2");
 
 	/* all positioning is via logic gates:

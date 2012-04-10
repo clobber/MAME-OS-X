@@ -118,15 +118,15 @@ INLINE int scanline_to_vcount( int scanline )
 
 static TIMER_DEVICE_CALLBACK( ddragon_scanline )
 {
-	ddragon_state *state = (ddragon_state *)timer->machine->driver_data;
+	ddragon_state *state = (ddragon_state *)timer.machine->driver_data;
 	int scanline = param;
-	int screen_height = video_screen_get_height(timer->machine->primary_screen);
+	int screen_height = timer.machine->primary_screen->height();
 	int vcount_old = scanline_to_vcount((scanline == 0) ? screen_height - 1 : scanline - 1);
 	int vcount = scanline_to_vcount(scanline);
 
 	/* update to the current point */
 	if (scanline > 0)
-		video_screen_update_partial(timer->machine->primary_screen, scanline - 1);
+		timer.machine->primary_screen->update_partial(scanline - 1);
 
 	/* on the rising edge of VBLK (vcount == F8), signal an NMI */
 	if (vcount == 0xf8)
@@ -152,11 +152,11 @@ static MACHINE_START( ddragon )
 	/* configure banks */
 	memory_configure_bank(machine, "bank1", 0, 8, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->sub_cpu = devtag_get_device(machine, "sub");
-	state->snd_cpu = devtag_get_device(machine, "soundcpu");
-	state->adpcm_1 = devtag_get_device(machine, "adpcm1");
-	state->adpcm_2 = devtag_get_device(machine, "adpcm2");
+	state->maincpu = machine->device("maincpu");
+	state->sub_cpu = machine->device("sub");
+	state->snd_cpu = machine->device("soundcpu");
+	state->adpcm_1 = machine->device("adpcm1");
+	state->adpcm_2 = machine->device("adpcm2");
 
 	/* register for save states */
 	state_save_register_global(machine, state->dd_sub_cpu_busy);
@@ -1133,8 +1133,7 @@ static MACHINE_DRIVER_START( ddragon2 )
 	MDRV_SOUND_ROUTE(0, "mono", 0.60)
 	MDRV_SOUND_ROUTE(1, "mono", 0.60)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -1561,7 +1560,9 @@ ROM_START( ddragon6809 )
 	ROM_LOAD( "21.bin",      0x08000, 0x08000, CRC(4437fc51) SHA1(fffcf2bec50d0b79861904b4abc607206b7794e6) )
 
 	/* all the gfx roms are scrambled on this set */
-	ROM_REGION( 0x08000, "gfx1", 0 )
+	ROM_REGION( 0x08000, "gfx1", ROMREGION_ERASEFF )
+
+	ROM_REGION( 0x08000, "chars", 0 )
 	ROM_LOAD( "13.bin",        0x00000, 0x08000, CRC(b5a54537) SHA1(a6157cde4f9738565008d11a4a6d8576ae3abfef) )	/* chars */
 
 	ROM_REGION( 0x80000, "gfx2", 0 )
@@ -1638,7 +1639,9 @@ ROM_START( ddragon6809a )
 	ROM_LOAD( "16.7n",   0x08000, 0x08000, CRC(f4c72690) SHA1(c70d032355acf3f7f6586b6e57a94f80e099bf1a) )
 
 	/* all the gfx roms are scrambled on this set */
-	ROM_REGION( 0x08000, "gfx1", 0 )
+	ROM_REGION( 0x08000, "gfx1", ROMREGION_ERASEFF )
+
+	ROM_REGION( 0x08000, "chars", 0 )
 	ROM_LOAD( "13.5f",   0x00000, 0x08000, CRC(b5a54537) SHA1(a6157cde4f9738565008d11a4a6d8576ae3abfef) )	/* chars */
 
 	ROM_REGION( 0x80000, "gfx2", 0 )
@@ -2079,7 +2082,22 @@ static DRIVER_INIT( toffy )
 static DRIVER_INIT( ddragon6809 )
 {
 	ddragon_state *state = (ddragon_state *)machine->driver_data;
-	/* Descramble GFX here */
+	int i;
+	UINT8 *dst,*src;
+
+	src = memory_region(machine, "chars");
+	dst = memory_region(machine, "gfx1");
+
+	for (i = 0; i < 0x8000; i++)
+	{
+		switch(i & 0x18)
+		{
+			case 0x00: dst[i] = src[(i & ~0x18) | 0x18]; break;
+			case 0x08: dst[i] = src[(i & ~0x18) | 0x00]; break;
+			case 0x10: dst[i] = src[(i & ~0x18) | 0x08]; break;
+			case 0x18: dst[i] = src[(i & ~0x18) | 0x10]; break;
+		}
+	}
 
 	state->sprite_irq = INPUT_LINE_NMI;
 	state->sound_irq = M6809_IRQ_LINE;
@@ -2094,11 +2112,11 @@ static DRIVER_INIT( ddragon6809 )
  *************************************/
 
 GAME( 1987, ddragon,     0,        ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan", "Double Dragon (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragonw,    ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito license)", "Double Dragon (World Set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragonw1,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito license)", "Double Dragon (World Set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragonu,    ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito America license)", "Double Dragon (US Set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragonua,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito America license)", "Double Dragon (US Set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1987, ddragonub,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "[Technos Japan] (Taito America license)", "Double Dragon (US Set 3)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragonw,    ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan (Taito license)", "Double Dragon (World Set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragonw1,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan (Taito license)", "Double Dragon (World Set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragonu,    ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan (Taito America license)", "Double Dragon (US Set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragonua,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan (Taito America license)", "Double Dragon (US Set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1987, ddragonub,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "Technos Japan (Taito America license)", "Double Dragon (US Set 3)", GAME_SUPPORTS_SAVE )
 GAME( 1987, ddragonb2,   ddragon,  ddragon,  ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1987, ddragonb,    ddragon,  ddragonb, ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg with HD6309)", GAME_SUPPORTS_SAVE ) // according to dump notes
 GAME( 1987, ddragonba,   ddragon,  ddragonba,   ddragon,  ddragon,  ROT0, "bootleg", "Double Dragon (bootleg with M6803)", GAME_SUPPORTS_SAVE )

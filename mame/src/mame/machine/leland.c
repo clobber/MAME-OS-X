@@ -372,11 +372,11 @@ MACHINE_START( leland )
 
 MACHINE_RESET( leland )
 {
-	timer_adjust_oneshot(master_int_timer, video_screen_get_time_until_pos(machine->primary_screen, 8, 0), 8);
+	timer_adjust_oneshot(master_int_timer, machine->primary_screen->time_until_pos(8), 8);
 
 	/* reset globals */
 	leland_gfx_control = 0x00;
-	leland_sound_port_w(devtag_get_device(machine, "ay8910.1"), 0, 0xff);
+	leland_sound_port_w(machine->device("ay8910.1"), 0, 0xff);
 	wcol_enable = 0;
 
 	dangerz_x = 512;
@@ -407,7 +407,8 @@ MACHINE_RESET( leland )
 		memory_set_bankptr(machine, "bank3", &slave_base[0x10000]);
 
 	/* if we have an I80186 CPU, reset it */
-	if (devtag_get_device(machine, "audiocpu") != NULL && cpu_get_type(devtag_get_device(machine, "audiocpu")) == CPU_I80186)
+	device_t *audiocpu = machine->device("audiocpu");
+	if (audiocpu != NULL && audiocpu->type() == I80186)
 		leland_80186_sound_init();
 }
 
@@ -426,7 +427,7 @@ MACHINE_START( ataxx )
 MACHINE_RESET( ataxx )
 {
 	memset(extra_tram, 0, ATAXX_EXTRA_TRAM_SIZE);
-	timer_adjust_oneshot(master_int_timer, video_screen_get_time_until_pos(machine->primary_screen, 8, 0), 8);
+	timer_adjust_oneshot(master_int_timer, machine->primary_screen->time_until_pos(8), 8);
 
 	/* initialize the XROM */
 	xrom_length = memory_region_length(machine, "user1");
@@ -478,7 +479,7 @@ static TIMER_CALLBACK( leland_interrupt_callback )
 	scanline += 16;
 	if (scanline > 248)
 		scanline = 8;
-	timer_adjust_oneshot(master_int_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	timer_adjust_oneshot(master_int_timer, machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 
@@ -490,7 +491,7 @@ static TIMER_CALLBACK( ataxx_interrupt_callback )
 	cputag_set_input_line(machine, "master", 0, HOLD_LINE);
 
 	/* set a timer for the next one */
-	timer_adjust_oneshot(master_int_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	timer_adjust_oneshot(master_int_timer, machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 
@@ -1142,7 +1143,7 @@ READ8_HANDLER( leland_master_input_r )
 
 		case 0x01:	/* /GIN1 */
 			result = input_port_read(space->machine, "IN1");
-			if (cpu_get_reg(devtag_get_device(space->machine, "slave"), Z80_HALT))
+			if (cpu_get_reg(space->machine->device("slave"), Z80_HALT))
 				result ^= 0x01;
 			break;
 
@@ -1153,7 +1154,7 @@ READ8_HANDLER( leland_master_input_r )
 
 		case 0x03:	/* /IGID */
 		case 0x13:
-			result = ay8910_r(devtag_get_device(space->machine, "ay8910.1"), offset);
+			result = ay8910_r(space->machine->device("ay8910.1"), offset);
 			break;
 
 		case 0x10:	/* /GIN0 */
@@ -1185,7 +1186,7 @@ WRITE8_HANDLER( leland_master_output_w )
 			cputag_set_input_line(space->machine, "slave", INPUT_LINE_NMI, (data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
 			cputag_set_input_line(space->machine, "slave", 0, (data & 0x08) ? CLEAR_LINE : ASSERT_LINE);
 
-			eeprom = devtag_get_device(space->machine, "eeprom");
+			eeprom = space->machine->device("eeprom");
 			if (LOG_EEPROM) logerror("%04X:EE write %d%d%d\n", cpu_get_pc(space->cpu),
 					(data >> 6) & 1, (data >> 5) & 1, (data >> 4) & 1);
 			eeprom_write_bit     (eeprom, (data & 0x10) >> 4);
@@ -1195,7 +1196,7 @@ WRITE8_HANDLER( leland_master_output_w )
 
 		case 0x0a:	/* /OGIA */
 		case 0x0b:	/* /OGID */
-			ay8910_address_data_w(devtag_get_device(space->machine, "ay8910.1"), offset, data);
+			ay8910_address_data_w(space->machine->device("ay8910.1"), offset, data);
 			break;
 
 		case 0x0c:	/* /BKXL */
@@ -1224,7 +1225,7 @@ READ8_HANDLER( ataxx_master_input_r )
 
 		case 0x07:	/* /SLVBLK */
 			result = input_port_read(space->machine, "IN1");
-			if (cpu_get_reg(devtag_get_device(space->machine, "slave"), Z80_HALT))
+			if (cpu_get_reg(space->machine->device("slave"), Z80_HALT))
 				result ^= 0x01;
 			break;
 
@@ -1262,7 +1263,7 @@ WRITE8_HANDLER( ataxx_master_output_w )
 			break;
 
 		case 0x08:	/*  */
-			timer_adjust_oneshot(master_int_timer, video_screen_get_time_until_pos(space->machine->primary_screen, data + 1, 0), data + 1);
+			timer_adjust_oneshot(master_int_timer, space->machine->primary_screen->time_until_pos(data + 1), data + 1);
 			break;
 
 		default:
@@ -1447,7 +1448,7 @@ WRITE8_HANDLER( ataxx_slave_banksw_w )
 
 READ8_HANDLER( leland_raster_r )
 {
-	return video_screen_get_vpos(space->machine->primary_screen);
+	return space->machine->primary_screen->vpos();
 }
 
 

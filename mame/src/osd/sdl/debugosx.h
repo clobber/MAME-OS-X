@@ -109,7 +109,7 @@ typedef float CGFloat;
 	running_machine	*machine;
 	debug_view		*view;
 
-	debug_view_xy	totalSize, topLeft;
+	debug_view_xy	*totalSize, *topLeft;
 
 	NSFont			*font;
 	CGFloat			fontWidth, fontHeight, fontAscent;
@@ -117,7 +117,7 @@ typedef float CGFloat;
 
 + (NSFont *)defaultFont;
 
-- (id)initWithFrame:(NSRect)f type:(int)t machine:(running_machine *)m;
+- (id)initWithFrame:(NSRect)f type:(debug_view_type)t machine:(running_machine *)m;
 
 - (void)update;
 

@@ -965,7 +965,7 @@ static INTERRUPT_GEN( sci_interrupt )
 	state->sci_int6 = !state->sci_int6;
 
 	if (state->sci_int6)
-		timer_set(device->machine, cpu_clocks_to_attotime(device, 200000 - 500), NULL, 0, taitoz_interrupt6);
+		timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, taitoz_interrupt6);
 
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
@@ -983,7 +983,7 @@ static INTERRUPT_GEN( dblaxle_interrupt )
 	state->dblaxle_int6 = !state->dblaxle_int6;
 
 	if (state->dblaxle_int6)
-		timer_set(device->machine, cpu_clocks_to_attotime(device, 200000 - 500), NULL, 0, taitoz_interrupt6);
+		timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, taitoz_interrupt6);
 
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
@@ -991,7 +991,7 @@ static INTERRUPT_GEN( dblaxle_interrupt )
 static INTERRUPT_GEN( dblaxle_cpub_interrupt )
 {
 	// Unsure how many int6's per frame
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 200000 - 500), NULL,  0, taitoz_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL,  0, taitoz_interrupt6);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -1208,7 +1208,7 @@ static WRITE16_HANDLER( bshark_stick_w )
        but we don't want CPUA to have an int6 before int4 is over (?)
     */
 
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu, 10000), NULL, 0, taitoz_interrupt6);
+	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, taitoz_interrupt6);
 }
 
 
@@ -1293,7 +1293,7 @@ static WRITE16_HANDLER( spacegun_lightgun_w )
        Four lightgun interrupts happen before the collected coords
        are moved to shared ram where CPUA can use them. */
 
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu, 10000), NULL, 0, taitoz_cpub_interrupt5);
+	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, taitoz_cpub_interrupt5);
 }
 
 static WRITE16_HANDLER( spacegun_gun_output_w )
@@ -1508,7 +1508,7 @@ static WRITE8_HANDLER( taitoz_pancontrol )
 //  state->pandata[offset] = data;
 //  popmessage(" pan %02x %02x %02x %02x", state->pandata[0], state->pandata[1], state->pandata[2], state->pandata[3] );
 
-	flt_volume_set_volume(devtag_get_device(space->machine, fltname[offset & 3]), data / 255.0f);
+	flt_volume_set_volume(space->machine->device(fltname[offset & 3]), data / 255.0f);
 }
 
 static WRITE16_HANDLER( spacegun_pancontrol )
@@ -2968,15 +2968,15 @@ static MACHINE_START( bshark )
 {
 	taitoz_state *state = (taitoz_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->eeprom = devtag_get_device(machine, "eeprom");
-	state->tc0100scn = devtag_get_device(machine, "tc0100scn");
-	state->tc0150rod = devtag_get_device(machine, "tc0150rod");
-	state->tc0480scp = devtag_get_device(machine, "tc0480scp");
-	state->tc0220ioc = devtag_get_device(machine, "tc0220ioc");
-	state->tc0140syt = devtag_get_device(machine, "tc0140syt");
+	state->maincpu = machine->device("maincpu");
+	state->subcpu = machine->device("sub");
+	state->audiocpu = machine->device("audiocpu");
+	state->eeprom = machine->device("eeprom");
+	state->tc0100scn = machine->device("tc0100scn");
+	state->tc0150rod = machine->device("tc0150rod");
+	state->tc0480scp = machine->device("tc0480scp");
+	state->tc0220ioc = machine->device("tc0220ioc");
+	state->tc0140syt = machine->device("tc0140syt");
 
 	state_save_register_global(machine, state->cpua_ctrl);
 
@@ -4944,13 +4944,13 @@ GAMEL(1989, sci,        0,        sci,      sci,      taitoz,   ROT0,           
 GAMEL(1989, scia,       sci,      sci,      sci,      taitoz,   ROT0,               "Taito Corporation Japan",   "Special Criminal Investigation (World set 2)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_contcirc )
 GAMEL(1989, scij,       sci,      sci,      scij,     taitoz,   ROT0,               "Taito Corporation",         "Special Criminal Investigation (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_contcirc )
 GAMEL(1989, sciu,       sci,      sci,      sciu,     taitoz,   ROT0,               "Taito America Corporation", "Special Criminal Investigation (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_contcirc )
-GAMEL(1991, scin,       sci,      sci,      sci,      taitoz,   ROT0,               "Taito Corporation Japan",   "Super Special Criminal Investigation (Negro Torino hack)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_contcirc )
+GAMEL(1991, scin,       sci,      sci,      sci,      taitoz,   ROT0,               "hack (Negro Torino)",       "Super Special Criminal Investigation (Negro Torino hack)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_contcirc )
 GAME( 1989, nightstr,   0,        nightstr, nightstr, taitoz,   ROT0,               "Taito Corporation Japan",   "Night Striker (World)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1989, nightstrj,  nightstr, nightstr, nghtstrj, taitoz,   ROT0,               "Taito Corporation",         "Night Striker (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1989, nightstru,  nightstr, nightstr, nghtstru, taitoz,   ROT0,               "Taito America Corporation", "Night Striker (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1990, aquajack,   0,        aquajack, aquajack, taitoz,   ROT0,               "Taito Corporation Japan",   "Aqua Jack (World)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1990, aquajackj,  aquajack, aquajack, aquajckj, taitoz,   ROT0,               "Taito Corporation",         "Aqua Jack (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1990, spacegun,   0,        spacegun, spacegun, bshark,   ORIENTATION_FLIP_X, "Taito Corporation Japan",   "Space Gun (World)", GAME_SUPPORTS_SAVE )
-GAMEL(1991, dblaxle,    0,        dblaxle,  dblaxle,  dblaxle,   ROT0,               "Taito America Corporation", "Double Axle (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_dblaxle )
-GAME( 1991, pwheelsj,   dblaxle,  dblaxle,  pwheelsj, dblaxle,   ROT0,               "Taito Corporation",         "Power Wheels (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1991, racingb,    0,        racingb,  dblaxle,  dblaxle,   ROT0,               "Taito Corporation Japan",   "Racing Beat (World)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAMEL(1991, dblaxle,    0,        dblaxle,  dblaxle,  dblaxle,  ROT0,               "Taito America Corporation", "Double Axle (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_dblaxle )
+GAME( 1991, pwheelsj,   dblaxle,  dblaxle,  pwheelsj, dblaxle,  ROT0,               "Taito Corporation",         "Power Wheels (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1991, racingb,    0,        racingb,  dblaxle,  dblaxle,  ROT0,               "Taito Corporation Japan",   "Racing Beat (World)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

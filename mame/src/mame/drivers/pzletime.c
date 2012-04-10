@@ -128,7 +128,7 @@ static VIDEO_UPDATE( pzletime )
 	}
 
 	tilemap_draw(bitmap, cliprect, state->txt_tilemap, 0, 0);
-	if ((video_screen_get_frame_number(screen) % 16) != 0)
+	if ((screen->frame_number() % 16) != 0)
 		tilemap_draw(bitmap, cliprect, state->txt_tilemap, 1, 0);
 
 	return 0;
@@ -197,13 +197,13 @@ static WRITE16_HANDLER( video_regs_w )
 
 static WRITE16_DEVICE_HANDLER( oki_bank_w )
 {
-	okim6295_set_bank_base(device, 0x40000 * (data & 0x3));
+	downcast<okim6295_device *>(device)->set_bank_base(0x40000 * (data & 0x3));
 }
 
 static CUSTOM_INPUT( ticket_status_r )
 {
 	pzletime_state *state = (pzletime_state *)field->port->machine->driver_data;
-	return (state->ticket && !(video_screen_get_frame_number(field->port->machine->primary_screen) % 128));
+	return (state->ticket && !(field->port->machine->primary_screen->frame_number() % 128));
 }
 
 static ADDRESS_MAP_START( pzletime_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -337,8 +337,7 @@ static MACHINE_DRIVER_START( pzletime )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("oki", OKIM6295, 937500) //freq & pin7 taken from stlforce
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", 937500, OKIM6295_PIN7_HIGH) //freq & pin7 taken from stlforce
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -385,4 +384,4 @@ ROM_START( pzletime )
 	ROM_LOAD( "pzletime.nv", 0x0000, 0x0080, CRC(e5ed3d40) SHA1(8c163a6e5839e5c82d52f046d3268202fdf9f4d1) )
 ROM_END
 
-GAME( 199?, pzletime, 0, pzletime,  pzletime,  0, ROT0, "Elettronica Video-Games S.R.L.", "Puzzle Time (Prototype)", GAME_SUPPORTS_SAVE )
+GAME( 199?, pzletime, 0, pzletime,  pzletime,  0, ROT0, "Elettronica Video-Games S.R.L.", "Puzzle Time (prototype)", GAME_SUPPORTS_SAVE )

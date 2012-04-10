@@ -297,7 +297,7 @@ covert megatech / megaplay drivers to use new code etc. etc.
 #include "cpu/z80/z80.h"
 #include "sound/sn76496.h"
 #include "machine/mc8123.h"
-#include "machine/segacrpt.h"
+#include "machine/segacrp2.h"
 #include "includes/segamsys.h"
 
 /****************************************************************************************
@@ -364,8 +364,8 @@ static void init_ports_systeme(running_machine *machine)
 	/* INIT THE PORTS *********************************************************************************************/
 
 	const address_space *io = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
-	running_device *sn1 = devtag_get_device(machine, "sn1");
-	running_device *sn2 = devtag_get_device(machine, "sn2");
+	running_device *sn1 = machine->device("sn1");
+	running_device *sn2 = machine->device("sn2");
 
 	memory_install_write8_device_handler(io, sn2, 0x7b, 0x7b, 0, 0, sn76496_w);
 	memory_install_write8_device_handler(io, sn1, 0x7e, 0x7f, 0, 0, sn76496_w);
@@ -402,7 +402,7 @@ static void init_systeme_map(running_machine *machine)
 	init_ports_systeme(machine);
 }
 
-DRIVER_INIT( segasyse )
+static DRIVER_INIT( segasyse )
 {
 	init_systeme_map(machine);
 	DRIVER_INIT_CALL(hazemd_segasyse);
@@ -996,7 +996,7 @@ static DRIVER_INIT( astrofl )
 {
 	DRIVER_INIT_CALL(segasyse);
 
-	astrofl_decode(machine, "maincpu");
+	sega_315_5177_decode(machine, "maincpu");
 }
 
 GAME( 1985, hangonjr, 0,        systeme, hangonjr, hangonjr, ROT0,  "Sega", "Hang-On Jr.", 0 )

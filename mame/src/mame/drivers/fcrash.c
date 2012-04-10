@@ -696,10 +696,10 @@ static MACHINE_START( fcrash )
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "soundcpu");
-	state->msm_1 = devtag_get_device(machine, "msm1");
-	state->msm_2 = devtag_get_device(machine, "msm2");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("soundcpu");
+	state->msm_1 = machine->device("msm1");
+	state->msm_2 = machine->device("msm2");
 
 	state_save_register_global(machine, state->sample_buffer1);
 	state_save_register_global(machine, state->sample_buffer2);
@@ -711,8 +711,8 @@ static MACHINE_START( kodb )
 {
 	cps_state *state = (cps_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "soundcpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("soundcpu");
 }
 
 static MACHINE_RESET( fcrash )
@@ -818,8 +818,7 @@ static MACHINE_DRIVER_START( kodb )
 //  MDRV_SOUND_ROUTE(0, "mono", 0.35)
 //  MDRV_SOUND_ROUTE(1, "mono", 0.35)
 
-//  MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-//  MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // pin 7 can be changed by the game code, see f006 on z80
+//  MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // pin 7 can be changed by the game code, see f006 on z80
 //  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 MACHINE_DRIVER_END
 
@@ -922,5 +921,5 @@ ROM_START( kodb )
 	ROM_LOAD( "2.ic19",      0x00000, 0x40000, CRC(a2db1575) SHA1(1a4a29e4b045af50700adf1665697feab12cc234) )
 ROM_END
 
-GAME( 1990, fcrash,   ffight,  fcrash,     fcrash,   cps1,     ROT0,   "[Capcom] (Playmark bootleg)", "Final Crash (bootleg of Final Fight)", GAME_SUPPORTS_SAVE )
-GAME( 1991, kodb,     kod,     kodb,       kodb,     cps1,     ROT0,   "[Capcom] (Playmark bootleg)", "The King of Dragons (bootleg)", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )	// 910731  "ETC"
+GAME( 1990, fcrash,   ffight,  fcrash,     fcrash,   cps1,     ROT0,   "bootleg (Playmark)", "Final Crash (bootleg of Final Fight)", GAME_SUPPORTS_SAVE )
+GAME( 1991, kodb,     kod,     kodb,       kodb,     cps1,     ROT0,   "bootleg (Playmark)", "The King of Dragons (bootleg)", GAME_NOT_WORKING | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )	// 910731  "ETC"

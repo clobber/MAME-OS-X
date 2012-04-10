@@ -676,7 +676,7 @@ static INTERRUPT_GEN( zaccaria_cb1_toggle )
 {
 	laserbat_state *state = (laserbat_state *)device->machine->driver_data;
 
-	pia6821_cb1_w(state->pia, 0, state->cb1_toggle & 1);
+	pia6821_cb1_w(state->pia, state->cb1_toggle & 1);
 	state->cb1_toggle ^= 1;
 }
 
@@ -706,16 +706,16 @@ static MACHINE_START( laserbat )
 {
 	laserbat_state *state = (laserbat_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->s2636_1 = devtag_get_device(machine, "s2636_1");
-	state->s2636_2 = devtag_get_device(machine, "s2636_2");
-	state->s2636_3 = devtag_get_device(machine, "s2636_3");
-	state->pia = devtag_get_device(machine, "pia");
-	state->sn = devtag_get_device(machine, "snsnd");
-	state->tms1 = devtag_get_device(machine, "tms1");
-	state->tms2 = devtag_get_device(machine, "tms2");
-	state->ay1 = devtag_get_device(machine, "ay1");
-	state->ay2 = devtag_get_device(machine, "ay2");
+	state->audiocpu = machine->device("audiocpu");
+	state->s2636_1 = machine->device("s2636_1");
+	state->s2636_2 = machine->device("s2636_2");
+	state->s2636_3 = machine->device("s2636_3");
+	state->pia = machine->device("pia");
+	state->sn = machine->device("snsnd");
+	state->tms1 = machine->device("tms1");
+	state->tms2 = machine->device("tms2");
+	state->ay1 = machine->device("ay1");
+	state->ay2 = machine->device("ay2");
 
 	state_save_register_global(machine, state->video_page);
 	state_save_register_global(machine, state->input_mux);
@@ -1036,6 +1036,6 @@ ROM_END
 
 
 GAME( 1981, laserbat, 0,        laserbat, laserbat, 0, ROT0,  "Zaccaria", "Laser Battle",                    GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1981, lazarian, laserbat, laserbat, lazarian, 0, ROT0,  "Bally Midway (Zaccaria License)", "Lazarian", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1981, lazarian, laserbat, laserbat, lazarian, 0, ROT0,  "Zaccaria (Bally Midway license)", "Lazarian", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1982, catnmous, 0,        catnmous, catnmous, 0, ROT90, "Zaccaria", "Cat and Mouse (set 1)",           GAME_NO_SOUND | GAME_WRONG_COLORS | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE)
 GAME( 1982, catnmousa,catnmous, catnmous, catnmous, 0, ROT90, "Zaccaria", "Cat and Mouse (set 2)",           GAME_NO_SOUND | GAME_WRONG_COLORS | GAME_NO_COCKTAIL | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE)

@@ -60,7 +60,7 @@ static WRITE8_DEVICE_HANDLER( paradise_okibank_w )
 	if (data & ~0x02)
 		logerror("%s: unknown oki bank bits %02X\n", cpuexec_describe_context(device->machine), data);
 
-	okim6295_set_bank_base(device, (data & 0x02) ? 0x40000 : 0);
+	downcast<okim6295_device *>(device)->set_bank_base((data & 0x02) ? 0x40000 : 0);
 }
 
 static WRITE8_HANDLER( torus_coin_counter_w )
@@ -548,7 +548,7 @@ static MACHINE_START( paradise )
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 3, &ROM[0x00000], 0x4000);
-	memory_configure_bank(machine, "bank1", 3, bank_n - 4, &ROM[0x10000], 0x4000);
+	memory_configure_bank(machine, "bank1", 3, bank_n - 3, &ROM[0x10000], 0x4000);
 
 	state_save_register_global(machine, state->palbank);
 	state_save_register_global(machine, state->priority);
@@ -593,12 +593,10 @@ static MACHINE_DRIVER_START( paradise )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_12MHz/12)	/* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", XTAL_12MHz/12, OKIM6295_PIN7_HIGH)	/* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_12MHz/12) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki2", XTAL_12MHz/12, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
@@ -648,7 +646,7 @@ MACHINE_DRIVER_END
 
                           Paradise / Paradise Deluxe
 
-(c) Yun Sung  year unkown
+(c) Yun Sung  year unknown
 
 Another porn qix like game
 

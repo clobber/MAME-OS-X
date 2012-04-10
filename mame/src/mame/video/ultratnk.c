@@ -52,7 +52,7 @@ static TILE_GET_INFO( ultratnk_tile_info )
 
 VIDEO_START( ultratnk )
 {
-	helper = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	helper = machine->primary_screen->alloc_compatible_bitmap();
 
 	playfield = tilemap_create(machine, ultratnk_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
@@ -96,7 +96,7 @@ VIDEO_EOF( ultratnk )
 {
 	int i;
 	UINT16 BG = colortable_entry_get_value(machine->colortable, 0);
-	running_device *discrete = devtag_get_device(machine, "discrete");
+	running_device *discrete = machine->device("discrete");
 	UINT8 *videoram = machine->generic.videoram.u8;
 
 	/* check for sprite-playfield collisions */
@@ -119,7 +119,7 @@ VIDEO_EOF( ultratnk )
 		rect.max_x = horz - 15 + machine->gfx[1]->width - 1;
 		rect.max_y = vert - 15 + machine->gfx[1]->height - 1;
 
-		sect_rect(&rect, video_screen_get_visible_area(machine->primary_screen));
+		sect_rect(&rect, &machine->primary_screen->visible_area());
 
 		tilemap_draw(helper, &rect, playfield, 0, 0);
 

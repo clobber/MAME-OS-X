@@ -32,7 +32,7 @@ static PALETTE_INIT( shanghai )
 	int i;
 
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine->total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 
@@ -63,7 +63,7 @@ static VIDEO_START( shanghai )
 
 static VIDEO_UPDATE( shanghai )
 {
-	running_device *hd63484 = devtag_get_device(screen->machine, "hd63484");
+	running_device *hd63484 = screen->machine->device("hd63484");
 	int x, y, b, src;
 
 	b = ((hd63484_regs_r(hd63484, 0xcc/2, 0xffff) & 0x000f) << 16) + hd63484_regs_r(hd63484, 0xce/2, 0xffff);

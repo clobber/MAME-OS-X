@@ -39,14 +39,14 @@ static emu_timer *acefruit_refresh_timer;
 
 static TIMER_CALLBACK( acefruit_refresh )
 {
-	int vpos = video_screen_get_vpos(machine->primary_screen);
+	int vpos = machine->primary_screen->vpos();
 
-	video_screen_update_partial(machine->primary_screen, vpos );
+	machine->primary_screen->update_partial(vpos );
 	acefruit_update_irq(machine, vpos );
 
 	vpos = ( ( vpos / 8 ) + 1 ) * 8;
 
-	timer_adjust_oneshot( acefruit_refresh_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos, 0 ), 0 );
+	timer_adjust_oneshot( acefruit_refresh_timer, machine->primary_screen->time_until_pos(vpos), 0 );
 }
 
 static VIDEO_START( acefruit )
@@ -716,4 +716,4 @@ GAMEL( 1981?, sidewndr, 0,        acefruit, sidewndr, sidewndr, ROT270, "ACE", "
 GAMEL( 1981?, spellbnd, sidewndr, acefruit, spellbnd, 0,        ROT270, "ACE", "Spellbound", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND, layout_sidewndr )
 GAME ( 1982?, starspnr, 0,        acefruit, starspnr, 0,        ROT270, "ACE", "Starspinner (Dutch/Nederlands)", GAME_NOT_WORKING | GAME_NO_SOUND )
 // inputs need fixing on this one, no idea what it's called either
-GAME ( 1982?, acefruit, 0,        acefruit, spellbnd, 0,        ROT270, "ACE", "Unknown ACE Fruits Game", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME ( 1982?, acefruit, 0,        acefruit, spellbnd, 0,        ROT270, "ACE", "unknown ACE fruits game", GAME_NOT_WORKING | GAME_NO_SOUND )

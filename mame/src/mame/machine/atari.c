@@ -22,7 +22,7 @@
 
 static void a600xl_mmu(running_machine *machine, UINT8 new_mmu);
 
-static void pokey_reset(running_machine *machine);
+static void pokey_reset(running_machine &machine);
 
 void atari_interrupt_cb(running_device *device, int mask)
 {
@@ -159,7 +159,7 @@ static int atari_last;
 
 void a800_handle_keyboard(running_machine *machine)
 {
-	running_device *pokey = devtag_get_device(machine, "pokey");
+	running_device *pokey = machine->device("pokey");
 	int atari_code, count, ipt, i;
 	static const char *const tag[] = {
 		"keyboard_0", "keyboard_1", "keyboard_2", "keyboard_3",
@@ -244,7 +244,7 @@ void a800_handle_keyboard(running_machine *machine)
 
 void a5200_handle_keypads(running_machine *machine)
 {
-	running_device *pokey = devtag_get_device(machine, "pokey");
+	running_device *pokey = machine->device("pokey");
 	int atari_code, count, ipt, i;
 	static const char *const tag[] = { "keypad_0", "keypad_1", "keypad_2", "keypad_3" };
 
@@ -306,9 +306,9 @@ void a5200_handle_keypads(running_machine *machine)
  *************************************/
 
 
-static void pokey_reset(running_machine *machine)
+static void pokey_reset(running_machine &machine)
 {
-	running_device *pokey = devtag_get_device(machine, "pokey");
+	running_device *pokey = machine.device("pokey");
 	pokey_w(pokey,15,0);
 	atari_last = 0xff;
 }
@@ -322,7 +322,7 @@ static UINT8 console_read(const address_space *space)
 
 static void console_write(const address_space *space, UINT8 data)
 {
-	running_device *dac = devtag_get_device(space->machine, "dac");
+	running_device *dac = space->machine->device("dac");
 	if (data & 0x08)
 		dac_data_w(dac, (UINT8)-120);
 	else
@@ -330,7 +330,7 @@ static void console_write(const address_space *space, UINT8 data)
 }
 
 
-static void _antic_reset(running_machine *machine)
+static void _antic_reset(running_machine &machine)
 {
 	antic_reset();
 }
@@ -349,10 +349,10 @@ void atari_machine_start(running_machine *machine)
 	gtia_init(machine, &gtia_intf);
 
 	/* pokey */
-	add_reset_callback(machine, pokey_reset);
+	machine->add_notifier(MACHINE_NOTIFY_RESET, pokey_reset);
 
 	/* ANTIC */
-	add_reset_callback(machine, _antic_reset);
+	machine->add_notifier(MACHINE_NOTIFY_RESET, _antic_reset);
 
 	/* save states */
 	state_save_register_global_pointer(machine, ((UINT8 *) &antic.r), sizeof(antic.r));

@@ -1,7 +1,7 @@
 /****************************************************************************
 
-Mazer Blazer by Stern (c) 1983
-Great Guns by Stern (c) 1983
+Mazer Blazer by Stern Electronics (c) 1983
+Great Guns by Stern Electronics (c) 1983
 
 
 Driver by Jarek Burczynski
@@ -131,10 +131,10 @@ static PALETTE_INIT( mazerbla )
 static VIDEO_START( mazerbla )
 {
 	mazerbla_state *state = (mazerbla_state *)machine->driver_data;
-	state->tmpbitmaps[0] = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	state->tmpbitmaps[1] = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	state->tmpbitmaps[2] = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	state->tmpbitmaps[3] = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	state->tmpbitmaps[0] = machine->primary_screen->alloc_compatible_bitmap();
+	state->tmpbitmaps[1] = machine->primary_screen->alloc_compatible_bitmap();
+	state->tmpbitmaps[2] = machine->primary_screen->alloc_compatible_bitmap();
+	state->tmpbitmaps[3] = machine->primary_screen->alloc_compatible_bitmap();
 
 	state_save_register_global_bitmap(machine, state->tmpbitmaps[0]);
 	state_save_register_global_bitmap(machine, state->tmpbitmaps[1]);
@@ -1403,8 +1403,8 @@ static MACHINE_START( mazerbla )
 {
 	mazerbla_state *state = (mazerbla_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->subcpu = devtag_get_device(machine, "sub");
+	state->maincpu = machine->device("maincpu");
+	state->subcpu = machine->device("sub");
 
 	state_save_register_global_array(machine, state->vcu_video_reg);
 	state_save_register_global(machine, state->vcu_gfx_addr);
@@ -1470,7 +1470,7 @@ static MACHINE_RESET( mazerbla )
 
 	memset(state->lookup_ram, 0, ARRAY_LENGTH(state->lookup_ram));
 
-	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
+	cpu_set_irq_callback(machine->device("maincpu"), irq_callback);
 }
 
 
@@ -1705,6 +1705,6 @@ static DRIVER_INIT( greatgun )
 	rom[0x0380] = 0;
 }
 
-GAME( 1983, mazerbla,  0,        mazerbla,  mazerbla, mazerbla, ROT0, "Stern", "Mazer Blazer (set 1)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1983, mazerblaa, mazerbla, mazerbla,  mazerbla, mazerbla, ROT0, "Stern", "Mazer Blazer (set 2)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1983, greatgun,  0,        greatgun,  greatgun, greatgun, ROT0, "Stern", "Great Guns", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1983, mazerbla,  0,        mazerbla,  mazerbla, mazerbla, ROT0, "Stern Electronics", "Mazer Blazer (set 1)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1983, mazerblaa, mazerbla, mazerbla,  mazerbla, mazerbla, ROT0, "Stern Electronics", "Mazer Blazer (set 2)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1983, greatgun,  0,        greatgun,  greatgun, greatgun, ROT0, "Stern Electronics", "Great Guns", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

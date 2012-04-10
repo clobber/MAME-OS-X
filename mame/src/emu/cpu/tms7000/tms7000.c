@@ -72,8 +72,8 @@ struct _tms7000_state
 	UINT8		irq_state[3];	/* State of the three IRQs */
 	UINT8		rf[0x80];	/* Register file (SJE) */
 	UINT8		pf[0x100];	/* Perpherial file */
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	int			icount;
@@ -88,11 +88,9 @@ struct _tms7000_state
 INLINE tms7000_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_TMS7000 ||
-		   cpu_get_type(device) == CPU_TMS7000_EXL);
-	return (tms7000_state *)device->token;
+	assert(device->type() == TMS7000 ||
+		   device->type() == TMS7000_EXL);
+	return (tms7000_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define pPC		cpustate->pc.w.l
@@ -265,7 +263,7 @@ static CPU_SET_INFO( tms7000 )
 
 CPU_GET_INFO( tms7000 )
 {
-	tms7000_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	tms7000_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
     switch( state )
     {
@@ -446,8 +444,7 @@ static CPU_EXECUTE( tms7000 )
 	tms7000_state *cpustate = get_safe_token(device);
 	int op;
 
-	cpustate->icount = cycles;
-	cpustate->div_by_16_trigger += cycles;
+	cpustate->div_by_16_trigger += cpustate->icount;
 
     tms7000_check_IRQ_lines(cpustate);
 
@@ -480,7 +477,6 @@ static CPU_EXECUTE( tms7000 )
 	} while( cpustate->icount > 0 );
 
 	cpustate->div_by_16_trigger -= cpustate->icount;
-	return cycles - cpustate->icount;
 }
 
 static CPU_EXECUTE( tms7000_exl )
@@ -488,8 +484,7 @@ static CPU_EXECUTE( tms7000_exl )
 	tms7000_state *cpustate = get_safe_token(device);
 	int op;
 
-	cpustate->icount = cycles;
-	cpustate->div_by_16_trigger += cycles;
+	cpustate->div_by_16_trigger += cpustate->icount;
 
     tms7000_check_IRQ_lines(cpustate);
 
@@ -523,7 +518,6 @@ static CPU_EXECUTE( tms7000_exl )
 	} while( cpustate->icount > 0 );
 
 	cpustate->div_by_16_trigger -= cpustate->icount;
-	return cycles - cpustate->icount;
 }
 
 /****************************************************************************
@@ -550,13 +544,13 @@ static void tms7000_service_timer1( running_device *device )
         {
             cpustate->t1_decrementer = cpustate->pf[2]; /* Reload decrementer (8 bit) */
 			cpu_set_input_line(device, TMS7000_IRQ2_LINE, HOLD_LINE);
-            //LOG( ("tms7000: trigger int2 (cycles: %d)\t%d\tdelta %d\n", cpu_get_total_cycles(device), cpu_get_total_cycles(device) - tick, cpustate->cycles_per_INT2-(cpu_get_total_cycles(device) - tick) );
-			//tick = cpu_get_total_cycles(device) );
+            //LOG( ("tms7000: trigger int2 (cycles: %d)\t%d\tdelta %d\n", cpustate->device->total_cycles(), cpustate->device->total_cycles() - tick, cpustate->cycles_per_INT2-(cpustate->device->total_cycles() - tick) );
+			//tick = cpustate->device->total_cycles() );
             /* Also, cascade out to timer 2 - timer 2 unimplemented */
         }
     }
-//  LOG( ( "tms7000: service timer1. 0x%2.2x 0x%2.2x (cycles %d)\t%d\t\n", cpustate->t1_prescaler, cpustate->t1_decrementer, cpu_get_total_cycles(device), cpu_get_total_cycles(device) - tick2 ) );
-//  tick2 = cpu_get_total_cycles(device);
+//  LOG( ( "tms7000: service timer1. 0x%2.2x 0x%2.2x (cycles %d)\t%d\t\n", cpustate->t1_prescaler, cpustate->t1_decrementer, cpustate->device->total_cycles(), cpustate->device->total_cycles() - tick2 ) );
+//  tick2 = cpustate->device->total_cycles();
 }
 
 static WRITE8_HANDLER( tms70x0_pf_w )	/* Perpherial file write */
@@ -731,3 +725,6 @@ static READ8_HANDLER( tms7000_internal_r ) {
 	tms7000_state *cpustate = get_safe_token(space->cpu);
 	return cpustate->rf[ offset ];
 }
+
+DEFINE_LEGACY_CPU_DEVICE(TMS7000, tms7000);
+DEFINE_LEGACY_CPU_DEVICE(TMS7000_EXL, tms7000_exl);

@@ -105,7 +105,7 @@ typedef enum
 } trans32T;
 
 // local variables
-static running_device *sector_timer;
+static timer_device *sector_timer;
 static partitionT partitions[MAX_FILTERS];
 static partitionT *transpart;
 
@@ -198,7 +198,7 @@ TIMER_DEVICE_CALLBACK( stv_sector_cb )
 	cr3 = (cd_curfad>>16)&0xff;
 	cr4 = cd_curfad;
 
-	timer_device_adjust_oneshot(timer, ATTOTIME_IN_HZ(150), 0);
+	timer.adjust(ATTOTIME_IN_HZ(150));
 }
 
 // global functions
@@ -258,7 +258,7 @@ void stvcd_reset(running_machine *machine)
 	}
 
 	#ifdef MESS
-	cdrom = mess_cd_get_cdrom_file(devtag_get_device( machine, "cdrom" ));
+	cdrom = mess_cd_get_cdrom_file(machine->device( "cdrom" ));
 	#else
 	cdrom = cdrom_open(get_disk_handle(machine, "cdrom"));
 	#endif
@@ -273,8 +273,8 @@ void stvcd_reset(running_machine *machine)
 		cd_stat = CD_STAT_OPEN;
 	}
 
-	sector_timer = devtag_get_device(machine, "sector_timer");
-	timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
+	sector_timer = machine->device<timer_device>("sector_timer");
+	sector_timer->adjust(ATTOTIME_IN_HZ(150));	// 150 sectors / second = 300kBytes/second
 }
 
 static blockT *cd_alloc_block(UINT8 *blknum)
@@ -765,8 +765,8 @@ static void cd_writeWord(running_machine *machine, UINT32 addr, UINT16 data)
 
 			// and do the disc I/O
 			// make sure it doesn't come in too early
-			timer_device_adjust_oneshot(sector_timer, attotime_never, 0);
-			timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);	// 150 sectors / second = 300kBytes/second
+			sector_timer->reset();
+			sector_timer->adjust(ATTOTIME_IN_HZ(150));	// 150 sectors / second = 300kBytes/second
 			break;
 
 		case 0x1100: // disk seek
@@ -1274,7 +1274,7 @@ static void cd_writeWord(running_machine *machine, UINT32 addr, UINT16 data)
 			playtype = 1;
 
 			// and do the disc I/O
-//          timer_device_adjust_oneshot(sector_timer, ATTOTIME_IN_HZ(150), 0);  // 150 sectors / second = 300kBytes/second
+//          sector_timer->adjust(ATTOTIME_IN_HZ(150));  // 150 sectors / second = 300kBytes/second
 			break;
 
 		case 0x7500:
@@ -1538,11 +1538,11 @@ static void make_dir_current(running_machine *machine, UINT32 fad)
 	}
 }
 
-void stvcd_exit(running_machine* machine)
+void stvcd_exit(running_machine& machine)
 {
 	if (curdir != (direntryT *)NULL)
 	{
-		auto_free(machine, curdir);
+		auto_free(&machine, curdir);
 		curdir = (direntryT *)NULL;
 	}
 

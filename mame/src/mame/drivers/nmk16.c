@@ -873,12 +873,12 @@ static void mcu_run(running_machine *machine, UINT8 dsw_setting)
 
 static TIMER_DEVICE_CALLBACK( tdragon_mcu_sim )
 {
-	mcu_run(timer->machine,1);
+	mcu_run(timer.machine,1);
 }
 
 static TIMER_DEVICE_CALLBACK( hachamf_mcu_sim )
 {
-	mcu_run(timer->machine,0);
+	mcu_run(timer.machine,0);
 }
 
 static ADDRESS_MAP_START( tdragon_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -1572,7 +1572,7 @@ static INPUT_PORTS_START( hachamf )
 	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
 
 	PORT_START("DSW1")
-	PORT_DIPNAME( 0x0700, 0x0700, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW2:1,2,3")
+	PORT_DIPNAME( 0x0700, 0x0700, DEF_STR( Coin_A ) )	PORT_DIPLOCATION("SW2:8,7,6")
 	PORT_DIPSETTING(    0x0100, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x0200, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x0300, DEF_STR( 2C_1C ) )
@@ -1581,7 +1581,7 @@ static INPUT_PORTS_START( hachamf )
 	PORT_DIPSETTING(    0x0500, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x0400, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x3800, 0x3800, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW2:4,5,6")
+	PORT_DIPNAME( 0x3800, 0x3800, DEF_STR( Coin_B ) )	PORT_DIPLOCATION("SW2:5,4,3")
 	PORT_DIPSETTING(    0x0800, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x1000, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x1800, DEF_STR( 2C_1C ) )
@@ -1590,10 +1590,10 @@ static INPUT_PORTS_START( hachamf )
 	PORT_DIPSETTING(    0x2800, DEF_STR( 1C_3C ) )
 	PORT_DIPSETTING(    0x2000, DEF_STR( 1C_4C ) )
 	PORT_DIPSETTING(    0x0000, DEF_STR( Free_Play ) )
-	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:7")
+	PORT_DIPNAME( 0x4000, 0x4000, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:2")
 	PORT_DIPSETTING(    0x0000, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x4000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW2:8")
+	PORT_DIPNAME( 0x8000, 0x8000, DEF_STR( Unknown ) )	PORT_DIPLOCATION("SW2:1")
 	PORT_DIPSETTING(    0x8000, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x0000, DEF_STR( On ) )
 	PORT_DIPNAME( 0x0001, 0x0001, DEF_STR( Flip_Screen ) )	PORT_DIPLOCATION("SW1:8")
@@ -3567,12 +3567,10 @@ static MACHINE_DRIVER_START( tharrier )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3613,12 +3611,10 @@ static MACHINE_DRIVER_START( manybloc )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3658,12 +3654,10 @@ static MACHINE_DRIVER_START( mustang )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3737,12 +3731,10 @@ static MACHINE_DRIVER_START( bioship )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, BIOSHIP_CRYSTAL2 / 3 ) /* 4.0 Mhz, Pin 7 High (verified) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", BIOSHIP_CRYSTAL2 / 3 , OKIM6295_PIN7_HIGH) /* 4.0 Mhz, Pin 7 High (verified) */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, BIOSHIP_CRYSTAL2 / 3 ) /* 4.0 Mhz, Pin 7 High (verified) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", BIOSHIP_CRYSTAL2 / 3 , OKIM6295_PIN7_HIGH) /* 4.0 Mhz, Pin 7 High (verified) */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3781,12 +3773,10 @@ static MACHINE_DRIVER_START( vandyke )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_12MHz/3) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", XTAL_12MHz/3, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_12MHz/3) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki2", XTAL_12MHz/3, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3799,7 +3789,7 @@ static MACHINE_DRIVER_START( vandykeb )
 	MDRV_CPU_PERIODIC_INT(irq1_line_hold,112)/* ???????? */
 
 	MDRV_CPU_ADD("mcu", PIC16C57, 12000000)	/* 3MHz */
-	MDRV_CPU_FLAGS(CPU_DISABLE)
+	MDRV_DEVICE_DISABLE()
 
 	//MDRV_MACHINE_RESET(NMK004) // no NMK004
 
@@ -3821,8 +3811,7 @@ static MACHINE_DRIVER_START( vandykeb )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3861,12 +3850,10 @@ static MACHINE_DRIVER_START( acrobatm )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4) /* (verified on pcb) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* on the pcb pin7 is not connected to gnd or +5v! */
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW) /* (verified on pcb) on the pcb pin7 is not connected to gnd or +5v! */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4) /* (verified on pcb) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* on the pcb pin7 is not connected to gnd or +5v! */
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW) /* (verified on pcb) on the pcb pin7 is not connected to gnd or +5v! */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3940,12 +3927,10 @@ static MACHINE_DRIVER_START( tdragon )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_8MHz/2) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", XTAL_8MHz/2, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_8MHz/2) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki2", XTAL_8MHz/2, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -3978,8 +3963,7 @@ static MACHINE_DRIVER_START( ssmissin )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 8000000/8) /* 1 Mhz, pin 7 high */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 8000000/8, OKIM6295_PIN7_HIGH) /* 1 Mhz, pin 7 high */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NMK112_ADD("nmk112", nmk16_nmk112_intf)
@@ -4020,12 +4004,10 @@ static MACHINE_DRIVER_START( strahl )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -4065,12 +4047,10 @@ static MACHINE_DRIVER_START( hachamf )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -4109,12 +4089,10 @@ static MACHINE_DRIVER_START( macross )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -4153,12 +4131,10 @@ static MACHINE_DRIVER_START( blkheart )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_8MHz/2) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", XTAL_8MHz/2, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_8MHz/2) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki2", XTAL_8MHz/2, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -4197,12 +4173,10 @@ static MACHINE_DRIVER_START( gunnail )
 	MDRV_SOUND_ROUTE(2, "mono", 0.50)
 	MDRV_SOUND_ROUTE(3, "mono", 2.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_DRIVER_END
 
@@ -4240,12 +4214,10 @@ static MACHINE_DRIVER_START( macross2 )
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
 	MDRV_NMK112_ADD("nmk112", nmk16_nmk112_intf)
@@ -4285,12 +4257,10 @@ static MACHINE_DRIVER_START( tdragon2 )
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.08)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.08)
 
 	MDRV_NMK112_ADD("nmk112", nmk16_nmk112_intf)
@@ -4329,12 +4299,10 @@ static MACHINE_DRIVER_START( raphero )
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
 	MDRV_NMK112_ADD("nmk112", nmk16_nmk112_intf)
@@ -4366,12 +4334,10 @@ static MACHINE_DRIVER_START( bjtwin )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 16000000/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", 16000000/4, OKIM6295_PIN7_LOW)  /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 16000000/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki2", 16000000/4, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 
 	MDRV_NMK112_ADD("nmk112", nmk16_nmk112_intf)
@@ -4713,9 +4679,9 @@ static WRITE16_HANDLER( twinactn_flipscreen_w )
 static WRITE8_DEVICE_HANDLER( spec2k_oki1_banking_w )
 {
 	if(data == 0xfe)
-		okim6295_set_bank_base(device, 0);
+		downcast<okim6295_device *>(device)->set_bank_base(0);
 	else if(data == 0xff)
-		okim6295_set_bank_base(device, 0x40000);
+		downcast<okim6295_device *>(device)->set_bank_base(0x40000);
 }
 
 static ADDRESS_MAP_START( afega_sound_cpu, ADDRESS_SPACE_PROGRAM, 8 )
@@ -4741,7 +4707,7 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( twinactn_oki_bank_w )
 {
-	okim6295_set_bank_base(device, (data & 3) * 0x40000);
+	downcast<okim6295_device *>(device)->set_bank_base((data & 3) * 0x40000);
 
 	if (data & (~3))
 		logerror("%s: invalid oki bank %02x\n", cpuexec_describe_context(device->machine), data);
@@ -4881,8 +4847,7 @@ static MACHINE_DRIVER_START( stagger1 )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.30)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_4MHz/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki1", XTAL_4MHz/4, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.70)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.70)
 MACHINE_DRIVER_END
@@ -4961,12 +4926,10 @@ static MACHINE_DRIVER_START( firehawk )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -5000,8 +4963,7 @@ static MACHINE_DRIVER_START( twinactn )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -7118,7 +7080,7 @@ GAME( 1990, sbsgomo,  bioship,  bioship,  bioship,  0,        ROT0,   "UPL",    
 GAME( 1990, vandyke,    0,       vandyke,  vandyke, 0,        ROT270, "UPL",                          "Vandyke (Japan)",  GAME_IMPERFECT_SOUND )
 GAME( 1990, vandykejal, vandyke, vandyke,  vandyke, 0,        ROT270, "UPL (Jaleco license)",         "Vandyke (Jaleco, Set 1)",  GAME_IMPERFECT_SOUND )
 GAME( 1990, vandykejal2,vandyke, vandyke,  vandyke, 0,        ROT270, "UPL (Jaleco license)",         "Vandyke (Jaleco, Set 2)",  GAME_IMPERFECT_SOUND )
-GAME( 1990, vandykeb,  vandyke, vandykeb, vandykeb, vandykeb, ROT270, "[UPL] (bootleg)",              "Vandyke (bootleg with PIC16c57)",  GAME_NO_SOUND )
+GAME( 1990, vandykeb,  vandyke, vandykeb, vandykeb, vandykeb, ROT270, "bootleg",                      "Vandyke (bootleg with PIC16c57)",  GAME_NO_SOUND )
 
 GAME( 1991, blkheart, 0,        blkheart,  blkheart, 0,       ROT0,   "UPL",                          "Black Heart", GAME_IMPERFECT_SOUND  )
 GAME( 1991, blkheartj,blkheart, blkheart,  blkheart, 0,       ROT0,   "UPL",                          "Black Heart (Japan)", GAME_IMPERFECT_SOUND )
@@ -7156,8 +7118,8 @@ GAME( 1995, nouryoku, 0,        bjtwin,   nouryoku, nmk,      ROT0,   "Tecmo",  
 
 // these use the seibu sound system (sound / music stolen from Raiden) rather than the bootleggers copying the nmk004
 GAME( 1990, mustangb, mustang,  mustangb, mustang,  0,        ROT0,   "bootleg",                       "US AAF Mustang (bootleg)", 0 )
-GAME( 1990, mustangb2,mustang,  mustangb, mustang,  0,        ROT0,   "bootleg",                       "US AAF Mustang (TAB Austria bootleg)", 0 ) // PCB and roms have TAB Austria stickers
-GAME( 1991, tdragonb, tdragon,  tdragonb, tdragonb, tdragonb, ROT270, "bootleg",	               "Thunder Dragon (bootleg)", 0 )
+GAME( 1990, mustangb2,mustang,  mustangb, mustang,  0,        ROT0,   "bootleg (TAB Austria)",         "US AAF Mustang (TAB Austria bootleg)", 0 ) // PCB and roms have TAB Austria stickers
+GAME( 1991, tdragonb, tdragon,  tdragonb, tdragonb, tdragonb, ROT270, "bootleg",	                   "Thunder Dragon (bootleg)", 0 )
 
 // these are from Comad, based on the Thunder Dragon code?
 GAME( 1992, ssmissin, 0,        ssmissin, ssmissin, ssmissin, ROT270, "Comad",                         "S.S. Mission", GAME_NO_COCKTAIL )
@@ -7171,14 +7133,14 @@ GAME( 1997, redhawk,  stagger1, stagger1, stagger1, redhawk,  ROT270, "Afega (Ne
 GAME( 1997, redhawki, stagger1, redhawki, stagger1, 0,        ROT0,   "Afega (Hea Dong Corp license)",     "Red Hawk (Italy)", 0 ) // bootleg? strange scroll regs
 GAME( 1997, redhawke, stagger1, stagger1, stagger1, 0,        ROT270, "Afega (Excellent Co. license)",     "Red Hawk (Excellent Co., Ltd)", 0 )
 GAME( 1997, redhawkb, stagger1, redhawkb, redhawkb, 0,        ROT0,   "bootleg",                           "Red Hawk (bootleg)", 0 )
-GAME( 1998, grdnstrm, 0,        grdnstrm, grdnstrm, 0,        ORIENTATION_FLIP_Y,   "Afega (Apples Industries license)", "Guardian Storm", 0 )
+GAME( 1998, grdnstrm, 0,        grdnstrm, grdnstrm, 0,        ORIENTATION_FLIP_Y, "Afega (Apples Industries license)", "Guardian Storm", 0 )
 GAME( 1998, grdnstrmk,grdnstrm, grdnstrmk,grdnstrk, grdnstrm, ROT270, "Afega",                             "Sen Jin - Guardian Storm (Korea)", 0 )
 GAME( 1998, bubl2000, 0,        popspops, bubl2000, bubl2000, ROT0,   "Tuning",                            "Bubble 2000", 0 ) // on a tuning board (bootleg?)
 GAME( 1998, hotbubl,  bubl2000, popspops, bubl2000, bubl2000, ROT0,   "Pandora",                           "Hot Bubble" , 0 ) // on an afega board ..
 GAME( 1999, popspops, 0,        popspops, popspops, grdnstrm, ROT0,   "Afega",                             "Pop's Pop's", 0 )
 GAME( 2000, mangchi,  0,        popspops, mangchi,  bubl2000, ROT0,   "Afega",                             "Mang-Chi", 0 )
-GAME( 2000, spec2k,   0,        firehawk, spec2k,   spec2k,   ORIENTATION_FLIP_Y, "YONA Tech",             "Spectrum 2000 (Euro)", 0 )
+GAME( 2000, spec2k,   0,        firehawk, spec2k,   spec2k,   ORIENTATION_FLIP_Y, "Yona Tech",             "Spectrum 2000 (Euro)", 0 )
 GAME( 2001, firehawk, 0,        firehawk, firehawk, 0,        ORIENTATION_FLIP_Y, "ESD",                   "Fire Hawk", 0 )
 
 // bee-oh board - different display / interrupt timing to others?
-GAME( 1991, manybloc, 0,        manybloc, manybloc, 0,        ROT270,             "Bee-Oh",            "Many Block", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND )
+GAME( 1991, manybloc, 0,        manybloc, manybloc, 0,        ROT270,             "Bee-Oh",                "Many Block", GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND )

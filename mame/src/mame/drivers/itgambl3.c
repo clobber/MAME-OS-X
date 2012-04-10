@@ -102,7 +102,7 @@ static VIDEO_UPDATE( itgambl3 )
 
 			color = (blit_ram[count] & 0xff)>>0;
 
-			if((x)<video_screen_get_visible_area(screen)->max_x && ((y)+0)<video_screen_get_visible_area(screen)->max_y)
+			if((x)<screen->visible_area().max_x && ((y)+0)<screen->visible_area().max_y)
 				*BITMAP_ADDR32(bitmap, y, x) = screen->machine->pens[color];
 
 			count++;
@@ -259,8 +259,7 @@ static MACHINE_DRIVER_START( itgambl3 )
 
     /* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("oki", OKIM6295, MAIN_CLOCK/16)	/* 1MHz */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", MAIN_CLOCK/16, OKIM6295_PIN7_HIGH)	/* 1MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -424,6 +423,50 @@ ROM_START( supjolly )	/* CPU and clock should be changed for this game */
 	ROM_LOAD( "saws.u29", 0x00000, 0x20000, CRC(e8612586) SHA1(bf536597a4cf1af5e9f701f2ecd1718320c06edd) )
 ROM_END
 
+/*
+
+X Five Jokers
+
+CPUs
+1x  M30624FGAFP         u11     16-bit Single-Chip Microcomputer - main (internal ROM not dumped)
+1x  MSM6295             u28     4-Channel Mixing ADCPM Voice Synthesis LSI - sound
+1x  LM358N              u33     Dual Operational Amplifier - sound
+1x  TDA2003             u32     Audio Amplifier - sound
+1x  oscillator  16.000MHz   u27
+ROMs
+4x  M27C4001    1,2,3,S     dumped
+RAMs
+3x  D431000AGW-70LL     u20,u21,u22
+PLDs
+2x  ispLSI1032E-70LJ    u12,u13     not dumped
+Others
+
+1x 28x2 edge connector
+1x 8x2 ISP connector
+1x RSR232 connector (JP15)
+1x 8 legs connector (JP16)
+1x 7 legs connector (JP17)
+1x 4 legs connector (JP18)
+2x trimmer (volume,spark)
+1x pushbutton (TEST)
+1x red LED
+1x battery 3.6V
+
+*/
+
+ROM_START( x5jokers )	/* CPU and clock should be changed for this game */
+	ROM_REGION( 0x1000000, "maincpu", 0 )	/* all the program code is in here */
+	ROM_LOAD( "x5jokers_m30624fgafp.mcu", 0x00000, 0x4000, NO_DUMP )
+
+	ROM_REGION( 0x180000, "gfx1", 0 )
+	ROM_LOAD( "xfivej3.u23", 0x000000, 0x80000, CRC(c01f1b2d) SHA1(608df59adcc0d7166dfb056bab0e31b8e75d9779) )
+	ROM_LOAD( "xfivej2.u24", 0x080000, 0x80000, CRC(d12176f7) SHA1(49c56025e1b2a4cea9711c80e09c786f24b6dce0) )
+	ROM_LOAD( "xfivej1.u25", 0x100000, 0x80000, CRC(cdac7a77) SHA1(7487fcb211dc2ff9a5bccefdff0d9d541f1f742b) )
+
+	ROM_REGION( 0x80000, "oki", 0 )
+	ROM_LOAD( "xfivejs.u29", 0x00000, 0x80000, CRC(67d51cb4) SHA1(9182a63473a32a9ad91a7a6a47d5a5d965e3cb03) )
+ROM_END
+
 
 
 /*************************
@@ -431,6 +474,7 @@ ROM_END
 *************************/
 
 /*    YEAR  NAME      PARENT  MACHINE   INPUT     INIT ROT    COMPANY        FULLNAME        FLAGS  */
-GAME( 200?, ejollyx5, 0,      itgambl3, itgambl3, 0,   ROT0, "Solar Games", "Euro Jolly X5", GAME_NOT_WORKING )
-GAME( 200?, grandprx, 0,      itgambl3, itgambl3, 0,   ROT0, "4fun",        "Grand Prix",    GAME_NOT_WORKING )
-GAME( 200?, supjolly, 0,      itgambl3, itgambl3, 0,   ROT0, "<unknown>",   "Super Jolly",   GAME_NOT_WORKING )
+GAME( 200?, ejollyx5, 0,      itgambl3, itgambl3, 0,   ROT0, "Solar Games",           "Euro Jolly X5",                  GAME_NOT_WORKING )
+GAME( 200?, grandprx, 0,      itgambl3, itgambl3, 0,   ROT0, "4fun",                  "Grand Prix",                     GAME_NOT_WORKING )
+GAME( 200?, supjolly, 0,      itgambl3, itgambl3, 0,   ROT0, "<unknown>",             "Super Jolly",                    GAME_NOT_WORKING )
+GAME( 200?, x5jokers, 0,      itgambl3, itgambl3, 0,   ROT0, "Electronic Projects",   "X Five Jokers (Version 1.12)",   GAME_NOT_WORKING )

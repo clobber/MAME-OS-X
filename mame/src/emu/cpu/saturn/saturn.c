@@ -81,8 +81,8 @@ struct _saturn_state
 	UINT8   sleeping;       /* low-consumption state */
 	int 	monitor_id;
 	int		monitor_in;
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	int icount;
 };
@@ -90,10 +90,8 @@ struct _saturn_state
 INLINE saturn_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_SATURN);
-	return (saturn_state *)device->token;
+	assert(device->type() == SATURN);
+	return (saturn_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /***************************************************************
@@ -113,7 +111,7 @@ static CPU_INIT( saturn )
 {
 	saturn_state *cpustate = get_safe_token(device);
 
-	cpustate->config = (saturn_cpu_core *) device->baseconfig().static_config;
+	cpustate->config = (saturn_cpu_core *) device->baseconfig().static_config();
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
@@ -171,8 +169,6 @@ static CPU_EXECUTE( saturn )
 {
 	saturn_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		cpustate->oldpc = cpustate->pc;
@@ -195,8 +191,6 @@ static CPU_EXECUTE( saturn )
 		}
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -305,7 +299,7 @@ static INT64 Reg64Int(Saturn64 r)
 
 CPU_GET_INFO( saturn )
 {
-	saturn_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	saturn_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -412,3 +406,5 @@ CPU_GET_INFO( saturn )
 	        case CPUINFO_STR_REGISTER + SATURN_SLEEPING:	sprintf(info->s, "sleep:%c", cpustate->sleeping?'S':'.'); break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(SATURN, saturn);

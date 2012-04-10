@@ -477,8 +477,8 @@ static MACHINE_START( exprraid )
 {
 	exprraid_state *state = (exprraid_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->slave = devtag_get_device(machine, "slave");
+	state->maincpu = machine->device("maincpu");
+	state->slave = machine->device("slave");
 
 	state_save_register_global_array(machine, state->bg_index);
 }
@@ -540,7 +540,6 @@ static MACHINE_DRIVER_START( exprboot )
 
 	MDRV_CPU_REPLACE("maincpu", M6502, 4000000)        /* 4 MHz ??? */
 	MDRV_CPU_PROGRAM_MAP(master_map)
-	MDRV_CPU_IO_MAP(0)
 MACHINE_DRIVER_END
 
 

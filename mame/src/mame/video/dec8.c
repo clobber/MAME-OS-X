@@ -75,7 +75,7 @@ PALETTE_INIT( ghostb )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2, bit3, r, g, b;
 
@@ -89,10 +89,10 @@ PALETTE_INIT( ghostb )
 		bit2 = (color_prom[i] >> 6) & 0x01;
 		bit3 = (color_prom[i] >> 7) & 0x01;
 		g = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
-		bit0 = (color_prom[i + machine->config->total_colors] >> 0) & 0x01;
-		bit1 = (color_prom[i + machine->config->total_colors] >> 1) & 0x01;
-		bit2 = (color_prom[i + machine->config->total_colors] >> 2) & 0x01;
-		bit3 = (color_prom[i + machine->config->total_colors] >> 3) & 0x01;
+		bit0 = (color_prom[i + machine->total_colors()] >> 0) & 0x01;
+		bit1 = (color_prom[i + machine->total_colors()] >> 1) & 0x01;
+		bit2 = (color_prom[i + machine->total_colors()] >> 2) & 0x01;
+		bit3 = (color_prom[i + machine->total_colors()] >> 3) & 0x01;
 		b = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
 		palette_set_color(machine, i, MAKE_RGB(r, g, b));
@@ -326,7 +326,7 @@ static void draw_sprites2( running_machine* machine, bitmap_t *bitmap, const rec
 		x = buffered_spriteram[offs + 5] + (buffered_spriteram[offs + 4] << 8);
 		colour = ((x & 0xf000) >> 12);
 		flash = x & 0x800;
-		if (flash && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+		if (flash && (machine->primary_screen->frame_number() & 1)) continue;
 
 		if (priority == 1 &&  (colour & 4)) continue;
 		if (priority == 2 && !(colour & 4)) continue;

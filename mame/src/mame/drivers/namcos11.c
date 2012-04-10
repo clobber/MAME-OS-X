@@ -46,7 +46,7 @@ Soul Edge Ver. III      (C) Namco, 1996
 Tekken Ver.C            (C) Namco, 1995
 Tekken II Ver.C         (C) Namco, 1995
 
-If you can help with the remaining undumped S11 games, please contact http://www.mameworld.net/gurudumps/comments.html
+If you can help with the remaining undumped S11 games, please contact http://guru.mameworld.info/
 
 
 The Namco System 11 system comprises 3 PCB's....
@@ -826,7 +826,7 @@ ADDRESS_MAP_START( c76_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(M37710_ADC0_H, M37710_ADC7_H) AM_READNOP
 ADDRESS_MAP_END
 
-INTERRUPT_GEN( c76_interrupt )
+static INTERRUPT_GEN( c76_interrupt )
 {
 	switch (cpu_getiloops(device))
 	{

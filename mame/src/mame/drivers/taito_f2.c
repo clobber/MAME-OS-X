@@ -70,39 +70,8 @@ qcrayon  TC0510NIO TC0360PRI TC0260DAR
 qcrayon2 TC0510NIO TC0360PRI TC0260DAR
 driftout TC0510NIO TC0360PRI TC0260DAR TC0430GRW(zoom/rot)
 
-
-
-F2 Game List
-------------
-. Final Blow                                                                       (1)
-. Don Doko Don                                                                     (2)
-. Mega Blast               http://www.taito.co.jp/game-history/80b/megabla.html    (3)
-. Quiz Torimonochou        http://www.taito.co.jp/game-history/90a/qui_tori.html   (4)
-. Quiz HQ                  http://www.taito.co.jp/game-history/90a/quiz_hq.html
-. Thunder Fox              http://www.taito.co.jp/game-history/90a/thu_fox.html
-. Liquid Kids              http://www.taito.co.jp/game-history/90a/miz_bak.html    (7)
-. SSI / Majestic 12        http://www.taito.co.jp/game-history/90a/mj12.html       (8)
-. Gun Frontier             http://www.taito.co.jp/game-history/90a/gunfro.html     (9)
-. Growl / Runark           http://www.taito.co.jp/game-history/90a/runark.html    (10)
-. Hat Trick Hero           http://www.taito.co.jp/game-history/90a/hthero.html    (11)
-. Mahjong Quest            http://www.taito.co.jp/game-history/90a/mahque.html    (12)
-. Yuu-yu no Quiz de Go!Go! http://www.taito.co.jp/game-history/90a/youyu.html     (13)
-. Ah Eikou no Koshien      http://www.taito.co.jp/game-history/90a/koshien.html   (14)
-. Ninja Kids               http://www.taito.co.jp/game-history/90a/ninjakids.html (15)
-. Quiz Quest               http://www.taito.co.jp/game-history/90a/q_quest.html
-. Metal Black              http://www.taito.co.jp/game-history/90a/metabla.html
-. Quiz Chikyu Boueigun     http://www.taito.co.jp/game-history/90a/qui_tik.html
-. Dinorex                  http://www.taito.co.jp/game-history/90a/dinorex.html
-. Pulirula
-. Dead Connection          http://www.taito.co.jp/game-history/90a/deadconn.html
-. Quiz Jinsei Gekijou      http://www.taito.co.jp/game-history/90a/qui_jin.html
-. Quiz Crayon Shinchan     http://www.taito.co.jp/game-history/90a/qcrashin.html
-. Crayon Shinchan Orato Asobo
-
-
-This list is translated version of
-http://www.aianet.or.jp/~eisetu/rom/rom_tait.html
-This page also contains info for other Taito boards.
+A complete list of Taito Games can be still accessed with archive.org:
+http://web.archive.org/web/20010502131808/www.taito.co.jp/game-history/
 
 F2 Motherboard ( Big ) K1100432A, J1100183A
                (Small) K1100608A, J1100242A
@@ -614,7 +583,7 @@ static TIMER_CALLBACK( taitof2_interrupt6 )
 
 static INTERRUPT_GEN( taitof2_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 500), NULL, 0, taitof2_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(500), NULL, 0, taitof2_interrupt6);
 	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
@@ -647,7 +616,7 @@ static READ8_HANDLER( driveout_sound_command_r)
 static void reset_driveout_sound_region( running_machine *machine )
 {
 	taitof2_state *state = (taitof2_state *)machine->driver_data;
-	okim6295_set_bank_base(state->oki, state->oki_bank * 0x40000);
+	state->oki->set_bank_base(state->oki_bank * 0x40000);
 }
 
 static WRITE8_HANDLER( oki_bank_w )
@@ -3379,16 +3348,15 @@ static MACHINE_START( common )
 {
 	taitof2_state *state = (taitof2_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");;
-	state->oki = devtag_get_device(machine, "oki");;
-	state->tc0100scn = devtag_get_device(machine, "tc0100scn");;
-	state->tc0100scn_1 = devtag_get_device(machine, "tc0100scn_1");;
-	state->tc0100scn_2 = devtag_get_device(machine, "tc0100scn_2");;
-	state->tc0360pri = devtag_get_device(machine, "tc0360pri");;
-	state->tc0280grd = devtag_get_device(machine, "tc0280grd");;
-	state->tc0430grw = devtag_get_device(machine, "tc0430grw");;
-	state->tc0480scp = devtag_get_device(machine, "tc0480scp");;
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");;
+	state->tc0100scn = machine->device("tc0100scn");;
+	state->tc0100scn_1 = machine->device("tc0100scn_1");;
+	state->tc0100scn_2 = machine->device("tc0100scn_2");;
+	state->tc0360pri = machine->device("tc0360pri");;
+	state->tc0280grd = machine->device("tc0280grd");;
+	state->tc0430grw = machine->device("tc0430grw");;
+	state->tc0480scp = machine->device("tc0480scp");;
 }
 
 static MACHINE_START( f2 )
@@ -4000,8 +3968,7 @@ static MACHINE_DRIVER_START( cameltrya )
 	MDRV_SOUND_ROUTE(2, "mono", 0.20)
 	MDRV_SOUND_ROUTE(3, "mono", 0.60)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 4224000/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", 4224000/4, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitof2_tc0140syt_intf)
@@ -4047,8 +4014,7 @@ static MACHINE_DRIVER_START( driveout )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")   /* does it ? */
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
@@ -4557,72 +4523,72 @@ ROM_END
 
 ROM_START( liquidk )
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 512k for 68000 code */
-	ROM_LOAD16_BYTE( "c49-09.12",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
-	ROM_LOAD16_BYTE( "c49-11.14",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
-	ROM_LOAD16_BYTE( "c49-10.13",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
-	ROM_LOAD16_BYTE( "c49-12.15",  0x40001, 0x20000, CRC(cb16bad5) SHA1(900c28761200f261cb217f09f492895753ef16f7) )
+	ROM_LOAD16_BYTE( "c49-09.ic47",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
+	ROM_LOAD16_BYTE( "c49-11.ic48",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
+	ROM_LOAD16_BYTE( "c49-10.ic45",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
+	ROM_LOAD16_BYTE( "c49-12.ic46",  0x40001, 0x20000, CRC(cb16bad5) SHA1(900c28761200f261cb217f09f492895753ef16f7) )
 
 	ROM_REGION( 0x080000, "gfx1", 0 )	/* SCR */
-	ROM_LOAD( "lk_scr.bin",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
+	ROM_LOAD( "c49-03.ic76",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )	/* OBJ */
-	ROM_LOAD( "lk_obj0.bin", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
-	ROM_LOAD( "lk_obj1.bin", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
+	ROM_LOAD( "c49-01.ic54", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
+	ROM_LOAD( "c49-02.ic53", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
 
 	ROM_REGION( 0x1c000, "audiocpu", 0 )		/* sound cpu */
-	ROM_LOAD( "c49-08.9",    0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
+	ROM_LOAD( "c49-08.ic32", 0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
 	ROM_CONTINUE(            0x10000, 0x0c000 )	/* banked stuff */
 
 	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
-	ROM_LOAD( "lk_snd.bin",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
+	ROM_LOAD( "c49-04.ic33",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
 
 	/* no Delta-T samples */
 ROM_END
 
 ROM_START( liquidku )
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 512k for 68000 code */
-	ROM_LOAD16_BYTE( "c49-09.12",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
-	ROM_LOAD16_BYTE( "c49-11.14",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
-	ROM_LOAD16_BYTE( "c49-10.13",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
-	ROM_LOAD16_BYTE( "c49-14.15",  0x40001, 0x20000, CRC(bc118a43) SHA1(eb306a753ab43e67eacb9d6eff1c14ec78de965f) )
+	ROM_LOAD16_BYTE( "c49-09.ic47",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
+	ROM_LOAD16_BYTE( "c49-11.ic48",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
+	ROM_LOAD16_BYTE( "c49-10.ic45",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
+	ROM_LOAD16_BYTE( "c49-14.ic46",  0x40001, 0x20000, CRC(bc118a43) SHA1(eb306a753ab43e67eacb9d6eff1c14ec78de965f) )
 
 	ROM_REGION( 0x080000, "gfx1", 0 )	/* SCR */
-	ROM_LOAD( "lk_scr.bin",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
+	ROM_LOAD( "c49-03.ic76",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )	/* OBJ */
-	ROM_LOAD( "lk_obj0.bin", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
-	ROM_LOAD( "lk_obj1.bin", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
+	ROM_LOAD( "c49-01.ic54", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
+	ROM_LOAD( "c49-02.ic53", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
 
 	ROM_REGION( 0x1c000, "audiocpu", 0 )		/* sound cpu */
-	ROM_LOAD( "c49-08.9",    0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
+	ROM_LOAD( "c49-08.ic32", 0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
 	ROM_CONTINUE(            0x10000, 0x0c000 )	/* banked stuff */
 
 	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
-	ROM_LOAD( "lk_snd.bin",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
+	ROM_LOAD( "c49-04.ic33",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
 
 	/* no Delta-T samples */
 ROM_END
 
 ROM_START( mizubaku )
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 512k for 68000 code */
-	ROM_LOAD16_BYTE( "c49-09.12",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
-	ROM_LOAD16_BYTE( "c49-11.14",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
-	ROM_LOAD16_BYTE( "c49-10.13",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
-	ROM_LOAD16_BYTE( "c49-13.15",  0x40001, 0x20000, CRC(2518dbf9) SHA1(c5975d3bfbfbb34b37b5da1d1cd2adf3491f9196) )
+	ROM_LOAD16_BYTE( "c49-09.ic47",  0x00000, 0x20000, CRC(6ae09eb9) SHA1(0f2527a1b231ecf8c6a937bf56d1245fdd270695) )
+	ROM_LOAD16_BYTE( "c49-11.ic48",  0x00001, 0x20000, CRC(42d2be6e) SHA1(c7953af2a561159d739d05dc06a4c905b6c40e64) )
+	ROM_LOAD16_BYTE( "c49-10.ic45",  0x40000, 0x20000, CRC(50bef2e0) SHA1(54afd46dde81ac0fc272417c53aba1e9e8c90606) )
+	ROM_LOAD16_BYTE( "c49-13.ic46",  0x40001, 0x20000, CRC(2518dbf9) SHA1(c5975d3bfbfbb34b37b5da1d1cd2adf3491f9196) )
 
 	ROM_REGION( 0x080000, "gfx1", 0 )	/* SCR */
-	ROM_LOAD( "lk_scr.bin",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
+	ROM_LOAD( "c49-03.ic76",  0x00000, 0x80000, CRC(c3364f9b) SHA1(3512a8c352df8b8f19590c859afb8fdec758eb91) )
 
 	ROM_REGION( 0x100000, "gfx2", 0 )	/* OBJ */
-	ROM_LOAD( "lk_obj0.bin", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
-	ROM_LOAD( "lk_obj1.bin", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
+	ROM_LOAD( "c49-01.ic54", 0x00000, 0x80000, CRC(67cc3163) SHA1(f898d52c136f07497ec6be214f016cbadc700055) )
+	ROM_LOAD( "c49-02.ic53", 0x80000, 0x80000, CRC(d2400710) SHA1(082aa0336dbc066d8bb0dd6eb362340f49e87b67) )
 
 	ROM_REGION( 0x1c000, "audiocpu", 0 )		/* sound cpu */
-	ROM_LOAD( "c49-08.9",    0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
+	ROM_LOAD( "c49-08.ic32", 0x00000, 0x04000, CRC(413c310c) SHA1(cecb1c0c9fe3c8b744f95ce29009650a289107ab) )
 	ROM_CONTINUE(            0x10000, 0x0c000 )	/* banked stuff */
 
 	ROM_REGION( 0x80000, "ymsnd", 0 )	/* ADPCM samples */
-	ROM_LOAD( "lk_snd.bin",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
+	ROM_LOAD( "c49-04.ic33",  0x00000, 0x80000, CRC(474d45a4) SHA1(20cb818d753a185973098007e645f1aa75c5528d) )
 
 	/* no Delta-T samples */
 ROM_END
@@ -4940,10 +4906,10 @@ ROM_END
 
 ROM_START( footchmp )
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 512k for 68000 code */
-	ROM_LOAD16_BYTE( "c80-11.6",     0x00000, 0x20000, CRC(f78630fb) SHA1(37da34401f664caaf5113a9abad78e447f4f4651) )
-	ROM_LOAD16_BYTE( "c80-10.4",     0x00001, 0x20000, CRC(32c109cb) SHA1(46a116127bcea18cc15ddf297e5e0d5cdcac9842) )
-	ROM_LOAD16_BYTE( "c80-12.7",     0x40000, 0x20000, CRC(80d46fef) SHA1(cc81c8ba19321e8bae9054021bfb61cb11c2aba5) )
-	ROM_LOAD16_BYTE( "c80-14.5",     0x40001, 0x20000, CRC(40ac4828) SHA1(9a2112b0ccd573a3e94d9817b78bb02909b972e1) )
+	ROM_LOAD16_BYTE( "c80-11.6", 0x00000, 0x20000, CRC(f78630fb) SHA1(37da34401f664caaf5113a9abad78e447f4f4651) )
+	ROM_LOAD16_BYTE( "c80-10.4", 0x00001, 0x20000, CRC(32c109cb) SHA1(46a116127bcea18cc15ddf297e5e0d5cdcac9842) )
+	ROM_LOAD16_BYTE( "c80-12.7", 0x40000, 0x20000, CRC(80d46fef) SHA1(cc81c8ba19321e8bae9054021bfb61cb11c2aba5) )
+	ROM_LOAD16_BYTE( "c80-14.5", 0x40001, 0x20000, CRC(40ac4828) SHA1(9a2112b0ccd573a3e94d9817b78bb02909b972e1) )
 
 	ROM_REGION( 0x100000, "gfx1", 0 )	/* SCR */
 	ROM_LOAD16_BYTE( "c80-04.1", 0x00000, 0x80000, CRC(9a17fe8c) SHA1(d2ea72743151f0f7bf78f33dba526214afb07389) )
@@ -4967,10 +4933,10 @@ ROM_END
 
 ROM_START( hthero )
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 512k for 68000 code */
-	ROM_LOAD16_BYTE( "c80-16.6",  0x00000, 0x20000, CRC(4e795b52) SHA1(90a32133a68de4d0410935e5039d4dec37836a13) )
-	ROM_LOAD16_BYTE( "c80-17.4",  0x00001, 0x20000, CRC(42c0a838) SHA1(4ba96a7248715562668994a4bf974e8ce4c44fd3) )
-	ROM_LOAD16_BYTE( "c80-12.7",  0x40000, 0x20000, CRC(80d46fef) SHA1(cc81c8ba19321e8bae9054021bfb61cb11c2aba5) )
-	ROM_LOAD16_BYTE( "c80-18.5",  0x40001, 0x20000, CRC(aea22904) SHA1(907889f141fced8cada793f02244e80cf0f89c81) )
+	ROM_LOAD16_BYTE( "c80-16.6", 0x00000, 0x20000, CRC(4e795b52) SHA1(90a32133a68de4d0410935e5039d4dec37836a13) )
+	ROM_LOAD16_BYTE( "c80-17.4", 0x00001, 0x20000, CRC(42c0a838) SHA1(4ba96a7248715562668994a4bf974e8ce4c44fd3) )
+	ROM_LOAD16_BYTE( "c80-12.7", 0x40000, 0x20000, CRC(80d46fef) SHA1(cc81c8ba19321e8bae9054021bfb61cb11c2aba5) )
+	ROM_LOAD16_BYTE( "c80-18.5", 0x40001, 0x20000, CRC(aea22904) SHA1(907889f141fced8cada793f02244e80cf0f89c81) )
 
 	ROM_REGION( 0x100000, "gfx1", 0 )	/* SCR */
 	ROM_LOAD16_BYTE( "c80-04.1", 0x00000, 0x80000, CRC(9a17fe8c) SHA1(d2ea72743151f0f7bf78f33dba526214afb07389) )

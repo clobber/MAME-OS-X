@@ -446,10 +446,10 @@ static TIMER_DEVICE_CALLBACK( generate_interrupt )
 
 	/* IRQ is clocked on the rising edge of 16V, equal to the previous 32V */
 	if (scanline & 16)
-		cputag_set_input_line(timer->machine, "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
+		cputag_set_input_line(timer.machine, "maincpu", 0, ((scanline - 1) & 32) ? ASSERT_LINE : CLEAR_LINE);
 
 	/* do a partial update now to handle sprite multiplexing (Maze Invaders) */
-	video_screen_update_partial(timer->machine->primary_screen, scanline);
+	timer.machine->primary_screen->update_partial(scanline);
 }
 
 
@@ -1977,7 +1977,7 @@ ROM_END
 static DRIVER_INIT( caterplr )
 {
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	running_device *device = devtag_get_device(machine, "pokey");
+	running_device *device = machine->device("pokey");
 	memory_install_readwrite8_device_handler(space, device, 0x1000, 0x100f, 0, 0, caterplr_AY8910_r, caterplr_AY8910_w);
 	memory_install_read8_device_handler(space, device, 0x1780, 0x1780, 0, 0, caterplr_rand_r);
 }
@@ -1986,7 +1986,7 @@ static DRIVER_INIT( caterplr )
 static DRIVER_INIT( magworm )
 {
 	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	running_device *device = devtag_get_device(machine, "pokey");
+	running_device *device = machine->device("pokey");
 	memory_install_write8_device_handler(space, device, 0x1001, 0x1001, 0, 0, ay8910_address_w);
 	memory_install_readwrite8_device_handler(space, device, 0x1003, 0x1003, 0, 0, ay8910_r, ay8910_data_w);
 }
@@ -2011,7 +2011,7 @@ GAME( 1980, centtime, centiped, centiped, centtime, 0,        ROT270, "Atari",  
 GAME( 1980, centipdb, centiped, centipdb, centiped, 0,        ROT270, "bootleg", "Centipede (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1980, centipdd, centiped, centiped, centiped, 0,        ROT270, "hack",    "Centipede Dux (hack)", GAME_SUPPORTS_SAVE )
 GAME( 1980, caterplr, centiped, caterplr, caterplr, caterplr, ROT270, "bootleg", "Caterpillar", GAME_SUPPORTS_SAVE )
-GAME( 1980, millpac,  centiped, centipdb, centiped, 0,        ROT270, "Valadon Automation", "Millpac", GAME_SUPPORTS_SAVE )
+GAME( 1980, millpac,  centiped, centipdb, centiped, 0,        ROT270, "bootleg? (Valadon Automation)", "Millpac", GAME_SUPPORTS_SAVE )
 GAME( 1980, magworm,  centiped, magworm,  magworm,  magworm,  ROT270, "bootleg", "Magic Worm (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1982, milliped, 0,        milliped, milliped, 0,        ROT270, "Atari",   "Millipede", GAME_SUPPORTS_SAVE )
 GAME( 1982, millipdd, milliped, milliped, milliped, 0,        ROT270, "hack",    "Millipede Dux (hack)", GAME_SUPPORTS_SAVE )
@@ -2019,4 +2019,4 @@ GAME( 1982, millipdd, milliped, milliped, milliped, 0,        ROT270, "hack",   
 GAME( 1980, warlords, 0,        warlords, warlords, 0,        ROT0,   "Atari",   "Warlords", GAME_SUPPORTS_SAVE )
 GAME( 1981, mazeinv,  0,        mazeinv,  mazeinv,  0,        ROT270, "Atari",   "Maze Invaders (prototype)", 0 )
 
-GAME( 1985, bullsdrt, 0,        bullsdrt, bullsdrt, bullsdrt, ROT270, "Shinkai Inc. (Magic Eletronics Inc. licence)", "Bulls Eye Darts", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1985, bullsdrt, 0,        bullsdrt, bullsdrt, bullsdrt, ROT270, "Shinkai Inc. (Magic Eletronics Inc. license)", "Bulls Eye Darts", GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

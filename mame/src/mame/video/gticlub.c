@@ -189,7 +189,7 @@ static UINT8 *gfxrom;
 
 void K001005_swap_buffers(running_machine *machine);
 
-static void K001005_exit(running_machine *machine)
+static void K001005_exit(running_machine &machine)
 {
 	poly_free(poly);
 }
@@ -198,14 +198,14 @@ void K001005_init(running_machine *machine)
 {
 	int i;
 
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 	K001005_zbuffer = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED32);
 
 	gfxrom = memory_region(machine, "gfx1");
 
-	K001005_bitmap[0] = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	K001005_bitmap[1] = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	K001005_bitmap[0] = machine->primary_screen->alloc_compatible_bitmap();
+	K001005_bitmap[1] = machine->primary_screen->alloc_compatible_bitmap();
 
 	K001005_texture = auto_alloc_array(machine, UINT8, 0x800000);
 
@@ -217,7 +217,7 @@ void K001005_init(running_machine *machine)
 	K001005_3d_fifo = auto_alloc_array(machine, UINT32, 0x10000);
 
 	poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), POLYFLAG_ALLOW_QUADS);
-	add_exit_callback(machine, K001005_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, K001005_exit);
 
 	for (i=0; i < 128; i++)
 	{
@@ -311,18 +311,18 @@ READ32_HANDLER( K001005_r )
 				if (K001005_fifo_read_ptr < 0x3ff)
 				{
 					//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, CLEAR_LINE);
-					sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, CLEAR_LINE);
+					sharc_set_flag_input(space->machine->device("dsp"), 1, CLEAR_LINE);
 				}
 				else
 				{
 					//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, ASSERT_LINE);
-					sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, ASSERT_LINE);
+					sharc_set_flag_input(space->machine->device("dsp"), 1, ASSERT_LINE);
 				}
 			}
 			else
 			{
 				//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, ASSERT_LINE);
-				sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, ASSERT_LINE);
+				sharc_set_flag_input(space->machine->device("dsp"), 1, ASSERT_LINE);
 			}
 
 			K001005_fifo_read_ptr++;
@@ -364,18 +364,18 @@ WRITE32_HANDLER( K001005_w )
 				if (K001005_fifo_write_ptr < 0x400)
 				{
 					//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, ASSERT_LINE);
-					sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, ASSERT_LINE);
+					sharc_set_flag_input(space->machine->device("dsp"), 1, ASSERT_LINE);
 				}
 				else
 				{
 					//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, CLEAR_LINE);
-					sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, CLEAR_LINE);
+					sharc_set_flag_input(space->machine->device("dsp"), 1, CLEAR_LINE);
 				}
 			}
 			else
 			{
 				//cputag_set_input_line(space->machine, "dsp", SHARC_INPUT_FLAG1, ASSERT_LINE);
-				sharc_set_flag_input(devtag_get_device(space->machine, "dsp"), 1, ASSERT_LINE);
+				sharc_set_flag_input(space->machine->device("dsp"), 1, ASSERT_LINE);
 			}
 
 	    //  mame_printf_debug("K001005 FIFO write: %08X at %08X\n", data, cpu_get_pc(space->cpu));
@@ -538,7 +538,7 @@ static void draw_scanline_tex(void *dest, INT32 scanline, const poly_extent *ext
 static void render_polygons(running_machine *machine)
 {
 	int i, j;
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine->primary_screen->visible_area();
 
 //  mame_printf_debug("K001005_fifo_ptr = %08X\n", K001005_3d_fifo_ptr);
 
@@ -579,9 +579,9 @@ static void render_polygons(running_machine *machine)
 			++index;
 
 			extra->color = color;
-			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
-			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[0], &v[2], &v[3]);
-//          poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page],  visarea, draw_scanline, 1, 4, v);
+			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
+			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[0], &v[2], &v[3]);
+//          poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page],  &visarea, draw_scanline, 1, 4, v);
 
 			i = index - 1;
 		}
@@ -686,13 +686,13 @@ static void render_polygons(running_machine *machine)
 
 			if (num_verts < 3)
 			{
-				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &prev_v[2], &v[0], &v[1]);
+				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &prev_v[2], &v[0], &v[1]);
 				if (prev_poly_type)
-					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &prev_v[2], &prev_v[3], &v[0]);
+					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &prev_v[2], &prev_v[3], &v[0]);
 //              if (prev_poly_type)
-//                  poly_render_quad(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &prev_v[2], &prev_v[3], &v[0], &v[1]);
+//                  poly_render_quad(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &prev_v[2], &prev_v[3], &v[0], &v[1]);
 //              else
-//                  poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &prev_v[2], &v[0], &v[1]);
+//                  poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &prev_v[2], &v[0], &v[1]);
 
 				memcpy(&prev_v[0], &prev_v[2], sizeof(poly_vertex));
 				memcpy(&prev_v[1], &prev_v[3], sizeof(poly_vertex));
@@ -701,10 +701,10 @@ static void render_polygons(running_machine *machine)
 			}
 			else
 			{
-				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &v[0], &v[1], &v[2]);
+				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &v[0], &v[1], &v[2]);
 				if (num_verts > 3)
-					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &v[2], &v[3], &v[0]);
-//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, num_verts, v);
+					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &v[2], &v[3], &v[0]);
+//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, num_verts, v);
 
 				memcpy(prev_v, v, sizeof(poly_vertex) * 4);
 			}
@@ -785,10 +785,10 @@ static void render_polygons(running_machine *machine)
 
 				extra->color = color;
 
-				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &v[0], &v[1], &v[2]);
+				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &v[0], &v[1], &v[2]);
 				if (new_verts > 1)
-					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, &v[2], &v[3], &v[0]);
-//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline_tex, 4, new_verts + 2, v);
+					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, &v[2], &v[3], &v[0]);
+//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline_tex, 4, new_verts + 2, v);
 
 				memcpy(prev_v, v, sizeof(poly_vertex) * 4);
 			};
@@ -844,10 +844,10 @@ static void render_polygons(running_machine *machine)
 
 			extra->color = color;
 
-			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
+			poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
 			if (num_verts > 3)
-				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[2], &v[3], &v[0]);
-//          poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, num_verts, v);
+				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[2], &v[3], &v[0]);
+//          poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, num_verts, v);
 
 			memcpy(prev_v, v, sizeof(poly_vertex) * 4);
 
@@ -903,10 +903,10 @@ static void render_polygons(running_machine *machine)
 
 				extra->color = color;
 
-				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
+				poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[0], &v[1], &v[2]);
 				if (new_verts > 1)
-					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, &v[0], &v[2], &v[3]);
-//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], visarea, draw_scanline, 1, new_verts + 2, v);
+					poly_render_triangle(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, &v[0], &v[2], &v[3]);
+//              poly_render_polygon(poly, K001005_bitmap[K001005_bitmap_page], &visarea, draw_scanline, 1, new_verts + 2, v);
 
 				memcpy(prev_v, v, sizeof(poly_vertex) * 4);
 			};
@@ -979,7 +979,7 @@ VIDEO_START( gticlub )
 
 VIDEO_UPDATE( gticlub )
 {
-	running_device *k001604 = devtag_get_device(screen->machine, "k001604_1");
+	running_device *k001604 = screen->machine->device("k001604_1");
 
 	k001604_draw_back_layer(k001604, bitmap, cliprect);
 
@@ -1041,7 +1041,7 @@ VIDEO_UPDATE( gticlub )
 	draw_7segment_led(bitmap, 9, 3, gticlub_led_reg1);
 
 	//cputag_set_input_line(screen->machine, "dsp", SHARC_INPUT_FLAG1, ASSERT_LINE);
-	sharc_set_flag_input(devtag_get_device(screen->machine, "dsp"), 1, ASSERT_LINE);
+	sharc_set_flag_input(screen->machine->device("dsp"), 1, ASSERT_LINE);
 	return 0;
 }
 

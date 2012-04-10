@@ -175,8 +175,8 @@ static MACHINE_START( mouser )
 {
 	mouser_state *state = (mouser_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->sound_byte);
 	state_save_register_global(machine, state->nmi_enable);
@@ -301,4 +301,4 @@ static DRIVER_INIT( mouser )
 
 
 GAME( 1983, mouser,   0,      mouser, mouser, mouser, ROT90, "UPL", "Mouser", GAME_SUPPORTS_SAVE )
-GAME( 1983, mouserc,  mouser, mouser, mouser, mouser, ROT90, "[UPL] (Cosmos license)", "Mouser (Cosmos)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mouserc,  mouser, mouser, mouser, mouser, ROT90, "UPL (Cosmos license)", "Mouser (Cosmos)", GAME_SUPPORTS_SAVE )

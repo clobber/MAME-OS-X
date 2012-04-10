@@ -30,13 +30,13 @@ static SOUND_START( timeplt )
 {
 	timeplt_state *state = (timeplt_state *)machine->driver_data;
 
-	state->soundcpu = devtag_get_device(machine, "tpsound");
-	state->filter_0_0 = devtag_get_device(machine, "filter.0.0");
-	state->filter_0_1 = devtag_get_device(machine, "filter.0.1");
-	state->filter_0_2 = devtag_get_device(machine, "filter.0.2");
-	state->filter_1_0 = devtag_get_device(machine, "filter.1.0");
-	state->filter_1_1 = devtag_get_device(machine, "filter.1.1");
-	state->filter_1_2 = devtag_get_device(machine, "filter.1.2");
+	state->soundcpu = machine->device<cpu_device>("tpsound");
+	state->filter_0_0 = machine->device("filter.0.0");
+	state->filter_0_1 = machine->device("filter.0.1");
+	state->filter_0_2 = machine->device("filter.0.2");
+	state->filter_1_0 = machine->device("filter.1.0");
+	state->filter_1_1 = machine->device("filter.1.1");
+	state->filter_1_2 = machine->device("filter.1.2");
 
 	state->last_irq_state = 0;
 	state_save_register_global(machine, state->last_irq_state);
@@ -76,7 +76,7 @@ static READ8_DEVICE_HANDLER( timeplt_portB_r )
 		0x00, 0x10, 0x20, 0x30, 0x40, 0x90, 0xa0, 0xb0, 0xa0, 0xd0
 	};
 
-	return timeplt_timer[(cpu_get_total_cycles(state->soundcpu) / 512) % 10];
+	return timeplt_timer[(state->soundcpu->total_cycles() / 512) % 10];
 }
 
 

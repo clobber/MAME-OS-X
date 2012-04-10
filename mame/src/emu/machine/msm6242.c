@@ -33,7 +33,7 @@ typedef struct _msm6242_t msm6242_t;
 struct _msm6242_t
 {
 	UINT8 reg[3];
-	mame_system_time hold_time;
+	system_time hold_time;
 };
 
 
@@ -41,16 +41,15 @@ struct _msm6242_t
 INLINE msm6242_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == DEVICE_GET_INFO_NAME(msm6242));
+	assert(device->type() == MSM6242);
 
-	return (msm6242_t *)device->token;
+	return (msm6242_t *)downcast<legacy_device_base *>(device)->token();
 }
 
 
 READ8_DEVICE_HANDLER( msm6242_r )
 {
-	mame_system_time curtime, *systime = &curtime;
+	system_time curtime, *systime = &curtime;
 	msm6242_t *msm6242 = get_safe_token(device);
 
 	if (msm6242->reg[0] & 1) /* if HOLD is set, use the hold time */
@@ -59,7 +58,7 @@ READ8_DEVICE_HANDLER( msm6242_r )
 	}
 	else /* otherwise, use the current time */
 	{
-		mame_get_current_datetime(device->machine, &curtime);
+		device->machine->current_datetime(curtime);
 	}
 
 	switch(offset)
@@ -121,7 +120,7 @@ WRITE8_DEVICE_HANDLER( msm6242_w )
 
 			if (data & 1)	/* was Hold set? */
 			{
-				mame_get_current_datetime(device->machine, &msm6242->hold_time);
+				device->machine->current_datetime(msm6242->hold_time);
 			}
 
 			return;
@@ -158,7 +157,7 @@ static DEVICE_START( msm6242 )
 	msm6242->reg[0] = 0;
 	msm6242->reg[1] = 0;
 	msm6242->reg[2] = 0;
-	memset(&msm6242->hold_time, 0, sizeof(mame_system_time));
+	memset(&msm6242->hold_time, 0, sizeof(system_time));
 }
 
 
@@ -169,7 +168,6 @@ DEVICE_GET_INFO( msm6242 )
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(msm6242_t);				break;
 		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;								break;
-		case DEVINFO_INT_CLASS:							info->i = DEVICE_CLASS_TIMER;				break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(msm6242);	break;
@@ -201,3 +199,6 @@ WRITE16_HANDLER( msm6242_lsb_w )
 		msm6242_w(space, offset, data);
 }
 #endif
+
+
+DEFINE_LEGACY_DEVICE(MSM6242, msm6242);

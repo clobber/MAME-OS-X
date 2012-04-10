@@ -98,7 +98,7 @@ static TIMER_CALLBACK( vidc_vblank )
 	archimedes_request_irq_a(machine, ARCHIMEDES_IRQA_VBL);
 
 	// set up for next vbl
-	timer_adjust_oneshot(vbl_timer, video_screen_get_time_until_pos(machine->primary_screen, vidc_regs[0xb4], 0), 0);
+	timer_adjust_oneshot(vbl_timer, machine->primary_screen->time_until_pos(vidc_regs[0xb4]), 0);
 }
 
 static TIMER_CALLBACK( a310_audio_tick )
@@ -317,7 +317,7 @@ static void latch_timer_cnt(int tmr)
 READ32_HANDLER(archimedes_ioc_r)
 {
 	#ifdef MESS
-	running_device *fdc = (running_device *)devtag_get_device(space->machine, "wd1772");
+	running_device *fdc = (running_device *)space->machine->device("wd1772");
 	#endif
 	if (offset >= 0x80000 && offset < 0xc0000)
 	{
@@ -367,7 +367,7 @@ READ32_HANDLER(archimedes_ioc_r)
 WRITE32_HANDLER(archimedes_ioc_w)
 {
 	#ifdef MESS
-	running_device *fdc = (running_device *)devtag_get_device(space->machine, "wd1772");
+	running_device *fdc = (running_device *)space->machine->device("wd1772");
 	#endif
 
 	if (offset >= 0x80000 && offset < 0xc0000)
@@ -542,7 +542,7 @@ WRITE32_HANDLER(archimedes_vidc_w)
 				vidc_regs[0x80], vidc_regs[0xa0],
 				visarea.max_x, visarea.max_y);
 
-			video_screen_configure(space->machine->primary_screen, vidc_regs[0x80], vidc_regs[0xa0], &visarea, video_screen_get_frame_period(space->machine->primary_screen).attoseconds);
+			space->machine->primary_screen->configure(vidc_regs[0x80], vidc_regs[0xa0], visarea, space->machine->primary_screen->frame_period().attoseconds);
 
 			// slightly hacky: fire off a VBL right now.  the BIOS doesn't wait long enough otherwise.
 			timer_adjust_oneshot(vbl_timer, attotime_zero, 0);
@@ -597,7 +597,7 @@ WRITE32_HANDLER(archimedes_memc_w)
 				else
 				{
 					timer_adjust_oneshot(snd_timer, attotime_never, 0);
-					dac_signed_data_w(devtag_get_device(space->machine, "dac"), 0x80);
+					dac_signed_data_w(space->machine->device("dac"), 0x80);
 				}
 				break;
 

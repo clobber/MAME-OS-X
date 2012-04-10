@@ -90,7 +90,7 @@ static READ8_HANDLER( irq_clear_r )
 
 static TIMER_DEVICE_CALLBACK( irq_callback )
 {
-	astrof_state *state = (astrof_state *)timer->machine->driver_data;
+	astrof_state *state = (astrof_state *)timer.machine->driver_data;
 	cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
 }
 
@@ -310,7 +310,7 @@ static WRITE8_HANDLER( video_control_1_w )
 	/* D2 - not connected in the schematics, but at one point Astro Fighter sets it to 1 */
 	/* D3-D7 - not connected */
 
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
@@ -333,7 +333,7 @@ static void astrof_set_video_control_2( running_machine *machine, UINT8 data )
 static WRITE8_HANDLER( astrof_video_control_2_w )
 {
 	astrof_set_video_control_2(space->machine, data);
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
@@ -353,7 +353,7 @@ static void spfghmk2_set_video_control_2( running_machine *machine, UINT8 data )
 static WRITE8_HANDLER( spfghmk2_video_control_2_w )
 {
 	spfghmk2_set_video_control_2(space->machine, data);
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
@@ -372,7 +372,7 @@ static void tomahawk_set_video_control_2( running_machine *machine, UINT8 data )
 static WRITE8_HANDLER( tomahawk_video_control_2_w )
 {
 	tomahawk_set_video_control_2(space->machine, data);
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
@@ -500,8 +500,8 @@ static MACHINE_START( astrof )
 	/* the 74175 outputs all HI's if not otherwise set */
 	astrof_set_video_control_2(machine, 0xff);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->samples = devtag_get_device(machine, "samples");
+	state->maincpu = machine->device("maincpu");
+	state->samples = machine->device("samples");
 
 	/* register for state saving */
 	state_save_register_global(machine, state->red_on);
@@ -534,7 +534,7 @@ static MACHINE_START( spfghmk2 )
 	/* the 74175 outputs all HI's if not otherwise set */
 	spfghmk2_set_video_control_2(machine, 0xff);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 
 	/* the red background circuit is disabled */
 	state->red_on = FALSE;
@@ -553,8 +553,8 @@ static MACHINE_START( tomahawk )
 	/* the 74175 outputs all HI's if not otherwise set */
 	tomahawk_set_video_control_2(machine, 0xff);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->sn = devtag_get_device(machine, "snsnd");
+	state->maincpu = machine->device("maincpu");
+	state->sn = machine->device("snsnd");
 
 	/* register for state saving */
 	state_save_register_global(machine, state->red_on);
@@ -1355,9 +1355,9 @@ static DRIVER_INIT( sstarbtl )
 GAME( 1979, astrof,   0,        astrof,   astrof,   0,       ROT90, "Data East",   "Astro Fighter (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, astrof2,  astrof,   astrof,   astrof,   0,       ROT90, "Data East",   "Astro Fighter (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, astrof3,  astrof,   astrof,   astrof,   0,       ROT90, "Data East",   "Astro Fighter (set 3)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1979, abattle,  astrof,   abattle,  abattle,  abattle, ROT90, "Sidam",       "Astro Battle (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1979, abattle2, astrof,   abattle,  abattle,  abattle, ROT90, "Sidam",       "Astro Battle (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1979, afire,    astrof,   abattle,  abattle,  afire,   ROT90, "Rene Pierre", "Astro Fire", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1979, abattle,  astrof,   abattle,  abattle,  abattle, ROT90, "bootleg? (Sidam)",      "Astro Battle (set 1)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1979, abattle2, astrof,   abattle,  abattle,  abattle, ROT90, "bootleg? (Sidam)",      "Astro Battle (set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1979, afire,    astrof,   abattle,  abattle,  afire,   ROT90, "bootleg (Rene Pierre)", "Astro Fire", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, acombat,  astrof,   abattle,  abattle,  afire,   ROT90, "bootleg",     "Astro Combat (newer, CB)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, acombato, astrof,   abattle,  abattle,  afire,   ROT90, "bootleg",     "Astro Combat (older, PZ)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, sstarbtl, astrof,   abattle,  abattle,  sstarbtl,ROT90, "bootleg",     "Super Star Battle", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

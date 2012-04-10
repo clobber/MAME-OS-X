@@ -71,10 +71,8 @@ void arm7_dt_w_callback(arm_state *cpustate, UINT32 insn, UINT32 *prn, void (*wr
 INLINE arm_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_ARM7 || cpu_get_type(device) == CPU_ARM9 || cpu_get_type(device) == CPU_PXA255);
-	return (arm_state *)device->token;
+	assert(device->type() == ARM7 || device->type() == ARM7_BE || device->type() == ARM9 || device->type() == PXA255);
+	return (arm_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE INT64 saturate_qbit_overflow(arm_state *cpustate, INT64 res)
@@ -191,7 +189,7 @@ INLINE UINT32 arm7_tlb_translate(arm_state *cpustate, UINT32 vaddr)
 
 static CPU_TRANSLATE( arm7 )
 {
-	arm_state *cpustate = (device != NULL) ? (arm_state *)device->token : NULL;
+	arm_state *cpustate = (device != NULL) ? (arm_state *)device->token() : NULL;
 
 	/* only applies to the program address space and only does something if the MMU's enabled */
 	if( space == ADDRESS_SPACE_PROGRAM && ( COPRO_CTRL & COPRO_CTRL_MMU_EN ) )
@@ -236,6 +234,14 @@ static CPU_RESET( arm7 )
 
 	cpustate->archRev = 4;	// ARMv4
 	cpustate->archFlags = eARM_ARCHFLAGS_T;	// has Thumb
+}
+
+static CPU_RESET( arm7_be )
+{
+	arm_state *cpustate = get_safe_token(device);
+
+	CPU_RESET_CALL( arm7 );
+	cpustate->endian = ENDIANNESS_BIG;
 }
 
 static CPU_RESET( arm9 )
@@ -300,6 +306,19 @@ static CPU_DISASSEMBLE( arm7 )
     	return CPU_DISASSEMBLE_CALL(arm7thumb);
     else
     	return CPU_DISASSEMBLE_CALL(arm7arm);
+}
+
+static CPU_DISASSEMBLE( arm7_be )
+{
+	CPU_DISASSEMBLE( arm7arm_be );
+	CPU_DISASSEMBLE( arm7thumb_be );
+
+	arm_state *cpustate = get_safe_token(device);
+
+	if (T_IS_SET(GET_CPSR))
+		return CPU_DISASSEMBLE_CALL(arm7thumb_be);
+	else
+		return CPU_DISASSEMBLE_CALL(arm7arm_be);
 }
 
 
@@ -385,7 +404,7 @@ static CPU_SET_INFO( arm7 )
 
 CPU_GET_INFO( arm7 )
 {
-    arm_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+    arm_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
     switch (state)
     {
@@ -555,6 +574,19 @@ CPU_GET_INFO( arm7 )
     }
 }
 
+
+CPU_GET_INFO( arm7_be )
+{
+	switch (state)
+	{
+		case DEVINFO_INT_ENDIANNESS:		info->i = ENDIANNESS_BIG;								break;
+		case CPUINFO_FCT_RESET:				info->reset = CPU_RESET_NAME(arm7_be);					break;
+		case CPUINFO_FCT_DISASSEMBLE:		info->disassemble = CPU_DISASSEMBLE_NAME(arm7_be);		break;
+		case DEVINFO_STR_NAME:				strcpy(info->s, "ARM7 (big endian)");					break;
+		default:							CPU_GET_INFO_CALL(arm7);
+	}
+}
+
 CPU_GET_INFO( arm9 )
 {
     switch (state)
@@ -617,7 +649,7 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
 			switch( cReg )
 			{
 				case 1:	// clock counter
-					data = (UINT32)cpu_get_total_cycles(device);
+					data = (UINT32)cpustate->device->total_cycles();
 					break;
 
 				default:
@@ -838,3 +870,8 @@ void arm7_dt_w_callback(arm_state *cpustate, UINT32 insn, UINT32 *prn, void (*wr
 {
 }
 
+DEFINE_LEGACY_CPU_DEVICE(ARM7, arm7);
+DEFINE_LEGACY_CPU_DEVICE(ARM7_BE, arm7_be);
+DEFINE_LEGACY_CPU_DEVICE(ARM9, arm9);
+DEFINE_LEGACY_CPU_DEVICE(PXA255, pxa255);
+DEFINE_LEGACY_CPU_DEVICE(SA1110, sa1110);

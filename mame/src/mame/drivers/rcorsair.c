@@ -11,12 +11,7 @@
 
 Red Corsair EPROM dump (dumped by Phil Morris) - notes follow:
 
-As of 14th January 2003 a picture can be found here:
-
-http://www.morris0.fsnet.co.uk/red_corsair.jpg
-
-But that will no doubt be removed in the coming months, so grab it while
-you can. :)
+http://www.morris0.fsnet.co.uk
 
 The game itself involves you guiding a pirate around various obstacles and
 picking up treasure. It's a top-down viewpoint.
@@ -116,7 +111,7 @@ static MACHINE_DRIVER_START( rcorsair )
 	/* Main CPU is probably inside Custom Block with
        program code, unknown type */
 
-	MDRV_CPU_ADD("maincpu", 8085A,8000000)		 /* Sound CPU? */
+	MDRV_CPU_ADD("maincpu", I8085A,8000000)		 /* Sound CPU? */
 	MDRV_CPU_PROGRAM_MAP(rcorsair_map)
 //  MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 

@@ -233,7 +233,7 @@ static WRITE8_HANDLER( pacland_led_w )
 static WRITE8_HANDLER( pacland_irq_1_ctrl_w )
 {
 	int bit = !BIT(offset, 11);
-	cpu_interrupt_enable(devtag_get_device(space->machine, "maincpu"), bit);
+	cpu_interrupt_enable(space->machine->device("maincpu"), bit);
 	if (!bit)
 		cputag_set_input_line(space->machine, "maincpu", 0, CLEAR_LINE);
 }
@@ -241,7 +241,7 @@ static WRITE8_HANDLER( pacland_irq_1_ctrl_w )
 static WRITE8_HANDLER( pacland_irq_2_ctrl_w )
 {
 	int bit = !BIT(offset, 13);
-	cpu_interrupt_enable(devtag_get_device(space->machine, "mcu"), bit);
+	cpu_interrupt_enable(space->machine->device("mcu"), bit);
 	if (!bit)
 		cputag_set_input_line(space->machine, "mcu", 0, CLEAR_LINE);
 }
@@ -631,4 +631,4 @@ GAME( 1984, pacland,   0,       pacland, pacland, 0, ROT0, "Namco", "Pac-Land (W
 GAME( 1984, paclandj,  pacland, pacland, pacland, 0, ROT0, "Namco", "Pac-Land (Japan new)", GAME_SUPPORTS_SAVE )
 GAME( 1984, paclandjo, pacland, pacland, pacland, 0, ROT0, "Namco", "Pac-Land (Japan old)", GAME_SUPPORTS_SAVE )
 GAME( 1984, paclandjo2,pacland, pacland, pacland, 0, ROT0, "Namco", "Pac-Land (Japan older)", GAME_SUPPORTS_SAVE )
-GAME( 1984, paclandm,  pacland, pacland, pacland, 0, ROT0, "[Namco] (Bally Midway license)", "Pac-Land (Midway)", GAME_SUPPORTS_SAVE )
+GAME( 1984, paclandm,  pacland, pacland, pacland, 0, ROT0, "Namco (Bally Midway license)", "Pac-Land (Midway)", GAME_SUPPORTS_SAVE )

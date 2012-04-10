@@ -23,6 +23,7 @@
         * War of the Worlds
         * Boxing Bugs
         * QB-3
+        * Space Ship
 
     To do:
         * look into bad sample latency
@@ -151,7 +152,7 @@ static WRITE8_HANDLER( mux_select_w )
 
 static UINT8 joystick_read(running_device *device)
 {
-	if (mame_get_phase(device->machine) != MAME_PHASE_RUNNING)
+	if (device->machine->phase() != MACHINE_PHASE_RUNNING)
 		return 0;
 	else
 	{
@@ -269,8 +270,8 @@ static READ8_HANDLER( boxingb_dial_r )
 
 static READ8_HANDLER( qb3_frame_r )
 {
-	attotime next_update = video_screen_get_time_until_update(space->machine->primary_screen);
-	attotime frame_period = video_screen_get_frame_period(space->machine->primary_screen);
+	attotime next_update = space->machine->primary_screen->time_until_update();
+	attotime frame_period = space->machine->primary_screen->frame_period();
 	int percent = next_update.attoseconds / (frame_period.attoseconds / 100);
 
 	/* note this is just an approximation... */
@@ -280,7 +281,7 @@ static READ8_HANDLER( qb3_frame_r )
 
 static WRITE8_HANDLER( qb3_ram_bank_w )
 {
-	memory_set_bank(space->machine, "bank1", cpu_get_reg(devtag_get_device(space->machine, "maincpu"), CCPU_P) & 3);
+	memory_set_bank(space->machine, "bank1", cpu_get_reg(space->machine->device("maincpu"), CCPU_P) & 3);
 }
 
 
@@ -373,6 +374,21 @@ static INPUT_PORTS_START( spacewar )
 	PORT_DIPSETTING(	0x40, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_CHANGED(coin_inserted, 0)
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( spaceshp )
+	PORT_INCLUDE(spacewar )
+
+	PORT_MODIFY("SWITCHES")
+	PORT_DIPNAME( 0x03, 0x00, "Time" ) PORT_DIPLOCATION("SW1:!4,!3")
+	PORT_DIPSETTING(	0x00, "1:00/coin" )
+	PORT_DIPSETTING(	0x01, "1:30/coin" )
+	PORT_DIPSETTING(	0x02, "2:00/coin" )
+	PORT_DIPSETTING(	0x03, "2:30/coin" )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW1:!1" )
+	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:!2" )
 INPUT_PORTS_END
 
 
@@ -1183,6 +1199,27 @@ ROM_START( spacewar )
 ROM_END
 
 
+ROM_START( spaceshp )
+	ROM_REGION( 0x1000, "maincpu", 0 )
+	ROMX_LOAD( "pr08.61", 0x0000, 0x0400, CRC(556c4ff4) SHA1(c8c1f3e5fe7bf48ecaa92dabf376adfd6a0a9b72), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr07.63", 0x0000, 0x0400, CRC(ba7747d1) SHA1(e9eb9de07ad5a306f815ee0d8371c64f8f242de6), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr04.83", 0x0001, 0x0400, CRC(19966799) SHA1(ffadb6cbcf4e4c4a60a251eb239eddc7d1030e6e), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr03.85", 0x0001, 0x0400, CRC(d6557503) SHA1(c226fdf85236558208942e43bcc3ce5af7e3d588), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr10.62", 0x0800, 0x0400, CRC(3ee163f9) SHA1(30269158434fb66049620bbac5f1c9b878416468), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr09.64", 0x0800, 0x0400, CRC(7946086c) SHA1(09d5435bc602a10ddd4206fd546f5b758e746cb2), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+	ROMX_LOAD( "pr06.84", 0x0801, 0x0400, CRC(f19c8eb0) SHA1(80f66d00caaf258232ea5e6adf515899abf53896), ROM_NIBBLE | ROM_SHIFT_NIBBLE_HI | ROM_SKIP(1) )
+	ROMX_LOAD( "pr05.86", 0x0801, 0x0400, CRC(3dbc6360) SHA1(8d59dfee6e02ec29f755cc1c85ae236621009715), ROM_NIBBLE | ROM_SHIFT_NIBBLE_LO | ROM_SKIP(1) )
+
+	ROM_REGION( 0x1a0, "proms", 0 )
+	ROM_LOAD( "pr13.139", 0x0000, 0x0100, CRC(9edbf536) SHA1(036ad8a231284e05f44b1106d38fc0c7e041b6e8) )
+	ROM_LOAD( "pr17.138", 0x0100, 0x0020, CRC(29dbfb87) SHA1(d8c40ab010b2ea30f29b2c443819e2b69f376c04) )
+	ROM_LOAD( "pr18.137", 0x0120, 0x0020, CRC(98b7bd46) SHA1(fd7d0cac8783964bac36918e0ffcc07e2ea2081a) )
+	ROM_LOAD( "pr19.136", 0x0140, 0x0020, CRC(07492cda) SHA1(32df9148797c23f70db47b840139c40e046dd710) )
+	ROM_LOAD( "pr20.72" , 0x0160, 0x0020, CRC(791ec9e1) SHA1(6f7fcce4aa3be9020595235568381588adaab88e) )
+	ROM_LOAD( "pr21.143", 0x0180, 0x0020, CRC(a481ca71) SHA1(ce145d61686f600cc16b77febfd5c783bf8c13b0) )
+ROM_END
+
+
 ROM_START( barrier )
 	ROM_REGION( 0x1000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "barrier.t7", 0x0000, 0x0800, CRC(7c3d68c8) SHA1(1138029552b73e94522b3b48096befc057d603c7) )
@@ -1485,6 +1522,7 @@ static DRIVER_INIT( qb3 )
  *************************************/
 
 GAME( 1977, spacewar, 0,       spacewar, spacewar, 0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Space Wars", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1978, spaceshp, spacewar,spacewar, spaceshp, 0,        ORIENTATION_FLIP_Y,   "Cinematronics (Sega license)", "Space Ship", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, barrier,  0,       barrier,  barrier,  0,        ORIENTATION_FLIP_X ^ ROT270, "Vectorbeam", "Barrier", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, speedfrk, 0,       speedfrk, speedfrk, speedfrk, ORIENTATION_FLIP_Y,   "Vectorbeam", "Speed Freak", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1979, starhawk, 0,       starhawk, starhawk, 0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Hawk", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
@@ -1493,17 +1531,17 @@ GAMEL(1979, tailg,    0,       tailg,    tailg,    tailg,    ORIENTATION_FLIP_Y,
 GAME( 1979, warrior,  0,       warrior,  warrior,  0,        ORIENTATION_FLIP_Y,   "Vectorbeam", "Warrior", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAMEL(1980, armora,   0,       armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Armor Attack", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
 GAMEL(1980, armorap,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Armor Attack (prototype)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
-GAMEL(1980, armorar,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics (Rock-ola license)", "Armor Attack (Rock-ola)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
+GAMEL(1980, armorar,  armora,  armora,   armora,   0,        ORIENTATION_FLIP_Y,   "Cinematronics (Rock-Ola license)", "Armor Attack (Rock-Ola)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_armora )
 GAME( 1980, ripoff,   0,       ripoff,   ripoff,   0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Rip Off", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAMEL(1980, starcas,  0,       starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (version 3)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcas1, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (older)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcasp, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics", "Star Castle (prototype)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1980, starcase, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics (Mottoeis license)", "Star Castle (Mottoeis)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
-GAMEL(1980, stellcas, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "bootleg", "Stellar Castle (Elettronolo)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
-GAMEL(1981, spaceftr, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Zaccaria", "Space Fortress (Zaccaria)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
+GAMEL(1980, stellcas, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "bootleg (Elettronolo)", "Stellar Castle (Elettronolo)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
+GAMEL(1981, spaceftr, starcas, starcas,  starcas,  0,        ORIENTATION_FLIP_Y,   "Cinematronics (Zaccaria license)", "Space Fortress (Zaccaria)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_starcas )
 GAMEL(1981, solarq,   0,       solarq,   solarq,   0,        ORIENTATION_FLIP_Y ^ ORIENTATION_FLIP_X, "Cinematronics", "Solar Quest", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_solarq )
 GAME( 1981, boxingb,  0,       boxingb,  boxingb,  boxingb,  ORIENTATION_FLIP_Y,   "Cinematronics", "Boxing Bugs", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, wotw,     0,       wotw,     wotw,     0,        ORIENTATION_FLIP_Y,   "Cinematronics", "War of the Worlds", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, wotwc,    wotw,    wotwc,    wotw,     0,        ORIENTATION_FLIP_Y,   "Cinematronics", "War of the Worlds (color)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1982, demon,    0,       demon,    demon,    0,        ORIENTATION_FLIP_Y,   "Rock-ola", "Demon", GAME_SUPPORTS_SAVE )
-GAME( 1982, qb3,      0,       qb3,      qb3,      qb3,      ORIENTATION_FLIP_Y,   "Rock-ola", "QB-3 (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1982, demon,    0,       demon,    demon,    0,        ORIENTATION_FLIP_Y,   "Rock-Ola", "Demon", GAME_SUPPORTS_SAVE )
+GAME( 1982, qb3,      0,       qb3,      qb3,      qb3,      ORIENTATION_FLIP_Y,   "Rock-Ola", "QB-3 (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

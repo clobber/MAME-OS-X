@@ -9,7 +9,7 @@
 #ifndef __KAN_PAND_H__
 #define __KAN_PAND_H__
 
-#include "devcb.h"
+#include "devlegcy.h"
 
 /***************************************************************************
     TYPE DEFINITIONS
@@ -24,18 +24,11 @@ struct _kaneko_pandora_interface
 	int        y;
 };
 
-/***************************************************************************
-    FUNCTION PROTOTYPES
-***************************************************************************/
-
-DEVICE_GET_INFO( kaneko_pandora );
-
+DECLARE_LEGACY_DEVICE(KANEKO_PANDORA, kaneko_pandora);
 
 /***************************************************************************
     DEVICE CONFIGURATION MACROS
 ***************************************************************************/
-
-#define KANEKO_PANDORA DEVICE_GET_INFO_NAME( kaneko_pandora )
 
 #define MDRV_KANEKO_PANDORA_ADD(_tag, _interface) \
 	MDRV_DEVICE_ADD(_tag, KANEKO_PANDORA, 0) \
@@ -49,6 +42,7 @@ DEVICE_GET_INFO( kaneko_pandora );
 void pandora_update(running_device *device, bitmap_t *bitmap, const rectangle *cliprect);
 void pandora_eof(running_device *device);
 void pandora_set_clear_bitmap(running_device *device, int clear);
+void pandora_set_bg_pen( running_device *device, int pen );
 
 WRITE8_DEVICE_HANDLER ( pandora_spriteram_w );
 READ8_DEVICE_HANDLER( pandora_spriteram_r );

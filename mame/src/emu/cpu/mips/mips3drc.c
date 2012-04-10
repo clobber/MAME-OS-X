@@ -276,25 +276,23 @@ static const UINT8 fpmode_source[4] =
 INLINE mips3_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_VR4300BE ||
-		   cpu_get_type(device) == CPU_VR4300LE ||
-		   cpu_get_type(device) == CPU_VR4310BE ||
-		   cpu_get_type(device) == CPU_VR4310LE ||
-		   cpu_get_type(device) == CPU_R4600BE ||
-		   cpu_get_type(device) == CPU_R4600LE ||
-		   cpu_get_type(device) == CPU_R4650BE ||
-		   cpu_get_type(device) == CPU_R4650LE ||
-		   cpu_get_type(device) == CPU_R4700BE ||
-		   cpu_get_type(device) == CPU_R4700LE ||
-		   cpu_get_type(device) == CPU_R5000BE ||
-		   cpu_get_type(device) == CPU_R5000LE ||
-		   cpu_get_type(device) == CPU_QED5271BE ||
-		   cpu_get_type(device) == CPU_QED5271LE ||
-		   cpu_get_type(device) == CPU_RM7000BE ||
-		   cpu_get_type(device) == CPU_RM7000LE);
-	return *(mips3_state **)device->token;
+	assert(device->type() == VR4300BE ||
+		   device->type() == VR4300LE ||
+		   device->type() == VR4310BE ||
+		   device->type() == VR4310LE ||
+		   device->type() == R4600BE ||
+		   device->type() == R4600LE ||
+		   device->type() == R4650BE ||
+		   device->type() == R4650LE ||
+		   device->type() == R4700BE ||
+		   device->type() == R4700LE ||
+		   device->type() == R5000BE ||
+		   device->type() == R5000LE ||
+		   device->type() == QED5271BE ||
+		   device->type() == QED5271LE ||
+		   device->type() == RM7000BE ||
+		   device->type() == RM7000LE);
+	return *(mips3_state **)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -360,7 +358,7 @@ INLINE void save_fast_iregs(mips3_state *mips3, drcuml_block *block)
     mips3_init - initialize the processor
 -------------------------------------------------*/
 
-static void mips3_init(mips3_flavor flavor, int bigendian, running_device *device, cpu_irq_callback irqcallback)
+static void mips3_init(mips3_flavor flavor, int bigendian, legacy_cpu_device *device, device_irq_callback irqcallback)
 {
 	drcfe_config feconfig =
 	{
@@ -381,7 +379,7 @@ static void mips3_init(mips3_flavor flavor, int bigendian, running_device *devic
 		fatalerror("Unable to allocate cache of size %d", (UINT32)(CACHE_SIZE + sizeof(*mips3)));
 
 	/* allocate the core memory */
-	*(mips3_state **)device->token = mips3 = (mips3_state *)drccache_memory_alloc_near(cache, sizeof(*mips3));
+	*(mips3_state **)device->token() = mips3 = (mips3_state *)drccache_memory_alloc_near(cache, sizeof(*mips3));
 	memset(mips3, 0, sizeof(*mips3));
 
 	/* initialize the core */
@@ -521,7 +519,6 @@ static CPU_EXECUTE( mips3 )
 	mips3->impstate->cache_dirty = FALSE;
 
 	/* execute */
-	mips3->icount = cycles;
 	do
 	{
 		/* run as much as we can */
@@ -536,9 +533,6 @@ static CPU_EXECUTE( mips3 )
 			code_flush_cache(mips3);
 
 	} while (execute_result != EXECUTE_OUT_OF_CYCLES);
-
-	/* return the number of cycles executed */
-	return cycles - mips3->icount;
 }
 
 
@@ -602,7 +596,7 @@ static CPU_SET_INFO( mips3 )
 
 static CPU_GET_INFO( mips3 )
 {
-	mips3_state *mips3 = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mips3_state *mips3 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -850,7 +844,7 @@ static void code_compile_block(mips3_state *mips3, UINT8 mode, offs_t pc)
 static void cfunc_get_cycles(void *param)
 {
 	mips3_state *mips3 = (mips3_state *)param;
-	mips3->impstate->numcycles = cpu_get_total_cycles(mips3->device);
+	mips3->impstate->numcycles = mips3->device->total_cycles();
 }
 
 
@@ -4070,3 +4064,26 @@ CPU_GET_INFO( rm7000le )
 		default:										CPU_GET_INFO_CALL(mips3);			break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(VR4300BE, vr4300be);
+DEFINE_LEGACY_CPU_DEVICE(VR4300LE, vr4300le);
+DEFINE_LEGACY_CPU_DEVICE(VR4310BE, vr4310be);
+DEFINE_LEGACY_CPU_DEVICE(VR4310LE, vr4310le);
+
+DEFINE_LEGACY_CPU_DEVICE(R4600BE, r4600be);
+DEFINE_LEGACY_CPU_DEVICE(R4600LE, r4600le);
+
+DEFINE_LEGACY_CPU_DEVICE(R4650BE, r4650be);
+DEFINE_LEGACY_CPU_DEVICE(R4650LE, r4650le);
+
+DEFINE_LEGACY_CPU_DEVICE(R4700BE, r4700be);
+DEFINE_LEGACY_CPU_DEVICE(R4700LE, r4700le);
+
+DEFINE_LEGACY_CPU_DEVICE(R5000BE, r5000be);
+DEFINE_LEGACY_CPU_DEVICE(R5000LE, r5000le);
+
+DEFINE_LEGACY_CPU_DEVICE(QED5271BE, qed5271be);
+DEFINE_LEGACY_CPU_DEVICE(QED5271LE, qed5271le);
+
+DEFINE_LEGACY_CPU_DEVICE(RM7000BE, rm7000be);
+DEFINE_LEGACY_CPU_DEVICE(RM7000LE, rm7000le);

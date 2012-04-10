@@ -33,7 +33,7 @@ PALETTE_INIT( gomoku )
 	int i;
 	int bit0, bit1, bit2, r, g, b;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		/* red component */
 		bit0 = (*color_prom >> 0) & 0x01;
@@ -120,7 +120,7 @@ VIDEO_START( gomoku )
 	int bgdata;
 	int color;
 
-	gomoku_bg_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	gomoku_bg_bitmap = machine->primary_screen->alloc_compatible_bitmap();
 
 	fg_tilemap = tilemap_create(machine, get_fg_tile_info,tilemap_scan_rows,8,8,32, 32);
 

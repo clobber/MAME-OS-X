@@ -284,7 +284,7 @@ struct _dsio_denver_state
 typedef struct _dcs_state dcs_state;
 struct _dcs_state
 {
-	running_device *cpu;
+	cpu_device *cpu;
 	const address_space *program;
 	const address_space *data;
 	UINT8		rev;
@@ -295,10 +295,10 @@ struct _dcs_state
 	UINT8		channels;
 	UINT16		size;
 	UINT16		incs;
-	running_device *dmadac[6];
-	running_device *reg_timer;
-	running_device *sport_timer;
-	running_device *internal_timer;
+	dmadac_sound_device *dmadac[6];
+	timer_device *reg_timer;
+	timer_device *sport_timer;
+	timer_device *internal_timer;
 	INT32		ireg;
 	UINT16		ireg_base;
 	UINT16		control_regs[32];
@@ -350,7 +350,7 @@ struct _hle_transfer_state
 	INT32		writes_left;
 	UINT16		sum;
 	INT32		fifo_entries;
-	running_device *watchdog;
+	timer_device *watchdog;
 };
 
 
@@ -409,12 +409,12 @@ static WRITE16_HANDLER( output_latch_w );
 static READ16_HANDLER( output_control_r );
 static WRITE16_HANDLER( output_control_w );
 
-static void timer_enable_callback(running_device *device, int enable);
+static void timer_enable_callback(cpu_device &device, int enable);
 static TIMER_DEVICE_CALLBACK( internal_timer_callback );
 static TIMER_DEVICE_CALLBACK( dcs_irq );
 static TIMER_DEVICE_CALLBACK( sport0_irq );
 static void recompute_sample_rate(running_machine *machine);
-static void sound_tx_callback(running_device *device, int port, INT32 data);
+static void sound_tx_callback(cpu_device &device, int port, INT32 data);
 
 static READ16_HANDLER( dcs_polling_r );
 static WRITE16_HANDLER( dcs_polling_w );
@@ -674,6 +674,7 @@ MACHINE_DRIVER_END
 MACHINE_DRIVER_START( dcs2_audio_2104 )
 	MDRV_IMPORT_FROM(dcs2_audio_2115)
 	MDRV_CPU_REPLACE("dcs2", ADSP2104, XTAL_16MHz)
+	MDRV_CPU_CONFIG(adsp_config)
 	MDRV_CPU_PROGRAM_MAP(dcs2_2104_program_map)
 	MDRV_CPU_DATA_MAP(dcs2_2104_data_map)
 MACHINE_DRIVER_END
@@ -863,11 +864,11 @@ static TIMER_CALLBACK( dcs_reset )
 	/* reset timers */
 	dcs.timer_enable = 0;
 	dcs.timer_scale = 1;
-	timer_device_adjust_oneshot(dcs.internal_timer, attotime_never, 0);
+	dcs.internal_timer->reset();
 
 	/* start the SPORT0 timer */
 	if (dcs.sport_timer != NULL)
-		timer_device_adjust_periodic(dcs.sport_timer, ATTOTIME_IN_HZ(1000), 0, ATTOTIME_IN_HZ(1000));
+		dcs.sport_timer->adjust(ATTOTIME_IN_HZ(1000), 0, ATTOTIME_IN_HZ(1000));
 
 	/* reset the HLE transfer states */
 	transfer.dcs_state = transfer.state = 0;
@@ -940,12 +941,12 @@ void dcs_init(running_machine *machine)
 	dcs_sram = NULL;
 
 	/* find the DCS CPU and the sound ROMs */
-	dcs.cpu = devtag_get_device(machine, "dcs");
+	dcs.cpu = machine->device<cpu_device>("dcs");
 	dcs.program = cpu_get_address_space(dcs.cpu, ADDRESS_SPACE_PROGRAM);
 	dcs.data = cpu_get_address_space(dcs.cpu, ADDRESS_SPACE_DATA);
 	dcs.rev = 1;
 	dcs.channels = 1;
-	dcs.dmadac[0] = devtag_get_device(machine, "dac");
+	dcs.dmadac[0] = machine->device<dmadac_sound_device>("dac");
 
 	/* configure boot and sound ROMs */
 	dcs.bootrom = (UINT16 *)memory_region(machine, "dcs");
@@ -956,8 +957,8 @@ void dcs_init(running_machine *machine)
 	memory_configure_bank(machine, "databank", 0, dcs.sounddata_banks, dcs.sounddata, 0x1000*2);
 
 	/* create the timers */
-	dcs.internal_timer = devtag_get_device(machine, "dcs_int_timer");
-	dcs.reg_timer = devtag_get_device(machine, "dcs_reg_timer");
+	dcs.internal_timer = machine->device<timer_device>("dcs_int_timer");
+	dcs.reg_timer = machine->device<timer_device>("dcs_reg_timer");
 
 	/* non-RAM based automatically acks */
 	dcs.auto_ack = TRUE;
@@ -977,26 +978,26 @@ void dcs2_init(running_machine *machine, int dram_in_mb, offs_t polling_offset)
 	memset(&dcs, 0, sizeof(dcs));
 
 	/* find the DCS CPU and the sound ROMs */
-	dcs.cpu = devtag_get_device(machine, "dcs2");
+	dcs.cpu = machine->device<cpu_device>("dcs2");
 	dcs.rev = 2;
 	soundbank_words = 0x1000;
 	if (dcs.cpu == NULL)
 	{
-		dcs.cpu = devtag_get_device(machine, "dsio");
+		dcs.cpu = machine->device<cpu_device>("dsio");
 		dcs.rev = 3;
 		soundbank_words = 0x400;
 	}
 	if (dcs.cpu == NULL)
 	{
-		dcs.cpu = devtag_get_device(machine, "denver");
+		dcs.cpu = machine->device<cpu_device>("denver");
 		dcs.rev = 4;
 		soundbank_words = 0x800;
 	}
 	dcs.program = cpu_get_address_space(dcs.cpu, ADDRESS_SPACE_PROGRAM);
 	dcs.data = cpu_get_address_space(dcs.cpu, ADDRESS_SPACE_DATA);
 	dcs.channels = 2;
-	dcs.dmadac[0] = devtag_get_device(machine, "dac1");
-	dcs.dmadac[1] = devtag_get_device(machine, "dac2");
+	dcs.dmadac[0] = machine->device<dmadac_sound_device>("dac1");
+	dcs.dmadac[1] = machine->device<dmadac_sound_device>("dac2");
 
 	/* always boot from the base of "dcs" */
 	dcs.bootrom = (UINT16 *)memory_region(machine, "dcs");
@@ -1021,9 +1022,9 @@ void dcs2_init(running_machine *machine, int dram_in_mb, offs_t polling_offset)
 	dcs_sram = auto_alloc_array(machine, UINT16, 0x8000*4/2);
 
 	/* create the timers */
-	dcs.internal_timer = devtag_get_device(machine, "dcs_int_timer");
-	dcs.reg_timer = devtag_get_device(machine, "dcs_reg_timer");
-	dcs.sport_timer = devtag_get_device(machine, "dcs_sport_timer");
+	dcs.internal_timer = machine->device<timer_device>("dcs_int_timer");
+	dcs.reg_timer = machine->device<timer_device>("dcs_reg_timer");
+	dcs.sport_timer = machine->device<timer_device>("dcs_sport_timer");
 
 	/* we don't do auto-ack by default */
 	dcs.auto_ack = FALSE;
@@ -1036,7 +1037,7 @@ void dcs2_init(running_machine *machine, int dram_in_mb, offs_t polling_offset)
 	/* allocate a watchdog timer for HLE transfers */
 	transfer.hle_enabled = (ENABLE_HLE_TRANSFERS && dram_in_mb != 0);
 	if (transfer.hle_enabled)
-		transfer.watchdog = devtag_get_device(machine, "dcs_hle_timer");
+		transfer.watchdog = machine->device<timer_device>("dcs_hle_timer");
 
 	/* register for save states */
 	dcs_register_state(machine);
@@ -1408,7 +1409,7 @@ static WRITE16_HANDLER( denver_w )
 				{
 					char buffer[10];
 					sprintf(buffer, "dac%d", chan + 1);
-					dcs.dmadac[chan] = devtag_get_device(space->machine, buffer);
+					dcs.dmadac[chan] = space->machine->device<dmadac_sound_device>(buffer);
 				}
 				dmadac_enable(&dcs.dmadac[0], dcs.channels, enable);
 				if (dcs.channels < 6)
@@ -1694,7 +1695,7 @@ static WRITE16_HANDLER( output_control_w )
 
 static READ16_HANDLER( output_control_r )
 {
-	dcs.output_control_cycles = cpu_get_total_cycles(space->cpu);
+	dcs.output_control_cycles = dcs.cpu->total_cycles();
 	return dcs.output_control;
 }
 
@@ -1723,7 +1724,7 @@ static void update_timer_count(running_machine *machine)
 		return;
 
 	/* count cycles */
-	elapsed_cycles = cpu_get_total_cycles(dcs.cpu) - dcs.timer_start_cycles;
+	elapsed_cycles = dcs.cpu->total_cycles() - dcs.timer_start_cycles;
 	elapsed_clocks = elapsed_cycles / dcs.timer_scale;
 
 	/* if we haven't counted past the initial count yet, just do that */
@@ -1749,11 +1750,11 @@ static TIMER_DEVICE_CALLBACK( internal_timer_callback )
 	/* we do this to avoid drifting */
 	dcs.timers_fired++;
 	target_cycles = dcs.timer_start_cycles + dcs.timer_scale * (dcs.timer_start_count + 1 + dcs.timers_fired * (dcs.timer_period + 1));
-	target_cycles -= cpu_get_total_cycles(dcs.cpu);
+	target_cycles -= dcs.cpu->total_cycles();
 
 	/* set the next timer, but only if it's for a reasonable number */
 	if (!dcs.timer_ignore && (dcs.timer_period > 10 || dcs.timer_scale > 1))
-		timer_device_adjust_oneshot(timer, cpu_clocks_to_attotime(dcs.cpu, target_cycles), 0);
+		timer.adjust(dcs.cpu->cycles_to_attotime(target_cycles));
 
 	/* the IRQ line is edge triggered */
 	cpu_set_input_line(dcs.cpu, ADSP2105_TIMER, ASSERT_LINE);
@@ -1768,7 +1769,7 @@ static void reset_timer(running_machine *machine)
 		return;
 
 	/* compute the time until the first firing */
-	dcs.timer_start_cycles = cpu_get_total_cycles(dcs.cpu);
+	dcs.timer_start_cycles = dcs.cpu->total_cycles();
 	dcs.timers_fired = 0;
 
 	/* if this is the first timer, check the IRQ routine for the DRAM refresh stub */
@@ -1789,23 +1790,23 @@ static void reset_timer(running_machine *machine)
 
 	/* adjust the timer if not optimized */
 	if (!dcs.timer_ignore)
-		timer_device_adjust_oneshot(dcs.internal_timer, cpu_clocks_to_attotime(dcs.cpu, dcs.timer_scale * (dcs.timer_start_count + 1)), 0);
+		dcs.internal_timer->adjust(dcs.cpu->cycles_to_attotime(dcs.timer_scale * (dcs.timer_start_count + 1)));
 }
 
 
-static void timer_enable_callback(running_device *device, int enable)
+static void timer_enable_callback(cpu_device &device, int enable)
 {
 	dcs.timer_enable = enable;
 	dcs.timer_ignore = 0;
 	if (enable)
 	{
-//      mame_printf_debug("Timer enabled @ %d cycles/int, or %f Hz\n", dcs.timer_scale * (dcs.timer_period + 1), 1.0 / cpu_clocks_to_attotime(dcs.cpu, dcs.timer_scale * (dcs.timer_period + 1)));
-		reset_timer(device->machine);
+//      mame_printf_debug("Timer enabled @ %d cycles/int, or %f Hz\n", dcs.timer_scale * (dcs.timer_period + 1), 1.0 / dcs.cpu->cycles_to_attotime(dcs.timer_scale * (dcs.timer_period + 1)));
+		reset_timer(device.machine);
 	}
 	else
 	{
 //      mame_printf_debug("Timer disabled\n");
-		timer_device_adjust_oneshot(dcs.internal_timer, attotime_never, 0);
+		dcs.internal_timer->reset();
 	}
 }
 
@@ -1883,7 +1884,7 @@ static WRITE16_HANDLER( adsp_control_w )
 			if ((data & 0x0800) == 0)
 			{
 				dmadac_enable(&dcs.dmadac[0], dcs.channels, 0);
-				timer_device_adjust_oneshot(dcs.reg_timer, attotime_never, 0);
+				dcs.reg_timer->reset();
 			}
 			break;
 
@@ -1892,7 +1893,7 @@ static WRITE16_HANDLER( adsp_control_w )
 			if ((data & 0x0002) == 0)
 			{
 				dmadac_enable(&dcs.dmadac[0], dcs.channels, 0);
-				timer_device_adjust_oneshot(dcs.reg_timer, attotime_never, 0);
+				dcs.reg_timer->reset();
 			}
 			break;
 
@@ -1970,7 +1971,7 @@ static TIMER_DEVICE_CALLBACK( dcs_irq )
 	}
 
 	/* store it */
-	cpu_set_reg(dcs.cpu, ADSP2100_I0 + dcs.ireg, reg);
+	dcs.cpu->set_state(ADSP2100_I0 + dcs.ireg, reg);
 }
 
 
@@ -1980,7 +1981,7 @@ static TIMER_DEVICE_CALLBACK( sport0_irq )
 	/* note that there is non-interrupt code that reads/modifies/writes the output_control */
 	/* register; if we don't interlock it, we will eventually lose sound (see CarnEvil) */
 	/* so we skip the SPORT interrupt if we read with output_control within the last 5 cycles */
-	if ((cpu_get_total_cycles(dcs.cpu) - dcs.output_control_cycles) > 5)
+	if ((dcs.cpu->total_cycles() - dcs.output_control_cycles) > 5)
 	{
 		cpu_set_input_line(dcs.cpu, ADSP2115_SPORT0_RX, ASSERT_LINE);
 		cpu_set_input_line(dcs.cpu, ADSP2115_SPORT0_RX, CLEAR_LINE);
@@ -1993,7 +1994,7 @@ static void recompute_sample_rate(running_machine *machine)
 	/* calculate how long until we generate an interrupt */
 
 	/* frequency the time per each bit sent */
-	attotime sample_period = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(dcs.cpu)), 2 * (dcs.control_regs[S1_SCLKDIV_REG] + 1));
+	attotime sample_period = attotime_mul(ATTOTIME_IN_HZ(dcs.cpu->unscaled_clock()), 2 * (dcs.control_regs[S1_SCLKDIV_REG] + 1));
 
 	/* now put it down to samples, so we know what the channel frequency has to be */
 	sample_period = attotime_mul(sample_period, 16 * dcs.channels);
@@ -2004,12 +2005,12 @@ static void recompute_sample_rate(running_machine *machine)
 	if (dcs.incs)
 	{
 		attotime period = attotime_div(attotime_mul(sample_period, dcs.size), (2 * dcs.channels * dcs.incs));
-		timer_device_adjust_periodic(dcs.reg_timer, period, 0, period);
+		dcs.reg_timer->adjust(period, 0, period);
 	}
 }
 
 
-static void sound_tx_callback(running_device *device, int port, INT32 data)
+static void sound_tx_callback(cpu_device &device, int port, INT32 data)
 {
 	/* check if it's for SPORT1 */
 	if (port != 1)
@@ -2032,21 +2033,21 @@ static void sound_tx_callback(running_device *device, int port, INT32 data)
 
 			/* now get the register contents in a more legible format */
 			/* we depend on register indexes to be continuous (wich is the case in our core) */
-			source = cpu_get_reg(device, ADSP2100_I0 + dcs.ireg);
-			dcs.incs = cpu_get_reg(device, ADSP2100_M0 + mreg);
-			dcs.size = cpu_get_reg(device, ADSP2100_L0 + lreg);
+			source = device.state(ADSP2100_I0 + dcs.ireg);
+			dcs.incs = device.state(ADSP2100_M0 + mreg);
+			dcs.size = device.state(ADSP2100_L0 + lreg);
 
 			/* get the base value, since we need to keep it around for wrapping */
 			source -= dcs.incs;
 
 			/* make it go back one so we dont lose the first sample */
-			cpu_set_reg(device, ADSP2100_I0 + dcs.ireg, source);
+			device.set_state(ADSP2100_I0 + dcs.ireg, source);
 
 			/* save it as it is now */
 			dcs.ireg_base = source;
 
 			/* recompute the sample rate and timer */
-			recompute_sample_rate(device->machine);
+			recompute_sample_rate(device.machine);
 			return;
 		}
 		else
@@ -2057,7 +2058,7 @@ static void sound_tx_callback(running_device *device, int port, INT32 data)
 	dmadac_enable(&dcs.dmadac[0], dcs.channels, 0);
 
 	/* remove timer */
-	timer_device_adjust_oneshot(dcs.reg_timer, attotime_never, 0);
+	dcs.reg_timer->reset();
 }
 
 
@@ -2112,9 +2113,10 @@ static TIMER_DEVICE_CALLBACK( transfer_watchdog_callback )
 	if (transfer.fifo_entries && starting_writes_left == transfer.writes_left)
 	{
 		for ( ; transfer.fifo_entries; transfer.fifo_entries--)
-			preprocess_write(timer->machine, (*dcs.fifo_data_r)(dcs.cpu));
+			preprocess_write(timer.machine, (*dcs.fifo_data_r)(dcs.cpu));
 	}
-	timer_device_adjust_oneshot(transfer.watchdog, ATTOTIME_IN_MSEC(1), transfer.writes_left);
+	if (transfer.watchdog != NULL)
+		transfer.watchdog->adjust(ATTOTIME_IN_MSEC(1), transfer.writes_left);
 }
 
 
@@ -2344,7 +2346,7 @@ static int preprocess_stage_2(running_machine *machine, UINT16 data)
 			transfer.sum = 0;
 			if (transfer.hle_enabled)
 			{
-				timer_device_adjust_oneshot(transfer.watchdog, ATTOTIME_IN_MSEC(1), transfer.writes_left);
+				transfer.watchdog->adjust(ATTOTIME_IN_MSEC(1), transfer.writes_left);
 				return 1;
 			}
 			break;
@@ -2371,7 +2373,7 @@ static int preprocess_stage_2(running_machine *machine, UINT16 data)
 				if (transfer.state == 0)
 				{
 					timer_set(machine, ATTOTIME_IN_USEC(1), NULL, transfer.sum, s2_ack_callback);
-					timer_device_adjust_oneshot(transfer.watchdog, attotime_never, 0);
+					transfer.watchdog->reset();
 				}
 				return 1;
 			}

@@ -33,7 +33,7 @@ STA-0001B   GOLF ROM    94  Eagle Shot Golf                         Sammy
 STA-0001B   STS0003     94  Twin Eagle II - The Rescue Mission (1)  Seta
 STA-0001B   VISCO       95  Mobil Suit Gundam Final Shooting (2)    Banpresto
 STA-0001B   P1-102A     95  Mahjong Hyper Reaction                  Sammy
-?           ?           95  Ultra X Weapons / Ultra Keibitai        Banpresto + Tsuburaya Prod.
+?           ?           95  Ultra X Weapons / Ultra Keibitai        Banpresto / Tsuburaya Prod.
 STA-0001B   VISCO-JJ1   96  Lovely Pop Mahjong JangJang Shimasho    Visco
 STA-0001B   VISCO-001B  96  Storm Blade                             Visco
 STA-0001B   P1-105A     96? Meosis Magic                            Sammy
@@ -339,7 +339,7 @@ static WRITE16_HANDLER( ssv_lockout_inv_w )
 static MACHINE_RESET( ssv )
 {
 	requested_int = 0;
-	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), ssv_irq_callback);
+	cpu_set_irq_callback(machine->device("maincpu"), ssv_irq_callback);
 	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1"));
 }
 
@@ -766,7 +766,7 @@ static WRITE16_HANDLER( srmp7_sound_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		running_device *device = devtag_get_device(space->machine, "ensoniq");
+		running_device *device = space->machine->device("ensoniq");
 		int bank = 0x400000/2 * (data & 1);	// UINT16 address
 		int voice;
 		for (voice = 0; voice < 32; voice++)
@@ -4593,7 +4593,7 @@ GAME( 1994,  eaglshot, 0,        eaglshot, eaglshot, eaglshot, ROT0,   "Sammy", 
 GAME( 1995,  hypreact, 0,        hypreact, hypreact, hypreact, ROT0,   "Sammy",              "Mahjong Hyper Reaction (Japan)",                   GAME_NO_COCKTAIL )
 GAME( 1994,  twineag2, 0,        twineag2, twineag2, twineag2, ROT270, "Seta",               "Twin Eagle II - The Rescue Mission",               GAME_NO_COCKTAIL )
 GAME( 1995,  gdfs,     0,        gdfs,     gdfs,     gdfs,     ROT0,   "Banpresto",          "Mobil Suit Gundam Final Shooting (Japan)",         GAME_NO_COCKTAIL )
-GAME( 1995,  ultrax,   0,        ultrax,   ultrax,   ultrax,   ROT270, "Banpresto + Tsuburaya Prod.", "Ultra X Weapons / Ultra Keibitai",        GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )
+GAME( 1995,  ultrax,   0,        ultrax,   ultrax,   ultrax,   ROT270, "Banpresto / Tsuburaya Productions", "Ultra X Weapons / Ultra Keibitai",  GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )
 GAME( 1996,  janjans1, 0,        janjans1, janjans1, janjans1, ROT0,   "Visco",              "Lovely Pop Mahjong JangJang Shimasho (Japan)",     GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )
 GAME( 1996?, meosism,  0,        meosism,  meosism,  meosism,  ROT0,   "Sammy",              "Meosis Magic (Japan)",                             GAME_NO_COCKTAIL )
 GAME( 1996,  stmblade, 0,        stmblade, stmblade, stmblade, ROT270, "Visco",              "Storm Blade (US)",                                 GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )

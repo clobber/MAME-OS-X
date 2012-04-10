@@ -294,8 +294,8 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 0x0000 : Japan
       * 0x0001 : US
       * 0x0002 : World
-      * 0x0003 : US, licenced to ROMSTAR
-      * 0x0004 : licenced to PHOENIX ELECTRONICS CO.
+      * 0x0003 : US, licensed to ROMSTAR
+      * 0x0004 : licensed to PHOENIX ELECTRONICS CO.
   - Coinage relies on "Coin Mode" Dip Switch (code at 0x0030fc) :
       * "Mode A" uses TAITO_COINAGE_JAPAN_OLD
       * "Mode B" uses TAITO_COINAGE_WORLD
@@ -668,10 +668,10 @@ static MACHINE_START( rainbow )
 {
 	rainbow_state *state = (rainbow_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->pc080sn = devtag_get_device(machine, "pc080sn");
-	state->pc090oj = devtag_get_device(machine, "pc090oj");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->pc080sn = machine->device("pc080sn");
+	state->pc090oj = machine->device("pc090oj");
 }
 
 static MACHINE_DRIVER_START( rainbow )

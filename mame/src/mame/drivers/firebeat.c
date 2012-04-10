@@ -470,7 +470,7 @@ static VIDEO_UPDATE(firebeat)
 {
 	int chip;
 
-	if (screen == screen->machine->devicelist.find(VIDEO_SCREEN, 0))
+	if (screen == screen->machine->m_devicelist.find(SCREEN, 0))
 		chip = 0;
 	else
 		chip = 1;
@@ -599,11 +599,11 @@ static void GCU_w(running_machine *machine, int chip, UINT32 offset, UINT32 data
 			COMBINE_DATA( &gcu[chip].visible_area );
 			if (ACCESSING_BITS_0_15)
 			{
-				running_device *screen = machine->devicelist.find(VIDEO_SCREEN, chip);
+				screen_device *screen = downcast<screen_device *>(machine->m_devicelist.find(SCREEN, chip));
 
 				if (screen != NULL)
 				{
-					rectangle visarea = *video_screen_get_visible_area(screen);
+					rectangle visarea = screen->visible_area();
 					int width, height;
 
 					width = (gcu[chip].visible_area & 0xffff);
@@ -612,7 +612,7 @@ static void GCU_w(running_machine *machine, int chip, UINT32 offset, UINT32 data
 					visarea.max_x = width-1;
 					visarea.max_y = height-1;
 
-					video_screen_configure(screen, visarea.max_x + 1, visarea.max_y + 1, &visarea, video_screen_get_frame_period(screen).attoseconds);
+					screen->configure(visarea.max_x + 1, visarea.max_y + 1, visarea, screen->frame_period().attoseconds);
 				}
 			}
 			break;
@@ -864,7 +864,7 @@ static void atapi_clear_irq(running_machine *machine)
 	cputag_set_input_line(machine, "maincpu", INPUT_LINE_IRQ4, CLEAR_LINE);
 }
 
-static void atapi_exit(running_machine* machine)
+static void atapi_exit(running_machine& machine)
 {
 	SCSIDeleteInstance(atapi_device_data[1]);
 	SCSIDeleteInstance(atapi_device_data[0]);
@@ -886,7 +886,7 @@ static void atapi_init(running_machine *machine)
 	SCSIAllocInstance( machine, SCSI_DEVICE_CDROM, &atapi_device_data[0], "scsi0" );
 	// TODO: the slave drive can be either CD-ROM, DVD-ROM or HDD
 	SCSIAllocInstance( machine, SCSI_DEVICE_CDROM, &atapi_device_data[1], "scsi1" );
-	add_exit_callback(machine, atapi_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, atapi_exit);
 }
 
 static void atapi_reset(void)
@@ -1683,10 +1683,10 @@ static UINT32 *work_ram;
 static MACHINE_START( firebeat )
 {
 	/* set conservative DRC options */
-	ppcdrc_set_options(devtag_get_device(machine, "maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
+	ppcdrc_set_options(machine->device("maincpu"), PPCDRC_COMPATIBLE_OPTIONS);
 
 	/* configure fast RAM regions for DRC */
-	ppcdrc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, 0x01ffffff, FALSE, work_ram);
+	ppcdrc_add_fastram(machine->device("maincpu"), 0x00000000, 0x01ffffff, FALSE, work_ram);
 }
 
 static ADDRESS_MAP_START( firebeat_map, ADDRESS_SPACE_PROGRAM, 32 )
@@ -1909,7 +1909,7 @@ static MACHINE_RESET( firebeat )
 	}
 
 	SCSIGetDevice( atapi_device_data[1], &cd );
-	cdda_set_cdrom(devtag_get_device(machine, "cdda"), cd);
+	cdda_set_cdrom(machine->device("cdda"), cd);
 }
 
 static MACHINE_DRIVER_START(firebeat)
@@ -2157,7 +2157,7 @@ static void security_w(running_device *device, UINT8 data)
 {
 	int r = ibutton_w(data);
 	if (r >= 0)
-		ppc4xx_spu_receive_byte(devtag_get_device(device->machine, "maincpu"), r);
+		ppc4xx_spu_receive_byte(device->machine->device("maincpu"), r);
 }
 
 /*****************************************************************************/
@@ -2190,7 +2190,7 @@ static void init_firebeat(running_machine *machine)
 
 	cur_cab_data = cab_data;
 
-	ppc4xx_spu_set_tx_handler(devtag_get_device(machine, "maincpu"), security_w);
+	ppc4xx_spu_set_tx_handler(machine->device("maincpu"), security_w);
 
 	set_ibutton(rom);
 
@@ -2233,7 +2233,7 @@ static DRIVER_INIT(kbm)
 
 ROM_START( ppp )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("977jaa03.e21", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
+	ROM_LOAD16_WORD_SWAP("977jaa03.21e", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2248,7 +2248,7 @@ ROM_END
 
 ROM_START( kbm )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("974a03.e21", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
+	ROM_LOAD16_WORD_SWAP("974a03.21e", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2264,7 +2264,7 @@ ROM_END
 
 ROM_START( kbm2nd )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("974a03.e21", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
+	ROM_LOAD16_WORD_SWAP("974a03.21e", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2280,7 +2280,7 @@ ROM_END
 
 ROM_START( kbm3rd )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("974a03.e21", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
+	ROM_LOAD16_WORD_SWAP("974a03.21e", 0x00000, 0x80000, CRC(ef9a932d) SHA1(6299d3b9823605e519dbf1f105b59a09197df72f))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2294,9 +2294,27 @@ ROM_START( kbm3rd )
 	DISK_IMAGE_READONLY( "a12jaa02", 1, SHA1(1256ce9d71350d355a256f83c7b319f0e6e84525) )
 ROM_END
 
+ROM_START( popn5 )
+	ROM_REGION32_BE(0x80000, "user1", 0)
+        ROM_LOAD16_WORD_SWAP( "a02jaa03.21e", 0x000000, 0x080000, CRC(43ecc093) SHA1(637df5b546cf7409dd4752dc471674fe2a046599) )
+
+	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
+
+	ROM_REGION(0xc0, "user2", ROMREGION_ERASE00)	// Security dongle
+
+	ROM_REGION(0x80000, "audiocpu", 0)			// SPU 68K program
+        ROM_LOAD16_WORD_SWAP( "a02jaa04.3q",  0x000000, 0x080000, CRC(8c6000dd) SHA1(94ab2a66879839411eac6c673b25143d15836683) )
+
+	DISK_REGION( "scsi0" )
+	DISK_IMAGE_READONLY( "a04jaa01", 0, SHA1(87136ddad1d786b4d5f04381fcbf679ab666e6c9) )
+
+	DISK_REGION( "scsi1" )
+	DISK_IMAGE_READONLY( "a04jaa02", 1, SHA1(49a017dde76f84829f6e99a678524c40665c3bfd) )
+ROM_END
+
 ROM_START( popn7 )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("a02jaa03.e21", 0x00000, 0x80000, CRC(43ecc093) SHA1(637df5b546cf7409dd4752dc471674fe2a046599))
+	ROM_LOAD16_WORD_SWAP("a02jaa03.21e", 0x00000, 0x80000, CRC(43ecc093) SHA1(637df5b546cf7409dd4752dc471674fe2a046599))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2315,7 +2333,7 @@ ROM_END
 
 ROM_START( ppd )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("977jaa03.e21", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
+	ROM_LOAD16_WORD_SWAP("977jaa03.21e", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2331,7 +2349,7 @@ ROM_END
 
 ROM_START( ppp11 )
 	ROM_REGION32_BE(0x80000, "user1", 0)
-	ROM_LOAD16_WORD_SWAP("977jaa03.e21", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
+	ROM_LOAD16_WORD_SWAP("977jaa03.21e", 0x00000, 0x80000, CRC(7b83362a) SHA1(2857a93be58636c10a8d180dbccf2caeeaaff0e2))
 
 	ROM_REGION(0x400000, "ymz", ROMREGION_ERASE00)
 
@@ -2353,4 +2371,5 @@ GAME( 2000, ppp11,    0,       firebeat,      ppp,    ppp,      ROT0,   "Konami"
 GAMEL(2000, kbm,      0,       firebeat2,     kbm,    kbm,    ROT270,   "Konami",  "Keyboardmania", GAME_NOT_WORKING, layout_firebeat)
 GAMEL(2000, kbm2nd,   0,       firebeat2,     kbm,    kbm,    ROT270,   "Konami",  "Keyboardmania 2nd Mix", GAME_NOT_WORKING, layout_firebeat)
 GAMEL(2001, kbm3rd,   0,       firebeat2,     kbm,    kbm,    ROT270,   "Konami",  "Keyboardmania 3rd Mix", GAME_NOT_WORKING, layout_firebeat)
+GAME( 2000, popn5,    0,       firebeat_spu,  popn,   ppp,      ROT0,   "Konami",  "Pop n' Music 5", GAME_NOT_WORKING)
 GAME( 2001, popn7,    0,       firebeat_spu,  popn,   ppp,      ROT0,   "Konami",  "Pop n' Music 7", GAME_NOT_WORKING)

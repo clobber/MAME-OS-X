@@ -417,7 +417,7 @@ struct _pdp1_state
 	/* 1 for 16-line sequence break system, 0 for default break system */
 	int type_20_sbs;
 
-	running_device *device;
+	legacy_cpu_device *device;
 	const address_space *program;
 	int icount;
 };
@@ -425,10 +425,8 @@ struct _pdp1_state
 INLINE pdp1_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_PDP1);
-	return (pdp1_state *)device->token;
+	assert(device->type() == PDP1);
+	return (pdp1_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static void execute_instruction(pdp1_state *cpustate);
@@ -539,7 +537,7 @@ static void pdp1_set_irq_line (pdp1_state *cpustate, int irqline, int state)
 
 static CPU_INIT( pdp1 )
 {
-	const pdp1_reset_param_t *param = (const pdp1_reset_param_t *)device->baseconfig().static_config;
+	const pdp1_reset_param_t *param = (const pdp1_reset_param_t *)device->baseconfig().static_config();
 	pdp1_state *cpustate = get_safe_token(device);
 	int i;
 
@@ -622,8 +620,6 @@ static const char instruction_kind[32] =
 static CPU_EXECUTE( pdp1 )
 {
 	pdp1_state *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	do
 	{
@@ -862,8 +858,6 @@ static CPU_EXECUTE( pdp1 )
 		}
 	}
 	while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -937,7 +931,7 @@ static CPU_SET_INFO( pdp1 )
 
 CPU_GET_INFO( pdp1 )
 {
-	pdp1_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	pdp1_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1892,3 +1886,5 @@ static void pulse_start_clear(pdp1_state *cpustate)
 	if (cpustate->io_sc_callback)
 		(*cpustate->io_sc_callback)(cpustate->device);
 }
+
+DEFINE_LEGACY_CPU_DEVICE(PDP1, pdp1);

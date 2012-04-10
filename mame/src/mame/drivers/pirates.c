@@ -119,7 +119,7 @@ static WRITE16_HANDLER( pirates_out_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		running_device *eeprom = devtag_get_device(space->machine, "eeprom");
+		eeprom_device *eeprom = space->machine->device<eeprom_device>("eeprom");
 
 		/* bits 0-2 control EEPROM */
 		eeprom_write_bit(eeprom, data & 0x04);
@@ -127,7 +127,8 @@ static WRITE16_HANDLER( pirates_out_w )
 		eeprom_set_clock_line(eeprom, (data & 0x02) ? ASSERT_LINE : CLEAR_LINE);
 
 		/* bit 6 selects oki bank */
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), (data & 0x40) ? 0x40000 : 0x00000);
+		okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+		oki->set_bank_base((data & 0x40) ? 0x40000 : 0x00000);
 
 		/* bit 7 used (function unknown) */
 	}
@@ -148,7 +149,7 @@ static CUSTOM_INPUT( prot_r )
        602e and 62a6 */
 	/* For Genix, see 6576 for setting values and 67c2,d3b4 and dbc2 for tests. */
 
-	pc = cpu_get_pc(devtag_get_device(field->port->machine, "main"));
+	pc = cpu_get_pc(field->port->machine->device("main"));
 	if (pc == 0x6134)
 	{
 		bit = prot & 1;
@@ -293,8 +294,7 @@ static MACHINE_DRIVER_START( pirates )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1333333)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", 1333333, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

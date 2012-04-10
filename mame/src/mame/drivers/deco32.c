@@ -239,7 +239,7 @@ Notes:
 
 static UINT32 *deco32_ram;
 static int raster_enable;
-static running_device *raster_irq_timer;
+static timer_device *raster_irq_timer;
 static UINT8 nslasher_sound_irq;
 
 /**********************************************************************************/
@@ -248,21 +248,21 @@ static UINT8 nslasher_sound_irq;
 static WRITE32_HANDLER( deco32_pf12_control_w )
 {
 	COMBINE_DATA(&deco32_pf12_control[offset]);
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
 static WRITE32_HANDLER( deco32_pf34_control_w )
 {
 	COMBINE_DATA(&deco32_pf34_control[offset]);
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
 
 
 
 static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
-	cputag_set_input_line(timer->machine, "maincpu", ARM_IRQ_LINE, HOLD_LINE);
+	cputag_set_input_line(timer.machine, "maincpu", ARM_IRQ_LINE, HOLD_LINE);
 }
 
 static READ32_HANDLER( deco32_irq_controller_r )
@@ -289,7 +289,7 @@ static READ32_HANDLER( deco32_irq_controller_r )
 
         /* ZV03082007 - video_screen_get_vblank() doesn't work for Captain America, as it expects
            that this bit is NOT set in rows 0-7. */
-        vblank = video_screen_get_vpos(space->machine->primary_screen) > video_screen_get_visible_area(space->machine->primary_screen)->max_y;
+        vblank = space->machine->primary_screen->vpos() > space->machine->primary_screen->visible_area().max_y;
 		if (vblank)
 			return 0xffffff80 | 0x1 | 0x10; /* Assume VBL takes priority over possible raster/lightgun irq */
 
@@ -316,10 +316,10 @@ static WRITE32_HANDLER( deco32_irq_controller_w )
 		if (raster_enable && scanline>0 && scanline<240)
 		{
 			// needs +16 for the raster to align on captaven intro? (might just be our screen size / visible area / layer offsets need adjusting instead)
-			timer_device_adjust_oneshot(raster_irq_timer,video_screen_get_time_until_pos(space->machine->primary_screen, scanline+16, 320),0);
+			raster_irq_timer->adjust(space->machine->primary_screen->time_until_pos(scanline+16, 320));
 		}
 		else
-			timer_device_adjust_oneshot(raster_irq_timer,attotime_never,0);
+			raster_irq_timer->reset();
 		break;
 	case 2: /* VBL irq ack */
 		break;
@@ -363,7 +363,7 @@ static READ32_HANDLER( fghthist_control_r )
 	switch (offset) {
 	case 0: return 0xffff0000 | input_port_read(space->machine, "IN0");
 	case 1: return 0xffff0000 | input_port_read(space->machine, "IN1"); //check top bits??
-	case 2: return 0xfffffffe | eeprom_read_bit(devtag_get_device(space->machine, "eeprom"));
+	case 2: return 0xfffffffe | eeprom_read_bit(space->machine->device("eeprom"));
 	}
 
 	return 0xffffffff;
@@ -372,7 +372,7 @@ static READ32_HANDLER( fghthist_control_r )
 static WRITE32_HANDLER( fghthist_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7) {
-		running_device *device = devtag_get_device(space->machine, "eeprom");
+		eeprom_device *device = space->machine->device<eeprom_device>("eeprom");
 		eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
@@ -494,7 +494,8 @@ static WRITE32_HANDLER( tattass_control_w )
 	static int pendingCommand=0; /* 1 = read, 2 = write */
 	static int readBitCount=0;
 	static int byteAddr=0;
-	const address_space *eeprom_space = cputag_get_address_space(space->machine, "eeprom", ADDRESS_SPACE_0);
+	eeprom_device *eeprom = space->machine->device<eeprom_device>("eeprom");
+	const address_space *eeprom_space = eeprom->space();
 
 	/* Eprom in low byte */
 	if (mem_mask==0x000000ff) { /* Byte write to low byte only (different from word writing including low byte) */
@@ -630,7 +631,7 @@ static READ32_HANDLER( nslasher_prot_r )
 	switch (offset<<1) {
 	case 0x280: return input_port_read(space->machine, "IN0") << 16| 0xffff; /* IN0 */
 	case 0x4c4: return input_port_read(space->machine, "IN1") << 16| 0xffff; /* IN1 */
-	case 0x35a: return (eeprom_read_bit(devtag_get_device(space->machine, "eeprom"))<< 16) | 0xffff; // Debug switch in low word??
+	case 0x35a: return (eeprom_read_bit(space->machine->device("eeprom"))<< 16) | 0xffff; // Debug switch in low word??
 	}
 
 	//logerror("%08x: Read unmapped prot %08x (%08x)\n",cpu_get_pc(space->cpu),offset<<1,mem_mask);
@@ -642,7 +643,7 @@ static WRITE32_HANDLER( nslasher_eeprom_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		running_device *device = devtag_get_device(space->machine, "eeprom");
+		eeprom_device *device = space->machine->device<eeprom_device>("eeprom");
 		eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x40) ? CLEAR_LINE : ASSERT_LINE);
@@ -1613,8 +1614,10 @@ static void sound_irq_nslasher(running_device *device, int state)
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	okim6295_set_bank_base(devtag_get_device(device->machine, "oki1"), ((data >> 0)& 1) * 0x40000);
-	okim6295_set_bank_base(devtag_get_device(device->machine, "oki2"), ((data >> 1)& 1) * 0x40000);
+	okim6295_device *oki1 = device->machine->device<okim6295_device>("oki1");
+	okim6295_device *oki2 = device->machine->device<okim6295_device>("oki2");
+	oki1->set_bank_base(((data >> 0)& 1) * 0x40000);
+	oki2->set_bank_base(((data >> 1)& 1) * 0x40000);
 }
 
 static const ym2151_interface ym2151_config =
@@ -1639,7 +1642,7 @@ static const eeprom_interface eeprom_interface_tattass =
 
 static MACHINE_RESET( deco32 )
 {
-	raster_irq_timer = devtag_get_device(machine, "int_timer");
+	raster_irq_timer = machine->device<timer_device>("int_timer");
 }
 
 static INTERRUPT_GEN( deco32_vbl_interrupt )
@@ -1690,13 +1693,11 @@ static MACHINE_DRIVER_START( captaven )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.42)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.42)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_32_22MHz/32) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* pin 7 is floating to 2.5V (left unconnected), so I presume High */
+	MDRV_OKIM6295_ADD("oki1", XTAL_32_22MHz/32, OKIM6295_PIN7_HIGH)  /* verified on pcb; pin 7 is floating to 2.5V (left unconnected), so I presume High */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_32_22MHz/16) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* pin 7 is floating to 2.5V (left unconnected), so I presume High */
+	MDRV_OKIM6295_ADD("oki2", XTAL_32_22MHz/16, OKIM6295_PIN7_HIGH) /* verified on pcb; pin 7 is floating to 2.5V (left unconnected), so I presume High */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_DRIVER_END
@@ -1736,13 +1737,11 @@ static MACHINE_DRIVER_START( fghthist )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.42)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.42)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_DRIVER_END
@@ -1782,13 +1781,11 @@ static MACHINE_DRIVER_START( fghthsta )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.42)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.42)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 MACHINE_DRIVER_END
@@ -1832,18 +1829,15 @@ static MACHINE_DRIVER_START( dragngun )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.42)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.42)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 
-	MDRV_SOUND_ADD("oki3", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki3", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_DRIVER_END
@@ -1887,18 +1881,15 @@ static MACHINE_DRIVER_START( lockload )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.42)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.42)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
 
-	MDRV_SOUND_ADD("oki3", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki3", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_DRIVER_END
@@ -1977,13 +1968,11 @@ static MACHINE_DRIVER_START( nslasher )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 MACHINE_DRIVER_END
@@ -3090,8 +3079,8 @@ GAME( 1993, fghthista,  fghthist, fghthsta, fghthist, fghthist, ROT0, "Data East
 GAME( 1993, fghthistj,  fghthist, fghthist, fghthist, fghthist, ROT0, "Data East Corporation", "Fighter's History (Japan ver 42-03)", 0 )
 GAME( 1994, lockload,   0,        lockload, lockload, lockload, ROT0, "Data East Corporation", "Locked 'n Loaded (World)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
 GAME( 1994, lockloadu,  lockload, lockload, lockload, lockload, ROT0, "Data East Corporation", "Locked 'n Loaded (US)", GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
-GAME( 1994, tattass,    0,        tattass,  tattass,  tattass,  ROT0, "Data East Pinball",     "Tattoo Assassins (US Prototype)", GAME_IMPERFECT_GRAPHICS )
-GAME( 1994, tattassa,   tattass,  tattass,  tattass,  tattass,  ROT0, "Data East Pinball",     "Tattoo Assassins (Asia Prototype)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, tattass,    0,        tattass,  tattass,  tattass,  ROT0, "Data East Pinball",     "Tattoo Assassins (US prototype)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1994, tattassa,   tattass,  tattass,  tattass,  tattass,  ROT0, "Data East Pinball",     "Tattoo Assassins (Asia prototype)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1994, nslasher,   0,        nslasher, nslasher, nslasher, ROT0, "Data East Corporation", "Night Slashers (Korea Rev 1.3)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1994, nslasherj,  nslasher, nslasher, nslasher, nslasher, ROT0, "Data East Corporation", "Night Slashers (Japan Rev 1.2)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1994, nslashers,  nslasher, nslasher, nslasher, nslasher, ROT0, "Data East Corporation", "Night Slashers (Over Sea Rev 1.2)", GAME_IMPERFECT_GRAPHICS )

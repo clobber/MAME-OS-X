@@ -318,7 +318,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
   - Coinage relies on the region (code at 0x00dd10) :
       * 0x0000 (Japan) use TAITO_COINAGE_JAPAN_NEW
       * 0x0001 (US) use TAITO_COINAGE_US
-      * 0x0002 (World), 0x0003 (US, licenced to ROMSTAR) and 0x0004 (licenced to PHOENIX ELECTRONICS CO.)
+      * 0x0002 (World), 0x0003 (US, licensed to ROMSTAR) and 0x0004 (licensed to PHOENIX ELECTRONICS CO.)
         use slighlty different TAITO_COINAGE_WORLD : 1C_7C instead of 1C_6C for Coin B
   - GP order relies on the sub-region (code at 0x00bc9c) :
       * 0x0000 : 0x00 0x01 0x02 0x03 0x04 0x05 0x06 0x07
@@ -477,7 +477,7 @@ static TIMER_CALLBACK( wgp_cpub_interrupt6 )
 
 static INTERRUPT_GEN( wgp_cpub_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device,200000-500), NULL, 0, wgp_cpub_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000-500), NULL, 0, wgp_cpub_interrupt6);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -601,7 +601,7 @@ static WRITE16_HANDLER( wgp_adinput_w )
        hardware has got the next a/d conversion ready. We set a token
        delay of 10000 cycles although our inputs are always ready. */
 
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,10000), NULL, 0, wgp_interrupt6);
+	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, wgp_interrupt6);
 }
 
 
@@ -955,11 +955,11 @@ static MACHINE_START( wgp )
 
 	memory_configure_bank(machine, "bank10", 0, 4, memory_region(machine, "audiocpu") + 0xc000, 0x4000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->tc0140syt = devtag_get_device(machine, "tc0140syt");
-	state->tc0100scn = devtag_get_device(machine, "tc0100scn");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->subcpu = machine->device("sub");
+	state->tc0140syt = machine->device("tc0140syt");
+	state->tc0100scn = machine->device("tc0100scn");
 
 	state_save_register_global(machine, state->cpua_ctrl);
 	state_save_register_global(machine, state->banknum);

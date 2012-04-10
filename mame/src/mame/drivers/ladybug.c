@@ -725,14 +725,14 @@ GFXDECODE_END
 static MACHINE_START( ladybug )
 {
 	ladybug_state *state = (ladybug_state *)machine->driver_data;
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 }
 
 static MACHINE_START( sraider )
 {
 	ladybug_state *state = (ladybug_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 
 	state_save_register_global(machine, state->grid_color);
 	state_save_register_global(machine, state->sound_low);
@@ -1084,7 +1084,7 @@ GAME( 1981, cavenger, 0,       ladybug, cavenger, 0,       ROT0,   "Universal", 
 GAME( 1981, ladybug,  0,       ladybug, ladybug,  0,       ROT270, "Universal", "Lady Bug", GAME_SUPPORTS_SAVE )
 GAME( 1981, ladybugb, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1981, ladybgb2, ladybug, ladybug, ladybug,  0,       ROT270, "bootleg",   "Lady Bug (bootleg set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1982, dorodon,  0,       ladybug, dorodon,  dorodon, ROT270, "Falcon",    "Dorodon (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1982, dorodon2, dorodon, ladybug, dorodon,  dorodon, ROT270, "Falcon",    "Dorodon (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1982, dorodon,  0,       ladybug, dorodon,  dorodon, ROT270, "UPL (Falcon license?)", "Dorodon (set 1)", GAME_SUPPORTS_SAVE ) // license or bootleg?
+GAME( 1982, dorodon2, dorodon, ladybug, dorodon,  dorodon, ROT270, "UPL (Falcon license?)", "Dorodon (set 2)", GAME_SUPPORTS_SAVE ) // "
 GAME( 1982, snapjack, 0,       ladybug, snapjack, 0,       ROT0,   "Universal", "Snap Jack", GAME_SUPPORTS_SAVE )
 GAME( 1982, sraider,  0,       sraider, sraider,  0,       ROT270, "Universal", "Space Raider", GAME_SUPPORTS_SAVE )

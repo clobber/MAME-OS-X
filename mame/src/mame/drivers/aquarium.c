@@ -342,7 +342,7 @@ static MACHINE_START( aquarium )
 {
 	aquarium_state *state = (aquarium_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->aquarium_snd_ack);
 }
@@ -395,8 +395,7 @@ static MACHINE_DRIVER_START( aquarium )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1122000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
 MACHINE_DRIVER_END

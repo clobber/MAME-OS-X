@@ -64,10 +64,6 @@ static int config_save_xml(running_machine *machine, mame_file *file, int type);
 void config_init(running_machine *machine)
 {
 	typelist = NULL;
-
-#ifdef MESS
-	mess_config_init(machine);
-#endif
 }
 
 
@@ -106,7 +102,7 @@ void config_register(running_machine *machine, const char *nodename, config_call
 
 int config_load_settings(running_machine *machine)
 {
-	const char *controller = options_get_string(mame_options(), OPTION_CTRLR);
+	const char *controller = options_get_string(machine->options(), OPTION_CTRLR);
 	file_error filerr;
 	config_type *type;
 	mame_file *file;
@@ -141,7 +137,7 @@ int config_load_settings(running_machine *machine)
 	}
 
 	/* finally, load the game-specific file */
-	astring fname(machine->basename, ".cfg");
+	astring fname(machine->basename(), ".cfg");
 	filerr = mame_fopen(SEARCHPATH_CONFIG, fname, OPEN_FLAG_READ, &file);
 
 	if (filerr == FILERR_NONE)
@@ -179,7 +175,7 @@ void config_save_settings(running_machine *machine)
 	}
 
 	/* finally, save the game-specific file */
-	astring fname(machine->basename, ".cfg");
+	astring fname(machine->basename(), ".cfg");
 	filerr = mame_fopen(SEARCHPATH_CONFIG, fname, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE | OPEN_FLAG_CREATE_PATHS, &file);
 
 	if (filerr == FILERR_NONE)

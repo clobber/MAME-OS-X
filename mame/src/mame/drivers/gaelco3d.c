@@ -164,14 +164,14 @@ static offs_t tms_offset_xor;
 static UINT8 analog_ports[4];
 static UINT8 framenum;
 
-static running_device *adsp_autobuffer_timer;
+static timer_device *adsp_autobuffer_timer;
 static UINT16 *adsp_control_regs;
 static UINT16 *adsp_fastram_base;
 static UINT8 adsp_ireg;
 static offs_t adsp_ireg_base, adsp_incs, adsp_size;
-static running_device *dmadac[SOUND_CHANNELS];
+static dmadac_sound_device *dmadac[SOUND_CHANNELS];
 
-static void adsp_tx_callback(running_device *device, int port, INT32 data);
+static void adsp_tx_callback(cpu_device &device, int port, INT32 data);
 
 
 /*************************************
@@ -210,7 +210,7 @@ static MACHINE_RESET( common )
 	}
 
 	/* allocate a timer for feeding the autobuffer */
-	adsp_autobuffer_timer = devtag_get_device(machine, "adsp_timer");
+	adsp_autobuffer_timer = machine->device<timer_device>("adsp_timer");
 
 	memory_configure_bank(machine, "bank1", 0, 256, memory_region(machine, "user1"), 0x4000);
 	memory_set_bank(machine, "bank1", 0);
@@ -222,7 +222,7 @@ static MACHINE_RESET( common )
 	{
 		char buffer[10];
 		sprintf(buffer, "dac%d", i + 1);
-		dmadac[i] = devtag_get_device(machine, buffer);
+		dmadac[i] = machine->device<dmadac_sound_device>(buffer);
 	}
 }
 
@@ -250,7 +250,7 @@ static MACHINE_RESET( gaelco3d2 )
 
 static INTERRUPT_GEN( vblank_gen )
 {
-	gaelco3d_render(device->machine->primary_screen);
+	gaelco3d_render(*device->machine->primary_screen);
 	cpu_set_input_line(device, 2, ASSERT_LINE);
 }
 
@@ -531,7 +531,7 @@ static WRITE16_HANDLER( adsp_control_w )
 			if ((data & 0x0800) == 0)
 			{
 				dmadac_enable(&dmadac[0], SOUND_CHANNELS, 0);
-				timer_device_adjust_oneshot(adsp_autobuffer_timer, attotime_never, 0);
+				adsp_autobuffer_timer->reset();
 			}
 			break;
 
@@ -540,7 +540,7 @@ static WRITE16_HANDLER( adsp_control_w )
 			if ((data & 0x0002) == 0)
 			{
 				dmadac_enable(&dmadac[0], SOUND_CHANNELS, 0);
-				timer_device_adjust_oneshot(adsp_autobuffer_timer, attotime_never, 0);
+				adsp_autobuffer_timer->reset();
 			}
 			break;
 
@@ -571,8 +571,10 @@ static WRITE16_HANDLER( adsp_rombank_w )
 
 static TIMER_DEVICE_CALLBACK( adsp_autobuffer_irq )
 {
+	cpu_device *adsp = timer.machine->device<cpu_device>("adsp");
+
 	/* get the index register */
-	int reg = cpu_get_reg(devtag_get_device(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg);
+	int reg = adsp->state(ADSP2100_I0 + adsp_ireg);
 
 	/* copy the current data into the buffer */
 // logerror("ADSP buffer: I%d=%04X incs=%04X size=%04X\n", adsp_ireg, reg, adsp_incs, adsp_size);
@@ -589,15 +591,15 @@ static TIMER_DEVICE_CALLBACK( adsp_autobuffer_irq )
 		reg = adsp_ireg_base;
 
 		/* generate the (internal, thats why the pulse) irq */
-		generic_pulse_irq_line(devtag_get_device(timer->machine, "adsp"), ADSP2105_IRQ1);
+		generic_pulse_irq_line(adsp, ADSP2105_IRQ1);
 	}
 
 	/* store it */
-	cpu_set_reg(devtag_get_device(timer->machine, "adsp"), ADSP2100_I0 + adsp_ireg, reg);
+	adsp->set_state(ADSP2100_I0 + adsp_ireg, reg);
 }
 
 
-static void adsp_tx_callback(running_device *device, int port, INT32 data)
+static void adsp_tx_callback(cpu_device &device, int port, INT32 data)
 {
 	/* check if it's for SPORT1 */
 	if (port != 1)
@@ -621,15 +623,15 @@ static void adsp_tx_callback(running_device *device, int port, INT32 data)
 
 			/* now get the register contents in a more legible format */
 			/* we depend on register indexes to be continuous (wich is the case in our core) */
-			source = cpu_get_reg(device, ADSP2100_I0 + adsp_ireg);
-			adsp_incs = cpu_get_reg(device, ADSP2100_M0 + mreg);
-			adsp_size = cpu_get_reg(device, ADSP2100_L0 + lreg);
+			source = device.state(ADSP2100_I0 + adsp_ireg);
+			adsp_incs = device.state(ADSP2100_M0 + mreg);
+			adsp_size = device.state(ADSP2100_L0 + lreg);
 
 			/* get the base value, since we need to keep it around for wrapping */
 			source -= adsp_incs;
 
 			/* make it go back one so we dont lose the first sample */
-			cpu_set_reg(device, ADSP2100_I0 + adsp_ireg, source);
+			device.set_state(ADSP2100_I0 + adsp_ireg, source);
 
 			/* save it as it is now */
 			adsp_ireg_base = source;
@@ -637,7 +639,7 @@ static void adsp_tx_callback(running_device *device, int port, INT32 data)
 			/* calculate how long until we generate an interrupt */
 
 			/* period per each bit sent */
-			sample_period = attotime_mul(ATTOTIME_IN_HZ(cpu_get_clock(device)), 2 * (adsp_control_regs[S1_SCLKDIV_REG] + 1));
+			sample_period = attotime_mul(ATTOTIME_IN_HZ(device.clock()), 2 * (adsp_control_regs[S1_SCLKDIV_REG] + 1));
 
 			/* now put it down to samples, so we know what the channel frequency has to be */
 			sample_period = attotime_mul(sample_period, 16 * SOUND_CHANNELS);
@@ -648,7 +650,7 @@ static void adsp_tx_callback(running_device *device, int port, INT32 data)
 			/* fire off a timer wich will hit every half-buffer */
 			sample_period = attotime_div(attotime_mul(sample_period, adsp_size), SOUND_CHANNELS * adsp_incs);
 
-			timer_device_adjust_periodic(adsp_autobuffer_timer, sample_period, 0, sample_period);
+			adsp_autobuffer_timer->adjust(sample_period, 0, sample_period);
 
 			return;
 		}
@@ -660,7 +662,7 @@ static void adsp_tx_callback(running_device *device, int port, INT32 data)
 	dmadac_enable(&dmadac[0], SOUND_CHANNELS, 0);
 
 	/* remove timer */
-	timer_device_adjust_oneshot(adsp_autobuffer_timer, attotime_never, 0);
+	adsp_autobuffer_timer->reset();
 }
 
 
@@ -1013,8 +1015,10 @@ static MACHINE_DRIVER_START( gaelco3d2 )
 	/* basic machine hardware */
 	MDRV_CPU_REPLACE("maincpu", M68EC020, 25000000)
 	MDRV_CPU_PROGRAM_MAP(main020_map)
+	MDRV_CPU_VBLANK_INT("screen", vblank_gen)
 
-	MDRV_CPU_REPLACE("tms", TMS32031, 50000000)
+	MDRV_CPU_MODIFY("tms")
+	MDRV_CPU_CLOCK(50000000)
 
 	MDRV_MACHINE_RESET(gaelco3d2)
 MACHINE_DRIVER_END

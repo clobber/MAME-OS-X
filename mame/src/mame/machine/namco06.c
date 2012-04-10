@@ -98,8 +98,8 @@ struct _namco_06xx_state
 {
 	UINT8 control;
 	emu_timer *nmi_timer;
-	running_device *nmicpu;
-	running_device *device[4];
+	cpu_device *nmicpu;
+	device_t *device[4];
 	read8_device_func read[4];
 	void (*readreq[4])(running_device *device);
 	write8_device_func write[4];
@@ -108,10 +108,9 @@ struct _namco_06xx_state
 INLINE namco_06xx_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == NAMCO_06XX);
+	assert(device->type() == NAMCO_06XX);
 
-	return (namco_06xx_state *)device->token;
+	return (namco_06xx_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -120,7 +119,7 @@ static TIMER_CALLBACK( nmi_generate )
 {
 	namco_06xx_state *state = get_safe_token((running_device *)ptr);
 
-	if (!cpu_is_suspended(state->nmicpu, SUSPEND_REASON_HALT | SUSPEND_REASON_RESET | SUSPEND_REASON_DISABLE))
+	if (!state->nmicpu->suspended(SUSPEND_REASON_HALT | SUSPEND_REASON_RESET | SUSPEND_REASON_DISABLE))
 	{
 		LOG(("NMI cpu '%s'\n",state->nmicpu->tag()));
 
@@ -221,31 +220,31 @@ WRITE8_DEVICE_HANDLER( namco_06xx_ctrl_w )
 
 static DEVICE_START( namco_06xx )
 {
-	const namco_06xx_config *config = (const namco_06xx_config *)device->baseconfig().inline_config;
+	const namco_06xx_config *config = (const namco_06xx_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
 	namco_06xx_state *state = get_safe_token(device);
 	int devnum;
 
 	assert(config != NULL);
 
 	/* resolve our CPU */
-	state->nmicpu = devtag_get_device(device->machine, config->nmicpu);
+	state->nmicpu = device->machine->device<cpu_device>(config->nmicpu);
 	assert(state->nmicpu != NULL);
 
 	/* resolve our devices */
-	state->device[0] = (config->chip0 != NULL) ? devtag_get_device(device->machine, config->chip0) : NULL;
+	state->device[0] = (config->chip0 != NULL) ? device->machine->device(config->chip0) : NULL;
 	assert(state->device[0] != NULL || config->chip0 == NULL);
-	state->device[1] = (config->chip1 != NULL) ? devtag_get_device(device->machine, config->chip1) : NULL;
+	state->device[1] = (config->chip1 != NULL) ? device->machine->device(config->chip1) : NULL;
 	assert(state->device[1] != NULL || config->chip1 == NULL);
-	state->device[2] = (config->chip2 != NULL) ? devtag_get_device(device->machine, config->chip2) : NULL;
+	state->device[2] = (config->chip2 != NULL) ? device->machine->device(config->chip2) : NULL;
 	assert(state->device[2] != NULL || config->chip2 == NULL);
-	state->device[3] = (config->chip3 != NULL) ? devtag_get_device(device->machine, config->chip3) : NULL;
+	state->device[3] = (config->chip3 != NULL) ? device->machine->device(config->chip3) : NULL;
 	assert(state->device[3] != NULL || config->chip3 == NULL);
 
 	/* loop over devices and set their read/write handlers */
 	for (devnum = 0; devnum < 4; devnum++)
 		if (state->device[devnum] != NULL)
 		{
-			device_type type = state->device[devnum]->type;
+			device_type type = state->device[devnum]->type();
 
 			if (type == NAMCO_50XX)
 			{
@@ -300,3 +299,6 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_NAME		"Namco 06xx"
 #define DEVTEMPLATE_FAMILY		"Namco I/O"
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(NAMCO_06XX, namco_06xx);

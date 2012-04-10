@@ -184,15 +184,15 @@ static void update_interrupts(running_machine *machine)
 }
 
 
-static void scanline_update(running_device *screen, int scanline)
+static void scanline_update(screen_device &screen, int scanline)
 {
-	const address_space *space = cputag_get_address_space(screen->machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	const address_space *space = cputag_get_address_space(screen.machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
 
 	/* sound IRQ is on 32V */
 	if (scanline & 32)
 		atarigen_6502_irq_ack_r(space, 0);
-	else if (!(input_port_read(screen->machine, "FE4000") & 0x40))
-		atarigen_6502_irq_gen(devtag_get_device(screen->machine, "audiocpu"));
+	else if (!(input_port_read(screen.machine, "FE4000") & 0x40))
+		atarigen_6502_irq_gen(screen.machine->device("audiocpu"));
 }
 
 
@@ -214,9 +214,9 @@ static MACHINE_RESET( badlands )
 
 	atarigen_eeprom_reset(&state->atarigen);
 	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
-	atarigen_scanline_timer_reset(machine->primary_screen, scanline_update, 32);
+	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update, 32);
 
-	atarigen_sound_io_reset(devtag_get_device(machine, "audiocpu"));
+	atarigen_sound_io_reset(machine->device("audiocpu"));
 	memcpy(state->bank_base, &state->bank_source_data[0x0000], 0x1000);
 }
 
@@ -689,13 +689,13 @@ static void update_interrupts_bootleg(running_machine *machine)
 }
 
 
-static void scanline_update_bootleg(running_device *screen, int scanline)
+static void scanline_update_bootleg(screen_device &screen, int scanline)
 {
 	/* sound IRQ is on 32V */
 //  if (scanline & 32)
 //      atarigen_6502_irq_ack_r(screen->machine, 0);
 //  else if (!(input_port_read(machine, "FE4000") & 0x40))
-//      atarigen_6502_irq_gen(devtag_get_device(screen->machine, "audiocpu"));
+//      atarigen_6502_irq_gen(screen->machine->device("audiocpu"));
 }
 
 
@@ -707,9 +707,9 @@ static MACHINE_RESET( badlandsb )
 
 	atarigen_eeprom_reset(&state->atarigen);
 	atarigen_interrupt_reset(&state->atarigen, update_interrupts_bootleg);
-	atarigen_scanline_timer_reset(machine->primary_screen, scanline_update_bootleg, 32);
+	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update_bootleg, 32);
 
-//  atarigen_sound_io_reset(devtag_get_device(machine, "audiocpu"));
+//  atarigen_sound_io_reset(machine->device("audiocpu"));
 //  memcpy(state->bank_base, &state->bank_source_data[0x0000], 0x1000);
 }
 
@@ -785,4 +785,4 @@ ROM_START( badlandsb )
 ROM_END
 
 
-GAME( 1989, badlandsb, badlands, badlandsb, badlands, 0, ROT0, "[Atari Games] (Playmark bootleg)", "Bad Lands (bootleg)", GAME_NOT_WORKING )
+GAME( 1989, badlandsb, badlands, badlandsb, badlands, 0, ROT0, "bootleg (Playmark)", "Bad Lands (bootleg)", GAME_NOT_WORKING )

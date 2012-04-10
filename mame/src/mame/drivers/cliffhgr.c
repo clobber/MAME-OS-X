@@ -203,7 +203,7 @@ static TIMER_CALLBACK( cliff_irq_callback )
 		cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
 	}
 
-	timer_adjust_oneshot(irq_timer, video_screen_get_time_until_pos(machine->primary_screen, param * 2, 0), param);
+	timer_adjust_oneshot(irq_timer, machine->primary_screen->time_until_pos(param * 2), param);
 }
 
 static void vdp_interrupt(running_machine *machine, int state)
@@ -215,7 +215,7 @@ static void vdp_interrupt(running_machine *machine, int state)
 
 static MACHINE_START( cliffhgr )
 {
-	laserdisc = devtag_get_device(machine, "laserdisc");
+	laserdisc = machine->device("laserdisc");
 	irq_timer = timer_alloc(machine, cliff_irq_callback, NULL);
 }
 
@@ -223,7 +223,7 @@ static MACHINE_RESET( cliffhgr )
 {
 	port_bank = 0;
 	phillips_code = 0;
-	timer_adjust_oneshot(irq_timer, video_screen_get_time_until_pos(machine->primary_screen, 17, 0), 17);
+	timer_adjust_oneshot(irq_timer, machine->primary_screen->time_until_pos(17), 17);
 }
 
 /********************************************************/
@@ -785,4 +785,4 @@ static DRIVER_INIT( cliff )
 
 GAME( 1983, cliffhgr, 0,        cliffhgr, cliffhgr,  cliff, ROT0, "Stern Electronics", "Cliff Hanger", 0)
 GAME( 1983, cliffhgra,cliffhgr, cliffhgr, cliffhgra, cliff, ROT0, "Stern Electronics", "Cliff Hanger (Alt)", 0)
-GAME( 1983, goaltogo, 0,        cliffhgr, goaltogo, cliff, ROT0, "Stern Electronics", "Goal To Go", GAME_NOT_WORKING)
+GAME( 1983, goaltogo, 0,        cliffhgr, goaltogo,  cliff, ROT0, "Stern Electronics", "Goal To Go", GAME_NOT_WORKING)

@@ -71,7 +71,7 @@
 
 
 class input_type_desc;
-class running_device;
+class device_t;
 
 
 /*-----------------------------------------------------------------------------
@@ -113,7 +113,7 @@ class running_device;
 
         Note that there is no corresponding osd_exit(). Rather, like most
         systems in MAME, you can register an exit callback via the
-        add_exit_callback() function in mame.c.
+        add_notifier() function in mame.c.
 
         Also note that there is no return value. If you need to report a
         fatal error, use the fatalerror() function with a friendly message
@@ -126,7 +126,7 @@ class running_device;
 -----------------------------------------------------------------------------*/
 void osd_init(running_machine *machine);
 
-void osd_wait_for_debugger(running_device *device, int firststop);
+void osd_wait_for_debugger(device_t *device, int firststop);
 
 
 

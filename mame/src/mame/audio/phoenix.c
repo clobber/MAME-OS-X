@@ -511,7 +511,7 @@ WRITE8_DEVICE_HANDLER( phoenix_sound_control_b_w )
 	discrete_sound_w(device, PHOENIX_EFFECT_1_FREQ, data & 0x10);
 
 	/* update the tune that the MM6221AA is playing */
-	mm6221aa_tune_w(devtag_get_device(device->machine, "tms"), data >> 6);
+	mm6221aa_tune_w(device->machine->device("tms"), data >> 6);
 }
 
 static DEVICE_START( phoenix_sound )
@@ -554,3 +554,6 @@ DEVICE_GET_INFO( phoenix_sound )
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(PHOENIX, phoenix_sound);

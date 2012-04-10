@@ -241,7 +241,7 @@ static WRITE8_HANDLER( rallyx_latch_w )
 
 		case 0x02:	/* SOUND ON */
 			/* this doesn't work in New Rally X so I'm not supporting it */
-//          pacman_sound_enable_w(devtag_get_device(space->machine, "namco"), bit);
+//          pacman_sound_enable_w(space->machine->device("namco"), bit);
 			break;
 
 		case 0x03:	/* FLIP */
@@ -876,8 +876,8 @@ static MACHINE_START( rallyx )
 {
 	timeplt_state *state = (timeplt_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->samples = devtag_get_device(machine, "samples");
+	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->samples = machine->device("samples");
 
 	state_save_register_global(machine, state->last_bang);
 	state_save_register_global(machine, state->stars_enable);
@@ -1385,13 +1385,13 @@ ROM_END
 
 GAME( 1980, rallyx,   0,        rallyx,   rallyx,   0, ROT0,  "Namco", "Rally X (32k Ver.?)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1980, rallyxa,  rallyx,   rallyx,   rallyx,   0, ROT0,  "Namco", "Rally X", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1980, rallyxm,  rallyx,   rallyx,   rallyx,   0, ROT0,  "[Namco] (Midway license)", "Rally X (Midway)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, rallyxm,  rallyx,   rallyx,   rallyx,   0, ROT0,  "Namco (Midway license)", "Rally X (Midway)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, nrallyx,  0,        rallyx,   nrallyx,  0, ROT0,  "Namco", "New Rally X", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, nrallyxb, nrallyx,  rallyx,   nrallyx,  0, ROT0,  "Namco", "New Rally X (bootleg?) ", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1981, jungler,  0,        jungler,  jungler,  0, ROT90, "Konami", "Jungler", GAME_SUPPORTS_SAVE )
-GAME( 1981, junglers, jungler,  jungler,  jungler,  0, ROT90, "[Konami] (Stern license)", "Jungler (Stern)", GAME_SUPPORTS_SAVE )
-GAME( 1982, tactcian, 0,        tactcian, tactcian, 0, ROT90, "[Konami] (Sega license)", "Tactician (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1981, tactcian2,tactcian, tactcian, tactcian, 0, ROT90, "[Konami] (Sega license)", "Tactician (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1981, junglers, jungler,  jungler,  jungler,  0, ROT90, "Konami (Stern Electronics license)", "Jungler (Stern Electronics)", GAME_SUPPORTS_SAVE )
+GAME( 1982, tactcian, 0,        tactcian, tactcian, 0, ROT90, "Konami (Sega license)", "Tactician (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1981, tactcian2,tactcian, tactcian, tactcian, 0, ROT90, "Konami (Sega license)", "Tactician (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1982, locomotn, 0,        locomotn, locomotn, 0, ROT90, "Konami (Centuri license)", "Loco-Motion", GAME_SUPPORTS_SAVE )
 GAME( 1982, gutangtn, locomotn, locomotn, locomotn, 0, ROT90, "Konami (Sega license)", "Guttang Gottong", GAME_SUPPORTS_SAVE )
 GAME( 1982, cottong,  locomotn, locomotn, locomotn, 0, ROT90, "bootleg", "Cotocoto Cottong", GAME_SUPPORTS_SAVE )

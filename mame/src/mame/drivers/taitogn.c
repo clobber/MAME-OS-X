@@ -347,7 +347,7 @@ static void rf5c296_reg_w(ATTR_UNUSED running_machine *machine, UINT8 reg, UINT8
 			{
 				devtag_reset(machine, "card");
 				locked = 0x1ff;
-				ide_set_gnet_readlock (devtag_get_device(machine, "card"), 1);
+				ide_set_gnet_readlock (machine->device("card"), 1);
 			}
 		break;
 
@@ -365,7 +365,7 @@ static UINT8 rf5c296_reg_r(ATTR_UNUSED running_machine *machine, UINT8 reg)
 static WRITE32_HANDLER(rf5c296_io_w)
 {
 	if(offset < 2) {
-		ide_controller32_pcmcia_w(devtag_get_device(space->machine, "card"), offset, data, mem_mask);
+		ide_controller32_pcmcia_w(space->machine->device("card"), offset, data, mem_mask);
 		return;
 	}
 
@@ -380,7 +380,7 @@ static WRITE32_HANDLER(rf5c296_io_w)
 static READ32_HANDLER(rf5c296_io_r)
 {
 	if(offset < 2)
-		return ide_controller32_pcmcia_r(devtag_get_device(space->machine, "card"), offset, mem_mask);
+		return ide_controller32_pcmcia_r(space->machine->device("card"), offset, mem_mask);
 
 	offset *= 4;
 
@@ -430,7 +430,7 @@ static WRITE32_HANDLER(rf5c296_mem_w)
 		else
 			locked |= 1 << pos;
 		if (!locked) {
-			ide_set_gnet_readlock (devtag_get_device(space->machine, "card"), 0);
+			ide_set_gnet_readlock (space->machine->device("card"), 0);
 		}
 	}
 }
@@ -548,11 +548,11 @@ static WRITE32_HANDLER(control_w)
 	// selection too, but they're always 0.
 
 	UINT32 p = control;
-	running_device *mb3773 = devtag_get_device(space->machine, "mb3773");
+	running_device *mb3773 = space->machine->device("mb3773");
 
 	COMBINE_DATA(&control);
 
-	mb3773_set_ck(mb3773, 0, (control & 0x20) >> 5);
+	mb3773_set_ck(mb3773, (control & 0x20) >> 5);
 
 #if 0
 	if((p ^ control) & ~0x20)
@@ -720,7 +720,7 @@ static WRITE32_HANDLER( znsecsel_w )
 			psx_sio_install_handler( 0, sio_dip_handler );
 			psx_sio_input( space->machine, 0, PSX_SIO_IN_DSR, 0 );
 
-			timer_adjust_oneshot( dip_timer, cpu_clocks_to_attotime( space->cpu, 100 ), 1 );
+			timer_adjust_oneshot( dip_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( 100 ), 1 );
         }
 }
 
@@ -852,7 +852,7 @@ static MACHINE_RESET( coh3002t )
 	control = 0;
 	psx_machine_init(machine);
 	devtag_reset(machine, "card");
-	ide_set_gnet_readlock(devtag_get_device(machine, "card"), 1);
+	ide_set_gnet_readlock(machine->device("card"), 1);
 
 	// halt sound CPU since it has no valid program at start
 	cputag_set_input_line(machine, "mn10200",INPUT_LINE_RESET,ASSERT_LINE); /* MCU */
@@ -1296,7 +1296,7 @@ ROM_END
 /* A dummy driver, so that the bios can be debugged, and to serve as */
 /* parent for the coh-3002t.353 file, so that we do not have to include */
 /* it in every zip file */
-GAME( 1997, taitogn,  0,        coh3002t, coh3002t, coh3002t, ROT0,   "Sony/Taito", "Taito GNET", GAME_IS_BIOS_ROOT )
+GAME( 1997, taitogn,  0,        coh3002t, coh3002t, coh3002t, ROT0,   "Sony / Taito", "Taito GNET", GAME_IS_BIOS_ROOT )
 
 GAME( 1998, chaoshea, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Chaos Heat (V2.09O)", GAME_IMPERFECT_SOUND )
 GAME( 1998, chaosheaj,chaoshea, coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Chaos Heat (V2.08J)", GAME_IMPERFECT_SOUND )
@@ -1305,24 +1305,24 @@ GAME( 1999, spuzbobl, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "
 GAME( 1999, spuzboblj,spuzbobl, coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Super Puzzle Bobble (V2.04J)", GAME_IMPERFECT_SOUND )
 GAME( 1999, gobyrc,   taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Go By RC (V2.03O)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // custom inputs need calibrating
 GAME( 1999, rcdego,   gobyrc,   coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "RC De Go (V2.03J)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // custom inputs need calibrating
-GAME( 1999, flipmaze, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito/Moss", "Flip Maze (V2.04J)", GAME_IMPERFECT_SOUND )
-GAME( 2001, shikigam, taitogn,  coh3002t, coh3002t, coh3002t, ROT270, "Taito/Alfa System", "Shikigami no Shiro (V2.03J)", GAME_IMPERFECT_SOUND )
+GAME( 1999, flipmaze, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito / Moss", "Flip Maze (V2.04J)", GAME_IMPERFECT_SOUND )
+GAME( 2001, shikigam, taitogn,  coh3002t, coh3002t, coh3002t, ROT270, "Alfa System / Taito", "Shikigami no Shiro (V2.03J)", GAME_IMPERFECT_SOUND )
 GAME( 2003, sianniv,  taitogn,  coh3002t, coh3002t, coh3002t, ROT270, "Taito", "Space Invaders Anniversary (V2.02J)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // IRQ at the wrong time
 GAME( 2003, kollon,   taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Kollon (V2.04J)", GAME_IMPERFECT_SOUND )
 GAME( 2003, kollonc,  kollon,   coh3002t, coh3002t, coh3002t, ROT0,   "Taito", "Kollon (V2.04JC)", GAME_IMPERFECT_SOUND )
 
 GAME( 1999, otenamih, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Success", "Otenami Haiken (V2.04J)", GAME_IMPERFECT_SOUND )
-GAME( 2005, otenamhf, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Success/Warashi", "Otenami Haiken Final (V2.07JC)", GAME_IMPERFECT_SOUND )
+GAME( 2005, otenamhf, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Success / Warashi", "Otenami Haiken Final (V2.07JC)", GAME_IMPERFECT_SOUND )
 GAME( 2000, psyvaria, taitogn,  coh3002t, coh3002t, coh3002t, ROT270, "Success", "Psyvariar -Medium Unit- (V2.04J)", GAME_IMPERFECT_SOUND )
 GAME( 2000, psyvarrv, taitogn,  coh3002t, coh3002t, coh3002t, ROT270, "Success", "Psyvariar -Revision- (V2.04J)", GAME_IMPERFECT_SOUND )
 GAME( 2000, zokuoten, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Success", "Zoku Otenamihaiken (V2.03J)", GAME_IMPERFECT_SOUND )
 GAME( 2004, zooo,     taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Success", "Zooo (V2.01J)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // missing most of the playfield
 
-GAME( 1999, mahjngoh, taitogn,  coh3002t, coh3002t_mp, coh3002t_mp, ROT0, "Warashi/Mahjong Kobo/Taito", "Mahjong Oh (V2.06J)", GAME_IMPERFECT_SOUND )
-GAME( 2001, usagi,    taitogn,  coh3002t, coh3002t_mp, coh3002t_mp, ROT0, "Warashi/Mahjong Kobo/Taito", "Usagi (V2.02J)", GAME_IMPERFECT_SOUND )
+GAME( 1999, mahjngoh, taitogn,  coh3002t, coh3002t_mp, coh3002t_mp, ROT0, "Warashi / Mahjong Kobo / Taito", "Mahjong Oh (V2.06J)", GAME_IMPERFECT_SOUND )
+GAME( 2001, usagi,    taitogn,  coh3002t, coh3002t_mp, coh3002t_mp, ROT0, "Warashi / Mahjong Kobo / Taito", "Usagi (V2.02J)", GAME_IMPERFECT_SOUND )
 GAME( 2000, soutenry, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Warashi", "Soutenryu (V2.07J)", GAME_IMPERFECT_SOUND )
 GAME( 2000, shanghss, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Warashi", "Shanghai Shoryu Sairin (V2.03J)", GAME_IMPERFECT_SOUND )
-GAME( 2002, shangtou, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Warashi/Sunsoft/Taito", "Shanghai Sangokuhai Tougi (Ver 2.01J)", GAME_IMPERFECT_SOUND )
+GAME( 2002, shangtou, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Warashi / Sunsoft / Taito", "Shanghai Sangokuhai Tougi (Ver 2.01J)", GAME_IMPERFECT_SOUND )
 
 GAME( 2001, nightrai, taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Takumi", "Night Raid (V2.03J)", GAME_NOT_WORKING | GAME_IMPERFECT_SOUND ) // no background / enemy sprites
 GAME( 2001, otenki,   taitogn,  coh3002t, coh3002t, coh3002t, ROT0,   "Takumi", "Otenki Kororin (V2.01J)", GAME_IMPERFECT_SOUND )

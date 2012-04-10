@@ -252,7 +252,7 @@ static MACHINE_START( kncljoe )
 {
 	kncljoe_state *state = (kncljoe_state *)machine->driver_data;
 
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
+	state->soundcpu = machine->device("soundcpu");
 
 	state_save_register_global(machine, state->port1);
 	state_save_register_global(machine, state->port2);
@@ -421,6 +421,6 @@ ROM_END
 
 
 
-GAME( 1985, kncljoe,  0,       kncljoe, kncljoe, 0, ROT0, "[Seibu Kaihatsu] (Taito license)", "Knuckle Joe (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1985, kncljoea, kncljoe, kncljoe, kncljoe, 0, ROT0, "[Seibu Kaihatsu] (Taito license)", "Knuckle Joe (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1985, bcrusher, kncljoe, kncljoe, kncljoe, 0, ROT0, "bootleg",                          "Bone Crusher", GAME_SUPPORTS_SAVE )
+GAME( 1985, kncljoe,  0,       kncljoe, kncljoe, 0, ROT0, "Seibu Kaihatsu (Taito license)", "Knuckle Joe (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1985, kncljoea, kncljoe, kncljoe, kncljoe, 0, ROT0, "Seibu Kaihatsu (Taito license)", "Knuckle Joe (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, bcrusher, kncljoe, kncljoe, kncljoe, 0, ROT0, "bootleg",                        "Bone Crusher", GAME_SUPPORTS_SAVE )

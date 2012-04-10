@@ -798,7 +798,7 @@ static READ8_HANDLER( mjifb_rom_io_r )
 	{
 		case 0x8000:	return input_port_read(space->machine, "DSW4");		// dsw 4
 		case 0x8200:	return input_port_read(space->machine, "DSW3");		// dsw 3
-		case 0x9001:	return ay8910_r(devtag_get_device(space->machine,"aysnd"), 0);	// inputs
+		case 0x9001:	return ay8910_r(space->machine->device("aysnd"), 0);	// inputs
 		case 0x9011:	return input_port_read(space->machine, "SYSTEM");
 	}
 
@@ -819,8 +819,8 @@ static WRITE8_HANDLER( mjifb_rom_io_w )
 	switch(offset)
 	{
 		case 0x8e00:	palette_base = data & 0x1f;	return;
-		case 0x9002:	ay8910_data_w(devtag_get_device(space->machine,"aysnd"),0,data);			return;
-		case 0x9003:	ay8910_address_w(devtag_get_device(space->machine,"aysnd"),0,data);		return;
+		case 0x9002:	ay8910_data_w(space->machine->device("aysnd"),0,data);			return;
+		case 0x9003:	ay8910_address_w(space->machine->device("aysnd"),0,data);		return;
 		case 0x9010:
 			mjifb_coin_counter_w(space,0,data);
 			return;
@@ -905,7 +905,7 @@ static READ8_HANDLER( mjdejavu_rom_io_r )
 	{
 		case 0x8000:	return input_port_read(space->machine, "DSW2");		// dsw 2
 		case 0x8001:	return input_port_read(space->machine, "DSW1");		// dsw 1
-		case 0x9001:	return ay8910_r(devtag_get_device(space->machine,"aysnd"), 0);	// inputs
+		case 0x9001:	return ay8910_r(space->machine->device("aysnd"), 0);	// inputs
 		case 0x9011:	return input_port_read(space->machine, "SYSTEM");
 	}
 
@@ -925,8 +925,8 @@ static WRITE8_HANDLER( mjdejavu_rom_io_w )
 	switch(offset)
 	{
 		case 0x8802:	palette_base = data & 0x1f;					return;
-		case 0x9002:	ay8910_data_w(devtag_get_device(space->machine,"aysnd"),0,data);		return;
-		case 0x9003:	ay8910_address_w(devtag_get_device(space->machine,"aysnd"),0,data);	return;
+		case 0x9002:	ay8910_data_w(space->machine->device("aysnd"),0,data);		return;
+		case 0x9003:	ay8910_address_w(space->machine->device("aysnd"),0,data);	return;
 		case 0x9010:	mjifb_coin_counter_w(space,0,data);		return;
 		case 0x9011:	input_port_select_w(space,0,data);		return;
 		case 0x9013:
@@ -1105,7 +1105,7 @@ static READ8_HANDLER( mjvegasa_rom_io_r )
 		case 0x800e:
 		case 0x800f:
 		{
-			running_device *rtc = devtag_get_device(space->machine, "rtc");
+			running_device *rtc = space->machine->device("rtc");
 			return msm6242_r(rtc, offset-0x8000);
 		}
 	}
@@ -1142,7 +1142,7 @@ static WRITE8_HANDLER( mjvegasa_rom_io_w )
 		case 0x800e:
 		case 0x800f:
 		{
-			running_device *rtc = devtag_get_device(space->machine, "rtc");
+			running_device *rtc = space->machine->device("rtc");
 			msm6242_w(rtc, offset-0x8000, data);
 			return;
 		}
@@ -3127,7 +3127,8 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( janoh )
 
 	MDRV_IMPORT_FROM(royalmah)
-	MDRV_CPU_REPLACE("maincpu", Z80, 8000000/2)	/* 4 MHz ? */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(8000000/2)	/* 4 MHz ? */
 	MDRV_CPU_PROGRAM_MAP(janho_map)
 
 	MDRV_CPU_ADD("sub", Z80, 4000000)        /* 4 MHz ? */
@@ -3153,25 +3154,29 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( dondenmj )
 	MDRV_IMPORT_FROM(royalmah)
-	MDRV_CPU_REPLACE("maincpu", Z80, 8000000/2)	/* 4 MHz ? */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(8000000/2)	/* 4 MHz ? */
 	MDRV_CPU_IO_MAP(dondenmj_iomap)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( makaijan )
 	MDRV_IMPORT_FROM(royalmah)
-	MDRV_CPU_REPLACE("maincpu", Z80, 8000000/2)	/* 4 MHz ? */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(8000000/2)	/* 4 MHz ? */
 	MDRV_CPU_IO_MAP(makaijan_iomap)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( daisyari )
 	MDRV_IMPORT_FROM(royalmah)
-	MDRV_CPU_REPLACE("maincpu", Z80, 8000000/2)	/* 4 MHz ? */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(8000000/2)	/* 4 MHz ? */
 	MDRV_CPU_IO_MAP(daisyari_iomap)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( mjclub )
 	MDRV_IMPORT_FROM(royalmah)
-	MDRV_CPU_REPLACE("maincpu", Z80, 8000000/2)	/* 4 MHz ? */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(8000000/2)	/* 4 MHz ? */
 	MDRV_CPU_IO_MAP(mjclub_iomap)
 MACHINE_DRIVER_END
 
@@ -4321,9 +4326,7 @@ MSM2128x4
 
 
 dumped by sayu
-
 --- Team Japump!!! ---
-http://japump.i.am/
 
 */
 
@@ -4623,7 +4626,7 @@ GAME( 1981,  royalmj,  0,        royalmah, royalmah, 0,        ROT0,   "Nichibut
 GAME( 1981?, openmj,   royalmj,  royalmah, royalmah, 0,        ROT0,   "Sapporo Mechanic",           "Open Mahjong [BET] (Japan)",            0 )
 GAME( 1982,  royalmah, royalmj,  royalmah, royalmah, 0,        ROT0,   "bootleg",                    "Royal Mahjong (Falcon bootleg, v1.01)", 0 )
 GAME( 1983,  janyoup2, royalmj,  ippatsu,  janyoup2, 0,        ROT0,   "Cosmo Denshi",               "Janyou Part II (ver 7.03, July 1 1983)",0 )
-GAME( 1981,  janputer, 0,        royalmah, royalmah, 0,        ROT0,   "Ps Ltd. / Mes",              "New Double Bet Mahjong (Japan)",        0 )
+GAME( 1981,  janputer, 0,        royalmah, royalmah, 0,        ROT0,   "Public Software Ltd. / Mes", "New Double Bet Mahjong (Japan)",        0 )
 GAME( 1984,  janoh,    0,        royalmah, royalmah, 0,        ROT0,   "Toaplan",                    "Jan Oh (set 1)",                        GAME_NOT_WORKING )
 GAME( 1984,  janoha,   janoh,    janoh,    royalmah, 0,        ROT0,   "Toaplan",                    "Jan Oh (set 2)",                        GAME_NOT_WORKING ) // this one is complete?
 GAME( 1985,  jansou,   0,        jansou,   jansou,   0,        ROT180, "Dyna",                       "Jansou (set 1)",                        GAME_NOT_WORKING|GAME_NO_SOUND )

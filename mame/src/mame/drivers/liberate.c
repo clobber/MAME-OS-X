@@ -801,8 +801,8 @@ static MACHINE_START( liberate )
 {
 	liberate_state *state = (liberate_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->background_disable);
 	state_save_register_global(machine, state->background_color);
@@ -874,10 +874,8 @@ static MACHINE_DRIVER_START( liberatb )
 	MDRV_IMPORT_FROM(liberate)
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_TYPE(M6502)
+	MDRV_CPU_REPLACE("maincpu", M6502, 2000000)
 	MDRV_CPU_PROGRAM_MAP(liberatb_map)
-	MDRV_CPU_IO_MAP(0)
 	MDRV_CPU_VBLANK_INT("screen", deco16_interrupt)
 MACHINE_DRIVER_END
 
@@ -1425,8 +1423,8 @@ static DRIVER_INIT( liberate )
  *************************************/
 
 GAME( 1983, prosoccr,  0,        prosoccr,  prosoccr, prosport, ROT270, "Data East Corporation", "Pro Soccer", GAME_SUPPORTS_SAVE )
-GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro. Sports (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, prosport,  0,        prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro Sports - Bowling, Tennis, and Golf", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1983, prosporta, prosport, prosport,  prosport, prosport, ROT270, "Data East Corporation", "Pro Sports - Bowling, Tennis, and Golf (alternate)", GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1983, boomrang,  0,        boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1983, boomranga, boomrang, boomrang,  boomrang, prosport, ROT270, "Data East Corporation", "Boomer Rang'r / Genesis (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1984, kamikcab,  0,        boomrang,  kamikcab, prosport, ROT270, "Data East Corporation", "Kamikaze Cabbie", GAME_SUPPORTS_SAVE )

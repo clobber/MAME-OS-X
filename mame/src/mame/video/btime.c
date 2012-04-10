@@ -37,7 +37,7 @@ PALETTE_INIT( btime )
 	/* This function is also used by Eggs. */
 	if (color_prom == 0) return;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -82,7 +82,7 @@ PALETTE_INIT( lnc )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -129,7 +129,7 @@ VIDEO_START( bnj )
 	/* the background area is twice as wide as the screen */
 	int width = 256;
 	int height = 256;
-	bitmap_format format = video_screen_get_format(machine->primary_screen);
+	bitmap_format format = machine->primary_screen->format();
 	state->background_bitmap = auto_bitmap_alloc(machine, 2 * width, height, format);
 
 	state_save_register_global_bitmap(machine, state->background_bitmap);

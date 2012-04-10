@@ -84,9 +84,6 @@
 
 #include <ctype.h>
 
-#ifdef MESS
-#include "cheatms.h"
-#endif
 
 
 
@@ -215,8 +212,8 @@ struct _cheat_private
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-static void cheat_exit(running_machine *machine);
-static void cheat_frame(running_machine *machine);
+static void cheat_exit(running_machine &machine);
+static void cheat_frame(running_machine &machine);
 static void cheat_execute_script(cheat_private *cheatinfo, cheat_entry *cheat, script_state state);
 
 static cheat_entry *cheat_list_load(running_machine *machine, const char *filename);
@@ -377,8 +374,8 @@ void cheat_init(running_machine *machine)
 	cheat_private *cheatinfo;
 
 	/* request a callback */
-	add_frame_callback(machine, cheat_frame);
-	add_exit_callback(machine, cheat_exit);
+	machine->add_notifier(MACHINE_NOTIFY_FRAME, cheat_frame);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, cheat_exit);
 
 	/* allocate memory */
 	cheatinfo = auto_alloc_clear(machine, cheat_private);
@@ -404,7 +401,7 @@ void cheat_reload(running_machine *machine)
 	cheat_private *cheatinfo = machine->cheat_data;
 
 	/* free everything */
-	cheat_exit(machine);
+	cheat_exit(*machine);
 
 	/* reset our memory */
 	auto_free(machine, cheatinfo);
@@ -412,16 +409,24 @@ void cheat_reload(running_machine *machine)
 
 	/* load the cheat file, MESS will load a crc32.xml ( eg. 01234567.xml )
        and MAME will load gamename.xml */
-	#ifdef MESS
+	device_image_interface *image = NULL;
+	for (bool gotone = machine->m_devicelist.first(image); gotone; gotone = image->next(image))
 	{
-		char mess_cheat_filename[9];
-		cheat_mess_init(machine);
-		sprintf(mess_cheat_filename, "%08X", this_game_crc);
-		cheatinfo->cheatlist = cheat_list_load(machine, mess_cheat_filename);
+		if (image->exists())
+		{
+			char mess_cheat_filename[9];
+			UINT32	crc = image->crc();
+			sprintf(mess_cheat_filename, "%08X", crc);
+			if (crc!=0) {
+				cheatinfo->cheatlist = cheat_list_load(machine, mess_cheat_filename);
+				break;
+			}
+		}
 	}
-	#else
-	cheatinfo->cheatlist = cheat_list_load(machine, machine->basename);
-	#endif
+	if (cheatinfo->cheatlist == NULL)
+	{
+		cheatinfo->cheatlist = cheat_list_load(machine, machine->basename());
+	}
 
 	/* temporary: save the file back out as output.xml for comparison */
 	if (cheatinfo->cheatlist != NULL)
@@ -433,13 +438,13 @@ void cheat_reload(running_machine *machine)
     cheat_exit - clean up on the way out
 -------------------------------------------------*/
 
-static void cheat_exit(running_machine *machine)
+static void cheat_exit(running_machine &machine)
 {
-	cheat_private *cheatinfo = machine->cheat_data;
+	cheat_private *cheatinfo = machine.cheat_data;
 
 	/* free the list of cheats */
 	if (cheatinfo->cheatlist != NULL)
-		cheat_list_free(machine, cheatinfo->cheatlist);
+		cheat_list_free(&machine, cheatinfo->cheatlist);
 }
 
 
@@ -892,9 +897,9 @@ astring &cheat_get_comment(void *entry)
     cheat_frame - per-frame callback
 -------------------------------------------------*/
 
-static void cheat_frame(running_machine *machine)
+static void cheat_frame(running_machine &machine)
 {
-	cheat_private *cheatinfo = machine->cheat_data;
+	cheat_private *cheatinfo = machine.cheat_data;
 	cheat_entry *cheat;
 	int linenum;
 

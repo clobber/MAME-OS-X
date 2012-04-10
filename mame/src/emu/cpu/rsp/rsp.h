@@ -16,7 +16,7 @@
 #ifndef __RSP_H__
 #define __RSP_H__
 
-
+#define USE_RSPDRC
 
 /***************************************************************************
     REGISTER ENUMERATION
@@ -197,7 +197,7 @@ struct _rsp_state
 	VECTOR_REG v[32];
 	UINT16 flag[4];
 	UINT32 sr;
-    UINT32 step_count;
+	UINT32 step_count;
 
 	ACCUMULATOR accum[8];
 	INT32 square_root_res;
@@ -208,16 +208,15 @@ struct _rsp_state
 	UINT32 ppc;
 	UINT32 nextpc;
 
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	int icount;
 
 	rspimp_state* impstate;
 };
 
-CPU_GET_INFO( rsp );
-#define CPU_RSP CPU_GET_INFO_NAME( rsp )
+DECLARE_LEGACY_CPU_DEVICE(RSP, rsp);
 
 extern offs_t rsp_dasm_one(char *buffer, offs_t pc, UINT32 op);
 

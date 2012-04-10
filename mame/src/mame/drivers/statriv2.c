@@ -164,7 +164,7 @@ static WRITE8_HANDLER( statriv2_videoram_w )
 
 static VIDEO_UPDATE( statriv2 )
 {
-	if (tms9927_screen_reset(devtag_get_device(screen->machine, "tms")))
+	if (tms9927_screen_reset(screen->machine->device("tms")))
 		bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 	else
 		tilemap_draw(bitmap, cliprect, statriv2_tilemap, 0, 0);
@@ -568,7 +568,7 @@ static const tms9927_interface tms9927_intf =
 static MACHINE_DRIVER_START( statriv2 )
 	/* basic machine hardware */
 	/* FIXME: The 8085A had a max clock of 6MHz, internally divided by 2! */
-    MDRV_CPU_ADD("maincpu", 8085A, MASTER_CLOCK)
+    MDRV_CPU_ADD("maincpu", I8085A, MASTER_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(statriv2_map)
 	MDRV_CPU_IO_MAP(statriv2_io_map)
 	MDRV_CPU_VBLANK_INT("screen", statriv2_interrupt)
@@ -614,7 +614,8 @@ static MACHINE_DRIVER_START( funcsino )
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(statriv2)
 
-    MDRV_CPU_REPLACE("maincpu", 8085A, MASTER_CLOCK/2)	/* 3 MHz?? seems accurate */
+    MDRV_CPU_MODIFY("maincpu")
+    MDRV_CPU_CLOCK(MASTER_CLOCK/2)	/* 3 MHz?? seems accurate */
 MACHINE_DRIVER_END
 
 

@@ -19,6 +19,7 @@ XTAL        :   18.432 MHz
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
+#include "includes/wiping.h"
 
 /* Variables & functions defined in video: */
 
@@ -38,7 +39,6 @@ VIDEO_UPDATE( clshroad );
 extern UINT8 *wiping_soundregs;
 
 DEVICE_GET_INFO( wiping_sound );
-#define SOUND_WIPING DEVICE_GET_INFO_NAME(wiping_sound)
 
 WRITE8_HANDLER( wiping_sound_w );
 
@@ -286,11 +286,11 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( clshroad )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 18432000/4)	/* ? real speed unknown. 3MHz is too low and causes problems */
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/4)	/* ? real speed unknown. 3MHz is too low and causes problems */
 	MDRV_CPU_PROGRAM_MAP(clshroad_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* IRQ, no NMI */
 
-	MDRV_CPU_ADD("audiocpu", Z80, 18432000/6)	/* ? */
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_18_432MHz/6)	/* ? */
 	MDRV_CPU_PROGRAM_MAP(clshroad_sound_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)	/* IRQ, no NMI */
 
@@ -464,5 +464,5 @@ die once, it would be nice to avoid the hack however
 }
 
 GAME( 1984, firebatl, 0,        firebatl, firebatl, firebatl, ROT90, "Taito", "Fire Battle", GAME_IMPERFECT_GRAPHICS )
-GAME( 1986, clshroad, 0,        clshroad, clshroad, 0,        ROT0,  "Woodplace Inc.", "Clash-Road", 0 )
-GAME( 1986, clshroads,clshroad, clshroad, clshroad, 0,        ROT0,  "Woodplace Inc. (Status Game Corp. license)", "Clash-Road (Status license)", 0 )
+GAME( 1986, clshroad, 0,        clshroad, clshroad, 0,        ROT0,  "Wood Place Inc.", "Clash-Road", 0 )
+GAME( 1986, clshroads,clshroad, clshroad, clshroad, 0,        ROT0,  "Wood Place Inc. (Status Game Corp. license)", "Clash-Road (Status license)", 0 )

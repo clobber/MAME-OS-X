@@ -13,6 +13,9 @@
     Known bugs:
         * not done yet
 
+    To Do
+        * make version 1.0 of MK4 work
+
 According to a Midway service bulletin
 As of 2/12/2001 the lastest software levels:
 
@@ -28,6 +31,7 @@ The Grid         v1.2   10/18/2000
 #include "cpu/tms32031/tms32031.h"
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/adsp2100/adsp2100.h"
+#include "cpu/pic16c5x/pic16c5x.h"
 #include "includes/midzeus.h"
 #include "machine/midwayic.h"
 #include "machine/timekpr.h"
@@ -509,7 +513,7 @@ static void update_gun_irq(running_machine *machine)
 static TIMER_CALLBACK( invasn_gun_callback )
 {
 	int player = param;
-	int beamy = video_screen_get_vpos(machine->primary_screen);
+	int beamy = machine->primary_screen->vpos();
 
 	/* set the appropriate IRQ in the internal gun control and update */
 	gun_irq_state |= 0x01 << player;
@@ -517,8 +521,8 @@ static TIMER_CALLBACK( invasn_gun_callback )
 
 	/* generate another interrupt on the next scanline while we are within the BEAM_DY */
 	beamy++;
-	if (beamy <= video_screen_get_visible_area(machine->primary_screen)->max_y && beamy <= gun_y[player] + BEAM_DY)
-		timer_adjust_oneshot(gun_timer[player], video_screen_get_time_until_pos(machine->primary_screen, beamy, MAX(0, gun_x[player] - BEAM_DX)), player);
+	if (beamy <= machine->primary_screen->visible_area().max_y && beamy <= gun_y[player] + BEAM_DY)
+		timer_adjust_oneshot(gun_timer[player], machine->primary_screen->time_until_pos(beamy, MAX(0, gun_x[player] - BEAM_DX)), player);
 }
 
 
@@ -539,15 +543,15 @@ static WRITE32_HANDLER( invasn_gun_w )
 		UINT8 pmask = 0x04 << player;
 		if (((old_control ^ gun_control) & pmask) != 0 && (gun_control & pmask) == 0)
 		{
-			const rectangle *visarea = video_screen_get_visible_area(space->machine->primary_screen);
+			const rectangle &visarea = space->machine->primary_screen->visible_area();
 			static const char *const names[2][2] =
 			{
 				{ "GUNX1", "GUNY1" },
 				{ "GUNX2", "GUNY2" }
 			};
-			gun_x[player] = input_port_read(space->machine, names[player][0]) * (visarea->max_x + 1 - visarea->min_x) / 255 + visarea->min_x + BEAM_XOFFS;
-			gun_y[player] = input_port_read(space->machine, names[player][1]) * (visarea->max_y + 1 - visarea->min_y) / 255 + visarea->min_y;
-			timer_adjust_oneshot(gun_timer[player], video_screen_get_time_until_pos(space->machine->primary_screen, MAX(0, gun_y[player] - BEAM_DY), MAX(0, gun_x[player] - BEAM_DX)), player);
+			gun_x[player] = input_port_read(space->machine, names[player][0]) * (visarea.max_x + 1 - visarea.min_x) / 255 + visarea.min_x + BEAM_XOFFS;
+			gun_y[player] = input_port_read(space->machine, names[player][1]) * (visarea.max_y + 1 - visarea.min_y) / 255 + visarea.min_y;
+			timer_adjust_oneshot(gun_timer[player], space->machine->primary_screen->time_until_pos(MAX(0, gun_y[player] - BEAM_DY), MAX(0, gun_x[player] - BEAM_DX)), player);
 		}
 	}
 }
@@ -555,8 +559,8 @@ static WRITE32_HANDLER( invasn_gun_w )
 
 static READ32_HANDLER( invasn_gun_r )
 {
-	int beamx = video_screen_get_hpos(space->machine->primary_screen);
-	int beamy = video_screen_get_vpos(space->machine->primary_screen);
+	int beamx = space->machine->primary_screen->hpos();
+	int beamy = space->machine->primary_screen->vpos();
 	UINT32 result = 0xffff;
 	int player;
 
@@ -1128,6 +1132,23 @@ static MACHINE_DRIVER_START( midzeus )
 	MDRV_IMPORT_FROM(dcs2_audio_2104)
 MACHINE_DRIVER_END
 
+static READ8_HANDLER( PIC16C5X_T0_clk_r )
+{
+	return 0;
+}
+
+static ADDRESS_MAP_START( pic_io_map, ADDRESS_SPACE_IO, 8 )
+	AM_RANGE(PIC16C5x_T0, PIC16C5x_T0) AM_READ(PIC16C5X_T0_clk_r)
+ADDRESS_MAP_END
+
+
+static MACHINE_DRIVER_START( invasn )
+
+	MDRV_IMPORT_FROM(midzeus)
+
+	MDRV_CPU_ADD("pic", PIC16C57, 8000000)	/* ? */
+	MDRV_CPU_IO_MAP(pic_io_map)
+MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( midzeus2 )
 
@@ -1222,6 +1243,9 @@ ROM_START( invasnab ) /* Version 5.0 Program roms, v4.0 Graphics roms, v2.0 Soun
 	ROM_LOAD16_BYTE( "invasion2.u4", 0x800000, 0x200000, CRC(5ef1fab5) SHA1(987afa0672fa89b18cf20d28644848a9e5ee9b17) )
 	ROM_LOAD16_BYTE( "invasion2.u5", 0xc00000, 0x200000, CRC(e42805c9) SHA1(e5b71eb1852809a649ac43a82168b3bdaf4b1526) )
 
+	ROM_REGION( 0x2000, "pic", 0 ) /* PIC16c57 Code */
+	ROM_LOAD( "pic16c57.u76", 0x00000, 0x2000, CRC(f62729c9) SHA1(9642c53dd7eceeb7eb178497d367691c44abc5c5) ) // is this even a valid dump?
+
 	ROM_REGION32_LE( 0x1800000, "user1", 0 )
 	ROM_LOAD32_WORD( "invasion5.u10", 0x0000000, 0x200000, CRC(8c7785d9) SHA1(701602314cd4eba4215c47ea0ae75fd4eddad43b) ) /* Roms U10 & U11 were labeled as v5.0 */
 	ROM_LOAD32_WORD( "invasion5.u11", 0x0000002, 0x200000, CRC(8ceb1f32) SHA1(82d01f25cba25d77b11c347632e8b72776e12984) )
@@ -1241,6 +1265,9 @@ ROM_START( invasnv4 ) /* Version 4.0 Program roms & Graphics roms, v2.0 Sound ro
 	ROM_LOAD16_BYTE( "invasion2.u3", 0x400000, 0x200000, CRC(86b956ae) SHA1(f7fd4601a2ce3e7e9b67e7d77908bfa206ee7e62) )
 	ROM_LOAD16_BYTE( "invasion2.u4", 0x800000, 0x200000, CRC(5ef1fab5) SHA1(987afa0672fa89b18cf20d28644848a9e5ee9b17) )
 	ROM_LOAD16_BYTE( "invasion2.u5", 0xc00000, 0x200000, CRC(e42805c9) SHA1(e5b71eb1852809a649ac43a82168b3bdaf4b1526) )
+
+	ROM_REGION( 0x2000, "pic", 0 ) /* PIC16c57 Code */
+	ROM_LOAD( "pic16c57.u76", 0x00000, 0x2000, CRC(f62729c9) SHA1(9642c53dd7eceeb7eb178497d367691c44abc5c5) ) // is this even a valid dump?
 
 	ROM_REGION32_LE( 0x1800000, "user1", 0 )
 	ROM_LOAD32_WORD( "invasion4.u10", 0x0000000, 0x200000, CRC(b3ce958b) SHA1(ed51c167d85bc5f6155b8046ec056a4f4ad5cf9d) ) /* These rom were all labeled as v4.0 */
@@ -1436,8 +1463,8 @@ static DRIVER_INIT( thegrid )
 GAME(  1997, mk4,      0,        midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 3.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1997, mk4a,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 2.1)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME(  1997, mk4b,     mk4,      midzeus,  mk4,      mk4,      ROT0, "Midway", "Mortal Kombat 4 (version 1.0)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME(  1999, invasnab, 0,        midzeus,  invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 5.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME(  1999, invasnv4, invasnab, midzeus,  invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 4.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME(  1999, invasnab, 0,        invasn,   invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 5.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME(  1999, invasnv4, invasnab, invasn,   invasn,   invasn,   ROT0, "Midway", "Invasion - The Abductors (version 4.0)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAMEL( 1999, crusnexo, 0,        midzeus2, crusnexo, crusnexo, ROT0, "Midway", "Cruis'n Exotica (version 2.4)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_crusnexo )
 GAMEL( 1999, crusnexoa,crusnexo, midzeus2, crusnexo, crusnexo, ROT0, "Midway", "Cruis'n Exotica (version 2.0)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_crusnexo )
 GAMEL( 1999, crusnexob,crusnexo, midzeus2, crusnexo, crusnexo, ROT0, "Midway", "Cruis'n Exotica (version 1.6)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE, layout_crusnexo )

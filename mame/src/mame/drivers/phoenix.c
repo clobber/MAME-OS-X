@@ -452,7 +452,7 @@ static MACHINE_RESET( phoenix )
 static MACHINE_DRIVER_START( phoenix )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8085A, CPU_CLOCK)	/* 2.75 MHz */
+	MDRV_CPU_ADD("maincpu", I8085A, CPU_CLOCK)	/* 2.75 MHz */
 	MDRV_CPU_PROGRAM_MAP(phoenix_memory_map)
 
 	MDRV_MACHINE_RESET(phoenix)
@@ -524,7 +524,7 @@ static I8085_CONFIG( survival_i8085_config )
 static MACHINE_DRIVER_START( survival )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8085A, CPU_CLOCK)	/* 5.50 MHz */
+	MDRV_CPU_ADD("maincpu", I8085A, CPU_CLOCK)	/* 5.50 MHz */
 	MDRV_CPU_CONFIG(survival_i8085_config)
 	MDRV_CPU_PROGRAM_MAP(survival_memory_map)
 
@@ -563,6 +563,7 @@ static MACHINE_DRIVER_START( condor )
 	MDRV_IMPORT_FROM(phoenix)
 	/* FIXME: Verify clock. This is most likely 11MHz/2 */
 	MDRV_CPU_REPLACE("maincpu", Z80, 11000000/4)	/* 2.75 MHz??? */
+	MDRV_CPU_PROGRAM_MAP(phoenix_memory_map)
 MACHINE_DRIVER_END
 
 
@@ -1066,25 +1067,25 @@ static DRIVER_INIT( condor )
 GAME( 1980, phoenix,  0,        phoenix,  phoenix,  0,        ROT90, "Amstar", "Phoenix (Amstar)", GAME_SUPPORTS_SAVE )
 GAME( 1980, phoenixa, phoenix,  phoenix,  phoenixa, 0,        ROT90, "Amstar (Centuri license)", "Phoenix (Centuri, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1980, phoenixb, phoenix,  phoenix,  phoenixa, 0,        ROT90, "Amstar (Centuri license)", "Phoenix (Centuri, set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1980, phoenixt, phoenix,  phoenix,  phoenixt, 0,        ROT90, "Taito", "Phoenix (Taito)", GAME_SUPPORTS_SAVE )
-GAME( 1980, phoenixj, phoenix,  phoenix,  phoenixt, 0,        ROT90, "Taito", "Phoenix (Taito Japan Ver.)", GAME_SUPPORTS_SAVE )
-GAME( 1980, phoenix3, phoenix,  phoenix,  phoenix3, 0,        ROT90, "bootleg", "Phoenix (T.P.N.)", GAME_SUPPORTS_SAVE )
-GAME( 1981, phoenixc, phoenix,  phoenix,  phoenixt, 0,        ROT90, "bootleg?", "Phoenix (IRECSA, G.G.I Corp)", GAME_SUPPORTS_SAVE )
-GAME( 1981, condor,   phoenix,  condor,   condor,   condor,   ROT90, "Sidam (bootleg)",       "Condor (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
+GAME( 1980, phoenixt, phoenix,  phoenix,  phoenixt, 0,        ROT90, "Amstar (Taito license)", "Phoenix (Taito)", GAME_SUPPORTS_SAVE )
+GAME( 1980, phoenixj, phoenix,  phoenix,  phoenixt, 0,        ROT90, "Amstar (Taito Japan license)", "Phoenix (Taito Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1980, phoenix3, phoenix,  phoenix,  phoenix3, 0,        ROT90, "bootleg (T.P.N.)",   "Phoenix (T.P.N.)", GAME_SUPPORTS_SAVE )
+GAME( 1981, phoenixc, phoenix,  phoenix,  phoenixt, 0,        ROT90, "bootleg? (Irecsa / G.G.I Corp)",  "Phoenix (Irecsa / G.G.I Corp)", GAME_SUPPORTS_SAVE )
+GAME( 1981, condor,   phoenix,  condor,   condor,   condor,   ROT90, "bootleg",   "Condor (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
 // the following 2 were common bootlegs in england & france respectively
-GAME( 1980, falcon,   phoenix,  phoenix,  phoenixt, 0,        ROT90, "bootleg",               "Falcon (bootleg of Phoenix) (8085A CPU)", GAME_SUPPORTS_SAVE )
-GAME( 1980, vautour,  phoenix,  phoenix,  phoenixt, 0,        ROT90, "Jeutel (bootleg)",      "Vautour (bootleg of Phoenix) (8085A CPU)", GAME_SUPPORTS_SAVE )
-GAME( 1980, falconz,  phoenix,  condor,   falconz,  0,        ROT90, "bootleg",               "Falcon (bootleg of Phoenix) (Z80 CPU)", GAME_SUPPORTS_SAVE )
-GAME( 1980, vautourz, phoenix,  condor,   condor,   condor,   ROT90, "bootleg",               "Vautour (bootleg of Phoenix) (Z80 CPU)", GAME_SUPPORTS_SAVE )
+GAME( 1980, falcon,   phoenix,  phoenix,  phoenixt, 0,        ROT90, "bootleg",   "Falcon (bootleg of Phoenix) (8085A CPU)", GAME_SUPPORTS_SAVE )
+GAME( 1980, vautour,  phoenix,  phoenix,  phoenixt, 0,        ROT90, "bootleg (Jeutel)", "Vautour (bootleg of Phoenix) (8085A CPU)", GAME_SUPPORTS_SAVE )
+GAME( 1980, falconz,  phoenix,  condor,   falconz,  0,        ROT90, "bootleg",   "Falcon (bootleg of Phoenix) (Z80 CPU)", GAME_SUPPORTS_SAVE )
+GAME( 1980, vautourz, phoenix,  condor,   condor,   condor,   ROT90, "bootleg",   "Vautour (bootleg of Phoenix) (Z80 CPU)", GAME_SUPPORTS_SAVE )
 // fenix is an italian bootleg based on vautourz
-GAME( 1980, fenix,    phoenix,  condor,   condor,   condor,   ROT90, "bootleg",               "Fenix (bootleg of Phoenix)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1980, griffon,  phoenix,  condor,   condor,   condor,   ROT90, "Videotron (bootleg)",   "Griffon (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
+GAME( 1980, fenix,    phoenix,  condor,   condor,   condor,   ROT90, "bootleg",   "Fenix (bootleg of Phoenix)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1980, griffon,  phoenix,  condor,   condor,   condor,   ROT90, "bootleg (Videotron)",   "Griffon (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
 // nextfase is a spanish bootleg
-GAME( 1981, nextfase, phoenix,  phoenix,  nextfase, 0,        ROT90, "Petaco S.A. (bootleg)", "Next Fase (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
+GAME( 1981, nextfase, phoenix,  phoenix,  nextfase, 0,        ROT90, "bootleg (Petaco S.A.)", "Next Fase (bootleg of Phoenix)", GAME_SUPPORTS_SAVE )
 
 GAME( 1981, pleiads,  0,        pleiads,  pleiads,  0,        ROT90, "Tehkan", "Pleiads (Tehkan)", GAME_IMPERFECT_COLORS )
 GAME( 1981, pleiadbl, pleiads,  pleiads,  pleiadbl, 0,        ROT90, "bootleg", "Pleiads (bootleg)", GAME_IMPERFECT_COLORS )
 GAME( 1981, pleiadce, pleiads,  pleiads,  pleiadce, 0,        ROT90, "Tehkan (Centuri license)", "Pleiads (Centuri)", GAME_IMPERFECT_COLORS )
-GAME( 1981, capitol,  pleiads,  phoenix,  capitol,  0,        ROT90, "Universal Video Spiel", "Capitol", GAME_IMPERFECT_COLORS )
+GAME( 1981, capitol,  pleiads,  phoenix,  capitol,  0,        ROT90, "bootleg? (Universal Video Spiel)", "Capitol", GAME_IMPERFECT_COLORS )
 
-GAME( 1982, survival, 0,        survival, survival, 0,        ROT90, "Rock-ola", "Survival", GAME_IMPERFECT_COLORS )
+GAME( 1982, survival, 0,        survival, survival, 0,        ROT90, "Rock-Ola", "Survival", GAME_IMPERFECT_COLORS )

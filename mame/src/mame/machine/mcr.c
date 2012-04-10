@@ -216,14 +216,14 @@ const pia6821_interface zwackery_pia2_intf =
  *
  *************************************/
 
-const z80_daisy_chain mcr_daisy_chain[] =
+const z80_daisy_config mcr_daisy_chain[] =
 {
 	{ "ctc" },
 	{ NULL }
 };
 
 
-const z80_daisy_chain mcr_ipu_daisy_chain[] =
+const z80_daisy_config mcr_ipu_daisy_chain[] =
 {
 	{ "ipu_ctc" },
 	{ "ipu_pio1" },
@@ -420,7 +420,7 @@ MACHINE_RESET( zwackery )
 
 INTERRUPT_GEN( mcr_interrupt )
 {
-	running_device *ctc = devtag_get_device(device->machine, "ctc");
+	running_device *ctc = device->machine->device("ctc");
 
 	/* CTC line 2 is connected to VBLANK, which is once every 1/2 frame */
 	/* for the 30Hz interlaced display */
@@ -439,7 +439,7 @@ INTERRUPT_GEN( mcr_interrupt )
 
 INTERRUPT_GEN( mcr_ipu_interrupt )
 {
-	running_device *ctc = devtag_get_device(device->machine, "ipu_ctc");
+	running_device *ctc = device->machine->device("ipu_ctc");
 
 	/* CTC line 3 is connected to 493, which is signalled once every */
 	/* frame at 30Hz */
@@ -491,7 +491,7 @@ static TIMER_CALLBACK( mcr68_493_callback )
 {
 	v493_irq_state = 1;
 	update_mcr68_interrupts(machine);
-	timer_set(machine, video_screen_get_scan_period(machine->primary_screen), NULL, 0, mcr68_493_off_callback);
+	timer_set(machine, machine->primary_screen->scan_period(), NULL, 0, mcr68_493_off_callback);
 	logerror("--- (INT1) ---\n");
 }
 
@@ -606,17 +606,17 @@ static WRITE_LINE_DEVICE_HANDLER( zwackery_pia_irq )
 
 static TIMER_CALLBACK( zwackery_493_off_callback )
 {
-	running_device *pia = devtag_get_device(machine, "pia0");
-	pia6821_ca1_w(pia, 0, 0);
+	running_device *pia = machine->device("pia0");
+	pia6821_ca1_w(pia, 0);
 }
 
 
 static TIMER_CALLBACK( zwackery_493_callback )
 {
-	running_device *pia = devtag_get_device(machine, "pia0");
+	running_device *pia = machine->device("pia0");
 
-	pia6821_ca1_w(pia, 0, 1);
-	timer_set(machine, video_screen_get_scan_period(machine->primary_screen), NULL, 0, zwackery_493_off_callback);
+	pia6821_ca1_w(pia, 1);
+	timer_set(machine, machine->primary_screen->scan_period(), NULL, 0, zwackery_493_off_callback);
 }
 
 

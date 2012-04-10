@@ -514,11 +514,11 @@ static TIMER_CALLBACK( dma_timer_callback );
 static DEVICE_START( common_sh_start )
 {
 	running_machine *machine = device->machine;
-	const address_space *dmaspace = machine->device("audiocpu")->space(AS_PROGRAM);
+	const address_space *dmaspace = cputag_get_address_space(machine, "audiocpu", AS_PROGRAM);
 	int i;
 
 	/* determine which sound hardware is installed */
-	has_ym2151 = (devtag_get_device(device->machine, "ymsnd") != NULL);
+	has_ym2151 = (device->machine->device("ymsnd") != NULL);
 
 	/* allocate separate streams for the DMA and non-DMA DACs */
 	dma_stream = stream_create(device, 0, 1, OUTPUT_RATE, (void *)dmaspace, leland_80186_dma_update);
@@ -586,6 +586,11 @@ DEVICE_GET_INFO( redline_80186_sound )
 }
 
 
+DEFINE_LEGACY_SOUND_DEVICE(LELAND, leland_sound);
+DEFINE_LEGACY_SOUND_DEVICE(LELAND_80186, leland_80186_sound);
+DEFINE_LEGACY_SOUND_DEVICE(REDLINE_80186, redline_80186_sound);
+
+
 static void leland_80186_reset(void)
 {
 	struct i80186_state oldstate = i80186;
@@ -651,7 +656,7 @@ static IRQ_CALLBACK( int_callback )
 	if (LOG_INTERRUPTS) logerror("(%f) **** Acknowledged interrupt vector %02X\n", attotime_to_double(timer_get_time(device->machine)), i80186.intr.poll_status & 0x1f);
 
 	/* clear the interrupt */
-	cpu_set_info(device, CPUINFO_INT_INPUT_STATE + 0, CLEAR_LINE);
+	cpu_set_input_line(device, 0, CLEAR_LINE);
 	i80186.intr.pending = 0;
 
 	/* clear the request and set the in-service bit */
@@ -1776,9 +1781,10 @@ static READ16_HANDLER( main_to_sound_comm_r )
 
 static TIMER_CALLBACK( delayed_response_r )
 {
+	cpu_device *master = machine->device<cpu_device>("master");
 	int checkpc = param;
-	int pc = cpu_get_reg(devtag_get_device(machine, "master"), Z80_PC);
-	int oldaf = cpu_get_reg(devtag_get_device(machine, "master"), Z80_AF);
+	int pc = master->pc();
+	int oldaf = master->state(Z80_AF);
 
 	/* This is pretty cheesy, but necessary. Since the CPUs run in round-robin order,
        synchronizing on the write to this register from the slave side does nothing.
@@ -1791,7 +1797,7 @@ static TIMER_CALLBACK( delayed_response_r )
 		if (LOG_COMM) logerror("(Updated sound response latch to %02X)\n", sound_response);
 
 		oldaf = (oldaf & 0x00ff) | (sound_response << 8);
-		cpu_set_reg(devtag_get_device(machine, "master"), Z80_AF, oldaf);
+		master->set_state(Z80_AF, oldaf);
 	}
 	else
 		logerror("ERROR: delayed_response_r - current PC = %04X, checkPC = %04X\n", pc, checkpc);
@@ -2043,7 +2049,7 @@ static READ16_HANDLER( peripheral_r )
 			if (!has_ym2151)
 				return pit8254_r(space, offset | 0x40, mem_mask);
 			else
-				return ym2151_r(devtag_get_device(space->machine, "ymsnd"), offset);
+				return ym2151_r(space->machine->device("ymsnd"), offset);
 
 		case 4:
 			if (is_redline)
@@ -2079,7 +2085,7 @@ static WRITE16_HANDLER( peripheral_w )
 			if (!has_ym2151)
 				pit8254_w(space, offset | 0x40, data, mem_mask);
 			else
-				ym2151_w(devtag_get_device(space->machine, "ymsnd"), offset, data);
+				ym2151_w(space->machine->device("ymsnd"), offset, data);
 			break;
 
 		case 4:

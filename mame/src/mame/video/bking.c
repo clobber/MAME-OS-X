@@ -41,7 +41,7 @@ PALETTE_INIT( bking )
 			3, &resistances_rg[0], gweights, 0, 0,
 			2, &resistances_b[0],  bweights, 0, 0);
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		UINT16 pen;
 		int bit0, bit1, bit2, r, g, b;
@@ -241,8 +241,8 @@ VIDEO_START( bking )
 {
 	buggychl_state *state = (buggychl_state *)machine->driver_data;
 	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
-	state->tmp_bitmap1 = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	state->tmp_bitmap2 = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	state->tmp_bitmap1 = machine->primary_screen->alloc_compatible_bitmap();
+	state->tmp_bitmap2 = machine->primary_screen->alloc_compatible_bitmap();
 
 	state_save_register_global_bitmap(machine, state->tmp_bitmap1);
 	state_save_register_global_bitmap(machine, state->tmp_bitmap2);

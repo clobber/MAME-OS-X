@@ -466,7 +466,7 @@ static void set_ea(const address_space *space, int ea)
 static SOUND_START( mario )
 {
 	mario_state	*state = (mario_state *)machine->driver_data;
-	running_device *audiocpu = devtag_get_device(machine, "audiocpu");
+	running_device *audiocpu = machine->device("audiocpu");
 #if USE_8039
 	UINT8 *SND = memory_region(machine, "audiocpu");
 
@@ -474,7 +474,7 @@ static SOUND_START( mario )
 #endif
 
 	state->eabank = NULL;
-	if (audiocpu != NULL && cpu_get_type(audiocpu) != CPU_Z80)
+	if (audiocpu != NULL && audiocpu->type() != Z80)
 	{
 		state->eabank = "bank1";
 		memory_install_read_bank(cpu_get_address_space(audiocpu, ADDRESS_SPACE_PROGRAM), 0x000, 0x7ff, 0, 0, "bank1");
@@ -629,7 +629,7 @@ WRITE8_HANDLER( mario_sh3_w )
 			I8035_P1_W_AH(space,3,data & 1);
 			break;
 		case 7: /* skid */
-			discrete_sound_w(devtag_get_device(space->machine, "discrete"),DS_SOUND7_INP,data & 1);
+			discrete_sound_w(space->machine->device("discrete"),DS_SOUND7_INP,data & 1);
 			break;
 	}
 }

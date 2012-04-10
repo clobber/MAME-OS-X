@@ -228,7 +228,7 @@ MACHINE_DRIVER_START( mw8080bw_root )
 	MDRV_DRIVER_DATA(mw8080bw_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",8080,MW8080BW_CPU_CLOCK)
+	MDRV_CPU_ADD("maincpu",I8080,MW8080BW_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_MACHINE_START(mw8080bw)
 	MDRV_MACHINE_RESET(mw8080bw)
@@ -630,7 +630,7 @@ static WRITE8_HANDLER( tornbase_io_w )
 	mw8080bw_state *state = (mw8080bw_state *)space->machine->driver_data;
 
 	if (offset & 0x01)
-		tornbase_audio_w(devtag_get_device(space->machine, "discrete"), 0, data);
+		tornbase_audio_w(space->machine->device("discrete"), 0, data);
 
 	if (offset & 0x02)
 		mb14241_shift_count_w(state->mb14241, 0, data);
@@ -883,7 +883,7 @@ MACHINE_DRIVER_END
 static STATE_POSTLOAD( maze_update_discrete )
 {
 	mw8080bw_state *state = (mw8080bw_state *)machine->driver_data;
-	maze_write_discrete(devtag_get_device(machine, "discrete"), state->maze_tone_timing_state);
+	maze_write_discrete(machine->device("discrete"), state->maze_tone_timing_state);
 }
 
 
@@ -2156,7 +2156,7 @@ MACHINE_DRIVER_END
 
 static TIMER_DEVICE_CALLBACK( spcenctr_strobe_timer_callback )
 {
-	mw8080bw_state *state = (mw8080bw_state *)timer->machine->driver_data;
+	mw8080bw_state *state = (mw8080bw_state *)timer.machine->driver_data;
 	output_set_value("STROBE", param && state->spcenctr_strobe_state);
 }
 
@@ -2692,7 +2692,7 @@ static INPUT_PORTS_START( invaders )
 	PORT_DIPSETTING(    0x01, "4" )
 	PORT_DIPSETTING(    0x02, "5" )
 	PORT_DIPSETTING(    0x03, "6" )
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED ) /* in the software, this is TILI, but not connected on the Midway PCB */
+	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_UNUSED ) /* in the software, this is TILI, but not connected on the Midway PCB. Is this correct? */
 	PORT_DIPNAME( 0x08, 0x00, DEF_STR( Bonus_Life ) ) PORT_DIPLOCATION("SW:2")
 	PORT_DIPSETTING(    0x08, "1000" )
 	PORT_DIPSETTING(    0x00, "1500" )
@@ -3225,7 +3225,7 @@ ROM_END
 /* 645 */ GAME( 1980, spcenctr, 0,        spcenctr, spcenctr, 0, ROT0,   "Midway", "Space Encounters", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE  )
 /* 652 */ GAMEL(1979, phantom2, 0,        phantom2, phantom2, 0, ROT0,   "Midway", "Phantom II", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE , layout_hoa0a0ff )
 /* 730 */ GAME( 1978, bowler,   0,        bowler,   bowler,   0, ROT90,  "Midway", "Bowling Alley", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE  )
-/* 739 */ GAMEL(1978, invaders, 0,        invaders, invaders, 0, ROT270, "Midway / Taito", "Space Invaders / Space Invaders M", GAME_SUPPORTS_SAVE , layout_invaders )
+/* 739 */ GAMEL(1978, invaders, 0,        invaders, invaders, 0, ROT270, "Taito / Midway", "Space Invaders / Space Invaders M", GAME_SUPPORTS_SAVE , layout_invaders )
 /* 742 */ GAME( 1978, blueshrk, 0,        blueshrk, blueshrk, 0, ROT0,   "Midway", "Blue Shark", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE  )
 /* 749 4 Player Bowling Alley (cocktail, dump does not exist) */
 /* 851 */ GAMEL(1980, invad2ct, 0,        invad2ct, invad2ct, 0, ROT90,  "Midway", "Space Invaders II (Midway, cocktail)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_invad2ct )

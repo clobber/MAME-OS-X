@@ -33,7 +33,7 @@ Atari Orbit Driver
 
 static TIMER_DEVICE_CALLBACK( nmi_32v )
 {
-	orbit_state *state = (orbit_state *)timer->machine->driver_data;
+	orbit_state *state = (orbit_state *)timer.machine->driver_data;
 	int scanline = param;
 	int nmistate = (scanline & 32) && (state->misc_flags & 4);
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, nmistate ? ASSERT_LINE : CLEAR_LINE);
@@ -50,7 +50,7 @@ static TIMER_CALLBACK( irq_off )
 static INTERRUPT_GEN( orbit_interrupt )
 {
 	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, video_screen_get_time_until_vblank_end(device->machine->primary_screen), NULL, 0, irq_off);
+	timer_set(device->machine, device->machine->primary_screen->time_until_vblank_end(), NULL, 0, irq_off);
 }
 
 
@@ -276,8 +276,8 @@ static MACHINE_START( orbit )
 {
 	orbit_state *state = (orbit_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->discrete = devtag_get_device(machine, "discrete");
+	state->maincpu = machine->device("maincpu");
+	state->discrete = machine->device("discrete");
 
 	state_save_register_global(machine, state->misc_flags);
 	state_save_register_global(machine, state->flip_screen);

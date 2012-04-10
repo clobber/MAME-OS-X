@@ -300,9 +300,9 @@ static MACHINE_START( funkyjet )
 {
 	funkyjet_state *state = (funkyjet_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->deco16ic = machine->device("deco_custom");
 }
 
 static MACHINE_DRIVER_START( funkyjet )
@@ -343,8 +343,7 @@ static MACHINE_DRIVER_START( funkyjet )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END
@@ -415,6 +414,6 @@ static DRIVER_INIT( funkyjet )
 
 /******************************************************************************/
 
-GAME( 1992, funkyjet, 0,        funkyjet, funkyjet, funkyjet, ROT0, "[Data East] (Mitchell license)", "Funky Jet (World)", GAME_SUPPORTS_SAVE )
+GAME( 1992, funkyjet, 0,        funkyjet, funkyjet, funkyjet, ROT0, "Data East (Mitchell license)", "Funky Jet (World)", GAME_SUPPORTS_SAVE )
 GAME( 1992, funkyjetj,funkyjet, funkyjet, funkyjetj,funkyjet, ROT0, "Data East Corporation", "Funky Jet (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1995, sotsugyo, 0,        funkyjet, sotsugyo, funkyjet, ROT0, "Mitchell (Atlus license)", "Sotsugyo Shousho", GAME_SUPPORTS_SAVE )

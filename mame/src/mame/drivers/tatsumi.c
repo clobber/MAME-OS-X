@@ -851,7 +851,7 @@ static MACHINE_RESET( apache3 )
 	cputag_set_input_line(machine, "sub2", INPUT_LINE_RESET, ASSERT_LINE); // TODO
 
 	/* Hook the RESET line, which resets the Z80 */
-	m68k_set_reset_callback(devtag_get_device(machine, "sub"), apache3_68000_reset);
+	m68k_set_reset_callback(machine->device("sub"), apache3_68000_reset);
 }
 
 
@@ -896,8 +896,7 @@ static MACHINE_DRIVER_START( apache3 )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, CLOCK_1 / 4 / 2)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", CLOCK_1 / 4 / 2, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 MACHINE_DRIVER_END
@@ -939,8 +938,7 @@ static MACHINE_DRIVER_START( roundup5 )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, CLOCK_1 / 4 / 2)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", CLOCK_1 / 4 / 2, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 MACHINE_DRIVER_END
@@ -983,8 +981,7 @@ static MACHINE_DRIVER_START( cyclwarr )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, CLOCK_1 / 8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", CLOCK_1 / 8, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 MACHINE_DRIVER_END
@@ -1027,8 +1024,7 @@ static MACHINE_DRIVER_START( bigfight )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, CLOCK_1 / 8 / 2) /* 2MHz was too fast. Can the clock be software controlled? */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", CLOCK_1 / 8 / 2, OKIM6295_PIN7_HIGH) /* 2MHz was too fast. Can the clock be software controlled? */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 MACHINE_DRIVER_END
@@ -1368,7 +1364,7 @@ static DRIVER_INIT( cyclwarr )
 
 /* 1987 Gray Out */
 GAME( 1988, apache3,  0,       apache3,   apache3,  apache3,  ROT0, "Tatsumi", "Apache 3", GAME_IMPERFECT_GRAPHICS )
-GAME( 1988, apache3a, apache3, apache3,   apache3,  apache3,  ROT0, "Tatsumi", "Apache 3 (Kana Corporation license)", GAME_IMPERFECT_GRAPHICS )
+GAME( 1988, apache3a, apache3, apache3,   apache3,  apache3,  ROT0, "Tatsumi (Kana Corporation license)", "Apache 3 (Kana Corporation license)", GAME_IMPERFECT_GRAPHICS )
 GAMEL(1989, roundup5, 0,       roundup5,  roundup5, roundup5, ROT0, "Tatsumi", "Round Up 5 - Super Delta Force", GAME_IMPERFECT_GRAPHICS, layout_roundup5 )
 GAME( 1991, cyclwarr, 0,       cyclwarr,  cyclwarr, cyclwarr, ROT0, "Tatsumi", "Cycle Warriors", GAME_IMPERFECT_GRAPHICS)
 GAME( 1992, bigfight, 0,       bigfight,  bigfight, cyclwarr, ROT0, "Tatsumi", "Big Fight - Big Trouble In The Atlantic Ocean", GAME_IMPERFECT_GRAPHICS)

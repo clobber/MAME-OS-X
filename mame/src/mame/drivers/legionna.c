@@ -207,16 +207,16 @@ static ADDRESS_MAP_START( cupsocbl_mem, ADDRESS_SPACE_PROGRAM, 16 )
 ADDRESS_MAP_END
 
 
-static WRITE8_HANDLER( okim_rombank_w )
+static WRITE8_DEVICE_HANDLER( okim_rombank_w )
 {
 //  popmessage("%08x",0x40000 * (data & 0x07));
-	okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), 0x40000 * (data & 0x7));
+	downcast<okim6295_device *>(device)->set_bank_base(0x40000 * (data & 0x7));
 }
 
 static ADDRESS_MAP_START( cupsocbl_sound_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
-	AM_RANGE(0x9000, 0x9000) AM_WRITE(okim_rombank_w)
+	AM_RANGE(0x9000, 0x9000) AM_DEVWRITE("oki", okim_rombank_w)
 	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
@@ -1262,8 +1262,7 @@ static MACHINE_DRIVER_START( cupsocbl )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -2165,22 +2164,22 @@ static DRIVER_INIT( legiongfx )
 
 
 
-GAME( 1992, legionna, 0,        legionna, legionna, legiongfx, ROT0, "Tad", "Legionnaire (World)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, legionnau,legionna, legionna, legionna, legiongfx, ROT0, "Tad (Fabtek license)", "Legionnaire (US)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, legionna, 0,        legionna, legionna, legiongfx, ROT0, "TAD Corporation", "Legionnaire (World)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, legionnau,legionna, legionna, legionna, legiongfx, ROT0, "TAD Corporation (Fabtek license)", "Legionnaire (US)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
-GAME( 1992, heatbrl,  0,        heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Barrel (World version 3)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, heatbrl2, heatbrl,  heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Barrel (World version 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, heatbrlo, heatbrl,  heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Barrel (World old version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, heatbrlu, heatbrl,  heatbrl,  heatbrl,  0,   ROT0, "Tad", "Heated Barrel (US)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, heatbrl,  0,        heatbrl,  heatbrl,  0,         ROT0, "TAD Corporation", "Heated Barrel (World version 3)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, heatbrl2, heatbrl,  heatbrl,  heatbrl,  0,         ROT0, "TAD Corporation", "Heated Barrel (World version 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, heatbrlo, heatbrl,  heatbrl,  heatbrl,  0,         ROT0, "TAD Corporation", "Heated Barrel (World old version)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, heatbrlu, heatbrl,  heatbrl,  heatbrl,  0,         ROT0, "TAD Corporation", "Heated Barrel (US)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
-GAME( 1993, godzilla, 0,        godzilla, godzilla, 0,        ROT0, "Banpresto", "Godzilla", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1993, grainbow, 0,        grainbow, grainbow, 0,		  ROT0, "Banpresto", "SD Gundam Sangokushi Rainbow Tairiku Senki", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1993, denjinmk, 0,        denjinmk, denjinmk, denjinmk, ROT0, "Banpresto", "Denjin Makai", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, godzilla, 0,        godzilla, godzilla, 0,         ROT0, "Banpresto", "Godzilla", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, grainbow, 0,        grainbow, grainbow, 0,		   ROT0, "Banpresto", "SD Gundam Sangokushi Rainbow Tairiku Senki", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1993, denjinmk, 0,        denjinmk, denjinmk, denjinmk,  ROT0, "Banpresto", "Denjin Makai", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
 
-GAME( 1992, cupsoc,   0,        cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Seibu Cup Soccer (set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, cupsoca,  cupsoc,   cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Seibu Cup Soccer (set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, cupsocs,  cupsoc,   cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Seibu Cup Soccer :Selection: (set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, cupsocs2, cupsoc,   cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Seibu Cup Soccer :Selection: (set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, cupsocsb, cupsoc,   cupsocbl, cupsoc,   cupsoc,   ROT0, "bootleg", "Seibu Cup Soccer :Selection: (bootleg, set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, cupsocsb2,cupsoc,  cupsocbl, cupsoc,   cupsoc,   ROT0, "bootleg", "Seibu Cup Soccer :Selection: (bootleg, set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
-GAME( 1992, olysoc92, cupsoc,   cupsoc,   cupsoc,   0,        ROT0, "Seibu", "Olympic Soccer '92", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsoc,   0,        cupsoc,   cupsoc,   0,         ROT0, "Seibu Kaihatsu", "Seibu Cup Soccer (set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsoca,  cupsoc,   cupsoc,   cupsoc,   0,         ROT0, "Seibu Kaihatsu", "Seibu Cup Soccer (set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsocs,  cupsoc,   cupsoc,   cupsoc,   0,         ROT0, "Seibu Kaihatsu", "Seibu Cup Soccer :Selection: (set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsocs2, cupsoc,   cupsoc,   cupsoc,   0,         ROT0, "Seibu Kaihatsu", "Seibu Cup Soccer :Selection: (set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsocsb, cupsoc,   cupsocbl, cupsoc,   cupsoc,    ROT0, "bootleg", "Seibu Cup Soccer :Selection: (bootleg, set 1)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, cupsocsb2,cupsoc,   cupsocbl, cupsoc,   cupsoc,    ROT0, "bootleg", "Seibu Cup Soccer :Selection: (bootleg, set 2)", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )
+GAME( 1992, olysoc92, cupsoc,   cupsoc,   cupsoc,   0,         ROT0, "Seibu Kaihatsu", "Olympic Soccer '92", GAME_UNEMULATED_PROTECTION | GAME_NOT_WORKING )

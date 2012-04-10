@@ -23,9 +23,6 @@
 
     --------
 
-    Most of the info here comes from the wiretap archive at:
-    http://www.spies.com/arcade/simulation/gameHardware/
-
 
     Omega Race Memory Map
     Version 1.1 (Jul 24,1997)
@@ -584,5 +581,5 @@ static DRIVER_INIT( omegrace )
  *
  *************************************/
 
-GAMEL(1981, omegrace, 0,        omegrace, omegrace, omegrace, ROT0, "Midway",         "Omega Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
-GAMEL(1981, deltrace, omegrace, omegrace, omegrace, omegrace, ROT0, "Allied Leisure", "Delta Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
+GAMEL(1981, omegrace, 0,        omegrace, omegrace, omegrace, ROT0, "Midway", "Omega Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )
+GAMEL(1981, deltrace, omegrace, omegrace, omegrace, omegrace, ROT0, "bootleg (Allied Leisure)", "Delta Race", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE, layout_hoffe457 )

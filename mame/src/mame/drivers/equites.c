@@ -1141,7 +1141,7 @@ static const samples_interface alphamc07_samples_interface =
 // the sound board is the same in all games
 static MACHINE_DRIVER_START( common_sound )
 
-	MDRV_CPU_ADD("audiocpu", 8085A, XTAL_6_144MHz)	/* verified on pcb */
+	MDRV_CPU_ADD("audiocpu", I8085A, XTAL_6_144MHz)	/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	MDRV_CPU_IO_MAP(sound_portmap)
 
@@ -1185,11 +1185,11 @@ static MACHINE_START( equites )
 {
 	equites_state *state = (equites_state *)machine->driver_data;
 
-	state->mcu = devtag_get_device(machine, "mcu");
-	state->audio_cpu = devtag_get_device(machine, "audiocpu");
-	state->msm = devtag_get_device(machine, "msm");
-	state->dac_1 = devtag_get_device(machine, "dac1");
-	state->dac_2 = devtag_get_device(machine, "dac2");
+	state->mcu = machine->device("mcu");
+	state->audio_cpu = machine->device("audiocpu");
+	state->msm = machine->device("msm");
+	state->dac_1 = machine->device("dac1");
+	state->dac_2 = machine->device("dac2");
 
 	state_save_register_global(machine, state->fg_char_bank);
 	state_save_register_global(machine, state->bgcolor);

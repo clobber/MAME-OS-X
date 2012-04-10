@@ -200,7 +200,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 'topspeed' : region = 0x0003
       * 'topspedu' : region = 0x0004
   - Coinage relies on the region (code at 0x00dd10) :
-      * 0x0001 (Japan), 0x0002 (US) and 0x0004 (US, Romstar licence) use TAITO_COINAGE_JAPAN_OLD
+      * 0x0001 (Japan), 0x0002 (US) and 0x0004 (US, Romstar license) use TAITO_COINAGE_JAPAN_OLD
       * 0x0003 (World) uses TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0001
   - Game name : "Top Speed"
@@ -303,14 +303,14 @@ static TIMER_CALLBACK( topspeed_cpub_interrupt6 )
 static INTERRUPT_GEN( topspeed_interrupt )
 {
 	/* Unsure how many int6's per frame */
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 200000 - 500), NULL, 0, topspeed_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, topspeed_interrupt6);
 	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
 static INTERRUPT_GEN( topspeed_cpub_interrupt )
 {
 	/* Unsure how many int6's per frame */
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 200000 - 500), NULL, 0, topspeed_cpub_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(200000 - 500), NULL, 0, topspeed_cpub_interrupt6);
 	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
@@ -652,12 +652,12 @@ static MACHINE_START( topspeed )
 
 	memory_configure_bank(machine, "bank10", 0, 4, memory_region(machine, "audiocpu") + 0xc000, 0x4000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->tc0220ioc = devtag_get_device(machine, "tc0220ioc");
-	state->pc080sn_1 = devtag_get_device(machine, "pc080sn_1");
-	state->pc080sn_2 = devtag_get_device(machine, "pc080sn_2");
+	state->maincpu = machine->device("maincpu");
+	state->subcpu = machine->device("sub");
+	state->audiocpu = machine->device("audiocpu");
+	state->tc0220ioc = machine->device("tc0220ioc");
+	state->pc080sn_1 = machine->device("pc080sn_1");
+	state->pc080sn_2 = machine->device("pc080sn_2");
 
 	state_save_register_global(machine, state->cpua_ctrl);
 	state_save_register_global(machine, state->ioc220_port);

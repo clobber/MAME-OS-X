@@ -211,7 +211,7 @@ static PALETTE_INIT( esh )
 	int i;
 
 	/* Oddly enough, the top 4 bits of each byte is 0 */
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int r,g,b;
 		int bit0,bit1,bit2;
@@ -272,7 +272,7 @@ static INTERRUPT_GEN( vblank_callback_esh )
 
 static MACHINE_START( esh )
 {
-	laserdisc = devtag_get_device(machine, "laserdisc");
+	laserdisc = machine->device("laserdisc");
 }
 
 

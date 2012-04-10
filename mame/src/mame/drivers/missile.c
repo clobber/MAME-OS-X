@@ -372,7 +372,7 @@ INLINE int scanline_to_v(int scanline)
 {
 	/* since the vertical sync counter counts backwards when flipped,
         this function returns the current effective V value, given
-        that video_screen_get_vpos() only counts forward */
+        that vpos() only counts forward */
 	return flipscreen ? (256 - scanline) : scanline;
 }
 
@@ -395,7 +395,7 @@ INLINE void schedule_next_irq(running_machine *machine, int curv)
 		curv = ((curv + 32) & 0xff) & ~0x10;
 
 	/* next one at the start of this scanline */
-	timer_adjust_oneshot(irq_timer, video_screen_get_time_until_pos(machine->primary_screen, v_to_scanline(curv), 0), curv);
+	timer_adjust_oneshot(irq_timer, machine->primary_screen->time_until_pos(v_to_scanline(curv), 0), curv);
 }
 
 
@@ -408,7 +408,7 @@ static TIMER_CALLBACK( clock_irq )
 	cputag_set_input_line(machine, "maincpu", 0, irq_state ? ASSERT_LINE : CLEAR_LINE);
 
 	/* force an update while we're here */
-	video_screen_update_partial(machine->primary_screen, v_to_scanline(curv));
+	machine->primary_screen->update_partial(v_to_scanline(curv));
 
 	/* find the next edge */
 	schedule_next_irq(machine, curv);
@@ -417,7 +417,7 @@ static TIMER_CALLBACK( clock_irq )
 
 static CUSTOM_INPUT( get_vblank )
 {
-	int v = scanline_to_v(video_screen_get_vpos(field->port->machine->primary_screen));
+	int v = scanline_to_v(field->port->machine->primary_screen->vpos());
 	return v < 24;
 }
 
@@ -441,7 +441,7 @@ static TIMER_CALLBACK( adjust_cpu_speed )
 
 	/* scanline for the next run */
 	curv ^= 224;
-	timer_adjust_oneshot(cpu_timer, video_screen_get_time_until_pos(machine->primary_screen, v_to_scanline(curv), 0), curv);
+	timer_adjust_oneshot(cpu_timer, machine->primary_screen->time_until_pos(v_to_scanline(curv), 0), curv);
 }
 
 
@@ -481,7 +481,7 @@ static MACHINE_START( missile )
 
 	/* create a timer to speed/slow the CPU */
 	cpu_timer = timer_alloc(machine, adjust_cpu_speed, NULL);
-	timer_adjust_oneshot(cpu_timer, video_screen_get_time_until_pos(machine->primary_screen, v_to_scanline(0), 0), 0);
+	timer_adjust_oneshot(cpu_timer, machine->primary_screen->time_until_pos(v_to_scanline(0), 0), 0);
 
 	/* create a timer for IRQs and set up the first callback */
 	irq_timer = timer_alloc(machine, clock_irq, NULL);
@@ -679,7 +679,7 @@ static WRITE8_HANDLER( missile_w )
 
 	/* POKEY */
 	else if (offset < 0x4800)
-		pokey_w(devtag_get_device(space->machine, "pokey"), offset & 0x0f, data);
+		pokey_w(space->machine->device("pokey"), offset & 0x0f, data);
 
 	/* OUT0 */
 	else if (offset < 0x4900)
@@ -738,7 +738,7 @@ static READ8_HANDLER( missile_r )
 
 	/* POKEY */
 	else if (offset < 0x4800)
-		result = pokey_r(devtag_get_device(space->machine, "pokey"), offset & 0x0f);
+		result = pokey_r(space->machine->device("pokey"), offset & 0x0f);
 
 	/* IN0 */
 	else if (offset < 0x4900)
@@ -1195,9 +1195,9 @@ static DRIVER_INIT( suprmatk )
 
 GAME( 1980, missile,  0,       missile, missile,         0, ROT0, "Atari", "Missile Command (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1980, missile2, missile, missile, missile,         0, ROT0, "Atari", "Missile Command (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1981, suprmatk, missile, missile, suprmatk, suprmatk, ROT0, "Atari + Gencomp", "Super Missile Attack (for set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1981, suprmatkd,missile, missile, suprmatk,        0, ROT0, "Atari + Gencomp", "Super Missile Attack (not encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1981, suprmatk, missile, missile, suprmatk, suprmatk, ROT0, "Atari / Gencomp", "Super Missile Attack (for set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1981, suprmatkd,missile, missile, suprmatk,        0, ROT0, "Atari / Gencomp", "Super Missile Attack (not encrypted)", GAME_SUPPORTS_SAVE )
 
 /* the bootlegs are on different hardware and don't work */
-GAME( 198?, mcombat,  missile, missile, missile,         0, ROT0, "[Atari] (Videotron bootleg)", "Missile Combat (Videotron bootleg, set 1)", GAME_NOT_WORKING )
-GAME( 198?, mcombata, missile, missile, missile,         0, ROT0, "[Atari] (Videotron bootleg)", "Missile Combat (Videotron bootleg, set 2)", GAME_NOT_WORKING )
+GAME( 198?, mcombat,  missile, missile, missile,         0, ROT0, "bootleg (Videotron)", "Missile Combat (Videotron bootleg, set 1)", GAME_NOT_WORKING )
+GAME( 198?, mcombata, missile, missile, missile,         0, ROT0, "bootleg (Videotron)", "Missile Combat (Videotron bootleg, set 2)", GAME_NOT_WORKING )

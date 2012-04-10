@@ -259,7 +259,7 @@ static MACHINE_START( lemmings )
 {
 	lemmings_state *state = (lemmings_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 }
 
 static MACHINE_DRIVER_START( lemmings )
@@ -302,8 +302,7 @@ static MACHINE_DRIVER_START( lemmings )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.45)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1023924)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END
@@ -342,4 +341,4 @@ ROM_END
 
 /******************************************************************************/
 
-GAME( 1991, lemmings, 0, lemmings, lemmings, 0, ROT0, "Data East USA", "Lemmings (US Prototype)", GAME_SUPPORTS_SAVE )
+GAME( 1991, lemmings, 0, lemmings, lemmings, 0, ROT0, "Data East USA", "Lemmings (US prototype)", GAME_SUPPORTS_SAVE )

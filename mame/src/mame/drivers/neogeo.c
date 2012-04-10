@@ -9,7 +9,7 @@
         * This driver was made possible by the research done by
           Charles MacDonald.  For a detailed description of the Neo-Geo
           hardware, please visit his page at:
-          http://cgfm2.emuviews.com/temp/mvstech.txt
+          http://cgfm2.emuviews.com/txt/mvstech.txt
         * Presented to you by the Shin Emu Keikaku team.
         * The following people have all spent probably far
           too much time on this:
@@ -246,7 +246,7 @@ static void adjust_display_position_interrupt_timer( running_machine *machine )
 	if ((state->display_counter + 1) != 0)
 	{
 		attotime period = attotime_mul(ATTOTIME_IN_HZ(NEOGEO_PIXEL_CLOCK), state->display_counter + 1);
-		if (LOG_VIDEO_SYSTEM) logerror("adjust_display_position_interrupt_timer  current y: %02x  current x: %02x   target y: %x  target x: %x\n", video_screen_get_vpos(machine->primary_screen), video_screen_get_hpos(machine->primary_screen), (state->display_counter + 1) / NEOGEO_HTOTAL, (state->display_counter + 1) % NEOGEO_HTOTAL);
+		if (LOG_VIDEO_SYSTEM) logerror("adjust_display_position_interrupt_timer  current y: %02x  current x: %02x   target y: %x  target x: %x\n", machine->primary_screen->vpos(), machine->primary_screen->hpos(), (state->display_counter + 1) / NEOGEO_HTOTAL, (state->display_counter + 1) % NEOGEO_HTOTAL);
 
 		timer_adjust_oneshot(state->display_position_interrupt_timer, period, 0);
 	}
@@ -315,11 +315,11 @@ static TIMER_CALLBACK( display_position_interrupt_callback )
 {
 	neogeo_state *state = (neogeo_state *)machine->driver_data;
 
-	if (LOG_VIDEO_SYSTEM) logerror("--- Scanline @ %d,%d\n", video_screen_get_vpos(machine->primary_screen), video_screen_get_hpos(machine->primary_screen));
+	if (LOG_VIDEO_SYSTEM) logerror("--- Scanline @ %d,%d\n", machine->primary_screen->vpos(), machine->primary_screen->hpos());
 
 	if (state->display_position_interrupt_control & IRQ2CTRL_ENABLE)
 	{
-		if (LOG_VIDEO_SYSTEM) logerror("*** Scanline interrupt (IRQ2) ***  y: %02x  x: %02x\n", video_screen_get_vpos(machine->primary_screen), video_screen_get_hpos(machine->primary_screen));
+		if (LOG_VIDEO_SYSTEM) logerror("*** Scanline interrupt (IRQ2) ***  y: %02x  x: %02x\n", machine->primary_screen->vpos(), machine->primary_screen->hpos());
 		state->display_position_interrupt_pending = 1;
 
 		update_interrupts(machine);
@@ -344,7 +344,7 @@ static TIMER_CALLBACK( display_position_vblank_callback )
 	}
 
 	/* set timer for next screen */
-	timer_adjust_oneshot(state->display_position_vblank_timer, video_screen_get_time_until_pos(machine->primary_screen, NEOGEO_VBSTART, NEOGEO_VBLANK_RELOAD_HPOS), 0);
+	timer_adjust_oneshot(state->display_position_vblank_timer, machine->primary_screen->time_until_pos(NEOGEO_VBSTART, NEOGEO_VBLANK_RELOAD_HPOS), 0);
 }
 
 
@@ -352,7 +352,7 @@ static TIMER_CALLBACK( vblank_interrupt_callback )
 {
 	neogeo_state *state = (neogeo_state *)machine->driver_data;
 
-	if (LOG_VIDEO_SYSTEM) logerror("+++ VBLANK @ %d,%d\n", video_screen_get_vpos(machine->primary_screen), video_screen_get_hpos(machine->primary_screen));
+	if (LOG_VIDEO_SYSTEM) logerror("+++ VBLANK @ %d,%d\n", machine->primary_screen->vpos(), machine->primary_screen->hpos());
 
 	/* add a timer tick to the pd4990a */
 	upd4990a_addretrace(state->upd4990a);
@@ -362,7 +362,7 @@ static TIMER_CALLBACK( vblank_interrupt_callback )
 	update_interrupts(machine);
 
 	/* set timer for next screen */
-	timer_adjust_oneshot(state->vblank_interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, NEOGEO_VBSTART, 0), 0);
+	timer_adjust_oneshot(state->vblank_interrupt_timer, machine->primary_screen->time_until_pos(NEOGEO_VBSTART), 0);
 }
 
 
@@ -378,8 +378,8 @@ static void create_interrupt_timers( running_machine *machine )
 static void start_interrupt_timers( running_machine *machine )
 {
 	neogeo_state *state = (neogeo_state *)machine->driver_data;
-	timer_adjust_oneshot(state->vblank_interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, NEOGEO_VBSTART, 0), 0);
-	timer_adjust_oneshot(state->display_position_vblank_timer, video_screen_get_time_until_pos(machine->primary_screen, NEOGEO_VBSTART, NEOGEO_VBLANK_RELOAD_HPOS), 0);
+	timer_adjust_oneshot(state->vblank_interrupt_timer, machine->primary_screen->time_until_pos(NEOGEO_VBSTART), 0);
+	timer_adjust_oneshot(state->display_position_vblank_timer, machine->primary_screen->time_until_pos(NEOGEO_VBSTART, NEOGEO_VBLANK_RELOAD_HPOS), 0);
 }
 
 
@@ -681,7 +681,7 @@ static CUSTOM_INPUT( get_audio_result )
 	neogeo_state *state = (neogeo_state *)field->port->machine->driver_data;
 	UINT32 ret = state->audio_result;
 
-//  if (LOG_CPU_COMM) logerror("MAIN CPU PC %06x: audio_result_r %02x\n", cpu_get_pc(devtag_get_device(field->port->machine, "maincpu")), ret);
+//  if (LOG_CPU_COMM) logerror("MAIN CPU PC %06x: audio_result_r %02x\n", cpu_get_pc(field->port->machine->device("maincpu")), ret);
 
 	return ret;
 }
@@ -1076,9 +1076,9 @@ static MACHINE_START( neogeo )
 	state->irq3_pending = 1;
 
 	/* get devices */
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->upd4990a = devtag_get_device(machine, "upd4990a");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->upd4990a = machine->device("upd4990a");
 
 	/* register state save */
 	state_save_register_global(machine, state->display_position_interrupt_control);
@@ -1289,7 +1289,7 @@ static const ym2610_interface ym2610_config =
 	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_START2 )   												\
 	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Previous Game") PORT_CODE(KEYCODE_8)	\
 	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)			\
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* In AES 'mode' nitd, kof2000, sengoku3, matrim and mslug5 check if this is ACTIVE_HIGH */
 
 
 #define STANDARD_IN3																				\
@@ -1297,9 +1297,9 @@ static const ym2610_interface ym2610_config =
 	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )													\
 	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )													\
 	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_SERVICE1 )													\
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* having this ACTIVE_HIGH causes you to start with 2 credits using USA bios roms */	\
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* having this ACTIVE_HIGH causes you to start with 2 credits using USA bios roms */	\
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_SPECIAL ) /* what is this? */								\
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* having this ACTIVE_HIGH causes you to start with 2 credits using USA bios roms; if ACTIVE_HIGH + IN4 bit 6 ACTIVE_HIGH = AES 'mode' */	\
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* having this ACTIVE_HIGH causes you to start with 2 credits using USA bios roms; if ACTIVE_HIGH + IN4 bit 6 ACTIVE_HIGH = AES 'mode' */	\
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_SPECIAL ) /* what is this? When ACTIVE_HIGH + IN4 bit 6 ACTIVE_LOW MVS-4 slot is detected */	\
 	PORT_BIT( 0x00c0, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_calendar_status, NULL)			\
 	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_audio_result, NULL)
 
@@ -1312,7 +1312,7 @@ static const ym2610_interface ym2610_config =
 	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_UNKNOWN )												\
 	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_UNKNOWN )												\
 	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_UNKNOWN )												\
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_SPECIAL ) /* what is this? */							\
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_SPECIAL ) /* what is this? If ACTIVE_LOW, MVS-6 slot detected, when ACTIVE_HIGH MVS-1 slot (AES) detected */	\
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Enter BIOS") PORT_CODE(KEYCODE_F2)	\
 	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
 

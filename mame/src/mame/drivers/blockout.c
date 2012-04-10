@@ -257,7 +257,7 @@ static MACHINE_START( blockout )
 {
 	blockout_state *state = (blockout_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->color);
 }
@@ -306,8 +306,7 @@ static MACHINE_DRIVER_START( blockout )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END
@@ -403,8 +402,8 @@ ROM_END
  *
  *************************************/
 
-GAME( 1989, blockout, 0,        blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1989, blockout2,blockout, blockout, blockout, 0, ROT0, "Technos Japan + California Dreams", "Block Out (set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1989, blockoutj,blockout, blockout, blockoutj,0, ROT0, "Technos Japan + California Dreams", "Block Out (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1989, blockout, 0,        blockout, blockout, 0, ROT0, "Technos Japan / California Dreams", "Block Out (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1989, blockout2,blockout, blockout, blockout, 0, ROT0, "Technos Japan / California Dreams", "Block Out (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1989, blockoutj,blockout, blockout, blockoutj,0, ROT0, "Technos Japan / California Dreams", "Block Out (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1991, agress,   0,        blockout, agress,   0, ROT0, "Palco", "Agress", GAME_SUPPORTS_SAVE )
-GAME( 2003, agressb,  agress,   blockout, agress,   0, ROT0, "Palco", "Agress (English bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 2003, agressb,  agress,   blockout, agress,   0, ROT0, "bootleg", "Agress (English bootleg)", GAME_SUPPORTS_SAVE )

@@ -82,6 +82,9 @@ astring *astring_alloc(void);
 /* free an astring */
 void astring_free(astring *str);
 
+/* free an astring */
+void astring_expand(astring *str, int length);
+
 
 
 /* ----- inline astring changes ----- */
@@ -315,7 +318,9 @@ public:
 	astring &operator=(const astring &string) { return cpy(string); }
 
 	astring &reset() { return cpy(""); }
+	astring &expand(int length) { astring_expand(this, length); return *this; }
 
+	operator char *() { return this->text; }
 	operator const char *() const { return astring_c(this); }
 	const char *cstr() const { return astring_c(this); }
 	int len() const { return astring_len(this); }
@@ -342,6 +347,8 @@ public:
 	int vprintf(const char *format, va_list args) { return astring_vprintf(this, format, args); }
 	int catprintf(const char *format, ...) { va_list ap; va_start(ap, format); int result = astring_catvprintf(this, format, ap); va_end(ap); return result; }
 	int catvprintf(const char *format, va_list args) { return astring_catvprintf(this, format, args); }
+
+	astring &format(const char *format, ...) { va_list ap; va_start(ap, format); astring_vprintf(this, format, ap); va_end(ap); return *this; }
 
 	int cmp(const astring &str2) const { return astring_cmp(this, &str2); }
 	int cmp(const char *str2) const { return astring_cmpc(this, str2); }

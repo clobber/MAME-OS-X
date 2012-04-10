@@ -365,12 +365,14 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( eolith50 )
 	MDRV_IMPORT_FROM(eolith45)
-	MDRV_CPU_REPLACE("maincpu", E132N, 50000000)		 /* 50 MHz */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(50000000)		 /* 50 MHz */
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( ironfort )
 	MDRV_IMPORT_FROM(eolith45)
-	MDRV_CPU_REPLACE("maincpu", E132N, 44900000) /* Normaly 45MHz??? but PCB actually had a 44.9MHz OSC, so it's value is used */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(44900000) /* Normaly 45MHz??? but PCB actually had a 44.9MHz OSC, so it's value is used */
 MACHINE_DRIVER_END
 
 
@@ -417,7 +419,6 @@ Notes:
       IS61C1024    - ISSI 128k x4 High Speed CMOS Static RAM (SOJ32)
       KM6161002    - Samsung 64k x4 Ultra High Speed CMOS Video Static RAM (SOJ44)
       QS1000       - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                     see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A      - QDSP QS1001A 512k x8 MaskROM (SOP32)
       EV0514-001   - Custom Eolith IC (QFP100)
       VSync        - 60Hz
@@ -551,7 +552,6 @@ Notes:
       KM6161002    - Samsung 64k x16 Ultra High Speed CMOS Video Static RAM (SOJ44)
       TDA1519      - Audio Power AMP
       QS1000       - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                     see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A      - QDSP QS1001A 512k x8 MaskROM (SOP32)
       EV0514-001   - Custom Eolith IC (QFP100)
       VSync        - 60Hz
@@ -624,7 +624,6 @@ Notes:
       KM6161002    - Samsung 64k x16 Ultra High Speed CMOS Video Static RAM (SOJ44)
       TDA1519      - Audio Power AMP
       QS1000       - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                     see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A      - QDSP QS1001A 512k x8 MaskROM (SOP32)
       EV0514-001   - Custom Eolith IC (QFP100)
       VSync        - 60Hz
@@ -714,7 +713,6 @@ Notes:
       KM6161002    - Samsung 64k x16 Ultra High Speed CMOS Video Static RAM (SOJ44)
       KA22065      - Audio Power AMP
       QS1000       - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                     see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A      - QDSP QS1001A 512k x8 MaskROM (SOP32)
       EV0514-001   - Custom Eolith IC (QFP100)
       VSync        - 60Hz
@@ -987,7 +985,6 @@ Notes:
       KM6161002    - Samsung 64k x16 Ultra High Speed CMOS Video Static RAM (SOJ44)
       TDA1519      - Audio Power AMP
       QS1000       - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                     see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A      - QDSP QS1001A 512k x8 MaskROM (SOP32)
       EV0514-001   - Custom Eolith IC (QFP100)
       VSync        - 60Hz

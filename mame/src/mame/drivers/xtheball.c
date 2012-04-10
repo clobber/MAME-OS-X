@@ -44,7 +44,7 @@ static MACHINE_RESET( xtheball )
  *
  *************************************/
 
-static void xtheball_scanline_update(running_device *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
+static void xtheball_scanline_update(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
 	UINT16 *srcbg = &vram_bg[(params->rowaddr << 8) & 0xff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
@@ -133,7 +133,7 @@ static WRITE16_HANDLER( bit_controls_w )
 			switch (offset)
 			{
 				case 7:
-					ticket_dispenser_w(devtag_get_device(space->machine, "ticket"), 0, data << 7);
+					ticket_dispenser_w(space->machine->device("ticket"), 0, data << 7);
 					break;
 
 				case 8:

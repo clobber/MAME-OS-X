@@ -334,9 +334,9 @@ static MACHINE_START( supbtime )
 {
 	supbtime_state *state = (supbtime_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->deco16ic = machine->device("deco_custom");
 }
 
 static MACHINE_DRIVER_START( supbtime )
@@ -379,8 +379,7 @@ static MACHINE_DRIVER_START( supbtime )
 	MDRV_SOUND_ROUTE(0, "mono", 0.45)
 	MDRV_SOUND_ROUTE(1, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1023924)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 
@@ -425,8 +424,7 @@ static MACHINE_DRIVER_START( chinatwn )
 	MDRV_SOUND_ROUTE(0, "mono", 0.45)
 	MDRV_SOUND_ROUTE(1, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1023924)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_DRIVER_END
 

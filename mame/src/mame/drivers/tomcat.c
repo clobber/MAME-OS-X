@@ -143,7 +143,7 @@ static WRITE16_HANDLER(tomcat_mresl_w)
 {
 	// 320 Reset Low         (Address Strobe)
 	// Reset TMS320
-	cpu_set_input_line(devtag_get_device(space->machine, "dsp"), INPUT_LINE_RESET, ASSERT_LINE);
+	cpu_set_input_line(space->machine->device("dsp"), INPUT_LINE_RESET, ASSERT_LINE);
 }
 
 static WRITE16_HANDLER(tomcat_mresh_w)
@@ -151,7 +151,7 @@ static WRITE16_HANDLER(tomcat_mresh_w)
 	// 320 Reset high        (Address Strobe)
 	// Release reset of TMS320
 	dsp_BIO = 0;
-	cpu_set_input_line(devtag_get_device(space->machine, "dsp"), INPUT_LINE_RESET, CLEAR_LINE);
+	cpu_set_input_line(space->machine->device("dsp"), INPUT_LINE_RESET, CLEAR_LINE);
 }
 
 static WRITE16_HANDLER(tomcat_irqclr_w)
@@ -385,7 +385,7 @@ static MACHINE_DRIVER_START(tomcat)
 	MDRV_CPU_IO_MAP( dsp_io_map)
 
 	MDRV_CPU_ADD("soundcpu", M6502, XTAL_14_31818MHz / 8 )
-	MDRV_CPU_FLAGS( CPU_DISABLE )
+	MDRV_DEVICE_DISABLE()
 	MDRV_CPU_PROGRAM_MAP( sound_map)
 
 	MDRV_RIOT6532_ADD("riot", XTAL_14_31818MHz / 8, tomcat_riot6532_intf)

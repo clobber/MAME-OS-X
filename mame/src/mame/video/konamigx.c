@@ -353,13 +353,13 @@ static void K053936GP_zoom_draw(running_machine *machine,
 	}
 }
 
-void K053936GP_0_zoom_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
+static void K053936GP_0_zoom_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
 		tilemap_t *tmap, int tilebpp, int blend, int alpha, int pixeldouble_output)
 {
 	K053936GP_zoom_draw(machine, 0,K053936_0_ctrl,K053936_0_linectrl,bitmap,cliprect,tmap,tilebpp,blend,alpha, pixeldouble_output);
 }
 
-void K053936GP_1_zoom_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
+static void K053936GP_1_zoom_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect,
 		tilemap_t *tmap, int tilebpp, int blend, int alpha, int pixeldouble_output)
 {
 	K053936GP_zoom_draw(machine, 1,K053936_1_ctrl,K053936_1_linectrl,bitmap,cliprect,tmap,tilebpp,blend,alpha, pixeldouble_output);
@@ -924,7 +924,7 @@ INLINE int K055555GX_decode_inpri(int c18) // (see p.59 7.2.2)
 	return(c18 | op);
 }
 
-void konamigx_type2_sprite_callback(int *code, int *color, int *priority)
+static void konamigx_type2_sprite_callback(int *code, int *color, int *priority)
 {
 	int num = *code;
 	int c18 = *color;
@@ -935,7 +935,7 @@ void konamigx_type2_sprite_callback(int *code, int *color, int *priority)
 	*priority = K055555GX_decode_inpri(c18);
 }
 
-void konamigx_dragoonj_sprite_callback(int *code, int *color, int *priority)
+static void konamigx_dragoonj_sprite_callback(int *code, int *color, int *priority)
 {
 	int num, op, pri, c18;
 
@@ -953,7 +953,7 @@ void konamigx_dragoonj_sprite_callback(int *code, int *color, int *priority)
 	*color = K055555GX_decode_objcolor(c18);
 }
 
-void konamigx_salmndr2_sprite_callback(int *code, int *color, int *priority)
+static void konamigx_salmndr2_sprite_callback(int *code, int *color, int *priority)
 {
 	int num, op, pri, c18;
 
@@ -971,7 +971,7 @@ void konamigx_salmndr2_sprite_callback(int *code, int *color, int *priority)
 	*color = K055555GX_decode_objcolor(c18);
 }
 
-void konamigx_le2_sprite_callback(int *code, int *color, int *priority)
+static void konamigx_le2_sprite_callback(int *code, int *color, int *priority)
 {
 	int num, op, pri;
 
@@ -988,7 +988,7 @@ void konamigx_le2_sprite_callback(int *code, int *color, int *priority)
 	*priority = pri | op;
 }
 
-int K055555GX_decode_vmixcolor(int layer, int *color) // (see p.62 7.2.6 and p.27 3.3)
+static int K055555GX_decode_vmixcolor(int layer, int *color) // (see p.62 7.2.6 and p.27 3.3)
 {
 	int vcb, shift, pal, vmx, von, pl45, emx;
 
@@ -1017,6 +1017,7 @@ int K055555GX_decode_vmixcolor(int layer, int *color) // (see p.62 7.2.6 and p.2
 	return(emx);
 }
 
+#ifdef UNUSED_FUNCTION
 int K055555GX_decode_osmixcolor(int layer, int *color) // (see p.63, p.49-50 and p.27 3.3)
 {
 	int scb, shift, pal, osmx, oson, pl45, emx;
@@ -1054,13 +1055,14 @@ int K055555GX_decode_osmixcolor(int layer, int *color) // (see p.63, p.49-50 and
 
 	return(emx);
 }
+#endif
 
 static void gx_wipezbuf(running_machine *machine, int noshadow)
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine->primary_screen->visible_area();
 
-	int w = visarea->max_x - visarea->min_x + 1;
-	int h = visarea->max_y - visarea->min_y + 1;
+	int w = visarea.max_x - visarea.min_x + 1;
+	int h = visarea.max_y - visarea.min_y + 1;
 
 	UINT8 *zptr = gx_objzbuf;
 	int ecx = h;
@@ -1121,7 +1123,7 @@ static int K053247_dx, K053247_dy;
 static int *K054338_shdRGB;
 
 
-void K053247GP_set_SpriteOffset(int offsx, int offsy)
+static void K053247GP_set_SpriteOffset(int offsx, int offsy)
 {
 	K053247_dx = offsx;
 	K053247_dy = offsy;
@@ -1496,7 +1498,7 @@ void konamigx_mixer(running_machine *machine, bitmap_t *bitmap, const rectangle 
 	}
 
 	// traverse draw list
-	screenwidth = video_screen_get_width(machine->primary_screen);
+	screenwidth = machine->primary_screen->width();
 
 	for (count=0; count<nobj; count++)
 	{
@@ -1577,8 +1579,8 @@ void konamigx_mixer(running_machine *machine, bitmap_t *bitmap, const rectangle 
 					if (offs == -2)
 					{
 						int pixeldouble_output = 0;
-						const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
-						int width = visarea->max_x - visarea->min_x + 1;
+						const rectangle &visarea = machine->primary_screen->visible_area();
+						int width = visarea.max_x - visarea.min_x + 1;
 
 						if (width>512) // vsnetscr case
 							pixeldouble_output = 1;
@@ -1620,8 +1622,8 @@ void konamigx_mixer(running_machine *machine, bitmap_t *bitmap, const rectangle 
 						if (extra_bitmap) // soccer superstars roz layer
 						{
 							int xx,yy;
-							int width = video_screen_get_width(machine->primary_screen);
-							int height = video_screen_get_height(machine->primary_screen);
+							int width = machine->primary_screen->width();
+							int height = machine->primary_screen->height();
 							const pen_t *paldata = machine->pens;
 
 							// the output size of the roz layer has to be doubled horizontally
@@ -2148,8 +2150,8 @@ VIDEO_START(konamigx_6bpp)
 
 VIDEO_START(konamigx_type3)
 {
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	K056832_vh_start(machine, "gfx1", K056832_BPP_6, 0, NULL, konamigx_type2_tile_callback, 1);
 	K055673_vh_start(machine, "gfx2", K055673_LAYOUT_GX6, -132, -23, konamigx_type2_sprite_callback);
@@ -2187,8 +2189,8 @@ VIDEO_START(konamigx_type3)
 
 VIDEO_START(konamigx_type4)
 {
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	K056832_vh_start(machine, "gfx1", K056832_BPP_8, 0, NULL, konamigx_type2_tile_callback, 0);
 	K055673_vh_start(machine, "gfx2", K055673_LAYOUT_GX6, -79, -24, konamigx_type2_sprite_callback); // -23 looks better in intro
@@ -2218,8 +2220,8 @@ VIDEO_START(konamigx_type4)
 
 VIDEO_START(konamigx_type4_vsn)
 {
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	K056832_vh_start(machine, "gfx1", K056832_BPP_8, 0, NULL, konamigx_type2_tile_callback, 2);   // set djmain_hack to 2 to kill layer association or half the tilemaps vanish on screen 0
 	K055673_vh_start(machine, "gfx2", K055673_LAYOUT_GX6, -132, -23, konamigx_type2_sprite_callback);
@@ -2248,8 +2250,8 @@ VIDEO_START(konamigx_type4_vsn)
 
 VIDEO_START(konamigx_type4_sd2)
 {
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	K056832_vh_start(machine, "gfx1", K056832_BPP_8, 0, NULL, konamigx_type2_tile_callback, 0);
 	K055673_vh_start(machine, "gfx2", K055673_LAYOUT_GX6, -81, -23, konamigx_type2_sprite_callback);
@@ -2386,8 +2388,8 @@ VIDEO_UPDATE(konamigx)
 
 	if (konamigx_has_dual_screen)
 	{
-		running_device *left_screen  = devtag_get_device(screen->machine, "screen");
-		running_device *right_screen = devtag_get_device(screen->machine, "screen2");
+		running_device *left_screen  = screen->machine->device("screen");
+		running_device *right_screen = screen->machine->device("screen2");
 
 		/* the video gets demuxed by a board which plugs into the jamma connector */
 		if (screen==left_screen)
@@ -2570,7 +2572,7 @@ VIDEO_UPDATE(konamigx)
 			int y,x;
 
 			// make it flicker, to compare positioning
-			//if (video_screen_get_frame_number(screen) & 1)
+			//if (screen->frame_number() & 1)
 			{
 
 				for (y=0;y<256;y++)
@@ -2597,8 +2599,8 @@ VIDEO_UPDATE(konamigx)
 
 	if (konamigx_has_dual_screen)
 	{
-		running_device *left_screen  = devtag_get_device(screen->machine, "screen");
-		running_device *right_screen = devtag_get_device(screen->machine, "screen2");
+		running_device *left_screen  = screen->machine->device("screen");
+		running_device *right_screen = screen->machine->device("screen2");
 
 		if (screen==left_screen)
 		{
@@ -2627,6 +2629,7 @@ WRITE32_HANDLER( konamigx_palette_w )
 	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
 
+#ifdef UNUSED_FUNCTION
 WRITE32_HANDLER( konamigx_palette2_w )
 {
 	int r,g,b;
@@ -2641,12 +2644,14 @@ WRITE32_HANDLER( konamigx_palette2_w )
 
 	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
+#endif
 
 INLINE void set_color_555(running_machine *machine, pen_t color, int rshift, int gshift, int bshift, UINT16 data)
 {
 	palette_set_color_rgb(machine, color, pal5bit(data >> rshift), pal5bit(data >> gshift), pal5bit(data >> bshift));
 }
 
+#ifdef UNUSED_FUNCTION
 // main monitor for type 3
 WRITE32_HANDLER( konamigx_555_palette_w )
 {
@@ -2671,6 +2676,7 @@ WRITE32_HANDLER( konamigx_555_palette2_w )
 	set_color_555(space->machine, offset*2, 0, 5, 10,coldat >> 16);
 	set_color_555(space->machine, offset*2+1, 0, 5, 10,coldat & 0xffff);
 }
+#endif
 
 
 WRITE32_HANDLER( konamigx_tilebank_w )

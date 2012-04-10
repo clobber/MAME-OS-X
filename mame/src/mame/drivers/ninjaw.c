@@ -249,7 +249,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 'ninjawj' : region = 0x0000
   - Coinage relies on the region (code at 0x0013bc) :
       * 0x0000 (Japan), 0x0001 (?) and 0x0002 (US) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0003 (World) and 0x0004 (licenced to xxx) use TAITO_COINAGE_WORLD
+      * 0x0003 (World) and 0x0004 (licensed to xxx) use TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0000
   - According to the manual, DSWB bit 6 determines continue pricing :
 
@@ -273,7 +273,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 'darius2' : region = 0x0001
   - Coinage relies on the region (code at 0x00f37a) :
       * 0x0000 (?), 0x0001 (Japan) and 0x0002 (US) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0002 (US, licenced to ROMSTAR) uses slighlty different TAITO_COINAGE_US :
+      * 0x0002 (US, licensed to ROMSTAR) uses slighlty different TAITO_COINAGE_US :
         4C_3C instead of 4C_1C, same other settings otherwise
       * 0x0003 (World) uses TAITO_COINAGE_WORLD
   - Texts and game name rely on the region :
@@ -413,7 +413,7 @@ static WRITE8_HANDLER( ninjaw_pancontrol )
 }
 
 
-WRITE16_HANDLER( tc0100scn_triple_screen_w )
+static WRITE16_HANDLER( tc0100scn_triple_screen_w )
 {
 	ninjaw_state *state = (ninjaw_state *)space->machine->driver_data;
 
@@ -690,7 +690,8 @@ static DEVICE_GET_INFO( subwoofer )
 	}
 }
 
-#define SOUND_SUBWOOFER DEVICE_GET_INFO_NAME(subwoofer)
+DECLARE_LEGACY_SOUND_DEVICE(SUBWOOFER, subwoofer);
+DEFINE_LEGACY_SOUND_DEVICE(SUBWOOFER, subwoofer);
 #endif
 
 
@@ -762,22 +763,22 @@ static MACHINE_START( ninjaw )
 
 	memory_configure_bank(machine, "bank10", 0, 8, memory_region(machine, "audiocpu") + 0xc000, 0x4000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->tc0140syt = devtag_get_device(machine, "tc0140syt");
-	state->tc0100scn_1 = devtag_get_device(machine, "tc0100scn_1");
-	state->tc0100scn_2 = devtag_get_device(machine, "tc0100scn_2");
-	state->tc0100scn_3 = devtag_get_device(machine, "tc0100scn_3");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->subcpu = machine->device("sub");
+	state->tc0140syt = machine->device("tc0140syt");
+	state->tc0100scn_1 = machine->device("tc0100scn_1");
+	state->tc0100scn_2 = machine->device("tc0100scn_2");
+	state->tc0100scn_3 = machine->device("tc0100scn_3");
 
-	state->lscreen = devtag_get_device(machine, "lscreen");
-	state->mscreen = devtag_get_device(machine, "mscreen");
-	state->rscreen = devtag_get_device(machine, "rscreen");
+	state->lscreen = machine->device("lscreen");
+	state->mscreen = machine->device("mscreen");
+	state->rscreen = machine->device("rscreen");
 
-	state->_2610_1l = devtag_get_device(machine, "2610.1.l");
-	state->_2610_1r = devtag_get_device(machine, "2610.1.r");
-	state->_2610_2l = devtag_get_device(machine, "2610.2.l");
-	state->_2610_2r = devtag_get_device(machine, "2610.2.r");
+	state->_2610_1l = machine->device("2610.1.l");
+	state->_2610_1r = machine->device("2610.1.r");
+	state->_2610_2l = machine->device("2610.2.l");
+	state->_2610_2r = machine->device("2610.2.r");
 
 	state_save_register_global(machine, state->cpua_ctrl);
 	state_save_register_global(machine, state->banknum);

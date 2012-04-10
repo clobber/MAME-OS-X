@@ -1,6 +1,6 @@
 /*******************************************************************************************
 
-Fever Soccer (c) 2004 Seibu
+Fever Soccer (c) 2004 Seibu Kaihatsu
 
 A down-grade of the Seibu SPI Hardware with SH-2 as main cpu.
 
@@ -136,7 +136,8 @@ static WRITE32_HANDLER( output_w )
 		//data>>16 & 2 coin out
 		coin_counter_w(space->machine, 1,data>>16 & 4);
 		//data>>16 & 8 coin hopper
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), 0x40000 * (((data>>16) & 0x20)>>5));
+		okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+		oki->set_bank_base(0x40000 * (((data>>16) & 0x20)>>5));
 	}
 	if(ACCESSING_BITS_0_15)
 	{
@@ -255,8 +256,7 @@ static MACHINE_DRIVER_START( feversoc )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_SOUND_ADD("oki", OKIM6295, MASTER_CLOCK/16) //pin 7 & frequency not verified (clock should be 28,6363 / n)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", MASTER_CLOCK/16, OKIM6295_PIN7_LOW) //pin 7 & frequency not verified (clock should be 28,6363 / n)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.6)
 MACHINE_DRIVER_END
 
@@ -285,4 +285,4 @@ static DRIVER_INIT( feversoc )
 	seibuspi_rise11_sprite_decrypt_feversoc(memory_region(machine, "gfx1"), 0x200000);
 }
 
-GAME( 2004, feversoc,  0,       feversoc,  feversoc,  feversoc, ROT0, "Seibu", "Fever Soccer", 0 )
+GAME( 2004, feversoc,  0,       feversoc,  feversoc,  feversoc, ROT0, "Seibu Kaihatsu", "Fever Soccer", 0 )

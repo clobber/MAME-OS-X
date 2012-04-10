@@ -63,8 +63,8 @@ MACHINE_START( espial )
 {
 	espial_state *state = (espial_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	//state_save_register_global_array(machine, mcu_out[1]);
 	state_save_register_global(machine, state->sound_nmi_enabled);
@@ -458,6 +458,6 @@ ROM_END
 
 
 
-GAME( 1983, espial,  0,      espial,  espial,  0, ROT0,  "[Orca] Thunderbolt", "Espial (Europe)", GAME_SUPPORTS_SAVE )
-GAME( 1983, espialu, espial, espial,  espial,  0, ROT0,  "[Orca] Thunderbolt", "Espial (US?)", GAME_SUPPORTS_SAVE )
+GAME( 1983, espial,  0,      espial,  espial,  0, ROT0,  "Orca / Thunderbolt", "Espial (Europe)", GAME_SUPPORTS_SAVE )
+GAME( 1983, espialu, espial, espial,  espial,  0, ROT0,  "Orca / Thunderbolt", "Espial (US?)", GAME_SUPPORTS_SAVE )
 GAME( 1983, netwars, 0,      netwars, netwars, 0, ROT90, "Orca (Esco Trading Co license)", "Net Wars", GAME_SUPPORTS_SAVE )

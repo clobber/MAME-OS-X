@@ -18,16 +18,10 @@
 
 **********************************************************************/
 
-#ifndef __6821NEW_H__
-#define __6821NEW_H__
+#ifndef __6821PIA_H__
+#define __6821PIA_H__
 
-
-/***************************************************************************
-    CONSTANTS
-***************************************************************************/
-
-#define PIA6821		DEVICE_GET_INFO_NAME(pia6821)
-#define PIA6822		DEVICE_GET_INFO_NAME(pia6822)
+#include "devlegcy.h"
 
 
 /***************************************************************************
@@ -53,13 +47,14 @@ struct _pia6821_interface
 	devcb_write_line irq_b_func;
 };
 
+DECLARE_LEGACY_DEVICE(PIA6821, pia6821);
+DECLARE_LEGACY_DEVICE(PIA6822, pia6822);
+
+
 
 /***************************************************************************
     PROTOTYPES
 ***************************************************************************/
-
-DEVICE_GET_INFO( pia6821 );
-DEVICE_GET_INFO( pia6822 );
 
 READ8_DEVICE_HANDLER( pia6821_r );
 WRITE8_DEVICE_HANDLER( pia6821_w );
@@ -75,11 +70,11 @@ WRITE8_DEVICE_HANDLER( pia6821_porta_w );
 void pia6821_set_input_a(running_device *device, UINT8 data, UINT8 z_mask);
 UINT8 pia6821_get_output_a(running_device *device);
 
-READ8_DEVICE_HANDLER( pia6821_ca1_r );
-WRITE8_DEVICE_HANDLER( pia6821_ca1_w );
+READ_LINE_DEVICE_HANDLER( pia6821_ca1_r );
+WRITE_LINE_DEVICE_HANDLER( pia6821_ca1_w );
 
-READ8_DEVICE_HANDLER( pia6821_ca2_r );
-WRITE8_DEVICE_HANDLER( pia6821_ca2_w );
+READ_LINE_DEVICE_HANDLER( pia6821_ca2_r );
+WRITE_LINE_DEVICE_HANDLER( pia6821_ca2_w );
 int pia6821_get_output_ca2(running_device *device);
 int pia6821_get_output_ca2_z(running_device *device);
 
@@ -87,11 +82,11 @@ READ8_DEVICE_HANDLER( pia6821_portb_r );
 WRITE8_DEVICE_HANDLER( pia6821_portb_w );
 UINT8 pia6821_get_output_b(running_device *device);
 
-READ8_DEVICE_HANDLER( pia6821_cb1_r );
-WRITE8_DEVICE_HANDLER( pia6821_cb1_w );
+READ_LINE_DEVICE_HANDLER( pia6821_cb1_r );
+WRITE_LINE_DEVICE_HANDLER( pia6821_cb1_w );
 
-READ8_DEVICE_HANDLER( pia6821_cb2_r );
-WRITE8_DEVICE_HANDLER( pia6821_cb2_w );
+READ_LINE_DEVICE_HANDLER( pia6821_cb2_r );
+WRITE_LINE_DEVICE_HANDLER( pia6821_cb2_w );
 int pia6821_get_output_cb2(running_device *device);
 int pia6821_get_output_cb2_z(running_device *device);
 

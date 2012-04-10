@@ -133,7 +133,7 @@ static WRITE16_DEVICE_HANDLER( tmaster_oki_bank_w )
 	{
 		// data & 0x0800?
 		okibank = ((data >> 8) & 3);
-		okim6295_set_bank_base(device, okibank * 0x40000);
+		downcast<okim6295_device *>(device)->set_bank_base(okibank * 0x40000);
 	}
 
 	if (ACCESSING_BITS_0_7)
@@ -184,9 +184,9 @@ static UINT8 binary_to_BCD(UINT8 data)
 
 static READ16_HANDLER(rtc_r)
 {
-	mame_system_time systime;
+	system_time systime;
 
-	mame_get_current_datetime(space->machine, &systime);
+	space->machine->current_datetime(systime);
 	rtc_ram[0x1] = binary_to_BCD(systime.local_time.second);
 	rtc_ram[0x2] = binary_to_BCD(systime.local_time.minute);
 	rtc_ram[0x3] = binary_to_BCD(systime.local_time.hour);
@@ -279,7 +279,7 @@ static VIDEO_START( tmaster )
 	{
 		for (buffer = 0; buffer < 2; buffer++)
 		{
-			tmaster_bitmap[layer][buffer] = video_screen_auto_bitmap_alloc(machine->primary_screen);
+			tmaster_bitmap[layer][buffer] = machine->primary_screen->alloc_compatible_bitmap();
 			bitmap_fill(tmaster_bitmap[layer][buffer], NULL, 0xff);
 		}
 	}
@@ -545,7 +545,7 @@ static const char *const galgames_eeprom_names[5] = { GALGAMES_EEPROM_BIOS, GALG
 
 static READ16_HANDLER( galgames_eeprom_r )
 {
-	running_device *eeprom = devtag_get_device(space->machine, galgames_eeprom_names[galgames_cart]);
+	running_device *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
 
 	return eeprom_read_bit(eeprom) ? 0x80 : 0x00;
 }
@@ -557,7 +557,7 @@ static WRITE16_HANDLER( galgames_eeprom_w )
 
 	if ( ACCESSING_BITS_0_7 )
 	{
-		running_device *eeprom = devtag_get_device(space->machine, galgames_eeprom_names[galgames_cart]);
+		running_device *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
 
 		// latch the bit
 		eeprom_write_bit(eeprom, data & 0x0001);
@@ -633,7 +633,7 @@ static WRITE16_HANDLER( galgames_cart_sel_w )
 		{
 			case 0x07:		// 7 resets the eeprom
 				for (i = 0; i < 5; i++)
-					eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[i]), ASSERT_LINE);
+					eeprom_set_cs_line(space->machine->device(galgames_eeprom_names[i]), ASSERT_LINE);
 				break;
 
 			case 0x00:
@@ -641,12 +641,12 @@ static WRITE16_HANDLER( galgames_cart_sel_w )
 			case 0x02:
 			case 0x03:
 			case 0x04:
-				eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[data & 0xff]), CLEAR_LINE);
+				eeprom_set_cs_line(space->machine->device(galgames_eeprom_names[data & 0xff]), CLEAR_LINE);
 				galgames_update_rombank(space->machine, data & 0xff);
 				break;
 
 			default:
-				eeprom_set_cs_line(devtag_get_device(space->machine, galgames_eeprom_names[0]), CLEAR_LINE);
+				eeprom_set_cs_line(space->machine->device(galgames_eeprom_names[0]), CLEAR_LINE);
 				galgames_update_rombank(space->machine, 0);
 				logerror("%06x: unknown cart sel = %04x\n", cpu_get_pc(space->cpu), data);
 				break;
@@ -848,7 +848,7 @@ static MACHINE_RESET( tmaster )
 	tmaster_gfx_offs = 0;
 	tmaster_gfx_size = memory_region_length(machine, "blitter");
 
-	tmaster_devices.duart68681 = devtag_get_device( machine, "duart68681" );
+	tmaster_devices.duart68681 = machine->device( "duart68681" );
 }
 
 static INTERRUPT_GEN( tm3k_interrupt )
@@ -896,8 +896,7 @@ static MACHINE_DRIVER_START( tm3k )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki",OKIM6295, XTAL_32MHz / 16) /* 2MHz */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz / 16, OKIM6295_PIN7_HIGH)  /* 2MHz; clock frequency & pin 7 not verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -905,8 +904,7 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( tm )
 	MDRV_IMPORT_FROM(tm3k)
 
-	MDRV_SOUND_REPLACE("oki",OKIM6295, 1122000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_REPLACE("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -969,8 +967,7 @@ static MACHINE_DRIVER_START( galgames )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_24MHz / 8)	// ??
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", XTAL_24MHz / 8, OKIM6295_PIN7_LOW) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

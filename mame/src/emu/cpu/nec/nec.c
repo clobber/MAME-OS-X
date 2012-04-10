@@ -160,8 +160,8 @@ struct _nec_state_t
 	UINT32	poll_state;
 	UINT8	no_interrupt;
 
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	int		icount;
@@ -184,14 +184,12 @@ struct _nec_state_t
 INLINE nec_state_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_V20 ||
-		   cpu_get_type(device) == CPU_V25 ||
-		   cpu_get_type(device) == CPU_V30 ||
-		   cpu_get_type(device) == CPU_V33 ||
-		   cpu_get_type(device) == CPU_V35);
-	return (nec_state_t *)device->token;
+	assert(device->type() == V20 ||
+		   device->type() == V25 ||
+		   device->type() == V30 ||
+		   device->type() == V33 ||
+		   device->type() == V35);
+	return (nec_state_t *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /* The interrupt number of a pending external interrupt pending NMI is 2.   */
@@ -925,9 +923,6 @@ OP( 0xd6, i_setalc ) { nec_state->regs.b[AL] = (CF)?0xff:0x00; nec_state->icount
 OP( 0xd7, i_trans  ) { UINT32 dest = (nec_state->regs.w[BW]+nec_state->regs.b[AL])&0xffff; nec_state->regs.b[AL] = GetMemB(DS0, dest); CLKS(9,9,5); }
 OP( 0xd8, i_fpo    ) { GetModRM; nec_state->icount-=2;	logerror("%06x: Unimplemented floating point control %04x\n",PC(nec_state),ModRM); }
 
-OP( 0xda, i_mov_pre_r8b   ) { UINT8  src; GetModRM; src = GetPreRMByte(ModRM);	RegByte(ModRM)=src;	CLKM(2,2,2,11,11,5);		} // cycles wrong
-OP( 0xdb, i_mov_pre_r16w  ) { UINT16 src; GetModRM; src = GetPreRMWord(ModRM);	RegWord(ModRM)=src; 	CLKR(15,15,7,15,11,5,2,EA); 	} // cycles wrong
-
 OP( 0xe0, i_loopne ) { INT8 disp = (INT8)FETCH(); nec_state->regs.w[CW]--; if (!ZF && nec_state->regs.w[CW]) { nec_state->ip = (WORD)(nec_state->ip+disp); /*CHANGE_PC;*/ CLKS(14,14,6); } else CLKS(5,5,3); }
 OP( 0xe1, i_loope  ) { INT8 disp = (INT8)FETCH(); nec_state->regs.w[CW]--; if ( ZF && nec_state->regs.w[CW]) { nec_state->ip = (WORD)(nec_state->ip+disp); /*CHANGE_PC;*/ CLKS(14,14,6); } else CLKS(5,5,3); }
 OP( 0xe2, i_loop   ) { INT8 disp = (INT8)FETCH(); nec_state->regs.w[CW]--; if (nec_state->regs.w[CW]) { nec_state->ip = (WORD)(nec_state->ip+disp); /*CHANGE_PC;*/ CLKS(13,13,6); } else CLKS(5,5,3); }
@@ -1104,9 +1099,9 @@ static CPU_DISASSEMBLE( nec )
 	return necv_dasm_one(buffer, pc, oprom, nec_state->config);
 }
 
-static void nec_init(running_device *device, cpu_irq_callback irqcallback, int type)
+static void nec_init(legacy_cpu_device *device, device_irq_callback irqcallback, int type)
 {
-	const nec_config *config = device->baseconfig().static_config ? (const nec_config *)device->baseconfig().static_config : &default_config;
+	const nec_config *config = device->baseconfig().static_config() ? (const nec_config *)device->baseconfig().static_config() : &default_config;
 	nec_state_t *nec_state = get_safe_token(device);
 
 	nec_state->config = config;
@@ -1195,8 +1190,6 @@ static CPU_EXECUTE( necv )
 	nec_state_t *nec_state = get_safe_token(device);
 	int prev_ICount;
 
-	nec_state->icount=cycles;
-
 	while(nec_state->icount>0) {
 		/* Dispatch IRQ */
 		if (nec_state->pending_irq && nec_state->no_interrupt==0)
@@ -1216,7 +1209,6 @@ static CPU_EXECUTE( necv )
 		nec_instruction[fetchop(nec_state)](nec_state);
 		do_prefetch(nec_state, prev_ICount);
     }
-	return cycles - nec_state->icount;
 }
 
 /* Wrappers for the different CPU types */
@@ -1226,7 +1218,7 @@ static CPU_INIT( v20 )
 
 	nec_init(device, irqcallback, 0);
 	configure_memory_8bit(nec_state);
-	nec_state->chip_type=V20;
+	nec_state->chip_type=V20_TYPE;
 	nec_state->prefetch_size = 4;		/* 3 words */
 	nec_state->prefetch_cycles = 4;		/* four cycles per byte */
 }
@@ -1237,7 +1229,7 @@ static CPU_INIT( v30 )
 
 	nec_init(device, irqcallback, 1);
 	configure_memory_16bit(nec_state);
-	nec_state->chip_type=V30;
+	nec_state->chip_type=V30_TYPE;
 	nec_state->prefetch_size = 6;		/* 3 words */
 	nec_state->prefetch_cycles = 2;		/* two cycles per byte / four per word */
 
@@ -1248,7 +1240,7 @@ static CPU_INIT( v33 )
 	nec_state_t *nec_state = get_safe_token(device);
 
 	nec_init(device, irqcallback, 2);
-	nec_state->chip_type=V33;
+	nec_state->chip_type=V33_TYPE;
 	nec_state->prefetch_size = 6;
 	/* FIXME: Need information about prefetch size and cycles for V33.
      * complete guess below, nbbatman will not work
@@ -1324,7 +1316,7 @@ static CPU_SET_INFO( nec )
 
 static CPU_GET_INFO( nec )
 {
-	nec_state_t *nec_state = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	nec_state_t *nec_state = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	int flags;
 
 	switch (state)
@@ -1536,3 +1528,9 @@ CPU_GET_INFO( v35 )
 		default:										CPU_GET_INFO_CALL(nec);				break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(V20, v20);
+DEFINE_LEGACY_CPU_DEVICE(V25, v25);
+DEFINE_LEGACY_CPU_DEVICE(V30, v30);
+DEFINE_LEGACY_CPU_DEVICE(V33, v33);
+DEFINE_LEGACY_CPU_DEVICE(V35, v35);

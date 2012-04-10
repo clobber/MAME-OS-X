@@ -59,9 +59,9 @@ struct _hc11_state
 	UINT8 adctl;
 	int ad_channel;
 
-	cpu_irq_callback irq_callback;
+	device_irq_callback irq_callback;
 	UINT8 irq_state[2];
-	running_device *device;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	int icount;
@@ -81,10 +81,8 @@ struct _hc11_state
 INLINE hc11_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_MC68HC11);
-	return (hc11_state *)device->token;
+	assert(device->type() == MC68HC11);
+	return (hc11_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define HC11OP(XX)		hc11_##XX
@@ -370,7 +368,7 @@ static CPU_INIT( hc11 )
 	hc11_state *cpustate = get_safe_token(device);
 	int i;
 
-	const hc11_config *conf = (const hc11_config *)device->baseconfig().static_config;
+	const hc11_config *conf = (const hc11_config *)device->baseconfig().static_config();
 
 	/* clear the opcode tables */
 	for(i=0; i < 256; i++) {
@@ -497,8 +495,6 @@ static CPU_EXECUTE( hc11 )
 {
 	hc11_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
-
 	while(cpustate->icount > 0)
 	{
 		UINT8 op;
@@ -511,8 +507,6 @@ static CPU_EXECUTE( hc11 )
 		op = FETCH(cpustate);
 		hc11_optable[op](cpustate);
 	}
-
-	return cycles-cpustate->icount;
 }
 
 /*****************************************************************************/
@@ -538,7 +532,7 @@ static CPU_SET_INFO( mc68hc11 )
 
 CPU_GET_INFO( mc68hc11 )
 {
-	hc11_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	hc11_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch(state)
 	{
@@ -613,3 +607,5 @@ CPU_GET_INFO( mc68hc11 )
 		case CPUINFO_STR_REGISTER + HC11_IY:			sprintf(info->s, "IY: %04X", cpustate->iy);	break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(MC68HC11, mc68hc11);

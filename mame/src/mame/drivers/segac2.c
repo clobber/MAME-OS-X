@@ -341,7 +341,7 @@ static READ16_HANDLER( io_chip_r )
 
 			/* otherwise, return an input port */
 			if (offset == 0x04/2 && sound_banks)
-				return (input_port_read(space->machine, portnames[offset]) & 0xbf) | (upd7759_busy_r(devtag_get_device(space->machine, "upd")) << 6);
+				return (input_port_read(space->machine, portnames[offset]) & 0xbf) | (upd7759_busy_r(space->machine->device("upd")) << 6);
 			return input_port_read(space->machine, portnames[offset]);
 
 		/* 'SEGA' protection */
@@ -422,13 +422,13 @@ static WRITE16_HANDLER( io_chip_w )
 			newbank = data & 3;
 			if (newbank != palbank)
 			{
-				//video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen) + 1);
+				//space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos() + 1);
 				palbank = newbank;
 				recompute_palette_tables();
 			}
 			if (sound_banks > 1)
 			{
-				running_device *upd = devtag_get_device(space->machine, "upd");
+				running_device *upd = space->machine->device("upd");
 				newbank = (data >> 2) & (sound_banks - 1);
 				upd7759_set_bank_base(upd, newbank * 0x20000);
 			}
@@ -438,7 +438,7 @@ static WRITE16_HANDLER( io_chip_w )
 		case 0x1c/2:
 			if (sound_banks > 1)
 			{
-				running_device *upd = devtag_get_device(space->machine, "upd");
+				running_device *upd = space->machine->device("upd");
 				upd7759_reset_w(upd, (data >> 1) & 1);
 			}
 			break;
@@ -525,11 +525,11 @@ static WRITE16_HANDLER( prot_w )
 	/* if the palette changed, force an update */
 	if (new_sp_palbase != sp_palbase || new_bg_palbase != bg_palbase)
 	{
-		//video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen) + 1);
+		//space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos() + 1);
 		sp_palbase = new_sp_palbase;
 		bg_palbase = new_bg_palbase;
 		recompute_palette_tables();
-		if (LOG_PALETTE) logerror("Set palbank: %d/%d (scan=%d)\n", bg_palbase, sp_palbase, video_screen_get_vpos(space->machine->primary_screen));
+		if (LOG_PALETTE) logerror("Set palbank: %d/%d (scan=%d)\n", bg_palbase, sp_palbase, space->machine->primary_screen->vpos());
 	}
 }
 
@@ -1821,7 +1821,7 @@ it should be, otherwise I don't see how the formula could be computed.
 
 static void segac2_common_init(running_machine* machine, int (*func)(int in))
 {
-	running_device *upd = devtag_get_device(machine, "upd");
+	running_device *upd = machine->device("upd");
 
 	DRIVER_INIT_CALL( megadriv_c2 );
 

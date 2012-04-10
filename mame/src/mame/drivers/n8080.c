@@ -393,7 +393,7 @@ INPUT_PORTS_END
 
 static TIMER_DEVICE_CALLBACK( rst1_tick )
 {
-	n8080_state *n8080 = (n8080_state *)timer->machine->driver_data;
+	n8080_state *n8080 = (n8080_state *)timer.machine->driver_data;
 	int state = n8080->inte ? ASSERT_LINE : CLEAR_LINE;
 
 	/* V7 = 1, V6 = 0 */
@@ -402,7 +402,7 @@ static TIMER_DEVICE_CALLBACK( rst1_tick )
 
 static TIMER_DEVICE_CALLBACK( rst2_tick )
 {
-	n8080_state *n8080 = (n8080_state *)timer->machine->driver_data;
+	n8080_state *n8080 = (n8080_state *)timer.machine->driver_data;
 	int state = n8080->inte ? ASSERT_LINE : CLEAR_LINE;
 
 	/* vblank */
@@ -436,7 +436,7 @@ static MACHINE_START( n8080 )
 {
 	n8080_state *state = (n8080_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 
 	state_save_register_global(machine, state->shift_data);
 	state_save_register_global(machine, state->shift_bits);
@@ -512,7 +512,7 @@ static MACHINE_DRIVER_START( spacefev )
 	MDRV_DRIVER_DATA(n8080_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, MASTER_CLOCK / 10)
+	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK / 10)
 	MDRV_CPU_CONFIG(n8080_cpu_config)
 	MDRV_CPU_PROGRAM_MAP(main_cpu_map)
 	MDRV_CPU_IO_MAP(main_io_map)
@@ -546,7 +546,7 @@ static MACHINE_DRIVER_START( sheriff )
 	MDRV_DRIVER_DATA(n8080_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, MASTER_CLOCK / 10)
+	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK / 10)
 	MDRV_CPU_CONFIG(n8080_cpu_config)
 	MDRV_CPU_PROGRAM_MAP(main_cpu_map)
 	MDRV_CPU_IO_MAP(main_io_map)
@@ -580,7 +580,7 @@ static MACHINE_DRIVER_START( helifire )
 	MDRV_DRIVER_DATA(n8080_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, MASTER_CLOCK / 10)
+	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK / 10)
 	MDRV_CPU_CONFIG(n8080_cpu_config)
 	MDRV_CPU_PROGRAM_MAP(helifire_main_cpu_map)
 	MDRV_CPU_IO_MAP(main_io_map)
@@ -928,6 +928,6 @@ GAME( 1979, highsplta,  highsplt, spacefev, highsplt, 0, ROT270, "Nintendo", "Sp
 GAME( 1979, highspltb,  highsplt, spacefev, highsplt, 0, ROT270, "Nintendo", "Space Fever High Splitter (alt Sound)", GAME_SUPPORTS_SAVE )
 GAME( 1979, spacelnc,   0,        spacefev, spacelnc, 0, ROT270, "Nintendo", "Space Launcher", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1979, sheriff,    0,        sheriff,  sheriff,  0, ROT270, "Nintendo", "Sheriff", GAME_SUPPORTS_SAVE )
-GAME( 1980, bandido,    sheriff,  sheriff,  bandido,  0, ROT270, "Exidy",    "Bandido", GAME_SUPPORTS_SAVE )
+GAME( 1980, bandido,    sheriff,  sheriff,  bandido,  0, ROT270, "Nintendo (Exidy license)", "Bandido", GAME_SUPPORTS_SAVE )
 GAME( 1980, helifire,   0,        helifire, helifire, 0, ROT270, "Nintendo", "HeliFire (set 1)", GAME_NOT_WORKING | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1980, helifirea,  helifire, helifire, helifire, 0, ROT270, "Nintendo", "HeliFire (set 2)", GAME_NOT_WORKING | GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )

@@ -147,7 +147,7 @@ static UINT8 read_port_and_t0( running_machine *machine, int port )
 static UINT8 read_port_and_t0_and_hblank( running_machine *machine, int port )
 {
 	UINT8 val = read_port_and_t0(machine, port);
-	if (video_screen_get_hpos(machine->primary_screen) < (video_screen_get_width(machine->primary_screen) * 9 / 10))
+	if (machine->primary_screen->hpos() < (machine->primary_screen->width() * 9 / 10))
 		val ^= 0x04;
 	return val;
 }
@@ -322,7 +322,7 @@ static MACHINE_DRIVER_START( hitme )
 	MDRV_DRIVER_DATA(hitme_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, MASTER_CLOCK/16)
+	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK/16)
 	MDRV_CPU_PROGRAM_MAP(hitme_map)
 	MDRV_CPU_IO_MAP(hitme_portmap)
 

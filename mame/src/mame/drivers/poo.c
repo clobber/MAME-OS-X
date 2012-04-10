@@ -48,12 +48,12 @@ Other bits from DSW2 (but bit 5) don't seem to be read / tested at all ...
 static UINT8 *poo_vram, *poo_scrolly, *poo_sprites;
 static UINT8 vram_colbank;
 
-VIDEO_START(unclepoo)
+static VIDEO_START(unclepoo)
 {
 
 }
 
-VIDEO_UPDATE(unclepoo)
+static VIDEO_UPDATE(unclepoo)
 {
 	int y,x;
 	int count;
@@ -296,7 +296,7 @@ static PALETTE_INIT( unclepoo )
 
  static READ8_HANDLER( timer_r )
 {
-	return cpu_get_total_cycles(space->cpu) / 16;
+	return downcast<cpu_device *>(space->cpu)->total_cycles() / 16;
 }
 
 

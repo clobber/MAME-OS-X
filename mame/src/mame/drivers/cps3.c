@@ -75,7 +75,7 @@ Warzard / Red Earth                                  1996   96/11/21       CAP-W
 ** NOT DUMPED but known to exist
 
 The Game Region / No CD Flags / Development flags etc. are controlled by a byte in the bios roms.  The CDs
-contain revisions of the game code and are independant of the region.
+contain revisions of the game code and are independent of the region.
 
 The CP SYSTEM III comprises a main board with several custom ASICs, custom 72-pin SIMMs for program
 and graphics storage (the same SIMMs are also used in some CPS2 titles), SCSI CDROM and CDROM disc,
@@ -694,7 +694,7 @@ static DRIVER_INIT( cps3 )
 	if (!cps3_user5region) cps3_user5region = auto_alloc_array(machine, UINT8, USER5REGION_LENGTH);
 
 	// set strict verify
-	sh2drc_set_options(devtag_get_device(machine, "maincpu"), SH2DRC_STRICT_VERIFY);
+	sh2drc_set_options(machine->device("maincpu"), SH2DRC_STRICT_VERIFY);
 
 	cps3_decrypt_bios(machine);
 	decrypted_gamerom = auto_alloc_array(machine, UINT32, 0x1000000/4);
@@ -805,12 +805,12 @@ static VIDEO_START(cps3)
 	state_save_register_global_pointer(machine, cps3_char_ram, 0x800000 /4);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[0] = gfx_element_alloc(machine, &cps3_tiles8x8_layout, (UINT8 *)cps3_ss_ram, machine->config->total_colors / 16, 0);
+	machine->gfx[0] = gfx_element_alloc(machine, &cps3_tiles8x8_layout, (UINT8 *)cps3_ss_ram, machine->total_colors() / 16, 0);
 
 	//decode_ssram();
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[1] = gfx_element_alloc(machine, &cps3_tiles16x16_layout, (UINT8 *)cps3_char_ram, machine->config->total_colors / 64, 0);
+	machine->gfx[1] = gfx_element_alloc(machine, &cps3_tiles16x16_layout, (UINT8 *)cps3_char_ram, machine->total_colors() / 64, 0);
 	machine->gfx[1]->color_granularity = 64;
 
 	//decode_charram();
@@ -822,7 +822,7 @@ static VIDEO_START(cps3)
 
 	// the renderbuffer can be twice the size of the screen, this allows us to handle framebuffer zoom values
 	// between 0x00 and 0x80 (0x40 is normal, 0x80 would be 'view twice as much', 0x20 is 'view half as much')
-	renderbuffer_bitmap = auto_bitmap_alloc(machine,512*2,224*2,video_screen_get_format(machine->primary_screen));
+	renderbuffer_bitmap = auto_bitmap_alloc(machine,512*2,224*2,machine->primary_screen->format());
 
 	renderbuffer_clip.min_x = 0;
 	renderbuffer_clip.max_x = cps3_screenwidth-1;
@@ -920,8 +920,8 @@ static void cps3_draw_tilemapsprite_line(running_machine *machine, int tmnum, in
 static VIDEO_UPDATE(cps3)
 {
 	int y,x, count;
-	attoseconds_t period = video_screen_get_frame_period(screen).attoseconds;
-	rectangle visarea = *video_screen_get_visible_area(screen);
+	attoseconds_t period = screen->frame_period().attoseconds;
+	rectangle visarea = screen->visible_area();
 
 	int bg_drawn[4] = { 0, 0, 0, 0 };
 
@@ -941,7 +941,7 @@ static VIDEO_UPDATE(cps3)
 			cps3_screenwidth = 496;
 			visarea.min_x = 0; visarea.max_x = 496-1;
 			visarea.min_y = 0; visarea.max_y = 224-1;
-			video_screen_configure(screen, 496, 224, &visarea, period);
+			screen->configure(496, 224, visarea, period);
 		}
 	}
 	else
@@ -951,7 +951,7 @@ static VIDEO_UPDATE(cps3)
 			cps3_screenwidth = 384;
 			visarea.min_x = 0; visarea.max_x = 384-1;
 			visarea.min_y = 0; visarea.max_y = 224-1;
-			video_screen_configure(screen, 384, 224, &visarea, period);
+			screen->configure(384, 224, visarea, period);
 		}
 	}
 
@@ -1126,7 +1126,7 @@ static VIDEO_UPDATE(cps3)
 
 								if (current_ypos&0x200) current_ypos-=0x400;
 
-								//if ( (whichbpp) && (video_screen_get_frame_number(machine->primary_screen) & 1)) continue;
+								//if ( (whichbpp) && (machine->primary_screen->frame_number() & 1)) continue;
 
 								/* use the palette value from the main list or the sublists? */
 								if (whichpal)
@@ -2269,7 +2269,7 @@ static const struct WD33C93interface scsi_intf =
 	NULL			/* command completion IRQ */
 };
 
-static void cps3_exit(running_machine *machine)
+static void cps3_exit(running_machine &machine)
 {
 	wd33c93_exit(&scsi_intf);
 }
@@ -2277,7 +2277,7 @@ static void cps3_exit(running_machine *machine)
 static MACHINE_START( cps3 )
 {
 	wd33c93_init(machine, &scsi_intf);
-	add_exit_callback(machine, cps3_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, cps3_exit);
 }
 
 static MACHINE_RESET( cps3 )

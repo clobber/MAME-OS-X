@@ -58,7 +58,7 @@ static WRITE8_HANDLER( palette_w )
 {
 	int co;
 
-	video_screen_update_now(space->machine->primary_screen);
+	space->machine->primary_screen->update_now();
 	data &= 0x0f;
 
 	co = ((ram_attr[offset] & 0x7F) << 3) | (offset & 0x07);
@@ -140,7 +140,7 @@ static MC6845_UPDATE_ROW( update_row )
 static WRITE_LINE_DEVICE_HANDLER(hsync_changed)
 {
 	/* update any video up to the current scanline */
-	video_screen_update_now(device->machine->primary_screen);
+	device->machine->primary_screen->update_now();
 }
 
 static WRITE_LINE_DEVICE_HANDLER(vsync_changed)
@@ -525,7 +525,7 @@ GFXDECODE_END
 
 static VIDEO_UPDATE( slotcarn )
 {
-	running_device *mc6845 = devtag_get_device(screen->machine, "crtc");
+	running_device *mc6845 = screen->machine->device("crtc");
 	mc6845_update(mc6845, bitmap, cliprect);
 
 	return 0;
@@ -747,6 +747,6 @@ ROM_END
 *                Game Drivers                *
 **********************************************
 
-      YEAR  NAME      PARENT   MACHINE   INPUT     INIT   ROT    COMPANY        FULLNAME               FLAGS  */
-GAME( 1985, slotcarn, 0,       slotcarn, slotcarn, 0,     ROT0, "Wing Co.Ltd", "Slot Carnival",        GAME_NOT_WORKING )
-GAME( 1985, spielbud, 0,       slotcarn, spielbud, 0,     ROT0, "ADP",         "Spiel Bude (German)",  GAME_NOT_WORKING )
+      YEAR  NAME      PARENT   MACHINE   INPUT     INIT   ROT    COMPANY           FULLNAME               FLAGS  */
+GAME( 1985, slotcarn, 0,       slotcarn, slotcarn, 0,     ROT0, "Wing Co., Ltd.", "Slot Carnival",        GAME_NOT_WORKING )
+GAME( 1985, spielbud, 0,       slotcarn, spielbud, 0,     ROT0, "ADP",            "Spiel Bude (German)",  GAME_NOT_WORKING )

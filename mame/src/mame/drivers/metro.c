@@ -1274,7 +1274,7 @@ static void gakusai_oki_bank_set(running_device *device)
 {
 	metro_state *state = (metro_state *)device->machine->driver_data;
 	int bank = (state->gakusai_oki_bank_lo & 7) + (state->gakusai_oki_bank_hi & 1) * 8;
-	okim6295_set_bank_base(device, bank * 0x40000);
+	downcast<okim6295_device *>(device)->set_bank_base(bank * 0x40000);
 }
 
 static WRITE16_DEVICE_HANDLER( gakusai_oki_bank_hi_w )
@@ -1772,7 +1772,7 @@ static WRITE16_DEVICE_HANDLER( mouja_sound_rombank_w )
 	metro_state *state = (metro_state *)device->machine->driver_data;
 
 	if (ACCESSING_BITS_0_7)
-		okim6295_set_bank_base(state->oki, ((data >> 3) & 0x07) * 0x40000);
+		state->oki->set_bank_base(((data >> 3) & 0x07) * 0x40000);
 }
 
 static ADDRESS_MAP_START( mouja_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -3579,12 +3579,6 @@ static MACHINE_START( metro )
 {
 	metro_state *state = (metro_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->oki = devtag_get_device(machine, "oki");
-	state->ymsnd = devtag_get_device(machine, "ymsnd");
-	state->k053936 = devtag_get_device(machine, "k053936");
-
 	state_save_register_global(machine, state->blitter_bit);
 	state_save_register_global(machine, state->irq_line);
 	state_save_register_global_array(machine, state->requested_int);
@@ -3605,7 +3599,7 @@ static MACHINE_RESET( metro )
 	metro_state *state = (metro_state *)machine->driver_data;
 
 	if (state->irq_line == -1)
-		cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), metro_irq_callback);
+		cpu_set_irq_callback(machine->device("maincpu"), metro_irq_callback);
 }
 
 
@@ -3839,8 +3833,7 @@ static MACHINE_DRIVER_START( daitorid )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 MACHINE_DRIVER_END
@@ -3881,8 +3874,7 @@ static MACHINE_DRIVER_START( dharma )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -3927,8 +3919,7 @@ static MACHINE_DRIVER_START( karatour )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -3973,8 +3964,7 @@ static MACHINE_DRIVER_START( 3kokushi )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4019,8 +4009,7 @@ static MACHINE_DRIVER_START( lastfort )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4064,8 +4053,7 @@ static MACHINE_DRIVER_START( lastforg )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4104,8 +4092,7 @@ static MACHINE_DRIVER_START( dokyusei )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
@@ -4145,8 +4132,7 @@ static MACHINE_DRIVER_START( dokyusp )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 2112000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 2112000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
@@ -4187,8 +4173,7 @@ static MACHINE_DRIVER_START( gakusai )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 2112000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 2112000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
@@ -4229,8 +4214,7 @@ static MACHINE_DRIVER_START( gakusai2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 2112000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 2112000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
@@ -4275,8 +4259,7 @@ static MACHINE_DRIVER_START( pangpoms )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4321,8 +4304,7 @@ static MACHINE_DRIVER_START( poitto )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4373,8 +4355,7 @@ static MACHINE_DRIVER_START( pururun )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
 MACHINE_DRIVER_END
@@ -4415,8 +4396,7 @@ static MACHINE_DRIVER_START( skyalert )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4461,8 +4441,7 @@ static MACHINE_DRIVER_START( toride2g )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1200000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // was /128.. so pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1200000, OKIM6295_PIN7_HIGH) // was /128.. so pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.10)
 
@@ -4501,8 +4480,7 @@ static MACHINE_DRIVER_START( mouja )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
-	MDRV_SOUND_ADD("oki", OKIM6295, 16000000/1024*132)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 16000000/1024*132, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
 
@@ -4677,8 +4655,7 @@ static MACHINE_DRIVER_START( puzzlet )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_20MHz/5)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", XTAL_20MHz/5, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 
@@ -5807,7 +5784,7 @@ VG2200-(B)
 |TD62307     HM6216255|14300    |            |
 |TD62064              |         | CY7C199    |
 |                     |         |            |
-|  DIP18              |---------| CY7C199    |
+|  Z86E02             |---------| CY7C199    |
 |        JAMMA              26.666MHz        |
 |--------------------------------------------|
 Notes:
@@ -5816,7 +5793,7 @@ Notes:
       14300     - Imagetek 14300 Graphics Generator IC
       VSync     - 58Hz
       HSync     - 15.26kHz
-      DIP18     - unknown chip with scratched surface. Probably a PIC.
+      Z86E02    - DIP18 surface scratched, decapping reveals Zilog Z8 MCU
       HM6216255 - Hitachi 4M high speed SRAM (256-kword x16-bit)
       CY7C199   - 32k x8 SRAM
       YM2413B   - Clock 4MHz [20/5]
@@ -5832,6 +5809,9 @@ Notes:
 ROM_START( puzzlet )
 	ROM_REGION( 0x200000, "maincpu", 0 )	/* H8/3007 Code */
 	ROM_LOAD16_WORD_SWAP( "prg1_ver2.u9", 0x000000, 0x200000, CRC(592760da) SHA1(08f7493d2e50831438f53bbf0ae211ec40057da7) )
+
+	ROM_REGION( 0x200, "z86e02", 0 )	/* Zilog Z8 family 8-bit MCU */
+	ROM_LOAD( "z86e02.mcu", 0x000000, 0x200, CRC(399fa417) SHA1(f6c57020ea394c858742759050bf4f4b2f1e1fc5) )
 
 	ROM_REGION( 0x400000, "gfx1", 0 )	/* Gfx + Data (Addressable by CPU & Blitter) */
 	ROMX_LOAD( "cg2.u2", 0x000000, 0x200000, CRC(7720f2d8) SHA1(8e0ccd1e8efe00df909327aefdb1e23e50487524), ROM_GROUPWORD | ROM_SKIP(2))
@@ -6272,7 +6252,7 @@ GAME( 1996, balcube,   0,        balcube,  balcube,  balcube,  ROT0,   "Metro", 
 GAME( 1996, bangball,  0,        bangball, bangball, balcube,  ROT0,   "Banpresto / Kunihiko Tashiro+Goodhouse", "Bang Bang Ball (v1.05)",            GAME_SUPPORTS_SAVE )
 GAME( 1996, gstrik2,   0,        gstrik2,  gstrik2,  blzntrnd, ROT0,   "Human Amusement",                        "Grand Striker 2 (Europe and Oceania)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1996, gstrik2j,  gstrik2,  gstrik2,  gstrik2,  blzntrnd, ROT0,   "Human Amusement",                        "Grand Striker 2 (Japan)",           GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // priority between rounds
-GAME( 1999, batlbubl,  bangball, batlbubl, batlbubl, balcube,  ROT0,   "Limenko",                                "Battle Bubble (v2.00)",             GAME_SUPPORTS_SAVE )
+GAME( 1999, batlbubl,  bangball, batlbubl, batlbubl, balcube,  ROT0,   "Banpresto (Limenko license?)",           "Battle Bubble (v2.00)",             GAME_SUPPORTS_SAVE ) // or bootleg?
 GAME( 1996, mouja,     0,        mouja,    mouja,    mouja,    ROT0,   "Etona",                                  "Mouja (Japan)",                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1997, gakusai,   0,        gakusai,  gakusai,  gakusai,  ROT0,   "MakeSoft",                               "Mahjong Gakuensai (Japan)",         GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1998, gakusai2,  0,        gakusai2, gakusai,  gakusai,  ROT0,   "MakeSoft",                               "Mahjong Gakuensai 2 (Japan)",       GAME_SUPPORTS_SAVE )

@@ -131,7 +131,7 @@ Notes (couriersud)
 static WRITE8_DEVICE_HANDLER( ic8j1_output_changed )
 {
 	m10_state *state = (m10_state *)device->machine->driver_data;
-	LOG(("ic8j1: %d %d\n", data, video_screen_get_vpos(device->machine->primary_screen)));
+	LOG(("ic8j1: %d %d\n", data, device->machine->primary_screen->vpos()));
 	cpu_set_input_line(state->maincpu, 0, !data ? CLEAR_LINE : ASSERT_LINE);
 }
 
@@ -196,10 +196,10 @@ static MACHINE_START( m10 )
 {
 	m10_state *state = (m10_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->ic8j1 = devtag_get_device(machine, "ic8j1");
-	state->ic8j2 = devtag_get_device(machine, "ic8j2");
-	state->samples = devtag_get_device(machine, "samples");
+	state->maincpu = machine->device("maincpu");
+	state->ic8j1 = machine->device("ic8j1");
+	state->ic8j2 = machine->device("ic8j2");
+	state->samples = machine->device("samples");
 
 	state_save_register_global(machine, state->bottomline);
 	state_save_register_global(machine, state->flip);
@@ -482,7 +482,7 @@ static WRITE8_HANDLER( m15_a100_w )
 static READ8_HANDLER( m10_a700_r )
 {
 	m10_state *state = (m10_state *)space->machine->driver_data;
-	//LOG(("rd:%d\n",video_screen_get_vpos(space->machine->primary_screen)));
+	//LOG(("rd:%d\n",space->machine->primary_screen->vpos()));
 	LOG(("clear\n"));
 	ttl74123_clear_w(state->ic8j1, 0, 0);
 	ttl74123_clear_w(state->ic8j1, 0, 1);
@@ -492,7 +492,7 @@ static READ8_HANDLER( m10_a700_r )
 static READ8_HANDLER( m11_a700_r )
 {
 	m10_state *state = (m10_state *)space->machine->driver_data;
-	//LOG(("rd:%d\n",video_screen_get_vpos(space->machine->primary_screen)));
+	//LOG(("rd:%d\n",space->machine->primary_screen->vpos()));
 	//cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
 	LOG(("clear\n"));
 	ttl74123_clear_w(state->ic8j1, 0, 0);
@@ -520,12 +520,12 @@ static TIMER_CALLBACK( interrupt_callback )
 	if (param == 0)
 	{
 		cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
-		timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, IREMM10_VBSTART + 16, 0), NULL, 1, interrupt_callback);
+		timer_set(machine, machine->primary_screen->time_until_pos(IREMM10_VBSTART + 16), NULL, 1, interrupt_callback);
 	}
 	if (param == 1)
 	{
 		cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
-		timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, IREMM10_VBSTART + 24, 0), NULL, 2, interrupt_callback);
+		timer_set(machine, machine->primary_screen->time_until_pos(IREMM10_VBSTART + 24), NULL, 2, interrupt_callback);
 	}
 	if (param == -1)
 		cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
@@ -536,7 +536,7 @@ static TIMER_CALLBACK( interrupt_callback )
 static INTERRUPT_GEN( m11_interrupt )
 {
 	cpu_set_input_line(device, 0, ASSERT_LINE);
-	//timer_set(device->machine, video_screen_get_time_until_pos(machine->primary_screen, IREMM10_VBEND, 0), NULL, -1, interrupt_callback);
+	//timer_set(device->machine, machine->primary_screen->time_until_pos(IREMM10_VBEND), NULL, -1, interrupt_callback);
 }
 
 static INTERRUPT_GEN( m10_interrupt )
@@ -548,7 +548,7 @@ static INTERRUPT_GEN( m10_interrupt )
 static INTERRUPT_GEN( m15_interrupt )
 {
 	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, IREMM10_VBSTART + 1, 80), NULL, -1, interrupt_callback);
+	timer_set(device->machine, device->machine->primary_screen->time_until_pos(IREMM10_VBSTART + 1, 80), NULL, -1, interrupt_callback);
 }
 
 /*************************************
@@ -878,8 +878,7 @@ static MACHINE_DRIVER_START( m11 )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(m10)
-	MDRV_CPU_REPLACE("maincpu", M6502,IREMM10_CPU_CLOCK)
-	//MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(m11_main)
 	//MDRV_CPU_VBLANK_INT("screen", m11_interrupt)
 
@@ -922,7 +921,8 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( headoni )
 	MDRV_IMPORT_FROM(m15)
-	MDRV_CPU_REPLACE("maincpu", M6502,11730000/16)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(11730000/16)
 MACHINE_DRIVER_END
 
 /*************************************
@@ -1061,10 +1061,10 @@ ROM_START( greenber )
 	ROM_LOAD( "gb9", 0x3000, 0x0400, CRC(c27b9ba3) SHA1(a2f4f0c4b61eb03bba13ae5d25dc01009a4f86ee) ) // ok ?
 ROM_END
 
-GAME( 1979, andromed,  0,        m11,     skychut,  andromed, ROT270, "Irem", "Andromeda (Japan?)", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1979, ipminvad,  0,        m10,     ipminvad, 0,        ROT270, "Irem", "I P M Invader", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1979, ipminvad1, ipminvad, m10,     ipminvad, ipminva1, ROT270, "Irem", "I P M Invader (Incomplete Dump)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1979, andromed,  0,        m11,     skychut,  andromed, ROT270, "IPM",  "Andromeda (Japan?)", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1979, ipminvad,  0,        m10,     ipminvad, 0,        ROT270, "IPM",  "IPM Invader", GAME_IMPERFECT_SOUND | GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1979, ipminvad1, ipminvad, m10,     ipminvad, ipminva1, ROT270, "IPM",  "IPM Invader (Incomplete Dump)", GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1980, skychut,   0,        m11,     skychut,  0,        ROT270, "Irem", "Sky Chuter", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1979, spacbeam,  0,        m15,     spacbeam, 0,        ROT270, "Irem", "Space Beam", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1979, spacbeam,  0,        m15,     spacbeam, 0,        ROT270, "Irem", "Space Beam", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE ) // IPM or Irem?
 GAME( 1979, headoni,   0,        headoni, headoni,  0,        ROT270, "Irem", "Head On (Irem, M-15 Hardware)", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
 GAME( 1980, greenber,  0,        m15,     spacbeam, 0,        ROT270, "Irem", "Green Beret (Irem)", GAME_NO_COCKTAIL | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

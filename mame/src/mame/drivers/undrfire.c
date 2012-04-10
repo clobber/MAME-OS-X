@@ -297,7 +297,7 @@ static WRITE32_HANDLER( undrfire_input_w )
 
 			if (ACCESSING_BITS_0_7)
 			{
-				running_device *device = devtag_get_device(space->machine, "eeprom");
+				running_device *device = space->machine->device("eeprom");
 				eeprom_set_clock_line(device, (data & 0x20) ? ASSERT_LINE : CLEAR_LINE);
 				eeprom_write_bit(device, data & 0x40);
 				eeprom_set_cs_line(device, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
@@ -369,7 +369,7 @@ static READ32_HANDLER( unknown_hardware_r )
 static WRITE32_HANDLER( unknown_int_req_w )
 {
 	/* 10000 cycle delay is arbitrary */
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,10000), NULL, 0, interrupt5);
+	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(10000), NULL, 0, interrupt5);
 }
 
 
@@ -459,7 +459,7 @@ static WRITE32_HANDLER( cbombers_adc_w )
 {
 	/* One interrupt per input port (4 per frame, though only 2 used).
         1000 cycle delay is arbitrary */
-	timer_set(space->machine, cpu_clocks_to_attotime(space->cpu, 1000), NULL, 0, interrupt5);
+	timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(1000), NULL, 0, interrupt5);
 }
 
 /***********************************************************

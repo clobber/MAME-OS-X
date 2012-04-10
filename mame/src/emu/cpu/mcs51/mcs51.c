@@ -281,8 +281,8 @@ struct _mcs51_state_t
 	UINT8	(*sfr_read)(mcs51_state_t *mcs51_state, size_t offset);
 
 	/* Interrupt Callback */
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 
 	/* Memory spaces */
     const address_space *program;
@@ -651,23 +651,21 @@ INLINE void serial_transmit(mcs51_state_t *mcs51_state, UINT8 data);
 INLINE mcs51_state_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_I8031 ||
-		   cpu_get_type(device) == CPU_I8032 ||
-		   cpu_get_type(device) == CPU_I8051 ||
-		   cpu_get_type(device) == CPU_I8751 ||
-		   cpu_get_type(device) == CPU_I8052 ||
-		   cpu_get_type(device) == CPU_I8752 ||
-		   cpu_get_type(device) == CPU_I80C31 ||
-		   cpu_get_type(device) == CPU_I80C32 ||
-		   cpu_get_type(device) == CPU_I80C51 ||
-		   cpu_get_type(device) == CPU_I80C52 ||
-		   cpu_get_type(device) == CPU_I87C51 ||
-		   cpu_get_type(device) == CPU_I87C52 ||
-		   cpu_get_type(device) == CPU_AT89C4051 ||
-		   cpu_get_type(device) == CPU_DS5002FP);
-	return (mcs51_state_t *)device->token;
+	assert(device->type() == I8031 ||
+		   device->type() == I8032 ||
+		   device->type() == I8051 ||
+		   device->type() == I8751 ||
+		   device->type() == I8052 ||
+		   device->type() == I8752 ||
+		   device->type() == I80C31 ||
+		   device->type() == I80C32 ||
+		   device->type() == I80C51 ||
+		   device->type() == I80C52 ||
+		   device->type() == I87C51 ||
+		   device->type() == I87C52 ||
+		   device->type() == AT89C4051 ||
+		   device->type() == DS5002FP);
+	return (mcs51_state_t *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 INLINE void clear_current_irq(mcs51_state_t *mcs51_state)
@@ -1929,8 +1927,6 @@ static CPU_EXECUTE( mcs51 )
 
 	update_ptrs(mcs51_state);
 
-	mcs51_state->icount = cycles;
-
 	/* external interrupts may have been set since we last checked */
 	mcs51_state->inst_cycles = 0;
 	check_irqs(mcs51_state);
@@ -1939,7 +1935,7 @@ static CPU_EXECUTE( mcs51 )
 	if ((mcs51_state->features & FEATURE_CMOS) && GET_PD)
 	{
 		mcs51_state->icount = 0;
-		return cycles;
+		return;
 	}
 
 	mcs51_state->icount -= mcs51_state->inst_cycles;
@@ -1953,7 +1949,7 @@ static CPU_EXECUTE( mcs51 )
 			mcs51_state->icount--;
 			burn_cycles(mcs51_state, 1);
 		} while( mcs51_state->icount > 0 );
-		return cycles - mcs51_state->icount;
+		return;
 	}
 
 	do
@@ -1972,7 +1968,7 @@ static CPU_EXECUTE( mcs51 )
 
 		/* if in powerdown, just return */
 		if ((mcs51_state->features & FEATURE_CMOS) && GET_PD)
-			return cycles - mcs51_state->icount;
+			return;
 
 		burn_cycles(mcs51_state, mcs51_state->inst_cycles);
 
@@ -1982,11 +1978,9 @@ static CPU_EXECUTE( mcs51 )
 
 		/* If the chip entered in idle mode, end the loop */
 		if ((mcs51_state->features & FEATURE_CMOS) && GET_IDL)
-			return cycles - mcs51_state->icount;
+			return;
 
 	} while( mcs51_state->icount > 0 );
-
-	return cycles - mcs51_state->icount;
 }
 
 
@@ -2389,7 +2383,7 @@ static CPU_INIT( ds5002fp )
 {
 	/* default configuration */
 	static const ds5002fp_config default_config = { 0x00, 0x00, 0x00 };
-	const ds5002fp_config *sconfig = device->baseconfig().static_config ? (const ds5002fp_config *)device->baseconfig().static_config : &default_config;
+	const ds5002fp_config *sconfig = device->baseconfig().static_config() ? (const ds5002fp_config *)device->baseconfig().static_config() : &default_config;
 	mcs51_state_t *mcs51_state = get_safe_token(device);
 
 	CPU_INIT_CALL( mcs51 );
@@ -2476,7 +2470,7 @@ static CPU_SET_INFO( mcs51 )
 
 static CPU_GET_INFO( mcs51 )
 {
-	mcs51_state_t *mcs51_state = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mcs51_state_t *mcs51_state = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -2755,3 +2749,18 @@ CPU_GET_INFO( ds5002fp )
 		default:										CPU_GET_INFO_CALL(i8051);					break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(I8031, i8031);
+DEFINE_LEGACY_CPU_DEVICE(I8032, i8032);
+DEFINE_LEGACY_CPU_DEVICE(I8051, i8051);
+DEFINE_LEGACY_CPU_DEVICE(I8751, i8751);
+DEFINE_LEGACY_CPU_DEVICE(I8052, i8052);
+DEFINE_LEGACY_CPU_DEVICE(I8752, i8752);
+DEFINE_LEGACY_CPU_DEVICE(I80C31, i80c31);
+DEFINE_LEGACY_CPU_DEVICE(I80C51, i80c51);
+DEFINE_LEGACY_CPU_DEVICE(I87C51, i87c51);
+DEFINE_LEGACY_CPU_DEVICE(I80C32, i80c32);
+DEFINE_LEGACY_CPU_DEVICE(I80C52, i80c52);
+DEFINE_LEGACY_CPU_DEVICE(I87C52, i87c52);
+DEFINE_LEGACY_CPU_DEVICE(AT89C4051, at89c4051);
+DEFINE_LEGACY_CPU_DEVICE(DS5002FP, ds5002fp);

@@ -178,7 +178,7 @@ static WRITE8_HANDLER(audio_w)
 
 static WRITE8_DEVICE_HANDLER(ay_sel)
 {
-	if(cpu_get_previouspc(devtag_get_device(device->machine, "audiocpu"))==0x309)
+	if(cpu_get_previouspc(device->machine->device("audiocpu"))==0x309)
 	{
 		ay8910_address_w(device,0,nAyCtrl);
 		ay8910_data_w(device,0,nAyData);
@@ -346,7 +346,7 @@ static PALETTE_INIT( mirax )
 {
 	int i;
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine->total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 

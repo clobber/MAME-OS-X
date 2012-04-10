@@ -247,10 +247,8 @@ static signed short *RBUFDST;	//this points to where the sample will be stored i
 INLINE SCSP *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SOUND);
-	assert(sound_get_type(device) == SOUND_SCSP);
-	return (SCSP *)device->token;
+	assert(device->type() == SOUND_SCSP);
+	return (SCSP *)downcast<legacy_device_base *>(device)->token();
 }
 
 static unsigned char DecodeSCI(struct _SCSP *SCSP,unsigned char irq)
@@ -541,10 +539,10 @@ static void SCSP_Init(running_device *device, struct _SCSP *SCSP, const scsp_int
 		SCSP->Master=0;
 	}
 
-	SCSP->SCSPRAM = *device->region;
+	SCSP->SCSPRAM = *device->region();
 	if (SCSP->SCSPRAM)
 	{
-		SCSP->SCSPRAM_LENGTH = device->region->bytes();
+		SCSP->SCSPRAM_LENGTH = device->region()->bytes();
 		SCSP->DSP.SCSPRAM = (UINT16 *)SCSP->SCSPRAM;
 		SCSP->DSP.SCSPRAM_LENGTH = SCSP->SCSPRAM_LENGTH/2;
 		SCSP->SCSPRAM += intf->roffset;
@@ -700,7 +698,7 @@ static void SCSP_UpdateSlotReg(struct _SCSP *SCSP,int s,int r)
 static void SCSP_UpdateReg(struct _SCSP *SCSP, int reg)
 {
 	/* temporary hack until this is converted to a device */
-	const address_space *space = SCSP->device->machine->firstcpu->space(AS_PROGRAM);
+	const address_space *space = device_get_space(SCSP->device->machine->firstcpu, AS_PROGRAM);
 	switch(reg&0x3f)
 	{
 		case 0x2:
@@ -1218,7 +1216,7 @@ static void dma_scsp(const address_space *space, struct _SCSP *SCSP)
 
 	/*Job done,request a dma end irq*/
 	if(scsp_regs[0x1e/2] & 0x10)
-		cpu_set_input_line(space->machine->devicelist.find(CPU, 2),dma_transfer_end,HOLD_LINE);
+		cpu_set_input_line(space->machine->device("audiocpu"),dma_transfer_end,HOLD_LINE);
 }
 
 #ifdef UNUSED_FUNCTION
@@ -1244,7 +1242,7 @@ static DEVICE_START( scsp )
 
 	struct _SCSP *SCSP = get_safe_token(device);
 
-	intf = (const scsp_interface *)device->baseconfig().static_config;
+	intf = (const scsp_interface *)device->baseconfig().static_config();
 
 	// init the emulation
 	SCSP_Init(device, SCSP, intf);
@@ -1388,3 +1386,5 @@ DEVICE_GET_INFO( scsp )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(SCSP, scsp);

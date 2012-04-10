@@ -93,17 +93,16 @@ struct _vr0video_state
 INLINE vr0video_state *get_safe_token( running_device *device )
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == VIDEO_VRENDER0);
+	assert(device->type() == VIDEO_VRENDER0);
 
-	return (vr0video_state *)device->token;
+	return (vr0video_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 INLINE const vr0video_interface *get_interface( running_device *device )
 {
 	assert(device != NULL);
-	assert(device->type == VIDEO_VRENDER0);
-	return (const vr0video_interface *) device->baseconfig().static_config;
+	assert(device->type() == VIDEO_VRENDER0);
+	return (const vr0video_interface *) device->baseconfig().static_config();
 }
 
 /*****************************************************************************
@@ -567,7 +566,7 @@ static DEVICE_START( vr0video )
 	vr0video_state *vr0 = get_safe_token(device);
 	const vr0video_interface *intf = get_interface(device);
 
-	vr0->cpu = devtag_get_device(device->machine, intf->cpu);
+	vr0->cpu = device->machine->device(intf->cpu);
 
 	state_save_register_device_item_array(device, 0, vr0->InternalPalette);
 	state_save_register_device_item(device, 0, vr0->LastPalUpdate);
@@ -608,5 +607,7 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"VRender0"
 #define DEVTEMPLATE_FAMILY		"???"
-#define DEVTEMPLATE_CLASS		DEVICE_CLASS_VIDEO
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(VIDEO_VRENDER0, vr0video);

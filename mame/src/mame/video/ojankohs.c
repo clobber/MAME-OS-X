@@ -22,7 +22,7 @@ PALETTE_INIT( ojankoy )
 	int i;
 	int bit0, bit1, bit2, bit3, bit4, r, g, b;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		bit0 = BIT(color_prom[0], 2);
 		bit1 = BIT(color_prom[0], 3);
@@ -30,17 +30,17 @@ PALETTE_INIT( ojankoy )
 		bit3 = BIT(color_prom[0], 5);
 		bit4 = BIT(color_prom[0], 6);
 		r = 0x08 * bit0 + 0x11 * bit1 + 0x21 * bit2 + 0x43 * bit3 + 0x82 * bit4;
-		bit0 = BIT(color_prom[machine->config->total_colors], 5);
-		bit1 = BIT(color_prom[machine->config->total_colors], 6);
-		bit2 = BIT(color_prom[machine->config->total_colors], 7);
+		bit0 = BIT(color_prom[machine->total_colors()], 5);
+		bit1 = BIT(color_prom[machine->total_colors()], 6);
+		bit2 = BIT(color_prom[machine->total_colors()], 7);
 		bit3 = BIT(color_prom[0], 0);
 		bit4 = BIT(color_prom[0], 1);
 		g = 0x08 * bit0 + 0x11 * bit1 + 0x21 * bit2 + 0x43 * bit3 + 0x82 * bit4;
-		bit0 = BIT(color_prom[machine->config->total_colors], 0);
-		bit1 = BIT(color_prom[machine->config->total_colors], 1);
-		bit2 = BIT(color_prom[machine->config->total_colors], 2);
-		bit3 = BIT(color_prom[machine->config->total_colors], 3);
-		bit4 = BIT(color_prom[machine->config->total_colors], 4);
+		bit0 = BIT(color_prom[machine->total_colors()], 0);
+		bit1 = BIT(color_prom[machine->total_colors()], 1);
+		bit2 = BIT(color_prom[machine->total_colors()], 2);
+		bit3 = BIT(color_prom[machine->total_colors()], 3);
+		bit4 = BIT(color_prom[machine->total_colors()], 4);
 		b = 0x08 * bit0 + 0x11 * bit1 + 0x21 * bit2 + 0x43 * bit3 + 0x82 * bit4;
 
 		palette_set_color(machine, i, MAKE_RGB(r, g, b));
@@ -298,7 +298,7 @@ VIDEO_START( ojankoc )
 {
 	ojankohs_state *state = (ojankohs_state *)machine->driver_data;
 
-	state->tmpbitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	state->tmpbitmap = machine->primary_screen->alloc_compatible_bitmap();
 	state->videoram = auto_alloc_array(machine, UINT8, 0x8000);
 	state->paletteram = auto_alloc_array(machine, UINT8, 0x20);
 

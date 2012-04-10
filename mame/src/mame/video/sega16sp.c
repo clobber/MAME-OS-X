@@ -15,17 +15,16 @@ UINT16 *segaic16_spriteram_1;
 INLINE sega16sp_state *get_safe_token( running_device *device )
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == SEGA16SP);
+	assert(device->type() == SEGA16SP);
 
-	return (sega16sp_state *)device->token;
+	return (sega16sp_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 INLINE const sega16sp_interface *get_interface( running_device *device )
 {
 	assert(device != NULL);
-	assert((device->type == SEGA16SP));
-	return (const sega16sp_interface *) device->baseconfig().static_config;
+	assert((device->type() == SEGA16SP));
+	return (const sega16sp_interface *) device->baseconfig().static_config();
 }
 
 /*******************************************************************************************
@@ -66,7 +65,7 @@ INLINE const sega16sp_interface *get_interface( running_device *device )
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (color == sega16sp->colorbase + (0x3f << 4))						\
-				dest[x] += sega16sp->shadow ? palette.entries*2 : palette.entries;	\
+				dest[x] += sega16sp->shadow ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -231,7 +230,7 @@ void segaic16_sprites_hangon_draw(running_machine *machine, running_device *devi
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (shadow && pix == 0xa)										\
-				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries;	\
+				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -402,7 +401,7 @@ void segaic16_sprites_sharrier_draw(running_machine *machine, running_device *de
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (color == sega16sp->colorbase + (0x3f << 4))						\
-				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries;	\
+				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -561,8 +560,8 @@ void segaic16_sprites_16a_draw(running_machine *machine, running_device *device,
 			{																\
 				/* we have to check this for System 18 so that we don't */  \
 				/* attempt to shadow VDP pixels */							\
-				if (dest[x] < palette.entries)								\
-					dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries; \
+				if (dest[x] < segaic16_palette.entries)								\
+					dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries; \
 			}																\
 																			\
 			/* regular draw */												\
@@ -729,7 +728,7 @@ void segaic16_sprites_16b_draw(running_machine *machine, running_device *device,
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (pix == 14)													\
-				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries;	\
+				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -907,7 +906,7 @@ void segaic16_sprites_yboard_16b_draw(running_machine *machine, running_device *
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (shadow && pix == 0xa)										\
-				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries;	\
+				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -1093,7 +1092,7 @@ void segaic16_sprites_yboard_draw(running_machine *machine, running_device *devi
 {
 	UINT8 numbanks = memory_region_length(machine, "gfx1") / 0x80000;
 	const UINT64 *spritebase = (const UINT64 *)memory_region(machine, "gfx1");
-	const UINT16 *rotatebase = rotate[0].buffer ? rotate[0].buffer : rotate[0].rotateram;
+	const UINT16 *rotatebase = segaic16_rotate[0].buffer ? segaic16_rotate[0].buffer : segaic16_rotate[0].rotateram;
 	UINT8 visited[0x1000];
 	sega16sp_state *sega16sp = get_safe_token(device);
 	int next = 0;
@@ -1274,7 +1273,7 @@ void segaic16_sprites_yboard_draw(running_machine *machine, running_device *devi
 		{																	\
 			/* shadow/hilight mode? */										\
 			if (color == sega16sp->colorbase + (0x3f << 4))						\
-				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? palette.entries*2 : palette.entries;	\
+				dest[x] += (segaic16_paletteram[dest[x]] & 0x8000) ? segaic16_palette.entries*2 : segaic16_palette.entries;	\
 																			\
 			/* regular draw */												\
 			else															\
@@ -1462,9 +1461,9 @@ void segaic16_sprites_draw(running_device *screen, bitmap_t *bitmap, const recta
 	sega16sp_state *sega16sp;
 
 	if (!which)
-		device = devtag_get_device(screen->machine,"segaspr1");
+		device = screen->machine->device("segaspr1");
 	else
-		device = devtag_get_device(screen->machine,"segaspr2");
+		device = screen->machine->device("segaspr2");
 
 	if (!device)
 		fatalerror("segaic16_sprites_draw device not found\n");
@@ -1492,9 +1491,9 @@ void segaic16_sprites_set_bank(running_machine *machine, int which, int banknum,
 	running_device* device = 0;
 
 	if (!which)
-		device = devtag_get_device(machine,"segaspr1");
+		device = machine->device("segaspr1");
 	else
-		device = devtag_get_device(machine,"segaspr2");
+		device = machine->device("segaspr2");
 
 	if (!device)
 		fatalerror("segaic16_sprites_set_bank device not found\n");
@@ -1503,8 +1502,8 @@ void segaic16_sprites_set_bank(running_machine *machine, int which, int banknum,
 
 	if (sega16sp->bank[banknum] != offset)
 	{
-		running_device *screen = machine->primary_screen;
-		video_screen_update_partial(screen, video_screen_get_vpos(screen));
+		screen_device *screen = machine->primary_screen;
+		screen->update_partial(screen->vpos());
 		sega16sp->bank[banknum] = offset;
 	}
 }
@@ -1522,9 +1521,9 @@ void segaic16_sprites_set_flip(running_machine *machine, int which, int flip)
 	running_device* device = 0;
 
 	if (!which)
-		device = devtag_get_device(machine,"segaspr1");
+		device = machine->device("segaspr1");
 	else
-		device = devtag_get_device(machine,"segaspr2");
+		device = machine->device("segaspr2");
 
 	if (!device)
 		fatalerror("segaic16_sprites_set_flip device not found\n");
@@ -1534,8 +1533,8 @@ void segaic16_sprites_set_flip(running_machine *machine, int which, int flip)
 	flip = (flip != 0);
 	if (sega16sp->flip != flip)
 	{
-		running_device *screen = machine->primary_screen;
-		video_screen_update_partial(screen, video_screen_get_vpos(screen));
+		screen_device *screen = machine->primary_screen;
+		screen->update_partial(screen->vpos());
 		sega16sp->flip = flip;
 	}
 }
@@ -1553,9 +1552,9 @@ void segaic16_sprites_set_shadow(running_machine *machine, int which, int shadow
 	running_device* device = 0;
 
 	if (!which)
-		device = devtag_get_device(machine,"segaspr1");
+		device = machine->device("segaspr1");
 	else
-		device = devtag_get_device(machine,"segaspr2");
+		device = machine->device("segaspr2");
 
 	if (!device)
 		fatalerror("segaic16_sprites_set_shadow device not found\n");
@@ -1565,8 +1564,8 @@ void segaic16_sprites_set_shadow(running_machine *machine, int which, int shadow
 	shadow = (shadow != 0);
 	if (sega16sp->shadow != shadow)
 	{
-		running_device *screen = machine->primary_screen;
-		video_screen_update_partial(screen, video_screen_get_vpos(screen));
+		screen_device *screen = machine->primary_screen;
+		screen->update_partial(screen->vpos());
 		sega16sp->shadow = shadow;
 	}
 }
@@ -1615,7 +1614,7 @@ WRITE16_HANDLER( segaic16_sprites_draw_0_w )
 {
 	running_device* device = 0;
 
-	device = devtag_get_device(space->machine,"segaspr1");
+	device = space->machine->device("segaspr1");
 
 	if (!device)
 		fatalerror("segaic16_sprites_draw_0_w device not found\n");
@@ -1628,7 +1627,7 @@ WRITE16_HANDLER( segaic16_sprites_draw_1_w )
 {
 	running_device* device = 0;
 
-	device = devtag_get_device(space->machine,"segaspr2");
+	device = space->machine->device("segaspr2");
 
 	if (!device)
 		fatalerror("segaic16_sprites_draw_1_w device not found\n");
@@ -1683,7 +1682,6 @@ DEVICE_GET_INFO( sega16sp )
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
 		case DEVINFO_INT_TOKEN_BYTES:			info->i = sizeof(sega16sp_state);					break;
-		case DEVINFO_INT_CLASS:					info->i = DEVICE_CLASS_VIDEO;					break;
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case DEVINFO_FCT_START:					info->start = DEVICE_START_NAME(sega16sp);		break;

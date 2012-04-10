@@ -12,10 +12,8 @@
 
   Cross Pang New - Is shown on the website but is not currently dumped
 
-  No Copyright Notice is displayed for Cross Pang however the following page
-  lists it as being by F2 System, Released April 1998
-  http://www.f2.co.kr/eng/f2system/intro5.asp (page no longer valid, check www.f2.co.kr)
-
+  No Copyright Notice is displayed for Cross Pang however http://www.f2.co.kr
+  at one time did list it as being by F2 System, Released April 1998
 
   Cross Pang:
     Audio Test isn't correct when a sound is tested, instead musics are right.
@@ -289,7 +287,7 @@ static MACHINE_START( crospang )
 {
 	crospang_state *state = (crospang_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->bestri_tilebank);
 	state_save_register_global(machine, state->xsproff);
@@ -346,8 +344,7 @@ static MACHINE_DRIVER_START( crospang )
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -389,8 +386,7 @@ static MACHINE_DRIVER_START( bestri )
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 

@@ -436,7 +436,7 @@ WRITE8_HANDLER( pleiads_sound_control_b_w )
 	if (pitch == 3)
 		pitch = 2;	/* 2 and 3 are the same */
 
-	tms36xx_note_w(devtag_get_device(space->machine, "tms"), pitch, note);
+	tms36xx_note_w(space->machine->device("tms"), pitch, note);
 
 	stream_update(channel);
 	sound_latch_b = data;
@@ -694,3 +694,8 @@ DEVICE_GET_INFO( popflame_sound )
 		case DEVINFO_STR_SOURCE_FILE:						strcpy(info->s, __FILE__);						break;
 	}
 }
+
+
+DEFINE_LEGACY_SOUND_DEVICE(PLEIADS, pleiads_sound);
+DEFINE_LEGACY_SOUND_DEVICE(NAUGHTYB, naughtyb_sound);
+DEFINE_LEGACY_SOUND_DEVICE(POPFLAME, popflame_sound);

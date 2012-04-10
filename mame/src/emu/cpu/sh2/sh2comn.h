@@ -114,8 +114,8 @@ typedef struct
 	UINT32 pcflushes[16];			// pcflush entries
 
 	INT8	irq_line_state[17];
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *internal;
 	UINT32	*m;
@@ -128,6 +128,7 @@ typedef struct
 	int		frt_input;
 	int 	internal_irq_level;
 	int 	internal_irq_vector;
+	int				icount;
 
 	emu_timer *timer;
 	emu_timer *dma_timer[2];
@@ -143,8 +144,6 @@ typedef struct
 	drcuml_state *		drcuml;					/* DRC UML generator state */
 	drcfe_state *		drcfe;					/* pointer to the DRC front-end state */
 	UINT32				drcoptions;			/* configurable DRC options */
-
-	int				icount;
 
 	/* internal stuff */
 	UINT8				cache_dirty;		    	/* true if we need to flush the cache */
@@ -170,11 +169,11 @@ typedef struct
 	drcuml_codehandle *	nocode;					/* nocode */
 	drcuml_codehandle *	out_of_cycles;				/* out of cycles exception handler */
 #endif
-} SH2;
+} sh2_state;
 
-void sh2_common_init(SH2 *sh2, running_device *device, cpu_irq_callback irqcallback);
-void sh2_recalc_irq(SH2 *sh2);
-void sh2_set_irq_line(SH2 *sh2, int irqline, int state);
-void sh2_exception(SH2 *sh2, const char *message, int irqline);
+void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callback irqcallback);
+void sh2_recalc_irq(sh2_state *sh2);
+void sh2_set_irq_line(sh2_state *sh2, int irqline, int state);
+void sh2_exception(sh2_state *sh2, const char *message, int irqline);
 
 #endif /* __SH2COMN_H__ */

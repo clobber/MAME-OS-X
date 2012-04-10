@@ -192,7 +192,7 @@ static WRITE8_DEVICE_HANDLER( ay_audio_nmi_enable_w )
 
 static TIMER_DEVICE_CALLBACK( audio_nmi_gen )
 {
-	btime_state *state = (btime_state *)timer->machine->driver_data;
+	btime_state *state = (btime_state *)timer.machine->driver_data;
 	int scanline = param;
 	state->audio_nmi_state = scanline & 8;
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, (state->audio_nmi_enabled && state->audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
@@ -562,7 +562,7 @@ static READ8_HANDLER( audio_command_r )
 
 static READ8_HANDLER( zoar_dsw1_read )
 {
-	return (!video_screen_get_vblank(space->machine->primary_screen) << 7) | (input_port_read(space->machine, "DSW1") & 0x7f);
+	return (!space->machine->primary_screen->vblank() << 7) | (input_port_read(space->machine, "DSW1") & 0x7f);
 }
 
 static INPUT_PORTS_START( btime )
@@ -1360,7 +1360,7 @@ static const discrete_mixer_desc btime_sound_mixer_desc =
  */
 #define BTIME_R49	RES_K(47)	/* pcb: 47.4k */
 
-/* The input divider R51 R50 is not independant of R52, which
+/* The input divider R51 R50 is not independent of R52, which
  * also depends on ay internal resistance.
  * FIXME: Develop proper model when I am retired.
  *
@@ -1407,7 +1407,7 @@ static DISCRETE_SOUND_START( btime_sound )
 
 	/* Amplifier is upc1181H3
      *
-     * http://www.mydarc.de/dj7oh/fad/ics/upc1181/upc1181.htm
+     * http://www.ic-ts-histo.de/fad/ics/upc1181/upc1181.htm
      *
      * A linear frequency response is mentioned as well as a lower
      * edge frequency determined by cap on pin3, however no formula given.
@@ -1427,8 +1427,8 @@ static MACHINE_START( btime )
 {
 	btime_state *state = (btime_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->btime_palette);
 	state_save_register_global(machine, state->bnj_scroll1);
@@ -1597,7 +1597,8 @@ static MACHINE_DRIVER_START( sdtennis )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_REPLACE("maincpu", M6502, HCLK4)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(HCLK4)
 	MDRV_CPU_PROGRAM_MAP(bnj_map)
 
 	/* video hardware */
@@ -1649,7 +1650,8 @@ static MACHINE_DRIVER_START( disco )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(btime)
-	MDRV_CPU_REPLACE("maincpu", M6502, HCLK4)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(HCLK4)
 	MDRV_CPU_PROGRAM_MAP(disco_map)
 
 	MDRV_CPU_MODIFY("audiocpu")
@@ -1829,7 +1831,7 @@ ROM_START( tisland )
 ROM_END
 
 /* There is a flyer with a screen shot for Lock'n'Chase at:
-   http://www.gamearchive.com/flyers/video/taito/locknchase_f.jpg  */
+   http://www.arcadeflyers.com/?page=flyer&db=videodb&id=608&image=1  */
 
 ROM_START( lnc )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -2086,7 +2088,7 @@ static void decrypt_C10707_cpu(running_machine *machine, const char *cputag)
 	for (addr = 0; addr < 0x10000; addr++)
 		decrypt[addr] = swap_bits_5_6(rom[addr]);
 
-	if (space->cpu == devtag_get_device(machine, "maincpu"))
+	if (space->cpu == machine->device("maincpu"))
 		decrypted = decrypt;
 }
 
@@ -2221,7 +2223,7 @@ GAME( 1981, tisland,  0,       tisland,  btime,    tisland,  ROT270, "Data East 
 GAME( 1981, lnc,      0,       lnc,      lnc,      lnc,      ROT270, "Data East Corporation", "Lock'n'Chase", GAME_SUPPORTS_SAVE )
 GAME( 1982, protennb, 0,       disco,    disco,    protennb, ROT270, "bootleg", "Tennis (bootleg of Pro Tennis)", GAME_SUPPORTS_SAVE )
 GAME( 1982, wtennis,  0,       wtennis,  wtennis,  wtennis,  ROT270, "bootleg", "World Tennis", GAME_SUPPORTS_SAVE )
-GAME( 1982, mmonkey,  0,       mmonkey,  mmonkey,  lnc,      ROT270, "Technos Japan + Roller Tron", "Minky Monkey", GAME_SUPPORTS_SAVE )
+GAME( 1982, mmonkey,  0,       mmonkey,  mmonkey,  lnc,      ROT270, "Technos Japan / Roller Tron", "Minky Monkey", GAME_SUPPORTS_SAVE )
 GAME( 1982, brubber,  0,       bnj,      bnj,      bnj,      ROT270, "Data East", "Burnin' Rubber", GAME_SUPPORTS_SAVE )
 GAME( 1982, bnj,      brubber, bnj,      bnj,      bnj,      ROT270, "Data East USA (Bally Midway license)", "Bump 'n' Jump", GAME_SUPPORTS_SAVE )
 GAME( 1982, caractn,  brubber, bnj,      bnj,      bnj,      ROT270, "bootleg", "Car Action", GAME_SUPPORTS_SAVE )

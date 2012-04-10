@@ -87,7 +87,7 @@ struct _pic16c62x_state
 	int		inst_cycles;
 
 
-	running_device *device;
+	legacy_cpu_device *device;
 	const	address_space *program;
 	const	address_space *data;
 	const	address_space *io;
@@ -96,16 +96,14 @@ struct _pic16c62x_state
 INLINE pic16c62x_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_PIC16C620 ||
-		   cpu_get_type(device) == CPU_PIC16C620A ||
-//         cpu_get_type(device) == CPU_PIC16CR620A ||
-		   cpu_get_type(device) == CPU_PIC16C621 ||
-		   cpu_get_type(device) == CPU_PIC16C621A ||
-		   cpu_get_type(device) == CPU_PIC16C622 ||
-		   cpu_get_type(device) == CPU_PIC16C622A);
-	return (pic16c62x_state *)device->token;
+	assert(device->type() == PIC16C620 ||
+		   device->type() == PIC16C620A ||
+//         device->type() == PIC16CR620A ||
+		   device->type() == PIC16C621 ||
+		   device->type() == PIC16C621A ||
+		   device->type() == PIC16C622 ||
+		   device->type() == PIC16C622A);
+	return (pic16c62x_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -1009,8 +1007,6 @@ static CPU_EXECUTE( pic16c62x )
 
 	update_internalram_ptr(cpustate);
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		if (PD == 0)						/* Sleep Mode */
@@ -1065,8 +1061,6 @@ static CPU_EXECUTE( pic16c62x )
 		cpustate->icount -= cpustate->inst_cycles;
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -1115,7 +1109,7 @@ static CPU_SET_INFO( pic16c62x )
 
 static CPU_GET_INFO( pic16c62x )
 {
-	pic16c62x_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	pic16c62x_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1605,4 +1599,13 @@ CPU_GET_INFO( pic16c622a )
 		default:										CPU_GET_INFO_CALL(pic16c62x);			break;
 	}
 }
+
+
+DEFINE_LEGACY_CPU_DEVICE(PIC16C620, pic16c620);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C620A, pic16c620a);
+//DEFINE_LEGACY_CPU_DEVICE(PIC16CR620A, pic16cr620a);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C621, pic16c621);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C621A, pic16c621a);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C622, pic16c622);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C622A, pic16c622a);
 

@@ -131,7 +131,7 @@ G: gun mania only, drives air soft gun (this game uses real BB bullet)
   Note:
        Not all games listed above are confirmed to run on System 573.
        * - denotes not dumped yet. If you can help with the remaining undumped System 573 games,
-       please contact http://www.mameworld.net/gurudumps/comments.html
+       please contact http://guru.mameworld.info/
 
 
   Main PCB Layout
@@ -821,7 +821,7 @@ static WRITE32_HANDLER( atapi_w )
 
 					case 0x45: // PLAY
 						atapi_regs[ATAPI_REG_CMDSTATUS] = ATAPI_STAT_BSY;
-						timer_adjust_oneshot( atapi_timer, cpu_clocks_to_attotime( space->cpu, ATAPI_CYCLES_PER_SECTOR ), 0 );
+						timer_adjust_oneshot( atapi_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( ATAPI_CYCLES_PER_SECTOR ), 0 );
 						break;
 				}
 
@@ -963,13 +963,13 @@ static WRITE32_HANDLER( atapi_w )
 	}
 }
 
-static void atapi_exit(running_machine* machine)
+static void atapi_exit(running_machine& machine)
 {
 	int i;
 
 	for( i = 0; i < 2; i++ )
 	{
-		if( get_disk_handle( machine, diskregions[i] ) != NULL )
+		if( get_disk_handle( &machine, diskregions[i] ) != NULL )
 		{
 			SCSIDeleteInstance( available_cdroms[ i ] );
 		}
@@ -1006,7 +1006,7 @@ static void atapi_init(running_machine *machine)
 			available_cdroms[ i ] = NULL;
 		}
 	}
-	add_exit_callback(machine, atapi_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, atapi_exit);
 
 	atapi_data = auto_alloc_array(machine, UINT8,  ATAPI_DATA_SIZE );
 
@@ -1204,7 +1204,7 @@ static UINT64 m_p_n_root_start[ 3 ];
 static UINT64 psxcpu_gettotalcycles( running_machine *machine )
 {
 	/* TODO: should return the start of the current tick. */
-	return cputag_get_total_cycles(machine, "maincpu") * 2;
+	return machine->firstcpu->total_cycles() * 2;
 }
 
 static int root_divider( int n_counter )
@@ -1626,7 +1626,7 @@ static void update_mode( running_machine *machine )
 	if( inserted_cdrom != new_cdrom )
 	{
 		inserted_cdrom = new_cdrom;
-		cdda_set_cdrom(devtag_get_device(machine, "cdda"), atapi_get_device());
+		cdda_set_cdrom(machine->device("cdda"), atapi_get_device());
 	}
 }
 
@@ -1661,7 +1661,7 @@ todo:
 
 static READ32_HANDLER( ge765pwbba_r )
 {
-	running_device *upd4701 = devtag_get_device(space->machine, "upd4701");
+	running_device *upd4701 = space->machine->device("upd4701");
 	UINT32 data = 0;
 
 	switch (offset)
@@ -1699,7 +1699,7 @@ static READ32_HANDLER( ge765pwbba_r )
 
 static WRITE32_HANDLER( ge765pwbba_w )
 {
-	running_device *upd4701 = devtag_get_device(space->machine, "upd4701");
+	running_device *upd4701 = space->machine->device("upd4701");
 	switch (offset)
 	{
 	case 0x04:

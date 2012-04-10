@@ -199,11 +199,11 @@ static READ16_HANDLER( dual539_r )
 	data = 0;
 	if( ACCESSING_BITS_0_7 )
 	{
-		data |= k054539_r( devtag_get_device(space->machine, "konami2"), offset );
+		data |= k054539_r( space->machine->device("konami2"), offset );
 	}
 	if( ACCESSING_BITS_8_15 )
 	{
-		data |= k054539_r( devtag_get_device(space->machine, "konami1"), offset ) << 8;
+		data |= k054539_r( space->machine->device("konami1"), offset ) << 8;
 	}
 	return data;
 }
@@ -212,11 +212,11 @@ static WRITE16_HANDLER( dual539_w )
 {
 	if( ACCESSING_BITS_0_7 )
 	{
-		k054539_w( devtag_get_device(space->machine, "konami2"), offset, data );
+		k054539_w( space->machine->device("konami2"), offset, data );
 	}
 	if( ACCESSING_BITS_8_15 )
 	{
-		k054539_w( devtag_get_device(space->machine, "konami1"), offset, data >> 8 );
+		k054539_w( space->machine->device("konami1"), offset, data >> 8 );
 	}
 }
 
@@ -333,7 +333,7 @@ static DRIVER_INIT( konamigq )
 	m_p_n_pcmram = memory_region( machine, "shared" ) + 0x80000;
 }
 
-static void konamigq_exit(running_machine *machine)
+static void konamigq_exit(running_machine &machine)
 {
 	am53cf96_exit(&scsi_intf);
 }
@@ -342,7 +342,7 @@ static MACHINE_START( konamigq )
 {
 	/* init the scsi controller and hook up it's DMA */
 	am53cf96_init(machine, &scsi_intf);
-	add_exit_callback(machine, konamigq_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, konamigq_exit);
 	psx_dma_install_read_handler(5, scsi_dma_read);
 	psx_dma_install_write_handler(5, scsi_dma_write);
 

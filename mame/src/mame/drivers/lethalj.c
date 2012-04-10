@@ -176,14 +176,14 @@ static CUSTOM_INPUT( cclownz_paddle )
 static WRITE16_HANDLER( ripribit_control_w )
 {
 	coin_counter_w(space->machine, 0, data & 1);
-	ticket_dispenser_w(devtag_get_device(space->machine, "ticket"), 0, ((data >> 1) & 1) << 7);
+	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 1) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 }
 
 
 static WRITE16_HANDLER( cfarm_control_w )
 {
-	ticket_dispenser_w(devtag_get_device(space->machine, "ticket"), 0, ((data >> 0) & 1) << 7);
+	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 0) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 	output_set_lamp_value(1, (data >> 3) & 1);
 	output_set_lamp_value(2, (data >> 4) & 1);
@@ -193,7 +193,7 @@ static WRITE16_HANDLER( cfarm_control_w )
 
 static WRITE16_HANDLER( cclownz_control_w )
 {
-	ticket_dispenser_w(devtag_get_device(space->machine, "ticket"), 0, ((data >> 0) & 1) << 7);
+	ticket_dispenser_w(space->machine->device("ticket"), 0, ((data >> 0) & 1) << 7);
 	output_set_lamp_value(0, (data >> 2) & 1);
 	output_set_lamp_value(1, (data >> 4) & 1);
 	output_set_lamp_value(2, (data >> 5) & 1);
@@ -614,16 +614,13 @@ static MACHINE_DRIVER_START( gameroom )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, SOUND_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", SOUND_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.26)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, SOUND_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", SOUND_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.26)
 
-	MDRV_SOUND_ADD("oki3", OKIM6295, SOUND_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki3", SOUND_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.26)
 MACHINE_DRIVER_END
 

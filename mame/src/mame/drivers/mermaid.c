@@ -330,9 +330,9 @@ static MACHINE_START( mermaid )
 {
 	mermaid_state *state = (mermaid_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->ay1 = devtag_get_device(machine, "ay1");
-	state->ay2 = devtag_get_device(machine, "ay2");
+	state->maincpu = machine->device("maincpu");
+	state->ay1 = machine->device("ay1");
+	state->ay2 = machine->device("ay2");
 
 	state_save_register_global(machine, state->coll_bit0);
 	state_save_register_global(machine, state->coll_bit1);
@@ -500,6 +500,6 @@ ROM_END
 
 /* Game Drivers */
 
-GAME( 1982, mermaid,  0,        mermaid,  mermaid,  0, ROT0, "[Sanritsu] Rock-Ola", "Mermaid", GAME_SUPPORTS_SAVE )
-GAME( 1982, yachtmn,  mermaid,  mermaid,  yachtmn,  0, ROT0, "[Sanritsu] Esco", "Yachtsman", GAME_SUPPORTS_SAVE )
+GAME( 1982, mermaid,  0,        mermaid,  mermaid,  0, ROT0, "Sanritsu / Rock-Ola", "Mermaid", GAME_SUPPORTS_SAVE )
+GAME( 1982, yachtmn,  mermaid,  mermaid,  yachtmn,  0, ROT0, "Sanritsu / Esco", "Yachtsman", GAME_SUPPORTS_SAVE )
 GAME( 1982, rougien,  0,        mermaid,  rougien,  0, ROT0, "Sanritsu", "Rougien", GAME_SUPPORTS_SAVE )

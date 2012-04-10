@@ -625,7 +625,7 @@ static WRITE8_HANDLER( turbo_8279_w )
 static READ8_HANDLER( turbo_collision_r )
 {
 	turbo_state *state = (turbo_state *)space->machine->driver_data;
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 	return input_port_read(space->machine, "DSW3") | (state->turbo_collision & 15);
 }
 
@@ -633,7 +633,7 @@ static READ8_HANDLER( turbo_collision_r )
 static WRITE8_HANDLER( turbo_collision_clear_w )
 {
 	turbo_state *state = (turbo_state *)space->machine->driver_data;
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 	state->turbo_collision = 0;
 }
 
@@ -680,7 +680,7 @@ static READ8_HANDLER( buckrog_cpu2_command_r )
 {
 	/* assert ACK */
 	turbo_state *state = (turbo_state *)space->machine->driver_data;
-	ppi8255_set_port_c(devtag_get_device(space->machine, "ppi8255_0"), 0x00);
+	ppi8255_set_port_c(space->machine->device("ppi8255_0"), 0x00);
 	return state->buckrog_command;
 }
 
@@ -719,7 +719,7 @@ static READ8_HANDLER( buckrog_port_3_r )
 
 static TIMER_CALLBACK( delayed_ppi8255_w )
 {
-    ppi8255_w(devtag_get_device(machine, "ppi8255_0"), param >> 8, param & 0xff);
+    ppi8255_w(machine->device("ppi8255_0"), param >> 8, param & 0xff);
 }
 
 

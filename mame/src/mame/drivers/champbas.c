@@ -101,7 +101,7 @@ static VIDEO_EOF( champbas )
 	state->watchdog_count++;
 
 	if (state->watchdog_count == 0x10)
-		mame_schedule_soft_reset(machine);
+		machine->schedule_soft_reset();
 }
 
 
@@ -568,8 +568,8 @@ static MACHINE_START( champbas )
 {
 	champbas_state *state = (champbas_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->mcu = devtag_get_device(machine, CPUTAG_MCU);
+	state->maincpu = machine->device("maincpu");
+	state->mcu = machine->device(CPUTAG_MCU);
 
 	state_save_register_global(machine, state->watchdog_count);
 	state_save_register_global(machine, state->palette_bank);
@@ -579,7 +579,7 @@ static MACHINE_START( champbas )
 static MACHINE_START( exctsccr )
 {
 	champbas_state *state = (champbas_state *)machine->driver_data;
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	// FIXME
 	timer_pulse(machine, ATTOTIME_IN_HZ(75), NULL, 0, exctsccr_fm_callback); /* updates fm */
@@ -1236,10 +1236,10 @@ static DRIVER_INIT( exctsccr )
 
 GAME( 1982, talbot,     0,        talbot,   talbot,   0,        ROT270, "Alpha Denshi Co. (Volt Electronics license)", "Talbot", GAME_SUPPORTS_SAVE )
 
-GAME( 1983, champbas,   0,        champbas, champbas, champbas, ROT0,   "[Alpha Denshi Co.] (Sega license)", "Champion Base Ball", GAME_SUPPORTS_SAVE )
+GAME( 1983, champbas,   0,        champbas, champbas, champbas, ROT0,   "Alpha Denshi Co. (Sega license)", "Champion Base Ball", GAME_SUPPORTS_SAVE )
 GAME( 1983, champbasj,  champbas, champmcu, champbas, champbas, ROT0,   "Alpha Denshi Co.", "Champion Base Ball (Japan set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1983, champbasja, champbas, champbas, champbas, champbas, ROT0,   "Alpha Denshi Co.", "Champion Base Ball (Japan set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1983, champbb2,   0,        champmcu, champbas, champbas, ROT0,   "[Alpha Denshi Co.] (Sega license)", "Champion Base Ball Part-2: Pair Play (set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1983, champbb2,   0,        champmcu, champbas, champbas, ROT0,   "Alpha Denshi Co. (Sega license)", "Champion Base Ball Part-2: Pair Play (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1983, champbb2a,  champbb2, champmcu, champbas, champbas, ROT0,   "Alpha Denshi Co.", "Champion Baseball II (set 2)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )	// no dump
 GAME( 1983, champbb2j,  champbb2, champmcu, champbas, champbas, ROT0,   "Alpha Denshi Co.", "Champion Baseball II (Japan)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 

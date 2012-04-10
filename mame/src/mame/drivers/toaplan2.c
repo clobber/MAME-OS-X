@@ -209,7 +209,7 @@ Knuckle Bash                   Working, but sound FX only (missing music). MCU t
                                         Some PCBs use another version stamped 'NITRO' which is the same chip type.
 Truxton 2                      Working.
 Pipi & Bibis                   Working.
-Whoopee                        Working. Missing sound MCU dump. It's a Hitachi HD647180. Using bootleg sound CPU dump for now.
+Whoopee                        Working, but no sound. Missing sound MCU dump. It's a Hitachi HD647180.
 Pipi & Bibis (Ryouta Kikaku)   Working.
 FixEight                       Not working properly. Missing background GFX, and sound FX only (missing music). Both controlled by PLCC94 NEC V25+ MCU stamped 'TS-001-TURBO'
 FixEight bootleg               Working. One unknown ROM (same as pipibibi one). Region hardcoded to Korea (@ $4d8)
@@ -234,9 +234,6 @@ Notes:
 To Do / Unknowns:
     - Whoopee/Teki Paki sometimes tests bit 5 of the territory port
         just after testing for vblank. Why ?
-    - Whoppee is currently using the sound CPU ROM (Z80) from a differnt
-        (pirate ?) version of Pipi and Bibis (Ryouta Kikaku copyright).
-        It really has a HD647180 CPU, and its internal ROM needs to be dumped.
     - Fix top character text layer (implement the line position table).
     - Priority problem on 2nd player side of selection screen in FixEight (both original and bootleg)
     - Fixeight bootleg text in sound check mode does not display properly
@@ -322,7 +319,7 @@ static MACHINE_RESET( toaplan2 )
       This is important for games with common RAM; the RAM test will fail
       when leaving service mode if the sound CPU is not reset.
     */
-	m68k_set_reset_callback(devtag_get_device(machine, "maincpu"), toaplan2_reset);
+	m68k_set_reset_callback(machine->device("maincpu"), toaplan2_reset);
 }
 
 static MACHINE_RESET( ghox )
@@ -369,24 +366,24 @@ static void register_state_save(running_machine *machine)
 static DRIVER_INIT( T2_Z80 )		/* init_t2_Z80(); */
 {
 	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( T2_Z180 )
 {
 	toaplan2_sub_cpu = CPU_2_HD647180;
-	sub_cpu = devtag_get_device(machine, "mcu");
+	sub_cpu = machine->device("mcu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( T2_V25 )
 {
 	toaplan2_sub_cpu = CPU_2_V25;
-	if (devtag_get_device(machine, "mcu") != NULL)
-		sub_cpu = devtag_get_device(machine, "mcu");
-	else if (devtag_get_device(machine, "audiocpu") != NULL)
-		sub_cpu = devtag_get_device(machine, "audiocpu");
+	if (machine->device("mcu") != NULL)
+		sub_cpu = machine->device("mcu");
+	else if (machine->device("audiocpu") != NULL)
+		sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -398,7 +395,7 @@ static DRIVER_INIT( T2_noZ80 )
 
 static DRIVER_INIT( fixeight )
 {
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 
 	if (fixeight_sec_cpu_mem)
 	{
@@ -497,7 +494,7 @@ static DRIVER_INIT( pipibibi )
 	}
 
 	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -505,7 +502,7 @@ static DRIVER_INIT( batrider )
 {
 	raizing_sndirq_line = 4;
 	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -514,7 +511,7 @@ static DRIVER_INIT( bbakraid )
 	bbakraid_unlimited_ver = 0;
 	raizing_sndirq_line = 2;
 	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -523,7 +520,7 @@ static DRIVER_INIT( bbakradu )
 	bbakraid_unlimited_ver = 1;
 	raizing_sndirq_line = 2;
 	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = devtag_get_device(machine, "audiocpu");
+	sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -534,7 +531,7 @@ static DRIVER_INIT( bbakradu )
 
 static READ16_HANDLER( toaplan2_inputport_0_word_r )
 {
-	return ((video_screen_get_vpos(space->machine->primary_screen) + 15) % 262) >= 245;
+	return ((space->machine->primary_screen->vpos() + 15) % 262) >= 245;
 }
 
 
@@ -546,7 +543,7 @@ static TIMER_CALLBACK( toaplan2_raise_irq )
 static void toaplan2_vblank_irq(running_machine *machine, int irq_line)
 {
 	/* the IRQ appears to fire at line 0xe6 */
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 0xe6, 0), NULL, irq_line, toaplan2_raise_irq);
+	timer_set(machine, machine->primary_screen->time_until_pos(0xe6), NULL, irq_line, toaplan2_raise_irq);
 }
 
 static INTERRUPT_GEN( toaplan2_vblank_irq1 ) { toaplan2_vblank_irq(device->machine, 1); }
@@ -561,8 +558,8 @@ static READ16_HANDLER( video_count_r )
 	/* +---------+---------+--------+---------------------------+ */
 	/*************** Control Signals are active low ***************/
 
-	int hpos = video_screen_get_hpos(space->machine->primary_screen);
-	int vpos = video_screen_get_vpos(space->machine->primary_screen);
+	int hpos = space->machine->primary_screen->hpos();
+	int vpos = space->machine->primary_screen->vpos();
 	video_status = 0xff00;						/* Set signals inactive */
 
 	vpos = (vpos + 15) % 262;
@@ -578,7 +575,7 @@ static READ16_HANDLER( video_count_r )
 	else
 		video_status |= 0xff;
 
-//  logerror("VC: vpos=%04x hpos=%04x VBL=%04x\n",vpos,hpos,video_screen_get_vblank(space->machine->primary_screen));
+//  logerror("VC: vpos=%04x hpos=%04x VBL=%04x\n",vpos,hpos,space->machine->primary_screen->vblank());
 
 	return video_status;
 }
@@ -661,7 +658,7 @@ static WRITE16_HANDLER( shippumd_coin_word_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		toaplan2_coin_w(space, offset, data & 0xff);
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), (((data & 0x10) >> 4) * 0x40000));
+		space->machine->device<okim6295_device>("oki")->set_bank_base(((data & 0x10) >> 4) * 0x40000);
 	}
 	if (ACCESSING_BITS_8_15 && (data & 0xff00) )
 	{
@@ -879,7 +876,7 @@ static WRITE16_HANDLER( dogyuun_snd_cpu_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		mcu_data = data;
-		dogyuun_okisnd_w(devtag_get_device(space->machine, "oki"), data);
+		dogyuun_okisnd_w(space->machine->device("oki"), data);
 	}
 	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),mcu_data);
 }
@@ -917,7 +914,7 @@ static WRITE16_HANDLER( fixeight_sec_cpu_w )
 		if (mcu_data & 0xff00)
 		{
 			mcu_data = (mcu_data & 0xff00) | (data & 0xff);
-			fixeight_okisnd_w(devtag_get_device(space->machine, "oki"), data);
+			fixeight_okisnd_w(space->machine->device("oki"), data);
 		}
 		else if (mcu_data == 0xff00)
 		{
@@ -960,7 +957,7 @@ static WRITE16_HANDLER( batsugun_snd_cpu_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		mcu_data = data;
-		batsugun_okisnd_w(devtag_get_device(space->machine, "oki"), data);
+		batsugun_okisnd_w(space->machine->device("oki"), data);
 	}
 	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port %02x\n",cpu_get_previouspc(space->cpu),mcu_data,(offset*2));
 }
@@ -993,7 +990,7 @@ static WRITE16_HANDLER( kbash_snd_cpu_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		kbash_okisnd_w(devtag_get_device(space->machine, "oki"), data);
+		kbash_okisnd_w(space->machine->device("oki"), data);
 	}
 	logerror("PC:%06x Writing Sound command (%04x) to the NEC V25+ secondary CPU\n",cpu_get_previouspc(space->cpu),data);
 }
@@ -1003,7 +1000,7 @@ static WRITE16_DEVICE_HANDLER( oki_bankswitch_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		okim6295_set_bank_base(device, (data & 1) * 0x40000);
+		downcast<okim6295_device *>(device)->set_bank_base((data & 1) * 0x40000);
 	}
 }
 
@@ -1087,7 +1084,7 @@ static WRITE8_HANDLER( bgaregga_bankswitch_w )
 
 static WRITE8_HANDLER( raizing_okim6295_bankselect_0 )
 {
-	running_device *nmk112 = devtag_get_device(space->machine, "nmk112");
+	nmk112_device *nmk112 = space->machine->device<nmk112_device>("nmk112");
 
 	nmk112_okibank_w(nmk112, 0,  data		& 0x0f);	// chip 0 bank 0
 	nmk112_okibank_w(nmk112, 1, (data >> 4)	& 0x0f);	// chip 0 bank 1
@@ -1095,7 +1092,7 @@ static WRITE8_HANDLER( raizing_okim6295_bankselect_0 )
 
 static WRITE8_HANDLER( raizing_okim6295_bankselect_1 )
 {
-	running_device *nmk112 = devtag_get_device(space->machine, "nmk112");
+	nmk112_device *nmk112 = space->machine->device<nmk112_device>("nmk112");
 
 	nmk112_okibank_w(nmk112, 2,  data		& 0x0f);	// chip 0 bank 2
 	nmk112_okibank_w(nmk112, 3, (data >> 4)	& 0x0f);	// chip 0 bank 3
@@ -1103,7 +1100,7 @@ static WRITE8_HANDLER( raizing_okim6295_bankselect_1 )
 
 static WRITE8_HANDLER( raizing_okim6295_bankselect_2 )
 {
-	running_device *nmk112 = devtag_get_device(space->machine, "nmk112");
+	nmk112_device *nmk112 = space->machine->device<nmk112_device>("nmk112");
 
 	nmk112_okibank_w(nmk112, 4,  data		& 0x0f);	// chip 1 bank 0
 	nmk112_okibank_w(nmk112, 5, (data >> 4)	& 0x0f);	// chip 1 bank 1
@@ -1111,7 +1108,7 @@ static WRITE8_HANDLER( raizing_okim6295_bankselect_2 )
 
 static WRITE8_HANDLER( raizing_okim6295_bankselect_3 )
 {
-	running_device *nmk112 = devtag_get_device(space->machine, "nmk112");
+	nmk112_device *nmk112 = space->machine->device<nmk112_device>("nmk112");
 
 	nmk112_okibank_w(nmk112, 6,  data		& 0x0f);	// chip 1 bank 2
 	nmk112_okibank_w(nmk112, 7, (data >> 4)	& 0x0f);	// chip 1 bank 3
@@ -1270,7 +1267,7 @@ static const eeprom_interface bbakraid_93C66_intf =
 
 static READ16_HANDLER( bbakraid_nvram_r )
 {
-	running_device *eeprom = devtag_get_device(space->machine, "eeprom");
+	eeprom_device *eeprom = space->machine->device<eeprom_device>("eeprom");
 
 	/* Bit 1 returns the status of BUSAK from the Z80.
        BUSRQ is activated via bit 0x10 on the NVRAM write port.
@@ -1966,7 +1963,7 @@ ADDRESS_MAP_END
 
   Others are encrypted
 */
-#ifdef USE_ENCRYPTED_V25S
+
 /*
     AM_RANGE(0x21f000, 0x21f001) AM_READWRITE(toaplan2_snd_cpu_r, batsugun_snd_cpu_w)   ;V25+ Command/Status port
     AM_RANGE(0x21f004, 0x21f005) AM_READ_PORT("DSWA")
@@ -1990,12 +1987,390 @@ static READ8_HANDLER( v25s_internal_io_r )
 	return 0xff;
 }
 
+#define INVALID_WRITE logerror("write: invalid\n");
+
 static WRITE8_HANDLER( v25s_internal_io_w )
 {
-	printf("(PC=%05x) V25S internal I/O write %02x at [%04x]\n",cpu_get_pc(space->cpu),data,offset+0xf00);
+	logerror("(PC=%05x) V25S internal I/O write %02x at [%04x]\n",cpu_get_pc(space->cpu),data,offset+0xf00);
+
+	switch (offset)
+	{
+		/* 0x00 - 0x3f - Ports */
+
+		case 0x00:
+			logerror("write: Port 0 (P0)\n");
+			break;
+		case 0x01:
+			logerror("write: Port 0 Mode Register (PM0)\n");
+			break;
+		case 0x02:
+			logerror("write: Port 0 Mode Control Register (PMC0)\n");
+			break;
+
+		case 0x03: case 0x04: case 0x05: case 0x06: case 0x07: INVALID_WRITE break;
+
+		case 0x08:
+			logerror("write: Port 1 (P1)\n");
+			break;
+		case 0x09:
+			logerror("write: Port 1 Mode Register (PM1)\n");
+			break;
+		case 0x0A:
+			logerror("write: Port 1 Mode Control Register (PMC1)\n");
+			break;
+
+		case 0x0B: case 0x0C: case 0x0D: case 0x0E: case 0x0F: INVALID_WRITE break;
+
+		case 0x10:
+			logerror("write: Port 2 (P2)\n");
+			break;
+		case 0x11:
+			logerror("write: Port 2 Mode Register (PM2)\n");
+			break;
+		case 0x12:
+			logerror("write: Port 2 Mode Control Register (PMC2)\n");
+			break;
+
+		case 0x13: case 0x14: case 0x15: case 0x16: case 0x17: case 0x18: case 0x19: case 0x1A: case 0x1B: case 0x1C:
+		case 0x1D: case 0x1E: case 0x1F: case 0x20: case 0x21: case 0x22: case 0x23: case 0x24: case 0x25: case 0x26:
+		case 0x27: case 0x28: case 0x29: case 0x2A: case 0x2B: case 0x2C: case 0x2D: case 0x2E: case 0x2F: case 0x30:
+		case 0x31: case 0x32: case 0x33: case 0x34: case 0x35: case 0x36: case 0x37: INVALID_WRITE break;
+
+		case 0x38:
+			logerror("write: invalid (R/O) Port T (PT)\n");
+			break;
+
+		case 0x39: case 0x3a: INVALID_WRITE break;
+
+		case 0x3b:
+			logerror("write: Port T Mode Register(PMT)\n");
+			break;
+
+		case 0x3c: case 0x3d: case 0x3e: case 0x3f: INVALID_WRITE break;
+
+		/* 0x40 - 0x4f - Interrupts */
+
+		case 0x40:
+			logerror("write: External Interrupt Mode Register (INTM)\n");
+			break;
+
+		case 0x41: case 0x42: case 0x43: INVALID_WRITE break;
+
+		case 0x44:
+			logerror("write: External Interrupt Macro Service Control Register 0 (EMS0)\n");
+			break;
+		case 0x45:
+			logerror("write: External Interrupt Macro Service Control Register 1 (EMS1)\n");
+			break;
+		case 0x46:
+			logerror("write: External Interrupt Macro Service Control Register 2 (EMS2)\n");
+			break;
+
+		case 0x47: case 0x48: case 0x49: case 0x4a: case 0x4b: INVALID_WRITE break;
+
+		case 0x4c:
+			logerror("write: External Interrupt Request Control Register 0 (EXIC0)\n");
+			break;
+		case 0x4d:
+			logerror("write: External Interrupt Request Control Register 1 (EXIC1)\n");
+			break;
+		case 0x4e:
+			logerror("write: External Interrupt Request Control Register 2 (EXIC2)\n");
+			break;
+
+		case 0x4f: case 0x50: case 0x51: case 0x52: case 0x53: case 0x54: case 0x55: case 0x56: case 0x57: case 0x58:
+		case 0x59: case 0x5a: case 0x5b: case 0x5c: case 0x5d: case 0x5e: case 0x5f: INVALID_WRITE break;
+
+		/* 0x60 - 0x6f - Serial Port 0 */
+
+		case 0x60:
+			logerror("write: invalid (R/O) Recieve Buffer Register 0 (RxB0)\n");
+			break;
+
+		case 0x61: INVALID_WRITE break;
+
+		case 0x62:
+			logerror("write: Transmit Buffer Register 0 (TxB0)\n");
+			break;
+
+		case 0x63: case 0x64: INVALID_WRITE break;
+
+		case 0x65:
+			logerror("write: Serial Reception Macro Service Control Register 0 (SRMS0)\n");
+			break;
+		case 0x66:
+			logerror("write: Serial Transmission Macro Service Control Register 0 (STMS0)\n");
+			break;
+
+		case 0x67: INVALID_WRITE break;
+
+		case 0x68:
+			logerror("write: Serial Mode Register 0 (SCM0)\n");
+			break;
+		case 0x69:
+			logerror("write: Serial Control Register 0 (SCC0)\n");
+			break;
+		case 0x6a:
+			logerror("write: Baud Rate Generator Register 0 (BRG0)\n");
+			break;
+		case 0x6b:
+			logerror("write: invalid (R/O) Serial Status Register 0 (SCS0)\n");
+			break;
+		case 0x6c:
+			logerror("write: Serial Error Interrupt Request Control Register 0 (SEIC0)\n");
+			break;
+		case 0x6d:
+			logerror("write: Serial Reception Interrupt Request Control Register 0 (SRIC0)\n");
+			break;
+		case 0x6e:
+			logerror("write: Serial Transmission Interrupt Request Control Register 0 (STIC0)\n");
+			break;
+
+		case 0x6f: INVALID_WRITE break;
+
+		/* 0x70 - 0x7f - Serial Port 1 */
+		case 0x70:
+			logerror("write: invalid (R/O) Recieve Buffer Register 0 (RxB1)\n");
+			break;
+
+		case 0x71: INVALID_WRITE break;
+
+		case 0x72:
+			logerror("write: Transmit Buffer Register 0 (TxB1)\n");
+			break;
+
+		case 0x73: case 0x74: INVALID_WRITE break;
+
+		case 0x75:
+			logerror("write: Serial Reception Macro Service Control Register 0 (SRMS1)\n");
+			break;
+		case 0x76:
+			logerror("write: Serial Transmission Macro Service Control Register 0 (STMS1)\n");
+			break;
+
+		case 0x77: INVALID_WRITE break;
+
+		case 0x78:
+			logerror("write: Serial Mode Register 0 (SCM1)\n");
+			break;
+		case 0x79:
+			logerror("write: Serial Control Register 0 (SCC1)\n");
+			break;
+		case 0x7a:
+			logerror("write: Baud Rate Generator Register 0 (BRG1)\n");
+			break;
+		case 0x7b:
+			logerror("write: invalid (R/O) Serial Status Register 0 (SCS1)\n");
+			break;
+		case 0x7c:
+			logerror("write: Serial Error Interrupt Request Control Register 0 (SEIC1)\n");
+			break;
+		case 0x7d:
+			logerror("write: Serial Reception Interrupt Request Control Register 0 (SRIC1)\n");
+			break;
+		case 0x7e:
+			logerror("write: Serial Transmission Interrupt Request Control Register 0 (STIC1)\n");
+			break;
+
+		case 0x7f: INVALID_WRITE break;
+
+		/* 0x80 - 0x9f - Timers */
+
+		case 0x80:
+		case 0x81:
+			logerror("write: Timer Register 0 (16-bit) (TM0)\n");
+			break;
+		case 0x82:
+		case 0x83:
+			logerror("write: Modulo/Timer Register 0 (16-bit) (MD0)\n");
+			break;
+
+		case 0x84: case 0x85: case 0x86: case 0x87: INVALID_WRITE break;
+
+		case 0x88:
+		case 0x89:
+			logerror("write: Timer Register 1 (16-bit) (TM1)\n");
+			break;
+		case 0x8a:
+		case 0x8b:
+			logerror("write: Modulo/Timer Register 1 (16-bit) (MD1)\n");
+			break;
+
+		case 0x8c: case 0x8d: case 0x8e: case 0x8f:	INVALID_WRITE break;
+
+		case 0x90:
+			logerror("write: Timer Control Register 0 (TMC0)\n");
+			break;
+		case 0x91:
+			logerror("write: Timer Control Register 1 (TMC1)\n");
+			break;
+
+		case 0x92: case 0x93: INVALID_WRITE break;
+
+		case 0x94:
+			logerror("write: Timer Unit Macro Service Control Register 0 (TMMS0)\n");
+			break;
+		case 0x95:
+			logerror("write: Timer Unit Macro Service Control Register 1 (TMMS1)\n");
+			break;
+		case 0x96:
+			logerror("write: Timer Unit Macro Service Control Register 2 (TMMS2)\n");
+			break;
+
+		case 0x97: case 0x98: case 0x99: case 0x9a: case 0x9b: INVALID_WRITE break;
+
+		case 0x9c:
+			logerror("write: Timer Interrupt Request Control Register 0 (TMIC0)\n");
+			break;
+		case 0x9d:
+			logerror("write: Timer Interrupt Request Control Register 1 (TMIC1)\n");
+			break;
+		case 0x9e:
+			logerror("write: Timer Interrupt Request Control Register 2 (TMIC2)\n");
+			break;
+
+		case 0x9f: INVALID_WRITE break;
+
+		/* 0xa0 - 0xdf - DMA Regs */
+
+		case 0xa0:
+			logerror("write: DMA Control Register 0 (DMAC0)\n");
+			break;
+		case 0xa1:
+			logerror("write: DMA Mode Register 0 (DMAM0)\n");
+			break;
+		case 0xa2:
+			logerror("write: DMA Control Register 1 (DMAC1)\n");
+			break;
+		case 0xa3:
+			logerror("write: DMA Mode Register 1 (DMAM1)\n");
+			break;
+
+		case 0xa4:	case 0xa5: case 0xa6: case 0xa7: case 0xa8: case 0xa9: case 0xaa: case 0xab: INVALID_WRITE break;
+
+		case 0xac:
+			logerror("write: DMA Interrupt Request Control Register 0 (DIC0)\n");
+			break;
+		case 0xad:
+			logerror("write: DMA Interrupt Request Control Register 1 (DIC1)\n");
+			break;
+
+		case 0xae: case 0xaf: case 0xb0: case 0xb1: case 0xb2: case 0xb3: case 0xb4: case 0xb5: case 0xb6: case 0xb7:
+		case 0xb8: case 0xb9: case 0xba: case 0xbb: case 0xbc: case 0xbd: case 0xbe: case 0xbf: INVALID_WRITE break;
+
+		case 0xc0:
+			logerror("write: Source Address Pointer 0 (Low) (SAR0L)\n");
+			break;
+		case 0xc1:
+			logerror("write: Source Address Pointer 0 (Middle) (SAR0M)\n");
+			break;
+		case 0xc2:
+			logerror("write: Source Address Pointer 0 (High) (SAR0H)\n");
+			break;
+
+		case 0xc3: INVALID_WRITE break;
+
+		case 0xc4:
+			logerror("write: Destination Address Pointer 0 (Low) (DAR0L)\n");
+			break;
+		case 0xc5:
+			logerror("write: Destination Address Pointer 0 (Middle) (DAR0M)\n");
+			break;
+		case 0xc6:
+			logerror("write: Destination Address Pointer 0 (High) (DAR0H)\n");
+			break;
+
+		case 0xc7: INVALID_WRITE break;
+
+		case 0xc8:
+			logerror("write: Terminal Counter 0 (Low) (TC0L)\n");
+			break;
+		case 0xc9:
+			logerror("write: Terminal Counter 0 (High) (TC0H)\n");
+			break;
+
+		case 0xca: case 0xcb: case 0xcc: case 0xcd: case 0xce: case 0xcf: INVALID_WRITE break;
+
+		case 0xd0:
+			logerror("write: Source Address Pointer 1 (Low) (SAR1L)\n");
+			break;
+		case 0xd1:
+			logerror("write: Source Address Pointer 1 (Middle) (SAR1M)\n");
+			break;
+		case 0xd2:
+			logerror("write: Source Address Pointer 1 (High) (SAR1H)\n");
+			break;
+
+		case 0xd3: INVALID_WRITE break;
+
+		case 0xd4:
+			logerror("write: Destination Address Pointer 1 (Low) (DAR1L)\n");
+			break;
+		case 0xd5:
+			logerror("write: Destination Address Pointer 1 (Middle) (DAR1M)\n");
+			break;
+		case 0xd6:
+			logerror("write: Destination Address Pointer 1 (High) (DAR1H)\n");
+			break;
+
+		case 0xd7: INVALID_WRITE break;
+
+		case 0xd8:
+			logerror("write: Terminal Counter 1 (Low) (TC1L)\n");
+			break;
+		case 0xd9:
+			logerror("write: Terminal Counter 1 (High) (TC1H)\n");
+			break;
+
+		case 0xda: case 0xdb: case 0xdc: case 0xdd: case 0xde: case 0xdf: INVALID_WRITE break;
+
+		/* 0xe0 - 0xff misc */
+
+		case 0xe0:
+			logerror("write: Standby Control Register (STBC)\n");
+			break;
+		case 0xe1:
+			logerror("write: Refresh Mode Register (RFM)\n");
+			break;
+
+		case 0xe2: case 0xe3: case 0xe4: case 0xe5: case 0xe6: case 0xe7: INVALID_WRITE break;
+
+		case 0xe8:
+		case 0xe9:
+			logerror("write: Wait Control Register (16-bit) (WTC)\n");
+			break;
+		case 0xea:
+			logerror("write: User Flag Register (FLAG)\n");
+			break;
+		case 0xeb:
+			logerror("write: Processor Control Register (PRC)\n");
+			break;
+		case 0xec:
+			logerror("write: Time Base Interrupt Request Control Register (TBIC)\n");
+			break;
+
+		case 0xed: case 0xee: INVALID_WRITE break;
+
+		case 0xef:
+			logerror("write: invalid (R/O) Interrupt Source Register (IRQS)\n");
+			break;
+
+		case 0xf0: case 0xf1: case 0xf2: case 0xf3: case 0xf4: case 0xf5: case 0xf6: case 0xf7: case 0xf8: case 0xf9: case 0xfa: case 0xfb: INVALID_WRITE break;
+
+		case 0xfc:
+			logerror("write: invalid (R/O) Interrupt Priority Register (ISPR)\n");
+			break;
+
+		case 0xfd: case 0xfe: INVALID_WRITE break;
+
+		case 0xff:
+			logerror("write: internal data area base register (IDB)\n");
+			break;
+	}
 }
 
-/* FIXME: needs an irq to remove this, I've seen two irq routines that have encrypted opcodes... -AS */
+#ifdef USE_ENCRYPTED_V25S
+/* FIXME: needs an irq to remove this */
 static READ8_HANDLER( kludge_r )
 {
 	return 0xff;
@@ -2008,8 +2383,8 @@ static ADDRESS_MAP_START( V25_rambased_mem, ADDRESS_SPACE_PROGRAM, 8 )
 
 //  AM_RANGE(0x40000, 0x477ff) AM_RAM AM_SHARE("share7")
 	AM_RANGE(0x40e00, 0x40eff) AM_RAM //internal V25 RAM
-	#ifdef USE_ENCRYPTED_V25S
 	AM_RANGE(0x40f00, 0x40fff) AM_READWRITE(v25s_internal_io_r,v25s_internal_io_w)
+	#ifdef USE_ENCRYPTED_V25S
 	AM_RANGE(0x87ff9, 0x87ff9) AM_READ(kludge_r)
 	#endif
 
@@ -3353,41 +3728,38 @@ static const gfx_layout fixeighblayout =
 };
 
 static GFXDECODE_START( toaplan2 )
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,   0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0,  64 )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,   0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0, 0x1000 )
 GFXDECODE_END
 
 static GFXDECODE_START( 2 )
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,   0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0,  64 )
-	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,   0, 128 )
-	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 0,  64 )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,   0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout, 0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx2", 0, tilelayout,   0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 0, 0x1000 )
 GFXDECODE_END
 
 static GFXDECODE_START( truxton2 )
-	GFXDECODE_ENTRY( "gfx1", 0,       tilelayout            , 0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0,       spritelayout          , 0,  64 )
-//  GFXDECODE_ENTRY( "maincpu", 0x40000, truxton2_tx_tilelayout, 0, 128 )  /* Truxton 2 */
-//  GFXDECODE_ENTRY( "maincpu", 0x68000, truxton2_tx_tilelayout, 0, 128 )  /* Fix Eight */
+	GFXDECODE_ENTRY( "gfx1", 0,       tilelayout            , 0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0,       spritelayout          , 0, 0x1000 )
 	GFXDECODE_ENTRY( NULL, 0, truxton2_tx_tilelayout,  0, 128 )
 GFXDECODE_END
 
 static GFXDECODE_START( raizing )
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,         0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,       0,  64 )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,         0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,       0, 0x1000 )
 	GFXDECODE_ENTRY( "gfx2", 0, raizing_textlayout, 0, 128 )		/* Extra-text layer */
 GFXDECODE_END
 
-/* This is wrong a bit. Text layer is dynamically changed. */
 static GFXDECODE_START( batrider )
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,             0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,           0,  64 )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout,             0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout,           0, 0x1000 )
 	GFXDECODE_ENTRY( NULL,           0, batrider_tx_tilelayout, 0,  16 )
 GFXDECODE_END
 
 static GFXDECODE_START( fixeighb )
-	GFXDECODE_ENTRY( "gfx1", 0, tilelayout     , 0, 128 )
-	GFXDECODE_ENTRY( "gfx1", 0, spritelayout   , 0,  64 )
+	GFXDECODE_ENTRY( "gfx1", 0, tilelayout     , 0, 0x1000 )
+	GFXDECODE_ENTRY( "gfx1", 0, spritelayout   , 0, 0x1000 )
 	GFXDECODE_ENTRY( "gfx2", 0, fixeighblayout , 0, 128 )
 GFXDECODE_END
 
@@ -3434,7 +3806,7 @@ static MACHINE_DRIVER_START( tekipaki )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3473,7 +3845,7 @@ static MACHINE_DRIVER_START( ghox )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3535,7 +3907,7 @@ static MACHINE_DRIVER_START( dogyuun )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_1)
 	MDRV_VIDEO_EOF(toaplan2_1)
@@ -3547,8 +3919,7 @@ static MACHINE_DRIVER_START( dogyuun )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_25MHz/24) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", XTAL_25MHz/24, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3625,7 +3996,7 @@ static MACHINE_DRIVER_START( kbash )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3637,8 +4008,7 @@ static MACHINE_DRIVER_START( kbash )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32MHz/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3661,7 +4031,7 @@ static MACHINE_DRIVER_START( kbash2 )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3670,12 +4040,10 @@ static MACHINE_DRIVER_START( kbash2 )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_16MHz/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", XTAL_16MHz/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_16MHz/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", XTAL_16MHz/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3699,7 +4067,7 @@ static MACHINE_DRIVER_START( truxton2 )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(truxton2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(truxton2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3711,8 +4079,7 @@ static MACHINE_DRIVER_START( truxton2 )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_16MHz/4) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", XTAL_16MHz/4, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3741,7 +4108,7 @@ static MACHINE_DRIVER_START( pipibibs )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3763,11 +4130,10 @@ static MACHINE_DRIVER_START( whoopee )
 	MDRV_CPU_PROGRAM_MAP(tekipaki_68k_mem)
 	MDRV_CPU_VBLANK_INT("screen", toaplan2_vblank_irq4)
 
-	MDRV_CPU_ADD("audiocpu", Z80, XTAL_27MHz/8)			/* This should be a HD647180 */
-											/* Change this to 10MHz when HD647180 gets dumped. 10MHz Oscillator */
-	MDRV_CPU_PROGRAM_MAP(sound_z80_mem)
-
-	MDRV_QUANTUM_TIME(HZ(600))
+#ifdef USE_HD64x180
+	MDRV_CPU_ADD("mcu", Z180, XTAL_10MHz)			/* HD647180 CPU actually */
+	MDRV_CPU_PROGRAM_MAP(hd647180_mem)
+#endif
 
 	MDRV_MACHINE_RESET(toaplan2)
 
@@ -3781,7 +4147,7 @@ static MACHINE_DRIVER_START( whoopee )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3820,7 +4186,7 @@ static MACHINE_DRIVER_START( pipibibi )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3888,7 +4254,7 @@ static MACHINE_DRIVER_START( fixeight )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(truxton2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(truxton2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3900,8 +4266,7 @@ static MACHINE_DRIVER_START( fixeight )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_16MHz/16) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", XTAL_16MHz/16, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3924,7 +4289,7 @@ static MACHINE_DRIVER_START( fixeighb )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(fixeighb)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(truxton2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -3933,8 +4298,7 @@ static MACHINE_DRIVER_START( fixeighb )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_14MHz/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", XTAL_14MHz/16, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3993,7 +4357,7 @@ static MACHINE_DRIVER_START( vfive )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -4083,7 +4447,7 @@ static MACHINE_DRIVER_START( batsugun )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_1)
 	MDRV_VIDEO_EOF(toaplan2_1)
@@ -4096,8 +4460,7 @@ static MACHINE_DRIVER_START( batsugun )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 	MDRV_SOUND_CONFIG(batsugun_ym2151_interface)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32MHz/8)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/8, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -4121,7 +4484,7 @@ static MACHINE_DRIVER_START( snowbro2 )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(toaplan2)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(toaplan2_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -4133,8 +4496,7 @@ static MACHINE_DRIVER_START( snowbro2 )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_27MHz/10)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_27MHz/10, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -4163,7 +4525,7 @@ static MACHINE_DRIVER_START( mahoudai )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(raizing)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(bgaregga_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -4175,8 +4537,7 @@ static MACHINE_DRIVER_START( mahoudai )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32MHz/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -4205,7 +4566,7 @@ static MACHINE_DRIVER_START( shippumd )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(raizing)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(bgaregga_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -4217,8 +4578,7 @@ static MACHINE_DRIVER_START( shippumd )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono",1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32MHz/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -4247,7 +4607,7 @@ static MACHINE_DRIVER_START( bgaregga )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(raizing)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(bgaregga_0)
 	MDRV_VIDEO_EOF(toaplan2_0)
@@ -4259,8 +4619,7 @@ static MACHINE_DRIVER_START( bgaregga )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_32MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32MHz/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NMK112_ADD("nmk112", bgaregga_nmk112_intf)
@@ -4292,7 +4651,7 @@ static MACHINE_DRIVER_START( batrider )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(batrider)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(batrider_0)
 	MDRV_VIDEO_UPDATE(batrider_0)
@@ -4303,12 +4662,10 @@ static MACHINE_DRIVER_START( batrider )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_32MHz/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, XTAL_32MHz/10)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", XTAL_32MHz/10, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, XTAL_32MHz/10)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki2", XTAL_32MHz/10, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NMK112_ADD("nmk112", batrider_nmk112_intf)
@@ -4341,7 +4698,7 @@ static MACHINE_DRIVER_START( bbakraid )
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
 	MDRV_GFXDECODE(batrider)
-	MDRV_PALETTE_LENGTH(2048)
+	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
 	MDRV_VIDEO_START(batrider_0)
 	MDRV_VIDEO_UPDATE(batrider_0)
@@ -4376,7 +4733,7 @@ ROM_START( tekipaki )
 	ROM_LOAD16_BYTE( "tp020-1.bin", 0x000000, 0x010000, CRC(d8420bd5) SHA1(30c1ad9e053cd7e79adb42aa428ebee28e144755) )
 	ROM_LOAD16_BYTE( "tp020-2.bin", 0x000001, 0x010000, CRC(7222de8e) SHA1(8352ae23efc24a2e20cc24b6d37cb8fc6b1a730c) )
 
-	ROM_REGION( 0x10000, "cpu1", 0 )			/* Sound HD647180 code */
+	ROM_REGION( 0x10000, "audiocpu", 0 )			/* Sound HD647180 code */
 	/* sound CPU is a HD647180 (Z180) with internal ROM - not yet supported */
 	ROM_LOAD( "hd647180.020", 0x00000, 0x08000, NO_DUMP )
 
@@ -4391,7 +4748,7 @@ ROM_START( ghox ) /* Spinner with single axis (up/down) controls */
 	ROM_LOAD16_BYTE( "tp021-01.u10", 0x000000, 0x020000, CRC(9e56ac67) SHA1(daf241d9e55a6e60fc004ed61f787641595b1e62) )
 	ROM_LOAD16_BYTE( "tp021-02.u11", 0x000001, 0x020000, CRC(15cac60f) SHA1(6efa3a50a5dfe6ef4072738d6a7d0d95dca8a675) )
 
-	ROM_REGION( 0x10000, "cpu1", 0 )			/* Sound HD647180 code */
+	ROM_REGION( 0x10000, "audiocpu", 0 )			/* Sound HD647180 code */
 	/* sound CPU is a HD647180 (Z180) with internal ROM - not yet supported */
 	ROM_LOAD( "hd647180.021", 0x00000, 0x08000, NO_DUMP )
 
@@ -4406,7 +4763,7 @@ ROM_START( ghoxj ) /* 8-way joystick for controls */
 	ROM_LOAD16_BYTE( "tp021-01a.u10", 0x000000, 0x020000, CRC(c11b13c8) SHA1(da7defc1d3b6ddded910ba56c31fbbdb5ed57b09) )
 	ROM_LOAD16_BYTE( "tp021-02a.u11", 0x000001, 0x020000, CRC(8d426767) SHA1(1ed4a8bcbf4352257e7d58cb5c2c91eb48c2f047) )
 
-	ROM_REGION( 0x10000, "cpu1", 0 )			/* Sound HD647180 code */
+	ROM_REGION( 0x10000, "audiocpu", 0 )			/* Sound HD647180 code */
 	/* sound CPU is a HD647180 (Z180) with internal ROM - not yet supported */
 	ROM_LOAD( "hd647180.021", 0x00000, 0x08000, NO_DUMP )
 
@@ -4578,10 +4935,9 @@ ROM_START( whoopee )
 	ROM_LOAD16_BYTE( "whoopee.1", 0x000000, 0x020000, CRC(28882e7e) SHA1(8fcd278a7d005eb81cd9e461139c0c0f756a4fa4) )
 	ROM_LOAD16_BYTE( "whoopee.2", 0x000001, 0x020000, CRC(6796f133) SHA1(d4e657be260ba3fd3f0556ade617882513b52685) )
 
-	ROM_REGION( 0x10000, "audiocpu", 0 )			/* Sound Z80 code */
+	ROM_REGION( 0x10000, "audiocpu", 0 )			/* Sound HD647180 code */
 	/* sound CPU is a HD647180 (Z180) with internal ROM - not yet supported */
-	/* use the Z80 version from the bootleg Pipi & Bibis set for now */
-	ROM_LOAD( "hd647180.025", 0x00000, 0x08000, BAD_DUMP CRC(101c0358) SHA1(162e02d00b7bdcdd3b48a0cd0527b7428435ec50)  )
+	ROM_LOAD( "hd647180.025", 0x00000, 0x08000, NO_DUMP )
 
 	ROM_REGION( 0x200000, "gfx1", 0 )
 	ROM_LOAD( "tp025-4.bin", 0x000000, 0x100000, CRC(ab97f744) SHA1(c1620e614345dbd5c6567e4cb6f55c61b900d0ee) )
@@ -5432,8 +5788,6 @@ ROM_END
 
 /* The following is in order of Toaplan Board/game numbers */
 /* See list at top of file */
-/* Whoopee machine to be changed to Teki Paki when (if) HD647180 is dumped */
-/* Whoopee  init   to be changed to T2_Z180   when (if) HD647180 is dumped */
 
 /*  ( YEAR  NAME      PARENT    MACHINE   INPUT     INIT      MONITOR COMPANY    FULLNAME     FLAGS ) */
 GAME( 1991, tekipaki, 0,        tekipaki, tekipaki, T2_Z180,  ROT0,   "Toaplan", "Teki Paki", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
@@ -5441,8 +5795,8 @@ GAME( 1991, tekipaki, 0,        tekipaki, tekipaki, T2_Z180,  ROT0,   "Toaplan",
 GAME( 1991, ghox,     0,        ghox,     ghox,     T2_Z180,  ROT270, "Toaplan", "Ghox (Spinner with Up/Down Axis)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1991, ghoxj,    ghox,     ghox,     ghox,     T2_Z180,  ROT270, "Toaplan", "Ghox (8-Way Joystick)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
-GAME( 1992, dogyuun,  0,        dogyuun,  dogyuun,  T2_V25,   ROT270, "Toaplan", "Dogyuun", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1992, dogyuunk, dogyuun,  dogyuun,  dogyuunk, T2_V25,   ROT270, "Toaplan", "Dogyuun (Licensed to Unite Trading For Korea)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1992, dogyuun,  0,        dogyuun,  dogyuun,  T2_V25,   ROT270, "Toaplan", "Dogyuun", GAME_NO_SOUND | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
+GAME( 1992, dogyuunk, dogyuun,  dogyuun,  dogyuunk, T2_V25,   ROT270, "Toaplan", "Dogyuun (Unite Trading license)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
 
 GAME( 1993, kbash,    0,        kbash,    kbash,    T2_V25,   ROT0,   "Toaplan", "Knuckle Bash", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 
@@ -5452,8 +5806,8 @@ GAME( 1992, truxton2, 0,        truxton2, truxton2, T2_noZ80, ROT270, "Toaplan",
 
 GAME( 1991, pipibibs, 0,        pipibibs, pipibibs, T2_Z80,   ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Z80 sound cpu, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1991, pipibibsa,pipibibs, pipibibs, pipibibs, T2_Z80,   ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Z80 sound cpu, set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1991, whoopee,  pipibibs, whoopee,  whoopee,  T2_Z80,   ROT0,   "Toaplan", "Whoopee!! / Pipi & Bibis", GAME_SUPPORTS_SAVE ) // original Whoopee!! boards have a HD647180 instead
-GAME( 1991, pipibibi, pipibibs, pipibibi, pipibibi, pipibibi, ROT0,   "[Toaplan] Ryouta Kikaku", "Pipi & Bibis / Whoopee!! (bootleg?)", GAME_SUPPORTS_SAVE )
+GAME( 1991, whoopee,  pipibibs, whoopee,  whoopee,  T2_Z180,  ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Whoopee!! board)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE ) // original Whoopee!! boards have a HD647180 instead of Z80
+GAME( 1991, pipibibi, pipibibs, pipibibi, pipibibi, pipibibi, ROT0,   "bootleg? (Ryouta Kikaku)", "Pipi & Bibis / Whoopee!! (bootleg?)", GAME_SUPPORTS_SAVE )
 
 GAME( 1992, fixeight, 0,        fixeight, fixeight, fixeight, ROT270, "Toaplan", "FixEight", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1992, fixeightb,fixeight, fixeighb, fixeighb, fixeighb, ROT270, "bootleg", "FixEight (bootleg)", GAME_SUPPORTS_SAVE )
@@ -5462,11 +5816,11 @@ GAME( 1992, grindstm, vfive,    vfive,    grindstm, T2_V25,   ROT270, "Toaplan",
 GAME( 1992, grindstma,vfive,    vfive,    grindstm, T2_V25,   ROT270, "Toaplan", "Grind Stormer (older set)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1993, vfive,    0,        vfive,    vfive,    T2_V25,   ROT270, "Toaplan", "V-Five (Japan)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
-GAME( 1993, batsugun,  0,        batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 1)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1993, batsuguna, batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 2)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1993, batsugunsp,batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (Special Ver.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1993, batsugun,  0,        batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 1)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
+GAME( 1993, batsuguna, batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 2)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
+GAME( 1993, batsugunsp,batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (Special Ver.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
 
-GAME( 1994, snowbro2, 0,        snowbro2, snowbro2, T2_noZ80, ROT0,   "[Toaplan] Hanafram", "Snow Bros. 2 - With New Elves / Otenki Paradise", GAME_SUPPORTS_SAVE )
+GAME( 1994, snowbro2, 0,        snowbro2, snowbro2, T2_noZ80, ROT0,   "Hanafram", "Snow Bros. 2 - With New Elves / Otenki Paradise", GAME_SUPPORTS_SAVE )
 
 GAME( 1993, mahoudai, 0,        mahoudai, mahoudai, T2_Z80,   ROT270, "Raizing (Able license)", "Mahou Daisakusen (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1993, sstriker, mahoudai, mahoudai, sstriker, T2_Z80,   ROT270, "Raizing", "Sorcer Striker (World)" , GAME_SUPPORTS_SAVE ) // from korean board

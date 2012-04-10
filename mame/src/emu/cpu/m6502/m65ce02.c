@@ -74,8 +74,8 @@ struct	_m65ce02_Regs {
 	UINT8	nmi_state;
 	UINT8	irq_state;
 	int		icount;
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *space;
 	read8_space_func rdmem_id;					/* readmem callback for indexed instructions */
 	write8_space_func wrmem_id;					/* writemem callback for indexed instructions */
@@ -84,10 +84,8 @@ struct	_m65ce02_Regs {
 INLINE m65ce02_Regs *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_M65CE02);
-	return (m65ce02_Regs *)device->token;
+	assert(device->type() == M65CE02);
+	return (m65ce02_Regs *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 /***************************************************************
@@ -102,7 +100,7 @@ static void default_wdmem_id(const address_space *space, offs_t address, UINT8 d
 static CPU_INIT( m65ce02 )
 {
 	m65ce02_Regs *cpustate = get_safe_token(device);
-	const m6502_interface *intf = (const m6502_interface *)device->baseconfig().static_config;
+	const m6502_interface *intf = (const m6502_interface *)device->baseconfig().static_config();
 
 	cpustate->rdmem_id = default_rdmem_id;
 	cpustate->wrmem_id = default_wdmem_id;
@@ -170,8 +168,6 @@ static CPU_EXECUTE( m65ce02 )
 {
 	m65ce02_Regs *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		UINT8 op;
@@ -206,8 +202,6 @@ static CPU_EXECUTE( m65ce02 )
 			m65ce02_take_irq(cpustate);
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 static void m65ce02_set_irq_line(m65ce02_Regs *cpustate, int irqline, int state)
@@ -276,7 +270,7 @@ static CPU_SET_INFO( m65ce02 )
 
 CPU_GET_INFO( m65ce02 )
 {
-	m65ce02_Regs *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	m65ce02_Regs *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch( state )
 	{
@@ -365,3 +359,5 @@ CPU_GET_INFO( m65ce02 )
 		case CPUINFO_STR_REGISTER + M65CE02_ZP:			sprintf(info->s, "ZP:%03X", cpustate->zp.w.l); break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(M65CE02, m65ce02);

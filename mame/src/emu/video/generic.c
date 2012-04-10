@@ -251,7 +251,7 @@ void generic_video_init(running_machine *machine)
 VIDEO_START( generic_bitmapped )
 {
 	/* allocate the temporary bitmap */
-	machine->generic.tmpbitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	machine->generic.tmpbitmap = machine->primary_screen->alloc_compatible_bitmap();
 
 	/* ensure the contents of the bitmap are saved */
 	state_save_register_global_bitmap(machine, machine->generic.tmpbitmap);
@@ -389,10 +389,10 @@ void buffer_spriteram_2(running_machine *machine, UINT8 *ptr, int length)
 static void updateflip(running_machine *machine)
 {
 	generic_video_private *state = machine->generic_video_data;
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
-	attoseconds_t period = video_screen_get_frame_period(machine->primary_screen).attoseconds;
-	rectangle visarea = *video_screen_get_visible_area(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
+	attoseconds_t period = machine->primary_screen->frame_period().attoseconds;
+	rectangle visarea = machine->primary_screen->visible_area();
 
 	tilemap_set_flip_all(machine,(TILEMAP_FLIPX & state->flip_screen_x) | (TILEMAP_FLIPY & state->flip_screen_y));
 
@@ -413,7 +413,7 @@ static void updateflip(running_machine *machine)
 		visarea.max_y = temp;
 	}
 
-	video_screen_configure(machine->primary_screen, width, height, &visarea, period);
+	machine->primary_screen->configure(width, height, visarea, period);
 }
 
 
@@ -523,7 +523,7 @@ PALETTE_INIT( all_black )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		palette_set_color(machine,i,RGB_BLACK); /* black */
 	}
@@ -577,7 +577,7 @@ PALETTE_INIT( RRRR_GGGG_BBBB )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0,bit1,bit2,bit3,r,g,b;
 
@@ -589,17 +589,17 @@ PALETTE_INIT( RRRR_GGGG_BBBB )
 		r = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
 		/* green component */
-		bit0 = (color_prom[i + machine->config->total_colors] >> 0) & 0x01;
-		bit1 = (color_prom[i + machine->config->total_colors] >> 1) & 0x01;
-		bit2 = (color_prom[i + machine->config->total_colors] >> 2) & 0x01;
-		bit3 = (color_prom[i + machine->config->total_colors] >> 3) & 0x01;
+		bit0 = (color_prom[i + machine->total_colors()] >> 0) & 0x01;
+		bit1 = (color_prom[i + machine->total_colors()] >> 1) & 0x01;
+		bit2 = (color_prom[i + machine->total_colors()] >> 2) & 0x01;
+		bit3 = (color_prom[i + machine->total_colors()] >> 3) & 0x01;
 		g = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
 		/* blue component */
-		bit0 = (color_prom[i + 2*machine->config->total_colors] >> 0) & 0x01;
-		bit1 = (color_prom[i + 2*machine->config->total_colors] >> 1) & 0x01;
-		bit2 = (color_prom[i + 2*machine->config->total_colors] >> 2) & 0x01;
-		bit3 = (color_prom[i + 2*machine->config->total_colors] >> 3) & 0x01;
+		bit0 = (color_prom[i + 2*machine->total_colors()] >> 0) & 0x01;
+		bit1 = (color_prom[i + 2*machine->total_colors()] >> 1) & 0x01;
+		bit2 = (color_prom[i + 2*machine->total_colors()] >> 2) & 0x01;
+		bit3 = (color_prom[i + 2*machine->total_colors()] >> 3) & 0x01;
 		b = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
 		palette_set_color(machine,i,MAKE_RGB(r,g,b));
@@ -925,6 +925,12 @@ WRITE8_HANDLER( paletteram_xRRRRRGGGGGBBBBB_le_w )
 {
 	space->machine->generic.paletteram.u8[offset] = data;
 	set_color_555(space->machine, offset / 2, 10, 5, 0, paletteram16_le(space->machine, offset));
+}
+
+WRITE8_HANDLER( paletteram_xRRRRRGGGGGBBBBB_be_w )
+{
+	space->machine->generic.paletteram.u8[offset] = data;
+	set_color_555(space->machine, offset / 2, 10, 5, 0, paletteram16_be(space->machine, offset));
 }
 
 WRITE8_HANDLER( paletteram_xRRRRRGGGGGBBBBB_split1_w )

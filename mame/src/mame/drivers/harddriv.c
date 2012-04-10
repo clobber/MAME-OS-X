@@ -3632,21 +3632,6 @@ ROM_END
  *
  *************************************/
 
-/* COMMON INIT: find all the CPUs */
-static void find_cpus(running_machine *machine)
-{
-	harddriv_state *state = (harddriv_state *)machine->driver_data;
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->gsp = devtag_get_device(machine, "gsp");
-	state->msp = devtag_get_device(machine, "msp");
-	state->adsp = devtag_get_device(machine, "adsp");
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
-	state->sounddsp = devtag_get_device(machine, "sounddsp");
-	state->jsacpu = devtag_get_device(machine, "jsa");
-	state->dsp32 = devtag_get_device(machine, "dsp32");
-}
-
-
 static const UINT16 default_eeprom[] =
 {
 	1,
@@ -3660,9 +3645,6 @@ static void init_driver(running_machine *machine)
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
 
-	/* assume we're first to be called */
-	find_cpus(machine);
-
 	/* note that we're not multisync and set the default EEPROM data */
 	state->gsp_multisync = FALSE;
 	state->atarigen.eeprom_default = default_eeprom;
@@ -3673,9 +3655,6 @@ static void init_driver(running_machine *machine)
 static void init_multisync(running_machine *machine, int compact_inputs)
 {
 	harddriv_state *state = (harddriv_state *)machine->driver_data;
-
-	/* assume we're first to be called */
-	find_cpus(machine);
 
 	/* note that we're multisync and set the default EEPROM data */
 	state->gsp_multisync = TRUE;
@@ -3735,11 +3714,11 @@ static void init_ds3(running_machine *machine)
 	memory_install_write16_handler(cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM), 0x823800, 0x823fff, 0, 0, hd68k_ds3_control_w);
 
 	/* if we have a sound DSP, boot it */
-	if (state->soundcpu != NULL && cpu_get_type(state->soundcpu) == CPU_ADSP2105)
-		adsp2105_load_boot_data(state->soundcpu->region->base.u8 + 0x10000, state->soundcpu->region->base.u32);
+	if (state->soundcpu != NULL && state->soundcpu->type() == ADSP2105)
+		adsp2105_load_boot_data(state->soundcpu->region()->base() + 0x10000, &state->soundcpu->region()->u32());
 
-	if (state->sounddsp != NULL && cpu_get_type(state->sounddsp) == CPU_ADSP2105)
-		adsp2105_load_boot_data(state->sounddsp->region->base.u8 + 0x10000, state->sounddsp->region->base.u32);
+	if (state->sounddsp != NULL && state->sounddsp->type() == ADSP2105)
+		adsp2105_load_boot_data(state->sounddsp->region()->base() + 0x10000, &state->sounddsp->region()->u32());
 
 /*
 
@@ -3994,10 +3973,7 @@ static READ32_HANDLER( rddsp32_speedup_r )
 		int cycles_to_burn = 17 * 4 * (0x2bc - r1 - 2);
 		if (cycles_to_burn > 20 * 4)
 		{
-			int icount_remaining = *cpu_get_icount_ptr(space->cpu);
-			if (cycles_to_burn > icount_remaining)
-				cycles_to_burn = icount_remaining;
-			cpu_adjust_icount(space->cpu, -cycles_to_burn);
+			cpu_eat_cycles(space->cpu, cycles_to_burn);
 			memory_write_word(space, r14 - 0x14, r1 + cycles_to_burn / 17);
 		}
 		state->msp_speedup_count[0]++;

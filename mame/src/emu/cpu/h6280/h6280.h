@@ -60,8 +60,8 @@ typedef struct
     UINT8 nmi_state;
     UINT8 irq_state[3];
 	UINT8 irq_pending;
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 
@@ -72,9 +72,7 @@ typedef struct
 } h6280_Regs;
 
 
-
-CPU_GET_INFO( h6280 );
-#define CPU_H6280 CPU_GET_INFO_NAME( h6280 )
+DECLARE_LEGACY_CPU_DEVICE(H6280, h6280);
 
 READ8_HANDLER( h6280_irq_status_r );
 WRITE8_HANDLER( h6280_irq_status_w );

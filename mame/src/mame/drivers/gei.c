@@ -150,13 +150,13 @@ static WRITE8_DEVICE_HANDLER( sound_w )
 	set_led_status(device->machine, 9,data & 0x08);
 
 	/* bit 5 - ticket out in trivia games */
-	ticket_dispenser_w(devtag_get_device(device->machine, "ticket"), 0, (data & 0x20)<< 2);
+	ticket_dispenser_w(device->machine->device("ticket"), 0, (data & 0x20)<< 2);
 
 	/* bit 6 enables NMI */
 	interrupt_enable_w(space, 0, data & 0x40);
 
 	/* bit 7 goes directly to the sound amplifier */
-	dac_data_w(devtag_get_device(device->machine, "dac"), ((data & 0x80) >> 7) * 255);
+	dac_data_w(device->machine->device("dac"), ((data & 0x80) >> 7) * 255);
 }
 
 static WRITE8_DEVICE_HANDLER( sound2_w )
@@ -173,7 +173,7 @@ static WRITE8_DEVICE_HANDLER( sound2_w )
 	set_led_status(device->machine, 12,data & 0x20);
 
 	/* bit 7 goes directly to the sound amplifier */
-	dac_data_w(devtag_get_device(device->machine, "dac"), ((data & 0x80) >> 7) * 255);
+	dac_data_w(device->machine->device("dac"), ((data & 0x80) >> 7) * 255);
 }
 
 static WRITE8_DEVICE_HANDLER( lamps2_w )
@@ -1861,20 +1861,20 @@ GAME( 1984, gt103asx, gtsers8,  findout,  gt103a,   0,       ROT0, "Greyhound El
 GAME( 1985, sextriv1, 0,        getrivia, sextriv1, 0,       ROT0, "Kinky Kit and Game Co.", "Sexual Trivia (Version 1.02SB, set 1)",  GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1985, sextriv2, sextriv1, getrivia, sextriv1, 0,       ROT0, "Kinky Kit and Game Co.", "Sexual Trivia (Version 1.02SB, set 2)",  GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1986, gt507uk,  0,        findout,  gt507uk,  0,       ROT0, "Grayhound Electronics", "Trivia (UK Version 5.07)",                GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1986, gt5,      0,        findout,  gt103,    0,       ROT0, "Grayhound Electronics", "Trivia (Version 5.06)",                   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, gt507uk,  0,        findout,  gt507uk,  0,       ROT0, "Greyhound Electronics", "Trivia (UK Version 5.07)",                GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, gt5,      0,        findout,  gt103,    0,       ROT0, "Greyhound Electronics", "Trivia (Version 5.06)",                   GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1986, quiz,     0,        findout,  quiz,     0,       ROT0, "Italian bootleg",       "Quiz (Revision 2)",                       GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, quiz,     0,        findout,  quiz,     0,       ROT0, "bootleg",               "Quiz (Revision 2)",                       GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 GAME( 1986, quizvid,  0,        quizvid,  quiz,     0,       ROT0, "bootleg",               "Video Quiz",                              GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1986, reelfun,  0,        findout,  reelfun,  0,       ROT0, "Grayhound Electronics", "Reel Fun (Version 7.03)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1986, reelfun1, reelfun,  findout,  reelfun,  0,       ROT0, "Grayhound Electronics", "Reel Fun (Version 7.01)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, reelfun,  0,        findout,  reelfun,  0,       ROT0, "Greyhound Electronics", "Reel Fun (Version 7.03)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, reelfun1, reelfun,  findout,  reelfun,  0,       ROT0, "Greyhound Electronics", "Reel Fun (Version 7.01)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1987, findout,  0,        findout,  findout,  0,       ROT0, "Elettronolo",           "Find Out (Version 4.04)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1987, suprpokr, 0,        suprpokr, suprpokr, 0,       ROT0, "Grayhound Electronics", "Super Poker",                             GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1987, suprpokr, 0,        suprpokr, suprpokr, 0,       ROT0, "Greyhound Electronics", "Super Poker",                             GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 GAME( 1991, quiz211,  0,        findout,  quiz,     0,       ROT0, "Elettronolo",           "Quiz (Revision 2.11)",                    GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1992, geimulti, 0,        geimulti, geimulti, geimulti,ROT0, "Grayhound Electronics",  "GEI Multi Game",                         GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1992, geimulti, 0,        geimulti, geimulti, geimulti,ROT0, "Greyhound Electronics",  "GEI Multi Game",                         GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1992, sprtauth, 0,        sprtauth, sprtauth, geimulti,ROT0, "Classic Games",          "Sports Authority",                       GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

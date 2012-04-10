@@ -65,7 +65,7 @@ bootleg todo:
 
 static WRITE16_DEVICE_HANDLER(pktgaldx_oki_bank_w)
 {
-	okim6295_set_bank_base(device, (data & 3) * 0x40000);
+	downcast<okim6295_device *>(device)->set_bank_base((data & 3) * 0x40000);
 }
 
 /**********************************************************************************/
@@ -314,8 +314,8 @@ static MACHINE_START( pktgaldx )
 {
 	pktgaldx_state *state = (pktgaldx_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->deco16ic = machine->device("deco_custom");
 }
 
 static MACHINE_DRIVER_START( pktgaldx )
@@ -348,13 +348,11 @@ static MACHINE_DRIVER_START( pktgaldx )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
 MACHINE_DRIVER_END
@@ -388,13 +386,11 @@ static MACHINE_DRIVER_START( pktgaldb )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
 MACHINE_DRIVER_END
@@ -466,5 +462,5 @@ static DRIVER_INIT( pktgaldx )
 }
 
 GAME( 1992, pktgaldx,  0,        pktgaldx, pktgaldx, pktgaldx,  ROT0, "Data East Corporation", "Pocket Gal Deluxe (Euro v3.00)", GAME_SUPPORTS_SAVE )
-GAME( 1993, pktgaldxj, pktgaldx, pktgaldx, pktgaldx, pktgaldx,  ROT0, "Nihon System",          "Pocket Gal Deluxe (Japan v3.00)", GAME_SUPPORTS_SAVE )
+GAME( 1993, pktgaldxj, pktgaldx, pktgaldx, pktgaldx, pktgaldx,  ROT0, "Data East Corporation (Nihon System license)", "Pocket Gal Deluxe (Japan v3.00)", GAME_SUPPORTS_SAVE )
 GAME( 1992, pktgaldxb, pktgaldx, pktgaldb, pktgaldx, 0,         ROT0, "bootleg",               "Pocket Gal Deluxe (Euro v3.00, bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )

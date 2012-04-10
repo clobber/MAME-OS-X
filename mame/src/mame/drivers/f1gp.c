@@ -449,8 +449,8 @@ static MACHINE_START( f1gp )
 
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x8000);
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->k053936 = devtag_get_device(machine, "k053936");
+	state->audiocpu = machine->device("audiocpu");
+	state->k053936 = machine->device("k053936");
 
 	MACHINE_START_CALL(f1gpb);
 }
@@ -553,8 +553,7 @@ static MACHINE_DRIVER_START( f1gpb )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
 MACHINE_DRIVER_END
@@ -727,6 +726,6 @@ ROM_END
 
 
 GAME( 1991, f1gp,  0,    f1gp,  f1gp,  0, ROT90, "Video System Co.", "F-1 Grand Prix", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1991, f1gpb, f1gp, f1gpb, f1gp,  0, ROT90, "[Video System Co.] (Playmark bootleg)", "F-1 Grand Prix (Playmark bootleg)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE ) // PCB marked 'Super Formula II', manufactured by Playmark.
+GAME( 1991, f1gpb, f1gp, f1gpb, f1gp,  0, ROT90, "bootleg (Playmark)", "F-1 Grand Prix (Playmark bootleg)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE ) // PCB marked 'Super Formula II', manufactured by Playmark.
 
 GAME( 1992, f1gp2, 0,    f1gp2, f1gp2, 0, ROT90, "Video System Co.", "F-1 Grand Prix Part II", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )

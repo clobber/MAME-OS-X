@@ -280,8 +280,8 @@ static MACHINE_START( actfancr )
 {
 	actfancr_state *state = (actfancr_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 }
 
 static MACHINE_START( triothep )
@@ -360,8 +360,7 @@ static MACHINE_DRIVER_START( actfancr )
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1024188)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1024188, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
 MACHINE_DRIVER_END
 
@@ -409,8 +408,7 @@ static MACHINE_DRIVER_START( triothep )
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_1_056MHz) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", XTAL_1_056MHz, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
 MACHINE_DRIVER_END
 

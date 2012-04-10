@@ -654,8 +654,8 @@ static MACHINE_START( hyprduel )
 {
 	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->subcpu = devtag_get_device(machine, "sub");
+	state->maincpu = machine->device("maincpu");
+	state->subcpu = machine->device("sub");
 
 	state_save_register_global(machine, state->blitter_bit);
 	state_save_register_global(machine, state->requested_int);
@@ -711,8 +711,7 @@ static MACHINE_DRIVER_START( hyprduel )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 4000000/16/16*132)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 4000000/16/16*132, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.57)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.57)
 MACHINE_DRIVER_END
@@ -757,8 +756,7 @@ static MACHINE_DRIVER_START( magerror )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.00)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.00)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 4000000/16/16*132)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 4000000/16/16*132, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.57)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.57)
 MACHINE_DRIVER_END
@@ -782,7 +780,7 @@ ROM_START( hyprduel )
 	ROM_LOAD( "97.u97", 0x00000, 0x40000, CRC(bf3f8574) SHA1(9e743f05e53256c886d43e1f0c43d7417134b9b3) ) /* Also silk screened as position 11 */
 ROM_END
 
-ROM_START( hyprdelj )
+ROM_START( hyprduel2 )
 	ROM_REGION( 0x80000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "24a.u24", 0x000000, 0x40000, CRC(2458f91d) SHA1(c75c7bccc84738e29b35667793491a1213aea1da) ) /* Also silk screened as position 10 */
 	ROM_LOAD16_BYTE( "23a.u23", 0x000001, 0x40000, CRC(98aedfca) SHA1(42028e57ac79473cde683be2100b953ff3b2b345) ) /* Also silk screened as position  9 */
@@ -836,5 +834,5 @@ static DRIVER_INIT( magerror )
 
 
 GAME( 1993, hyprduel, 0,        hyprduel, hyprduel, hyprduel, ROT0, "Technosoft", "Hyper Duel (Japan set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1993, hyprdelj, hyprduel, hyprduel, hyprduel, hyprduel, ROT0, "Technosoft", "Hyper Duel (Japan set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1993, hyprduel2,hyprduel, hyprduel, hyprduel, hyprduel, ROT0, "Technosoft", "Hyper Duel (Japan set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1994, magerror, 0,        magerror, magerror, magerror, ROT0, "Technosoft / Jaleco", "Magical Error wo Sagase", GAME_SUPPORTS_SAVE )

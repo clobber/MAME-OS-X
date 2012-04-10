@@ -95,7 +95,7 @@ static render_texture *get_vector_texture(float dx, float dy, float intensity)
 		return tex->texture;
 
 	height = lbucket * VECTOR_WIDTH_DENOM / TEXTURE_LENGTH_BUCKETS;
-	tex->bitmap = bitmap_alloc(TEXTURE_WIDTH, height, BITMAP_FORMAT_ARGB32);
+	tex->bitmap = global_alloc(bitmap_t(TEXTURE_WIDTH, height, BITMAP_FORMAT_ARGB32));
 	bitmap_fill(tex->bitmap, NULL, MAKE_ARGB(0xff,0xff,0xff,0xff));
 
 	totalint = 1.0f;
@@ -178,10 +178,10 @@ float vector_get_beam(void)
 
 VIDEO_START( vector )
 {
-	beam_width = options_get_float(mame_options(), OPTION_BEAM);
+	beam_width = options_get_float(machine->options(), OPTION_BEAM);
 
 	/* Grab the settings for this session */
-	vector_set_flicker(options_get_float(mame_options(), OPTION_FLICKER));
+	vector_set_flicker(options_get_float(machine->options(), OPTION_FLICKER));
 
 	vector_index = 0;
 
@@ -259,12 +259,12 @@ void vector_clear_list (void)
 
 VIDEO_UPDATE( vector )
 {
-	UINT32 flags = PRIMFLAG_ANTIALIAS(options_get_bool(mame_options(), OPTION_ANTIALIAS) ? 1 : 0) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD);
-	const rectangle *visarea = video_screen_get_visible_area(screen);
-	float xscale = 1.0f / (65536 * (visarea->max_x - visarea->min_x));
-	float yscale = 1.0f / (65536 * (visarea->max_y - visarea->min_y));
-	float xoffs = (float)visarea->min_x;
-	float yoffs = (float)visarea->min_y;
+	UINT32 flags = PRIMFLAG_ANTIALIAS(options_get_bool(screen->machine->options(), OPTION_ANTIALIAS) ? 1 : 0) | PRIMFLAG_BLENDMODE(BLENDMODE_ADD);
+	const rectangle &visarea = screen->visible_area();
+	float xscale = 1.0f / (65536 * (visarea.max_x - visarea.min_x));
+	float yscale = 1.0f / (65536 * (visarea.max_y - visarea.min_y));
+	float xoffs = (float)visarea.min_x;
+	float yoffs = (float)visarea.min_y;
 	point *curpoint;
 	render_bounds clip;
 	int lastx = 0, lasty = 0;

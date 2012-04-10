@@ -110,7 +110,7 @@ Stephh's additional notes (based on the games M68000 code and some tests) :
     undumped ! Set the SBASEBAL_HACK to 1 and you'll notice the following
     differences :
 
-      * different manufacturer (no more SNK licence)
+      * different manufacturer (no more SNK license)
       * different coinage (check code at 0x00035c) and additional COIN2
       * different game time (check code at 0x001d20)
       * different table for "Unknown" Dip Switch
@@ -807,8 +807,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( kyros_sound_portmap, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVWRITE("ym1", ym2203_w)
-	AM_RANGE(0x80, 0x81) AM_DEVWRITE("ym2", ym2203_w)
-	AM_RANGE(0x90, 0x91) AM_DEVWRITE("ym3", ym2203_w)
+	AM_RANGE(0x80, 0x80) AM_DEVWRITE("ym2", ym2203_write_port_w)
+	AM_RANGE(0x81, 0x81) AM_DEVWRITE("ym2", ym2203_control_port_w)
+	AM_RANGE(0x90, 0x90) AM_DEVWRITE("ym3", ym2203_write_port_w)
+	AM_RANGE(0x91, 0x91) AM_DEVWRITE("ym3", ym2203_control_port_w)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jongbou_sound_portmap, ADDRESS_SPACE_IO, 8 )
@@ -1119,11 +1121,11 @@ static INPUT_PORTS_START( timesold )
 	PORT_DIPSETTING(    0x00, "6" )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN5")  /* player 1 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0x0f, 0x00, IPT_POSITIONAL ) PORT_POSITIONS(12) PORT_WRAPS PORT_SENSITIVITY(15) PORT_KEYDELTA(1) PORT_CODE_DEC(KEYCODE_Z) PORT_CODE_INC(KEYCODE_X) PORT_REVERSE PORT_FULL_TURN_COUNT(12)
+	PORT_START("IN5")  /* player 1 12-way rotary control */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN6")  /* player 2 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0x0f, 0x00, IPT_POSITIONAL ) PORT_POSITIONS(12) PORT_WRAPS PORT_SENSITIVITY(15) PORT_KEYDELTA(1) PORT_CODE_DEC(KEYCODE_N) PORT_CODE_INC(KEYCODE_M) PORT_PLAYER(2) PORT_REVERSE PORT_FULL_TURN_COUNT(12)
+	PORT_START("IN6")  /* player 2 12-way rotary control */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 /* Same as 'timesold' but different default settings for the "Language" Dip Switch */
@@ -1169,11 +1171,11 @@ static INPUT_PORTS_START( btlfield )
 	PORT_DIPSETTING(    0x00, "6" )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN5")  /* player 1 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(25) PORT_KEYDELTA(8) PORT_CODE_DEC(KEYCODE_Z) PORT_CODE_INC(KEYCODE_X) PORT_REVERSE
+	PORT_START("IN5")  /* player 1 12-way rotary control */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 
-	PORT_START("IN6")  /* player 2 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(25) PORT_KEYDELTA(8) PORT_CODE_DEC(KEYCODE_N) PORT_CODE_INC(KEYCODE_M) PORT_REVERSE PORT_PLAYER(2)
+	PORT_START("IN6")  /* player 2 12-way rotary control */
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( btlfieldb )
@@ -1194,12 +1196,6 @@ static INPUT_PORTS_START( btlfieldb )
 	PORT_DIPSETTING(    0x08, DEF_STR( On ) )
 	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW1:2" )
 	PORT_DIPUNKNOWN_DIPLOC( 0x20, 0x20, "SW1:1" )
-
-	PORT_MODIFY("IN5")  /* player 1 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_MODIFY("IN6")  /* player 2 12-way rotary control - converted in controls_r() */
-	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( skysoldr )
@@ -1858,7 +1854,7 @@ static MACHINE_START( common )
 {
 	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->trigstate);
 	state_save_register_global(machine, state->deposits1);
@@ -2392,6 +2388,12 @@ ROM_START( kyros )
 	ROM_REGION( 0x10000, "audiocpu", 0 )   /* Sound CPU */
 	ROM_LOAD( "2s.1f",      0x00000, 0x4000, CRC(800ceb27) SHA1(4daa1b8adcad7a90cfd5d20704a7c431673c4995) )
 	ROM_LOAD( "1s.1d",      0x04000, 0x8000, CRC(87d3e719) SHA1(4b8b1b600c7c1de3a77030001e7e6f0ff118f294) )
+
+	// not hooked up yet
+	ROM_REGION( 0x1000, "mcu", 0 )
+	ROM_LOAD( "kyros_68705u3.bin",    0x0000, 0x1000, CRC(c20880b7) SHA1(b041c36cbc4f348d74e0548df5cb14727f2d353b) ) // this one is from a bootleg PCB, program code *might* be compatible.
+	ROM_LOAD( "kyros_mcu.bin",    0x0000, 0x0800,  CRC(3a902a19) SHA1(af1be8894c899b27b1106663ffaf2ab43fa1cdaa) ) // original MCU? (HD6805U1)
+
 
 	ROM_REGION( 0x60000, "gfx1", 0 )
 	ROM_LOAD( "8.9pr",  0x00000, 0x8000, CRC(c5290944) SHA1(ec97482dc59220002780ae4d02be4cd172cf65ac) )
@@ -3396,15 +3398,15 @@ static DRIVER_INIT( tnextspc )
 /******************************************************************************/
 
 GAME( 1986, sstingry,  0,        sstingry,       sstingry, sstingry, ROT90, "Alpha Denshi Co.",   "Super Stingray", GAME_SUPPORTS_SAVE )
-GAME( 1987, kyros,     0,        kyros,          kyros,    kyros,    ROT90, "World Games Inc",    "Kyros", GAME_SUPPORTS_SAVE )
+GAME( 1987, kyros,     0,        kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co. (World Games Inc. license)", "Kyros", GAME_SUPPORTS_SAVE )
 GAME( 1986, kyrosj,    kyros,    kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co.",   "Kyros No Yakata (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1987, jongbou,   0,        jongbou,        jongbou,  jongbou,  ROT90, "SNK",                "Mahjong Block Jongbou (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1988, paddlema,  0,        alpha68k_I,     paddlema, paddlema, ROT90, "SNK",                "Paddle Mania", GAME_SUPPORTS_SAVE )
-GAME( 1987, timesold,  0,        alpha68k_II,    timesold, timesold, ROT90, "[Alpha Denshi Co.] (SNK/Romstar license)", "Time Soldiers (US Rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1987, timesold1, timesold, alpha68k_II,    timesold, timesold1,ROT90, "[Alpha Denshi Co.] (SNK/Romstar license)", "Time Soldiers (US Rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, btlfield,  timesold, alpha68k_II,    btlfield, btlfield, ROT90, "[Alpha Denshi Co.] (SNK license)", "Battle Field (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, timesold,  0,        alpha68k_II,    timesold, timesold, ROT90, "Alpha Denshi Co. (SNK/Romstar license)", "Time Soldiers (US Rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1987, timesold1, timesold, alpha68k_II,    timesold, timesold1,ROT90, "Alpha Denshi Co. (SNK/Romstar license)", "Time Soldiers (US Rev 1)", GAME_SUPPORTS_SAVE )
+GAME( 1987, btlfield,  timesold, alpha68k_II,    btlfield, btlfield, ROT90, "Alpha Denshi Co. (SNK license)", "Battle Field (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1987, btlfieldb, timesold, btlfieldb,      btlfieldb,btlfieldb,ROT90, "bootleg",            "Battle Field (bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 1988, skysoldr,  0,        alpha68k_II,    skysoldr, skysoldr, ROT90, "[Alpha Denshi Co.] (SNK of America/Romstar license)", "Sky Soldiers (US)", GAME_SUPPORTS_SAVE )
+GAME( 1988, skysoldr,  0,        alpha68k_II,    skysoldr, skysoldr, ROT90, "Alpha Denshi Co. (SNK of America/Romstar license)", "Sky Soldiers (US)", GAME_SUPPORTS_SAVE )
 GAME( 1988, goldmedl,  0,        alpha68k_II_gm, goldmedl, goldmedl, ROT0,  "SNK",                "Gold Medalist", GAME_SUPPORTS_SAVE )
 GAME( 1988, goldmedla, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "SNK",                "Gold Medalist (alt)", GAME_SUPPORTS_SAVE )
 GAME( 1988, goldmedlb, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "bootleg",            "Gold Medalist (bootleg)", GAME_NOT_WORKING )

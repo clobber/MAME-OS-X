@@ -923,7 +923,7 @@ static WRITE8_HANDLER( sparkman_rombank_w )
 
 static READ8_HANDLER( sparkman_c0a3_r )
 {
-	return (video_screen_get_frame_number(space->machine->primary_screen) & 1) ? 0x80 : 0;
+	return (space->machine->primary_screen->frame_number() & 1) ? 0x80 : 0;
 }
 
 #if 0
@@ -1022,7 +1022,7 @@ ADDRESS_MAP_END
 static WRITE8_HANDLER( brickzn_pcm_w )
 {
 	static const char *const dacs[] = { "dac1", "dac2", "dac3", "dac4" };
-	dac_signed_data_w( devtag_get_device(space->machine, dacs[offset & 3]), (data & 0xf) * 0x11 );
+	dac_signed_data_w( space->machine->device(dacs[offset & 3]), (data & 0xf) * 0x11 );
 }
 
 

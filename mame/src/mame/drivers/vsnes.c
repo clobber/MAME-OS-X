@@ -76,7 +76,7 @@ Graphic hack games:
 
 Needed roms:
 - Babel no Tou               (by Namco, 1986)
-- Family Boxing              (by Namco/Woodplace, 1987; Japan version of TKO Boxing)
+- Family Boxing              (by Namco/Wood Place, 1987; Japan version of TKO Boxing)
 - Family Stadium '87         (by Namco, 1987; sequel to RBI Baseball)
 - Family Stadium '88         (by Namco, 1988; sequel to RBI Baseball)
 - Family Tennis              (by Namco, 1987)
@@ -155,13 +155,13 @@ static int coin;
 static WRITE8_HANDLER( sprite_dma_0_w )
 {
 	int source = ( data & 7 );
-	ppu2c0x_spriteram_dma( space, devtag_get_device(space->machine, "ppu1"), source );
+	ppu2c0x_spriteram_dma( space, space->machine->device("ppu1"), source );
 }
 
 static WRITE8_HANDLER( sprite_dma_1_w )
 {
 	int source = ( data & 7 );
-	ppu2c0x_spriteram_dma( space, devtag_get_device(space->machine, "ppu2"), source );
+	ppu2c0x_spriteram_dma( space, space->machine->device("ppu2"), source );
 }
 
 static WRITE8_HANDLER( vsnes_coin_counter_w )
@@ -2649,12 +2649,12 @@ GAME( 1984, smgolfj,  smgolf,   vsnes,   golf,     vsnormal, ROT0, "Nintendo",  
 GAME( 1984, ladygolf, smgolf,   vsnes,   golf,     vsnormal, ROT0, "Nintendo",  "Vs. Stroke & Match Golf (Ladies Version)", 0 )
 GAME( 1984, vspinbal, 0,        vsnes,   vspinbal, vsnormal, ROT0, "Nintendo",  "Vs. Pinball", 0 )
 GAME( 1984, vspinbalj,vspinbal, vsnes,   vspinblj, vsnormal, ROT0, "Nintendo",  "Vs. Pinball (Japan)", 0 )
-GAME( 1986, vsslalom, 0,        vsnes,   vsslalom, vsnormal, ROT0, "Rare LTD.", "Vs. Slalom", GAME_IMPERFECT_GRAPHICS )
+GAME( 1986, vsslalom, 0,        vsnes,   vsslalom, vsnormal, ROT0, "Rare",      "Vs. Slalom", GAME_IMPERFECT_GRAPHICS )
 GAME( 1985, vssoccer, 0,        vsnes,   vssoccer, vsnormal, ROT0, "Nintendo",  "Vs. Soccer", 0 )
 GAME( 1985, vssoccerj,vssoccer, vsnes,   vssoccer, bnglngby, ROT0, "Nintendo",  "Vs. Soccer (Japan)", 0 )
 GAME( 1986, vsgradus, 0,        vsnes,   vsgradus, vskonami, ROT0, "Konami",    "Vs. Gradius", 0 )
 GAME( 1987, platoon,  0,        vsnes,   platoon,  platoon,  ROT0, "Ocean Software Limited", "Vs. Platoon", 0 )
-GAME( 1987, vstetris, 0,        vsnes,   vstetris, vsnormal, ROT0, "Academysoft-Elory", "Vs. Tetris" , 0 )
+GAME( 1987, vstetris, 0,        vsnes,   vstetris, vsnormal, ROT0, "Academysoft-Elorg", "Vs. Tetris" , 0 )
 GAME( 1986, mightybj, 0,        mightybj,mightybj, vsnormal, ROT0, "Tecmo",     "Vs. Mighty Bomb Jack (Japan)", 0 )
 GAME( 1985, jajamaru, 0,        jajamaru,jajamaru, vsnormal, ROT0, "Jaleco",    "Vs. Ninja Jajamaru Kun (Japan)", 0 )
 GAME( 1987, topgun,   0,        topgun,  topgun,   vsvram,   ROT0, "Konami",    "Vs. Top Gun", 0)

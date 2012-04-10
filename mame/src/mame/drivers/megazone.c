@@ -31,7 +31,7 @@ static READ8_DEVICE_HANDLER( megazone_port_a_r )
 	/* (divide by (1024/2), and not 1024, because the CPU cycle counter is */
 	/* incremented every other state change of the clock) */
 
-	clock = cpu_get_total_cycles(state->audiocpu) * 7159/12288;	/* = (14318/8)/(18432/6) */
+	clock = state->audiocpu->total_cycles() * 7159/12288;	/* = (14318/8)/(18432/6) */
 	timer = (clock / (1024/2)) & 0x0f;
 
 	/* low three bits come from the 8039 */
@@ -52,7 +52,7 @@ static WRITE8_DEVICE_HANDLER( megazone_port_b_w )
 			C += 220000;	/* 220000pF = 0.22uF */
 
 		data >>= 2;
-		filter_rc_set_RC(devtag_get_device(device->machine, fltname[i]),FLT_RC_LOWPASS,1000,2200,200,CAP_P(C));
+		filter_rc_set_RC(device->machine->device(fltname[i]),FLT_RC_LOWPASS,1000,2200,200,CAP_P(C));
 	}
 }
 
@@ -228,9 +228,9 @@ static MACHINE_START( megazone )
 {
 	megazone_state *state = (megazone_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->daccpu = devtag_get_device(machine, "daccpu");
+	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->audiocpu = machine->device<cpu_device>("audiocpu");
+	state->daccpu = machine->device<cpu_device>("daccpu");
 
 	state_save_register_global(machine, state->flipscreen);
 	state_save_register_global(machine, state->i8039_status);
@@ -536,4 +536,4 @@ GAME( 1983, megazoneb, megazone, megazone, megazone, megazone, ROT90, "Konami / 
 GAME( 1983, megazonec, megazone, megazone, megazone, megazone, ROT90, "Konami / Kosuka",              "Mega Zone (Kosuka set 2)", GAME_SUPPORTS_SAVE )
 
 /* this displays Konami and Kosuka copyright with a Konami / Interlogic logo */
-GAME( 1983, megazonei, megazone, megazone, megazone, megazone, ROT90, "Konami / Interlogic + Kosuka", "Mega Zone (Interlogic + Kosuka)", GAME_SUPPORTS_SAVE )
+GAME( 1983, megazonei, megazone, megazone, megazone, megazone, ROT90, "Konami / Interlogic / Kosuka", "Mega Zone (Interlogic / Kosuka)", GAME_SUPPORTS_SAVE )

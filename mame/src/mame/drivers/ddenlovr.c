@@ -1537,13 +1537,17 @@ static WRITE16_HANDLER( ddenlovr16_transparency_mask_w )
 
 static WRITE8_DEVICE_HANDLER( quizchq_oki_bank_w )
 {
-	okim6295_set_bank_base(device, (data & 1) * 0x40000);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base((data & 1) * 0x40000);
 }
 
 static WRITE16_DEVICE_HANDLER( ddenlovr_oki_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
-		okim6295_set_bank_base(device, (data & 7) * 0x40000);
+	{
+		okim6295_device *oki = downcast<okim6295_device *>(device);
+		oki->set_bank_base((data & 7) * 0x40000);
+	}
 }
 
 
@@ -1555,7 +1559,8 @@ static WRITE16_DEVICE_HANDLER( quiz365_oki_bank1_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		state->okibank = (state->okibank & 2) | (data & 1);
-		okim6295_set_bank_base(device, state->okibank * 0x40000);
+		okim6295_device *oki = downcast<okim6295_device *>(device);
+		oki->set_bank_base(state->okibank * 0x40000);
 	}
 }
 
@@ -1566,7 +1571,8 @@ static WRITE16_DEVICE_HANDLER( quiz365_oki_bank2_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		state->okibank = (state->okibank & 1) | ((data & 1) << 1);
-		okim6295_set_bank_base(device, state->okibank * 0x40000);
+		okim6295_device *oki = downcast<okim6295_device *>(device);
+		oki->set_bank_base(state->okibank * 0x40000);
 	}
 }
 
@@ -1835,7 +1841,7 @@ static WRITE16_HANDLER( ddenlovrk_protection2_w )
 	dynax_state *state = (dynax_state *)space->machine->driver_data;
 
 	COMBINE_DATA(state->protection2);
-	okim6295_set_bank_base(state->oki, ((*state->protection2) & 0x7) * 0x40000);
+	state->oki->set_bank_base(((*state->protection2) & 0x7) * 0x40000);
 }
 
 static ADDRESS_MAP_START( ddenlovrk_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -1960,7 +1966,10 @@ static WRITE16_HANDLER( nettoqc_coincounter_w )
 static WRITE16_DEVICE_HANDLER( nettoqc_oki_bank_w )
 {
 	if (ACCESSING_BITS_0_7)
-		okim6295_set_bank_base(device, (data & 3) * 0x40000);
+	{
+		okim6295_device *oki = downcast<okim6295_device *>(device);
+		oki->set_bank_base((data & 3) * 0x40000);
+	}
 }
 
 static ADDRESS_MAP_START( nettoqc_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -2521,7 +2530,8 @@ static WRITE8_HANDLER( hanakanz_palette_w )
 
 static WRITE8_DEVICE_HANDLER( hanakanz_oki_bank_w )
 {
-	okim6295_set_bank_base(device, (data & 0x40) ? 0x40000 : 0);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base((data & 0x40) ? 0x40000 : 0);
 }
 
 static READ8_HANDLER( hanakanz_rand_r )
@@ -2707,7 +2717,8 @@ static WRITE8_HANDLER( mjchuuka_coincounter_w )
 static WRITE8_DEVICE_HANDLER( mjchuuka_oki_bank_w )
 {
 	// data & 0x08 ?
-	okim6295_set_bank_base(device, (data & 0x01) ? 0x40000 : 0);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base((data & 0x01) ? 0x40000 : 0);
 
 #ifdef MAME_DEBUG
 //    popmessage("1e = %02x",data);
@@ -3052,7 +3063,7 @@ ADDRESS_MAP_END
 static UINT8 hgokou_player_r( const address_space *space, int player )
 {
 	dynax_state *state = (dynax_state *)space->machine->driver_data;
-	UINT8 hopper_bit = ((state->hopper && !(video_screen_get_frame_number(space->machine->primary_screen) % 10)) ? 0 : (1 << 6));
+	UINT8 hopper_bit = ((state->hopper && !(space->machine->primary_screen->frame_number() % 10)) ? 0 : (1 << 6));
 
 	if (!BIT(state->input_sel, 0))   return input_port_read(space->machine, player ? "KEY5" : "KEY0") | hopper_bit;
 	if (!BIT(state->input_sel, 1))   return input_port_read(space->machine, player ? "KEY6" : "KEY1") | hopper_bit;
@@ -3321,7 +3332,7 @@ static WRITE16_HANDLER( akamaru_protection1_w )
 	COMBINE_DATA(&state->prot_16);
 	// BCD number?
 	bank = (((state->prot_16 >> 4) & 0x0f) % 10) * 10 + ((state->prot_16 & 0x0f) % 10);
-	okim6295_set_bank_base(state->oki, bank * 0x40000);
+	state->oki->set_bank_base(bank * 0x40000);
 
 //  popmessage("bank $%0x (%d)", state->prot_16, bank);
 }
@@ -3409,7 +3420,8 @@ static WRITE8_HANDLER( mjflove_rombank_w )
 
 static WRITE8_DEVICE_HANDLER( mjflove_okibank_w )
 {
-	okim6295_set_bank_base(device, (data & 0x07) * 0x40000);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base((data & 0x07) * 0x40000);
 	//popmessage("SOUND = %02x", data);
 }
 
@@ -3495,7 +3507,8 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( jongtei_okibank_w )
 {
-	okim6295_set_bank_base(device, ((data >> 4) & 0x07) * 0x40000);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base(((data >> 4) & 0x07) * 0x40000);
 }
 
 static WRITE8_HANDLER( jongtei_dsw_keyb_w )
@@ -3674,7 +3687,8 @@ static READ8_HANDLER( daimyojn_protection_r )
 
 static WRITE8_DEVICE_HANDLER( daimyojn_okibank_w )
 {
-	okim6295_set_bank_base(device, ((data >> 4) & 0x01) * 0x40000);
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	oki->set_bank_base(((data >> 4) & 0x01) * 0x40000);
 }
 
 static WRITE8_HANDLER( daimyojn_palette_sel_w )
@@ -7562,9 +7576,9 @@ static MACHINE_START( ddenlovr )
 {
 	dynax_state *state = (dynax_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
-	state->oki = devtag_get_device(machine, "oki");
+	state->maincpu = machine->device("maincpu");
+	state->soundcpu = machine->device("soundcpu");
+	state->oki = machine->device<okim6295_device>("oki");
 
 	state_save_register_global(machine, state->input_sel);
 	state_save_register_global(machine, state->dsw_sel);
@@ -7732,8 +7746,7 @@ static MACHINE_DRIVER_START( ddenlovr )
 	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_28_63636MHz / 16)	// or /8 ?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_28_63636MHz / 28)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_28_63636MHz / 28, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -7811,7 +7824,7 @@ static INTERRUPT_GEN( quizchq_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise quizchq would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	if ((++state->irq_count % 60) == 0)
@@ -7861,8 +7874,7 @@ static MACHINE_DRIVER_START( quizchq )
 	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1022720)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1022720, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -7897,7 +7909,7 @@ static INTERRUPT_GEN( mmpanic_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise the game would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	if ((++state->irq_count % 60) == 0)
@@ -7948,8 +7960,7 @@ static MACHINE_DRIVER_START( mmpanic )
 	MDRV_SOUND_ADD("aysnd", AY8910, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1022720)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1022720, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -7975,7 +7986,7 @@ static INTERRUPT_GEN( hanakanz_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise quizchq would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	if ((++state->irq_count % 60) == 0)
@@ -8018,8 +8029,7 @@ static MACHINE_DRIVER_START( hanakanz )
 	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1022720)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1022720, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -8057,7 +8067,7 @@ static INTERRUPT_GEN( mjchuuka_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise quizchq would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	if ((++state->irq_count % 60) == 0)
@@ -8117,7 +8127,7 @@ static INTERRUPT_GEN( mjmyster_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise quizchq would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	switch (cpu_getiloops(device))
@@ -8175,7 +8185,7 @@ static INTERRUPT_GEN( hginga_irq )
 	/* I haven't found a irq ack register, so I need this kludge to
        make sure I don't lose any interrupt generated by the blitter,
        otherwise hginga would lock up. */
-	if (device->get_runtime_int(CPUINFO_INT_INPUT_STATE + 0))
+	if (downcast<cpu_device *>(device)->input_state(0))
 		return;
 
 	if ((++state->irq_count % 60) == 0)
@@ -8349,8 +8359,7 @@ static MACHINE_DRIVER_START( jongtei )
 	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_28_63636MHz / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_28_63636MHz / 28)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_28_63636MHz / 28, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -8398,8 +8407,7 @@ static MACHINE_DRIVER_START( sryudens )
 	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_28_63636MHz / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_28_63636MHz / 28)	// ?
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_28_63636MHz / 28, OKIM6295_PIN7_HIGH)	// ?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -8444,8 +8452,7 @@ static MACHINE_DRIVER_START( daimyojn )
 	MDRV_SOUND_ADD("ymsnd", YM2413, XTAL_28_63636MHz / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_28_63636MHz / 28)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_28_63636MHz / 28, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
 	/* devices */
@@ -8562,21 +8569,59 @@ probably 7501S is damaged, I can not get a consistent read. 10 reads supplied fo
 
 ***************************************************************************/
 
-ROM_START( animaljr )
+ROM_START( animaljr ) /* English version */
 	ROM_REGION( 0x50000, "maincpu", 0 )	/* Z80 Code */
-	ROM_LOAD( "7502s.2e",     0x00000, 0x40000, CRC(4b14a4be) SHA1(79f7207f7311c627ece1a0d8571b4bddcdefb336) )
-	ROM_RELOAD(               0x10000, 0x40000 )
+	ROM_LOAD( "7502a.2e", 0x00000, 0x40000, CRC(78aa0f24) SHA1(5ae8cd27ddbd4d0d40112010d7c1ce3d55e02173) )
+	ROM_RELOAD(           0x10000, 0x40000 )
 
 	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Z80 Code */
-	ROM_LOAD( "7503s.8e",     0x00000, 0x20000, CRC(d1fac899) SHA1(dde2824d73b13c18b83e4c4b63fe7835bce87ea4) )	// 1xxxxxxxxxxxxxxxx = 0xFF
+	ROM_LOAD( "7503a.8e", 0x00000, 0x20000, CRC(a7032aae) SHA1(13f61b7e631b75f7af36f670c181614631801048) )	// 1xxxxxxxxxxxxxxxx = 0xFF
 
 	ROM_REGION( 0x200000, "blitter", 0 )	/* blitter data */
-	ROM_LOAD( "7504.17b",     0x000000, 0x100000, CRC(b62de6a3) SHA1(62abf09b52844d3b3325e8931cb572c15581964f) )
-	ROM_LOAD( "7505.17d",     0x100000, 0x080000, CRC(729b073f) SHA1(8e41fafc47adbe76452e92ab1459536a5a46784d) )
-	ROM_LOAD( "7506s.17f",    0x180000, 0x080000, CRC(1be1ae17) SHA1(57bf9bcd9df49cdbb1311ec9e850cb1a141e5069) )
+	ROM_LOAD( "7504.17b",  0x000000, 0x100000, CRC(b62de6a3) SHA1(62abf09b52844d3b3325e8931cb572c15581964f) )
+	ROM_LOAD( "7505.17d",  0x100000, 0x080000, CRC(729b073f) SHA1(8e41fafc47adbe76452e92ab1459536a5a46784d) )
+	ROM_LOAD( "7506a.17f", 0x180000, 0x080000, CRC(21fb7d86) SHA1(1323225d64903a07f180673556463df5e60039eb) )
 
 	ROM_REGION( 0x40000, "oki", 0 )	/* Samples */
-	ROM_LOAD( "7501s_0.1h",   0x00000, 0x40000, BAD_DUMP CRC(59debb66) SHA1(9021722d3f8956946f102eddc7c676e1ef41574e) )
+	ROM_LOAD( "7501a.1h", 0x00000, 0x40000, CRC(52174727) SHA1(974029774eb8951d54f1eb4efa4f336e460456aa) )
+
+	ROM_REGION( 0x0200, "plds", 0 )
+	ROM_LOAD( "n75a.2j",  0x0000, 0x0117, CRC(0191d68d) SHA1(0b792708c8e9e84a6e07485c7723376cc58f64a6) ) /* lattice GAL16V8A-25LP */
+	ROM_LOAD( "n75b.15b", 0x0000, 0x0117, CRC(c6365977) SHA1(c55a5a0771aa299eec55263657f12cb3d756fac5) ) /* lattice GAL16V8A-25LP */
+ROM_END
+
+ROM_START( animaljrs ) /* Spanish version */
+	ROM_REGION( 0x50000, "maincpu", 0 )	/* Z80 Code */
+	ROM_LOAD( "7502s.2e", 0x00000, 0x40000, CRC(4b14a4be) SHA1(79f7207f7311c627ece1a0d8571b4bddcdefb336) )
+	ROM_RELOAD(           0x10000, 0x40000 )
+
+	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Z80 Code */
+	ROM_LOAD( "7503s.8e", 0x00000, 0x20000, CRC(d1fac899) SHA1(dde2824d73b13c18b83e4c4b63fe7835bce87ea4) )	// 1xxxxxxxxxxxxxxxx = 0xFF
+
+	ROM_REGION( 0x200000, "blitter", 0 )	/* blitter data */
+	ROM_LOAD( "7504.17b",  0x000000, 0x100000, CRC(b62de6a3) SHA1(62abf09b52844d3b3325e8931cb572c15581964f) )
+	ROM_LOAD( "7505.17d",  0x100000, 0x080000, CRC(729b073f) SHA1(8e41fafc47adbe76452e92ab1459536a5a46784d) )
+	ROM_LOAD( "7506s.17f", 0x180000, 0x080000, CRC(1be1ae17) SHA1(57bf9bcd9df49cdbb1311ec9e850cb1a141e5069) )
+
+	ROM_REGION( 0x40000, "oki", 0 )	/* Samples */
+	ROM_LOAD( "7501s.1h", 0x00000, 0x40000, BAD_DUMP CRC(59debb66) SHA1(9021722d3f8956946f102eddc7c676e1ef41574e) )
+ROM_END
+
+
+ROM_START( animaljrj ) /* Japanese version */
+	ROM_REGION( 0x50000, "maincpu", 0 )	/* Z80 Code */
+	ROM_LOAD( "nwc_7502.2e", 0x00000, 0x40000, CRC(c526cf56) SHA1(466378125c06de1475de37c2e0b80c7522b82308) )
+	ROM_RELOAD(              0x10000, 0x40000 )
+
+	ROM_REGION( 0x20000, "soundcpu", 0 )	/* Z80 Code */
+	ROM_LOAD( "nwc_7503.8e", 0x00000, 0x20000, CRC(9c27e0b6) SHA1(e904725912391a776ef22cc79e25b9c8cf90ebf6) )	// 1xxxxxxxxxxxxxxxx = 0xFF
+
+	ROM_REGION( 0x200000, "blitter", 0 )	/* blitter data */
+	ROM_LOAD( "nwc_7504.17b", 0x000000, 0x100000, CRC(b62de6a3) SHA1(62abf09b52844d3b3325e8931cb572c15581964f) )
+	ROM_LOAD( "nwc_7505.17d", 0x100000, 0x080000, CRC(729b073f) SHA1(8e41fafc47adbe76452e92ab1459536a5a46784d) )
+
+	ROM_REGION( 0x40000, "oki", 0 )	/* Samples */
+	ROM_LOAD( "nwc_7501.1h", 0x00000, 0x40000, CRC(c821e589) SHA1(45ece97a1cd5114871ff07d2593057635d928959) )
 ROM_END
 
 
@@ -10170,34 +10215,36 @@ ROM_START( daimyojn )
 ROM_END
 
 
-GAME( 1992, mmpanic,   0,        mmpanic,   mmpanic,  0,        ROT0, "Nakanihon + East Technology (Taito license)", "Monkey Mole Panic (USA)",                                         GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1993, funkyfig,  0,        funkyfig,  funkyfig, 0,        ROT0, "Nakanihon + East Technology (Taito license)", "The First Funky Fighter",                                         GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // scrolling, priority?
+GAME( 1992, mmpanic,   0,        mmpanic,   mmpanic,  0,        ROT0, "Nakanihon / East Technology (Taito license)", "Monkey Mole Panic (USA)",                                         GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1993, funkyfig,  0,        funkyfig,  funkyfig, 0,        ROT0, "Nakanihon / East Technology (Taito license)", "The First Funky Fighter",                                         GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE ) // scrolling, priority?
 GAME( 1993, quizchq,   0,        quizchq,   quizchq,  0,        ROT0, "Nakanihon",                                   "Quiz Channel Question (Ver 1.00) (Japan)",                        GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1993, quizchql,  quizchq,  quizchq,   quizchq,  0,        ROT0, "Nakanihon (Laxan license)",                   "Quiz Channel Question (Ver 1.23) (Taiwan?)",                      GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
-GAME( 1993, animaljr,  0,        mmpanic,   animaljr, 0,        ROT0, "Nakanihon + East Technology (Taito license)", "Animalandia Jr.",                                                 GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1993, animaljr,  0,        mmpanic,   animaljr, 0,        ROT0, "Nakanihon / East Technology (Taito license)", "Exciting Animal Land Jr. (USA)",                                  GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1993, animaljrs, animaljr, mmpanic,   animaljr, 0,        ROT0, "Nakanihon / East Technology (Taito license)", "Animalandia Jr. (Spanish)",                                       GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1993, animaljrj, animaljr, mmpanic,   animaljr, 0,        ROT0, "Nakanihon / East Technology (Taito license)", "Waiwai Animal Land Jr. (Japan)",                                  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, hginga,    0,        hginga,    hginga,   0,        ROT0, "Dynax",                                       "Hanafuda Hana Ginga",                                             GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, mjmyster,  0,        mjmyster,  mjmyster, 0,        ROT0, "Dynax",                                       "Mahjong The Mysterious World (set 1)",                            GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, mjmywrld,  mjmyster, mjmywrld,  mjmyster, 0,        ROT0, "Dynax",                                       "Mahjong The Mysterious World (set 2)",                            GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, mjmyornt,  0,        mjmyornt,  mjmyornt, 0,        ROT0, "Dynax",                                       "Mahjong The Mysterious Orient",                                   GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, mjmyuniv,  0,        mjmyuniv,  mjmyster, 0,        ROT0, "Dynax",                                       "Mahjong The Mysterious Universe",                                 GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1994, quiz365,   0,        quiz365,   quiz365,  0,        ROT0, "Nakanihon",                                   "Quiz 365 (Japan)",                                                GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
-GAME( 1994, quiz365t,  quiz365,  quiz365,   quiz365,  0,        ROT0, "Nakanihon + Taito",                           "Quiz 365 (Hong Kong & Taiwan)",                                   GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
-GAME( 1994, rongrong,  0,        rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision licence)",              "Puzzle Game Rong Rong (Europe)",                                  GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1994, rongrongj, rongrong, rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision licence)",              "Puzzle Game Rong Rong (Japan)",                                   GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
-GAME( 1994, rongrongg, rongrong, rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision licence)",              "Puzzle Game Rong Rong (Germany)",                                 GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1994, quiz365t,  quiz365,  quiz365,   quiz365,  0,        ROT0, "Nakanihon / Taito",                           "Quiz 365 (Hong Kong & Taiwan)",                                   GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION | GAME_SUPPORTS_SAVE )
+GAME( 1994, rongrong,  0,        rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision license)",              "Puzzle Game Rong Rong (Europe)",                                  GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1994, rongrongj, rongrong, rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision license)",              "Puzzle Game Rong Rong (Japan)",                                   GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1994, rongrongg, rongrong, rongrong,  rongrong, rongrong, ROT0, "Nakanihon (Activision license)",              "Puzzle Game Rong Rong (Germany)",                                 GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
 GAME( 1994, hparadis,  0,        hparadis,  hparadis, 0,        ROT0, "Dynax",                                       "Super Hana Paradise (Japan)",                                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1995, hgokou,    0,        hgokou,    hgokou,   0,        ROT0, "Dynax (Alba licence)",                        "Hanafuda Hana Gokou (Japan)",                                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1995, hgokou,    0,        hgokou,    hgokou,   0,        ROT0, "Dynax (Alba license)",                        "Hanafuda Hana Gokou (Japan)",                                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1995, mjdchuka,  0,        mjchuuka,  mjchuuka, 0,        ROT0, "Dynax",                                       "Mahjong The Dai Chuuka Ken (China, v. D111)",                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1995, nettoqc,   0,        nettoqc,   nettoqc,  0,        ROT0, "Nakanihon",                                   "Nettoh Quiz Champion (Japan)",                                    GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
 GAME( 1995, ddenlovj,  0,        ddenlovj,  ddenlovj, 0,        ROT0, "Dynax",                                       "Don Den Lover Vol. 1 - Shiro Kuro Tsukeyo! (Japan)",              GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1995, ddenlovrk, ddenlovj, ddenlovrk, ddenlovr, 0,        ROT0, "Dynax",                                       "Don Den Lover Vol. 1 - Heukbaeg-euro Jeonghaja (Korea)",          GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1995, ddenlovrb, ddenlovj, ddenlovr,  ddenlovr, 0,        ROT0, "[Dynax] (bootleg)",                           "Don Den Lover Vol. 1 - Heukbaeg-euro Jeonghaja (Korea, bootleg)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1995, ddenlovrb, ddenlovj, ddenlovr,  ddenlovr, 0,        ROT0, "bootleg",                                     "Don Den Lover Vol. 1 - Heukbaeg-euro Jeonghaja (Korea, bootleg)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1996, ddenlovr,  ddenlovj, ddenlovr,  ddenlovr, 0,        ROT0, "Dynax",                                       "Don Den Lover Vol. 1 (Hong Kong)",                                GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1996, hanakanz,  0,        hanakanz,  hanakanz, 0,        ROT0, "Dynax",                                       "Hana Kanzashi (Japan)",                                           GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1996, akamaru,   0,        akamaru,   akamaru,  0,        ROT0, "Dynax (Nakanihon licence)",                   "Panel & Variety Akamaru Q Jousyou Dont-R",                        GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1996, akamaru,   0,        akamaru,   akamaru,  0,        ROT0, "Dynax (Nakanihon license)",                   "Panel & Variety Akamaru Q Jousyou Dont-R",                        GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1996, sryudens,  0,        sryudens,  sryudens, 0,        ROT0, "Dynax / Face",                                "Mahjong Seiryu Densetsu (Japan, NM502)",                          GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1996, mjflove,   0,        mjflove,   mjflove,  0,        ROT0, "Nakanihon",                                   "Mahjong Fantasic Love (Japan)",                                   GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1997, hkagerou,  0,        hkagerou,  hkagerou, 0,        ROT0, "Nakanihon + Dynax",                           "Hana Kagerou [BET] (Japan)",                                      GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1997, hkagerou,  0,        hkagerou,  hkagerou, 0,        ROT0, "Nakanihon / Dynax",                           "Hana Kagerou [BET] (Japan)",                                      GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1998, mjchuuka,  0,        mjchuuka,  mjchuuka, 0,        ROT0, "Dynax",                                       "Mahjong Chuukanejyo (China)",                                     GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1998, mjreach1,  0,        mjreach1,  mjreach1, 0,        ROT0, "Nihon System",                                "Mahjong Reach Ippatsu (Japan)",                                   GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 GAME( 1999, jongtei,   0,        jongtei,   jongtei,  0,        ROT0, "Dynax",                                       "Mahjong Jong-Tei (Japan, ver. NM532-01)",                         GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )

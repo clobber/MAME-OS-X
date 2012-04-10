@@ -60,7 +60,7 @@ WRITE8_HANDLER( gottlieb_video_control_w )
 {
 	/* bit 0 controls foreground/background priority */
 	if (background_priority != (data & 0x01))
-		video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen));
+		space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 	background_priority = data & 0x01;
 
 	/* bit 1 controls horizonal flip screen */
@@ -84,7 +84,7 @@ WRITE8_HANDLER( gottlieb_video_control_w )
 
 WRITE8_HANDLER( gottlieb_laserdisc_video_control_w )
 {
-	running_device *laserdisc = space->machine->devicelist.first(LASERDISC);
+	running_device *laserdisc = space->machine->m_devicelist.first(LASERDISC);
 
 	/* bit 0 works like the other games */
 	gottlieb_video_control_w(space, offset, data & 0x01);

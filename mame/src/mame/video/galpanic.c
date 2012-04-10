@@ -8,8 +8,8 @@ static bitmap_t *sprites_bitmap;
 
 VIDEO_START( galpanic )
 {
-	machine->generic.tmpbitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	sprites_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	machine->generic.tmpbitmap = machine->primary_screen->alloc_compatible_bitmap();
+	sprites_bitmap = machine->primary_screen->alloc_compatible_bitmap();
 }
 
 PALETTE_INIT( galpanic )
@@ -101,7 +101,7 @@ static void draw_fgbitmap(bitmap_t *bitmap, const rectangle *cliprect)
 
 VIDEO_UPDATE( galpanic )
 {
-	running_device *pandora = devtag_get_device(screen->machine, "pandora");
+	running_device *pandora = screen->machine->device("pandora");
 
 	/* copy the temporary bitmap to the screen */
 	copybitmap(bitmap,screen->machine->generic.tmpbitmap,0,0,0,0,cliprect);

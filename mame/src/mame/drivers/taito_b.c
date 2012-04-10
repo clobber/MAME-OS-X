@@ -194,7 +194,7 @@ static TIMER_CALLBACK( rsaga2_interrupt2  )
 
 static INTERRUPT_GEN( rastansaga2_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, rsaga2_interrupt2);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, rsaga2_interrupt2);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -207,7 +207,7 @@ static TIMER_CALLBACK( crimec_interrupt3 )
 
 static INTERRUPT_GEN( crimec_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, crimec_interrupt3);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, crimec_interrupt3);
 	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
@@ -220,7 +220,7 @@ static TIMER_CALLBACK( hitice_interrupt6 )
 
 static INTERRUPT_GEN( hitice_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, hitice_interrupt6);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, hitice_interrupt6);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -233,7 +233,7 @@ static TIMER_CALLBACK( rambo3_interrupt1 )
 
 static INTERRUPT_GEN( rambo3_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, rambo3_interrupt1);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, rambo3_interrupt1);
 	cpu_set_input_line(device, 6, HOLD_LINE);
 }
 
@@ -246,7 +246,7 @@ static TIMER_CALLBACK( pbobble_interrupt5 )
 
 static INTERRUPT_GEN( pbobble_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, pbobble_interrupt5);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, pbobble_interrupt5);
 	cpu_set_input_line(device, 3, HOLD_LINE);
 }
 
@@ -258,7 +258,7 @@ static TIMER_CALLBACK( viofight_interrupt1 )
 
 static INTERRUPT_GEN( viofight_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, viofight_interrupt1);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, viofight_interrupt1);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -270,7 +270,7 @@ static TIMER_CALLBACK( masterw_interrupt4 )
 
 static INTERRUPT_GEN( masterw_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, masterw_interrupt4);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, masterw_interrupt4);
 	cpu_set_input_line(device, 5, HOLD_LINE);
 }
 
@@ -282,7 +282,7 @@ static TIMER_CALLBACK( silentd_interrupt4 )
 
 static INTERRUPT_GEN( silentd_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, silentd_interrupt4);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, silentd_interrupt4);
 	cpu_set_input_line(device, 6, HOLD_LINE);
 }
 
@@ -294,7 +294,7 @@ static TIMER_CALLBACK( selfeena_interrupt4 )
 
 static INTERRUPT_GEN( selfeena_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 5000), NULL, 0, selfeena_interrupt4);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(5000), NULL, 0, selfeena_interrupt4);
 	cpu_set_input_line(device, 6, HOLD_LINE);
 }
 
@@ -306,7 +306,7 @@ static TIMER_CALLBACK( sbm_interrupt5 )//4
 
 static INTERRUPT_GEN( sbm_interrupt )//5
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 10000), NULL, 0, sbm_interrupt5);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(10000), NULL, 0, sbm_interrupt5);
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
@@ -2194,13 +2194,13 @@ static MACHINE_START( taitob )
 {
 	taitob_state *state = (taitob_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->mb87078 = devtag_get_device(machine, "mb87078");
-	state->ym = devtag_get_device(machine, "ymsnd");
-	state->tc0180vcu = devtag_get_device(machine, "tc0180vcu");
-	state->tc0640fio = devtag_get_device(machine, "tc0640fio");
-	state->tc0220ioc = devtag_get_device(machine, "tc0220ioc");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->mb87078 = machine->device("mb87078");
+	state->ym = machine->device("ymsnd");
+	state->tc0180vcu = machine->device("tc0180vcu");
+	state->tc0640fio = machine->device("tc0640fio");
+	state->tc0220ioc = machine->device("tc0220ioc");
 
 	state_save_register_global(machine, state->eep_latch);
 	state_save_register_global(machine, state->coin_word);
@@ -2511,8 +2511,7 @@ static MACHINE_DRIVER_START( hitice )
 	MDRV_SOUND_ROUTE(2, "mono", 0.25)
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
@@ -2877,8 +2876,7 @@ static MACHINE_DRIVER_START( viofight )
 	MDRV_SOUND_ROUTE(2, "mono", 0.25)
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
@@ -3817,7 +3815,7 @@ ROM_START( silentdu )
 	ROM_LOAD( "east-02.ic3", 0x00000, 0x80000, CRC(e0de5c39) SHA1(75d0e193d882e67921c216c3293454e34304d25e) )
 ROM_END
 
-ROM_START( selfeena )
+ROM_START( selfeena ) /* Silkscreened PCB number ET910000A */
 	ROM_REGION( 0x80000, "maincpu", 0 )     /* 256k for 68000 code */
 	ROM_LOAD16_BYTE( "se-02.27", 0x00000, 0x20000, CRC(08f0c8e3) SHA1(2279ebfcd0cd05eec9c7a01ca7db82fcdc3b7ca7) )
 	ROM_LOAD16_BYTE( "se-01.26", 0x00001, 0x20000, CRC(a06ca64b) SHA1(6bfd3c5faf169678ba9bb1c483901b6c06605faf) )
@@ -3904,7 +3902,7 @@ GAME( 1990, ashura,   0,       ashura,   ashura,   taito_b, ROT270, "Taito Corpo
 GAME( 1990, ashuraj,  ashura,  ashura,   ashuraj,  taito_b, ROT270, "Taito Corporation", "Ashura Blaster (Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ashurau,  ashura,  ashura,   ashurau,  taito_b, ROT270, "Taito America Corporation", "Ashura Blaster (US)", GAME_SUPPORTS_SAVE )
 GAME( 1990, hitice,   0,       hitice,   hitice,   taito_b, ROT0,   "Williams", "Hit the Ice (US)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1990, hiticej,  hitice,  hitice,   hitice,   taito_b, ROT0,   "Midway/Taito Corporation", "Hit the Ice (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1990, hiticej,  hitice,  hitice,   hitice,   taito_b, ROT0,   "Midway / Taito Corporation", "Hit the Ice (Japan)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1991, selfeena, 0,       selfeena, selfeena, taito_b, ROT0,   "East Technology", "Sel Feena", GAME_SUPPORTS_SAVE )
 GAME( 1992, silentd,  0,       silentd,  silentd,  taito_b, ROT0,   "Taito Corporation Japan", "Silent Dragon (World)", GAME_SUPPORTS_SAVE )
 GAME( 1992, silentdj, silentd, silentd,  silentdj, taito_b, ROT0,   "Taito Corporation", "Silent Dragon (Japan)", GAME_SUPPORTS_SAVE )

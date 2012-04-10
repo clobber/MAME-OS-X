@@ -670,7 +670,7 @@ static INTERRUPT_GEN(konamigx_vbinterrupt_type4)
 
 	// maybe this interupt should only be every 30fps, or maybe there are flags to prevent the game running too fast
 	// the real hardware should output the display for each screen on alternate frames
-//  if(video_screen_get_frame_number(device->machine->primary_screen) & 1)
+//  if(device->machine->primary_screen->frame_number() & 1)
 	if (1) // gx_syncen & 0x20)
 	{
 		gx_syncen &= ~0x20;
@@ -1254,9 +1254,9 @@ static READ16_HANDLER( dual539_r )
 	UINT16 ret = 0;
 
 	if (ACCESSING_BITS_0_7)
-		ret |= k054539_r(devtag_get_device(space->machine, "konami2"), offset);
+		ret |= k054539_r(space->machine->device("konami2"), offset);
 	if (ACCESSING_BITS_8_15)
-		ret |= k054539_r(devtag_get_device(space->machine, "konami1"), offset)<<8;
+		ret |= k054539_r(space->machine->device("konami1"), offset)<<8;
 
 	return ret;
 }
@@ -1264,9 +1264,9 @@ static READ16_HANDLER( dual539_r )
 static WRITE16_HANDLER( dual539_w )
 {
 	if (ACCESSING_BITS_0_7)
-		k054539_w(devtag_get_device(space->machine, "konami2"), offset, data);
+		k054539_w(space->machine->device("konami2"), offset, data);
 	if (ACCESSING_BITS_8_15)
-		k054539_w(devtag_get_device(space->machine, "konami1"), offset, data>>8);
+		k054539_w(space->machine->device("konami1"), offset, data>>8);
 }
 
 static READ16_HANDLER( sndcomm68k_r )
@@ -1287,27 +1287,27 @@ static INTERRUPT_GEN(tms_sync)
 
 static READ16_HANDLER(tms57002_data_word_r)
 {
-	return tms57002_data_r(devtag_get_device(space->machine, "dasp"), 0);
+	return tms57002_data_r(space->machine->device("dasp"), 0);
 }
 
 static WRITE16_HANDLER(tms57002_data_word_w)
 {
 	if (ACCESSING_BITS_0_7)
-		tms57002_data_w(devtag_get_device(space->machine, "dasp"), 0, data);
+		tms57002_data_w(space->machine->device("dasp"), 0, data);
 }
 
 static READ16_HANDLER(tms57002_status_word_r)
 {
-	return (tms57002_dready_r(devtag_get_device(space->machine, "dasp"), 0) ? 4 : 0) |
-		(tms57002_empty_r(devtag_get_device(space->machine, "dasp"), 0) ? 1 : 0);
+	return (tms57002_dready_r(space->machine->device("dasp"), 0) ? 4 : 0) |
+		(tms57002_empty_r(space->machine->device("dasp"), 0) ? 1 : 0);
 }
 
 static WRITE16_HANDLER(tms57002_control_word_w)
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		tms57002_pload_w(devtag_get_device(space->machine, "dasp"), 0, data & 4);
-		tms57002_cload_w(devtag_get_device(space->machine, "dasp"), 0, data & 8);
+		tms57002_pload_w(space->machine->device("dasp"), 0, data & 4);
+		tms57002_cload_w(space->machine->device("dasp"), 0, data & 8);
 		cputag_set_input_line(space->machine, "dasp", INPUT_LINE_RESET, !(data & 16) ? ASSERT_LINE : CLEAR_LINE);
 	}
 }
@@ -1506,7 +1506,7 @@ static INPUT_PORTS_START( le2 )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( Mono ))
 	PORT_DIPNAME( 0x02000000, 0x02000000, "Coin Mechanism")
 	PORT_DIPSETTING(          0x02000000, "Common")
-	PORT_DIPSETTING(          0x00000000, "Independant")
+	PORT_DIPSETTING(          0x00000000, "Independent")
 	PORT_DIPNAME( 0x04000000, 0x04000000, "Stage Select" )
 	PORT_DIPSETTING(          0x04000000, DEF_STR( Off ) )
 	PORT_DIPSETTING(          0x00000000, DEF_STR( On ) )
@@ -1840,7 +1840,8 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( dragoonj )
 	MDRV_IMPORT_FROM(konamigx)
-	MDRV_CPU_REPLACE("maincpu", M68EC020, 26400000) // needs higher clock to stop sprite flickerings
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(26400000) // needs higher clock to stop sprite flickerings
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
 	MDRV_VIDEO_START(dragoonj)
@@ -3630,7 +3631,7 @@ static MACHINE_START( konamigx )
 
 static MACHINE_RESET(konamigx)
 {
-	running_device *k054539_2 = devtag_get_device(machine, "konami2");
+	running_device *k054539_2 = machine->device("konami2");
 	int i;
 
 	konamigx_wrport1_0 = konamigx_wrport1_1 = 0;

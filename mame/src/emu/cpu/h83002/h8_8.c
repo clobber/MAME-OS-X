@@ -416,13 +416,13 @@ static void recalc_8bit_timer(h83xx_state *h8, int t)
 
 	if (h8->TCORA[t])
 	{
-		time = (cpu_get_clock(h8->device) / dividers[div]) / (h8->TCORA[t] - h8->TCNT[t]);
+		time = (h8->device->unscaled_clock() / dividers[div]) / (h8->TCORA[t] - h8->TCNT[t]);
 		timer_adjust_oneshot(h8->timer[(t*2)], ATTOTIME_IN_HZ(time), 0);
 	}
 
 	if (h8->TCORB[t])
 	{
-		time = (cpu_get_clock(h8->device) / dividers[div]) / (h8->TCORB[t] - h8->TCNT[t]);
+		time = (h8->device->unscaled_clock() / dividers[div]) / (h8->TCORB[t] - h8->TCNT[t]);
 		timer_adjust_oneshot(h8->timer[(t*2)+1], ATTOTIME_IN_HZ(time), 0);
 	}
 }
@@ -515,7 +515,7 @@ static READ8_HANDLER( h8330_itu_r )
 	UINT8 reg;
 	UINT64 frc;
 	static const UINT64 divider[4] = { 2, 8, 32, 1 };
-	h83xx_state *h8 = (h83xx_state *)space->cpu->token;
+	h83xx_state *h8 = get_safe_token(space->cpu);
 
 	reg = (offset + 0x88) & 0xff;
 
@@ -525,11 +525,11 @@ static READ8_HANDLER( h8330_itu_r )
 		val = memory_read_byte(h8->io, H8_SERIAL_1);
 		break;
 	case 0x92:  		// FRC H
-		frc = cpu_get_total_cycles(h8->device) / divider[h8->per_regs[0x96]];
+		frc = h8->device->total_cycles() / divider[h8->per_regs[0x96]];
 		frc %= 65536;
 		return frc>>8;
 	case 0x93:		// FRC L
-		frc = cpu_get_total_cycles(h8->device) / divider[h8->per_regs[0x96]];
+		frc = h8->device->total_cycles() / divider[h8->per_regs[0x96]];
 		frc %= 65536;
 		return frc&0xff;
 	case 0xb2:  		// port 1 data
@@ -603,7 +603,7 @@ static READ8_HANDLER( h8330_itu_r )
 static WRITE8_HANDLER( h8330_itu_w )
 {
 	UINT8 reg;
-	h83xx_state *h8 = (h83xx_state *)space->cpu->token;
+	h83xx_state *h8 = get_safe_token(space->cpu);
 
 	reg = (offset + 0x88) & 0xff;
 
@@ -751,7 +751,7 @@ ADDRESS_MAP_END
 
 CPU_GET_INFO( h8_3334 )
 {
-	h83xx_state *h8 = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	h83xx_state *h8 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch(state) {
 	// Interface functions and variables
@@ -824,3 +824,4 @@ CPU_GET_INFO( h8_3334 )
 	}
 }
 
+DEFINE_LEGACY_CPU_DEVICE(H83334, h8_3334);

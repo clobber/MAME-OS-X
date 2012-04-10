@@ -37,11 +37,11 @@ static WRITE8_HANDLER( bogeyman_8910_control_w )
 
 	// bit 5 goes to 8910 #0 BDIR pin
 	if ((state->last_write & 0x20) == 0x20 && (data & 0x20) == 0x00)
-		ay8910_data_address_w(devtag_get_device(space->machine, "ay1"), state->last_write >> 4, state->psg_latch);
+		ay8910_data_address_w(space->machine->device("ay1"), state->last_write >> 4, state->psg_latch);
 
 	// bit 7 goes to 8910 #1 BDIR pin
 	if ((state->last_write & 0x80) == 0x80 && (data & 0x80) == 0x00)
-		ay8910_data_address_w(devtag_get_device(space->machine, "ay2"), state->last_write >> 6, state->psg_latch);
+		ay8910_data_address_w(space->machine->device("ay2"), state->last_write >> 6, state->psg_latch);
 
 	state->last_write = data;
 }
@@ -221,6 +221,26 @@ static MACHINE_RESET( bogeyman )
 	state->last_write = 0;
 }
 
+static WRITE8_DEVICE_HANDLER( bogeyman_colbank_w )
+{
+	bogeyman_state *state = (bogeyman_state *)device->machine->driver_data;
+
+	if((data & 1) != (state->colbank & 1))
+	{
+		state->colbank = data & 1;
+		tilemap_mark_all_tiles_dirty(state->fg_tilemap);
+	}
+}
+
+static const ay8910_interface ay8910_config =
+{
+	AY8910_LEGACY_OUTPUT,
+	AY8910_DEFAULT_LOADS,
+	DEVCB_NULL,
+	DEVCB_NULL,
+	DEVCB_HANDLER(bogeyman_colbank_w),
+	DEVCB_NULL
+};
 
 static MACHINE_DRIVER_START( bogeyman )
 
@@ -256,6 +276,7 @@ static MACHINE_DRIVER_START( bogeyman )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ay1", AY8910, 1500000)	/* Verified */
+	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
 	MDRV_SOUND_ADD("ay2", AY8910, 1500000)	/* Verified */

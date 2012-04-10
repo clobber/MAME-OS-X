@@ -112,8 +112,8 @@ struct _m6800_state
 	UINT8	irq_state[2];	/* IRQ line state [IRQ1,TIN] */
 	UINT8	ic_eddge;		/* InputCapture eddge , b.0=fall,b.1=raise */
 
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 
 	/* Memory spaces */
     const address_space *program;
@@ -156,16 +156,14 @@ struct _m6800_state
 INLINE m6800_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_M6800 ||
-		   cpu_get_type(device) == CPU_M6801 ||
-		   cpu_get_type(device) == CPU_M6802 ||
-		   cpu_get_type(device) == CPU_M6803 ||
-		   cpu_get_type(device) == CPU_M6808 ||
-		   cpu_get_type(device) == CPU_HD63701 ||
-		   cpu_get_type(device) == CPU_NSC8105);
-	return (m6800_state *)device->token;
+	assert(device->type() == M6800 ||
+		   device->type() == M6801 ||
+		   device->type() == M6802 ||
+		   device->type() == M6803 ||
+		   device->type() == M6808 ||
+		   device->type() == HD63701 ||
+		   device->type() == NSC8105);
+	return (m6800_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #if 0
@@ -598,19 +596,29 @@ INLINE void CHECK_IRQ_LINES(m6800_state *cpustate)
 {
 	if (cpustate->nmi_pending)
 	{
+		if(cpustate->wai_state & M6800_SLP)
+			cpustate->wai_state &= ~M6800_SLP;
+
 		cpustate->nmi_pending = FALSE;
 		enter_interrupt(cpustate, "M6800 '%s' take NMI\n",0xfffc);
 	}
-	else if( !(CC & 0x10) )
+	else
 	{
 		if( cpustate->irq_state[M6800_IRQ_LINE] != CLEAR_LINE )
 		{	/* standard IRQ */
-			enter_interrupt(cpustate, "M6800 '%s' take IRQ1\n",0xfff8);
-			if( cpustate->irq_callback )
-				(void)(*cpustate->irq_callback)(cpustate->device, M6800_IRQ_LINE);
+			if(cpustate->wai_state & M6800_SLP)
+				cpustate->wai_state &= ~M6800_SLP;
+
+			if( !(CC & 0x10) )
+			{
+				enter_interrupt(cpustate, "M6800 '%s' take IRQ1\n",0xfff8);
+				if( cpustate->irq_callback )
+					(void)(*cpustate->irq_callback)(cpustate->device, M6800_IRQ_LINE);
+			}
 		}
 		else
-			m6800_check_irq2(cpustate);
+			if( !(CC & 0x10) )
+				m6800_check_irq2(cpustate);
 	}
 }
 
@@ -624,6 +632,8 @@ static void check_timer_event(m6800_state *cpustate)
 		cpustate->tcsr |= TCSR_OCF;
 		cpustate->pending_tcsr |= TCSR_OCF;
 		MODIFIED_tcsr;
+		if((cpustate->tcsr & TCSR_EOCI) && cpustate->wai_state & M6800_SLP)
+			cpustate->wai_state &= ~M6800_SLP;
 		if ( !(CC & 0x10) && (cpustate->tcsr & TCSR_EOCI))
 			TAKE_OCI;
 	}
@@ -637,6 +647,8 @@ static void check_timer_event(m6800_state *cpustate)
 		cpustate->tcsr |= TCSR_TOF;
 		cpustate->pending_tcsr |= TCSR_TOF;
 		MODIFIED_tcsr;
+		if((cpustate->tcsr & TCSR_ETOI) && cpustate->wai_state & M6800_SLP)
+			cpustate->wai_state &= ~M6800_SLP;
 		if ( !(CC & 0x10) && (cpustate->tcsr & TCSR_ETOI))
 			TAKE_TOI;
 	}
@@ -1256,7 +1268,6 @@ static CPU_EXECUTE( m6800 )
 {
 	m6800_state *cpustate = get_safe_token(device);
 	UINT8 ireg;
-	cpustate->icount = cycles;
 
 	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
 
@@ -1278,8 +1289,6 @@ static CPU_EXECUTE( m6800 )
 			increment_counter(cpustate, cycles_6800[ireg]);
 		}
 	} while( cpustate->icount>0 );
-
-	return cycles - cpustate->icount;
 }
 
 /****************************************************************************
@@ -1298,7 +1307,7 @@ static CPU_INIT( m6801 )
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
-	cpustate->clock = device->clock / 4;
+	cpustate->clock = device->clock() / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
 	cpustate->m6800_tx_timer = timer_alloc(device->machine, m6800_tx_tick, cpustate);
 
@@ -1340,7 +1349,7 @@ static CPU_INIT( m6803 )
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
-	cpustate->clock = device->clock / 4;
+	cpustate->clock = device->clock() / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
 	cpustate->m6800_tx_timer = timer_alloc(device->machine, m6800_tx_tick, cpustate);
 
@@ -1621,7 +1630,6 @@ static CPU_EXECUTE( m6803 )
 {
 	m6800_state *cpustate = get_safe_token(device);
 	UINT8 ireg;
-	cpustate->icount = cycles;
 
 	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
 
@@ -1643,8 +1651,6 @@ static CPU_EXECUTE( m6803 )
 			increment_counter(cpustate, cycles_6803[ireg]);
 		}
 	} while( cpustate->icount>0 );
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -1694,7 +1700,7 @@ static CPU_INIT( hd63701 )
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
-	cpustate->clock = device->clock / 4;
+	cpustate->clock = device->clock() / 4;
 	cpustate->m6800_rx_timer = timer_alloc(device->machine, m6800_rx_tick, cpustate);
 	cpustate->m6800_tx_timer = timer_alloc(device->machine, m6800_tx_tick, cpustate);
 
@@ -1975,7 +1981,6 @@ static CPU_EXECUTE( hd63701 )
 {
 	m6800_state *cpustate = get_safe_token(device);
 	UINT8 ireg;
-	cpustate->icount = cycles;
 
 	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
 
@@ -1997,8 +2002,6 @@ static CPU_EXECUTE( hd63701 )
 			increment_counter(cpustate, cycles_63701[ireg]);
 		}
 	} while( cpustate->icount>0 );
-
-	return cycles - cpustate->icount;
 }
 
 /*
@@ -2321,7 +2324,6 @@ static CPU_EXECUTE( nsc8105 )
 {
 	m6800_state *cpustate = get_safe_token(device);
 	UINT8 ireg;
-	cpustate->icount = cycles;
 
 	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
 
@@ -2343,8 +2345,6 @@ static CPU_EXECUTE( nsc8105 )
 			increment_counter(cpustate, cycles_nsc8105[ireg]);
 		}
 	} while( cpustate->icount>0 );
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -2672,7 +2672,7 @@ static CPU_SET_INFO( m6800 )
 
 CPU_GET_INFO( m6800 )
 {
-	m6800_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	m6800_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -2901,3 +2901,11 @@ CPU_GET_INFO( nsc8105 )
 		default:										CPU_GET_INFO_CALL(m6800);				break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(M6800, m6800);
+DEFINE_LEGACY_CPU_DEVICE(M6801, m6801);
+DEFINE_LEGACY_CPU_DEVICE(M6802, m6802);
+DEFINE_LEGACY_CPU_DEVICE(M6803, m6803);
+DEFINE_LEGACY_CPU_DEVICE(M6808, m6808);
+DEFINE_LEGACY_CPU_DEVICE(HD63701, hd63701);
+DEFINE_LEGACY_CPU_DEVICE(NSC8105, nsc8105);

@@ -85,9 +85,8 @@ struct _upd4990a_state
 INLINE upd4990a_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert((device->type == UPD4990A));
-	return (upd4990a_state *)device->token;
+	assert((device->type() == UPD4990A));
+	return (upd4990a_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 INLINE UINT8 convert_to_bcd(int val)
@@ -449,8 +448,8 @@ static DEVICE_START( upd4990a )
 {
 	upd4990a_state *upd4990a = get_safe_token(device);
 
-	mame_system_time curtime, *systime = &curtime;
-	mame_get_current_datetime(device->machine, &curtime);
+	system_time curtime, *systime = &curtime;
+	device->machine->current_datetime(curtime);
 
 #if 0
 	upd4990a->seconds = 0x00;
@@ -532,5 +531,7 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_FEATURES	DT_HAS_START | DT_HAS_RESET
 #define DEVTEMPLATE_NAME		"NEC uPD4990A"
 #define DEVTEMPLATE_FAMILY		"NEC uPD4990A Calendar & Clock"
-#define DEVTEMPLATE_CLASS		DEVICE_CLASS_PERIPHERAL
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_DEVICE(UPD4990A, upd4990a);

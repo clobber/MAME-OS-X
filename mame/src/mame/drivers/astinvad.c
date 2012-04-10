@@ -5,7 +5,7 @@ Misc early Z80 games with simple color bitmap graphics
     - Space King 2    (c) Konami
     - Kosmo Killer    bootleg
     - Kamikaze        (c) Leijac Corporation
-    - Astro Invader   (c) Stern
+    - Astro Invader   (c) Stern Electronics
     - Space Intruder  (c) Shoei
 
 Space Intruder emulation by Lee Taylor (lee@defender.demon.co.uk),
@@ -217,7 +217,7 @@ static TIMER_CALLBACK( kamizake_int_gen )
 	/* interrupts are asserted on every state change of the 128V line */
 	cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
 	param ^= 128;
-	timer_adjust_oneshot(state->int_timer, video_screen_get_time_until_pos(machine->primary_screen, param, 0), param);
+	timer_adjust_oneshot(state->int_timer, machine->primary_screen->time_until_pos(param), param);
 
 	/* an RC circuit turns the interrupt off after a short amount of time */
 	timer_set(machine, double_to_attotime(300 * 0.1e-6), NULL, 0, kamikaze_int_off);
@@ -228,13 +228,13 @@ static MACHINE_START( kamikaze )
 {
 	astinvad_state *state = (astinvad_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->ppi8255_0 = devtag_get_device(machine, "ppi8255_0");
-	state->ppi8255_1 = devtag_get_device(machine, "ppi8255_1");
-	state->samples = devtag_get_device(machine, "samples");
+	state->maincpu = machine->device("maincpu");
+	state->ppi8255_0 = machine->device("ppi8255_0");
+	state->ppi8255_1 = machine->device("ppi8255_1");
+	state->samples = machine->device("samples");
 
 	state->int_timer = timer_alloc(machine, kamizake_int_gen, NULL);
-	timer_adjust_oneshot(state->int_timer, video_screen_get_time_until_pos(machine->primary_screen, 128, 0), 128);
+	timer_adjust_oneshot(state->int_timer, machine->primary_screen->time_until_pos(128), 128);
 
 	state_save_register_global(machine, state->screen_flip);
 	state_save_register_global(machine, state->screen_red);
@@ -256,8 +256,8 @@ static MACHINE_START( spaceint )
 {
 	astinvad_state *state = (astinvad_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->samples = devtag_get_device(machine, "samples");
+	state->maincpu = machine->device("maincpu");
+	state->samples = machine->device("samples");
 
 	state_save_register_global(machine, state->screen_flip);
 	state_save_register_global_array(machine, state->sound_state);
@@ -776,7 +776,7 @@ static DRIVER_INIT( spcking2 )
  *************************************/
 
 GAME( 1979, kamikaze, 0,        kamikaze, kamikaze, kamikaze, ROT270, "Leijac Corporation", "Kamikaze",      GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1980, astinvad, kamikaze, kamikaze, astinvad, kamikaze, ROT270, "Stern",              "Astro Invader", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1980, astinvad, kamikaze, kamikaze, astinvad, kamikaze, ROT270, "Leijac Corporation (Stern Electronics license)", "Astro Invader", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 19??, kosmokil, kamikaze, kamikaze, kamikaze, kamikaze, ROT270, "bootleg",            "Kosmo Killer",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) // says >BEM< Mi Italy but it looks hacked in, dif revision of game tho.
 GAME( 1979, spcking2, 0,        spcking2, spcking2, spcking2, ROT270, "Konami",             "Space King 2",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1980, spaceint, 0,        spaceint, spaceint, 0,        ROT90,  "Shoei",              "Space Intruder", GAME_IMPERFECT_SOUND | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )

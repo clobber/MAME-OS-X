@@ -271,18 +271,18 @@ PALETTE_INIT( tia_PAL )
 
 VIDEO_START( tia )
 {
-	int cx = video_screen_get_width(machine->primary_screen);
+	int cx = machine->primary_screen->width();
 
-	screen_height = video_screen_get_height(machine->primary_screen);
-	helper[0] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
-	helper[1] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
-	helper[2] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, video_screen_get_format(machine->primary_screen));
+	screen_height = machine->primary_screen->height();
+	helper[0] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine->primary_screen->format());
+	helper[1] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine->primary_screen->format());
+	helper[2] = auto_bitmap_alloc(machine, cx, TIA_MAX_SCREEN_HEIGHT, machine->primary_screen->format());
 }
 
 
 VIDEO_UPDATE( tia )
 {
-	screen_height = video_screen_get_height(screen);
+	screen_height = screen->height();
 	copybitmap(bitmap, helper[2], 0, 0, 0, 0, cliprect);
 	return 0;
 }
@@ -508,13 +508,13 @@ static int collision_check(UINT8* p1, UINT8* p2, int x1, int x2)
 
 INLINE int current_x(const address_space *space)
 {
-	return 3 * ((cpu_get_total_cycles(space->cpu) - frame_cycles) % 76) - 68;
+	return 3 * ((space->machine->firstcpu->total_cycles() - frame_cycles) % 76) - 68;
 }
 
 
 INLINE int current_y(const address_space *space)
 {
-	return (cpu_get_total_cycles(space->cpu) - frame_cycles) / 76;
+	return (space->machine->firstcpu->total_cycles() - frame_cycles) / 76;
 }
 
 
@@ -853,7 +853,7 @@ static void update_bitmap(int next_x, int next_y)
 
 static WRITE8_HANDLER( WSYNC_w )
 {
-	int cycles = cpu_get_total_cycles(space->cpu) - frame_cycles;
+	int cycles = space->machine->firstcpu->total_cycles() - frame_cycles;
 
 	if (cycles % 76)
 	{
@@ -872,8 +872,8 @@ static WRITE8_HANDLER( VSYNC_w )
 
 			if ( curr_y > 5 )
 				update_bitmap(
-					video_screen_get_width(space->machine->primary_screen),
-					video_screen_get_height(space->machine->primary_screen));
+					space->machine->primary_screen->width(),
+					space->machine->primary_screen->height());
 
 			if ( tia_vsync_callback ) {
 				tia_vsync_callback( space, 0, curr_y, 0xFFFF );
@@ -894,7 +894,7 @@ static WRITE8_HANDLER( VBLANK_w )
 {
 	if (data & 0x80)
 	{
-		paddle_cycles = cpu_get_total_cycles(space->cpu);
+		paddle_cycles = space->machine->firstcpu->total_cycles();
 	}
 	if ( ! ( VBLANK & 0x40 ) ) {
 		INPT4 = 0x80;
@@ -1647,7 +1647,7 @@ static WRITE8_HANDLER( GRP1_w )
 
 static READ8_HANDLER( INPT_r )
 {
-	UINT64 elapsed = cpu_get_total_cycles(space->cpu) - paddle_cycles;
+	UINT64 elapsed = space->machine->firstcpu->total_cycles() - paddle_cycles;
 	int input = TIA_INPUT_PORT_ALWAYS_ON;
 	if ( tia_read_input_port )
 	{
@@ -1863,7 +1863,7 @@ WRITE8_HANDLER( tia_w )
 	case 0x18: /* AUDF1 */
 	case 0x19: /* AUDV0 */
 	case 0x1A: /* AUDV1 */
-		tia_sound_w(devtag_get_device(space->machine, "tia"), offset, data);
+		tia_sound_w(space->machine->device("tia"), offset, data);
 		break;
 
 	case 0x1B:
@@ -1924,7 +1924,7 @@ WRITE8_HANDLER( tia_w )
 }
 
 
-static void tia_reset(running_machine *machine)
+static void tia_reset(running_machine &machine)
 {
 	int i;
 
@@ -1981,7 +1981,7 @@ static void tia_reset(running_machine *machine)
 
 void tia_init(running_machine *machine, const struct tia_interface* ti)
 {
-	assert_always(mame_get_phase(machine) == MAME_PHASE_INIT, "Can only call tia_init at init time!");
+	assert_always(machine->phase() == MACHINE_PHASE_INIT, "Can only call tia_init at init time!");
 
 	if ( ti ) {
 		tia_read_input_port = ti->read_input_port;
@@ -1993,8 +1993,8 @@ void tia_init(running_machine *machine, const struct tia_interface* ti)
 		tia_vsync_callback = NULL;
 	}
 
-	tia_reset( machine );
+	tia_reset( *machine );
 
-	add_reset_callback(machine, tia_reset);
+	machine->add_notifier(MACHINE_NOTIFY_RESET, tia_reset);
 }
 

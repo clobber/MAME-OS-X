@@ -523,8 +523,8 @@ static MACHINE_START( esd16 )
 
 	memory_configure_bank(machine, "bank1", 0, 17, &AUDIO[0x0000], 0x4000);
 
-	state->audio_cpu = devtag_get_device(machine, "audiocpu");
-	state->eeprom = devtag_get_device(machine, "eeprom");
+	state->audio_cpu = machine->device("audiocpu");
+	state->eeprom = machine->device("eeprom");
 
 	state_save_register_global(machine, state->tilemap0_color);
 }
@@ -574,8 +574,7 @@ static MACHINE_DRIVER_START( multchmp )
 	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 MACHINE_DRIVER_END
 

@@ -6,7 +6,7 @@ PALETTE_INIT( mnchmobl )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -45,7 +45,7 @@ WRITE8_HANDLER( mnchmobl_flipscreen_w )
 VIDEO_START( mnchmobl )
 {
 	munchmo_state *state = (munchmo_state *)machine->driver_data;
-	state->tmpbitmap = auto_bitmap_alloc(machine, 512, 512, video_screen_get_format(machine->primary_screen));
+	state->tmpbitmap = auto_bitmap_alloc(machine, 512, 512, machine->primary_screen->format());
 }
 
 static void draw_status( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )

@@ -359,9 +359,9 @@ static MACHINE_START( missb2 )
 {
 	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->slave = devtag_get_device(machine, "slave");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->slave = machine->device("slave");
 	state->mcu = NULL;
 
 	state_save_register_global(machine, state->sound_nmi_enable);
@@ -423,8 +423,7 @@ static MACHINE_DRIVER_START( missb2 )
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.4)
 MACHINE_DRIVER_END
 
@@ -485,4 +484,4 @@ static DRIVER_INIT( missb2 )
 
 /* Game Drivers */
 
-GAME( 1996, missb2, 0, missb2, missb2, missb2, ROT0,  "Alpha Co", "Miss Bubble 2", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1996, missb2, 0, missb2, missb2, missb2, ROT0,  "Alpha Co.", "Miss Bubble II", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

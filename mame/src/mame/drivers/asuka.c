@@ -238,7 +238,7 @@ static TIMER_CALLBACK( cadash_interrupt5 )
 
 static INTERRUPT_GEN( cadash_interrupt )
 {
-	timer_set(device->machine, cpu_clocks_to_attotime(device, 500), NULL, 0, cadash_interrupt5);
+	timer_set(device->machine, downcast<cpu_device *>(device)->cycles_to_attotime(500), NULL, 0, cadash_interrupt5);
 	cpu_set_input_line(device, 4, HOLD_LINE);  /* interrupt vector 4 */
 }
 
@@ -837,10 +837,10 @@ static MACHINE_START( asuka )
 {
 	asuka_state *state = (asuka_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->pc090oj = devtag_get_device(machine, "pc090oj");
-	state->tc0100scn = devtag_get_device(machine, "tc0100scn");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->pc090oj = machine->device("pc090oj");
+	state->tc0100scn = machine->device("tc0100scn");
 
 	/* configure the banks */
 	memory_configure_bank(machine, "bank1", 0, 1, memory_region(machine, "audiocpu"), 0);

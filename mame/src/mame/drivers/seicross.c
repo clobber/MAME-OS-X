@@ -102,7 +102,7 @@ static WRITE8_DEVICE_HANDLER( friskyt_portB_w )
 {
 //logerror("PC %04x: 8910 port B = %02x\n",cpu_get_pc(space->cpu),data);
 	/* bit 0 is IRQ enable */
-	cpu_interrupt_enable(devtag_get_device(device->machine, "maincpu"), data & 1);
+	cpu_interrupt_enable(device->machine->device("maincpu"), data & 1);
 
 	/* bit 1 flips screen */
 
@@ -598,5 +598,5 @@ ROM_END
 GAME( 1981, friskyt,  0,        nvram,    friskyt,  0, ROT0,  "Nichibutsu", "Frisky Tom (set 1)", GAME_NO_COCKTAIL )
 GAME( 1981, friskyta, friskyt,  nvram,    friskyt,  0, ROT0,  "Nichibutsu", "Frisky Tom (set 2)", GAME_NO_COCKTAIL )
 GAME( 1982, radrad,   0,        no_nvram, radrad,   0, ROT0,  "Nichibutsu USA", "Radical Radial", GAME_NO_COCKTAIL )
-GAME( 1984, seicross, 0,        no_nvram, seicross, 0, ROT90, "Nichibutsu + Alice", "Seicross", GAME_NO_COCKTAIL )
-GAME( 1984, sectrzon, seicross, no_nvram, seicross, 0, ROT90, "Nichibutsu + Alice", "Sector Zone", GAME_NO_COCKTAIL )
+GAME( 1984, seicross, 0,        no_nvram, seicross, 0, ROT90, "Nichibutsu / Alice", "Seicross", GAME_NO_COCKTAIL )
+GAME( 1984, sectrzon, seicross, no_nvram, seicross, 0, ROT90, "Nichibutsu / Alice", "Sector Zone", GAME_NO_COCKTAIL )

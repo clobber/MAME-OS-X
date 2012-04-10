@@ -164,7 +164,7 @@ Language
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "includes/appoooh.h"
-#include "machine/segacrpt.h"		// needed for robowres_decode
+#include "machine/segacrp2.h"
 #include "sound/msm5205.h"
 #include "sound/sn76496.h"
 
@@ -404,7 +404,7 @@ static MACHINE_START( appoooh )
 {
 	appoooh_state *state = (appoooh_state *)machine->driver_data;
 
-	state->adpcm = devtag_get_device(machine, "msm");
+	state->adpcm = machine->device("msm");
 
 	state_save_register_global(machine, state->adpcm_data);
 	state_save_register_global(machine, state->adpcm_address);
@@ -600,7 +600,7 @@ ROM_END
 
 static DRIVER_INIT(robowres)
 {
-	robowres_decode(machine, "maincpu");
+	sega_315_5179_decode(machine, "maincpu");
 }
 
 static DRIVER_INIT(robowresb)
@@ -616,6 +616,6 @@ static DRIVER_INIT(robowresb)
  *
  *************************************/
 
-GAME( 1984, appoooh,   0,        appoooh,  appoooh,  0,        ROT0, "[Sanritsu] Sega", "Appoooh", GAME_SUPPORTS_SAVE )
-GAME( 1986, robowres,  0,        robowres, robowres, robowres, ROT0, "Sega",            "Robo Wres 2001", GAME_SUPPORTS_SAVE )
+GAME( 1984, appoooh,   0,        appoooh,  appoooh,  0,        ROT0, "Sanritsu / Sega", "Appoooh", GAME_SUPPORTS_SAVE )
+GAME( 1986, robowres,  0,        robowres, robowres, robowres, ROT0, "Sanritsu / Sega", "Robo Wres 2001", GAME_SUPPORTS_SAVE )
 GAME( 1986, robowresb, robowres, robowres, robowres, robowresb,ROT0, "bootleg",         "Robo Wres 2001 (bootleg)", GAME_SUPPORTS_SAVE )

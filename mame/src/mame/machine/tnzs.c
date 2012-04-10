@@ -693,9 +693,9 @@ MACHINE_START( tnzs )
 	state->bank1 = 2;
 	state->bank2 = 0;
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->subcpu = devtag_get_device(machine, "sub");
-	state->mcu = devtag_get_device(machine, "mcu");
+	state->audiocpu = machine->device("audiocpu");
+	state->subcpu = machine->device("sub");
+	state->mcu = machine->device("mcu");
 
 	state_save_register_global(machine, state->screenflip);
 	state_save_register_global(machine, state->kageki_csport_sel);
@@ -725,7 +725,7 @@ MACHINE_START( jpopnics )
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
 	memory_configure_bank(machine, "bank2", 0, 4, &SUB[0x10000], 0x2000);
 
-	state->subcpu = devtag_get_device(machine, "sub");
+	state->subcpu = machine->device("sub");
 	state->mcu = NULL;
 
 	state->bank1 = 2;
@@ -773,7 +773,7 @@ WRITE8_HANDLER( tnzs_bankswitch1_w )
 				/* bit 2 resets the mcu */
 				if (data & 0x04)
 				{
-					if (state->mcu != NULL && cpu_get_type(state->mcu) == CPU_I8742)
+					if (state->mcu != NULL && state->mcu->type() == I8742)
 						cpu_set_input_line(state->mcu, INPUT_LINE_RESET, PULSE_LINE);
 				}
 				/* Coin count and lockout is handled by the i8742 */

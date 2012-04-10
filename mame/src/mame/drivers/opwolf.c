@@ -216,7 +216,7 @@ Stephh's notes (based on the game M68000 code and some tests) :
   - These 2 games are 100% the same, only region and gun offsets differ !
   - Coinage relies on the region (code at 0x00bea4) :
       * 0x0001 (Japan) and 0x0002 (US) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0003 (World) and 0x0004 (Japan, licenced to Taito America ?) use TAITO_COINAGE_WORLD
+      * 0x0003 (World) and 0x0004 (Japan, licensed to Taito America ?) use TAITO_COINAGE_WORLD
   - Gun offsets are stored at 0x03ffaf.b (Y) and 0x03ffb1.b (X);
     these values are checked via routine at 0x000b76
   - Notice screen only if region = 0x0001
@@ -433,12 +433,12 @@ static MACHINE_START( opwolf )
 {
 	opwolf_state *state = (opwolf_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->pc080sn = devtag_get_device(machine, "pc080sn");
-	state->pc090oj = devtag_get_device(machine, "pc090oj");
-	state->msm1 = devtag_get_device(machine, "msm1");
-	state->msm2 = devtag_get_device(machine, "msm2");
+	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->audiocpu = machine->device<cpu_device>("audiocpu");
+	state->pc080sn = machine->device("pc080sn");
+	state->pc090oj = machine->device("pc090oj");
+	state->msm1 = machine->device("msm1");
+	state->msm2 = machine->device("msm2");
 
 	state_save_register_global(machine, state->sprite_ctrl);
 	state_save_register_global(machine, state->sprites_flipscreen);
@@ -462,8 +462,8 @@ static MACHINE_RESET( opwolf )
 	state->sprite_ctrl = 0;
 	state->sprites_flipscreen = 0;
 
-	msm5205_reset_w(devtag_get_device(machine, "msm1"), 1);
-	msm5205_reset_w(devtag_get_device(machine, "msm2"), 1);
+	msm5205_reset_w(machine->device("msm1"), 1);
+	msm5205_reset_w(machine->device("msm2"), 1);
 }
 
 static void opwolf_msm5205_vck( running_device *device )
@@ -1026,4 +1026,4 @@ GAME( 1987, opwolf,   0,        opwolf,   opwolf,   opwolf,   ROT0, "Taito Corpo
 GAME( 1987, opwolfa,  opwolf,   opwolf,   opwolf,   opwolf,   ROT0, "Taito Corporation Japan", "Operation Wolf (World, set 2)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1987, opwolfj,  opwolf,   opwolf,   opwolf,   opwolf,   ROT0, "Taito Corporation", "Operation Wolf (Japan)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1987, opwolfu,  opwolf,   opwolf,   opwolfu,  opwolf,   ROT0, "Taito America Corporation", "Operation Wolf (US)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1987, opwolfb,  opwolf,   opwolfb,  opwolfb,  opwolfb,  ROT0, "[Taito] (Bear Corporation Korea bootleg)", "Operation Bear (bootleg of Operation Wolf)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1987, opwolfb,  opwolf,   opwolfb,  opwolfb,  opwolfb,  ROT0, "bootleg (Bear Corporation Korea)", "Operation Bear (bootleg of Operation Wolf)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

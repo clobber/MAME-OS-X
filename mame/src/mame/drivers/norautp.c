@@ -41,7 +41,8 @@
    * HI-LO Double Up Joker Poker,         1983,  SMS Manufacturing Corp.
    * DRHL Poker (v.2.89),                 1986,  Drews Inc.
    * Turbo Poker 2,                       1993,  Micro Manufacturing, Inc.
-   * Fast Draw (poker conversion kit)?,   198?,  Stern/Seeburg?.
+   * Southern Systems Joker Poker,        1982,  Southern Systems & Assembly, Ltd.
+   * Fast Draw (poker conversion kit)?,   198?,  Stern Electronics?
    * Draw Poker HI-LO (unknown, rev 1),   198?,  SMS Manufacturing Corp?.
    * Draw Poker HI-LO (unknown, rev 2),   198?,  SMS Manufacturing Corp?.
 
@@ -54,10 +55,9 @@
   Blue Games, CGI, Micro Manufacturing, SMS Manufacturing, Drews Distributing,
   Drew Industries, Lynch Enterprises Inc, Hillside Gaming Corp, Electro Sport,
   Mainline London, Southern Systems, Americade Amusement Inc, Prologic Ireland,
-  Mosfat, Unique, GEI, etc...
+  Mosfat, Unique, GEI, Southern Systems & Assembly Ltd., etc...
 
   You can see some legal issues in the following links:
-  http://www.altlaw.org/v1/cases/533481
   http://cases.justia.com/us-court-of-appeals/F2/783/421/41759/
 
 
@@ -511,6 +511,12 @@
   - Added some technical notes.
 
 
+  [2009-12-08]
+
+  - Added Southern Systems Joker Poker. Based on 8080 CPU.
+  - Added some technical notes.
+
+
   TODO:
 
   - Analize and hook the 3rd PPI device at 0xc0-0xc3.
@@ -651,7 +657,7 @@ static WRITE8_DEVICE_HANDLER( soundlamps_w )
   xxxx ----  * Discrete Sound Lines.
 */
 
-	running_device *discrete = devtag_get_device(device->machine, "discrete");
+	running_device *discrete = device->machine->device("discrete");
 
 	output_set_lamp_value(8, (data >> 0) & 1);	/* DEAL / DRAW lamp */
 	output_set_lamp_value(9, (data >> 1) & 1);	/* BET / COLLECT lamp */
@@ -721,8 +727,8 @@ static WRITE8_HANDLER( vram_data_w )
 	np_vram[np_addr] = data & 0xff;
 
 	/* trigger 8255-2 port C bit 7 (/OBF) */
-//  i8255a_pc7_w(devtag_get_device(device->machine, "ppi8255_2"), 0);
-//  i8255a_pc7_w(devtag_get_device(device->machine, "ppi8255_2"), 1);
+//  i8255a_pc7_w(device->machine->device("ppi8255_2"), 0);
+//  i8255a_pc7_w(device->machine->device("ppi8255_2"), 1);
 
 }
 
@@ -782,6 +788,8 @@ static READ8_HANDLER( test2_r )
   | tpoker2  |  8080   |  0x7C-0x7F   |  0x90  |  0xBC-0xBF   |  0x92  |  0xDC-0xDF   |          0xC0          |
   +----------+---------+--------------+--------+--------------+--------+--------------+------------------------+
   | drhl     |  8080?  |  0x7C-0x7F   |  0x90  |  0xBC-0xBF   |  0x92  |  0xDC-0xDF   |          0xC0          |
+  +----------+---------+--------------+--------+--------------+--------+--------------+------------------------+
+  | ssjkrpkr |  8080   |  0x60-0x63   |  0x90  |  0xA0-0xA3   |  0x92  |  0xC0-0xC3   |          0xC0          |
   +----------+---------+--------------+--------+--------------+--------+--------------+------------------------+
   | fastdrwp |  8080?  |  0x7C-0x7F   |  0x90  |  0xBC-0xBF   |  0x92  |  0xDC-0xDF   |          0xC0          |
   +----------+---------+--------------+--------+--------------+--------+--------------+------------------------+
@@ -868,6 +876,12 @@ static ADDRESS_MAP_START( dphla_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x3fff)
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( ssjkrpkr_map, ADDRESS_SPACE_PROGRAM, 8 )
+	ADDRESS_MAP_GLOBAL_MASK(0x7fff)
+	AM_RANGE(0x0000, 0x1fff) AM_ROM
+	AM_RANGE(0x4000, 0x43ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( dphltest_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1337,8 +1351,9 @@ static MACHINE_DRIVER_START( dphl )
 	MDRV_IMPORT_FROM(noraut_base)
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", 8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(dphl_map)
+	MDRV_CPU_IO_MAP(norautp_portmap)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("discrete")
@@ -1350,8 +1365,9 @@ static MACHINE_DRIVER_START( dphla )
 	MDRV_IMPORT_FROM(noraut_base)
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", 8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(dphla_map)
+	MDRV_CPU_IO_MAP(norautp_portmap)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("discrete")
@@ -1363,8 +1379,9 @@ static MACHINE_DRIVER_START( kimbldhl )
 	MDRV_IMPORT_FROM(noraut_base)
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", 8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(kimbldhl_map)
+	MDRV_CPU_IO_MAP(norautp_portmap)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("discrete")
@@ -1376,8 +1393,9 @@ static MACHINE_DRIVER_START( dphltest )
 	MDRV_IMPORT_FROM(noraut_base)
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", 8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(dphltest_map)
+	MDRV_CPU_IO_MAP(norautp_portmap)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("discrete")
@@ -1389,8 +1407,22 @@ static MACHINE_DRIVER_START( drhl )
 	MDRV_IMPORT_FROM(noraut_base)
 
 	/* basic machine hardware */
-	MDRV_CPU_REPLACE("maincpu", 8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(drhl_map)
+	MDRV_CPU_IO_MAP(norautp_portmap)
+
+	/* sound hardware */
+	MDRV_SOUND_MODIFY("discrete")
+	MDRV_SOUND_CONFIG_DISCRETE(dphl)
+MACHINE_DRIVER_END
+
+
+static MACHINE_DRIVER_START( ssjkrpkr )
+	MDRV_IMPORT_FROM(noraut_base)
+
+	/* basic machine hardware */
+	MDRV_CPU_REPLACE("maincpu", I8080, DPHL_CPU_CLOCK)
+	MDRV_CPU_PROGRAM_MAP(ssjkrpkr_map)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("discrete")
@@ -3191,11 +3223,45 @@ ROM_START( tpoker2 )
 ROM_END
 
 
+/*
+
+  Southern Systems Joker Poker
+  ----------------------------
+
+  .u11  2723
+  .u10  2732
+  .u27  2716  couldn't get a good read
+
+  8255 x3
+  8080A
+  unknown 28 ping chip @ u10
+  open 16 pin socketa @ u41
+  18.000 crystal
+
+
+
+  $1fdf = call $0a0c --> draw 'bet' screen sector.
+  $1fe2 = call $09ee --> draw 'credit' screen sector.
+
+*/
+
+ROM_START( ssjkrpkr )
+	ROM_REGION( 0x10000, "maincpu", 0 )	/* Southern Systems */
+	ROM_LOAD( "oc.u11", 0x0000, 0x1000, CRC(b9072aa5) SHA1(bfa3df090e1030aaebbb784cb5e686f4f84f2263) )
+	ROM_LOAD( "oc.u10", 0x1000, 0x1000, CRC(8652ebb9) SHA1(e907df4f8da99b42c425ed58da3cda9943c89fb7) )
+
+	/* All garbage inside. Replaced with generic GFX ROM from DPHLA set, modified to support the "'" char */
+	ROM_REGION( 0x1000,  "gfx", 0 )
+	ROM_FILL(           0x0000, 0x0800, 0xff )
+	ROM_LOAD( "oc.u27", 0x0800, 0x0800, BAD_DUMP CRC(ac8e9f2c) SHA1(25ab615de3055e5be78d409194edf7e3c03fe9b9) )
+ROM_END
+
+
 /************************** Unknown Sets ****************************/
 
 /*
 
-  Fast Draw (Stern)?
+  Fast Draw (Stern Electronics)?
 
   Text font is different to other similar games.
 
@@ -3378,6 +3444,16 @@ static DRIVER_INIT( deb )
 	ROM[0x206c] = 0xff;
 }
 
+static DRIVER_INIT( ssa )
+/* Passing the video PPI handshaking lines */
+/* Just for debugging purposes */
+{
+//  UINT8 *ROM = memory_region(machine, "maincpu");
+//  ROM[0x07af] = 0x00;
+//  ROM[0x07b0] = 0x00;
+//  ROM[0x07b1] = 0x00;
+}
+
 
 /*************************
 *      Game Drivers      *
@@ -3415,18 +3491,19 @@ GAMEL( 198?, bjpoker,  0,       norautxp, norautrh, 0,   ROT0, "M.Kramer Manufac
 /*  The following ones are 'Draw Poker HI-LO' type, running in a 8080 based hardware  */
 /**************************************************************************************/
 
-/*     YEAR  NAME      PARENT   MACHINE   INPUT     INIT ROT    COMPANY                     FULLNAME                              FLAGS             LAYOUT */
+/*     YEAR  NAME      PARENT   MACHINE   INPUT     INIT ROT    COMPANY                        FULLNAME                           FLAGS             LAYOUT */
 
-GAME(  1983, dphl,     0,       dphl,     norautp,  0,   ROT0, "M.Kramer Manufacturing.",  "Draw Poker HI-LO (M.Kramer)",         GAME_NOT_WORKING )
-GAME(  1983, dphla,    0,       dphla,    norautp,  0,   ROT0, "<unknown>",                "Draw Poker HI-LO (Alt)",              GAME_NOT_WORKING )
-GAME(  1983, dphljp,   0,       dphl,     norautp,  0,   ROT0, "<unknown>",                "Draw Poker HI-LO (Japanese)",         GAME_NOT_WORKING )
-GAME(  198?, kimbldhl, 0,       kimbldhl, norautp,  0,   ROT0, "Kimble Ireland",           "Kimble Double HI-LO",                 GAME_NOT_WORKING )
-GAME(  1983, gtipoker, 0,       dphl,     norautp,  0,   ROT0, "GTI Inc",                  "GTI Poker",                           GAME_NOT_WORKING )
-GAME(  1983, smshilo,  0,       dphla,    norautp,  0,   ROT0, "SMS Manufacturing Corp.",  "HI-LO Double Up Joker Poker",         GAME_NOT_WORKING )
-GAME(  1986, drhl,     0,       drhl,     norautp,  0,   ROT0, "Drews Inc.",               "DRHL Poker (v.2.89)",                 GAME_NOT_WORKING )
+GAME(  1983, dphl,     0,       dphl,     norautp,  0,   ROT0, "M.Kramer Manufacturing.",     "Draw Poker HI-LO (M.Kramer)",      GAME_NOT_WORKING )
+GAME(  1983, dphla,    0,       dphla,    norautp,  0,   ROT0, "<unknown>",                   "Draw Poker HI-LO (Alt)",           GAME_NOT_WORKING )
+GAME(  1983, dphljp,   0,       dphl,     norautp,  0,   ROT0, "<unknown>",                   "Draw Poker HI-LO (Japanese)",      GAME_NOT_WORKING )
+GAME(  198?, kimbldhl, 0,       kimbldhl, norautp,  0,   ROT0, "Kimble Ireland",              "Kimble Double HI-LO",              GAME_NOT_WORKING )
+GAME(  1983, gtipoker, 0,       dphl,     norautp,  0,   ROT0, "GTI Inc",                     "GTI Poker",                        GAME_NOT_WORKING )
+GAME(  1983, smshilo,  0,       dphla,    norautp,  0,   ROT0, "SMS Manufacturing Corp.",     "HI-LO Double Up Joker Poker",      GAME_NOT_WORKING )
+GAME(  1986, drhl,     0,       drhl,     norautp,  0,   ROT0, "Drews Inc.",                  "DRHL Poker (v.2.89)",              GAME_NOT_WORKING )
+GAME(  1982, ssjkrpkr, 0,       ssjkrpkr, norautp,  ssa, ROT0, "Southern Systems & Assembly", "Southern Systems Joker Poker",     GAME_NOT_WORKING )
 
 /* The following one also has a custom 68705 MCU */
-GAME(  1993, tpoker2,  0,       dphltest, norautp,  0,   ROT0, "Micro Manufacturing Inc.", "Turbo Poker 2",                       GAME_NOT_WORKING )
+GAME(  1993, tpoker2,  0,       dphltest, norautp,  0,   ROT0, "Micro Manufacturing Inc.",    "Turbo Poker 2",                    GAME_NOT_WORKING )
 
 
 /************************************ unknown sets ************************************/
@@ -3435,6 +3512,6 @@ GAME(  1993, tpoker2,  0,       dphltest, norautp,  0,   ROT0, "Micro Manufactur
 
 /*     YEAR  NAME      PARENT   MACHINE   INPUT     INIT ROT    COMPANY                     FULLNAME                              FLAGS             LAYOUT */
 
-GAME(  198?, fastdrwp, 0,       dphl,     norautp,  0,   ROT0, "Stern/Seeburg?",           "Fast Draw (poker conversion kit)?",   GAME_NOT_WORKING )
+GAME(  198?, fastdrwp, 0,       dphl,     norautp,  0,   ROT0, "Stern Electronics?",       "Fast Draw (poker conversion kit)?",   GAME_NOT_WORKING )
 GAME(  198?, dphlunka, 0,       dphl,     norautp,  0,   ROT0, "SMS Manufacturing Corp.",  "Draw Poker HI-LO (unknown, rev 1)",   GAME_NOT_WORKING )
 GAME(  198?, dphlunkb, 0,       dphl,     norautp,  0,   ROT0, "SMS Manufacturing Corp.",  "Draw Poker HI-LO (unknown, rev 2)",   GAME_NOT_WORKING )

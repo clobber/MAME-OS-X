@@ -82,7 +82,7 @@ static void (*execute_command)(running_device *laserdisc, int command);
  *
  *************************************/
 
-static void free_string(running_machine *machine)
+static void free_string(running_machine &machine)
 {
 }
 
@@ -94,7 +94,7 @@ static chd_file *get_disc(running_device *device)
 	mame_path *path;
 
 	/* open a path to the ROMs and find the first CHD file */
-	path = mame_openpath(mame_options(), OPTION_ROMPATH);
+	path = mame_openpath(device->machine->options(), OPTION_ROMPATH);
 	if (path != NULL)
 	{
 		const osd_directory_entry *dir;
@@ -124,7 +124,7 @@ static chd_file *get_disc(running_device *device)
 					{
 						set_disk_handle(device->machine, "laserdisc", image_file, image_chd);
 						filename.cpy(dir->name);
-						add_exit_callback(device->machine, free_string);
+						device->machine->add_notifier(MACHINE_NOTIFY_EXIT, free_string);
 						break;
 					}
 
@@ -227,7 +227,7 @@ static void process_commands(running_device *laserdisc)
 
 static TIMER_CALLBACK( vsync_update )
 {
-	running_device *laserdisc = machine->devicelist.first(LASERDISC);
+	running_device *laserdisc = machine->m_devicelist.first(LASERDISC);
 	int vblank_scanline;
 	attotime target;
 
@@ -236,8 +236,8 @@ static TIMER_CALLBACK( vsync_update )
 		process_commands(laserdisc);
 
 	/* set a timer to go off on the next VBLANK */
-	vblank_scanline = video_screen_get_visible_area(machine->primary_screen)->max_y + 1;
-	target = video_screen_get_time_until_pos(machine->primary_screen, vblank_scanline, 0);
+	vblank_scanline = machine->primary_screen->visible_area().max_y + 1;
+	target = machine->primary_screen->time_until_pos(vblank_scanline);
 	timer_set(machine, target, NULL, 0, vsync_update);
 }
 
@@ -250,7 +250,7 @@ static MACHINE_START( ldplayer )
 
 static TIMER_CALLBACK( autoplay )
 {
-	running_device *laserdisc = machine->devicelist.first(LASERDISC);
+	running_device *laserdisc = machine->m_devicelist.first(LASERDISC);
 
 	/* start playing */
 	(*execute_command)(laserdisc, CMD_PLAY);
@@ -323,7 +323,7 @@ static TIMER_CALLBACK( pr8210_bit_callback )
 
 static MACHINE_START( pr8210 )
 {
-	running_device *laserdisc = machine->devicelist.first(LASERDISC);
+	running_device *laserdisc = machine->m_devicelist.first(LASERDISC);
 	MACHINE_START_CALL(ldplayer);
 	pr8210_bit_timer = timer_alloc(machine, pr8210_bit_callback, (void *)laserdisc);
 }

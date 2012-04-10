@@ -478,15 +478,15 @@ static DEVICE_START( discrete )
 {
 	linked_list_entry **intf;
 	const linked_list_entry *entry;
-	const discrete_sound_block *intf_start = (discrete_sound_block *)device->baseconfig().static_config;
+	const discrete_sound_block *intf_start = (discrete_sound_block *)device->baseconfig().static_config();
 	discrete_info *info = get_safe_token(device);
 	char name[32];
 
 	info->device = device;
 
 	/* If a clock is specified we will use it, otherwise run at the audio sample rate. */
-	if (device->clock)
-		info->sample_rate = device->clock;
+	if (device->clock())
+		info->sample_rate = device->clock();
 	else
 		info->sample_rate = device->machine->sample_rate;
 	info->sample_time = 1.0 / info->sample_rate;
@@ -581,7 +581,7 @@ static void display_profiling(const discrete_info *info)
 	/* print statistics */
 	printf("Total Samples  : %16" I64FMT "d\n", info->total_samples);
 	tresh = total / count;
-	printf("Treshold (mean): %16" I64FMT "d\n", tresh / info->total_samples );
+	printf("Threshold (mean): %16" I64FMT "d\n", tresh / info->total_samples );
 	for (entry = info->node_list; entry != NULL; entry = entry->next)
 	{
 		node_description *node = (node_description *) entry->ptr;
@@ -1087,3 +1087,5 @@ DEVICE_GET_INFO( discrete )
 	}
 }
 
+
+DEFINE_LEGACY_SOUND_DEVICE(DISCRETE, discrete);

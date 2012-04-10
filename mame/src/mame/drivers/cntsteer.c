@@ -64,7 +64,7 @@ public:
 static PALETTE_INIT( zerotrgt )
 {
 	int i;
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2, r, g, b;
 
@@ -310,10 +310,9 @@ static VIDEO_UPDATE( cntsteer )
 	{
 		int p1, p2, p3, p4;
 		int rot_val, x, y;
-		state->rotation_x |= state->rotation_x | (state->rotation_sign & 3) << 8;
 
-		rot_val = (state->rotation_sign & 4) ? (state->rotation_x) : (-state->rotation_x);
-
+		rot_val = (state->rotation_x) | ((state->rotation_sign & 3) << 8);
+		rot_val = (state->rotation_sign & 4) ? (rot_val) : (-rot_val);
 //      popmessage("%d %02x %02x", rot_val, state->rotation_sign, state->rotation_x);
 
 		/*
@@ -788,9 +787,9 @@ static MACHINE_START( cntsteer )
 {
 	cntsteer_state *state = (cntsteer_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->subcpu = devtag_get_device(machine, "subcpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->subcpu = machine->device("subcpu");
 
 	state_save_register_global(machine, state->flipscreen);
 	state_save_register_global(machine, state->bg_bank);

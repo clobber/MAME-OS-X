@@ -86,7 +86,7 @@ static PALETTE_INIT( jangou )
 			2, resistances_b,  weights_b,  0, 0,
 			0, 0, 0, 0, 0);
 
-	for (i = 0;i < machine->config->total_colors; i++)
+	for (i = 0;i < machine->total_colors(); i++)
 	{
 		int bit0, bit1, bit2;
 		int r, g, b;
@@ -399,7 +399,7 @@ static ADDRESS_MAP_START( cpu0_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x11,0x11) AM_WRITE(mux_w)
 	AM_RANGE(0x12,0x17) AM_WRITE(blitter_process_w)
 	AM_RANGE(0x20,0x2f) AM_WRITE(blit_vregs_w)
-	AM_RANGE(0x30,0x30) AM_WRITENOP //? polls 0x03 continously
+	AM_RANGE(0x30,0x30) AM_WRITENOP //? polls 0x03 continuously
 	AM_RANGE(0x31,0x31) AM_WRITE(sound_latch_w)
 ADDRESS_MAP_END
 
@@ -470,7 +470,7 @@ static ADDRESS_MAP_START( cntrygrl_cpu0_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x11,0x11) AM_WRITE(mux_w)
 	AM_RANGE(0x12,0x17) AM_WRITE(blitter_process_w)
 	AM_RANGE(0x20,0x2f) AM_WRITE(blit_vregs_w )
-	AM_RANGE(0x30,0x30) AM_WRITENOP //? polls 0x03 continously
+	AM_RANGE(0x30,0x30) AM_WRITENOP //? polls 0x03 continuously
 //  AM_RANGE(0x31,0x31) AM_WRITE(sound_latch_w)
 ADDRESS_MAP_END
 
@@ -800,10 +800,10 @@ static MACHINE_START( common )
 {
 	jangou_state *state = (jangou_state *)machine->driver_data;
 
-	state->cpu_0 = devtag_get_device(machine, "cpu0");
-	state->cpu_1 = devtag_get_device(machine, "cpu1");
-	state->cvsd = devtag_get_device(machine, "cvsd");
-	state->nsc = devtag_get_device(machine, "nsc");
+	state->cpu_0 = machine->device("cpu0");
+	state->cpu_1 = machine->device("cpu1");
+	state->cvsd = machine->device("cvsd");
+	state->nsc = machine->device("nsc");
 
 	state_save_register_global_array(machine, state->pen_data);
 	state_save_register_global_array(machine, state->blit_data);
@@ -1256,14 +1256,14 @@ static DRIVER_INIT (luckygrl)
  *
  *************************************/
 
-GAME( 1983,  jangou,     0,        jangou,   jangou,    0,        ROT0, "Nichibutsu",   "Jangou [BET] (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1983,  macha,      0,        jangou,   macha,     0,        ROT0, "Logitec",      "Monoshiri Quiz Osyaberi Macha (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1984,  jngolady,   0,        jngolady, jngolady,  jngolady, ROT0, "Nichibutsu",   "Jangou Lady (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1984,  cntrygrl,   0,        cntrygrl, cntrygrl,  0,        ROT0, "Royal Denshi", "Country Girl (Japan set 1)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1984,  cntrygrla,  cntrygrl, cntrygrl, cntrygrl,  0,        ROT0, "Nichibutsu",   "Country Girl (Japan set 2)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
-GAME( 1984,  fruitbun,   cntrygrl, cntrygrl, cntrygrl,  0,        ROT0, "Nichibutsu",   "Fruits & Bunny (World?)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1983,  jangou,     0,        jangou,   jangou,    0,        ROT0, "Nichibutsu",     "Jangou [BET] (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1983,  macha,      0,        jangou,   macha,     0,        ROT0, "Logitec",        "Monoshiri Quiz Osyaberi Macha (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1984,  jngolady,   0,        jngolady, jngolady,  jngolady, ROT0, "Nichibutsu",     "Jangou Lady (Japan)", GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1984,  cntrygrl,   0,        cntrygrl, cntrygrl,  0,        ROT0, "Royal Denshi",   "Country Girl (Japan set 1)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1984,  cntrygrla,  cntrygrl, cntrygrl, cntrygrl,  0,        ROT0, "Nichibutsu",     "Country Girl (Japan set 2)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
+GAME( 1984,  fruitbun,   cntrygrl, cntrygrl, cntrygrl,  0,        ROT0, "Nichibutsu",     "Fruits & Bunny (World?)",  GAME_NO_COCKTAIL | GAME_SUPPORTS_SAVE )
 /* The following might not run there... */
-GAME( 1984?, luckygrl,   0,        cntrygrl, cntrygrl,  luckygrl, ROT0, "Wing",         "Lucky Girl? (Wing)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1984?, luckygrl,   0,        cntrygrl, cntrygrl,  luckygrl, ROT0, "Wing Co., Ltd.", "Lucky Girl? (Wing)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 
 /*
 Some other games that might run on this HW:

@@ -526,13 +526,15 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         mOptimalSize.height *= 2;
     }
     
-    const device_config * primaryScreen = video_screen_first(mMachine->config);
+    //const device_config * primaryScreen = video_screen_first(mMachine->config);
+    const device_config * primaryScreen = screen_first(*mMachine->config);
     double targetRefresh = 60.0;
     // determine the refresh rate of the primary screen
     if (primaryScreen != NULL)
     {
-        const screen_config * config = (const screen_config*)primaryScreen->inline_config;
-        targetRefresh = ATTOSECONDS_TO_HZ(config->refresh);
+        //FIXME: Fix so this does not default to 60.0
+        //const screen_config * config = (const screen_config*)primaryScreen->inline_config;
+        //targetRefresh = ATTOSECONDS_TO_HZ(config->refresh);
     }
     JRLogInfo(@"Target refresh: %.3f", targetRefresh);
     
@@ -723,7 +725,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
 - (void) stop;
 {
     [mMameLock lock];
-    mame_schedule_exit(mMachine);
+    //mame_schedule_exit(mMachine);
+    mMachine->schedule_exit();
     [mMameLock unlock];
 }
 
@@ -734,13 +737,18 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         return;
     [mMameLock lock];
     {
-        int phase = mame_get_phase(mMachine);
-        if (phase == MAME_PHASE_RUNNING)
+        //int phase = mame_get_phase(mMachine);
+        int phase = mMachine->phase();
+        //if (phase == MAME_PHASE_RUNNING)
+        if (phase == MACHINE_PHASE_RUNNING)
         {
-            if (mame_is_paused(mMachine))
-                mame_pause(mMachine, FALSE);
+            //if (mame_is_paused(mMachine))
+            //    mame_pause(mMachine, FALSE);
+            if (mMachine->paused())
+                mMachine->resume();
             else
-                mame_pause(mMachine, TRUE);
+                //mame_pause(mMachine, TRUE);
+                mMachine->paused();
         }
     }
     [mMameLock unlock];
@@ -757,11 +765,14 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     BOOL isPaused = NO;
     [mMameLock lock];
     {
-        phase = mame_get_phase(mMachine);
-        if (phase == MAME_PHASE_RUNNING)
+        //phase = mame_get_phase(mMachine);
+        phase = mMachine->phase();
+        //if (phase == MAME_PHASE_RUNNING)
+        if (phase == MACHINE_PHASE_RUNNING)
         {
-            isPaused = mame_is_paused(mMachine);
-            mame_pause(mMachine, pause);
+            //isPaused = mame_is_paused(mMachine);
+            //mame_pause(mMachine, pause);
+            mMachine->paused();
         }
     }
     [mMameLock unlock];

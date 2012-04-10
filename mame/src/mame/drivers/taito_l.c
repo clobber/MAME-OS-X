@@ -143,8 +143,8 @@ static MACHINE_START( taito_l )
 {
 	taitol_state *state = (taitol_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state->rambanks = auto_alloc_array(machine, UINT8, 0x1000 * 12);
 	state->palette_ram = auto_alloc_array(machine, UINT8, 0x1000);
@@ -2328,8 +2328,8 @@ static MACHINE_DRIVER_START( lagirl )
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(plotting)
 	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(XTAL_27_2109MHz/4)
 	MDRV_CPU_PROGRAM_MAP(cachat_map)
-	MDRV_CPU_REPLACE("maincpu", Z80, XTAL_27_2109MHz/4)
 
 	/* sound hardware */
 	MDRV_SOUND_REPLACE("ymsnd", YM2203, XTAL_27_2109MHz/8)

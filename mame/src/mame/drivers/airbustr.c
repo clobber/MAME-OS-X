@@ -587,10 +587,10 @@ static MACHINE_START( airbustr )
 	memory_configure_bank(machine, "bank3", 0, 3, &AUDIO[0x00000], 0x4000);
 	memory_configure_bank(machine, "bank3", 3, 5, &AUDIO[0x10000], 0x4000);
 
-	state->master = devtag_get_device(machine, "master");
-	state->slave = devtag_get_device(machine, "slave");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->pandora = devtag_get_device(machine, "pandora");
+	state->master = machine->device("master");
+	state->slave = machine->device("slave");
+	state->audiocpu = machine->device("audiocpu");
+	state->pandora = machine->device("pandora");
 
 	state_save_register_global(machine, state->soundlatch_status);
 	state_save_register_global(machine, state->soundlatch2_status);
@@ -683,8 +683,7 @@ static MACHINE_DRIVER_START( airbustr )
 	MDRV_SOUND_ROUTE(2, "mono", 0.25)
 	MDRV_SOUND_ROUTE(3, "mono", 0.50)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 12000000/4)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", 12000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_DRIVER_END
 

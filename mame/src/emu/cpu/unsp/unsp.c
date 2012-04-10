@@ -13,10 +13,8 @@
 INLINE unsp_state *get_safe_token(running_device *device)
 {
     assert(device != NULL);
-    assert(device->token != NULL);
-    assert(device->type == CPU);
-    assert(cpu_get_type(device) == CPU_UNSP);
-    return (unsp_state *)device->token;
+    assert(device->type() == UNSP);
+    return (unsp_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static void unsp_set_irq_line(unsp_state *unsp, int irqline, int state);
@@ -176,8 +174,6 @@ static CPU_EXECUTE( unsp )
     UINT32 lres;
     UINT16 r0, r1;
 	lres = 0;
-
-    unsp->icount = cycles;
 
     while (unsp->icount > 0)
     {
@@ -749,8 +745,6 @@ static CPU_EXECUTE( unsp )
 		unsp->icount -= 5;
 		unsp->icount = MAX(unsp->icount, 0);
     }
-
-    return cycles - unsp->icount;
 }
 
 
@@ -857,7 +851,7 @@ static CPU_SET_INFO( unsp )
 
 CPU_GET_INFO( unsp )
 {
-    unsp_state *unsp = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+    unsp_state *unsp = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
     switch(state)
     {
@@ -926,3 +920,5 @@ CPU_GET_INFO( unsp )
 		case CPUINFO_STR_REGISTER + UNSP_SB:			sprintf(info->s, "SB: %d", unsp->sb);       break;
     }
 }
+
+DEFINE_LEGACY_CPU_DEVICE(UNSP, unsp);

@@ -64,7 +64,7 @@ struct _mn102_info
 
 	int cycles;
 
-	running_device *device;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 };
@@ -149,11 +149,9 @@ INLINE void mn102_change_pc(mn102_info *mn102, UINT32 pc)
 INLINE mn102_info *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_MN10200);
+	assert(device->type() == MN10200);
 
-	return (mn102_info *)device->token;
+	return (mn102_info *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static void mn102_take_irq(mn102_info *mn102, int level, int group)
@@ -190,7 +188,7 @@ static void refresh_timer(mn102_info *cpustate, int tmr)
 			if (cpustate->prescaler[source-2].mode & 0x80)
 			{
 				// rate = (sysclock / prescaler) / our count
-				rate = cpu_get_clock(cpustate->device) / cpustate->prescaler[source-2].cycles;
+				rate = cpustate->device->unscaled_clock() / cpustate->prescaler[source-2].cycles;
 				rate /= cpustate->simple_timer[tmr].base;
 
 				if (tmr != 8)	// HACK: timer 8 is run at 500 kHz by the Taito program for no obvious reason, which kills performance
@@ -513,8 +511,6 @@ static void mn102_extirq(mn102_info *mn102, int irqnum, int status)
 static CPU_EXECUTE(mn10200)
 {
 	mn102_info *mn102 = get_safe_token(device);
-
-	mn102->cycles = cycles;
 
 	while(mn102->cycles > 0)
 	{
@@ -1819,11 +1815,9 @@ static CPU_EXECUTE(mn10200)
 			break;
 		}
 	}
-
-	return cycles - mn102->cycles;
 }
 
-const char *inames[10][4] = {
+static const char *const inames[10][4] = {
   { "timer0", "timer1", "timer2", "timer3" },
   { "timer4", "timer5", "timer6", "timer7" },
   { "timer8", "timer9", "timer12a", "timer12b" },
@@ -2129,8 +2123,8 @@ static void mn10200_w(mn102_info *mn102, UINT32 adr, UINT32 data, int type)
   }
 
   case 0x28a: case 0x29a: case 0x2aa: case 0x2ba: case 0x2ca: case 0x2da: case 0x2ea: case 0x2fa: {
-    static const char *trans[4] = { "M-IO", "M-M", "M-X1", "m-X2" };
-    static const char *start[32] = {
+    static const char *const trans[4] = { "M-IO", "M-M", "M-X1", "m-X2" };
+    static const char *const start[32] = {
       "soft", "a/d", "ser0tx", "set0rx", "ser1tx", "ser1rx",
       "timer0", "timer1", "timer2", "timer3", "timer4", "timer5", "timer6", "timer7", "timer8", "timer9",
       "timer10u", "timer10a", "timer10b",
@@ -2151,7 +2145,7 @@ static void mn10200_w(mn102_info *mn102, UINT32 adr, UINT32 data, int type)
   }
 
   case 0x28b: case 0x29b: case 0x2ab: case 0x2bb: case 0x2cb: case 0x2db: case 0x2eb: case 0x2fb: {
-    static const char *tradr[4] = { "inc", "dec", "fixed", "reserved" };
+    static const char *const tradr[4] = { "inc", "dec", "fixed", "reserved" };
     int dma = (adr-0x280) >> 4;
     mn102->dma[dma].ctrlh = data;
 	logerror("MN10200: DMA %d control %s irq=%s %s %s dir=%s %s %s\n",
@@ -2336,7 +2330,7 @@ static UINT32 mn10200_r(mn102_info *mn102, UINT32 adr, int type)
 
 static CPU_SET_INFO(mn10200)
 {
-	mn102_info *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mn102_info *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -2365,7 +2359,7 @@ static CPU_SET_INFO(mn10200)
 
 CPU_GET_INFO( mn10200 )
 {
-	mn102_info *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mn102_info *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch(state)
 	{
@@ -2442,3 +2436,5 @@ CPU_GET_INFO( mn10200 )
 		case CPUINFO_STR_REGISTER + MN10200_IAGR:          sprintf(info->s, "IAGR:  %02x", cpustate->iagr); break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(MN10200, mn10200);

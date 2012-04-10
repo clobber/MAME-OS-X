@@ -318,16 +318,16 @@ static void amiga_m68k_reset(running_device *device)
 MACHINE_RESET( amiga )
 {
 	/* set m68k reset  function */
-	m68k_set_reset_callback(devtag_get_device(machine, "maincpu"), amiga_m68k_reset);
+	m68k_set_reset_callback(machine->device("maincpu"), amiga_m68k_reset);
 
-	amiga_m68k_reset(devtag_get_device(machine, "maincpu"));
+	amiga_m68k_reset(machine->device("maincpu"));
 
 	/* call the system-specific callback */
 	if (amiga_intf->reset_callback)
 		(*amiga_intf->reset_callback)(machine);
 
 	/* start the scanline timer */
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), NULL, 0, scanline_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(0), NULL, 0, scanline_callback);
 }
 
 
@@ -341,8 +341,8 @@ MACHINE_RESET( amiga )
 static TIMER_CALLBACK( scanline_callback )
 {
 	int scanline = param;
-	running_device *cia_0 = devtag_get_device(machine, "cia_0");
-	running_device *cia_1 = devtag_get_device(machine, "cia_1");
+	running_device *cia_0 = machine->device("cia_0");
+	running_device *cia_1 = machine->device("cia_1");
 
 	/* on the first scanline, we do some extra bookkeeping */
 	if (scanline == 0)
@@ -362,7 +362,7 @@ static TIMER_CALLBACK( scanline_callback )
 	mos6526_tod_w(cia_1, 1);
 
 	/* render up to this scanline */
-	if (!video_screen_update_partial(machine->primary_screen, scanline))
+	if (!machine->primary_screen->update_partial(scanline))
 	{
 		if (IS_AGA(amiga_intf))
 			amiga_aga_render_scanline(machine, NULL, scanline);
@@ -374,8 +374,8 @@ static TIMER_CALLBACK( scanline_callback )
 	amiga_audio_update();
 
 	/* set timer for next line */
-	scanline = (scanline + 1) % video_screen_get_height(machine->primary_screen);
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, scanline, scanline_callback);
+	scanline = (scanline + 1) % machine->primary_screen->height();
+	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, scanline_callback);
 }
 
 
@@ -1026,7 +1026,7 @@ static void blitter_setup(const address_space *space)
 	CUSTOM_REG(REG_DMACON) |= 0x4000;
 
 	/* set a timer */
-	timer_adjust_oneshot( amiga_blitter_timer, cpu_clocks_to_attotime( space->cpu, blittime ), 0);
+	timer_adjust_oneshot( amiga_blitter_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( blittime ), 0);
 }
 
 
@@ -1046,14 +1046,14 @@ READ16_HANDLER( amiga_cia_r )
 	/* offsets 0000-07ff reference CIA B, and are accessed via the MSB */
 	if ((offset & 0x0800) == 0)
 	{
-		cia = devtag_get_device(space->machine, "cia_1");
+		cia = space->machine->device("cia_1");
 		shift = 8;
 	}
 
 	/* offsets 0800-0fff reference CIA A, and are accessed via the LSB */
 	else
 	{
-		cia = devtag_get_device(space->machine, "cia_0");
+		cia = space->machine->device("cia_0");
 		shift = 0;
 	}
 
@@ -1086,7 +1086,7 @@ WRITE16_HANDLER( amiga_cia_w )
 	{
 		if (!ACCESSING_BITS_8_15)
 			return;
-		cia = devtag_get_device(space->machine, "cia_1");
+		cia = space->machine->device("cia_1");
 		data >>= 8;
 	}
 
@@ -1095,7 +1095,7 @@ WRITE16_HANDLER( amiga_cia_w )
 	{
 		if (!ACCESSING_BITS_0_7)
 			return;
-		cia = devtag_get_device(space->machine, "cia_0");
+		cia = space->machine->device("cia_0");
 		data &= 0xff;
 	}
 
@@ -1183,16 +1183,16 @@ READ16_HANDLER( amiga_custom_r )
 		case REG_VPOSR:
 			CUSTOM_REG(REG_VPOSR) &= 0xff00;
 			if (IS_AGA(amiga_intf))
-				CUSTOM_REG(REG_VPOSR) |= amiga_aga_gethvpos(space->machine->primary_screen) >> 16;
+				CUSTOM_REG(REG_VPOSR) |= amiga_aga_gethvpos(*space->machine->primary_screen) >> 16;
 			else
-				CUSTOM_REG(REG_VPOSR) |= amiga_gethvpos(space->machine->primary_screen) >> 16;
+				CUSTOM_REG(REG_VPOSR) |= amiga_gethvpos(*space->machine->primary_screen) >> 16;
 			return CUSTOM_REG(REG_VPOSR);
 
 		case REG_VHPOSR:
 			if (IS_AGA(amiga_intf))
-				return amiga_aga_gethvpos(space->machine->primary_screen) & 0xffff;
+				return amiga_aga_gethvpos(*space->machine->primary_screen) & 0xffff;
 			else
-				return amiga_gethvpos(space->machine->primary_screen) & 0xffff;
+				return amiga_gethvpos(*space->machine->primary_screen) & 0xffff;
 
 		case REG_SERDATR:
 			CUSTOM_REG(REG_SERDATR) &= ~0x4000;
@@ -1421,7 +1421,7 @@ WRITE16_HANDLER( amiga_custom_w )
 
 			/* if 'blitter-nasty' has been turned on and we have a blit pending, reschedule it */
 			if ( ( data & 0x400 ) && ( CUSTOM_REG(REG_DMACON) & 0x4000 ) )
-				timer_adjust_oneshot( amiga_blitter_timer, cpu_clocks_to_attotime( space->cpu, BLITTER_NASTY_DELAY ), 0);
+				timer_adjust_oneshot( amiga_blitter_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( BLITTER_NASTY_DELAY ), 0);
 
 			break;
 
@@ -1432,7 +1432,7 @@ WRITE16_HANDLER( amiga_custom_w )
 			CUSTOM_REG(offset) = data;
 
 			if ( temp & 0x8000  ) /* if we're enabling irq's, delay a bit */
-				timer_adjust_oneshot( amiga_irq_timer, cpu_clocks_to_attotime( space->cpu, AMIGA_IRQ_DELAY_CYCLES ), 0);
+				timer_adjust_oneshot( amiga_irq_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( AMIGA_IRQ_DELAY_CYCLES ), 0);
 			else /* if we're disabling irq's, process right away */
 				update_irqs(space->machine);
 			break;
@@ -1444,8 +1444,8 @@ WRITE16_HANDLER( amiga_custom_w )
 				CUSTOM_REG(REG_SERDATR) &= ~0x8000;
 
 			data = (data & 0x8000) ? (CUSTOM_REG(offset) | (data & 0x7fff)) : (CUSTOM_REG(offset) & ~(data & 0x7fff));
-			cia_0 = devtag_get_device(space->machine, "cia_0");
-			cia_1 = devtag_get_device(space->machine, "cia_1");
+			cia_0 = space->machine->device("cia_0");
+			cia_1 = space->machine->device("cia_1");
 			if ( mos6526_irq_r( cia_0 ) ) data |= INTENA_PORTS;
 			if ( mos6526_irq_r( cia_1 ) ) data |= INTENA_EXTER;
 			CUSTOM_REG(offset) = data;
@@ -1575,7 +1575,7 @@ void amiga_add_autoconfig(running_machine *machine, const amiga_autoconfig_devic
 	autoconfig_device *dev, **d;
 
 	/* validate the data */
-	assert_always(mame_get_phase(machine) == MAME_PHASE_INIT, "Can only call amiga_add_autoconfig at init time!");
+	assert_always(machine->phase() == MACHINE_PHASE_INIT, "Can only call amiga_add_autoconfig at init time!");
 	assert_always((device->size & (device->size - 1)) == 0, "device->size must be power of 2!");
 
 	/* allocate memory and link it in at the end of the list */

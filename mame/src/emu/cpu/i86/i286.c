@@ -57,8 +57,8 @@ struct _i80286_state
 		UINT16 limit;
 		UINT8 rights;
 	} ldtr, tr;
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	INT32	AuxVal, OverVal, SignVal, ZeroVal, CarryVal, DirVal; /* 0 or non-0 valued flags */
@@ -84,10 +84,8 @@ struct _i80286_state
 INLINE i80286_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_I80286);
-	return (i80286_state *)device->token;
+	assert(device->type() == I80286);
+	return (i80286_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define INT_IRQ 0x01
@@ -215,14 +213,16 @@ static CPU_EXECUTE( i80286 )
 	i80286_state *cpustate = get_safe_token(device);
 
 	if (cpustate->halted)
-		return cycles;
+	{
+		cpustate->icount = 0;
+		return;
+	}
 
 	/* copy over the cycle counts if they're not correct */
 	if (timing.id != 80286)
 		timing = i80286_cycles;
 
 	/* adjust for any interrupts that came in */
-	cpustate->icount = cycles;
 	cpustate->icount -= cpustate->extra_cycles;
 	cpustate->extra_cycles = 0;
 
@@ -241,8 +241,6 @@ static CPU_EXECUTE( i80286 )
 	/* adjust for any interrupts that came in */
 	cpustate->icount -= cpustate->extra_cycles;
 	cpustate->extra_cycles = 0;
-
-	return cycles - cpustate->icount;
 }
 
 extern int i386_dasm_one(char *buffer, UINT32 eip, const UINT8 *oprom, int mode);
@@ -298,8 +296,8 @@ static CPU_INIT( i80286 )
 	cpustate->io = device->space(AS_IO);
 
 	/* If a reset parameter is given, take it as pointer to an address mask */
-	if( device->baseconfig().static_config )
-		cpustate->amask = *(unsigned*)device->baseconfig().static_config;
+	if( device->baseconfig().static_config() )
+		cpustate->amask = *(unsigned*)device->baseconfig().static_config();
 	else
 		cpustate->amask = 0x00ffff;
 
@@ -389,7 +387,7 @@ static CPU_SET_INFO( i80286 )
 
 CPU_GET_INFO( i80286 )
 {
-	i80286_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	i80286_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -517,3 +515,6 @@ CPU_GET_INFO( i80286 )
 		case CPUINFO_STR_REGISTER + I80286_IDTR_LIMIT:	sprintf(info->s, "%04X", cpustate->idtr.limit); break;
 	}
 }
+
+#undef I80286
+DEFINE_LEGACY_CPU_DEVICE(I80286, i80286);

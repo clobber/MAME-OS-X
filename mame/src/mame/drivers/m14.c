@@ -44,7 +44,6 @@ mgpa10.bin
 
 
 --- Team Japump!!! ---
-http://japump.i.am/
 Dumped by Chackn
 01/30/2000
 
@@ -317,7 +316,7 @@ static MACHINE_START( m14 )
 {
 	m14_state *state = (m14_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 
 	state_save_register_global(machine, state->hop_mux);
 }
@@ -336,7 +335,7 @@ static MACHINE_DRIVER_START( m14 )
 	MDRV_DRIVER_DATA(m14_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",8085A,6000000/2) //guess: 6 Mhz internally divided by 2
+	MDRV_CPU_ADD("maincpu",I8085A,6000000/2) //guess: 6 Mhz internally divided by 2
 	MDRV_CPU_PROGRAM_MAP(m14_map)
 	MDRV_CPU_IO_MAP(m14_io_map)
 	MDRV_CPU_VBLANK_INT("screen",m14_irq)
@@ -389,4 +388,4 @@ ROM_START( ptrmj )
 	ROM_LOAD( "mgpa10.bin",  0x0400, 0x0400, CRC(e1a4ebdc) SHA1(d9df42424ede17f0634d8d0a56c0374a33c55333) )
 ROM_END
 
-GAME( 1979, ptrmj,  0,       m14,  m14,  0, ROT0, "Irem", "PT Reach Mahjong (Japan)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1979, ptrmj,  0,       m14,  m14,  0, ROT0, "Irem", "PT Reach Mahjong (Japan)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE ) // IPM or Irem?

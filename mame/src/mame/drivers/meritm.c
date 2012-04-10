@@ -333,12 +333,12 @@ static VIDEO_START( meritm )
 {
 	layer0_enabled = layer1_enabled = 1;
 
-	vdp0_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	v9938_init (machine, 0, machine->primary_screen, vdp0_bitmap, MODEL_V9938, 0x20000, meritm_vdp0_interrupt);
+	vdp0_bitmap = machine->primary_screen->alloc_compatible_bitmap();
+	v9938_init (machine, 0, *machine->primary_screen, vdp0_bitmap, MODEL_V9938, 0x20000, meritm_vdp0_interrupt);
 	v9938_reset(0);
 
-	vdp1_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
-	v9938_init (machine, 1, machine->primary_screen, vdp1_bitmap, MODEL_V9938, 0x20000, meritm_vdp1_interrupt);
+	vdp1_bitmap = machine->primary_screen->alloc_compatible_bitmap();
+	v9938_init (machine, 1, *machine->primary_screen, vdp1_bitmap, MODEL_V9938, 0x20000, meritm_vdp1_interrupt);
 	v9938_reset(1);
 
 	state_save_register_global(machine, meritm_vint);
@@ -521,13 +521,13 @@ static UINT8 binary_to_BCD(UINT8 data)
 
 static READ8_HANDLER(meritm_ds1644_r)
 {
-	mame_system_time systime;
+	system_time systime;
 	int rambank = (meritm_psd_a15 >> 2) & 0x3;
 	if (rambank == 3)
 	{
 		//logerror( "Reading RTC, reg = %x\n", offset);
 
-		mame_get_current_datetime(space->machine, &systime);
+		space->machine->current_datetime(systime);
 		meritm_ram[0x7ff9] = binary_to_BCD(systime.local_time.second);
 		meritm_ram[0x7ffa] = binary_to_BCD(systime.local_time.minute);
 		meritm_ram[0x7ffb] = binary_to_BCD(systime.local_time.hour);
@@ -954,7 +954,7 @@ static Z80PIO_INTERFACE( meritm_io_pio_intf )
 	DEVCB_NULL
 };
 
-static const z80_daisy_chain meritm_daisy_chain[] =
+static const z80_daisy_config meritm_daisy_chain[] =
 {
 	{ "z80pio_0" },
 	{ "z80pio_1" },
@@ -963,8 +963,8 @@ static const z80_daisy_chain meritm_daisy_chain[] =
 
 static MACHINE_START(merit_common)
 {
-	meritm_z80pio[0] = devtag_get_device( machine, "z80pio_0" );
-	meritm_z80pio[1] = devtag_get_device( machine, "z80pio_1" );
+	meritm_z80pio[0] = machine->device( "z80pio_0" );
+	meritm_z80pio[1] = machine->device( "z80pio_1" );
 
 	z80pio_astb_w(meritm_z80pio[0], 1);
 	z80pio_bstb_w(meritm_z80pio[0], 1);

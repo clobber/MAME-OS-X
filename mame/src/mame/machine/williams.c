@@ -172,7 +172,7 @@ const pia6821_interface williams2_muxed_pia_0_intf =
 const pia6821_interface williams2_pia_1_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_INPUT_PORT("IN2"), DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_HANDLER("pia_2", pia6821_ca1_w),
+	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_LINE("pia_2", pia6821_ca1_w),
 	/*irqs   : A/B             */ DEVCB_LINE(williams_main_irq), DEVCB_LINE(williams_main_irq)
 };
 
@@ -180,7 +180,7 @@ const pia6821_interface williams2_pia_1_intf =
 const pia6821_interface williams2_snd_pia_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_DEVICE_HANDLER("pia_1", pia6821_portb_w), DEVCB_DEVICE_HANDLER("wmsdac", dac_w), DEVCB_DEVICE_HANDLER("pia_1", pia6821_cb1_w), DEVCB_NULL,
+	/*outputs: A/B,CA/B2       */ DEVCB_DEVICE_HANDLER("pia_1", pia6821_portb_w), DEVCB_DEVICE_HANDLER("wmsdac", dac_w), DEVCB_DEVICE_LINE("pia_1", pia6821_cb1_w), DEVCB_NULL,
 	/*irqs   : A/B             */ DEVCB_LINE(williams_snd_irq), DEVCB_LINE(williams_snd_irq)
 };
 
@@ -204,7 +204,7 @@ const pia6821_interface mysticm_pia_0_intf =
 const pia6821_interface mysticm_pia_1_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_INPUT_PORT("IN2"), DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_HANDLER("pia_2", pia6821_ca1_w),
+	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_LINE("pia_2", pia6821_ca1_w),
 	/*irqs   : A/B             */ DEVCB_LINE(mysticm_main_irq), DEVCB_LINE(mysticm_main_irq)
 };
 
@@ -220,7 +220,7 @@ const pia6821_interface tshoot_pia_0_intf =
 const pia6821_interface tshoot_pia_1_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_INPUT_PORT("IN2"), DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_HANDLER("pia_2", pia6821_ca1_w),
+	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(williams2_snd_cmd_w), DEVCB_NULL, DEVCB_DEVICE_LINE("pia_2", pia6821_ca1_w),
 	/*irqs   : A/B             */ DEVCB_LINE(tshoot_main_irq), DEVCB_LINE(tshoot_main_irq)
 };
 
@@ -228,7 +228,7 @@ const pia6821_interface tshoot_pia_1_intf =
 const pia6821_interface tshoot_snd_pia_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_DEVICE_HANDLER("pia_1", pia6821_portb_w), DEVCB_DEVICE_HANDLER("wmsdac", dac_w), DEVCB_DEVICE_HANDLER("pia_1", pia6821_cb1_w), DEVCB_HANDLER(tshoot_maxvol_w),
+	/*outputs: A/B,CA/B2       */ DEVCB_DEVICE_HANDLER("pia_1", pia6821_portb_w), DEVCB_DEVICE_HANDLER("wmsdac", dac_w), DEVCB_DEVICE_LINE("pia_1", pia6821_cb1_w), DEVCB_HANDLER(tshoot_maxvol_w),
 	/*irqs   : A/B             */ DEVCB_LINE(williams_snd_irq), DEVCB_LINE(williams_snd_irq)
 };
 
@@ -236,7 +236,7 @@ const pia6821_interface tshoot_snd_pia_intf =
 const pia6821_interface joust2_pia_1_intf =
 {
 	/*inputs : A/B,CA/B1,CA/B2 */ DEVCB_INPUT_PORT("IN2"), DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL, DEVCB_NULL,
-	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(joust2_snd_cmd_w), DEVCB_HANDLER(joust2_pia_3_cb1_w), DEVCB_DEVICE_HANDLER("pia_2", pia6821_ca1_w),
+	/*outputs: A/B,CA/B2       */ DEVCB_NULL, DEVCB_HANDLER(joust2_snd_cmd_w), DEVCB_HANDLER(joust2_pia_3_cb1_w), DEVCB_DEVICE_LINE("pia_2", pia6821_ca1_w),
 	/*irqs   : A/B             */ DEVCB_LINE(williams_main_irq), DEVCB_LINE(williams_main_irq)
 };
 
@@ -250,46 +250,46 @@ const pia6821_interface joust2_pia_1_intf =
 
 TIMER_DEVICE_CALLBACK( williams_va11_callback )
 {
-	running_device *pia_1 = devtag_get_device(timer->machine, "pia_1");
+	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
 	int scanline = param;
 
 	/* the IRQ signal comes into CB1, and is set to VA11 */
-	pia6821_cb1_w(pia_1, 0, scanline & 0x20);
+	pia6821_cb1_w(pia_1, scanline & 0x20);
 
 	/* set a timer for the next update */
 	scanline += 0x20;
 	if (scanline >= 256) scanline = 0;
-	timer_device_adjust_oneshot(timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline, 0), scanline);
+	timer.adjust(timer.machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static TIMER_CALLBACK( williams_count240_off_callback )
 {
-	running_device *pia_1 = devtag_get_device(machine, "pia_1");
+	pia6821_device *pia_1 = machine->device<pia6821_device>("pia_1");
 
 	/* the COUNT240 signal comes into CA1, and is set to the logical AND of VA10-VA13 */
-	pia6821_ca1_w(pia_1, 0, 0);
+	pia6821_ca1_w(pia_1, 0);
 }
 
 
 TIMER_DEVICE_CALLBACK( williams_count240_callback )
 {
-	running_device *pia_1 = devtag_get_device(timer->machine, "pia_1");
+	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
 
 	/* the COUNT240 signal comes into CA1, and is set to the logical AND of VA10-VA13 */
-	pia6821_ca1_w(pia_1, 0, 1);
+	pia6821_ca1_w(pia_1, 1);
 
 	/* set a timer to turn it off once the scanline counter resets */
-	timer_set(timer->machine, video_screen_get_time_until_pos(timer->machine->primary_screen, 0, 0), NULL, 0, williams_count240_off_callback);
+	timer_set(timer.machine, timer.machine->primary_screen->time_until_pos(0), NULL, 0, williams_count240_off_callback);
 
 	/* set a timer for next frame */
-	timer_device_adjust_oneshot(timer, video_screen_get_time_until_pos(timer->machine->primary_screen, 240, 0), 0);
+	timer.adjust(timer.machine->primary_screen->time_until_pos(240));
 }
 
 
 static void williams_main_irq(running_device *device, int state)
 {
-	running_device *pia_1 = devtag_get_device(device->machine, "pia_1");
+	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
@@ -306,7 +306,7 @@ static void williams_main_firq(running_device *device, int state)
 
 static void williams_snd_irq(running_device *device, int state)
 {
-	running_device *pia_2 = devtag_get_device(device->machine, "pia_2");
+	pia6821_device *pia_2 = device->machine->device<pia6821_device>("pia_2");
 	int combined_state = pia6821_get_irq_a(pia_2) | pia6821_get_irq_b(pia_2);
 
 	/* IRQ to the sound CPU */
@@ -323,8 +323,8 @@ static void williams_snd_irq(running_device *device, int state)
 
 static void mysticm_main_irq(running_device *device, int state)
 {
-	running_device *pia_0 = devtag_get_device(device->machine, "pia_0");
-	running_device *pia_1 = devtag_get_device(device->machine, "pia_1");
+	pia6821_device *pia_0 = device->machine->device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_b(pia_0) | pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
@@ -334,8 +334,8 @@ static void mysticm_main_irq(running_device *device, int state)
 
 static void tshoot_main_irq(running_device *device, int state)
 {
-	running_device *pia_0 = devtag_get_device(device->machine, "pia_0");
-	running_device *pia_1 = devtag_get_device(device->machine, "pia_1");
+	pia6821_device *pia_0 = device->machine->device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = device->machine->device<pia6821_device>("pia_1");
 	int combined_state = pia6821_get_irq_a(pia_0) | pia6821_get_irq_b(pia_0) | pia6821_get_irq_a(pia_1) | pia6821_get_irq_b(pia_1);
 
 	/* IRQ to the main CPU */
@@ -363,10 +363,12 @@ static MACHINE_START( williams_common )
 static MACHINE_RESET( williams_common )
 {
 	/* set a timer to go off every 16 scanlines, to toggle the VA11 line and update the screen */
-	timer_device_adjust_oneshot(devtag_get_device(machine, "scan_timer"), video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+	timer_device *scan_timer = machine->device<timer_device>("scan_timer");
+	scan_timer->adjust(machine->primary_screen->time_until_pos(0));
 
 	/* also set a timer to go off on scanline 240 */
-	timer_device_adjust_oneshot(devtag_get_device(machine, "240_timer"), video_screen_get_time_until_pos(machine->primary_screen, 240, 0), 0);
+	timer_device *l240_timer = machine->device<timer_device>("240_timer");
+	l240_timer->adjust(machine->primary_screen->time_until_pos(240));
 }
 
 
@@ -391,42 +393,42 @@ MACHINE_RESET( williams )
 
 TIMER_DEVICE_CALLBACK( williams2_va11_callback )
 {
-	running_device *pia_0 = devtag_get_device(timer->machine, "pia_0");
-	running_device *pia_1 = devtag_get_device(timer->machine, "pia_1");
+	pia6821_device *pia_0 = timer.machine->device<pia6821_device>("pia_0");
+	pia6821_device *pia_1 = timer.machine->device<pia6821_device>("pia_1");
 	int scanline = param;
 
 	/* the IRQ signal comes into CB1, and is set to VA11 */
-	pia6821_cb1_w(pia_0, 0, scanline & 0x20);
-	pia6821_ca1_w(pia_1, 0, scanline & 0x20);
+	pia6821_cb1_w(pia_0, scanline & 0x20);
+	pia6821_ca1_w(pia_1, scanline & 0x20);
 
 	/* set a timer for the next update */
 	scanline += 0x20;
 	if (scanline >= 256) scanline = 0;
-	timer_device_adjust_oneshot(timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline, 0), scanline);
+	timer.adjust(timer.machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 
 static TIMER_CALLBACK( williams2_endscreen_off_callback )
 {
-	running_device *pia_0 = devtag_get_device(machine, "pia_0");
+	pia6821_device *pia_0 = machine->device<pia6821_device>("pia_0");
 
 	/* the /ENDSCREEN signal comes into CA1 */
-	pia6821_ca1_w(pia_0, 0, 1);
+	pia6821_ca1_w(pia_0, 1);
 }
 
 
 TIMER_DEVICE_CALLBACK( williams2_endscreen_callback )
 {
-	running_device *pia_0 = devtag_get_device(timer->machine, "pia_0");
+	pia6821_device *pia_0 = timer.machine->device<pia6821_device>("pia_0");
 
 	/* the /ENDSCREEN signal comes into CA1 */
-	pia6821_ca1_w(pia_0, 0, 0);
+	pia6821_ca1_w(pia_0, 0);
 
 	/* set a timer to turn it off once the scanline counter resets */
-	timer_set(timer->machine, video_screen_get_time_until_pos(timer->machine->primary_screen, 8, 0), NULL, 0, williams2_endscreen_off_callback);
+	timer_set(timer.machine, timer.machine->primary_screen->time_until_pos(8), NULL, 0, williams2_endscreen_off_callback);
 
 	/* set a timer for next frame */
-	timer_device_adjust_oneshot(timer, video_screen_get_time_until_pos(timer->machine->primary_screen, 254, 0), 0);
+	timer.adjust(timer.machine->primary_screen->time_until_pos(254));
 }
 
 
@@ -464,10 +466,12 @@ MACHINE_RESET( williams2 )
 	williams2_bank_select_w(space, 0, 0);
 
 	/* set a timer to go off every 16 scanlines, to toggle the VA11 line and update the screen */
-	timer_device_adjust_oneshot(devtag_get_device(machine, "scan_timer"), video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+	timer_device *scan_timer = machine->device<timer_device>("scan_timer");
+	scan_timer->adjust(machine->primary_screen->time_until_pos(0));
 
 	/* also set a timer to go off on scanline 254 */
-	timer_device_adjust_oneshot(devtag_get_device(machine, "254_timer"), video_screen_get_time_until_pos(machine->primary_screen, 254, 0), 0);
+	timer_device *l254_timer = machine->device<timer_device>("254_timer");
+	l254_timer->adjust(machine->primary_screen->time_until_pos(254));
 }
 
 
@@ -533,10 +537,10 @@ WRITE8_HANDLER( williams2_bank_select_w )
 
 static TIMER_CALLBACK( williams_deferred_snd_cmd_w )
 {
-	running_device *pia_2 = devtag_get_device(machine, "pia_2");
+	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
 
 	pia6821_portb_w(pia_2, 0, param);
-	pia6821_cb1_w(pia_2, 0, (param == 0xff) ? 0 : 1);
+	pia6821_cb1_w(pia_2, (param == 0xff) ? 0 : 1);
 }
 
 WRITE8_DEVICE_HANDLER( williams_snd_cmd_w )
@@ -553,7 +557,7 @@ WRITE8_DEVICE_HANDLER( playball_snd_cmd_w )
 
 static TIMER_CALLBACK( williams2_deferred_snd_cmd_w )
 {
-	running_device *pia_2 = devtag_get_device(machine, "pia_2");
+	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
 
 	pia6821_porta_w(pia_2, 0, param);
 }
@@ -949,27 +953,27 @@ MACHINE_START( joust2 )
 
 MACHINE_RESET( joust2 )
 {
-	running_device *pia_3 = devtag_get_device(machine, "cvsdpia");
+	pia6821_device *pia_3 = machine->device<pia6821_device>("cvsdpia");
 
 	/* standard init */
 	MACHINE_RESET_CALL(williams2);
-	pia6821_ca1_w(pia_3, 0, 1);
+	pia6821_ca1_w(pia_3, 1);
 }
 
 
 static TIMER_CALLBACK( joust2_deferred_snd_cmd_w )
 {
-	running_device *pia_2 = devtag_get_device(machine, "pia_2");
+	pia6821_device *pia_2 = machine->device<pia6821_device>("pia_2");
 	pia6821_porta_w(pia_2, 0, param & 0xff);
 }
 
 
 static WRITE8_DEVICE_HANDLER( joust2_pia_3_cb1_w )
 {
-	running_device *pia_3 = devtag_get_device(device->machine, "cvsdpia");
+	pia6821_device *pia_3 = device->machine->device<pia6821_device>("cvsdpia");
 
 	joust2_current_sound_data = (joust2_current_sound_data & ~0x100) | ((data << 8) & 0x100);
-	pia6821_cb1_w(pia_3, offset, data);
+	pia6821_cb1_w(pia_3, data);
 }
 
 

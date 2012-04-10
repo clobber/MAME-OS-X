@@ -81,19 +81,19 @@ static TIMER_CALLBACK( interrupt_callback )
 	if (scanline >= 262)
 		scanline = 16;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, scanline, interrupt_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, interrupt_callback);
 }
 
 
 static MACHINE_START( cball )
 {
 	cball_state *state = (cball_state *)machine->driver_data;
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 }
 
 static MACHINE_RESET( cball )
 {
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 16, 0), NULL, 16, interrupt_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(16), NULL, 16, interrupt_callback);
 }
 
 

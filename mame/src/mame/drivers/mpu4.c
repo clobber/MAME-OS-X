@@ -57,7 +57,7 @@
   28-04-2006: El Condor
   20-05-2004: Re-Animator
 
-  See http://www.mameworld.net/agemame/techinfo/mpu4.php for Information.
+  See http://agemame.mameworld.info/techinfo/mpu4.php for Information.
 
 --- Board Setup ---
 
@@ -316,15 +316,14 @@ static UINT8 Lamps[128];		/* 128 multiplexed lamps */
 static int optic_pattern;
 
 /* Lookup table for CHR data */
-static const UINT8 MPU4_chr_lut[72]= {	0x00,0x1A,0x04,0x10,0x18,0x0F,0x13,0x1B,
-								0x03,0x07,0x17,0x1D,0x36,0x35,0x2B,0x28,
-								0x39,0x21,0x22,0x25,0x2C,0x29,0x31,0x34,
-								0x0A,0x1F,0x06,0x0E,0x1C,0x12,0x1E,0x0D,
-								0x14,0x0A,0x19,0x15,0x06,0x0F,0x08,0x1B,
-								0x1E,0x04,0x01,0x0C,0x18,0x1A,0x11,0x0B,
-								0x03,0x17,0x10,0x1D,0x0E,0x07,0x12,0x09,
-								0x0D,0x1F,0x16,0x05,0x13,0x1C,0x02,0x00,
-								0x00,0x01,0x04,0x09,0x10,0x19,0x24,0x31};
+
+struct mpu4_chr_table
+{
+	UINT8 call;
+	UINT8 response;
+};
+
+static const mpu4_chr_table* mpu4_current_chr_table;
 
 /*
 LED Segments related to pins (5 is not connected):
@@ -454,13 +453,13 @@ static MACHINE_RESET( mpu4 )
 /* 6809 IRQ handler */
 static WRITE_LINE_DEVICE_HANDLER( cpu0_irq )
 {
-	running_device *pia3 = devtag_get_device(device->machine, "pia_ic3");
-	running_device *pia4 = devtag_get_device(device->machine, "pia_ic4");
-	running_device *pia5 = devtag_get_device(device->machine, "pia_ic5");
-	running_device *pia6 = devtag_get_device(device->machine, "pia_ic6");
-	running_device *pia7 = devtag_get_device(device->machine, "pia_ic7");
-	running_device *pia8 = devtag_get_device(device->machine, "pia_ic8");
-	running_device *ptm6840 = devtag_get_device(device->machine, "6840ptm");
+	running_device *pia3 = device->machine->device("pia_ic3");
+	running_device *pia4 = device->machine->device("pia_ic4");
+	running_device *pia5 = device->machine->device("pia_ic5");
+	running_device *pia6 = device->machine->device("pia_ic6");
+	running_device *pia7 = device->machine->device("pia_ic7");
+	running_device *pia8 = device->machine->device("pia_ic8");
+	running_device *ptm6840 = device->machine->device("6840ptm");
 
 	/* The PIA and PTM IRQ lines are all connected to a common PCB track, leading directly to the 6809 IRQ line. */
 	int combined_state = pia6821_get_irq_a(pia3) | pia6821_get_irq_b(pia3) |
@@ -485,7 +484,7 @@ static WRITE_LINE_DEVICE_HANDLER( cpu0_irq )
 
 static WRITE_LINE_DEVICE_HANDLER( cpu0_irq_m6840 )
 {
-	cpu0_irq(devtag_get_device(device->machine, "pia_ic3"), state);
+	cpu0_irq(device->machine->device("pia_ic3"), state);
 }
 
 
@@ -514,8 +513,8 @@ static WRITE8_DEVICE_HANDLER( ic2_o1_callback )
 
 static WRITE8_DEVICE_HANDLER( ic2_o2_callback )
 {
-	running_device *pia = devtag_get_device(device->machine, "pia_ic3");
-	pia6821_ca1_w(pia, 0, data); /* copy output value to IC3 ca1 */
+	running_device *pia = device->machine->device("pia_ic3");
+	pia6821_ca1_w(pia, data); /* copy output value to IC3 ca1 */
 
 	/* the output from timer2 is the input clock for timer3 */
 	ptm6840_set_c3(device, 0, data);
@@ -687,12 +686,12 @@ static READ8_DEVICE_HANDLER( pia_ic4_portb_r )
 	if ( serial_data )
 	{
 		ic4_input_b |=  0x80;
-		pia6821_cb1_w(device, 0, 1);
+		pia6821_cb1_w(device, 1);
 	}
 	else
 	{
 		ic4_input_b &= ~0x80;
-		pia6821_cb1_w(device, 0, 0);
+		pia6821_cb1_w(device, 0);
 	}
 
 	if ( optic_pattern & 0x01 ) ic4_input_b |=  0x40; /* reel A tab */
@@ -745,18 +744,18 @@ static const pia6821_interface pia_ic4_intf =
 	DEVCB_LINE(cpu0_irq)		/* IRQB */
 };
 
-
 /* IC5, AUX ports, coin lockouts and AY sound chip select (MODs below 4 only) */
 static READ8_DEVICE_HANDLER( pia_ic5_porta_r )
 {
 	LOG(("%s: IC5 PIA Read of Port A (AUX1)\n",cpuexec_describe_context(device->machine)));
+
 	return input_port_read(device->machine, "AUX1");
 }
 
 
 static READ8_DEVICE_HANDLER( pia_ic5_portb_r )
 {
-	running_device *pia_ic5 = devtag_get_device(device->machine, "pia_ic5");
+	running_device *pia_ic5 = device->machine->device("pia_ic5");
 	LOG(("%s: IC5 PIA Read of Port B (coin input AUX2)\n",cpuexec_describe_context(device->machine)));
 	coin_lockout_w(device->machine, 0, (pia6821_get_output_b(pia_ic5) & 0x01) );
 	coin_lockout_w(device->machine, 1, (pia6821_get_output_b(pia_ic5) & 0x02) );
@@ -809,14 +808,14 @@ static void update_ay(running_device *device)
 		    }
 			case 0x01:
 			{	/* CA2 = 1 CB2 = 0? : Read from selected PSG register and make the register data available to Port A */
-				running_device *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
+				running_device *pia_ic6 = device->machine->device("pia_ic6");
 				LOG(("AY8913 address = %d \n",pia6821_get_output_a(pia_ic6)&0x0f));
 				break;
 			}
 			case 0x02:
 			{/* CA2 = 0 CB2 = 1? : Write to selected PSG register and write data to Port A */
-				running_device *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
-				running_device *ay = devtag_get_device(device->machine, "ay8913");
+				running_device *pia_ic6 = device->machine->device("pia_ic6");
+				running_device *ay = device->machine->device("ay8913");
 				ay8910_data_w(ay, 0, pia6821_get_output_a(pia_ic6));
 				LOG(("AY Chip Write \n"));
 				break;
@@ -824,8 +823,8 @@ static void update_ay(running_device *device)
 			case 0x03:
 			{/* CA2 = 1 CB2 = 1? : The register will now be selected and the user can read from or write to it.
              The register will remain selected until another is chosen.*/
-				running_device *pia_ic6 = devtag_get_device(device->machine, "pia_ic6");
-				running_device *ay = devtag_get_device(device->machine, "ay8913");
+				running_device *pia_ic6 = device->machine->device("pia_ic6");
+				running_device *ay = device->machine->device("ay8913");
 				ay8910_address_w(ay, 0, pia6821_get_output_a(pia_ic6));
 				LOG(("AY Chip Select \n"));
 				break;
@@ -956,7 +955,7 @@ static WRITE8_DEVICE_HANDLER( pia_ic7_porta_w )
 static WRITE8_DEVICE_HANDLER( pia_ic7_portb_w )
 {
 	int meter;
-	UINT64 cycles = cputag_get_total_cycles(device->machine, "maincpu");
+	UINT64 cycles = device->machine->device<cpu_device>("maincpu")->total_cycles();
 
 /* The meters are connected to a voltage drop sensor, where current
 flowing through them also passes through pin B7, meaning that when
@@ -997,7 +996,7 @@ static WRITE_LINE_DEVICE_HANDLER( pia_ic7_cb2_w )
 {
 /* The eighth meter is connected here, because the voltage sensor
 is on PB7. */
-	UINT64 cycles = cputag_get_total_cycles(device->machine, "maincpu");
+	UINT64 cycles = device->machine->device<cpu_device>("maincpu")->total_cycles();
 	if (state)
 	{
 		pia6821_portb_w(device, 0, mmtr_data|0x80);
@@ -1028,13 +1027,13 @@ static const pia6821_interface pia_ic7_intf =
 static READ8_DEVICE_HANDLER( pia_ic8_porta_r )
 {
 	static const char *const portnames[] = { "ORANGE1", "ORANGE2", "BLACK1", "BLACK2", "ORANGE1", "ORANGE2", "DIL1", "DIL2" };
-	running_device *pia_ic5 = devtag_get_device(device->machine, "pia_ic5");
+	running_device *pia_ic5 = device->machine->device("pia_ic5");
 
 	LOG_IC8(("%s: IC8 PIA Read of Port A (MUX input data)\n", cpuexec_describe_context(device->machine)));
 /* The orange inputs are polled twice as often as the black ones, for reasons of efficiency.
    This is achieved via connecting every input line to an AND gate, thus allowing two strobes
    to represent each orange input bank (strobes are active low). */
-	pia6821_cb1_w(pia_ic5, 0, (input_port_read(device->machine, "AUX2") & 0x80));
+	pia6821_cb1_w(pia_ic5, (input_port_read(device->machine, "AUX2") & 0x80));
 	return input_port_read(device->machine, portnames[input_strobe]);
 }
 
@@ -1089,7 +1088,7 @@ static const pia6821_interface pia_ic8_intf =
 
 static WRITE8_DEVICE_HANDLER( pia_gb_porta_w )
 {
-	running_device *msm6376 = devtag_get_device(device->machine, "msm6376");
+	running_device *msm6376 = device->machine->device("msm6376");
 
 	LOG(("%s: GAMEBOARD: PIA Port A Set to %2x\n", cpuexec_describe_context(device->machine),data));
 	okim6376_w(msm6376, 0, data);
@@ -1631,27 +1630,34 @@ of all 00, is sometimes the correct answer, particularly in non-Barcrest use of 
 there are again fixed call values.
 */
 
+
 static WRITE8_HANDLER( characteriser_w )
 {
-	UINT8 x;
+	int x;
 	int call=data;
 	LOG_CHR_FULL(("%04x Characteriser write offset %02X data %02X", cpu_get_previouspc(space->cpu),offset,data));
+
+	if (!mpu4_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(space->cpu));
+
 	if (offset == 0)
 	{
-		if (call == 0)
+	//  for (x = prot_col; x < 64; x++)
 		{
-			prot_col = 0;
-		}
-		else
-		{
-			for (x = prot_col; x < 64; x++)
+			if (call == 0)
 			{
-				if	(MPU4_chr_lut[(x)] == call)
+				prot_col = 0;
+			}
+			else
+			{
+				for (x = prot_col; x < 64; x++)
 				{
-					prot_col = x;
-					LOG_CHR(("Characteriser find column %02X\n",prot_col));
-					LOG_CHR(("Characteriser find data %02X\n",MPU4_chr_data[prot_col]));
-					break;
+					if	(mpu4_current_chr_table[(x)].call == call)
+					{
+						prot_col = x;
+						LOG_CHR(("Characteriser find column %02X\n",prot_col));
+						break;
+					}
 				}
 			}
 		}
@@ -1661,7 +1667,7 @@ static WRITE8_HANDLER( characteriser_w )
 		LOG_CHR(("Characteriser write 2 data %02X\n",data));
 		for (x = lamp_col; x < 16; x++)
 		{
-			if	(MPU4_chr_lut[(64+x)] == call)
+			if	(mpu4_current_chr_table[(64+x)].call == call)
 			{
 				lamp_col = x;
 				LOG_CHR(("Characteriser find column %02X\n",lamp_col));
@@ -1678,59 +1684,56 @@ static WRITE8_HANDLER( characteriser_w )
 
 static READ8_HANDLER( characteriser_r )
 {
+	if (!mpu4_current_chr_table)
+		fatalerror("No Characteriser Table @ %04x\n", cpu_get_previouspc(space->cpu));
+
 	LOG_CHR(("Characteriser read offset %02X \n",offset));
 	LOG_CHR_FULL(("%04x Characteriser read offset %02X", cpu_get_previouspc(space->cpu),offset));
 	if (offset == 0)
 	{
 		LOG_CHR(("Characteriser read data %02X \n",MPU4_chr_data[prot_col]));
-		return MPU4_chr_data[prot_col];
+		return mpu4_current_chr_table[prot_col].response;
 	}
 	if (offset == 3)
 	{
 		LOG_CHR(("Characteriser read data %02X \n",MPU4_chr_data[lamp_col+64]));
-		return MPU4_chr_data[lamp_col+64];
+		return mpu4_current_chr_table[lamp_col+64].response;
 	}
 	return 0;
 }
 
+static const mpu4_chr_table ccelbr_data[72] = {
+{0x00, 0x00},{0x1a, 0x84},{0x04, 0x8c},{0x10, 0xb8},{0x18, 0x74},{0x0f, 0x80},{0x13, 0x1c},{0x1b, 0xb4},
+{0x03, 0xd8},{0x07, 0x74},{0x17, 0x00},{0x1d, 0xd4},{0x36, 0xc8},{0x35, 0x78},{0x2b, 0xa4},{0x28, 0x4c},
+{0x39, 0xe0},{0x21, 0xdc},{0x22, 0xf4},{0x25, 0x88},{0x2c, 0x78},{0x29, 0x24},{0x31, 0x84},{0x34, 0xcc},
+{0x0a, 0xb8},{0x1f, 0x74},{0x06, 0x90},{0x0e, 0x48},{0x1c, 0xa0},{0x12, 0x1c},{0x1e, 0x24},{0x0d, 0x94},
+{0x14, 0xc8},{0x0a, 0xb8},{0x19, 0x74},{0x15, 0x00},{0x06, 0x94},{0x0f, 0x48},{0x08, 0x30},{0x1b, 0x90},
+{0x1e, 0x08},{0x04, 0x60},{0x01, 0xd4},{0x0c, 0x58},{0x18, 0xf4},{0x1a, 0x18},{0x11, 0x74},{0x0b, 0x80},
+{0x03, 0xdc},{0x17, 0x74},{0x10, 0xd0},{0x1d, 0x58},{0x0e, 0x24},{0x07, 0x94},{0x12, 0xd8},{0x09, 0x34},
+{0x0d, 0x90},{0x1f, 0x58},{0x16, 0xf4},{0x05, 0x88},{0x13, 0x38},{0x1c, 0x24},{0x02, 0xd4},{0x00, 0x00},
+{0x00, 0x00},{0x01, 0x50},{0x04, 0x00},{0x09, 0x50},{0x10, 0x10},{0x19, 0x40},{0x24, 0x04},{0x31, 0x00}
+};
+
+static const mpu4_chr_table gmball_data[72] = {
+{0x00, 0x00},{0x1a, 0x0c},{0x04, 0x50},{0x10, 0x90},{0x18, 0xb0},{0x0f, 0x38},{0x13, 0xd4},{0x1b, 0xa0},
+{0x03, 0xbc},{0x07, 0xd4},{0x17, 0x30},{0x1d, 0x90},{0x36, 0x38},{0x35, 0xc4},{0x2b, 0xac},{0x28, 0x70},
+{0x39, 0x98},{0x21, 0xdc},{0x22, 0xdc},{0x25, 0x54},{0x2c, 0x80},{0x29, 0xb4},{0x31, 0x38},{0x34, 0xcc},
+{0x0a, 0xe8},{0x1f, 0xf8},{0x06, 0xd4},{0x0e, 0x30},{0x1c, 0x00},{0x12, 0x84},{0x1e, 0x2c},{0x0d, 0xc8},
+{0x14, 0xf8},{0x0a, 0x4c},{0x19, 0x58},{0x15, 0xd4},{0x06, 0xa8},{0x0f, 0x78},{0x08, 0x44},{0x1b, 0x0c},
+{0x1e, 0x48},{0x04, 0x50},{0x01, 0x98},{0x0c, 0xd4},{0x18, 0xb0},{0x1a, 0xa0},{0x11, 0xa4},{0x0b, 0x3c},
+{0x03, 0xdc},{0x17, 0xd4},{0x10, 0xb8},{0x1d, 0xd4},{0x0e, 0x30},{0x07, 0x88},{0x12, 0xe0},{0x09, 0x24},
+{0x0d, 0x8c},{0x1f, 0xf8},{0x16, 0xcc},{0x05, 0x70},{0x13, 0x90},{0x1c, 0x20},{0x02, 0x9c},{0x00, 0x00},
+{0x00, 0x00},{0x01, 0x18},{0x04, 0x08},{0x09, 0x10},{0x10, 0x00},{0x19, 0x18},{0x24, 0x08},{0x31, 0x00}
+};
+
 static DRIVER_INIT (m_ccelbr)
 {
-	int x;
-	static const UINT8 chr_table[72]={	0x00,0x84,0x8C,0xB8,0x74,0x80,0x1C,0xB4,
-										0xD8,0x74,0x00,0xD4,0xC8,0x78,0xA4,0x4C,
-										0xE0,0xDC,0xF4,0x88,0x78,0x24,0x84,0xCC,
-										0xB8,0x74,0x90,0x48,0xA0,0x1C,0x24,0x94,
-										0xC8,0xB8,0x74,0x00,0x94,0x48,0x30,0x90,
-										0x08,0x60,0xD4,0x58,0xF4,0x18,0x74,0x80,
-										0xDC,0x74,0xD0,0x58,0x24,0x94,0xD8,0x34,
-										0x90,0x58,0xF4,0x88,0x38,0x24,0xD4,0x00,
-										0x00,0x50,0x00,0x50,0x10,0x40,0x04,0x00};
-
-	for (x=0; x<72; x++)
-	{
-		MPU4_chr_data[(x)] = chr_table[(x)];
-	}
-
+	mpu4_current_chr_table = ccelbr_data;
 }
 
 static DRIVER_INIT (m_gmball)
 {
-	int x;
-	static const UINT8 chr_table[72]= {	0x00,0x0C,0x50,0x90,0xB0,0x38,0xD4,0xA0,
-										0xBC,0xD4,0x30,0x90,0x38,0xC4,0xAC,0x70,
-										0x98,0xDC,0xDC,0x54,0x80,0xB4,0x38,0xCC,
-										0xE8,0xF8,0xD4,0x30,0x00,0x84,0x2C,0xC8,
-										0xF8,0x4C,0x58,0xD4,0xA8,0x78,0x44,0x0C,
-										0x48,0x50,0x98,0xD4,0xB0,0xA0,0xA4,0x3C,
-										0xDC,0xD4,0xB8,0xD4,0x30,0x88,0xE0,0x24,
-										0x8C,0xF8,0xCC,0x70,0x90,0x20,0x9C,0x00,
-										0x00,0x18,0x08,0x10,0x00,0x18,0x08,0x00};
-
-	for (x=0; x < 72; x++)
-	{
-		MPU4_chr_data[(x)] = chr_table[(x)];
-	}
-
+		mpu4_current_chr_table = gmball_data;
 }
 
 
@@ -1742,7 +1745,7 @@ static TIMER_DEVICE_CALLBACK( gen_50hz )
     oscillating signal.*/
 	signal_50hz = signal_50hz?0:1;
 	update_lamps();
-	pia6821_ca1_w(devtag_get_device(timer->machine, "pia_ic4"), 0,  signal_50hz);	/* signal is connected to IC4 CA1 */
+	pia6821_ca1_w(timer.machine->device("pia_ic4"), signal_50hz);	/* signal is connected to IC4 CA1 */
 }
 
 
@@ -1915,6 +1918,11 @@ static MACHINE_DRIVER_START( mpu4dutch )
 	MDRV_MACHINE_START(mpu4dutch)						// main mpu4 board initialisation
 MACHINE_DRIVER_END
 
+static DRIVER_INIT (connect4)
+{
+	led_extend=1;
+}
+
 ROM_START( m_oldtmr )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "dot11.bin",  0x00000, 0x10000,  CRC(da095666) SHA1(bc7654dc9da1f830a43f925db8079f27e18bb61e))
@@ -1930,9 +1938,38 @@ ROM_START( m_gmball )
 	ROM_LOAD( "gbbx.p1",	0x0000, 0x10000,  CRC(0b5adcd0) SHA1(1a198bd4a1e7d6bf4cf025c43d35aaef351415fc))
 ROM_END
 
+ROM_START( connect4 )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASE00  )
+	ROM_LOAD( "connect4.p2",  0x8000, 0x4000,  CRC(6090633c) SHA1(0cd2725a235bf93cfe94f2ca648d5fccb87b8e5c) )
+	ROM_LOAD( "connect4.p1",  0xC000, 0x4000,  CRC(b1af50c0) SHA1(7c9645ea378f0857b849ca24a239d9114f62da7f) )
+ROM_END
+
+ROM_START( mpu4utst )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASE00  )
+	ROM_LOAD( "ut4.p1",  0xC000, 0x4000,  CRC(086dc325) SHA1(923caeb61347ac9d3e6bcec45998ddf04b2c8ffd))
+ROM_END
+
+ROM_START( mpu4tst2 )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASE00  )
+	ROM_LOAD( "ut2.p1",  0xE000, 0x2000,  CRC(f7fb6575) SHA1(f7961cbd0801b9561d8cd2d23081043d733e1902))
+ROM_END
+
+ROM_START( mpu4met0 )
+	ROM_REGION( 0x10000, "maincpu", ROMREGION_ERASE00  )
+	ROM_LOAD( "meter-zero.p1",  0x8000, 0x8000,  CRC(e74297e5) SHA1(49a2cc85eda14199975ec37a794b685c839d3ab9))
+ROM_END
+
 //    year, name,    parent,  machine,  input,       init,    monitor, company,         fullname,                                    flags
 GAME( 198?, m_oldtmr,0,       mpu4dutch,mpu4,		 0,        ROT0,   "Barcrest",		"Old Timer",														GAME_NOT_WORKING|GAME_NO_SOUND|GAME_REQUIRES_ARTWORK )
 GAME( 198?, m_ccelbr,0,       mpu4mod2, mpu4,		 m_ccelbr, ROT0,   "Barcrest",		"Club Celebration",													GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK )
 GAMEL(198?, m_gmball,0,		  mod4yam,  gamball,     m_gmball, ROT0,   "Barcrest",      "Gamball",															GAME_NOT_WORKING|GAME_REQUIRES_ARTWORK,layout_gamball )
+
+//SWP
+GAMEL(1989?, connect4,  0,        mpu4mod2, connect4, connect4, ROT0, "Dolbeck Systems","Connect 4",														GAME_IMPERFECT_GRAPHICS|GAME_REQUIRES_ARTWORK,layout_connect4 )
+
+//Diagnostic ROMs
+GAME( 198?,  mpu4utst,  0,        mpu4mod2, mpu4,     0,        ROT0, "Barcrest",		"MPU4 Unit Test (Program 4)",										0 )
+GAME( 198?,  mpu4tst2,  0,        mpu4mod2, mpu4,     0,        ROT0, "Barcrest",		"MPU4 Unit Test (Program 2)",										0 )
+GAME( 198?,  mpu4met0,  0,        mpu4mod2, mpu4,     0,        ROT0, "Barcrest",		"MPU4 Meter Clear ROM",												0 )
 
 #include "drivers/mpu4drvr.c"

@@ -145,15 +145,15 @@ struct _z80_state
 	UINT8			nmi_state;			/* nmi line state */
 	UINT8			nmi_pending;		/* nmi pending */
 	UINT8			irq_state;			/* irq line state */
+	UINT8			nsc800_irq_state[4];/* state of NSC800 restart interrupts A, B, C */
 	UINT8			after_ei;			/* are we in the EI shadow? */
 	UINT32			ea;
-	cpu_irq_callback irq_callback;
-	running_device *device;
+	device_irq_callback irq_callback;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	int				icount;
-	z80_daisy_state *daisy;
-	cpu_state_table state;
+	z80_daisy_chain daisy;
 	UINT8			rtemp;
 	const UINT8 *	cc_op;
 	const UINT8 *	cc_cb;
@@ -166,10 +166,8 @@ struct _z80_state
 INLINE z80_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_Z80);
-	return (z80_state *)device->token;
+	assert(device->type() == Z80 || device->type() == NSC800);
+	return (z80_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define CF		0x01
@@ -226,61 +224,6 @@ INLINE z80_state *get_safe_token(running_device *device)
 #define WZ		wz.w.l
 #define WZ_H	wz.b.h
 #define WZ_L	wz.b.l
-
-
-/***************************************************************************
-    CPU STATE DESCRIPTION
-***************************************************************************/
-
-#define Z80_STATE_ENTRY(_name, _format, _member, _datamask, _flags) \
-	CPU_STATE_ENTRY(Z80_##_name, #_name, _format, z80_state, _member, _datamask, ~0, _flags)
-
-static const cpu_state_entry state_array[] =
-{
-	Z80_STATE_ENTRY(PC,  "%04X", PCD, 0xffff, 0)
-	Z80_STATE_ENTRY(GENPC, "%04X", PCD, 0xffff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(GENPCBASE, "%04X", prvpc.w.l, 0xffff, CPUSTATE_NOSHOW)
-
-	Z80_STATE_ENTRY(SP,  "%04X", SP, 0xffff, 0)
-	Z80_STATE_ENTRY(GENSP, "%04X", SPD, 0xffff, CPUSTATE_NOSHOW)
-
-	Z80_STATE_ENTRY(A, "%02X", A, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(B, "%02X", B, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(C, "%02X", C, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(D, "%02X", D, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(E, "%02X", E, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(H, "%02X", H, 0xff, CPUSTATE_NOSHOW)
-	Z80_STATE_ENTRY(L, "%02X", L, 0xff, CPUSTATE_NOSHOW)
-
-	Z80_STATE_ENTRY(AF, "%04X", AF, 0xffff, 0)
-	Z80_STATE_ENTRY(BC, "%04X", BC, 0xffff, 0)
-	Z80_STATE_ENTRY(DE, "%04X", DE, 0xffff, 0)
-	Z80_STATE_ENTRY(HL, "%04X", HL, 0xffff, 0)
-	Z80_STATE_ENTRY(IX, "%04X", IX, 0xffff, 0)
-	Z80_STATE_ENTRY(IY, "%04X", IY, 0xffff, 0)
-
-	Z80_STATE_ENTRY(AF2, "%04X", af2.w.l, 0xffff, 0)
-	Z80_STATE_ENTRY(BC2, "%04X", bc2.w.l, 0xffff, 0)
-	Z80_STATE_ENTRY(DE2, "%04X", de2.w.l, 0xffff, 0)
-	Z80_STATE_ENTRY(HL2, "%04X", hl2.w.l, 0xffff, 0)
-
-	Z80_STATE_ENTRY(WZ,  "%04X", WZ,   0xffff, 0)
-	Z80_STATE_ENTRY(R,   "%02X", rtemp,0xff, CPUSTATE_EXPORT | CPUSTATE_IMPORT)
-	Z80_STATE_ENTRY(I,   "%02X", i,    0xff, 0)
-	Z80_STATE_ENTRY(IM,  "%1u",  im,   0x3,  0)
-	Z80_STATE_ENTRY(IFF1,"%1u",  iff1, 0x1,  0)
-	Z80_STATE_ENTRY(IFF2,"%1u",  iff2, 0x1,  0)
-	Z80_STATE_ENTRY(HALT,"%1u",  halt, 0x1,  0)
-};
-
-static const cpu_state_table state_table_template =
-{
-	NULL,						/* pointer to the base of state (offsets are relative to this) */
-	0,							/* subtype this table refers to */
-	ARRAY_LENGTH(state_array),	/* number of entries */
-	state_array					/* array of entries */
-};
-
 
 
 static UINT8 SZ[256];		/* zero and sign flags */
@@ -405,6 +348,7 @@ static const UINT8 cc_ex[0x100] = {
 #define cc_fd	cc_xy
 
 static void take_interrupt(z80_state *z80);
+static void take_interrupt_nsc800(z80_state *z80);
 static CPU_BURN( z80 );
 
 typedef void (*funcptr)(z80_state *z80);
@@ -838,8 +782,7 @@ INLINE UINT32 ARG16(z80_state *z80)
 	(Z)->WZ = (Z)->PC;											\
 /* according to http://www.msxnet.org/tech/z80-documented.pdf */\
 	(Z)->iff1 = (Z)->iff2;										\
-	if ((Z)->daisy != NULL)										\
-		z80daisy_call_reti_device((Z)->daisy);					\
+	(Z)->daisy.call_reti_device();								\
 } while (0)
 
 /***************************************************************
@@ -3282,8 +3225,8 @@ static void take_interrupt(z80_state *z80)
 	z80->iff1 = z80->iff2 = 0;
 
 	/* Daisy chain mode? If so, call the requesting device */
-	if (z80->daisy)
-		irq_vector = z80daisy_call_ack_device(z80->daisy);
+	if (z80->daisy.present())
+		irq_vector = z80->daisy.call_ack_device();
 
 	/* else call back the cpu interface to retrieve the vector */
 	else
@@ -3346,6 +3289,39 @@ static void take_interrupt(z80_state *z80)
 		/* 'interrupt latency' cycles */
 		z80->icount -= z80->cc_ex[0xff];
 	}
+	z80->WZ=z80->PCD;
+}
+
+static void take_interrupt_nsc800(z80_state *z80)
+{
+	/* there isn't a valid previous program counter */
+	z80->PRVPC = -1;
+
+	/* Check if processor was halted */
+	LEAVE_HALT(z80);
+
+	/* Clear both interrupt flip flops */
+	z80->iff1 = z80->iff2 = 0;
+
+	if (z80->nsc800_irq_state[NSC800_RSTA])
+	{
+		PUSH(z80, pc);
+		z80->PCD = 0x003c;
+	}
+	else if (z80->nsc800_irq_state[NSC800_RSTB])
+	{
+		PUSH(z80, pc);
+		z80->PCD = 0x0034;
+	}
+	else if (z80->nsc800_irq_state[NSC800_RSTC])
+	{
+		PUSH(z80, pc);
+		z80->PCD = 0x002c;
+	}
+
+	/* 'interrupt latency' cycles */
+	z80->icount -= z80->cc_op[0xff] + cc_ex[0xff];
+
 	z80->WZ=z80->PCD;
 }
 
@@ -3462,9 +3438,35 @@ static CPU_INIT( z80 )
 	state_save_register_device_item(device, 0, z80->after_ei);
 
 	/* Reset registers to their initial values */
-	memset(z80, 0, sizeof(*z80));
-	if (device->baseconfig().static_config != NULL)
-		z80->daisy = z80daisy_init(device, (const z80_daisy_chain *)device->baseconfig().static_config);
+	z80->PRVPC = 0;
+	z80->PCD = 0;
+	z80->SPD = 0;
+	z80->AFD = 0;
+	z80->BCD = 0;
+	z80->DED = 0;
+	z80->HLD = 0;
+	z80->IXD = 0;
+	z80->IYD = 0;
+	z80->WZ = 0;
+	z80->af2.d = 0;
+	z80->bc2.d = 0;
+	z80->de2.d = 0;
+	z80->hl2.d = 0;
+	z80->r = 0;
+	z80->r2 = 0;
+	z80->iff1 = 0;
+	z80->iff2 = 0;
+	z80->halt = 0;
+	z80->im = 0;
+	z80->i = 0;
+	z80->nmi_state = 0;
+	z80->nmi_pending = 0;
+	z80->irq_state = 0;
+	z80->after_ei = 0;
+	z80->ea = 0;
+
+	if (device->baseconfig().static_config() != NULL)
+		z80->daisy.init(device, (const z80_daisy_config *)device->baseconfig().static_config());
 	z80->irq_callback = irqcallback;
 	z80->device = device;
 	z80->program = device->space(AS_PROGRAM);
@@ -3473,9 +3475,40 @@ static CPU_INIT( z80 )
 	z80->F = ZF;			/* Zero flag is set */
 
 	/* set up the state table */
-	z80->state = state_table_template;
-	z80->state.baseptr = z80;
-	z80->state.subtypemask = 1;
+	{
+		device_state_interface *state;
+		device->interface(state);
+		state->state_add(Z80_PC,          "PC",        z80->pc.w.l);
+		state->state_add(STATE_GENPC,     "GENPC",     z80->pc.w.l).noshow();
+		state->state_add(STATE_GENPCBASE, "GENPCBASE", z80->prvpc.w.l).noshow();
+		state->state_add(Z80_SP,          "SP",        z80->SP);
+		state->state_add(STATE_GENSP,     "GENSP",     z80->SP).noshow();
+		state->state_add(STATE_GENFLAGS,  "GENFLAGS",  z80->F).noshow().formatstr("%8s");
+		state->state_add(Z80_A,           "A",         z80->A).noshow();
+		state->state_add(Z80_B,           "B",         z80->B).noshow();
+		state->state_add(Z80_C,           "C",         z80->C).noshow();
+		state->state_add(Z80_D,           "D",         z80->D).noshow();
+		state->state_add(Z80_E,           "E",         z80->E).noshow();
+		state->state_add(Z80_H,           "H",         z80->H).noshow();
+		state->state_add(Z80_L,           "L",         z80->L).noshow();
+		state->state_add(Z80_AF,          "AF",        z80->AF);
+		state->state_add(Z80_BC,          "BC",        z80->BC);
+		state->state_add(Z80_DE,          "DE",        z80->DE);
+		state->state_add(Z80_HL,          "HL",        z80->HL);
+		state->state_add(Z80_IX,          "IX",        z80->IX);
+		state->state_add(Z80_IY,          "IY",        z80->IY);
+		state->state_add(Z80_AF2,         "AF2",       z80->af2.w.l);
+		state->state_add(Z80_BC2,         "BC2",       z80->bc2.w.l);
+		state->state_add(Z80_DE2,         "DE2",       z80->de2.w.l);
+		state->state_add(Z80_HL2,         "HL2",       z80->hl2.w.l);
+		state->state_add(Z80_WZ,          "WZ",        z80->WZ);
+		state->state_add(Z80_R,           "R",         z80->rtemp).callimport().callexport();
+		state->state_add(Z80_I,           "I",         z80->i);
+		state->state_add(Z80_IM,          "IM",        z80->im).mask(0x3);
+		state->state_add(Z80_IFF1,        "IFF1",      z80->iff1).mask(0x1);
+		state->state_add(Z80_IFF2,        "IFF2",      z80->iff2).mask(0x1);
+		state->state_add(Z80_HALT,        "HALT",      z80->halt).mask(0x1);
+	}
 
 	/* setup cycle tables */
 	z80->cc_op = cc_op;
@@ -3484,6 +3517,13 @@ static CPU_INIT( z80 )
 	z80->cc_xy = cc_xy;
 	z80->cc_xycb = cc_xycb;
 	z80->cc_ex = cc_ex;
+}
+
+static CPU_INIT( nsc800 )
+{
+	z80_state *z80 = get_safe_token(device);
+	state_save_register_device_item_array(device, 0, z80->nsc800_irq_state);
+	CPU_INIT_CALL (z80);
 }
 
 /****************************************************************************
@@ -3502,10 +3542,16 @@ static CPU_RESET( z80 )
 	z80->irq_state = CLEAR_LINE;
 	z80->after_ei = FALSE;
 
-	if (z80->daisy)
-		z80daisy_reset(z80->daisy);
+	z80->daisy.reset();
 
 	z80->WZ=z80->PCD;
+}
+
+ static CPU_RESET( nsc800 )
+{
+	z80_state *z80 = get_safe_token(device);
+	memset(z80->nsc800_irq_state, 0, sizeof(z80->nsc800_irq_state));
+	CPU_RESET_CALL(z80);
 }
 
 static CPU_EXIT( z80 )
@@ -3522,8 +3568,6 @@ static CPU_EXIT( z80 )
 static CPU_EXECUTE( z80 )
 {
 	z80_state *z80 = get_safe_token(device);
-
-	z80->icount = cycles;
 
 	/* check for NMIs on the way in; they can only be set externally */
 	/* via timers, and can't be dynamically enabled, so it is safe */
@@ -3554,8 +3598,48 @@ static CPU_EXECUTE( z80 )
 		z80->r++;
 		EXEC_INLINE(z80,op,ROP(z80));
 	} while (z80->icount > 0);
+}
 
-	return cycles - z80->icount;
+ static CPU_EXECUTE( nsc800 )
+{
+	z80_state *z80 = get_safe_token(device);
+
+	/* check for NMIs on the way in; they can only be set externally */
+	/* via timers, and can't be dynamically enabled, so it is safe */
+	/* to just check here */
+	if (z80->nmi_pending)
+	{
+		LOG(("Z80 '%s' take NMI\n", z80->device->tag()));
+		z80->PRVPC = -1;			/* there isn't a valid previous program counter */
+		LEAVE_HALT(z80);			/* Check if processor was halted */
+
+		z80->iff1 = 0;
+		PUSH(z80, pc);
+		z80->PCD = 0x0066;
+		z80->WZ=z80->PCD;
+		z80->icount -= 11;
+		z80->nmi_pending = FALSE;
+	}
+
+	do
+	{
+		/* check for NSC800 IRQs line RSTA, RSTB, RSTC */
+		if ((z80->nsc800_irq_state[NSC800_RSTA] != CLEAR_LINE ||
+			z80->nsc800_irq_state[NSC800_RSTB] != CLEAR_LINE ||
+			z80->nsc800_irq_state[NSC800_RSTC] != CLEAR_LINE) && z80->iff1 && !z80->after_ei)
+				take_interrupt_nsc800(z80);
+
+		/* check for IRQs before each instruction */
+		if (z80->irq_state != CLEAR_LINE && z80->iff1 && !z80->after_ei)
+			take_interrupt(z80);
+
+		z80->after_ei = FALSE;
+
+		z80->PRVPC = z80->PCD;
+		debugger_instruction_hook(device, z80->PCD);
+		z80->r++;
+		EXEC_INLINE(z80,op,ROP(z80));
+	} while (z80->icount > 0);
 }
 
 /****************************************************************************
@@ -3590,13 +3674,39 @@ static void set_irq_line(z80_state *z80, int irqline, int state)
 	{
 		/* update the IRQ state via the daisy chain */
 		z80->irq_state = state;
-		if (z80->daisy)
-			z80->irq_state = z80daisy_update_irq_state(z80->daisy);
+		if (z80->daisy.present())
+			z80->irq_state = z80->daisy.update_irq_state();
 
 		/* the main execute loop will take the interrupt */
 	}
 }
 
+
+static void set_irq_line_nsc800(z80_state *z80, int irqline, int state)
+{
+	if (irqline == INPUT_LINE_NMI)
+	{
+		/* mark an NMI pending on the rising edge */
+		if (z80->nmi_state == CLEAR_LINE && state != CLEAR_LINE)
+			z80->nmi_pending = TRUE;
+		z80->nmi_state = state;
+	}
+	else if (irqline == NSC800_RSTA)
+		z80->nsc800_irq_state[NSC800_RSTA] = state;
+	else if (irqline == NSC800_RSTB)
+		z80->nsc800_irq_state[NSC800_RSTB] = state;
+	else if (irqline == NSC800_RSTC)
+		z80->nsc800_irq_state[NSC800_RSTC] = state;
+	else
+	{
+		/* update the IRQ state via the daisy chain */
+		z80->irq_state = state;
+		if (z80->daisy.present())
+			z80->irq_state = z80->daisy.update_irq_state();
+
+		/* the main execute loop will take the interrupt */
+	}
+}
 
 
 /**************************************************************************
@@ -3607,7 +3717,7 @@ static CPU_IMPORT_STATE( z80 )
 {
 	z80_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case Z80_R:
 			cpustate->r = cpustate->rtemp & 0x7f;
@@ -3625,7 +3735,7 @@ static CPU_EXPORT_STATE( z80 )
 {
 	z80_state *cpustate = get_safe_token(device);
 
-	switch (entry->index)
+	switch (entry.index())
 	{
 		case Z80_R:
 			cpustate->rtemp = (cpustate->r & 0x7f) | (cpustate->r2 & 0x80);
@@ -3633,6 +3743,26 @@ static CPU_EXPORT_STATE( z80 )
 
 		default:
 			fatalerror("CPU_EXPORT_STATE(z80) called for unexpected value\n");
+			break;
+	}
+}
+
+static CPU_EXPORT_STRING( z80 )
+{
+	z80_state *cpustate = get_safe_token(device);
+
+	switch (entry.index())
+	{
+		case STATE_GENFLAGS:
+			string.printf("%c%c%c%c%c%c%c%c",
+				cpustate->F & 0x80 ? 'S':'.',
+				cpustate->F & 0x40 ? 'Z':'.',
+				cpustate->F & 0x20 ? 'Y':'.',
+				cpustate->F & 0x10 ? 'H':'.',
+				cpustate->F & 0x08 ? 'X':'.',
+				cpustate->F & 0x04 ? 'P':'.',
+				cpustate->F & 0x02 ? 'N':'.',
+				cpustate->F & 0x01 ? 'C':'.');
 			break;
 	}
 }
@@ -3650,6 +3780,20 @@ static CPU_SET_INFO( z80 )
 		/* --- the following bits of info are set as 64-bit signed integers --- */
 		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:		set_irq_line(z80, INPUT_LINE_NMI, info->i); break;
 		case CPUINFO_INT_INPUT_STATE + 0:					set_irq_line(z80, 0, info->i);				break;
+	}
+}
+
+static CPU_SET_INFO( nsc800 )
+{
+	z80_state *z80 = get_safe_token(device);
+	switch (state)
+	{
+		/* --- the following bits of info are set as 64-bit signed integers --- */
+		case CPUINFO_INT_INPUT_STATE + INPUT_LINE_NMI:		set_irq_line_nsc800(z80, INPUT_LINE_NMI, info->i);	break;
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTA:			set_irq_line_nsc800(z80, NSC800_RSTA, info->i); 	break;
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTB:			set_irq_line_nsc800(z80, NSC800_RSTB, info->i); 	break;
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTC:			set_irq_line_nsc800(z80, NSC800_RSTC, info->i); 	break;
+		case CPUINFO_INT_INPUT_STATE + 0:					set_irq_line_nsc800(z80, 0, info->i);				break;
 	}
 }
 
@@ -3672,7 +3816,7 @@ void z80_set_cycle_tables(running_device *device, const UINT8 *op, const UINT8 *
 
 CPU_GET_INFO( z80 )
 {
-	z80_state *z80 = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	z80_state *z80 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 	switch (state)
 	{
 		/* --- the following bits of info are returned as 64-bit signed integers --- */
@@ -3706,10 +3850,10 @@ CPU_GET_INFO( z80 )
 		case CPUINFO_FCT_DISASSEMBLE:	info->disassemble = CPU_DISASSEMBLE_NAME(z80);			break;
 		case CPUINFO_FCT_IMPORT_STATE:	info->import_state = CPU_IMPORT_STATE_NAME(z80);		break;
 		case CPUINFO_FCT_EXPORT_STATE:	info->export_state = CPU_EXPORT_STATE_NAME(z80);		break;
+		case CPUINFO_FCT_EXPORT_STRING:	info->export_string = CPU_EXPORT_STRING_NAME(z80);		break;
 
 		/* --- the following bits of info are returned as pointers --- */
 		case CPUINFO_PTR_INSTRUCTION_COUNTER:			info->icount = &z80->icount;			break;
-		case CPUINFO_PTR_STATE_TABLE:					info->state_table = &z80->state;		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
 		case DEVINFO_STR_NAME:							strcpy(info->s, "Z80");					break;
@@ -3717,17 +3861,30 @@ CPU_GET_INFO( z80 )
 		case DEVINFO_STR_VERSION:						strcpy(info->s, "3.9");					break;
 		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);				break;
 		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Juergen Buchmueller, all rights reserved."); break;
-
-		case CPUINFO_STR_FLAGS:
-			sprintf(info->s, "%c%c%c%c%c%c%c%c",
-				z80->F & 0x80 ? 'S':'.',
-				z80->F & 0x40 ? 'Z':'.',
-				z80->F & 0x20 ? 'Y':'.',
-				z80->F & 0x10 ? 'H':'.',
-				z80->F & 0x08 ? 'X':'.',
-				z80->F & 0x04 ? 'P':'.',
-				z80->F & 0x02 ? 'N':'.',
-				z80->F & 0x01 ? 'C':'.');
-			break;
 	}
 }
+
+CPU_GET_INFO( nsc800 )
+{
+	z80_state *z80 = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
+	switch (state)
+	{
+		case CPUINFO_INT_INPUT_LINES:					info->i = 4;									break;
+
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTA:		info->i = z80->nsc800_irq_state[NSC800_RSTA];	break;
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTB:		info->i = z80->nsc800_irq_state[NSC800_RSTB];	break;
+		case CPUINFO_INT_INPUT_STATE + NSC800_RSTC:		info->i = z80->nsc800_irq_state[NSC800_RSTC];	break;
+
+		case CPUINFO_FCT_SET_INFO:						info->setinfo = CPU_SET_INFO_NAME(nsc800);		break;
+		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(nsc800);				break;
+		case CPUINFO_FCT_RESET:							info->reset = CPU_RESET_NAME(nsc800);			break;
+		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(nsc800);		break;
+
+		case DEVINFO_STR_NAME:							strcpy(info->s, "NSC800");						break;
+
+		default:										CPU_GET_INFO_CALL(z80); 						break;
+	}
+}
+
+DEFINE_LEGACY_CPU_DEVICE(Z80, z80);
+DEFINE_LEGACY_CPU_DEVICE(NSC800, nsc800);

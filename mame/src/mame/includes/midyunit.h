@@ -29,6 +29,7 @@ DRIVER_INIT( mkyunit );
 DRIVER_INIT( mkyturbo );
 DRIVER_INIT( mkyawdim );
 DRIVER_INIT( term2 );
+DRIVER_INIT( term2la3 );
 DRIVER_INIT( term2la2 );
 DRIVER_INIT( term2la1 );
 DRIVER_INIT( totcarn );
@@ -62,4 +63,4 @@ WRITE16_HANDLER( midyunit_paletteram_w );
 READ16_HANDLER( midyunit_dma_r );
 WRITE16_HANDLER( midyunit_dma_w );
 
-void midyunit_scanline_update(running_device *screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);
+void midyunit_scanline_update(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params);

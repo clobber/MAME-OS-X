@@ -93,13 +93,13 @@ static UINT8 dac_value[2];
 
 static WRITE16_HANDLER( exterm_host_data_w )
 {
-	tms34010_host_w(devtag_get_device(space->machine, "slave"), offset / TOWORD(0x00100000), data);
+	tms34010_host_w(space->machine->device("slave"), offset / TOWORD(0x00100000), data);
 }
 
 
 static READ16_HANDLER( exterm_host_data_r )
 {
-	return tms34010_host_r(devtag_get_device(space->machine, "slave"), offset / TOWORD(0x00100000));
+	return tms34010_host_r(space->machine->device("slave"), offset / TOWORD(0x00100000));
 }
 
 
@@ -212,7 +212,7 @@ static TIMER_DEVICE_CALLBACK( master_sound_nmi_callback )
 {
 	/* bit 0 of the sound control determines if the NMI is actually delivered */
 	if (sound_control & 0x01)
-		cputag_set_input_line(timer->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
+		cputag_set_input_line(timer.machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
 
@@ -229,7 +229,8 @@ static WRITE8_HANDLER( sound_nmi_rate_w )
 	/* this value is latched into up-counters, which are clocked at the */
 	/* input clock / 256 */
 	attotime nmi_rate = attotime_mul(ATTOTIME_IN_HZ(4000000), 4096 * (256 - data));
-	timer_device_adjust_periodic(devtag_get_device(space->machine, "snd_nmi_timer"), nmi_rate, 0, nmi_rate);
+	timer_device *nmi_timer = space->machine->device<timer_device>("snd_nmi_timer");
+	nmi_timer->adjust(nmi_rate, 0, nmi_rate);
 }
 
 
@@ -392,7 +393,7 @@ static INPUT_PORTS_START( exterm )
 	PORT_DIPSETTING(      0x0000, DEF_STR( 1C_8C ) )
 	PORT_DIPNAME( 0x0040, 0x0040, "Memory Test" )
 	PORT_DIPSETTING(      0x0040, "Once" )
-	PORT_DIPSETTING(      0x0000, "Continous" )
+	PORT_DIPSETTING(      0x0000, "Continuous" )
 	PORT_DIPNAME( 0x0080, 0x0080, DEF_STR( Free_Play ) )
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )

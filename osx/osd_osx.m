@@ -35,7 +35,7 @@
 #include <unistd.h>
 
 
-static void mame_did_exit(running_machine * machine);
+static void mame_did_exit(running_machine &machine);
 static void mame_did_pause(running_machine * machine, int pause);
 static void error_callback(void *param, const char *format, va_list argptr);
 static void warning_callback(void *param, const char *format, va_list argptr);
@@ -68,16 +68,17 @@ void osd_set_controller(MameView * controller)
 
 void osd_init(running_machine *machine)
 {
-    add_exit_callback(machine, mame_did_exit);
-    add_pause_callback(machine, mame_did_pause);
+    //add_exit_callback(machine, mame_did_exit);
+    machine->add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit);
+    //add_pause_callback(machine, mame_did_pause);
     
     [sController osd_init: machine];
     return;
 }
 
-static void mame_did_exit(running_machine * machine)
+static void mame_did_exit(running_machine &machine)
 {
-    [sController mameDidExit: machine];
+    [sController mameDidExit: &machine];
 }
 
 static void mame_did_pause(running_machine * machine, int pause)

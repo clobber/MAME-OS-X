@@ -110,7 +110,7 @@ struct _worker_param {
 //  PROTOTYPES
 //============================================================
 
-static void sdlwindow_exit(running_machine *machine);
+static void sdlwindow_exit(running_machine &machine);
 static void sdlwindow_video_window_destroy(running_machine *machine, sdl_window_info *window);
 static OSDWORK_CALLBACK( draw_video_contents_wt );
 static OSDWORK_CALLBACK( sdlwindow_video_window_destroy_wt );
@@ -206,13 +206,13 @@ int sdlwindow_init(running_machine *machine)
 {
 	mame_printf_verbose("Enter sdlwindow_init\n");
 	// determine if we are using multithreading or not
-	multithreading_enabled = options_get_bool(mame_options(), SDLOPTION_MULTITHREADING);
+	multithreading_enabled = options_get_bool(machine->options(), SDLOPTION_MULTITHREADING);
 
 	// get the main thread ID before anything else
 	main_threadid = SDL_ThreadID();
 
 	// ensure we get called on the way out
-	add_exit_callback(machine, sdlwindow_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, sdlwindow_exit);
 
 	// if multithreading, create a thread to run the windows
 	if (multithreading_enabled)
@@ -292,7 +292,7 @@ static OSDWORK_CALLBACK( sdlwindow_exit_wt )
 }
 
 
-static void sdlwindow_exit(running_machine *machine)
+static void sdlwindow_exit(running_machine &machine)
 {
 	ASSERT_MAIN_THREAD();
 
@@ -303,7 +303,7 @@ static void sdlwindow_exit(running_machine *machine)
 	{
 		sdl_window_info *temp = sdl_window_list;
 		sdl_window_list = temp->next;
-		sdlwindow_video_window_destroy(machine, temp);
+		sdlwindow_video_window_destroy(&machine, temp);
 	}
 
 	// if we're multithreaded, clean up the window thread
@@ -587,47 +587,6 @@ void sdlwindow_modify_prescale(running_machine *machine, sdl_window_info *window
 	}
 }
 
-void sdlwindow_toggle_draw(running_machine *machine, sdl_window_info *window)
-{
-#if USE_OPENGL
-	//FIXME: Not yet working in 1.3
-#if (!SDL_VERSION_ATLEAST(1,3,0))
-	worker_param wp;
-
-	// If we are not fullscreen (windowed) remember our windowed size
-	if (!window->fullscreen)
-	{
-		window->windowed_width = window->width;
-		window->windowed_height = window->height;
-	}
-
-	clear_worker_param(&wp);
-
-	wp.window = window;
-	wp.machine = machine;
-	execute_async_wait(&sdlwindow_video_window_destroy_wt, &wp);
-
-	window->scale_mode = VIDEO_SCALE_MODE_NONE;
-
-	if (video_config.mode == VIDEO_MODE_OPENGL)
-	{
-		video_config.mode = VIDEO_MODE_SOFT;
-		drawsdl_init(&draw);
-		ui_popup_time(1, "Using software rendering");
-	}
-	else
-	{
-		video_config.mode = VIDEO_MODE_OPENGL;
-		drawogl_init(&draw);
-		ui_popup_time(1, "Using OpenGL rendering");
-	}
-
-	execute_async_wait(&complete_create_wt, &wp);
-#endif
-#endif
-}
-
-
 //============================================================
 //  sdlwindow_update_cursor_state
 //  (main or window thread)
@@ -646,14 +605,14 @@ static void sdlwindow_update_cursor_state(running_machine *machine, sdl_window_i
 		if (!window->fullscreen && !sdlinput_should_hide_mouse(machine))
 		{
 			SDL_ShowCursor(SDL_ENABLE);
-			if (SDL_GetWindowGrab(window->window_id ))
-				SDL_SetWindowGrab(window->window_id, 0);
+			if (SDL_GetWindowGrab(window->sdl_window ))
+				SDL_SetWindowGrab(window->sdl_window, 0);
 		}
 		else
 		{
 			SDL_ShowCursor(SDL_DISABLE);
-			if (!SDL_GetWindowGrab(window->window_id))
-				SDL_SetWindowGrab(window->window_id, 1);
+			if (!SDL_GetWindowGrab(window->sdl_window))
+				SDL_SetWindowGrab(window->sdl_window, 1);
 		}
 		SDL_SetCursor(NULL); // Force an update in case the underlying driver has changed visibility
 	}
@@ -717,7 +676,7 @@ int sdlwindow_video_window_create(running_machine *machine, int index, sdl_monit
 
 	// set the initial maximized state
 	// FIXME: Does not belong here
-	window->startmaximized = options_get_bool(mame_options(), SDLOPTION_MAXIMIZE);
+	window->startmaximized = options_get_bool(machine->options(), SDLOPTION_MAXIMIZE);
 
 	if (!window->fullscreen)
 	{
@@ -745,7 +704,7 @@ int sdlwindow_video_window_create(running_machine *machine, int index, sdl_monit
 
 	// set the specific view
 	sprintf(option, SDLOPTION_VIEW("%d"), index);
-	set_starting_view(machine, index, window, options_get_string(mame_options(), option));
+	set_starting_view(machine, index, window, options_get_string(machine->options(), option));
 
 	// make the window title
 	if (video_config.numscreens == 1)
@@ -1054,7 +1013,7 @@ void sdlwindow_video_window_update(running_machine *machine, sdl_window_info *wi
 
 static void set_starting_view(running_machine *machine, int index, sdl_window_info *window, const char *view)
 {
-	const char *defview = options_get_string(mame_options(), SDLOPTION_VIEW( ));
+	const char *defview = options_get_string(machine->options(), SDLOPTION_VIEW( ));
 	int viewindex;
 
 	ASSERT_MAIN_THREAD();

@@ -506,7 +506,7 @@ static INTERRUPT_GEN( timer_irq )
 		watchdog_cnt++;
 		if ( watchdog_cnt > 2 )	// this is a hack, i don't know what the watchdog timeout is, 3 IRQ's works fine
 		{  // reset board
-			mame_schedule_soft_reset(device->machine);		// reset entire machine. CPU 0 should be enough, but that doesn't seem to work !!
+			device->machine->schedule_soft_reset();		// reset entire machine. CPU 0 should be enough, but that doesn't seem to work !!
 			on_scorpion2_reset(device->machine);
 			return;
 		}
@@ -600,7 +600,7 @@ static WRITE8_HANDLER( mmtr_w )
 {
 	int i;
 	int  changed = mmtr_latch ^ data;
-	UINT64 cycles  = cpu_get_total_cycles(space->cpu);
+	UINT64 cycles  = downcast<cpu_device *>(space->cpu)->total_cycles();
 
 	mmtr_latch = data;
 
@@ -698,8 +698,8 @@ static WRITE8_HANDLER( volume_override_w )
 
 	if ( old != volume_override )
 	{
-		running_device *ym = devtag_get_device(space->machine, "ymsnd");
-		running_device *upd = devtag_get_device(space->machine, "upd");
+		running_device *ym = space->machine->device("ymsnd");
+		running_device *upd = space->machine->device("upd");
 		float percent = volume_override? 1.0f : (32-global_volume)/32.0f;
 
 		sound_set_output_gain(ym, 0, percent);
@@ -776,7 +776,7 @@ static READ8_HANDLER( vfd_status_hop_r )	// on video games, hopper inputs are co
 		}
 	}
 
-	if ( !upd7759_busy_r(devtag_get_device(space->machine, "upd")) ) result |= 0x80;			  // update sound busy input
+	if ( !upd7759_busy_r(space->machine->device("upd")) ) result |= 0x80;			  // update sound busy input
 
 	return result;
 }
@@ -812,8 +812,8 @@ static WRITE8_HANDLER( expansion_latch_w )
 			}
 
 			{
-				running_device *ym = devtag_get_device(space->machine, "ymsnd");
-				running_device *upd = devtag_get_device(space->machine, "upd");
+				running_device *ym = space->machine->device("ymsnd");
+				running_device *upd = space->machine->device("upd");
 				float percent = volume_override ? 1.0f : (32-global_volume)/32.0f;
 
 				sound_set_output_gain(ym, 0, percent);
@@ -2666,7 +2666,7 @@ static READ8_HANDLER( vfd_status_r )
 
 	int result = optic_pattern;
 
-	if ( !upd7759_busy_r(devtag_get_device(space->machine, "upd")) ) result |= 0x80;
+	if ( !upd7759_busy_r(space->machine->device("upd")) ) result |= 0x80;
 
 	return result;
 }
@@ -2680,7 +2680,7 @@ static READ8_HANDLER( vfd_status_dm01_r )
 
 	int result = optic_pattern;
 
-	if ( !upd7759_busy_r(devtag_get_device(space->machine, "upd")) ) result |= 0x80;
+	if ( !upd7759_busy_r(space->machine->device("upd")) ) result |= 0x80;
 
 	if ( BFM_dm01_busy() ) result |= 0x40;
 

@@ -703,10 +703,10 @@ static MACHINE_START( m63 )
 {
 	m63_state *state = (m63_state *)machine->driver_data;
 
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
-	state->ay1 = devtag_get_device(machine, "ay1");
-	state->ay2 = devtag_get_device(machine, "ay2");
-	state->samples = devtag_get_device(machine, "samples");
+	state->soundcpu = machine->device("soundcpu");
+	state->ay1 = machine->device("ay1");
+	state->ay2 = machine->device("ay2");
+	state->samples = machine->device("samples");
 
 	state_save_register_global(machine, state->pal_bank);
 	state_save_register_global(machine, state->fg_flag);
@@ -768,10 +768,10 @@ static MACHINE_DRIVER_START( m63 )
 	MDRV_SPEAKER_STANDARD_MONO("mono") /* ????? */
 
 	MDRV_SOUND_ADD("ay1", AY8910, XTAL_12MHz/8)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
 	MDRV_SOUND_ADD("ay2", AY8910, XTAL_12MHz/8) /* ????? */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( atomboy )

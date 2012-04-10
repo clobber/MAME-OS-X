@@ -165,6 +165,9 @@ void free_file_line(void *memory, const char *file, int line)
 		return;
 	}
 
+	// clear memory to a bogus value
+	memset(memory, 0xfc, entry->m_size);
+
 	// free the entry and the memory
 	if (entry != NULL)
 		memory_entry::release(entry);
@@ -200,7 +203,8 @@ void dump_unfreed_mem(void)
 
 resource_pool::resource_pool()
 	: m_listlock(osd_lock_alloc()),
-	  m_ordered_head(NULL)
+	  m_ordered_head(NULL),
+	  m_ordered_tail(NULL)
 {
 	memset(m_hash, 0, sizeof(m_hash));
 }
@@ -234,10 +238,13 @@ void resource_pool::add(resource_pool_item &item)
 	m_hash[hashval] = &item;
 
 	// insert into ordered list
-	item.m_ordered_next = m_ordered_head;
-	if (m_ordered_head != NULL)
-		m_ordered_head->m_ordered_prev = &item;
-	m_ordered_head = &item;
+	item.m_ordered_next = NULL;
+	item.m_ordered_prev = m_ordered_tail;
+	if (m_ordered_tail != NULL)
+		m_ordered_tail->m_ordered_next = &item;
+	m_ordered_tail = &item;
+	if (m_ordered_head == NULL)
+		m_ordered_head = &item;
 
 	osd_lock_release(m_listlock);
 }
@@ -274,6 +281,8 @@ void resource_pool::remove(void *ptr)
 				m_ordered_head = deleteme->m_ordered_next;
 			if (deleteme->m_ordered_next != NULL)
 				deleteme->m_ordered_next->m_ordered_prev = deleteme->m_ordered_prev;
+			else
+				m_ordered_tail = deleteme->m_ordered_prev;
 
 			// delete the object and break
 			delete deleteme;
@@ -343,7 +352,8 @@ void resource_pool::clear()
 {
 	osd_lock_acquire(m_listlock);
 
-	// important: delete in reverse order of adding
+	// important: delete from earliest to latest; this allows objects to clean up after
+	// themselves if they wish
 	while (m_ordered_head != NULL)
 		remove(m_ordered_head->m_ptr);
 

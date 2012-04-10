@@ -278,9 +278,9 @@ static MACHINE_START( rockrage )
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->k007342 = devtag_get_device(machine, "k007342");
-	state->k007420 = devtag_get_device(machine, "k007420");
+	state->audiocpu = machine->device("audiocpu");
+	state->k007342 = machine->device("k007342");
+	state->k007420 = machine->device("k007420");
 
 	state_save_register_global(machine, state->vreg);
 	state_save_register_global_array(machine, state->layer_colorbase);
@@ -432,5 +432,5 @@ ROM_END
 ***************************************************************************/
 
 GAME( 1986, rockrage, 0,        rockrage, rockrage, 0, ROT0, "Konami", "Rock'n Rage (World)", GAME_SUPPORTS_SAVE )
-GAME( 1986, rockragea,rockrage, rockrage, rockrage, 0, ROT0, "Konami", "Rock'n Rage (Prototype?)", GAME_SUPPORTS_SAVE )
+GAME( 1986, rockragea,rockrage, rockrage, rockrage, 0, ROT0, "Konami", "Rock'n Rage (prototype?)", GAME_SUPPORTS_SAVE )
 GAME( 1986, rockragej,rockrage, rockrage, rockrage, 0, ROT0, "Konami", "Koi no Hotrock (Japan)", GAME_SUPPORTS_SAVE )

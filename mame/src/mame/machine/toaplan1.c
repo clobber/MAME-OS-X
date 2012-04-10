@@ -302,8 +302,9 @@ WRITE16_HANDLER( toaplan1_reset_sound )
 	{
 		logerror("PC:%04x  Resetting Sound CPU and Sound chip (%08x)\n", cpu_get_previouspc(space->cpu), data);
 		devtag_reset(space->machine, "ymsnd");
-		if (devtag_get_device(space->machine, "audiocpu") != NULL && cpu_get_type(devtag_get_device(space->machine, "audiocpu")) == CPU_Z80)
-			cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_RESET, PULSE_LINE);
+		device_t *audiocpu = space->machine->device("audiocpu");
+		if (audiocpu != NULL && audiocpu->type() == Z80)
+			cpu_set_input_line(audiocpu, INPUT_LINE_RESET, PULSE_LINE);
 	}
 }
 
@@ -366,7 +367,7 @@ WRITE16_HANDLER( samesame_coin_w )
 }
 
 
-void toaplan1_init_coinage_tables(running_machine *machine)
+static void toaplan1_init_coinage_tables(running_machine *machine)
 {
 	/* Japan */
 	toaplan1_coins_for_credit[TOAPLAN1_REGION_JAPAN][0][0] = 1; toaplan1_credits_for_coin[TOAPLAN1_REGION_JAPAN][0][0] = 1;

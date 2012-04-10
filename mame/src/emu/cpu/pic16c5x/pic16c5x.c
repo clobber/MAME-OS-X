@@ -97,7 +97,7 @@ struct _pic16c5x_state
 	int		inst_cycles;
 
 
-	running_device *device;
+	legacy_cpu_device *device;
 	const	address_space *program;
 	const	address_space *data;
 	const	address_space *io;
@@ -106,14 +106,12 @@ struct _pic16c5x_state
 INLINE pic16c5x_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_PIC16C54 ||
-		   cpu_get_type(device) == CPU_PIC16C55 ||
-		   cpu_get_type(device) == CPU_PIC16C56 ||
-		   cpu_get_type(device) == CPU_PIC16C57 ||
-		   cpu_get_type(device) == CPU_PIC16C58);
-	return (pic16c5x_state *)device->token;
+	assert(device->type() == PIC16C54 ||
+		   device->type() == PIC16C55 ||
+		   device->type() == PIC16C56 ||
+		   device->type() == PIC16C57 ||
+		   device->type() == PIC16C58);
+	return (pic16c5x_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 
@@ -889,8 +887,6 @@ static CPU_EXECUTE( pic16c5x )
 
 	update_internalram_ptr(cpustate);
 
-	cpustate->icount = cycles;
-
 	do
 	{
 		if (PD == 0)						/* Sleep Mode */
@@ -951,8 +947,6 @@ static CPU_EXECUTE( pic16c5x )
 		cpustate->icount -= cpustate->inst_cycles;
 
 	} while (cpustate->icount > 0);
-
-	return cycles - cpustate->icount;
 }
 
 
@@ -997,7 +991,7 @@ static CPU_SET_INFO( pic16c5x )
 
 static CPU_GET_INFO( pic16c5x )
 {
-	pic16c5x_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	pic16c5x_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1389,3 +1383,9 @@ CPU_GET_INFO( pic16c58 )
 		default:										CPU_GET_INFO_CALL(pic16c5x);			break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(PIC16C54, pic16c54);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C55, pic16c55);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C56, pic16c56);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C57, pic16c57);
+DEFINE_LEGACY_CPU_DEVICE(PIC16C58, pic16c58);

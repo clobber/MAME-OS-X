@@ -187,7 +187,7 @@ ADDRESS_MAP_END
 
 static void unlock_shared_ram(const address_space *space)
 {
-    if(!cputag_is_suspended(space->machine, "sub", SUSPEND_REASON_HALT))
+    if(!space->machine->device<cpu_device>("sub")->suspended(SUSPEND_REASON_HALT))
     {
         subcpu_status|=1;
     }
@@ -322,7 +322,7 @@ static const msm5205_interface msm_interface =
 static VIDEO_START( sothello )
 {
     VIDEO_START_CALL(generic_bitmapped);
-    v9938_init (machine, 0, machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, VDP_MEM, sothello_vdp_interrupt);
+    v9938_init (machine, 0, *machine->primary_screen, machine->generic.tmpbitmap, MODEL_V9938, VDP_MEM, sothello_vdp_interrupt);
     v9938_reset(0);
 }
 
@@ -412,4 +412,4 @@ ROM_START( sothello )
     ROM_LOAD( "6.7f",   0x8000, 0x8000, CRC(ee80fc78) SHA1(9a9d7925847d7a36930f0761c70f67a9affc5e7c) )
 ROM_END
 
-GAME( 1986, sothello,  0,       sothello,  sothello,  0, ROT0, "Success/Fujiwara", "Super Othello", 0 )
+GAME( 1986, sothello,  0,       sothello,  sothello,  0, ROT0, "Success / Fujiwara", "Super Othello", 0 )

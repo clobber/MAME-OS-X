@@ -763,8 +763,7 @@ static MACHINE_DRIVER_START( fitfight )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1333333) // ~8080Hz ??? TODO: find out the real frequency
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", 1333333, OKIM6295_PIN7_LOW) // ~8080Hz ??? TODO: find out the real frequency
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -794,8 +793,7 @@ static MACHINE_DRIVER_START( bbprot )
 
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1333333) // ~8080Hz ??? TODO: find out the real frequency
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", 1333333, OKIM6295_PIN7_LOW) // ~8080Hz ??? TODO: find out the real frequency
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -1005,4 +1003,4 @@ static DRIVER_INIT( bbprot )
 
 GAME( 199?, fitfight, 0, fitfight, fitfight, fitfight, ROT0, "bootleg", "Fit of Fighting", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 199?, histryma, 0, fitfight, histryma, histryma, ROT0, "bootleg", "The History of Martial Arts", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 199?, bbprot,   0, bbprot,   bbprot,   bbprot,   ROT0, "<unknown>", "Untitled Fighter 'BB' (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 199?, bbprot,   0, bbprot,   bbprot,   bbprot,   ROT0, "<unknown>", "unknown fighting game 'BB' (prototype)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND | GAME_SUPPORTS_SAVE )

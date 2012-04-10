@@ -210,7 +210,7 @@ static MACHINE_DRIVER_START( m79amb )
 	MDRV_DRIVER_DATA(m79amb_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", 8080, XTAL_19_6608MHz / 10)
+	MDRV_CPU_ADD("maincpu", I8080, XTAL_19_6608MHz / 10)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT("screen", m79amb_interrupt)
 
@@ -325,4 +325,4 @@ static DRIVER_INIT( m79amb )
 	}
 }
 
-GAME( 1977, m79amb, 0, m79amb, m79amb, m79amb, ROT0, "Ramtek", "M-79 Ambush", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1977, m79amb, 0, m79amb, m79amb, m79amb, ROT0, "RamTek", "M-79 Ambush", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

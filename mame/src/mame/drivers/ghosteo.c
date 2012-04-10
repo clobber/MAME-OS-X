@@ -212,7 +212,7 @@ static READ32_HANDLER( lcd_control_r )
 	{
 		case 0x00/4:
 		{
-			int line_val = video_screen_get_vpos(space->machine->primary_screen) & 0x3ff;
+			int line_val = space->machine->primary_screen->vpos() & 0x3ff;
 			return (lcd_control[offset] & ~(0x3ff << 18)) | ((lcd.line_val - line_val) << 18);
 		}
 
@@ -241,7 +241,7 @@ static WRITE32_HANDLER( lcd_control_w )
 	{
 		case 0x00/4:
 		{
-			int line_val = video_screen_get_vpos(space->machine->primary_screen) & 0x3ff;
+			int line_val = space->machine->primary_screen->vpos() & 0x3ff;
 			int bpp_mode = (lcd_control[offset] & 0x1e) >> 1;
 			int screen_type = (lcd_control[offset] & 0x60) >> 5;
 
@@ -550,7 +550,6 @@ Notes:
       IC42S16800 - ISSI IC42S16800 4(2)M x 8(16) Bits x 4 Banks (128MBit) SDRAM
 
       QS1000     - QDSP QS1000 AdMOS 9638R, Wavetable Audio chip, clock input of 24.000MHz (QFP100)
-                   see http://www.hwass.co.kr/product.htm for more info on QS100x chips.
       QS1001A    - QDSP QS1001A 512k x8 MaskROM (SOP32)
 
       qs1001a.u17 was not dumped from this PCB, but is a standard sample rom found on many Eolith games

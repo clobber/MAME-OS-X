@@ -206,9 +206,9 @@ static MACHINE_START( skattv )
 	adp_state *state = (adp_state *)machine->driver_data;
 	microtouch_init(machine, microtouch_tx, 0);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->duart = devtag_get_device(machine, "duart68681");
-	state->hd63484 = devtag_get_device(machine, "hd63484");
+	state->maincpu = machine->device("maincpu");
+	state->duart = machine->device("duart68681");
+	state->hd63484 = machine->device("hd63484");
 
 	state_save_register_global(machine, state->mux_data);
 	state_save_register_global(machine, state->register_active);
@@ -227,7 +227,7 @@ static MACHINE_START( skattv )
 		UINT16 *rom = (UINT16*)memory_region(machine, "gfx1");
 		int i;
 
-		running_device *hd63484 = devtag_get_device(machine, "hd63484");
+		running_device *hd63484 = machine->device("hd63484");
 
 		for(i = 0; i < 0x40000/2; ++i)
 		{
@@ -259,7 +259,7 @@ static PALETTE_INIT( adp )
 {
     int i;
 
-    for (i = 0; i < machine->config->total_colors; i++)
+    for (i = 0; i < machine->total_colors(); i++)
     {
         int bit0, bit1, bit2, r, g, b;
 
@@ -419,15 +419,15 @@ static READ8_DEVICE_HANDLER(t2_r)
 	static UINT8 res;
 	static int h,w;
 	res = 0;
-	h = video_screen_get_height(device->machine->primary_screen);
-	w = video_screen_get_width(device->machine->primary_screen);
+	h = device->machine->primary_screen->height();
+	w = device->machine->primary_screen->width();
 
 //  popmessage("%d %d",h,w);
 
-	if (video_screen_get_hpos(device->machine->primary_screen) > h)
+	if (device->machine->primary_screen->hpos() > h)
 		res|= 0x20; //hblank
 
-	if (video_screen_get_vpos(device->machine->primary_screen) > w)
+	if (device->machine->primary_screen->vpos() > w)
 		res|= 0x40; //vblank
 
 	return res;

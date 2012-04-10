@@ -1492,13 +1492,11 @@ static MACHINE_DRIVER_START( system_A )
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.80)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, OKI4_SOUND_CLOCK) /* 4MHz verified */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH) /* 4MHz verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, OKI4_SOUND_CLOCK) /* 4MHz verified */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH) /* 4MHz verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 MACHINE_DRIVER_END
@@ -1513,8 +1511,8 @@ static MACHINE_DRIVER_START( system_B )
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(system_A)
 
-	MDRV_CPU_REPLACE("maincpu", M68000, SYS_B_CPU_CLOCK) /* 8MHz */
 	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(SYS_B_CPU_CLOCK) /* 8MHz */
 	MDRV_CPU_PROGRAM_MAP(megasys1B_map)
 	MDRV_CPU_VBLANK_INT_HACK(interrupt_B,INTERRUPT_NUM_B)
 
@@ -1552,8 +1550,7 @@ static MACHINE_DRIVER_START( system_Bbl )
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
 	/* just the one OKI, used for sound and music */
-	MDRV_SOUND_ADD("oki1", OKIM6295, OKI4_SOUND_CLOCK)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", OKI4_SOUND_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 MACHINE_DRIVER_END
@@ -1563,13 +1560,11 @@ static MACHINE_DRIVER_START( system_B_hayaosi1 )
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(system_B)
 
-	MDRV_SOUND_REPLACE("oki1",OKIM6295, 2000000) /* correct speed, but unknown OSC + divider combo */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_REPLACE("oki1", 2000000, OKIM6295_PIN7_HIGH) /* correct speed, but unknown OSC + divider combo */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 
-	MDRV_SOUND_REPLACE("oki2",OKIM6295, 2000000) /* correct speed, but unknown OSC + divider combo */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_REPLACE("oki2", 2000000, OKIM6295_PIN7_HIGH) /* correct speed, but unknown OSC + divider combo */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.30)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.30)
 MACHINE_DRIVER_END
@@ -1579,8 +1574,8 @@ static MACHINE_DRIVER_START( system_C )
 
 	/* basic machine hardware */
 	MDRV_IMPORT_FROM(system_A)
-	MDRV_CPU_REPLACE("maincpu", M68000, SYS_C_CPU_CLOCK) /* 12MHz */
 	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(SYS_C_CPU_CLOCK) /* 12MHz */
 	MDRV_CPU_PROGRAM_MAP(megasys1C_map)
 	MDRV_CPU_VBLANK_INT_HACK(interrupt_C,INTERRUPT_NUM_C)
 
@@ -1628,8 +1623,7 @@ static MACHINE_DRIVER_START( system_D )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki1",OKIM6295, SYS_D_CPU_CLOCK/4)	/* 2MHz (8MHz / 4) */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", SYS_D_CPU_CLOCK/4, OKIM6295_PIN7_HIGH)	/* 2MHz (8MHz / 4) */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -3859,8 +3853,8 @@ static WRITE16_DEVICE_HANDLER( okim6295_both_w )
 
 static DRIVER_INIT( jitsupro )
 {
-	running_device *oki1 = devtag_get_device(machine, "oki1");
-	running_device *oki2 = devtag_get_device(machine, "oki2");
+	running_device *oki1 = machine->device("oki1");
+	running_device *oki2 = machine->device("oki2");
 	UINT16 *RAM  = (UINT16 *) memory_region(machine, "maincpu");
 
 	astyanax_rom_decode(machine, "maincpu");		// Code
@@ -3984,13 +3978,13 @@ GAME( 1989, plusalph, 0,        system_A,          plusalph, plusalph, ROT270, "
 GAME( 1989, stdragon, 0,        system_A,          stdragon, stdragon, ROT0,   "Jaleco", "Saint Dragon", 0 )
 GAME( 1990, rodland,  0,        system_A,          rodland,  rodland,  ROT0,   "Jaleco", "Rod-Land (World)", 0 )
 GAME( 1990, rodlandj, rodland,  system_A,          rodland,  rodlandj, ROT0,   "Jaleco", "Rod-Land (Japan)", 0 )
-GAME( 1990, rodlandjb,rodland,  system_A,          rodland,  0,        ROT0,   "Jaleco", "Rod-Land (Japan bootleg)", 0 )
+GAME( 1990, rodlandjb,rodland,  system_A,          rodland,  0,        ROT0,   "bootleg","Rod-Land (Japan bootleg)", 0 )
 GAME( 1991, avspirit, 0,        system_B,          avspirit, avspirit, ROT0,   "Jaleco", "Avenging Spirit", 0 )
 GAME( 1990, phantasm, avspirit, system_A,          phantasm, phantasm, ROT0,   "Jaleco", "Phantasm (Japan)", 0 )
-GAME( 1990, monkelf,  avspirit, system_B,          avspirit, monkelf,  ROT0,   "bootleg", "Monky Elf (Korean bootleg of Avenging Spirit)", GAME_NOT_WORKING )
+GAME( 1990, monkelf,  avspirit, system_B,          avspirit, monkelf,  ROT0,   "bootleg","Monky Elf (Korean bootleg of Avenging Spirit)", GAME_NOT_WORKING )
 GAME( 1991, edf,      0,        system_B,          edf,      edf,      ROT0,   "Jaleco", "E.D.F. : Earth Defense Force", 0 )
 GAME( 1991, edfu,     edf,      system_B,          edf,      edf,      ROT0,   "Jaleco", "E.D.F. : Earth Defense Force (North America)", 0 )
-GAME( 1991, edfbl,    edf,      system_Bbl,        edf,      edfbl,    ROT0,   "Jaleco", "E.D.F. : Earth Defense Force (bootleg)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1991, edfbl,    edf,      system_Bbl,        edf,      edfbl,    ROT0,   "bootleg","E.D.F. : Earth Defense Force (bootleg)", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 1991, 64street, 0,        system_C,          64street, 64street, ROT0,   "Jaleco", "64th. Street - A Detective Story (World)", 0 )
 GAME( 1991, 64streetj,64street, system_C,          64street, 64street, ROT0,   "Jaleco", "64th. Street - A Detective Story (Japan)", 0 )
 GAME( 1992, soldam,   0,        system_A,          soldam,   soldam,   ROT0,   "Jaleco", "Soldam", 0 )

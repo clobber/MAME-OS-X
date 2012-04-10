@@ -1,392 +1,620 @@
 /***************************************************************************
 
-    Neo-Geo hardware
+    neodrvr.c
 
+    Neo Geo hardware
     This file contains all game specific overrides
+
+
+    In 2010, SNK Playmore, the successor of SNK, released a title catalogue which lists the released
+    games (MVS/AES/CD) including their release dates in Japan. It is not 100% complete.
+    The included title catalogue is the english one.
+
+    Title catalogue
+    (source: http://neogeomuseum.snkplaymore.co.jp/english/catalogue/index.php)
+
+    Game Title                                                  Genre           Publisher       Date Released (in Japan)
+    =================================================================================================================================
+    NAM-1975                                                    3D Action       SNK             MVS Cartridge:1990/04/26
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    MAHJONG KYORETSUDEN                                         Mahjong         SNK             MVS Cartridge:1990/04/26
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    MAGICIAN LORD                                               Action          ADK             MVS Cartridge:1990/04/26
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/10/31
+    BASEBALL STARS PROFESSIONAL                                 Sports          SNK             MVS Cartridge:1990/04/26
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1995/04/21
+    TOP PLAYER'S GOLF                                           Sports          SNK             MVS Cartridge:1990/05/23
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    NINJA COMBAT                                                Action          ADK             MVS Cartridge:1990/07/24
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/10/31
+    RIDING HERO                                                 3D Racing       SNK             MVS Cartridge:1990/07/24
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1995/05/26
+    THE SUPER SPY                                               3D Action       SNK             MVS Cartridge:1990/10/08
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    CYBER-LIP                                                   Action          SNK             MVS Cartridge:1990/11/07
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1995/04/21
+    PUZZLED                                                     Puzzle          SNK             MVS Cartridge:1990/11/20
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    LEAGUE BOWLING                                              Sports          SNK             MVS Cartridge:1990/12/10
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    GHOST PILOTS                                                Shooter         SNK             MVS Cartridge:1991/01/25
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1995/03/17
+    SENGOKU                                                     Action          SNK             MVS Cartridge:1991/02/12
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1995/03/17
+    KING OF THE MONSTERS                                        Fighting        SNK             MVS Cartridge:1991/02/25
+                                                                                                NEOGEO ROM-cart:1991/07/01
+    BLUE'S JOURNEY                                              Action          ADK             MVS Cartridge:1991/03/14
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/10/31
+    ALPHA MISSION II                                            Shooter         SNK             MVS Cartridge:1991/03/25
+                                                                                                NEOGEO ROM-cart:1991/07/01
+                                                                                                NEOGEO CD:1994/09/09
+    BURNING FIGHT                                               Action          SNK             MVS Cartridge:1991/05/20
+                                                                                                NEOGEO ROM-cart:1991/08/09
+                                                                                                NEOGEO CD:1994/09/09
+    MINNASAN NO OKAGESAMA DESU                                  Table           Monolith        MVS Cartridge:1991/07/25
+                                                                                                NEOGEO ROM-cart:1991/07/21
+    CROSSED SWORDS                                              Action          ADK             MVS Cartridge:1991/07/25
+                                                                                                NEOGEO ROM-cart:1991/10/01
+                                                                                                NEOGEO CD:1994/10/31
+    LEGEND OF SUCCESS JOE                                       Action          Wave            MVS Cartridge:1991/07
+                                                                                                NEOGEO ROM-cart:1991/08/30
+    QUIZ DAISUSA SEN: THE LAST COUNT DOWN                       Quiz            SNK             MVS Cartridge:1991/07
+                                                                                                NEOGEO ROM-cart:1991/08/30
+    SUPER BASEBALL 2020                                         Sports          SNK             MVS Cartridge:1991/09/20
+                                                                                                NEOGEO ROM-cart:1991/10/25
+                                                                                                NEOGEO CD:1995/02/25
+    ROBO ARMY                                                   Action          SNK             MVS Cartridge:1991/10/30
+                                                                                                NEOGEO ROM-cart:1991/12/20
+                                                                                                NEOGEO CD:1995/04/21
+    THRASH RALLY                                                Racing          ADK             MVS Cartridge:1991/11/08
+                                                                                                NEOGEO ROM-cart:1991/12/20
+                                                                                                NEOGEO CD:1994/10/31
+    EIGHT MAN                                                   Action          SNK             NEOGEO ROM-cart:1991/11/20
+    FATAL FURY                                                  Fighting        SNK             MVS Cartridge:1991/11/25
+                                                                                                NEOGEO ROM-cart:1991/12/20
+                                                                                                NEOGEO CD:1994/09/09
+    BAKATONO-SAMA MAHJONG MAN'YUKI                              Mahjong         Monolith        MVS Cartridge:1991/11
+                                                                                                NEOGEO ROM-cart:1991/12/13
+    THRASH RALLY                                                Racing          ADK             NEOGEO ROM-cart:1991/12/20
+    FOOTBALL FRENZY                                             Sports          SNK             MVS Cartridge:1992/01/31
+                                                                                                NEOGEO ROM-cart:1992/02/21
+                                                                                                NEOGEO CD:1994/09/09
+    SOCCER BRAWL                                                Sports          SNK             MVS Cartridge:1992/02/14
+                                                                                                NEOGEO ROM-cart:1992/03/13
+                                                                                                NEOGEO CD:1995/03/31
+    MUTATION NATION                                             Action          SNK             MVS Cartridge:1992/03/16
+                                                                                                NEOGEO ROM-cart:1992/04/17
+                                                                                                NEOGEO CD:1995/02/25
+    LAST RESORT                                                 Shooter         SNK             MVS Cartridge:1992/03/23
+                                                                                                NEOGEO ROM-cart:1992/04/24
+                                                                                                NEOGEO CD:1994/09/09
+    QUIZ MEITANTEI NEO & GEO: QUIZ DAISOUSASEN PART 2           Quiz            SNK             MVS Cartridge:1992/03
+                                                                                                NEOGEO ROM-cart:1991/04/24
+    BASEBALL STARS 2                                            Sports          SNK             MVS Cartridge:1992/04/15
+                                                                                                NEOGEO ROM-cart:1992/04/28
+                                                                                                NEOGEO CD:1994/09/09
+    NINJA COMMANDO                                              Shooter         ADK             MVS Cartridge:1992/04/30
+                                                                                                NEOGEO ROM-cart:1992/05/29
+                                                                                                NEOGEO CD:1994/10/31
+    KING OF THE MONSTERS 2                                      Fighting        SNK             MVS Cartridge:1992/05/25
+                                                                                                NEOGEO ROM-cart:1992/06/19
+                                                                                                NEOGEO CD:1994/09/09
+    ANDRO DUNOS                                                 Shooter         Visco           MVS Cartridge:1992/06/15
+                                                                                                NEOGEO ROM-cart:1992/07/17
+    WORLD HEROES                                                Fighting        ADK             MVS Cartridge:1992/07/28
+                                                                                                NEOGEO ROM-cart:1992/09/11
+                                                                                                NEOGEO CD:1995/03/17
+    ART OF FIGHTING                                             Fighting        SNK             MVS Cartridge:1992/09/24
+                                                                                                NEOGEO ROM-cart:1992/12/11
+                                                                                                NEOGEO CD:1994/09/09
+    VIEWPOINT                                                   Shooter         Sammy           MVS Cartridge:1992/11/20
+                                                                                                NEOGEO ROM-cart:1992/12/11
+                                                                                                NEOGEO CD:1995/02/25
+    FATAL FURY 2                                                Fighting        SNK             MVS Cartridge:1992/12/10
+                                                                                                NEOGEO ROM-cart:1993/03/05
+                                                                                                NEOGEO CD:1994/09/09
+    SUPER SIDEKICKS                                             Sports          SNK             MVS Cartridge:1992/12/14
+                                                                                                NEOGEO ROM-cart:1993/02/19
+                                                                                                NEOGEO CD:1995/03/31
+    SENGOKU 2                                                   Action          SNK             MVS Cartridge:1993/02/18
+                                                                                                NEOGEO ROM-cart:1993/04/09
+                                                                                                NEOGEO CD:1995/03/17
+    3 COUNT BOUT                                                Fighting        SNK             MVS Cartridge:1993/03/25
+                                                                                                NEOGEO ROM-cart:1993/04/23
+                                                                                                NEOGEO CD:1995/04/21
+    WORLD HEROES 2                                              Fighting        ADK             MVS Cartridge:1993/04/26
+                                                                                                NEOGEO ROM-cart:1993/06/04
+                                                                                                NEOGEO CD:1995/04/14
+    SAMURAI SHODOWN                                             Fighting        SNK             MVS Cartridge:1993/07/07
+                                                                                                NEOGEO ROM-cart:1993/08/11
+                                                                                                NEOGEO CD:1994/09/09
+    FATAL FURY SPECIAL                                          Fighting        SNK             MVS Cartridge:1993/09/16
+                                                                                                NEOGEO ROM-cart:1993/12/22
+                                                                                                NEOGEO CD:1994/09/09
+    SPINMASTER                                                  Sideview Action Data East       MVS Cartridge:1993/12/16
+                                                                                                NEOGEO ROM-cart:1994/02/18
+    ART OF FIGHTING 2                                           Fighting        SNK             MVS Cartridge:1994/02/03
+                                                                                                NEOGEO ROM-cart:1994/03/11
+                                                                                                NEOGEO CD:1994/09/09
+    WINDJAMMERS                                                 Sports          Data East       MVS Cartridge:1994/02/17
+                                                                                                NEOGEO ROM-cart:1994/04/08
+                                                                                                NEOGEO CD:1995/01/20
+    KARNOV'S REVENGE                                            Fighting        Data East       MVS Cartridge:1994/03/17
+                                                                                                NEOGEO ROM-cart:1994/04/28
+                                                                                                NEOGEO CD:1994/12/22
+    SUPER SIDEKICKS 2                                           Sports          SNK             MVS Cartridge:1994/04/19
+                                                                                                NEOGEO ROM-cart:1994/05/27
+                                                                                                NEOGEO CD:1994/09/09
+    WORLD HEROES 2 JET                                          Fighting        ADK             MVS Cartridge:1994/04/26
+                                                                                                NEOGEO ROM-cart:1994/06/10
+                                                                                                NEOGEO CD:1994/11/11
+    TOP HUNTER                                                  Action          SNK             MVS Cartridge:1994/05/18
+                                                                                                NEOGEO ROM-cart:1994/06/24
+                                                                                                NEOGEO CD:1994/09/29
+    GURURIN                                                     Puzzle          Face            MVS Cartridge:1994/05/25
+    FIGHT FEVER                                                 Fighting        VICCOM          MVS Cartridge:1994/06/28
+    JANSHIN DENSETSU: QUEST OF JONGMASTER                       Mahjong         Aicom           MVS Cartridge:1994/06/29
+                                                                                                NEOGEO CD:1995/03/31
+    AERO FIGHTERS 2                                             Topview Shooter Video System    MVS Cartridge:1994/07/18
+                                                                                                NEOGEO ROM-cart:1994/08/26
+                                                                                                NEOGEO CD:1994/09/29
+    AGGRESSORS OF DARK KOMBAT                                   Fighting        ADK             MVS Cartridge:1994/07/26
+                                                                                                NEOGEO ROM-cart:1994/08/26
+                                                                                                NEOGEO CD:1995/01/13
+    THE KING OF FIGHTERS '94                                    Fighting        SNK             MVS Cartridge:1994/08/25
+                                                                                                NEOGEO ROM-cart:1994/10/01
+                                                                                                NEOGEO CD:1994/11/02
+    ZED BLADE                                                   Shooter         NMK             MVS Cartridge:1994/09/13
+    POWER SPIKES II                                             Sports          Video System    MVS Cartridge:1994/10/19
+                                                                                                NEOGEO CD:1995/03/18
+    SAMURAI SHODOWN II                                          Fighting        SNK             MVS Cartridge:1994/10/28
+                                                                                                NEOGEO ROM-cart:1994/12/02
+                                                                                                NEOGEO CD:1994/12/15
+    STREET HOOP                                                 Sports          Data East       MVS Cartridge:1994/12/08
+                                                                                                NEOGEO ROM-cart:1994/12/09
+                                                                                                NEOGEO CD:1995/01/20
+    PUZZLE BOBBLE                                               Puzzle          TAITO           MVS Cartridge:1994/12/21
+                                                                                                NEOGEO CD:1995/05/02
+    SUPER VOLLEY '94                                            Sports          TAITO           MVS Cartridge:1994
+    BOMBERMAN: PANIC BOMBER                                     Puzzle          Eighting        MVS Cartridge:1995/01/18
+    GALAXY FIGHT: UNIVERSAL WARRIORS                            Fighting        Sunsoft         MVS Cartridge:1995/01/24
+                                                                                                NEOGEO ROM-cart:1995/02/25
+                                                                                                NEOGEO CD:1995/04/21
+    QUIZ KING OF FIGHTERS                                       Quiz            Saurus          MVS Cartridge:1995/02/01
+                                                                                                NEOGEO ROM-cart:1995/03/10
+                                                                                                NEOGEO CD:1995/04/07
+    DOUBLE DRAGON                                               Fighting        Technos         MVS Cartridge:1995/03/03
+                                                                                                NEOGEO ROM-cart:1995/03/31
+                                                                                                NEOGEO CD:1995/06/02
+    SUPER SIDEKICKS 3                                           Sports          SNK             MVS Cartridge:1995/03/07
+                                                                                                NEOGEO ROM-cart:1995/04/07
+                                                                                                NEOGEO CD:1995/06/23
+    FATAL FURY 3                                                Fighting        SNK             MVS Cartridge:1995/03/27
+                                                                                                NEOGEO ROM-cart:1995/04/21
+                                                                                                NEOGEO CD:1995/04/28
+    SAVAGE REIGN                                                Fighting        SNK             MVS Cartridge:1995/04/25
+                                                                                                NEOGEO ROM-cart:1995/03/10
+                                                                                                NEOGEO CD:1995/06/16
+    CROSSED SWORDS II                                           Action          ADK             NEOGEO CD:1995/05/02
+    WORLD HEROES PERFECT                                        Fighting        ADK             MVS Cartridge:1995/05/25
+                                                                                                NEOGEO ROM-cart:1995/06/30
+                                                                                                NEOGEO CD:1995/07/21
+    FAR EAST OF EDEN: KABUKI KLASH                              Fighting        Hudson Soft     MVS Cartridge:1995/06/20
+                                                                                                NEOGEO ROM-cart:1995/07/28
+                                                                                                NEOGEO CD:1995/11/24
+    THE KING OF FIGHTERS '95                                    Fighting        SNK             MVS Cartridge:1995/07/25
+                                                                                                NEOGEO ROM-cart:1995/09/01
+                                                                                                NEOGEO CD:1995/09/29
+    IDOL MAHJONG FINAL ROMANCE 2                                Mahjong         Video System    NEOGEO CD:1995/08/25
+    PULSTAR                                                     Sidevi. Shooter Aicom           MVS Cartridge:1995/08/28
+                                                                                                NEOGEO ROM-cart:1995/09/29
+                                                                                                NEOGEO CD:1995/10/27
+    VOLTAGE FIGHTER GOWCAIZER                                   Fighting        Technos         MVS Cartridge:1995/09/18
+                                                                                                NEOGEO ROM-cart:1995/10/20
+                                                                                                NEOGEO CD:1995/11/24
+    STAKES WINNER                                               Action          Saurus          MVS Cartridge:1995/09/27
+                                                                                                NEOGEO ROM-cart:1995/10/27
+                                                                                                NEOGEO CD:1996/03/22
+    SHOGI NO TATSUJIN - MASTER OF SYOUGI                        Japanese chess  ADK             MVS Cartridge:1995/09/28
+                                                                                                NEOGEO ROM-cart:1995/10/13
+                                                                                                NEOGEO CD:1995/10/20
+    AERO FIGHTERS 3                                             Topview Action  Video System    MVS Cartridge:1995/10/12
+                                                                                                NEOGEO ROM-cart:1995/11/17
+                                                                                                NEOGEO CD:1995/12/08
+    ADK WORLD                                                   Variety         ADK             NEOGEO CD:1995/11/10
+    SAMURAI SHODOWN III                                         Fighting        SNK             MVS Cartridge:1995/11/15
+                                                                                                NEOGEO ROM-cart:1995/12/01
+                                                                                                NEOGEO CD:1995/12/29
+    CHIBI MARUKO-CHAN DELUXE QUIZ                               Variety         Takara          MVS Cartridge:1995/11/27
+                                                                                                NEOGEO ROM-cart:1996/01/26
+    PUZZLE DE PON!                                              Puzzle          Visco           MVS Cartridge:1995/11/28
+    REAL BOUT FATAL FURY                                        Fighting        SNK             MVS Cartridge:1995/12/21
+                                                                                                NEOGEO ROM-cart:1996/01/26
+                                                                                                NEOGEO CD:1996/02/23
+    NEO-GEO CD SPECIAL                                          Variety         SNK             NEOGEO CD:1995/12/22
+    NEO TURF MASTERS                                            Sports          Nazca           MVS Cartridge:1996/01/29
+                                                                                                NEOGEO ROM-cart:1996/03/01
+                                                                                                NEOGEO CD:1996/05/03
+    ART OF FIGHTING 3                                           Fighting        SNK             MVS Cartridge:1996/03/12
+                                                                                                NEOGEO ROM-cart:1996/04/26
+                                                                                                NEOGEO CD:1996/06/14
+    MAGICAL DROP II                                             Puzzle          Data East       MVS Cartridge:1996/03/21
+                                                                                                NEOGEO ROM-cart:1996/04/19
+                                                                                                NEOGEO CD:1996/05/24
+    OSHIDASHI JIN TRICK                                         Puzzle          ADK             NEOGEO CD:1996/03/22
+    NEO DRIFT OUT                                               Racing          Visco           MVS Cartridge:1996/03/28
+                                                                                                NEOGEO CD:1996/07/26
+    METAL SLUG                                                  Action          Nazca           MVS Cartridge:1996/04/19
+                                                                                                NEOGEO ROM-cart:1996/05/24
+                                                                                                NEOGEO CD:1996/07/05
+    OVER TOP                                                    Racing          ADK             MVS Cartridge:1996/04/26
+                                                                                                NEOGEO ROM-cart:1996/06/07
+                                                                                                NEOGEO CD:1996/07/26
+    NINJA MASTER'S                                              Fighting        ADK             MVS Cartridge:1996/05/27
+                                                                                                NEOGEO ROM-cart:1996/06/28
+                                                                                                NEOGEO CD:1996/09/27
+    RAGNAGARD                                                   Fighting        Saurus          MVS Cartridge:1996/06/13
+                                                                                                NEOGEO ROM-cart:1996/07/26
+                                                                                                NEOGEO CD:1996/08/23
+    FUTSAL                                                      Sports          Saurus          NEOGEO CD:1996/07/19
+    THE KING OF FIGHTERS '96                                    Fighting        SNK             MVS Cartridge:1996/07/30
+                                                                                                NEOGEO ROM-cart:1996/09/27
+                                                                                                NEOGEO CD:1996/10/25
+    KIZUNA ENCOUNTER SUPER TAG BATTLE                           Fighting        SNK             MVS Cartridge:1996/09/20
+                                                                                                NEOGEO ROM-cart:1996/11/08
+    CHOUTETSU BURIKINGA                                         Shooter         Saurus          NEOGEO CD:1996/09/20
+    STAKES WINNER 2                                             Real Jockey Act Saurus          MVS Cartridge:1996/09/24
+                                                                                                NEOGEO ROM-cart:1996/12/13
+    THE ULTIMATE 11                                             Sports          SNK             MVS Cartridge:1996/10/16
+                                                                                                NEOGEO ROM-cart:1996/12/20
+    SAMURAI SHODOWN IV                                          Fighting        SNK             MVS Cartridge:1996/10/25
+                                                                                                NEOGEO ROM-cart:1996/11/29
+                                                                                                NEOGEO CD:1996/12/27
+    WAKU WAKU 7                                                 Fighting        Sunsoft         MVS Cartridge:1996/11/21
+                                                                                                NEOGEO ROM-cart:1996/12/27
+    TWINKLE STAR SPRITES                                        Shooter         ADK             MVS Cartridge:1996/11/25
+                                                                                                NEOGEO ROM-cart:1997/01/31
+                                                                                                NEOGEO CD:1997/02/21
+    BREAKERS                                                    Fighting        Visco           MVS Cartridge:1996/12/17
+                                                                                                NEOGEO ROM-cart:1997/03/21
+                                                                                                NEOGEO CD:1997/04/25
+    MONEY IDOL EXCHANGER                                        Puzzle          Face            MVS Cartridge:1997/01/15
+    Real Bout FATAL FURY SPECIAL                                Fighting        SNK             MVS Cartridge:1997/01/28
+                                                                                                NEOGEO ROM-cart:1997/02/28
+                                                                                                NEOGEO CD:1997/03/03
+    THE KING OF FIGHTERS '96 NEOGEO COLLECTION                  Variety         SNK             NEOGEO CD:1997/02/14
+    MAGICAL DROP III                                            Puzzle          Data East       MVS Cartridge:1997/02/25
+                                                                                                NEOGEO ROM-cart:1997/04/25
+    NEO BOMBERMAN                                               Action          Hudson Soft     MVS Cartridge:1997/05/01
+    NEO MR.DO!                                                  Action          Visco           MVS Cartridge:1997/06/26
+    SHINSETSU SAMURAI SHODOWN BUSHIDO RETSUDEN                  Role-playing    SNK             NEOGEO CD:1997/06/27
+    THE KING OF FIGHTERS '97                                    Fighting        SNK             MVS Cartridge:1997/07/28
+                                                                                                NEOGEO ROM-cart:1997/09/25
+                                                                                                NEOGEO CD:1997/10/30
+    UCCHAN NANCHAN NO HONO NO CHALLENGER ULTRA DENRYU IRAIRABOU Action          Saurus          MVS Cartridge:1997/08/25
+    SHOCK TROOPERS                                              Shooter         Saurus          MVS Cartridge:1997/11/11
+    THE LAST BLADE                                              Fighting        SNK             MVS Cartridge:1997/12/05
+                                                                                                NEOGEO ROM-cart:1998/01/29
+                                                                                                NEOGEO CD:1998/03/26
+    BLAZING STAR                                                Shooter         Yumekobo        MVS Cartridge:1998/01/19
+                                                                                                NEOGEO ROM-cart:1998/02/26
+    METAL SLUG 2                                                Action          SNK             MVS Cartridge:1998/02/23
+                                                                                                NEOGEO ROM-cart:1998/04/02
+                                                                                                NEOGEO CD:1998/06/25
+    REAL BOUT FATAL FURY 2                                      Fighting        SNK             MVS Cartridge:1998/03/20
+                                                                                                NEOGEO ROM-cart:1998/04/29
+                                                                                                NEOGEO CD:1998/07/23
+    NEOGEO CUP '98                                              Sports          SNK             MVS Cartridge:1998/05/28
+                                                                                                NEOGEO ROM-cart:1998/07/30
+    BREAKERS REVENGE                                            Fighting        Visco           MVS Cartridge:1998/07/03
+                                                                                                NEOGEO ROM-cart:
+    THE KING OF FIGHTERS '98                                    Fighting        SNK             MVS Cartridge:1998/07/23
+                                                                                                NEOGEO ROM-cart:1998/09/23
+                                                                                                NEOGEO CD:1998/12/23
+    SHOCK TROOPERS 2nd Squad                                    Action Shooter  Saurus          MVS Cartridge:1998/11/06
+                                                                                                NEOGEO ROM-cart:1999/06/24
+    THE LAST BLADE 2                                            Fighting        SNK             MVS Cartridge:1998/11/25
+                                                                                                NEOGEO ROM-cart:1999/01/28
+                                                                                                NEOGEO CD:1999/02/27
+    FLIP SHOT                                                   Action          Visco           MVS Cartridge:1998/12/08
+    METAL SLUG X                                                Action          SNK             MVS Cartridge:1999/03/19
+                                                                                                NEOGEO ROM-cart:1999/05/27
+    CAPTAIN TOMADAY                                             Shooter         Visco           MVS Cartridge:1999/05/27
+    THE KING OF FIGHTERS '99                                    Fighting        SNK             MVS Cartridge:1999/07/22
+                                                                                                NEOGEO ROM-cart:1999/09/23
+                                                                                                NEOGEO CD:1999/12/02
+    PREHISTORIC ISLE 2                                          Shooter         Yumekobo        MVS Cartridge:1999/09/27
+    GAROU: MARK OF THE WOLVES                                   Fighting        SNK             MVS Cartridge:1999/11/26
+                                                                                                NEOGEO ROM-cart:2000/02/25
+    STRIKERS 1945 PLUS                                          Shooter         Psikyo          MVS Cartridge:1999/12/24
+    METAL SLUG 3                                                Action Shooter  SNK             MVS Cartridge:2000/03/23
+                                                                                                NEOGEO ROM-cart:2000/06/01
+    THE KING OF FIGHTERS 2000                                   Fighting        SNK             MVS Cartridge:2000/07/26
+                                                                                                NEOGEO ROM-cart:2000/12/21
+    NIGHTMARE IN THE DARK                                       Horror Action   Gavaking        MVS Cartridge:2001
+    ZUPAPA!                                                     Comical Action  Video System    MVS Cartridge:2001
+    SENGOKU 3                                                   Action          SNK PLAYMORE    MVS Cartridge:2001/07/18
+                                                                                                NEOGEO ROM-cart:2001/10/25
+    THE KING OF FIGHTERS 2001                                   Fighting        SNK PLAYMORE    MVS Cartridge:2001/11/15
+                                                                                                NEOGEO ROM-cart:2002/03/14
+    METAL SLUG 4                                                Action Shooter  SNK PLAYMORE    MVS Cartridge:2002/03/27
+                                                                                                NEOGEO ROM-cart:2002/06/13
+    RAGE OF THE DRAGONS                                         Fighting        Evoga           MVS Cartridge:2002/06/06
+                                                                                                NEOGEO ROM-cart:2002/09/26
+    THE KING OF FIGHTERS 2002                                   Fighting        SNK PLAYMORE    MVS Cartridge:2002/10/10
+                                                                                                NEOGEO ROM-cart:2002/12/19
+    POWER INSTINCT MATRIMELEE                                   Fighting        ATLUS/NOISE FA. MVS Cartridge:2003/03/20
+                                                                                                NEOGEO ROM-cart:2003/05/29
+    SNK VS. CAPCOM: SVC CHAOS                                   Fighting        SNK PLAYMORE    MV-0:2003/07/24
+                                                                                                NEOGEO ROM-cart:2003/11/13
+    SAMURAI SHODOWN V                                           Fighting        SNK P/Yuki Ent  MVS Cartridge:2003/10/10
+                                                                                                NEOGEO ROM-cart:2003/12/11
+    METAL SLUG 5                                                Action Shooter  SNK PLAYMORE    MV-0:2003/11/14
+                                                                                                NEOGEO ROM-cart:2004/02/19
+    THE KING OF FIGHTERS 2003                                   Fighting        SNK PLAYMORE    MV-0:2003/12/12
+                                                                                                NEOGEO ROM-cart:2004/03/18
+    POCHI & NYAA                                                Puzzle          Aiky            MVS Cartridge:2003/12/24
+    SAMURAI SHODOWN V SPECIAL                                   Fighting        SNK P/Yuki Ent  MVS Cartridge:2004/04/22
+                                                                                                NEOGEO ROM-cart:2004/07/15
+
+
+    Neo Geo game PCB infos:
+    =======================
+
+    The Neo Geo games for AES (home) and MVS (arcade) systems are cartridge based.
+
+    Each cartridge consists of two PCBs: CHA and PROG.
+    .CHA PCB contains gfx data ('C' - rom), text layer data ('S' - rom) and sound driver ('M' - rom).
+    .PROG PCB contains sample data ('V' - rom) and program code ('P' - rom).
+
+    On most PCBs various custom/protection chips can also be found:
+
+    CHA:
+    . NEO-273
+    . NEO-CMC
+    . NEO-ZMC
+    . NEO-ZMC2
+    . PRO-CT0
+    . SNK-9201
+
+    PROG:
+    . 0103 (QFP144)
+    . ALTERA (EPM7128SQC100-15)
+    . NEO-COMA
+    . NEO-PCM2 (SNK 1999)
+    . NEO-PCM2 (PLAYMORE 2002)
+    . NEO-PVC
+    . NEO-SMA
+    . PCM
+    . PRO-CT0
+    . SNK-9201
+
+
+    Known PCBs:
+    ============
+
+    MVS CHA:
+    -- SNK --
+    . NEO-MVS CHA-32
+    . NEO-MVS CHA-8M
+    . NEO-MVS CHA42G
+    . NEO-MVS CHA42G-1
+    . NEO-MVS CHA 42G-2
+    . NEO-MVS CHA 42G-3
+    . NEO-MVS CHA42G-3B
+    . NEO-MVS CHA256
+    . NEO-MVS CHA256B
+    . NEO-MVS PSTM CHA136
+    . NEO-MVS CHA512Y
+    . NEO-MVS CHAFIO (1999.6.14) - used with NEO-CMC 90G06C7042 or NEO-CMC 90G06C7050
+    . MVS CHAFIO REV1.0 (KOF-2001)
+    . NEO-MVS CHAFIO (SNK 2002) - MADE IN KOREA
+    -- SNKPLAYMORE --
+    . NEO-MVS CHAFIO (2003.7.24)
+
+    MVS PROG:
+    -- SNK --
+    . NEO-MVS PROG-NAM
+    . NEO-MVS PROG-HERO
+    . NEO-MVS PROG-EP
+    . NEO-MVS PROG-8MB
+    . NEO-MVS PROG8M42
+    . NEO-MVS PROG16
+    . NEO-MVS PROG42G
+    . NEO-MVS PROG42G-COM
+    . NEO-MVS PROG42G-1
+    . NEO-MVS PROG-G2
+    . NEO-MVS PROG 4096
+    . NEO-MVS PROG 4096 B
+    . NEO-MVS PROGGSC
+    . NEO-MVS PROGSM
+    . NEO-MVS PROGSS3
+    . NEO-MVS PROGTOP
+    . NEO-MVS PROGSF1 (1998.6.17)
+    . NEO-MVS PROGEOP (1999.2.2)
+    . NEO-MVS PROGLBA (1999.4.12) - LBA-SUB (2000.2.24)
+    . NEO-MVS PROGBK1 (1994)
+    . NEO-MVS PROGBK1 (2001)
+    . NEO-MVS PROGBK2 (2000.3.21)
+    . MVS PROGBK2 REV1.0 (KOF-2001)
+    . NEO-MVS PROGBK2 (SNK 2002) - MADE IN KOREA
+    -- SNKPLAYMORE --
+    . NEO-MVS PROGBK2R (2003.8.26) - NEO-HYCS (2003.9.29)
+    . NEO-MVS PROGBK3R (2003.9.2) - NEO-HYCS (2003.9.29)
+    . NEO-MVS PROGBK3S (2003.10.1)
+    . NEO-MVS PROGBK2S (2003.10.18)
+
+
+    AES CHA:
+    -- SNK --
+    . NEO-AEG CHA-32
+    . NEO-AEG CHA-8M
+    . NEO-AEG CHA42G
+    . NEO-AEG CHA42G-1
+    . NEO-AEG CHA42G-2B
+    . NEO-AEG CHA42G-3
+    . NEO-AEG CHA42G-4
+    . NEO-AEG CHA256
+    . NEO-AEG CHA256[B]
+    . NEO-AEG CHA256RY
+    . NEO-AEG CHA512Y
+    . NEO-AEG CHAFIO (1999.8.10) - used with NEO-CMC 90G06C7042 or NEO-CMC 90G06C7050
+    -- SNKPLAYMORE --
+    . NEO-AEG CHAFIO (2003.7.24) - used only with NEO-CMC 90G06C7050
+
+    AES PROG:
+    -- SNK --
+    . NEO-AEG PROG-NAM
+    . NEO-AEG PROG-HERO
+    . NEO-AEG PROG-4A
+    . NEO-AEG PROG-4B
+    . NEO-AEG PROG 8M42
+    . NEO-AEG PROG B
+    . NEO-AEG PROG16
+    . NEO-AEG PROG42G
+    . NEO-AEG PROG42G-COM
+    . NEO-AEG PROG42G-1
+    . NEO-AEG PROG-G2
+    . NEO-AEG PROG4096 B
+    . NEO-AEG PROGGS
+    . NEO-AEG PROGTOP2
+    . NEO-AEG PROGLBA (1999.7.6)
+    . NEO-AEG PROGRK
+    . NEO-AEG PROGRKB
+    . NEO-AEG PROGBK1Y
+    . NEO-AEG PROGBK1F
+    -- PLAYMORE --
+    . NEO-AEG PROGBK2 (2002.4.1) - used with NEO-PCM2 (1999 SNK) or NEO-PCM2 (2002 PLAYMORE)
+    -- SNKPLAYMORE --
+    . NEO-AEG PROGBK3R (2003.8.29) - NEO-HYCS (2003.9.29)
+    . NEO-AEG PROGBK3S (2003.10.6)
+    . NEO-AEG PROGBK2S (2003.10.16)
+
+
+    Cartridge colours:
+    ==================
+
+    MVS cartridges were produced in different colours.
+
+    Known cartridge colours:
+    . Black
+    . Blue
+    . Green
+    . Grey
+    . Red
+    . Transparent
+    . Transparent Blue
+    . Transparent Green
+    . White
+    . Yellow
+
+    The above listed only covers SNK / PLAYMORE / SNKPLAYMORE PCBs. There also exists a
+    wide range of 'bootleg' PCBs.
+
+
+    Neo Geo game PCB infos by Johnboy
+
 
 ****************************************************************************/
 
+	/* Neo Geo bios */
 
-/* Game specific input definitions */
+/*
+    These are the known Bios Roms, Set options.bios to the one you want.
 
-static INPUT_PORTS_START( svcpcb )
-	STANDARD_IN0
+    The Universe bios roms are supported because they're now used on enough PCBs
+    to be considered 'in active arcade use' rather than just homebrew hacks.
+    Some may be missing, there have been multiple CRCs reported for the same
+    revision in some cases (the Universe bios has an option for entering / displaying
+    a serial number; these should be noted as such if they're added).
 
-	STANDARD_IN1
+    The 'japan-hotel' BIOS is a dump of an MVS which could be found in some japanese
+    hotels. it is a custom MVS mobo which uses MVS carts but it hasn't jamma
+    connector and it's similar to a console with a coin mechanism, so it's a sort
+    of little coin op console installed in hotels.
 
-	STANDARD_IN2
+    The sp-45.sp1 bios is the latest 'ASIA' revision. Japan-j3.bin is the latest 'JAPAN'
+    revision. Both of them are also used in the sp-4x.sp1 bios of the Jamma PCB boards.
 
-	STANDARD_IN3
+    The current Neo Geo MVS system set (SFIX/SM1/000-LO) used is from a NEO-MVH MV1FS board.
+    Other boards (MV1xx / MV2x / MV4x /MV6) other system sets?
 
-	STANDARD_IN4
+    Zoom ROM (LO)    128K   TC531000CP      1x 128Kx8   Zoom look-up table ROM
+    Fix ROM (SFIX)   128K   27C1000         1x 128Kx8   Text layer graphics ROM
+    Sound ROM (SM1)  128K   27C1000/23C1000 1x 128Kx8   Z80 program ROM
 
-	/* the rom banking is tied directly to the dipswitch?, or is there a bank write somewhere? */
-	PORT_START("HARDDIP")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Region ) ) PORT_DIPLOCATION("HARDDIP:3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Asia ) )
-	PORT_DIPSETTING(	0x01, DEF_STR( Japan ) )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( ms5pcb )
-	STANDARD_IN0
-
-	STANDARD_IN1
-
-	STANDARD_IN2
-
-	STANDARD_IN3
-
-	STANDARD_IN4
-
-	/* the rom banking is tied directly to the dipswitch?, or is there a bank write somewhere? */
-	PORT_START("HARDDIP")
-	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Region ) ) PORT_DIPLOCATION("HARDDIP:3")
-	PORT_DIPSETTING(	0x00, DEF_STR( Asia ) )
-	PORT_DIPSETTING(	0x01, DEF_STR( Japan ) )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( kog )
-	STANDARD_IN0
-
-	STANDARD_IN1
-
-	STANDARD_IN2
-
-	STANDARD_IN3
-
-	STANDARD_IN4
-
-	/* a jumper on the pcb overlays a ROM address, very strange but that's how it works. */
-	PORT_START("JUMPER")
-	PORT_DIPNAME( 0x0001, 0x0001, "Title Language" ) PORT_DIPLOCATION("CART-JUMPER:1")
-	PORT_DIPSETTING(	  0x0001, DEF_STR( English ) )
-	PORT_DIPSETTING(	  0x0000, "Non-English" )
-	PORT_BIT( 0x00fe, IP_ACTIVE_HIGH, IPT_UNUSED )
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( mjneogeo )
-	PORT_START("IN0")
-	PORT_DIPNAME( 0x0001, 0x0001, "Test Switch" ) PORT_DIPLOCATION("SW:1")
-	PORT_DIPSETTING(	  0x0001, DEF_STR( Off ) )
-	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0002, 0x0002, "Coin Chutes?" ) PORT_DIPLOCATION("SW:2")
-	PORT_DIPSETTING(	  0x0000, "1?" )
-	PORT_DIPSETTING(	  0x0002, "2?" )
-	PORT_DIPNAME( 0x0004, 0x0000, "Mahjong Control Panel" ) PORT_DIPLOCATION("SW:3")
-	PORT_DIPSETTING(	  0x0004, DEF_STR( Off ) )
-	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0018, 0x0018, "COMM Setting (Cabinet No.)" ) PORT_DIPLOCATION("SW:4,5")
-	PORT_DIPSETTING(	  0x0018, "1" )
-	PORT_DIPSETTING(	  0x0008, "2" )
-	PORT_DIPSETTING(	  0x0010, "3" )
-	PORT_DIPSETTING(	  0x0000, "4" )
-	PORT_DIPNAME( 0x0020, 0x0020, "COMM Setting (Link Enable)" ) PORT_DIPLOCATION("SW:6")
-	PORT_DIPSETTING(	  0x0020, DEF_STR( Off ) )
-	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW:7")
-	PORT_DIPSETTING(	  0x0040, DEF_STR( Off ) )
-	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "Freeze" ) PORT_DIPLOCATION("SW:8")
-	PORT_DIPSETTING(	  0x0080, DEF_STR( Off ) )
-	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(mahjong_controller_r, NULL)
-
-	STANDARD_IN1
-
-	STANDARD_IN2
-
-	STANDARD_IN3
-
-	STANDARD_IN4
-
-	PORT_START("MAHJONG1")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_A )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_B )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_C )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_D )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_E )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_MAHJONG_F )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_MAHJONG_G )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-	PORT_START("MAHJONG2")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_H )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_I )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_J )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_K )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_L )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_MAHJONG_M )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_MAHJONG_N )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-	PORT_START("MAHJONG3")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON4 )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
-
-	PORT_START("MAHJONG4")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_PON )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_CHI )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_KAN )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_RON )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_REACH )
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( irrmaze )
-	PORT_START("IN0")
-	STANDARD_DIPS
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)0)
-
-	PORT_START("IN1")
-	PORT_BIT( 0x0fff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-
-	PORT_START("IN2")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	STANDARD_IN3
-
-	PORT_START("IN4")
-	PORT_BIT( 0x0001, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0002, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0004, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_UNKNOWN )  /* this bit is used.. */
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Enter BIOS") PORT_CODE(KEYCODE_F2)
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN0-0")
-	PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_X ) PORT_SENSITIVITY(10) PORT_KEYDELTA(20) PORT_REVERSE
-
-	PORT_START("IN0-1")
-	PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_Y ) PORT_SENSITIVITY(10) PORT_KEYDELTA(20) PORT_REVERSE
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( popbounc )
-	PORT_START("IN0")
-	STANDARD_DIPS
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)0)
-
-	PORT_START("IN1")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)1)
-
-	STANDARD_IN2
-
-	STANDARD_IN3
-
-	STANDARD_IN4
-
-	/* Fake inputs read by CUSTOM_INPUT handlers */
-	PORT_START("IN0-0")
-	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(25) PORT_KEYDELTA(20)
-
-	PORT_START("IN0-1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
-	PORT_BIT( 0x90, IP_ACTIVE_LOW, IPT_BUTTON1 ) /* note it needs it from 0x80 when using paddle */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 )
-
-	PORT_START("IN1-0")
-	PORT_BIT( 0xff, 0x00, IPT_DIAL  ) PORT_SENSITIVITY(25) PORT_KEYDELTA(20) PORT_PLAYER(2)
-
-	PORT_START("IN1-1")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
-	PORT_BIT( 0x90, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) /* note it needs it from 0x80 when using paddle */
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( vliner )
-	PORT_START("IN0")
-	STANDARD_DIPS
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("View Payout Table/Big")
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Bet/Small")
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Stop/Double Up")
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Start/Collect")
-
-	PORT_START("IN1")
-	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN2")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* this bit is used.. */
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* this bit is used.. */
-	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	PORT_START("IN3")
-	PORT_BIT( 0x003f, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x00c0, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_calendar_status, NULL)
-	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_audio_result, NULL)
-
-	STANDARD_IN4
-
-	PORT_START("IN5")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Operator Menu") PORT_CODE(KEYCODE_F1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Clear Credit")
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Hopper Out")
-	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	/* not sure what any of these bits are */
-	PORT_START("IN6")
-	PORT_BIT( 0x0003, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0xffc0, IP_ACTIVE_HIGH, IPT_UNKNOWN )
-INPUT_PORTS_END
-
-
-static INPUT_PORTS_START( jockeygp )
-	STANDARD_IN0
-
-	STANDARD_IN1
-
-	PORT_START("IN2")
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* game freezes with this bit enabled */
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Next Game") PORT_CODE(KEYCODE_7)
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* game freezes with this bit enabled */
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Previous Game") PORT_CODE(KEYCODE_8)
-	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
-	STANDARD_IN3
-
-	STANDARD_IN4
-INPUT_PORTS_END
-
-
-/* Neo-Geo bios */
-
-/******************************************************************************
-
- These are the known Bios Roms, Set options.bios to the one you want
-
- The Universe bios roms are supported because they're now used on enough PCBs
- to be considered 'in active arcade use' rather than just homebrew hacks.
-  -- some may be missing, there have been multiple CRCs reported for the same
-     revision in some cases (the Universe bios has an option for entering / displaying
-     a serial number; these should be noted as such if they're added.
-
- The 'japan-hotel' BIOS is a dump of an MVS which could be found in some japanese
- hotels. it is a custom MVS mobo which uses MVS carts but it hasn't jamma
- connector and it's similar to a console with a coin mechanism, so it's a sort
- of little coin op console installed in hotels.
-
- *****************************************************************************/
+*/
 
 #define ROM_LOAD16_WORD_SWAP_BIOS(bios,name,offset,length,hash) \
 		ROMX_LOAD(name, offset, length, hash, ROM_GROUPWORD | ROM_REVERSE | ROM_BIOS(bios+1)) /* Note '+1' */
 
 #define NEOGEO_BIOS \
 	ROM_REGION16_BE( 0x80000, "mainbios", 0 )													\
-	ROM_SYSTEM_BIOS( 0, "euro",       "Europe MVS (Ver. 2)" ) \
+	ROM_SYSTEM_BIOS( 0, "euro",        "Europe MVS (Ver. 2)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 0, "sp-s2.sp1",    0x00000, 0x020000, CRC(9036d879) SHA1(4f5ed7105b7128794654ce82b51723e16e389543) ) /* Europe, 1 Slot, has also been found on 2 Slot and 4 Slot (the old hacks were designed for this one) */ \
-	ROM_SYSTEM_BIOS( 1, "euro-s1",    "Europe MVS (Ver. 1)" ) \
+	ROM_SYSTEM_BIOS( 1, "euro-s1",     "Europe MVS (Ver. 1)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 1, "sp-s.sp1",     0x00000, 0x020000, CRC(c7f2fa45) SHA1(09576ff20b4d6b365e78e6a5698ea450262697cd) ) /* Europe, 4 Slot */ \
-	ROM_SYSTEM_BIOS( 2, "us",         "US MVS (Ver. 2?)" ) \
+	ROM_SYSTEM_BIOS( 2, "us",          "US MVS (Ver. 2?)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 2, "usa_2slt.bin", 0x00000, 0x020000, CRC(e72943de) SHA1(5c6bba07d2ec8ac95776aa3511109f5e1e2e92eb) ) /* US, 2 Slot */ \
-	ROM_SYSTEM_BIOS( 3, "us-e",       "US MVS (Ver. 1)" ) \
+	ROM_SYSTEM_BIOS( 3, "us-e",        "US MVS (Ver. 1)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 3, "sp-e.sp1",     0x00000, 0x020000, CRC(2723a5b5) SHA1(5dbff7531cf04886cde3ef022fb5ca687573dcb8) ) /* US, 6 Slot (V5?) */ \
-	ROM_SYSTEM_BIOS( 4, "asia",       "Asia MVS (Ver. 3)" ) \
+	ROM_SYSTEM_BIOS( 4, "asia",        "Asia MVS (Ver. 3)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 4, "asia-s3.rom",  0x00000, 0x020000, CRC(91b64be3) SHA1(720a3e20d26818632aedf2c2fd16c54f213543e1) ) /* Asia */ \
-	ROM_SYSTEM_BIOS( 5, "japan",      "Japan MVS (Ver. 3)" ) \
+	ROM_SYSTEM_BIOS( 5, "japan",       "Japan MVS (Ver. 3)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 5, "vs-bios.rom",  0x00000, 0x020000, CRC(f0e8f27d) SHA1(ecf01eda815909f1facec62abf3594eaa8d11075) ) /* Japan, Ver 6 VS Bios */ \
-	ROM_SYSTEM_BIOS( 6, "japan-s2",   "Japan MVS (Ver. 2)" ) \
+	ROM_SYSTEM_BIOS( 6, "japan-s2",    "Japan MVS (Ver. 2)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 6, "sp-j2.sp1",    0x00000, 0x020000, CRC(acede59c) SHA1(b6f97acd282fd7e94d9426078a90f059b5e9dd91) ) /* Japan, Older */ \
-	ROM_SYSTEM_BIOS( 7, "japan-s1",   "Japan MVS (Ver. 1)" ) \
+	ROM_SYSTEM_BIOS( 7, "japan-s1",    "Japan MVS (Ver. 1)" ) \
 	ROM_LOAD16_WORD_SWAP_BIOS( 7, "sp1.jipan.1024",0x00000, 0x020000, CRC(9fb0abe4) SHA1(18a987ce2229df79a8cf6a84f968f0e42ce4e59d) ) /* Japan, Older */ \
-	ROM_SYSTEM_BIOS( 8, "mv1c",   "NEO-MVH MV1C" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 8, "sp-45.sp1",0x00000, 0x080000, CRC(03cc9f6a) SHA1(cdf1f49e3ff2bac528c21ed28449cf35b7957dc1) ) /* MV1C; redump required */ \
-	ROM_SYSTEM_BIOS( 9, "japan-hotel", "Custom Japanese Hotel" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 9, "sp-1v1_3db8c.bin",0x00000, 0x020000, CRC(162f0ebe) SHA1(fe1c6dd3dfcf97d960065b1bb46c1e11cb7bf271)  ) /* 'rare MVS found in japanese hotels' shows v1.3 in test mode */ \
-	ROM_SYSTEM_BIOS( 10, "uni-bios_2_3","Universe Bios (Hack, Ver. 2.3)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 10, "uni-bios_2_3.rom",  0x00000, 0x020000, CRC(27664eb5) SHA1(5b02900a3ccf3df168bdcfc98458136fd2b92ac0) ) /* Universe Bios v2.3 (hack) */ \
-	ROM_SYSTEM_BIOS( 11, "uni-bios_2_3o","Universe Bios (Hack, Ver. 2.3, older?)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 11, "uni-bios_2_3o.rom",  0x00000, 0x020000, CRC(601720ae) SHA1(1b8a72c720cdb5ee3f1d735bbcf447b09204b8d9) ) /* Universe Bios v2.3 (hack) alt version, withdrawn? */ \
-	ROM_SYSTEM_BIOS( 12, "uni-bios_2_2","Universe Bios (Hack, Ver. 2.2)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 12, "uni-bios_2_2.rom",  0x00000, 0x020000, CRC(2d50996a) SHA1(5241a4fb0c63b1a23fd1da8efa9c9a9bd3b4279c) ) /* Universe Bios v2.2 (hack) */ \
-	ROM_SYSTEM_BIOS( 13, "uni-bios_2_1","Universe Bios (Hack, Ver. 2.1)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 13, "uni-bios_2_1.rom",  0x00000, 0x020000, CRC(8dabf76b) SHA1(c23732c4491d966cf0373c65c83c7a4e88f0082c) ) /* Universe Bios v2.1 (hack) */ \
-	ROM_SYSTEM_BIOS( 14, "uni-bios_2_0","Universe Bios (Hack, Ver. 2.0)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 14, "uni-bios_2_0.rom",  0x00000, 0x020000, CRC(0c12c2ad) SHA1(37bcd4d30f3892078b46841d895a6eff16dc921e) ) /* Universe Bios v2.0 (hack) */ \
-	ROM_SYSTEM_BIOS( 15, "uni-bios_1_3","Universe Bios (Hack, Ver. 1.3)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 15, "uni-bios_1_3.rom",  0x00000, 0x020000, CRC(b24b44a0) SHA1(eca8851d30557b97c309a0d9f4a9d20e5b14af4e) ) /* Universe Bios v1.3 (hack) */ \
-	ROM_SYSTEM_BIOS( 16, "uni-bios_1_2","Universe Bios (Hack, Ver. 1.2)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 16, "uni-bios_1_2.rom",  0x00000, 0x020000, CRC(4fa698e9) SHA1(682e13ec1c42beaa2d04473967840c88fd52c75a) ) /* Universe Bios v1.2 (hack) */ \
-	ROM_SYSTEM_BIOS( 17, "uni-bios_1_2o","Universe Bios (Hack, Ver. 1.2, older)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 17, "uni-bios_1_2o.rom", 0x00000, 0x020000, CRC(e19d3ce9) SHA1(af88ef837f44a3af2d7144bb46a37c8512b67770) ) /* Universe Bios v1.2 (hack) alt version */ \
-	ROM_SYSTEM_BIOS( 18, "uni-bios_1_1","Universe Bios (Hack, Ver. 1.1)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 18, "uni-bios_1_1.rom",  0x00000, 0x020000, CRC(5dda0d84) SHA1(4153d533c02926a2577e49c32657214781ff29b7) ) /* Universe Bios v1.1 (hack) */ \
-	ROM_SYSTEM_BIOS( 19, "uni-bios_1_0","Universe Bios (Hack, Ver. 1.0)" ) \
-	ROM_LOAD16_WORD_SWAP_BIOS( 19, "uni-bios_1_0.rom",  0x00000, 0x020000, CRC(0ce453a0) SHA1(3b4c0cd26c176fc6b26c3a2f95143dd478f6abf9) ) /* Universe Bios v1.0 (hack) */ \
-//  ROM_SYSTEM_BIOS( 20, "debug",      "Debug MVS (Hack?)" )
-//  ROM_LOAD16_WORD_SWAP_BIOS( 20, "neodebug.rom", 0x00000, 0x020000, CRC(698ebb7d) SHA1(081c49aa8cc7dad5939833dc1b18338321ea0a07) ) /* Debug (Development) Bios */
-//  ROM_SYSTEM_BIOS(21, "asia-aes",   "Asia AES" )
-//  ROM_LOAD16_WORD_SWAP_BIOS(21, "neo-epo.bin", 0x00000, 0x020000, CRC(d27a71f1) SHA1(1b3b22092f30c4d1b2c15f04d1670eb1e9fbea07) ) /* AES Console (Asia?) Bios */
-//  ROM_SYSTEM_BIOS(22, "jap-aes",   "Japan AES" )
-//  ROM_LOAD16_WORD_SWAP_BIOS(22, "neo-po.bin", 0x00000, 0x020000, CRC(16d0c132) SHA1(4e4a440cae46f3889d20234aebd7f8d5f522e22c) ) /* AES Console (Japan) Bios */
+	ROM_SYSTEM_BIOS( 8, "mv1c",        "NEO-MVH MV1C" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 8, "sp-45.sp1",0x00000, 0x080000, CRC(03cc9f6a) SHA1(cdf1f49e3ff2bac528c21ed28449cf35b7957dc1) ) /* Latest Asia bios */ \
+	ROM_SYSTEM_BIOS( 9, "japan-j3",    "Japan MVS (J3)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 9, "japan-j3.bin",0x00000, 0x020000, CRC(dff6d41f) SHA1(e92910e20092577a4523a6b39d578a71d4de7085) ) /* Latest Japan bios; correct chip label unknown */ \
+	ROM_SYSTEM_BIOS( 10, "japan-hotel","Custom Japanese Hotel" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 10, "sp-1v1_3db8c.bin",0x00000, 0x020000, CRC(162f0ebe) SHA1(fe1c6dd3dfcf97d960065b1bb46c1e11cb7bf271) ) /* 'rare MVS found in japanese hotels' shows v1.3 in test mode */ \
+	ROM_SYSTEM_BIOS( 11, "uni-bios_2_3","Universe Bios (Hack, Ver. 2.3)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 11, "uni-bios_2_3.rom",  0x00000, 0x020000, CRC(27664eb5) SHA1(5b02900a3ccf3df168bdcfc98458136fd2b92ac0) ) /* Universe Bios v2.3 (hack) */ \
+	ROM_SYSTEM_BIOS( 12, "uni-bios_2_3o","Universe Bios (Hack, Ver. 2.3, older?)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 12, "uni-bios_2_3o.rom",  0x00000, 0x020000, CRC(601720ae) SHA1(1b8a72c720cdb5ee3f1d735bbcf447b09204b8d9) ) /* Universe Bios v2.3 (hack) alt version, withdrawn? */ \
+	ROM_SYSTEM_BIOS( 13, "uni-bios_2_2","Universe Bios (Hack, Ver. 2.2)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 13, "uni-bios_2_2.rom",  0x00000, 0x020000, CRC(2d50996a) SHA1(5241a4fb0c63b1a23fd1da8efa9c9a9bd3b4279c) ) /* Universe Bios v2.2 (hack) */ \
+	ROM_SYSTEM_BIOS( 14, "uni-bios_2_1","Universe Bios (Hack, Ver. 2.1)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 14, "uni-bios_2_1.rom",  0x00000, 0x020000, CRC(8dabf76b) SHA1(c23732c4491d966cf0373c65c83c7a4e88f0082c) ) /* Universe Bios v2.1 (hack) */ \
+	ROM_SYSTEM_BIOS( 15, "uni-bios_2_0","Universe Bios (Hack, Ver. 2.0)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 15, "uni-bios_2_0.rom",  0x00000, 0x020000, CRC(0c12c2ad) SHA1(37bcd4d30f3892078b46841d895a6eff16dc921e) ) /* Universe Bios v2.0 (hack) */ \
+	ROM_SYSTEM_BIOS( 16, "uni-bios_1_3","Universe Bios (Hack, Ver. 1.3)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 16, "uni-bios_1_3.rom",  0x00000, 0x020000, CRC(b24b44a0) SHA1(eca8851d30557b97c309a0d9f4a9d20e5b14af4e) ) /* Universe Bios v1.3 (hack) */ \
+	ROM_SYSTEM_BIOS( 17, "uni-bios_1_2","Universe Bios (Hack, Ver. 1.2)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 17, "uni-bios_1_2.rom",  0x00000, 0x020000, CRC(4fa698e9) SHA1(682e13ec1c42beaa2d04473967840c88fd52c75a) ) /* Universe Bios v1.2 (hack) */ \
+	ROM_SYSTEM_BIOS( 18, "uni-bios_1_2o","Universe Bios (Hack, Ver. 1.2, older)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 18, "uni-bios_1_2o.rom", 0x00000, 0x020000, CRC(e19d3ce9) SHA1(af88ef837f44a3af2d7144bb46a37c8512b67770) ) /* Universe Bios v1.2 (hack) alt version */ \
+	ROM_SYSTEM_BIOS( 19, "uni-bios_1_1","Universe Bios (Hack, Ver. 1.1)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 19, "uni-bios_1_1.rom",  0x00000, 0x020000, CRC(5dda0d84) SHA1(4153d533c02926a2577e49c32657214781ff29b7) ) /* Universe Bios v1.1 (hack) */ \
+	ROM_SYSTEM_BIOS( 20, "uni-bios_1_0","Universe Bios (Hack, Ver. 1.0)" ) \
+	ROM_LOAD16_WORD_SWAP_BIOS( 20, "uni-bios_1_0.rom",  0x00000, 0x020000, CRC(0ce453a0) SHA1(3b4c0cd26c176fc6b26c3a2f95143dd478f6abf9) ) /* Universe Bios v1.0 (hack) */ \
+//  ROM_SYSTEM_BIOS( 21, "debug",      "Debug MVS (Hack?)" )
+//  ROM_LOAD16_WORD_SWAP_BIOS( 21, "neodebug.rom", 0x00000, 0x020000, CRC(698ebb7d) SHA1(081c49aa8cc7dad5939833dc1b18338321ea0a07) ) /* Debug (Development) Bios */
+//  ROM_SYSTEM_BIOS( 22, "asia-aes",   "Asia AES" )
+//  ROM_LOAD16_WORD_SWAP_BIOS( 22, "neo-epo.bin", 0x00000, 0x020000, CRC(d27a71f1) SHA1(1b3b22092f30c4d1b2c15f04d1670eb1e9fbea07) ) /* AES Console (Asia?) Bios */
+//  ROM_SYSTEM_BIOS( 23, "jap-aes",   "Japan AES" )
+//  ROM_LOAD16_WORD_SWAP_BIOS( 23, "neo-po.bin", 0x00000, 0x020000, CRC(16d0c132) SHA1(4e4a440cae46f3889d20234aebd7f8d5f522e22c) ) /* AES Console (Japan) Bios */
 
-/* note you'll have to modify the last for lines of each block to use the extra bios roms,
-   they're hacks / homebrew / console bios roms so MAME doesn't list them by default */
-
-
-/******************************************************************************
-
-    The current Neo-Geo MVS system set (SFIX/SM1/000-LO) used is from a NEO-MVH MV1FS board.
-    Other boards (MV1xx / MV2x / MV4 /MV6) other system sets?
-
-    Zoom ROM (LO)    128K   TC531000CP      1x 128Kx8   Zoom look-up table ROM
-    Fix ROM (SFIX)   128K   27C1000         1x 128Kx8   Text layer graphics ROM
-    Sound ROM (SM1)  128K   27C1000/23C1000 1x 128Kx8   Z80 program ROM
-
-******************************************************************************/
+/*  Note you'll have to modify the last for lines of each block to use the extra bios roms,
+    they're hacks / homebrew / console bios roms so MAME doesn't list them by default. */
 
 #define NEO_BIOS_AUDIO_64K(name, hash)																			\
 	NEOGEO_BIOS 																								\
@@ -494,228 +722,69 @@ INPUT_PORTS_END
 	ROM_LOAD( "000-lo.lo", 0x00000, 0x20000, CRC(5a86cff2) SHA1(5992277debadeb64d1c1c64b0a92d9293eaf7e4a) )
 
 
-/* AES and MVS cartridge information */
+/****************************************************************************/
 
-/***************************************************************************
-
-    Neo-Geo game pcb infos:
-    =======================
-
-    The Neo-Geo games for AES (home) and MVS (arcade) systems are cartridge based.
-
-    Each cartridge consists of two pcb's: CHA and PROG.
-
-    CHA pcb contains gfx data ('C' - rom), text layer data ('S' - rom) and sound driver ('M' - rom).
-    PROG pcb contains sample data ('V' - rom) and program code ('P' - rom).
-
-    On most pcb's various custom/protection chips can also be found:
-
-    CHA:
-    . NEO-273
-    . NEO-CMC
-    . NEO-ZMC
-    . NEO-ZMC2
-    . PRO-CT0
-    . SNK-9201
-
-    PROG:
-    . 0103 (QFP144)
-    . ALTERA (EPM7128SQC100-15)
-    . NEO-COMA
-    . NEO-PCM2 (SNK 1999)
-    . NEO-PCM2 (PLAYMORE 2002)
-    . NEO-PVC
-    . NEO-SMA
-    . PCM
-    . PRO-CT0
-    . SNK-9201
-
-
-    Known pcb's:
-    ============
-
-    MVS CHA:
-    -- SNK --
-    . NEO-MVS CHA-32
-    . NEO-MVS CHA-8M
-    . NEO-MVS CHA42G
-    . NEO-MVS CHA42G-1
-    . NEO-MVS CHA 42G-2
-    . NEO-MVS CHA 42G-3
-    . NEO-MVS CHA42G-3B
-    . NEO-MVS CHA256
-    . NEO-MVS CHA256B
-    . NEO-MVS PSTM CHA136
-    . NEO-MVS CHA512Y
-    . NEO-MVS CHAFIO (1999.6.14)
-    . MVS CHAFIO REV1.0 (KOF-2001)
-    . NEO-MVS CHAFIO (SNK 2002) - MADE IN KOREA
-    -- SNKPLAYMORE --
-    . NEO-MVS CHAFIO (2003.7.24)
-
-    MVS PROG:
-    -- SNK --
-    . NEO-MVS PROG-NAM
-    . NEO-MVS PROG-HERO
-    . NEO-MVS PROG-EP
-    . NEO-MVS PROG-8MB
-    . NEO-MVS PROG8M42
-    . NEO-MVS PROG16
-    . NEO-MVS PROG42G
-    . NEO-MVS PROG42G-COM
-    . NEO-MVS PROG42G-1
-    . NEO-MVS PROG-G2
-    . NEO-MVS PROG 4096
-    . NEO-MVS PROG 4096 B
-    . NEO-MVS PROGGSC
-    . NEO-MVS PROGSM
-    . NEO-MVS PROGSS3
-    . NEO-MVS PROGTOP
-    . NEO-MVS PROGSF1 (1998.6.17)
-    . NEO-MVS PROGEOP (1999.2.2)
-    . NEO-MVS PROGLBA (1999.4.12) - LBA-SUB (2000.2.24)
-    . NEO-MVS PROGBK1
-    . NEO-MVS PROGBK2 (2000.3.21)
-    . MVS PROGBK2 REV1.0 (KOF-2001)
-    . NEO-MVS PROGBK2 (SNK 2002) - MADE IN KOREA
-    -- SNKPLAYMORE --
-    . NEO-MVS PROGBK2R (2003.8.26) - NEO-HYCS (2003.9.29)
-    . NEO-MVS PROGBK3R (2003.9.2) - NEO-HYCS (2003.9.29)
-    . NEO-MVS PROGBK3S (2003.10.1)
-    . NEO-MVS PROGBK2S (2003.10.18)
-
-
-    AES CHA:
-    -- SNK --
-    . NEO-AEG CHA-32
-    . NEO-AEG CHA-8M
-    . NEO-AEG CHA42G
-    . NEO-AEG CHA42G-1
-    . NEO-AEG CHA42G-2B
-    . NEO-AEG CHA42G-3
-    . NEO-AEG CHA42G-4
-    . NEO-AEG CHA256
-    . NEO-AEG CHA256[B]
-    . NEO-AEG CHA256RY
-    . NEO-AEG CHA512Y
-    . NEO-AEG CHAFIO (1999.8.10)
-    -- SNKPLAYMORE --
-    . NEO-AEG CHAFIO (2003.7.24)
-
-    AES PROG:
-    -- SNK --
-    . NEO-AEG PROG-NAM
-    . NEO-AEG PROG-HERO
-    . NEO-AEG PROG-4A
-    . NEO-AEG PROG-4B
-    . NEO-AEG PROG 8M42
-    . NEO-AEG PROG B
-    . NEO-AEG PROG16
-    . NEO-AEG PROG42G
-    . NEO-AEG PROG42G-COM
-    . NEO-AEG PROG42G-1
-    . NEO-AEG PROG-G2
-    . NEO-AEG PROG4096 B
-    . NEO-AEG PROGGS
-    . NEO-AEG PROGTOP2
-    . NEO-AEG PROGLBA (1999.7.6)
-    . NEO-AEG PROGRK
-    . NEO-AEG PROGRKB
-    . NEO-AEG PROGBK1Y
-    . NEO-AEG PROGBK1F
-    -- PLAYMORE --
-    . NEO-AEG PROGBK2 (2002.4.1)
-    -- SNKPLAYMORE --
-    . NEO-AEG PROGBK3R (2003.8.29) - NEO-HYCS (2003.9.29)
-    . NEO-AEG PROGBK2S (2003.10.16)
-
-
-    Cartridge colours:
-    ==================
-
-    MVS cartridges were produced in different colours.
-
-    Known cartridge colours:
-    . Black
-    . Blue
-    . Green
-    . Grey
-    . Red
-    . Transparent
-    . Transparent Blue
-    . Transparent Green
-    . White
-    . Yellow
-
-    The above listed only covers SNK / PLAYMORE / SNKPLAYMORE pcb's. There also exists a
-    wide range of 'bootleg' pcb's.
-
-
-    Neo-Geo game pcb infos by Johnboy
-
-****************************************************************************/
-
-/****************************************************************************
-
-    General set notes:
-    ==================
-
-    NOTES BELOW APPLY TO OEM SETS ONLY!
-
-    Many 'M1' roms contain mirrored data (64k mirrored or 128k mirrored).
-    Found on several early sets (ID 0001 ~ 0045) and on the last sets (ID 0267 ~ 0272).
-    This caused some confusion and incorrect rom sizes.
-    Minimum 'M1' size is 1mbit, maximum size 4mbit.
-    The remaining 64k 'M1' are marked BAD_DUMP.
-
-    All 'S1' roms found on prom are 1mbit.
-    The remainig 64k 'S1' are marked BAD_DUMP.
-
-****************************************************************************/
-
-
-	/* OEM sets */
-
+	/* Official sets */
 
 /*
-    Missing (undumped) sets:
-    . Rage of the Dragons (AES)
-    . Last Blade 2 (early revisions) ?
-    . Power Spikes II (early revisions) ?
-    . Metal Slug 3 (rev. Mar/17/2000 1:36)
-    . Metal Slug 4 (AES)
-    . Metal Slug 4 (MVS, 1st revision)
-    . Metal Slug 5 (PCB)
-    . Sengoku 3 (alternate revision)
+    About supported sets:
 
-    All rom labels need to be reverified
+    MVS carts (arcade) were released before the AES carts (home)
+    The actual codepath taken depends entirely on the BIOS rom, not the roms in the cartridge, which (with
+    a few exceptions) support both codepaths.
 
-    SMA protected sets:
-    On some SMA protected sets there is a small sub pcb found, LBA-SUB (2000.2.24), which replaces the
-    regular used 2x32mbit or 4x16mbit proms. LBA-SUB (2000.2.24) contains 4x16mbit mask proms.
-    MVS sets confirmed are garou, mslug3, mslug3a and kof2000.
+    The initial AES releases are therefore later revisions of the game, often with bug fixes over the
+    initial MVS releases. It isn't uncommon for later production runs and bootlegs to use these newer sets,
+    so all of them are supported in MAME.
+
+    Likewise, because the MVS carts were released first (and were produced in higher numbers and generally
+    have a lower cost) it's not uncommon for AES units to operate with converted MVS carts, so, with the
+    exception of the sets that specifically lock out the AES mode* these sets are all equally suitable
+    for MESS.
+    * nitd, kof2001 (initial release has no AES code), and a number of the hacked bootlegs.
+
+    The 'MVS ONLY RELEASE' tagged sets were not officially released for the AES (home) system.
+    Information about this can be found at 'The NeoGeo Master List' (unofficial) - http://www.neo-geo.com
+    and the official NeoGeo museum - http://neogeomuseum.snkplaymore.co.jp/english/index.php
+    Several unofficial 'conversions' of these sets can be found across the internet.
+    For completeness sake: Some of these have sets have been relesead for the CD system.
+
+
+    M1 (sound driver) rom information:
+    . Many 'M1' roms contain mirrored data (64k mirrored or 128k mirrored).
+    . Found on several early sets (ID 0001 ~ 0045) and on the last sets (ID 0267 ~ 0272).
+    . This caused some confusion and incorrect rom sizes.
+    . Minimum 'M1' size is 1mbit, maximum size 4mbit.
+    . The remaining 64k 'M1' are marked BAD_DUMP.
+
+
+    S1 (text layer) rom information:
+    . All 'S1' roms found on prom are 1mbit.
+    . The remainig 64k 'S1' are marked BAD_DUMP.
+
+
+    MULTI PLAY MODE:
+    The NeoGeo has three games which support MULTI PLAY MODE (Riding Hero / League Bowling / Trash Rally).
+    This allows you to 'link' 4 games (MVS) / 2 games (AES) using in game 'Multi-Play' option. To establish
+    a link between the carts you have to connect the carts to each other by a communicator cable. The communicatior
+    cable is a regular headphone cable with stereo pin jack. It has been reported that you can also 'link' MVS <-> AES.
+
+    All three games use a special PROG board for MULTI PLAY MODE support:
+    . Riding Hero    (AES - NEO-AEG PROG-HERO   / MVS NEO-MVS PROG-HERO)
+    . League Bowling (AES - NEO-AEG PROG-HERO   / MVS NEO-MVS PROG-HERO)
+    . Trash Rally    (AES - NEO-AEG PROG42G-COM / NEO-MVS PROG42G-COM)
+
+    A HD6301V1P MCU on the above boards is used for establishing the 'link'. The MCU has a 4kb internal ROM which
+    is not dumped.
+    To use the MULTI PLAY MODE on your MVS you have to set the following hardware dips:
+    HARD DIP SETTING  4   5   6
+    CABINET 1:        OFF OFF ON
+    CABINET 2:        OFF ON  ON
+    CABINET 3:        ON  OFF ON
+    CABINET 4:        ON  ON  ON
+
 */
 
-/*
-
-  About supported sets:
-
-  MVS carts (arcade) were released before the AES carts (home)
-  The actual codepath taken depends entirely on the BIOS rom, not the roms in the cartridge, which (with
-  a few exceptions) support both codepaths.
-
-  The initial AES releases are therefore later revisions of the game, often with bug fixes over the
-  initial MVS releases.  It isn't uncommon for later production runs and bootlegs to use these newer sets,
-  so all of them are supported in MAME.
-
-  Likewise, because the MVS carts were released first (and were produced in higher numbers and generally
-  have a lower cost) it's not uncommon for AES units to operate with converted MVS carts, so, with the
-  exception of the sets that specifically lock out the AES mode* these sets are all equally suitable
-  for MESS.
-
-  * nitd, kof2001 (initial release has no AES code), and a number of the hacked bootlegs.
-
-*/
 
 /* dummy entry for the dummy bios driver */
 ROM_START( neogeo )
@@ -853,11 +922,11 @@ ROM_START( tpgolf ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "003-c8.bin", 0x300001, 0x80000, CRC(422af22d) SHA1(f67c844c34545de6ea187f5bfdf440dec8518532) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( mahretsu )
+ROM_START( mahretsu ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "004-p1.bin", 0x000000, 0x080000, CRC(fc6f53db) SHA1(64a62ca4c8fb68954e06121399c9402278bd0467) )
 
-	NEO_SFIX_128K( "004-s1.bin", CRC(4e310702) SHA1(edb0a27fe51d5e7f5739715b7c8872b6d4459b06) )
+	NEO_SFIX_128K( "004-s1.bin", CRC(2bd05a06) SHA1(876deadd4645373d82a503154eeddf18f440d743) )
 
 	NEO_BIOS_AUDIO_128K( "004-m1.bin", CRC(c71fbb3b) SHA1(59c58665b53da61352359d191a0569de5dd1f4b3) )
 
@@ -928,6 +997,7 @@ ROM_START( maglordh ) /* AES VERSION */
 ROM_END
 
 ROM_START( ridhero )
+	/* HD6301V1P MCU for MULTI PLAY MODE missing */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "006-p1.bin", 0x000000, 0x080000, CRC(d4aaf597) SHA1(34d35b71adb5bd06f4f1b50ffd9c58ab9c440a84) )
 
@@ -954,6 +1024,7 @@ ROM_START( ridhero )
 ROM_END
 
 ROM_START( ridheroh )
+	/* HD6301V1P MCU for MULTI PLAY MODE missing */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "006-p1h.bin", 0x000000, 0x080000, CRC(52445646) SHA1(647bb31f2f68453c1366cb6e2e867e37d1df7a54) )
 
@@ -1001,7 +1072,7 @@ ROM_START( alpham2 ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "007-c4.bin", 0x200001, 0x080000, CRC(7d588349) SHA1(a5ed789d7bbc25be5c5b2d99883b64d379c103a2) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( ncombat )
+ROM_START( ncombat ) /* MVS VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "009-p1.bin", 0x000000, 0x080000, CRC(b45fcfbf) SHA1(3872147dda2d1ba905d35f4571065d87b1958b4a) )
 
@@ -1026,7 +1097,7 @@ ROM_START( ncombat )
 	ROM_LOAD16_BYTE( "009-c6.bin", 0x200001, 0x80000, CRC(2eca8b19) SHA1(16764ef10e404325ba0a1a2ad3a4c0af287be21f) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( ncombath ) /* MVS AND AES VERSION */
+ROM_START( ncombath ) /* AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "009-pg1.bin", 0x000000, 0x080000, CRC(8e9f0add) SHA1(d0b908a86a58f2537eea73a431038f1cd74a5a2f) )
 
@@ -1123,7 +1194,7 @@ ROM_START( mutnat ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "014-c4.bin", 0x200001, 0x100000, CRC(e4002651) SHA1(17e53a5f4708866a120415bf24f3b89621ad0bcc) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kotm )
+ROM_START( kotm ) /* MVS VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "016-p1.bin", 0x000000, 0x080000, CRC(1b818731) SHA1(b98b1b33c0301fd79aac908f6b635dd00d1cb08d) )
 	ROM_LOAD16_WORD_SWAP( "016-p2.bin", 0x080000, 0x020000, CRC(12afdc2b) SHA1(3a95f5910cbb9f17e63ddece995c6e120fa2f622) )
@@ -1257,7 +1328,8 @@ ROM_START( burningfh )
 	ROM_LOAD16_BYTE( "018-c4.bin", 0x200001, 0x100000, CRC(e2e0aff7) SHA1(1c691c092a6e2787de4f433b0eb9252bfdaa7e16) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( lbowling )
+ROM_START( lbowling ) /* MVS AND AES VERSION */
+	/* HD6301V1P MCU for MULTI PLAY MODE missing */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "019-p1.bin", 0x000000, 0x080000, CRC(a2de8445) SHA1(893d7ae72b4644123469de143fa35fac1cbcd61e) )
 
@@ -1367,12 +1439,13 @@ ROM_START( bjourney ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "022-c4.bin", 0x200001, 0x080000, CRC(71bfd48a) SHA1(47288be69e6992d09ebef108b4de9ffab6293dc8) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( quizdais )
+ROM_START( quizdais ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "023-p1.bin", 0x000000, 0x100000, CRC(c488fda3) SHA1(4cdf2f1837fffd720efef42f81f933bdf2ef1402) )
 
 	NEO_SFIX_128K( "023-s1.bin", CRC(ac31818a) SHA1(93c8d67a93606a2e02f12ca4cab849dc3f3de286) )
 
+	/* TC531001 */
 	NEO_BIOS_AUDIO_128K( "023-m1.bin", CRC(2a2105e0) SHA1(26fc13556fda2dbeb7b5b035abd994e302dc7662) )
 
 	ROM_REGION( 0x100000, "ymsnd", 0 )
@@ -1383,6 +1456,24 @@ ROM_START( quizdais )
 	ROM_REGION( 0x200000, "sprites", 0 )
 	ROM_LOAD16_BYTE( "023-c1.bin", 0x000000, 0x100000, CRC(2999535a) SHA1(0deabf771039987b559edc2444eea741bd7ba861) ) /* Plane 0,1 */
 	ROM_LOAD16_BYTE( "023-c2.bin", 0x000001, 0x100000, CRC(876a99e6) SHA1(8d1dcfc0927d7523f8be8203573192406ec654b4) ) /* Plane 2,3 */
+ROM_END
+
+ROM_START( quizdaisk ) /* KOREAN VERSION */
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_WORD_SWAP( "123-p1.bin", 0x000000, 0x100000, CRC(a6f35eae) SHA1(edd3fd5ba8eae2231e2b0a6605fa00e5c6de094a) )
+
+	NEO_SFIX_128K( "123-s1.bin", CRC(53de938a) SHA1(5024fee3b245f8a069d7ecfa6f033b70ed1a5fce) )
+
+	NEO_BIOS_AUDIO_128K( "123-m1.bin", CRC(d67f53f9) SHA1(73a1bd175ae29dd957a907a046884f8715bd0a34) )
+
+	ROM_REGION( 0x100000, "ymsnd", 0 )
+	ROM_LOAD( "123-v1.bin", 0x000000, 0x100000, CRC(a53e5bd3) SHA1(cf115c6478ce155d889e6a5acb962339e08e024b) )
+
+	NO_DELTAT_REGION
+
+	ROM_REGION( 0x200000, "sprites", 0 )
+	ROM_LOAD16_BYTE( "123-c1.bin", 0x000000, 0x100000, CRC(2999535a) SHA1(0deabf771039987b559edc2444eea741bd7ba861) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "123-c2.bin", 0x000001, 0x100000, CRC(876a99e6) SHA1(8d1dcfc0927d7523f8be8203573192406ec654b4) ) /* Plane 2,3 */
 ROM_END
 
 ROM_START( lresort )
@@ -1532,9 +1623,9 @@ ROM_START( 2020bbh )
 	ROM_LOAD16_BYTE( "030-c4.bin", 0x200001, 0x100000, CRC(780d1c4e) SHA1(2e2cf9de828e3b48642dd2203637103438c62142) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( socbrawl )
+ROM_START( socbrawl ) /* MVS VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "031-p1.bin", 0x000000, 0x080000, CRC(a2801c24) SHA1(627d76ff0740ca29586f37b268f47fb469822529) )
+	ROM_LOAD16_WORD_SWAP( "031-pg1.bin", 0x000000, 0x080000, CRC(17f034a7) SHA1(2e66c7bd93a08efe63c4894494db50bbf58f60e4) )
 
 	NEO_SFIX_128K( "031-s1.bin", CRC(4c117174) SHA1(26e52c4f628338a9aa1c159517cdf873f738fb98) )
 
@@ -1554,9 +1645,9 @@ ROM_START( socbrawl )
 	ROM_LOAD16_BYTE( "031-c4.bin", 0x200001, 0x080000, CRC(ed297de8) SHA1(616f8fa4c86231f3e79faf9f69f8bb909cbc35f0) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( socbrawla ) /* MVS VERSION */
+ROM_START( socbrawlh ) /* AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "031-pg1.bin", 0x000000, 0x080000, CRC(17f034a7) SHA1(2e66c7bd93a08efe63c4894494db50bbf58f60e4) )
+	ROM_LOAD16_WORD_SWAP( "031-p1.bin", 0x000000, 0x080000, CRC(a2801c24) SHA1(627d76ff0740ca29586f37b268f47fb469822529) )
 
 	NEO_SFIX_128K( "031-s1.bin", CRC(4c117174) SHA1(26e52c4f628338a9aa1c159517cdf873f738fb98) )
 
@@ -1666,13 +1757,14 @@ ROM_START( fbfrenzy ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "034-c4.bin", 0x200001, 0x080000, CRC(0eb138cc) SHA1(21d31e1f136c674caa6dd44073281cd07b72ea9b) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( bakatono )
+ROM_START( bakatono ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "036-p1.bin", 0x000000, 0x080000, CRC(1c66b6fa) SHA1(6c50cc452971c46c763ae0b2def95792671a1798) )
 
 	NEO_SFIX_128K( "036-s1.bin", CRC(f3ef4485) SHA1(c30bfceed7e669e4c97b0b3ec2e9f4271e5b6662) )
 
-	NEO_BIOS_AUDIO_128K( "036-m1.bin", BAD_DUMP CRC(f1385b96) SHA1(e7e3d1484188a115e262511116aaf466b8b1f428) )
+	/* CXK381003 */
+	NEO_BIOS_AUDIO_128K( "036-m1.bin", CRC(f1385b96) SHA1(e7e3d1484188a115e262511116aaf466b8b1f428) )
 
 	ROM_REGION( 0x200000, "ymsnd", 0 )
 	ROM_LOAD( "036-v1.bin", 0x000000, 0x100000, CRC(1c335dce) SHA1(493c273fa71bf81861a20af4c4eaae159e169f39) )
@@ -1708,6 +1800,7 @@ ROM_START( crsword )
 ROM_END
 
 ROM_START( trally ) /* MVS AND AES VERSION */
+	/* HD6301V1P MCU for MULTI PLAY MODE missing */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "038-p1.bin", 0x000000, 0x080000, CRC(1e52a576) SHA1(a1cb56354c3378e955b0cd482c3c41ae15add952) )
 	ROM_LOAD16_WORD_SWAP( "038-p2.bin", 0x080000, 0x080000, CRC(a5193e2f) SHA1(96803480439e90da23cdca70d59ff519ee85beeb) )
@@ -2010,7 +2103,7 @@ ROM_START( fatfury2 ) /* MVS AND AES VERSION */
 	ROM_CONTINUE( 0x600001, 0x100000 )
 ROM_END
 
-ROM_START( janshin )
+ROM_START( janshin ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "048-p1.bin", 0x000000, 0x100000, CRC(7514cb7a) SHA1(da512c0a8e8160a9db7f956e351245327c38eaf1) )
 
@@ -2028,13 +2121,14 @@ ROM_START( janshin )
 	ROM_LOAD16_BYTE( "048-c2.bin", 0x000001, 0x200000, CRC(59c48ad8) SHA1(2630817e735a6d197377558f4324c1442803fe15) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( androdun )
+ROM_START( androdun ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "049-p1.bin", 0x000000, 0x080000, CRC(3b857da2) SHA1(4dd86c739944696c16c3cdd85935d6dfa9fdc276) )
 	ROM_LOAD16_WORD_SWAP( "049-p2.bin", 0x080000, 0x080000, CRC(2f062209) SHA1(991cf3e3677929b2cc0b2787b0c7b6ad3700f618) )
 
 	NEO_SFIX_128K( "049-s1.bin", CRC(6349de5d) SHA1(bcc44b9576d7bedd9a39294530bb66f707690c72) )
 
+	/* CXK381003 */
 	NEO_BIOS_AUDIO_128K( "049-m1.bin", CRC(edd2acf4) SHA1(c4ee6ba834d54b9fc5a854dbc41a05877e090371) )
 
 	ROM_REGION( 0x100000, "ymsnd", 0 )
@@ -2182,7 +2276,7 @@ ROM_START( wh1ha )
 	ROM_LOAD16_BYTE( "053-c4.bin", 0x200001, 0x100000, CRC(9270d954) SHA1(a2ef909868f6b06cdcc22a63ddf6c96be12b999c) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kof94 )
+ROM_START( kof94 ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "055-p1.bin", 0x100000, 0x100000, CRC(f10a2042) SHA1(d08a3f3c28be4b1793de7d362456281329fe1828) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -2209,7 +2303,7 @@ ROM_START( kof94 )
 	ROM_LOAD16_BYTE( "055-c8.bin", 0xc00001, 0x200000, CRC(fe0a235d) SHA1(a45c66836e4e3c77dfef9d4c6cc422cb59169149) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( aof2 )
+ROM_START( aof2 ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "056-p1.bin", 0x000000, 0x100000, CRC(a3b1d021) SHA1(ee42f3ca4516226b0088d0303ed28e3ecdabcd71) )
 
@@ -2235,7 +2329,7 @@ ROM_START( aof2 )
 	ROM_LOAD16_BYTE( "056-c8.bin", 0xc00001, 0x200000, CRC(e546d7a8) SHA1(74a2fca994a5a93a5784a46c0f68193122456a09) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( aof2a ) /* make parent? */
+ROM_START( aof2a ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "056-p1.bin",  0x000000, 0x100000, CRC(a3b1d021) SHA1(ee42f3ca4516226b0088d0303ed28e3ecdabcd71) )
 	/* the rom below acts as a patch to the program rom in the cart, replacing the first 512kb */
@@ -2263,7 +2357,7 @@ ROM_START( aof2a ) /* make parent? */
 	ROM_LOAD16_BYTE( "056-c8.bin", 0xc00001, 0x200000, CRC(e546d7a8) SHA1(74a2fca994a5a93a5784a46c0f68193122456a09) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( wh2 )
+ROM_START( wh2 ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "057-p1.bin", 0x100000, 0x100000, CRC(65a891d9) SHA1(ff8d5ccb0dd22c523902bb3db3c645583a335056) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -2287,7 +2381,7 @@ ROM_START( wh2 )
 	ROM_LOAD16_BYTE( "057-c6.bin", 0x800001, 0x200000, CRC(b13d1de3) SHA1(7d749c23a33d90fe50279e884540d71cf1aaaa6b) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( fatfursp )
+ROM_START( fatfursp ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x180000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "058-p1.bin", 0x000000, 0x100000, CRC(2f585ba2) SHA1(429b4bf43fb9b1082c15d645ca328f9d175b976b) )
 	ROM_LOAD16_WORD_SWAP( "058-p2.bin", 0x100000, 0x080000, CRC(d7c71a6b) SHA1(b3428063031a2e5857da40a5d2ffa87fb550c1bb) )
@@ -2312,7 +2406,7 @@ ROM_START( fatfursp )
 	ROM_LOAD16_BYTE( "058-c6.bin", 0x800001, 0x200000, CRC(8ff1f43d) SHA1(6180ceb5412a3e2e34e9513a3283b9f63087f747) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( fatfursa )
+ROM_START( fatfursa ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x180000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "058-p1.bin", 0x000000, 0x100000, CRC(2f585ba2) SHA1(429b4bf43fb9b1082c15d645ca328f9d175b976b) )
 	ROM_LOAD16_WORD_SWAP( "058-p2.bin", 0x100000, 0x080000, CRC(d7c71a6b) SHA1(b3428063031a2e5857da40a5d2ffa87fb550c1bb) )
@@ -2366,7 +2460,7 @@ ROM_START( savagere )
 	ROM_LOAD16_BYTE( "059-c8.bin", 0xc00001, 0x200000, CRC(484ce3ba) SHA1(4f21ed20ce6e2b67e2b079404599310c94f591ff) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( fightfev )
+ROM_START( fightfev ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "060-p1.bin", 0x000000, 0x080000, CRC(3032041b) SHA1(4b8ed2e6f74579ea35a53e06ccac42d6905b0f51) )
 	ROM_LOAD16_WORD_SWAP( "060-p2.bin", 0x080000, 0x080000, CRC(b0801d5f) SHA1(085746d8f5d271d5f84ccbb7f577193c391f88d4) )
@@ -2388,7 +2482,7 @@ ROM_START( fightfev )
 	ROM_LOAD16_BYTE( "060-c4.bin", 0x0400001, 0x200000, CRC(026f3b62) SHA1(d608483b70d60e7aa0e41f25a8b3fed508129eb7) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( fightfeva ) /* MVS VERSION */
+ROM_START( fightfeva ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "060-p1.rom", 0x0000000, 0x100000, CRC(2a104b50) SHA1(3eb663d3df7074e1cdf4c0e450a35c9cf55d8979) )
 	/* There was also a copy of the 060-p1.bin with the name 060-p2.bin maybe it should be loaded over the top or this
@@ -2411,7 +2505,7 @@ ROM_START( fightfeva ) /* MVS VERSION */
 	ROM_LOAD16_BYTE( "060-c4.bin", 0x0400001, 0x200000, CRC(026f3b62) SHA1(d608483b70d60e7aa0e41f25a8b3fed508129eb7) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( ssideki2 )
+ROM_START( ssideki2 ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "061-p1.bin", 0x000000, 0x100000, CRC(5969e0dc) SHA1(78abea880c125ec5a85bef6404478512a34b5513) )
 
@@ -2610,7 +2704,7 @@ ROM_START( karnovr )
 	ROM_LOAD16_BYTE( "066-c6.bin", 0x800001, 0x200000, CRC(c15c01ed) SHA1(7cf5583e6610bcdc3b332896cefc71df84fb3f19) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( gururin )
+ROM_START( gururin ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "067-p1.bin", 0x000000, 0x80000, CRC(4cea8a49) SHA1(cea4a35db8de898e30eb40dd339b3cbe77ac0856) )
 
@@ -2628,7 +2722,7 @@ ROM_START( gururin )
 	ROM_LOAD16_BYTE( "067-c2.bin", 0x000001, 0x200000, CRC(9db64084) SHA1(68a43c12f63f5e98d68ad0902a6551c5d30f8543) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( pspikes2 ) /* MVS VERSION */
+ROM_START( pspikes2 ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "068-pg1.bin", 0x000000, 0x100000, CRC(105a408f) SHA1(2ee51defa1c24c66c63a6498ee542ac26de3cfbb) )
 
@@ -2677,7 +2771,7 @@ ROM_START( fatfury3 ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "069-c6.bin", 0x1000001, 0x200000, CRC(69210441) SHA1(6d496c549dba65caabeaffe5b762e86f9d648a26) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( zupapa ) /* Original Version - Encrypted GFX */
+ROM_START( zupapa ) /* Original Version - Encrypted GFX */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "070-p1.bin", 0x000000, 0x100000, CRC(5a96203e) SHA1(49cddec9ca6cc51e5ecf8a34e447a23e1f8a15a1) )
 
@@ -2702,7 +2796,7 @@ ROM_START( zupapa ) /* Original Version - Encrypted GFX */
 	ROM_LOAD16_BYTE( "070-c2.bin", 0x0000001, 0x800000, CRC(70156dde) SHA1(06286bf043d50199b47df9a76ca91f39cb28cb90) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( panicbom )
+ROM_START( panicbom ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "073-p1.bin", 0x000000, 0x080000, CRC(adc356ad) SHA1(801e0a54b65d7a3500e6cef2d6bba40c6356dc1f) )
 
@@ -2721,7 +2815,7 @@ ROM_START( panicbom )
 	ROM_LOAD16_BYTE( "073-c2.bin", 0x000001, 0x100000, CRC(e15a093b) SHA1(548a418c81af79cd7ab6ad165b8d6daee30abb49) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( aodk )
+ROM_START( aodk ) /* MVS AND AES VERSION */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "074-p1.bin", 0x100000, 0x100000, CRC(62369553) SHA1(ca4d561ee08d16fe6804249d1ba49188eb3bd606) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -2769,7 +2863,7 @@ ROM_START( sonicwi2 )
 	ROM_LOAD16_BYTE( "075-c4.bin", 0x400001, 0x200000, CRC(1f777206) SHA1(e29c5ae65ebdcc1167a894306d2446ce909639da) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( zedblade )
+ROM_START( zedblade ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "076-p1.bin", 0x000000, 0x080000, CRC(d7c1effd) SHA1(485c2308a40baecd122be9ab4996044622bdcc7e) )
 
@@ -2826,9 +2920,9 @@ ROM_START( strhoop )
 
 	NEO_BIOS_AUDIO_128K( "079-m1.bin", CRC(bee3455a) SHA1(fd5345d9847982085a9b364fff542580889bf02f) )
 
-	ROM_REGION( 0x280000, "ymsnd", 0 )
+	ROM_REGION( 0x300000, "ymsnd", 0 )
 	ROM_LOAD( "079-v1.bin", 0x000000, 0x200000, CRC(718a2400) SHA1(cefc5d0b302bd4a87ab1fa244ade4482c23c6806) )
-	ROM_LOAD( "079-v2.bin", 0x200000, 0x080000, CRC(b19884f8) SHA1(5fe910f2029da19ddab4dc95c2292d7fbb086741) )
+	ROM_LOAD( "079-v2.bin", 0x200000, 0x100000, CRC(720774eb) SHA1(e4926f01322d0a15e700fb150b368152f2091146) )
 
 	NO_DELTAT_REGION
 
@@ -2859,6 +2953,30 @@ ROM_START( quizkof )
 	ROM_LOAD16_BYTE( "080-c2.bin", 0x000001, 0x200000, CRC(d331d4a4) SHA1(94228d13fb1e30973eb54058e697f17456ee16ea) ) /* Plane 2,3 */
 	ROM_LOAD16_BYTE( "080-c3.bin", 0x400000, 0x200000, CRC(b4851bfe) SHA1(b8286c601de5755c1681ea46e177fc89006fc066) ) /* Plane 0,1 */
 	ROM_LOAD16_BYTE( "080-c4.bin", 0x400001, 0x200000, CRC(ca6f5460) SHA1(ed36e244c9335f4c0a97c57b7b7f1b849dd3a90d) ) /* Plane 2,3 */
+ROM_END
+
+ROM_START( quizkofk ) /* KOREAN VERSION */
+	/* Made by Viccom Corp.; proms have manufacturer stamp VICxxxxxx-xxx, chip labels same as quizkof; Cart ID 0080 */
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_WORD_SWAP( "080-p1.p1", 0x000000, 0x100000, CRC(2589488e) SHA1(609f3095c1cf8b11335b56f23c5d955eebd66dd2) )
+
+	NEO_SFIX_128K( "080-s1.s1", CRC(af72c30f) SHA1(f6a2c583f38295b7da2cbcf4b2c7ed3d3e01db4f) )
+
+	NEO_BIOS_AUDIO_128K( "080-m1.m1", CRC(4f157e9a) SHA1(8397bfdd5738914670ada7cd8c611c20ed1f74da) )
+
+	ROM_REGION( 0x600000, "ymsnd", 0 )
+	/* v1 same as in quizkof */
+	ROM_LOAD( "080-v1.bin", 0x000000, 0x200000, CRC(0be18f60) SHA1(05c8b7d9f5a8583015f31902ad16d9c621f47d4e) )
+	ROM_LOAD( "080-v2.v2", 0x200000, 0x200000, CRC(719fee5b) SHA1(c94f8ca066c9693cd7c9fd311db1ad9b2665fc69) )
+	ROM_LOAD( "080-v3.v3", 0x400000, 0x200000, CRC(64b7efde) SHA1(11727f9a3c4da17fa7b00559c7081b66e7211c49) )
+
+	NO_DELTAT_REGION
+
+	ROM_REGION( 0x800000, "sprites", 0 )
+	ROM_LOAD16_BYTE( "080-c1.c1", 0x000000, 0x200000, CRC(94d90170) SHA1(4ab63dadc6ee0d32b8784c327681376f5fef0df9) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "080-c2.c2", 0x000001, 0x200000, CRC(297f25a1) SHA1(0dd845726c640d70804b5fd5854921771e8dbf19) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "080-c3.c3", 0x400000, 0x200000, CRC(cf484c4f) SHA1(f588908a693dbbb8362ffbfe5035dd5f867d9697) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "080-c4.c4", 0x400001, 0x200000, CRC(36e5d997) SHA1(99955ff947e2e586e60c1146c978c70705787917) ) /* Plane 2,3 */
 ROM_END
 
 ROM_START( ssideki3 )
@@ -2912,7 +3030,7 @@ ROM_START( doubledr )
 	ROM_LOAD16_BYTE( "082-c8.bin", 0xc00001, 0x100000, CRC(69a5fa37) SHA1(020e70e0e8b3c5d00a40fe97e418115a3187e50a) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( pbobblen ) /* MVS VERSION */
+ROM_START( pbobblen ) /* MVS ONLY RELEASE */
 	/* This set uses CHA and PROG board from Power Spikes II. Six Power Spikes II prom's are replaced with
     Puzzle Bobble prom's. Confirmed on several original carts. Do other layouts also exist? */
 
@@ -2999,7 +3117,7 @@ ROM_START( kof95h ) /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "084-c8.bin", 0x1800001, 0x100000, CRC(78eb0f9b) SHA1(2925ea21ed2ce167f08a25589e94f28643379034) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( tws96 )
+ROM_START( tws96 ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "086-p1.bin", 0x000000, 0x100000, CRC(03e20ab6) SHA1(3a0a5a54649178ce7a6158980cb4445084b40fb5) )
 
@@ -3201,7 +3319,7 @@ ROM_START( kabukikl )
 	ROM_LOAD16_BYTE( "092-c4.bin", 0x800001, 0x400000, CRC(de07f997) SHA1(c27a4d4bef868eed38dc152ff37d4135b16cc991) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( neobombe )
+ROM_START( neobombe ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "093-p1.bin", 0x000000, 0x100000, CRC(a1a71d0d) SHA1(059284c84f61a825923d86d2f29c91baa2c439cd) )
 
@@ -3429,7 +3547,7 @@ ROM_START( mslug )
 	ROM_LOAD16_BYTE( "201-c4.bin", 0x800001, 0x400000, CRC(f4ad59a3) SHA1(4e94fda8ee63abf0f92afe08060a488546e5c280) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( puzzledp )
+ROM_START( puzzledp ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "202-p1.bin", 0x000000, 0x080000, CRC(2b61415b) SHA1(0e3e4faf2fd6e63407425e1ac788003e75aeeb4f) )
 
@@ -3486,7 +3604,7 @@ ROM_START( marukodq )
 	ROM_LOAD16_BYTE( "206-c4.bin", 0x800001, 0x100000, CRC(55e1314d) SHA1(fffbc9eb9000ff5b1063af1817de7ea4a267fedd) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( neomrdo )
+ROM_START( neomrdo ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "207-p1.bin", 0x000000, 0x80000, CRC(39efdb82) SHA1(75fe68921f871872e5fc92594e43b4cd712e819b) )
 
@@ -3504,7 +3622,7 @@ ROM_START( neomrdo )
 	ROM_LOAD16_BYTE( "207-c2.bin", 0x000001, 0x200000, CRC(f57166d2) SHA1(bf3aa47d17156485c2177fb63cba093f050abb98) )
 ROM_END
 
-ROM_START( sdodgeb )
+ROM_START( sdodgeb ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "208-p1.bin", 0x100000, 0x100000, CRC(127f3d32) SHA1(18e77b79b1197a89371533ef9b1e4d682c44d875) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -3514,8 +3632,7 @@ ROM_START( sdodgeb )
 	NEO_BIOS_AUDIO_128K( "208-m1.bin", CRC(0a5f3325) SHA1(04e0236df478a5452654c823dcb42fea65b6a718) )
 
 	ROM_REGION( 0x400000, "ymsnd", 0 )
-	ROM_LOAD( "208-v1.bin", 0x000000, 0x200000, CRC(8b53e945) SHA1(beb7d63f6101f8435f35321fddb8479d312505c4) )
-	ROM_LOAD( "208-v2.bin", 0x200000, 0x200000, CRC(af37ebf8) SHA1(f5c511479483533480f2b9ecf8edd4b7ae64c2d9) )
+	ROM_LOAD( "208-v1.bin", 0x000000, 0x400000, CRC(e7899a24) SHA1(3e75b449898fee73fbacf58d70e3a460b9e0c573) )
 
 	NO_DELTAT_REGION
 
@@ -3526,7 +3643,7 @@ ROM_START( sdodgeb )
 	ROM_LOAD16_BYTE( "208-c4.bin", 0x0800001, 0x200000, CRC(c7165f19) SHA1(221f03de893dca0e5305fa17aa94f96c67713818) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( goalx3 )
+ROM_START( goalx3 ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "209-p1.bin", 0x100000, 0x100000, CRC(2a019a79) SHA1(422a639e74284fef2e53e1b49cf8803b0a7e80c6) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -3570,7 +3687,7 @@ ROM_START( overtop )
 	ROM_LOAD16_BYTE( "212-c6.bin", 0x1000001, 0x200000, CRC(0589c15e) SHA1(b1167caf7cb61f3e05a5d342290bfe00e02e9d38) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( neodrift )
+ROM_START( neodrift ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "213-p1.bin", 0x100000, 0x100000, CRC(e397d798) SHA1(10f459111db4bab7aaa63ca47e83304a84300812) )
 	ROM_CONTINUE( 0x000000, 0x100000)
@@ -3750,7 +3867,7 @@ ROM_START( ragnagrd )
 	ROM_LOAD16_BYTE( "218-c8.bin", 0x1800001, 0x400000, CRC(d9b311f6) SHA1(ba61a7ab3f08bb7348ad6cd01e5d29ca5ee75074) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( pgoal )
+ROM_START( pgoal ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "219-p1.bin", 0x100000, 0x100000, CRC(6af0e574) SHA1(c3f0fed0d942e48c99c80b1713f271c033ce0f4f) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -3849,6 +3966,34 @@ ROM_END
 ROM_START( rbffspec )
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "223-p1.bin", 0x000000, 0x100000, CRC(f84a2d1d) SHA1(fc19225d9dbdb6bd0808023ee32c7829f6ffdef6) )
+	ROM_LOAD16_WORD_SWAP( "223-p2.bin", 0x100000, 0x400000, CRC(addd8f08) SHA1(abaf5b86c8ec915c07ef2d83fce9ad03acaa4817) )
+
+	NEO_SFIX_128K( "223-s1.bin", CRC(7ecd6e8c) SHA1(465455afc4d83cbb118142be4671b2539ffafd79) )
+
+	NEO_BIOS_AUDIO_128K( "223-m1.bin", CRC(3fee46bf) SHA1(e750f85233953853618fcdff980a4721af1710a3) )
+
+	ROM_REGION( 0xc00000, "ymsnd", 0 )
+	ROM_LOAD( "223-v1.bin", 0x000000, 0x400000, CRC(76673869) SHA1(78a26afa29f73de552ffabdbf3fc4bf26be8ae9e) )
+	ROM_LOAD( "223-v2.bin", 0x400000, 0x400000, CRC(7a275acd) SHA1(8afe87ce822614262b72a90b371fc79155ac0d0c) )
+	ROM_LOAD( "223-v3.bin", 0x800000, 0x400000, CRC(5a797fd2) SHA1(94958e334f86d4d71059af8138f255b8d97a3b01) )
+
+	NO_DELTAT_REGION
+
+	ROM_REGION( 0x2000000, "sprites", 0 )
+	ROM_LOAD16_BYTE( "223-c1.bin", 0x0000000, 0x400000, CRC(ebab05e2) SHA1(0d60a8b631e3a3dcfbfdd7779dee081c9548ec39) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "223-c2.bin", 0x0000001, 0x400000, CRC(641868c3) SHA1(aa1aeb661842276b3326bfa4f1456f75bfecd52e) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "223-c3.bin", 0x0800000, 0x400000, CRC(ca00191f) SHA1(96977febfcc513e1848d7029ff169cdf51104038) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "223-c4.bin", 0x0800001, 0x400000, CRC(1f23d860) SHA1(e18df52f898a51074e07a0b8c6e75873e7cde35e) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "223-c5.bin", 0x1000000, 0x400000, CRC(321e362c) SHA1(39bd189334278f266124c97c6f70995f6f171cea) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "223-c6.bin", 0x1000001, 0x400000, CRC(d8fcef90) SHA1(bbccacb27f1e587bc144fe7ce68bd7b327ceaaee) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "223-c7.bin", 0x1800000, 0x400000, CRC(bc80dd2d) SHA1(086f372015eede88c6c578595fe915e28a589d2f) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "223-c8.bin", 0x1800001, 0x400000, CRC(5ad62102) SHA1(e28cc9840caed2a1a8bd65a03bef05231071040c) ) /* Plane 2,3 */
+ROM_END
+
+ROM_START( rbffspeck ) /* KOREAN VERSION */
+	ROM_REGION( 0x500000, "maincpu", 0 )
+	ROM_LOAD16_WORD_SWAP( "223-p1k.bin", 0x000000, 0x100000, CRC(b78c8391) SHA1(936b356ac135331b10a37bc10882ec2e4f6b400b) )
+	/* Chip label is correct. They used Cart ID 0124 as 0123 was allready used by quizdaisk ?!? */
 	ROM_LOAD16_WORD_SWAP( "223-p2.bin", 0x100000, 0x400000, CRC(addd8f08) SHA1(abaf5b86c8ec915c07ef2d83fce9ad03acaa4817) )
 
 	NEO_SFIX_128K( "223-s1.bin", CRC(7ecd6e8c) SHA1(465455afc4d83cbb118142be4671b2539ffafd79) )
@@ -3981,7 +4126,7 @@ ROM_START( breakers )
 	ROM_LOAD16_BYTE( "230-c4.bin", 0x800001, 0x400000, CRC(63aeb74c) SHA1(9ff6930c0c3d79b46b86356e8565ce4fcd69ac38) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( miexchng )
+ROM_START( miexchng ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "231-p1.bin", 0x000000, 0x80000, CRC(61be1810) SHA1(1ab0e11352ca05329c6e3f5657b60e4a227fcbfb) )
 
@@ -4150,7 +4295,7 @@ ROM_START( lastsold ) /* KOREAN VERSION */
 	ROM_LOAD16_BYTE( "234-c6.bin", 0x2000001, 0x400000, CRC(beafd091) SHA1(55df9cc128eb0f00856de3996c946e3efe8f09a5) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( puzzldpr )
+ROM_START( puzzldpr ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "235-p1.bin", 0x000000, 0x080000, CRC(afed5de2) SHA1(a5d82c6dbe687505e8c8d7339908da45cd379a0b) )
 
@@ -4168,7 +4313,7 @@ ROM_START( puzzldpr )
 	ROM_LOAD16_BYTE( "202-c2.bin", 0x000001, 0x100000, CRC(42371307) SHA1(df794f989e2883634bf7ffeea48d6bc3854529af) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( irrmaze )
+ROM_START( irrmaze ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "236-p1.bin", 0x000000, 0x200000, CRC(6d536c6e) SHA1(87d66683304a6617da8af7dfdfcbf4a3ab63056a) )
 
@@ -4196,7 +4341,7 @@ ROM_START( irrmaze )
 	ROM_LOAD16_BYTE( "236-c2.bin", 0x000001, 0x400000, CRC(e15f972e) SHA1(6a329559c57a67be73a6733513b59e9e6c8d61cc) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( popbounc )
+ROM_START( popbounc ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "237-p1.bin", 0x000000, 0x100000, CRC(be96e44f) SHA1(43679da8664fbb491103a1108040ddf94d59fc2b) )
 
@@ -4214,7 +4359,7 @@ ROM_START( popbounc )
 	ROM_LOAD16_BYTE( "237-c2.bin", 0x000001, 0x200000, CRC(5e633c65) SHA1(9a82107caf027317c173c1c1ef676f0fdeea79b2) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( shocktro )
+ROM_START( shocktro ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "238-p1.bin", 0x000000, 0x100000, CRC(5677456f) SHA1(f76169fa5c90871d65e2a16fd1bb036c90533ac8) )
 	ROM_LOAD16_WORD_SWAP( "238-p2.bin", 0x100000, 0x400000, CRC(5b4a09c5) SHA1(de04036cba2da4bb2da73d902d1822b82b4f67a9) )
@@ -4240,7 +4385,7 @@ ROM_START( shocktro )
 	ROM_LOAD16_BYTE( "238-c8.bin", 0x1800001, 0x400000, CRC(1c7c2efb) SHA1(b055ee43cbdaf9a3cb19e4e1f9dd2c40bde69d70) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( shocktra )
+ROM_START( shocktra ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "238-pg1.bin", 0x000000, 0x100000, CRC(efedf8dc) SHA1(f638df9bf7aa7d514ee2bccfc7f2adbf39ca83fc) )
 	ROM_LOAD16_WORD_SWAP( "238-p2.bin", 0x100000, 0x400000, CRC(5b4a09c5) SHA1(de04036cba2da4bb2da73d902d1822b82b4f67a9) )
@@ -4305,7 +4450,6 @@ ROM_START( rbff2 ) /* MVS VERSION */
 	ROM_REGION( 0x0e00000, "ymsnd", 0 )
 	ROM_LOAD( "240-v1.bin", 0x000000, 0x400000, CRC(f796265a) SHA1(736dff37eb91fc856b4d189249fb0de9b6c0813a) )
 	ROM_LOAD( "240-v2.bin", 0x400000, 0x400000, CRC(2cb3f3bb) SHA1(697e677890892f4b028c9a27c66809ca0a8a9b18) )
-	//ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(df77b7fa) SHA1(4df971ce20bdb8c1ce8cc1692a32ac69505ffa9a) ) // bad?
 	ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(8fe1367a) SHA1(093d7a4ac2b54ad7ffb2dc316fe29415f7a99535) )
 	ROM_LOAD( "240-v4.bin", 0xc00000, 0x200000, CRC(996704d8) SHA1(0bf7a1d0660199dedf3c25be757eeab75cc6147e) )
 
@@ -4333,7 +4477,6 @@ ROM_START( rbff2h ) /* AES VERSION */
 	ROM_REGION( 0x0e00000, "ymsnd", 0 )
 	ROM_LOAD( "240-v1.bin", 0x000000, 0x400000, CRC(f796265a) SHA1(736dff37eb91fc856b4d189249fb0de9b6c0813a) )
 	ROM_LOAD( "240-v2.bin", 0x400000, 0x400000, CRC(2cb3f3bb) SHA1(697e677890892f4b028c9a27c66809ca0a8a9b18) )
-	//ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(df77b7fa) SHA1(4df971ce20bdb8c1ce8cc1692a32ac69505ffa9a) ) // bad?
 	ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(8fe1367a) SHA1(093d7a4ac2b54ad7ffb2dc316fe29415f7a99535) )
 	ROM_LOAD( "240-v4.bin", 0xc00000, 0x200000, CRC(996704d8) SHA1(0bf7a1d0660199dedf3c25be757eeab75cc6147e) )
 
@@ -4361,7 +4504,6 @@ ROM_START( rbff2k ) /* KOREAN VERSION */
 	ROM_REGION( 0x0e00000, "ymsnd", 0 )
 	ROM_LOAD( "240-v1.bin", 0x000000, 0x400000, CRC(f796265a) SHA1(736dff37eb91fc856b4d189249fb0de9b6c0813a) )
 	ROM_LOAD( "240-v2.bin", 0x400000, 0x400000, CRC(2cb3f3bb) SHA1(697e677890892f4b028c9a27c66809ca0a8a9b18) )
-	//ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(df77b7fa) SHA1(4df971ce20bdb8c1ce8cc1692a32ac69505ffa9a) ) // bad?
 	ROM_LOAD( "240-v3.bin", 0x800000, 0x400000, CRC(8fe1367a) SHA1(093d7a4ac2b54ad7ffb2dc316fe29415f7a99535) )
 	ROM_LOAD( "240-v4.bin", 0xc00000, 0x200000, CRC(996704d8) SHA1(0bf7a1d0660199dedf3c25be757eeab75cc6147e) )
 
@@ -4456,7 +4598,36 @@ ROM_START( kof98k ) /* encrypted code + protection, only z80 rom is different to
 	ROM_LOAD16_BYTE( "242-c8.bin", 0x3000001, 0x800000, CRC(c823e045) SHA1(886fbf64bcb58bc4eabb1fc9262f6ac9901a0f28) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kof98n )
+ROM_START( kof98ka ) /* encrypted code + protection, only z80 rom is different to kof98 */ /* KOREAN VERSION */
+	ROM_REGION( 0x600000, "maincpu", 0 )
+	ROM_LOAD16_WORD_SWAP( "242-p1.bin", 0x000000, 0x200000, CRC(8893df89) SHA1(0452828785110601c65f667209fc2d2926cd3751) )
+	ROM_LOAD16_WORD_SWAP( "242-p2.bin", 0x200000, 0x400000, CRC(980aba4c) SHA1(5e735929ec6c3ca5b2efae3c7de47bcbb8ade2c5) )
+
+	NEO_SFIX_128K( "242-s1.bin", CRC(7f7b4805) SHA1(80ee6e5d0ece9c34ebca54b043a7cb33f9ff6b92) )
+
+	/* Correct chip label */
+	NEO_BIOS_AUDIO_256K( "242-mg1k.bin", CRC(ce9fb07c) SHA1(631d995f1291dd803fb069f3b25e7b9ed30d8649) )
+
+	ROM_REGION( 0x1000000, "ymsnd", 0 )
+	ROM_LOAD( "242-v1.bin", 0x000000, 0x400000, CRC(b9ea8051) SHA1(49606f64eb249263b3341b4f50cc1763c390b2af) )
+	ROM_LOAD( "242-v2.bin", 0x400000, 0x400000, CRC(cc11106e) SHA1(d3108bc05c9bf041d4236b2fa0c66b013aa8db1b) )
+	ROM_LOAD( "242-v3.bin", 0x800000, 0x400000, CRC(044ea4e1) SHA1(062a2f2e52098d73bc31c9ad66f5db8080395ce8) )
+	ROM_LOAD( "242-v4.bin", 0xc00000, 0x400000, CRC(7985ea30) SHA1(54ed5f0324de6164ea81943ebccb3e8d298368ec) )
+
+	NO_DELTAT_REGION
+
+	ROM_REGION( 0x4000000, "sprites", 0 )
+	ROM_LOAD16_BYTE( "242-c1.bin", 0x0000000, 0x800000, CRC(e564ecd6) SHA1(78f22787a204f26bae9b2b1c945ddbc27143352f) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "242-c2.bin", 0x0000001, 0x800000, CRC(bd959b60) SHA1(2c97c59e77c9a3fe7d664e741d37944f3d56c10b) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "242-c3.bin", 0x1000000, 0x800000, CRC(22127b4f) SHA1(bd0d00f889d9da7c6ac48f287d9ed8c605ae22cf) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "242-c4.bin", 0x1000001, 0x800000, CRC(0b4fa044) SHA1(fa13c3764fae6b035a626601bc43629f1ebaaffd) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "242-c5.bin", 0x2000000, 0x800000, CRC(9d10bed3) SHA1(4d44addc7c808649bfb03ec45fb9529da413adff) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "242-c6.bin", 0x2000001, 0x800000, CRC(da07b6a2) SHA1(9c3f0da7cde1ffa8feca89efc88f07096e502acf) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "242-c7.bin", 0x3000000, 0x800000, CRC(f6d7a38a) SHA1(dd295d974dd4a7e5cb26a3ef3febcd03f28d522b) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "242-c8.bin", 0x3000001, 0x800000, CRC(c823e045) SHA1(886fbf64bcb58bc4eabb1fc9262f6ac9901a0f28) ) /* Plane 2,3 */
+ROM_END
+
+ROM_START( kof98h ) /* AES VERSION */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "242-pn1.bin", 0x000000, 0x100000, CRC(61ac868a) SHA1(26577264aa72d6af272952a876fcd3775f53e3fa) )
 	ROM_LOAD16_WORD_SWAP( "242-p2.bin",  0x100000, 0x400000, CRC(980aba4c) SHA1(5e735929ec6c3ca5b2efae3c7de47bcbb8ade2c5) )
@@ -4531,7 +4702,7 @@ ROM_START( neocup98 )
 	ROM_LOAD16_BYTE( "244-c2.bin", 0x000001, 0x800000, CRC(33aa0f35) SHA1(3443c7765c6aa177003d42bbfcac9f31d1e12575) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( breakrev )
+ROM_START( breakrev ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "245-p1.bin", 0x100000, 0x100000, CRC(c828876d) SHA1(1dcba850e5cf8219d0945612cfded6d20ca8682a) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -4581,9 +4752,9 @@ ROM_START( shocktr2 )
 	ROM_LOAD16_BYTE( "246-c6.bin", 0x2000001, 0x800000, CRC(7e2caae1) SHA1(d9de14e3e323664a8c5b7f1df1ba9ec7dd0e6a46) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( flipshot )
+ROM_START( flipshot ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "247-p1.bin", 0x000000, 0x080000, CRC(d2e7a7e3) SHA1(1ff4f070fcc658bbc7dc69e16c87f82d7392d100) )
+	ROM_LOAD16_WORD_SWAP( "247-p1.bin", 0x000000, 0x080000, BAD_DUMP CRC(d2e7a7e3) SHA1(1ff4f070fcc658bbc7dc69e16c87f82d7392d100) )
 
 	NEO_SFIX_128K( "247-s1.bin", CRC(6300185c) SHA1(cb2f1de085fde214f96a962b1c2fa285eb387d44) )
 
@@ -4599,7 +4770,7 @@ ROM_START( flipshot )
 	ROM_LOAD16_BYTE( "247-c2.bin", 0x000001, 0x200000, CRC(7d6d6e87) SHA1(6475b58b9f91c20d1f465f3e892de0c68e12a92b) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( pbobbl2n )
+ROM_START( pbobbl2n ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "248-p1.bin", 0x000000, 0x100000, CRC(9d6c0754) SHA1(95c70c2d51fc4de01e768e03cc800a850aaad5dc) )
 
@@ -4620,7 +4791,7 @@ ROM_START( pbobbl2n )
 	ROM_LOAD16_BYTE( "248-c4.bin", 0x800001, 0x100000, CRC(8efead3f) SHA1(f577d2f7c6f850b3d100c36947ad15e33dfa0bed) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( ctomaday )
+ROM_START( ctomaday ) /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "249-p1.bin", 0x100000, 0x100000, CRC(c9386118) SHA1(5554662c7bc8605889cac4a67fee05bbb4eb786f) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -4775,8 +4946,7 @@ ROM_START( kof99e ) /* Original Version - Encrypted Code & GFX */
 	ROM_LOAD16_BYTE( "251-c8.bin", 0x3000001, 0x800000, CRC(8d921c68) SHA1(42acf1d27d52a8e3b6262eb7df50693c0b135565) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kof99n ) /* Original Version - Encrypted GFX */
-	/* If chip label / ID correct: Korean Version ? */
+ROM_START( kof99k ) /* Original Version - Encrypted GFX */ /* KOREAN VERSION */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "152-p1.bin", 0x000000, 0x100000, CRC(f2c7ddfa) SHA1(d592eecc53d442c55c2f26a6a721fdf2924d2a5b) )
 	ROM_LOAD16_WORD_SWAP( "152-p2.bin", 0x100000, 0x400000, CRC(274ef47a) SHA1(98654b68cc85c19d4a90b46f3110f551fa2e5357) )
@@ -4842,7 +5012,7 @@ ROM_START( kof99p ) /* Prototype Version - Possibly Hacked */
 	ROM_LOAD16_BYTE( "251-c8p.bin", 0x3000001, 0x800000, CRC(ead513ce) SHA1(e9b07a0b01fdeb3004755a479df059c81b4d0ed6) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( ganryu ) /* Original Version - Encrypted GFX */
+ROM_START( ganryu ) /* Original Version - Encrypted GFX */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "252-p1.bin", 0x100000, 0x100000, CRC(4b8ac4fb) SHA1(93d90271bff281862b03beba3809cf95a47a1e44) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -4970,7 +5140,7 @@ ROM_START( garoup ) /* Prototype Version, seems genuine */
 	ROM_LOAD16_BYTE( "253-c8p.bin", 0x3000001, 0x800000, CRC(f778fe99) SHA1(c963f6ba90a36d02991728b44ffcf174ca18268a) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( s1945p ) /* Original Version, Encrypted GFX Roms */
+ROM_START( s1945p ) /* Original Version, Encrypted GFX Roms */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "254-p1.bin", 0x000000, 0x100000, CRC(ff8efcff) SHA1(dcaeaca573385c172ecc43ee6bee355359091893) )
 	ROM_LOAD16_WORD_SWAP( "254-p2.bin", 0x100000, 0x400000, CRC(efdfd4dd) SHA1(254f3e1b546eed788f7ae919be9d1bf9702148ce) )
@@ -5004,7 +5174,7 @@ ROM_START( s1945p ) /* Original Version, Encrypted GFX Roms */
 	ROM_LOAD16_BYTE( "254-c8.bin", 0x3000001, 0x800000, CRC(66848c7d) SHA1(24d4ed627940a4cf8129761c1da15556e52e199c) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( preisle2 ) /* Original Version, Encrypted GFX */
+ROM_START( preisle2 ) /* Original Version, Encrypted GFX */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "255-p1.bin", 0x000000, 0x100000, CRC(dfa3c0f3) SHA1(793c6a46f3a794536dc0327a3f3fad20e25ab661) )
 	ROM_LOAD16_WORD_SWAP( "255-p2.bin", 0x100000, 0x400000, CRC(42050b80) SHA1(0981a8295d43b264c2b95e5d7568bdda4e64c976) )
@@ -5035,11 +5205,12 @@ ROM_START( preisle2 ) /* Original Version, Encrypted GFX */
 	ROM_LOAD16_BYTE( "255-c6.bin", 0x2000001, 0x800000, CRC(b001bdd3) SHA1(394ba8004644844ee97a120cfda48aeac685af8a) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( mslug3 ) /* Original Version - Encrypted Code & GFX */ /* revision 2000.4.1 */
+ROM_START( mslug3 ) /* Original Version - Encrypted Code & GFX */ /* revision 2000.4.1 */ /* MVS VERSION */
 	ROM_REGION( 0x900000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "256-sma.bin", 0x0c0000, 0x040000, CRC(9cd55736) SHA1(d6efb2b313127c2911d47d9324626b3f1e7c6ccb) )	/* stored in the custom chip */
-	ROM_LOAD16_WORD_SWAP( "256-p1.bin",  0x100000, 0x400000, CRC(b07edfd5) SHA1(dcbd9e500bfae98d754e55cdbbbbf9401013f8ee) )
-	ROM_LOAD16_WORD_SWAP( "256-p2.bin",  0x500000, 0x400000, CRC(6097c26b) SHA1(248ec29d21216f29dc6f5f3f0e1ad1601b3501b6) )
+	/* The SMA for this release has a green colour marking; the older revision has a white colour marking */
+	ROM_LOAD16_WORD_SWAP( "256-pg1.bin",  0x100000, 0x400000, CRC(b07edfd5) SHA1(dcbd9e500bfae98d754e55cdbbbbf9401013f8ee) )
+	ROM_LOAD16_WORD_SWAP( "256-pg2.bin",  0x500000, 0x400000, CRC(6097c26b) SHA1(248ec29d21216f29dc6f5f3f0e1ad1601b3501b6) )
 
 	ROM_Y_ZOOM
 
@@ -5071,7 +5242,7 @@ ROM_START( mslug3 ) /* Original Version - Encrypted Code & GFX */ /* revision 20
 	ROM_LOAD16_BYTE( "256-c8.bin", 0x3000001, 0x800000, CRC(4d9be34c) SHA1(a737bdfa2b815aea7067e7af2636e83a9409c414) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( mslug3h ) /* Original Version - Encrypted GFX */ /* MVS AND AES VERSION */
+ROM_START( mslug3h ) /* Original Version - Encrypted GFX */ /* revision 2000.3.17 */ /* AES VERSION */
 	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "256-ph1.bin", 0x000000, 0x100000, CRC(9c42ca85) SHA1(7a8f77a89867b889295ae9b9dfd4ba28f02d234d) )
 	ROM_LOAD16_WORD_SWAP( "256-ph2.bin", 0x100000, 0x400000, CRC(1f3d8ce8) SHA1(08b05a8abfb86ec09a5e758d6273acf1489961f9) )
@@ -5106,7 +5277,7 @@ ROM_START( mslug3h ) /* Original Version - Encrypted GFX */ /* MVS AND AES VERSI
 	ROM_LOAD16_BYTE( "256-c8.bin", 0x3000001, 0x800000, CRC(4d9be34c) SHA1(a737bdfa2b815aea7067e7af2636e83a9409c414) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kof2000 ) /* Original Version, Encrypted Code + Sound + GFX Roms */
+ROM_START( kof2000 ) /* Original Version, Encrypted Code + Sound + GFX Roms */ /* MVS AND AES VERSION */
 	ROM_REGION( 0x900000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "257-sma.bin", 0x0c0000, 0x040000, CRC(71c6e6bb) SHA1(1bd29ded4c6b29780db8e8b772c452189699ca89) )	/* stored in the custom chip */
 	ROM_LOAD16_WORD_SWAP( "257-p1.bin",  0x100000, 0x400000, CRC(60947b4c) SHA1(5faa0a7ac7734d6c8e276589bd12dd574264647d) )
@@ -5177,7 +5348,7 @@ ROM_START( kof2000n ) /* Original Version, Encrypted Sound + GFX Roms */
 	ROM_LOAD16_BYTE( "257-c8.bin", 0x3000001, 0x800000, CRC(b1afa60b) SHA1(b916184f5cfe4121752270f4f65abf35d8eb0519) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( bangbead ) /* Original Version - Encrypted GFX */
+ROM_START( bangbead ) /* Original Version - Encrypted GFX */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "259-p1.bin", 0x100000, 0x100000, CRC(88a37f8b) SHA1(566db84850fad5e8fe822e8bba910a33e083b550) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
@@ -5231,7 +5402,7 @@ ROM_START( bangbedp )
 ROM_END
 #endif
 
-ROM_START( nitd ) /* Original Version - Encrypted GFX */
+ROM_START( nitd ) /* Original Version - Encrypted GFX */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "260-p1.bin", 0x000000, 0x080000, CRC(61361082) SHA1(441f3f41c1aa752c0e0a9a0b1d92711d9e636b85) )
 
@@ -5259,7 +5430,7 @@ ROM_END
 ROM_START( sengoku3 ) /* Original Version - Encrypted GFX */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	//ROM_LOAD16_WORD_SWAP( "261-p1.bin", 0x100000, 0x100000, CRC(5b557201) SHA1(d01421d1dc80fe7d2a46b9f79c0f344b3c81c1e7) ) this one is almost certainly bad
-	ROM_LOAD16_WORD_SWAP( "261-p1.bin", 0x100000, 0x100000, CRC(e0d4bc0a) SHA1(8df366097f224771ca6d1aa5c1691cd46776cd12) )
+	ROM_LOAD16_WORD_SWAP( "261-ph1.bin", 0x100000, 0x100000, CRC(e0d4bc0a) SHA1(8df366097f224771ca6d1aa5c1691cd46776cd12) )
 	ROM_CONTINUE( 0x000000, 0x100000 )
 
 	ROM_Y_ZOOM
@@ -5361,12 +5532,12 @@ ROM_START( kof2001h ) /* AES VERSION */
 ROM_END
 
 ROM_START( mslug4 ) /* Original Version - Encrypted GFX */ /* MVS VERSION */
-	ROM_REGION( 0x500000, "maincpu", 0 )
 	/* There also exist carts where p1 label is pg1;
     The PG1 revision has a Japanese cart label, SN 02Jxxxxx
     The P1 revision has a US/EUR cart label, SN 02Txxxxx
     Rom data on both is identical.
     These carts were manufactured by Mega Enterprise, not SNK. */
+	ROM_REGION( 0x500000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "263-p1.bin", 0x000000, 0x100000, CRC(27e4def3) SHA1(a08785e8145981bb6b5332a3b2df7eb321253cca) )
 	ROM_LOAD16_WORD_SWAP( "263-p2.bin", 0x100000, 0x400000, CRC(fdb7aed8) SHA1(dbeaec38f44e58ffedba99e70fa1439c2bf0dfa3) )
 
@@ -5430,7 +5601,6 @@ ROM_START( mslug4h ) /* Original Version - Encrypted GFX */ /* AES VERSION */
 	ROM_LOAD16_BYTE( "263-c5.bin", 0x2000000, 0x800000, CRC(a748854f) SHA1(2611bbedf9b5d8e82c6b2c99b88f842c46434d41) ) /* Plane 0,1 */
 	ROM_LOAD16_BYTE( "263-c6.bin", 0x2000001, 0x800000, CRC(5c8ba116) SHA1(6034db09c8706d4ddbcefc053efbc47a0953eb92) ) /* Plane 2,3 */
 ROM_END
-
 
 ROM_START( rotd ) /* Encrypted Set */ /* MVS VERSION */
 	ROM_REGION( 0x800000, "maincpu", 0 )
@@ -5536,7 +5706,7 @@ ROM_START( matrim ) /* Encrypted Set */ /* MVS AND AES VERSION */
 	ROM_LOAD16_BYTE( "266-c8.bin", 0x3000001, 0x800000, CRC(29873d33) SHA1(dc77f129ed49b8d40d0d4241feef3f6c2f19a987) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( pnyaa ) /* Encrypted Set */ /* MVS VERSION */
+ROM_START( pnyaa ) /* Encrypted Set */ /* MVS ONLY RELEASE */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "267-p1.bin", 0x000000, 0x100000, CRC(112fe2c0) SHA1(01420e051f0bdbd4f68ce306a3738161b96f8ba8) )
 
@@ -5772,7 +5942,8 @@ ROM_START( kof2003 ) /* Encrypted Code + Sound + GFX Roms */ /* MVS VERSION */
 	ROM_LOAD16_BYTE( "271-c8c.bin", 0x3000001, 0x800000, CRC(20ec4fdc) SHA1(deb5f7ec5a090e419b9d1a6a74877bee081198e2) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( kof2003h ) /* Encrypted Code + Sound + GFX Roms */
+ROM_START( kof2003h ) /* Encrypted Code + Sound + GFX Roms */ /* AES VERSION */
+	/* All chip labels for this set are correct */
 	ROM_REGION( 0x900000, "maincpu", 0 )
 	ROM_LOAD32_WORD_SWAP( "271-p1k.bin", 0x000000, 0x400000, CRC(d0d0ae3e) SHA1(538d054ac50c91694fbbfefcce548b063713e14e) )
 	ROM_LOAD32_WORD_SWAP( "271-p2k.bin", 0x000002, 0x400000, CRC(fb3f79d9) SHA1(f253d10e732d6e23ae82d74ac9269d21f69ddb4d) )
@@ -5808,7 +5979,7 @@ ROM_START( kof2003h ) /* Encrypted Code + Sound + GFX Roms */
 	ROM_LOAD16_BYTE( "271-c8k.bin", 0x3000001, 0x800000, CRC(312f528c) SHA1(b4ad75f54f730ada6cb00112b74022250f055725) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( samsh5sp ) /* Encrypted Set */
+ROM_START( samsh5sp ) /* Encrypted Set */ /* MVS VERSION */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "272-p1.bin", 0x000000, 0x400000, CRC(fb7a6bba) SHA1(f68c527208d8a55ca44b0caaa8ab66b3a0ffdfe5) )
 	ROM_LOAD16_WORD_SWAP( "272-p2.bin", 0x400000, 0x400000, CRC(63492ea6) SHA1(6ba946acb62c63ed61a42fe72b7fff3828883bcc) )
@@ -5842,7 +6013,7 @@ ROM_START( samsh5sp ) /* Encrypted Set */
 	ROM_LOAD16_BYTE( "272-c8.bin", 0x3000001, 0x800000, CRC(d49773cd) SHA1(cd8cf3b762d381c1f8f12919579c84a7ef7efb3f) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( samsh5sph ) /* Encrypted Set */
+ROM_START( samsh5sph ) /* Encrypted Set */ /* AES VERSION */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "272-p1c.bin", 0x000000, 0x400000, CRC(9291794d) SHA1(66588ff9b00ffad6508b03423548984e28a3209d) )
 	ROM_LOAD16_WORD_SWAP( "272-p2c.bin", 0x400000, 0x400000, CRC(fa1a7dd8) SHA1(62443dad76d6c1e18f515d7d4ef8e1295a4b7f1d) )
@@ -5877,7 +6048,7 @@ ROM_START( samsh5sph ) /* Encrypted Set */
 	ROM_LOAD16_BYTE( "272-c8.bin", 0x3000001, 0x800000, CRC(d49773cd) SHA1(cd8cf3b762d381c1f8f12919579c84a7ef7efb3f) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( samsh5spn ) /* Encrypted Set */
+ROM_START( samsh5spn ) /* Encrypted Set */ /* AES VERSION */
 	ROM_REGION( 0x800000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "272-p1ca.bin", 0x000000, 0x400000, CRC(c30a08dd) SHA1(66864954017c841d7ca8490112c3aa7a71a4da70) )
 	ROM_LOAD16_WORD_SWAP( "272-p2ca.bin", 0x400000, 0x400000, CRC(bd64a518) SHA1(aa259a168930f106377d680db444535411b3bce0) )
@@ -5912,9 +6083,12 @@ ROM_START( samsh5spn ) /* Encrypted Set */
 	ROM_LOAD16_BYTE( "272-c8.bin", 0x3000001, 0x800000, CRC(d49773cd) SHA1(cd8cf3b762d381c1f8f12919579c84a7ef7efb3f) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( jockeygp )
+ROM_START( jockeygp ) /* Officially licensed? Cart has a holographic 'SNK' sticker applied */
+	/* PROG board used: MVS PROGV (2000.11.17)
+    CHA board used: NEO-MVS CHAFIO (1999.6.14) */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "jgp-p1.bin", 0x000000, 0x100000, CRC(2fb7f388) SHA1(e3c9b03944b4c10cf5081caaf9c8be1f08c06493) )
+	ROM_LOAD16_WORD_SWAP( "008-epr.p1", 0x000000, 0x100000, CRC(2fb7f388) SHA1(e3c9b03944b4c10cf5081caaf9c8be1f08c06493) )
+	/* P on eprom, correct chip label unknown */
 	ROM_FILL( 0x100000, 0x100000, 0xff )
 
 	ROM_Y_ZOOM
@@ -5926,58 +6100,66 @@ ROM_START( jockeygp )
 	ROM_LOAD( "sfix.sfix", 0x000000, 0x20000, CRC(c2ea0cfd) SHA1(fd4a618cdcdbf849374f0a50dd8efe9dbab706c3) )
 
 	/* Encrypted */
-	NEO_BIOS_AUDIO_ENCRYPTED_512K( "jgp-m1.bin", CRC(d163c690) SHA1(1dfd04d20c5985037f07cd01000d0b04f3a8f4f4) )
+	NEO_BIOS_AUDIO_ENCRYPTED_512K( "008-mg1.bin", CRC(d163c690) SHA1(1dfd04d20c5985037f07cd01000d0b04f3a8f4f4) )
 
 	ROM_REGION( 0x0200000, "ymsnd", 0 )
-	ROM_LOAD( "jgp-v1.bin", 0x000000, 0x200000, CRC(443eadba) SHA1(3def3c22f0e276bc4c2fc7ff70ce473c08b0d2df) )
+	ROM_LOAD( "008-v1.bin", 0x000000, 0x200000, CRC(443eadba) SHA1(3def3c22f0e276bc4c2fc7ff70ce473c08b0d2df) )
 
 	NO_DELTAT_REGION
 
 	ROM_REGION( 0x1000000, "sprites", 0 )
 	/* Encrypted */
-	ROM_LOAD16_BYTE( "jgp-c1.bin", 0x0000000, 0x800000, CRC(a9acbf18) SHA1(d55122c70cbe78c2679598dc07863e1d1d1a31df) ) /* Plane 0,1 */
-	ROM_LOAD16_BYTE( "jgp-c2.bin", 0x0000001, 0x800000, CRC(6289eef9) SHA1(a2ede77bb2468a2e1486d74745a22a5451026039) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "008-c1.bin", 0x0000000, 0x800000, CRC(a9acbf18) SHA1(d55122c70cbe78c2679598dc07863e1d1d1a31df) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "008-c2.bin", 0x0000001, 0x800000, CRC(6289eef9) SHA1(a2ede77bb2468a2e1486d74745a22a5451026039) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( vliner )
+ROM_START( vliner ) /* Officially licensed? Cart has a holographic 'SNK' sticker applied */
+	/* PROG board used: MVS PROGV (2000.11.17)
+    CHA board used: MVS CHAV (2000.10.26 */
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "vl-p1.bin", 0x000000, 0x080000, CRC(72a2c043) SHA1(b34bcc10ff33e4465126a6865fe8bf6b6a3d6cee) )
+	ROM_LOAD16_WORD_SWAP( "epr.p1", 0x000000, 0x080000, CRC(72a2c043) SHA1(b34bcc10ff33e4465126a6865fe8bf6b6a3d6cee) )
+	/* P on eprom, correct chip label unknown */
 
-	NEO_SFIX_128K( "vl-s1.bin", CRC(972d8c31) SHA1(41f09ef28a3791668ea304c74b8b06c117a50e9a) )
+	NEO_SFIX_128K( "s-1.s1", CRC(972d8c31) SHA1(41f09ef28a3791668ea304c74b8b06c117a50e9a) )
 
-	NEO_BIOS_AUDIO_64K( "vl-m1.bin", CRC(9b92b7d1) SHA1(2c9b777feb9a8e43fa1bd942aba5afe3b5427d94) )
+	NEO_BIOS_AUDIO_64K( "m-1.m1", CRC(9b92b7d1) SHA1(2c9b777feb9a8e43fa1bd942aba5afe3b5427d94) )
 
 	ROM_REGION( 0x200000, "ymsnd", ROMREGION_ERASE00 )
 
 	NO_DELTAT_REGION
 
 	ROM_REGION( 0x400000, "sprites", 0 )
-	ROM_LOAD16_BYTE( "vl-c1.bin", 0x000000, 0x80000, CRC(5118f7c0) SHA1(b6fb6e9cbb660580d98e00780ebf248c0995145a) ) /* Plane 0,1 */
-	ROM_LOAD16_BYTE( "vl-c2.bin", 0x000001, 0x80000, CRC(efe9b33e) SHA1(910c651aadce9bf59e51c338ceef62287756d2e8) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "c-1.c1", 0x000000, 0x80000, CRC(5118f7c0) SHA1(b6fb6e9cbb660580d98e00780ebf248c0995145a) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "c-2.c2", 0x000001, 0x80000, CRC(efe9b33e) SHA1(910c651aadce9bf59e51c338ceef62287756d2e8) ) /* Plane 2,3 */
 ROM_END
 
-ROM_START( vlinero )
+ROM_START( vlinero ) /* Officially licensed? Cart has a holographic 'SNK' sticker applied */
+	/* PROG board used: MVS PROGV (2000.11.17)
+    CHA board used: MVS CHAV (2000.10.26 */
 	ROM_REGION( 0x100000, "maincpu", 0 )
-	ROM_LOAD16_WORD_SWAP( "vl-p1_54.bin", 0x000000, 0x080000, CRC(172efc18) SHA1(8ca739f8780a9e6fa19ac2c3e931d75871603f58) )
+	ROM_LOAD16_WORD_SWAP( "epr_54.p1", 0x000000, 0x080000, CRC(172efc18) SHA1(8ca739f8780a9e6fa19ac2c3e931d75871603f58) )
+	/* P on eprom, correct chip label unknown */
 
-	NEO_SFIX_128K( "vl-s1.bin", CRC(972d8c31) SHA1(41f09ef28a3791668ea304c74b8b06c117a50e9a) )
+	NEO_SFIX_128K( "s-1.s1", CRC(972d8c31) SHA1(41f09ef28a3791668ea304c74b8b06c117a50e9a) )
 
-	NEO_BIOS_AUDIO_64K( "vl-m1.bin", CRC(9b92b7d1) SHA1(2c9b777feb9a8e43fa1bd942aba5afe3b5427d94) )
+	NEO_BIOS_AUDIO_64K( "m-1.m1", CRC(9b92b7d1) SHA1(2c9b777feb9a8e43fa1bd942aba5afe3b5427d94) )
 
 	ROM_REGION( 0x200000, "ymsnd", ROMREGION_ERASE00 )
 
 	NO_DELTAT_REGION
 
 	ROM_REGION( 0x400000, "sprites", 0 )
-	ROM_LOAD16_BYTE( "vl-c1.bin", 0x000000, 0x80000, CRC(5118f7c0) SHA1(b6fb6e9cbb660580d98e00780ebf248c0995145a) ) /* Plane 0,1 */
-	ROM_LOAD16_BYTE( "vl-c2.bin", 0x000001, 0x80000, CRC(efe9b33e) SHA1(910c651aadce9bf59e51c338ceef62287756d2e8) ) /* Plane 2,3 */
+	ROM_LOAD16_BYTE( "c-1.c1", 0x000000, 0x80000, CRC(5118f7c0) SHA1(b6fb6e9cbb660580d98e00780ebf248c0995145a) ) /* Plane 0,1 */
+	ROM_LOAD16_BYTE( "c-2.c2", 0x000001, 0x80000, CRC(efe9b33e) SHA1(910c651aadce9bf59e51c338ceef62287756d2e8) ) /* Plane 2,3 */
 ROM_END
 
+
+/****************************************************************************/
 
 	/* Jamma PCB sets */
 
 
-/******************************************************************************
+/*
     The following Jamma PCB boards are known:
 
     SNK vs. CAPCOM SVC CHAOS (svcpcb)
@@ -5991,7 +6173,7 @@ ROM_END
 
     The King of Fighters 2003
     NEO-MVH MVOC 2003.11.3
-******************************************************************************/
+*/
 
 
 /* complete redump required */
@@ -6135,12 +6317,16 @@ ROM_START( kf2k3pcb ) /* Encrypted Set, JAMMA PCB */
 ROM_END
 
 
+/****************************************************************************/
+
 	/* Bootleg sets */
 
-
 /*
-    Most bootleg sets are incomplete (missing 'C', 'V' and 'M' roms).
-    Verification required.
+    About supported sets:
+
+    For many bootleg sets, only P's (program rom), M1 (sound driver) and S1 (text layer) roms were dumped.
+    For these sets it is assumed that the original V's (sound data) and C's (gfx data) are used.
+    This requires verification.
 
 */
 
@@ -7156,34 +7342,28 @@ ROM_START( diggerma ) /* Unlicensed Prototype, no official game ID # */
 	ROM_LOAD16_BYTE( "dig-c2.bin", 0x000001, 0x080000, CRC(3e632161) SHA1(83711c4286fb1d9f3f91414ac6e5fed36618033e) ) /* Plane 2,3 */
 ROM_END
 
-/* NeoPrint
 
-Very little is known about the NeoPrint system at this time.
-
-The cartridges fit in a normal NeoGeo unit but they do not work.  They appear to be designed to work with a
-different motherboard (and different bios rom)
-
-98best44 is the only NeoPrint cart we've seen with a program rom.
-Many of the others only contain graphic roms.  I'm speculating that the NeoPrint was a multi-slot system and
-had a concept of Master and Slave cartridges, and the slave ones simply added new graphic themes.
-
-If anybody has any actual factual information on the NeoPrint system, please contribute it.
-
-*/
+	/* NeoPrint */
 
 /*
+    Very little is known about the NeoPrint system at this time.
 
-logo: Neo Print
+    The cartridges fit in a normal Neo Geo unit but they do not work.  They appear to be designed to work with a
+    different motherboard (and different bios rom)
 
-small text: Cassette supporting Neo Print and Neo Print Multi
+    98best44 is the only NeoPrint cart we've seen with a program rom.
+    Many of the others only contain graphic roms.  I'm speculating that the NeoPrint was a multi-slot system and
+    had a concept of Master and Slave cartridges, and the slave ones simply added new graphic themes.
 
-(cassette=cartridge)
-
-title: '98 NeoPri Best 44 version
-
+    If anybody has any actual factual information on the NeoPrint system, please contribute it.
 */
 
+
 ROM_START( 98best44 )
+	/* logo: Neo Print
+    small text: Cassette supporting Neo Print and Neo Print Multi
+    (cassette=cartridge)
+    title: '98 NeoPri Best 44 version */
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_WORD_SWAP( "p060-ep1", 0x000000, 0x080000, CRC(d42e505d) SHA1(0ad6b0288f36c339832730a03e53cbc07dab4f82))
 
@@ -7217,7 +7397,307 @@ ROM_START( 98best44 )
 ROM_END
 
 
-/* Game specific inits */
+/****************************************************************************/
+
+	/* Game specific input definitions */
+
+
+static INPUT_PORTS_START( svcpcb )
+	STANDARD_IN0
+
+	STANDARD_IN1
+
+	STANDARD_IN2
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+
+	/* the rom banking is tied directly to the dipswitch?, or is there a bank write somewhere? */
+	PORT_START("HARDDIP")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Region ) ) PORT_DIPLOCATION("HARDDIP:3")
+	PORT_DIPSETTING(	0x00, DEF_STR( Asia ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( Japan ) )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( ms5pcb )
+	STANDARD_IN0
+
+	STANDARD_IN1
+
+	STANDARD_IN2
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+
+	/* the rom banking is tied directly to the dipswitch?, or is there a bank write somewhere? */
+	PORT_START("HARDDIP")
+	PORT_DIPNAME( 0x01, 0x00, DEF_STR( Region ) ) PORT_DIPLOCATION("HARDDIP:3")
+	PORT_DIPSETTING(	0x00, DEF_STR( Asia ) )
+	PORT_DIPSETTING(	0x01, DEF_STR( Japan ) )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( kog )
+	STANDARD_IN0
+
+	STANDARD_IN1
+
+	STANDARD_IN2
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+
+	/* a jumper on the pcb overlays a ROM address, very strange but that's how it works. */
+	PORT_START("JUMPER")
+	PORT_DIPNAME( 0x0001, 0x0001, "Title Language" ) PORT_DIPLOCATION("CART-JUMPER:1")
+	PORT_DIPSETTING(	  0x0001, DEF_STR( English ) )
+	PORT_DIPSETTING(	  0x0000, "Non-English" )
+	PORT_BIT( 0x00fe, IP_ACTIVE_HIGH, IPT_UNUSED )
+	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( mjneogeo )
+	PORT_START("IN0")
+	PORT_DIPNAME( 0x0001, 0x0001, "Test Switch" ) PORT_DIPLOCATION("SW:1")
+	PORT_DIPSETTING(	  0x0001, DEF_STR( Off ) )
+	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0002, 0x0002, "Coin Chutes?" ) PORT_DIPLOCATION("SW:2")
+	PORT_DIPSETTING(	  0x0000, "1?" )
+	PORT_DIPSETTING(	  0x0002, "2?" )
+	PORT_DIPNAME( 0x0004, 0x0000, "Mahjong Control Panel" ) PORT_DIPLOCATION("SW:3")
+	PORT_DIPSETTING(	  0x0004, DEF_STR( Off ) )
+	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0018, 0x0018, "COMM Setting (Cabinet No.)" ) PORT_DIPLOCATION("SW:4,5")
+	PORT_DIPSETTING(	  0x0018, "1" )
+	PORT_DIPSETTING(	  0x0008, "2" )
+	PORT_DIPSETTING(	  0x0010, "3" )
+	PORT_DIPSETTING(	  0x0000, "4" )
+	PORT_DIPNAME( 0x0020, 0x0020, "COMM Setting (Link Enable)" ) PORT_DIPLOCATION("SW:6")
+	PORT_DIPSETTING(	  0x0020, DEF_STR( Off ) )
+	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0040, 0x0040, DEF_STR( Free_Play ) ) PORT_DIPLOCATION("SW:7")
+	PORT_DIPSETTING(	  0x0040, DEF_STR( Off ) )
+	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0080, 0x0080, "Freeze" ) PORT_DIPLOCATION("SW:8")
+	PORT_DIPSETTING(	  0x0080, DEF_STR( Off ) )
+	PORT_DIPSETTING(	  0x0000, DEF_STR( On ) )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(mahjong_controller_r, NULL)
+
+	STANDARD_IN1
+
+	STANDARD_IN2
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+
+	PORT_START("MAHJONG1")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_A )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_B )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_C )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_D )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_E )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_MAHJONG_F )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_MAHJONG_G )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+	PORT_START("MAHJONG2")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_H )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_I )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_J )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_K )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_L )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_MAHJONG_M )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_MAHJONG_N )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+	PORT_START("MAHJONG3")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON4 )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
+
+	PORT_START("MAHJONG4")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_MAHJONG_PON )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_MAHJONG_CHI )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_MAHJONG_KAN )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_MAHJONG_RON )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_MAHJONG_REACH )
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_UNUSED )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( irrmaze )
+	PORT_START("IN0")
+	STANDARD_DIPS
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)0)
+
+	PORT_START("IN1")
+	PORT_BIT( 0x0fff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
+	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
+	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
+
+	PORT_START("IN2")
+	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_START1 )
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_START2 )
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	STANDARD_IN3
+
+	PORT_START("IN4")
+	PORT_BIT( 0x0001, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0002, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0004, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0008, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0020, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+	PORT_BIT( 0x0040, IP_ACTIVE_HIGH, IPT_UNKNOWN )  /* this bit is used.. */
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Enter BIOS") PORT_CODE(KEYCODE_F2)
+	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("IN0-0")
+	PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_X ) PORT_SENSITIVITY(10) PORT_KEYDELTA(20) PORT_REVERSE
+
+	PORT_START("IN0-1")
+	PORT_BIT( 0xff, 0x00, IPT_TRACKBALL_Y ) PORT_SENSITIVITY(10) PORT_KEYDELTA(20) PORT_REVERSE
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( popbounc )
+	PORT_START("IN0")
+	STANDARD_DIPS
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)0)
+
+	PORT_START("IN1")
+	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(multiplexed_controller_r, (void *)1)
+
+	STANDARD_IN2
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+
+	/* Fake inputs read by CUSTOM_INPUT handlers */
+	PORT_START("IN0-0")
+	PORT_BIT( 0xff, 0x00, IPT_DIAL ) PORT_SENSITIVITY(25) PORT_KEYDELTA(20)
+
+	PORT_START("IN0-1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
+	PORT_BIT( 0x90, IP_ACTIVE_LOW, IPT_BUTTON1 ) /* note it needs it from 0x80 when using paddle */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 )
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 )
+
+	PORT_START("IN1-0")
+	PORT_BIT( 0xff, 0x00, IPT_DIAL  ) PORT_SENSITIVITY(25) PORT_KEYDELTA(20) PORT_PLAYER(2)
+
+	PORT_START("IN1-1")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_PLAYER(2)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_PLAYER(2)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_PLAYER(2)
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_PLAYER(2)
+	PORT_BIT( 0x90, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) /* note it needs it from 0x80 when using paddle */
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( vliner )
+	PORT_START("IN0")
+	STANDARD_DIPS
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT )
+	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_NAME("View Payout Table/Big")
+	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_NAME("Bet/Small")
+	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_NAME("Stop/Double Up")
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_NAME("Start/Collect")
+
+	PORT_START("IN1")
+	PORT_BIT( 0xffff, IP_ACTIVE_LOW, IPT_UNUSED )
+
+	PORT_START("IN2")
+	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* this bit is used.. */
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* this bit is used.. */
+	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_START("IN3")
+	PORT_BIT( 0x003f, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x00c0, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_calendar_status, NULL)
+	PORT_BIT( 0xff00, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_audio_result, NULL)
+
+	STANDARD_IN4
+
+	PORT_START("IN5")
+	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
+	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Operator Menu") PORT_CODE(KEYCODE_F1)
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_NAME("Clear Credit")
+	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_NAME("Hopper Out")
+	PORT_BIT( 0xff00, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	/* not sure what any of these bits are */
+	PORT_START("IN6")
+	PORT_BIT( 0x0003, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xffc0, IP_ACTIVE_HIGH, IPT_UNKNOWN )
+INPUT_PORTS_END
+
+
+static INPUT_PORTS_START( jockeygp )
+	STANDARD_IN0
+
+	STANDARD_IN1
+
+	PORT_START("IN2")
+	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
+	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* game freezes with this bit enabled */
+	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Next Game") PORT_CODE(KEYCODE_7)
+	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_UNKNOWN ) /* game freezes with this bit enabled */
+	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Previous Game") PORT_CODE(KEYCODE_8)
+	PORT_BIT( 0x7000, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(get_memcard_status, NULL)
+	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	STANDARD_IN3
+
+	STANDARD_IN4
+INPUT_PORTS_END
+
+
+/****************************************************************************/
+
+	/* Game specific inits */
 
 static DRIVER_INIT( fatfury2 )
 {
@@ -7248,7 +7728,7 @@ static DRIVER_INIT( kof99 )
 	kof99_install_protection(machine);
 }
 
-static DRIVER_INIT( kof99n )
+static DRIVER_INIT( kof99k )
 {
 	neogeo_state *state = (neogeo_state *)machine->driver_data;
 	DRIVER_INIT_CALL(neogeo);
@@ -7826,8 +8306,8 @@ static DRIVER_INIT( lans2004 )
 	DRIVER_INIT_CALL(neogeo);
 }
 
-/***********************************************************************/
 
+/****************************************************************************/
 
 /*    YEAR  NAME       PARENT    MACHINE   INPUT     INIT      MONITOR  */
 GAME( 1990, neogeo,    0,        neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Neo-Geo", GAME_IS_BIOS_ROOT | GAME_SUPPORTS_SAVE )
@@ -7837,7 +8317,7 @@ GAME( 1990, nam1975,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "NAM
 GAME( 1990, bstars,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Baseball Stars Professional (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1990, bstarsh,   bstars,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Baseball Stars Professional (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1990, tpgolf,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Top Player's Golf", GAME_SUPPORTS_SAVE )
-GAME( 1990, mahretsu,  neogeo,   neogeo,   mjneogeo, neogeo,   ROT0, "SNK", "Mahjong Kyoretsuden", GAME_SUPPORTS_SAVE )
+GAME( 1990, mahretsu,  neogeo,   neogeo,   mjneogeo, neogeo,   ROT0, "SNK", "Mahjong Kyo Retsuden", GAME_SUPPORTS_SAVE )
 GAME( 1990, ridhero,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Riding Hero (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1990, ridheroh,  ridhero,  neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Riding Hero (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1991, alpham2,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Alpha Mission II / ASO II - Last Guardian", GAME_SUPPORTS_SAVE )
@@ -7855,6 +8335,7 @@ GAME( 1991, gpilots,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Gho
 GAME( 1991, gpilotsh,  gpilots,  neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Ghost Pilots (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1990, joyjoy,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Puzzled / Joy Joy Kid", GAME_SUPPORTS_SAVE )
 GAME( 1991, quizdais,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Quiz Daisousa Sen - The Last Count Down", GAME_SUPPORTS_SAVE )
+GAME( 1991, quizdaisk, quizdais, neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Quiz Daisousa Sen - The Last Count Down (Korean release)", GAME_SUPPORTS_SAVE )
 GAME( 1992, lresort,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Last Resort", GAME_SUPPORTS_SAVE )
 GAME( 1991, eightman,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK / Pallas", "Eight Man", GAME_SUPPORTS_SAVE )
 GAME( 1991, legendos,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Legend of Success Joe / Ashitano Joe Densetsu", GAME_SUPPORTS_SAVE )
@@ -7862,7 +8343,7 @@ GAME( 1991, 2020bb,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK / Pall
 GAME( 1991, 2020bba,   2020bb,   neogeo,   neogeo,   neogeo,   ROT0, "SNK / Pallas", "2020 Super Baseball (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1991, 2020bbh,   2020bb,   neogeo,   neogeo,   neogeo,   ROT0, "SNK / Pallas", "2020 Super Baseball (set 3)", GAME_SUPPORTS_SAVE )
 GAME( 1991, socbrawl,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Soccer Brawl (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1991, socbrawla, socbrawl, neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Soccer Brawl (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1991, socbrawlh, socbrawl, neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Soccer Brawl (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1991, fatfury1,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Fatal Fury - King of Fighters / Garou Densetsu - shukumei no tatakai", GAME_SUPPORTS_SAVE )
 GAME( 1991, roboarmy,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Robo Army", GAME_SUPPORTS_SAVE )
 //GAME( 1991, roboarma,  roboarmy, neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Robo Army (set 2)", GAME_SUPPORTS_SAVE )
@@ -7906,6 +8387,7 @@ GAME( 1996, kizuna,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Kiz
 GAME( 1996, samsho4,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Samurai Shodown IV - Amakusa's Revenge / Samurai Spirits - Amakusa Kourin", GAME_SUPPORTS_SAVE )
 GAME( 1996, samsho4k,  samsho4,  neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Pae Wang Jeon Seol / Legend of a Warrior (Korean censored Samurai Shodown IV)", GAME_SUPPORTS_SAVE )
 GAME( 1996, rbffspec,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Real Bout Fatal Fury Special / Real Bout Garou Densetsu Special", GAME_SUPPORTS_SAVE )
+GAME( 1996, rbffspeck, rbffspec, neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Real Bout Fatal Fury Special / Real Bout Garou Densetsu Special (Korean release)", GAME_SUPPORTS_SAVE )
 GAME( 1997, kof97,     neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The King of Fighters '97 (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1997, kof97h,    kof97,    neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The King of Fighters '97 (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1997, kof97pls,  kof97,    neogeo,   neogeo,   neogeo,   ROT0, "bootleg", "The King of Fighters '97 Plus (bootleg)", GAME_SUPPORTS_SAVE )
@@ -7920,14 +8402,15 @@ GAME( 1998, rbff2k,    rbff2,    neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Rea
 GAME( 1998, mslug2,    neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Metal Slug 2 - Super Vehicle-001/II", GAME_SUPPORTS_SAVE )
 GAME( 1998, kof98,     neogeo,   neogeo,   neogeo,   kof98,    ROT0, "SNK", "The King of Fighters '98 - The Slugfest / King of Fighters '98 - dream match never ends", GAME_SUPPORTS_SAVE )
 GAME( 1998, kof98k,    kof98,    neogeo,   neogeo,   kof98,    ROT0, "SNK", "The King of Fighters '98 - The Slugfest / King of Fighters '98 - dream match never ends (Korean board)", GAME_SUPPORTS_SAVE )
-GAME( 1998, kof98n,    kof98,    neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The King of Fighters '98 - The Slugfest / King of Fighters '98 - dream match never ends (not encrypted)", GAME_SUPPORTS_SAVE )
+GAME( 1998, kof98ka,   kof98,    neogeo,   neogeo,   kof98,    ROT0, "SNK", "The King of Fighters '98 - The Slugfest / King of Fighters '98 - dream match never ends (Korean board 2)", GAME_SUPPORTS_SAVE )
+GAME( 1998, kof98h,    kof98,    neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The King of Fighters '98 - The Slugfest / King of Fighters '98 - dream match never ends (AES cart)", GAME_SUPPORTS_SAVE )
 GAME( 1998, lastbld2,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The Last Blade 2 / Bakumatsu Roman - Dai Ni Maku Gekka no Kenshi", GAME_SUPPORTS_SAVE )
 GAME( 1998, neocup98,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "SNK", "Neo-Geo Cup '98 - The Road to the Victory", GAME_SUPPORTS_SAVE )
 GAME( 1999, mslugx,    neogeo,   neogeo,   neogeo,   mslugx,   ROT0, "SNK", "Metal Slug X - Super Vehicle-001", GAME_SUPPORTS_SAVE )
 GAME( 1999, kof99,     neogeo,   neogeo,   neogeo,   kof99,    ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (set 1)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code & GFX */
 GAME( 1999, kof99a,    kof99,    neogeo,   neogeo,   kof99,    ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (set 2)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code & GFX, crashes going into attract demo */
 GAME( 1999, kof99e,    kof99,    neogeo,   neogeo,   kof99,    ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (earlier)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code & GFX */
-GAME( 1999, kof99n,    kof99,    neogeo,   neogeo,   kof99n,   ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (not encrypted)" , GAME_SUPPORTS_SAVE )	/* Encrypted GFX */
+GAME( 1999, kof99k,    kof99,    neogeo,   neogeo,   kof99k,   ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (Korean release)" , GAME_SUPPORTS_SAVE )	/* Encrypted GFX */
 GAME( 1999, kof99p,    kof99,    neogeo,   neogeo,   neogeo,   ROT0, "SNK", "The King of Fighters '99 - Millennium Battle (prototype)", GAME_SUPPORTS_SAVE )
 GAME( 1999, garou,     neogeo,   neogeo,   neogeo,   garou,    ROT0, "SNK", "Garou - Mark of the Wolves (set 1)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code & GFX */
 GAME( 1999, garouo,    garou,    neogeo,   neogeo,   garouo,   ROT0, "SNK", "Garou - Mark of the Wolves (set 2)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code & GFX */
@@ -7959,26 +8442,26 @@ GAME( 2003, mslug5,    neogeo,   neogeo,   neogeo,   mslug5,   ROT0, "SNK Playmo
 GAME( 2003, mslug5h,   mslug5,   neogeo,   neogeo,   mslug5,   ROT0, "SNK Playmore", "Metal Slug 5 (AES Cart)", GAME_SUPPORTS_SAVE ) /* Also found in later MVS carts */
 GAME( 2003, ms5pcb,    0,        neogeo,   ms5pcb,   ms5pcb,   ROT0, "SNK Playmore", "Metal Slug 5 (JAMMA PCB)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 2003, ms5plus,   mslug5,   neogeo,   neogeo,   ms5plus,  ROT0, "bootleg", "Metal Slug 5 Plus (bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 2003, svcpcb,    0,        neogeo,   svcpcb,   svcpcb,   ROT0, "SNK Playmore", "SNK vs. CAPCOM SVC CHAOS (JAMMA PCB, set 1)", GAME_SUPPORTS_SAVE ) // not a clone of neogeo because it's NOT a neogeo cart.
-GAME( 2003, svcpcba,   svcpcb,   neogeo,   svcpcb,   svcpcb,   ROT0, "SNK Playmore", "SNK vs. CAPCOM SVC CHAOS (JAMMA PCB, set 2)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code */
-GAME( 2003, svc,       neogeo,   neogeo,   neogeo,   svc,      ROT0, "SNK Playmore", "SNK vs. CAPCOM SVC CHAOS", GAME_SUPPORTS_SAVE )
-GAME( 2003, svcboot,   svc,      neogeo,   neogeo,   svcboot,  ROT0, "bootleg", "SNK vs. CAPCOM SVC CHAOS (bootleg)", GAME_SUPPORTS_SAVE )
-GAME( 2003, svcplus,   svc,      neogeo,   neogeo,   svcplus,  ROT0, "bootleg", "SNK vs. CAPCOM SVC CHAOS Plus (bootleg set 1)", GAME_SUPPORTS_SAVE )
-GAME( 2003, svcplusa,  svc,      neogeo,   neogeo,   svcplusa, ROT0, "bootleg", "SNK vs. CAPCOM SVC CHAOS Plus (bootleg set 2)", GAME_SUPPORTS_SAVE )
-GAME( 2003, svcsplus,  svc,      neogeo,   neogeo,   svcsplus, ROT0, "bootleg", "SNK vs. CAPCOM SVC CHAOS Super Plus (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 2003, svcpcb,    0,        neogeo,   svcpcb,   svcpcb,   ROT0, "SNK Playmore", "SNK vs. Capcom - SVC Chaos (JAMMA PCB, set 1)", GAME_SUPPORTS_SAVE ) // not a clone of neogeo because it's NOT a neogeo cart.
+GAME( 2003, svcpcba,   svcpcb,   neogeo,   svcpcb,   svcpcb,   ROT0, "SNK Playmore", "SNK vs. Capcom - SVC Chaos (JAMMA PCB, set 2)" , GAME_SUPPORTS_SAVE ) /* Encrypted Code */
+GAME( 2003, svc,       neogeo,   neogeo,   neogeo,   svc,      ROT0, "SNK Playmore", "SNK vs. Capcom - SVC Chaos", GAME_SUPPORTS_SAVE )
+GAME( 2003, svcboot,   svc,      neogeo,   neogeo,   svcboot,  ROT0, "bootleg", "SNK vs. Capcom - SVC Chaos (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 2003, svcplus,   svc,      neogeo,   neogeo,   svcplus,  ROT0, "bootleg", "SNK vs. Capcom - SVC Chaos Plus (bootleg set 1)", GAME_SUPPORTS_SAVE )
+GAME( 2003, svcplusa,  svc,      neogeo,   neogeo,   svcplusa, ROT0, "bootleg", "SNK vs. Capcom - SVC Chaos Plus (bootleg set 2)", GAME_SUPPORTS_SAVE )
+GAME( 2003, svcsplus,  svc,      neogeo,   neogeo,   svcsplus, ROT0, "bootleg", "SNK vs. Capcom - SVC Chaos Super Plus (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 2003, samsho5,   neogeo,   neogeo,   neogeo,   samsho5,  ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V / Samurai Spirits Zero (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 2003, samsho5h,  samsho5,  neogeo,   neogeo,   samsho5,  ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V / Samurai Spirits Zero (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 2003, samsho5b,  samsho5,  neogeo,   neogeo,   samsho5b, ROT0, "bootleg", "Samurai Shodown V / Samurai Spirits Zero (bootleg)", GAME_SUPPORTS_SAVE ) // different program scrambling
 GAME( 2003, kf2k3pcb,  0,        neogeo,   neogeo,   kf2k3pcb, ROT0, "SNK Playmore", "The King of Fighters 2003 (Japan, JAMMA PCB)", GAME_SUPPORTS_SAVE ) // not a clone of neogeo because it's NOT a neogeo cart.
-GAME( 2003, kof2003,   neogeo,   neogeo,   neogeo,   kof2003,  ROT0, "SNK Playmore", "The King of Fighters 2003 (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 2003, kof2003h,  kof2003,  neogeo,   neogeo,   kof2003h, ROT0, "SNK Playmore", "The King of Fighters 2003 (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 2003, kof2003,   neogeo,   neogeo,   neogeo,   kof2003,  ROT0, "SNK Playmore", "The King of Fighters 2003", GAME_SUPPORTS_SAVE )
+GAME( 2003, kof2003h,  kof2003,  neogeo,   neogeo,   kof2003h, ROT0, "SNK Playmore", "The King of Fighters 2003 (AES cart)", GAME_SUPPORTS_SAVE )
 GAME( 2003, kf2k3bl,   kof2003,  neogeo,   neogeo,   kf2k3bl , ROT0, "bootleg", "The King of Fighters 2003 (bootleg set 1)", GAME_SUPPORTS_SAVE ) // zooming is wrong because its a bootleg of the pcb version on a cart (unless it was a bootleg pcb with the new bios?)
 GAME( 2003, kf2k3bla,  kof2003,  neogeo,   neogeo,   kf2k3pl,  ROT0, "bootleg", "The King of Fighters 2003 (bootleg set 2)", GAME_SUPPORTS_SAVE ) // zooming is wrong because its a bootleg of the pcb version on a cart
 GAME( 2003, kf2k3pl,   kof2003,  neogeo,   neogeo,   kf2k3pl,  ROT0, "bootleg", "The King of Fighters 2004 Plus / Hero (The King of Fighters 2003 bootleg)", GAME_SUPPORTS_SAVE ) // zooming is wrong because its a bootleg of the pcb version on a cart
 GAME( 2003, kf2k3upl,  kof2003,  neogeo,   neogeo,   kf2k3upl, ROT0, "bootleg", "The King of Fighters 2004 Ultra Plus (The King of Fighters 2003 bootleg)", GAME_SUPPORTS_SAVE ) // zooming is wrong because its a bootleg of the pcb version on a cart
-GAME( 2003, samsh5sp,  neogeo,   neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 1, uncensored)", GAME_SUPPORTS_SAVE )
-GAME( 2003, samsh5sph, samsh5sp, neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 2, censored)", GAME_SUPPORTS_SAVE )
-GAME( 2003, samsh5spn, samsh5sp, neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 3, less censored)", GAME_SUPPORTS_SAVE )
+GAME( 2004, samsh5sp,  neogeo,   neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 1, uncensored)", GAME_SUPPORTS_SAVE )
+GAME( 2004, samsh5sph, samsh5sp, neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 2, censored)", GAME_SUPPORTS_SAVE )
+GAME( 2004, samsh5spn, samsh5sp, neogeo,   neogeo,   samsh5sp, ROT0, "Yuki Enterprise / SNK Playmore", "Samurai Shodown V Special / Samurai Spirits Zero Special (set 3, less censored)", GAME_SUPPORTS_SAVE )
 
 /* there are other bootlegs kof96ep, kf2k1pls etc.? -- work out which should be supported */
 
@@ -8002,8 +8485,8 @@ GAME( 1995, whp,       neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK / SNK"
 GAME( 1995, mosyougi,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK / SNK",        "Syougi No Tatsujin - Master of Syougi", GAME_SUPPORTS_SAVE )
 GAME( 1996, overtop,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK",              "Over Top", GAME_SUPPORTS_SAVE )
 GAME( 1996, ninjamas,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK / SNK",        "Ninja Master's - haoh-ninpo-cho", GAME_SUPPORTS_SAVE )
-GAME( 1996, twinspri,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK",              "Twinkle Star Sprites", GAME_SUPPORTS_SAVE )
-GAME( 1996, zintrckb,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "hack / bootleg",   "Zintrick / Oshidashi Zentrix (hack / bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1996, twinspri,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "ADK / SNK",        "Twinkle Star Sprites", GAME_SUPPORTS_SAVE )
+GAME( 1996, zintrckb,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "hack",             "Zintrick / Oshidashi Zentrix (hack)", GAME_SUPPORTS_SAVE )
 
 /* Aicom (was a part of Sammy) / Yumekobo (changed name in 1996) */
 GAME( 1992, viewpoin,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Sammy / Aicom", "Viewpoint", GAME_SUPPORTS_SAVE )
@@ -8036,7 +8519,7 @@ GAME( 1997, neobombe,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Hudson", "
 
 /* Monolith Corp. */
 GAME( 1990, minasan,   neogeo,   neogeo,   mjneogeo, neogeo,   ROT0, "Monolith Corp.", "Minnasanno Okagesamadesu", GAME_SUPPORTS_SAVE )
-GAME( 1991, bakatono,  neogeo,   neogeo,   mjneogeo, neogeo,   ROT0, "Monolith Corp.", "Bakatonosama Mahjong Manyuki", GAME_SUPPORTS_SAVE )
+GAME( 1991, bakatono,  neogeo,   neogeo,   mjneogeo, neogeo,   ROT0, "Monolith Corp.", "Bakatonosama Mahjong Manyuuki", GAME_SUPPORTS_SAVE )
 
 /* Nazca (later acquired by SNK) */
 GAME( 1996, turfmast,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Nazca", "Neo Turf Masters / Big Tournament Golf", GAME_SUPPORTS_SAVE )
@@ -8050,6 +8533,7 @@ GAME( 1999, s1945p,    neogeo,   neogeo,   neogeo,   s1945p,   ROT0, "Psikyo", "
 
 /* Saurus */
 GAME( 1995, quizkof,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Saurus", "Quiz King of Fighters", GAME_SUPPORTS_SAVE )
+GAME( 1995, quizkofk,  quizkof,  neogeo,   neogeo,   neogeo,   ROT0, "Saurus", "Quiz King of Fighters (Korean release)", GAME_SUPPORTS_SAVE )
 GAME( 1995, stakwin,   neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Saurus", "Stakes Winner / Stakes Winner - GI kinzen seihae no michi", GAME_SUPPORTS_SAVE )
 GAME( 1996, ragnagrd,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Saurus", "Ragnagard / Shin-Oh-Ken", GAME_SUPPORTS_SAVE )
 GAME( 1996, pgoal,     neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Saurus", "Pleasure Goal / Futsal - 5 on 5 Mini Soccer", GAME_SUPPORTS_SAVE )
@@ -8065,7 +8549,7 @@ GAME( 1996, wakuwak7,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Sunsoft", 
 
 /* Taito */
 GAME( 1994, pbobblen,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Taito", "Puzzle Bobble / Bust-A-Move (Neo-Geo) (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1994, pbobblenb, pbobblen, neogeo,   neogeo,   neogeo,   ROT0, "Taito", "Puzzle Bobble / Bust-A-Move (Neo-Geo) (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1994, pbobblenb, pbobblen, neogeo,   neogeo,   neogeo,   ROT0, "bootleg", "Puzzle Bobble / Bust-A-Move (Neo-Geo) (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1999, pbobbl2n,  neogeo,   neogeo,   neogeo,   neogeo,   ROT0, "Taito (SNK license)", "Puzzle Bobble 2 / Bust-A-Move Again (Neo-Geo)", GAME_SUPPORTS_SAVE )
 GAME( 2003, pnyaa,     neogeo,   neogeo,   neogeo,   pnyaa,    ROT0, "Aiky / Taito", "Pochi and Nyaa", GAME_SUPPORTS_SAVE )
 

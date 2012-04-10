@@ -116,8 +116,6 @@ EPR10135.19
 
 
 --- Team Japump!!! ---
-http://www.rainemu.com/japump/
-http://japump.i.am/
 Dumped by Chackn
 02/25/2000
 
@@ -128,7 +126,7 @@ Dumped by Chackn
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "machine/segacrpt.h"
+#include "machine/segacrp2.h"
 #include "sound/2203intf.h"
 #include "includes/angelkds.h"
 
@@ -579,7 +577,7 @@ static MACHINE_START( angelkds )
 {
 	angelkds_state *state = (angelkds_state *)machine->driver_data;
 
-	state->subcpu = devtag_get_device(machine, "sub");
+	state->subcpu = machine->device("sub");
 
 	state_save_register_global(machine, state->layer_ctrl);
 	state_save_register_global(machine, state->txbank);
@@ -762,7 +760,7 @@ static DRIVER_INIT( spcpostn )
 {
 	UINT8 *RAM = memory_region(machine, "user1");
 
-	spcpostn_decode(machine, "maincpu");
+	sega_317_0005_decode(machine, "maincpu");
 	memory_configure_bank(machine, "bank1", 0, 10, &RAM[0x0000], 0x4000);
 }
 

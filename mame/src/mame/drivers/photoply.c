@@ -31,12 +31,12 @@ static UINT8 vga_regs[0x19];
 
 #define SET_VISIBLE_AREA(_x_,_y_) \
 	{ \
-	rectangle visarea = *video_screen_get_visible_area(machine->primary_screen); \
+	rectangle visarea; \
 	visarea.min_x = 0; \
 	visarea.max_x = _x_-1; \
 	visarea.min_y = 0; \
 	visarea.max_y = _y_-1; \
-	video_screen_configure(machine->primary_screen, _x_, _y_, &visarea, video_screen_get_frame_period(machine->primary_screen).attoseconds ); \
+	machine->primary_screen->configure(_x_, _y_, visarea, machine->primary_screen->frame_period().attoseconds ); \
 	} \
 
 #define RES_320x200 0
@@ -467,12 +467,12 @@ static MACHINE_START( photoply )
 //  bank = -1;
 //  lastvalue = -1;
 //  hv_blank = 0;
-	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
-	photoply_devices.pit8253 = devtag_get_device( machine, "pit8254" );
-	photoply_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
-	photoply_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );
-	photoply_devices.dma8237_1 = devtag_get_device( machine, "dma8237_1" );
-	photoply_devices.dma8237_2 = devtag_get_device( machine, "dma8237_2" );
+	cpu_set_irq_callback(machine->device("maincpu"), irq_callback);
+	photoply_devices.pit8253 = machine->device( "pit8254" );
+	photoply_devices.pic8259_1 = machine->device( "pic8259_1" );
+	photoply_devices.pic8259_2 = machine->device( "pic8259_2" );
+	photoply_devices.dma8237_1 = machine->device( "dma8237_1" );
+	photoply_devices.dma8237_2 = machine->device( "dma8237_2" );
 
 	init_pc_common(machine, PCCOMMON_KEYBOARD_AT, photoply_set_keyb_int);
 	mc146818_init(machine, MC146818_STANDARD);

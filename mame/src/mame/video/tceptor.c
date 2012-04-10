@@ -403,7 +403,7 @@ VIDEO_START( tceptor )
 	decode_sprite32(machine, "gfx4");
 
 	/* allocate temp bitmaps */
-	temp_bitmap = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	temp_bitmap = machine->primary_screen->alloc_compatible_bitmap();
 
 	namco_road_init(machine, gfx_index);
 
@@ -534,13 +534,13 @@ VIDEO_UPDATE( tceptor )
 	int pri;
 	int bg_center = 144 - ((((bg1_scroll_x + bg2_scroll_x ) & 0x1ff) - 288) / 2);
 
-	running_device *_2d_screen       = devtag_get_device(screen->machine, "2dscreen");
-	running_device *_3d_left_screen  = devtag_get_device(screen->machine, "3dleft");
-	running_device *_3d_right_screen = devtag_get_device(screen->machine, "3dright");
+	running_device *_2d_screen       = screen->machine->device("2dscreen");
+	running_device *_3d_left_screen  = screen->machine->device("3dleft");
+	running_device *_3d_right_screen = screen->machine->device("3dright");
 
 	if (screen != _2d_screen)
 	{
-		int frame = video_screen_get_frame_number(screen);
+		int frame = screen->frame_number();
 
 		if ((frame & 1) == 1 && screen == _3d_left_screen)
 			return UPDATE_HAS_NOT_CHANGED;

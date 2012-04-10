@@ -187,7 +187,7 @@ Notes:
 
 2008-08
 Dip locations verified for:
-    - dsccr94j, gunforce, inthunt, majtitl2, uccops [manual]
+    - dsoccr94j, gunforce, inthunt, majtitl2, uccops [manual]
     - bmaster, hook, lethalt, mysticri, rtypeleo [dip listing]
 psoldier dip locations still need veritication.
 
@@ -242,7 +242,7 @@ static MACHINE_START( m92 )
 
 static MACHINE_RESET( m92 )
 {
-	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+	timer_adjust_oneshot(scanline_timer, machine->primary_screen->time_until_pos(0), 0);
 }
 
 /*****************************************************************************/
@@ -254,21 +254,21 @@ static TIMER_CALLBACK( m92_scanline_interrupt )
 	/* raster interrupt */
 	if (scanline == m92_raster_irq_position)
 	{
-		video_screen_update_partial(machine->primary_screen, scanline);
+		machine->primary_screen->update_partial(scanline);
 		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M92_IRQ_2);
 	}
 
 	/* VBLANK interrupt */
-	else if (scanline == video_screen_get_visible_area(machine->primary_screen)->max_y + 1)
+	else if (scanline == machine->primary_screen->visible_area().max_y + 1)
 	{
-		video_screen_update_partial(machine->primary_screen, scanline);
+		machine->primary_screen->update_partial(scanline);
 		cputag_set_input_line_and_vector(machine, "maincpu", 0, HOLD_LINE, M92_IRQ_0);
 	}
 
 	/* adjust for next scanline */
-	if (++scanline >= video_screen_get_height(machine->primary_screen))
+	if (++scanline >= machine->primary_screen->height())
 		scanline = 0;
-	timer_adjust_oneshot(scanline_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	timer_adjust_oneshot(scanline_timer, machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 /*****************************************************************************/
@@ -320,7 +320,7 @@ enum { VECTOR_INIT, YM2151_ASSERT, YM2151_CLEAR, V30_ASSERT, V30_CLEAR };
 
 static TIMER_CALLBACK( setvector_callback )
 {
-	if (!devtag_get_device(machine, "soundcpu"))
+	if (!machine->device("soundcpu"))
 		return;
 
 	switch(param)
@@ -333,9 +333,9 @@ static TIMER_CALLBACK( setvector_callback )
 	}
 
 	if (irqvector & 0x2)		/* YM2151 has precedence */
-		cpu_set_input_line_vector(devtag_get_device(machine, "soundcpu"), 0, 0x18);
+		cpu_set_input_line_vector(machine->device("soundcpu"), 0, 0x18);
 	else if (irqvector & 0x1)	/* V30 */
-		cpu_set_input_line_vector(devtag_get_device(machine, "soundcpu"), 0, 0x19);
+		cpu_set_input_line_vector(machine->device("soundcpu"), 0, 0x19);
 
 	if (irqvector == 0)	/* no IRQs pending */
 		cputag_set_input_line(machine, "soundcpu", 0, CLEAR_LINE);
@@ -789,7 +789,7 @@ static INPUT_PORTS_START( psoldier )
 INPUT_PORTS_END
 
 
-static INPUT_PORTS_START( dsccr94j )
+static INPUT_PORTS_START( dsoccr94j )
 	PORT_INCLUDE(m92_4player)
 	/* Dip Switch 2, dip 2 is listed as "Don't Change" and is "OFF" */
 
@@ -1041,8 +1041,7 @@ static MACHINE_DRIVER_START( ppan )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1000000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -1080,7 +1079,7 @@ static MACHINE_DRIVER_START( psoldier )
 MACHINE_DRIVER_END
 
 static const nec_config dsoccr94_config ={ dsoccr94_decryption_table, };
-static MACHINE_DRIVER_START( dsccr94j )
+static MACHINE_DRIVER_START( dsoccr94j )
 	MDRV_IMPORT_FROM(m92)
 	MDRV_CPU_MODIFY("soundcpu")
 	MDRV_CPU_CONFIG(dsoccr94_config)
@@ -1676,6 +1675,35 @@ ROM_START( gunhohki )
 	ROM_LOAD( "mr-da.bin", 0x000000, 0x040000, CRC(1a11fc59) SHA1(6d1f4ca688bf015ecbbe369fbc0eb5e2bcaefcfc) )
 ROM_END
 
+ROM_START( mysticrib )
+	ROM_REGION( 0x100000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "h0", 0x000001, 0x040000, CRC(e38c1f56) SHA1(491f370c66c36ab56a4bee3f335fe7357ff5668b) )
+	ROM_LOAD16_BYTE( "l0", 0x000000, 0x040000, CRC(77846e48) SHA1(c715136c4ed8dda24ec1ed634e6308d23c92ec05) )
+	ROM_LOAD16_BYTE( "h1", 0x080001, 0x010000, CRC(4dcb085b) SHA1(7c053f5ef2978e574d3d2d9f5c12035473d13c3b) )
+	ROM_LOAD16_BYTE( "l1", 0x080000, 0x010000, CRC(88df4f70) SHA1(f55769a107fe3f5446d8268f66e895b02727c61e) )
+
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	// older revision code? rev 3.31, doesn't work?
+	ROM_LOAD16_BYTE( "sh0", 0x000001, 0x010000, CRC(fc7221ee) SHA1(4e714f31ce0d1bb2f6c649a26af748f96912848e) )
+	ROM_LOAD16_BYTE( "sl0", 0x000000, 0x010000, CRC(65c809e6) SHA1(45a860b250219a15aa8a2177251f4d3f2e559b9e) )
+
+	ROM_REGION( 0x100000, "gfx1", 0 ) /* Tiles */
+	ROM_LOAD( "mr-c0.bin", 0x000000, 0x040000, CRC(872a8fad) SHA1(236406e5959c81a1cffe96fef02d637c2150ce1e) )
+	ROM_LOAD( "mr-c1.bin", 0x040000, 0x040000, CRC(d2ffb27a) SHA1(fedfb430ce8a8953b2f78970d0b0dc5571de333c) )
+	ROM_LOAD( "mr-c2.bin", 0x080000, 0x040000, CRC(62bff287) SHA1(cb7b73c4a26737f1a1f9cc9423ae51c284368b1b) )
+	ROM_LOAD( "mr-c3.bin", 0x0c0000, 0x040000, CRC(d0da62ab) SHA1(96c7c8e1d8dafb797731652fa91d3048aa157185) )
+
+	ROM_REGION( 0x400000, "gfx2", 0 ) /* Sprites */
+	ROM_LOAD( "mr-o00.bin", 0x000000, 0x080000, CRC(a0f9ce16) SHA1(ae423313d189ebddc6d5d0785ac484e0cdf79112) )
+	ROM_LOAD( "mr-o10.bin", 0x100000, 0x080000, CRC(4e70a9e9) SHA1(8f6b043b03420a590a1081c99311723169126332) )
+	ROM_LOAD( "mr-o20.bin", 0x200000, 0x080000, CRC(b9c468fc) SHA1(dc42a5b80cad5373fce03cc416b9d742fcbec6e9) )
+	ROM_LOAD( "mr-o30.bin", 0x300000, 0x080000, CRC(cc32433a) SHA1(a1a1ab09c4bd6c9ae85529c1aa5427ad3126b914) )
+
+	ROM_REGION( 0x40000, "irem", 0 )
+	ROM_LOAD( "mr-da.bin", 0x000000, 0x040000, CRC(1a11fc59) SHA1(6d1f4ca688bf015ecbbe369fbc0eb5e2bcaefcfc) )
+ROM_END
+
+
 ROM_START( uccops )
 	ROM_REGION( 0x100000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "uc_h0.rom", 0x000001, 0x040000, CRC(240aa5f7) SHA1(8d864bb1377e9f6d266631ed365c5809b9da33f8) )
@@ -1968,7 +1996,7 @@ ROM_START( psoldier )
 	ROM_LOAD( "f3_w95.da", 0x000000, 0x080000, CRC(f7ca432b) SHA1(274458b68f906e6043bc36110a4903280647ac2d) )
 ROM_END
 
-ROM_START( dsccr94j )
+ROM_START( dsoccr94j )
 	ROM_REGION( 0x180000, "maincpu", 0 )
 	ROM_LOAD16_BYTE("a3_-h0-e.bin", 0x000001, 0x040000, CRC(8de1dbcd) SHA1(3726c7f8bc1e61a488ab7ef0b79a7a45054235c2) )
 	ROM_LOAD16_BYTE("a3_-l0-e.bin", 0x000000, 0x040000, CRC(d3df8bfd) SHA1(b98064579491aef8eb8ccb94195412e79674a0c1) )
@@ -2173,7 +2201,7 @@ static DRIVER_INIT( psoldier )
 	sound_status = 0x80;
 }
 
-static DRIVER_INIT( dsccr94j )
+static DRIVER_INIT( dsoccr94j )
 {
 	init_m92(machine, 1);
 }
@@ -2200,6 +2228,9 @@ GAME( 1992, uccopsar, uccops,   uccops,        uccops,   uccops,   ROT0,   "Irem
 GAME( 1992, uccopsj,  uccops,   uccops,        uccops,   uccops,   ROT0,   "Irem",         "Undercover Cops (Japan)", 0 )
 GAME( 1992, mysticri, 0,        mysticri,      mysticri, mysticri, ROT0,   "Irem",         "Mystic Riders (World)", 0 )
 GAME( 1992, gunhohki, mysticri, mysticri,      mysticri, mysticri, ROT0,   "Irem",         "Gun Hohki (Japan)", 0 )
+// cheaply produced Korean board, has original chips, but lacks any proper labels - uses older revision sound program that doesn't work in MAME right now
+// main code is also significantly different to the supported original set, so it might just be a legitimate early revision on a cheap board
+GAME( 1992, mysticrib,mysticri, mysticri,      mysticri, mysticri, ROT0,   "Irem",         "Mystic Riders (bootleg?)", GAME_NO_SOUND )
 GAME( 1992, majtitl2, 0,        majtitl2,      majtitl2, majtitl2, ROT0,   "Irem",         "Major Title 2 (World)", 0 )
 GAME( 1992, majtitl2j,majtitl2, majtitl2,      majtitl2, majtitl2, ROT0,   "Irem",         "Major Title 2 (Japan)", 0 )
 GAME( 1992, skingame, majtitl2, majtitl2,      majtitl2, majtitl2, ROT0,   "Irem America", "The Irem Skins Game (US set 1)", 0 )
@@ -2217,6 +2248,6 @@ GAME( 1993, nbbatman, 0,        nbbatman,      nbbatman, nbbatman, ROT0,   "Irem
 GAME( 1993, leaguemn, nbbatman, nbbatman,      nbbatman, nbbatman, ROT0,   "Irem",         "Yakyuu Kakutou League-Man (Japan)", GAME_IMPERFECT_GRAPHICS )
 GAME( 1993, ssoldier, 0,        psoldier,      psoldier, ssoldier, ROT0,   "Irem America", "Superior Soldiers (US)", GAME_IMPERFECT_SOUND )
 GAME( 1993, psoldier, ssoldier, psoldier,      psoldier, psoldier, ROT0,   "Irem",         "Perfect Soldiers (Japan)", GAME_IMPERFECT_SOUND )
-GAME( 1994, dsccr94j, dsoccr94, dsccr94j,      dsccr94j, dsccr94j, ROT0,   "Irem",         "Dream Soccer '94 (Japan)", 0 )
+GAME( 1994, dsoccr94j,dsoccr94, dsoccr94j,     dsoccr94j,dsoccr94j,ROT0,   "Irem",         "Dream Soccer '94 (Japan)", 0 )
 GAME( 1994, gunforc2, 0,        gunforc2,      gunforc2, gunforc2, ROT0,   "Irem",         "Gunforce 2 (US)", 0 )
 GAME( 1994, geostorm, gunforc2, gunforc2,      gunforc2, gunforc2, ROT0,   "Irem",         "Geostorm (Japan)", 0 )

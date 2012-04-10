@@ -165,9 +165,9 @@ static void draw_object(running_machine *machine, bitmap_t *bitmap, const rectan
 	}
 }
 
-static void taitojc_exit(running_machine *machine)
+static void taitojc_exit(running_machine &machine)
 {
-	taitojc_state *state = (taitojc_state *)machine->driver_data;
+	taitojc_state *state = (taitojc_state *)machine.driver_data;
 	poly_free(state->poly);
 }
 
@@ -177,7 +177,7 @@ VIDEO_START( taitojc )
 	int width, height;
 
 	state->poly = poly_alloc(machine, 4000, sizeof(poly_extra_data), POLYFLAG_ALLOW_QUADS);
-	add_exit_callback(machine, taitojc_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, taitojc_exit);
 
 	/* find first empty slot to decode gfx */
 	for (state->gfx_index = 0; state->gfx_index < MAX_GFX_ELEMENTS; state->gfx_index++)
@@ -194,14 +194,14 @@ VIDEO_START( taitojc )
 	state->tile_ram = auto_alloc_array_clear(machine, UINT32, 0x4000/4);
 
 	/* create the char set (gfx will then be updated dynamically from RAM) */
-	machine->gfx[state->gfx_index] = gfx_element_alloc(machine, &taitojc_char_layout, (UINT8 *)state->char_ram, machine->config->total_colors / 16, 0);
+	machine->gfx[state->gfx_index] = gfx_element_alloc(machine, &taitojc_char_layout, (UINT8 *)state->char_ram, machine->total_colors() / 16, 0);
 
 	state->texture = auto_alloc_array(machine, UINT8, 0x400000);
 
-	state->framebuffer = video_screen_auto_bitmap_alloc(machine->primary_screen);
+	state->framebuffer = machine->primary_screen->alloc_compatible_bitmap();
 
-	width = video_screen_get_width(machine->primary_screen);
-	height = video_screen_get_height(machine->primary_screen);
+	width = machine->primary_screen->width();
+	height = machine->primary_screen->height();
 	state->zbuffer = auto_bitmap_alloc(machine, width, height, BITMAP_FORMAT_INDEXED16);
 }
 
@@ -481,7 +481,7 @@ void taitojc_render_polygons(running_machine *machine, UINT16 *polygon_fifo, int
 
 				if (vert[0].p[0] < 0x8000 && vert[1].p[0] < 0x8000 && vert[2].p[0] < 0x8000)
 				{
-					poly_render_triangle(state->poly, state->framebuffer, video_screen_get_visible_area(machine->primary_screen), render_texture_scan, 4, &vert[0], &vert[1], &vert[2]);
+					poly_render_triangle(state->poly, state->framebuffer, &machine->primary_screen->visible_area(), render_texture_scan, 4, &vert[0], &vert[1], &vert[2]);
 				}
 				break;
 			}
@@ -529,11 +529,11 @@ void taitojc_render_polygons(running_machine *machine, UINT16 *polygon_fifo, int
 						vert[2].p[1] == vert[3].p[1])
 					{
 						// optimization: all colours the same -> render solid
-						poly_render_quad(state->poly, state->framebuffer, video_screen_get_visible_area(machine->primary_screen), render_solid_scan, 2, &vert[0], &vert[1], &vert[2], &vert[3]);
+						poly_render_quad(state->poly, state->framebuffer, &machine->primary_screen->visible_area(), render_solid_scan, 2, &vert[0], &vert[1], &vert[2], &vert[3]);
 					}
 					else
 					{
-						poly_render_quad(state->poly, state->framebuffer, video_screen_get_visible_area(machine->primary_screen), render_shade_scan, 2, &vert[0], &vert[1], &vert[2], &vert[3]);
+						poly_render_quad(state->poly, state->framebuffer, &machine->primary_screen->visible_area(), render_shade_scan, 2, &vert[0], &vert[1], &vert[2], &vert[3]);
 					}
 				}
 				break;
@@ -601,7 +601,7 @@ void taitojc_render_polygons(running_machine *machine, UINT16 *polygon_fifo, int
 
 				if (vert[0].p[0] < 0x8000 && vert[1].p[0] < 0x8000 && vert[2].p[0] < 0x8000 && vert[3].p[0] < 0x8000)
 				{
-					poly_render_quad(state->poly, state->framebuffer, video_screen_get_visible_area(machine->primary_screen), render_texture_scan, 4, &vert[0], &vert[1], &vert[2], &vert[3]);
+					poly_render_quad(state->poly, state->framebuffer, &machine->primary_screen->visible_area(), render_texture_scan, 4, &vert[0], &vert[1], &vert[2], &vert[3]);
 				}
 				break;
 			}
@@ -627,8 +627,8 @@ void taitojc_clear_frame(running_machine *machine)
 
 	cliprect.min_x = 0;
 	cliprect.min_y = 0;
-	cliprect.max_x = video_screen_get_width(machine->primary_screen) - 1;
-	cliprect.max_y = video_screen_get_height(machine->primary_screen) - 1;
+	cliprect.max_x = machine->primary_screen->width() - 1;
+	cliprect.max_y = machine->primary_screen->height() - 1;
 
 	bitmap_fill(state->framebuffer, &cliprect, 0);
 	bitmap_fill(state->zbuffer, &cliprect, 0xffff);

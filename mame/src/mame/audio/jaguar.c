@@ -339,11 +339,11 @@ WRITE32_HANDLER( jaguar_jerry_regs32_w )
 static WRITE32_HANDLER( dsp_flags_w )
 {
 	/* write the data through */
-	jaguardsp_ctrl_w(devtag_get_device(space->machine, "audiocpu"), offset, data, mem_mask);
+	jaguardsp_ctrl_w(space->machine->device("audiocpu"), offset, data, mem_mask);
 
 	/* if they were clearing the A2S interrupt, see if we are headed for the spin */
 	/* loop with R22 != 0; if we are, just start spinning again */
-	if (space->cpu == devtag_get_device(space->machine, "audiocpu") && ACCESSING_BITS_8_15 && (data & 0x400))
+	if (space->cpu == space->machine->device("audiocpu") && ACCESSING_BITS_8_15 && (data & 0x400))
 	{
 		/* see if we're going back to the spin loop */
 		if (!(data & 0x04000) && cpu_get_reg(space->cpu, JAGUAR_R22) != 0)
@@ -370,8 +370,8 @@ static WRITE32_HANDLER( dsp_flags_w )
 TIMER_DEVICE_CALLBACK( jaguar_serial_callback )
 {
 	/* assert the A2S IRQ on CPU #2 (DSP) */
-	cputag_set_input_line(timer->machine, "audiocpu", 1, ASSERT_LINE);
-	jaguar_dsp_resume(timer->machine);
+	cputag_set_input_line(timer.machine, "audiocpu", 1, ASSERT_LINE);
+	jaguar_dsp_resume(timer.machine);
 
 	/* fix flaky code in interrupt handler which thwarts our speedup */
 	if ((jaguar_dsp_ram[0x3e/4] & 0xffff) == 0xbfbc &&
@@ -389,8 +389,8 @@ TIMER_DEVICE_CALLBACK( jaguar_serial_callback )
 TIMER_DEVICE_CALLBACK( jaguar_serial_callback )
 {
 	/* assert the A2S IRQ on CPU #2 (DSP) */
-	cputag_set_input_line(timer->machine, "audiocpu", 1, ASSERT_LINE);
-	jaguar_dsp_resume(timer->machine);
+	cputag_set_input_line(timer.machine, "audiocpu", 1, ASSERT_LINE);
+	jaguar_dsp_resume(timer.machine);
 }
 
 #endif
@@ -416,12 +416,12 @@ WRITE32_HANDLER( jaguar_serial_w )
 	{
 		/* right DAC */
 		case 2:
-			dac_signed_data_16_w(devtag_get_device(space->machine, "dac2"), (data & 0xffff) ^ 0x8000);
+			dac_signed_data_16_w(space->machine->device("dac2"), (data & 0xffff) ^ 0x8000);
 			break;
 
 		/* left DAC */
 		case 3:
-			dac_signed_data_16_w(devtag_get_device(space->machine, "dac1"), (data & 0xffff) ^ 0x8000);
+			dac_signed_data_16_w(space->machine->device("dac1"), (data & 0xffff) ^ 0x8000);
 			break;
 
 		/* frequency register */
@@ -436,7 +436,8 @@ WRITE32_HANDLER( jaguar_serial_w )
 			if ((data & 0x3f) == 0x15)
 			{
 				attotime rate = attotime_mul(ATTOTIME_IN_HZ(26000000), 32 * 2 * (serial_frequency + 1));
-				timer_device_adjust_periodic(devtag_get_device(space->machine, "serial_timer"), rate, 0, rate);
+				timer_device *serial_timer = space->machine->device<timer_device>("serial_timer");
+				serial_timer->adjust(rate, 0, rate);
 			}
 			break;
 

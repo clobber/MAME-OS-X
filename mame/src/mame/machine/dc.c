@@ -409,7 +409,7 @@ void dc_update_interrupt_status(running_machine *machine)
 	}
 
 	level=dc_compute_interrupt_level(machine);
-	sh4_set_irln_input(devtag_get_device(machine, "maincpu"), 15-level);
+	sh4_set_irln_input(machine->device("maincpu"), 15-level);
 
 	/* Wave DMA HW trigger */
 	if(wave_dma.flag && ((wave_dma.sel & 2) == 2))
@@ -663,7 +663,7 @@ WRITE64_HANDLER( dc_sysctrl_w )
 				ddtdata.direction=0;
 				ddtdata.channel=2;
 				ddtdata.mode=25; //011001
-				sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+				sh4_dma_ddt(space->machine->device("maincpu"),&ddtdata);
 				#if DEBUG_SYSCTRL
 				if ((address >= 0x11000000) && (address <= 0x11FFFFFF))
 					if (dc_sysctrl_regs[SB_LMMODE0])
@@ -793,7 +793,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					ddtdata.direction=0;	// 0 source to buffer, 1 buffer to source
 					ddtdata.channel= -1;	// not used
 					ddtdata.mode= -1;		// copy from/to buffer
-					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
+					sh4_dma_ddt(space->machine->device("maincpu"), &ddtdata);
 
 					endflag=buff[0] & 0x80000000;
 					port=(buff[0] >> 16) & 3;
@@ -832,7 +832,7 @@ WRITE64_HANDLER( naomi_maple_w )
 								ddtdata.direction=0;
 								ddtdata.channel= -1;
 								ddtdata.mode=-1;
-								sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+								sh4_dma_ddt(space->machine->device("maincpu"),&ddtdata);
 								chk=0;
 								for (a=1;a < length;a++)
 								{
@@ -858,7 +858,7 @@ WRITE64_HANDLER( naomi_maple_w )
 								ddtdata.direction=0;
 								ddtdata.channel= -1;
 								ddtdata.mode=-1;
-								sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+								sh4_dma_ddt(space->machine->device("maincpu"),&ddtdata);
 
 								subcommand = buff[0] & 0xff;
 								#if DEBUG_MAPLE
@@ -1062,7 +1062,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					ddtdata.destination=destination;
 					ddtdata.buffer=buff;
 					ddtdata.direction=1;
-					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+					sh4_dma_ddt(space->machine->device("maincpu"),&ddtdata);
 
 					if (endflag)
 					{
@@ -1139,7 +1139,7 @@ WRITE64_HANDLER( dc_maple_w )
 					ddtdata.direction=0;	// 0 source to buffer, 1 buffer to source
 					ddtdata.channel= -1;	// not used
 					ddtdata.mode= -1;		// copy from/to buffer
-					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
+					sh4_dma_ddt(space->machine->device("maincpu"), &ddtdata);
 
 					endflag=buff[0] & 0x80000000;
 					port=(buff[0] >> 16) & 3;
@@ -1211,7 +1211,7 @@ WRITE64_HANDLER( dc_maple_w )
 					ddtdata.destination=destination;
 					ddtdata.buffer=buff;
 					ddtdata.direction=1;
-					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+					sh4_dma_ddt(space->machine->device("maincpu"),&ddtdata);
 
 					if (endflag)
 					{
@@ -1316,8 +1316,8 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 			}
 			g1bus_regs[SB_GDST] = dat & 1;
 //          printf("ROM board DMA to %x len %x (PC %x)\n", g1bus_regs[SB_GDSTAR], g1bus_regs[SB_GDLEN], cpu_get_pc(space->cpu));
-			ROM = (UINT8 *)space->machine->device("rom_board")->get_runtime_ptr(DEVINFO_PTR_MEMORY);
-			dmaoffset = (UINT32)space->machine->device("rom_board")->get_runtime_int(DEVINFO_INT_DMAOFFSET);
+			ROM = (UINT8 *)naomibd_get_memory(space->machine->device("rom_board"));
+			dmaoffset = naomibd_get_dmaoffset(space->machine->device("rom_board"));
 			ddtdata.destination=g1bus_regs[SB_GDSTAR];		// destination address
 			ddtdata.length=g1bus_regs[SB_GDLEN] >> 5;		// words to transfer
 			/* data in the lower 5 bits makes the length size to round by 32 bytes, this'll be needed by Virtua Tennis to boot (according to Deunan) */
@@ -1330,7 +1330,7 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 			ddtdata.channel= -1;	// not used
 			ddtdata.mode= -1;		// copy from/to buffer
 			mame_printf_verbose("G1CTRL: transfer %x from ROM %08x to sdram %08x\n", g1bus_regs[SB_GDLEN], dmaoffset, g1bus_regs[SB_GDSTAR]);
-			sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
+			sh4_dma_ddt(space->machine->device("maincpu"), &ddtdata);
 			/* Note: KOF Neowave definitely wants this to be delayed (!) */
 			/* FIXME: timing of this */
 			timer_set(space->machine, ATTOTIME_IN_USEC(500), NULL, 0, gdrom_dma_irq);
@@ -1578,8 +1578,8 @@ static void rtc_initial_setup(running_machine *machine)
 	static UINT32 current_time;
 	static int year_count,cur_year,i;
 	static const int month_to_day_conversion[12] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
-	mame_system_time systime;
-	mame_get_base_datetime(machine, &systime);
+	system_time systime;
+	machine->base_datetime(systime);
 
 	memset(dc_rtcregister, 0, sizeof(dc_rtcregister));
 

@@ -136,7 +136,7 @@ struct _tilemap_private
 
 /* system management helpers */
 static tilemap_t *tilemap_create_common(running_machine *machine, void *get_info_object, tile_get_info_func tile_get_info, tilemap_mapper_func mapper, int tilewidth, int tileheight, int cols, int rows);
-static void tilemap_exit(running_machine *machine);
+static void tilemap_exit(running_machine &machine);
 static STATE_POSTLOAD( tilemap_postload );
 static void tilemap_dispose(tilemap_t *tmap);
 
@@ -291,13 +291,13 @@ void tilemap_init(running_machine *machine)
 	if (machine->primary_screen == NULL)
 		return;
 
-	screen_width  = video_screen_get_width(machine->primary_screen);
-	screen_height = video_screen_get_height(machine->primary_screen);
+	screen_width  = machine->primary_screen->width();
+	screen_height = machine->primary_screen->height();
 
 	if (screen_width != 0 && screen_height != 0)
 	{
 		machine->priority_bitmap = auto_bitmap_alloc(machine, screen_width, screen_height, BITMAP_FORMAT_INDEXED8);
-		add_exit_callback(machine, tilemap_exit);
+		machine->add_notifier(MACHINE_NOTIFY_EXIT, tilemap_exit);
 	}
 }
 
@@ -322,7 +322,7 @@ tilemap_t *tilemap_create(running_machine *machine, tile_get_info_func tile_get_
     is owned by a device
 -------------------------------------------------*/
 
-tilemap_t *tilemap_create_device(running_device *device, tile_get_info_device_func tile_get_info, tilemap_mapper_func mapper, int tilewidth, int tileheight, int cols, int rows)
+tilemap_t *tilemap_create_device(device_t *device, tile_get_info_device_func tile_get_info, tilemap_mapper_func mapper, int tilewidth, int tileheight, int cols, int rows)
 {
 	return tilemap_create_common(device->machine, (void *)device, (tile_get_info_func)tile_get_info, mapper, tilewidth, tileheight, cols, rows);
 }
@@ -836,8 +836,8 @@ profiler_mark_start(PROFILER_TILEMAP_DRAW);
 		tmap->gfx_used = 0;
 	}
 
-	width  = video_screen_get_width(tmap->machine->primary_screen);
-	height = video_screen_get_height(tmap->machine->primary_screen);
+	width  = tmap->machine->primary_screen->width();
+	height = tmap->machine->primary_screen->height();
 
 	/* XY scrolling playfield */
 	if (tmap->scrollrows == 1 && tmap->scrollcols == 1)
@@ -1119,9 +1119,9 @@ TILEMAP_MAPPER( tilemap_scan_cols_flip_xy )
     tilemap system
 -------------------------------------------------*/
 
-static void tilemap_exit(running_machine *machine)
+static void tilemap_exit(running_machine &machine)
 {
-	tilemap_private *tilemap_data = machine->tilemap_data;
+	tilemap_private *tilemap_data = machine.tilemap_data;
 
 	/* free all the tilemaps in the list */
 	if (tilemap_data != NULL)

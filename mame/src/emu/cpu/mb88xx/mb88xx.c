@@ -73,8 +73,8 @@ struct _mb88_state
 
     /* IRQ handling */
     UINT8 pending_interrupt;
-    cpu_irq_callback irqcallback;
-    running_device *device;
+    device_irq_callback irqcallback;
+    legacy_cpu_device *device;
     const address_space *program;
     const address_space *data;
     const address_space *io;
@@ -84,14 +84,12 @@ struct _mb88_state
 INLINE mb88_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_MB88 ||
-		   cpu_get_type(device) == CPU_MB8841 ||
-		   cpu_get_type(device) == CPU_MB8842 ||
-		   cpu_get_type(device) == CPU_MB8843 ||
-		   cpu_get_type(device) == CPU_MB8844);
-	return (mb88_state *)device->token;
+	assert(device->type() == MB88 ||
+		   device->type() == MB8841 ||
+		   device->type() == MB8842 ||
+		   device->type() == MB8843 ||
+		   device->type() == MB8844);
+	return (mb88_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 static TIMER_CALLBACK( serial_timer );
@@ -137,9 +135,9 @@ static CPU_INIT( mb88 )
 {
 	mb88_state *cpustate = get_safe_token(device);
 
-	if ( device->baseconfig().static_config )
+	if ( device->baseconfig().static_config() )
 	{
-		const mb88_cpu_core *_config = (const mb88_cpu_core*)device->baseconfig().static_config;
+		const mb88_cpu_core *_config = (const mb88_cpu_core*)device->baseconfig().static_config();
 		cpustate->PLA = _config->PLA_config;
 	}
 
@@ -210,7 +208,7 @@ static CPU_RESET( mb88 )
 
 static TIMER_CALLBACK( serial_timer )
 {
-	mb88_state *cpustate = get_safe_token((running_device *)ptr);
+	mb88_state *cpustate = get_safe_token((cpu_device *)ptr);
 
 	cpustate->SBcount++;
 
@@ -247,7 +245,7 @@ static int pla( mb88_state *cpustate, int inA, int inB )
 static void set_irq_line(mb88_state *cpustate, int state)
 {
 	/* on falling edge trigger interrupt */
-	if ( (cpustate->pio & 0x04) && cpustate->nf && state == CLEAR_LINE )
+	if ( (cpustate->pio & 0x04) && cpustate->nf == 0 && state != CLEAR_LINE )
 	{
 		cpustate->pending_interrupt |= INT_CAUSE_EXTERNAL;
 	}
@@ -263,7 +261,7 @@ static void update_pio_enable( mb88_state *cpustate, UINT8 newpio )
 		if ((newpio & 0x30) == 0)
 			timer_adjust_oneshot(cpustate->serial, attotime_never, 0);
 		else if ((newpio & 0x30) == 0x20)
-			timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE));
+			timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock() / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock() / SERIAL_PRESCALE));
 		else
 			fatalerror("mb88xx: update_pio_enable set serial enable to unsupported value %02X\n", newpio & 0x30);
 	}
@@ -339,8 +337,6 @@ void mb88_external_clock_w(running_device *device, int state)
 static CPU_EXECUTE( mb88 )
 {
 	mb88_state *cpustate = get_safe_token(device);
-
-	cpustate->icount = cycles;
 
 	while (cpustate->icount > 0)
 	{
@@ -597,7 +593,7 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x24: /* tstr ZCS:..x */
 				arg = READPORT( MB88_PORTR0+(cpustate->Y/4) );
-				cpustate->st = ( arg & ( 1 << (cpustate->Y%4) ) ) ? 1 : 0;
+				cpustate->st = ( arg & ( 1 << (cpustate->Y%4) ) ) ? 0 : 1;
 				break;
 
 			case 0x25: /* tsti ZCS:..x */
@@ -615,7 +611,7 @@ static CPU_EXECUTE( mb88 )
 				{
 					/* re-enable the timer if we disabled it previously */
 					if (cpustate->SBcount >= SERIAL_DISABLE_THRESH)
-						timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock / SERIAL_PRESCALE));
+						timer_adjust_periodic(cpustate->serial, ATTOTIME_IN_HZ(cpustate->device->clock() / SERIAL_PRESCALE), 0, ATTOTIME_IN_HZ(cpustate->device->clock() / SERIAL_PRESCALE));
 					cpustate->SBcount = 0;
 				}
 				cpustate->sf = 0;
@@ -683,7 +679,7 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x38: case 0x39: case 0x3a: case 0x3b: /* tbit ZCS:... */
 				arg = RDMEM(GETEA());
-				cpustate->st = ( arg & (1 << (opcode&3) ) ) ? 1 : 0;
+				cpustate->st = ( arg & (1 << (opcode&3) ) ) ? 0 : 1;
 				break;
 
 			case 0x3c: /* rti ZCS:... */
@@ -733,11 +729,11 @@ static CPU_EXECUTE( mb88 )
 
 			case 0x48:	case 0x49:	case 0x4a:	case 0x4b: /* tstD ZCS:..x */
 				arg = READPORT(MB88_PORTR2);
-				cpustate->st = (arg & (1 << (opcode&3))) ? 1 : 0;
+				cpustate->st = (arg & (1 << (opcode&3))) ? 0 : 1;
 				break;
 
 			case 0x4c:	case 0x4d:	case 0x4e:	case 0x4f: /* tba ZCS:..x */
-				cpustate->st = (cpustate->A & (1 << (opcode&3))) ? 1 : 0;
+				cpustate->st = (cpustate->A & (1 << (opcode&3))) ? 0 : 1;
 				break;
 
 			case 0x50:	case 0x51:	case 0x52:	case 0x53: /* xd ZCS:x.. */
@@ -858,8 +854,6 @@ static CPU_EXECUTE( mb88 )
 		/* update interrupts, serial and timer flags */
 		update_pio(cpustate, oc);
 	}
-
-	return cycles - cpustate->icount;
 }
 
 /***************************************************************************
@@ -927,7 +921,7 @@ static CPU_SET_INFO( mb88 )
 
 CPU_GET_INFO( mb88 )
 {
-	mb88_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	mb88_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1105,3 +1099,9 @@ CPU_GET_INFO( mb8844 )
 		default:										CPU_GET_INFO_CALL(mb88);			break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(MB88, mb88);
+DEFINE_LEGACY_CPU_DEVICE(MB8841, mb8841);
+DEFINE_LEGACY_CPU_DEVICE(MB8842, mb8842);
+DEFINE_LEGACY_CPU_DEVICE(MB8843, mb8843);
+DEFINE_LEGACY_CPU_DEVICE(MB8844, mb8844);

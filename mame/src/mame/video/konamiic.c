@@ -5,8 +5,10 @@ TODO:
   hardcoded in the drivers; there might be a control bit somewhere.
   Games requiring shadows to affect sprites behind them:
   - Surprise Attack (dark glass walls in level 3)
-  - 88 Games (angle indicator in the long jump event).
+  - 88 Games (angle indicator in the long jump event)
   - Sunset Riders (bull's eye in the saloon cutscene)
+  - TMNT 2 (lightbeam in level 4 cave)
+  - Metamorphic Force (double! lightbeam just before the last boss)
   Games requiring shadows to NOT affect sprites behind them:
   - Asterix (Asterix's shadow would be over his feet otherwise)
   - X-Men is dubious, see enemies halfway through level 1 coming from above with
@@ -1160,6 +1162,7 @@ Registers (word-wise):
     (it could be easily converted into an iterative one).
     It's called shuffle because it mimics the shuffling of a deck of cards.
 */
+#ifdef UNUSED_FUNCTION
 static void shuffle(UINT16 *buf,int len)
 {
 	int i;
@@ -1204,6 +1207,7 @@ void konami_rom_deinterleave_4(running_machine *machine, const char *mem_region)
 	konami_rom_deinterleave_2(machine, mem_region);
 	konami_rom_deinterleave_2(machine, mem_region);
 }
+#endif
 
 
 static void decode_gfx(running_machine *machine, int gfx_index, UINT8 *data, UINT32 total, const gfx_layout *layout, int bpp)
@@ -1212,7 +1216,7 @@ static void decode_gfx(running_machine *machine, int gfx_index, UINT8 *data, UIN
 
 	memcpy(&gl, layout, sizeof(gl));
 	gl.total = total;
-	machine->gfx[gfx_index] = gfx_element_alloc(machine, &gl, data, machine->config->total_colors >> bpp, 0);
+	machine->gfx[gfx_index] = gfx_element_alloc(machine, &gl, data, machine->total_colors() >> bpp, 0);
 }
 
 
@@ -1225,6 +1229,7 @@ static void decode_gfx(running_machine *machine, int gfx_index, UINT8 *data, UIN
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 UINT8 K007121_ctrlram[MAX_K007121][8];
 static int K007121_flipscreen[MAX_K007121];
 
@@ -1440,6 +1445,7 @@ if (input_code_pressed(gfx->machine, KEYCODE_D))
 		source += inc;
 	}
 }
+#endif
 
 
 
@@ -1449,6 +1455,7 @@ if (input_code_pressed(gfx->machine, KEYCODE_D))
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 static UINT8 *K007342_ram,*K007342_scroll_ram;
 static int K007342_gfxnum;
 static int K007342_int_enabled;
@@ -1672,6 +1679,7 @@ int K007342_is_INT_enabled(void)
 {
 	return K007342_int_enabled;
 }
+#endif
 
 
 
@@ -1681,6 +1689,7 @@ int K007342_is_INT_enabled(void)
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 static gfx_element *K007420_gfx;
 static void (*K007420_callback)(int *code,int *color);
 static UINT8 *K007420_ram;
@@ -2526,7 +2535,7 @@ void K051960_vh_start(running_machine *machine,const char *gfx_memory_region,int
 		fatalerror("Unknown plane_order");
 	}
 
-	if (VERBOSE && !(machine->config->video_attributes & VIDEO_HAS_SHADOWS))
+	if (VERBOSE && !(machine->config->m_video_attributes & VIDEO_HAS_SHADOWS))
 		popmessage("driver should use VIDEO_HAS_SHADOWS");
 
 	K051960_dx = K051960_dy = 0;
@@ -2929,6 +2938,7 @@ WRITE8_HANDLER( K052109_051960_w )
 	else
 		K051960_w(space,offset - 0x3c00,data);
 }
+#endif
 
 
 
@@ -2956,10 +2966,12 @@ static int K05324x_z_rejection;
                -1 = accept all(default)
         0x00-0xff = zcode to ignore
 */
+#ifdef UNUSED_FUNCTION
 void K05324x_set_z_rejection(int zcode)
 {
 	K05324x_z_rejection = zcode;
 }
+#endif
 
 
 
@@ -2969,6 +2981,7 @@ void K05324x_set_z_rejection(int zcode)
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 #define MAX_K053245_CHIPS 2
 
 static const char *K053245_memory_region[MAX_K053245_CHIPS];
@@ -3022,7 +3035,7 @@ void K053245_vh_start(running_machine *machine,int chip, const char *gfx_memory_
 		fatalerror("Unsupported plane_order");
 	}
 
-	if (VERBOSE && !(machine->config->video_attributes & VIDEO_HAS_SHADOWS))
+	if (VERBOSE && !(machine->config->m_video_attributes & VIDEO_HAS_SHADOWS))
 		popmessage("driver should use VIDEO_HAS_SHADOWS");
 
 
@@ -3693,6 +3706,7 @@ if (input_code_pressed(machine, KEYCODE_D))
 #endif
 #undef NUM_SPRITES
 }
+#endif
 
 
 /***************************************************************************/
@@ -3727,6 +3741,7 @@ void K053247_export_config(UINT16 **ram, gfx_element **gfx, void (**callback)(in
 int K053246_read_register(int regnum) { return(K053246_regs[regnum]); }
 int K053247_read_register(int regnum) { return(K053247_regs[regnum]); }
 
+#ifdef UNUSED_FUNCTION
 void K053247_set_SpriteOffset(int offsx, int offsy)
 {
 	K053247_dx = offsx;
@@ -3755,6 +3770,16 @@ void K053247_vh_start(running_machine *machine, const char *gfx_memory_region, i
 				8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
 		128*8
 	};
+	static const gfx_layout tasman_16x16_layout =
+	{
+		16,16,
+		RGN_FRAC(1,2),
+		8,
+		{ 0,8,16,24, RGN_FRAC(1,2)+0,RGN_FRAC(1,2)+8,RGN_FRAC(1,2)+16,RGN_FRAC(1,2)+24 },
+		{ 0,1,2,3,4,5,6,7, 32,33,34,35,36,37,38,39 },
+		{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64, 8*64, 9*64, 10*64, 11*64, 12*64, 13*64, 14*64, 15*64 },
+		16*64
+	};
 
 
 	/* find first empty slot to decode gfx */
@@ -3771,20 +3796,25 @@ void K053247_vh_start(running_machine *machine, const char *gfx_memory_region, i
 		decode_gfx(machine, gfx_index, memory_region(machine, gfx_memory_region), total, &spritelayout, 4);
 		break;
 
+	case TASMAN_PLANE_ORDER:
+		total = memory_region_length(machine, gfx_memory_region) / 128;
+		decode_gfx(machine, gfx_index, memory_region(machine, gfx_memory_region), total, &tasman_16x16_layout, 4);
+		break;
+
 	default:
 		fatalerror("Unsupported plane_order");
 	}
 
 	if (VERBOSE)
 	{
-	if (video_screen_get_format(machine->primary_screen) == BITMAP_FORMAT_RGB32)
+	if (machine->primary_screen->format() == BITMAP_FORMAT_RGB32)
 	{
-		if ((machine->config->video_attributes & (VIDEO_HAS_SHADOWS|VIDEO_HAS_HIGHLIGHTS)) != VIDEO_HAS_SHADOWS+VIDEO_HAS_HIGHLIGHTS)
+		if ((machine->config->m_video_attributes & (VIDEO_HAS_SHADOWS|VIDEO_HAS_HIGHLIGHTS)) != VIDEO_HAS_SHADOWS+VIDEO_HAS_HIGHLIGHTS)
 			popmessage("driver missing SHADOWS or HIGHLIGHTS flag");
 	}
 	else
 	{
-		if (!(machine->config->video_attributes & VIDEO_HAS_SHADOWS))
+		if (!(machine->config->m_video_attributes & VIDEO_HAS_SHADOWS))
 			popmessage("driver should use VIDEO_HAS_SHADOWS");
 	}
 	}
@@ -3808,6 +3838,7 @@ void K053247_vh_start(running_machine *machine, const char *gfx_memory_region, i
 	state_save_register_global_array(machine, K053247_regs);
 	state_save_register_global(machine, K053246_OBJCHA_line);
 }
+#endif
 
 /* K055673 used with the 54246 in PreGX/Run and Gun/System GX games */
 void K055673_vh_start(running_machine *machine, const char *gfx_memory_region, int layout, int dx, int dy, void (*callback)(int *code,int *color,int *priority))
@@ -3915,7 +3946,7 @@ void K055673_vh_start(running_machine *machine, const char *gfx_memory_region, i
 		fatalerror("Unsupported layout");
 	}
 
-	if (VERBOSE && !(machine->config->video_attributes & VIDEO_HAS_SHADOWS))
+	if (VERBOSE && !(machine->config->m_video_attributes & VIDEO_HAS_SHADOWS))
 		popmessage("driver should use VIDEO_HAS_SHADOWS");
 
 	K053247_dx = dx;
@@ -3976,6 +4007,7 @@ WRITE32_HANDLER( K053247_long_w )
 	COMBINE_DATA(K053247_ram + offset);
 }
 
+#ifdef UNUSED_FUNCTION
 READ8_HANDLER( K053247_r )
 {
 	int offs = offset >> 1;
@@ -3995,6 +4027,7 @@ WRITE8_HANDLER( K053247_w )
 	else
 		K053247_ram[offs] = (K053247_ram[offs] & 0x00ff) | (data<<8);
 }
+#endif
 
 // Mystic Warriors hardware games support a non-OBJCHA based ROM readback
 // write the address to the 246 as usual, but there's a completely separate ROM
@@ -4072,6 +4105,7 @@ READ16_HANDLER( K055673_GX6bpp_rom_word_r )
 	return 0;
 }
 
+#ifdef UNUSED_FUNCTION
 READ8_HANDLER( K053246_r )
 {
 	if (K053246_OBJCHA_line == ASSERT_LINE)
@@ -4090,17 +4124,20 @@ READ8_HANDLER( K053246_r )
 		return 0;
 	}
 }
+#endif
 
-WRITE8_HANDLER( K053246_w )
+static WRITE8_HANDLER( K053246_w )
 {
 	K053246_regs[offset] = data;
 }
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K053246_word_r )
 {
 	offset <<= 1;
 	return K053246_r(space, offset + 1) | (K053246_r(space, offset) << 8);
 }
+#endif
 
 WRITE16_HANDLER( K053246_word_w )
 {
@@ -4110,11 +4147,13 @@ WRITE16_HANDLER( K053246_word_w )
 		K053246_w(space, (offset<<1) + 1,data & 0xff);
 }
 
+#ifdef UNUSED_FUNCTION
 READ32_HANDLER( K053246_long_r )
 {
 	offset <<= 1;
 	return (K053246_word_r(space, offset+1, 0xffff) | K053246_word_r(space, offset, 0xffff)<<16);
 }
+#endif
 
 WRITE32_HANDLER( K053246_long_w )
 {
@@ -4163,6 +4202,7 @@ int K053246_is_IRQ_enabled(void)
  * The rest of the sprite remains normal.
  */
 
+#ifdef UNUSED_FUNCTION
 void K053247_sprites_draw(running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect) //*
 {
 #define NUM_SPRITES 256
@@ -4190,7 +4230,7 @@ void K053247_sprites_draw(running_machine *machine, bitmap_t *bitmap,const recta
 	int offx = (short)((K053246_regs[0] << 8) | K053246_regs[1]);
 	int offy = (short)((K053246_regs[2] << 8) | K053246_regs[3]);
 
-	int screen_width = video_screen_get_width(machine->primary_screen);
+	int screen_width = machine->primary_screen->width();
 	UINT8 drawmode_table[256];
 	UINT8 shadowmode_table[256];
 	UINT8 *whichtable;
@@ -4205,9 +4245,9 @@ void K053247_sprites_draw(running_machine *machine, bitmap_t *bitmap,const recta
 
         VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS
     */
-	if (machine->config->video_attributes & VIDEO_HAS_SHADOWS)
+	if (machine->config->m_video_attributes & VIDEO_HAS_SHADOWS)
 	{
-		if (bitmap->bpp == 32 && (machine->config->video_attributes & VIDEO_HAS_HIGHLIGHTS))
+		if (bitmap->bpp == 32 && (machine->config->m_video_attributes & VIDEO_HAS_HIGHLIGHTS))
 			shdmask = 3; // enable all shadows and highlights
 		else
 			shdmask = 0; // enable default shadows
@@ -4534,6 +4574,7 @@ void K053247_sprites_draw(running_machine *machine, bitmap_t *bitmap,const recta
 	} // end of sprite-list loop
 #undef NUM_SPRITES
 }
+#endif
 
 
 
@@ -4543,6 +4584,7 @@ void K053247_sprites_draw(running_machine *machine, bitmap_t *bitmap,const recta
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 #define MAX_K051316 3
 
 static const char *K051316_memory_region[MAX_K051316];
@@ -4892,6 +4934,7 @@ void K051316_zoom_draw_2(bitmap_t *bitmap,const rectangle *cliprect,int flags,UI
 {
 	K051316_zoom_draw(2,bitmap,cliprect,flags,priority);
 }
+#endif
 
 
 
@@ -5037,10 +5080,12 @@ void K053936_0_zoom_draw(bitmap_t *bitmap,const rectangle *cliprect,tilemap_t *t
 	K053936_zoom_draw(0,K053936_0_ctrl,K053936_0_linectrl,bitmap,cliprect,tmap,flags,priority, glfgreat_hack);
 }
 
+#ifdef UNUSED_FUNCTION
 void K053936_1_zoom_draw(bitmap_t *bitmap,const rectangle *cliprect,tilemap_t *tmap,int flags,UINT32 priority, int glfgreat_hack)
 {
 	K053936_zoom_draw(1,K053936_1_ctrl,K053936_1_linectrl,bitmap,cliprect,tmap,flags,priority, glfgreat_hack);
 }
+#endif
 
 
 void K053936_wraparound_enable(int chip, int status)
@@ -5063,6 +5108,7 @@ void K053936_set_offset(int chip, int xoffs, int yoffs)
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 static UINT8 K053251_ram[16];
 static int K053251_palette_index[5];
 static tilemap_t *K053251_tilemaps[5];
@@ -5165,6 +5211,7 @@ int K053251_get_palette_index(int ci)
 {
 	return K053251_palette_index[ci];
 }
+#endif
 
 
 
@@ -5176,14 +5223,14 @@ int K053251_get_palette_index(int ci)
 
 static UINT8 K054000_ram[0x20];
 
-WRITE8_HANDLER( K054000_w )
+static WRITE8_HANDLER( K054000_w )
 {
 //logerror("%04x: write %02x to 054000 address %02x\n",cpu_get_pc(space->cpu),data,offset);
 
 	K054000_ram[offset] = data;
 }
 
-READ8_HANDLER( K054000_r )
+static READ8_HANDLER( K054000_r )
 {
 	int Acx,Acy,Aax,Aay;
 	int Bcx,Bcy,Bax,Bay;
@@ -5239,6 +5286,7 @@ WRITE16_HANDLER( K054000_lsb_w )
 /*                                                                         */
 /***************************************************************************/
 
+#ifdef UNUSED_FUNCTION
 static UINT8 K051733_ram[0x20];
 
 WRITE8_HANDLER( K051733_w )
@@ -5327,6 +5375,7 @@ READ8_HANDLER( K051733_r )
 			return K051733_ram[offset];
 	}
 }
+#endif
 
 /***************************************************************************/
 /*                                                                         */
@@ -5479,6 +5528,7 @@ if (!(K056832_djmain_hack==1) || K056832_LayerAssociatedWithPage[pageIndex] == -
 	K056832_MarkAllTilemapsDirty();
 }
 
+#ifdef UNUSED_FUNCTION
 int K056832_get_lookup(int bits)
 {
 	int res;
@@ -5490,6 +5540,7 @@ int K056832_get_lookup(int bits)
 
 	return res;
 }
+#endif
 
 static void (*K056832_callback)(int layer, int *code, int *color, int *flags);
 
@@ -5574,12 +5625,14 @@ static void K056832_change_rambank(void)
 	K056832_MarkAllTilemapsDirty();
 }
 
+#ifdef UNUSED_FUNCTION
 int K056832_get_current_rambank(void)
 {
 	int bank = K056832_regs[0x19];
 
 	return ((bank>>1)&0xc)|(bank&3);
 }
+#endif
 
 static void K056832_change_rombank(void)
 {
@@ -5597,6 +5650,7 @@ static void K056832_change_rombank(void)
 	K056832_CurGfxBank = bank % K056832_NumGfxBanks;
 }
 
+#ifdef UNUSED_FUNCTION
 void K056832_set_tile_bank(int bank)
 {
 	K056832_uses_tile_banks = 1;
@@ -5613,6 +5667,7 @@ void K056832_set_tile_bank(int bank)
 
 	K056832_change_rombank();
 }
+#endif
 
 static STATE_POSTLOAD( K056832_postload )
 {
@@ -5630,6 +5685,16 @@ void K056832_vh_start(running_machine *machine, const char *gfx_memory_region, i
 	int gfx_index;
 	int i;
 	UINT32 total;
+	static const gfx_layout charlayout8_tasman =
+	{
+		8,8,
+		RGN_FRAC(1,1),
+		8,
+		{ 0,8,16,24,32,40,48,56 },
+		{ 0,1,2,3,4,5,6,7 },
+		{ 0*64, 1*64, 2*64, 3*64, 4*64, 5*64, 6*64, 7*64},
+		8*64
+	};
 	static const gfx_layout charlayout8 =
 	{
 		8, 8,
@@ -5730,6 +5795,11 @@ void K056832_vh_start(running_machine *machine, const char *gfx_memory_region, i
 		case K056832_BPP_8LE:
 			total = memory_region_length(machine, gfx_memory_region) / (i*8);
 			decode_gfx(machine, gfx_index, memory_region(machine, gfx_memory_region), total, &charlayout8le, 4);
+			break;
+
+		case K056832_BPP_8TASMAN:
+			total = memory_region_length(machine, gfx_memory_region) / (i*8);
+			decode_gfx(machine, gfx_index, memory_region(machine, gfx_memory_region), total, &charlayout8_tasman, 4);
 			break;
 
 		case K056832_BPP_4dj:
@@ -5835,10 +5905,12 @@ void K056832_vh_start(running_machine *machine, const char *gfx_memory_region, i
 }
 
 /* call if a game uses external linescroll */
+#ifdef UNUSED_FUNCTION
 void K056832_SetExtLinescroll(void)
 {
 	K056832_use_ext_linescroll = 1;
 }
+#endif
 
 /* generic helper routine for ROM checksumming */
 static int K056832_rom_read_b(running_machine *machine, int offset, int blksize, int blksize2, int zerosec)
@@ -5875,6 +5947,7 @@ static int K056832_rom_read_b(running_machine *machine, int offset, int blksize,
 	return ret;
 }
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K056832_5bpp_rom_word_r )
 {
 	if (mem_mask == 0xff00)
@@ -5891,6 +5964,7 @@ READ16_HANDLER( K056832_5bpp_rom_word_r )
 	}
 	return 0;
 }
+#endif
 
 READ32_HANDLER( K056832_5bpp_rom_long_r )
 {
@@ -5942,6 +6016,7 @@ READ32_HANDLER( K056832_6bpp_rom_long_r )
 	return 0;
 }
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K056832_rom_word_r )
 {
 	int ofs16, ofs8;
@@ -5972,6 +6047,7 @@ READ16_HANDLER( K056832_rom_word_r )
 
 	return ret;
 }
+#endif
 
 // data is arranged like this:
 // 0000 1111 22 0000 1111 22
@@ -6040,6 +6116,7 @@ READ16_HANDLER( K056832_mw_rom_word_r )
 
 }
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K056832_bishi_rom_word_r )
 {
 	int addr = 0x4000*K056832_CurGfxBank+offset;
@@ -6081,6 +6158,7 @@ READ32_HANDLER( K056832_rom_long_r )
 	offset <<= 1;
 	return (K056832_rom_word_r(space, offset+1, 0xffff) | (K056832_rom_word_r(space, offset, 0xffff)<<16));
 }
+#endif
 
 /* only one page is mapped to videoram at a time through a window */
 READ16_HANDLER( K056832_ram_word_r )
@@ -6091,10 +6169,12 @@ READ16_HANDLER( K056832_ram_word_r )
 	return K056832_videoram[K056832_SelectedPagex4096+offset];
 }
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K056832_ram_half_word_r )
 {
 	return K056832_videoram[K056832_SelectedPagex4096+(((offset << 1) & 0xffe) | ((offset >> 11) ^ 1))];
 }
+#endif
 
 READ32_HANDLER( K056832_ram_long_r )
 {
@@ -6106,6 +6186,7 @@ READ32_HANDLER( K056832_ram_long_r )
 	return(pMem[0]<<16 | pMem[1]);
 }
 
+#ifdef UNUSED_FUNCTION
 /* special 8-bit handlers for Lethal Enforcers */
 READ8_HANDLER( K056832_ram_code_lo_r )
 {
@@ -6198,6 +6279,7 @@ WRITE8_HANDLER( K056832_ram_attr_hi_w )
 			K056832_mark_line_dirty(K056832_SelectedPage, offset);
 	}
 }
+#endif
 
 WRITE16_HANDLER( K056832_ram_word_w )
 {
@@ -6221,6 +6303,7 @@ WRITE16_HANDLER( K056832_ram_word_w )
 	}
 }
 
+#ifdef UNUSED_FUNCTION
 WRITE16_HANDLER( K056832_ram_half_word_w )
 {
 	UINT16 *adr = &K056832_videoram[K056832_SelectedPagex4096+(((offset << 1) & 0xffe) | 1)];
@@ -6239,6 +6322,7 @@ WRITE16_HANDLER( K056832_ram_half_word_w )
     			K056832_mark_line_dirty(K056832_SelectedPage, dofs);
 	}
 }
+#endif
 
 WRITE32_HANDLER( K056832_ram_long_w )
 {
@@ -6395,6 +6479,7 @@ WRITE16_HANDLER( K056832_b_word_w )
 	COMBINE_DATA( &K056832_regsb[offset] );
 }
 
+#ifdef UNUSED_FUNCTION
 WRITE8_HANDLER( K056832_w )
 {
 	if (offset & 1)
@@ -6430,6 +6515,7 @@ WRITE32_HANDLER( K056832_b_long_w )
 		K056832_b_word_w(space, (offset<<1)+1, data, mem_mask);
 	}
 }
+#endif
 
 static int K056832_update_linemap(running_machine *machine, bitmap_t *bitmap, int page, int flags)
 {
@@ -6844,6 +6930,7 @@ void K056832_tilemap_draw(running_machine *machine, bitmap_t *bitmap, const rect
 
 } // end of function
 
+#ifdef UNUSED_FUNCTION
 void K056832_tilemap_draw_dj(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, int layer, UINT32 flags, UINT32 priority) //*
 {
 	static int last_colorbase[K056832_PAGE_COUNT];
@@ -7107,6 +7194,7 @@ void K056832_set_LayerAssociation(int status)
 {
 	K056832_DefaultLayerAssociation = status;
 }
+#endif
 
 int K056832_get_LayerAssociation(void)
 {
@@ -7119,17 +7207,20 @@ void K056832_set_LayerOffset(int layer, int offsx, int offsy)
 	K056832_LayerOffset[layer][1] = offsy;
 }
 
+#ifdef UNUSED_FUNCTION
 void K056832_set_LSRAMPage(int logical_page, int physical_page, int physical_offset)
 {
 	K056832_LSRAMPage[logical_page][0] = physical_page;
 	K056832_LSRAMPage[logical_page][1] = physical_offset;
 }
+#endif
 
 void K056832_set_UpdateMode(int mode)
 {
 	K056832_UpdateMode = mode;
 }
 
+#ifdef UNUSED_FUNCTION
 void K056832_linemap_enable(int enable)
 {
 	K056832_linemap_enabled = enable;
@@ -7150,6 +7241,7 @@ int K056832_read_register(int regnum)
 {
 	return(K056832_regs[regnum]);
 }
+#endif
 
 
 
@@ -7308,6 +7400,7 @@ void K054338_update_all_shadows(running_machine *machine, int rushingheroes_hack
 	}
 }
 
+#ifdef UNUSED_FUNCTION
 // K054338 BG color fill
 void K054338_fill_solid_bg(bitmap_t *bitmap)
 {
@@ -7327,6 +7420,7 @@ void K054338_fill_solid_bg(bitmap_t *bitmap)
 			*pLine++ = bgcolor;
 	}
 }
+#endif
 
 // Unified K054338/K055555 BG color fill
 void K054338_fill_backcolor(running_machine *machine, bitmap_t *bitmap, int mode) // (see p.67)
@@ -7335,12 +7429,12 @@ void K054338_fill_backcolor(running_machine *machine, bitmap_t *bitmap, int mode
 	int BGC_CBLK, BGC_SET;
 	UINT32 *dst_ptr, *pal_ptr;
 	int bgcolor;
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine->primary_screen->visible_area();
 
-	clipx = visarea->min_x & ~3;
-	clipy = visarea->min_y;
-	clipw = (visarea->max_x - clipx + 4) & ~3;
-	cliph = visarea->max_y - clipy + 1;
+	clipx = visarea.min_x & ~3;
+	clipy = visarea.min_y;
+	clipw = (visarea.max_x - clipx + 4) & ~3;
+	cliph = visarea.max_y - clipy + 1;
 
 	dst_ptr = BITMAP_ADDR32(bitmap, clipy, 0);
 	dst_pitch = bitmap->rowpixels;
@@ -7498,14 +7592,14 @@ void K053250_set_LayerOffset(int chip, int offsx, int offsy)
 
 // The DMA process should be instantaneous but since rendering in MAME is performed at VIDEO_UPDATE()
 // the K053250 memory must be buffered to maintain visual integrity.
-void K053250_dma(running_machine *machine, int chip, int limiter)
+static void K053250_dma(running_machine *machine, int chip, int limiter)
 {
 	struct K053250_CHIPTAG *chip_ptr;
 	int last_frame, current_frame;
 
 	chip_ptr = &K053250_info.chip[chip];
 
-	current_frame = video_screen_get_frame_number(machine->primary_screen);
+	current_frame = machine->primary_screen->frame_number();
 	last_frame = chip_ptr->frame;
 
 	if (limiter && current_frame == last_frame) return; // make sure we only do DMA transfer once per frame
@@ -7594,6 +7688,7 @@ READ16_HANDLER( K053250_0_rom_r )
 	return *(K053250_info.chip[0].base + 0x80000*K053250_info.chip[0].regs[6] + 0x800*K053250_info.chip[0].regs[7] + (offset>>1));
 }
 
+#ifdef UNUSED_FUNCTION
 WRITE16_HANDLER( K053250_1_w )
 {
 	if (ACCESSING_BITS_0_7)
@@ -7627,7 +7722,6 @@ READ16_HANDLER( K053250_1_rom_r )
 	return *(K053250_info.chip[1].base + 0x80000*K053250_info.chip[1].regs[6] + 0x800*K053250_info.chip[1].regs[7] + (offset>>1));
 }
 
-#if 0
 
 static void K053250_pdraw_scanline8(
 		bitmap_t *bitmap,int x,int y,int length,
@@ -7808,7 +7902,7 @@ void K053250_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *c
 	static int pmode[2] = {-1,-1};
 	static int kc=-1, kk=0, kxx=-105, kyy=0;
 
-	const rectangle area = *video_screen_get_visible_area(machine->primary_screen);
+	const rectangle area = *machine->primary_screen->visible_area();
 	UINT16 *line;
 	int delta, dim1, dim1_max, dim2_max;
 	UINT32 mask1, mask2;
@@ -8318,7 +8412,7 @@ void K053250_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *c
 	linedata_offs += line_start * linedata_adv;		// pre-advance line info offset for the clipped region
 
 	// load physical palette base
-	pal_base = machine->pens + (colorbase << 4) % machine->config->total_colors;
+	pal_base = machine->pens + (colorbase << 4) % machine->total_colors();
 
 	// walk the target bitmap within the visible area vertically or horizontally, one line at a time
 	for (line_pos=line_start; line_pos<=line_end; linedata_offs+=linedata_adv, line_pos++)
@@ -8398,26 +8492,31 @@ void K053250_draw(running_machine *machine, bitmap_t *bitmap, const rectangle *c
 // K053252 CRT and interrupt control unit
 static UINT16 K053252_regs[16];
 
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K053252_word_r )
 {
 	return(K053252_regs[offset]);
 }
+#endif
 
 WRITE16_HANDLER( K053252_word_w )
 {
 	COMBINE_DATA(K053252_regs + offset);
 }
 
+#ifdef UNUSED_FUNCTION
 WRITE32_HANDLER( K053252_long_w )
 {
 	offset <<= 1;
 	K053252_word_w(space, offset, data>>16, mem_mask>>16);
 	K053252_word_w(space, offset+1, data, mem_mask);
 }
+#endif
 
 
 
 // debug handlers
+#ifdef UNUSED_FUNCTION
 READ16_HANDLER( K056832_word_r ) { return(K056832_regs[offset]); }		// VACSET
 READ16_HANDLER( K056832_b_word_r ) { return(K056832_regsb[offset]); }	// VSCCS (board dependent)
 READ16_HANDLER( K053246_reg_word_r ) { return(K053246_regs[offset*2]<<8|K053246_regs[offset*2+1]); }	// OBJSET1
@@ -8446,4 +8545,5 @@ READ32_HANDLER( K055555_long_r )
 }
 
 READ16_HANDLER( K053244_reg_word_r ) { return(K053244_regs[0][offset*2]<<8|K053244_regs[0][offset*2+1]); }
+#endif
 

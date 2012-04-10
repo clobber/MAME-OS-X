@@ -3,7 +3,7 @@
     Bellfruit scorpion1 driver, (under heavy construction !!!)
 
     A.G.E Code Copyright J. Wallace and the AGEMAME Development Team.
-    Visit http://www.mameworld.net/agemame/ for more information.
+    Visit http://agemame.mameworld.info for more information.
 
     M.A.M.E Core Copyright Nicola Salmoria and the MAME Team,
     used under license from http://mamedev.org
@@ -169,7 +169,7 @@ static INTERRUPT_GEN( timer_irq )
 		watchdog_cnt++;
 		if ( watchdog_cnt > 2 )	// this is a hack, i don't know what the watchdog timeout is, 3 IRQ's works fine
 		{  // reset board
-			mame_schedule_soft_reset(device->machine);// reset entire machine. CPU 0 should be enough, but that doesn't seem to work !!
+			device->machine->schedule_soft_reset();// reset entire machine. CPU 0 should be enough, but that doesn't seem to work !!
 			return;
 		}
 	}
@@ -180,7 +180,7 @@ static INTERRUPT_GEN( timer_irq )
 
 	    sc1_Inputs[2] = input_port_read(device->machine,"STROBE0");
 
-		generic_pulse_irq_line(devtag_get_device(device->machine, "maincpu"), M6809_IRQ_LINE);
+		generic_pulse_irq_line(device->machine->device("maincpu"), M6809_IRQ_LINE);
 	}
 }
 
@@ -268,7 +268,7 @@ static WRITE8_HANDLER( mmtr_w )
 	else
 	{
 		int  changed = mmtr_latch ^ data;
-		UINT64 cycles  = cpu_get_total_cycles(space->cpu);
+		UINT64 cycles  = downcast<cpu_device *>(space->cpu)->total_cycles();
 
 		mmtr_latch = data;
 
@@ -277,7 +277,7 @@ static WRITE8_HANDLER( mmtr_w )
 			if ( changed & (1 << i) )
 			{
 				Mechmtr_update(i, cycles, data & (1 << i) );
-				generic_pulse_irq_line(devtag_get_device(space->machine, "maincpu"), M6809_FIRQ_LINE);
+				generic_pulse_irq_line(space->machine->device("maincpu"), M6809_FIRQ_LINE);
 			}
 		}
 	}

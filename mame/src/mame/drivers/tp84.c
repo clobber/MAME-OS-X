@@ -89,6 +89,13 @@ PALETTE_INIT( tp84 );
 VIDEO_START( tp84 );
 VIDEO_UPDATE( tp84 );
 
+static cpu_device *audiocpu;
+
+
+static MACHINE_START( tp84 )
+{
+	audiocpu = machine->device<cpu_device>("audiocpu");
+}
 
 
 static READ8_HANDLER( tp84_sh_timer_r )
@@ -97,7 +104,7 @@ static READ8_HANDLER( tp84_sh_timer_r )
 	/* divided by 2048 to get this timer */
 	/* (divide by (2048/2), and not 1024, because the CPU cycle counter is */
 	/* incremented every other state change of the clock) */
-	return (cpu_get_total_cycles(space->cpu) / (2048/2)) & 0x0f;
+	return (audiocpu->total_cycles() / (2048/2)) & 0x0f;
 }
 
 
@@ -109,23 +116,23 @@ static WRITE8_HANDLER( tp84_filter_w )
 	C = 0;
 	if (offset & 0x008) C +=  47000;	/*  47000pF = 0.047uF */
 	if (offset & 0x010) C += 470000;	/* 470000pF = 0.47uF */
-	filter_rc_set_RC(devtag_get_device(space->machine, "filter1"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
+	filter_rc_set_RC(space->machine->device("filter1"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
 
 	/* 76489 #1 (optional) */
 	C = 0;
 	if (offset & 0x020) C +=  47000;	/*  47000pF = 0.047uF */
 	if (offset & 0x040) C += 470000;	/* 470000pF = 0.47uF */
-//  filter_rc_set_RC(devtag_get_device(space->machine, "filter2"),1000,2200,1000,C);
+//  filter_rc_set_RC(space->machine->device("filter2"),1000,2200,1000,C);
 
 	/* 76489 #2 */
 	C = 0;
 	if (offset & 0x080) C += 470000;	/* 470000pF = 0.47uF */
-	filter_rc_set_RC(devtag_get_device(space->machine, "filter2"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
+	filter_rc_set_RC(space->machine->device("filter2"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
 
 	/* 76489 #3 */
 	C = 0;
 	if (offset & 0x100) C += 470000;	/* 470000pF = 0.47uF */
-	filter_rc_set_RC(devtag_get_device(space->machine, "filter3"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
+	filter_rc_set_RC(space->machine->device("filter3"),FLT_RC_LOWPASS,1000,2200,1000,CAP_P(C));
 }
 
 static WRITE8_HANDLER( tp84_sh_irqtrigger_w )
@@ -300,6 +307,9 @@ static MACHINE_DRIVER_START( tp84 )
 
 	MDRV_QUANTUM_TIME(HZ(6000))	/* 100 CPU slices per frame - an high value to ensure proper */
 							/* synchronization of the CPUs */
+
+	MDRV_MACHINE_START(tp84)
+
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)

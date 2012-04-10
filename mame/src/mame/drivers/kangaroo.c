@@ -468,7 +468,7 @@ static MACHINE_DRIVER_START( mcu )
 	MDRV_MACHINE_START(kangaroo_mcu)
 
 	MDRV_CPU_ADD("mcu", MB8841, MASTER_CLOCK/4/2)
-	MDRV_CPU_FLAGS(CPU_DISABLE)
+	MDRV_DEVICE_DISABLE()
 MACHINE_DRIVER_END
 
 
@@ -576,7 +576,7 @@ ROM_END
  *
  *************************************/
 
-GAME( 1981, fnkyfish,  0,        nomcu, fnkyfish, 0, ROT90, "Sun Electronics",                   "Funky Fish", GAME_SUPPORTS_SAVE )
-GAME( 1982, kangaroo,  0,        mcu,   kangaroo, 0, ROT90, "Sun Electronics",                   "Kangaroo", GAME_SUPPORTS_SAVE )
-GAME( 1982, kangarooa, kangaroo, mcu,   kangaroo, 0, ROT90, "[Sun Electronics] (Atari license)", "Kangaroo (Atari)", GAME_SUPPORTS_SAVE )
-GAME( 1982, kangaroob, kangaroo, nomcu, kangaroo, 0, ROT90, "bootleg",                           "Kangaroo (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1981, fnkyfish,  0,        nomcu, fnkyfish, 0, ROT90, "Sun Electronics",                 "Funky Fish", GAME_SUPPORTS_SAVE )
+GAME( 1982, kangaroo,  0,        mcu,   kangaroo, 0, ROT90, "Sun Electronics",                 "Kangaroo", GAME_SUPPORTS_SAVE )
+GAME( 1982, kangarooa, kangaroo, mcu,   kangaroo, 0, ROT90, "Sun Electronics (Atari license)", "Kangaroo (Atari)", GAME_SUPPORTS_SAVE )
+GAME( 1982, kangaroob, kangaroo, nomcu, kangaroo, 0, ROT90, "bootleg",                         "Kangaroo (bootleg)", GAME_SUPPORTS_SAVE )

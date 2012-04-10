@@ -45,7 +45,7 @@ PALETTE_INIT( gridlee )
 {
 	int i;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		palette_set_color_rgb(machine,i,pal4bit(color_prom[0x0000]),pal4bit(color_prom[0x0800]),pal4bit(color_prom[0x1000]));
 		color_prom++;
@@ -133,7 +133,7 @@ WRITE8_HANDLER( gridlee_videoram_w )
 WRITE8_HANDLER( gridlee_palette_select_w )
 {
 	/* update the scanline palette */
-	video_screen_update_partial(space->machine->primary_screen, video_screen_get_vpos(space->machine->primary_screen) - 1 + BALSENTE_VBEND);
+	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos() - 1 + BALSENTE_VBEND);
 	palettebank_vis = data & 0x3f;
 }
 

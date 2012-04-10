@@ -283,7 +283,7 @@ static WRITE8_HANDLER( custom_io_w )
 
 static CUSTOM_INPUT( hopper_r )
 {
-	if (hopper) return !(video_screen_get_frame_number(field->port->machine->primary_screen)%10);
+	if (hopper) return !(field->port->machine->primary_screen->frame_number()%10);
 	return input_code_pressed(field->port->machine, KEYCODE_H);
 }
 
@@ -1615,8 +1615,7 @@ static MACHINE_DRIVER_START( number10 )
 	MDRV_VIDEO_START(cpokerpk)
 	MDRV_VIDEO_UPDATE(cpokerpk)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_12MHz / 12)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki", XTAL_12MHz / 12, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -2217,21 +2216,21 @@ ROM_END
 
 
 
-GAMEL( 1993?, cpoker,   0,        igspoker, cpoker,  cpoker,  ROT0, "IGS",    "Champion Poker (v220I)",                    0, layout_igspoker )
-GAMEL( 1993?, cpokert,  cpoker,   igspoker, cpoker,  cpokert, ROT0, "Tuning", "Champion Poker (v200G)",                    0,	layout_igspoker )
-GAMEL( 2000, chleague,  0,        igspoker, chleague,chleague, ROT0, "IGS",   "Champion League (Poker)",                   0,	layout_igspoker )
-GAMEL( 2000, chleagul,  chleague, igspoker, chleague,chleague, ROT0, "IGS",   "Champion League (Lattine)",                 0,	layout_igspoker )
-GAMEL( 198?,  csk227it, 0,        csk227it, csk227,  cska,    ROT0, "IGS",    "Champion Skill (with Ability)",             0,	layout_igspoker ) /* SU 062 */
-GAMEL( 198?,  csk234it, csk227it, csk234it, csk234,  cska,    ROT0, "IGS",    "Champion Skill (Ability, Poker & Symbols)", 0,	layout_igspoker ) /* SU 062 */
-GAMEL( 2000, number10,  0,        number10, number10, number10, ROT0, "PlayMark Srl",   "Number Dieci (Poker)",            0,	layout_igspoker )
-GAMEL( 2000, numbr10l,  number10, number10, number10, number10, ROT0, "PlayMark Srl",   "Number Dieci (Lattine)",          0,	layout_igspoker )
-GAMEL( 198?,  igs_ncs,  0,        igs_ncs,  igs_ncs, igs_ncs, ROT0, "IGS",    "New Champion Skill (v100n)",                0,	layout_igspoker ) /* SU 062 */
-GAMEL( 199?, cpokerpk,  0,        cpokerpk, cpokerpk,  cpokerpk,  ROT0, "SGS",    "Champion Italian PK (bootleg, blue board)",   0,	layout_igspoker )
-GAMEL( 199?, cpokerpkg, cpokerpk, cpokerpk, cpokerpk,  cpokerpk,  ROT0, "SGS",    "Champion Italian PK (bootleg, green board)",  0, layout_igspoker )
-GAMEL( 199?, citalcup,  cpokerpk, cpokerpk, cpokerpk,  cpokerpk,  ROT0, "SGS",    "Champion Italian Cup (bootleg V220IT)",     0, layout_igspoker )
+GAMEL( 1993?, cpoker,   0,        igspoker, cpoker,   cpoker,   ROT0, "IGS",           "Champion Poker (v220I)",                     0, layout_igspoker )
+GAMEL( 1993?, cpokert,  cpoker,   igspoker, cpoker,   cpokert,  ROT0, "IGS (Tuning license)", "Champion Poker (v200G)",              0, layout_igspoker )
+GAMEL( 2000, chleague,  0,        igspoker, chleague, chleague, ROT0, "IGS",           "Champion League (Poker)",                    0, layout_igspoker )
+GAMEL( 2000, chleagul,  chleague, igspoker, chleague, chleague, ROT0, "IGS",           "Champion League (Lattine)",                  0, layout_igspoker )
+GAMEL( 198?,  csk227it, 0,        csk227it, csk227,   cska,     ROT0, "IGS",           "Champion Skill (with Ability)",              0, layout_igspoker ) /* SU 062 */
+GAMEL( 198?,  csk234it, csk227it, csk234it, csk234,   cska,     ROT0, "IGS",           "Champion Skill (Ability, Poker & Symbols)",  0, layout_igspoker ) /* SU 062 */
+GAMEL( 2000, number10,  0,        number10, number10, number10, ROT0, "PlayMark SRL",  "Number Dieci (Poker)",                       0, layout_igspoker )
+GAMEL( 2000, numbr10l,  number10, number10, number10, number10, ROT0, "PlayMark SRL",  "Number Dieci (Lattine)",                     0, layout_igspoker )
+GAMEL( 198?,  igs_ncs,  0,        igs_ncs,  igs_ncs,  igs_ncs,  ROT0, "IGS",           "New Champion Skill (v100n)",                 0, layout_igspoker ) /* SU 062 */
+GAMEL( 199?, cpokerpk,  0,        cpokerpk, cpokerpk, cpokerpk, ROT0, "bootleg (SGS)", "Champion Italian PK (bootleg, blue board)",  0, layout_igspoker )
+GAMEL( 199?, cpokerpkg, cpokerpk, cpokerpk, cpokerpk, cpokerpk, ROT0, "bootleg (SGS)", "Champion Italian PK (bootleg, green board)", 0, layout_igspoker )
+GAMEL( 199?, citalcup,  cpokerpk, cpokerpk, cpokerpk, cpokerpk, ROT0, "bootleg (SGS)", "Champion Italian Cup (bootleg V220IT)",      0, layout_igspoker )
 
-GAMEL( 2000, igs_ncs2,  0,        igs_ncs,  igs_ncs, igs_ncs2, ROT0, "IGS",   "New Champion Skill (v100n 2000)",           GAME_IMPERFECT_GRAPHICS, layout_igspoker )
+GAMEL( 2000, igs_ncs2,  0,        igs_ncs,  igs_ncs,  igs_ncs2, ROT0, "IGS",           "New Champion Skill (v100n 2000)",            GAME_IMPERFECT_GRAPHICS, layout_igspoker )
 
-GAMEL( 1998, stellecu,  0,        number10, number10, 0,       ROT0, "Sure",   "Stelle e Cubi (Italy)",                     GAME_NOT_WORKING,	layout_igspoker )
+GAMEL( 1998, stellecu,  0,        number10, number10, 0,        ROT0, "Sure",          "Stelle e Cubi (Italy)",                      GAME_NOT_WORKING, layout_igspoker )
 
-GAMEL( 1993?, pktet346, 0,        pktetris, pktet346, pktet346,  ROT0, "IGS",   "PK Tetris (v346I)",                    0, layout_igspoker )
+GAMEL( 1993?, pktet346, 0,        pktetris, pktet346, pktet346, ROT0, "IGS",           "PK Tetris (v346I)",                          0, layout_igspoker )

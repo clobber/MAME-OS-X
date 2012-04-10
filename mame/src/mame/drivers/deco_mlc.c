@@ -109,7 +109,7 @@ VIDEO_EOF( mlc );
 
 extern UINT32 *mlc_vram, *mlc_clip_ram;
 static UINT32 *mlc_ram, *irq_ram;
-static running_device *raster_irq_timer;
+static timer_device *raster_irq_timer;
 static int mainCpuIsArm;
 static int mlc_raster_table[9][256];
 static UINT32 vbl_i;
@@ -170,20 +170,20 @@ static READ32_HANDLER( decomlc_vbl_r )
 
 static READ32_HANDLER( mlc_scanline_r )
 {
-//  logerror("read scanline counter (%d)\n", video_screen_get_vpos(space->machine->primary_screen));
-	return video_screen_get_vpos(space->machine->primary_screen);
+//  logerror("read scanline counter (%d)\n", space->machine->primary_screen->vpos());
+	return space->machine->primary_screen->vpos();
 }
 
 static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
-//  logerror("hit scanline IRQ %d (%08x)\n", video_screen_get_vpos(machine->primary_screen), info.i);
-	cputag_set_input_line(timer->machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, HOLD_LINE);
+//  logerror("hit scanline IRQ %d (%08x)\n", machine->primary_screen->vpos(), info.i);
+	cputag_set_input_line(timer.machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, HOLD_LINE);
 }
 
 static WRITE32_HANDLER( mlc_irq_w )
 {
 	static int lastScanline[9]={ 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-	int scanline=video_screen_get_vpos(space->machine->primary_screen);
+	int scanline=space->machine->primary_screen->vpos();
 	irq_ram[offset]=data&0xffff;
 
 	switch (offset*4)
@@ -192,8 +192,8 @@ static WRITE32_HANDLER( mlc_irq_w )
 		cputag_set_input_line(space->machine, "maincpu", mainCpuIsArm ? ARM_IRQ_LINE : 1, CLEAR_LINE);
 		return;
 	case 0x14: /* Prepare scanline interrupt */
-		timer_device_adjust_oneshot(raster_irq_timer,video_screen_get_time_until_pos(space->machine->primary_screen, irq_ram[0x14/4], 0),0);
-		//logerror("prepare scanline to fire at %d (currently on %d)\n", irq_ram[0x14/4], video_screen_get_vpos(space->machine->primary_screen));
+		raster_irq_timer->adjust(space->machine->primary_screen->time_until_pos(irq_ram[0x14/4]));
+		//logerror("prepare scanline to fire at %d (currently on %d)\n", irq_ram[0x14/4], space->machine->primary_screen->vpos());
 		return;
 	case 0x18:
 	case 0x1c:
@@ -379,7 +379,7 @@ GFXDECODE_END
 static MACHINE_RESET( mlc )
 {
 	vbl_i = 0xffffffff;
-	raster_irq_timer = devtag_get_device(machine, "int_timer");
+	raster_irq_timer = machine->device<timer_device>("int_timer");
 }
 
 static MACHINE_DRIVER_START( avengrgs )
@@ -742,11 +742,11 @@ static READ32_HANDLER( avengrgs_speedup_r )
 static DRIVER_INIT( avengrgs )
 {
 	// init options
-	sh2drc_set_options(devtag_get_device(machine, "maincpu"), SH2DRC_FASTEST_OPTIONS);
+	sh2drc_set_options(machine->device("maincpu"), SH2DRC_FASTEST_OPTIONS);
 
 	// set up speed cheat
-	sh2drc_add_pcflush(devtag_get_device(machine, "maincpu"), 0x3234);
-	sh2drc_add_pcflush(devtag_get_device(machine, "maincpu"), 0x32dc);
+	sh2drc_add_pcflush(machine->device("maincpu"), 0x3234);
+	sh2drc_add_pcflush(machine->device("maincpu"), 0x32dc);
 
 	mainCpuIsArm = 0;
 	memory_install_read32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x01089a0, 0x01089a3, 0, 0, avengrgs_speedup_r );
@@ -758,7 +758,7 @@ static DRIVER_INIT( mlc )
 	/* The timing in the ARM core isn't as accurate as it should be, so bump up the
         effective clock rate here to compensate otherwise we have slowdowns in
         Skull Fung where there probably shouldn't be. */
-	cpu_set_clockscale(devtag_get_device(machine, "maincpu"), 2.0f);
+	machine->device("maincpu")->set_clock_scale(2.0f);
 	mainCpuIsArm = 1;
 	deco156_decrypt(machine);
 	descramble_sound(machine);

@@ -123,10 +123,10 @@ static TIMER_CALLBACK( capbowl_update )
 {
 	int scanline = param;
 
-	video_screen_update_partial(machine->primary_screen, scanline - 1);
+	machine->primary_screen->update_partial(scanline - 1);
 	scanline += 32;
 	if (scanline > 240) scanline = 32;
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, scanline, capbowl_update);
+	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, scanline, capbowl_update);
 }
 
 
@@ -349,8 +349,8 @@ static MACHINE_START( capbowl )
 {
 	capbowl_state *state = (capbowl_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->blitter_addr);
 	state_save_register_global(machine, state->last_trackball_val[0]);
@@ -361,7 +361,7 @@ static MACHINE_RESET( capbowl )
 {
 	capbowl_state *state = (capbowl_state *)machine->driver_data;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 32, 0), NULL, 32, capbowl_update);
+	timer_set(machine, machine->primary_screen->time_until_pos(32), NULL, 32, capbowl_update);
 
 	state->blitter_addr = 0;
 	state->last_trackball_val[0] = 0;
@@ -528,9 +528,9 @@ static DRIVER_INIT( capbowl )
  *
  *************************************/
 
-GAME( 1988, capbowl,  0,       capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies", "Capcom Bowling (set 1)", 0 )
-GAME( 1988, capbowl2, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies", "Capcom Bowling (set 2)", 0 )
-GAME( 1988, capbowl3, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies", "Capcom Bowling (set 3)", 0 )
-GAME( 1988, capbowl4, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies", "Capcom Bowling (set 4)", 0 )
-GAME( 1989, clbowl,   capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies", "Coors Light Bowling", 0 )
+GAME( 1988, capbowl,  0,       capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies / Capcom", "Capcom Bowling (set 1)", 0 )
+GAME( 1988, capbowl2, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies / Capcom", "Capcom Bowling (set 2)", 0 )
+GAME( 1988, capbowl3, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies / Capcom", "Capcom Bowling (set 3)", 0 )
+GAME( 1988, capbowl4, capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies / Capcom", "Capcom Bowling (set 4)", 0 )
+GAME( 1989, clbowl,   capbowl, capbowl,  capbowl, capbowl,  ROT270, "Incredible Technologies / Capcom", "Coors Light Bowling", 0 )
 GAME( 1991, bowlrama, 0,       bowlrama, capbowl, 0,        ROT270, "P&P Marketing", "Bowl-O-Rama", 0 )

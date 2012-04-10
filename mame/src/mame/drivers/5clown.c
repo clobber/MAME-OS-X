@@ -453,7 +453,7 @@ static UINT8 main_latch_d800;
 static UINT8 snd_latch_0800;
 static UINT8 snd_latch_0a02;
 static UINT8 ay8910_addr;
-running_device *ay8910;
+static running_device *ay8910;
 
 
 /*************************
@@ -527,7 +527,7 @@ static PALETTE_INIT( fclown )
 
 	if (color_prom == 0) return;
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine->total_colors();i++)
 	{
 		int bit0, bit1, bit2, bit3, r, g, b, bk;
 
@@ -1066,8 +1066,7 @@ static MACHINE_DRIVER_START( fclown )
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
 
-	MDRV_SOUND_ADD("oki6295", OKIM6295, MASTER_CLOCK/12)	/* guess, seems ok */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)			/* pin7 guessed, seems ok */
+	MDRV_OKIM6295_ADD("oki6295", MASTER_CLOCK/12, OKIM6295_PIN7_LOW)	/* guess, seems ok; pin7 guessed, seems ok */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.20)
 
 MACHINE_DRIVER_END
@@ -1229,7 +1228,7 @@ static DRIVER_INIT( fclown )
 
 	/* Assigning AY-3-8910 sound device */
 
-	ay8910 = devtag_get_device(machine, "ay8910");
+	ay8910 = machine->device("ay8910");
 }
 
 
@@ -1238,6 +1237,6 @@ static DRIVER_INIT( fclown )
 *************************/
 
 /*    YEAR  NAME      PARENT  MACHINE INPUT   INIT    ROT    COMPANY  FULLNAME                      FLAGS... */
-GAME( 1993, 5clown,   0,      fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (english, set 1)", GAME_IMPERFECT_SOUND )
-GAME( 1993, 5clowna,  5clown, fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (english, set 2)", GAME_IMPERFECT_SOUND )
-GAME( 1993, 5clownsp, 5clown, fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (spanish hack)",   GAME_IMPERFECT_SOUND )
+GAME( 1993, 5clown,   0,      fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (English, set 1)", GAME_IMPERFECT_SOUND )
+GAME( 1993, 5clowna,  5clown, fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (English, set 2)", GAME_IMPERFECT_SOUND )
+GAME( 1993, 5clownsp, 5clown, fclown, fclown, fclown, ROT0, "IGS",   "Five Clown (Spanish hack)",   GAME_IMPERFECT_SOUND )

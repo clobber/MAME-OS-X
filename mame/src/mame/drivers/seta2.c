@@ -126,7 +126,7 @@ Notes:
 Guardians
 Banpresto, 1995
 
-This hardware is not common Banpresto hardware. Possibly licenced
+This hardware is not common Banpresto hardware. Possibly licensed
 to them from another manufacturer? Or an early design that they decided
 not to use for future games? Either way, this game is _extremely_ rare :-)
 
@@ -950,7 +950,7 @@ static READ32_HANDLER( funcube_debug_r )
 	UINT32 ret = input_port_read(space->machine,"DEBUG");
 
 	// This bits let you move the crosshair in the inputs / touch panel test with a joystick
-	if (!(video_screen_get_frame_number(space->machine->primary_screen) % 3))
+	if (!(space->machine->primary_screen->frame_number() % 3))
 		ret |= 0x3f;
 
 	return ret;
@@ -996,13 +996,13 @@ static READ8_HANDLER( funcube_coins_r )
 	UINT8 coin_bit0 = 1;	// active low
 	UINT8 coin_bit1 = 1;
 
-	UINT8 hopper_bit = (funcube_hopper_motor && !(video_screen_get_frame_number(space->machine->primary_screen)%20)) ? 1 : 0;
+	UINT8 hopper_bit = (funcube_hopper_motor && !(space->machine->primary_screen->frame_number()%20)) ? 1 : 0;
 
 	const UINT64 coin_total_cycles = FUNCUBE_SUB_CPU_CLOCK / (1000/20);
 
 	if ( funcube_coin_start_cycles )
 	{
-		UINT64 elapsed = cpu_get_total_cycles(space->cpu) - funcube_coin_start_cycles;
+		UINT64 elapsed = downcast<cpu_device *>(space->cpu)->total_cycles() - funcube_coin_start_cycles;
 
 		if ( elapsed < coin_total_cycles/2 )
 			coin_bit0 = 0;
@@ -1014,7 +1014,7 @@ static READ8_HANDLER( funcube_coins_r )
 	else
 	{
 		if (!(ret & 1))
-			funcube_coin_start_cycles = cpu_get_total_cycles(space->cpu);
+			funcube_coin_start_cycles = downcast<cpu_device *>(space->cpu)->total_cycles();
 	}
 
 	return (ret & ~7) | (hopper_bit << 2) | (coin_bit1 << 1) | coin_bit0;

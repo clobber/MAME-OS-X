@@ -1,7 +1,7 @@
 /***************************************************************************
 
-King of Boxer - (c) 1985 Woodplace Inc.
-Ring King     - (c) 1985 Data East USA Inc. / Woodplace Inc.
+King of Boxer - (c) 1985 Wood Place Inc.
+Ring King     - (c) 1985 Data East USA Inc. / Wood Place Inc.
 
 Driver by:
 Ernesto Corvi
@@ -458,9 +458,9 @@ static MACHINE_START( kingofb )
 {
 	kingofb_state *state = (kingofb_state *)machine->driver_data;
 
-	state->video_cpu = devtag_get_device(machine, "video");
-	state->sprite_cpu = devtag_get_device(machine, "sprite");
-	state->audio_cpu = devtag_get_device(machine, "audiocpu");
+	state->video_cpu = machine->device("video");
+	state->sprite_cpu = machine->device("sprite");
+	state->audio_cpu = machine->device("audiocpu");
 
 	state_save_register_global(machine, state->nmi_enable);
 	state_save_register_global(machine, state->palette_bank);
@@ -829,8 +829,8 @@ static DRIVER_INIT( ringkingw )
 }
 
 
-GAME( 1985, kingofb,   0,       kingofb,  kingofb,  0,        ROT90, "Woodplace",     "King of Boxer (English)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking,  kingofb, ringking, ringking, 0,        ROT90, "Data East USA", "Ring King (US set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking2, kingofb, ringking, ringking, 0,        ROT90, "Data East USA", "Ring King (US set 2)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringking3, kingofb, kingofb,  kingofb,  ringking3,ROT90, "Data East USA", "Ring King (US set 3)", GAME_SUPPORTS_SAVE )
-GAME( 1985, ringkingw, kingofb, kingofb,  kingofb,  ringkingw,ROT90, "Woodplace",     "Ring King (US, Woodplace license)", GAME_SUPPORTS_SAVE )
+GAME( 1985, kingofb,   0,       kingofb,  kingofb,  0,        ROT90, "Wood Place Inc.", "King of Boxer (English)", GAME_SUPPORTS_SAVE )
+GAME( 1985, ringking,  kingofb, ringking, ringking, 0,        ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 1)", GAME_SUPPORTS_SAVE )
+GAME( 1985, ringking2, kingofb, ringking, ringking, 0,        ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1985, ringking3, kingofb, kingofb,  kingofb,  ringking3,ROT90, "Wood Place Inc. (Data East USA license)", "Ring King (US set 3)", GAME_SUPPORTS_SAVE )
+GAME( 1985, ringkingw, kingofb, kingofb,  kingofb,  ringkingw,ROT90, "Wood Place Inc.", "Ring King (US, Wood Place Inc.)", GAME_SUPPORTS_SAVE )

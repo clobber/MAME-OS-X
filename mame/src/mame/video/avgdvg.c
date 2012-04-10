@@ -510,7 +510,7 @@ static int avg_latch0(vgdata *vg)
 static int quantum_st2st3(vgdata *vg)
 {
 	/* Quantum doesn't decode latch0 or latch2 but ST2 and ST3 are fed
-     * into the address controller which incremets the PC
+     * into the address controller which increments the PC
      */
 	vg->pc++;
 	return 0;
@@ -548,7 +548,7 @@ static int bzone_latch1(vgdata *vg)
 	/*
      * Battle Zone has clipping hardware. We need to remember the
      * position of the beam when the analog switches hst or lst get
-     * turened off.
+     * turned off.
      */
 
 	if (vg->hst == 0)
@@ -834,6 +834,8 @@ static int tempest_strobe2(vgdata *vg)
 {
 	if ((OP2 == 0) && (vg->dvy12 == 0))
 	{
+		/* Contrary to previous documentation in MAME,
+        Tempest does not have the vg->enspkl bit. */
 		if (vg->dvy & 0x800)
 			vg->color = vg->dvy & 0xf;
 		else
@@ -1488,15 +1490,15 @@ static void register_state (running_machine *machine)
 
 static VIDEO_START( avg_common )
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine->primary_screen->visible_area();
 
 	vg = &vgd;
 	vg->machine = machine;
 
-	xmin = visarea->min_x;
-	ymin = visarea->min_y;
-	xmax = visarea->max_x;
-	ymax = visarea->max_y;
+	xmin = visarea.min_x;
+	ymin = visarea.min_y;
+	xmax = visarea.max_x;
+	ymax = visarea.max_y;
 
 	xcenter = ((xmax - xmin) / 2) << 16;
 	ycenter = ((ymax - ymin) / 2) << 16;
@@ -1520,14 +1522,14 @@ static VIDEO_START( avg_common )
 
 VIDEO_START( dvg )
 {
-	const rectangle *visarea = video_screen_get_visible_area(machine->primary_screen);
+	const rectangle &visarea = machine->primary_screen->visible_area();
 
 	vgc = &dvg_default;
 	vg = &vgd;
 	vg->machine = machine;
 
-	xmin = visarea->min_x;
-	ymin = visarea->min_y;
+	xmin = visarea.min_x;
+	ymin = visarea.min_y;
 
 	vg_halt_timer = timer_alloc(machine, vg_set_halt_callback, NULL);
 	vg_run_timer = timer_alloc(machine, run_state_machine, NULL);

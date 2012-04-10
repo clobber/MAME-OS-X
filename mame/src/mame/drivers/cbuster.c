@@ -297,9 +297,9 @@ static MACHINE_START( cbuster )
 {
 	cbuster_state *state = (cbuster_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->deco16ic = machine->device("deco_custom");
 
 	state_save_register_global(machine, state->prot);
 	state_save_register_global(machine, state->pri);
@@ -357,12 +357,10 @@ static MACHINE_DRIVER_START( twocrude )
 	MDRV_SOUND_ROUTE(0, "mono", 0.45)
 	MDRV_SOUND_ROUTE(1, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki1", OKIM6295, 32220000/32)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 
-	MDRV_SOUND_ADD("oki2", OKIM6295, 32220000/16)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high)
+	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 MACHINE_DRIVER_END
 

@@ -84,7 +84,7 @@ static TIMER_CALLBACK( scanline_callback )
 	scanline += 128;
 	scanline &= 255;
 
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), scanline);
+	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(scanline), scanline);
 }
 
 static MACHINE_START( magmax )
@@ -101,7 +101,7 @@ static MACHINE_START( magmax )
 
 static MACHINE_RESET( magmax )
 {
-	timer_adjust_oneshot(interrupt_timer, video_screen_get_time_until_pos(machine->primary_screen, 64, 0), 64);
+	timer_adjust_oneshot(interrupt_timer, machine->primary_screen->time_until_pos(64), 64);
 
 #if 0
 	{
@@ -116,9 +116,9 @@ static MACHINE_RESET( magmax )
 
 static WRITE8_DEVICE_HANDLER( ay8910_portA_0_w )
 {
-running_device *ay1 = devtag_get_device(device->machine, "ay1");
-running_device *ay2 = devtag_get_device(device->machine, "ay2");
-running_device *ay3 = devtag_get_device(device->machine, "ay3");
+running_device *ay1 = device->machine->device("ay1");
+running_device *ay2 = device->machine->device("ay2");
+running_device *ay3 = device->machine->device("ay3");
 float percent;
 
 /*There are three AY8910 chips and four(!) separate amplifiers on the board

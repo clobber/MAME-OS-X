@@ -389,10 +389,10 @@ static void dkong_init_device_driver_data( running_machine *machine )
 {
 	dkong_state *state = (dkong_state *)machine->driver_data;
 
-	state->dev_n2a03a = devtag_get_device(machine, "n2a03a");
-	state->dev_n2a03b = devtag_get_device(machine, "n2a03b");
-	state->dev_6h = devtag_get_device(machine, "ls259.6h");
-	state->dev_vp2 = devtag_get_device(machine, "virtual_p2");
+	state->dev_n2a03a = machine->device("n2a03a");
+	state->dev_n2a03b = machine->device("n2a03b");
+	state->dev_6h = machine->device("ls259.6h");
+	state->dev_vp2 = machine->device("virtual_p2");
 }
 
 static MACHINE_START( dkong2b )
@@ -1824,7 +1824,7 @@ ROM_START( radarscp1 )
     ROM_RELOAD(               0x0800, 0x0800 )
     ROM_FILL(                 0x1000, 0x0800, 0xFF )
 
-    ROM_REGION( 0x0800, "tms", 0 )  /* speech rom */
+    ROM_REGION( 0x0800, "m58819", 0 )  /* speech rom */
     ROM_LOAD( "trs014ha.bin",      0x0000, 0x0800, CRC(d1f1b48c) SHA1(ee5584368d2e9f7bde271f5004585b53f5ff5c3f) ) /* speech rom */
 
     ROM_REGION( 0x1000, "gfx1", 0 )
@@ -2971,16 +2971,16 @@ GAME( 1984, dkong3b,  dkong3,   dkong3b,  dkong3b,        0,  ROT90, "bootleg", 
 GAME( 1983, pestplce, mario,    pestplce, pestplce,       0,  ROT180, "bootleg", "Pest Place", GAME_WRONG_COLORS | GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 
 /* 2650 based */
-GAME( 1984, herbiedk, huncholy, s2650,    herbiedk,       0,  ROT90, "CVS", "Herbie at the Olympics (DK conversion)", GAME_SUPPORTS_SAVE )
+GAME( 1984, herbiedk, huncholy, s2650,    herbiedk,       0,  ROT90, "Century Electronics / Seatongrove Ltd", "Herbie at the Olympics (DK conversion)", GAME_SUPPORTS_SAVE )
 GAME( 1983, hunchbkd, hunchbak, s2650,    hunchbkd,       0,  ROT90, "Century Electronics", "Hunchback (DK conversion)", GAME_SUPPORTS_SAVE )
 GAME( 1984, sbdk,     superbik, s2650,    sbdk,           0,  ROT90, "Century Electronics", "Super Bike (DK conversion)", GAME_SUPPORTS_SAVE )
 GAME( 1984, herodk,   hero,     s2650,    herodk,    herodk,  ROT90, "Seatongrove Ltd (Crown license)", "Hero in the Castle of Doom (DK conversion)", GAME_SUPPORTS_SAVE )
 GAME( 1984, herodku,  hero,     s2650,    herodk,         0,  ROT90, "Seatongrove Ltd (Crown license)", "Hero in the Castle of Doom (DK conversion not encrypted)", GAME_SUPPORTS_SAVE )
-GAME( 1984, 8ballact, 0,        s2650,    8ballact,       0,  ROT90, "Seatongrove Ltd (Magic Eletronics USA licence)", "Eight Ball Action (DK conversion)", GAME_SUPPORTS_SAVE )
-GAME( 1984, 8ballact2,8ballact, s2650,    8ballact,       0,  ROT90, "Seatongrove Ltd (Magic Eletronics USA licence)", "Eight Ball Action (DKJr conversion)", GAME_SUPPORTS_SAVE )
-GAME( 1984, shootgal, 0,        s2650,    shootgal,       0,  ROT180, "Seatongrove Ltd (Zaccaria licence)", "Shooting Gallery", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1985, spclforc, 0,        spclforc, spclforc,       0,  ROT90, "Senko Industries (Magic Eletronics Inc. licence)", "Special Forces", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
-GAME( 1985, spcfrcii, 0,        spclforc, spclforc,       0,  ROT90, "Senko Industries (Magic Eletronics Inc. licence)", "Special Forces II", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1984, 8ballact, 0,        s2650,    8ballact,       0,  ROT90, "Seatongrove Ltd (Magic Eletronics USA license)", "Eight Ball Action (DK conversion)", GAME_SUPPORTS_SAVE )
+GAME( 1984, 8ballact2,8ballact, s2650,    8ballact,       0,  ROT90, "Seatongrove Ltd (Magic Eletronics USA license)", "Eight Ball Action (DKJr conversion)", GAME_SUPPORTS_SAVE )
+GAME( 1984, shootgal, 0,        s2650,    shootgal,       0,  ROT180,"Seatongrove Ltd (Zaccaria license)", "Shooting Gallery", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1985, spclforc, 0,        spclforc, spclforc,       0,  ROT90, "Senko Industries (Magic Eletronics Inc. license)", "Special Forces", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1985, spcfrcii, 0,        spclforc, spclforc,       0,  ROT90, "Senko Industries (Magic Eletronics Inc. license)", "Special Forces II", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
 /* EPOS */
 GAME( 1984, drakton,  0,        drakton,  drakton,  drakton,  ROT90, "Epos Corporation", "Drakton (DK conversion)", GAME_SUPPORTS_SAVE )

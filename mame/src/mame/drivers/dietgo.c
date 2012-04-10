@@ -194,9 +194,9 @@ static MACHINE_START( dietgo )
 {
 	dietgo_state *state = (dietgo_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->deco16ic = devtag_get_device(machine, "deco_custom");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->deco16ic = machine->device("deco_custom");
 }
 
 static MACHINE_DRIVER_START( dietgo )
@@ -236,8 +236,7 @@ static MACHINE_DRIVER_START( dietgo )
 	MDRV_SOUND_CONFIG(ym2151_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.45)
 
-	MDRV_SOUND_ADD("oki", OKIM6295, XTAL_32_22MHz/32) /* verified on pcb */
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) /* verified on pcb */
+	MDRV_OKIM6295_ADD("oki", XTAL_32_22MHz/32, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 MACHINE_DRIVER_END
 

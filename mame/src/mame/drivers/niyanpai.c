@@ -122,10 +122,10 @@ static WRITE8_HANDLER( tmpz84c011_pio_w)
 			niyanpai_soundbank_w(space->machine, data & 0x03);
 			break;
 		case 1:			/* PB_0 */
-			DAC_WRITE(devtag_get_device(space->machine, "dac2"), 0, data);
+			DAC_WRITE(space->machine->device("dac2"), 0, data);
 			break;
 		case 2:			/* PC_0 */
-			DAC_WRITE(devtag_get_device(space->machine, "dac1"), 0, data);
+			DAC_WRITE(space->machine->device("dac1"), 0, data);
 			break;
 		case 3:			/* PD_0 */
 			break;
@@ -764,7 +764,7 @@ static INTERRUPT_GEN( niyanpai_interrupt )
 	cpu_set_input_line(device, 1, HOLD_LINE);
 }
 
-static const z80_daisy_chain daisy_chain_sound[] =
+static const z80_daisy_config daisy_chain_sound[] =
 {
 	{ "ctc" },
 	{ NULL }
@@ -910,5 +910,5 @@ ROM_END
 
 GAME( 1996, niyanpai, 0, niyanpai, niyanpai, niyanpai, ROT0, "Nichibutsu", "Niyanpai (Japan)", 0 )
 GAME( 1995, musobana, 0, musobana, musobana, niyanpai, ROT0, "Nichibutsu/Yubis", "Musoubana (Japan)", 0 )
-GAME( 1994, 4psimasy, 0, musobana, 4psimasy, niyanpai, ROT0, "SPHINX/AV JAPAN", "Mahjong 4P Simasyo (Japan)", 0 )
+GAME( 1994, 4psimasy, 0, musobana, 4psimasy, niyanpai, ROT0, "Sphinx/AV Japan", "Mahjong 4P Simasyo (Japan)", 0 )
 GAME( 199?, mhhonban, 0, mhhonban, mhhonban, niyanpai, ROT0, "Nichibutsu?", "Mahjong Housoukyoku Honbanchuu (Japan)", 0 )

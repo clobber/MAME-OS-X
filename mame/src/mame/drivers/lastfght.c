@@ -101,7 +101,7 @@ static VIDEO_START( lastfght )
 	lastfght_state *state = (lastfght_state *)machine->driver_data;
 	int i;
 	for (i = 0; i < 2; i++)
-		state->bitmap[i] = video_screen_auto_bitmap_alloc(machine->primary_screen);
+		state->bitmap[i] = machine->primary_screen->alloc_compatible_bitmap();
 
 	state->colorram = auto_alloc_array(machine, UINT8, 256 * 3);
 
@@ -527,7 +527,7 @@ static MACHINE_START( lastfght )
 {
 	lastfght_state *state = (lastfght_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device("maincpu");
 
 	state_save_register_global(machine, state->clr_offset);
 	state_save_register_global(machine, state->dest);

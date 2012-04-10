@@ -313,7 +313,7 @@ static WRITE8_HANDLER( thunderx_1f98_w )
 		calculate_collisions(space->machine);
 
 		/* 100 cycle delay is arbitrary */
-		timer_set(space->machine, cpu_clocks_to_attotime(space->cpu,100), NULL, 0, thunderx_firq_callback);
+		timer_set(space->machine, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(100), NULL, 0, thunderx_firq_callback);
 	}
 
 	state->_1f98_data = data;
@@ -631,11 +631,11 @@ static MACHINE_START( scontra )
 
 	machine->generic.paletteram.u8 = auto_alloc_array_clear(machine, UINT8, 0x800);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->k007232 = devtag_get_device(machine, "k007232");
-	state->k052109 = devtag_get_device(machine, "k052109");
-	state->k051960 = devtag_get_device(machine, "k051960");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->k007232 = machine->device("k007232");
+	state->k052109 = machine->device("k052109");
+	state->k051960 = machine->device("k051960");
 
 	state_save_register_global(machine, state->priority);
 	state_save_register_global(machine, state->_1f98_data);
@@ -674,7 +674,7 @@ static MACHINE_RESET( scontra )
 
 static MACHINE_RESET( thunderx )
 {
-	konami_configure_set_lines(devtag_get_device(machine, "maincpu"), thunderx_banking);
+	konami_configure_set_lines(machine->device("maincpu"), thunderx_banking);
 
 	MACHINE_RESET_CALL(scontra);
 }

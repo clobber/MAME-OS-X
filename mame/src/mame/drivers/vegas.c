@@ -475,7 +475,7 @@ static UINT8 cmos_unlocked;
 static UINT32 *timekeeper_nvram;
 static size_t timekeeper_nvram_size;
 
-static running_device *voodoo_device;
+static running_device *voodoo;
 static UINT8 dcs_idma_cs;
 
 static int dynamic_count;
@@ -516,7 +516,7 @@ static void remap_dynamic_addresses(running_machine *machine);
 
 static VIDEO_UPDATE( vegas )
 {
-	return voodoo_update(voodoo_device, bitmap, cliprect) ? 0 : UPDATE_HAS_NOT_CHANGED;
+	return voodoo_update(voodoo, bitmap, cliprect) ? 0 : UPDATE_HAS_NOT_CHANGED;
 }
 
 
@@ -528,7 +528,7 @@ static VIDEO_UPDATE( vegas )
 
 static MACHINE_START( vegas )
 {
-	voodoo_device = devtag_get_device(machine, "voodoo");
+	voodoo = machine->device("voodoo");
 
 	/* allocate timers for the NILE */
 	timer[0] = timer_alloc(machine, NULL, NULL);
@@ -537,19 +537,19 @@ static MACHINE_START( vegas )
 	timer[3] = timer_alloc(machine, nile_timer_callback, NULL);
 
 	/* identify our sound board */
-	if (devtag_get_device(machine, "dsio") != NULL)
+	if (machine->device("dsio") != NULL)
 		dcs_idma_cs = 6;
-	else if (devtag_get_device(machine, "denver") != NULL)
+	else if (machine->device("denver") != NULL)
 		dcs_idma_cs = 7;
 	else
 		dcs_idma_cs = 0;
 
 	/* set the fastest DRC options, but strict verification */
-	mips3drc_set_options(devtag_get_device(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY + MIPS3DRC_FLUSH_PC);
+	mips3drc_set_options(machine->device("maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY + MIPS3DRC_FLUSH_PC);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, ramsize - 1, FALSE, rambase);
-	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE, rombase);
+	mips3drc_add_fastram(machine->device("maincpu"), 0x00000000, ramsize - 1, FALSE, rambase);
+	mips3drc_add_fastram(machine->device("maincpu"), 0x1fc00000, 0x1fc7ffff, TRUE, rombase);
 
 	/* register for save states */
 	state_save_register_global(machine, nile_irq_state);
@@ -577,7 +577,7 @@ static MACHINE_RESET( vegas )
 	memset(pci_3dfx_regs, 0, sizeof(pci_3dfx_regs));
 
 	/* reset the DCS system if we have one */
-	if (devtag_get_device(machine, "dcs2") != NULL || devtag_get_device(machine, "dsio") != NULL || devtag_get_device(machine, "denver") != NULL)
+	if (machine->device("dcs2") != NULL || machine->device("dsio") != NULL || machine->device("denver") != NULL)
 	{
 		dcs_reset_w(1);
 		dcs_reset_w(0);
@@ -636,8 +636,8 @@ static READ32_HANDLER( timekeeper_r )
 	if ((offset*4) >= 0x7ff0)
 	{
 		/* get the time */
-		mame_system_time systime;
-		mame_get_base_datetime(space->machine, &systime);
+		system_time systime;
+		space->machine->base_datetime(systime);
 
 		/* return portions thereof */
 		switch (offset*4)
@@ -767,7 +767,7 @@ static WRITE32_HANDLER( pci_ide_w )
 
 		case 0x14:		/* interrupt pending */
 			if (data & 4)
-				ide_interrupt(devtag_get_device(space->machine, "ide"), 0);
+				ide_interrupt(space->machine->device("ide"), 0);
 			break;
 	}
 	if (LOG_PCI)
@@ -784,7 +784,7 @@ static WRITE32_HANDLER( pci_ide_w )
 
 static READ32_HANDLER( pci_3dfx_r )
 {
-	int voodoo_type = voodoo_get_type(voodoo_device);
+	int voodoo_type = voodoo_get_type(voodoo);
 	UINT32 result = pci_3dfx_regs[offset];
 
 	switch (offset)
@@ -817,7 +817,7 @@ static READ32_HANDLER( pci_3dfx_r )
 
 static WRITE32_HANDLER( pci_3dfx_w )
 {
-	int voodoo_type = voodoo_get_type(voodoo_device);
+	int voodoo_type = voodoo_get_type(voodoo);
 
 	pci_3dfx_regs[offset] = data;
 
@@ -856,7 +856,7 @@ static WRITE32_HANDLER( pci_3dfx_w )
 			break;
 
 		case 0x10:		/* initEnable register */
-			voodoo_set_init_enable(voodoo_device, data);
+			voodoo_set_init_enable(voodoo, data);
 			break;
 
 	}
@@ -1551,9 +1551,9 @@ INLINE void _add_dynamic_device_address(running_device *device, offs_t start, of
 
 static void remap_dynamic_addresses(running_machine *machine)
 {
-	running_device *ethernet = devtag_get_device(machine, "ethernet");
-	running_device *ide = devtag_get_device(machine, "ide");
-	int voodoo_type = voodoo_get_type(voodoo_device);
+	running_device *ethernet = machine->device("ethernet");
+	running_device *ide = machine->device("ide");
+	int voodoo_type = voodoo_get_type(voodoo);
 	offs_t base;
 	int addr;
 
@@ -1652,24 +1652,24 @@ static void remap_dynamic_addresses(running_machine *machine)
 		if (base >= ramsize && base < 0x20000000)
 		{
 			if (voodoo_type == VOODOO_2)
-				add_dynamic_device_address(voodoo_device, base + 0x000000, base + 0xffffff, voodoo_r, voodoo_w);
+				add_dynamic_device_address(voodoo, base + 0x000000, base + 0xffffff, voodoo_r, voodoo_w);
 			else
-				add_dynamic_device_address(voodoo_device, base + 0x000000, base + 0x1ffffff, banshee_r, banshee_w);
+				add_dynamic_device_address(voodoo, base + 0x000000, base + 0x1ffffff, banshee_r, banshee_w);
 		}
 
 		if (voodoo_type >= VOODOO_BANSHEE)
 		{
 			base = pci_3dfx_regs[0x05] & 0xfffffff0;
             if (base >= ramsize && base < 0x20000000)
-				add_dynamic_device_address(voodoo_device, base + 0x0000000, base + 0x1ffffff, banshee_fb_r, banshee_fb_w);
+				add_dynamic_device_address(voodoo, base + 0x0000000, base + 0x1ffffff, banshee_fb_r, banshee_fb_w);
 
 			base = pci_3dfx_regs[0x06] & 0xfffffff0;
             if (base >= ramsize && base < 0x20000000)
-				add_dynamic_device_address(voodoo_device, base + 0x0000000, base + 0x00000ff, banshee_io_r, banshee_io_w);
+				add_dynamic_device_address(voodoo, base + 0x0000000, base + 0x00000ff, banshee_io_r, banshee_io_w);
 
 			base = pci_3dfx_regs[0x0c] & 0xffff0000;
             if (base >= ramsize && base < 0x20000000)
-				add_dynamic_device_address(voodoo_device, base + 0x0000000, base + 0x000ffff, banshee_rom_r, NULL);
+				add_dynamic_device_address(voodoo, base + 0x0000000, base + 0x000ffff, banshee_rom_r, NULL);
 		}
 	}
 
@@ -2258,7 +2258,8 @@ static MACHINE_DRIVER_START( vegas250 )
 	MDRV_IMPORT_FROM(vegascore)
 	MDRV_IMPORT_FROM(dcs2_audio_2104)
 
-	MDRV_CPU_REPLACE("maincpu", R5000LE, SYSTEM_CLOCK*2.5)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(SYSTEM_CLOCK*2.5)
 MACHINE_DRIVER_END
 
 
@@ -2288,6 +2289,8 @@ MACHINE_DRIVER_END
 static MACHINE_DRIVER_START( vegasv3 )
 	MDRV_IMPORT_FROM(vegas32m)
 	MDRV_CPU_REPLACE("maincpu", RM7000LE, SYSTEM_CLOCK*2.5)
+	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_PROGRAM_MAP(vegas_map_8mb)
 
 	MDRV_DEVICE_REMOVE("voodoo")
 	MDRV_3DFX_VOODOO_3_ADD("voodoo", STD_VOODOO_3_CLOCK, 16, "screen")
@@ -2301,6 +2304,7 @@ static MACHINE_DRIVER_START( denver )
 	MDRV_IMPORT_FROM(dcs2_audio_denver)
 
 	MDRV_CPU_REPLACE("maincpu", RM7000LE, SYSTEM_CLOCK*2.5)
+	MDRV_CPU_CONFIG(config)
 	MDRV_CPU_PROGRAM_MAP(vegas_map_32mb)
 
 	MDRV_DEVICE_REMOVE("voodoo")
@@ -2487,10 +2491,10 @@ static DRIVER_INIT( gauntleg )
 	init_common(machine, MIDWAY_IOASIC_CALSPEED, 340/* 340=39", 322=27", others? */);
 
 	/* speedups */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x80015430, 0x8CC38060, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x80015464, 0x3C09801E, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800C8918, 0x8FA2004C, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800C8890, 0x8FA20024, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x80015430, 0x8CC38060, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x80015464, 0x3C09801E, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800C8918, 0x8FA2004C, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800C8890, 0x8FA20024, 250);		/* confirmed */
 }
 
 
@@ -2500,10 +2504,10 @@ static DRIVER_INIT( gauntdl )
 	init_common(machine, MIDWAY_IOASIC_GAUNTDL, 346/* 347, others? */);
 
 	/* speedups */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800158B8, 0x8CC3CC40, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800158EC, 0x3C0C8022, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800D40C0, 0x8FA2004C, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x800D4038, 0x8FA20024, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800158B8, 0x8CC3CC40, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800158EC, 0x3C0C8022, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800D40C0, 0x8FA2004C, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x800D4038, 0x8FA20024, 250);		/* confirmed */
 }
 
 
@@ -2513,7 +2517,7 @@ static DRIVER_INIT( warfa )
 	init_common(machine, MIDWAY_IOASIC_MACE, 337/* others? */);
 
 	/* speedups */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x8009436C, 0x0C031663, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x8009436C, 0x0C031663, 250);		/* confirmed */
 }
 
 
@@ -2523,10 +2527,10 @@ static DRIVER_INIT( tenthdeg )
 	init_common(machine, MIDWAY_IOASIC_GAUNTDL, 330/* others? */);
 
 	/* speedups */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x80051CD8, 0x0C023C15, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x8005E674, 0x3C028017, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x8002DBCC, 0x8FA2002C, 250);		/* confirmed */
-	mips3drc_add_hotspot(devtag_get_device(machine, "maincpu"), 0x80015930, 0x8FC20244, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x80051CD8, 0x0C023C15, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x8005E674, 0x3C028017, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x8002DBCC, 0x8FA2002C, 250);		/* confirmed */
+	mips3drc_add_hotspot(machine->device("maincpu"), 0x80015930, 0x8FC20244, 250);		/* confirmed */
 }
 
 

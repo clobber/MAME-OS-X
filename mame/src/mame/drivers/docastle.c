@@ -115,8 +115,7 @@ TODO:
 
 - third CPU
 - dip switch reading bug. dorunrun and docastle are VERY timing sensitive, and
-  dip switch reading will fail if the main CPU is running at the nominally correct
-  4MHz speed. This is kludge by slighly lowering the speed to 3.98MHz.
+  dip switch reading will fail if timing is not completely accurate.
 - the dorunrun attract mode sequence is also very timing sensitive. The behaviour
   of the "dorunrun2" set, verified on the real board, with all dips in the OFF
   position (easiest difficulty setting), should be, for the first 12 rounds of
@@ -134,9 +133,9 @@ TODO:
   11) Mr do moves right.
   12) Mr do moves. Kills 'A' monster. Shows winning extra Mr do.
 
-  Small changes to the CPU speed alter the demo timing and can cause the above
-  sequence not to work (e.g. Mr Do might not fill all monsters at once on the
-  first round). The 3.98MHz speed makes the sequence work.
+  Small changes to the CPU speed or refresh rate alter the demo timing and can cause
+  the above sequence (not) to work (e.g. Mr Do might not fill all monsters at once
+  on the first round).
   Note that this only works in the dorunrun2 set. The dorunrun set works slightly
   differently, however it hasn't been compared with the real board so it might be
   right.
@@ -453,16 +452,6 @@ INPUT_PORTS_END
 static INPUT_PORTS_START( kickridr )
 	PORT_INCLUDE( docastle )
 
-	PORT_MODIFY("JOYS")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
-	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
-	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_8WAY PORT_COCKTAIL
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_COCKTAIL
-
 	PORT_MODIFY("DSW1")
 	PORT_DIPNAME( 0x03, 0x03, "Difficulty?" )
 	PORT_DIPSETTING(    0x03, DEF_STR( Easy ) )
@@ -497,24 +486,24 @@ static INPUT_PORTS_START( idsoccer )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICKLEFT_DOWN ) PORT_8WAY PORT_PLAYER(2)
 
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW1:7,8")
 	PORT_DIPSETTING(    0x03, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0x02, DEF_STR( Medium ) )
 	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x04, 0x04, "One Player vs. Computer" )	// Additional time extended for winning score
+	PORT_DIPNAME( 0x04, 0x04, "One Player vs. Computer" ) PORT_DIPLOCATION("SW1:!6")	// Additional time extended for winning score
 	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Flip_Screen ) )
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Flip_Screen ) ) PORT_DIPLOCATION("SW1:5")
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, "Player 2 Time Extension" )	// Player may play same game with additional credit
+	PORT_DIPNAME( 0x10, 0x10, "Player 2 Time Extension" ) PORT_DIPLOCATION("SW1:4")	// Player may play same game with additional credit
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x10, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, "Player 1 Time Extension" )	// Player may play same game with additional credit
+	PORT_DIPNAME( 0x20, 0x20, "Player 1 Time Extension" ) PORT_DIPLOCATION("SW1:3")	// Player may play same game with additional credit
 	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x20, DEF_STR( On ) )
-	PORT_DIPNAME( 0xc0, 0xc0, "Real Game Time" )			// Indicator always shows 3:00 and counts down
+	PORT_DIPNAME( 0xc0, 0xc0, "Real Game Time" ) PORT_DIPLOCATION("SW1:1,2") // Indicator always shows 3:00 and counts down
 	PORT_DIPSETTING(    0xc0, "3:00" )
 	PORT_DIPSETTING(    0x80, "2:30" )
 	PORT_DIPSETTING(    0x40, "2:00" )
@@ -592,7 +581,8 @@ static MACHINE_START( docastle )
 {
 	docastle_state *state = (docastle_state *)machine->driver_data;
 
-	state->slave = devtag_get_device(machine, "slave");
+	state->maincpu = machine->device<cpu_device>("maincpu");
+	state->slave = machine->device<cpu_device>("slave");
 
 	state_save_register_global(machine, state->adpcm_pos);
 	state_save_register_global(machine, state->adpcm_data);
@@ -608,23 +598,22 @@ static MACHINE_DRIVER_START( docastle )
 	MDRV_DRIVER_DATA(docastle_state)
 
 	/* basic machine hardware */
-//  MDRV_CPU_ADD("maincpu", Z80, 4000000)  // 4 MHz
-	MDRV_CPU_ADD("maincpu", Z80, 3980000)	// make dip switches work in docastle and dorunrun and fix dorunrun2 attract sequence
+	MDRV_CPU_ADD("maincpu", Z80, XTAL_4MHz)
 	MDRV_CPU_PROGRAM_MAP(docastle_map)
 	MDRV_CPU_IO_MAP(docastle_io_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("slave", Z80, 4000000)	// 4 MHz
+	MDRV_CPU_ADD("slave", Z80, XTAL_4MHz)
 	MDRV_CPU_PROGRAM_MAP(docastle_map2)
 	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 8)
 
-	MDRV_CPU_ADD("cpu3", Z80, 4000000)	// 4 MHz
+	MDRV_CPU_ADD("cpu3", Z80, XTAL_4MHz)
 	MDRV_CPU_PROGRAM_MAP(docastle_map3)
 	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(59.60)	// measured on pcb
+	MDRV_SCREEN_REFRESH_RATE(59.60)	// measured on pcb, real refresh rate should be derived from XTAL_9_828MHz, how?
 	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(32*8, 32*8)
@@ -643,16 +632,16 @@ static MACHINE_DRIVER_START( docastle )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("sn1", SN76489A, 4000000)
+	MDRV_SOUND_ADD("sn1", SN76489A, XTAL_4MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("sn2", SN76489A, 4000000)
+	MDRV_SOUND_ADD("sn2", SN76489A, XTAL_4MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("sn3", SN76489A, 4000000)
+	MDRV_SOUND_ADD("sn3", SN76489A, XTAL_4MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 
-	MDRV_SOUND_ADD("sn4", SN76489A, 4000000)
+	MDRV_SOUND_ADD("sn4", SN76489A, XTAL_4MHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_DRIVER_END
 
@@ -684,7 +673,7 @@ static MACHINE_DRIVER_START( idsoccer )
 	MDRV_VIDEO_START(dorunrun)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("msm", MSM5205, 384000)
+	MDRV_SOUND_ADD("msm", MSM5205, XTAL_384kHz) /* Crystal verified on American Soccer board. */
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 MACHINE_DRIVER_END
@@ -1036,6 +1025,77 @@ ROM_START( idsoccer )
 	ROM_LOAD( "id_3d.clr",   0x0000, 0x0200, CRC(a433ff62) SHA1(db9afe5fc917d25aafa21576cb1cecec7481d4cb) )
 ROM_END
 
+ROM_START( idsoccera )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "indoor.e10",           0x0000, 0x2000, CRC(ed086bd1) SHA1(e1351fe53779c73a8631d4c33fa9508ddac8b4c1) )
+	ROM_LOAD( "indoor.f10",           0x2000, 0x2000, CRC(54e5c6fc) SHA1(2c5a1e7bb9c8d5877eb99e8d20498986b85a8af4) )
+	ROM_LOAD( "indoor.h10",           0x6000, 0x2000, CRC(f0ca1ac8) SHA1(fa5724ba8ab0ff82a1ef22ddd56e57b4c2b6ab74) )
+
+	ROM_REGION( 0x10000, "slave", 0 )
+	ROM_LOAD( "indoor.e2",           0x0000, 0x4000, CRC(c4bacc14) SHA1(d457a24b084726fe6b2f97a1be44e67c0a61a97b) ) // different
+
+	ROM_REGION( 0x10000, "cpu3", 0 )
+	ROM_LOAD( "indoor.p8",          0x0000, 0x0200, CRC(2747ca77) SHA1(abc0ca05925974c4b852827605ee2f1caefb8524) )
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "indoor.e6",          0x0000, 0x4000, CRC(a57c7a11) SHA1(9faebad0050da05101811427f350e163a7811396) )
+
+	// some graphic / sound roms also differ on this set - verify them
+	// the sound rom causes bad sound, but the implementation is hacked anyway so I'm not 100% convinced it's bad yet
+	ROM_REGION( 0x20000, "gfx2", 0 )
+	ROM_LOAD( "indoor.p3",           0x00000, 0x8000, CRC(b42a6f4a) SHA1(ddce4438b3649610bd3703cbd7592aaa9a3eda0e) )
+	ROM_LOAD( "indoor.n3",           0x08000, 0x8000, CRC(fa2b1c77) SHA1(0d8e9db065c76621deb58575f01c6ec5ee6cf6b0) )
+	ROM_LOAD( "indoor.l3",           0x10000, 0x8000, CRC(2663405c) SHA1(16c054c5c16ace80941523a64654afa3a77d7611) ) // different
+	ROM_LOAD( "indoor.k3",           0x18000, 0x8000, CRC(a2a69223) SHA1(6bd9b76e0119643450c9f64c80b52e9056da82d6) )
+
+	ROM_REGION( 0x10000, "adpcm", 0 )
+	ROM_LOAD( "indoor.ic1",            0x0000, 0x4000, CRC(3bb65dc7) SHA1(499151903b3da9fa2455b3d2c04863b3e33e853d) ) // different (causes bad sound in attract, but doesn't simply look like a bad dump?)
+	ROM_LOAD( "indoor.ic3",            0x8000, 0x4000, CRC(27bebba3) SHA1(cf752b22603c1e2a0b33958481c652d6d56ebf68) )
+	ROM_LOAD( "indoor.ic4",            0xc000, 0x4000, CRC(dd5ffaa2) SHA1(4bc4330a54ca93448a8fe05207d3fb1a3a9872e1) )
+
+	ROM_REGION( 0x0200, "proms", 0 )
+	ROM_LOAD( "indoor.d3",   0x0000, 0x0200, CRC(d9b2550c) SHA1(074253b1ede42a743f1a8858756640693126209f) ) // different
+ROM_END
+
+/*
+    American Soccer
+
+    Main Board:    8461-A
+    Samples Board: 8461-SUB
+*/
+
+ROM_START( asoccer )
+	ROM_REGION( 0x10000, "maincpu", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "as1.e10",   0x00000, 0x2000, CRC(e9d61bbf) SHA1(8f9b3a6fd99f136698035263a20f39c3174b70cf) )
+	ROM_LOAD( "as2.f10",   0x02000, 0x2000, CRC(62b2e4c8) SHA1(4270148652b18006c7df1f612f9b19f06e5400de) )
+	ROM_LOAD( "as3.h10",   0x06000, 0x2000, CRC(25bbd0d8) SHA1(fa7fb4b78e5ac4200ff5f57f94794632af450ce0) )
+    ROM_LOAD( "as4.k10",   0x08000, 0x2000, CRC(8d8bdc08) SHA1(75da310576047102af45c3a5f7d20893ef260d40) )
+
+	ROM_REGION( 0x10000, "slave", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "as0.e2",    0x00000, 0x4000, CRC(05d613bf) SHA1(ab822fc532fc7f1122b5ff0385b268513e7e193e) )
+
+	ROM_REGION( 0x10000, "cpu3", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "200b.p8",   0x00000, 0x0200, CRC(2747ca77) SHA1(abc0ca05925974c4b852827605ee2f1caefb8524) ) /* 82S147 PROM */
+
+	ROM_REGION( 0x8000, "gfx1", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "as5-2.e6",  0x00000, 0x4000, CRC(430295c4) SHA1(b1f4d9ab3ec0c969da4db51f476c47e87d48b879) )
+
+	ROM_REGION( 0x20000, "gfx2", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "as6.p3-2",  0x00000, 0x8000, CRC(ae577023) SHA1(61e8f441eca1ff64760bae8139c8fa378ff5fbd2) )
+	ROM_LOAD( "as7.n3-2",  0x08000, 0x8000, CRC(a20ddd9b) SHA1(530e5371b7f52031e555c98d1ff70c7beba94d4a) )
+	ROM_LOAD( "as8.l3-2",  0x10000, 0x8000, CRC(dafad065) SHA1(a491680b642bd1ea4936f914297e61d4e3ccad88) )
+	ROM_LOAD( "as9.j3-2",  0x18000, 0x8000, CRC(3a2ae776) SHA1(d9682abd30f64c51498c678257797d125b1c6a43) )
+
+	ROM_REGION( 0x10000, "adpcm", 0 ) /* These roms are located on the 8461-SUB board. */
+	ROM_LOAD( "1.ic1",     0x00000, 0x4000, CRC(3bb65dc7) SHA1(499151903b3da9fa2455b3d2c04863b3e33e853d) )
+    /* Verified on board that IC2 is not populated. */
+	ROM_LOAD( "3.ic3",     0x08000, 0x4000, CRC(27bebba3) SHA1(cf752b22603c1e2a0b33958481c652d6d56ebf68) )
+	ROM_LOAD( "4.ic4",     0x0c000, 0x4000, CRC(dd5ffaa2) SHA1(4bc4330a54ca93448a8fe05207d3fb1a3a9872e1) )
+
+	ROM_REGION( 0x0200, "proms", 0 ) /* These roms are located on the 8461-A board. */
+	ROM_LOAD( "3-2d.d3-2", 0x00000, 0x0200, CRC(a433ff62) SHA1(db9afe5fc917d25aafa21576cb1cecec7481d4cb) ) /* 82S147 PROM */
+ROM_END
+
 /* Game Drivers */
 
 GAME( 1983, docastle,  0,        docastle, docastle, 0, ROT270, "Universal", "Mr. Do's Castle (set 1)", GAME_SUPPORTS_SAVE )
@@ -1050,4 +1110,6 @@ GAME( 1987, spiero,    dorunrun, dorunrun, dorunrun, 0, ROT0,   "Universal", "Su
 GAME( 1984, dowild,    0,        dorunrun, dowild,   0, ROT0,   "Universal", "Mr. Do's Wild Ride", GAME_SUPPORTS_SAVE )
 GAME( 1984, jjack,     0,        dorunrun, jjack,    0, ROT270, "Universal", "Jumping Jack", GAME_SUPPORTS_SAVE )
 GAME( 1984, kickridr,  0,        dorunrun, kickridr, 0, ROT0,   "Universal", "Kick Rider", GAME_SUPPORTS_SAVE )
-GAME( 1985, idsoccer,  0,        idsoccer, idsoccer, 0, ROT0,   "Universal", "Indoor Soccer", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1985, idsoccer,  0,        idsoccer, idsoccer, 0, ROT0,   "Universal", "Indoor Soccer (set 1)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1985, idsoccera, idsoccer, idsoccer, idsoccer, 0, ROT0,   "Universal", "Indoor Soccer (set 2)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND )
+GAME( 1987, asoccer,   idsoccer, idsoccer, idsoccer, 0, ROT0,   "Universal", "American Soccer", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND )

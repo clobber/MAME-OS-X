@@ -199,7 +199,7 @@ static READ8_HANDLER( spotty_sound_r )
 	if(spotty_sound_cmd == 0xf7)
 		return soundlatch_r(space,0);
 	else
-		return okim6295_r(devtag_get_device(space->machine, "oki"),0);
+		return okim6295_r(space->machine->device("oki"),0);
 }
 
 static ADDRESS_MAP_START( spotty_sound_io_map, ADDRESS_SPACE_IO, 8 )
@@ -693,8 +693,7 @@ static MACHINE_DRIVER_START( spotty )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 4000000 / 4 ) //?
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // not verified
+	MDRV_OKIM6295_ADD("oki", 4000000 / 4 , OKIM6295_PIN7_HIGH) //?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_DRIVER_END
 
@@ -968,9 +967,9 @@ ROM_END
 
 static READ32_HANDLER( dynabomb_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0xc25b8)
+	if(space->machine->firstcpu->pc() == 0xc25b8)
 	{
-		cpu_eat_cycles(space->cpu, 50);
+		space->machine->firstcpu->eat_cycles(50);
 	}
 
 	return mainram[0xe2784/4];
@@ -978,9 +977,9 @@ static READ32_HANDLER( dynabomb_speedup_r )
 
 static READ32_HANDLER( legendoh_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x23e32)
+	if(space->machine->firstcpu->pc() == 0x23e32)
 	{
-		cpu_eat_cycles(space->cpu, 50);
+		space->machine->firstcpu->eat_cycles(50);
 	}
 
 	return mainram[0x32ab0/4];
@@ -988,9 +987,9 @@ static READ32_HANDLER( legendoh_speedup_r )
 
 static READ32_HANDLER( sb2003_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x26da4)
+	if(space->machine->firstcpu->pc() == 0x26da4)
 	{
-		cpu_eat_cycles(space->cpu, 50);
+		space->machine->firstcpu->eat_cycles(50);
 	}
 
 	return mainram[0x135800/4];
@@ -998,9 +997,9 @@ static READ32_HANDLER( sb2003_speedup_r )
 
 static READ32_HANDLER( spotty_speedup_r )
 {
-	if(cpu_get_pc(space->cpu) == 0x8560)
+	if(space->machine->firstcpu->pc() == 0x8560)
 	{
-		cpu_eat_cycles(space->cpu, 50);
+		space->machine->firstcpu->eat_cycles(50);
 	}
 
 	return mainram[0x6626c/4];

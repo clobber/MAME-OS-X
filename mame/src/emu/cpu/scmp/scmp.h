@@ -9,9 +9,9 @@
 enum
 {
 	SCMP_PC, SCMP_P1, SCMP_P2, SCMP_P3, SCMP_AC, SCMP_ER, SCMP_SR,
-	SCMP_GENPC = REG_GENPC,
-	SCMP_GENSP = REG_GENSP,
-	SCMP_GENPCBASE = REG_GENPCBASE
+	SCMP_GENPC = STATE_GENPC,
+	SCMP_GENSP = STATE_GENSP,
+	SCMP_GENPCBASE = STATE_GENPCBASE
 };
 
 /***************************************************************************
@@ -33,12 +33,10 @@ struct _scmp_config
     FUNCTION PROTOTYPES
 ***************************************************************************/
 
-CPU_GET_INFO( scmp );
-#define CPU_SCMP CPU_GET_INFO_NAME( scmp )
+DECLARE_LEGACY_CPU_DEVICE(SCMP, scmp);
 
 CPU_DISASSEMBLE( scmp );
 
-CPU_GET_INFO( ins8060 );
-#define CPU_INS8060 CPU_GET_INFO_NAME( ins8060 )
+DECLARE_LEGACY_CPU_DEVICE(INS8060, ins8060);
 
 #endif

@@ -47,8 +47,7 @@ enum
 };
 
 /* Needed for MAME */
-CPU_GET_INFO( i860 );
-#define CPU_I860 CPU_GET_INFO_NAME( i860 )
+DECLARE_LEGACY_CPU_DEVICE(I860, i860);
 
 
 /***************************************************************************
@@ -169,7 +168,7 @@ typedef struct {
 	/*
      * MAME-specific stuff.
      */
-	running_device *device;
+	legacy_cpu_device *device;
 	const address_space *program;
 	UINT32 ppc;
 	int icount;
@@ -179,10 +178,8 @@ typedef struct {
 INLINE i860_state_t *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_I860);
-	return (i860_state_t *)device->token;
+	assert(device->type() == I860);
+	return (i860_state_t *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 

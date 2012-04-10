@@ -106,13 +106,13 @@ static MACHINE_RESET( artmagic )
 
 static READ16_HANDLER( tms_host_r )
 {
-	return tms34010_host_r(devtag_get_device(space->machine, "tms"), offset);
+	return tms34010_host_r(space->machine->device("tms"), offset);
 }
 
 
 static WRITE16_HANDLER( tms_host_w )
 {
-	tms34010_host_w(devtag_get_device(space->machine, "tms"), offset, data);
+	tms34010_host_w(space->machine->device("tms"), offset, data);
 }
 
 
@@ -129,7 +129,10 @@ static WRITE16_HANDLER( control_w )
 
 	/* OKI banking here */
 	if (offset == 0)
-		okim6295_set_bank_base(devtag_get_device(space->machine, "oki"), (((data >> 4) & 1) * 0x40000) % memory_region_length(space->machine, "oki"));
+	{
+		okim6295_device *oki = space->machine->device<okim6295_device>("oki");
+		oki->set_bank_base((((data >> 4) & 1) * 0x40000) % oki->region()->bytes());
+	}
 
 	logerror("%06X:control_w(%d) = %04X\n", cpu_get_pc(space->cpu), offset, data);
 }
@@ -729,8 +732,7 @@ static MACHINE_DRIVER_START( artmagic )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, MASTER_CLOCK_40MHz/3/10)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", MASTER_CLOCK_40MHz/3/10, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.65)
 MACHINE_DRIVER_END
 
@@ -946,7 +948,7 @@ static DRIVER_INIT( stonebal )
  *************************************/
 
 GAME( 1993, ultennis, 0,        artmagic, ultennis, ultennis, ROT0, "Art & Magic", "Ultimate Tennis", GAME_SUPPORTS_SAVE )
-GAME( 1993, ultennisj,ultennis, artmagic, ultennis, ultennis, ROT0, "[Art & Magic] (Banpresto license)", "Ultimate Tennis (v 1.4, Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1993, ultennisj,ultennis, artmagic, ultennis, ultennis, ROT0, "Art & Magic (Banpresto license)", "Ultimate Tennis (v 1.4, Japan)", GAME_SUPPORTS_SAVE )
 GAME( 1994, cheesech, 0,        cheesech, cheesech, cheesech, ROT0, "Art & Magic", "Cheese Chase", GAME_SUPPORTS_SAVE )
 GAME( 1994, stonebal, 0,        stonebal, stonebal, stonebal, ROT0, "Art & Magic", "Stone Ball (4 Players)", GAME_SUPPORTS_SAVE )
 GAME( 1994, stonebal2,stonebal, stonebal, stoneba2, stonebal, ROT0, "Art & Magic", "Stone Ball (2 Players)", GAME_SUPPORTS_SAVE )

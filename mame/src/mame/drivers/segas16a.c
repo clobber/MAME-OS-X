@@ -149,6 +149,7 @@ Tetris         -         -         -         -         EPR12169  EPR12170  -    
 #include "cpu/mcs51/mcs51.h"
 #include "includes/segas16.h"
 #include "machine/8255ppi.h"
+#include "machine/segacrp2.h"
 #include "machine/fd1089.h"
 #include "machine/i8243.h"
 #include "cpu/mcs48/mcs48.h"
@@ -217,12 +218,12 @@ static void system16a_generic_init(running_machine *machine)
 	state->lamp_changed_w = NULL;
 	state->i8751_vblank_hook = NULL;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->soundcpu = devtag_get_device(machine, "soundcpu");
-	state->mcu = devtag_get_device(machine, "mcu");
-	state->ymsnd = devtag_get_device(machine, "ymsnd");
-	state->ppi8255 = devtag_get_device(machine, "ppi8255");
-	state->n7751 = devtag_get_device(machine, "n7751");
+	state->maincpu = machine->device("maincpu");
+	state->soundcpu = machine->device("soundcpu");
+	state->mcu = machine->device("mcu");
+	state->ymsnd = machine->device("ymsnd");
+	state->ppi8255 = machine->device("ppi8255");
+	state->n7751 = machine->device("n7751");
 }
 
 
@@ -259,7 +260,7 @@ static MACHINE_RESET( system16a )
 {
 	segas1x_state *state = (segas1x_state *)machine->driver_data;
 
-	fd1094_machine_init(devtag_get_device(machine, "maincpu"));
+	fd1094_machine_init(machine->device("maincpu"));
 
 	/* if we have a fake i8751 handler, disable the actual 8751 */
 	if (state->i8751_vblank_hook != NULL)
@@ -872,6 +873,10 @@ static WRITE8_HANDLER( mcu_control_w )
 {
 	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
 	int irqline;
+
+	/* if we have a fake i8751 handler, ignore writes by the actual 8751 */
+	if (state->i8751_vblank_hook != NULL)
+		return;
 
 	cpu_set_input_line(state->maincpu, INPUT_LINE_RESET, (data & 0x40) ? ASSERT_LINE : CLEAR_LINE);
 	for (irqline = 1; irqline <= 7; irqline++)
@@ -2515,6 +2520,36 @@ ROM_START( fantzone1 )
 	ROM_LOAD( "epr-7535.12",  0x0000, 0x8000, CRC(0cb2126a) SHA1(42b18a81bed58ef59eaad929007eef89ad273dbb) )
 ROM_END
 
+/**************************************************************************************************************************
+    Fantasy Zone, Sega System 16A
+    CPU: 68000 + NEC 0317-5000 encrypted Z80
+ */
+ROM_START( fantzonep )
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 68000 code */
+	ROM_LOAD16_BYTE( "epr-7385.43",  0x000000, 0x8000, CRC(5cb64450) SHA1(5831405359975dd7d8c6614b20fd9b18a5d6410d) )
+	ROM_LOAD16_BYTE( "epr-7382.26",  0x000001, 0x8000, CRC(3fda7416) SHA1(91f34cc8afb4ad8bc783c31d25781a1359c44cfe) )
+	ROM_LOAD16_BYTE( "epr-7386.42",  0x010000, 0x8000, CRC(15810ace) SHA1(e61a258ab6601d359f6ad1f37a2b2801bf777d26) )
+	ROM_LOAD16_BYTE( "epr-7383.25",  0x010001, 0x8000, CRC(a001e10a) SHA1(04ebb012b10817db36997d0ee877104d512decf8) )
+	ROM_LOAD16_BYTE( "epr-7387.41",  0x020000, 0x8000, CRC(0acd335d) SHA1(f39566a2069eefa7682c57c6521ea7a328738d06) )
+	ROM_LOAD16_BYTE( "epr-7384.24",  0x020001, 0x8000, CRC(fd909341) SHA1(2f1e01eb7d7b330c9c0dd98e5f8ed4973f0e93fb) )
+
+	ROM_REGION( 0x18000, "gfx1", 0 ) /* tiles */
+	ROM_LOAD( "epr-7388.95",  0x00000, 0x08000, CRC(8eb02f6b) SHA1(80511b944b57541669010bd5a0ca52bc98eabd62) )
+	ROM_LOAD( "epr-7389.94",  0x08000, 0x08000, CRC(2f4f71b8) SHA1(ceb39e95cd43904b8e4f89c7227491e139fb3ca6) )
+	ROM_LOAD( "epr-7390.93",  0x10000, 0x08000, CRC(d90609c6) SHA1(4232f6ecb21f242c0c8d81e06b88bc742668609f) )
+
+	ROM_REGION16_BE( 0x30000, "gfx2", 0 ) /* sprites */
+	ROM_LOAD16_BYTE( "epr-7392.10",  0x00001, 0x8000, CRC(5bb7c8b6) SHA1(eaa0ed63ac4f66ee285757e842bdd7b005292600) )
+	ROM_LOAD16_BYTE( "epr-7396.11",  0x00000, 0x8000, CRC(74ae4b57) SHA1(1f24b1faea765994b85f0e7ac8e944c8da22103f) )
+	ROM_LOAD16_BYTE( "epr-7393.17",  0x10001, 0x8000, CRC(14fc7e82) SHA1(ca7caca989a3577dd30ad4f66b0fcce712a454ef) )
+	ROM_LOAD16_BYTE( "epr-7397.18",  0x10000, 0x8000, CRC(e05a1e25) SHA1(9691d9f0763b7483ee6912437902f22ab4b78a05) )
+	ROM_LOAD16_BYTE( "epr-7394.23",  0x20001, 0x8000, CRC(531ca13f) SHA1(19e68bc515f6021e1145cff4f3f0e083839ee8f3) )
+	ROM_LOAD16_BYTE( "epr-7398.24",  0x20000, 0x8000, CRC(68807b49) SHA1(0a189da8cdd2090e76d6d06c55b478abce60542d) )
+
+	ROM_REGION( 0x10000, "soundcpu", 0 ) /* sound CPU */
+	ROM_LOAD( "epr-7391.12",  0x0000, 0x8000, CRC(c03e155e) SHA1(6bbdf308c47b96ba622329520b70fa0ea47248a4) ) /* Original encrypted sound code */
+ROM_END
+
 
 /**************************************************************************************************************************
  **************************************************************************************************************************
@@ -3350,6 +3385,44 @@ ROM_START( wb35 )
 	ROM_LOAD( "317-wb35.key", 0x0000, 0x2000, BAD_DUMP CRC(8a2e0575) SHA1(e43a2c8ca102ec38871067685a860da53d748765) )
 ROM_END
 
+ROM_START( wb35a )
+	ROM_REGION( 0x40000, "maincpu", 0 ) /* 68000 code */
+	ROM_LOAD16_BYTE( "epr-12120.43_alt", 0x000000, 0x10000, CRC(cbd8c99b) SHA1(2401aab80293bbe3b603a0b6af33ebc8834915e9) )
+	ROM_LOAD16_BYTE( "epr-12118.26_alt", 0x000001, 0x10000, CRC(e9a3280c) SHA1(b7725171286915f8e1039d8063ba9e9f6ab40b56) )
+	ROM_LOAD16_BYTE( "epr-12121.42",     0x020000, 0x10000, CRC(5e44c0a9) SHA1(4d4c9575a6cd571a7cf635164e92afd92d4b63fe) )
+	ROM_LOAD16_BYTE( "epr-12119.25_alt", 0x020001, 0x10000, CRC(01ed3ef9) SHA1(29491a81a735198393f1cc2f06940cf40168ff59) )
+
+	ROM_REGION( 0x30000, "gfx1", 0 ) /* tiles */
+	ROM_LOAD( "epr-12086.95", 0x00000, 0x10000, CRC(45b949df) SHA1(84390d16da00b775988e5f6c20950cb2304b1a74) )
+	ROM_LOAD( "epr-12087.94", 0x10000, 0x10000, CRC(5fb761aa) SHA1(dcf88e68732a8ec122d0603d87f6ea1f1614adef) )
+	ROM_LOAD( "epr-12088.83", 0x20000, 0x10000, CRC(00579c39) SHA1(12acdea75e3d040d60a9f32d05fd9e0191d38f21) )
+
+	ROM_REGION16_BE( 0x80000, "gfx2", 0 ) /* sprites */
+	ROM_LOAD16_BYTE( "epr-12090.b1", 0x00001, 0x008000, CRC(aeeecfca) SHA1(496124b170a725ad863c741d4e021ab947511e4c) )
+	ROM_CONTINUE(                    0x40001, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12094.b5", 0x00000, 0x008000, CRC(615e4927) SHA1(d23f164973afa770714e284a77ddf10f18cc596b) )
+	ROM_CONTINUE(                    0x40000, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12091.b2", 0x10001, 0x008000, CRC(8409a243) SHA1(bcbb9510a6499d8147543d6befa5a49f4ac055d9) )
+	ROM_CONTINUE(                    0x50001, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12095.b6", 0x10000, 0x008000, CRC(e774ec2c) SHA1(a4aa15ec7be5539a740ad02ff720458018dbc536) )
+	ROM_CONTINUE(                    0x50000, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12092.b3", 0x20001, 0x008000, CRC(5c2f0d90) SHA1(e0fbc0f841e4607ad232931368b16e81440a75c4) )
+	ROM_CONTINUE(                    0x60001, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12096.b7", 0x20000, 0x008000, CRC(0cd59d6e) SHA1(caf754a461feffafcfe7bfc6e89da76c4db257c5) )
+	ROM_CONTINUE(                    0x60000, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12093.b4", 0x30001, 0x008000, CRC(4891e7bb) SHA1(1be04fcabe9bfa8cf746263a5bcca67902a021a0) )
+	ROM_CONTINUE(                    0x70001, 0x008000 )
+	ROM_LOAD16_BYTE( "epr-12097.b8", 0x30000, 0x008000, CRC(e645902c) SHA1(497cfcf6c25cc2e042e16dbcb1963d2223def15a) )
+	ROM_CONTINUE(                    0x70000, 0x008000 )
+
+	ROM_REGION( 0x10000, "soundcpu", 0 ) /* sound CPU */
+	ROM_LOAD( "epr-12089.12", 0x0000, 0x8000, CRC(8321eb0b) SHA1(61cf95833c0aa38e35fc18db39d4ec74e4aaf01e) )
+
+	ROM_REGION( 0x2000, "fd1089a", 0 ) /* decryption key */
+	ROM_LOAD( "317-wb35.key", 0x0000, 0x2000, BAD_DUMP CRC(8a2e0575) SHA1(e43a2c8ca102ec38871067685a860da53d748765) )
+ROM_END
+
+
 /*************************************
  *
  *  Generic driver initialization
@@ -3419,6 +3492,14 @@ static DRIVER_INIT( quartet )
 }
 
 
+static DRIVER_INIT( fantzonep )
+{
+	system16a_generic_init(machine);
+
+	sega_315_5177_decode(machine, "soundcpu");
+}
+
+
 static DRIVER_INIT( sdi )
 {
 	segas1x_state *state = (segas1x_state *)machine->driver_data;
@@ -3464,17 +3545,19 @@ GAME( 1988, aceattaca,  aceattac, system16a       , aceattaa,   aceattaa,    ROT
 GAME( 1986, afighter,   0,        system16a_no7751, afighter,   fd1089a_16a, ROT270, "Sega",           "Action Fighter (FD1089A 317-0018)", GAME_SUPPORTS_SAVE )
 GAME( 1986, alexkidd,   0,        system16a,        alexkidd,   generic_16a, ROT0,   "Sega",           "Alex Kidd: The Lost Stars (set 2, unprotected)", GAME_SUPPORTS_SAVE )
 GAME( 1986, alexkidd1,  alexkidd, system16a,        alexkidd,   fd1089a_16a, ROT0,   "Sega",           "Alex Kidd: The Lost Stars (set 1, FD1089A 317-0021)", GAME_SUPPORTS_SAVE )
-GAME( 1986, fantzone,   0,        system16a_no7751, fantzone,   generic_16a, ROT0,   "Sega",           "Fantasy Zone (set 2, unprotected)", GAME_SUPPORTS_SAVE )
-GAME( 1986, fantzone1,  fantzone, system16a_no7751, fantzone,   generic_16a, ROT0,   "Sega",           "Fantasy Zone (set 1, unprotected)", GAME_SUPPORTS_SAVE )
+GAME( 1986, fantzone,   0,        system16a_no7751, fantzone,   generic_16a, ROT0,   "Sega",           "Fantasy Zone (Rev A, unprotected)", GAME_SUPPORTS_SAVE )
+GAME( 1986, fantzone1,  fantzone, system16a_no7751, fantzone,   generic_16a, ROT0,   "Sega",           "Fantasy Zone (unprotected)", GAME_SUPPORTS_SAVE )
+GAME( 1986, fantzonep,  fantzone, system16a_no7751, fantzone,   fantzonep,   ROT0,   "Sega",           "Fantasy Zone (317-5000)", GAME_SUPPORTS_SAVE )
 GAME( 1988, passsht16a, passsht,  system16a,        passsht16a, passsht16a,  ROT270, "Sega",           "Passing Shot (Japan, 4 Players, System 16A, FD1094 317-0071)", GAME_SUPPORTS_SAVE )
 GAME( 1987, sdi,        0,        system16a_no7751, sdi,        sdi,         ROT0,   "Sega",           "SDI - Strategic Defense Initiative (Japan, old, System 16A, FD1089B 317-0027)", GAME_SUPPORTS_SAVE )
 GAME( 1987, shinobi,    0,        system16a,        shinobi,    generic_16a, ROT0,   "Sega",           "Shinobi (set 6, System 16A, unprotected)", GAME_SUPPORTS_SAVE )
 GAME( 1987, shinobi1,   shinobi,  system16a,        shinobi,    generic_16a, ROT0,   "Sega",           "Shinobi (set 1, System 16A, FD1094 317-0050)", GAME_SUPPORTS_SAVE )
-GAME( 1987, shinobls,   shinobi,  system16a,        shinobi,    generic_16a, ROT0,   "[Sega] (Star bootleg)", "Shinobi (Star bootleg, System 16A)", GAME_SUPPORTS_SAVE )
-GAME( 1987, shinoblb,   shinobi,  system16a,        shinobi,    generic_16a, ROT0,   "[Sega] (Beta bootleg)", "Shinobi (Beta bootleg)", GAME_SUPPORTS_SAVE ) // should have different sound hw? using original ATM
+GAME( 1987, shinobls,   shinobi,  system16a,        shinobi,    generic_16a, ROT0,   "bootleg (Star)", "Shinobi (Star bootleg, System 16A)", GAME_SUPPORTS_SAVE )
+GAME( 1987, shinoblb,   shinobi,  system16a,        shinobi,    generic_16a, ROT0,   "bootleg (Beta)", "Shinobi (Beta bootleg)", GAME_SUPPORTS_SAVE ) // should have different sound hw? using original ATM
 GAME( 1987, sjryuko1,   sjryuko,  system16a,        sjryuko,    sjryukoa,    ROT0,   "White Board",    "Sukeban Jansi Ryuko (set 1, System 16A, FD1089B 317-5021)", GAME_SUPPORTS_SAVE )
 GAME( 1988, tetris,     0,        system16a_no7751, tetris,     generic_16a, ROT0,   "Sega",           "Tetris (set 4, Japan, System 16A, FD1094 317-0093)", GAME_SUPPORTS_SAVE )
 GAME( 1988, tetris3,    tetris,   system16a_no7751, tetris,     generic_16a, ROT0,   "Sega",           "Tetris (set 3, Japan, System 16A, FD1094 317-0093a)", GAME_SUPPORTS_SAVE )
 GAME( 1987, timescan1,  timescan, system16a,        timescan,   fd1089b_16a, ROT270, "Sega",           "Time Scanner (set 1, System 16A, FD1089B 317-0024)", GAME_SUPPORTS_SAVE )
 GAME( 1988, wb31,       wb3,      system16a_no7751, wb3,        generic_16a, ROT0,   "Sega / Westone", "Wonder Boy III - Monster Lair (set 1, System 16A, FD1094 317-0084)", GAME_SUPPORTS_SAVE )
-GAME( 1988, wb35,       wb3,      system16a_no7751, wb3,        fd1089a_16a, ROT0,   "Sega / Westone", "Wonder Boy III - Monster Lair (set 5, System 16A, FD1089A 317-xxxx)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1988, wb35,       wb3,      system16a_no7751, wb3,        fd1089a_16a, ROT0,   "Sega / Westone", "Wonder Boy III - Monster Lair (set 5, System 16A, FD1089A 317-xxxx, bad dump?)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
+GAME( 1988, wb35a,      wb3,      system16a_no7751, wb3,        fd1089a_16a, ROT0,   "Sega / Westone", "Wonder Boy III - Monster Lair (set 6, System 16A, FD1089A 317-xxxx)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )

@@ -92,7 +92,7 @@ static READ8_DEVICE_HANDLER(pk8000_80_portb_r)
 
 static WRITE8_DEVICE_HANDLER(pk8000_80_portc_w)
 {
-	speaker_level_w(devtag_get_device(device->machine, "speaker"), BIT(data,7));
+	speaker_level_w(device->machine->device("speaker"), BIT(data,7));
 }
 
 static I8255A_INTERFACE( pk8000_ppi8255_interface_1 )
@@ -180,7 +180,7 @@ static IRQ_CALLBACK(pk8000_irq_callback)
 static MACHINE_RESET(pk8000)
 {
 	pk8000_set_bank(machine,0);
-	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), pk8000_irq_callback);
+	cpu_set_irq_callback(machine->device("maincpu"), pk8000_irq_callback);
 }
 
 static VIDEO_START( photon )
@@ -195,7 +195,7 @@ static VIDEO_UPDATE( photon )
 static MACHINE_DRIVER_START( photon )
 
     /* basic machine hardware */
-    MDRV_CPU_ADD("maincpu",8080, 1780000)
+    MDRV_CPU_ADD("maincpu",I8080, 1780000)
     MDRV_CPU_PROGRAM_MAP(pk8000_mem)
     MDRV_CPU_IO_MAP(pk8000_io)
     MDRV_CPU_VBLANK_INT("screen", pk8000_interrupt)

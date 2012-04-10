@@ -489,8 +489,8 @@ static VIDEO_START(mtnew)
 //attotime_never
 static VIDEO_UPDATE(mtnew)
 {
-	running_device *megadriv_screen = devtag_get_device(screen->machine, "megadriv");
-	running_device *menu_screen     = devtag_get_device(screen->machine, "menu");
+	running_device *megadriv_screen = screen->machine->device("megadriv");
+	running_device *menu_screen     = screen->machine->device("menu");
 
 	if (screen == megadriv_screen)
 	{
@@ -1224,7 +1224,7 @@ ROM_END
 /* 52 */ GAME( 1991, mt_sonic, megatech, megatech, megatech, mtnew, ROT0, "Sega",                  "Sonic The Hedgehog (Mega-Tech, set 1)", GAME_NOT_WORKING )
 /*    */ GAME( 1991, mt_sonia, mt_sonic, megatech, megatech, mtnew, ROT0, "Sega",                  "Sonic The Hedgehog (Mega-Tech, set 2)", GAME_NOT_WORKING )
 /* 53 */ GAME( 1990, mt_fshrk, megatech, megatech, megatech, mtnew, ROT0, "Toaplan / Sega",        "Fire Shark (Mega-Tech)", GAME_NOT_WORKING )
-/* 54 */ GAME( 1991, mt_spman, megatech, megatech, megatech, mtnew, ROT0, "Marvel, Sega",          "Spider-Man vs The Kingpin (Mega-Tech)", GAME_NOT_WORKING )
+/* 54 */ GAME( 1991, mt_spman, megatech, megatech, megatech, mtnew, ROT0, "Marvel / Sega",         "Spider-Man vs The Kingpin (Mega-Tech)", GAME_NOT_WORKING )
 /* 55 */ // unknown
 /* 56 */ // unknown
 /* 57 */ GAME( 1991, mt_gaxe2, megatech, megatech, megatech, mtnew, ROT0, "Sega",                  "Golden Axe II (Mega-Tech)", GAME_NOT_WORKING )

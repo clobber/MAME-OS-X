@@ -42,11 +42,20 @@ EMUOBJS = \
 	$(EMUOBJ)/cheat.o \
 	$(EMUOBJ)/clifront.o \
 	$(EMUOBJ)/config.o \
-	$(EMUOBJ)/cpuexec.o \
 	$(EMUOBJ)/crsshair.o \
 	$(EMUOBJ)/debugger.o \
 	$(EMUOBJ)/devcb.o \
+	$(EMUOBJ)/devcpu.o \
+	$(EMUOBJ)/devimage.o \
+	$(EMUOBJ)/devlegcy.o \
 	$(EMUOBJ)/devintrf.o \
+	$(EMUOBJ)/didisasm.o \
+	$(EMUOBJ)/diexec.o \
+	$(EMUOBJ)/diimage.o \
+	$(EMUOBJ)/dimemory.o \
+	$(EMUOBJ)/dinvram.o \
+	$(EMUOBJ)/disound.o \
+	$(EMUOBJ)/distate.o \
 	$(EMUOBJ)/drawgfx.o \
 	$(EMUOBJ)/driver.o \
 	$(EMUOBJ)/emualloc.o \
@@ -55,11 +64,15 @@ EMUOBJS = \
 	$(EMUOBJ)/emupal.o \
 	$(EMUOBJ)/fileio.o \
 	$(EMUOBJ)/hash.o \
+	$(EMUOBJ)/hashfile.o \
+	$(EMUOBJ)/image.o \
 	$(EMUOBJ)/info.o \
 	$(EMUOBJ)/input.o \
 	$(EMUOBJ)/inputseq.o \
 	$(EMUOBJ)/inptport.o \
+	$(EMUOBJ)/ioprocs.o \
 	$(EMUOBJ)/mame.o \
+	$(EMUOBJ)/machine.o \
 	$(EMUOBJ)/mconfig.o \
 	$(EMUOBJ)/memory.o \
 	$(EMUOBJ)/output.o \
@@ -68,6 +81,8 @@ EMUOBJS = \
 	$(EMUOBJ)/rendlay.o \
 	$(EMUOBJ)/rendutil.o \
 	$(EMUOBJ)/romload.o \
+	$(EMUOBJ)/schedule.o \
+	$(EMUOBJ)/softlist.o \
 	$(EMUOBJ)/sound.o \
 	$(EMUOBJ)/state.o \
 	$(EMUOBJ)/streams.o \
@@ -75,6 +90,7 @@ EMUOBJS = \
 	$(EMUOBJ)/timer.o \
 	$(EMUOBJ)/ui.o \
 	$(EMUOBJ)/uigfx.o \
+	$(EMUOBJ)/uiimage.o \
 	$(EMUOBJ)/uiinput.o \
 	$(EMUOBJ)/uimenu.o \
 	$(EMUOBJ)/validity.o \
@@ -86,6 +102,10 @@ EMUOBJS = \
 	$(EMUOBJ)/debug/debugcpu.o \
 	$(EMUOBJ)/debug/debughlp.o \
 	$(EMUOBJ)/debug/debugvw.o \
+	$(EMUOBJ)/debug/dvdisasm.o \
+	$(EMUOBJ)/debug/dvmemory.o \
+	$(EMUOBJ)/debug/dvstate.o \
+	$(EMUOBJ)/debug/dvtext.o \
 	$(EMUOBJ)/debug/express.o \
 	$(EMUOBJ)/debug/textbuf.o \
 	$(EMUOBJ)/debugint/debugint.o
@@ -140,9 +160,9 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/i8243.o \
 	$(EMUMACHINE)/i8255a.o \
 	$(EMUMACHINE)/i2cmem.o \
-	$(EMUMACHINE)/i2cmemdev.o \
 	$(EMUMACHINE)/idectrl.o \
 	$(EMUMACHINE)/ins8154.o	\
+	$(EMUMACHINE)/ins8250.o \
 	$(EMUMACHINE)/intelfsh.o \
 	$(EMUMACHINE)/k033906.o \
 	$(EMUMACHINE)/k056230.o \
@@ -173,6 +193,7 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/smc91c9x.o \
 	$(EMUMACHINE)/timekpr.o \
 	$(EMUMACHINE)/tmp68301.o \
+	$(EMUMACHINE)/tms6100.o \
 	$(EMUMACHINE)/upd4701.o \
 	$(EMUMACHINE)/wd33c93.o \
 	$(EMUMACHINE)/x2212.o \
@@ -189,6 +210,8 @@ EMUVIDEOOBJS = \
 	$(EMUVIDEO)/generic.o \
 	$(EMUVIDEO)/hd63484.o \
 	$(EMUVIDEO)/mc6845.o \
+	$(EMUVIDEO)/pc_vga.o \
+	$(EMUVIDEO)/pc_video.o \
 	$(EMUVIDEO)/poly.o \
 	$(EMUVIDEO)/resnet.o \
 	$(EMUVIDEO)/rgbutil.o \
@@ -236,8 +259,8 @@ $(LIBSOUND): $(SOUNDOBJS)
 
 $(EMUOBJ)/rendfont.o:	$(EMUOBJ)/uismall.fh
 
-$(EMUOBJ)/video.o:		$(EMUSRC)/rendersw.c
-
+$(EMUOBJ)/video.o:	$(EMUSRC)/rendersw.c
+$(EMUVIDEO)/v9938.o:	$(EMUSRC)/video/v9938mod.c
 
 
 #-------------------------------------------------

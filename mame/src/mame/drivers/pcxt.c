@@ -72,12 +72,12 @@ the main program is 9th October 1990.
 
 #define SET_VISIBLE_AREA(_x_,_y_) \
 	{ \
-	rectangle visarea = *video_screen_get_visible_area(machine->primary_screen); \
+	rectangle visarea; \
 	visarea.min_x = 0; \
 	visarea.max_x = _x_-1; \
 	visarea.min_y = 0; \
 	visarea.max_y = _y_-1; \
-	video_screen_configure(machine->primary_screen, _x_, _y_, &visarea, video_screen_get_frame_period(machine->primary_screen).attoseconds ); \
+	machine->primary_screen->configure(_x_, _y_, visarea, machine->primary_screen->frame_period().attoseconds ); \
 	} \
 
 
@@ -116,15 +116,15 @@ static READ8_HANDLER( vga_hvretrace_r )
 	static UINT8 res;
 	static int h,w;
 	res = 0;
-	h = video_screen_get_height(space->machine->primary_screen);
-	w = video_screen_get_width(space->machine->primary_screen);
+	h = space->machine->primary_screen->height();
+	w = space->machine->primary_screen->width();
 
 //  popmessage("%d %d",h,w);
 
-	if (video_screen_get_hpos(space->machine->primary_screen) > h)
+	if (space->machine->primary_screen->hpos() > h)
 		res|= 1;
 
-	if (video_screen_get_vpos(space->machine->primary_screen) > w)
+	if (space->machine->primary_screen->vpos() > w)
 		res|= 8;
 
 	return res;
@@ -454,8 +454,8 @@ static READ8_DEVICE_HANDLER( port_c_r )
 static WRITE8_DEVICE_HANDLER( port_b_w )
 {
 	port_b_data = data;
-// running_device *beep = devtag_get_device(device->machine, "beep");
-// running_device *cvsd = devtag_get_device(device->machine, "cvsd");
+// running_device *beep = device->machine->device("beep");
+// running_device *cvsd = device->machine->device("cvsd");
 //  hc55516_digit_w(cvsd, data);
 //  popmessage("%02x\n",data);
 //  beep_set_state(beep, 0);
@@ -909,12 +909,12 @@ static MACHINE_RESET( filetto )
 	bank = -1;
 	lastvalue = -1;
 	hv_blank = 0;
-	cpu_set_irq_callback(devtag_get_device(machine, "maincpu"), irq_callback);
-	filetto_devices.pit8253 = devtag_get_device( machine, "pit8253" );
-	filetto_devices.pic8259_1 = devtag_get_device( machine, "pic8259_1" );
-	filetto_devices.pic8259_2 = devtag_get_device( machine, "pic8259_2" );
-	filetto_devices.dma8237_1 = devtag_get_device( machine, "dma8237_1" );
-	filetto_devices.dma8237_2 = devtag_get_device( machine, "dma8237_2" );
+	cpu_set_irq_callback(machine->device("maincpu"), irq_callback);
+	filetto_devices.pit8253 = machine->device( "pit8253" );
+	filetto_devices.pic8259_1 = machine->device( "pic8259_1" );
+	filetto_devices.pic8259_2 = machine->device( "pic8259_2" );
+	filetto_devices.dma8237_1 = machine->device( "dma8237_1" );
+	filetto_devices.dma8237_2 = machine->device( "dma8237_2" );
 }
 
 static MACHINE_DRIVER_START( filetto )

@@ -55,7 +55,7 @@ static MACHINE_RESET( atarig1 )
 	atarigen_eeprom_reset(&state->atarigen);
 	atarigen_slapstic_reset(&state->atarigen);
 	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
-	atarigen_scanline_timer_reset(machine->primary_screen, atarig1_scanline_update, 8);
+	atarigen_scanline_timer_reset(*machine->primary_screen, atarig1_scanline_update, 8);
 	atarijsa_reset();
 }
 
@@ -1180,7 +1180,7 @@ static void init_g1_common(running_machine *machine, offs_t slapstic_base, int s
 		state_save_register_postload(machine, pitfightb_state_postload, NULL);
 	}
 	else if (slapstic != 0)
-		atarigen_slapstic_init(devtag_get_device(machine, "maincpu"), slapstic_base, 0, slapstic);
+		atarigen_slapstic_init(machine->device("maincpu"), slapstic_base, 0, slapstic);
 	atarijsa_init(machine, "IN0", 0x4000);
 
 	state->is_pitfight = is_pitfight;
@@ -1213,4 +1213,4 @@ GAME( 1990, pitfight5, pitfight, atarig1, pitfight, pitfight7, ROT0, "Atari Game
 GAME( 1990, pitfight4, pitfight, atarig1, pitfight, pitfight,  ROT0, "Atari Games", "Pit Fighter (rev 4)", GAME_SUPPORTS_SAVE )
 GAME( 1990, pitfight3, pitfight, atarig1, pitfight, pitfight,  ROT0, "Atari Games", "Pit Fighter (rev 3)", GAME_SUPPORTS_SAVE )
 GAME( 1990, pitfightj, pitfight, atarig1, pitfightj,pitfightj, ROT0, "Atari Games", "Pit Fighter (Japan, 2 players)", GAME_SUPPORTS_SAVE )
-GAME( 1990, pitfightb, pitfight, atarig1, pitfight, pitfightb, ROT0, "Atari Games", "Pit Fighter (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1990, pitfightb, pitfight, atarig1, pitfight, pitfightb, ROT0, "bootleg",     "Pit Fighter (bootleg)", GAME_SUPPORTS_SAVE )

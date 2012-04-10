@@ -244,7 +244,7 @@ static WRITE8_HANDLER( led_board_w )
 
 static WRITE8_HANDLER( cpu1_outputs_w )
 {
-	running_device *discrete = devtag_get_device(space->machine, "discrete");
+	running_device *discrete = space->machine->device("discrete");
 	grchamp_state *state = (grchamp_state *)space->machine->driver_data;
 	UINT8 diff = data ^ state->cpu1_out[offset];
 	state->cpu1_out[offset] = data;
@@ -342,7 +342,7 @@ INLINE UINT8 get_pc3259_bits(running_machine *machine, grchamp_state *state, int
 	int bits;
 
 	/* force a partial update to the current position */
-	video_screen_update_partial(machine->primary_screen, video_screen_get_vpos(machine->primary_screen));
+	machine->primary_screen->update_partial(machine->primary_screen->vpos());
 
 	/* get the relevant 4 bits */
 	bits = (state->collide >> (offs*4)) & 0x0f;

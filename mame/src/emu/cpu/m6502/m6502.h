@@ -65,14 +65,7 @@ struct _m6502_interface
 	m6510_port_write_func	port_write_func;
 };
 
-
-enum
-{
-	CPUINFO_INT_M6510_PORT = CPUINFO_INT_CPU_SPECIFIC
-};
-
-extern CPU_GET_INFO( m6502 );
-#define CPU_M6502 CPU_GET_INFO_NAME( m6502 )
+DECLARE_LEGACY_CPU_DEVICE(M6502, m6502);
 
 extern CPU_DISASSEMBLE( m6502 );
 
@@ -92,11 +85,11 @@ extern CPU_DISASSEMBLE( m6502 );
 
 #define M6510_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m6510 );
-#define CPU_M6510 CPU_GET_INFO_NAME( m6510 )
+DECLARE_LEGACY_CPU_DEVICE(M6510, m6510);
 
 extern CPU_DISASSEMBLE( m6510 );
 
+UINT8 m6510_get_port(legacy_cpu_device *device);
 
 #define M6510T_A						M6502_A
 #define M6510T_X						M6502_X
@@ -111,8 +104,7 @@ extern CPU_DISASSEMBLE( m6510 );
 
 #define M6510T_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m6510t );
-#define CPU_M6510T CPU_GET_INFO_NAME( m6510t )
+DECLARE_LEGACY_CPU_DEVICE(M6510T, m6510t);
 
 
 #define M7501_A 						M6502_A
@@ -128,8 +120,7 @@ extern CPU_GET_INFO( m6510t );
 
 #define M7501_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m7501 );
-#define CPU_M7501 CPU_GET_INFO_NAME( m7501 )
+DECLARE_LEGACY_CPU_DEVICE(M7501, m7501);
 
 #define M8502_A 						M6502_A
 #define M8502_X 						M6502_X
@@ -144,8 +135,7 @@ extern CPU_GET_INFO( m7501 );
 
 #define M8502_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m8502 );
-#define CPU_M8502 CPU_GET_INFO_NAME( m8502 )
+DECLARE_LEGACY_CPU_DEVICE(M8502, m8502);
 
 
 /****************************************************************************
@@ -164,8 +154,7 @@ extern CPU_GET_INFO( m8502 );
 
 #define N2A03_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( n2a03 );
-#define CPU_N2A03 CPU_GET_INFO_NAME( n2a03 )
+DECLARE_LEGACY_CPU_DEVICE(N2A03, n2a03);
 
 #define N2A03_DEFAULTCLOCK (21477272.724 / 12)
 
@@ -192,8 +181,7 @@ extern void n2a03_irq(running_device *device);
 
 #define M65C02_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m65c02 );
-#define CPU_M65C02 CPU_GET_INFO_NAME( m65c02 )
+DECLARE_LEGACY_CPU_DEVICE(M65C02, m65c02);
 
 extern CPU_DISASSEMBLE( m65c02 );
 
@@ -214,8 +202,7 @@ extern CPU_DISASSEMBLE( m65c02 );
 
 #define M65SC02_IRQ_LINE				M6502_IRQ_LINE
 
-extern CPU_GET_INFO( m65sc02 );
-#define CPU_M65SC02 CPU_GET_INFO_NAME( m65sc02 )
+DECLARE_LEGACY_CPU_DEVICE(M65SC02, m65sc02);
 
 extern CPU_DISASSEMBLE( m65sc02 );
 
@@ -235,8 +222,7 @@ extern CPU_DISASSEMBLE( m65sc02 );
 
 #define DECO16_IRQ_LINE					M6502_IRQ_LINE
 
-extern CPU_GET_INFO( deco16 );
-#define CPU_DECO16 CPU_GET_INFO_NAME( deco16 )
+DECLARE_LEGACY_CPU_DEVICE(DECO16, deco16);
 
 extern CPU_DISASSEMBLE( deco16 );
 

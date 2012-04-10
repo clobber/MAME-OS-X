@@ -58,8 +58,8 @@ Stephh's notes (based on the game M68000 code and some tests) :
   - Sets :
       * 'syvalion' : region = 0x0000
   - Coinage relies on the region (code at 0x003640) :
-      * 0x0000 (Japan), 0x0001 (US), 0x0003 (US, Romstar licence) and
-        0x0004 (licenced to PHOENIX ELECTRONICS CO.) use TAITO_COINAGE_JAPAN_OLD
+      * 0x0000 (Japan), 0x0001 (US), 0x0003 (US, Romstar license) and
+        0x0004 (licensed to PHOENIX ELECTRONICS CO.) use TAITO_COINAGE_JAPAN_OLD
       * 0x0002 (World) uses TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0000
   - Text is always in Japanese regardless of the region !
@@ -77,10 +77,10 @@ Stephh's notes (based on the game M68000 code and some tests) :
       * 'recordbr' : region = 0x0003 and title = 0x0001
       * 'gogold'   : region = 0x0001 and title = 0x0000
   - Coinage relies on the region (code at 0x00144a) :
-      * 0x0001 (Japan), 0x0002 (US), 0x0005 (World, Romstar licence) and
-        0x0006 (US, Romstar licence) use TAITO_COINAGE_JAPAN_OLD
-      * 0x0003 (World), 0x0004 (licenced to xxx) and
-        0x0007 (licenced to PHOENIX ELECTRONICS CO.) use TAITO_COINAGE_WORLD
+      * 0x0001 (Japan), 0x0002 (US), 0x0005 (World, Romstar license) and
+        0x0006 (US, Romstar license) use TAITO_COINAGE_JAPAN_OLD
+      * 0x0003 (World), 0x0004 (licensed to xxx) and
+        0x0007 (licensed to PHOENIX ELECTRONICS CO.) use TAITO_COINAGE_WORLD
   - Notice screen only if region = 0x0000 or region = 0x0001
 
   - Debug Mode (from Shimapong)
@@ -529,9 +529,9 @@ static MACHINE_START( taitoh )
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0xc000], 0x4000);
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->tc0220ioc = devtag_get_device(machine, "tc0220ioc");
-	state->tc0080vco = devtag_get_device(machine, "tc0080vco");
+	state->audiocpu = machine->device("audiocpu");
+	state->tc0220ioc = machine->device("tc0220ioc");
+	state->tc0080vco = machine->device("tc0080vco");
 
 	state_save_register_global(machine, state->banknum);
 	state_save_register_postload(machine, taitoh_postload, NULL);

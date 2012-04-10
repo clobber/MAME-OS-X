@@ -59,7 +59,7 @@ Chips:
   CPU: IDT 79R3041-25J (MIPS R3000 core)
 Sound: BSMT2000
 Other: Bt481AKPJ110 (44 Pin PQFP, Brooktree RAMDAC)
-       AT001 (160 Pin PQFP, P & P Marketing, custom programmed XILINX XC4310)
+       AT001 (160 Pin PQFP, P&P Marketing, custom programmed XILINX XC4310)
        ATMEL 93C66 (EEPROM)
        CN7 - 4 pin connector for stero speaker output
 PLDs:
@@ -128,7 +128,7 @@ static TIMER_CALLBACK( irq5_gen )
 static INTERRUPT_GEN( irq4_gen )
 {
 	cpu_set_input_line(device, R3000_IRQ4, ASSERT_LINE);
-	timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen, 0, 0), NULL, 0, irq5_gen);
+	timer_set(device->machine, device->machine->primary_screen->time_until_pos(0), NULL, 0, irq5_gen);
 }
 
 
@@ -155,7 +155,7 @@ static WRITE32_HANDLER( control_w )
 	/* handle EEPROM I/O */
 	if (ACCESSING_BITS_16_23)
 	{
-		running_device *device = devtag_get_device(space->machine, "eeprom");
+		running_device *device = space->machine->device("eeprom");
 		eeprom_write_bit(device, data & 0x00800000);
 		eeprom_set_cs_line(device, (data & 0x00200000) ? CLEAR_LINE : ASSERT_LINE);
 		eeprom_set_clock_line(device, (data & 0x00400000) ? ASSERT_LINE : CLEAR_LINE);
@@ -164,7 +164,7 @@ static WRITE32_HANDLER( control_w )
 	/* toggling BSMT off then on causes a reset */
 	if (!(old & 0x80000000) && (control_data & 0x80000000))
 	{
-		running_device *device = devtag_get_device(space->machine, "bsmt");
+		running_device *device = space->machine->device("bsmt");
 		bsmt2000_data_w(device, bsmt_data_bank, 0, 0xffff);
 		device->reset();
 	}
@@ -220,7 +220,7 @@ static WRITE32_HANDLER( speedup_w )
 	/* see if the PC matches */
 	if ((cpu_get_previouspc(space->cpu) & 0x1fffffff) == speedup_pc)
 	{
-		UINT64 curr_cycles = cpu_get_total_cycles(space->cpu);
+		UINT64 curr_cycles = space->machine->firstcpu->total_cycles();
 
 		/* if less than 50 cycles from the last time, count it */
 		if (curr_cycles - last_cycles < 50)
@@ -721,13 +721,13 @@ static DRIVER_INIT( sshoot12 )
  *
  *************************************/
 
-GAME( 1996, policetr,    0,        policetr, policetr, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3)", 0 )
-GAME( 1996, policetr11,  policetr, policetr, polict10, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.1)", 0 )
-GAME( 1996, policetr10,  policetr, policetr, polict10, policetr, ROT0, "P & P Marketing", "Police Trainer (Rev 1.0)", 0 )
+GAME( 1996, policetr,    0,        policetr, policetr, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3)", 0 )
+GAME( 1996, policetr11,  policetr, policetr, polict10, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.1)", 0 )
+GAME( 1996, policetr10,  policetr, policetr, polict10, policetr, ROT0, "P&P Marketing", "Police Trainer (Rev 1.0)", 0 )
 
-GAME( 1996, policetr13a, policetr, sshooter, policetr, plctr13b, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3B Newer)", 0 )
-GAME( 1996, policetr13b, policetr, sshooter, policetr, plctr13b, ROT0, "P & P Marketing", "Police Trainer (Rev 1.3B)", 0 )
+GAME( 1996, policetr13a, policetr, sshooter, policetr, plctr13b, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3B Newer)", 0 )
+GAME( 1996, policetr13b, policetr, sshooter, policetr, plctr13b, ROT0, "P&P Marketing", "Police Trainer (Rev 1.3B)", 0 )
 
-GAME( 1998, sshooter,    0,        sshooter, policetr, sshooter, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.7)", 0 )
-GAME( 1998, sshooter12,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.2)", 0 )
-GAME( 1998, sshooter11,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P & P Marketing", "Sharpshooter (Rev 1.1)", 0 )
+GAME( 1998, sshooter,    0,        sshooter, policetr, sshooter, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.7)", 0 )
+GAME( 1998, sshooter12,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.2)", 0 )
+GAME( 1998, sshooter11,  sshooter, sshooter, sshoot11, sshoot12, ROT0, "P&P Marketing", "Sharpshooter (Rev 1.1)", 0 )

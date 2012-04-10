@@ -250,8 +250,7 @@ static MACHINE_DRIVER_START( gumbo )
 
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1122000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
 MACHINE_DRIVER_END
@@ -402,4 +401,4 @@ GAME( 1994, msbingo,  0,        mspuzzle, msbingo,  0, ROT0,  "Min Corp.", "Miss
 GAME( 1994, mspuzzle, 0,        mspuzzle, mspuzzle, 0, ROT90, "Min Corp.", "Miss Puzzle", GAME_SUPPORTS_SAVE )
 GAME( 1994, mspuzzlen,mspuzzle, mspuzzle, mspuzzle, 0, ROT90, "Min Corp.", "Miss Puzzle (Nudes)", GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1995, dblpoint, 0,        dblpoint, dblpoint, 0, ROT0,  "Min Corp.", "Double Point", GAME_SUPPORTS_SAVE )
-GAME( 1995, dblpointd,dblpoint, dblpoint, dblpoint, 0, ROT0,  "Dong Bang Electron", "Double Point (Dong Bang Electron, bootleg?)", GAME_SUPPORTS_SAVE )
+GAME( 1995, dblpointd,dblpoint, dblpoint, dblpoint, 0, ROT0,  "bootleg? (Dong Bang Electron)", "Double Point (Dong Bang Electron, bootleg?)", GAME_SUPPORTS_SAVE )

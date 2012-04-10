@@ -56,10 +56,9 @@ struct _rtc65271_state
 INLINE rtc65271_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == RTC65271);
+	assert(device->type() == RTC65271);
 
-	return (rtc65271_state *)device->token;
+	return (rtc65271_state *)downcast<legacy_device_base *>(device)->token();
 }
 
 
@@ -234,10 +233,10 @@ static int rtc65271_file_load(running_device *device, mame_file *file)
 	/*state->dirty = FALSE;*/
 
 	{
-		mame_system_time systime;
+		system_time systime;
 
 		/* get the current date/time from the core */
-		mame_get_current_datetime(device->machine, &systime);
+		device->machine->current_datetime(systime);
 
 		/* set clock registers */
 		state->regs[reg_second] = systime.local_time.second;
@@ -686,7 +685,7 @@ static TIMER_CALLBACK( rtc_end_update_callback )
 
 static DEVICE_START( rtc65271 )
 {
-	rtc65271_config *config = (rtc65271_config *)device->baseconfig().inline_config;
+	rtc65271_config *config = (rtc65271_config *)downcast<const legacy_device_config_base &>(device->baseconfig()).inline_config();
 	rtc65271_state *state = get_safe_token(device);
 
 	state->update_timer = timer_alloc(device->machine, rtc_begin_update_callback, (void *)device);
@@ -718,3 +717,6 @@ static const char DEVTEMPLATE_SOURCE[] = __FILE__;
 #define DEVTEMPLATE_NAME		"RTC65271"
 #define DEVTEMPLATE_FAMILY		"RTC"
 #include "devtempl.h"
+
+
+DEFINE_LEGACY_NVRAM_DEVICE(RTC65271, rtc65271);

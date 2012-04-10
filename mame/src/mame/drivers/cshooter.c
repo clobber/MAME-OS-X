@@ -501,7 +501,7 @@ Notes:   LB - CPU board        S-0086-002-0B
          TB - GFX board        S-0087-807
 
          The PCB looks like a prototype, due to the modifications
-         to the PCB. The game is probably licenced from Seibu.
+         to the PCB. The game is probably licensed from Seibu.
 
          The bipolar PROMs are not used for colour.
 
@@ -535,8 +535,9 @@ ROM_START( cshooter )
 	ROM_REGION( 0x10000, "audiocpu", 0 )	// Sub/Sound CPU?
 	ROM_LOAD( "r4",  0x00000, 0x08000, CRC(84fed017) SHA1(9a564c9379eb48569cfba48562889277991864d8) )
 
+	// not hooked up yet (Taito version has this instead of encryption!
 	ROM_REGION( 0x0800, "cpu2", 0 )	/* 2k for the microcontroller */
-	ROM_LOAD( "68705.bin",    0x0000, 0x0800, NO_DUMP )
+	ROM_LOAD( "crshooter.3j",    0x0000, 0x0800, CRC(aae61ce7) SHA1(bb2b9887ec73a5b82604b9b64c533c2242d20d0f) )
 
 	ROM_REGION( 0x02000, "gfx1", 0 )	// TX Layer
 	ROM_LOAD( "r3",  0x00000, 0x02000, CRC(67b50a47) SHA1(b1f4aefc9437edbeefba5371149cc08c0b55c741) )	// only 1 byte difference with 3.f11, bad dump?
@@ -698,7 +699,7 @@ static DRIVER_INIT( cshootere )
 
 
 
-GAME( 1987, cshooter,  0,       cshooter, cshooter, cshooter,  ROT270, "[Seibu Kaihatsu] (Taito license)",  "Cross Shooter (not encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 1987, cshootere, cshooter, airraid, cshooter, cshootere, ROT270, "[Seibu Kaihatsu] (J.K.H. license)", "Cross Shooter (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 1987, airraid,   cshooter, airraid, cshooter, cshootere, ROT270, "Seibu Kaihatsu",                    "Air Raid (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1987, cshooter,  0,       cshooter, cshooter, cshooter,  ROT270, "Seibu Kaihatsu (Taito license)",  "Cross Shooter (not encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1987, cshootere, cshooter, airraid, cshooter, cshootere, ROT270, "Seibu Kaihatsu (J.K.H. license)", "Cross Shooter (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 1987, airraid,   cshooter, airraid, cshooter, cshootere, ROT270, "Seibu Kaihatsu",                  "Air Raid (encrypted)", GAME_NOT_WORKING | GAME_NO_SOUND )
 

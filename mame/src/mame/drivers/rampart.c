@@ -45,11 +45,11 @@ static void update_interrupts(running_machine *machine)
 }
 
 
-static void scanline_update(running_device *screen, int scanline)
+static void scanline_update(screen_device &screen, int scanline)
 {
 	/* generate 32V signals */
 	if ((scanline & 32) == 0)
-		atarigen_scanline_int_gen(devtag_get_device(screen->machine, "maincpu"));
+		atarigen_scanline_int_gen(screen.machine->device("maincpu"));
 }
 
 
@@ -73,7 +73,7 @@ static MACHINE_RESET( rampart )
 	atarigen_eeprom_reset(&state->atarigen);
 	atarigen_slapstic_reset(&state->atarigen);
 	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
-	atarigen_scanline_timer_reset(machine->primary_screen, scanline_update, 32);
+	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update, 32);
 }
 
 
@@ -371,8 +371,7 @@ static MACHINE_DRIVER_START( rampart )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, MASTER_CLOCK/4/3)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7low)
+	MDRV_OKIM6295_ADD("oki", MASTER_CLOCK/4/3, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
 
 	MDRV_SOUND_ADD("ymsnd", YM2413, MASTER_CLOCK/4)
@@ -501,7 +500,7 @@ static DRIVER_INIT( rampart )
 
 	state->atarigen.eeprom_default = compressed_default_eeprom;
 	memcpy(&rom[0x140000], &rom[0x40000], 0x8000);
-	atarigen_slapstic_init(devtag_get_device(machine, "maincpu"), 0x140000, 0x438000, 118);
+	atarigen_slapstic_init(machine->device("maincpu"), 0x140000, 0x438000, 118);
 }
 
 

@@ -198,12 +198,12 @@ static MACHINE_RESET( jpmimpct )
 
 static WRITE16_HANDLER( m68k_tms_w )
 {
-	tms34010_host_w(devtag_get_device(space->machine, "dsp"), offset, data);
+	tms34010_host_w(space->machine->device("dsp"), offset, data);
 }
 
 static READ16_HANDLER( m68k_tms_r )
 {
-	return tms34010_host_r(devtag_get_device(space->machine, "dsp"), offset);
+	return tms34010_host_r(space->machine->device("dsp"), offset);
 }
 
 
@@ -241,7 +241,7 @@ static TIMER_DEVICE_CALLBACK( duart_1_timer_event )
 	duart_1.ISR |= 0x08;
 
 	duart_1_irq = 1;
-	update_irqs(timer->machine);
+	update_irqs(timer.machine);
 }
 
 static READ16_HANDLER( duart_1_r )
@@ -292,7 +292,8 @@ static READ16_HANDLER( duart_1_r )
 		case 0xe:
 		{
 			attotime rate = attotime_mul(ATTOTIME_IN_HZ(MC68681_1_CLOCK), 16 * duart_1.CT);
-			timer_device_adjust_periodic(devtag_get_device(space->machine, "duart_1_timer"), rate, 0, rate);
+			timer_device *duart_timer = space->machine->device<timer_device>("duart_1_timer");
+			duart_timer->adjust(rate, 0, rate);
 			break;
 		}
 		case 0xf:
@@ -559,7 +560,7 @@ static READ16_HANDLER( jpmio_r )
 
 static WRITE16_HANDLER( jpmio_w )
 {
-	UINT64 cycles = cpu_get_total_cycles(space->cpu);
+	UINT64 cycles = space->machine->firstcpu->total_cycles();
 	switch (offset)
 	{
 		case 0x02:
@@ -1204,7 +1205,7 @@ static READ16_HANDLER( optos_r )
 static WRITE16_HANDLER( jpmioawp_w )
 {
 	int i;
-	UINT64 cycles  = cpu_get_total_cycles(space->cpu);
+	UINT64 cycles  = space->machine->firstcpu->total_cycles();
 	switch (offset)
 	{
 		case 0x00:

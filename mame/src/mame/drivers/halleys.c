@@ -1014,7 +1014,7 @@ static WRITE8_HANDLER( blitter_w )
 		else
 		{
 			blitter_busy = 1;
-			timer_adjust_oneshot(blitter_reset_timer, cpu_clocks_to_attotime(space->cpu, 100), 0); // free blitter if no updates in 100 cycles
+			timer_adjust_oneshot(blitter_reset_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime(100), 0); // free blitter if no updates in 100 cycles
 		}
 	}
 }
@@ -1979,7 +1979,8 @@ MACHINE_DRIVER_END
 
 static MACHINE_DRIVER_START( benberob )
 	MDRV_IMPORT_FROM(halleys)
-	MDRV_CPU_REPLACE("maincpu", M6809, XTAL_19_968MHz/12) /* not verified but pcb identical to halley's comet */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_CLOCK(XTAL_19_968MHz/12) /* not verified but pcb identical to halley's comet */
 	MDRV_CPU_VBLANK_INT_HACK(benberob_interrupt, 4)
 	MDRV_VIDEO_UPDATE(benberob)
 MACHINE_DRIVER_END

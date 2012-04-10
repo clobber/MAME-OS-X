@@ -407,12 +407,8 @@ I couldn't test this board so I don't know the manufakturer, sorry.
 1 OSC 8 Mhz
 1 MPU 8751 (which is read-protected)
 
-
-
 If you need more info or if this package doesn't
 Work, mail me.
-
-Visit The ROMLiST Homepage: Http://hem.passagen.se/ogg/
 
 ..............CaBBe!...................................
 
@@ -482,5 +478,5 @@ ROM_START( rundeep )
 	ROM_LOAD( "fi-3", 0x400, 0x200, CRC(f61a9686) SHA1(24082f60b72268d240ceca6999bdf18872625cd2) )
 ROM_END
 
-GAME( 1987, thedeep, 0,      thedeep, thedeep, 0, ROT270, "Woodplace Inc.", "The Deep (Japan)", 0 )
-GAME( 1988, rundeep, thedeep,thedeep, thedeep, 0, ROT270, "Cream",     "Run Deep", 0 )
+GAME( 1987, thedeep, 0,      thedeep, thedeep, 0, ROT270, "Wood Place Inc.", "The Deep (Japan)", 0 )
+GAME( 1988, rundeep, thedeep,thedeep, thedeep, 0, ROT270, "bootleg (Cream)", "Run Deep", 0 )

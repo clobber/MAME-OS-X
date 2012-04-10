@@ -2237,19 +2237,19 @@ static MACHINE_START( common )
 {
 	tmnt_state *state = (tmnt_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->k007232 = devtag_get_device(machine, "k007232");
-	state->k053260 = devtag_get_device(machine, "k053260");
-	state->k054539 = devtag_get_device(machine, "k054539");
-	state->upd = devtag_get_device(machine, "upd");
-	state->samples = devtag_get_device(machine, "samples");
-	state->k052109 = devtag_get_device(machine, "k052109");
-	state->k051960 = devtag_get_device(machine, "k051960");
-	state->k053245 = devtag_get_device(machine, "k053245");
-	state->k053251 = devtag_get_device(machine, "k053251");
-	state->k053936 = devtag_get_device(machine, "k053936");
-	state->k054000 = devtag_get_device(machine, "k054000");
+	state->maincpu = machine->device("maincpu");
+	state->audiocpu = machine->device("audiocpu");
+	state->k007232 = machine->device("k007232");
+	state->k053260 = machine->device("k053260");
+	state->k054539 = machine->device("k054539");
+	state->upd = machine->device("upd");
+	state->samples = machine->device("samples");
+	state->k052109 = machine->device("k052109");
+	state->k051960 = machine->device("k051960");
+	state->k053245 = machine->device("k053245");
+	state->k053251 = machine->device("k053251");
+	state->k053936 = machine->device("k053936");
+	state->k054000 = machine->device("k054000");
 
 	state_save_register_global(machine, state->toggle);
 	state_save_register_global(machine, state->last);
@@ -2416,8 +2416,8 @@ static MACHINE_DRIVER_START( tmnt )
 
 	MDRV_SOUND_ADD("k007232", K007232, XTAL_3_579545MHz)
 	MDRV_SOUND_CONFIG(k007232_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.20)
-	MDRV_SOUND_ROUTE(1, "mono", 0.20)
+	MDRV_SOUND_ROUTE(0, "mono", 0.33)
+	MDRV_SOUND_ROUTE(1, "mono", 0.33)
 
 	MDRV_SOUND_ADD("upd", UPD7759, XTAL_640kHz)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
@@ -2599,7 +2599,7 @@ static MACHINE_DRIVER_START( glfgreat )
 	MDRV_DRIVER_DATA(tmnt_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* ? */
+	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* Confirmed */
 	MDRV_CPU_PROGRAM_MAP(glfgreat_main_map)
 	MDRV_CPU_VBLANK_INT("screen", lgtnfght_interrupt)
 
@@ -2666,7 +2666,7 @@ static MACHINE_DRIVER_START( prmrsocr )
 	MDRV_DRIVER_DATA(tmnt_state)
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* ? */
+	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* Confirmed */
 	MDRV_CPU_PROGRAM_MAP(prmrsocr_main_map)
 	MDRV_CPU_VBLANK_INT("screen", lgtnfght_interrupt)
 
@@ -2852,8 +2852,7 @@ static MACHINE_DRIVER_START( sunsetbl )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("oki", OKIM6295, 1056000)
-	MDRV_SOUND_CONFIG(okim6295_interface_pin7high) // clock frequency & pin 7 not verified
+	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_DRIVER_END
@@ -4374,7 +4373,7 @@ GAME( 1991, ssridersubc, ssriders, ssriders, ssriders, 0,        ROT0,  "Konami"
 GAME( 1991, ssridersabd, ssriders, ssriders, ssriders, 0,        ROT0,  "Konami", "Sunset Riders (2 Players ver ABD)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1991, ssridersadd, ssriders, ssriders, ssrid4ps, 0,        ROT0,  "Konami", "Sunset Riders (4 Players ver ADD)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1991, ssridersjbd, ssriders, ssriders, ssriders, 0,        ROT0,  "Konami", "Sunset Riders (2 Players ver JBD)", GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
-GAME( 1991, ssridersb,   ssriders, sunsetbl, sunsetbl, 0,        ROT0,  "Konami", "Sunset Riders (bootleg 4 Players ver ADD)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1991, ssridersb,   ssriders, sunsetbl, sunsetbl, 0,        ROT0,  "bootleg","Sunset Riders (bootleg 4 Players ver ADD)", GAME_NOT_WORKING | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 
 GAME( 1991, thndrx2,     0,        thndrx2,  thndrx2,  0,        ROT0,  "Konami", "Thunder Cross II (World)", GAME_SUPPORTS_SAVE )
 GAME( 1991, thndrx2a,    thndrx2,  thndrx2,  thndrx2,  0,        ROT0,  "Konami", "Thunder Cross II (Asia)", GAME_SUPPORTS_SAVE )

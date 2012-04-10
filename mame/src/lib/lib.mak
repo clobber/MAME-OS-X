@@ -37,8 +37,10 @@ UTILOBJS = \
 	$(LIBOBJ)/util/coreutil.o \
 	$(LIBOBJ)/util/harddisk.o \
 	$(LIBOBJ)/util/huffman.o \
+	$(LIBOBJ)/util/imageutl.o \
 	$(LIBOBJ)/util/jedparse.o \
 	$(LIBOBJ)/util/md5.o \
+	$(LIBOBJ)/util/opresolv.o \
 	$(LIBOBJ)/util/options.o \
 	$(LIBOBJ)/util/palette.o \
 	$(LIBOBJ)/util/png.o \
@@ -49,6 +51,7 @@ UTILOBJS = \
 	$(LIBOBJ)/util/unzip.o \
 	$(LIBOBJ)/util/vbiparse.o \
 	$(LIBOBJ)/util/xmlfile.o \
+	$(LIBOBJ)/util/zippath.o \
 
 $(OBJ)/libutil.a: $(UTILOBJS)
 

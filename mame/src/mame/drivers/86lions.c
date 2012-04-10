@@ -76,13 +76,13 @@ static READ8_HANDLER( test_r )
 
 static READ8_HANDLER(lions_via_r)
 {
-	running_device *via_0 = devtag_get_device(space->machine, "via6522_0");
+	running_device *via_0 = space->machine->device("via6522_0");
 	return via_r(via_0, offset);
 }
 
 static WRITE8_HANDLER(lions_via_w)
 {
-	running_device *via_0 = devtag_get_device(space->machine, "via6522_0");
+	running_device *via_0 = space->machine->device("via6522_0");
 	via_w(via_0, offset, data);
 }
 
@@ -333,7 +333,7 @@ static PALETTE_INIT( lions )
 {
 	int i;
 
-	for (i = 0;i < machine->config->total_colors;i++)
+	for (i = 0;i < machine->total_colors();i++)
 	{
 		int bit0,bit1,bit2,r,g,b;
 

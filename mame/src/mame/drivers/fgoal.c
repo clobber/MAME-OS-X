@@ -81,12 +81,12 @@ static TIMER_CALLBACK( interrupt_callback )
 
 	state->prev_coin = coin;
 
-	scanline = video_screen_get_vpos(machine->primary_screen) + 128;
+	scanline = machine->primary_screen->vpos() + 128;
 
 	if (scanline > 256)
 		scanline = 0;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, scanline, 0), NULL, 0, interrupt_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(scanline), NULL, 0, interrupt_callback);
 }
 
 
@@ -106,7 +106,7 @@ static READ8_HANDLER( fgoal_analog_r )
 
 static CUSTOM_INPUT( fgoal_80_r )
 {
-	UINT8 ret = (video_screen_get_vpos(field->port->machine->primary_screen) & 0x80) ? 1 : 0;
+	UINT8 ret = (field->port->machine->primary_screen->vpos() & 0x80) ? 1 : 0;
 
 	return ret;
 }
@@ -340,8 +340,8 @@ static MACHINE_START( fgoal )
 {
 	fgoal_state *state = (fgoal_state *)machine->driver_data;
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
-	state->mb14241 = devtag_get_device(machine, "mb14241");
+	state->maincpu = machine->device("maincpu");
+	state->mb14241 = machine->device("mb14241");
 
 	state_save_register_global(machine, state->xpos);
 	state_save_register_global(machine, state->ypos);
@@ -356,7 +356,7 @@ static MACHINE_RESET( fgoal )
 {
 	fgoal_state *state = (fgoal_state *)machine->driver_data;
 
-	timer_set(machine, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), NULL, 0, interrupt_callback);
+	timer_set(machine, machine->primary_screen->time_until_pos(0), NULL, 0, interrupt_callback);
 
 	state->xpos = 0;
 	state->ypos = 0;

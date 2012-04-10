@@ -29,8 +29,8 @@ struct _v810_state
 	UINT32 reg[65];
 	UINT8 irq_line;
 	UINT8 nmi_line;
-	cpu_irq_callback irq_cb;
-	running_device *device;
+	device_irq_callback irq_cb;
+	legacy_cpu_device *device;
 	const address_space *program;
 	const address_space *io;
 	UINT32 PPC;
@@ -40,10 +40,8 @@ struct _v810_state
 INLINE v810_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->token != NULL);
-	assert(device->type == CPU);
-	assert(cpu_get_type(device) == CPU_V810);
-	return (v810_state *)device->token;
+	assert(device->type() == V810);
+	return (v810_state *)downcast<legacy_cpu_device *>(device)->token();
 }
 
 #define R0 reg[0]
@@ -1027,7 +1025,6 @@ static CPU_EXECUTE( v810 )
 {
 	v810_state *cpustate = get_safe_token(device);
 
-	cpustate->icount = cycles;
 	while(cpustate->icount>0)
 	{
 		UINT32 op;
@@ -1038,7 +1035,6 @@ static CPU_EXECUTE( v810 )
 		cpustate->PC+=2;
 		cpustate->icount-= OpCodeTable[op>>10](cpustate,op);
 	}
-	return cycles-cpustate->icount;
 }
 
 
@@ -1135,7 +1131,7 @@ static CPU_SET_INFO( v810 )
 
 CPU_GET_INFO( v810 )
 {
-	v810_state *cpustate = (device != NULL && device->token != NULL) ? get_safe_token(device) : NULL;
+	v810_state *cpustate = (device != NULL && device->token() != NULL) ? get_safe_token(device) : NULL;
 
 	switch (state)
 	{
@@ -1288,3 +1284,5 @@ CPU_GET_INFO( v810 )
 		case CPUINFO_STR_REGISTER + V810_ADTRE:			sprintf(info->s, "ADTRE:%08X", cpustate->ADTRE);	break;
 	}
 }
+
+DEFINE_LEGACY_CPU_DEVICE(V810, v810);

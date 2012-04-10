@@ -205,9 +205,9 @@ static READ8_HANDLER( dual_pokey_r )
 	int pokey_reg = (offset % 8) | control;
 
 	if (pokey_num == 0)
-		return pokey_r(devtag_get_device(space->machine, "pokey1"), pokey_reg);
+		return pokey_r(space->machine->device("pokey1"), pokey_reg);
 	else
-		return pokey_r(devtag_get_device(space->machine, "pokey2"), pokey_reg);
+		return pokey_r(space->machine->device("pokey2"), pokey_reg);
 }
 
 
@@ -218,9 +218,9 @@ static WRITE8_HANDLER( dual_pokey_w )
 	int pokey_reg = (offset % 8) | control;
 
 	if (pokey_num == 0)
-		pokey_w(devtag_get_device(space->machine, "pokey1"), pokey_reg, data);
+		pokey_w(space->machine->device("pokey1"), pokey_reg, data);
 	else
-		pokey_w(devtag_get_device(space->machine, "pokey2"), pokey_reg, data);
+		pokey_w(space->machine->device("pokey2"), pokey_reg, data);
 }
 
 
@@ -319,7 +319,7 @@ ADDRESS_MAP_END
 static CUSTOM_INPUT( clock_r )
 {
 	/* 2.4kHz (divide 2.5MHz by 1024) */
-	return (cputag_get_total_cycles(field->port->machine, "alpha") & 0x400) ? 0 : 1;
+	return (field->port->machine->device<cpu_device>("alpha")->total_cycles() & 0x400) ? 0 : 1;
 }
 
 
@@ -418,7 +418,7 @@ static INPUT_PORTS_START( mhavocrv )
 
 	PORT_MODIFY("IN1")
 	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SPECIAL ) PORT_CUSTOM(tms5220_r, NULL)
-	PORT_BIT( 0x0b, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( mhavocp )
@@ -742,9 +742,9 @@ ROM_END
  *
  *************************************/
 
-GAME( 1983, mhavoc,   0,      mhavoc,   mhavoc,   0,        ROT0, "Atari", "Major Havoc (rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavoc2,  mhavoc, mhavoc,   mhavoc,   0,        ROT0, "Atari", "Major Havoc (rev 2)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavocrv, mhavoc, mhavocrv, mhavocrv, mhavocrv, ROT0, "JMA",   "Major Havoc (Return to Vax)", GAME_SUPPORTS_SAVE )
-GAME( 1983, mhavocp,  mhavoc, mhavoc,   mhavocp,  0,        ROT0, "Atari", "Major Havoc (prototype)", GAME_SUPPORTS_SAVE )
-GAME( 1983, alphaone, mhavoc, alphaone, alphaone, 0,        ROT0, "Atari", "Alpha One (prototype, 3 lives)", GAME_SUPPORTS_SAVE )
-GAME( 1983, alphaonea,mhavoc, alphaone, alphaone, 0,        ROT0, "Atari", "Alpha One (prototype, 5 lives)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavoc,   0,      mhavoc,   mhavoc,   0,        ROT0, "Atari",         "Major Havoc (rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavoc2,  mhavoc, mhavoc,   mhavoc,   0,        ROT0, "Atari",         "Major Havoc (rev 2)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavocrv, mhavoc, mhavocrv, mhavocrv, mhavocrv, ROT0, "Atari / JMA",   "Major Havoc (Return to Vax)", GAME_SUPPORTS_SAVE )
+GAME( 1983, mhavocp,  mhavoc, mhavoc,   mhavocp,  0,        ROT0, "Atari",         "Major Havoc (prototype)", GAME_SUPPORTS_SAVE )
+GAME( 1983, alphaone, mhavoc, alphaone, alphaone, 0,        ROT0, "Atari",         "Alpha One (prototype, 3 lives)", GAME_SUPPORTS_SAVE )
+GAME( 1983, alphaonea,mhavoc, alphaone, alphaone, 0,        ROT0, "Atari",         "Alpha One (prototype, 5 lives)", GAME_SUPPORTS_SAVE )

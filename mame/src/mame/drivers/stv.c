@@ -94,7 +94,7 @@ ToDo / Notes:
 -Add the RS232c interface (serial port),needed by fhboxers.
 -(PCB owners) check if the clocks documented in the manuals are really right for ST-V.
 -SCSP to master irq: see if there is a sound cpu mask bit.
--Does the cpu_set_clock really works?Investigate.
+-Does the device_set_clock really works?Investigate.
 -We need to check every game if can be completed or there are any hanging/crash/protection
  issues on them.
 -Memo: Some tests done on the original & working PCB,to be implemented:
@@ -113,8 +113,6 @@ ToDo / Notes:
 
 (per-game issues)
 -stress: accesses the Sound Memory Expansion Area (0x05a00000-0x05afffff), unknown purpose;
--groovef: hangs soon after loaded,caused by two memory addresses in the Work RAM-H range.
- Kludged for now to work.
 -smleague / finlarch: it randomly hangs / crashes,it works if you use a ridiculous MDRV_INTERLEAVE number,might need strict
  SH-2 synching.
 -various: find idle skip if possible.
@@ -190,6 +188,9 @@ static UINT8 *smpc_ram;
 
 UINT32* stv_workram_l;
 UINT32* stv_workram_h;
+cpu_device *stv_maincpu;
+cpu_device *stv_slave;
+cpu_device *stv_audiocpu;
 static UINT32* stv_backupram;
 static UINT32* ioga;
 static UINT16* scsp_regs;
@@ -250,6 +251,8 @@ int minit_boost,sinit_boost;
 attotime minit_boost_timeslice, sinit_boost_timeslice;
 
 //static int scanline;
+
+static emu_timer *stv_rtc_timer;
 
 
 /*A-Bus IRQ checks,where they could be located these?*/
@@ -474,7 +477,7 @@ static UINT8 stv_SMPC_r8 (const address_space *space, int offset)
 		return_data = input_port_read(space->machine, "DSW1");
 
 	if (offset == 0x77)//PDR2 read
-		return_data=  (0xfe | eeprom_read_bit(devtag_get_device(space->machine, "eeprom")));
+		return_data=  (0xfe | eeprom_read_bit(space->machine->device("eeprom")));
 
 //  if (offset == 0x33) //country code
 //      return_data = input_port_read(machine, "FAKE");
@@ -489,16 +492,16 @@ static UINT8 stv_SMPC_r8 (const address_space *space, int offset)
 
 static void stv_SMPC_w8 (const address_space *space, int offset, UINT8 data)
 {
-	mame_system_time systime;
+	system_time systime;
 
-	mame_get_base_datetime(space->machine, &systime);
+	space->machine->base_datetime(systime);
 
 //  if(LOG_SMPC) logerror ("8-bit SMPC Write to Offset %02x with Data %02x\n", offset, data);
 	smpc_ram[offset] = data;
 
 	if(offset == 0x75)
 	{
-		running_device *device = devtag_get_device(space->machine, "eeprom");
+		eeprom_device *device = space->machine->device<eeprom_device>("eeprom");
 		eeprom_set_clock_line(device, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 		eeprom_write_bit(device, data & 0x10);
 		eeprom_set_cs_line(device, (data & 0x04) ? CLEAR_LINE : ASSERT_LINE);
@@ -627,13 +630,13 @@ static void stv_SMPC_w8 (const address_space *space, int offset, UINT8 data)
 				if(LOG_SMPC) logerror ("SMPC: Status Acquire\n");
 				smpc_ram[0x5f]=0x10;
 				smpc_ram[0x21] = (0x80) | ((NMI_reset & 1) << 6);
-				smpc_ram[0x23] = DectoBCD(systime.local_time.year /100);
-				smpc_ram[0x25] = DectoBCD(systime.local_time.year %100);
-				smpc_ram[0x27] = (systime.local_time.weekday << 4) | (systime.local_time.month+1);
-				smpc_ram[0x29] = DectoBCD(systime.local_time.mday);
-				smpc_ram[0x2b] = DectoBCD(systime.local_time.hour);
-				smpc_ram[0x2d] = DectoBCD(systime.local_time.minute);
-				smpc_ram[0x2f] = DectoBCD(systime.local_time.second);
+				//smpc_ram[0x23] = DectoBCD(systime.local_time.year /100);
+				//smpc_ram[0x25] = DectoBCD(systime.local_time.year %100);
+				//smpc_ram[0x27] = (systime.local_time.weekday << 4) | (systime.local_time.month+1);
+				//smpc_ram[0x29] = DectoBCD(systime.local_time.mday);
+				//smpc_ram[0x2b] = DectoBCD(systime.local_time.hour);
+				//smpc_ram[0x2d] = DectoBCD(systime.local_time.minute);
+				//smpc_ram[0x2f] = DectoBCD(systime.local_time.second);
 
 				smpc_ram[0x31]=0x00;  //?
 
@@ -1968,14 +1971,14 @@ static WRITE32_HANDLER( minit_w )
 	logerror("cpu %s (PC=%08X) MINIT write = %08x\n", space->cpu->tag(), cpu_get_pc(space->cpu),data);
 	cpuexec_boost_interleave(space->machine, minit_boost_timeslice, ATTOTIME_IN_USEC(minit_boost));
 	cpuexec_trigger(space->machine, 1000);
-	sh2_set_frt_input(devtag_get_device(space->machine, "slave"), PULSE_LINE);
+	sh2_set_frt_input(space->machine->device("slave"), PULSE_LINE);
 }
 
 static WRITE32_HANDLER( sinit_w )
 {
 	logerror("cpu %s (PC=%08X) SINIT write = %08x\n", space->cpu->tag(), cpu_get_pc(space->cpu),data);
 	cpuexec_boost_interleave(space->machine, sinit_boost_timeslice, ATTOTIME_IN_USEC(sinit_boost));
-	sh2_set_frt_input(devtag_get_device(space->machine, "maincpu"), PULSE_LINE);
+	sh2_set_frt_input(space->machine->device("maincpu"), PULSE_LINE);
 }
 
 
@@ -2333,9 +2336,9 @@ static void print_game_info(void);
 
 DRIVER_INIT ( stv )
 {
-	mame_system_time systime;
+	system_time systime;
 
-	mame_get_base_datetime(machine, &systime);
+	machine->base_datetime(systime);
 
 	/* amount of time to boost interleave for on MINIT / SINIT, needed for communication to work */
 	minit_boost = 400;
@@ -2352,8 +2355,8 @@ DRIVER_INIT ( stv )
 	// do strict overwrite verification - maruchan and rsgun crash after coinup without this.
 	// cottonbm needs strict PCREL
 	// todo: test what games need this and don't turn it on for them...
-	sh2drc_set_options(devtag_get_device(machine, "maincpu"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
-	sh2drc_set_options(devtag_get_device(machine, "slave"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
+	sh2drc_set_options(machine->device("maincpu"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
+	sh2drc_set_options(machine->device("slave"), SH2DRC_STRICT_VERIFY|SH2DRC_STRICT_PCREL);
 
 	/* debug .. watch the command buffer rsgun, cottonbm etc. appear to use to communicate between cpus */
 	memory_install_write32_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x60ffc44, 0x60ffc47, 0, 0, w60ffc44_write );
@@ -2361,13 +2364,6 @@ DRIVER_INIT ( stv )
 	memory_install_write32_handler(cputag_get_address_space(machine, "slave", ADDRESS_SPACE_PROGRAM), 0x60ffc44, 0x60ffc47, 0, 0, w60ffc44_write );
 	memory_install_write32_handler(cputag_get_address_space(machine, "slave", ADDRESS_SPACE_PROGRAM), 0x60ffc48, 0x60ffc4b, 0, 0, w60ffc48_write );
 
-	smpc_ram[0x23] = DectoBCD(systime.local_time.year /100);
-    smpc_ram[0x25] = DectoBCD(systime.local_time.year %100);
-    smpc_ram[0x27] = (systime.local_time.weekday << 4) | (systime.local_time.month+1);
-    smpc_ram[0x29] = DectoBCD(systime.local_time.mday);
-    smpc_ram[0x2b] = DectoBCD(systime.local_time.hour);
-    smpc_ram[0x2d] = DectoBCD(systime.local_time.minute);
-    smpc_ram[0x2f] = DectoBCD(systime.local_time.second);
     smpc_ram[0x31] = 0x00; //CTG1=0 CTG0=0 (correct??)
 //  smpc_ram[0x33] = input_port_read(machine, "FAKE");
 	smpc_ram[0x5f] = 0x10;
@@ -2523,9 +2519,85 @@ static const scsp_interface scsp_config =
 	scsp_irq
 };
 
+static TIMER_CALLBACK(stv_rtc_increment)
+{
+	static const UINT8 dpm[12] = { 0x31, 0x28, 0x31, 0x30, 0x31, 0x30, 0x31, 0x31, 0x30, 0x31, 0x30, 0x31 };
+	static int year_num, year_count;
+
+	/*
+        smpc_ram[0x23] = DectoBCD(systime.local_time.year /100);
+        smpc_ram[0x25] = DectoBCD(systime.local_time.year %100);
+        smpc_ram[0x27] = (systime.local_time.weekday << 4) | (systime.local_time.month+1);
+        smpc_ram[0x29] = DectoBCD(systime.local_time.mday);
+        smpc_ram[0x2b] = DectoBCD(systime.local_time.hour);
+        smpc_ram[0x2d] = DectoBCD(systime.local_time.minute);
+        smpc_ram[0x2f] = DectoBCD(systime.local_time.second);
+    */
+
+	smpc_ram[0x2f]++;
+
+	/* seconds from 9 -> 10*/
+	if((smpc_ram[0x2f] & 0x0f) >= 0x0a) 			{ smpc_ram[0x2f]+=0x10; smpc_ram[0x2f]&=0xf0; }
+	/* seconds from 59 -> 0 */
+	if((smpc_ram[0x2f] & 0xf0) >= 0x60) 			{ smpc_ram[0x2d]++;     smpc_ram[0x2f] = 0; }
+	/* minutes from 9 -> 10 */
+	if((smpc_ram[0x2d] & 0x0f) >= 0x0a) 			{ smpc_ram[0x2d]+=0x10; smpc_ram[0x2d]&=0xf0; }
+	/* minutes from 59 -> 0 */
+	if((smpc_ram[0x2d] & 0xf0) >= 0x60) 			{ smpc_ram[0x2b]++;     smpc_ram[0x2d] = 0; }
+	/* hours from 9 -> 10 */
+	if((smpc_ram[0x2b] & 0x0f) >= 0x0a) 			{ smpc_ram[0x2b]+=0x10; smpc_ram[0x2b]&=0xf0; }
+	/* hours from 23 -> 0 */
+	if((smpc_ram[0x2b] & 0xff) >= 0x24)				{ smpc_ram[0x29]++; smpc_ram[0x27]+=0x10; smpc_ram[0x2b] = 0; }
+	/* week day name sunday -> monday */
+	if((smpc_ram[0x27] & 0xf0) >= 0x70)				{ smpc_ram[0x27]&=0x0f; }
+	/* day number 9 -> 10 */
+	if((smpc_ram[0x29] & 0x0f) >= 0x0a)				{ smpc_ram[0x29]+=0x10; smpc_ram[0x29]&=0xf0; }
+
+	// year BCD to dec conversion (for the leap year stuff)
+	{
+		year_num = (smpc_ram[0x25] & 0xf);
+
+		for(year_count = 0; year_count < (smpc_ram[0x25] & 0xf0); year_count += 0x10)
+			year_num += 0xa;
+
+		year_num += (smpc_ram[0x23] & 0xf)*0x64;
+
+		for(year_count = 0; year_count < (smpc_ram[0x23] & 0xf0); year_count += 0x10)
+			year_num += 0x3e8;
+	}
+
+	/* month +1 check */
+	/* the RTC have a range of 1980 - 2100, so we don't actually need to support the leap year special conditions */
+	if(((year_num % 4) == 0) && (smpc_ram[0x27] & 0xf) == 2)
+	{
+		if((smpc_ram[0x29] & 0xff) >= dpm[(smpc_ram[0x27] & 0xf)-1]+1+1)
+			{ smpc_ram[0x27]++; smpc_ram[0x29] = 0x01; }
+	}
+	else if((smpc_ram[0x29] & 0xff) >= dpm[(smpc_ram[0x27] & 0xf)-1]+1){ smpc_ram[0x27]++; smpc_ram[0x29] = 0x01; }
+	/* year +1 check */
+	if((smpc_ram[0x27] & 0x0f) > 12)				{ smpc_ram[0x25]++;  smpc_ram[0x27] = (smpc_ram[0x27] & 0xf0) | 0x01; }
+	/* year from 9 -> 10 */
+	if((smpc_ram[0x25] & 0x0f) >= 0x0a)				{ smpc_ram[0x25]+=0x10; smpc_ram[0x25]&=0xf0; }
+	/* year from 99 -> 100 */
+	if((smpc_ram[0x25] & 0xf0) >= 0xa0)				{ smpc_ram[0x23]++; smpc_ram[0x25] = 0; }
+
+	// probably not SO precise, here just for reference ...
+	/* year from 999 -> 1000 */
+	//if((smpc_ram[0x23] & 0x0f) >= 0x0a)               { smpc_ram[0x23]+=0x10; smpc_ram[0x23]&=0xf0; }
+	/* year from 9999 -> 0 */
+	//if((smpc_ram[0x23] & 0xf0) >= 0xa0)               { smpc_ram[0x23] = 0; } //roll over
+}
+
 static MACHINE_START( stv )
 {
-	scsp_set_ram_base(devtag_get_device(machine, "scsp"), sound_ram);
+	system_time systime;
+	machine->base_datetime(systime);
+
+	stv_maincpu = machine->device<cpu_device>("maincpu");
+	stv_slave = machine->device<cpu_device>("slave");
+	stv_audiocpu = machine->device<cpu_device>("audiocpu");
+
+	scsp_set_ram_base(machine->device("scsp"), sound_ram);
 
 	// save states
 	state_save_register_global_pointer(machine, smpc_ram, 0x80);
@@ -2551,7 +2623,17 @@ static MACHINE_START( stv )
 
 	stv_register_protection_savestates(machine); // machine/stvprot.c
 
-	add_exit_callback(machine, stvcd_exit);
+	machine->add_notifier(MACHINE_NOTIFY_EXIT, stvcd_exit);
+
+	smpc_ram[0x23] = DectoBCD(systime.local_time.year /100);
+    smpc_ram[0x25] = DectoBCD(systime.local_time.year %100);
+    smpc_ram[0x27] = (systime.local_time.weekday << 4) | (systime.local_time.month+1);
+    smpc_ram[0x29] = DectoBCD(systime.local_time.mday);
+    smpc_ram[0x2b] = DectoBCD(systime.local_time.hour);
+    smpc_ram[0x2d] = DectoBCD(systime.local_time.minute);
+    smpc_ram[0x2f] = DectoBCD(systime.local_time.second);
+
+	stv_rtc_timer = timer_alloc(machine, stv_rtc_increment, 0);
 }
 
 /*
@@ -2579,9 +2661,9 @@ SCU register[40] is for IRQ masking.
    It's not tested much either, but I'm aware that timer 1 doesn't work with this for whatever reason ... */
 static TIMER_CALLBACK( stv_irq_callback )
 {
-	int hpos = video_screen_get_hpos(machine->primary_screen);
-	int vpos = video_screen_get_vpos(machine->primary_screen);
-	rectangle visarea = *video_screen_get_visible_area(machine->primary_screen);
+	int hpos = machine->primary_screen->hpos();
+	int vpos = machine->primary_screen->vpos();
+	rectangle visarea = *machine->primary_screen->visible_area();
 
 	h_sync = visarea.max_x+1;//horz
 	v_sync = visarea.max_y+1;//vert
@@ -2589,12 +2671,12 @@ static TIMER_CALLBACK( stv_irq_callback )
 	if(vpos == v_sync && hpos == 0)
 		VBLANK_IN_IRQ;
 	if(hpos == 0 && vpos == 0)
-		VBLANK_OUT_IRQ;
+		VBLANK_OUT_IRQ(timer->machine);
 	if(hpos == h_sync)
-		TIMER_0_IRQ;
+		TIMER_0_IRQ(timer->machine);
 	if(hpos == h_sync && (vpos != 0 && vpos != v_sync))
 	{
-		HBLANK_IN_IRQ;
+		HBLANK_IN_IRQ(timer->machine);
 		timer_0++;
 	}
 
@@ -2604,28 +2686,28 @@ static TIMER_CALLBACK( stv_irq_callback )
 		VDP1_IRQ;
 
 	if(hpos == timer_1)
-		TIMER_1_IRQ;
+		TIMER_1_IRQ(timer->machine);
 
 	if(hpos <= h_sync)
-		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos, hpos+1), 0);
+		scan_timer->adjust(machine->primary_screen->time_until_pos(vpos, hpos+1));
 	else if(vpos <= v_sync)
-		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, vpos+1, 0), 0);
+		scan_timer->adjust(machine->primary_screen->time_until_pos(vpos+1));
 	else
-		timer_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
+		scan_timer->adjust(machine->primary_screen->time_until_pos(0));
 }
 
 #endif
 
 
-static running_device *vblank_out_timer,*scan_timer,*t1_timer;
+static timer_device *vblank_out_timer,*scan_timer,*t1_timer;
 static int h_sync,v_sync;
 static int cur_scan;
 
-#define VBLANK_OUT_IRQ	\
+#define VBLANK_OUT_IRQ(m)	\
 timer_0 = 0; \
 { \
 	/*if(LOG_IRQ) logerror ("Interrupt: VBlank-OUT Vector 0x41 Level 0x0e\n");*/ \
-	cputag_set_input_line_and_vector(timer->machine, "maincpu", 0xe, (stv_irq.vblank_out) ? HOLD_LINE : CLEAR_LINE , 0x41); \
+	cputag_set_input_line_and_vector(m, "maincpu", 0xe, (stv_irq.vblank_out) ? HOLD_LINE : CLEAR_LINE , 0x41); \
 } \
 
 #define VBLANK_IN_IRQ \
@@ -2634,34 +2716,34 @@ timer_0 = 0; \
 	cputag_set_input_line_and_vector(device->machine, "maincpu", 0xf, (stv_irq.vblank_in) ? HOLD_LINE : CLEAR_LINE , 0x40); \
 } \
 
-#define HBLANK_IN_IRQ \
+#define HBLANK_IN_IRQ(m) \
 timer_1 = stv_scu[37] & 0x1ff; \
 { \
 	/*if(LOG_IRQ) logerror ("Interrupt: HBlank-In at scanline %04x, Vector 0x42 Level 0x0d\n",scanline);*/ \
-	cputag_set_input_line_and_vector(timer->machine, "maincpu", 0xd, (stv_irq.hblank_in) ? HOLD_LINE : CLEAR_LINE, 0x42); \
+	cputag_set_input_line_and_vector(m, "maincpu", 0xd, (stv_irq.hblank_in) ? HOLD_LINE : CLEAR_LINE, 0x42); \
 } \
 
-#define TIMER_0_IRQ \
+#define TIMER_0_IRQ(m) \
 if(timer_0 == (stv_scu[36] & 0x3ff)) \
 { \
 	/*if(LOG_IRQ) logerror ("Interrupt: Timer 0 at scanline %04x, Vector 0x43 Level 0x0c\n",scanline);*/ \
-	cputag_set_input_line_and_vector(timer->machine, "maincpu", 0xc, (stv_irq.timer_0) ? HOLD_LINE : CLEAR_LINE, 0x43 ); \
+	cputag_set_input_line_and_vector(m, "maincpu", 0xc, (stv_irq.timer_0) ? HOLD_LINE : CLEAR_LINE, 0x43 ); \
 } \
 
-#define TIMER_1_IRQ	\
+#define TIMER_1_IRQ(m)	\
 if((stv_scu[38] & 1)) \
 { \
 	if(!(stv_scu[38] & 0x80)) \
 	{ \
 		/*if(LOG_IRQ) logerror ("Interrupt: Timer 1 at point %04x, Vector 0x44 Level 0x0b\n",point);*/ \
-		cputag_set_input_line_and_vector(timer->machine, "maincpu", 0xb, (stv_irq.timer_1) ? HOLD_LINE : CLEAR_LINE, 0x44 ); \
+		cputag_set_input_line_and_vector(m, "maincpu", 0xb, (stv_irq.timer_1) ? HOLD_LINE : CLEAR_LINE, 0x44 ); \
 	} \
 	else \
 	{ \
 		if((timer_0) == (stv_scu[36] & 0x3ff)) \
 		{ \
 			/*if(LOG_IRQ) logerror ("Interrupt: Timer 1 at point %04x, Vector 0x44 Level 0x0b\n",point);*/ \
-			cputag_set_input_line_and_vector(timer->machine, "maincpu", 0xb, (stv_irq.timer_1) ? HOLD_LINE : CLEAR_LINE, 0x44 ); \
+			cputag_set_input_line_and_vector(m, "maincpu", 0xb, (stv_irq.timer_1) ? HOLD_LINE : CLEAR_LINE, 0x44 ); \
 		} \
 	} \
 } \
@@ -2675,20 +2757,20 @@ static TIMER_DEVICE_CALLBACK( hblank_in_irq )
 {
 	int scanline = param;
 
-//  h = video_screen_get_height(timer->machine->primary_screen);
-//  w = video_screen_get_width(timer->machine->primary_screen);
+//  h = timer.machine->primary_screen->height();
+//  w = timer.machine->primary_screen->width();
 
-	HBLANK_IN_IRQ;
-	TIMER_0_IRQ;
+	HBLANK_IN_IRQ(timer.machine);
+	TIMER_0_IRQ(timer.machine);
 
 	if(scanline+1 < v_sync)
 	{
 		if(stv_irq.hblank_in || stv_irq.timer_0)
-			timer_device_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline+1, h_sync), scanline+1);
+			scan_timer->adjust(timer.machine->primary_screen->time_until_pos(scanline+1, h_sync), scanline+1);
 		/*set the first Timer-1 event*/
 		cur_scan = scanline+1;
 		if(stv_irq.timer_1)
-			timer_device_adjust_oneshot(t1_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline+1, timer_1), scanline+1);
+			t1_timer->adjust(timer.machine->primary_screen->time_until_pos(scanline+1, timer_1), scanline+1);
 	}
 
 	timer_0++;
@@ -2698,10 +2780,10 @@ static TIMER_DEVICE_CALLBACK( timer1_irq )
 {
 	int scanline = param;
 
-	TIMER_1_IRQ;
+	TIMER_1_IRQ(timer.machine);
 
 	if(stv_irq.timer_1)
-		timer_device_adjust_oneshot(t1_timer, video_screen_get_time_until_pos(timer->machine->primary_screen, scanline+1, timer_1), scanline+1);
+		t1_timer->adjust(timer.machine->primary_screen->time_until_pos(scanline+1, timer_1), scanline+1);
 }
 
 static TIMER_CALLBACK( vdp1_irq )
@@ -2711,14 +2793,14 @@ static TIMER_CALLBACK( vdp1_irq )
 
 static TIMER_DEVICE_CALLBACK( vblank_out_irq )
 {
-	VBLANK_OUT_IRQ;
+	VBLANK_OUT_IRQ(timer.machine);
 }
 
 /*V-Blank-IN event*/
 static INTERRUPT_GEN( stv_interrupt )
 {
 //  scanline = 0;
-	rectangle visarea = *video_screen_get_visible_area(device->machine->primary_screen);
+	rectangle visarea = device->machine->primary_screen->visible_area();
 
 	h_sync = visarea.max_x+1;//horz
 	v_sync = visarea.max_y+1;//vert
@@ -2727,14 +2809,14 @@ static INTERRUPT_GEN( stv_interrupt )
 
 	/*Next V-Blank-OUT event*/
 	if(stv_irq.vblank_out)
-		timer_device_adjust_oneshot(vblank_out_timer,video_screen_get_time_until_pos(device->machine->primary_screen, 0, 0), 0);
+		vblank_out_timer->adjust(device->machine->primary_screen->time_until_pos(0));
 	/*Set the first Hblank-IN event*/
 	if(stv_irq.hblank_in || stv_irq.timer_0 || stv_irq.timer_1)
-		timer_device_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(device->machine->primary_screen, 0, h_sync), 0);
+		scan_timer->adjust(device->machine->primary_screen->time_until_pos(0, h_sync));
 
 	/*TODO: timing of this one (related to the VDP1 speed)*/
 	/*      (NOTE: value shouldn't be at h_sync/v_sync position (will break shienryu))*/
-	timer_set(device->machine, video_screen_get_time_until_pos(device->machine->primary_screen,0,0), NULL, 0, vdp1_irq);
+	timer_set(device->machine, device->machine->primary_screen->time_until_pos(0), NULL, 0, vdp1_irq);
 }
 
 static MACHINE_RESET( stv )
@@ -2760,11 +2842,13 @@ static MACHINE_RESET( stv )
 	stvcd_reset(machine);
 
 	/* set the first scanline 0 timer to go off */
-	scan_timer = devtag_get_device(machine, "scan_timer");
-	t1_timer = devtag_get_device(machine, "t1_timer");
-	vblank_out_timer = devtag_get_device(machine, "vbout_timer");
-	timer_device_adjust_oneshot(vblank_out_timer,video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
-	timer_device_adjust_oneshot(scan_timer, video_screen_get_time_until_pos(machine->primary_screen, 224, 352), 0);
+	scan_timer = machine->device<timer_device>("scan_timer");
+	t1_timer = machine->device<timer_device>("t1_timer");
+	vblank_out_timer = machine->device<timer_device>("vbout_timer");
+	vblank_out_timer->adjust(machine->primary_screen->time_until_pos(0));
+	scan_timer->adjust(machine->primary_screen->time_until_pos(224, 352));
+
+	timer_adjust_periodic(stv_rtc_timer, attotime_zero, 0, ATTOTIME_IN_SEC(1));
 }
 
 
@@ -3990,7 +4074,7 @@ GAME( 1998, sss,       stvbios, stv, stv,		sss,    	ROT0,   "Capcom / Cave / Vic
 GAME( 1995, sandor,    stvbios, stv, stv,		sandor, 	ROT0,   "Sega", 	    				"Puzzle & Action: Sando-R (J 951114 V1.000)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, thunt,     sandor,  stv, stv,		thunt,  	ROT0,   "Sega",	                		"Puzzle & Action: Treasure Hunt (JUET 970901 V2.00E)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, thuntk,    sandor,  stv, stv,		sandor, 	ROT0,   "Sega / Deniam",        		"Puzzle & Action: BoMulEul Chajara (JUET 970125 V2.00K)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1996, sokyugrt,  stvbios, stv, stv,		sokyugrt,	ROT0,   "Raizing / 8ing",   			"Soukyugurentai / Terra Diver (JUET 960821 V1.000)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1996, sokyugrt,  stvbios, stv, stv,		sokyugrt,	ROT0,   "Raizing / Eighting",   		"Soukyugurentai / Terra Diver (JUET 960821 V1.000)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, suikoenb,  stvbios, stv, stv,		suikoenb,	ROT0,   "Data East",                	"Suikoenbu / Outlaws of the Lost Dynasty (JUETL 950314 V2.001)", GAME_IMPERFECT_SOUND )
 GAME( 1996, vfkids,    stvbios, stv, stv,		stv,    	ROT0,   "Sega", 						"Virtua Fighter Kids (JUET 960319 V0.000)", GAME_IMPERFECT_SOUND )
 GAME( 1997, winterht,  stvbios, stv, stv,		winterht,	ROT0,   "Sega", 						"Winter Heat (JUET 971012 V1.000)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

@@ -36,7 +36,7 @@ PALETTE_INIT( pastelg )
 	int i;
 	int bit0, bit1, bit2, bit3, r, g, b;
 
-	for (i = 0; i < machine->config->total_colors; i++)
+	for (i = 0; i < machine->total_colors(); i++)
 	{
 		bit0 = (color_prom[0] >> 0) & 0x01;
 		bit1 = (color_prom[0] >> 1) & 0x01;
@@ -48,10 +48,10 @@ PALETTE_INIT( pastelg )
 		bit2 = (color_prom[0] >> 6) & 0x01;
 		bit3 = (color_prom[0] >> 7) & 0x01;
 		g = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
-		bit0 = (color_prom[machine->config->total_colors] >> 0) & 0x01;
-		bit1 = (color_prom[machine->config->total_colors] >> 1) & 0x01;
-		bit2 = (color_prom[machine->config->total_colors] >> 2) & 0x01;
-		bit3 = (color_prom[machine->config->total_colors] >> 3) & 0x01;
+		bit0 = (color_prom[machine->total_colors()] >> 0) & 0x01;
+		bit1 = (color_prom[machine->total_colors()] >> 1) & 0x01;
+		bit2 = (color_prom[machine->total_colors()] >> 2) & 0x01;
+		bit3 = (color_prom[machine->total_colors()] >> 3) & 0x01;
 		b = 0x0e * bit0 + 0x1f * bit1 + 0x43 * bit2 + 0x8f * bit3;
 
 		palette_set_color(machine,i,MAKE_RGB(r,g,b));
@@ -141,8 +141,8 @@ static void pastelg_vramflip(running_machine *machine)
 	static int pastelg_flipscreen_old = 0;
 	int x, y;
 	UINT8 color1, color2;
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	if (pastelg_flipscreen == pastelg_flipscreen_old) return;
 
@@ -168,7 +168,7 @@ static TIMER_CALLBACK( blitter_timer_callback )
 static void pastelg_gfxdraw(running_machine *machine)
 {
 	UINT8 *GFX = memory_region(machine, "gfx1");
-	int width = video_screen_get_width(machine->primary_screen);
+	int width = machine->primary_screen->width();
 
 	int x, y;
 	int dx, dy;
@@ -294,8 +294,8 @@ static void pastelg_gfxdraw(running_machine *machine)
 ******************************************************************************/
 VIDEO_START( pastelg )
 {
-	int width = video_screen_get_width(machine->primary_screen);
-	int height = video_screen_get_height(machine->primary_screen);
+	int width = machine->primary_screen->width();
+	int height = machine->primary_screen->height();
 
 	pastelg_videoram = auto_alloc_array_clear(machine, UINT8, width * height);
 	pastelg_clut = auto_alloc_array(machine, UINT8, 0x10);
@@ -310,8 +310,8 @@ VIDEO_UPDATE( pastelg )
 	if (pastelg_dispflag)
 	{
 		int x, y;
-		int width = video_screen_get_width(screen);
-		int height = video_screen_get_height(screen);
+		int width = screen->width();
+		int height = screen->height();
 
 		for (y = 0; y < height; y++)
 			for (x = 0; x < width; x++)

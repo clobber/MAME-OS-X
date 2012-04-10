@@ -352,7 +352,7 @@ static READ8_DEVICE_HANDLER ( combatsc_ym2203_r )
 		if (state->boost)
 		{
 			state->boost = 0;
-			timer_adjust_periodic(state->interleave_timer, attotime_zero, 0, cpu_clocks_to_attotime(state->audiocpu, 80));
+			timer_adjust_periodic(state->interleave_timer, attotime_zero, 0, state->audiocpu->cycles_to_attotime(80));
 		}
 		else if (status & 2)
 		{
@@ -510,7 +510,7 @@ static INPUT_PORTS_START( dips )
 	PORT_DIPSETTING(	0x04, DEF_STR( Cocktail ) )
 	PORT_DIPUNKNOWN_DIPLOC( 0x08, 0x08, "SW2:4" )	/* Not Used according to the manual */
 	PORT_DIPUNKNOWN_DIPLOC( 0x10, 0x10, "SW2:5" )	/* Not Used according to the manual */
-	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,7")
+	PORT_DIPNAME( 0x60, 0x60, DEF_STR( Difficulty ) ) PORT_DIPLOCATION("SW2:6,7")
 	PORT_DIPSETTING( 0x60, DEF_STR( Easy ) )
 	PORT_DIPSETTING( 0x40, DEF_STR( Normal ) )
 	PORT_DIPSETTING( 0x20, DEF_STR( Difficult ) )
@@ -677,9 +677,9 @@ static MACHINE_START( combatsc )
 
 	state->interleave_timer = timer_alloc(machine, NULL, NULL);
 
-	state->audiocpu = devtag_get_device(machine, "audiocpu");
-	state->k007121_1 = devtag_get_device(machine, "k007121_1");
-	state->k007121_2 = devtag_get_device(machine, "k007121_2");
+	state->audiocpu = machine->device<cpu_device>("audiocpu");
+	state->k007121_1 = machine->device("k007121_1");
+	state->k007121_2 = machine->device("k007121_2");
 
 	memory_configure_bank(machine, "bank1", 0, 10, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 

@@ -200,7 +200,7 @@ static MACHINE_START( tutankhm )
 
 	memory_configure_bank(machine, "bank1", 0, 16, memory_region(machine, "maincpu") + 0x10000, 0x1000);
 
-	state->maincpu = devtag_get_device(machine, "maincpu");
+	state->maincpu = machine->device<cpu_device>("maincpu");
 
 	state_save_register_global(machine, state->irq_toggle);
 	state_save_register_global(machine, state->irq_enable);
@@ -321,4 +321,4 @@ ROM_END
  *************************************/
 
 GAME( 1982, tutankhm, 0,        tutankhm, tutankhm, 0, ROT90, "Konami", "Tutankham", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)
-GAME( 1982, tutankhms,tutankhm, tutankhm, tutankhm, 0, ROT90, "[Konami] (Stern license)", "Tutankham (Stern)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)
+GAME( 1982, tutankhms,tutankhm, tutankhm, tutankhm, 0, ROT90, "Konami (Stern Electronics license)", "Tutankham (Stern Electronics)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS)

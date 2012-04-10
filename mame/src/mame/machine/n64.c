@@ -135,7 +135,7 @@ WRITE32_HANDLER( n64_mi_reg_w )
 	}
 }
 
-static running_device *dmadac[2];
+static dmadac_sound_device *dmadac[2];
 
 void signal_rcp_interrupt(running_machine *machine, int interrupt)
 {
@@ -822,8 +822,8 @@ static void n64_vi_recalculate_resolution(running_machine *machine)
     int y_end = (n64_vi_vstart & 0x000003ff) / 2;
     int width = ((n64_vi_xscale & 0x00000fff) * (x_end - x_start)) / 0x400;
     int height = ((n64_vi_yscale & 0x00000fff) * (y_end - y_start)) / 0x400;
-    rectangle visarea = *video_screen_get_visible_area(machine->primary_screen);
-    attoseconds_t period = video_screen_get_frame_period(machine->primary_screen).attoseconds;
+    rectangle visarea = machine->primary_screen->visible_area();
+    attoseconds_t period = machine->primary_screen->frame_period().attoseconds;
 
     if (width == 0 || height == 0)
     {
@@ -855,7 +855,7 @@ static void n64_vi_recalculate_resolution(running_machine *machine)
 
     visarea.max_x = width - 1;
     visarea.max_y = height - 1;
-    video_screen_configure(machine->primary_screen, width, 525, &visarea, period);
+    machine->primary_screen->configure(width, 525, visarea, period);
 }
 
 READ32_HANDLER( n64_vi_reg_r )
@@ -875,7 +875,7 @@ READ32_HANDLER( n64_vi_reg_r )
             return n64_vi_intr;
 
 		case 0x10/4:		// VI_CURRENT_REG
-			return video_screen_get_vpos(space->machine->primary_screen);
+			return space->machine->primary_screen->vpos();
 
 		case 0x14/4:		// VI_BURST_REG
             return n64_vi_burst;
@@ -1108,8 +1108,8 @@ static void start_audio_dma(running_machine *machine)
 
 //  mame_printf_debug("DACDMA: %x for %x bytes\n", current->address, current->length);
 
-	dmadac[0] = devtag_get_device(machine, "dac1");
-	dmadac[1] = devtag_get_device(machine, "dac2");
+	dmadac[0] = machine->device<dmadac_sound_device>("dac1");
+	dmadac[1] = machine->device<dmadac_sound_device>("dac2");
     dmadac_transfer(&dmadac[0], 2, 2, 2, current->length/4, ram);
 
     ai_status |= 0x40000000;
@@ -2006,15 +2006,15 @@ WRITE32_HANDLER( n64_pif_ram_w )
 
 MACHINE_START( n64 )
 {
-	mips3drc_set_options(devtag_get_device(machine, "maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY);
+	mips3drc_set_options(machine->device("maincpu"), MIPS3DRC_FASTEST_OPTIONS + MIPS3DRC_STRICT_VERIFY);
 
 	/* configure fast RAM regions for DRC */
-	mips3drc_add_fastram(devtag_get_device(machine, "maincpu"), 0x00000000, 0x007fffff, FALSE, rdram);
+	mips3drc_add_fastram(machine->device("maincpu"), 0x00000000, 0x007fffff, FALSE, rdram);
 
-	rspdrc_set_options(devtag_get_device(machine, "rsp"), 0);
-	rspdrc_add_imem(devtag_get_device(machine, "rsp"), rsp_imem);
-	rspdrc_add_dmem(devtag_get_device(machine, "rsp"), rsp_dmem);
-	rspdrc_flush_drc_cache(devtag_get_device(machine, "rsp"));
+	rspdrc_set_options(machine->device("rsp"), 0);
+	rspdrc_add_imem(machine->device("rsp"), rsp_imem);
+	rspdrc_add_dmem(machine->device("rsp"), rsp_dmem);
+	rspdrc_flush_drc_cache(machine->device("rsp"));
 
 	audio_timer = timer_alloc(machine, audio_timer_callback, NULL);
 }

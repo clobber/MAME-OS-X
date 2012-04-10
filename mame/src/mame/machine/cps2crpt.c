@@ -721,7 +721,7 @@ static void cps2_decrypt(running_machine *machine, const UINT32 *master_key, UIN
 	}
 
 	memory_set_decrypted_region(space, 0x000000, length - 1, dec);
-	m68k_set_encrypted_opcode_range(devtag_get_device(machine, "maincpu"), 0, length);
+	m68k_set_encrypted_opcode_range(machine->device("maincpu"), 0, length);
 }
 
 
@@ -844,6 +844,7 @@ static const struct game_keys keys_table[] =
 	{ "sfzjr1",   { 0x8db3167a,0xc29e0f45 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
 	{ "sfzjr2",   { 0x8db3167a,0xc29e0f45 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
 	{ "sfzh",     { 0x876b0e39,0x5ca24fd1 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
+	{ "sfzhr1",   { 0x876b0e39,0x5ca24fd1 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
 	{ "sfzb",     { 0xef415bd3,0x7a92c680 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
 	{ "sfzbr1",   { 0xef415bd3,0x7a92c680 }, 0x080000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
 	{ "mmancp2u", { 0x054893fa,0x94642525 }, 0x100000 },	// 0C80 0564 2194  cmpi.l  #$05642194,D0
@@ -895,6 +896,7 @@ static const struct game_keys keys_table[] =
 	{ "xmvsfjr2", { 0x38df93bc,0x210373ac }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
 	{ "xmvsfa",   { 0x7438fc3e,0x19abed90 }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
 	{ "xmvsfar1", { 0x7438fc3e,0x19abed90 }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
+	{ "xmvsfar2", { 0x7438fc3e,0x19abed90 }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
 	{ "xmvsfh",   { 0x835fb2d0,0x42fa9137 }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
 	{ "xmvsfb",   { 0x8ead9e4a,0xb02184f0 }, 0x100000 },	// 0C81 1972 0327  cmpi.l  #$19720327,D1
 	{ "batcir",   { 0xd195e597,0x3cbce2b5 }, 0x200000 },	// 0C81 0097 0131  cmpi.l  #$00970131,D1
@@ -931,6 +933,7 @@ static const struct game_keys keys_table[] =
 	{ "mvsc",     { 0x48025ade,0x1c697b27 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
 	{ "mvscr1",   { 0x48025ade,0x1c697b27 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
 	{ "mvscu",    { 0x692dc41b,0x7ef1c805 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
+	{ "mvscur1",  { 0x692dc41b,0x7ef1c805 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
 	{ "mvscj",    { 0xafc16138,0x97123eb0 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
 	{ "mvscjr1",  { 0xafc16138,0x97123eb0 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1
 	{ "mvsca",    { 0xf248aec6,0x7905cd17 }, 0x100000 },	// 0C81 1972 0121  cmpi.l  #$19720121,D1

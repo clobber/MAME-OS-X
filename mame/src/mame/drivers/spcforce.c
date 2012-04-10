@@ -55,9 +55,9 @@ static WRITE8_HANDLER( spcforce_SN76496_latch_w )
 
 static READ8_HANDLER( spcforce_SN76496_select_r )
 {
-	if (~spcforce_SN76496_select & 0x40) return sn76496_ready_r(devtag_get_device(space->machine, "sn1"), 0 );
-	if (~spcforce_SN76496_select & 0x20) return sn76496_ready_r(devtag_get_device(space->machine, "sn2"), 0 );
-	if (~spcforce_SN76496_select & 0x10) return sn76496_ready_r(devtag_get_device(space->machine, "sn3"), 0 );
+	if (~spcforce_SN76496_select & 0x40) return sn76496_ready_r(space->machine->device("sn1"));
+	if (~spcforce_SN76496_select & 0x20) return sn76496_ready_r(space->machine->device("sn2"));
+	if (~spcforce_SN76496_select & 0x10) return sn76496_ready_r(space->machine->device("sn3"));
 
 	return 0;
 }
@@ -66,9 +66,9 @@ static WRITE8_HANDLER( spcforce_SN76496_select_w )
 {
     spcforce_SN76496_select = data;
 
-	if (~data & 0x40)  sn76496_w(devtag_get_device(space->machine, "sn1"), 0, spcforce_SN76496_latch);
-	if (~data & 0x20)  sn76496_w(devtag_get_device(space->machine, "sn2"), 0, spcforce_SN76496_latch);
-	if (~data & 0x10)  sn76496_w(devtag_get_device(space->machine, "sn3"), 0, spcforce_SN76496_latch);
+	if (~data & 0x40)  sn76496_w(space->machine->device("sn1"), 0, spcforce_SN76496_latch);
+	if (~data & 0x20)  sn76496_w(space->machine->device("sn2"), 0, spcforce_SN76496_latch);
+	if (~data & 0x10)  sn76496_w(space->machine->device("sn3"), 0, spcforce_SN76496_latch);
 }
 
 static READ8_HANDLER( spcforce_t0_r )
@@ -246,7 +246,7 @@ static MACHINE_DRIVER_START( spcforce )
 
 	/* basic machine hardware */
 	/* FIXME: The 8085A had a max clock of 6MHz, internally divided by 2! */
-	MDRV_CPU_ADD("maincpu", 8085A, 8000000 * 2)        /* 4.00 MHz??? */
+	MDRV_CPU_ADD("maincpu", I8085A, 8000000 * 2)        /* 4.00 MHz??? */
 	MDRV_CPU_PROGRAM_MAP(spcforce_map)
 	MDRV_CPU_VBLANK_INT("screen", irq3_line_pulse)
 
@@ -358,5 +358,5 @@ ROM_END
 
 
 GAME( 1980, spcforce, 0,        spcforce, spcforce, 0, ROT270, "Venture Line", "Space Force (set 1)", GAME_IMPERFECT_COLORS )
-GAME( 19??, spcforc2, spcforce, spcforce, spcforc2, 0, ROT270, "Elcon (bootleg?)", "Space Force (set 2)", GAME_IMPERFECT_COLORS )
+GAME( 19??, spcforc2, spcforce, spcforce, spcforc2, 0, ROT270, "bootleg? (Elcon)", "Space Force (set 2)", GAME_IMPERFECT_COLORS )
 GAME( 1981, meteor,   spcforce, spcforce, spcforc2, 0, ROT270, "Venture Line", "Meteoroids", GAME_IMPERFECT_COLORS )

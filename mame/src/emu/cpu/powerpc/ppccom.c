@@ -132,7 +132,7 @@ INLINE void set_xer(powerpc_state *ppc, UINT32 value)
 
 INLINE UINT64 get_timebase(powerpc_state *ppc)
 {
-	return (cpu_get_total_cycles(ppc->device) - ppc->tb_zero_cycles) / ppc->tb_divisor;
+	return (ppc->device->total_cycles() - ppc->tb_zero_cycles) / ppc->tb_divisor;
 }
 
 
@@ -142,7 +142,7 @@ INLINE UINT64 get_timebase(powerpc_state *ppc)
 
 INLINE void set_timebase(powerpc_state *ppc, UINT64 newtb)
 {
-	ppc->tb_zero_cycles = cpu_get_total_cycles(ppc->device) - newtb * ppc->tb_divisor;
+	ppc->tb_zero_cycles = ppc->device->total_cycles() - newtb * ppc->tb_divisor;
 }
 
 
@@ -153,7 +153,7 @@ INLINE void set_timebase(powerpc_state *ppc, UINT64 newtb)
 
 INLINE UINT32 get_decrementer(powerpc_state *ppc)
 {
-	INT64 cycles_until_zero = ppc->dec_zero_cycles - cpu_get_total_cycles(ppc->device);
+	INT64 cycles_until_zero = ppc->dec_zero_cycles - ppc->device->total_cycles();
 	cycles_until_zero = MAX(cycles_until_zero, 0);
 	return cycles_until_zero / ppc->tb_divisor;
 }
@@ -170,14 +170,14 @@ INLINE void set_decrementer(powerpc_state *ppc, UINT32 newdec)
 
 	if (PRINTF_DECREMENTER)
 	{
-		UINT64 total = cpu_get_total_cycles(ppc->device);
+		UINT64 total = ppc->device->total_cycles();
 		mame_printf_debug("set_decrementer: olddec=%08X newdec=%08X divisor=%d totalcyc=%08X%08X timer=%08X%08X\n",
 				curdec, newdec, ppc->tb_divisor,
 				(UINT32)(total >> 32), (UINT32)total, (UINT32)(cycles_until_done >> 32), (UINT32)cycles_until_done);
 	}
 
-	ppc->dec_zero_cycles = cpu_get_total_cycles(ppc->device) + cycles_until_done;
-	timer_adjust_oneshot(ppc->decrementer_int_timer, cpu_clocks_to_attotime(ppc->device, cycles_until_done), 0);
+	ppc->dec_zero_cycles = ppc->device->total_cycles() + cycles_until_done;
+	timer_adjust_oneshot(ppc->decrementer_int_timer, ppc->device->cycles_to_attotime(cycles_until_done), 0);
 
 	if ((INT32)curdec >= 0 && (INT32)newdec < 0)
 		ppc->irq_pending |= 0x02;
@@ -286,9 +286,9 @@ INLINE int sign_double(double x)
     structure based on the configured type
 -------------------------------------------------*/
 
-void ppccom_init(powerpc_state *ppc, powerpc_flavor flavor, UINT8 cap, int tb_divisor, running_device *device, cpu_irq_callback irqcallback)
+void ppccom_init(powerpc_state *ppc, powerpc_flavor flavor, UINT8 cap, int tb_divisor, legacy_cpu_device *device, device_irq_callback irqcallback)
 {
-	const powerpc_config *config = (const powerpc_config *)device->baseconfig().static_config;
+	const powerpc_config *config = (const powerpc_config *)device->baseconfig().static_config();
 
 	/* initialize based on the config */
 	memset(ppc, 0, sizeof(*ppc));
@@ -296,14 +296,14 @@ void ppccom_init(powerpc_state *ppc, powerpc_flavor flavor, UINT8 cap, int tb_di
 	ppc->cap = cap;
 	ppc->cache_line_size = 32;
 	ppc->tb_divisor = tb_divisor;
-	ppc->cpu_clock = device->clock;
+	ppc->cpu_clock = device->clock();
 	ppc->irq_callback = irqcallback;
 	ppc->device = device;
 	ppc->program = device->space(AS_PROGRAM);
-	ppc->system_clock = (config != NULL) ? config->bus_frequency : device->clock;
-	ppc->tb_divisor = (ppc->tb_divisor * device->clock + ppc->system_clock / 2 - 1) / ppc->system_clock;
+	ppc->system_clock = (config != NULL) ? config->bus_frequency : device->clock();
+	ppc->tb_divisor = (ppc->tb_divisor * device->clock() + ppc->system_clock / 2 - 1) / ppc->system_clock;
 	ppc->codexor = 0;
-	if (!(cap & PPCCAP_4XX) && device->endianness() != ENDIANNESS_NATIVE)
+	if (!(cap & PPCCAP_4XX) && device->space_config()->m_endianness != ENDIANNESS_NATIVE)
 		ppc->codexor = 4;
 
 	/* allocate the virtual TLB */
@@ -383,7 +383,7 @@ void ppccom_reset(powerpc_state *ppc)
 		ppc->msr = MSROEA_IP;
 
 		/* reset the decrementer */
-		ppc->dec_zero_cycles = cpu_get_total_cycles(ppc->device);
+		ppc->dec_zero_cycles = ppc->device->total_cycles();
 		decrementer_int_callback(ppc->device->machine, ppc, 0);
 	}
 
@@ -404,7 +404,7 @@ void ppccom_reset(powerpc_state *ppc)
 		ppc->spr[SPR603_HID0] = 1;
 
 	/* time base starts here */
-	ppc->tb_zero_cycles = cpu_get_total_cycles(ppc->device);
+	ppc->tb_zero_cycles = ppc->device->total_cycles();
 
 	/* clear interrupts */
 	ppc->irq_pending = 0;
@@ -1517,8 +1517,8 @@ static TIMER_CALLBACK( decrementer_int_callback )
 
 	/* advance by another full rev */
 	ppc->dec_zero_cycles += (UINT64)ppc->tb_divisor << 32;
-	cycles_until_next = ppc->dec_zero_cycles - cpu_get_total_cycles(ppc->device);
-	timer_adjust_oneshot(ppc->decrementer_int_timer, cpu_clocks_to_attotime(ppc->device, cycles_until_next), 0);
+	cycles_until_next = ppc->dec_zero_cycles - ppc->device->total_cycles();
+	timer_adjust_oneshot(ppc->decrementer_int_timer, ppc->device->cycles_to_attotime(cycles_until_next), 0);
 }
 
 
@@ -1784,7 +1784,7 @@ static TIMER_CALLBACK( ppc4xx_fit_callback )
 		UINT32 timebase = get_timebase(ppc);
 		UINT32 interval = 0x200 << (4 * ((ppc->spr[SPR4XX_TCR] & PPC4XX_TCR_FP_MASK) >> 24));
 		UINT32 target = (timebase + interval) & ~(interval - 1);
-		timer_adjust_oneshot(ppc->fit_timer, cpu_clocks_to_attotime(ppc->device, (target + 1 - timebase) / ppc->tb_divisor), TRUE);
+		timer_adjust_oneshot(ppc->fit_timer, ppc->device->cycles_to_attotime((target + 1 - timebase) / ppc->tb_divisor), TRUE);
 	}
 
 	/* otherwise, turn ourself off */
@@ -1815,7 +1815,7 @@ static TIMER_CALLBACK( ppc4xx_pit_callback )
 		UINT32 timebase = get_timebase(ppc);
 		UINT32 interval = ppc->pit_reload;
 		UINT32 target = timebase + interval;
-		timer_adjust_oneshot(ppc->pit_timer, cpu_clocks_to_attotime(ppc->device, (target + 1 - timebase) / ppc->tb_divisor), TRUE);
+		timer_adjust_oneshot(ppc->pit_timer, ppc->device->cycles_to_attotime((target + 1 - timebase) / ppc->tb_divisor), TRUE);
 	}
 
 	/* otherwise, turn ourself off */
@@ -1980,7 +1980,7 @@ updateirq:
 
 static READ8_HANDLER( ppc4xx_spu_r )
 {
-	powerpc_state *ppc = *(powerpc_state **)space->cpu->token;
+	powerpc_state *ppc = *(powerpc_state **)downcast<legacy_cpu_device *>(space->cpu)->token();
 	UINT8 result = 0xff;
 
 	switch (offset)
@@ -2007,7 +2007,7 @@ static READ8_HANDLER( ppc4xx_spu_r )
 
 static WRITE8_HANDLER( ppc4xx_spu_w )
 {
-	powerpc_state *ppc = *(powerpc_state **)space->cpu->token;
+	powerpc_state *ppc = *(powerpc_state **)downcast<legacy_cpu_device *>(space->cpu)->token();
 	UINT8 oldstate, newstate;
 
 	if (PRINTF_SPU)
@@ -2084,7 +2084,7 @@ ADDRESS_MAP_END
 
 void ppc4xx_spu_set_tx_handler(running_device *device, ppc4xx_spu_tx_handler handler)
 {
-	powerpc_state *ppc = *(powerpc_state **)device->token;
+	powerpc_state *ppc = *(powerpc_state **)downcast<legacy_cpu_device *>(device)->token();
 	ppc->spu.tx_handler = handler;
 }
 
@@ -2096,7 +2096,7 @@ void ppc4xx_spu_set_tx_handler(running_device *device, ppc4xx_spu_tx_handler han
 
 void ppc4xx_spu_receive_byte(running_device *device, UINT8 byteval)
 {
-	powerpc_state *ppc = *(powerpc_state **)device->token;
+	powerpc_state *ppc = *(powerpc_state **)downcast<legacy_cpu_device *>(device)->token();
 	ppc4xx_spu_rx_data(ppc, byteval);
 }
 
