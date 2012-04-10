@@ -83,6 +83,9 @@ endif
 ifeq ($(firstword $(filter FreeBSD,$(UNAME))),FreeBSD)
 TARGETOS = freebsd
 endif
+ifeq ($(firstword $(filter GNU/kFreeBSD,$(UNAME))),GNU/kFreeBSD)
+TARGETOS = freebsd
+endif
 ifeq ($(firstword $(filter OpenBSD,$(UNAME))),OpenBSD)
 TARGETOS = openbsd
 endif
@@ -100,6 +103,9 @@ ifeq ($(firstword $(filter x86_64,$(UNAME))),x86_64)
 PTR64 = 1
 endif
 ifeq ($(firstword $(filter amd64,$(UNAME))),amd64)
+PTR64 = 1
+endif
+ifeq ($(firstword $(filter ppc64,$(UNAME))),ppc64)
 PTR64 = 1
 endif
 endif
@@ -155,7 +161,7 @@ endif
 # uncomment and specify architecture-specific optimizations here
 # some examples:
 #   optimize for I686:   ARCHOPTS = -march=pentiumpro
-#   optimize for Core 2: ARCHOPTS = -march=pentium-m -msse3
+#   optimize for Core 2: ARCHOPTS = -march=core2
 #   optimize for G4:     ARCHOPTS = -mcpu=G4
 # note that we leave this commented by default so that you can
 # configure this in your environment and never have to think about it
@@ -173,6 +179,9 @@ endif
 
 # uncomment next line to include the internal profiler
 # PROFILER = 1
+
+# uncomment next line to include gprof profiler support
+# GPROF = 1
 
 # uncomment the force the universal DRC to always use the C backend
 # you may need to do this if your target architecture does not have
@@ -244,6 +253,12 @@ PROFILER = 1
 endif
 endif
 
+# allow gprof profiling as well, which overrides the internal PROFILER
+ifdef GPROF
+CCOMFLAGS += -pg
+PROFILER =
+# LIBS += -lc_p
+endif
 
 
 #-------------------------------------------------
@@ -281,6 +296,7 @@ RM = @rm -f
 PREFIXSDL =
 SUFFIX64 =
 SUFFIXDEBUG =
+SUFFIXGPROF =
 
 # Windows SDL builds get an SDL prefix
 ifeq ($(OSD),sdl)
@@ -299,6 +315,11 @@ ifdef DEBUG
 SUFFIXDEBUG = d
 endif
 
+# gprof builds get an addition 'p' suffix
+ifdef GPROF
+SUFFIXGPROF = p
+endif
+
 # the name is just 'target' if no subtarget; otherwise it is
 # the concatenation of the two (e.g., mametiny)
 ifeq ($(TARGET),$(SUBTARGET))
@@ -308,7 +329,7 @@ NAME = $(TARGET)$(SUBTARGET)
 endif
 
 # fullname is prefix+name+suffix+suffix64+suffixdebug
-FULLNAME = $(PREFIX)$(PREFIXSDL)$(NAME)$(SUFFIX)$(SUFFIX64)$(SUFFIXDEBUG)
+FULLNAME = $(PREFIX)$(PREFIXSDL)$(NAME)$(SUFFIX)$(SUFFIX64)$(SUFFIXDEBUG)$(SUFFIXGPROF)
 
 # add an EXE suffix to get the final emulator name
 EMULATOR = $(FULLNAME)$(EXE)

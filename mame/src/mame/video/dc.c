@@ -11,15 +11,113 @@
 #include "profiler.h"
 #include "video/rgbutil.h"
 
-static int vblc=0;
 #define DEBUG_FIFO_POLY (0)
-#define DEBUG_PVRCTRL	(0)
 #define DEBUG_PVRTA	(0)
 #define DEBUG_PVRTA_REGS (0)
-#define DEBUG_PVRDLIST	(1)
+#define DEBUG_PVRDLIST	(0)
 #define DEBUG_PALRAM (1)
 
 #define NUM_BUFFERS 4
+
+/* PVR TA macro defines */
+/*
+SPG_HBLANK_INT
+---- --xx xxxx xxxx ---- ---- ---- ---- hblank_in_interrupt
+---- ---- ---- ---- --xx ---- ---- ---- hblank_int_mode
+---- ---- ---- ---- ---- --xx xxxx xxxx line_comp_val
+*/
+#define spg_hblank_in_irq   ((pvrta_regs[SPG_HBLANK_INT] & 0x03ff0000) >> 16)
+#define spg_hblank_int_mode ((pvrta_regs[SPG_HBLANK_INT] & 0x00003000) >> 12)
+#define spg_line_comp_val   ((pvrta_regs[SPG_HBLANK_INT] & 0x000003ff) >> 0)
+
+/*
+SPG_VBLANK_INT
+---- --xx xxxx xxxx ---- ---- ---- ---- vblank_out_interrupt_line_number
+---- ---- ---- ---- ---- --xx xxxx xxxx vblank_in_interrupt_line_number
+*/
+#define spg_vblank_out_irq_line_num ((pvrta_regs[SPG_VBLANK_INT] & 0x03ff0000) >> 16)
+#define spg_vblank_in_irq_line_num  ((pvrta_regs[SPG_VBLANK_INT] & 0x000003ff) >> 0)
+
+
+/*
+VO_BORDER_COL
+---- ---x ---- ---- ---- ---- ---- ---- Chroma ;suchie3 sets 0xff there, maybe it's 8 bits too?
+---- ---- xxxx xxxx ---- ---- ---- ---- Red
+---- ---- ---- ---- xxxx xxxx ---- ---- Green
+---- ---- ---- ---- ---- ---- xxxx xxxx Blue
+*/
+#define vo_border_K ((pvrta_regs[VO_BORDER_COL] & 0x01000000) >> 24)
+#define vo_border_R ((pvrta_regs[VO_BORDER_COL] & 0x00ff0000) >> 16)
+#define vo_border_G ((pvrta_regs[VO_BORDER_COL] & 0x0000ff00) >> 8)
+#define vo_border_B ((pvrta_regs[VO_BORDER_COL] & 0x000000ff) >> 0)
+
+/*
+SPG_HBLANK
+---- ---- --xx xxxx xxxx ---- ---- ---- hbend
+---- ---- ---- ---- ---- --xx xxxx xxxx hbstart
+*/
+#define spg_hbend    ((pvrta_regs[SPG_HBLANK] & 0x03ff0000) >> 16)
+#define spg_hbstart  ((pvrta_regs[SPG_HBLANK] & 0x000003ff) >> 0)
+
+
+/*
+SPG_LOAD
+---- ---- --xx xxxx xxxx ---- ---- ---- vcount
+---- ---- ---- ---- ---- --xx xxxx xxxx hcount
+*/
+#define spg_vcount   ((pvrta_regs[SPG_LOAD] & 0x03ff0000) >> 16)
+#define spg_hcount   ((pvrta_regs[SPG_LOAD] & 0x000003ff) >> 0)
+
+/*
+SPG_VBLANK
+---- ---- --xx xxxx xxxx ---- ---- ---- vbend
+---- ---- ---- ---- ---- --xx xxxx xxxx vbstart
+*/
+#define spg_vbend    ((pvrta_regs[SPG_VBLANK] & 0x03ff0000) >> 16)
+#define spg_vbstart  ((pvrta_regs[SPG_VBLANK] & 0x000003ff) >> 0)
+
+
+/*
+VO_CONTROL
+---- ---- --xx xxxx ---- ---- ---- ---- pclk_delay
+---- ---- ---- ---- ---- ---x ---- ---- pixel_double ;used in test mode
+---- ---- ---- ---- ---- ---- xxxx ---- field_mode
+---- ---- ---- ---- ---- ---- ---- x--- blank_video
+---- ---- ---- ---- ---- ---- ---- -x-- blank_pol
+---- ---- ---- ---- ---- ---- ---- --x- vsync_pol
+---- ---- ---- ---- ---- ---- ---- ---x hsync_pol
+*/
+#define spg_pclk_delay   ((pvrta_regs[VO_CONTROL] & 0x003f0000) >> 16)
+#define spg_pixel_double ((pvrta_regs[VO_CONTROL] & 0x00000100) >> 8)
+#define spg_field_mode   ((pvrta_regs[VO_CONTROL] & 0x000000f0) >> 4)
+#define spg_blank_video  ((pvrta_regs[VO_CONTROL] & 0x00000008) >> 3)
+#define spg_blank_pol    ((pvrta_regs[VO_CONTROL] & 0x00000004) >> 2)
+#define spg_vsync_pol    ((pvrta_regs[VO_CONTROL] & 0x00000002) >> 1)
+#define spg_hsync_pol    ((pvrta_regs[VO_CONTROL] & 0x00000001) >> 0)
+
+/*
+VO_STARTX
+---- ---- ---- ---- ---- ---x xxxx xxxx horzontal start position
+*/
+#define vo_horz_start_pos ((pvrta_regs[VO_STARTX] & 0x000003ff) >> 0)
+
+/*
+VO_STARTY
+---- ---x xxxx xxxx ---- ---- ---- ---- vertical start position on field 2
+---- ---- ---- ---- ---- ---x xxxx xxxx vertical start position on field 1
+*/
+
+#define vo_vert_start_pos_f2 ((pvrta_regs[VO_STARTY] & 0x03ff0000) >> 16)
+#define vo_vert_start_pos_f1 ((pvrta_regs[VO_STARTY] & 0x000003ff) >> 0)
+
+/*
+SPG_STATUS
+---- ---- ---- ---- --x- ---- ---- ---- vsync
+---- ---- ---- ---- ---x ---- ---- ---- hsync
+---- ---- ---- ---- ---- x--- ---- ---- blank
+---- ---- ---- ---- ---- -x-- ---- ---- field number
+---- ---- ---- ---- ---- --xx xxxx xxxx scanline
+*/
 
 UINT32 pvrctrl_regs[0x100/4];
 static UINT32 pvrta_regs[0x2000/4];
@@ -39,12 +137,13 @@ UINT64 *dc_texture_ram; // '64-bit access area'
 static UINT32 tafifo_buff[32];
 
 static emu_timer *vbout_timer;
+static emu_timer *vbin_timer;
 static emu_timer *hbin_timer;
 static emu_timer *endofrender_timer_isp;
 static emu_timer *endofrender_timer_tsp;
 static emu_timer *endofrender_timer_video;
 
-static int scanline;
+static int scanline,next_y;
 
 // the real accumulation buffer is a 32x32x8bpp buffer into which tiles get rendered before they get copied to the framebuffer
 //  our implementation is not currently tile based, and thus the accumulation buffer is screen sized
@@ -882,103 +981,6 @@ INLINE int decode_reg_64(UINT32 offset, UINT64 mem_mask, UINT64 *shift)
 	return reg;
 }
 
-READ64_HANDLER( pvr_ctrl_r )
-{
-	int reg;
-	UINT64 shift;
-
-	reg = decode_reg_64(offset, mem_mask, &shift);
-
-	#if DEBUG_PVRCTRL
-	mame_printf_verbose("PVRCTRL: [%08x] read %x @ %x (reg %x), mask %" I64FMT "x (PC=%x)\n", 0x5f7c00+reg*4, pvrctrl_regs[reg], offset, reg, mem_mask, cpu_get_pc(space->cpu));
-	#endif
-
-	return (UINT64)pvrctrl_regs[reg] << shift;
-}
-
-WRITE64_HANDLER( pvr_ctrl_w )
-{
-	int reg;
-	UINT64 shift;
-	UINT32 dat;
-	static struct {
-		UINT32 pvr_addr;
-		UINT32 sys_addr;
-		UINT32 size;
-		UINT8 sel;
-		UINT8 dir;
-		UINT8 flag;
-		UINT8 start;
-	}pvr_dma;
-
-	reg = decode_reg_64(offset, mem_mask, &shift);
-	dat = (UINT32)(data >> shift);
-
-	switch (reg)
-	{
-		case SB_PDSTAP: pvr_dma.pvr_addr = dat; break;
-		case SB_PDSTAR: pvr_dma.sys_addr = dat; break;
-		case SB_PDLEN: pvr_dma.size = dat; break;
-		case SB_PDDIR: pvr_dma.dir = dat & 1; break;
-		case SB_PDTSEL:
-			pvr_dma.sel = dat & 1;
-			if(pvr_dma.sel & 1)
-				printf("Warning: Unsupported irq mode trigger PVR-DMA\n");
-			break;
-		case SB_PDEN: pvr_dma.flag = dat & 1; break;
-		case SB_PDST:
-			pvr_dma.start = dat & 1;
-
-			if(pvr_dma.flag && pvr_dma.start)
-			{
-				UINT32 src,dst,size;
-				dst = pvr_dma.pvr_addr;
-				src = pvr_dma.sys_addr;
-				size = 0;
-
-				/* used by usagui and sprtjam*/
-				printf("PVR-DMA start\n");
-				printf("%08x %08x %08x\n",pvr_dma.pvr_addr,pvr_dma.sys_addr,pvr_dma.size);
-				printf("src %s dst %08x\n",pvr_dma.dir ? "->" : "<-",pvr_dma.sel);
-
-				/* 0 rounding size = 16 Mbytes */
-				if(pvr_dma.size == 0) { pvr_dma.size = 0x100000; }
-
-				if(pvr_dma.dir == 0)
-				{
-					for(;size<pvr_dma.size;size+=4)
-					{
-						memory_write_dword_64le(space,dst,memory_read_dword(space,src));
-						src+=4;
-						dst+=4;
-					}
-				}
-				else
-				{
-					for(;size<pvr_dma.size;size+=4)
-					{
-						memory_write_dword_64le(space,src,memory_read_dword(space,dst));
-						src+=4;
-						dst+=4;
-					}
-				}
-				/*Note: do not update the params, since this DMA type doesn't support it. */
-
-				dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_PVR;
-				dc_update_interrupt_status(space->machine);
-			}
-			break;
-	}
-
-	#if DEBUG_PVRCTRL
-	mame_printf_verbose("PVRCTRL: [%08x=%x] write %" I64FMT "x to %x (reg %x), mask %" I64FMT "x\n", 0x5f7c00+reg*4, dat, data>>shift, offset, reg, mem_mask);
-	#endif
-
-//  pvrctrl_regs[reg] |= dat;
-	pvrctrl_regs[reg] = dat;
-
-}
-
 READ64_HANDLER( pvr_ta_r )
 {
 	int reg;
@@ -989,8 +991,29 @@ READ64_HANDLER( pvr_ta_r )
 	switch (reg)
 	{
 	case SPG_STATUS:
-		pvrta_regs[reg] = (video_screen_get_vblank(space->machine->primary_screen) << 13) | (video_screen_get_hblank(space->machine->primary_screen) << 12) | (video_screen_get_vpos(space->machine->primary_screen) & 0x3ff);
+		{
+			UINT8 fieldnum,vsync,hsync,blank;
+
+			fieldnum = (video_screen_get_frame_number(space->machine->primary_screen) & 1) ? 1 : 0;
+
+			vsync = video_screen_get_vblank(space->machine->primary_screen) ? 1 : 0;
+			if(spg_vsync_pol) { vsync^=1; }
+
+			hsync = video_screen_get_hblank(space->machine->primary_screen) ? 1 : 0;
+			if(spg_hsync_pol) { hsync^=1; }
+
+			/* FIXME: following is just a wild guess */
+			blank = (video_screen_get_vblank(space->machine->primary_screen) | video_screen_get_hblank(space->machine->primary_screen)) ? 0 : 1;
+			if(spg_blank_pol) { blank^=1; }
+
+			pvrta_regs[reg] = (vsync << 13) | (hsync << 12) | (blank << 11) | (fieldnum << 10) | (video_screen_get_vpos(space->machine->primary_screen) & 0x3ff);
+			break;
+		}
+	case SPG_TRIGGER_POS:
+		printf("Warning: read at h/v counter ext latches\n");
 		break;
+	case TA_LIST_INIT:
+		return 0; //bit 31 always return 0, a probable left-over in Crazy Taxi reads this and discards the read (?)
 	}
 
 	#if DEBUG_PVRTA_REGS
@@ -1149,88 +1172,122 @@ WRITE64_HANDLER( pvr_ta_w )
 		assert_always(0, "TA grabber error A!\n");
 		break;
 	case TA_LIST_INIT:
-		state_ta.tafifo_pos=0;
-		state_ta.tafifo_mask=7;
-		state_ta.tafifo_vertexwords=8;
-		state_ta.tafifo_listtype= -1;
+		if(dat & 0x80000000)
+		{
+			state_ta.tafifo_pos=0;
+			state_ta.tafifo_mask=7;
+			state_ta.tafifo_vertexwords=8;
+			state_ta.tafifo_listtype= -1;
 	#if DEBUG_PVRTA
-		mame_printf_verbose("TA_OL_BASE       %08x TA_OL_LIMIT  %08x\n", pvrta_regs[TA_OL_BASE], pvrta_regs[TA_OL_LIMIT]);
-		mame_printf_verbose("TA_ISP_BASE      %08x TA_ISP_LIMIT %08x\n", pvrta_regs[TA_ISP_BASE], pvrta_regs[TA_ISP_LIMIT]);
-		mame_printf_verbose("TA_ALLOC_CTRL    %08x\n", pvrta_regs[TA_ALLOC_CTRL]);
-		mame_printf_verbose("TA_NEXT_OPB_INIT %08x\n", pvrta_regs[TA_NEXT_OPB_INIT]);
+			mame_printf_verbose("TA_OL_BASE       %08x TA_OL_LIMIT  %08x\n", pvrta_regs[TA_OL_BASE], pvrta_regs[TA_OL_LIMIT]);
+			mame_printf_verbose("TA_ISP_BASE      %08x TA_ISP_LIMIT %08x\n", pvrta_regs[TA_ISP_BASE], pvrta_regs[TA_ISP_LIMIT]);
+			mame_printf_verbose("TA_ALLOC_CTRL    %08x\n", pvrta_regs[TA_ALLOC_CTRL]);
+			mame_printf_verbose("TA_NEXT_OPB_INIT %08x\n", pvrta_regs[TA_NEXT_OPB_INIT]);
 	#endif
-		pvrta_regs[TA_NEXT_OPB] = pvrta_regs[TA_NEXT_OPB_INIT];
-		pvrta_regs[TA_ITP_CURRENT] = pvrta_regs[TA_ISP_BASE];
-		state_ta.alloc_ctrl_OPB_Mode = pvrta_regs[TA_ALLOC_CTRL] & 0x100000; // 0 up 1 down
-		state_ta.alloc_ctrl_PT_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 16) & 3)) & 0x38; // number of 32 bit words (0,8,16,32)
-		state_ta.alloc_ctrl_TM_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 12) & 3)) & 0x38;
-		state_ta.alloc_ctrl_T_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 8) & 3)) & 0x38;
-		state_ta.alloc_ctrl_OM_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 4) & 3)) & 0x38;
-		state_ta.alloc_ctrl_O_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 0) & 3)) & 0x38;
-		state_ta.listtype_used |= (1+4);
-		// use TA_ISP_BASE and select buffer for grab data
-		state_ta.grabsel = -1;
-		// try to find already used buffer but not busy
-		for (a=0;a < NUM_BUFFERS;a++)
-		{
-			if ((state_ta.grab[a].ispbase == pvrta_regs[TA_ISP_BASE]) && (state_ta.grab[a].busy == 0) && (state_ta.grab[a].valid == 1))
-			{
-				state_ta.grabsel=a;
-				break;
-			}
-		}
-		// try a buffer not used yet
-		if (state_ta.grabsel < 0)
-		{
+			pvrta_regs[TA_NEXT_OPB] = pvrta_regs[TA_NEXT_OPB_INIT];
+			pvrta_regs[TA_ITP_CURRENT] = pvrta_regs[TA_ISP_BASE];
+			state_ta.alloc_ctrl_OPB_Mode = pvrta_regs[TA_ALLOC_CTRL] & 0x100000; // 0 up 1 down
+			state_ta.alloc_ctrl_PT_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 16) & 3)) & 0x38; // number of 32 bit words (0,8,16,32)
+			state_ta.alloc_ctrl_TM_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 12) & 3)) & 0x38;
+			state_ta.alloc_ctrl_T_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 8) & 3)) & 0x38;
+			state_ta.alloc_ctrl_OM_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 4) & 3)) & 0x38;
+			state_ta.alloc_ctrl_O_OPB = (4 << ((pvrta_regs[TA_ALLOC_CTRL] >> 0) & 3)) & 0x38;
+			state_ta.listtype_used |= (1+4);
+			// use TA_ISP_BASE and select buffer for grab data
+			state_ta.grabsel = -1;
+			// try to find already used buffer but not busy
 			for (a=0;a < NUM_BUFFERS;a++)
 			{
-				if (state_ta.grab[a].valid == 0)
+				if ((state_ta.grab[a].ispbase == pvrta_regs[TA_ISP_BASE]) && (state_ta.grab[a].busy == 0) && (state_ta.grab[a].valid == 1))
 				{
 					state_ta.grabsel=a;
 					break;
 				}
 			}
-		}
-		// find a non busy buffer starting from the last one used
-		if (state_ta.grabsel < 0)
-		{
-			for (a=0;a < 3;a++)
+			// try a buffer not used yet
+			if (state_ta.grabsel < 0)
 			{
-				if (state_ta.grab[(state_ta.grabsellast+1+a) & 3].busy == 0)
+				for (a=0;a < NUM_BUFFERS;a++)
 				{
-					state_ta.grabsel=a;
-					break;
+					if (state_ta.grab[a].valid == 0)
+					{
+						state_ta.grabsel=a;
+						break;
+					}
 				}
 			}
-		}
-		if (state_ta.grabsel < 0)
-			assert_always(0, "TA grabber error B!\n");
-		state_ta.grabsellast=state_ta.grabsel;
-		state_ta.grab[state_ta.grabsel].ispbase=pvrta_regs[TA_ISP_BASE];
-		state_ta.grab[state_ta.grabsel].busy=0;
-		state_ta.grab[state_ta.grabsel].valid=1;
-		state_ta.grab[state_ta.grabsel].verts_size=0;
-		state_ta.grab[state_ta.grabsel].strips_size=0;
+			// find a non busy buffer starting from the last one used
+			if (state_ta.grabsel < 0)
+			{
+				for (a=0;a < 3;a++)
+				{
+					if (state_ta.grab[(state_ta.grabsellast+1+a) & 3].busy == 0)
+					{
+						state_ta.grabsel=a;
+						break;
+					}
+				}
+			}
+			if (state_ta.grabsel < 0)
+				assert_always(0, "TA grabber error B!\n");
+			state_ta.grabsellast=state_ta.grabsel;
+			state_ta.grab[state_ta.grabsel].ispbase=pvrta_regs[TA_ISP_BASE];
+			state_ta.grab[state_ta.grabsel].busy=0;
+			state_ta.grab[state_ta.grabsel].valid=1;
+			state_ta.grab[state_ta.grabsel].verts_size=0;
+			state_ta.grab[state_ta.grabsel].strips_size=0;
 
-		profiler_mark_end();
+			profiler_mark_end();
+		}
 		break;
 //#define TA_YUV_TEX_BASE       ((0x005f8148-0x005f8000)/4)
 	case TA_YUV_TEX_BASE:
 		printf("TA_YUV_TEX_BASE initialized to %08x\n", dat);
 
 		// hack, this interrupt is generated after transfering a set amount of data
-		dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_YUV;
-		dc_update_interrupt_status(space->machine);
+		//dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_YUV;
+		//dc_update_interrupt_status(space->machine);
 
 		break;
+	case TA_YUV_TEX_CTRL:
+		printf("TA_YUV_TEX_CTRL initialized to %08x\n", dat);
+		break;
 
+	case SPG_VBLANK_INT:
+		/* clear pending irqs and modify them with the updated ones */
+		timer_adjust_oneshot(vbin_timer, attotime_never, 0);
+		timer_adjust_oneshot(vbout_timer, attotime_never, 0);
 
+		timer_adjust_oneshot(vbin_timer, video_screen_get_time_until_pos(space->machine->primary_screen, spg_vblank_in_irq_line_num, 0), 0);
+		timer_adjust_oneshot(vbout_timer, video_screen_get_time_until_pos(space->machine->primary_screen, spg_vblank_out_irq_line_num, 0), 0);
+		break;
+	/* TODO: timer adjust for SPG_HBLANK_INT too */
 	case TA_LIST_CONT:
 	#if DEBUG_PVRTA
 		mame_printf_verbose("List continuation processing\n");
 	#endif
-		state_ta.tafifo_listtype= -1; // no list being received
-		state_ta.listtype_used |= (1+4);
+		if(dat & 0x80000000)
+		{
+			state_ta.tafifo_listtype= -1; // no list being received
+			state_ta.listtype_used |= (1+4);
+		}
+		break;
+	case SPG_VBLANK:
+	case SPG_HBLANK:
+	case SPG_LOAD:
+	case VO_STARTX:
+	case VO_STARTY:
+		{
+			rectangle visarea = *video_screen_get_visible_area(space->machine->primary_screen);
+			/* FIXME: right visible area calculations aren't known yet*/
+			visarea.min_x = 0;
+			visarea.max_x = ((spg_hbstart - spg_hbend - vo_horz_start_pos) <= 0x180 ? 320 : 640) - 1;
+			visarea.min_y = 0;
+			visarea.max_y = ((spg_vbstart - spg_vbend - vo_vert_start_pos_f1) <= 0x100 ? 240 : 480) - 1;
+
+
+			video_screen_configure(space->machine->primary_screen, spg_hbstart, spg_vbstart, &visarea, video_screen_get_frame_period(space->machine->primary_screen).attoseconds );
+		}
 		break;
 	}
 
@@ -1239,10 +1296,39 @@ WRITE64_HANDLER( pvr_ta_w )
 		mame_printf_verbose("PVRTA: [%08x=%x] write %" I64FMT "x to %x (reg %x %x), mask %" I64FMT "x\n", 0x5f8000+reg*4, dat, data>>shift, offset, reg, (reg*4)+0x8000, mem_mask);
 	#endif
 }
+
+static TIMER_CALLBACK( transfer_opaque_list_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_OPLST;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( transfer_opaque_modifier_volume_list_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_OPMV;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( transfer_translucent_list_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_TRLST;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( transfer_translucent_modifier_volume_list_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_TRMV;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( transfer_punch_through_list_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= (1 << 21);
+	dc_update_interrupt_status(machine);
+}
+
 static void process_ta_fifo(running_machine* machine)
 {
-	UINT32 a;
-
 	/* first byte in the buffer is the Parameter Control Word
 
      pppp pppp gggg gggg oooo oooo oooo oooo
@@ -1323,28 +1409,16 @@ static void process_ta_fifo(running_machine* machine)
 		#if DEBUG_PVRDLIST
 		mame_printf_verbose("Para Type 0 End of List\n");
 		#endif
-		a=0; // 6-10 0-3
+		/* Process transfer FIFO done irqs here */
+		/* FIXME: timing of these */
 		switch (state_ta.tafifo_listtype)
 		{
-		case 0:
-			a = 1 << 7;
-			break;
-		case 1:
-			a = 1 << 8;
-			break;
-		case 2:
-			a = 1 << 9;
-			break;
-		case 3:
-			a = 1 << 10;
-			break;
-		case 4:
-			a = 1 << 21;
-			break;
+		case 0: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_opaque_list_irq); break;
+		case 1: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_opaque_modifier_volume_list_irq); break;
+		case 2: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_translucent_list_irq); break;
+		case 3: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_translucent_modifier_volume_list_irq); break;
+		case 4: timer_set(machine, ATTOTIME_IN_USEC(100), NULL, 0, transfer_punch_through_list_irq); break;
 		}
-
-		dc_sysctrl_regs[SB_ISTNRM] |= a;
-		dc_update_interrupt_status(machine);
 		state_ta.tafifo_listtype= -1; // no list being received
 		state_ta.listtype_used |= (2+8);
 	}
@@ -1579,7 +1653,7 @@ WRITE64_HANDLER( ta_fifo_yuv_w )
 	reg = decode_reg_64(offset, mem_mask, &shift);
 	dat = (UINT32)(data >> shift);
 
-	mame_printf_verbose("YUV FIFO: [%08x=%x] write %" I64FMT "x to %x, mask %" I64FMT "x\n", 0x10800000+reg*4, dat, data, offset, mem_mask);
+//  printf("YUV FIFO: [%08x=%x] write %" I64FMT "x to %x, mask %" I64FMT "x %08x\n", 0x10800000+reg*4, dat, data, offset, mem_mask,test);
 }
 
 /* test video start */
@@ -1748,6 +1822,9 @@ static void render_span(bitmap_t *bitmap, texinfo *ti,
 	yy0 = round(y0);
 	yy1 = round(y1);
 
+	if((yy0 < 0 && y0 > 0) || (yy1 < 0 && y1 > 0)) //temp handling of int32 overflow, needed by hotd2/totd
+		return;
+
 	dy = yy0+0.5-y0;
 
 	if(0)
@@ -1865,6 +1942,7 @@ static void render_tri_sorted(bitmap_t *bitmap, texinfo *ti, const vert *v0, con
 						v1->x, v0->x + dx02dy*dy01, v1->u, v0->u + du02dy*dy01, v1->v, v0->v + dv02dy*dy01, v1->w, v0->w + dw02dy*dy01,
 						dx12dy, dx02dy, du12dy, du02dy, dv12dy, dv02dy, dw12dy, dw02dy);
 		} else {
+
 			render_span(bitmap, ti, v0->y, v1->y,
 						v0->x, v0->x, v0->u, v0->u, v0->v, v0->v, v0->w, v0->w,
 						dx02dy, dx01dy, du02dy, du01dy, dv02dy, dv01dy, dw02dy, dw01dy);
@@ -1969,7 +2047,64 @@ static void pvr_accumulationbuffer_to_framebuffer(const address_space *space, in
 
 	switch (packmode)
 	{
+		case 0x00:
+			printf("pvr_accumulationbuffer_to_framebuffer buffer to tile at %d,%d - unsupported pack mode %02x (0555 KRGB)\n",x,y,packmode);
+			break;
+
+		// used by cleoftp
 		case 0x01: //565 RGB 16 bit
+		{
+			int xcnt,ycnt;
+			for (ycnt=0;ycnt<32;ycnt++)
+			{
+				UINT32 realwriteoffs = 0x05000000 + writeoffs + (y+ycnt) * (stride<<3) + (x*2);
+				src = BITMAP_ADDR32(fake_accumulationbuffer_bitmap, y+ycnt, x);
+
+
+				for (xcnt=0;xcnt<32;xcnt++)
+				{
+					// data starts in 8888 format, downsample it
+					UINT32 data = src[xcnt];
+					UINT16 newdat = ((((data & 0x000000f8) >> 3)) << 0)   |
+					                ((((data & 0x0000fc00) >> 10)) << 5)  |
+									((((data & 0x00f80000) >> 19)) << 11);
+
+					memory_write_word(space,realwriteoffs+xcnt*2, newdat);
+				}
+			}
+		}
+		break;
+
+		case 0x02:
+			printf("pvr_accumulationbuffer_to_framebuffer buffer to tile at %d,%d - unsupported pack mode %02x (4444 ARGB)\n",x,y,packmode);
+			break;
+
+		case 0x03: // 1555 ARGB 16 bit
+		{
+			int xcnt,ycnt;
+			for (ycnt=0;ycnt<32;ycnt++)
+			{
+				UINT32 realwriteoffs = 0x05000000 + writeoffs + (y+ycnt) * (stride<<3) + (x*2);
+				src = BITMAP_ADDR32(fake_accumulationbuffer_bitmap, y+ycnt, x);
+
+
+				for (xcnt=0;xcnt<32;xcnt++)
+				{
+					// data starts in 8888 format, downsample it
+					UINT32 data = src[xcnt];
+					UINT16 newdat = ((((data & 0x000000f8) >> 3)) << 0)   |
+					                ((((data & 0x0000f800) >> 11)) << 5)  |
+									((((data & 0x00f80000) >> 19)) << 10);
+					// alpha?
+
+					memory_write_word(space,realwriteoffs+xcnt*2, newdat);
+				}
+			}
+		}
+		break;
+
+		// used by Suchie3
+		case 0x04: // 888 RGB 24-bit (HACK! should not downconvert and pvr_drawframebuffer should change accordingly)
 		{
 			int xcnt,ycnt;
 			for (ycnt=0;ycnt<32;ycnt++)
@@ -1991,6 +2126,10 @@ static void pvr_accumulationbuffer_to_framebuffer(const address_space *space, in
 			}
 		}
 		break;
+
+		case 0x05:
+			printf("pvr_accumulationbuffer_to_framebuffer buffer to tile at %d,%d - unsupported pack mode %02x (0888 KGB 32-bit)\n",x,y,packmode);
+			break;
 
 		case 0x06: // 8888 ARGB 32 bit (HACK! should not downconvert and pvr_drawframebuffer should change accordingly)
 		{
@@ -2015,17 +2154,9 @@ static void pvr_accumulationbuffer_to_framebuffer(const address_space *space, in
 		}
 		break;
 
-
-		case 0x00:
-
-		case 0x02:
-		case 0x03:
-		case 0x04:
-		case 0x05:
 		case 0x07:
-		default:
-
-			printf("pvr_accumulationbuffer_to_framebuffer buffer to tile at %d,%d - unsupported pack mode %02x\n",x,y,packmode);
+			printf("pvr_accumulationbuffer_to_framebuffer buffer to tile at %d,%d - unsupported pack mode %02x (Reserved! Don't Use!)\n",x,y,packmode);
+			break;
 	}
 
 
@@ -2040,29 +2171,199 @@ static void pvr_drawframebuffer(bitmap_t *bitmap,const rectangle *cliprect)
 	UINT32 c;
 	UINT32 r,g,b;
 
+	UINT32 wc = pvrta_regs[FB_R_CTRL];
+	UINT8 unpackmode = (wc & 0x0000000c) >>2;  // aka fb_depth
+	UINT8 enable = (wc & 0x00000001);
+
+	// ??
+	if (!enable) return;
+
 	// only for rgb565 framebuffer
 	xi=((pvrta_regs[FB_R_SIZE] & 0x3ff)+1) << 1;
 	dy=((pvrta_regs[FB_R_SIZE] >> 10) & 0x3ff)+1;
 
+//  dy++;
 	dy*=2; // probably depends on interlace mode, fields etc...
 
-
-	for (y=0;y < dy;y++)
+	switch (unpackmode)
 	{
-		addrp=pvrta_regs[FB_R_SOF1]+y*xi*2;
-		for (x=0;x < xi;x++)
-		{
-			fbaddr=BITMAP_ADDR32(bitmap,y,x);
-			c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+		case 0x00: // 0555 RGB 16-bit, Cleo Fortune Plus
+			// should upsample back to 8-bit output using fb_concat
+			for (y=0;y < dy;y++)
+			{
+				addrp=pvrta_regs[FB_R_SOF1]+y*xi*2;
+				if(spg_pixel_double)
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+0);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
 
-			b = (c & 0x001f) << 3;
-			g = (c & 0x07e0) >> 3;
-			r = (c & 0xf800) >> 8;
+						b = (c & 0x001f) << 3;
+						g = (c & 0x03e0) >> 2;
+						r = (c & 0x7c00) >> 7;
 
-			if (y<cliprect->max_y)
-				*fbaddr = b | (g<<8) | (r<<16);
-			addrp+=2;
-		}
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+1);
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+				else
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x03e0) >> 2;
+						r = (c & 0x7c00) >> 7;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+			}
+
+			break;
+		case 0x01: // 0565 RGB 16-bit
+			// should upsample back to 8-bit output using fb_concat
+			for (y=0;y < dy;y++)
+			{
+				addrp=pvrta_regs[FB_R_SOF1]+y*xi*2;
+				if(spg_pixel_double)
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+0);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+1);
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						addrp+=2;
+					}
+				}
+				else
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+			}
+			break;
+
+		case 0x02: ; // 888 RGB 24-bit - suchie3 - HACKED, see pvr_accumulationbuffer_to_framebuffer!
+			for (y=0;y < dy;y++)
+			{
+				addrp=pvrta_regs[FB_R_SOF1]+y*xi*2;
+				if(spg_pixel_double)
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+0);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+1);
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+				else
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+			}
+			break;
+
+		case 0x03:        // 0888 ARGB 32-bit - HACKED, see pvr_accumulationbuffer_to_framebuffer!
+			for (y=0;y < dy;y++)
+			{
+				addrp=pvrta_regs[FB_R_SOF1]+y*xi*2;
+				if(spg_pixel_double)
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+0);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						fbaddr=BITMAP_ADDR32(bitmap,y,x*2+1);
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+
+						addrp+=2;
+					}
+				}
+				else
+				{
+					for (x=0;x < xi;x++)
+					{
+						fbaddr=BITMAP_ADDR32(bitmap,y,x);
+						c=*(((UINT16 *)dc_framebuffer_ram) + (WORD2_XOR_LE(addrp) >> 1));
+
+						b = (c & 0x001f) << 3;
+						g = (c & 0x07e0) >> 3;
+						r = (c & 0xf800) >> 8;
+
+						if (y<=cliprect->max_y)
+							*fbaddr = b | (g<<8) | (r<<16);
+						addrp+=2;
+					}
+				}
+			}
+			break;
 	}
 }
 
@@ -2155,30 +2456,50 @@ static void pvr_build_parameterconfig(void)
 			pvr_parameterconfig[a] = pvr_parameterconfig[a-1];
 }
 
-static TIMER_CALLBACK(vbout)
+static TIMER_CALLBACK(vbin)
 {
-	UINT32 a;
-	//printf("vbout\n");
-
-	a=dc_sysctrl_regs[SB_ISTNRM] | IST_VBL_OUT;
-	dc_sysctrl_regs[SB_ISTNRM] = a; // V Blank-out interrupt
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_VBL_IN; // V Blank-in interrupt
 	dc_update_interrupt_status(machine);
 
-	scanline = 0;
-	timer_adjust_oneshot(vbout_timer, attotime_never, 0);
-	timer_adjust_oneshot(hbin_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 640), 0);
+	timer_adjust_oneshot(vbin_timer, video_screen_get_time_until_pos(machine->primary_screen, spg_vblank_in_irq_line_num, 0), 0);
+}
+
+static TIMER_CALLBACK(vbout)
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_VBL_OUT; // V Blank-out interrupt
+	dc_update_interrupt_status(machine);
+
+	timer_adjust_oneshot(vbout_timer, video_screen_get_time_until_pos(machine->primary_screen, spg_vblank_out_irq_line_num, 0), 0);
 }
 
 static TIMER_CALLBACK(hbin)
 {
-	dc_sysctrl_regs[SB_ISTNRM] |= IST_HBL_IN; // H Blank-in interrupt
-	dc_update_interrupt_status(machine);
+	if(spg_hblank_int_mode & 1)
+	{
+		if(scanline == next_y)
+		{
+			dc_sysctrl_regs[SB_ISTNRM] |= IST_HBL_IN; // H Blank-in interrupt
+			dc_update_interrupt_status(machine);
+			next_y+=spg_line_comp_val;
+		}
+	}
+	else if((scanline == spg_line_comp_val) || (spg_hblank_int_mode & 2))
+	{
+		dc_sysctrl_regs[SB_ISTNRM] |= IST_HBL_IN; // H Blank-in interrupt
+		dc_update_interrupt_status(machine);
+	}
 
 //  printf("hbin on scanline %d\n",scanline);
 
 	scanline++;
 
-	timer_adjust_oneshot(hbin_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, 640), 0);
+	if(scanline >= spg_vblank_in_irq_line_num)
+	{
+		scanline = 0;
+		next_y = spg_line_comp_val;
+	}
+
+	timer_adjust_oneshot(hbin_timer, video_screen_get_time_until_pos(machine->primary_screen, scanline, spg_hblank_in_irq-1), 0);
 }
 
 
@@ -2219,8 +2540,17 @@ VIDEO_START(dc)
 	// if the next 2 registers do not have the correct values, the naomi bios will hang
 	pvrta_regs[PVRID]=0x17fd11db;
 	pvrta_regs[REVISION]=0x11;
-	pvrta_regs[VO_CONTROL]=0xC;
-	pvrta_regs[SOFTRESET]=0x7;
+	/* FIXME: move the following regs inside MACHINE_RESET */
+	pvrta_regs[VO_CONTROL]=		0x00000108;
+	pvrta_regs[SOFTRESET]=		0x00000007;
+	pvrta_regs[VO_STARTX]=		0x0000009d;
+	pvrta_regs[VO_STARTY]=		0x00150015;
+	pvrta_regs[SPG_HBLANK]=		0x007e0345;
+	pvrta_regs[SPG_LOAD]=		0x01060359;
+	pvrta_regs[SPG_VBLANK]=		0x01500104;
+	pvrta_regs[SPG_HBLANK_INT]=	0x031d0000;
+	pvrta_regs[SPG_VBLANK_INT]=	0x01500104;
+
 	state_ta.tafifo_pos=0;
 	state_ta.tafifo_mask=7;
 	state_ta.tafifo_vertexwords=8;
@@ -2232,11 +2562,16 @@ VIDEO_START(dc)
 	computedilated();
 
 	vbout_timer = timer_alloc(machine, vbout, 0);
-	timer_adjust_oneshot(vbout_timer, attotime_never, 0);
+	timer_adjust_oneshot(vbout_timer, video_screen_get_time_until_pos(machine->primary_screen, spg_vblank_out_irq_line_num, 0), 0);
+
+	vbin_timer = timer_alloc(machine, vbin, 0);
+	timer_adjust_oneshot(vbin_timer, video_screen_get_time_until_pos(machine->primary_screen, spg_vblank_in_irq_line_num, 0), 0);
 
 	hbin_timer = timer_alloc(machine, hbin, 0);
-	timer_adjust_oneshot(hbin_timer, attotime_never, 0);
+	timer_adjust_oneshot(hbin_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, spg_hblank_in_irq-1), 0);
+
 	scanline = 0;
+	next_y = 0;
 
 	endofrender_timer_isp = timer_alloc(machine, endofrender_isp, 0);
 	endofrender_timer_tsp = timer_alloc(machine, endofrender_tsp, 0);
@@ -2287,21 +2622,13 @@ VIDEO_UPDATE(dc)
 	}
 #endif
 
-	pvr_drawframebuffer(bitmap,cliprect);
+	bitmap_fill(bitmap,cliprect,MAKE_ARGB(0xff,vo_border_R,vo_border_G,vo_border_B)); //FIXME: Chroma bit?
+
+	if(!spg_blank_video)
+		pvr_drawframebuffer(bitmap,cliprect);
 
 	// update this here so we only do string lookup once per frame
 	debug_dip_status = input_port_read(screen->machine, "MAMEDEBUG");
 
 	return 0;
-}
-
-void dc_vblank(running_machine *machine)
-{
-	//printf("vblankin\n");
-
-	dc_sysctrl_regs[SB_ISTNRM] |= IST_VBL_IN; // V Blank-in interrupt
-	dc_update_interrupt_status(machine);
-	vblc++;
-
-	timer_adjust_oneshot(vbout_timer, video_screen_get_time_until_pos(machine->primary_screen, 0, 0), 0);
 }

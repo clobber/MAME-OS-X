@@ -1865,6 +1865,17 @@ static void Z20_ssN0_dddd(z8000_state *cpustate)
 	cpustate->RB(dst) = RDMEM_B(cpustate,  cpustate->RW(src));
 }
 
+static void Z20_ssN0_dddd_seg(z8000_state *cpustate)
+{
+	UINT32 addr;
+	GET_DST(OP0,NIB3);
+	GET_SRC(OP0,NIB2);
+	addr = (cpustate->RW(src) & 0x0007) << 16;
+	addr|= cpustate->RW(src+1) & 0xffff;
+	cpustate->RB(dst) = RDMEM_B(cpustate,  addr);
+	//cycles?
+}
+
 /******************************************
  ld      rd,imm16
  flags:  ------
@@ -2722,6 +2733,14 @@ static void Z3E_dddd_ssss(z8000_state *cpustate)
 	WRPORT_B(cpustate,  0, RDMEM_W(cpustate,  cpustate->RW(dst)), cpustate->RB(src));
 }
 
+/* FIXME: aforementioned opcode looks bugged. */
+static void Z3E_dddd_ssss_seg(z8000_state *cpustate)
+{
+	GET_DST(OP0,NIB2);
+	GET_SRC(OP0,NIB3);
+	WRPORT_B(cpustate,  0, cpustate->RW(dst), cpustate->RB(src));
+}
+
 /******************************************
  out     @rd,rs
  flags:  ---V--
@@ -3094,6 +3113,29 @@ static void Z4C_0000_1000_addr(z8000_state *cpustate)
 	WRMEM_B(cpustate,  addr, 0);
 }
 
+static void Z4C_0000_1000_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_B(cpustate,  offset, 0);
+		cycles(cpustate, 14);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_B(cpustate,  offset, 0);
+		cycles(cpustate, 12);
+	}
+}
+
 /******************************************
  comb    addr(rd)
  flags:  -ZSP--
@@ -3233,6 +3275,32 @@ static void Z4D_0000_0101_addr_imm16(z8000_state *cpustate)
 	WRMEM_W(cpustate,  addr, imm16);
 }
 
+static void Z4D_0000_0101_addr_imm16_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+		UINT16 imm16 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_W(cpustate,  offset, imm16);
+		cycles(cpustate, 17);
+	}
+	else
+	{
+		UINT16 imm16 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_W(cpustate,  offset, imm16);
+		cycles(cpustate, 15);
+	}
+}
+
 /******************************************
  tset    addr
  flags:  --S---
@@ -3252,6 +3320,29 @@ static void Z4D_0000_1000_addr(z8000_state *cpustate)
 {
 	GET_ADDR(OP1);
 	WRMEM_W(cpustate,  addr, 0);
+}
+
+static void Z4D_0000_1000_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		WRMEM_W(cpustate,  offset, 0);
+		cycles(cpustate, 15);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		WRMEM_W(cpustate,  offset, 0);
+		cycles(cpustate, 12);
+	}
 }
 
 /******************************************
@@ -4313,6 +4404,34 @@ static void Z76_0000_dddd_addr(z8000_state *cpustate)
 	GET_DST(OP0,NIB3);
 	GET_ADDR(OP1);
 	cpustate->RW(dst) = addr;
+}
+
+static void Z76_0000_dddd_addr_seg(z8000_state *cpustate)
+{
+	static UINT32 offset;
+	UINT16 operand1;
+
+	GET_DST(OP0,NIB3);
+	operand1 = fetch(cpustate);
+
+	if(operand1 & 0x8000)
+	{
+		UINT16 operand2 = fetch(cpustate);
+
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand2 & 0xffff);
+		cpustate->RW(dst) = (offset & 0x70000) >> 16;
+		cpustate->RW(dst+1) = offset & 0xffff;
+		cycles(cpustate, 15);
+	}
+	else
+	{
+		offset = (operand1 & 0x0700) << 8;
+		offset|= (operand1 & 0x00ff);
+		cpustate->RW(dst) = (offset & 0x70000) >> 16;
+		cpustate->RW(dst+1) = offset & 0x00ff;
+		cycles(cpustate, 13);
+	}
 }
 
 /******************************************

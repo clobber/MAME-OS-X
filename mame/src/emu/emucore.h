@@ -28,13 +28,7 @@
 #endif
 
 // standard C++ includes
-#if defined(__cplusplus)
-extern "C++" {
-#endif
 #include <exception>
-#if defined(__cplusplus)
-}
-#endif
 
 // core system includes
 #include "osdcomm.h"

@@ -973,13 +973,13 @@ static WRITE_LINE_DEVICE_HANDLER( changed_write_line_device )
 
 time_t input_port_init(running_machine *machine, const input_port_token *tokens)
 {
-	input_port_private *portdata;
+	//input_port_private *portdata;
 	char errorbuf[1024];
 	time_t basetime;
 
 	/* allocate memory for our data structure */
 	machine->input_port_data = auto_alloc_clear(machine, input_port_private);
-	portdata = machine->input_port_data;
+	//portdata = machine->input_port_data;
 
 	/* add an exit callback and a frame callback */
 	add_exit_callback(machine, input_port_exit);
@@ -2079,7 +2079,7 @@ static void init_port_state(running_machine *machine)
 			}
 
 			/* Name keyboard key names */
-			if ((field->type == IPT_KEYBOARD) && (field->name == NULL))
+			if ((field->type == IPT_KEYBOARD || field->type == IPT_KEYPAD) && (field->name == NULL))
 			{
 				astring *name = get_keyboard_key_name(field);
 				if (name != NULL)
@@ -4704,18 +4704,23 @@ static void record_port(const input_port_config *port)
 
 int input_machine_has_keyboard(running_machine *machine)
 {
+	int have_keyboard = FALSE;
+#ifdef MESS
 	const input_field_config *field;
 	const input_port_config *port;
-	int have_keyboard = FALSE;
 	for (port = machine->portlist.first(); port != NULL; port = port->next)
 	{
 		for (field = port->fieldlist; field != NULL; field = field->next)
 		{
 			if (field->type == IPT_KEYBOARD)
+			{
 				have_keyboard = TRUE;
 				break;
+			}
 		}
 	}
+#endif
+
 	return have_keyboard;
 }
 
@@ -5357,6 +5362,7 @@ int input_classify_port(const input_field_config *field)
 			result = INPUT_CLASS_CONTROLLER;
 			break;
 
+		case IPT_KEYPAD:
 		case IPT_KEYBOARD:
 			result = INPUT_CLASS_KEYBOARD;
 			break;

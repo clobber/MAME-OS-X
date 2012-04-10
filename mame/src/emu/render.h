@@ -1,13 +1,13 @@
 /***************************************************************************
- 
- render.h
- 
- Core rendering routines for MAME.
- 
- Copyright Nicola Salmoria and the MAME Team.
- Visit http://mamedev.org for licensing and usage restrictions.
- 
- ***************************************************************************/
+
+    render.h
+
+    Core rendering routines for MAME.
+
+    Copyright Nicola Salmoria and the MAME Team.
+    Visit http://mamedev.org for licensing and usage restrictions.
+
+***************************************************************************/
 
 #ifndef __RENDER_H__
 #define __RENDER_H__
@@ -19,46 +19,46 @@
 
 
 /***************************************************************************
- 
- Theory of operation
- -------------------
- 
- A render "target" is described by 5 parameters:
- 
- - width = width, in pixels
- - height = height, in pixels
- - bpp = depth, in bits per pixel
- - orientation = orientation of the target
- - pixel_aspect = aspect ratio of the pixels
- 
- Width, height, and bpp are self-explanatory. The remaining parameters
- need some additional explanation.
- 
- Regarding orientation, there are three orientations that need to be
- dealt with: target orientation, UI orientation, and game orientation.
- In the current model, the UI orientation tracks the target orientation
- so that the UI is (in theory) facing the correct direction. The game
- orientation is specified by the game driver and indicates how the
- game and artwork are rotated.
- 
- Regarding pixel_aspect, this is the aspect ratio of the individual
- pixels, not the aspect ratio of the screen. You can determine this by
- dividing the aspect ratio of the screen by the aspect ratio of the
- resolution. For example, a 4:3 screen displaying 640x480 gives a
- pixel aspect ratio of (4/3)/(640/480) = 1.0, meaning the pixels are
- square. That same screen displaying 1280x1024 would have a pixel
- aspect ratio of (4/3)/(1280/1024) = 1.06666, meaning the pixels are
- slightly wider than they are tall.
- 
- Artwork is always assumed to be a 1.0 pixel aspect ratio. The game
- screens themselves can be variable aspect ratios.
- 
- ***************************************************************************/
+
+    Theory of operation
+    -------------------
+
+    A render "target" is described by 5 parameters:
+
+        - width = width, in pixels
+        - height = height, in pixels
+        - bpp = depth, in bits per pixel
+        - orientation = orientation of the target
+        - pixel_aspect = aspect ratio of the pixels
+
+    Width, height, and bpp are self-explanatory. The remaining parameters
+    need some additional explanation.
+
+    Regarding orientation, there are three orientations that need to be
+    dealt with: target orientation, UI orientation, and game orientation.
+    In the current model, the UI orientation tracks the target orientation
+    so that the UI is (in theory) facing the correct direction. The game
+    orientation is specified by the game driver and indicates how the
+    game and artwork are rotated.
+
+    Regarding pixel_aspect, this is the aspect ratio of the individual
+    pixels, not the aspect ratio of the screen. You can determine this by
+    dividing the aspect ratio of the screen by the aspect ratio of the
+    resolution. For example, a 4:3 screen displaying 640x480 gives a
+    pixel aspect ratio of (4/3)/(640/480) = 1.0, meaning the pixels are
+    square. That same screen displaying 1280x1024 would have a pixel
+    aspect ratio of (4/3)/(1280/1024) = 1.06666, meaning the pixels are
+    slightly wider than they are tall.
+
+    Artwork is always assumed to be a 1.0 pixel aspect ratio. The game
+    screens themselves can be variable aspect ratios.
+
+***************************************************************************/
 
 
 /***************************************************************************
- CONSTANTS
- ***************************************************************************/
+    CONSTANTS
+***************************************************************************/
 
 /* render primitive types */
 enum
@@ -81,9 +81,9 @@ enum
 #define LAYER_CONFIG_ENABLE_SCREEN_OVERLAY 0x10		/* enable screen overlays */
 
 #define LAYER_CONFIG_DEFAULT		(LAYER_CONFIG_ENABLE_BACKDROP | \
-LAYER_CONFIG_ENABLE_OVERLAY | \
-LAYER_CONFIG_ENABLE_BEZEL | \
-LAYER_CONFIG_ENABLE_SCREEN_OVERLAY)
+									 LAYER_CONFIG_ENABLE_OVERLAY | \
+									 LAYER_CONFIG_ENABLE_BEZEL | \
+									 LAYER_CONFIG_ENABLE_SCREEN_OVERLAY)
 
 /* texture formats */
 enum
@@ -141,8 +141,8 @@ enum
 
 
 /***************************************************************************
- MACROS
- ***************************************************************************/
+    MACROS
+***************************************************************************/
 
 /* convenience macros for adding items to the UI container */
 #define render_container_add_point(c, x0,y0,diam,argb,flags)	render_container_add_line(c, x0, y0, x0, y0, diam, argb, flags)
@@ -158,8 +158,8 @@ enum
 
 
 /***************************************************************************
- TYPE DEFINITIONS
- ***************************************************************************/
+    TYPE DEFINITIONS
+***************************************************************************/
 
 // forward definitions
 class running_device;
@@ -167,8 +167,8 @@ class device_config;
 
 
 /*-------------------------------------------------
- callbacks
- -------------------------------------------------*/
+    callbacks
+-------------------------------------------------*/
 
 /* texture scaling callback */
 typedef void (*texture_scaler_func)(bitmap_t *dest, const bitmap_t *source, const rectangle *sbounds, void *param);
@@ -176,8 +176,8 @@ typedef void (*texture_scaler_func)(bitmap_t *dest, const bitmap_t *source, cons
 
 
 /*-------------------------------------------------
- opaque types
- -------------------------------------------------*/
+    opaque types
+-------------------------------------------------*/
 
 typedef struct _render_container render_container;
 class render_target;
@@ -188,9 +188,9 @@ typedef struct _render_ref render_ref;
 
 
 /*-------------------------------------------------
- render_bounds - floating point bounding
- rectangle
- -------------------------------------------------*/
+    render_bounds - floating point bounding
+    rectangle
+-------------------------------------------------*/
 
 typedef struct _render_bounds render_bounds;
 struct _render_bounds
@@ -203,9 +203,9 @@ struct _render_bounds
 
 
 /*-------------------------------------------------
- render_color - floating point set of ARGB
- values
- -------------------------------------------------*/
+    render_color - floating point set of ARGB
+    values
+-------------------------------------------------*/
 
 typedef struct _render_color render_color;
 struct _render_color
@@ -218,9 +218,9 @@ struct _render_color
 
 
 /*-------------------------------------------------
- render_texuv - floating point set of UV
- texture coordinates
- -------------------------------------------------*/
+    render_texuv - floating point set of UV
+    texture coordinates
+-------------------------------------------------*/
 
 typedef struct _render_texuv render_texuv;
 struct _render_texuv
@@ -231,9 +231,9 @@ struct _render_texuv
 
 
 /*-------------------------------------------------
- render_quad_texuv - floating point set of UV
- texture coordinates
- -------------------------------------------------*/
+    render_quad_texuv - floating point set of UV
+    texture coordinates
+-------------------------------------------------*/
 
 typedef struct _render_quad_texuv render_quad_texuv;
 struct _render_quad_texuv
@@ -246,8 +246,8 @@ struct _render_quad_texuv
 
 
 /*-------------------------------------------------
- render_texinfo - texture information
- -------------------------------------------------*/
+    render_texinfo - texture information
+-------------------------------------------------*/
 
 typedef struct _render_texinfo render_texinfo;
 struct _render_texinfo
@@ -262,9 +262,9 @@ struct _render_texinfo
 
 
 /*-------------------------------------------------
- render_primitive - a single low-level
- primitive for the rendering engine
- -------------------------------------------------*/
+    render_primitive - a single low-level
+    primitive for the rendering engine
+-------------------------------------------------*/
 
 typedef struct _render_primitive render_primitive;
 struct _render_primitive
@@ -281,9 +281,9 @@ struct _render_primitive
 
 
 /*-------------------------------------------------
- render_primitive_list - an object containing
- a list head plus a lock
- -------------------------------------------------*/
+    render_primitive_list - an object containing
+    a list head plus a lock
+-------------------------------------------------*/
 
 typedef struct _render_primitive_list render_primitive_list;
 struct _render_primitive_list
@@ -296,10 +296,10 @@ struct _render_primitive_list
 
 
 /*-------------------------------------------------
- render_container_user_settings - an object
- containing user-controllable settings for
- a container
- -------------------------------------------------*/
+    render_container_user_settings - an object
+    containing user-controllable settings for
+    a container
+-------------------------------------------------*/
 
 typedef struct _render_container_user_settings render_container_user_settings;
 struct _render_container_user_settings
@@ -317,8 +317,8 @@ struct _render_container_user_settings
 
 
 /***************************************************************************
- FUNCTION PROTOTYPES
- ***************************************************************************/
+    FUNCTION PROTOTYPES
+***************************************************************************/
 
 
 /* ----- core implementation ----- */
@@ -397,7 +397,7 @@ void render_target_set_max_texture_size(render_target *target, int maxwidth, int
 void render_target_compute_visible_area(render_target *target, INT32 target_width, INT32 target_height, float target_pixel_aspect, int target_orientation, INT32 *visible_width, INT32 *visible_height);
 
 /* get the "minimum" size of a target, which is the smallest bounds that will ensure at least
- 1 target pixel per source pixel for all included screens */
+   1 target pixel per source pixel for all included screens */
 void render_target_get_minimum_size(render_target *target, INT32 *minwidth, INT32 *minheight);
 
 /* return a list of primitives for a given render target */

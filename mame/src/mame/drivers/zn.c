@@ -115,6 +115,7 @@ static const struct
 	{ "ts2",      cp01, cp02 }, /* OK */
 	{ "ts2j",     cp01, cp02 }, /* OK */
 	{ "starglad", cp01, cp03 }, /* OK */
+	{ "stargladj",cp01, cp03 }, /* OK */
 	{ "sfex",     cp01, cp04 }, /* OK */
 	{ "sfexa",    cp01, cp04 }, /* OK */
 	{ "sfexj",    cp01, cp04 }, /* OK */
@@ -132,6 +133,7 @@ static const struct
 	{ "sfex2",    cp10, cp08 }, /* OK ( random crashes on garuda ) */
 	{ "sfex2j",   cp10, cp08 }, /* OK ( random crashes on garuda ) */
 	{ "sfex2a",   cp10, cp08 }, /* OK ( random crashes on garuda ) */
+	{ "sfex2h",   cp10, cp08 }, /* OK ( random crashes on garuda ) */
 	{ "techromn", cp10, cp09 }, /* OK */
 	{ "techromnu",cp10, cp09 }, /* OK */
 	{ "kikaioh",  cp10, cp09 }, /* OK */
@@ -167,6 +169,7 @@ static const struct
 	{ "tecmowcm", mg01, mg13 }, /* OK */
 	{ "mfjump",   mg01, mg14 }, /* OK */
 	{ "sfchamp",  tt01, tt02 }, /* OK */
+	{"sfchamp24o",tt01, tt02 }, /* OK */
 	{ "sfchampj", tt01, tt02 }, /* OK */
 	{ "psyforce", tt01, tt03 }, /* OK */
 	{ "psyforcej",tt01, tt03 }, /* OK */
@@ -3016,6 +3019,29 @@ ROM_START( starglad )
 	ROM_LOAD16_WORD_SWAP( "ps1-01m.3b",   0x000000, 0x400000, CRC(0bfb17aa) SHA1(cf4482785a2a33ad814c8b1461c5bc8e8e027895) )
 ROM_END
 
+ROM_START( stargladj )
+	CPZN1_BIOS
+
+	ROM_REGION32_LE( 0x80000, "user3", 0 )
+	ROM_LOAD( "ps1j-04.2h",   0x000000, 0x080000, CRC(f865006d) SHA1(6abb476777a4309b1a60f12e6313c051db195808) )
+
+	ROM_REGION32_LE( 0x2400000, "user2", 0 )
+	ROM_LOAD( "ps1-05m.3h", 0x0000000, 0x400000, CRC(8ad72c4f) SHA1(c848c37eb5365000b4d4720b5c08d89ddd8e2c33) )
+	ROM_LOAD( "ps1-06m.4h", 0x0400000, 0x400000, CRC(95d8ed61) SHA1(e9f259d589dc38a8321a6fea1f5dac741cadc0ff) )
+	ROM_LOAD( "ps1-07m.5h", 0x0800000, 0x400000, CRC(c06752db) SHA1(0884b308e9cd9dde8660b422bc8fec9a362bcb52) )
+	ROM_LOAD( "ps1-08m.2k", 0x0c00000, 0x400000, CRC(381f9ded) SHA1(b7878a90740f5b3c5881ac7d46e2b84b18727337) )
+	ROM_LOAD( "ps1-09m.3k", 0x1000000, 0x400000, CRC(bd894812) SHA1(9f0c3365e685a53ae793f4a256a6c177a843a424) )
+	ROM_LOAD( "ps1-10m.4k", 0x1400000, 0x400000, CRC(ff80c18a) SHA1(8d01717eed6ec1f508fe7c445da941fb84ef7d22) )
+
+	ROM_REGION( 0x50000, "audiocpu", 0 ) /* 64k for the audio CPU (+banks) */
+	ROM_LOAD( "ps1-02a.2e",   0x000000, 0x008000, CRC(b854df92) SHA1(ea71a613b5b19ec7e9c6e342e7743d320582a6bb) )
+	ROM_CONTINUE(             0x010000, 0x018000 )
+	ROM_LOAD( "ps1-03a.3e",   0x028000, 0x020000, CRC(a2562fbb) SHA1(3de02a4aa7ea620961ca2a5c331f38134033db79) )
+
+	ROM_REGION( 0x400000, "qsound", 0 ) /* Q Sound Samples */
+	ROM_LOAD16_WORD_SWAP( "ps1-01m.3b",   0x000000, 0x400000, CRC(0bfb17aa) SHA1(cf4482785a2a33ad814c8b1461c5bc8e8e027895) )
+ROM_END
+
 ROM_START( ts2 )
 	CPZN1_BIOS
 
@@ -3220,7 +3246,7 @@ ROM_START( sfex2 )
 	CPZN2_BIOS
 
 	ROM_REGION32_LE( 0x80000, "user3", 0 )
-	ROM_LOAD( "ex2u-04a", 0x0000000, 0x080000, CRC(8dc5317f) SHA1(c35224caf70662a0e45a74cbead294a51f9b9e16) )
+	ROM_LOAD( "ex2u-04a.2h", 0x0000000, 0x080000, CRC(8dc5317f) SHA1(c35224caf70662a0e45a74cbead294a51f9b9e16) )
 
 	ROM_REGION32_LE( 0x3000000, "user2", 0 )
 	ROM_LOAD( "ex2-05m", 0x0000000, 0x800000, CRC(78726b17) SHA1(2da449df335ef133ebc3997bbad73ef4137f4771) )
@@ -3241,7 +3267,7 @@ ROM_START( sfex2j )
 	CPZN2_BIOS
 
 	ROM_REGION32_LE( 0x80000, "user3", 0 )
-	ROM_LOAD( "ex2j-04", 0x0000000, 0x080000, CRC(5d603586) SHA1(ff546d3bd011d6441e9672b88bab763d3cd89be2) )
+	ROM_LOAD( "ex2j-04.2h", 0x0000000, 0x080000, CRC(5d603586) SHA1(ff546d3bd011d6441e9672b88bab763d3cd89be2) )
 
 	ROM_REGION32_LE( 0x3000000, "user2", 0 )
 	ROM_LOAD( "ex2-05m", 0x0000000, 0x800000, CRC(78726b17) SHA1(2da449df335ef133ebc3997bbad73ef4137f4771) )
@@ -3262,7 +3288,28 @@ ROM_START( sfex2a )
 	CPZN2_BIOS
 
 	ROM_REGION32_LE( 0x80000, "user3", 0 )
-	ROM_LOAD( "ex2a-04", 0x0000000, 0x080000, CRC(ac9a872d) SHA1(4e237f5e2e5de58e587e9abc5767509b8d750004) )
+	ROM_LOAD( "ex2a-04.2h", 0x0000000, 0x080000, CRC(ac9a872d) SHA1(4e237f5e2e5de58e587e9abc5767509b8d750004) )
+
+	ROM_REGION32_LE( 0x3000000, "user2", 0 )
+	ROM_LOAD( "ex2-05m", 0x0000000, 0x800000, CRC(78726b17) SHA1(2da449df335ef133ebc3997bbad73ef4137f4771) )
+	ROM_LOAD( "ex2-06m", 0x0800000, 0x800000, CRC(be1075ed) SHA1(36dc673372f30f8b3ff5689ae568c5cd01fe2c07) )
+	ROM_LOAD( "ex2-07m", 0x1000000, 0x800000, CRC(6496c6ed) SHA1(054bcecbb04033abea14d9ffe6634b2bd11ca88b) )
+	ROM_LOAD( "ex2-08m", 0x1800000, 0x800000, CRC(3194132e) SHA1(d1324fcf0a8528fc683791d6342697a7e08674f4) )
+	ROM_LOAD( "ex2-09m", 0x2000000, 0x400000, CRC(075ae585) SHA1(6b88851db618fc3e96f1d740c46c1bc5be0ee21b) )
+
+	ROM_REGION( 0x50000, "audiocpu", 0 ) /* 64k for the audio CPU (+banks) */
+	ROM_LOAD( "ex2-02",  0x00000, 0x08000, CRC(9489875e) SHA1(1fc9985ff98232c63ea8d05a69f7d77cdf72919f) )
+	ROM_CONTINUE(        0x10000, 0x18000 )
+
+	ROM_REGION( 0x400000, "qsound", 0 ) /* Q Sound Samples */
+	ROM_LOAD16_WORD_SWAP( "ex2-01m", 0x0000000, 0x400000, CRC(14a5bb0e) SHA1(dfe3c3a53bd4c58743d8039b5344d3afbe2a9c24) )
+ROM_END
+
+ROM_START( sfex2h )
+	CPZN2_BIOS
+
+	ROM_REGION32_LE( 0x80000, "user3", 0 )
+	ROM_LOAD( "ex2h-04.2h", 0x0000000, 0x080000, CRC(68f2ef80) SHA1(212bb3c0d935c64f5e3b20e427e06d97404709d8) )
 
 	ROM_REGION32_LE( 0x3000000, "user2", 0 )
 	ROM_LOAD( "ex2-05m", 0x0000000, 0x800000, CRC(78726b17) SHA1(2da449df335ef133ebc3997bbad73ef4137f4771) )
@@ -4060,6 +4107,25 @@ ROM_START( sfchamp )
 	ROM_LOAD( "e18-01.15",           0x0000000, 0x200000, CRC(dbd1408c) SHA1(ef81064f2f95e5ae25eb1f10d1e78f27f9e294f5) )
 ROM_END
 
+ROM_START( sfchamp24o )
+	TAITOFX1_BIOS
+
+	ROM_REGION32_LE( 0x01000000, "user2", 0 )
+	ROM_LOAD16_BYTE( "e18-11.2",     0x0000001, 0x080000, CRC(f5462f30) SHA1(44eb03a9b51e2d8dd14fe2ed36dbcf17035a22c7) )
+	ROM_LOAD16_BYTE( "e18-08.7",     0x0000000, 0x080000, CRC(6a5558cd) SHA1(75b26bcaaa213283e7e0dace69ee58f305b4572d) )
+	ROM_LOAD( "e18-02.12",           0x0600000, 0x200000, CRC(c7b4fe29) SHA1(7f823bd61abf2b15d3ba62bca829a5b1acacfd09) )
+	ROM_LOAD( "e18-03.16",           0x0800000, 0x200000, CRC(76392346) SHA1(2c5b70c4708208f866feea0472fcc72333061124) )
+	ROM_LOAD( "e18-04.19",           0x0a00000, 0x200000, CRC(fc3731da) SHA1(58948aad8d7bb7a8449d2bf12e9d5e6d7b4426b5) )
+	ROM_LOAD( "e18-05.21",           0x0c00000, 0x200000, CRC(2e984c50) SHA1(6d8255e38c67d68bf489c9885663ed2edf148188) )
+
+	ROM_REGION( 0x2c000, "audiocpu", 0 )     /* 64k for Z80 code */
+	ROM_LOAD( "e18-09.22",           0x0000000, 0x004000, CRC(bb5a5319) SHA1(0bb700cafc157d3af663cc9bebb8167487ff2852) )
+	ROM_CONTINUE(                    0x0010000, 0x01c000 ) /* banked stuff */
+
+	ROM_REGION( 0x200000, "ymsnd", 0 )
+	ROM_LOAD( "e18-01.15",           0x0000000, 0x200000, CRC(dbd1408c) SHA1(ef81064f2f95e5ae25eb1f10d1e78f27f9e294f5) )
+ROM_END
+
 ROM_START( sfchampj )
 	TAITOFX1_BIOS
 
@@ -4079,7 +4145,7 @@ ROM_START( sfchampj )
 	ROM_LOAD( "e18-01.15",           0x0000000, 0x200000, CRC(dbd1408c) SHA1(ef81064f2f95e5ae25eb1f10d1e78f27f9e294f5) )
 ROM_END
 
-/* Eighteen Raizing */
+/* Eighting/Raizing */
 
 #define PSARC95_BIOS \
 	ROM_REGION32_LE( 0x080000, "user1", 0 ) \
@@ -4411,17 +4477,18 @@ ROM_END
 /* it in every zip file */
 GAME( 1995, cpzn1,    0,        coh1000c, zn,   coh1000c, ROT0, "Sony/Capcom", "ZN1", GAME_IS_BIOS_ROOT )
 
-GAME( 1995, ts2,      cpzn1,    coh1000c, zn6b, coh1000c, ROT0, "Capcom/Takara", "Battle Arena Toshinden 2 (USA 951124)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1995, ts2j,     ts2,      coh1000c, zn6b, coh1000c, ROT0, "Capcom/Takara", "Battle Arena Toshinden 2 (JAPAN 951124)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, starglad, cpzn1,    coh1000c, zn6b, coh1000c, ROT0, "Capcom", "Star Gladiator (USA 960627)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, sfex,     cpzn1,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (EURO 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, sfexu,    sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (USA 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, sfexa,    sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (ASIA 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, sfexj,    sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (JAPAN 961130)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1996, glpracr,  cpzn1,    coh1000c, zn,   coh1000c, ROT0, "Tecmo", "Gallop Racer (JAPAN Ver 9.01.12)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1997, sfexp,    cpzn1,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (USA 970407)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1997, sfexpu1,  sfexp,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (USA 970311)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1997, sfexpj,   sfexp,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (JAPAN 970311)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1995, ts2,       cpzn1,    coh1000c, zn6b, coh1000c, ROT0, "Capcom/Takara", "Battle Arena Toshinden 2 (USA 951124)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1995, ts2j,      ts2,      coh1000c, zn6b, coh1000c, ROT0, "Capcom/Takara", "Battle Arena Toshinden 2 (JAPAN 951124)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, starglad,  cpzn1,    coh1000c, zn6b, coh1000c, ROT0, "Capcom", "Star Gladiator (USA 960627)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, stargladj, starglad, coh1000c, zn6b, coh1000c, ROT0, "Capcom", "Star Gladiator (JAPAN 960627)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, sfex,      cpzn1,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (EURO 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, sfexu,     sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (USA 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, sfexa,     sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (ASIA 961219)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, sfexj,     sfex,     coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX (JAPAN 961130)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1996, glpracr,   cpzn1,    coh1000c, zn,   coh1000c, ROT0, "Tecmo", "Gallop Racer (JAPAN Ver 9.01.12)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1997, sfexp,     cpzn1,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (USA 970407)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1997, sfexpu1,   sfexp,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (USA 970311)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1997, sfexpj,    sfexp,    coh1002c, zn6b, coh1000c, ROT0, "Capcom/Arika", "Street Fighter EX Plus (JAPAN 970311)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 /* Capcom ZN2 */
 
@@ -4436,6 +4503,7 @@ GAME( 1997, jgakuen,   rvschool, coh3002c, zn6b, coh3002c, ROT0, "Capcom", "Just
 GAME( 1998, sfex2,     cpzn2,    coh3002c, zn6b, coh3002c, ROT0, "Capcom/Arika", "Street Fighter EX 2 (USA 980526)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, sfex2j,    sfex2,    coh3002c, zn6b, coh3002c, ROT0, "Capcom/Arika", "Street Fighter EX 2 (JAPAN 980312)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, sfex2a,    sfex2,    coh3002c, zn6b, coh3002c, ROT0, "Capcom/Arika", "Street Fighter EX 2 (ASIA 980312)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1998, sfex2h,    sfex2,    coh3002c, zn6b, coh3002c, ROT0, "Capcom/Arika", "Street Fighter EX 2 (HISPANIC 980312)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, plsmaswd,  cpzn2,    coh3002c, zn6b, coh3002c, ROT0, "Capcom", "Plasma Sword (USA 980316)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, stargld2,  plsmaswd, coh3002c, zn6b, coh3002c, ROT0, "Capcom", "Star Gladiator 2 (JAPAN 980316)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1998, plsmaswda, plsmaswd, coh3002c, zn6b, coh3002c, ROT0, "Capcom", "Plasma Sword (ASIA 980316)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
@@ -4511,6 +4579,7 @@ GAME( 1996, sncwgltd, aerofgts, coh1002v, zn, coh1002v, ROT270, "Video System", 
 GAME( 1995, taitofx1, 0,        coh1000ta,zn, coh1000ta, ROT0, "Sony/Taito", "Taito FX1", GAME_IS_BIOS_ROOT )
 
 GAME( 1995, sfchamp,   taitofx1, coh1000ta,zn, coh1000ta, ROT0, "Taito", "Super Football Champ (Ver 2.5O)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1995, sfchamp24o,sfchamp,  coh1000ta,zn, coh1000ta, ROT0, "Taito", "Super Football Champ (Ver 2.4O)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, sfchampj,  sfchamp,  coh1000ta,zn, coh1000ta, ROT0, "Taito", "Super Football Champ (Ver 2.4J)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, psyforce,  taitofx1, coh1000ta,zn, coh1000ta, ROT0, "Taito", "Psychic Force (Ver 2.4O)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1995, psyforcej, psyforce, coh1000ta,zn, coh1000ta, ROT0, "Taito", "Psychic Force (Ver 2.4J)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

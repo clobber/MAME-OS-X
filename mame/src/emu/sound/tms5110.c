@@ -65,16 +65,7 @@
 #include "tms5110.h"
 
 #define MAX_SAMPLE_CHUNK		512
-
-#define MAX_K					10
-#define MAX_SCALE_BITS			6
-#define MAX_SCALE				(1<<MAX_SCALE_BITS)
-#define COEFF_ENERGY_SENTINEL	(511)
-#define SUBTYPE_TMS5100			1
-#define SUBTYPE_M58817			2
-#define SUBTYPE_TMS5110			4
-#define FIFO_SIZE				64
-#define MAX_CHIRP_SIZE			51
+#define FIFO_SIZE				64 // TODO: technically the tms51xx chips don't have a fifo at all
 
 /* Variants */
 
@@ -93,20 +84,6 @@
 #define CTL_STATE_INPUT 		(0)
 #define CTL_STATE_OUTPUT		(1)
 #define CTL_STATE_NEXT_OUTPUT	(2)
-
-struct tms5100_coeffs
-{
-	int				subtype;
-	int				num_k;
-	int				energy_bits;
-	int				pitch_bits;
-	int				kbits[MAX_K];
-	unsigned short	energytable[MAX_SCALE];
-	unsigned short	pitchtable[MAX_SCALE];
-	int				ktable[MAX_K][MAX_SCALE];
-	INT8			chirptable[MAX_CHIRP_SIZE];
-	INT8			interp_coeff[8];
-};
 
 typedef struct _tms5110_state tms5110_state;
 struct _tms5110_state
@@ -763,8 +740,10 @@ void tms5110_PDC_set(tms5110_state *tms, int data)
 
 static void parse_frame(tms5110_state *tms)
 {
-	int bits, indx, i, rep_flag, ene;
-
+	int bits, indx, i, rep_flag;
+#if (DEBUG_5110)
+	int ene;
+#endif
 
 	/* count the total number of bits available */
 	bits = tms->fifo_count;
@@ -779,7 +758,9 @@ static void parse_frame(tms5110_state *tms)
 	}
 	indx = extract_bits(tms,tms->coeff->energy_bits);
 	tms->new_energy = tms->coeff->energytable[indx];
+#if (DEBUG_5110)
 	ene = indx;
+#endif
 
 	/* if the energy index is 0 or 15, we're done */
 

@@ -69,6 +69,7 @@
 #include "emucore.h"
 #include "osdcore.h"
 
+
 class input_type_desc;
 class running_device;
 

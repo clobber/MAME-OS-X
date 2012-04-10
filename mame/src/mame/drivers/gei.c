@@ -115,6 +115,16 @@ static PALETTE_INIT(gei)
 	}
 }
 
+static PALETTE_INIT(quizvid)
+{
+	int i;
+
+	for (i = 0; i < 8; i++ )
+	{
+		palette_set_color(machine, i, MAKE_RGB(pal1bit(i >> 1), pal1bit(i), pal1bit(i >> 2)));
+	}
+}
+
 static WRITE8_DEVICE_HANDLER( lamps_w )
 {
 	/* 5 button lamps */
@@ -292,6 +302,36 @@ static WRITE8_HANDLER(geimulti_bank_w)
 		memory_set_bankptr(space->machine, "bank1", memory_region(space->machine, "bank") + bank*0x8000);
 }
 
+static READ8_HANDLER(banksel_1_r)
+{
+	memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "maincpu") + 0x10000);
+	return 0x03;
+};
+
+static READ8_HANDLER(banksel_2_r)
+{
+	memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "maincpu") + 0x18000);
+	return 0x03;
+}
+
+static READ8_HANDLER(banksel_3_r)
+{
+	memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "maincpu") + 0x20000);
+	return 0x03;
+}
+
+static READ8_HANDLER(banksel_4_r)
+{
+	memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "maincpu") + 0x28000);
+	return 0x03;
+}
+
+static READ8_HANDLER(banksel_5_r)
+{
+	memory_set_bankptr(space->machine, "bank1",memory_region(space->machine, "maincpu") + 0x30000);
+	return 0x03;
+}
+
 /* This signature is used to validate the ROMs in sportauth. Simple protection check? */
 static int signature_answer,signature_pos;
 
@@ -434,6 +474,23 @@ static ADDRESS_MAP_START( findout_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xffff) AM_READ(catchall)
 ADDRESS_MAP_END
 
+static ADDRESS_MAP_START( quizvid_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x3fff) AM_ROM
+	AM_RANGE(0x4000, 0x47ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x4800, 0x4803) AM_DEVREADWRITE("ppi8255_0", ppi8255_r,ppi8255_w)
+	AM_RANGE(0x5000, 0x5003) AM_DEVREADWRITE("ppi8255_1", ppi8255_r,ppi8255_w)
+	/* banked ROMs are enabled by low 6 bits of the address */
+	AM_RANGE(0x602f, 0x602f) AM_READ(banksel_5_r)
+	AM_RANGE(0x6037, 0x6037) AM_READ(banksel_4_r)
+	AM_RANGE(0x603b, 0x603b) AM_READ(banksel_3_r)
+	AM_RANGE(0x603d, 0x603d) AM_READ(banksel_2_r)
+	AM_RANGE(0x603e, 0x603e) AM_READ(banksel_1_r)
+	AM_RANGE(0x7800, 0x7fff) AM_ROM /*space for diagnostic ROM?*/
+	AM_RANGE(0x8000, 0xffff) AM_ROMBANK("bank1")
+	AM_RANGE(0x8000, 0x8002) AM_WRITE(gei_drawctrl_w)
+	AM_RANGE(0xc000, 0xffff) AM_WRITE(gei_bitmap_w)  AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x0000, 0xffff) AM_READ(catchall)
+ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( suprpokr_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
@@ -1034,6 +1091,15 @@ static MACHINE_DRIVER_START( findout )
 	MDRV_PPI8255_RECONFIG( "ppi8255_1", findout_ppi8255_intf[1] )
 MACHINE_DRIVER_END
 
+static MACHINE_DRIVER_START( quizvid )
+	MDRV_IMPORT_FROM(findout)
+
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(quizvid_map)
+
+	MDRV_PALETTE_INIT(quizvid)
+MACHINE_DRIVER_END
+
 static MACHINE_DRIVER_START( gselect )
 
 	/* basic machine hardware */
@@ -1471,9 +1537,20 @@ ROM_START( suprpokr )
 	ROM_LOAD( "10-19s-1.e2",  0x08000, 0x4000, BAD_DUMP CRC(22b45aeb) SHA1(006c3072cc44c6fde9b4d15163dc70707bbd5a9c) ) /* Self test reports this ROM bad */
 ROM_END
 
-ROM_START( reelfun ) /* v7.01 */
+ROM_START( reelfun ) /* v7.03 */
 	ROM_REGION( 0x38000, "maincpu", 0 )
-	ROM_LOAD( "reelfun.cnt",          0x00000, 0x4000, CRC(d9d1e92b) SHA1(337f66a37b3734d565b3ff3d912e0f690fd7c445) )
+	ROM_LOAD( "reelfun.cnt",          0x00000, 0x4000, CRC(ce42e0ea) SHA1(87f703b14aa819c54e54b42e639448521c01f76b) )
+	ROM_LOAD( "reelfun.prg",          0x08000, 0x2000, CRC(615d846a) SHA1(ffa1c47393f4f364aa34d14cf3ac2f56d9eaecb0) )	/* banked */
+	ROM_LOAD( "reelfun-1-title",      0x10000, 0x8000, CRC(0e165fbc) SHA1(a3a5b7db72ab86efe973f649f5dfe5133830e3fc) )	/* banked ROMs for solution data */
+	ROM_LOAD( "reelfun-2-place",      0x18000, 0x8000, CRC(a0066bfd) SHA1(b6f031ab50eb396be79e79e06f2101400683ec3e) )
+	ROM_LOAD( "reelfun-3-phrase",     0x20000, 0x8000, CRC(199e36b0) SHA1(d9dfe39c9a4fca1169150f8941f8ebc499dfbaf5) )
+	ROM_LOAD( "reelfun-4-person",     0x28000, 0x8000, CRC(49b0710b) SHA1(a38b3251bcb8683d43bdb903036970140a9735e6) )
+	ROM_LOAD( "reelfun-5-song_title", 0x30000, 0x8000, CRC(cce01c45) SHA1(c484f5828928edf39335cedf21acab0b9e2a6881) )
+ROM_END
+
+ROM_START( reelfun1 ) /* v7.01 */
+	ROM_REGION( 0x38000, "maincpu", 0 )
+	ROM_LOAD( "reelfun701.cnt",       0x00000, 0x4000, CRC(d9d1e92b) SHA1(337f66a37b3734d565b3ff3d912e0f690fd7c445) )
 	ROM_LOAD( "reelfun.prg",          0x08000, 0x2000, CRC(615d846a) SHA1(ffa1c47393f4f364aa34d14cf3ac2f56d9eaecb0) )	/* banked */
 	ROM_LOAD( "reelfun-1-title",      0x10000, 0x8000, CRC(0e165fbc) SHA1(a3a5b7db72ab86efe973f649f5dfe5133830e3fc) )	/* banked ROMs for solution data */
 	ROM_LOAD( "reelfun-2-place",      0x18000, 0x8000, CRC(a0066bfd) SHA1(b6f031ab50eb396be79e79e06f2101400683ec3e) )
@@ -1622,6 +1699,23 @@ ROM_START( quiz )
 	ROM_LOAD( "prom_am27s29pc.bin", 0x0000, 0x0200, CRC(19e3f161) SHA1(52da3c1e50c2329454de14cb9c46149e573e562b) )
 ROM_END
 
+ROM_START( quizvid )
+	ROM_REGION( 0x38000, "maincpu", 0 )
+	ROM_LOAD( "quiz.rev2a.prg.0",    0x00000, 0x4000, CRC(28e5855a) SHA1(eec16ef7a46451054565c7001478382a0a84725a) )
+	ROM_LOAD( "quiz.reva.sesso.1",   0x10000, 0x8000, CRC(72367eee) SHA1(09cd8e8c20e159ab78025e4201065c41dde90ef5) )
+	ROM_LOAD( "quiz.rev2a.sport.2",  0x18000, 0x8000, CRC(1f050838) SHA1(2e44098476d05366b05f7071a615f52b588bcac5) )
+	ROM_LOAD( "quiz.rev2a.musica.3", 0x20000, 0x8000, CRC(6ae39e6b) SHA1(b5ce2678c07d6c1d3d49f1703e2b9f84105e88fa) )
+	ROM_LOAD( "quiz.reva.storia.4",  0x28000, 0x8000, CRC(1c648781) SHA1(e363ae1a3946446c0bc42f9857a9d66702cb3367) )
+	ROM_LOAD( "quiz.reva.attuale.5", 0x30000, 0x8000, CRC(a3642478) SHA1(57851aabc6d2f5acff426c09574559e141da5d13) )
+
+	ROM_REGION( 0x0104, "plds", 0 )
+	ROM_LOAD( "pal10l8cn.pal1",            0x0000, 0x002c, CRC(7f4499de) SHA1(74838150d0b71171f00f65e03748b262c2bb6e4c) )
+	ROM_LOAD( "pal10l8cn.pal4",            0x0000, 0x002c, CRC(f14a34ab) SHA1(78af7f5eafbf2d52ee7b01b497ad59448c986693) )
+	ROM_LOAD( "pal16l8a-2.bad.dump",       0x0000, 0x0104, BAD_DUMP CRC(e9cd78fb) SHA1(557d3e7ef3b25c1338b24722cac91bca788c02b8) )
+	ROM_LOAD( "pal16l8cn.pal3.bad.dump",   0x0000, 0x0104, BAD_DUMP CRC(e9cd78fb) SHA1(557d3e7ef3b25c1338b24722cac91bca788c02b8) )
+	ROM_LOAD( "pal16l8cn.pal5.bad.dump",   0x0000, 0x0104, BAD_DUMP CRC(e9cd78fb) SHA1(557d3e7ef3b25c1338b24722cac91bca788c02b8) )
+ROM_END
+
 ROM_START( quiz211 )
 	ROM_REGION( 0x38000, "maincpu", 0 )
 	ROM_LOAD( "1a.bin",         0x000000, 0x4000, CRC(116de0ea) SHA1(9af97b100aa2c79a58de055abe726d6e2e00aab4) )
@@ -1740,7 +1834,7 @@ GAME( 1982, gs4002,   0,        gselect,  gselect,  0,       ROT0, "Greyhound El
 GAME( 1982, gs4002a,  gs4002,   gselect,  gselect,  0,       ROT0, "Greyhound Electronics", "Selection (Version 40.02TMB, set 2)",     GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 GAME( 1982, amuse,    0,        amuse,    gepoker,  0,       ROT0, "Greyhound Electronics", "Amuse (Version 50.08 IBA)",               GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1982, amuse1, 0,          amuse1,   gepoker,  0,       ROT0, "Greyhound Electronics", "Amuse (Version 30.08 IBA)",               GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1982, amuse1,   amuse,    amuse1,   gepoker,  0,       ROT0, "Greyhound Electronics", "Amuse (Version 30.08 IBA)",               GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 GAME( 1984, gepoker,  0,        gepoker,  gepoker,  0,       ROT0, "Greyhound Electronics", "Poker (Version 50.02 ICB, set 1)",        GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1984, gepoker1, gepoker,  gepoker,  gepoker,  0,       ROT0, "Greyhound Electronics", "Poker (Version 50.02 ICB, set 2)",        GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
@@ -1772,7 +1866,10 @@ GAME( 1986, gt5,      0,        findout,  gt103,    0,       ROT0, "Grayhound El
 
 GAME( 1986, quiz,     0,        findout,  quiz,     0,       ROT0, "Italian bootleg",       "Quiz (Revision 2)",                       GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
-GAME( 1986, reelfun,  0,        findout,  reelfun,  0,       ROT0, "Grayhound Electronics", "Reel Fun (Version 7.01)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, quizvid,  0,        quizvid,  quiz,     0,       ROT0, "bootleg",               "Video Quiz",                              GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+
+GAME( 1986, reelfun,  0,        findout,  reelfun,  0,       ROT0, "Grayhound Electronics", "Reel Fun (Version 7.03)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1986, reelfun1, reelfun,  findout,  reelfun,  0,       ROT0, "Grayhound Electronics", "Reel Fun (Version 7.01)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1987, findout,  0,        findout,  findout,  0,       ROT0, "Elettronolo",           "Find Out (Version 4.04)",                 GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 
 GAME( 1987, suprpokr, 0,        suprpokr, suprpokr, 0,       ROT0, "Grayhound Electronics", "Super Poker",                             GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

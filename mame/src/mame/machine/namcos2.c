@@ -138,27 +138,26 @@ MACHINE_RESET( namcos2 )
 
 NVRAM_HANDLER( namcos2 )
 {
-	if( read_or_write )
-	{
-		mame_fwrite( file, namcos2_eeprom, namcos2_eeprom_size );
-	}
+	if (read_or_write)
+		mame_fwrite(file, namcos2_eeprom, namcos2_eeprom_size);
+	else if (file != NULL)
+		mame_fread(file, namcos2_eeprom, namcos2_eeprom_size);
+	else if (memory_region_length(machine, "nvram") == namcos2_eeprom_size)
+		memcpy(namcos2_eeprom, memory_region(machine, "nvram"), namcos2_eeprom_size);
 	else
 	{
-		if( file )
+		if( namcos2_gametype == NAMCOS21_STARBLADE )
 		{
-			mame_fread( file, namcos2_eeprom, namcos2_eeprom_size );
+			memset(namcos2_eeprom, 0x00, namcos2_eeprom_size);
 		}
 		else
 		{
-			int pat = 0xff; /* default */
-			if( namcos2_gametype == NAMCOS21_STARBLADE )
-			{
-				pat = 0x00;
-			}
-			memset( namcos2_eeprom, pat, namcos2_eeprom_size );
+			memset(namcos2_eeprom, 0xff, namcos2_eeprom_size);
 		}
 	}
 }
+
+
 
 WRITE16_HANDLER( namcos2_68k_eeprom_w ){
 	if( ACCESSING_BITS_0_7 )
@@ -741,9 +740,10 @@ WRITE8_HANDLER( namcos2_mcu_analog_ctrl_w )
 
 	/* Check if this is a start of conversion */
 	/* Input ports 2 thru 9 are the analog channels */
+
 	if(data & 0x40)
 	{
-		/* Set the conversion complete flag */
+	/* Set the conversion complete flag */
 		namcos2_mcu_analog_complete = 2;
 		/* We convert instantly, good eh! */
 		switch((data>>2) & 0x07)
@@ -772,6 +772,8 @@ WRITE8_HANDLER( namcos2_mcu_analog_ctrl_w )
 		case 7:
 			namcos2_mcu_analog_data=input_port_read(space->machine, "AN7");
 			break;
+		default:
+			output_set_value("anunk",data);
 		}
 #if 0
 		/* Perform the offset handling on the input port */

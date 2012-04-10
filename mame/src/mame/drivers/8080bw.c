@@ -2248,12 +2248,13 @@ ROM_START( vortex )
 	ROM_LOAD( "6.t31",        0x4800, 0x0800, CRC(271085d0) SHA1(a772cec8135bc746f6c56aa294eb22c0604e16f9) )
 ROM_END
 
+
 ROM_START( moonbase )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "ze3-1.a4",     0x0000, 0x0400, CRC(82dbf2c7) SHA1(c767d8b866db4a5059bd79f962a90ce3a962e1e6) )
 	ROM_LOAD( "ze3-2.c4",     0x0400, 0x0400, CRC(c867f5b4) SHA1(686318fda6edde297aecaf33f480bfa075fa6eca) )
 	ROM_LOAD( "ze3-3.e4",     0x0800, 0x0400, CRC(cb23ccc1) SHA1(86be2d14d52b3404e1a25c573bd25b97729d82a1) )
-	ROM_LOAD( "ze3-4.f4",     0x0c00, 0x0400, CRC(9a11abe2) SHA1(f5337183c7f279d75ddeeab24f4f132aa2ee103b) )
+	ROM_LOAD( "ze3-4.f4",     0x0c00, 0x0400, CRC(9a11abe2) SHA1(f5337183c7f279d75ddeeab24f4f132aa2ee103b) ) // 'Taito Corp' string hidden in ROM
 	ROM_LOAD( "ze3-5.h4",     0x1000, 0x0400, CRC(2b105ed3) SHA1(fa0767089b3aaec25be39e950e7163ecbdc2f39f) )
 	ROM_LOAD( "ze3-6.l4",     0x1400, 0x0400, CRC(cb3d6dcb) SHA1(b4923b12a141c76b7d50274f19a3224db26a5669) )
 	ROM_LOAD( "ze3-7.a5",     0x1800, 0x0400, CRC(774b52c9) SHA1(ddbbba874ac069fb930b364a890c45675ec389f7) )
@@ -2265,6 +2266,25 @@ ROM_START( moonbase )
 	ROM_LOAD( "cv02.h7",      0x0000, 0x0400, CRC(2bdf83a0) SHA1(01ffbd43964c41987e7d44816271308f9a70802b) ) /* NEC B406 or compatible BPROM, like the 82S137 */
 	ROM_LOAD( "cv01.g7",      0x0400, 0x0400, CRC(aac24f34) SHA1(ad110e776547fb48baac568bb50d61854537ca34) ) /* NEC B406 or compatible BPROM, like the 82S137 */
 ROM_END
+
+ROM_START( moonbasea )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ze3-1.a4",     0x0000, 0x0400, CRC(82dbf2c7) SHA1(c767d8b866db4a5059bd79f962a90ce3a962e1e6) )
+	ROM_LOAD( "ze3-2.c4",     0x0400, 0x0400, CRC(c867f5b4) SHA1(686318fda6edde297aecaf33f480bfa075fa6eca) )
+	ROM_LOAD( "ze3-3.e4",     0x0800, 0x0400, CRC(cb23ccc1) SHA1(86be2d14d52b3404e1a25c573bd25b97729d82a1) )
+	ROM_LOAD( "ze3-4_alt.f4", 0x0c00, 0x0400, CRC(86a00411) SHA1(f518f5098512d6d23a8887605707844c1b32e54f) ) // 'Nichibutsu' string hidden in ROM
+	ROM_LOAD( "ze3-5.h4",     0x1000, 0x0400, CRC(2b105ed3) SHA1(fa0767089b3aaec25be39e950e7163ecbdc2f39f) )
+	ROM_LOAD( "ze3-6.l4",     0x1400, 0x0400, CRC(cb3d6dcb) SHA1(b4923b12a141c76b7d50274f19a3224db26a5669) )
+	ROM_LOAD( "ze3-7.a5",     0x1800, 0x0400, CRC(774b52c9) SHA1(ddbbba874ac069fb930b364a890c45675ec389f7) )
+	ROM_LOAD( "ze3-8.c5",     0x1c00, 0x0400, CRC(e88ea83b) SHA1(ef05be4783c860369ee5ecd4844837207e99ad9f) )
+	ROM_LOAD( "ze3-9.e5",     0x4000, 0x0400, CRC(2dd5adfa) SHA1(62cb98cad1e48de0e0cbf30392d35834b38dadbd) )
+	ROM_LOAD( "ze3-10.f5",    0x4400, 0x0400, CRC(1e7c22a4) SHA1(b34173375494ffbf5400dd4014a683a9807f4f08) )
+
+	ROM_REGION( 0x0800, "proms", 0 )		/* color maps player 1/player 2 */
+	ROM_LOAD( "cv02.h7",      0x0000, 0x0400, CRC(2bdf83a0) SHA1(01ffbd43964c41987e7d44816271308f9a70802b) ) /* NEC B406 or compatible BPROM, like the 82S137 */
+	ROM_LOAD( "cv01.g7",      0x0400, 0x0400, CRC(aac24f34) SHA1(ad110e776547fb48baac568bb50d61854537ca34) ) /* NEC B406 or compatible BPROM, like the 82S137 */
+ROM_END
+
 
 ROM_START( invrvnge )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -2648,11 +2668,11 @@ ROM_END
 
 ROM_START( sflush )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "taitofr.005",        0xd800, 0x800, CRC(c4f08f9f) SHA1(997f216f5244942fc1a19f5c1988adbfadc301fc) )
-	ROM_LOAD( "taitofr.004",        0xe000, 0x800, CRC(87a754a5) SHA1(07c0e2c3cb7aa0086d8f4dd202a452bc6c20d4ee) )
-	ROM_LOAD( "taitofr.003",        0xe800, 0x800, CRC(5b12847f) SHA1(4b62342723dd49a387fae6637c331d7c853712a3) )
-	ROM_LOAD( "taitofr.002",        0xf000, 0x800, CRC(291c9b1f) SHA1(7e5b3e1605581abf3d8165f4de9d4e32a5ee3bb0) )
-	ROM_LOAD( "taitofr.001",        0xf800, 0x800, CRC(55d688c6) SHA1(574a3a2ca73cabb4b8f3444aa4464e6d64daa3ad) )
+	ROM_LOAD( "fr05.sc2",     0xd800, 0x800, CRC(c4f08f9f) SHA1(997f216f5244942fc1a19f5c1988adbfadc301fc) )
+	ROM_LOAD( "fr04.sc3",     0xe000, 0x800, CRC(87a754a5) SHA1(07c0e2c3cb7aa0086d8f4dd202a452bc6c20d4ee) )
+	ROM_LOAD( "fr03.sc4",     0xe800, 0x800, CRC(5b12847f) SHA1(4b62342723dd49a387fae6637c331d7c853712a3) )
+	ROM_LOAD( "fr02.sc5",     0xf000, 0x800, CRC(291c9b1f) SHA1(7e5b3e1605581abf3d8165f4de9d4e32a5ee3bb0) )
+	ROM_LOAD( "fr01.sc6",     0xf800, 0x800, CRC(55d688c6) SHA1(574a3a2ca73cabb4b8f3444aa4464e6d64daa3ad) )
 ROM_END
 
 ROM_START( schasercv )
@@ -2700,35 +2720,51 @@ ROM_END
 
 ROM_START( polaris )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ps-01",        0x0000, 0x0800, CRC(c04ce5a9) SHA1(62cc9b3b682ebecfb7600393862c65e26ff5263f) )
-	ROM_LOAD( "ps-09",        0x0800, 0x0800, CRC(9a5c8cb2) SHA1(7a8c5d74f8b431072d9476d3ef65a3fe1d639813) )
-	ROM_LOAD( "ps-08",        0x1000, 0x0800, CRC(8680d7ea) SHA1(7fd4b8a415666c36842fed80d2798b48f8b29d0d) )
-	ROM_LOAD( "ps-04",        0x1800, 0x0800, CRC(65694948) SHA1(de92a7f3e3ef732b573254baa60df60f8e068a5d) )
-	ROM_LOAD( "ps-05",        0x4000, 0x0800, CRC(772e31f3) SHA1(fa0b866b6df1a9217e286ca880b3bb3fb0644bf3) )
-	ROM_LOAD( "ps-10",        0x4800, 0x0800, CRC(3df77bac) SHA1(b3275c34b8d42df83df2c404c5b7d220aae651fa) )
+	ROM_LOAD( "ps01-1.30",   0x0000, 0x0800, CRC(7d41007c) SHA1(168f002fe997aac6e4141292de826d389859bb04) )
+	ROM_LOAD( "ps09.36",     0x0800, 0x0800, CRC(9a5c8cb2) SHA1(7a8c5d74f8b431072d9476d3ef65a3fe1d639813) )
+	ROM_LOAD( "ps03-1.31",   0x1000, 0x0800, CRC(21f32415) SHA1(6ac9ae9b55e342729fe260147021ed3911a24dc2) )
+	ROM_LOAD( "ps04.37",     0x1800, 0x0800, CRC(65694948) SHA1(de92a7f3e3ef732b573254baa60df60f8e068a5d) )
+	ROM_LOAD( "ps05.32",     0x4000, 0x0800, CRC(772e31f3) SHA1(fa0b866b6df1a9217e286ca880b3bb3fb0644bf3) )
+	ROM_LOAD( "ps10.38",     0x4800, 0x0800, CRC(3df77bac) SHA1(b3275c34b8d42df83df2c404c5b7d220aae651fa) )
+	ROM_LOAD( "ps26",        0x5000, 0x0800, CRC(9d5c3d50) SHA1(a6acf9ca6e807625156cb1759269014d5830a44f) )
 
 	ROM_REGION( 0x0400, "proms", 0 )		/* background color map */
-	ROM_LOAD( "ps07",         0x0000, 0x0400, CRC(164aa05d) SHA1(41c699ce45c76a60c71294f25d8df6c6e6c1280a) )
+	ROM_LOAD( "ps08.1b", 0x0000, 0x0400, CRC(164aa05d) SHA1(41c699ce45c76a60c71294f25d8df6c6e6c1280a) ) /* NEC B406 or compatible BPROM (82S137) */
 
 	ROM_REGION( 0x0100, "user1", 0 )		/* cloud graphics */
-	ROM_LOAD( "mb7052.2c",    0x0000, 0x0100, CRC(2953253b) SHA1(2fb851bc9652ca4e51d473b484ede6dab05f1b51) )
+	ROM_LOAD( "ps07.2c", 0x0000, 0x0100, CRC(2953253b) SHA1(2fb851bc9652ca4e51d473b484ede6dab05f1b51) ) /* MB7052 or compatible BPROM (82S129) */
 ROM_END
 
 ROM_START( polarisa )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ps01-1",       0x0000, 0x0800, CRC(7d41007c) SHA1(168f002fe997aac6e4141292de826d389859bb04) )
-	ROM_LOAD( "ps-09",        0x0800, 0x0800, CRC(9a5c8cb2) SHA1(7a8c5d74f8b431072d9476d3ef65a3fe1d639813) )
-	ROM_LOAD( "ps03-1",       0x1000, 0x0800, CRC(21f32415) SHA1(6ac9ae9b55e342729fe260147021ed3911a24dc2) )
-	ROM_LOAD( "ps-04",        0x1800, 0x0800, CRC(65694948) SHA1(de92a7f3e3ef732b573254baa60df60f8e068a5d) )
-	ROM_LOAD( "ps-05",        0x4000, 0x0800, CRC(772e31f3) SHA1(fa0b866b6df1a9217e286ca880b3bb3fb0644bf3) )
-	ROM_LOAD( "ps-10",        0x4800, 0x0800, CRC(3df77bac) SHA1(b3275c34b8d42df83df2c404c5b7d220aae651fa) )
-	ROM_LOAD( "ps26",         0x5000, 0x0800, CRC(9d5c3d50) SHA1(a6acf9ca6e807625156cb1759269014d5830a44f) )
+	ROM_LOAD( "ps01.30",     0x0000, 0x0800, CRC(c04ce5a9) SHA1(62cc9b3b682ebecfb7600393862c65e26ff5263f) )
+	ROM_LOAD( "ps09.36",     0x0800, 0x0800, CRC(9a5c8cb2) SHA1(7a8c5d74f8b431072d9476d3ef65a3fe1d639813) )
+	ROM_LOAD( "ps03.31",     0x1000, 0x0800, CRC(8680d7ea) SHA1(7fd4b8a415666c36842fed80d2798b48f8b29d0d) )
+	ROM_LOAD( "ps04.37",     0x1800, 0x0800, CRC(65694948) SHA1(de92a7f3e3ef732b573254baa60df60f8e068a5d) )
+	ROM_LOAD( "ps05.32",     0x4000, 0x0800, CRC(772e31f3) SHA1(fa0b866b6df1a9217e286ca880b3bb3fb0644bf3) )
+	ROM_LOAD( "ps10.38",     0x4800, 0x0800, CRC(3df77bac) SHA1(b3275c34b8d42df83df2c404c5b7d220aae651fa) )
 
 	ROM_REGION( 0x0400, "proms", 0 )		/* background color map */
-	ROM_LOAD( "ps07",         0x0000, 0x0400, CRC(164aa05d) SHA1(41c699ce45c76a60c71294f25d8df6c6e6c1280a) )
+	ROM_LOAD( "ps08.1b", 0x0000, 0x0400, CRC(164aa05d) SHA1(41c699ce45c76a60c71294f25d8df6c6e6c1280a) ) /* NEC B406 or compatible BPROM (82S137) */
 
 	ROM_REGION( 0x0100, "user1", 0 )		/* cloud graphics */
-	ROM_LOAD( "mb7052.2c",    0x0000, 0x0100, CRC(2953253b) SHA1(2fb851bc9652ca4e51d473b484ede6dab05f1b51) )
+	ROM_LOAD( "ps07.2c", 0x0000, 0x0100, CRC(2953253b) SHA1(2fb851bc9652ca4e51d473b484ede6dab05f1b51) ) /* MB7052 or compatible BPROM (82S129) */
+ROM_END
+
+ROM_START( polariso )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "ps01.30",     0x0000, 0x0800, CRC(c04ce5a9) SHA1(62cc9b3b682ebecfb7600393862c65e26ff5263f) )
+	ROM_LOAD( "ps02.36",     0x0800, 0x0800, CRC(18648e4f) SHA1(9f672e108177d5d9bc004b41eec00dc4d19269ff) )
+	ROM_LOAD( "ps03.31",     0x1000, 0x0800, CRC(8680d7ea) SHA1(7fd4b8a415666c36842fed80d2798b48f8b29d0d) )
+	ROM_LOAD( "ps04.37",     0x1800, 0x0800, CRC(65694948) SHA1(de92a7f3e3ef732b573254baa60df60f8e068a5d) )
+	ROM_LOAD( "ps05.32",     0x4000, 0x0800, CRC(772e31f3) SHA1(fa0b866b6df1a9217e286ca880b3bb3fb0644bf3) )
+	ROM_LOAD( "ps06.38",     0x4800, 0x0800, CRC(f577cb72) SHA1(7a931b5ebaf0d6941191f21afb9ed670d0251e07) )
+
+	ROM_REGION( 0x0400, "proms", 0 )		/* background color map */
+	ROM_LOAD( "ps08.1b", 0x0000, 0x0400, CRC(164aa05d) SHA1(41c699ce45c76a60c71294f25d8df6c6e6c1280a) ) /* NEC B406 or compatible BPROM (82S137) */
+
+	ROM_REGION( 0x0100, "user1", 0 )		/* cloud graphics */
+	ROM_LOAD( "ps07.2c", 0x0000, 0x0100, CRC(2953253b) SHA1(2fb851bc9652ca4e51d473b484ede6dab05f1b51) ) /* MB7052 or compatible BPROM (82S129) */
 ROM_END
 
 ROM_START( ozmawars )
@@ -2921,8 +2957,9 @@ GAME( 1979, schasercv,schaser,  schasercv,schasercv,0, ROT270, "Taito", "Space C
 GAME( 1979, sflush,   0,        sflush,   sflush,   0, ROT270, "Taito", "Straight Flush",GAME_SUPPORTS_SAVE | GAME_NO_SOUND | GAME_IMPERFECT_COLORS | GAME_NO_COCKTAIL)
 GAME( 1980, lupin3,   0,        lupin3,   lupin3,   0, ROT270, "Taito", "Lupin III (set 1)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1980, lupin3a,  lupin3,   lupin3a,  lupin3a,  0, ROT270, "Taito", "Lupin III (set 2)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
-GAME( 1980, polaris,  0,        polaris,  polaris,  0, ROT270, "Taito", "Polaris (set 1)", GAME_SUPPORTS_SAVE )
-GAME( 1980, polarisa, polaris,  polaris,  polaris,  0, ROT270, "Taito", "Polaris (set 2)", GAME_SUPPORTS_SAVE )
+GAME( 1980, polaris,  0,        polaris,  polaris,  0, ROT270, "Taito", "Polaris (Latest version)", GAME_SUPPORTS_SAVE )
+GAME( 1980, polarisa, polaris,  polaris,  polaris,  0, ROT270, "Taito", "Polaris (First revision)", GAME_SUPPORTS_SAVE )
+GAME( 1980, polariso, polaris,  polaris,  polaris,  0, ROT270, "Taito", "Polaris (Original version)", GAME_SUPPORTS_SAVE )
 GAME( 1980, ballbomb, 0,        ballbomb, ballbomb, 0, ROT270, "Taito", "Balloon Bomber", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )	/* missing clouds */
 GAME( 1980, indianbt, 0,        indianbt, indianbt, 0, ROT270, "Taito", "Indian Battle", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
 GAME( 1980, steelwkr, 0,        steelwkr, steelwkr, 0, ROT0  , "Taito", "Steel Worker", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
@@ -2938,7 +2975,7 @@ GAMEL(19??, sinvzen,  invaders, invaders, spaceatt, 0, ROT270, "Zenitone-Microse
 GAMEL(19??, sinvemag, invaders, invaders, sinvemag, 0, ROT270, "bootleg", "Super Invaders (EMAG)", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(19??, tst_invd, invaders, invaders, sicv,     0, ROT0,   "Test ROM", "Space Invaders Test ROM", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(19??, alieninv, invaders, invaders, alieninv, 0, ROT270, "Margamatics", "Alien Invasion", GAME_SUPPORTS_SAVE, layout_invaders )
-GAMEL(19??, alieninvp2,invaders, invaders, searthin, 0, ROT270, "bootleg", "Alien Invasion Part II", GAME_SUPPORTS_SAVE, layout_invaders )
+GAMEL(19??, alieninvp2,invaders, invaders, searthin,0, ROT270, "bootleg", "Alien Invasion Part II", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(1978, spceking, invaders, invaders, sicv,     0, ROT270, "Leijac Corporation (Konami)","Space King", GAME_SUPPORTS_SAVE, layout_invaders )
 GAMEL(1978, spcewars, invaders, spcewars, spcewars, 0, ROT270, "Sanritsu", "Space War (Sanritsu)", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE, layout_invaders )
 GAME (19??, astropal, 0,        astropal, astropal, 0, ROT0,   "Sidam?", "Astropal", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
@@ -2956,7 +2993,8 @@ GAMEL(19??, invasionb,invaders, invaders, invasion, 0, ROT270, "bootleg", "Invas
 GAMEL(19??, invasionrz,invaders,invaders, invasion, 0, ROT270, "bootleg", "Invasion (bootleg, set 3, R Z SRL BOLOGNA)", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING, layout_invaders )
 GAMEL(19??, invasionrza,invaders,invaders,invasion, 0, ROT270, "bootleg", "Invasion (bootleg, set 4, R Z SRL BOLOGNA)", GAME_SUPPORTS_SAVE | GAME_NOT_WORKING, layout_invaders )
 GAME( 19??, darthvdr, invaders, darthvdr, darthvdr, 0, ROT270, "bootleg", "Darth Vader", GAME_SUPPORTS_SAVE | GAME_NO_SOUND )
-GAME( 1979, moonbase, invadpt2, invadpt2, invadpt2, 0, ROT270, "Nichibutsu", "Moon Base", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )
+GAME( 1979, moonbase, invadpt2, invadpt2, invadpt2, 0, ROT270, "Nichibutsu (Taito license?)", "Moon Base (set 1)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND ) // this has a 'Taito Corp' string hidden away in the rom - how do you get it to display?
+GAME( 1979, moonbasea,invadpt2, invadpt2, invadpt2, 0, ROT270, "Nichibutsu", "Moon Base (set 2)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND )                  // this has the same string replaced with Nichibutsu, no other differences
 GAMEL(19??, invrvnge, 0,        invrvnge, invrvnge, 0, ROT270, "Zenitone-Microsec Ltd.", "Invader's Revenge",  GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND, layout_invrvnge )
 GAMEL(19??, invrvngea,invrvnge, invrvnge, invrvnge, 0, ROT270, "Zenitone-Microsec Ltd. (Dutchford license)", "Invader's Revenge (Dutchford)", GAME_SUPPORTS_SAVE | GAME_IMPERFECT_SOUND, layout_invrvnge )
 GAME( 1980, spclaser, 0,        invaders, spclaser, 0, ROT270, "Taito", "Space Laser", GAME_SUPPORTS_SAVE )

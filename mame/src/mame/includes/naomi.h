@@ -23,6 +23,7 @@ extern DRIVER_INIT( naomi );
 extern DRIVER_INIT( naomi_mp );
 extern DRIVER_INIT( naomi2 );
 
+extern DRIVER_INIT( sfz3ugd );
 extern DRIVER_INIT( ggxxsla );
 extern DRIVER_INIT( ggxxrl );
 extern DRIVER_INIT( ggxx );
@@ -32,6 +33,8 @@ extern DRIVER_INIT( mvsc2 );
 extern DRIVER_INIT( qmegamis );
 
 extern DRIVER_INIT( vf4evoct );
+
+extern DRIVER_INIT( kick4csh );
 
 extern UINT64 *naomi_ram64;
 

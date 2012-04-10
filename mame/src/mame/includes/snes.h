@@ -29,7 +29,7 @@
 #ifdef MAME_DEBUG
 /* #define SNES_DBG_GENERAL*/		/* Display general debug info */
 /* #define SNES_DBG_VIDEO */		/* Display video debug info */
-/* #define SNES_DBG_GDMA*/			/* Display GDMA debug info */
+/* #define SNES_DBG_DMA*/			/* Display DMA debug info */
 /* #define SNES_DBG_HDMA*/			/* Display HDMA debug info */
 /* #define SNES_DBG_REG_R*/			/* Display register read info */
 /* #define SNES_DBG_REG_W*/			/* Display register write info */
@@ -52,7 +52,6 @@
 #define SNES_VRAM_SIZE        0x20000	/* 128kb of video ram */
 #define SNES_CGRAM_SIZE       0x202		/* 256 16-bit colours + 1 tacked on 16-bit colour for fixed colour */
 #define SNES_OAM_SIZE         0x440		/* 1088 bytes of Object Attribute Memory */
-#define SNES_SPCRAM_SIZE      0x10000	/* 64kb of spc700 ram */
 #define SNES_EXROM_START      0x1000000
 #define FIXED_COLOUR          256		/* Position in cgram for fixed colour */
 /* Definitions for PPU Memory-Mapped registers */
@@ -386,6 +385,46 @@ public:
 
 	snes_state(running_machine &machine) { }
 
+	/* misc */
+	UINT16                htmult;		/* in 512 wide, we run HTOTAL double and halve it on latching */
+	UINT16                cgram_address;	/* CGRAM address */
+	UINT8                 vram_read_offset;	/* VRAM read offset */
+	UINT8                 read_ophct, read_opvct;
+	UINT16                hblank_offset;
+	UINT16                vram_fgr_high, vram_fgr_increment, vram_fgr_count, vram_fgr_mask, vram_fgr_shift, vram_read_buffer;
+	UINT32                wram_address;
+	UINT16                htime, vtime;
+	UINT16                vmadd;
+
+	/* timers */
+	emu_timer             *scanline_timer;
+	emu_timer             *hblank_timer;
+	emu_timer             *nmi_timer;
+	emu_timer             *hirq_timer;
+	emu_timer             *div_timer;
+	emu_timer             *mult_timer;
+	emu_timer             *io_timer;
+
+	/* DMA/HDMA-related */
+	struct
+	{
+		UINT8  dmap;
+		UINT8  dest_addr;
+		UINT16 src_addr;
+		UINT16 trans_size;
+		UINT8  bank;
+		UINT8  ibank;
+		UINT16 hdma_addr;
+		UINT16 hdma_iaddr;
+		UINT8  hdma_line_counter;
+		UINT8  unk;
+
+		int    do_transfer;
+
+		int    dma_disabled;	// used to stop DMA if HDMA is enabled (currently not implemented, see machine/snes.c)
+	}dma_channel[8];
+	UINT8                 hdmaen;	/* channels enabled for HDMA */
+
 	/* input-related */
 	UINT8                 joy1l, joy1h, joy2l, joy2h, joy3l, joy3h, joy4l, joy4h;
 	UINT16                data1[2], data2[2];
@@ -397,29 +436,35 @@ public:
 	/* input callbacks (to allow MESS to have its own input handlers) */
 	snes_io_read          io_read;
 	snes_oldjoy_read      oldjoy1_read, oldjoy2_read;
+
+	/* devices */
+	running_device *maincpu;
+	running_device *soundcpu;
+	running_device *spc700;
+	running_device *superfx;
 };
 
 /* Special chips, checked at init and used in memory handlers */
 enum
 {
-HAS_NONE = 0,
-HAS_DSP1,
-HAS_DSP2,
-HAS_DSP3,
-HAS_DSP4,
-HAS_SUPERFX,
-HAS_SA1,
-HAS_SDD1,
-HAS_OBC1,
-HAS_RTC,
-HAS_Z80GB,
-HAS_CX4,
-HAS_ST010,
-HAS_ST011,
-HAS_ST018,
-HAS_SPC7110,
-HAS_SPC7110_RTC,
-HAS_UNK
+	HAS_NONE = 0,
+	HAS_DSP1,
+	HAS_DSP2,
+	HAS_DSP3,
+	HAS_DSP4,
+	HAS_SUPERFX,
+	HAS_SA1,
+	HAS_SDD1,
+	HAS_OBC1,
+	HAS_RTC,
+	HAS_Z80GB,
+	HAS_CX4,
+	HAS_ST010,
+	HAS_ST011,
+	HAS_ST018,
+	HAS_SPC7110,
+	HAS_SPC7110_RTC,
+	HAS_UNK
 };
 
 /* offset-per-tile modes */
@@ -450,6 +495,8 @@ extern DRIVER_INIT( snes_hirom );
 extern MACHINE_START( snes );
 extern MACHINE_RESET( snes );
 
+READ8_HANDLER( snes_open_bus_r );
+
 extern READ8_HANDLER( snes_r_io );
 extern WRITE8_HANDLER( snes_w_io );
 
@@ -478,21 +525,13 @@ WRITE_LINE_DEVICE_HANDLER( snes_extern_irq_w );
 
 extern UINT8 snes_has_addon_chip;
 extern UINT32 snes_rom_size;
-extern UINT16 snes_htmult;
 
-extern void snes_gdma(const address_space *space, UINT8 channels);
-extern void snes_hdma_init(void);
-extern void snes_hdma(const address_space *space);
 extern void snes_latch_counters(running_machine *machine);
 
-/* (PPU) Video related */
-extern UINT8  *snes_vram;			/* Video RAM (Should be 16-bit, but it's easier this way) */
-extern UINT16 *snes_cgram;			/* Colour RAM */
-extern UINT16 *snes_oam;			/* Object Attribute Memory */
 extern UINT8  *snes_ram;			/* Main memory */
-extern UINT8  *spc_ram;				/* SPC main memory */
-extern UINT8  spc_port_in[4];		/* SPC input ports */
-extern UINT8  spc_port_out[4];		/* SPC output ports */
+
+
+/* (PPU) Video related */
 struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it would be better to reorganize it a bit... */
 {
 	struct
@@ -530,8 +569,7 @@ struct SNES_PPU_STRUCT	/* once all the regs are saved in this structure, it woul
 		UINT16 priority_rotation;
 		UINT8 next_charmap;
 		UINT8 next_size;
-		UINT8 size_;
-		UINT8 size[2];
+		UINT8 size;
 		UINT32 next_name_select;
 		UINT32 name_select;
 		UINT8 first_sprite;
@@ -605,77 +643,10 @@ struct snes_cart_info
 	UINT8  mode;		/* ROM memory mode */
 	UINT32 sram;		/* Amount of sram in cart */
 	UINT32 sram_max;	/* Maximum amount sram in cart (based on ROM mode) */
+	int    small_sram;
 };
 
 extern struct snes_cart_info snes_cart;
-
-/*----------- defined in audio/snes.c -----------*/
-
-/* (APU) Sound related */
-extern READ8_HANDLER( spc_io_r );
-extern WRITE8_HANDLER( spc_io_w );
-extern READ8_HANDLER( spc_ram_r );
-extern WRITE8_HANDLER( spc_ram_w );
-extern READ8_HANDLER( spc_ipl_r );
-extern DEVICE_GET_INFO( snes_sound );
-#define SOUND_SNES DEVICE_GET_INFO_NAME( snes_sound )
-
-/* Stuff from OpenSPC 0.3.99 by Brad Martin */
-
-/*========== TYPES ==========*/
-
-typedef enum                        /* ADSR state type              */
-    {
-    ATTACK,
-    DECAY,
-    SUSTAIN,
-    RELEASE
-    } env_state_t32;
-
-typedef struct                      /* Voice state type             */
-    {
-    UINT16  mem_ptr;        /* Sample data memory pointer   */
-    int             end;            /* End or loop after block      */
-    int             envcnt;         /* Counts to envelope update    */
-    env_state_t32   envstate;       /* Current envelope state       */
-    int             envx;           /* Last env height (0-0x7FFF)   */
-    int             filter;         /* Last header's filter         */
-    int             half;           /* Active nybble of BRR         */
-    int             header_cnt;     /* Bytes before new header (0-8)*/
-    int             mixfrac;        /* Fractional part of smpl pstn */
-    int             on_cnt;         /* Is it time to turn on yet?   */
-    int             pitch;          /* Sample pitch (4096->32000Hz) */
-    int             range;          /* Last header's range          */
-    UINT32   samp_id;        /* Sample ID#                   */
-    int             sampptr;        /* Where in sampbuf we are      */
-    signed long     smp1;           /* Last sample (for BRR filter) */
-    signed long     smp2;           /* Second-to-last sample decoded*/
-    short           sampbuf[ 4 ];   /* Buffer for Gaussian interp   */
-    } voice_state_type;
-
-typedef struct                      /* Source directory entry       */
-    {
-    UINT16  vptr;           /* Ptr to start of sample data  */
-    UINT16  lptr;           /* Loop pointer in sample data  */
-    } src_dir_type;
-
-/*========== MACROS ==========*/
-
-/* The functions to actually read and write to the DSP registers must be
-   implemented by the specific SPC core implementation, as this is too
-   specific to generalize.  However, by defining these macros, we can
-   generalize the DSP's behavior while staying out of the SPC's internals,
-   by requiring that the SPC core must use these macros at the appropriate
-   times. */
-
-/* All reads simply return the contents of the addressed register. */
-
-/* This macro must be used INSTEAD OF a normal write to register 0x7C
-   (ENDX) */
-#define DSP_WRITE_7C( x )   ( DSPregs[ 0x7C ] = 0 )
-
-/* All other writes should store the value in the addressed register as
-   expected. */
 
 /*----------- defined in video/snes.c -----------*/
 
@@ -684,5 +655,7 @@ extern struct SNES_PPU_STRUCT snes_ppu;
 extern VIDEO_START( snes );
 extern VIDEO_UPDATE( snes );
 
+extern READ8_HANDLER( snes_ppu_read );
+extern WRITE8_HANDLER( snes_ppu_write );
 
 #endif /* _SNES_H_ */

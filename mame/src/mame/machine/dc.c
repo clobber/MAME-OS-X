@@ -20,8 +20,9 @@
 #define DEBUG_MAPLE	(0)
 #define DEBUG_MAPLE_REGS	(0)
 #define DEBUG_AICA_DMA (0)
+#define DEBUG_PVRCTRL	(0)
 
-#define ENABLE_MAPLE_IRQ (0)
+static UINT8 mp_mux_data;
 
 #if DEBUG_SYSCTRL
 static const char *const sysctrl_names[] =
@@ -153,11 +154,157 @@ UINT8 maple0x86data1[0x80];
 static UINT8 maple0x86data2[0x400];
 static emu_timer *dc_rtc_timer;
 
-static const UINT32 maple0x82answer[]=
+static const UINT32 maple0x82answer_15kHz[]=
 {
-	0x07200083,0x2d353133,0x39343136,0x20202020,0x59504f43,0x48474952,0x45532054,0x45204147,
+	0x07200083,0x2d353133,0x39343136,0x20202020,0x59504f43,0x48474952,0x45532054,0x45204147,	// 15 kHz
 	0x05200083,0x5245544e,0x53495250,0x43205345,0x544c2c4f,0x20202e44,0x38393931,0x5c525043
 };
+
+static const UINT32 maple0x82answer_31kHz[]=
+{
+	0x07200083,0x2d353133,0x39313136,0x20202020,0x59504f43,0x48474952,0x45532054,0x45204147,	// 31 kHz (req. for Strike Fighter)
+	0x05200083,0x5245544e,0x53495250,0x43205345,0x544c2c4f,0x20202e44,0x38393931,0x5c525043
+};
+
+static struct {
+	UINT32 aica_addr;
+	UINT32 root_addr;
+	UINT32 size;
+	UINT8 dir;
+	UINT8 flag;
+	UINT8 indirect;
+	UINT8 start;
+	UINT8 sel;
+}wave_dma;
+
+static struct {
+	UINT32 pvr_addr;
+	UINT32 sys_addr;
+	UINT32 size;
+	UINT8 sel;
+	UINT8 dir;
+	UINT8 flag;
+	UINT8 start;
+}pvr_dma;
+
+static TIMER_CALLBACK( aica_dma_irq )
+{
+	wave_dma.start = g2bus_regs[SB_ADST] = 0;
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_AICA;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( pvr_dma_irq )
+{
+	pvr_dma.start = pvrctrl_regs[SB_PDST] = 0;
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_PVR;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( gdrom_dma_irq )
+{
+	g1bus_regs[SB_GDST] = 0;
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_GDROM;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( maple_dma_irq )
+{
+	maple_regs[SB_MDST] = 0;
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_MAPLE;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( ch2_dma_irq )
+{
+	dc_sysctrl_regs[SB_C2DLEN]=0;
+	dc_sysctrl_regs[SB_C2DST]=0;
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_CH2;
+	dc_update_interrupt_status(machine);
+}
+
+static TIMER_CALLBACK( yuv_fifo_irq )
+{
+	dc_sysctrl_regs[SB_ISTNRM] |= IST_EOXFER_YUV;
+	dc_update_interrupt_status(machine);
+}
+
+static void wave_dma_execute(const address_space *space)
+{
+	UINT32 src,dst,size;
+	dst = wave_dma.aica_addr;
+	src = wave_dma.root_addr;
+	size = 0;
+
+	/* 0 rounding size = 32 Mbytes */
+	if(wave_dma.size == 0) { wave_dma.size = 0x200000; }
+
+	if(wave_dma.dir == 0)
+	{
+		for(;size<wave_dma.size;size+=4)
+		{
+			memory_write_dword_64le(space,dst,memory_read_dword(space,src));
+			src+=4;
+			dst+=4;
+		}
+	}
+	else
+	{
+		for(;size<wave_dma.size;size+=4)
+		{
+			memory_write_dword_64le(space,src,memory_read_dword(space,dst));
+			src+=4;
+			dst+=4;
+		}
+	}
+
+	/* update the params*/
+	wave_dma.aica_addr = g2bus_regs[SB_ADSTAG] = dst;
+	wave_dma.root_addr = g2bus_regs[SB_ADSTAR] = src;
+	wave_dma.size = g2bus_regs[SB_ADLEN] = 0;
+	wave_dma.flag = (wave_dma.indirect & 1) ? 1 : 0;
+	/* Note: if you trigger an instant DMA IRQ trigger, sfz3upper doesn't play any bgm. */
+	/* TODO: timing of this */
+	timer_set(space->machine, ATTOTIME_IN_USEC(300), NULL, 0, aica_dma_irq);
+}
+
+static void pvr_dma_execute(const address_space *space)
+{
+	UINT32 src,dst,size;
+	dst = pvr_dma.pvr_addr;
+	src = pvr_dma.sys_addr;
+	size = 0;
+
+	/* used so far by usagui and sprtjam*/
+	//printf("PVR-DMA start\n");
+	//printf("%08x %08x %08x\n",pvr_dma.pvr_addr,pvr_dma.sys_addr,pvr_dma.size);
+	//printf("src %s dst %08x\n",pvr_dma.dir ? "->" : "<-",pvr_dma.sel);
+
+	/* 0 rounding size = 16 Mbytes */
+	if(pvr_dma.size == 0) { pvr_dma.size = 0x100000; }
+
+	if(pvr_dma.dir == 0)
+	{
+		for(;size<pvr_dma.size;size+=4)
+		{
+			memory_write_dword_64le(space,dst,memory_read_dword(space,src));
+			src+=4;
+			dst+=4;
+		}
+	}
+	else
+	{
+		for(;size<pvr_dma.size;size+=4)
+		{
+			memory_write_dword_64le(space,src,memory_read_dword(space,dst));
+			src+=4;
+			dst+=4;
+		}
+	}
+	/* Note: do not update the params, since this DMA type doesn't support it. */
+	/* TODO: timing of this */
+	timer_set(space->machine, ATTOTIME_IN_USEC(250), NULL, 0, pvr_dma_irq);
+}
 
 // register decode helpers
 
@@ -241,7 +388,7 @@ int dc_compute_interrupt_level(running_machine *machine)
 
 void dc_update_interrupt_status(running_machine *machine)
 {
-int level;
+	int level;
 
 	if (dc_sysctrl_regs[SB_ISTERR])
 	{
@@ -263,6 +410,30 @@ int level;
 
 	level=dc_compute_interrupt_level(machine);
 	sh4_set_irln_input(devtag_get_device(machine, "maincpu"), 15-level);
+
+	/* Wave DMA HW trigger */
+	if(wave_dma.flag && ((wave_dma.sel & 2) == 2))
+	{
+		if((dc_sysctrl_regs[SB_G2DTNRM] & dc_sysctrl_regs[SB_ISTNRM]) || (dc_sysctrl_regs[SB_G2DTEXT] & dc_sysctrl_regs[SB_ISTEXT]))
+		{
+			const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+
+			printf("Wave DMA HW trigger\n");
+			wave_dma_execute(space);
+		}
+	}
+
+	/* PVR-DMA HW trigger */
+	if(pvr_dma.flag && ((pvr_dma.sel & 1) == 1))
+	{
+		if((dc_sysctrl_regs[SB_PDTNRM] & dc_sysctrl_regs[SB_ISTNRM]) || (dc_sysctrl_regs[SB_PDTEXT] & dc_sysctrl_regs[SB_ISTEXT]))
+		{
+			const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+
+			printf("PVR-DMA HW trigger\n");
+			pvr_dma_execute(space);
+		}
+	}
 }
 
 /******************************************************
@@ -273,8 +444,6 @@ The function packets goes like this:
 [2] Parameter of the device
 [3] End flag (always zero)
 ******************************************************/
-static int jvs_mux_data;
-
 static int jvsboard_init(int pos)
 {
 	// four bytes for every available function
@@ -284,7 +453,6 @@ static int jvsboard_init(int pos)
 	{
 		maple0x86data2[pos+11]=1; // number of players
 		maple0x86data2[pos+12]=22; // switches per player (27 = mahjong)
-		jvs_mux_data = 1;
 	}
 	else //if JVSBD_DEFAULT
 	{
@@ -328,19 +496,19 @@ static int jvsboard_indirect_read(running_machine *machine, int pos)
 	if(jvsboard_type == JVSBD_MAHJONG)
 	{
 		maple0x86data2[pos+11]=0;
-		switch(jvs_mux_data)
+		switch(mp_mux_data)
 		{
-			case 0x01: maple0x86data2[pos+12]=input_port_read(machine, "IN1"); break;
-			case 0x02: maple0x86data2[pos+12]=input_port_read(machine, "IN2"); break;
-			case 0x04: maple0x86data2[pos+12]=input_port_read(machine, "IN3"); break;
-			case 0x08: maple0x86data2[pos+12]=input_port_read(machine, "IN4"); break;
-			case 0x10: maple0x86data2[pos+12]=0; break;
+			case 0x01: maple0x86data2[pos+12]=input_port_read(machine, "KEY1"); break;
+			case 0x02: maple0x86data2[pos+12]=input_port_read(machine, "KEY2"); break;
+			case 0x04: maple0x86data2[pos+12]=input_port_read(machine, "KEY3"); break;
+			case 0x08: maple0x86data2[pos+12]=input_port_read(machine, "KEY4"); break;
+			case 0x10: maple0x86data2[pos+12]=input_port_read(machine, "KEY5"); break;
 		}
 		maple0x86data2[pos+13]=0;
 		maple0x86data2[pos+14]=0;
 
-		jvs_mux_data<<=1;
-		if(jvs_mux_data >= 0x20) { jvs_mux_data = 1; }
+		mp_mux_data<<=1;
+		if(mp_mux_data >= 0x20) { mp_mux_data = 1; }
 	}
 	else
 	{
@@ -397,10 +565,20 @@ static int jvsboard_direct_read(running_machine *machine)
 		maple0x86data2[0x1b]=2; //number of players
 	if(jvsboard_type == JVSBD_MAHJONG)
 	{
-		maple0x86data2[0x1c]=input_port_read(machine, "IN1");
-		maple0x86data2[0x1d]=input_port_read(machine, "IN2");
-		maple0x86data2[0x1e]=input_port_read(machine, "IN3");
-		maple0x86data2[0x1f]=input_port_read(machine, "IN4");
+		maple0x86data2[0x1c]=0;
+		switch(mp_mux_data)
+		{
+			case 0x01: maple0x86data2[0x1d]=input_port_read(machine, "KEY1"); break;
+			case 0x02: maple0x86data2[0x1d]=input_port_read(machine, "KEY2"); break;
+			case 0x04: maple0x86data2[0x1d]=input_port_read(machine, "KEY3"); break;
+			case 0x08: maple0x86data2[0x1d]=input_port_read(machine, "KEY4"); break;
+			case 0x10: maple0x86data2[0x1d]=input_port_read(machine, "KEY5"); break;
+		}
+		maple0x86data2[0x1e]=0;
+		maple0x86data2[0x1f]=0;
+
+		mp_mux_data<<=1;
+		if(mp_mux_data >= 0x20) { mp_mux_data = 1; }
 	}
 	else
 	{
@@ -469,66 +647,81 @@ WRITE64_HANDLER( dc_sysctrl_w )
 	switch (reg)
 	{
 		case SB_C2DST:
-			address=dc_sysctrl_regs[SB_C2DSTAT];
-			ddtdata.destination=address;
-			/* 0 rounding size = 16 Mbytes */
-			if(dc_sysctrl_regs[SB_C2DLEN] == 0) { dc_sysctrl_regs[SB_C2DLEN] = 0x1000000; }
-			ddtdata.length=dc_sysctrl_regs[SB_C2DLEN];
-			ddtdata.size=1;
-			ddtdata.direction=0;
-			ddtdata.channel=2;
-			ddtdata.mode=25; //011001
-			sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
-			#if DEBUG_SYSCTRL
-			if ((address >= 0x11000000) && (address <= 0x11FFFFFF))
-				if (dc_sysctrl_regs[SB_LMMODE0])
-					printf("SYSCTRL: Ch2 direct display lists dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 1
-				else
-					mame_printf_verbose("SYSCTRL: Ch2 direct textures dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 0
-			else if ((address >= 0x13000000) && (address <= 0x13FFFFFF))
-				if (dc_sysctrl_regs[SB_LMMODE1])
-					printf("SYSCTRL: Ch2 direct display lists dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 1
-				else
-					mame_printf_verbose("SYSCTRL: Ch2 direct textures dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 0
-			else if ((address >= 0x10800000) && (address <= 0x10ffffff))
-				mame_printf_verbose("SYSCTRL: Ch2 YUV dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
-			else if ((address >= 0x10000000) && (address <= 0x107fffff))
-				mame_printf_verbose("SYSCTRL: Ch2 TA Display List dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
-			else
-				mame_printf_verbose("SYSCTRL: Ch2 unknown dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
-			#endif
-			if ((address >= 0x10000000) && (address <= 0x10ffffff))
+			if(((old & 1) == 0) && (dat & 1)) // 0 -> 1
 			{
-				dc_sysctrl_regs[SB_C2DSTAT]=address;
-			}
-			else
-			{
-				dc_sysctrl_regs[SB_C2DSTAT]=address+ddtdata.length;
-			}
+				address=(dc_sysctrl_regs[SB_C2DSTAT] & 0x03ffffe0) | 0x10000000;
+				if(dc_sysctrl_regs[SB_C2DSTAT] & 0x1f)
+					printf("C2DSTAT just used to reserved bits %02x\n",dc_sysctrl_regs[SB_C2DSTAT] & 0x1f);
 
-			dc_sysctrl_regs[SB_C2DLEN]=0;
-			dc_sysctrl_regs[SB_C2DST]=0;
-			dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_CH2;
+				ddtdata.destination=address;
+				/* 0 rounding size = 16 Mbytes */
+				if(dc_sysctrl_regs[SB_C2DLEN] == 0)
+					ddtdata.length = 0x1000000;
+				else
+					ddtdata.length = dc_sysctrl_regs[SB_C2DLEN];
+				ddtdata.size=1;
+				ddtdata.direction=0;
+				ddtdata.channel=2;
+				ddtdata.mode=25; //011001
+				sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"),&ddtdata);
+				#if DEBUG_SYSCTRL
+				if ((address >= 0x11000000) && (address <= 0x11FFFFFF))
+					if (dc_sysctrl_regs[SB_LMMODE0])
+						printf("SYSCTRL: Ch2 direct display lists dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 1
+					else
+						mame_printf_verbose("SYSCTRL: Ch2 direct textures dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 0
+				else if ((address >= 0x13000000) && (address <= 0x13FFFFFF))
+					if (dc_sysctrl_regs[SB_LMMODE1])
+						printf("SYSCTRL: Ch2 direct display lists dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 1
+					else
+						mame_printf_verbose("SYSCTRL: Ch2 direct textures dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]); // 0
+				else if ((address >= 0x10800000) && (address <= 0x10ffffff))
+					printf("SYSCTRL: Ch2 YUV dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
+				else if ((address >= 0x10000000) && (address <= 0x107fffff))
+					mame_printf_verbose("SYSCTRL: Ch2 TA Display List dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
+				else
+					mame_printf_verbose("SYSCTRL: Ch2 unknown dma %x from %08x to %08x (lmmode0=%d lmmode1=%d)\n", dc_sysctrl_regs[SB_C2DLEN], ddtdata.source-ddtdata.length, dc_sysctrl_regs[SB_C2DSTAT],dc_sysctrl_regs[SB_LMMODE0],dc_sysctrl_regs[SB_LMMODE1]);
+				#endif
+
+				if ((!(address & 0x01000000)))
+					dc_sysctrl_regs[SB_C2DSTAT]=address;
+				else //direct texture path
+					dc_sysctrl_regs[SB_C2DSTAT]=address+ddtdata.length;
+
+				/* 200 usecs breaks sfz3upper */
+				timer_set(space->machine, ATTOTIME_IN_USEC(50), NULL, 0, ch2_dma_irq);
+				/* simulate YUV FIFO processing here */
+				if((address & 0x1800000) == 0x0800000)
+					timer_set(space->machine, ATTOTIME_IN_USEC(500), NULL, 0, yuv_fifo_irq);
+			}
 			break;
 
 		case SB_ISTNRM:
 			dc_sysctrl_regs[SB_ISTNRM] = old & ~(dat | 0xC0000000); // bits 31,30 ro
+			dc_update_interrupt_status(space->machine);
 			break;
 
 		case SB_ISTEXT:
 			dc_sysctrl_regs[SB_ISTEXT] = old;
+			dc_update_interrupt_status(space->machine);
 			break;
 
 		case SB_ISTERR:
 			dc_sysctrl_regs[SB_ISTERR] = old & ~dat;
+			dc_update_interrupt_status(space->machine);
 			break;
 		case SB_SDST:
-			#if DEBUG_SYSCTRL
-			mame_printf_verbose("SYSCTRL: Sort-DMA not supported yet !!!\n");
-			#endif
+			if(dat & 1)
+			{
+				// TODO: Sort-DMA routine goes here
+				printf("Sort-DMA irq\n");
+
+				dc_sysctrl_regs[SB_SDST] = 0;
+				dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_SORT;
+				dc_update_interrupt_status(space->machine);
+			}
 			break;
 	}
-	dc_update_interrupt_status(space->machine);
 
 	#if DEBUG_SYSCTRL
 	if ((reg != 0x40) && (reg != 0x42) && (reg > 2))	// filter out IRQ acks and ch2 dma
@@ -564,7 +757,7 @@ WRITE64_HANDLER( naomi_maple_w )
 	static int jvs_command = 0,jvs_address = 0;
 	int chk;
 	int a;
-	int off,len,func;
+	int off,len/*,func*/;
 
 	reg = decode_reg32_64(space->machine, offset, mem_mask, &shift);
 	dat = (UINT32)(data >> shift);
@@ -577,13 +770,17 @@ WRITE64_HANDLER( naomi_maple_w )
 	maple_regs[reg] = dat; // 5f6c00+reg*4=dat
 	switch (reg)
 	{
+	case SB_MDTSEL:
+		if((dat & 1) == 1)
+			printf("MAPLE: hardware trigger not supported yet\n");
+		break;
 	case SB_MDST:
-		maple_regs[reg] = old;
+		maple_regs[SB_MDST] = old;
 		if (!(old & 1) && (dat & 1) && maple_regs[SB_MDEN] & 1) // 0 -> 1
 		{
-			if (!(maple_regs[SB_MDTSEL] & 1))
+			if (!(maple_regs[SB_MDTSEL] & 1)) // SW trigger
 			{
-				maple_regs[reg] = 1;
+				maple_regs[SB_MDST] = dat & 1;
 				dat=maple_regs[SB_MDSTAR];
 //              printf("Maple DMA: %08x %08x %08x %08x\n",maple_regs[SB_MDSTAR],maple_regs[SB_MDTSEL],maple_regs[SB_MDEN],maple_regs[SB_MDST]);
 //              printf("           %08x %08x %08x %08x\n",maple_regs[SB_MSYS],maple_regs[SB_MST],maple_regs[SB_MSHTCL],maple_regs[SB_MMSEL]);
@@ -598,7 +795,6 @@ WRITE64_HANDLER( naomi_maple_w )
 					ddtdata.mode= -1;		// copy from/to buffer
 					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
 
-					maple_regs[reg] = 0;
 					endflag=buff[0] & 0x80000000;
 					port=(buff[0] >> 16) & 3;
 					pattern=(buff[0] >> 8) & 7;
@@ -609,7 +805,7 @@ WRITE64_HANDLER( naomi_maple_w )
 					command=buff[2] & 255;
 					dap=(buff[2] >> 8) & 255;
 					sap=(buff[2] >> 16) & 255;
-					func = buff[3];
+					//func = buff[3];
 					//buff[0]=0;
 					//if(buff[1] == 0x700)
 					//  printf("%08x %08x",buff[0],buff[2]);
@@ -626,6 +822,7 @@ WRITE64_HANDLER( naomi_maple_w )
 							case 3:
 								ddtdata.length=1;
 								#if DEBUG_MAPLE
+								if(port == 0)
 								printf("MAPLE: transfer command %x port %x length %x\n", command, port, length);
 								#endif
 								break;
@@ -653,9 +850,7 @@ WRITE64_HANDLER( naomi_maple_w )
 								break;
 							case 0x82: // get license string
 								for (a=0;a < 16;a++)
-								{
-									buff[a]=maple0x82answer[a];
-								}
+									buff[a] = (input_port_read(space->machine, "DSW") & 1) ? maple0x82answer_31kHz[a] : maple0x82answer_15kHz[a];
 								ddtdata.length=16;
 								break;
 							case 0x86:
@@ -738,7 +933,7 @@ WRITE64_HANDLER( naomi_maple_w )
 											case 0xf1: // set address
 												break;
 											case 0x10:
-												strcpy((char *)(maple0x86data2+0x11+10), "SEGA ENTERPRISES,LTD.\nI/O BD JVS\n837-13551"); // name
+												strcpy((char *)(maple0x86data2+0x11+10), "SEGA ENTERPRISES,LTD.;I/O BD JVS;837-13551"); // name
 												maple0x86data2[pos+7]=24+21+2;
 												tocopy += 24+21;
 												break;
@@ -760,6 +955,10 @@ WRITE64_HANDLER( naomi_maple_w )
 											case 0x14:
 												{
 													tocopy += jvsboard_init(pos);
+
+													//TODO: something sets 0 in the mux data, dunno what yet
+													if(jvsboard_type == JVSBD_MAHJONG)
+														mp_mux_data = 1;
 												}
 												break;
 											case 0x21:
@@ -867,11 +1066,7 @@ WRITE64_HANDLER( naomi_maple_w )
 
 					if (endflag)
 					{
-						#if 1 //ENABLE_MAPLE_IRQ
-						/*TODO: this fixes moeru but breaks other games, understand why.*/
-						dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_MAPLE;
-						dc_update_interrupt_status(space->machine);
-						#endif
+						timer_set(space->machine, ATTOTIME_IN_USEC(200), NULL, 0, maple_dma_irq);
 						break;
 					}
 					// skip fixed packet header
@@ -879,14 +1074,9 @@ WRITE64_HANDLER( naomi_maple_w )
 					// skip transfer data
 					dat += (length + 1) * 4;
 				} // do transfers
-				maple_regs[reg] = 0;
+
 			}
-			else
-			{
-				#if DEBUG_MAPLE
-				printf("MAPLE: hardware trigger not supported yet\n");
-				#endif
-			}
+
 		}
 		break;
 	}
@@ -926,13 +1116,17 @@ WRITE64_HANDLER( dc_maple_w )
 	maple_regs[reg] = dat; // 5f6c00+reg*4=dat
 	switch (reg)
 	{
+	case SB_MDTSEL:
+		if((dat & 1) == 1)
+			printf("MAPLE: hardware trigger not supported yet\n");
+		break;
 	case SB_MDST:
-		maple_regs[reg] = old;
+		maple_regs[SB_MDST] = old;
 		if (!(old & 1) && (dat & 1) && maple_regs[SB_MDEN] & 1) // 0 -> 1
 		{
 			if (!(maple_regs[SB_MDTSEL] & 1))
 			{
-				maple_regs[reg] = 1;
+				maple_regs[SB_MDST] = dat & 1;
 				dat=maple_regs[SB_MDSTAR];
 //              printf("Maple DMA: %08x %08x %08x %08x\n",maple_regs[SB_MDSTAR],maple_regs[SB_MDTSEL],maple_regs[SB_MDEN],maple_regs[SB_MDST]);
 //              printf("           %08x %08x %08x %08x\n",maple_regs[SB_MSYS],maple_regs[SB_MST],maple_regs[SB_MSHTCL],maple_regs[SB_MMSEL]);
@@ -947,7 +1141,6 @@ WRITE64_HANDLER( dc_maple_w )
 					ddtdata.mode= -1;		// copy from/to buffer
 					sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
 
-					maple_regs[reg] = 0;
 					endflag=buff[0] & 0x80000000;
 					port=(buff[0] >> 16) & 3;
 					pattern=(buff[0] >> 8) & 7;
@@ -1022,10 +1215,7 @@ WRITE64_HANDLER( dc_maple_w )
 
 					if (endflag)
 					{
-						#if ENABLE_MAPLE_IRQ
-						dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_MAPLE;
-						dc_update_interrupt_status(space->machine);
-						#endif
+						timer_set(space->machine, ATTOTIME_IN_USEC(200), NULL, 0, maple_dma_irq);
 						break;
 					}
 					// skip fixed packet header
@@ -1033,13 +1223,7 @@ WRITE64_HANDLER( dc_maple_w )
 					// skip transfer data
 					dat += (length + 1) * 4;
 				} // do transfers
-				maple_regs[reg] = 0;
-			}
-			else
-			{
-				#if DEBUG_MAPLE
-				printf("MAPLE: hardware trigger not supported yet\n");
-				#endif
+
 			}
 		}
 		break;
@@ -1122,18 +1306,24 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 	switch (reg)
 	{
 	case SB_GDST:
-		if (dat & 1 && g1bus_regs[SB_GDEN] == 1) // 0 -> 1
+		g1bus_regs[SB_GDST] = old;
+		if (((old & 1) == 0) && (dat & 1) && g1bus_regs[SB_GDEN] == 1) // 0 -> 1
 		{
 			if (g1bus_regs[SB_GDDIR] == 0)
 			{
-				mame_printf_verbose("G1CTRL: unsupported transfer\n");
+				printf("G1CTRL: unsupported transfer\n");
 				return;
 			}
+			g1bus_regs[SB_GDST] = dat & 1;
 //          printf("ROM board DMA to %x len %x (PC %x)\n", g1bus_regs[SB_GDSTAR], g1bus_regs[SB_GDLEN], cpu_get_pc(space->cpu));
 			ROM = (UINT8 *)space->machine->device("rom_board")->get_runtime_ptr(DEVINFO_PTR_MEMORY);
 			dmaoffset = (UINT32)space->machine->device("rom_board")->get_runtime_int(DEVINFO_INT_DMAOFFSET);
 			ddtdata.destination=g1bus_regs[SB_GDSTAR];		// destination address
 			ddtdata.length=g1bus_regs[SB_GDLEN] >> 5;		// words to transfer
+			/* data in the lower 5 bits makes the length size to round by 32 bytes, this'll be needed by Virtua Tennis to boot (according to Deunan) */
+			if(g1bus_regs[SB_GDLEN] & 0x1c)
+				ddtdata.length++;
+
 			ddtdata.size=32;			// bytes per word
 			ddtdata.buffer=ROM+dmaoffset;	// buffer address
 			ddtdata.direction=1;	// 0 source to buffer, 1 buffer to destination
@@ -1141,9 +1331,9 @@ WRITE64_HANDLER( dc_g1_ctrl_w )
 			ddtdata.mode= -1;		// copy from/to buffer
 			mame_printf_verbose("G1CTRL: transfer %x from ROM %08x to sdram %08x\n", g1bus_regs[SB_GDLEN], dmaoffset, g1bus_regs[SB_GDSTAR]);
 			sh4_dma_ddt(devtag_get_device(space->machine, "maincpu"), &ddtdata);
-			g1bus_regs[SB_GDST]=0;
-			dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_GDROM;
-			dc_update_interrupt_status(space->machine);
+			/* Note: KOF Neowave definitely wants this to be delayed (!) */
+			/* FIXME: timing of this */
+			timer_set(space->machine, ATTOTIME_IN_USEC(500), NULL, 0, gdrom_dma_irq);
 		}
 		break;
 	}
@@ -1164,16 +1354,7 @@ WRITE64_HANDLER( dc_g2_ctrl_w )
 	int reg;
 	UINT64 shift;
 	UINT32 dat;
-	static struct {
-		UINT32 aica_addr;
-		UINT32 root_addr;
-		UINT32 size;
-		UINT8 dir;
-		UINT8 flag;
-		UINT8 indirect;
-		UINT8 start;
-		UINT8 sel;
-	}wave_dma;
+	UINT8 old;
 
 	reg = decode_reg32_64(space->machine, offset, mem_mask, &shift);
 	dat = (UINT32)(data >> shift);
@@ -1195,9 +1376,14 @@ WRITE64_HANDLER( dc_g2_ctrl_w )
 		case SB_ADDIR: wave_dma.dir = (dat & 1); break;
 		/*dma flag (active HIGH, bug in docs)*/
 		case SB_ADEN: wave_dma.flag = (dat & 1); break;
+		/*
+        SB_ADTSEL
+        bit 1: (0) Wave DMA thru SB_ADST flag (1) Wave DMA thru irq trigger, defined by SB_G2DTNRM / SB_G2DTEXT
+        */
 		case SB_ADTSEL: wave_dma.sel = dat & 7; break;
 		/*ready for dma'ing*/
 		case SB_ADST:
+			old = wave_dma.start & 1;
 			wave_dma.start = dat & 1;
 
 			#if DEBUG_AICA_DMA
@@ -1207,43 +1393,15 @@ WRITE64_HANDLER( dc_g2_ctrl_w )
 			#endif
 
 			//mame_printf_verbose("SB_ADST data %08x\n",dat);
-			if(wave_dma.flag && wave_dma.start)
-			{
-				UINT32 src,dst,size;
-				dst = wave_dma.aica_addr;
-				src = wave_dma.root_addr;
-				size = 0;
-				/* 0 rounding size = 32 Mbytes */
-				if(wave_dma.size == 0) { wave_dma.size = 0x200000; }
+			if(((old & 1) == 0) && wave_dma.flag && wave_dma.start && ((wave_dma.sel & 2) == 0)) // 0 -> 1
+				wave_dma_execute(space);
+			break;
 
-				if(wave_dma.dir == 0)
-				{
-					for(;size<wave_dma.size;size+=4)
-					{
-						memory_write_dword_64le(space,dst,memory_read_dword(space,src));
-						src+=4;
-						dst+=4;
-					}
-				}
-				else
-				{
-					for(;size<wave_dma.size;size+=4)
-					{
-						memory_write_dword_64le(space,src,memory_read_dword(space,dst));
-						src+=4;
-						dst+=4;
-					}
-				}
-				/* update the params*/
-				wave_dma.aica_addr = g2bus_regs[SB_ADSTAG] = dst;
-				wave_dma.root_addr = g2bus_regs[SB_ADSTAR] = src;
-				wave_dma.size = g2bus_regs[SB_ADLEN] = 0;
-				wave_dma.flag = (wave_dma.indirect & 1) ? 1 : 0;
-				wave_dma.start = g2bus_regs[SB_ADST] = 0;
-				/*TODO: this makes the sfz3upper to not play any bgm, understand why. */
-				//dc_sysctrl_regs[SB_ISTNRM] |= IST_DMA_AICA;
-				//dc_update_interrupt_status(space->machine);
-			}
+		case SB_E1ST:
+		case SB_E2ST:
+		case SB_DDST:
+			if(dat & 1)
+				printf("Warning: enabled G2 Debug / External DMA %08x\n",reg);
 			break;
 
 		case SB_ADSUSP:
@@ -1255,9 +1413,85 @@ WRITE64_HANDLER( dc_g2_ctrl_w )
 
 		default:
 			/* might access the unhandled DMAs, so tell us if this happens. */
-			printf("Unhandled G2 register [%08x] -> %08x\n",reg,dat);
+			//printf("Unhandled G2 register [%08x] -> %08x\n",reg,dat);
 			break;
 	}
+}
+
+INLINE int decode_reg_64(UINT32 offset, UINT64 mem_mask, UINT64 *shift)
+{
+	int reg = offset * 2;
+
+	*shift = 0;
+
+	// non 32-bit accesses have not yet been seen here, we need to know when they are
+	if ((mem_mask != U64(0xffffffff00000000)) && (mem_mask != U64(0x00000000ffffffff)))
+	{
+		/*assume to return the lower 32-bits ONLY*/
+		return reg & 0xffffffff;
+	}
+
+	if (mem_mask == U64(0xffffffff00000000))
+	{
+		reg++;
+		*shift = 32;
+	}
+
+	return reg;
+}
+
+READ64_HANDLER( pvr_ctrl_r )
+{
+	int reg;
+	UINT64 shift;
+
+	reg = decode_reg_64(offset, mem_mask, &shift);
+
+	#if DEBUG_PVRCTRL
+	mame_printf_verbose("PVRCTRL: [%08x] read %x @ %x (reg %x), mask %" I64FMT "x (PC=%x)\n", 0x5f7c00+reg*4, pvrctrl_regs[reg], offset, reg, mem_mask, cpu_get_pc(space->cpu));
+	#endif
+
+	return (UINT64)pvrctrl_regs[reg] << shift;
+}
+
+WRITE64_HANDLER( pvr_ctrl_w )
+{
+	int reg;
+	UINT64 shift;
+	UINT32 dat;
+	UINT8 old;
+
+	reg = decode_reg_64(offset, mem_mask, &shift);
+	dat = (UINT32)(data >> shift);
+
+	switch (reg)
+	{
+		case SB_PDSTAP: pvr_dma.pvr_addr = dat; break;
+		case SB_PDSTAR: pvr_dma.sys_addr = dat; break;
+		case SB_PDLEN: pvr_dma.size = dat; break;
+		case SB_PDDIR: pvr_dma.dir = dat & 1; break;
+		case SB_PDTSEL:
+			pvr_dma.sel = dat & 1;
+			//if(pvr_dma.sel & 1)
+			//  printf("Warning: Unsupported irq mode trigger PVR-DMA\n");
+			break;
+		case SB_PDEN: pvr_dma.flag = dat & 1; break;
+		case SB_PDST:
+			old = pvr_dma.start & 1;
+			pvr_dma.start = dat & 1;
+
+			if(((old & 1) == 0) && pvr_dma.flag && pvr_dma.start && ((pvr_dma.sel & 1) == 0)) // 0 -> 1
+				pvr_dma_execute(space);
+			break;
+	}
+
+	#if DEBUG_PVRCTRL
+	mame_printf_verbose("PVRCTRL: [%08x=%x] write %" I64FMT "x to %x (reg %x), mask %" I64FMT "x\n", 0x5f7c00+reg*4, dat, data>>shift, offset, reg, mem_mask);
+	#endif
+
+//  pvrctrl_regs[reg] |= dat;
+	pvrctrl_regs[reg] = dat;
+
 }
 
 READ64_HANDLER( dc_modem_r )
@@ -1296,6 +1530,7 @@ READ64_HANDLER( dc_rtc_r )
 
 	reg = decode_reg3216_64(space->machine, offset, mem_mask, &shift);
 	mame_printf_verbose("RTC:  Unmapped read %08x\n", 0x710000+reg*4);
+
 	return (UINT64)dc_rtcregister[reg] << shift;
 }
 
@@ -1337,9 +1572,49 @@ static TIMER_CALLBACK(dc_rtc_increment)
         dc_rtcregister[RTC1] = (dc_rtcregister[RTC1] + 1) & 0xFFFF;
 }
 
+/* fill the RTC registers with the proper start-up values */
+static void rtc_initial_setup(running_machine *machine)
+{
+	static UINT32 current_time;
+	static int year_count,cur_year,i;
+	static const int month_to_day_conversion[12] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
+	mame_system_time systime;
+	mame_get_base_datetime(machine, &systime);
+
+	memset(dc_rtcregister, 0, sizeof(dc_rtcregister));
+
+	/* put the seconds */
+	current_time = systime.local_time.second;
+	/* put the minutes */
+	current_time+= systime.local_time.minute*60;
+	/* put the hours */
+	current_time+= systime.local_time.hour*60*60;
+	/* put the days (note -1) */
+	current_time+= (systime.local_time.mday-1)*60*60*24;
+	/* take the current year here for calculating leaps */
+	cur_year = (systime.local_time.year);
+
+	/* take the months - despite popular beliefs, leap years aren't just evenly divisible by 4 */
+	if(((((cur_year % 4) == 0) && ((cur_year % 100) != 0)) || ((cur_year % 400) == 0)) && systime.local_time.month > 2)
+		current_time+= (month_to_day_conversion[systime.local_time.month]+1)*60*60*24;
+	else
+		current_time+= (month_to_day_conversion[systime.local_time.month])*60*60*24;
+
+	/* put the years */
+	year_count = (cur_year-1949);
+
+	for(i=0;i<year_count-1;i++)
+		current_time += (((((i+1950) % 4) == 0) && (((i+1950) % 100) != 0)) || (((i+1950) % 400) == 0)) ? 60*60*24*366 : 60*60*24*365;
+
+	dc_rtcregister[RTC2] = current_time & 0x0000ffff;
+	dc_rtcregister[RTC1] = (current_time & 0xffff0000) >> 16;
+
+	dc_rtc_timer = timer_alloc(machine, dc_rtc_increment, 0);
+}
+
 MACHINE_START( dc )
 {
-	dc_rtc_timer = timer_alloc(machine, dc_rtc_increment, 0);
+	rtc_initial_setup(machine);
 }
 
 MACHINE_RESET( dc )
@@ -1349,12 +1624,13 @@ MACHINE_RESET( dc )
 
 	memset(dc_sysctrl_regs, 0, sizeof(dc_sysctrl_regs));
 	memset(maple_regs, 0, sizeof(maple_regs));
-	memset(dc_rtcregister, 0, sizeof(dc_rtcregister));
 	memset(dc_coin_counts, 0, sizeof(dc_coin_counts));
 
 	timer_adjust_periodic(dc_rtc_timer, attotime_zero, 0, ATTOTIME_IN_SEC(1));
 
 	dc_sysctrl_regs[SB_SBREV] = 0x0b;
+
+	mp_mux_data = 0;
 }
 
 READ64_DEVICE_HANDLER( dc_aica_reg_r )

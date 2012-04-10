@@ -50,6 +50,12 @@ Known games currently not dumped:
 
 static UINT16 *backupram;
 
+/* callbacks to handle output */
+typedef void (*yboard_output_callback)(UINT16 data);
+static yboard_output_callback ybd_output_cb1, ybd_output_cb2;
+static UINT16 pdrift_bank;
+
+
 /*************************************
  *
  *  Configuration
@@ -63,6 +69,9 @@ static void yboard_generic_init( running_machine *machine )
 	/* reset globals */
 	state->vblank_irq_state = 0;
 	state->timer_irq_state = 0;
+
+	ybd_output_cb1 = NULL;
+	ybd_output_cb2 = NULL;
 }
 
 
@@ -319,15 +328,23 @@ static WRITE16_HANDLER( io_chip_w )
 	{
 		/* I/O ports */
 		case 0x00/2:
+			break;
 		case 0x02/2:
+			break;
 		case 0x04/2:
+			break;
 		case 0x06/2:
+			if (ybd_output_cb1)
+				ybd_output_cb1(data);
+			break;
 		case 0x0a/2:
 		case 0x0c/2:
 			break;
 
 		/* miscellaneous output */
 		case 0x08/2:
+
+
 			/*
                 D7 = /KILL
                 D6 = CONT
@@ -336,16 +353,21 @@ static WRITE16_HANDLER( io_chip_w )
                 D3 = XRES
                 D2 = YRES
                 D1-D0 = ADC0-1
-            */
+        */
 			segaic16_set_display_enable(space->machine, data & 0x80);
-			if (((old ^ data) & 0x20) && !(data & 0x20)) watchdog_reset_w(space, 0, 0);
+			if (((old ^ data) & 0x20) && !(data & 0x20))
+				watchdog_reset_w(space, 0, 0);
 			cpu_set_input_line(state->soundcpu, INPUT_LINE_RESET, (data & 0x10) ? CLEAR_LINE : ASSERT_LINE);
 			cpu_set_input_line(state->subx, INPUT_LINE_RESET, (data & 0x08) ? ASSERT_LINE : CLEAR_LINE);
 			cpu_set_input_line(state->suby, INPUT_LINE_RESET, (data & 0x04) ? ASSERT_LINE : CLEAR_LINE);
 			break;
 
 		/* mute */
+
 		case 0x0e/2:
+			if (ybd_output_cb2)
+				ybd_output_cb2(data);
+
 			/* D7 = /MUTE */
 			/* D6-D0 = FLT31-25 */
 			sound_global_enable(space->machine, data & 0x80);
@@ -356,7 +378,6 @@ static WRITE16_HANDLER( io_chip_w )
 			break;
 	}
 }
-
 
 
 /*************************************
@@ -384,6 +405,7 @@ static WRITE16_HANDLER( analog_w )
 	static const char *const ports[] = { "ADC0", "ADC1", "ADC2", "ADC3", "ADC4", "ADC5", "ADC6" };
 	int selected = ((offset & 3) == 3) ? (3 + (state->misc_io_data[0x08/2] & 3)) : (offset & 3);
 	int value = input_port_read_safe(space->machine, ports[selected], 0xff);
+
 	state->analog_data[offset & 3] = value;
 }
 
@@ -1021,6 +1043,9 @@ static MACHINE_DRIVER_START( yboard )
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(342,262)	/* to be verified */
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+
+	MDRV_SEGA16SP_ADD_YBOARD_16B("segaspr1")
+	MDRV_SEGA16SP_ADD_YBOARD("segaspr2")
 
 	MDRV_PALETTE_LENGTH(8192*3)
 
@@ -1694,63 +1719,129 @@ ROM_END
 /**************************************************************************************************************************
  **************************************************************************************************************************
  **************************************************************************************************************************
-    Rail Chase, Sega Y-board
+    Rail Chase World, Sega Y-board
     CPU: 68000 (317-????)
+    CPU BD      837-8073-05
+    VIDEO BD    837-8074-01
+    GAME BD     834-8072-05
 */
 ROM_START( rchase )
 	ROM_REGION( 0x080000, "maincpu", 0 ) // M
-	ROM_LOAD16_BYTE( "ic25.bin",  0x000000, 0x20000, CRC(388b2365) SHA1(0f006f9120b96b8d8be968878ce1d6dd853cd977) )
-	ROM_LOAD16_BYTE( "ic24.bin",  0x000001, 0x20000, CRC(14dba5d4) SHA1(ad09c55273ab1105630f2f76019aedc234fb9292) )
-	ROM_LOAD16_BYTE( "ic27.bin",  0x040000, 0x20000, CRC(dc1cd5a4) SHA1(3b2b6afbeb7daa7c0cc75279bc495221c2508e25) )
-	ROM_LOAD16_BYTE( "ic26.bin",  0x040001, 0x20000, CRC(969fdb3a) SHA1(2d98f1bab2c20cad3d4c20ee2c4022d04fa9ffce) )
+	ROM_LOAD16_BYTE( "epr-13986.25",  0x000000, 0x20000, CRC(388b2365) SHA1(0f006f9120b96b8d8be968878ce1d6dd853cd977) )
+	ROM_LOAD16_BYTE( "epr-13985.24",  0x000001, 0x20000, CRC(14dba5d4) SHA1(ad09c55273ab1105630f2f76019aedc234fb9292) )
+	ROM_LOAD16_BYTE( "epr-13988.27",  0x040000, 0x20000, CRC(dc1cd5a4) SHA1(3b2b6afbeb7daa7c0cc75279bc495221c2508e25) )
+	ROM_LOAD16_BYTE( "epr-13987.26",  0x040001, 0x20000, CRC(43be9e60) SHA1(107a9c126c2bff9030fe621f6b4ab8f29c994ef2) )
 
 	ROM_REGION( 0x040000, "subx", 0 ) // X
-	ROM_LOAD16_BYTE( "ic81.bin",  0x000000, 0x20000, CRC(c5d525b6) SHA1(1fab7f761be67b67ee346a1af1f1fe12aef87dc5) )
-	ROM_LOAD16_BYTE( "ic80.bin",  0x000001, 0x20000, CRC(299e3c7c) SHA1(e4903816ec364e9352abd1180e8a609fed75e1a7) )
+	ROM_LOAD16_BYTE( "epr-13992a.81",  0x000000, 0x20000, CRC(c5d525b6) SHA1(1fab7f761be67b67ee346a1af1f1fe12aef87dc5) )
+	ROM_LOAD16_BYTE( "epr-13991a.80",  0x000001, 0x20000, CRC(299e3c7c) SHA1(e4903816ec364e9352abd1180e8a609fed75e1a7) )
 
 	ROM_REGION( 0x040000, "suby", 0 ) // Y
-	ROM_LOAD16_BYTE( "ic54.bin",  0x000000, 0x20000, CRC(18eb23c5) SHA1(53e5681c7450a3879ed80c1680168d6295caa887) )
-	ROM_LOAD16_BYTE( "ic53.bin",  0x000001, 0x20000, CRC(8f4f824e) SHA1(d470f23ce2dca4e75b7b714175d47338c41bb721) )
+	ROM_LOAD16_BYTE( "epr-14092.54",  0x000000, 0x20000, CRC(18eb23c5) SHA1(53e5681c7450a3879ed80c1680168d6295caa887) )
+	ROM_LOAD16_BYTE( "epr-14091.53",  0x000001, 0x20000, CRC(72a56f71) SHA1(d45d3072ea92b5dde5c70138e56e7f0ca248880e) )
 
 	ROM_REGION16_BE( 0x080000, "gfx2", 0 )
-	ROM_LOAD16_BYTE( "vic16.bin", 0x000000, 0x40000, CRC(9a1dd53c) SHA1(cb01f2c64554914ea693879dfcb498181a1e7a9a) )
-	ROM_LOAD16_BYTE( "vic14.bin", 0x000001, 0x40000, CRC(1fdf1b87) SHA1(ed46af0f72081d545015b73a8d12240664f29506) )
+	ROM_LOAD16_BYTE( "mpr-13999.16", 0x000000, 0x40000, CRC(9a1dd53c) SHA1(cb01f2c64554914ea693879dfcb498181a1e7a9a) )
+	ROM_LOAD16_BYTE( "mpr-13997.14", 0x000001, 0x40000, CRC(1fdf1b87) SHA1(ed46af0f72081d545015b73a8d12240664f29506) )
 
 	ROM_REGION64_BE( 0xc00000, "gfx1", 0)
-	ROMX_LOAD( "vic67.bin",  0x000000, 0x80000, CRC(9fa88781) SHA1(a035fd0fe1d37a589adf3a5029c20d237d5cc827), ROM_SKIP(7) )
-	ROMX_LOAD( "vic75.bin",  0x000001, 0x80000, CRC(49e824bb) SHA1(c1330719b5718aa664b5788244d8cb7b7103a57c), ROM_SKIP(7) )
-	ROMX_LOAD( "vic63.bin",  0x000002, 0x80000, CRC(35b5187e) SHA1(6f0f6471c4135d07a2c852cdc50322b99176712e), ROM_SKIP(7) )
-	ROMX_LOAD( "vic71.bin",  0x000003, 0x80000, CRC(9a538b9b) SHA1(cd84a39bd3858fa6c1d8eb4a349d939261cea6b6), ROM_SKIP(7) )
-	ROMX_LOAD( "vic86.bin",  0x000004, 0x80000, CRC(e11c6c67) SHA1(839e71690e75e47d11b758f5b525452bcc75b823), ROM_SKIP(7) )
-	ROMX_LOAD( "vic114.bin", 0x000005, 0x80000, CRC(16344535) SHA1(a9bd101ae93c24a2e8002ad6a111cf0d0d3b1a64), ROM_SKIP(7) )
-	ROMX_LOAD( "vic82.bin",  0x000006, 0x80000, CRC(78e9983b) SHA1(c0f6577b55acda2cc8cdf0884d5c0517f79de4e9), ROM_SKIP(7) )
-	ROMX_LOAD( "vic110.bin", 0x000007, 0x80000, CRC(e9daa1a4) SHA1(24ad782e88a586fbb31f7ad86be4cdeb38823102), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14021.67",  0x000000, 0x80000, CRC(9fa88781) SHA1(a035fd0fe1d37a589adf3a5029c20d237d5cc827), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14022.75",  0x000001, 0x80000, CRC(49e824bb) SHA1(c1330719b5718aa664b5788244d8cb7b7103a57c), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14009.63",  0x000002, 0x80000, CRC(35b5187e) SHA1(6f0f6471c4135d07a2c852cdc50322b99176712e), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14010.71",  0x000003, 0x80000, CRC(9a538b9b) SHA1(cd84a39bd3858fa6c1d8eb4a349d939261cea6b6), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14023.86",  0x000004, 0x80000, CRC(e11c6c67) SHA1(839e71690e75e47d11b758f5b525452bcc75b823), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14024.114", 0x000005, 0x80000, CRC(16344535) SHA1(a9bd101ae93c24a2e8002ad6a111cf0d0d3b1a64), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14011.82",  0x000006, 0x80000, CRC(78e9983b) SHA1(c0f6577b55acda2cc8cdf0884d5c0517f79de4e9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14012.110", 0x000007, 0x80000, CRC(e9daa1a4) SHA1(24ad782e88a586fbb31f7ad86be4cdeb38823102), ROM_SKIP(7) )
 
-	ROMX_LOAD( "vic66.bin",  0x400000, 0x80000, CRC(b83df159) SHA1(f0cf99e6ddae1d26fd68240a731f3e28e9c6073b), ROM_SKIP(7) )
-	ROMX_LOAD( "vic74.bin",  0x400001, 0x80000, CRC(76dbe9ce) SHA1(2f5af8d015cf8fb90a0862bc37235bc20d4dac0d), ROM_SKIP(7) )
-	ROMX_LOAD( "vic62.bin",  0x400002, 0x80000, CRC(9e998209) SHA1(c0d39d11d554fd6a43db77ccf96ac04dd634edff), ROM_SKIP(7) )
-	ROMX_LOAD( "vic70.bin",  0x400003, 0x80000, CRC(2caddf1a) SHA1(a2e891e65c7cd156a3131a084ff51ae9b1663bc0), ROM_SKIP(7) )
-	ROMX_LOAD( "vic85.bin",  0x400004, 0x80000, CRC(b15e19ff) SHA1(947c35301875b4842835f2ba6aca216f087a3fc7), ROM_SKIP(7) )
-	ROMX_LOAD( "vic113.bin", 0x400005, 0x80000, CRC(84c7008f) SHA1(b92f3c636c5d91c5b1c6090a48be7bb1be6b927e), ROM_SKIP(7) )
-	ROMX_LOAD( "vic81.bin",  0x400006, 0x80000, CRC(c3cf5faa) SHA1(02bca1b248fcb6313cd529ca2aa0f7516177166b), ROM_SKIP(7) )
-	ROMX_LOAD( "vic109.bin", 0x400007, 0x80000, CRC(7e91beb2) SHA1(bc1a7ce68d6b825daf93ca437dda803857cee0a2), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14017.66",  0x400000, 0x80000, CRC(b83df159) SHA1(f0cf99e6ddae1d26fd68240a731f3e28e9c6073b), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14018.74",  0x400001, 0x80000, CRC(76dbe9ce) SHA1(2f5af8d015cf8fb90a0862bc37235bc20d4dac0d), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14005.62",  0x400002, 0x80000, CRC(9e998209) SHA1(c0d39d11d554fd6a43db77ccf96ac04dd634edff), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14006.70",  0x400003, 0x80000, CRC(2caddf1a) SHA1(a2e891e65c7cd156a3131a084ff51ae9b1663bc0), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14019.85",  0x400004, 0x80000, CRC(b15e19ff) SHA1(947c35301875b4842835f2ba6aca216f087a3fc7), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14020.113", 0x400005, 0x80000, CRC(84c7008f) SHA1(b92f3c636c5d91c5b1c6090a48be7bb1be6b927e), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14007.81",  0x400006, 0x80000, CRC(c3cf5faa) SHA1(02bca1b248fcb6313cd529ca2aa0f7516177166b), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14008.109", 0x400007, 0x80000, CRC(7e91beb2) SHA1(bc1a7ce68d6b825daf93ca437dda803857cee0a2), ROM_SKIP(7) )
 
-	ROMX_LOAD( "vic65.bin",  0x800000, 0x80000, CRC(31dbb2c3) SHA1(3efeff785d78056e2615dc2267f7bb80a6d4c663), ROM_SKIP(7) )
-	ROMX_LOAD( "vic73.bin",  0x800001, 0x80000, CRC(7e68257d) SHA1(600d1066cfa83f5df46e240a473a8f04179e70f8), ROM_SKIP(7) )
-	ROMX_LOAD( "vic61.bin",  0x800002, 0x80000, CRC(71031ad0) SHA1(02b6240461d66907199f846310e72d37faa5fb50), ROM_SKIP(7) )
-	ROMX_LOAD( "vic69.bin",  0x800003, 0x80000, CRC(27e70a5e) SHA1(fa767f6cc8e46c0e804c37666a8499376c09b025), ROM_SKIP(7) )
-	ROMX_LOAD( "vic84.bin",  0x800004, 0x80000, CRC(7540bf85) SHA1(e8f9208aea6ecedb6ae810a362476cdf1d424319), ROM_SKIP(7) )
-	ROMX_LOAD( "vic112.bin", 0x800005, 0x80000, CRC(7d87b94d) SHA1(4ef5b7b114c25b9e274e3f3dd7e3d7bd29d2d8b9), ROM_SKIP(7) )
-	ROMX_LOAD( "vic80.bin",  0x800006, 0x80000, CRC(87725d74) SHA1(d284512ad15362a886072aaa1a3af98f7a0bddf9), ROM_SKIP(7) )
-	ROMX_LOAD( "vic108.bin", 0x800007, 0x80000, CRC(73477291) SHA1(1fe9d7666d89ee55a0178dceb7cfea7ce94b9e18), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14013.65",  0x800000, 0x80000, CRC(31dbb2c3) SHA1(3efeff785d78056e2615dc2267f7bb80a6d4c663), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14014.73",  0x800001, 0x80000, CRC(7e68257d) SHA1(600d1066cfa83f5df46e240a473a8f04179e70f8), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14001.61",  0x800002, 0x80000, CRC(71031ad0) SHA1(02b6240461d66907199f846310e72d37faa5fb50), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14002.69",  0x800003, 0x80000, CRC(27e70a5e) SHA1(fa767f6cc8e46c0e804c37666a8499376c09b025), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14015.84",  0x800004, 0x80000, CRC(7540bf85) SHA1(e8f9208aea6ecedb6ae810a362476cdf1d424319), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14016.112", 0x800005, 0x80000, CRC(7d87b94d) SHA1(4ef5b7b114c25b9e274e3f3dd7e3d7bd29d2d8b9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14003.80",  0x800006, 0x80000, CRC(87725d74) SHA1(d284512ad15362a886072aaa1a3af98f7a0bddf9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14004.108", 0x800007, 0x80000, CRC(73477291) SHA1(1fe9d7666d89ee55a0178dceb7cfea7ce94b9e18), ROM_SKIP(7) )
 
 	ROM_REGION( 0x10000, "soundcpu", 0 )		/* Z80 sound CPU */
-	ROM_LOAD( "ic102.bin", 0x000000, 0x10000,  CRC(7cc3b543) SHA1(c5e6a2dca891d0b6528e6d66ccd18b24ed4a9464) )
+	ROM_LOAD( "epr-13993.102", 0x000000, 0x10000,  CRC(7cc3b543) SHA1(c5e6a2dca891d0b6528e6d66ccd18b24ed4a9464) )
 
 	ROM_REGION( 0x200000, "pcm", ROMREGION_ERASEFF )	/* SegaPCM samples */
-	ROM_LOAD( "ic107.bin", 0x000000, 0x80000, CRC(345f5a41) SHA1(d414c3485ba31863c2b36282756709e06a41d262) )
-	ROM_LOAD( "ic106.bin", 0x080000, 0x80000, CRC(f604c270) SHA1(02023786fec2f2702c2f19f51aff5b7e4928ae91) )
-	ROM_LOAD( "ic105.bin", 0x100000, 0x80000, CRC(76095538) SHA1(aab830e3675116c475fe69e0e991118c045b131b) )
+	ROM_LOAD( "mpr-13996.107", 0x000000, 0x80000, CRC(345f5a41) SHA1(d414c3485ba31863c2b36282756709e06a41d262) )
+	ROM_LOAD( "mpr-13995.106", 0x080000, 0x80000, CRC(f604c270) SHA1(02023786fec2f2702c2f19f51aff5b7e4928ae91) )
+	ROM_LOAD( "mpr-13994.105", 0x100000, 0x80000, CRC(76095538) SHA1(aab830e3675116c475fe69e0e991118c045b131b) )
+ROM_END
+
+/**************************************************************************************************************************
+ **************************************************************************************************************************
+ **************************************************************************************************************************
+    Rail Chase Japan, Sega Y-board
+    CPU: 68000 (317-????)
+*/
+
+ROM_START( rchasej )
+	ROM_REGION( 0x080000, "maincpu", 0 ) // M
+	ROM_LOAD16_BYTE( "epr-13986.25",  0x000000, 0x20000, CRC(388b2365) SHA1(0f006f9120b96b8d8be968878ce1d6dd853cd977) )
+	ROM_LOAD16_BYTE( "epr-13985.24",  0x000001, 0x20000, CRC(14dba5d4) SHA1(ad09c55273ab1105630f2f76019aedc234fb9292) )
+	ROM_LOAD16_BYTE( "epr-13988.27",  0x040000, 0x20000, CRC(dc1cd5a4) SHA1(3b2b6afbeb7daa7c0cc75279bc495221c2508e25) )
+	ROM_LOAD16_BYTE( "epr-13987.26",  0x040001, 0x20000, CRC(43be9e60) SHA1(107a9c126c2bff9030fe621f6b4ab8f29c994ef2) )
+
+	ROM_REGION( 0x040000, "subx", 0 ) // X
+	ROM_LOAD16_BYTE( "epr-13992a.81",  0x000000, 0x20000, CRC(c5d525b6) SHA1(1fab7f761be67b67ee346a1af1f1fe12aef87dc5) )
+	ROM_LOAD16_BYTE( "epr-13991a.80",  0x000001, 0x20000, CRC(299e3c7c) SHA1(e4903816ec364e9352abd1180e8a609fed75e1a7) )
+
+	ROM_REGION( 0x040000, "suby", 0 ) // Y
+	ROM_LOAD16_BYTE( "epr-13990.54.verify",  0x000000, 0x20000, CRC(18eb23c5) SHA1(53e5681c7450a3879ed80c1680168d6295caa887) ) /* Need to verify EPR #, same as epr-14092.54 above */
+	ROM_LOAD16_BYTE( "epr-13989.53.verify",  0x000001, 0x20000, CRC(8f4f824e) SHA1(d470f23ce2dca4e75b7b714175d47338c41bb721) ) /* Need to verify EPR # */
+
+	ROM_REGION16_BE( 0x080000, "gfx2", 0 )
+	ROM_LOAD16_BYTE( "mpr-13999.16", 0x000000, 0x40000, CRC(9a1dd53c) SHA1(cb01f2c64554914ea693879dfcb498181a1e7a9a) )
+	ROM_LOAD16_BYTE( "mpr-13997.14", 0x000001, 0x40000, CRC(1fdf1b87) SHA1(ed46af0f72081d545015b73a8d12240664f29506) )
+
+	ROM_REGION64_BE( 0xc00000, "gfx1", 0)
+	ROMX_LOAD( "mpr-14021.67",  0x000000, 0x80000, CRC(9fa88781) SHA1(a035fd0fe1d37a589adf3a5029c20d237d5cc827), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14022.75",  0x000001, 0x80000, CRC(49e824bb) SHA1(c1330719b5718aa664b5788244d8cb7b7103a57c), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14009.63",  0x000002, 0x80000, CRC(35b5187e) SHA1(6f0f6471c4135d07a2c852cdc50322b99176712e), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14010.71",  0x000003, 0x80000, CRC(9a538b9b) SHA1(cd84a39bd3858fa6c1d8eb4a349d939261cea6b6), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14023.86",  0x000004, 0x80000, CRC(e11c6c67) SHA1(839e71690e75e47d11b758f5b525452bcc75b823), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14024.114", 0x000005, 0x80000, CRC(16344535) SHA1(a9bd101ae93c24a2e8002ad6a111cf0d0d3b1a64), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14011.82",  0x000006, 0x80000, CRC(78e9983b) SHA1(c0f6577b55acda2cc8cdf0884d5c0517f79de4e9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14012.110", 0x000007, 0x80000, CRC(e9daa1a4) SHA1(24ad782e88a586fbb31f7ad86be4cdeb38823102), ROM_SKIP(7) )
+
+	ROMX_LOAD( "mpr-14017.66",  0x400000, 0x80000, CRC(b83df159) SHA1(f0cf99e6ddae1d26fd68240a731f3e28e9c6073b), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14018.74",  0x400001, 0x80000, CRC(76dbe9ce) SHA1(2f5af8d015cf8fb90a0862bc37235bc20d4dac0d), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14005.62",  0x400002, 0x80000, CRC(9e998209) SHA1(c0d39d11d554fd6a43db77ccf96ac04dd634edff), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14006.70",  0x400003, 0x80000, CRC(2caddf1a) SHA1(a2e891e65c7cd156a3131a084ff51ae9b1663bc0), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14019.85",  0x400004, 0x80000, CRC(b15e19ff) SHA1(947c35301875b4842835f2ba6aca216f087a3fc7), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14020.113", 0x400005, 0x80000, CRC(84c7008f) SHA1(b92f3c636c5d91c5b1c6090a48be7bb1be6b927e), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14007.81",  0x400006, 0x80000, CRC(c3cf5faa) SHA1(02bca1b248fcb6313cd529ca2aa0f7516177166b), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14008.109", 0x400007, 0x80000, CRC(7e91beb2) SHA1(bc1a7ce68d6b825daf93ca437dda803857cee0a2), ROM_SKIP(7) )
+
+	ROMX_LOAD( "mpr-14013.65",  0x800000, 0x80000, CRC(31dbb2c3) SHA1(3efeff785d78056e2615dc2267f7bb80a6d4c663), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14014.73",  0x800001, 0x80000, CRC(7e68257d) SHA1(600d1066cfa83f5df46e240a473a8f04179e70f8), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14001.61",  0x800002, 0x80000, CRC(71031ad0) SHA1(02b6240461d66907199f846310e72d37faa5fb50), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14002.69",  0x800003, 0x80000, CRC(27e70a5e) SHA1(fa767f6cc8e46c0e804c37666a8499376c09b025), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14015.84",  0x800004, 0x80000, CRC(7540bf85) SHA1(e8f9208aea6ecedb6ae810a362476cdf1d424319), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14016.112", 0x800005, 0x80000, CRC(7d87b94d) SHA1(4ef5b7b114c25b9e274e3f3dd7e3d7bd29d2d8b9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14003.80",  0x800006, 0x80000, CRC(87725d74) SHA1(d284512ad15362a886072aaa1a3af98f7a0bddf9), ROM_SKIP(7) )
+	ROMX_LOAD( "mpr-14004.108", 0x800007, 0x80000, CRC(73477291) SHA1(1fe9d7666d89ee55a0178dceb7cfea7ce94b9e18), ROM_SKIP(7) )
+
+	ROM_REGION( 0x10000, "soundcpu", 0 )		/* Z80 sound CPU */
+	ROM_LOAD( "epr-13993.102", 0x000000, 0x10000,  CRC(7cc3b543) SHA1(c5e6a2dca891d0b6528e6d66ccd18b24ed4a9464) )
+
+	ROM_REGION( 0x200000, "pcm", ROMREGION_ERASEFF )	/* SegaPCM samples */
+	ROM_LOAD( "mpr-13996.107", 0x000000, 0x80000, CRC(345f5a41) SHA1(d414c3485ba31863c2b36282756709e06a41d262) )
+	ROM_LOAD( "mpr-13995.106", 0x080000, 0x80000, CRC(f604c270) SHA1(02023786fec2f2702c2f19f51aff5b7e4928ae91) )
+	ROM_LOAD( "mpr-13994.105", 0x100000, 0x80000, CRC(76095538) SHA1(aab830e3675116c475fe69e0e991118c045b131b) )
 ROM_END
 
 
@@ -1832,16 +1923,280 @@ ROM_END
 
 /*************************************
  *
- *  Generic driver initialization
+ *  Output callbacks
+ *
+ *  TODO: kokoroj2 and jpark (SW2)
+ *
+ *  Additional notes:
+ *    - about jpark: the compression switch is broken/inoperative
+ *      and because of that all piston data, which is in this
+ *      section is frozen. bits x01, x04 and x10 when which == 0
+ *      (IO chip 0), seem to have something to do with the sensor
+ *      switches we need to fix
+ *************************************/
+
+static void pdrift_output_cb1( UINT16 data )
+{
+	/* Note:  this is an approximation to get a relatively accurate bank value.  It is obviously not 100% */
+
+	/* for some stupid reason the data is set to all on in the debug menu so we need to check for that */
+	if (data != 255)
+	{
+		/* this is a cheap hack to get some usable positional data in the service menu */
+		/* these values probably manually turn the motor left and right */
+		if (((data == 162) || (data == 161) || (data == 160)))
+		{
+			if ((data == 162))
+			/* moving left */
+			{
+				/* in this rare instance, the bottom bits are used for positional data */
+				output_set_value("bank_data_raw", data);
+				output_set_value("vibration_motor", 0);
+				switch (pdrift_bank)
+				/* we want to go left one step at a time */
+				{
+					case 1:
+						/* all left */
+						output_set_value("bank_motor_position", 1);
+						pdrift_bank = 1;
+						break;
+					case 2:
+						output_set_value("bank_motor_position", 1);
+						pdrift_bank = 1;
+						break;
+					case 3:
+						output_set_value("bank_motor_position", 2);
+						pdrift_bank = 2;
+						break;
+					case 4:
+						/* centered */
+						output_set_value("bank_motor_position", 3);
+						pdrift_bank = 3;
+						break;
+					case 5:
+						output_set_value("bank_motor_position", 4);
+						pdrift_bank = 4;
+						break;
+					case 6:
+						output_set_value("bank_motor_position", 5);
+						pdrift_bank = 5;
+						break;
+					case 7:
+						/* all right */
+						output_set_value("bank_motor_position", 6);
+						pdrift_bank = 6;
+						break;
+					default:
+						output_set_value("bank_motor_position", 4);
+						pdrift_bank = 4;
+						break;
+
+				}
+			}
+
+			if ((data == 161))
+			/* moving right */
+			{
+				/* in this rare instance, the bottom bits are used for positional data */
+				output_set_value("bank_data_raw", data);
+				output_set_value("vibration_motor", 0);
+				switch (pdrift_bank)
+				/* we want to go right one step at a time */
+				{
+					case 1:
+						/* all left */
+						output_set_value("bank_motor_position", 2);
+						pdrift_bank = 2;
+						break;
+					case 2:
+						output_set_value("bank_motor_position", 3);
+						pdrift_bank = 3;
+						break;
+					case 3:
+						output_set_value("bank_motor_position", 4);
+						pdrift_bank = 4;
+						break;
+					case 4:
+						/* centered */
+						output_set_value("bank_motor_position", 5);
+						pdrift_bank = 5;
+						break;
+					case 5:
+						output_set_value("bank_motor_position", 6);
+						pdrift_bank = 6;
+						break;
+					case 6:
+						output_set_value("bank_motor_position", 7);
+						pdrift_bank = 7;
+						break;
+					case 7:
+						/* all right */
+						output_set_value("bank_motor_position", 7);
+						pdrift_bank = 7;
+						break;
+					default:
+						output_set_value("bank_motor_position", 4);
+						pdrift_bank = 4;
+						break;
+
+				}
+
+			}
+		}
+		else
+		{
+			/* the vibration value uses the first few bits to give a number between 0 and 7 */
+			output_set_value("vibration_motor", data & 7);
+			/* normalize the data and subtract the vibration value from it*/
+
+			pdrift_bank = (data - (data & 7));
+			output_set_value("bank_data_raw", pdrift_bank);
+
+			/* position values from left to right */
+			/* 56 48 40 120 72 80 88 */
+
+			/* the normalized values we'll use */
+			/*   1  2  3   4  5  6  7 */
+
+			switch (pdrift_bank)
+			{
+				case 56:
+					/* all left */
+					output_set_value("bank_motor_position", 1);
+					break;
+				case 48:
+					output_set_value("bank_motor_position", 2);
+					break;
+				case 40:
+					output_set_value("bank_motor_position", 3);
+					break;
+				case 120:
+					/* centered */
+					output_set_value("bank_motor_position", 4);
+					break;
+				case 72:
+					output_set_value("bank_motor_position", 5);
+					break;
+				case 80:
+					output_set_value("bank_motor_position", 6);
+					break;
+				case 88:
+					/* all right */
+					output_set_value("bank_motor_position", 7);
+					break;
+					/* these are the only valid values but 24 pops up sometimes when we crash */
+
+			}
+		}
+	}
+}
+
+static void gloc_output_cb1( UINT16 data )
+{
+	if ((data < 32))
+	{
+		output_set_value("right_motor_position", data);
+
+		/* normalization here prevents strange data from being transferred */
+		/* we do this because for some odd reason */
+		/* gloc starts with one piston all up and one all down.... at least data-wise it does */
+		if ((data > 1) && (data < 29))
+			output_set_value("right_motor_position_nor", data);
+	}
+
+	if ((data < 40) && (data > 31))
+		output_set_value("right_motor_speed", data - 32);
+
+	if ((data < 96) && (data > 63))
+	{
+		output_set_value("left_motor_position", data);
+		/* normalized version... you know... for the kids */
+		if (((data - 64) > 1) && ((data - 64) < 29))
+			output_set_value("left_motor_position_nor", data - 64);
+	}
+
+	if ((data < 104) && (data > 95))
+		output_set_value("left_motor_speed", data - 96);
+}
+
+static void pdrift_output_cb2( UINT16 data )
+{
+	output_set_value("start_lamp", BIT(data, 2));
+	output_set_value("upright_wheel_motor", BIT(data, 1));
+}
+
+static void gforce2_output_cb2( UINT16 data )
+{
+	output_set_value("start_lamp", BIT(data, 2));
+}
+
+static void gloc_output_cb2( UINT16 data )
+{
+	output_set_value("start_lamp", BIT(data, 2));
+	output_set_value("danger_lamp", BIT(data, 5));
+	output_set_value("crash_lamp", BIT(data, 6));
+}
+
+static void r360_output_cb2( UINT16 data )
+{
+	/* r360 cabinet */
+	output_set_value("start_lamp", BIT(data, 2));
+	/* even though the same ouput is used, I've split them to avoid confusion. */
+	output_set_value("emergency_stop_lamp", BIT(data, 2));
+}
+
+static void rchase_output_cb2( UINT16 data )
+{
+	output_set_value("left_start_lamp", BIT(data, 2));
+	output_set_value("right_start_lamp", BIT(data, 1));
+
+	output_set_value("P1_Gun_Recoil", BIT(data, 6));
+	output_set_value("P2_Gun_Recoil", BIT(data, 5));
+}
+
+/*************************************
+ *
+ *  Game-Specific driver initialization
  *
  *************************************/
 
-static DRIVER_INIT( generic_yboard )
+static DRIVER_INIT( gforce2 )
 {
 	yboard_generic_init(machine);
+	ybd_output_cb2 = gforce2_output_cb2;
 }
 
+static DRIVER_INIT( pdrift )
+{
+	/* because some of the output data isn't fully understood we need to "center" the motor */
+	yboard_generic_init(machine);
 
+	ybd_output_cb1 = pdrift_output_cb1;
+	ybd_output_cb2 = pdrift_output_cb2;
+}
+
+static DRIVER_INIT( gloc )
+{
+	/* because some of the output data isn't fully understood we need to "center" the rams */
+	output_set_value("left_motor_position_nor", 16);
+	output_set_value("right_motor_position_nor", 16);
+	yboard_generic_init(machine);
+
+	ybd_output_cb1 = gloc_output_cb1;
+	ybd_output_cb2 = gloc_output_cb2;
+}
+
+static DRIVER_INIT( r360 )
+{
+	yboard_generic_init(machine);
+	ybd_output_cb2 = r360_output_cb2;
+}
+
+static DRIVER_INIT( rchase )
+{
+	yboard_generic_init(machine);
+	ybd_output_cb2 = rchase_output_cb2;
+}
 
 /*************************************
  *
@@ -1849,13 +2204,14 @@ static DRIVER_INIT( generic_yboard )
  *
  *************************************/
 
-GAME( 1988, gforce2,  0,       yboard, gforce2,  generic_yboard, ROT0, "Sega", "Galaxy Force 2" , GAME_SUPPORTS_SAVE )
-GAME( 1988, gforce2j, gforce2, yboard, gforce2,  generic_yboard, ROT0, "Sega", "Galaxy Force 2 (Japan)" , GAME_SUPPORTS_SAVE )
-GAME( 1990, gloc,     0,       yboard, gloc,     generic_yboard, ROT0, "Sega", "G-LOC Air Battle (US)" , GAME_SUPPORTS_SAVE )
-GAME( 1990, glocr360, gloc,    yboard, glocr360, generic_yboard, ROT0, "Sega", "G-LOC R360", GAME_SUPPORTS_SAVE )
-GAMEL(1988, pdrift,   0,       yboard, pdrift,   generic_yboard, ROT0, "Sega", "Power Drift (World, Rev A)", GAME_SUPPORTS_SAVE, layout_pdrift )
-GAMEL(1988, pdrifta,  pdrift,  yboard, pdrift,   generic_yboard, ROT0, "Sega", "Power Drift (World)", GAME_SUPPORTS_SAVE, layout_pdrift )
-GAMEL(1988, pdrifte,  pdrift,  yboard, pdrifte,  generic_yboard, ROT0, "Sega", "Power Drift (World, Earlier)", GAME_SUPPORTS_SAVE, layout_pdrift )
-GAMEL(1988, pdriftj,  pdrift,  yboard, pdriftj,  generic_yboard, ROT0, "Sega", "Power Drift (Japan)", GAME_SUPPORTS_SAVE, layout_pdrift )
-GAME( 1991, rchase,   0,       yboard, rchase,   generic_yboard, ROT0, "Sega", "Rail Chase (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1991, strkfgtr, 0,       yboard, strkfgtr, generic_yboard, ROT0, "Sega", "Strike Fighter (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1988, gforce2,  0,       yboard, gforce2,  gforce2, ROT0, "Sega", "Galaxy Force 2" , GAME_SUPPORTS_SAVE )
+GAME( 1988, gforce2j, gforce2, yboard, gforce2,  gforce2, ROT0, "Sega", "Galaxy Force 2 (Japan)" , GAME_SUPPORTS_SAVE )
+GAME( 1990, gloc,     0,       yboard, gloc,     gloc, ROT0, "Sega", "G-LOC Air Battle (US)" , GAME_SUPPORTS_SAVE )
+GAME( 1990, glocr360, gloc,    yboard, glocr360, r360, ROT0, "Sega", "G-LOC R360", GAME_SUPPORTS_SAVE )
+GAMEL(1988, pdrift,   0,       yboard, pdrift,   pdrift, ROT0, "Sega", "Power Drift (World, Rev A)", GAME_SUPPORTS_SAVE, layout_pdrift )
+GAMEL(1988, pdrifta,  pdrift,  yboard, pdrift,   pdrift, ROT0, "Sega", "Power Drift (World)", GAME_SUPPORTS_SAVE, layout_pdrift )
+GAMEL(1988, pdrifte,  pdrift,  yboard, pdrifte,  pdrift, ROT0, "Sega", "Power Drift (World, Earlier)", GAME_SUPPORTS_SAVE, layout_pdrift )
+GAMEL(1988, pdriftj,  pdrift,  yboard, pdriftj,  pdrift, ROT0, "Sega", "Power Drift (Japan)", GAME_SUPPORTS_SAVE, layout_pdrift )
+GAME( 1991, rchase,   0,       yboard, rchase,   rchase, ROT0, "Sega", "Rail Chase (World)", GAME_SUPPORTS_SAVE )
+GAME( 1991, rchasej,  rchase,  yboard, rchase,   rchase, ROT0, "Sega", "Rail Chase (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1991, strkfgtr, 0,       yboard, strkfgtr, gloc, ROT0, "Sega", "Strike Fighter (Japan)", GAME_SUPPORTS_SAVE )

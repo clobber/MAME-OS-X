@@ -680,7 +680,6 @@
 		5508164310AD280E008142B8 /* senjyo.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E7E10AD2809008142B8 /* senjyo.c */; };
 		5508164410AD280E008142B8 /* skydiver.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E7F10AD2809008142B8 /* skydiver.c */; };
 		5508164510AD280E008142B8 /* skyraid.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E8010AD2809008142B8 /* skyraid.c */; };
-		5508164610AD280E008142B8 /* snes.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E8110AD2809008142B8 /* snes.c */; };
 		5508164710AD280E008142B8 /* snk6502.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E8210AD2809008142B8 /* snk6502.c */; };
 		5508164810AD280E008142B8 /* spacefb.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E8310AD2809008142B8 /* spacefb.c */; };
 		5508164910AD280E008142B8 /* spiders.c in Sources */ = {isa = PBXBuildFile; fileRef = 55080E8410AD2809008142B8 /* spiders.c */; };
@@ -3430,6 +3429,26 @@
 		945DE2CB15315334009E2300 /* emualloc.c in Sources */ = {isa = PBXBuildFile; fileRef = 94299936152A5D1900A214B6 /* emualloc.c */; };
 		945DE2CF153179DC009E2300 /* rspdrc.c in Sources */ = {isa = PBXBuildFile; fileRef = 945DE2CD153179DC009E2300 /* rspdrc.c */; };
 		945DE2D0153179DC009E2300 /* rspfe.c in Sources */ = {isa = PBXBuildFile; fileRef = 945DE2CE153179DC009E2300 /* rspfe.c */; };
+		948500261533E0D800261B90 /* snes_snd.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500251533E0D800261B90 /* snes_snd.c */; };
+		948500291533E14100261B90 /* poker72.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500281533E14100261B90 /* poker72.c */; };
+		948500321533E24D00261B90 /* bigdeal.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002A1533E23300261B90 /* bigdeal.lay */; };
+		948500331533E24D00261B90 /* jollycrd.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002B1533E23300261B90 /* jollycrd.lay */; };
+		948500341533E24D00261B90 /* lucky8.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002C1533E23300261B90 /* lucky8.lay */; };
+		948500351533E24D00261B90 /* namcofl.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002D1533E23300261B90 /* namcofl.lay */; };
+		948500361533E24D00261B90 /* royalcrd.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002E1533E23300261B90 /* royalcrd.lay */; };
+		948500371533E24D00261B90 /* sharkpye.lay in Sources */ = {isa = PBXBuildFile; fileRef = 9485002F1533E23300261B90 /* sharkpye.lay */; };
+		948500381533E24D00261B90 /* sstrangr.lay in Sources */ = {isa = PBXBuildFile; fileRef = 948500301533E23300261B90 /* sstrangr.lay */; };
+		948500391533E24D00261B90 /* stisub.lay in Sources */ = {isa = PBXBuildFile; fileRef = 948500311533E23300261B90 /* stisub.lay */; };
+		9485003D1533E39A00261B90 /* sega16sp.c in Sources */ = {isa = PBXBuildFile; fileRef = 9485003B1533E39900261B90 /* sega16sp.c */; };
+		948500451533ED0900261B90 /* rdpblend.c in Sources */ = {isa = PBXBuildFile; fileRef = 9485003E1533ED0900261B90 /* rdpblend.c */; };
+		948500461533ED0900261B90 /* rdpfb.c in Sources */ = {isa = PBXBuildFile; fileRef = 9485003F1533ED0900261B90 /* rdpfb.c */; };
+		948500471533ED0900261B90 /* rdpfetch.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500401533ED0900261B90 /* rdpfetch.c */; };
+		948500481533ED0900261B90 /* rdpfrect.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500411533ED0900261B90 /* rdpfrect.c */; };
+		948500491533ED0900261B90 /* rdpspn16.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500421533ED0900261B90 /* rdpspn16.c */; };
+		9485004A1533ED0900261B90 /* rdptpipe.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500431533ED0900261B90 /* rdptpipe.c */; };
+		9485004B1533ED0900261B90 /* rdptrect.c in Sources */ = {isa = PBXBuildFile; fileRef = 948500441533ED0900261B90 /* rdptrect.c */; };
+		9485004E1533F34800261B90 /* strconv.c in Sources */ = {isa = PBXBuildFile; fileRef = 9485004C1533F34700261B90 /* strconv.c */; };
+		9485004F1533F34800261B90 /* strconv.h in Headers */ = {isa = PBXBuildFile; fileRef = 9485004D1533F34800261B90 /* strconv.h */; };
 		948F5473152599E400F2ACB1 /* i8008.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F5471152599E400F2ACB1 /* i8008.c */; };
 		948F547715259A0600F2ACB1 /* 8008dasm.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F547615259A0600F2ACB1 /* 8008dasm.c */; };
 		948F547A15259A9200F2ACB1 /* 16c62xdsm.c in Sources */ = {isa = PBXBuildFile; fileRef = 948F547815259A9200F2ACB1 /* 16c62xdsm.c */; };
@@ -3550,7 +3569,6 @@
 		B7EB08860FC714A8007E9821 /* fashion.lay in Sources */ = {isa = PBXBuildFile; fileRef = B7EB08310FC71423007E9821 /* fashion.lay */; };
 		B7EB08870FC714A8007E9821 /* finallap.lay in Sources */ = {isa = PBXBuildFile; fileRef = B7EB08320FC71423007E9821 /* finallap.lay */; };
 		B7EB08880FC714A8007E9821 /* firebeat.lay in Sources */ = {isa = PBXBuildFile; fileRef = 55FCA0AF0BB8D5660095FC7B /* firebeat.lay */; };
-		B7EB08890FC714A8007E9821 /* funworld.lay in Sources */ = {isa = PBXBuildFile; fileRef = 55FCA0B00BB8D5660095FC7B /* funworld.lay */; };
 		B7EB088A0FC714A8007E9821 /* galaxi.lay in Sources */ = {isa = PBXBuildFile; fileRef = B7EB08330FC71423007E9821 /* galaxi.lay */; };
 		B7EB088B0FC714A8007E9821 /* gamball.lay in Sources */ = {isa = PBXBuildFile; fileRef = B7EB08340FC71423007E9821 /* gamball.lay */; };
 		B7EB088C0FC714A8007E9821 /* geebee.lay in Sources */ = {isa = PBXBuildFile; fileRef = 55FCA0B10BB8D5660095FC7B /* geebee.lay */; };
@@ -4458,7 +4476,6 @@
 		55080E7E10AD2809008142B8 /* senjyo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = senjyo.c; path = mame/audio/senjyo.c; sourceTree = "<group>"; };
 		55080E7F10AD2809008142B8 /* skydiver.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = skydiver.c; path = mame/audio/skydiver.c; sourceTree = "<group>"; };
 		55080E8010AD2809008142B8 /* skyraid.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = skyraid.c; path = mame/audio/skyraid.c; sourceTree = "<group>"; };
-		55080E8110AD2809008142B8 /* snes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = snes.c; path = mame/audio/snes.c; sourceTree = "<group>"; };
 		55080E8210AD2809008142B8 /* snk6502.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = snk6502.c; path = mame/audio/snk6502.c; sourceTree = "<group>"; };
 		55080E8310AD2809008142B8 /* spacefb.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = spacefb.c; path = mame/audio/spacefb.c; sourceTree = "<group>"; };
 		55080E8410AD2809008142B8 /* spiders.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = spiders.c; path = mame/audio/spiders.c; sourceTree = "<group>"; };
@@ -7136,7 +7153,6 @@
 		55FCA0AD0BB8D5660095FC7B /* deadeye.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = deadeye.lay; sourceTree = "<group>"; };
 		55FCA0AE0BB8D5660095FC7B /* dlair.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = dlair.lay; sourceTree = "<group>"; };
 		55FCA0AF0BB8D5660095FC7B /* firebeat.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = firebeat.lay; sourceTree = "<group>"; };
-		55FCA0B00BB8D5660095FC7B /* funworld.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = funworld.lay; sourceTree = "<group>"; };
 		55FCA0B10BB8D5660095FC7B /* geebee.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = geebee.lay; sourceTree = "<group>"; };
 		55FCA0B20BB8D5660095FC7B /* gldncrwn.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = gldncrwn.lay; sourceTree = "<group>"; };
 		55FCA0B30BB8D5660095FC7B /* gypsyjug.lay */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = text.xml; path = gypsyjug.lay; sourceTree = "<group>"; };
@@ -7220,11 +7236,32 @@
 		94299932152A5B8B00A214B6 /* emucore.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = emucore.h; sourceTree = "<group>"; };
 		94299935152A5D1900A214B6 /* emu.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = emu.h; sourceTree = "<group>"; };
 		94299936152A5D1900A214B6 /* emualloc.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = emualloc.c; sourceTree = "<group>"; };
-		94299937152A5D1900A214B6 /* emualloc.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = emualloc.h; sourceTree = "<group>"; };
+		94299937152A5D1900A214B6 /* emualloc.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; fileEncoding = 4; path = emualloc.h; sourceTree = "<group>"; };
 		94299938152A5D1900A214B6 /* validity.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = validity.h; sourceTree = "<group>"; };
 		9429994B152A668900A214B6 /* sdlsync_ntc.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = sdlsync_ntc.c; sourceTree = "<group>"; };
 		945DE2CD153179DC009E2300 /* rspdrc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rspdrc.c; path = rsp/rspdrc.c; sourceTree = "<group>"; };
 		945DE2CE153179DC009E2300 /* rspfe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rspfe.c; path = rsp/rspfe.c; sourceTree = "<group>"; };
+		948500251533E0D800261B90 /* snes_snd.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = snes_snd.c; path = mame/audio/snes_snd.c; sourceTree = "<group>"; };
+		948500281533E14100261B90 /* poker72.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = poker72.c; path = mame/drivers/poker72.c; sourceTree = "<group>"; };
+		9485002A1533E23300261B90 /* bigdeal.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = bigdeal.lay; sourceTree = "<group>"; };
+		9485002B1533E23300261B90 /* jollycrd.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = jollycrd.lay; sourceTree = "<group>"; };
+		9485002C1533E23300261B90 /* lucky8.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = lucky8.lay; sourceTree = "<group>"; };
+		9485002D1533E23300261B90 /* namcofl.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = namcofl.lay; sourceTree = "<group>"; };
+		9485002E1533E23300261B90 /* royalcrd.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = royalcrd.lay; sourceTree = "<group>"; };
+		9485002F1533E23300261B90 /* sharkpye.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = sharkpye.lay; sourceTree = "<group>"; };
+		948500301533E23300261B90 /* sstrangr.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = sstrangr.lay; sourceTree = "<group>"; };
+		948500311533E23300261B90 /* stisub.lay */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = stisub.lay; sourceTree = "<group>"; };
+		9485003A1533E39900261B90 /* rdpfiltr.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpfiltr.c; path = mame/video/rdpfiltr.c; sourceTree = "<group>"; };
+		9485003B1533E39900261B90 /* sega16sp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = sega16sp.c; path = mame/video/sega16sp.c; sourceTree = "<group>"; };
+		9485003E1533ED0900261B90 /* rdpblend.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpblend.c; path = mame/video/rdpblend.c; sourceTree = "<group>"; };
+		9485003F1533ED0900261B90 /* rdpfb.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpfb.c; path = mame/video/rdpfb.c; sourceTree = "<group>"; };
+		948500401533ED0900261B90 /* rdpfetch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpfetch.c; path = mame/video/rdpfetch.c; sourceTree = "<group>"; };
+		948500411533ED0900261B90 /* rdpfrect.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpfrect.c; path = mame/video/rdpfrect.c; sourceTree = "<group>"; };
+		948500421533ED0900261B90 /* rdpspn16.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdpspn16.c; path = mame/video/rdpspn16.c; sourceTree = "<group>"; };
+		948500431533ED0900261B90 /* rdptpipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdptpipe.c; path = mame/video/rdptpipe.c; sourceTree = "<group>"; };
+		948500441533ED0900261B90 /* rdptrect.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rdptrect.c; path = mame/video/rdptrect.c; sourceTree = "<group>"; };
+		9485004C1533F34700261B90 /* strconv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = strconv.c; path = mame/src/osd/sdl/strconv.c; sourceTree = SOURCE_ROOT; };
+		9485004D1533F34800261B90 /* strconv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = strconv.h; path = mame/src/osd/sdl/strconv.h; sourceTree = SOURCE_ROOT; };
 		948F5471152599E400F2ACB1 /* i8008.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = i8008.c; path = i8008/i8008.c; sourceTree = "<group>"; };
 		948F547615259A0600F2ACB1 /* 8008dasm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = 8008dasm.c; path = src/emu/cpu/i8008/8008dasm.c; sourceTree = "<group>"; };
 		948F547815259A9200F2ACB1 /* 16c62xdsm.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = 16c62xdsm.c; path = src/emu/cpu/pic16c62x/16c62xdsm.c; sourceTree = "<group>"; };
@@ -7257,7 +7294,7 @@
 		948F54AF1525A1E000F2ACB1 /* nbmj8900.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = nbmj8900.c; path = mame/video/nbmj8900.c; sourceTree = "<group>"; };
 		948F54EC152613ED00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/machine/n64.c; sourceTree = "<group>"; };
 		948F54EE1526140A00F2ACB1 /* n64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = n64.c; path = mame/video/n64.c; sourceTree = "<group>"; };
-		94F5C3B415321CBE0023432B /* osdmalloc.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = osdmalloc.cpp; sourceTree = "<group>"; };
+		94F5C3B415321CBE0023432B /* osdmalloc.cpp */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; path = osdmalloc.cpp; sourceTree = "<group>"; };
 		94F5C430153258EB0023432B /* drcbex64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = drcbex64.c; sourceTree = "<group>"; };
 		B77981A50FC91B0C009F0EBB /* vbiparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = vbiparse.c; sourceTree = "<group>"; };
 		B77981A60FC91B0C009F0EBB /* vbiparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = vbiparse.h; sourceTree = "<group>"; };
@@ -7927,6 +7964,16 @@
 		55080E0110AD2621008142B8 /* auto */ = {
 			isa = PBXGroup;
 			children = (
+				9485003E1533ED0900261B90 /* rdpblend.c */,
+				9485003F1533ED0900261B90 /* rdpfb.c */,
+				948500401533ED0900261B90 /* rdpfetch.c */,
+				948500411533ED0900261B90 /* rdpfrect.c */,
+				948500421533ED0900261B90 /* rdpspn16.c */,
+				948500431533ED0900261B90 /* rdptpipe.c */,
+				948500441533ED0900261B90 /* rdptrect.c */,
+				9485003A1533E39900261B90 /* rdpfiltr.c */,
+				9485003B1533E39900261B90 /* sega16sp.c */,
+				948500281533E14100261B90 /* poker72.c */,
 				942998E9152A3D9D00A214B6 /* micro3d.c */,
 				942998EA152A3D9D00A214B6 /* taito_zm.c */,
 				942998D3152A3C9B00A214B6 /* 5clown.c */,
@@ -8082,7 +8129,7 @@
 				55080E7E10AD2809008142B8 /* senjyo.c */,
 				55080E7F10AD2809008142B8 /* skydiver.c */,
 				55080E8010AD2809008142B8 /* skyraid.c */,
-				55080E8110AD2809008142B8 /* snes.c */,
+				948500251533E0D800261B90 /* snes_snd.c */,
 				55080E8210AD2809008142B8 /* snk6502.c */,
 				55080E8310AD2809008142B8 /* spacefb.c */,
 				55080E8410AD2809008142B8 /* spiders.c */,
@@ -11085,6 +11132,8 @@
 		55B8C6F20C2ADB3C00B1CD96 /* sdlmame */ = {
 			isa = PBXGroup;
 			children = (
+				9485004C1533F34700261B90 /* strconv.c */,
+				9485004D1533F34800261B90 /* strconv.h */,
 				9429994B152A668900A214B6 /* sdlsync_ntc.c */,
 				55ECBA150D30977100F3F67E /* sdlsync.c */,
 				55ECBA160D30977100F3F67E /* sdlsync.h */,
@@ -11278,6 +11327,14 @@
 		55FCA09F0BB8D5660095FC7B /* mame */ = {
 			isa = PBXGroup;
 			children = (
+				9485002A1533E23300261B90 /* bigdeal.lay */,
+				9485002B1533E23300261B90 /* jollycrd.lay */,
+				9485002C1533E23300261B90 /* lucky8.lay */,
+				9485002D1533E23300261B90 /* namcofl.lay */,
+				9485002E1533E23300261B90 /* royalcrd.lay */,
+				9485002F1533E23300261B90 /* sharkpye.lay */,
+				948500301533E23300261B90 /* sstrangr.lay */,
+				948500311533E23300261B90 /* stisub.lay */,
 				942998C7152A3B4D00A214B6 /* crsbingo.lay */,
 				942998C8152A3B4D00A214B6 /* sharkpy.lay */,
 				942998C9152A3B4D00A214B6 /* smoto.lay */,
@@ -11379,7 +11436,6 @@
 				55FCA0AD0BB8D5660095FC7B /* deadeye.lay */,
 				55FCA0AE0BB8D5660095FC7B /* dlair.lay */,
 				55FCA0AF0BB8D5660095FC7B /* firebeat.lay */,
-				55FCA0B00BB8D5660095FC7B /* funworld.lay */,
 				55FCA0B10BB8D5660095FC7B /* geebee.lay */,
 				55FCA0B20BB8D5660095FC7B /* gldncrwn.lay */,
 				55FCA0B30BB8D5660095FC7B /* gypsyjug.lay */,
@@ -11761,6 +11817,7 @@
 				559025220CD613A100B34B42 /* MameMouse.h in Headers */,
 				5533C2FE0D0A7D6D0039BB42 /* MameJoystick.h in Headers */,
 				55ECBA180D30977100F3F67E /* sdlsync.h in Headers */,
+				9485004F1533F34800261B90 /* strconv.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -13420,6 +13477,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				948500321533E24D00261B90 /* bigdeal.lay in Sources */,
+				948500331533E24D00261B90 /* jollycrd.lay in Sources */,
+				948500341533E24D00261B90 /* lucky8.lay in Sources */,
+				948500351533E24D00261B90 /* namcofl.lay in Sources */,
+				948500361533E24D00261B90 /* royalcrd.lay in Sources */,
+				948500371533E24D00261B90 /* sharkpye.lay in Sources */,
+				948500381533E24D00261B90 /* sstrangr.lay in Sources */,
+				948500391533E24D00261B90 /* stisub.lay in Sources */,
 				942998CD152A3B5900A214B6 /* crsbingo.lay in Sources */,
 				942998CE152A3B5900A214B6 /* sharkpy.lay in Sources */,
 				942998CF152A3B5900A214B6 /* smoto.lay in Sources */,
@@ -13475,7 +13540,6 @@
 				B7EB08860FC714A8007E9821 /* fashion.lay in Sources */,
 				B7EB08870FC714A8007E9821 /* finallap.lay in Sources */,
 				B7EB08880FC714A8007E9821 /* firebeat.lay in Sources */,
-				B7EB08890FC714A8007E9821 /* funworld.lay in Sources */,
 				B7EB088A0FC714A8007E9821 /* galaxi.lay in Sources */,
 				B7EB088B0FC714A8007E9821 /* gamball.lay in Sources */,
 				B7EB088C0FC714A8007E9821 /* geebee.lay in Sources */,
@@ -13585,6 +13649,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5595EEF00B1AC6B200631777 /* symbols.c in Sources */,
+				948500261533E0D800261B90 /* snes_snd.c in Sources */,
 				55ACAB830C3542B700F647CE /* clifront.c in Sources */,
 				559020B70CD3A0BD00B34B42 /* emuopts.c in Sources */,
 				5508F59D10ABCB41008142B8 /* eeprom.c in Sources */,
@@ -13713,7 +13778,6 @@
 				5508164310AD280E008142B8 /* senjyo.c in Sources */,
 				5508164410AD280E008142B8 /* skydiver.c in Sources */,
 				5508164510AD280E008142B8 /* skyraid.c in Sources */,
-				5508164610AD280E008142B8 /* snes.c in Sources */,
 				5508164710AD280E008142B8 /* snk6502.c in Sources */,
 				5508164810AD280E008142B8 /* spacefb.c in Sources */,
 				5508164910AD280E008142B8 /* spiders.c in Sources */,
@@ -15578,6 +15642,15 @@
 				942998EB152A3D9D00A214B6 /* micro3d.c in Sources */,
 				942998EC152A3D9D00A214B6 /* taito_zm.c in Sources */,
 				9429992F152A5AE700A214B6 /* emucore.c in Sources */,
+				948500291533E14100261B90 /* poker72.c in Sources */,
+				9485003D1533E39A00261B90 /* sega16sp.c in Sources */,
+				948500451533ED0900261B90 /* rdpblend.c in Sources */,
+				948500461533ED0900261B90 /* rdpfb.c in Sources */,
+				948500471533ED0900261B90 /* rdpfetch.c in Sources */,
+				948500481533ED0900261B90 /* rdpfrect.c in Sources */,
+				948500491533ED0900261B90 /* rdpspn16.c in Sources */,
+				9485004A1533ED0900261B90 /* rdptpipe.c in Sources */,
+				9485004B1533ED0900261B90 /* rdptrect.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -15633,6 +15706,7 @@
 				9429994C152A668900A214B6 /* sdlsync_ntc.c in Sources */,
 				8218679015314D79002986DD /* emualloc.c in Sources */,
 				94F5C3B515321CBE0023432B /* osdmalloc.cpp in Sources */,
+				9485004E1533F34800261B90 /* strconv.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

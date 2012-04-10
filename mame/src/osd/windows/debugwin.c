@@ -430,7 +430,7 @@ void debugwin_init_windows(void)
 			t_face = tstring_from_utf8(options_get_string(mame_options(), WINOPTION_DEBUGGER_FONT));
 			debug_font = CreateFont(-MulDiv(size, GetDeviceCaps(temp_dc, LOGPIXELSY), 72), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
 						ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE, t_face);
-			global_free(t_face);
+			osd_free(t_face);
 
 			// fall back to Lucida Console 8
 			if (debug_font == NULL)
@@ -759,15 +759,15 @@ static LRESULT CALLBACK debugwin_window_proc(HWND wnd, UINT message, WPARAM wpar
 			// send the appropriate message to this view's scrollbar
 			if (info->view[viewnum].wnd && info->view[viewnum].vscroll)
 			{
-				int message = SB_LINELEFT;
+				int message_type = SB_LINELEFT;
 				if (delta < 0)
 				{
-					message = SB_LINERIGHT;
+					message_type = SB_LINERIGHT;
 					delta = -delta;
 				}
 				while (delta > 0)
 				{
-					SendMessage(info->view[viewnum].wnd, WM_VSCROLL, message, (LPARAM)info->view[viewnum].vscroll);
+					SendMessage(info->view[viewnum].wnd, WM_VSCROLL, message_type, (LPARAM)info->view[viewnum].vscroll);
 					delta--;
 				}
 			}
@@ -1574,7 +1574,7 @@ static LRESULT CALLBACK debugwin_edit_proc(HWND wnd, UINT message, WPARAM wparam
 							if (utf8_buffer != NULL)
 							{
 								(*info->process_string)(info, utf8_buffer);
-								global_free(utf8_buffer);
+								osd_free(utf8_buffer);
 							}
 						}
 						break;
@@ -1777,7 +1777,7 @@ static void memory_create_window(running_machine *machine)
 	{
 		TCHAR *t_name = tstring_from_utf8(subview->name);
 		int item = SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
-		global_free(t_name);
+		osd_free(t_name);
 		if (cursel == -1 && subview->space != NULL && subview->space->cpu == curcpu)
 			cursel = item;
 	}
@@ -2086,7 +2086,7 @@ static void disasm_create_window(running_machine *machine)
 	{
 		TCHAR *t_name = tstring_from_utf8(subview->name);
 		int item = SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
-		global_free(t_name);
+		osd_free(t_name);
 		if (cursel == 0 && subview->space->cpu == curcpu)
 			cursel = item;
 	}

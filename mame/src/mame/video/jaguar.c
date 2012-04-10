@@ -200,6 +200,7 @@ static bitmap_t *screen_bitmap;
 
 static pen_t *pen_table;
 
+UINT8 blitter_status;
 
 
 /*************************************
@@ -435,9 +436,8 @@ static void jaguar_set_palette(UINT16 vmode)
 			}
 			break;
 
-		/* YCC/RGB VARMOD */
+		/* YCC VARMOD */
 		case 0x100:
-		case 0x106:
 			for (i = 0; i < 65536; i++)
 			{
 				UINT8 r = (red_lookup[i >> 8] * (i & 0xff)) >> 8;
@@ -455,6 +455,17 @@ static void jaguar_set_palette(UINT16 vmode)
 					b = (b << 3) | (b >> 2);
 				}
 				pen_table[i] = MAKE_RGB(r, g, b);
+			}
+			break;
+
+		/* RGB VARMOD */
+		case 0x106:
+			for (i = 0; i < 65536; i++)
+			{
+				if (i & 1) // FIXME: controls RGB 5-5-5 / 5-6-5 format or it's just ignored? Used by UBI Soft logo in Rayman
+					pen_table[i] = MAKE_RGB(pal5bit(i >> 11), pal5bit(i >> 1), pal5bit(i >> 6));
+				else
+					pen_table[i] = MAKE_RGB(pal5bit(i >> 11), pal6bit(i >> 0), pal5bit(i >> 6));
 			}
 			break;
 
@@ -592,13 +603,17 @@ if (++reps % 100 == 99)
 	profiler_mark_end();
 }
 
+static TIMER_CALLBACK( blitter_done )
+{
+	blitter_status = 1;
+}
 
 READ32_HANDLER( jaguar_blitter_r )
 {
 	switch (offset)
 	{
 		case B_CMD:	/* B_CMD */
-			return 1;
+			return blitter_status & 3;
 
 		default:
 			logerror("%08X:Blitter read register @ F022%02X\n", cpu_get_previouspc(space->cpu), offset * 4);
@@ -611,7 +626,11 @@ WRITE32_HANDLER( jaguar_blitter_w )
 {
 	COMBINE_DATA(&blitter_regs[offset]);
 	if (offset == B_CMD)
+	{
+		blitter_status = 0;
+		timer_set(space->machine, ATTOTIME_IN_USEC(100), NULL, 0, blitter_done);
 		blitter_run(space->machine);
+	}
 
 	if (LOG_BLITTER_WRITE)
 	logerror("%08X:Blitter write register @ F022%02X = %08X\n", cpu_get_previouspc(space->cpu), offset * 4, data);
@@ -639,8 +658,16 @@ READ16_HANDLER( jaguar_tom_regs_r )
 			return video_screen_get_hpos(space->machine->primary_screen) % (video_screen_get_width(space->machine->primary_screen) / 2);
 
 		case VC:
-			return video_screen_get_vpos(space->machine->primary_screen) * 2 + gpu_regs[VBE];
+		{
+			UINT8 half_line;
 
+			if(video_screen_get_hpos(space->machine->primary_screen) >= (video_screen_get_width(space->machine->primary_screen) / 2))
+				half_line = 1;
+			else
+				half_line = 0;
+
+			return video_screen_get_vpos(space->machine->primary_screen) * 2 + half_line;
+		}
 	}
 
 	return gpu_regs[offset];
@@ -671,6 +698,16 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 
 		switch (offset)
 		{
+			case MEMCON1:
+				if((gpu_regs[offset] & 1) == 0)
+					printf("Warning: ROMHI = 0!\n");
+
+				break;
+			case PIT0:
+			case PIT1:
+				if(gpu_regs[PIT0] && reg_store != gpu_regs[offset])
+					printf("Warning: PIT irq used\n");
+				break;
 #if 0
 			case PIT1:
 				if (gpu_regs[PIT0])

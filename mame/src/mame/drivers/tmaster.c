@@ -1048,17 +1048,22 @@ Touchmaster 2000
 by Midway (c) 1996
 touchscreen game
 
+All chips are ST M27C4001
+---------------------------
+
 Name_Board Location        Version               Use             Checksum
 -------------------------------------------------------------------------
-TM2K_v402.u51              4.02 Game Program & Cpu instructions   c625
-TM2K_v402.u52              4.02 Game Program & Cpu instructions   e8a7
+TM2K_v402.u51              4.02 Game Program & Cpu instructions   c517
+TM2K_v402.u52              4.02 Game Program & Cpu instructions   e82c
 
-TM2K_graphic.u36           4.0  Video Images & Graphics           20cb
-TM2K_graphic.u37           4.0  Video Images & Graphics           f5cf
-TM2K_graphic.u38           4.0  Video Images & Graphics           14c7
-TM2K_graphic.u39           4.0  Video Images & Graphics           043e
-TM2K_sound.u8              4.0  Audio Program & sounds            9307
-u62 (NOT INCLUDED)         N/A  Battery Memory Module             N/A
+TM2K_v400.u51              4.00 Game Program & Cpu instructions   a49b
+TM2K_v400.u52              4.00 Game Program & Cpu instructions   7c2f
+
+TM2K_graphic.u36           4.00 Video Images & Graphics           20cb
+TM2K_graphic.u37           4.00 Video Images & Graphics           f5cf
+TM2K_graphic.u38           4.00 Video Images & Graphics           14c7
+TM2K_graphic.u39           4.00 Video Images & Graphics           043e
+TM2K_sound.u8              1.0  Audio Program & sounds            9307
 
 Does not require a security key
 
@@ -1066,17 +1071,33 @@ Does not require a security key
 
 ROM_START( tm2k )
 	ROM_REGION( 0x200000, "maincpu", 0 ) // 68000 Code
-	ROM_LOAD16_BYTE( "tm2k_v402.u51", 0x000000, 0x100000, CRC(fa6d168c) SHA1(c458d1114c658ac963a22cdb74ee5ea489ddcbba) ) /* Ver: 4.02 Standard 5-30-97 */
-	ROM_LOAD16_BYTE( "tm2k_v402.u52", 0x000001, 0x100000, CRC(4e9c2d42) SHA1(67e34778f21010c43c1247179faa3f7ede5ad8d0) ) /* Ver: 4.02 Standard 5-30-97 */
+	ROM_LOAD16_BYTE( "tm2k_v402.u51", 0x000000, 0x080000, CRC(47269aeb) SHA1(6b7ebfde290f7d21a36a72b00dc6523490581edb) ) /* Ver: 4.02 Standard 5-30-97 */
+	ROM_LOAD16_BYTE( "tm2k_v402.u52", 0x000001, 0x080000, CRC(2e3564ac) SHA1(9a71f38841bc17c291cb3f513b18ebe50fc18d9f) ) /* Ver: 4.02 Standard 5-30-97 */
 
 	ROM_REGION( 0x400000, "blitter", ROMREGION_ERASE )	// Blitter gfx
-	ROM_LOAD16_BYTE( "tm2k_graphic.u38", 0x100000, 0x080000, CRC(22bb6cc5) SHA1(fc6cfd4e1e6e1455d648a7b63f2c8e37cdfe86d6) )
+	ROM_LOAD16_BYTE( "tm2k_graphic.u38", 0x100000, 0x080000, CRC(22bb6cc5) SHA1(fc6cfd4e1e6e1455d648a7b63f2c8e37cdfe86d6) ) /* All 4 graphic roms marked as Rev 4.00 */
 	ROM_LOAD16_BYTE( "tm2k_graphic.u36", 0x100001, 0x080000, CRC(7f0840ac) SHA1(1c3af419d571579a3f2c561617d55914d28ef22b) )
 	ROM_LOAD16_BYTE( "tm2k_graphic.u39", 0x300000, 0x080000, CRC(059e1bd8) SHA1(7451c1cfa0d090b0566e353738a1ffba732a8ad2) )
 	ROM_LOAD16_BYTE( "tm2k_graphic.u37", 0x300001, 0x080000, CRC(4cf65950) SHA1(74d49166da19ecc4b8fc1e8e3f01361dfb645eea) )
 
 	ROM_REGION( 0x100000, "oki", 0 ) // Samples
-	ROM_LOAD( "tm2k_sound.u8", 0x40000, 0x040000, CRC(f39ad4cf) SHA1(9bcb9a5dd3636d6541eeb3e737c7253ab0ed4e8d) )
+	ROM_LOAD( "tm2k_sound.u8", 0x40000, 0x040000, CRC(f39ad4cf) SHA1(9bcb9a5dd3636d6541eeb3e737c7253ab0ed4e8d) ) /* Marked as Rev 1.0 */
+	ROM_CONTINUE(              0xc0000, 0x040000 )
+ROM_END
+
+ROM_START( tm2ka )
+	ROM_REGION( 0x200000, "maincpu", 0 ) // 68000 Code
+	ROM_LOAD16_BYTE( "tm2k_v400.u51", 0x000000, 0x080000, CRC(c110502b) SHA1(e9415ed23b9bb0851548e75c208ebcbe6ac2a708) ) /* Ver: 4.00 Standard 5-16-97 */
+	ROM_LOAD16_BYTE( "tm2k_v400.u52", 0x000001, 0x080000, CRC(a17c1d6e) SHA1(5ecb8f27f75469ab9600b3f640eb1acc7a3980e0) ) /* Ver: 4.00 Standard 5-16-97 */
+
+	ROM_REGION( 0x400000, "blitter", ROMREGION_ERASE )	// Blitter gfx
+	ROM_LOAD16_BYTE( "tm2k_graphic.u38", 0x100000, 0x080000, CRC(22bb6cc5) SHA1(fc6cfd4e1e6e1455d648a7b63f2c8e37cdfe86d6) ) /* All 4 graphic roms marked as Rev 4.00 */
+	ROM_LOAD16_BYTE( "tm2k_graphic.u36", 0x100001, 0x080000, CRC(7f0840ac) SHA1(1c3af419d571579a3f2c561617d55914d28ef22b) )
+	ROM_LOAD16_BYTE( "tm2k_graphic.u39", 0x300000, 0x080000, CRC(059e1bd8) SHA1(7451c1cfa0d090b0566e353738a1ffba732a8ad2) )
+	ROM_LOAD16_BYTE( "tm2k_graphic.u37", 0x300001, 0x080000, CRC(4cf65950) SHA1(74d49166da19ecc4b8fc1e8e3f01361dfb645eea) )
+
+	ROM_REGION( 0x100000, "oki", 0 ) // Samples
+	ROM_LOAD( "tm2k_sound.u8", 0x40000, 0x040000, CRC(f39ad4cf) SHA1(9bcb9a5dd3636d6541eeb3e737c7253ab0ed4e8d) ) /* Marked as Rev 1.0 */
 	ROM_CONTINUE(              0xc0000, 0x040000 )
 ROM_END
 
@@ -1104,7 +1125,6 @@ TM3K_graphic.u39           5.0  Video Images & Graphics           6029
 TM3K_graphic.u40           5.0  Video Images & Graphics           ccb4
 TM3K_graphic.u41           5.0  Video Images & Graphics           e9ab
 TM3K_sound.u8              5.0  Audio Program & sounds            64d5
-u62 (NOT INCLUDED)         N/A  Battery Memory Module             N/A
 
 Does not require a security key
 
@@ -1112,11 +1132,6 @@ Box labeled as:
 
 TMSTR 3000 UPGRADE KIT USA-DBV
 63373100870
-
--------------------------------------------------------------------------
-
-SCN68681c1n40
-xc3042A      www.xilinx.com
 
 ***************************************************************************/
 
@@ -1178,12 +1193,8 @@ TM4K_graphic.u39           6.0  Video Images & Graphics         CB90
 TM4K_graphic.u40           6.0  Video Images & Graphics         208A
 TM4K_graphic.u41           6.0  Video Images & Graphics         385D
 TM4K_sound.u8              6.0  Audio Program & sounds          DE0B
-u62 (NOT INCLUDED)         N/A  Battery Memory Module           N/A
-J12 DALLAS DS1204V         N/A  Security Key (required for this Version) - Labeled A-21657-003
------------------------------------------------------------------------------------
 
-SCN68681c1n40
-xc3042A      www.xilinx.com
+J12 DALLAS DS1204V         N/A  Security Key (required for this Version) - Labeled A-21657-003
 
 ***************************************************************************/
 
@@ -1328,7 +1339,6 @@ tm7k_sound.u8              8.0  Audio Program & sounds          F474 (same as TM
 J12 DALLAS DS1204V         N/A  Security Key (required for this Version) - Labeled A-21657-005
 -----------------------------------------------------------------------------------
 
-
 ***************************************************************************/
 
 ROM_START( tm7k )
@@ -1407,13 +1417,30 @@ tm8k_sound.u8              9.0  Audio Program & sounds          F474 (same as TM
 J12 DALLAS DS1204V         N/A  Security Key (required for this Version) - Labeled A-21657-007
 -----------------------------------------------------------------------------------
 
-
 ***************************************************************************/
 
+/* According to the Distributor notice from Midway, the only thing updated for v9.04 was the "Power Cell" game to 'improve the performance'. */
 ROM_START( tm8k )
 	ROM_REGION( 0x200000, "maincpu", 0 ) // 68000 Code
 	ROM_LOAD16_BYTE( "tm8k_v904.u51", 0x000000, 0x100000, CRC(28864ec8) SHA1(e703f9ee350dd915102e784bbd04445a95b7d0a5) ) /* TOUCHMASTER 8000 U51 DOMESTIC 9.04 (Standard 04/25/00) */
 	ROM_LOAD16_BYTE( "tm8k_v904.u52", 0x000001, 0x100000, CRC(c123eec2) SHA1(3e9c84755b18a4fd900068f385ee47107771391d) ) /* TOUCHMASTER 8000 U52 DOMESTIC 9.04 (Standard 04/25/00) */
+
+	ROM_REGION( 0x600000, "blitter", 0 )	// Blitter gfx
+	ROM_LOAD16_BYTE( "tm8k_graphic.u38", 0x000000, 0x100000, CRC(2a971d46) SHA1(6ca4067e9fa40053df415e670b2e853915319dbb) ) /* Mask rom labeled 5341-16513-07 U38 VIDEO IMAGE */
+	ROM_LOAD16_BYTE( "tm8k_graphic.u36", 0x000001, 0x100000, CRC(3bde285e) SHA1(87bf60034665542fb0240b7479adfffb7ba9fad7) ) /* Mask rom labeled 5341-16513-06 U36 VIDEO IMAGE */
+	ROM_LOAD16_BYTE( "tm8k_graphic.u39", 0x200000, 0x100000, CRC(58c6c1d8) SHA1(cc11863c4ea46bde7ea4775075f4328be6d6c6d1) ) /* Mask rom labeled 5341-16513-05 U39 VIDEO IMAGE */
+	ROM_LOAD16_BYTE( "tm8k_graphic.u37", 0x200001, 0x100000, CRC(c0992f7a) SHA1(e4e1ef2414f2f0a784c775f39123122c08950403) ) /* Mask rom labeled 5341-16513-04 U37 VIDEO IMAGE */
+	ROM_LOAD16_BYTE( "tm8k_graphic.u41", 0x400000, 0x100000, CRC(d8bdb82e) SHA1(9bdee261591ccff8a57c5454644f84f8992f614f) ) /* Mask rom labeled 5341-16513-09 U41 VIDEO IMAGE */
+	ROM_LOAD16_BYTE( "tm8k_graphic.u40", 0x400001, 0x100000, CRC(0c3d6347) SHA1(7ef19018c180abf412a8ff9f278b00c2b4321cc2) ) /* Mask rom labeled 5341-16513-08 U40 VIDEO IMAGE */
+
+	ROM_REGION( 0x100000, "oki", 0 ) // Samples
+	ROM_LOAD( "tm8k_sound.u8", 0x00000, 0x100000, CRC(c6070a60) SHA1(2dc20bf2217a36374b5a691133ad43f53dbe29ca) ) /* Mask rom labeled 5341-16513-03 U8 SOUND */
+ROM_END
+
+ROM_START( tm8k902 )
+	ROM_REGION( 0x200000, "maincpu", 0 ) // 68000 Code
+	ROM_LOAD16_BYTE( "tm8k_v902.u51", 0x000000, 0x100000, CRC(c0d95b2c) SHA1(2240d969047ada856ec2fac6cdf72db722753a6d) ) /* TOUCHMASTER 8000 U51 DOMESTIC 9.02 (Standard 03/17/00) */
+	ROM_LOAD16_BYTE( "tm8k_v902.u52", 0x000001, 0x100000, CRC(5194c1b5) SHA1(28a91d12a022927bfe96afd62b30b268c0ced3ea) ) /* TOUCHMASTER 8000 U52 DOMESTIC 9.02 (Standard 03/17/00) */
 
 	ROM_REGION( 0x600000, "blitter", 0 )	// Blitter gfx
 	ROM_LOAD16_BYTE( "tm8k_graphic.u38", 0x000000, 0x100000, CRC(2a971d46) SHA1(6ca4067e9fa40053df415e670b2e853915319dbb) ) /* Mask rom labeled 5341-16513-07 U38 VIDEO IMAGE */
@@ -1773,6 +1800,7 @@ static DRIVER_INIT( galgame2 )
 GAME( 1996, tm,       0,        tm,       tm,       0,        ROT0, "CES Inc., Midway Games Inc.",             "Touchmaster (v3.00 Euro)",            0 )
 GAME( 1996, tmdo,     tm,       tm,       tm,       0,        ROT0, "CES Inc., Midway Games Inc.",             "Touchmaster (v2.2-01 Standard)",      0 )
 GAME( 1996, tm2k,     0,        tm3k,     tmaster,  0,        ROT0, "Midway Games Inc.",                       "Touchmaster 2000 (v4.02 Standard)",   0 )
+GAME( 1996, tm2ka,    tm2k,     tm3k,     tmaster,  0,        ROT0, "Midway Games Inc.",                       "Touchmaster 2000 (v4.00 Standard)",   0 )
 GAME( 1997, tm3k,     0,        tm3k,     tmaster,  0,        ROT0, "Midway Games Inc.",                       "Touchmaster 3000 (v5.02 Standard)",   0 )
 GAME( 1997, tm3ka,    tm3k,     tm3k,     tmaster,  0,        ROT0, "Midway Games Inc.",                       "Touchmaster 3000 (v5.01 Standard)",   0 )
 GAME( 1998, tm4k,     0,        tm3k,     tmaster,  tm4k,     ROT0, "Midway Games Inc.",                       "Touchmaster 4000 (v6.03 Standard)",   0 )
@@ -1784,5 +1812,6 @@ GAME( 1999, tm7k,     0,        tm3k,     tmaster,  tm7k,     ROT0, "Midway Game
 GAME( 1999, tm7ka,    tm7k,     tm3k,     tmaster,  tm7ka,    ROT0, "Midway Games Inc.",                       "Touchmaster 7000 (v8.00 Standard)",   0 )
 GAME( 1999, tm7keval, tm7k,     tm3k,     tmaster,  tm7keval, ROT0, "Midway Games Inc.",                       "Touchmaster 7000 (v8.1X Evaluation)", 0 )
 GAME( 2000, tm8k,     0,        tm3k,     tmaster,  tm8k,     ROT0, "Midway Games Inc.",                       "Touchmaster 8000 (v9.04 Standard)",   0 )
+GAME( 2000, tm8k902,  tm8k,     tm3k,     tmaster,  tm8k,     ROT0, "Midway Games Inc.",                       "Touchmaster 8000 (v9.02 Standard)",   0 )
 GAME( 1998, galgbios, 0,        galgames, galgames, galgames, ROT0, "Creative Electronics & Software",         "Galaxy Games (BIOS v1.90)",           GAME_IS_BIOS_ROOT )
 GAME( 1998, galgame2, galgbios, galgame2, galgames, galgame2, ROT0, "Creative Electronics & Software / Namco", "Galaxy Games StarPak 2",              0 )
