@@ -138,7 +138,7 @@ Dip location and recommended settings verified with the US manual
 
 static WRITE8_HANDLER( combatsc_vreg_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 	if (data != state->vreg)
 	{
 		tilemap_mark_all_tiles_dirty(state->textlayer);
@@ -152,7 +152,7 @@ static WRITE8_HANDLER( combatsc_vreg_w )
 
 static WRITE8_HANDLER( combatscb_sh_irqtrigger_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
@@ -166,13 +166,7 @@ static READ8_HANDLER( combatscb_io_r )
 
 static WRITE8_HANDLER( combatscb_priority_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
-	state->priority = data & 0x20;
-}
-
-static WRITE8_HANDLER( combatsc_bankselect_w )
-{
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 
 	if (data & 0x40)
 	{
@@ -188,6 +182,26 @@ static WRITE8_HANDLER( combatsc_bankselect_w )
 	}
 
 	state->priority = data & 0x20;
+}
+
+static WRITE8_HANDLER( combatsc_bankselect_w )
+{
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
+
+	state->priority = data & 0x20;
+
+	if (data & 0x40)
+	{
+		state->video_circuit = 1;
+		state->videoram = state->page[1];
+		state->scrollram = state->scrollram1;
+	}
+	else
+	{
+		state->video_circuit = 0;
+		state->videoram = state->page[0];
+		state->scrollram = state->scrollram0;
+	}
 
 	if (data & 0x10)
 		memory_set_bank(space->machine, "bank1", (data & 0x0e) >> 1);
@@ -197,7 +211,7 @@ static WRITE8_HANDLER( combatsc_bankselect_w )
 
 static WRITE8_HANDLER( combatscb_io_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 
 	switch (offset)
 	{
@@ -210,7 +224,7 @@ static WRITE8_HANDLER( combatscb_io_w )
 
 static WRITE8_HANDLER( combatscb_bankselect_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 
 	if (data & 0x40)
 	{
@@ -262,7 +276,7 @@ static WRITE8_HANDLER( combatsc_coin_counter_w )
 
 static READ8_HANDLER( trackball_r )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 
 	if (offset == 0)
 	{
@@ -300,12 +314,12 @@ static READ8_HANDLER( trackball_r )
 /* the protection is a simple multiply */
 static WRITE8_HANDLER( protection_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 	state->prot[offset] = data;
 }
 static READ8_HANDLER( protection_r )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 	return ((state->prot[0] * state->prot[1]) >> (offset * 8)) & 0xff;
 }
 static WRITE8_HANDLER( protection_clock_w )
@@ -318,7 +332,7 @@ static WRITE8_HANDLER( protection_clock_w )
 
 static WRITE8_HANDLER( combatsc_sh_irqtrigger_w )
 {
-	combatsc_state *state = (combatsc_state *)space->machine->driver_data;
+	combatsc_state *state = space->machine->driver_data<combatsc_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
 
@@ -344,7 +358,7 @@ static WRITE8_DEVICE_HANDLER( combatsc_portA_w )
 
 static READ8_DEVICE_HANDLER ( combatsc_ym2203_r )
 {
-	combatsc_state *state = (combatsc_state *)device->machine->driver_data;
+	combatsc_state *state = device->machine->driver_data<combatsc_state>();
 	int status = ym2203_r(device,offset);
 
 	if (cpu_get_pc(state->audiocpu) == 0x334)
@@ -668,7 +682,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( combatsc )
 {
-	combatsc_state *state = (combatsc_state *)machine->driver_data;
+	combatsc_state *state = machine->driver_data<combatsc_state>();
 	UINT8 *MEM = memory_region(machine, "maincpu") + 0x38000;
 
 	state->io_ram  = MEM + 0x0000;
@@ -696,8 +710,8 @@ static MACHINE_START( combatsc )
 
 static MACHINE_RESET( combatsc )
 {
-	combatsc_state *state = (combatsc_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	combatsc_state *state = machine->driver_data<combatsc_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	memset(state->io_ram,  0x00, 0x4000);
@@ -720,10 +734,7 @@ static MACHINE_RESET( combatsc )
 }
 
 /* combat school (original) */
-static MACHINE_DRIVER_START( combatsc )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(combatsc_state)
+static MACHINE_CONFIG_START( combatsc, combatsc_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)	/* 3 MHz? */
@@ -765,13 +776,10 @@ static MACHINE_DRIVER_START( combatsc )
 
 	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* combat school (bootleg on different hardware) */
-static MACHINE_DRIVER_START( combatscb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(combatsc_state)
+static MACHINE_CONFIG_START( combatscb, combatsc_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)	/* 3 MHz? */
@@ -810,7 +818,7 @@ static MACHINE_DRIVER_START( combatscb )
 
 	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

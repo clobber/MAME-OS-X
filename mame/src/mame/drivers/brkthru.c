@@ -67,7 +67,7 @@
 
 static WRITE8_HANDLER( brkthru_1803_w )
 {
-	brkthru_state *state = (brkthru_state *)space->machine->driver_data;
+	brkthru_state *state = space->machine->driver_data<brkthru_state>();
 	/* bit 0 = NMI enable */
 	cpu_interrupt_enable(state->maincpu, ~data & 1);
 
@@ -75,7 +75,7 @@ static WRITE8_HANDLER( brkthru_1803_w )
 }
 static WRITE8_HANDLER( darwin_0803_w )
 {
-	brkthru_state *state = (brkthru_state *)space->machine->driver_data;
+	brkthru_state *state = space->machine->driver_data<brkthru_state>();
 	/* bit 0 = NMI enable */
 	/*cpu_interrupt_enable(state->audiocpu, ~data & 1);*/
 	logerror("0803 %02X\n",data);
@@ -85,14 +85,14 @@ static WRITE8_HANDLER( darwin_0803_w )
 
 static WRITE8_HANDLER( brkthru_soundlatch_w )
 {
-	brkthru_state *state = (brkthru_state *)space->machine->driver_data;
+	brkthru_state *state = space->machine->driver_data<brkthru_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted )
 {
-	brkthru_state *state = (brkthru_state *)field->port->machine->driver_data;
+	brkthru_state *state = field->port->machine->driver_data<brkthru_state>();
 	/* coin insertion causes an IRQ */
 	cpu_set_input_line(state->maincpu, 0, newval ? CLEAR_LINE : ASSERT_LINE);
 }
@@ -346,7 +346,7 @@ GFXDECODE_END
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
 static void irqhandler( running_device *device, int linestate )
 {
-	brkthru_state *state = (brkthru_state *)device->machine->driver_data;
+	brkthru_state *state = device->machine->driver_data<brkthru_state>();
 	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, linestate);
 }
 
@@ -365,7 +365,7 @@ static const ym3526_interface ym3526_config =
 
 static MACHINE_START( brkthru )
 {
-	brkthru_state *state = (brkthru_state *)machine->driver_data;
+	brkthru_state *state = machine->driver_data<brkthru_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -377,17 +377,14 @@ static MACHINE_START( brkthru )
 
 static MACHINE_RESET( brkthru )
 {
-	brkthru_state *state = (brkthru_state *)machine->driver_data;
+	brkthru_state *state = machine->driver_data<brkthru_state>();
 
 	state->bgscroll = 0;
 	state->bgbasecolor = 0;
 	state->flipscreen = 0;
 }
 
-static MACHINE_DRIVER_START( brkthru )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(brkthru_state)
+static MACHINE_CONFIG_START( brkthru, brkthru_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, MASTER_CLOCK/8)        /* 1.5 MHz ? */
@@ -425,13 +422,10 @@ static MACHINE_DRIVER_START( brkthru )
 	MDRV_SOUND_ADD("ym2", YM3526, MASTER_CLOCK/4)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( darwin )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(brkthru_state)
+static MACHINE_CONFIG_START( darwin, brkthru_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, MASTER_CLOCK/8)        /* 1.5 MHz ? */
@@ -480,7 +474,7 @@ static MACHINE_DRIVER_START( darwin )
 	MDRV_SOUND_ADD("ym2", YM3526, MASTER_CLOCK/4)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -140,7 +140,7 @@ static WRITE8_HANDLER( wardner_ramrom_bank_sw )
 	if (wardner_membank != data) {
 		int bankaddress = 0;
 
-		const address_space *mainspace;
+		address_space *mainspace;
 		UINT8 *RAM = memory_region(space->machine, "maincpu");
 
 		mainspace = cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
@@ -178,7 +178,7 @@ static WRITE8_HANDLER( wardner_ramrom_bank_sw )
 
 STATE_POSTLOAD( wardner_restore_bank )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	wardner_ramrom_bank_sw(space,0,1);	/* Dummy value to ensure restoration */
 	wardner_ramrom_bank_sw(space,0,wardner_membank);
@@ -392,7 +392,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( wardner )
+static MACHINE_CONFIG_START( wardner, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_24MHz/4)		/* 6MHz */
@@ -438,7 +438,7 @@ static MACHINE_DRIVER_START( wardner )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_14MHz/4)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

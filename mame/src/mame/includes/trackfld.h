@@ -8,12 +8,11 @@
 #include "sound/msm5205.h"
 
 
-class trackfld_state
+class trackfld_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, trackfld_state(machine)); }
-
-	trackfld_state(running_machine &machine) { }
+	trackfld_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  videoram;	// trackfld, hyperspt, yiear, sbasketb
@@ -31,7 +30,7 @@ public:
 	tilemap_t  *bg_tilemap;
 	int      bg_bank, sprite_bank1, sprite_bank2;	// trackfld
 	int      old_gfx_bank;					// needed by atlantol
-
+	int		 sprites_gfx_banked;
 
 	/* sound-related */
 	int      SN76496_latch;
@@ -80,7 +79,7 @@ WRITE8_HANDLER( atlantol_gfxbank_w );
 PALETTE_INIT( trackfld );
 VIDEO_START( trackfld );
 VIDEO_UPDATE( trackfld );
-
+VIDEO_START( atlantol );
 
 /*----------- defined in video/hyperspt.c -----------*/
 
@@ -92,7 +91,6 @@ PALETTE_INIT( hyperspt );
 VIDEO_START( hyperspt );
 VIDEO_UPDATE( hyperspt );
 VIDEO_START( roadf );
-
 
 /*----------- defined in video/sbasketb.c -----------*/
 

@@ -128,7 +128,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5001, 0x5001) AM_DEVWRITE("namco", pacman_sound_enable_w)
 	AM_RANGE(0x5003, 0x5003) AM_WRITE(pacman_flipscreen_w)
 	AM_RANGE(0x5040, 0x507f) AM_READ_PORT("P2")
-	AM_RANGE(0x5040, 0x505f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&pacman_soundregs)
+	AM_RANGE(0x5040, 0x505f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x5060, 0x506f) AM_WRITEONLY AM_BASE_GENERIC(spriteram2)
 	AM_RANGE(0x5070, 0x5070) AM_WRITE(pengo_palettebank_w)
 	AM_RANGE(0x5071, 0x5071) AM_WRITE(pengo_colortablebank_w)
@@ -263,7 +263,7 @@ static const namco_interface namco_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( jrpacman )
+static MACHINE_CONFIG_START( jrpacman, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 18432000/6)	/* 3.072 MHz */
@@ -292,7 +292,7 @@ static MACHINE_DRIVER_START( jrpacman )
 	MDRV_SOUND_ADD("namco", NAMCO, 3072000/32)
 	MDRV_SOUND_CONFIG(namco_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

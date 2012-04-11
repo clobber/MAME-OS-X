@@ -83,8 +83,9 @@ struct _z8000_state
 	int irq_state[2];	/* IRQ line states (NVI, VI) */
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int icount;
 };
 
@@ -108,53 +109,53 @@ static UINT8 z8000_zsp[256];
 
 INLINE UINT16 RDOP(z8000_state *cpustate)
 {
-	UINT16 res = memory_decrypted_read_word(cpustate->program, cpustate->pc);
+	UINT16 res = cpustate->direct->read_decrypted_word(cpustate->pc);
     cpustate->pc += 2;
     return res;
 }
 
 INLINE UINT8 RDMEM_B(z8000_state *cpustate, UINT32 addr)
 {
-	return memory_read_byte_16be(cpustate->program, addr);
+	return cpustate->program->read_byte(addr);
 }
 
 INLINE UINT16 RDMEM_W(z8000_state *cpustate, UINT32 addr)
 {
 	addr &= ~1;
-	return memory_read_word_16be(cpustate->program, addr);
+	return cpustate->program->read_word(addr);
 }
 
 INLINE UINT32 RDMEM_L(z8000_state *cpustate, UINT32 addr)
 {
 	UINT32 result;
 	addr &= ~1;
-	result = memory_read_word_16be(cpustate->program, addr) << 16;
-	return result + memory_read_word_16be(cpustate->program, addr + 2);
+	result = cpustate->program->read_word(addr) << 16;
+	return result + cpustate->program->read_word(addr + 2);
 }
 
 INLINE void WRMEM_B(z8000_state *cpustate, UINT32 addr, UINT8 value)
 {
-	memory_write_byte_16be(cpustate->program, addr, value);
+	cpustate->program->write_byte(addr, value);
 }
 
 INLINE void WRMEM_W(z8000_state *cpustate, UINT32 addr, UINT16 value)
 {
 	addr &= ~1;
-	memory_write_word_16be(cpustate->program, addr, value);
+	cpustate->program->write_word(addr, value);
 }
 
 INLINE void WRMEM_L(z8000_state *cpustate, UINT32 addr, UINT32 value)
 {
 	addr &= ~1;
-	memory_write_word_16be(cpustate->program, addr, value >> 16);
-	memory_write_word_16be(cpustate->program, (UINT16)(addr + 2), value & 0xffff);
+	cpustate->program->write_word(addr, value >> 16);
+	cpustate->program->write_word((UINT16)(addr + 2), value & 0xffff);
 }
 
 INLINE UINT8 RDPORT_B(z8000_state *cpustate, int mode, UINT16 addr)
 {
 	if(mode == 0)
 	{
-		return memory_read_byte_8le(cpustate->io, addr);
+		return cpustate->io->read_byte(addr);
 	}
 	else
 	{
@@ -167,8 +168,8 @@ INLINE UINT16 RDPORT_W(z8000_state *cpustate, int mode, UINT16 addr)
 {
 	if(mode == 0)
 	{
-		return memory_read_byte_8le(cpustate->io, (UINT16)(addr)) +
-			  (memory_read_byte_8le(cpustate->io, (UINT16)(addr+1)) << 8);
+		return cpustate->io->read_byte((UINT16)(addr)) +
+			  (cpustate->io->read_byte((UINT16)(addr+1)) << 8);
 	}
 	else
 	{
@@ -181,7 +182,7 @@ INLINE void WRPORT_B(z8000_state *cpustate, int mode, UINT16 addr, UINT8 value)
 {
 	if(mode == 0)
 	{
-        memory_write_byte_8le(cpustate->io, addr,value);
+        cpustate->io->write_byte(addr,value);
 	}
 	else
 	{
@@ -193,8 +194,8 @@ INLINE void WRPORT_W(z8000_state *cpustate, int mode, UINT16 addr, UINT16 value)
 {
 	if(mode == 0)
 	{
-		memory_write_byte_8le(cpustate->io, (UINT16)(addr),value & 0xff);
-		memory_write_byte_8le(cpustate->io, (UINT16)(addr+1),(value >> 8) & 0xff);
+		cpustate->io->write_byte((UINT16)(addr),value & 0xff);
+		cpustate->io->write_byte((UINT16)(addr+1),(value >> 8) & 0xff);
 	}
 	else
 	{
@@ -204,7 +205,7 @@ INLINE void WRPORT_W(z8000_state *cpustate, int mode, UINT16 addr, UINT16 value)
 
 INLINE UINT16 fetch(z8000_state *cpustate)
 {
-	UINT16 data = memory_decrypted_read_word(cpustate->program, cpustate->pc);
+	UINT16 data = cpustate->direct->read_decrypted_word(cpustate->pc);
 
 	cpustate->pc+=2;
 
@@ -365,6 +366,7 @@ static CPU_INIT( z8001 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
 	/* already initialized? */
@@ -379,6 +381,7 @@ static CPU_INIT( z8002 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
 	/* already initialized? */
@@ -395,6 +398,7 @@ static CPU_RESET( z8001 )
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 	cpustate->fcw = RDMEM_W(cpustate,  2); /* get reset cpustate->fcw */
 	if(cpustate->fcw & F_SEG)
@@ -416,6 +420,7 @@ static CPU_RESET( z8002 )
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 	cpustate->fcw = RDMEM_W(cpustate,  2); /* get reset cpustate->fcw */
 	cpustate->pc = RDMEM_W(cpustate,  4); /* get reset cpustate->pc  */

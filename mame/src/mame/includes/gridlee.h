@@ -9,9 +9,19 @@
 #include "devlegcy.h"
 
 
+class gridlee_state : public driver_device
+{
+public:
+	gridlee_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *videoram;
+};
+
+
 /*----------- defined in audio/gridlee.c -----------*/
 
-WRITE8_HANDLER( gridlee_sound_w );
+WRITE8_DEVICE_HANDLER( gridlee_sound_w );
 
 DECLARE_LEGACY_SOUND_DEVICE(GRIDLEE, gridlee_sound);
 

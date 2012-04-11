@@ -129,7 +129,7 @@ INPUT_PORTS_END
 
 static READ32_HANDLER( simpl156_inputs_read )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	int eep = eeprom_read_bit(state->eeprom);
 	UINT32 returndata = input_port_read(space->machine, "IN0") ^ 0xffff0000;
 
@@ -169,7 +169,7 @@ static READ32_HANDLER(  simpl156_system_r )
 
 static WRITE32_HANDLER( simpl156_eeprom_w )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	//int okibank;
 
 	//okibank = data & 0x07;
@@ -200,13 +200,13 @@ static WRITE32_HANDLER( simpl156_spriteram_w )
 
 static READ32_HANDLER( simpl156_mainram_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	return state->mainram[offset]^0xffff0000;
 }
 
 static WRITE32_HANDLER( simpl156_mainram_w )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	data &= 0x0000ffff;
 	mem_mask &= 0x0000ffff;
 
@@ -215,13 +215,13 @@ static WRITE32_HANDLER( simpl156_mainram_w )
 
 static READ32_HANDLER( simpl156_pf1_rowscroll_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	return state->pf1_rowscroll[offset] ^ 0xffff0000;
 }
 
 static WRITE32_HANDLER( simpl156_pf1_rowscroll_w )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	data &= 0x0000ffff;
 	mem_mask &= 0x0000ffff;
 
@@ -230,13 +230,13 @@ static WRITE32_HANDLER( simpl156_pf1_rowscroll_w )
 
 static READ32_HANDLER( simpl156_pf2_rowscroll_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	return state->pf2_rowscroll[offset] ^ 0xffff0000;
 }
 
 static WRITE32_HANDLER( simpl156_pf2_rowscroll_w )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	data &= 0x0000ffff;
 	mem_mask &= 0x0000ffff;
 
@@ -259,8 +259,8 @@ static ADDRESS_MAP_START( joemacr_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x160000, 0x161fff) AM_READWRITE(simpl156_pf1_rowscroll_r, simpl156_pf1_rowscroll_w)
 	AM_RANGE(0x164000, 0x165fff) AM_READWRITE(simpl156_pf2_rowscroll_r, simpl156_pf2_rowscroll_w)
 	AM_RANGE(0x170000, 0x170003) AM_READONLY AM_WRITENOP // ?
-	AM_RANGE(0x180000, 0x180003) AM_DEVREADWRITE8("okisfx", okim6295_r, okim6295_w, 0x000000ff)
-	AM_RANGE(0x1c0000, 0x1c0003) AM_DEVREADWRITE8("okimusic", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x180000, 0x180003) AM_DEVREADWRITE8_MODERN("okisfx", okim6295_device, read, write, 0x000000ff)
+	AM_RANGE(0x1c0000, 0x1c0003) AM_DEVREADWRITE8_MODERN("okimusic", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x200000, 0x200003) AM_READ(simpl156_inputs_read)
 	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(simpl156_state, systemram) // work ram (32-bit)
 ADDRESS_MAP_END
@@ -271,7 +271,7 @@ static ADDRESS_MAP_START( chainrec_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM // rom (32-bit)
 	AM_RANGE(0x200000, 0x200003) AM_READ(simpl156_inputs_read)
 	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(simpl156_state, systemram) // work ram (32-bit)
-	AM_RANGE(0x3c0000, 0x3c0003) AM_DEVREADWRITE8("okimusic", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x3c0000, 0x3c0003) AM_DEVREADWRITE8_MODERN("okimusic", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x400000, 0x407fff) AM_READWRITE(simpl156_mainram_r, simpl156_mainram_w) AM_BASE_MEMBER(simpl156_state, mainram) // main ram?
 	AM_RANGE(0x410000, 0x411fff) AM_READWRITE(simpl156_spriteram_r, simpl156_spriteram_w) AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x420000, 0x420fff) AM_READWRITE(simpl156_palette_r,simpl156_palette_w)
@@ -283,7 +283,7 @@ static ADDRESS_MAP_START( chainrec_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x460000, 0x461fff) AM_READWRITE(simpl156_pf1_rowscroll_r, simpl156_pf1_rowscroll_w)
 	AM_RANGE(0x464000, 0x465fff) AM_READWRITE(simpl156_pf2_rowscroll_r, simpl156_pf2_rowscroll_w)
 	AM_RANGE(0x470000, 0x470003) AM_READONLY AM_WRITENOP // ??
-	AM_RANGE(0x480000, 0x480003) AM_DEVREADWRITE8("okisfx", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x480000, 0x480003) AM_DEVREADWRITE8_MODERN("okisfx", okim6295_device, read, write, 0x000000ff)
 ADDRESS_MAP_END
 
 
@@ -292,7 +292,7 @@ static ADDRESS_MAP_START( magdrop_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x200003) AM_READ(simpl156_inputs_read)
 	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(simpl156_state, systemram) // work ram (32-bit)
-	AM_RANGE(0x340000, 0x340003) AM_DEVREADWRITE8("okimusic", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x340000, 0x340003) AM_DEVREADWRITE8_MODERN("okimusic", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x380000, 0x387fff) AM_READWRITE(simpl156_mainram_r, simpl156_mainram_w) AM_BASE_MEMBER(simpl156_state, mainram) // main ram?
 	AM_RANGE(0x390000, 0x391fff) AM_READWRITE(simpl156_spriteram_r, simpl156_spriteram_w) AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x3a0000, 0x3a0fff) AM_READWRITE(simpl156_palette_r,simpl156_palette_w)
@@ -304,7 +304,7 @@ static ADDRESS_MAP_START( magdrop_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x3e0000, 0x3e1fff) AM_READWRITE(simpl156_pf1_rowscroll_r, simpl156_pf1_rowscroll_w)
 	AM_RANGE(0x3e4000, 0x3e5fff) AM_READWRITE(simpl156_pf2_rowscroll_r, simpl156_pf2_rowscroll_w)
 	AM_RANGE(0x3f0000, 0x3f0003) AM_READONLY AM_WRITENOP //?
-	AM_RANGE(0x400000, 0x400003) AM_DEVREADWRITE8("okisfx", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x400000, 0x400003) AM_DEVREADWRITE8_MODERN("okisfx", okim6295_device, read, write, 0x000000ff)
 ADDRESS_MAP_END
 
 
@@ -313,7 +313,7 @@ static ADDRESS_MAP_START( magdropp_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x200000, 0x200003) AM_READ(simpl156_inputs_read)
 	AM_RANGE(0x201000, 0x201fff) AM_RAM AM_BASE_MEMBER(simpl156_state, systemram) // work ram (32-bit)
-	AM_RANGE(0x4c0000, 0x4c0003) AM_DEVREADWRITE8("okimusic", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x4c0000, 0x4c0003) AM_DEVREADWRITE8_MODERN("okimusic", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x680000, 0x687fff) AM_READWRITE(simpl156_mainram_r, simpl156_mainram_w) AM_BASE_MEMBER(simpl156_state, mainram) // main ram?
 	AM_RANGE(0x690000, 0x691fff) AM_READWRITE(simpl156_spriteram_r, simpl156_spriteram_w) AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x6a0000, 0x6a0fff) AM_READWRITE(simpl156_palette_r,simpl156_palette_w)
@@ -325,15 +325,15 @@ static ADDRESS_MAP_START( magdropp_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x6e0000, 0x6e1fff) AM_READWRITE(simpl156_pf1_rowscroll_r, simpl156_pf1_rowscroll_w)
 	AM_RANGE(0x6e4000, 0x6e5fff) AM_READWRITE(simpl156_pf2_rowscroll_r, simpl156_pf2_rowscroll_w)
 	AM_RANGE(0x6f0000, 0x6f0003) AM_READONLY AM_WRITENOP // ?
-	AM_RANGE(0x780000, 0x780003) AM_DEVREADWRITE8("okisfx", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x780000, 0x780003) AM_DEVREADWRITE8_MODERN("okisfx", okim6295_device, read, write, 0x000000ff)
 ADDRESS_MAP_END
 
 
 /* Mitchell MT5601-0 PCB (prtytime, charlien, osman) */
 static ADDRESS_MAP_START( mitchell156_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x100000, 0x100003) AM_DEVREADWRITE8("okisfx", okim6295_r, okim6295_w, 0x000000ff)
-	AM_RANGE(0x140000, 0x140003) AM_DEVREADWRITE8("okimusic", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x100000, 0x100003) AM_DEVREADWRITE8_MODERN("okisfx", okim6295_device, read, write, 0x000000ff)
+	AM_RANGE(0x140000, 0x140003) AM_DEVREADWRITE8_MODERN("okimusic", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x180000, 0x187fff) AM_READWRITE(simpl156_mainram_r, simpl156_mainram_w) AM_BASE_MEMBER(simpl156_state, mainram) // main ram
 	AM_RANGE(0x190000, 0x191fff) AM_READWRITE(simpl156_spriteram_r, simpl156_spriteram_w) AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x1a0000, 0x1a0fff) AM_READWRITE(simpl156_palette_r,simpl156_palette_w)
@@ -415,10 +415,7 @@ static const deco16ic_interface simpl156_deco16ic_intf =
 	NULL
 };
 
-static MACHINE_DRIVER_START( chainrec )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(simpl156_state)
+static MACHINE_CONFIG_START( chainrec, simpl156_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", ARM, 28000000 /* /4 */)	/*DE156*/ /* 7.000 MHz */ /* measured at 7.. seems to need 28? */
@@ -451,39 +448,39 @@ static MACHINE_DRIVER_START( chainrec )
 	MDRV_OKIM6295_ADD("okimusic", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( magdrop )
+static MACHINE_CONFIG_DERIVED( magdrop, chainrec )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(chainrec)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(magdrop_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( magdropp )
+static MACHINE_CONFIG_DERIVED( magdropp, chainrec )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(chainrec)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(magdropp_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( joemacr )
+static MACHINE_CONFIG_DERIVED( joemacr, chainrec )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(chainrec)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(joemacr_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mitchell156 )
+static MACHINE_CONFIG_DERIVED( mitchell156, chainrec )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(chainrec)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mitchell156_map)
 
 	MDRV_OKIM6295_REPLACE("okimusic", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*
@@ -1050,7 +1047,7 @@ static DRIVER_INIT( simpl156 )
 /* Everything seems more stable if we run the CPU speed x4 and use Idle skips.. maybe it has an internal multipler? */
 static READ32_HANDLER( joemacr_speedup_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	if (cpu_get_pc(space->cpu) == 0x284)
 		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(400));
 	return state->systemram[0x18/4];
@@ -1065,7 +1062,7 @@ static DRIVER_INIT( joemacr )
 
 static READ32_HANDLER( chainrec_speedup_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	if (cpu_get_pc(space->cpu) == 0x2d4)
 		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(400));
 	return state->systemram[0x18/4];
@@ -1079,7 +1076,7 @@ static DRIVER_INIT( chainrec )
 
 static READ32_HANDLER( prtytime_speedup_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	if (cpu_get_pc(space->cpu) == 0x4f0)
 		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(400));
 	return state->systemram[0xae0/4];
@@ -1094,7 +1091,7 @@ static DRIVER_INIT( prtytime )
 
 static READ32_HANDLER( charlien_speedup_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	if (cpu_get_pc(space->cpu) == 0xc8c8)
 		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(400));
 	return state->systemram[0x10/4];
@@ -1108,7 +1105,7 @@ static DRIVER_INIT( charlien )
 
 static READ32_HANDLER( osman_speedup_r )
 {
-	simpl156_state *state = (simpl156_state *)space->machine->driver_data;
+	simpl156_state *state = space->machine->driver_data<simpl156_state>();
 	if (cpu_get_pc(space->cpu) == 0x5974)
 		cpu_spinuntil_time(space->cpu, ATTOTIME_IN_USEC(400));
 	return state->systemram[0x10/4];

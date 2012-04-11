@@ -332,6 +332,17 @@ Notes:
 #include "sound/pokey.h"
 
 
+class missile_state : public driver_device
+{
+public:
+	missile_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *videoram;
+};
+
+
+
 #define MASTER_CLOCK	XTAL_10MHz
 
 #define PIXEL_CLOCK		(MASTER_CLOCK/2)
@@ -445,7 +456,7 @@ static TIMER_CALLBACK( adjust_cpu_speed )
 }
 
 
-static DIRECT_UPDATE_HANDLER( missile_direct_handler )
+DIRECT_UPDATE_HANDLER( missile_direct_handler )
 {
 	/* offset accounts for lack of A15 decoding */
 	int offset = address & 0x8000;
@@ -454,14 +465,15 @@ static DIRECT_UPDATE_HANDLER( missile_direct_handler )
 	/* RAM? */
 	if (address < 0x4000)
 	{
-		direct->raw = direct->decrypted = space->machine->generic.videoram.u8 - offset;
+		missile_state *state = direct.space().m_machine.driver_data<missile_state>();
+		direct.explicit_configure(0x0000 | offset, 0x3fff | offset, 0x3fff, state->videoram);
 		return ~0;
 	}
 
 	/* ROM? */
 	else if (address >= 0x5000)
 	{
-		direct->raw = direct->decrypted = memory_region(space->machine, "maincpu") - offset;
+		direct.explicit_configure(0x5000 | offset, 0x7fff | offset, 0x7fff, direct.space().m_machine.region("maincpu")->base() + 0x5000);
 		return ~0;
 	}
 
@@ -477,7 +489,8 @@ static MACHINE_START( missile )
 	flipscreen = 0;
 
 	/* set up an opcode base handler since we use mapped handlers for RAM */
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), missile_direct_handler);
+	address_space *space = machine->device<m6502_device>("maincpu")->space(AS_PROGRAM);
+	space->set_direct_update_handler(direct_update_delegate_create_static(missile_direct_handler, *machine));
 
 	/* create a timer to speed/slow the CPU */
 	cpu_timer = timer_alloc(machine, adjust_cpu_speed, NULL);
@@ -511,7 +524,7 @@ static MACHINE_RESET( missile )
  *
  *************************************/
 
-INLINE int get_madsel(const address_space *space)
+INLINE int get_madsel(address_space *space)
 {
 	UINT16 pc = cpu_get_previouspc(space->cpu);
 
@@ -522,7 +535,7 @@ INLINE int get_madsel(const address_space *space)
 	/* MADSEL signal disables standard address decoding and routes
         writes to video RAM; it is enabled if the IRQ signal is clear
         and the low 5 bits of the fetched opcode are 0x01 */
-	if (!irq_state && (memory_decrypted_read_byte(space, pc) & 0x1f) == 0x01)
+	if (!irq_state && (space->direct().read_decrypted_byte(pc) & 0x1f) == 0x01)
 	{
 		/* the MADSEL signal goes high 5 cycles after the opcode is identified;
             this effectively skips the indirect memory read. Since this is difficult
@@ -548,8 +561,10 @@ INLINE offs_t get_bit3_addr(offs_t pixaddr)
 }
 
 
-static void write_vram(const address_space *space, offs_t address, UINT8 data)
+static void write_vram(address_space *space, offs_t address, UINT8 data)
 {
+	missile_state *state = space->machine->driver_data<missile_state>();
+	UINT8 *videoram = state->videoram;
 	static const UINT8 data_lookup[4] = { 0x00, 0x0f, 0xf0, 0xff };
 	offs_t vramaddr;
 	UINT8 vramdata;
@@ -561,7 +576,7 @@ static void write_vram(const address_space *space, offs_t address, UINT8 data)
 	vramaddr = address >> 2;
 	vramdata = data_lookup[data >> 6];
 	vrammask = writeprom[(address & 7) | 0x10];
-	space->machine->generic.videoram.u8[vramaddr] = (space->machine->generic.videoram.u8[vramaddr] & vrammask) | (vramdata & ~vrammask);
+	videoram[vramaddr] = (videoram[vramaddr] & vrammask) | (vramdata & ~vrammask);
 
 	/* 3-bit VRAM writes use an extra clock to write the 3rd bit elsewhere */
 	/* on the schematics, this is the MUSHROOM == 1 case */
@@ -570,7 +585,7 @@ static void write_vram(const address_space *space, offs_t address, UINT8 data)
 		vramaddr = get_bit3_addr(address);
 		vramdata = -((data >> 5) & 1);
 		vrammask = writeprom[(address & 7) | 0x18];
-		space->machine->generic.videoram.u8[vramaddr] = (space->machine->generic.videoram.u8[vramaddr] & vrammask) | (vramdata & ~vrammask);
+		videoram[vramaddr] = (videoram[vramaddr] & vrammask) | (vramdata & ~vrammask);
 
 		/* account for the extra clock cycle */
 		cpu_adjust_icount(space->cpu, -1);
@@ -578,8 +593,10 @@ static void write_vram(const address_space *space, offs_t address, UINT8 data)
 }
 
 
-static UINT8 read_vram(const address_space *space, offs_t address)
+static UINT8 read_vram(address_space *space, offs_t address)
 {
+	missile_state *state = space->machine->driver_data<missile_state>();
+	UINT8 *videoram = state->videoram;
 	offs_t vramaddr;
 	UINT8 vramdata;
 	UINT8 vrammask;
@@ -590,7 +607,7 @@ static UINT8 read_vram(const address_space *space, offs_t address)
 	/* this should only be called if MADSEL == 1 */
 	vramaddr = address >> 2;
 	vrammask = 0x11 << (address & 3);
-	vramdata = space->machine->generic.videoram.u8[vramaddr] & vrammask;
+	vramdata = videoram[vramaddr] & vrammask;
 	if ((vramdata & 0xf0) == 0)
 		result &= ~0x80;
 	if ((vramdata & 0x0f) == 0)
@@ -602,7 +619,7 @@ static UINT8 read_vram(const address_space *space, offs_t address)
 	{
 		vramaddr = get_bit3_addr(address);
 		vrammask = 1 << (address & 7);
-		vramdata = space->machine->generic.videoram.u8[vramaddr] & vrammask;
+		vramdata = videoram[vramaddr] & vrammask;
 		if (vramdata == 0)
 			result &= ~0x20;
 
@@ -622,6 +639,8 @@ static UINT8 read_vram(const address_space *space, offs_t address)
 
 static VIDEO_UPDATE( missile )
 {
+	missile_state *state = screen->machine->driver_data<missile_state>();
+	UINT8 *videoram = state->videoram;
 	int x, y;
 
 	/* draw the bitmap to the screen, looping over Y */
@@ -630,12 +649,12 @@ static VIDEO_UPDATE( missile )
 		UINT16 *dst = (UINT16 *)bitmap->base + y * bitmap->rowpixels;
 
 		int effy = flipscreen ? ((256+24 - y) & 0xff) : y;
-		UINT8 *src = &screen->machine->generic.videoram.u8[effy * 64];
+		UINT8 *src = &videoram[effy * 64];
 		UINT8 *src3 = NULL;
 
 		/* compute the base of the 3rd pixel row */
 		if (effy >= 224)
-			src3 = &screen->machine->generic.videoram.u8[get_bit3_addr(effy << 8)];
+			src3 = &videoram[get_bit3_addr(effy << 8)];
 
 		/* loop over X */
 		for (x = cliprect->min_x; x <= cliprect->max_x; x++)
@@ -663,6 +682,8 @@ static VIDEO_UPDATE( missile )
 
 static WRITE8_HANDLER( missile_w )
 {
+	missile_state *state = space->machine->driver_data<missile_state>();
+	UINT8 *videoram = state->videoram;
 	/* if we're in MADSEL mode, write to video RAM */
 	if (get_madsel(space))
 	{
@@ -675,7 +696,7 @@ static WRITE8_HANDLER( missile_w )
 
 	/* RAM */
 	if (offset < 0x4000)
-		space->machine->generic.videoram.u8[offset] = data;
+		videoram[offset] = data;
 
 	/* POKEY */
 	else if (offset < 0x4800)
@@ -719,6 +740,8 @@ static WRITE8_HANDLER( missile_w )
 
 static READ8_HANDLER( missile_r )
 {
+	missile_state *state = space->machine->driver_data<missile_state>();
+	UINT8 *videoram = state->videoram;
 	UINT8 result = 0xff;
 
 	/* if we're in MADSEL mode, read from video RAM */
@@ -730,7 +753,7 @@ static READ8_HANDLER( missile_r )
 
 	/* RAM */
 	if (offset < 0x4000)
-		result = space->machine->generic.videoram.u8[offset];
+		result = videoram[offset];
 
 	/* ROM */
 	else if (offset >= 0x5000)
@@ -778,7 +801,7 @@ static READ8_HANDLER( missile_r )
 
 /* complete memory map derived from schematics (implemented above) */
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0xffff) AM_READWRITE(missile_r, missile_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x0000, 0xffff) AM_READWRITE(missile_r, missile_w) AM_BASE_MEMBER(missile_state, videoram)
 ADDRESS_MAP_END
 
 
@@ -974,7 +997,7 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( missile )
+static MACHINE_CONFIG_START( missile, missile_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK/8)
@@ -999,7 +1022,7 @@ static MACHINE_DRIVER_START( missile )
 	MDRV_SOUND_ADD("pokey", POKEY, MASTER_CLOCK/8)
 	MDRV_SOUND_CONFIG(pokey_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

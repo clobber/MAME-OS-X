@@ -173,12 +173,11 @@ Notes:
  *
  *************************************/
 
-class spaceg_state
+class spaceg_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, spaceg_state(machine)); }
-
-	spaceg_state(running_machine &machine) { }
+	spaceg_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *  videoram;
 	UINT8 *  unkram;
@@ -222,7 +221,7 @@ static PALETTE_INIT( spaceg )
 
 static WRITE8_HANDLER( zvideoram_w )
 {
-	spaceg_state *state = (spaceg_state *)space->machine->driver_data;
+	spaceg_state *state = space->machine->driver_data<spaceg_state>();
 	int col;
 
 	col = state->unkram[0x400];
@@ -257,7 +256,7 @@ static WRITE8_HANDLER( zvideoram_w )
 
 static READ8_HANDLER(spaceg_colorram_r)
 {
-	spaceg_state *state = (spaceg_state *)space->machine->driver_data;
+	spaceg_state *state = space->machine->driver_data<spaceg_state>();
 	int rgbcolor;
 
 	if (offset < 0x400)
@@ -289,7 +288,7 @@ static READ8_HANDLER(spaceg_colorram_r)
 
 static VIDEO_UPDATE( spaceg )
 {
-	spaceg_state *state = (spaceg_state *)screen->machine->driver_data;
+	spaceg_state *state = screen->machine->driver_data<spaceg_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -397,10 +396,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( spaceg )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(spaceg_state)
+static MACHINE_CONFIG_START( spaceg, spaceg_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,2500000)		 /* 2.5 MHz */
@@ -433,7 +429,7 @@ static MACHINE_DRIVER_START( spaceg )
 
 //  MDRV_SOUND_ADD("dac", DAC, 0)
 //  MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

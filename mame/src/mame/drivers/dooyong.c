@@ -58,7 +58,6 @@ Flying Tiger
 #include "sound/okim6295.h"
 #include "includes/dooyong.h"
 
-
 static WRITE8_HANDLER( lastday_bankswitch_w )
 {
 	memory_set_bank(space->machine, "bank1", data & 0x07);
@@ -173,7 +172,7 @@ static ADDRESS_MAP_START( flytiger_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xe020, 0xe020) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xe030, 0xe037) AM_WRITE(dooyong_bgscroll8_w)
 	AM_RANGE(0xe040, 0xe047) AM_WRITE(dooyong_fgscroll8_w)
-	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_xRRRRRGGGGGBBBBB_le_w) AM_BASE_GENERIC(paletteram)
+	AM_RANGE(0xe800, 0xefff) AM_RAM_WRITE(paletteram_flytiger_w) AM_BASE(&paletteram_flytiger)
 	AM_RANGE(0xf000, 0xffff) AM_RAM_WRITE(dooyong_txvideoram8_w) AM_BASE(&dooyong_txvideoram)
 ADDRESS_MAP_END
 
@@ -272,7 +271,7 @@ static ADDRESS_MAP_START( bluehawk_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xf000, 0xf7ff) AM_RAM
 	AM_RANGE(0xf800, 0xf800) AM_READ(soundlatch_r)
 	AM_RANGE(0xf808, 0xf809) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0xf80a, 0xf80a) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xf80a, 0xf80a) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -441,14 +440,18 @@ static INPUT_PORTS_START( dooyongm68_generic )
 	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START1 )
-	PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN2 )
-	PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_START2 )
-	PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE1 )
-	PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+/*
+    PORT_BIT( 0x0100, IP_ACTIVE_LOW, IPT_COIN1 )
+    PORT_BIT( 0x0200, IP_ACTIVE_LOW, IPT_START1 )
+    PORT_BIT( 0x0400, IP_ACTIVE_LOW, IPT_COIN2 )
+    PORT_BIT( 0x0800, IP_ACTIVE_LOW, IPT_START2 )
+    PORT_BIT( 0x1000, IP_ACTIVE_LOW, IPT_SERVICE1 )
+    PORT_BIT( 0x2000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x4000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x8000, IP_ACTIVE_LOW, IPT_UNKNOWN )
+*/
+
 INPUT_PORTS_END
 
 /***************************************************************************
@@ -774,7 +777,7 @@ static const ym2151_interface ym2151_config =
 ***************************************************************************/
 
 
-static MACHINE_DRIVER_START( sound_2203 )
+static MACHINE_CONFIG_FRAGMENT( sound_2203 )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ym1", YM2203, 4000000)
@@ -784,9 +787,9 @@ static MACHINE_DRIVER_START( sound_2203 )
 	MDRV_SOUND_ADD("ym2", YM2203, 4000000)
 	MDRV_SOUND_CONFIG(ym2203_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sound_2151 )
+static MACHINE_CONFIG_FRAGMENT( sound_2151 )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ymsnd", YM2151, 3579545)
@@ -796,9 +799,9 @@ static MACHINE_DRIVER_START( sound_2151 )
 
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sound_2151_m68k )
+static MACHINE_CONFIG_FRAGMENT( sound_2151_m68k )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
@@ -808,9 +811,9 @@ static MACHINE_DRIVER_START( sound_2151_m68k )
 
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( lastday )
+static MACHINE_CONFIG_START( lastday, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -840,10 +843,10 @@ static MACHINE_DRIVER_START( lastday )
 	MDRV_VIDEO_UPDATE(lastday)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2203 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2203 )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gulfstrm )
+static MACHINE_CONFIG_START( gulfstrm, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -873,10 +876,10 @@ static MACHINE_DRIVER_START( gulfstrm )
 	MDRV_VIDEO_UPDATE(gulfstrm)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2203 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2203 )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pollux )
+static MACHINE_CONFIG_START( pollux, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -906,10 +909,10 @@ static MACHINE_DRIVER_START( pollux )
 	MDRV_VIDEO_UPDATE(pollux)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2203 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2203 )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bluehawk )
+static MACHINE_CONFIG_START( bluehawk, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -939,10 +942,10 @@ static MACHINE_DRIVER_START( bluehawk )
 	MDRV_VIDEO_UPDATE(bluehawk)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151 )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( flytiger )
+static MACHINE_CONFIG_START( flytiger, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -972,10 +975,10 @@ static MACHINE_DRIVER_START( flytiger )
 	MDRV_VIDEO_UPDATE(flytiger)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151 )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( primella )
+static MACHINE_CONFIG_START( primella, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)	/* ??? */
@@ -1003,8 +1006,8 @@ static MACHINE_DRIVER_START( primella )
 	MDRV_VIDEO_UPDATE(primella)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151 )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151 )
+MACHINE_CONFIG_END
 
 static INTERRUPT_GEN( rshark_interrupt )
 {
@@ -1014,7 +1017,7 @@ static INTERRUPT_GEN( rshark_interrupt )
 		cpu_set_input_line(device, 6, HOLD_LINE);
 }
 
-static MACHINE_DRIVER_START( rshark )
+static MACHINE_CONFIG_START( rshark, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)	/* measured on super-x */
@@ -1042,10 +1045,10 @@ static MACHINE_DRIVER_START( rshark )
 	MDRV_VIDEO_UPDATE(rshark)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151_m68k )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151_m68k )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( superx ) // dif mem map
+static MACHINE_CONFIG_START( superx, driver_device ) // dif mem map
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)	/* measured on super-x */
@@ -1073,10 +1076,10 @@ static MACHINE_DRIVER_START( superx ) // dif mem map
 	MDRV_VIDEO_UPDATE(rshark)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151_m68k )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151_m68k )
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( popbingo )
+static MACHINE_CONFIG_START( popbingo, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)
@@ -1104,8 +1107,8 @@ static MACHINE_DRIVER_START( popbingo )
 	MDRV_VIDEO_UPDATE(popbingo)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM( sound_2151_m68k )
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD( sound_2151_m68k )
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -1849,7 +1852,7 @@ GAME( 1991, gulfstrmm,gulfstrm, gulfstrm, gulfstrm, 0, ROT270, "Dooyong (Media S
 GAME( 1991, pollux,   0,        pollux,   pollux,   0, ROT270, "Dooyong",  "Pollux (set 1)",       GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1991, polluxa,  pollux,   pollux,   pollux,   0, ROT270, "Dooyong",  "Pollux (set 2)",       GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1991, polluxa2, pollux,   pollux,   pollux,   0, ROT270, "Dooyong",  "Pollux (set 3)",       GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE ) /* Original Dooyong Board distributed by TCH */
-GAME( 1992, flytiger, 0,        flytiger, flytiger, 0, ROT270, "Dooyong",  "Flying Tiger",         GAME_IMPERFECT_GRAPHICS | GAME_WRONG_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1992, flytiger, 0,        flytiger, flytiger, 0, ROT270, "Dooyong",  "Flying Tiger",         GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 GAME( 1993, bluehawk, 0,        bluehawk, bluehawk, 0, ROT270, "Dooyong",  "Blue Hawk",            GAME_SUPPORTS_SAVE )
 GAME( 1993, bluehawkn,bluehawk, bluehawk, bluehawk, 0, ROT270, "Dooyong (NTC license)", "Blue Hawk (NTC)", GAME_SUPPORTS_SAVE )
 GAME( 1993, sadari,   0,        primella, sadari,   0, ROT0,   "Dooyong (NTC license)", "Sadari",  GAME_SUPPORTS_SAVE )

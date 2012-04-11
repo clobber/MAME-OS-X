@@ -51,7 +51,8 @@ struct _lh5810_state
 {
 	const lh5801_cpu_core *config;
 	legacy_cpu_device *device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 
 	PAIR s, p, u, x, y;
 	int tm; //9 bit
@@ -106,13 +107,14 @@ static CPU_INIT( lh5801 )
 	cpustate->config = (const lh5801_cpu_core *) device->baseconfig().static_config();
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 }
 
 static CPU_RESET( lh5801 )
 {
 	lh5801_state *cpustate = get_safe_token(device);
 
-	P = (memory_read_byte(cpustate->program, 0xfffe)<<8) | memory_read_byte(cpustate->program, 0xffff);
+	P = (cpustate->program->read_byte(0xfffe)<<8) | cpustate->program->read_byte(0xffff);
 
 	cpustate->idle=0;
 }

@@ -83,7 +83,7 @@ static READ16_HANDLER ( varia_crom_read )
 {
 	/* game reads the cgrom, result is 7772, verified to be correct on the real board */
 
-	metro_state *state = (metro_state *)space->machine->driver_data;
+	metro_state *state = space->machine->driver_data<metro_state>();
 	UINT8 *cgrom = memory_region(space->machine, "gfx1");
 	UINT16 retdat;
 
@@ -98,7 +98,7 @@ static READ16_HANDLER ( varia_crom_read )
 
 static void get_vmetal_tlookup(running_machine *machine, UINT16 data, UINT16 *tileno, UINT16 *color)
 {
-	metro_state *state = (metro_state *)machine->driver_data;
+	metro_state *state = machine->driver_data<metro_state>();
 	int idx = ((data & 0x7fff) >> 4) * 2;
 	UINT32 lookup = (state->vmetal_tlookup[idx] << 16) | state->vmetal_tlookup[idx + 1];
 
@@ -109,21 +109,21 @@ static void get_vmetal_tlookup(running_machine *machine, UINT16 data, UINT16 *ti
 
 static WRITE16_HANDLER( vmetal_texttileram_w )
 {
-	metro_state *state = (metro_state *)space->machine->driver_data;
+	metro_state *state = space->machine->driver_data<metro_state>();
 	COMBINE_DATA(&state->vmetal_texttileram[offset]);
 	tilemap_mark_tile_dirty(state->vmetal_texttilemap, offset);
 }
 
 static WRITE16_HANDLER( vmetal_mid1tileram_w )
 {
-	metro_state *state = (metro_state *)space->machine->driver_data;
+	metro_state *state = space->machine->driver_data<metro_state>();
 	COMBINE_DATA(&state->vmetal_mid1tileram[offset]);
 	tilemap_mark_tile_dirty(state->vmetal_mid1tilemap, offset);
 }
 
 static WRITE16_HANDLER( vmetal_mid2tileram_w )
 {
-	metro_state *state = (metro_state *)space->machine->driver_data;
+	metro_state *state = space->machine->driver_data<metro_state>();
 	COMBINE_DATA(&state->vmetal_mid2tileram[offset]);
 	tilemap_mark_tile_dirty(state->vmetal_mid2tilemap, offset);
 }
@@ -234,8 +234,8 @@ static ADDRESS_MAP_START( varia_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x31fffa, 0x31fffb) AM_READ(varia_dips_bit2_r)	// 0x40 = dip1-2  -> 0xff0085 , 0x80 = dip2-2 -> 0xff0084
 	AM_RANGE(0x31fffc, 0x31fffd) AM_READ(varia_dips_bit1_r)	// 0x40 = dip1-1  -> 0xff0085 , 0x80 = dip2-1 -> 0xff0084
 
-	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff )
-	AM_RANGE(0x400002, 0x400003) AM_DEVWRITE8("oki", okim6295_w, 0x00ff)	// Volume/channel info
+	AM_RANGE(0x400000, 0x400001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff )
+	AM_RANGE(0x400002, 0x400003) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0x00ff)	// Volume/channel info
 	AM_RANGE(0x500000, 0x50000d) AM_DEVWRITE8("essnd", vmetal_es8712_w, 0x00ff)
 
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
@@ -343,7 +343,7 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_vmetal_texttilemap_tile_info )
 {
-	metro_state *state = (metro_state *)machine->driver_data;
+	metro_state *state = machine->driver_data<metro_state>();
 	UINT32 tile;
 	UINT16 color, data = state->vmetal_texttileram[tile_index];
 	int idx = ((data & 0x7fff) >> 4) * 2;
@@ -361,7 +361,7 @@ static TILE_GET_INFO( get_vmetal_texttilemap_tile_info )
 
 static TILE_GET_INFO( get_vmetal_mid1tilemap_tile_info )
 {
-	metro_state *state = (metro_state *)machine->driver_data;
+	metro_state *state = machine->driver_data<metro_state>();
 	UINT16 tile, color, data = state->vmetal_mid1tileram[tile_index];
 
 	get_vmetal_tlookup(machine, data, &tile, &color);
@@ -374,7 +374,7 @@ static TILE_GET_INFO( get_vmetal_mid1tilemap_tile_info )
 
 static TILE_GET_INFO( get_vmetal_mid2tilemap_tile_info )
 {
-	metro_state *state = (metro_state *)machine->driver_data;
+	metro_state *state = machine->driver_data<metro_state>();
 	UINT16 tile, color, data = state->vmetal_mid2tileram[tile_index];
 
 	get_vmetal_tlookup(machine, data, &tile, &color);
@@ -387,7 +387,7 @@ static TILE_GET_INFO( get_vmetal_mid2tilemap_tile_info )
 
 static VIDEO_START(varia)
 {
-	metro_state *state = (metro_state *)machine->driver_data;
+	metro_state *state = machine->driver_data<metro_state>();
 
 	state->vmetal_texttilemap = tilemap_create(machine, get_vmetal_texttilemap_tile_info, tilemap_scan_rows,  8,  8, 256, 256);
 	state->vmetal_mid1tilemap = tilemap_create(machine, get_vmetal_mid1tilemap_tile_info, tilemap_scan_rows, 16, 16, 256, 256);
@@ -400,7 +400,7 @@ static VIDEO_START(varia)
 
 static VIDEO_UPDATE(varia)
 {
-	metro_state *state = (metro_state *)screen->machine->driver_data;
+	metro_state *state = screen->machine->driver_data<metro_state>();
 
 	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
@@ -421,10 +421,7 @@ static VIDEO_UPDATE(varia)
 }
 
 
-static MACHINE_DRIVER_START( varia )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(metro_state)
+static MACHINE_CONFIG_START( varia, metro_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)
@@ -455,7 +452,7 @@ static MACHINE_DRIVER_START( varia )
 	MDRV_SOUND_ADD("essnd", ES8712, 12000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( vmetal )

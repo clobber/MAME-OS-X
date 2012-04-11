@@ -144,7 +144,8 @@ struct _m4510_Regs {
 
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *space;
+	address_space *space;
+	direct_read_data *direct;
 	int 	icount;
 
 	read8_space_func rdmem_id;					/* readmem callback for indexed instructions */
@@ -170,27 +171,27 @@ INLINE m4510_Regs *get_safe_token(running_device *device)
 INLINE int m4510_cpu_readop(m4510_Regs *cpustate)
 {
 	register UINT16 t=cpustate->pc.w.l++;
-	return memory_decrypted_read_byte(cpustate->space, M4510_MEM(t));
+	return cpustate->direct->read_decrypted_byte(M4510_MEM(t));
 }
 
 INLINE int m4510_cpu_readop_arg(m4510_Regs *cpustate)
 {
 	register UINT16 t=cpustate->pc.w.l++;
-	return memory_raw_read_byte(cpustate->space, M4510_MEM(t));
+	return cpustate->direct->read_raw_byte(M4510_MEM(t));
 }
 
 #define M4510
 #include "t65ce02.c"
 
-static UINT8 default_rdmem_id(const address_space *space, offs_t address)
+static UINT8 default_rdmem_id(address_space *space, offs_t address)
 {
 	m4510_Regs *cpustate = get_safe_token(space->cpu);
-	return memory_read_byte_8le(space, M4510_MEM(address));
+	return space->read_byte(M4510_MEM(address));
 }
-static void default_wrmem_id(const address_space *space, offs_t address, UINT8 data)
+static void default_wrmem_id(address_space *space, offs_t address, UINT8 data)
 {
 	m4510_Regs *cpustate = get_safe_token(space->cpu);
-	memory_write_byte_8le(space, M4510_MEM(address), data);
+	space->write_byte(M4510_MEM(address), data);
 }
 
 static CPU_INIT( m4510 )
@@ -206,6 +207,7 @@ static CPU_INIT( m4510 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->space = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->space->direct();
 
 	if ( intf )
 	{

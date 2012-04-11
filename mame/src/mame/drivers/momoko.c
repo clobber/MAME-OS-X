@@ -227,7 +227,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( momoko )
 {
-	momoko_state *state = (momoko_state *)machine->driver_data;
+	momoko_state *state = machine->driver_data<momoko_state>();
 	UINT8 *BG_MAP = memory_region(machine, "user1");
 
 	memory_configure_bank(machine, "bank1", 0, 32, &BG_MAP[0x0000], 0x1000);
@@ -246,7 +246,7 @@ static MACHINE_START( momoko )
 
 static MACHINE_RESET( momoko )
 {
-	momoko_state *state = (momoko_state *)machine->driver_data;
+	momoko_state *state = machine->driver_data<momoko_state>();
 
 	state->fg_scrollx = 0;
 	state->fg_scrolly = 0;
@@ -260,10 +260,7 @@ static MACHINE_RESET( momoko )
 	state->flipscreen = 0;
 }
 
-static MACHINE_DRIVER_START( momoko )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(momoko_state)
+static MACHINE_CONFIG_START( momoko, momoko_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 5000000)	/* 5.0MHz */
@@ -304,7 +301,7 @@ static MACHINE_DRIVER_START( momoko )
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)
 	MDRV_SOUND_ROUTE(2, "mono", 0.15)
 	MDRV_SOUND_ROUTE(3, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /****************************************************************************/
 

@@ -38,7 +38,7 @@ DIP locations verified for:
 
 static INPUT_CHANGED( coin_inserted )
 {
-	lasso_state *state = (lasso_state *)field->port->machine->driver_data;
+	lasso_state *state = field->port->machine->driver_data<lasso_state>();
 
 	/* coin insertion causes an NMI */
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
@@ -48,14 +48,14 @@ static INPUT_CHANGED( coin_inserted )
 /* Write to the sound latch and generate an IRQ on the sound CPU */
 static WRITE8_HANDLER( sound_command_w )
 {
-	lasso_state *state = (lasso_state *)space->machine->driver_data;
+	lasso_state *state = space->machine->driver_data<lasso_state>();
 	soundlatch_w(space, offset, data);
 	generic_pulse_irq_line(state->audiocpu, 0);
 }
 
 static WRITE8_HANDLER( pinbo_sound_command_w )
 {
-	lasso_state *state = (lasso_state *)space->machine->driver_data;
+	lasso_state *state = space->machine->driver_data<lasso_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
 }
@@ -68,7 +68,7 @@ static READ8_HANDLER( sound_status_r )
 
 static WRITE8_HANDLER( sound_select_w )
 {
-	lasso_state *state = (lasso_state *)space->machine->driver_data;
+	lasso_state *state = space->machine->driver_data<lasso_state>();
 	UINT8 to_write = BITSWAP8(*state->chip_data, 0, 1, 2, 3, 4, 5, 6, 7);
 
 	if (~data & 0x01)	/* chip #0 */
@@ -464,7 +464,7 @@ GFXDECODE_END
 
 static MACHINE_START( lasso )
 {
-	lasso_state *state = (lasso_state *)machine->driver_data;
+	lasso_state *state = machine->driver_data<lasso_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -476,7 +476,7 @@ static MACHINE_START( lasso )
 
 static MACHINE_START( wwjgtin )
 {
-	lasso_state *state = (lasso_state *)machine->driver_data;
+	lasso_state *state = machine->driver_data<lasso_state>();
 
 	MACHINE_START_CALL(lasso);
 
@@ -485,24 +485,21 @@ static MACHINE_START( wwjgtin )
 
 static MACHINE_RESET( lasso )
 {
-	lasso_state *state = (lasso_state *)machine->driver_data;
+	lasso_state *state = machine->driver_data<lasso_state>();
 
 	state->gfxbank = 0;
 }
 
 static MACHINE_RESET( wwjgtin )
 {
-	lasso_state *state = (lasso_state *)machine->driver_data;
+	lasso_state *state = machine->driver_data<lasso_state>();
 
 	MACHINE_RESET_CALL(lasso);
 
 	state->track_enable = 0;
 }
 
-static MACHINE_DRIVER_START( base )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(lasso_state)
+static MACHINE_CONFIG_START( base, lasso_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, 11289000/16)	/* guess */
@@ -540,21 +537,19 @@ static MACHINE_DRIVER_START( base )
 
 	MDRV_SOUND_ADD("sn76489.2", SN76489, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( lasso )
+static MACHINE_CONFIG_DERIVED( lasso, base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(base)
 	MDRV_CPU_ADD("blitter", M6502, 11289000/16)	/* guess */
 	MDRV_CPU_PROGRAM_MAP(lasso_coprocessor_map)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( chameleo )
+static MACHINE_CONFIG_DERIVED( chameleo, base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(base)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(chameleo_main_map)
 
@@ -563,12 +558,11 @@ static MACHINE_DRIVER_START( chameleo )
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(chameleo)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( wwjgtin )
+static MACHINE_CONFIG_DERIVED( wwjgtin, base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(base)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(wwjgtin_main_map)
 
@@ -591,12 +585,11 @@ static MACHINE_DRIVER_START( wwjgtin )
 	/* sound hardware */
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pinbo )
+static MACHINE_CONFIG_DERIVED( pinbo, base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(base)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(pinbo_main_map)
 
@@ -621,7 +614,7 @@ static MACHINE_DRIVER_START( pinbo )
 
 	MDRV_SOUND_ADD("ay2", AY8910, 1250000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.55)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( lasso )

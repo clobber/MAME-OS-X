@@ -191,7 +191,19 @@
 #include "machine/midwayic.h"
 #include "machine/smc91c9x.h"
 #include "video/voodoo.h"
+#include "machine/nvram.h"
 
+
+
+class seattle_state : public driver_device
+{
+public:
+	seattle_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  m_nvram(*this, "nvram") { }
+
+	required_shared_ptr<UINT32>	m_nvram;
+};
 
 
 /*************************************
@@ -470,7 +482,7 @@ static void vblank_assert(running_device *device, int state);
 static void update_vblank_irq(running_machine *machine);
 static void galileo_reset(void);
 static TIMER_CALLBACK( galileo_timer_callback );
-static void galileo_perform_dma(const address_space *space, int which);
+static void galileo_perform_dma(address_space *space, int which);
 static void voodoo_stall(running_device *device, int stall);
 static void widget_reset(running_machine *machine);
 static void update_widget_irq(running_machine *machine);
@@ -758,7 +770,7 @@ static void vblank_assert(running_device *device, int state)
  *
  *************************************/
 
-static UINT32 pci_bridge_r(const address_space *space, UINT8 reg, UINT8 type)
+static UINT32 pci_bridge_r(address_space *space, UINT8 reg, UINT8 type)
 {
 	UINT32 result = galileo.pci_bridge_regs[reg];
 
@@ -779,7 +791,7 @@ static UINT32 pci_bridge_r(const address_space *space, UINT8 reg, UINT8 type)
 }
 
 
-static void pci_bridge_w(const address_space *space, UINT8 reg, UINT8 type, UINT32 data)
+static void pci_bridge_w(address_space *space, UINT8 reg, UINT8 type, UINT32 data)
 {
 	galileo.pci_bridge_regs[reg] = data;
 	if (LOG_PCI)
@@ -794,7 +806,7 @@ static void pci_bridge_w(const address_space *space, UINT8 reg, UINT8 type, UINT
  *
  *************************************/
 
-static UINT32 pci_3dfx_r(const address_space *space, UINT8 reg, UINT8 type)
+static UINT32 pci_3dfx_r(address_space *space, UINT8 reg, UINT8 type)
 {
 	UINT32 result = galileo.pci_3dfx_regs[reg];
 
@@ -815,7 +827,7 @@ static UINT32 pci_3dfx_r(const address_space *space, UINT8 reg, UINT8 type)
 }
 
 
-static void pci_3dfx_w(const address_space *space, UINT8 reg, UINT8 type, UINT32 data)
+static void pci_3dfx_w(address_space *space, UINT8 reg, UINT8 type, UINT32 data)
 {
 	galileo.pci_3dfx_regs[reg] = data;
 
@@ -843,7 +855,7 @@ static void pci_3dfx_w(const address_space *space, UINT8 reg, UINT8 type, UINT32
  *
  *************************************/
 
-static UINT32 pci_ide_r(const address_space *space, UINT8 reg, UINT8 type)
+static UINT32 pci_ide_r(address_space *space, UINT8 reg, UINT8 type)
 {
 	UINT32 result = galileo.pci_ide_regs[reg];
 
@@ -864,7 +876,7 @@ static UINT32 pci_ide_r(const address_space *space, UINT8 reg, UINT8 type)
 }
 
 
-static void pci_ide_w(const address_space *space, UINT8 reg, UINT8 type, UINT32 data)
+static void pci_ide_w(address_space *space, UINT8 reg, UINT8 type, UINT32 data)
 {
 	galileo.pci_ide_regs[reg] = data;
 	if (LOG_PCI)
@@ -925,7 +937,7 @@ static TIMER_CALLBACK( galileo_timer_callback )
  *
  *************************************/
 
-static int galileo_dma_fetch_next(const address_space *space, int which)
+static int galileo_dma_fetch_next(address_space *space, int which)
 {
 	offs_t address = 0;
 	UINT32 data;
@@ -947,25 +959,25 @@ static int galileo_dma_fetch_next(const address_space *space, int which)
 	}
 
 	/* fetch the byte count */
-	data = memory_read_dword(space, address); address += 4;
+	data = space->read_dword(address); address += 4;
 	galileo.reg[GREG_DMA0_COUNT + which] = data;
 
 	/* fetch the source address */
-	data = memory_read_dword(space, address); address += 4;
+	data = space->read_dword(address); address += 4;
 	galileo.reg[GREG_DMA0_SOURCE + which] = data;
 
 	/* fetch the dest address */
-	data = memory_read_dword(space, address); address += 4;
+	data = space->read_dword(address); address += 4;
 	galileo.reg[GREG_DMA0_DEST + which] = data;
 
 	/* fetch the next record address */
-	data = memory_read_dword(space, address); address += 4;
+	data = space->read_dword(address); address += 4;
 	galileo.reg[GREG_DMA0_NEXT + which] = data;
 	return 1;
 }
 
 
-static void galileo_perform_dma(const address_space *space, int which)
+static void galileo_perform_dma(address_space *space, int which)
 {
 	do
 	{
@@ -1016,7 +1028,7 @@ static void galileo_perform_dma(const address_space *space, int which)
 				}
 
 				/* write the data and advance */
-				voodoo_w(voodoo, (dstaddr & 0xffffff) / 4, memory_read_dword(space, srcaddr), 0xffffffff);
+				voodoo_w(voodoo, (dstaddr & 0xffffff) / 4, space->read_dword(srcaddr), 0xffffffff);
 				srcaddr += srcinc;
 				dstaddr += dstinc;
 				bytesleft -= 4;
@@ -1028,7 +1040,7 @@ static void galileo_perform_dma(const address_space *space, int which)
 		{
 			while (bytesleft > 0)
 			{
-				memory_write_byte(space, dstaddr, memory_read_byte(space, srcaddr));
+				space->write_byte(dstaddr, space->read_byte(srcaddr));
 				srcaddr += srcinc;
 				dstaddr += dstinc;
 				bytesleft--;
@@ -1347,7 +1359,7 @@ static void voodoo_stall(running_device *device, int stall)
 		for (which = 0; which < 4; which++)
 			if (galileo.dma_stalled_on_voodoo[which])
 			{
-				const address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+				address_space *space = cputag_get_address_space(device->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 				if (LOG_DMA) logerror("Resuming DMA%d on voodoo\n", which);
 
 				/* mark this DMA as no longer stalled */
@@ -1574,15 +1586,17 @@ static WRITE32_DEVICE_HANDLER( widget_w )
 
 static WRITE32_HANDLER( cmos_w )
 {
+	seattle_state *state = space->machine->driver_data<seattle_state>();
 	if (cmos_write_enabled)
-		COMBINE_DATA(space->machine->generic.nvram.u32 + offset);
+		COMBINE_DATA(state->m_nvram + offset);
 	cmos_write_enabled = FALSE;
 }
 
 
 static READ32_HANDLER( cmos_r )
 {
-	return space->machine->generic.nvram.u32[offset];
+	seattle_state *state = space->machine->driver_data<seattle_state>();
+	return state->m_nvram[offset];
 }
 
 
@@ -1734,7 +1748,7 @@ static ADDRESS_MAP_START( seattle_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x0c000000, 0x0c000fff) AM_READWRITE(galileo_r, galileo_w)
 	AM_RANGE(0x13000000, 0x13000003) AM_WRITE(asic_fifo_w)
 	AM_RANGE(0x16000000, 0x1600003f) AM_READWRITE(midway_ioasic_r, midway_ioasic_w)
-	AM_RANGE(0x16100000, 0x1611ffff) AM_READWRITE(cmos_r, cmos_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x16100000, 0x1611ffff) AM_READWRITE(cmos_r, cmos_w) AM_SHARE("nvram")
 	AM_RANGE(0x17000000, 0x17000003) AM_READWRITE(cmos_protect_r, cmos_protect_w)
 	AM_RANGE(0x17100000, 0x17100003) AM_WRITE(seattle_watchdog_w)
 	AM_RANGE(0x17300000, 0x17300003) AM_RAM_WRITE(seattle_interrupt_enable_w) AM_BASE(&interrupt_enable)
@@ -2450,23 +2464,23 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const mips3_config config =
+static const mips3_config r5000_config =
 {
 	16384,		/* code cache size */
 	16384,		/* data cache size */
 	SYSTEM_CLOCK	/* system clock rate */
 };
 
-static MACHINE_DRIVER_START( seattle_common )
+static MACHINE_CONFIG_START( seattle_common, seattle_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", R5000LE, SYSTEM_CLOCK*3)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(seattle_map)
 
 	MDRV_MACHINE_START(seattle)
 	MDRV_MACHINE_RESET(seattle)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MDRV_NVRAM_ADD_1FILL("nvram")
 
 	MDRV_IDE_CONTROLLER_ADD("ide", ide_interrupt)
 	MDRV_IDE_BUS_MASTER_SPACE("maincpu", PROGRAM)
@@ -2487,64 +2501,58 @@ static MACHINE_DRIVER_START( seattle_common )
 	MDRV_VIDEO_UPDATE(seattle)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( phoenixsa )
-	MDRV_IMPORT_FROM(seattle_common)
-	MDRV_IMPORT_FROM(dcs2_audio_2115)
+static MACHINE_CONFIG_DERIVED( phoenixsa, seattle_common )
+	MDRV_FRAGMENT_ADD(dcs2_audio_2115)
 
 	MDRV_CPU_REPLACE("maincpu", R4700LE, SYSTEM_CLOCK*2)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(seattle_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( seattle150 )
-	MDRV_IMPORT_FROM(seattle_common)
-	MDRV_IMPORT_FROM(dcs2_audio_2115)
+static MACHINE_CONFIG_DERIVED( seattle150, seattle_common )
+	MDRV_FRAGMENT_ADD(dcs2_audio_2115)
 
 	MDRV_CPU_REPLACE("maincpu", R5000LE, SYSTEM_CLOCK*3)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(seattle_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( seattle150_widget )
-	MDRV_IMPORT_FROM(seattle150)
+static MACHINE_CONFIG_DERIVED( seattle150_widget, seattle150 )
 	MDRV_SMC91C94_ADD("ethernet", ethernet_interrupt)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( seattle200 )
-	MDRV_IMPORT_FROM(seattle_common)
-	MDRV_IMPORT_FROM(dcs2_audio_2115)
+static MACHINE_CONFIG_DERIVED( seattle200, seattle_common )
+	MDRV_FRAGMENT_ADD(dcs2_audio_2115)
 
 	MDRV_CPU_REPLACE("maincpu", R5000LE, SYSTEM_CLOCK*4)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(seattle_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( seattle200_widget )
-	MDRV_IMPORT_FROM(seattle200)
+static MACHINE_CONFIG_DERIVED( seattle200_widget, seattle200 )
 	MDRV_SMC91C94_ADD("ethernet", ethernet_interrupt)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( flagstaff )
-	MDRV_IMPORT_FROM(seattle_common)
-	MDRV_IMPORT_FROM(cage_seattle)
+static MACHINE_CONFIG_DERIVED( flagstaff, seattle_common )
+	MDRV_FRAGMENT_ADD(cage_seattle)
 
 	MDRV_CPU_REPLACE("maincpu", R5000LE, SYSTEM_CLOCK*4)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(seattle_map)
 
 	MDRV_SMC91C94_ADD("ethernet", ethernet_interrupt)
 
 	MDRV_3DFX_VOODOO_MODIFY("voodoo")
 	MDRV_3DFX_VOODOO_TMU_MEMORY(1, 4)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

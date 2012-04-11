@@ -196,7 +196,8 @@ struct _mips3_state
 	mips3_flavor	flavor;
 	device_irq_callback irq_callback;
 	legacy_cpu_device *	device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 	UINT32			system_clock;
 	UINT32			cpu_clock;
 	UINT64			count_zero_time;

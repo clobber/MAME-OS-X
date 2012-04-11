@@ -441,7 +441,7 @@ TIMER_DEVICE_CALLBACK( williams2_endscreen_callback )
 
 static STATE_POSTLOAD( williams2_postload )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	williams2_bank_select_w(space, 0, vram_bank);
 }
 
@@ -460,7 +460,7 @@ MACHINE_START( williams2 )
 
 MACHINE_RESET( williams2 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	/* make sure our banking is reset */
 	williams2_bank_select_w(space, 0, 0);
@@ -641,14 +641,16 @@ READ8_DEVICE_HANDLER( williams_input_port_49way_0_5_r )
 WRITE8_HANDLER( williams_cmos_w )
 {
 	/* only 4 bits are valid */
-	space->machine->generic.nvram.u8[offset] = data | 0xf0;
+	williams_state *state = space->machine->driver_data<williams_state>();
+	state->m_nvram[offset] = data | 0xf0;
 }
 
 
 WRITE8_HANDLER( bubbles_cmos_w )
 {
 	/* bubbles has additional CMOS for a full 8 bits */
-	space->machine->generic.nvram.u8[offset] = data;
+	williams_state *state = space->machine->driver_data<williams_state>();
+	state->m_nvram[offset] = data;
 }
 
 
@@ -725,7 +727,7 @@ WRITE8_HANDLER( williams2_7segment_w )
 
 static STATE_POSTLOAD( defender_postload )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	defender_bank_select_w(space, 0, vram_bank);
 }
 
@@ -743,7 +745,7 @@ MACHINE_START( defender )
 
 MACHINE_RESET( defender )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	MACHINE_RESET_CALL(williams_common);
 

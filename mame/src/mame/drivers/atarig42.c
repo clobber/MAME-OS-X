@@ -33,15 +33,15 @@
 
 static void update_interrupts(running_machine *machine)
 {
-	atarig42_state *state = (atarig42_state *)machine->driver_data;
-	cputag_set_input_line(machine, "maincpu", 4, state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 5, state->atarigen.sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	atarig42_state *state = machine->driver_data<atarig42_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 5, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static MACHINE_START( atarig42 )
 {
-	atarig42_state *state = (atarig42_state *)machine->driver_data;
+	atarig42_state *state = machine->driver_data<atarig42_state>();
 	atarigen_init(machine);
 
 	state_save_register_global(machine, state->analog_data);
@@ -54,10 +54,10 @@ static MACHINE_START( atarig42 )
 
 static MACHINE_RESET( atarig42 )
 {
-	atarig42_state *state = (atarig42_state *)machine->driver_data;
+	atarig42_state *state = machine->driver_data<atarig42_state>();
 
-	atarigen_eeprom_reset(&state->atarigen);
-	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
+	atarigen_eeprom_reset(state);
+	atarigen_interrupt_reset(state, update_interrupts);
 	atarigen_scanline_timer_reset(*machine->primary_screen, atarig42_scanline_update, 8);
 	atarijsa_reset();
 }
@@ -72,10 +72,10 @@ static MACHINE_RESET( atarig42 )
 
 static READ16_HANDLER( special_port2_r )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	int temp = input_port_read(space->machine, "IN2");
-	if (state->atarigen.cpu_to_sound_ready) temp ^= 0x0020;
-	if (state->atarigen.sound_to_cpu_ready) temp ^= 0x0010;
+	if (state->cpu_to_sound_ready) temp ^= 0x0020;
+	if (state->sound_to_cpu_ready) temp ^= 0x0010;
 	temp ^= 0x0008;		/* A2D.EOC always high for now */
 	return temp;
 }
@@ -84,7 +84,7 @@ static READ16_HANDLER( special_port2_r )
 static WRITE16_HANDLER( a2d_select_w )
 {
 	static const char *const portnames[] = { "A2D0", "A2D1" };
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 
 	state->analog_data = input_port_read(space->machine, portnames[offset != 0]);
 }
@@ -92,7 +92,7 @@ static WRITE16_HANDLER( a2d_select_w )
 
 static READ16_HANDLER( a2d_data_r )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	return state->analog_data << 8;
 }
 
@@ -125,7 +125,7 @@ static WRITE16_HANDLER( io_latch_w )
 
 static WRITE16_HANDLER( mo_command_w )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	COMBINE_DATA(state->mo_command);
 	atarirle_command_w(0, (data == 0) ? ATARIRLE_COMMAND_CHECKSUM : ATARIRLE_COMMAND_DRAW);
 }
@@ -138,12 +138,12 @@ static WRITE16_HANDLER( mo_command_w )
  *
  *************************************/
 
-static DIRECT_UPDATE_HANDLER( sloop_direct_handler )
+DIRECT_UPDATE_HANDLER( atarig42_sloop_direct_handler )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
 	if (address < 0x80000)
 	{
-		direct->raw = direct->decrypted = (UINT8 *)state->sloop_base;
+		atarig42_state *state = machine->driver_data<atarig42_state>();
+		direct.explicit_configure(0x00000, 0x7ffff, 0x7ffff, state->sloop_base);
 		return (offs_t)-1;
 	}
 	return address;
@@ -264,7 +264,7 @@ static void roadriot_sloop_tweak(atarig42_state *state, int offset)
 
 static READ16_HANDLER( roadriot_sloop_data_r )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	roadriot_sloop_tweak(state, offset);
 	if (offset < 0x78000/2)
 		return state->sloop_base[offset];
@@ -275,7 +275,7 @@ static READ16_HANDLER( roadriot_sloop_data_r )
 
 static WRITE16_HANDLER( roadriot_sloop_data_w )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	roadriot_sloop_tweak(state, offset);
 }
 
@@ -323,7 +323,7 @@ static void guardians_sloop_tweak(atarig42_state *state, int offset)
 
 static READ16_HANDLER( guardians_sloop_data_r )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	guardians_sloop_tweak(state, offset);
 	if (offset < 0x78000/2)
 		return state->sloop_base[offset];
@@ -334,7 +334,7 @@ static READ16_HANDLER( guardians_sloop_data_r )
 
 static WRITE16_HANDLER( guardians_sloop_data_w )
 {
-	atarig42_state *state = (atarig42_state *)space->machine->driver_data;
+	atarig42_state *state = space->machine->driver_data<atarig42_state>();
 	guardians_sloop_tweak(state, offset);
 }
 
@@ -363,11 +363,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xf40000, 0xf40001) AM_READ(asic65_io_r)
 	AM_RANGE(0xf60000, 0xf60001) AM_READ(asic65_r)
 	AM_RANGE(0xf80000, 0xf80003) AM_WRITE(asic65_data_w)
-	AM_RANGE(0xfa0000, 0xfa0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE_SIZE_MEMBER(atarig42_state, atarigen.eeprom, atarigen.eeprom_size)
+	AM_RANGE(0xfa0000, 0xfa0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0xfc0000, 0xfc0fff) AM_RAM_WRITE(atarigen_666_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xff0000, 0xff0fff) AM_WRITE(atarirle_0_spriteram_w) AM_BASE(&atarirle_0_spriteram)
-	AM_RANGE(0xff2000, 0xff5fff) AM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(atarig42_state, atarigen.playfield)
-	AM_RANGE(0xff6000, 0xff6fff) AM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(atarig42_state, atarigen.alpha)
+	AM_RANGE(0xff2000, 0xff5fff) AM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(atarig42_state, playfield)
+	AM_RANGE(0xff6000, 0xff6fff) AM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(atarig42_state, alpha)
 	AM_RANGE(0xff7000, 0xff7001) AM_WRITE(mo_command_w) AM_BASE_MEMBER(atarig42_state, mo_command)
 	AM_RANGE(0xff0000, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -512,8 +512,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( atarig42 )
-	MDRV_DRIVER_DATA(atarig42_state)
+static MACHINE_CONFIG_START( atarig42, atarig42_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz)
@@ -521,11 +520,11 @@ static MACHINE_DRIVER_START( atarig42 )
 	MDRV_CPU_VBLANK_INT("screen", atarigen_video_int_gen)
 
 	/* ASIC65 */
-	MDRV_IMPORT_FROM(asic65)
+	MDRV_FRAGMENT_ADD(asic65)
 
 	MDRV_MACHINE_START(atarig42)
 	MDRV_MACHINE_RESET(atarig42)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MDRV_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -543,8 +542,8 @@ static MACHINE_DRIVER_START( atarig42 )
 	MDRV_VIDEO_UPDATE(atarig42)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_iii_mono)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(jsa_iii_mono)
+MACHINE_CONFIG_END
 
 
 
@@ -603,6 +602,9 @@ ROM_START( roadriot )
 	ROM_LOAD( "136089-1050.15e",  0x40000, 0x20000, CRC(64d410bb) SHA1(877bccca7ff37a9dd8294bc1453487a2f516ca7d) )
 	ROM_LOAD( "136089-1051.12e",  0x60000, 0x20000, CRC(bffd01c8) SHA1(f6de000f61ea0c1ddb31ee5301506e5e966638c2) )
 
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "roadriot-eeprom.bin", 0x0000, 0x1000, CRC(833d0d53) SHA1(239f791a29ed61317d639fab699752094984078e) )
+
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
 	ROM_LOAD( "136089-1001.bin",  0x0000, 0x0200, CRC(5836cb5a) SHA1(2c797f6a1227d6e1fd7a12f99f0254072c8c266e) )
 	ROM_LOAD( "136089-1002.bin",  0x0200, 0x0200, CRC(44288753) SHA1(811582015264f85a32643196cdb331a41430318f) )
@@ -649,6 +651,9 @@ ROM_START( guardian )
 	ROM_REGION( 0x80000, "adpcm", 0 )
 	ROM_LOAD( "136092-0010-snd",  0x00000, 0x80000, CRC(bca27f40) SHA1(91a41eac116eb7d9a790abc590eb06328726d1c2) )
 
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "guardian-eeprom.bin", 0x0000, 0x1000, CRC(fba171dc) SHA1(c53f72b7c25602c5fedc38d34d1342fbd10e4a44) )
+
 	ROM_REGION( 0x0600, "proms", 0 )	/* microcode for growth renderer */
 	ROM_LOAD( "136092-1001.bin",  0x0000, 0x0200, CRC(b3251eeb) SHA1(5e83baa70aaa28f07f32657bf974fd87719972d3) )
 	ROM_LOAD( "136092-1002.bin",  0x0200, 0x0200, CRC(0c5314da) SHA1(a9c7ee3ab015c7f3ada4200acd2854eb9a5c74b0) )
@@ -676,28 +681,16 @@ ROM_END
 
 static DRIVER_INIT( roadriot )
 {
-	static const UINT16 default_eeprom[] =
-	{
-		0x0001,0x01B7,0x01AF,0x01E4,0x0100,0x0130,0x0300,0x01CC,
-		0x0700,0x01FE,0x0500,0x0102,0x0200,0x0108,0x011B,0x01C8,
-		0x0100,0x0107,0x0120,0x0100,0x0125,0x0500,0x0177,0x0162,
-		0x013A,0x010A,0x01B7,0x01AF,0x01E4,0x0100,0x0130,0x0300,
-		0x01CC,0x0700,0x01FE,0x0500,0x0102,0x0200,0x0108,0x011B,
-		0x01C8,0x0100,0x0107,0x0120,0x0100,0x0125,0x0500,0x0177,
-		0x0162,0x013A,0x010A,0xE700,0x0164,0x0106,0x0100,0x0104,
-		0x01B0,0x0146,0x012E,0x1A00,0x01C8,0x01D0,0x0118,0x0D00,
-		0x0118,0x0100,0x01C8,0x01D0,0x0000
-	};
-	atarig42_state *state = (atarig42_state *)machine->driver_data;
-	state->atarigen.eeprom_default = default_eeprom;
+	atarig42_state *state = machine->driver_data<atarig42_state>();
 	atarijsa_init(machine, "IN2", 0x0040);
 
 	state->playfield_base = 0x400;
 	state->motion_object_base = 0x200;
 	state->motion_object_mask = 0x1ff;
 
-	state->sloop_base = memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000000, 0x07ffff, 0, 0, roadriot_sloop_data_r, roadriot_sloop_data_w);
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), sloop_direct_handler);
+	address_space *main = machine->device<m68000_device>("maincpu")->space(AS_PROGRAM);
+	state->sloop_base = memory_install_readwrite16_handler(main, 0x000000, 0x07ffff, 0, 0, roadriot_sloop_data_r, roadriot_sloop_data_w);
+	main->set_direct_update_handler(direct_update_delegate_create_static(atarig42_sloop_direct_handler, *machine));
 
 	asic65_config(machine, ASIC65_ROMBASED);
 /*
@@ -725,21 +718,7 @@ static DRIVER_INIT( roadriot )
 
 static DRIVER_INIT( guardian )
 {
-	static const UINT16 default_eeprom[] =
-	{
-		0x0001,0x01FD,0x01FF,0x01EF,0x0100,0x01CD,0x0300,0x0104,
-		0x0700,0x0117,0x0F00,0x0133,0x1F00,0x0133,0x2400,0x0120,
-		0x0600,0x0104,0x0300,0x010C,0x01A0,0x0100,0x0152,0x0179,
-		0x012D,0x01BD,0x01FD,0x01FF,0x01EF,0x0100,0x01CD,0x0300,
-		0x0104,0x0700,0x0117,0x0F00,0x0133,0x1F00,0x0133,0x2400,
-		0x0120,0x0600,0x0104,0x0300,0x010C,0x01A0,0x0100,0x0152,
-		0x0179,0x012D,0x01BD,0x8C00,0x0118,0x01AB,0x015A,0x0100,
-		0x01D0,0x010B,0x01B8,0x01C7,0x01E2,0x0134,0x0100,0x010A,
-		0x01BE,0x016D,0x0142,0x0100,0x0120,0x0109,0x0110,0x0141,
-		0x0109,0x0100,0x0108,0x0134,0x0105,0x0148,0x1400,0x0000
-	};
-	atarig42_state *state = (atarig42_state *)machine->driver_data;
-	state->atarigen.eeprom_default = default_eeprom;
+	atarig42_state *state = machine->driver_data<atarig42_state>();
 	atarijsa_init(machine, "IN2", 0x0040);
 
 	state->playfield_base = 0x000;
@@ -750,8 +729,9 @@ static DRIVER_INIT( guardian )
 	/* put an RTS there so we don't die */
 	*(UINT16 *)&memory_region(machine, "maincpu")[0x80000] = 0x4E75;
 
-	state->sloop_base = memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000000, 0x07ffff, 0, 0, guardians_sloop_data_r, guardians_sloop_data_w);
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), sloop_direct_handler);
+	address_space *main = machine->device<m68000_device>("maincpu")->space(AS_PROGRAM);
+	state->sloop_base = memory_install_readwrite16_handler(main, 0x000000, 0x07ffff, 0, 0, guardians_sloop_data_r, guardians_sloop_data_w);
+	main->set_direct_update_handler(direct_update_delegate_create_static(atarig42_sloop_direct_handler, *machine));
 
 	asic65_config(machine, ASIC65_GUARDIANS);
 /*

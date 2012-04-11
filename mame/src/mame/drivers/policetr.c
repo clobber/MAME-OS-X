@@ -417,7 +417,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static const r3000_cpu_core config =
+static const r3000_cpu_core r3000_config =
 {
 	0,		/* 1 if we have an FPU, 0 otherwise */
 	4096,	/* code cache size */
@@ -425,11 +425,11 @@ static const r3000_cpu_core config =
 };
 
 
-static MACHINE_DRIVER_START( policetr )
+static MACHINE_CONFIG_START( policetr, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", R3000BE, MASTER_CLOCK/2)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r3000_config)
 	MDRV_CPU_PROGRAM_MAP(policetr_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_gen)
 
@@ -455,16 +455,15 @@ static MACHINE_DRIVER_START( policetr )
 	MDRV_SOUND_ADD("bsmt", BSMT2000, MASTER_CLOCK/2)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( sshooter )
-	MDRV_IMPORT_FROM(policetr)
+static MACHINE_CONFIG_DERIVED( sshooter, policetr )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(sshooter_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

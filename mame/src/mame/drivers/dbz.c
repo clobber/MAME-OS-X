@@ -63,7 +63,7 @@ Notes:
 
 static INTERRUPT_GEN( dbz_interrupt )
 {
-	dbz_state *state = (dbz_state *)device->machine->driver_data;
+	dbz_state *state = device->machine->driver_data<dbz_state>();
 
 	switch (cpu_getiloops(device))
 	{
@@ -81,14 +81,14 @@ static INTERRUPT_GEN( dbz_interrupt )
 #if 0
 static READ16_HANDLER( dbzcontrol_r )
 {
-	dbz_state *state = (dbz_state *)space->machine->driver_data;
+	dbz_state *state = space->machine->driver_data<dbz_state>();
 	return state->control;
 }
 #endif
 
 static WRITE16_HANDLER( dbzcontrol_w )
 {
-	dbz_state *state = (dbz_state *)space->machine->driver_data;
+	dbz_state *state = space->machine->driver_data<dbz_state>();
 	/* bit 10 = enable '246 readback */
 
 	COMBINE_DATA(&state->control);
@@ -109,13 +109,13 @@ static WRITE16_HANDLER( dbz_sound_command_w )
 
 static WRITE16_HANDLER( dbz_sound_cause_nmi )
 {
-	dbz_state *state = (dbz_state *)space->machine->driver_data;
+	dbz_state *state = space->machine->driver_data<dbz_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static void dbz_sound_irq( running_device *device, int irq )
 {
-	dbz_state *state = (dbz_state *)device->machine->driver_data;
+	dbz_state *state = device->machine->driver_data<dbz_state>();
 
 	if (irq)
 		cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
@@ -164,7 +164,7 @@ static ADDRESS_MAP_START( dbz_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_RAM
 	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0xd000, 0xd002) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xd000, 0xd002) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe000, 0xe001) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -338,7 +338,7 @@ static const k053936_interface dbz_k053936_intf =
 
 static MACHINE_START( dbz )
 {
-	dbz_state *state = (dbz_state *)machine->driver_data;
+	dbz_state *state = machine->driver_data<dbz_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -356,7 +356,7 @@ static MACHINE_START( dbz )
 
 static MACHINE_RESET( dbz )
 {
-	dbz_state *state = (dbz_state *)machine->driver_data;
+	dbz_state *state = machine->driver_data<dbz_state>();
 	int i;
 
 	for (i = 0; i < 5; i++)
@@ -369,10 +369,7 @@ static MACHINE_RESET( dbz )
 	state->control = 0;
 }
 
-static MACHINE_DRIVER_START( dbz )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dbz_state)
+static MACHINE_CONFIG_START( dbz, dbz_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)
@@ -419,7 +416,7 @@ static MACHINE_DRIVER_START( dbz )
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /**********************************************************************************/
 

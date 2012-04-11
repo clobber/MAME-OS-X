@@ -29,12 +29,11 @@
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
-class skyarmy_state
+class skyarmy_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, skyarmy_state(machine)); }
-
-	skyarmy_state(running_machine &machine) { }
+	skyarmy_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *spriteram;
 	UINT8 *videoram;
@@ -56,7 +55,7 @@ static WRITE8_HANDLER( skyarmy_flip_screen_y_w )
 
 static TILE_GET_INFO( get_skyarmy_tile_info )
 {
-	skyarmy_state *state = (skyarmy_state *)machine->driver_data;
+	skyarmy_state *state = machine->driver_data<skyarmy_state>();
 	int code = state->videoram[tile_index];
 	int attr = BITSWAP8(state->colorram[tile_index], 7, 6, 5, 4, 3, 0, 1, 2) & 7;
 
@@ -65,7 +64,7 @@ static TILE_GET_INFO( get_skyarmy_tile_info )
 
 static WRITE8_HANDLER( skyarmy_videoram_w )
 {
-	skyarmy_state *state = (skyarmy_state *)space->machine->driver_data;
+	skyarmy_state *state = space->machine->driver_data<skyarmy_state>();
 
 	state->videoram[offset] = data;
 	tilemap_mark_tile_dirty(state->tilemap,offset);
@@ -73,7 +72,7 @@ static WRITE8_HANDLER( skyarmy_videoram_w )
 
 static WRITE8_HANDLER( skyarmy_colorram_w )
 {
-	skyarmy_state *state = (skyarmy_state *)space->machine->driver_data;
+	skyarmy_state *state = space->machine->driver_data<skyarmy_state>();
 
 	state->colorram[offset] = data;
 	tilemap_mark_tile_dirty(state->tilemap,offset);
@@ -109,7 +108,7 @@ static PALETTE_INIT( skyarmy )
 
 static VIDEO_START( skyarmy )
 {
-	skyarmy_state *state = (skyarmy_state *)machine->driver_data;
+	skyarmy_state *state = machine->driver_data<skyarmy_state>();
 
 	state->tilemap = tilemap_create(machine, get_skyarmy_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 	tilemap_set_scroll_cols(state->tilemap,32);
@@ -118,7 +117,7 @@ static VIDEO_START( skyarmy )
 
 static VIDEO_UPDATE( skyarmy )
 {
-	skyarmy_state *state = (skyarmy_state *)screen->machine->driver_data;
+	skyarmy_state *state = screen->machine->driver_data<skyarmy_state>();
 	UINT8 *spriteram = state->spriteram;
 	int sx, sy, flipx, flipy, offs,pal;
 	int i;
@@ -149,7 +148,7 @@ static VIDEO_UPDATE( skyarmy )
 
 static INTERRUPT_GEN( skyarmy_nmi_source )
 {
-	skyarmy_state *state = (skyarmy_state *)device->machine->driver_data;
+	skyarmy_state *state = device->machine->driver_data<skyarmy_state>();
 
 	if(state->nmi) cpu_set_input_line(device,INPUT_LINE_NMI, PULSE_LINE);
 }
@@ -157,7 +156,7 @@ static INTERRUPT_GEN( skyarmy_nmi_source )
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	skyarmy_state *state = (skyarmy_state *)space->machine->driver_data;
+	skyarmy_state *state = space->machine->driver_data<skyarmy_state>();
 
 	state->nmi=data & 1;
 }
@@ -272,9 +271,7 @@ static GFXDECODE_START( skyarmy )
 	GFXDECODE_ENTRY( "gfx2", 0, spritelayout, 0, 8 )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( skyarmy )
-
-	MDRV_DRIVER_DATA( skyarmy_state )
+static MACHINE_CONFIG_START( skyarmy, skyarmy_state )
 
 	MDRV_CPU_ADD("maincpu", Z80,4000000)
 	MDRV_CPU_PROGRAM_MAP(skyarmy_map)
@@ -301,7 +298,7 @@ static MACHINE_DRIVER_START( skyarmy )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 	MDRV_SOUND_ADD("aysnd", AY8910, 2500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( skyarmy )

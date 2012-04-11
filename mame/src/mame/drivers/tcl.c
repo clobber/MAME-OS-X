@@ -112,7 +112,7 @@ static const ppi8255_interface ppi8255_intf[2] =
 };
 
 
-static MACHINE_DRIVER_START( tcl )
+static MACHINE_CONFIG_START( tcl, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,12000000/4)
@@ -140,7 +140,7 @@ static MACHINE_DRIVER_START( tcl )
 
 	MDRV_SOUND_ADD("aysnd", AY8910, 12000000/6)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 
@@ -180,7 +180,7 @@ static DRIVER_INIT(tcl)
 {
 	/* only the first part is decrypted (and verified)*/
 
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *dest = memory_region(machine, "maincpu");
 	int len = memory_region_length(machine, "maincpu");
 	UINT8 *src = auto_alloc_array(machine, UINT8, len);
@@ -206,7 +206,7 @@ static DRIVER_INIT(tcl)
 	}
 	auto_free(machine, src);
 
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, dest+0x10000);
+	space->set_decrypted_region(0x0000, 0x7fff, dest+0x10000);
 }
 
 GAME( 1995, tcl,  0,       tcl,  tcl,  tcl, ROT0, "Uniwang", "Taiwan Chess Legend", GAME_NOT_WORKING )

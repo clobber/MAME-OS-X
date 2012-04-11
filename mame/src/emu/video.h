@@ -72,7 +72,7 @@ enum screen_type_enum
 
 // forward references
 class render_target;
-struct render_texture;
+class render_texture;
 class screen_device;
 
 
@@ -108,32 +108,21 @@ public:
 	float xscale() const { return m_xscale; }
 	float yscale() const { return m_yscale; }
 
-	// indexes to inline data
-	enum
-	{
-		INLINE_TYPE,
-		INLINE_FORMAT,
-		INLINE_REFRESH,
-		INLINE_VBLANK,
-		INLINE_WIDTH,
-		INLINE_HEIGHT,
-		INLINE_VIS_MINX,
-		INLINE_VIS_MAXX,
-		INLINE_VIS_MINY,
-		INLINE_VIS_MAXY,
-		INLINE_XOFFSET,
-		INLINE_XSCALE,
-		INLINE_YOFFSET,
-		INLINE_YSCALE,
-		INLINE_OLDVBLANK
-	};
+	// inline configuration helpers
+	static void static_set_format(device_config *device, bitmap_format format);
+	static void static_set_type(device_config *device, screen_type_enum type);
+	static void static_set_raw(device_config *device, UINT32 pixclock, UINT16 htotal, UINT16 hbend, UINT16 hbstart, UINT16 vtotal, UINT16 vbend, UINT16 vbstart);
+	static void static_set_refresh(device_config *device, attoseconds_t rate);
+	static void static_set_vblank_time(device_config *device, attoseconds_t time);
+	static void static_set_size(device_config *device, UINT16 width, UINT16 height);
+	static void static_set_visarea(device_config *device, INT16 minx, INT16 maxx, INT16 miny, INT16 maxy);
+	static void static_set_default_position(device_config *device, double xscale, double xoffs, double yscale, double yoffs);
 
 private:
 	// device_config overrides
-	virtual void device_config_complete();
 	virtual bool device_validity_check(const game_driver &driver) const;
 
-	// configuration data
+	// inline configuration data
 	screen_type_enum	m_type;						// type of screen
 	int					m_width, m_height;			// default total width/height (HTOTAL, VTOTAL)
 	rectangle			m_visarea;					// default visible area (HBLANK end/start, VBLANK end/start)
@@ -152,6 +141,7 @@ private:
 class screen_device : public device_t
 {
 	friend class screen_device_config;
+	friend class render_manager;
 	friend resource_pool_object<screen_device>::~resource_pool_object();
 
 	// construction/destruction
@@ -166,9 +156,11 @@ public:
 	int height() const { return m_height; }
 	const rectangle &visible_area() const { return m_visarea; }
 	bitmap_format format() const { return m_config.m_format; }
+	render_container &container() const { assert(m_container != NULL); return *m_container; }
 
 	// dynamic configuration
 	void configure(int width, int height, const rectangle &visarea, attoseconds_t frame_period);
+	void reset_origin(int beamy = 0, int beamx = 0);
 	void set_visible_area(int min_x, int max_x, int min_y, int max_y);
 
 	// beam positioning and state
@@ -209,6 +201,7 @@ private:
 	virtual void device_post_load();
 
 	// internal helpers
+	void set_container(render_container &container) { m_container = &container; }
 	void realloc_screen_bitmaps();
 
 	static TIMER_CALLBACK( static_vblank_begin_callback ) { reinterpret_cast<screen_device *>(ptr)->vblank_begin_callback(); }
@@ -226,9 +219,11 @@ private:
 	void scanline_update_callback(int scanline);
 
 	void finalize_burnin();
+	void load_effect_overlay(const char *filename);
 
 	// internal state
 	const screen_device_config &m_config;
+	render_container *		m_container;			// pointer to our container
 
 	// dimensions
 	int						m_width;				// current width (HTOTAL)
@@ -244,6 +239,7 @@ private:
 	INT32					m_texture_format;		// texture format of bitmap for this screen
 	bool					m_changed;				// has this bitmap changed?
 	INT32					m_last_partial_scan;	// scanline of last partial update
+	bitmap_t *				m_screen_overlay_bitmap;// screen overlay bitmap
 
 	// screen timing
 	attoseconds_t			m_frame_period;			// attoseconds per frame
@@ -279,49 +275,34 @@ extern const device_type SCREEN;
 
 #define MDRV_SCREEN_ADD(_tag, _type) \
 	MDRV_DEVICE_ADD(_tag, SCREEN, 0) \
-	MDRV_SCREEN_TYPE(_type)
+	MDRV_SCREEN_TYPE(_type) \
 
 #define MDRV_SCREEN_MODIFY(_tag) \
 	MDRV_DEVICE_MODIFY(_tag)
 
 #define MDRV_SCREEN_FORMAT(_format) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_FORMAT, _format)
+	screen_device_config::static_set_format(device, _format); \
 
 #define MDRV_SCREEN_TYPE(_type) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_TYPE, SCREEN_TYPE_##_type)
+	screen_device_config::static_set_type(device, SCREEN_TYPE_##_type); \
 
 #define MDRV_SCREEN_RAW_PARAMS(_pixclock, _htotal, _hbend, _hbstart, _vtotal, _vbend, _vbstart) \
-	MDRV_DEVICE_INLINE_DATA64(screen_device_config::INLINE_REFRESH, HZ_TO_ATTOSECONDS(_pixclock) * (_htotal) * (_vtotal)) \
-	MDRV_DEVICE_INLINE_DATA64(screen_device_config::INLINE_VBLANK, ((HZ_TO_ATTOSECONDS(_pixclock) * (_htotal) * (_vtotal)) / (_vtotal)) * ((_vtotal) - ((_vbstart) - (_vbend)))) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_WIDTH, _htotal)	\
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_HEIGHT, _vtotal)	\
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MINX, _hbend) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MAXX, (_hbstart) - 1) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MINY, _vbend) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MAXY, (_vbstart) - 1)
+	screen_device_config::static_set_raw(device, _pixclock, _htotal, _hbend, _hbstart, _vtotal, _vbend, _vbstart);
 
 #define MDRV_SCREEN_REFRESH_RATE(_rate) \
-	MDRV_DEVICE_INLINE_DATA64(screen_device_config::INLINE_REFRESH, HZ_TO_ATTOSECONDS(_rate))
+	screen_device_config::static_set_refresh(device, HZ_TO_ATTOSECONDS(_rate)); \
 
 #define MDRV_SCREEN_VBLANK_TIME(_time) \
-	MDRV_DEVICE_INLINE_DATA64(screen_device_config::INLINE_VBLANK, _time) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_OLDVBLANK, true)
+	screen_device_config::static_set_vblank_time(device, _time); \
 
 #define MDRV_SCREEN_SIZE(_width, _height) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_WIDTH, _width) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_HEIGHT, _height)
+	screen_device_config::static_set_size(device, _width, _height); \
 
 #define MDRV_SCREEN_VISIBLE_AREA(_minx, _maxx, _miny, _maxy) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MINX, _minx) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MAXX, _maxx) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MINY, _miny) \
-	MDRV_DEVICE_INLINE_DATA16(screen_device_config::INLINE_VIS_MAXY, _maxy)
+	screen_device_config::static_set_visarea(device, _minx, _maxx, _miny, _maxy); \
 
 #define MDRV_SCREEN_DEFAULT_POSITION(_xscale, _xoffs, _yscale, _yoffs)	\
-	MDRV_DEVICE_INLINE_DATA32(screen_device_config::INLINE_XOFFSET, (INT32)((_xoffs) * (double)(1 << 24))) \
-	MDRV_DEVICE_INLINE_DATA32(screen_device_config::INLINE_XSCALE, (INT32)((_xscale) * (double)(1 << 24))) \
-	MDRV_DEVICE_INLINE_DATA32(screen_device_config::INLINE_YOFFSET, (INT32)((_yoffs) * (double)(1 << 24))) \
-	MDRV_DEVICE_INLINE_DATA32(screen_device_config::INLINE_YSCALE, (INT32)((_yscale) * (double)(1 << 24)))
+	screen_device_config::static_set_default_position(device, _xscale, _xoffs, _yscale, _yoffs); \
 
 
 

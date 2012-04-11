@@ -170,7 +170,7 @@ static READ16_HANDLER( dassault_sub_control_r )
 
 static WRITE16_HANDLER( dassault_sound_w )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	soundlatch_w(space, 0, data & 0xff);
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE); /* IRQ1 */
 }
@@ -178,7 +178,7 @@ static WRITE16_HANDLER( dassault_sound_w )
 /* The CPU-CPU irq controller is overlaid onto the end of the shared memory */
 static READ16_HANDLER( dassault_irq_r )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	switch (offset)
 	{
 	case 0: cpu_set_input_line(state->maincpu, 5, CLEAR_LINE); break;
@@ -189,7 +189,7 @@ static READ16_HANDLER( dassault_irq_r )
 
 static WRITE16_HANDLER( dassault_irq_w )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	switch (offset)
 	{
 	case 0: cpu_set_input_line(state->maincpu, 5, ASSERT_LINE); break;
@@ -201,13 +201,13 @@ static WRITE16_HANDLER( dassault_irq_w )
 
 static WRITE16_HANDLER( shared_ram_w )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	COMBINE_DATA(&state->shared_ram[offset]);
 }
 
 static READ16_HANDLER( shared_ram_r )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	return state->shared_ram[offset];
 }
 
@@ -261,8 +261,8 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
@@ -513,13 +513,13 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int state)
 {
-	dassault_state *driver_state = (dassault_state *)device->machine->driver_data;
+	dassault_state *driver_state = device->machine->driver_data<dassault_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	dassault_state *state = (dassault_state *)device->machine->driver_data;
+	dassault_state *state = device->machine->driver_data<dassault_state>();
 
 	/* the second OKIM6295 ROM is bank switched */
 	state->oki2->set_bank_base((data & 1) * 0x40000);
@@ -551,10 +551,7 @@ static const deco16ic_interface dassault_deco16ic_intf =
 	dassault_bank_callback
 };
 
-static MACHINE_DRIVER_START( dassault )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dassault_state)
+static MACHINE_CONFIG_START( dassault, dassault_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000) /* Accurate */
@@ -606,7 +603,7 @@ static MACHINE_DRIVER_START( dassault )
 	MDRV_OKIM6295_ADD("oki2", 2047848, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /**********************************************************************************/
 
@@ -812,7 +809,7 @@ ROM_END
 
 static READ16_HANDLER( dassault_main_skip )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	int ret = state->ram[0];
 
 	if (cpu_get_previouspc(space->cpu) == 0x1170 && ret & 0x8000)
@@ -823,7 +820,7 @@ static READ16_HANDLER( dassault_main_skip )
 
 static READ16_HANDLER( thndzone_main_skip )
 {
-	dassault_state *state = (dassault_state *)space->machine->driver_data;
+	dassault_state *state = space->machine->driver_data<dassault_state>();
 	int ret = state->ram[0];
 
 	if (cpu_get_pc(space->cpu) == 0x114c && ret & 0x8000)

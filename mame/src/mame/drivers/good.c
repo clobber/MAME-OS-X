@@ -35,12 +35,11 @@ voice.rom - VOICE ROM
 #include "sound/okim6295.h"
 
 
-class good_state
+class good_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, good_state(machine)); }
-
-	good_state(running_machine &machine) { }
+	good_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *  bg_tilemapram;
@@ -55,14 +54,14 @@ public:
 
 static WRITE16_HANDLER( fg_tilemapram_w )
 {
-	good_state *state = (good_state *)space->machine->driver_data;
+	good_state *state = space->machine->driver_data<good_state>();
 	COMBINE_DATA(&state->fg_tilemapram[offset]);
 	tilemap_mark_tile_dirty(state->fg_tilemap, offset / 2);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	good_state *state = (good_state *)machine->driver_data;
+	good_state *state = machine->driver_data<good_state>();
 	int tileno = state->fg_tilemapram[tile_index * 2];
 	int attr = state->fg_tilemapram[tile_index * 2 + 1] & 0xf;
 	SET_TILE_INFO(0, tileno, attr, 0);
@@ -70,14 +69,14 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 static WRITE16_HANDLER( bg_tilemapram_w )
 {
-	good_state *state = (good_state *)space->machine->driver_data;
+	good_state *state = space->machine->driver_data<good_state>();
 	COMBINE_DATA(&state->bg_tilemapram[offset]);
 	tilemap_mark_tile_dirty(state->bg_tilemap, offset / 2);
 }
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	good_state *state = (good_state *)machine->driver_data;
+	good_state *state = machine->driver_data<good_state>();
 	int tileno = state->bg_tilemapram[tile_index * 2];
 	int attr = state->bg_tilemapram[tile_index * 2 + 1] & 0xf;
 	SET_TILE_INFO(1, tileno, attr, 0);
@@ -87,7 +86,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static VIDEO_START( good )
 {
-	good_state *state = (good_state *)machine->driver_data;
+	good_state *state = machine->driver_data<good_state>();
 	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
 	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 16, 16, 32, 32);
 	tilemap_set_transparent_pen(state->fg_tilemap, 0xf);
@@ -95,7 +94,7 @@ static VIDEO_START( good )
 
 static VIDEO_UPDATE( good )
 {
-	good_state *state = (good_state *)screen->machine->driver_data;
+	good_state *state = screen->machine->driver_data<good_state>();
 	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 	tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
 	return 0;
@@ -105,7 +104,7 @@ static ADDRESS_MAP_START( good_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x01ffff) AM_ROM
 
 	//AM_RANGE(0x270000, 0x270007) AM_RAM // scroll?
-	AM_RANGE(0x270000, 0x270001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x270000, 0x270001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 
 	AM_RANGE(0x280000, 0x280001) AM_READ_PORT("IN0")
 	AM_RANGE(0x280002, 0x280003) AM_READ_PORT("IN1")
@@ -273,8 +272,7 @@ static GFXDECODE_START( good )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( good )
-	MDRV_DRIVER_DATA(good_state)
+static MACHINE_CONFIG_START( good, good_state )
 
 	MDRV_CPU_ADD("maincpu", M68000, 16000000 /2)
 	MDRV_CPU_PROGRAM_MAP(good_map)
@@ -299,7 +297,7 @@ static MACHINE_DRIVER_START( good )
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( good )

@@ -317,10 +317,24 @@ public:
 	astring &operator=(const char *string) { return cpy(string); }
 	astring &operator=(const astring &string) { return cpy(string); }
 
+	bool operator==(const char *string) const { return (cmp(string) == 0); }
+	bool operator==(const astring &string) const { return (cmp(string) == 0); }
+	bool operator!=(const char *string) const { return (cmp(string) != 0); }
+	bool operator!=(const astring &string) const { return (cmp(string) != 0); }
+	bool operator<(const char *string) const { return (cmp(string) < 0); }
+	bool operator<(const astring &string) const { return (cmp(string) < 0); }
+	bool operator<=(const char *string) const { return (cmp(string) <= 0); }
+	bool operator<=(const astring &string) const { return (cmp(string) <= 0); }
+	bool operator>(const char *string) const { return (cmp(string) > 0); }
+	bool operator>(const astring &string) const { return (cmp(string) > 0); }
+	bool operator>=(const char *string) const { return (cmp(string) >= 0); }
+	bool operator>=(const astring &string) const { return (cmp(string) >= 0); }
+
 	astring &reset() { return cpy(""); }
 	astring &expand(int length) { astring_expand(this, length); return *this; }
 
-	operator char *() { return this->text; }
+	operator bool() { return this->text[0] != 0; }
+	operator bool() const { return this->text[0] != 0; }
 	operator const char *() const { return astring_c(this); }
 	const char *cstr() const { return astring_c(this); }
 	int len() const { return astring_len(this); }

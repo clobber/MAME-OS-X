@@ -52,10 +52,10 @@
 
 #define M4510_MEM(addr)	(cpustate->mem[(addr)>>13]+(addr))
 
-#define PEEK_OP()	memory_decrypted_read_byte(cpustate->space, M4510_MEM(PCW))
+#define PEEK_OP()	cpustate->direct->read_decrypted_byte(M4510_MEM(PCW))
 
-#define RDMEM(addr)			memory_read_byte_8le(cpustate->space, M4510_MEM(addr)); cpustate->icount -= 1
-#define WRMEM(addr,data)	memory_write_byte_8le(cpustate->space, M4510_MEM(addr),data); cpustate->icount -= 1
+#define RDMEM(addr)			cpustate->space->read_byte(M4510_MEM(addr)); cpustate->icount -= 1
+#define WRMEM(addr,data)	cpustate->space->write_byte(M4510_MEM(addr),data); cpustate->icount -= 1
 
 /***************************************************************
  *  RDOP    read an opcode

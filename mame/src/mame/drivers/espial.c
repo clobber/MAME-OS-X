@@ -43,14 +43,14 @@ Stephh's notes (based on the games Z80 code and some tests) :
 
 static TIMER_CALLBACK( interrupt_disable )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 	//interrupt_enable = 0;
 	cpu_interrupt_enable(state->maincpu, 0);
 }
 
 MACHINE_RESET( espial )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 
 	state->flipscreen = 0;
 
@@ -61,7 +61,7 @@ MACHINE_RESET( espial )
 
 MACHINE_START( espial )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -79,14 +79,14 @@ WRITE8_HANDLER( zodiac_master_interrupt_enable_w )
 
 WRITE8_HANDLER( espial_sound_nmi_enable_w )
 {
-	espial_state *state = (espial_state *)space->machine->driver_data;
+	espial_state *state = space->machine->driver_data<espial_state>();
 	state->sound_nmi_enabled = data & 1;
 }
 
 
 INTERRUPT_GEN( espial_sound_nmi_gen )
 {
-	espial_state *state = (espial_state *)device->machine->driver_data;
+	espial_state *state = device->machine->driver_data<espial_state>();
 
 	if (state->sound_nmi_enabled)
 		nmi_line_pulse(device);
@@ -104,7 +104,7 @@ INTERRUPT_GEN( zodiac_master_interrupt )
 
 WRITE8_HANDLER( zodiac_master_soundlatch_w )
 {
-	espial_state *state = (espial_state *)space->machine->driver_data;
+	espial_state *state = space->machine->driver_data<espial_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
 }
@@ -324,10 +324,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( espial )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(espial_state)
+static MACHINE_CONFIG_START( espial, espial_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
@@ -361,12 +358,11 @@ static MACHINE_DRIVER_START( espial )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( netwars )
+static MACHINE_CONFIG_DERIVED( netwars, espial )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(espial)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(netwars_map)
@@ -376,7 +372,7 @@ static MACHINE_DRIVER_START( netwars )
 	MDRV_SCREEN_SIZE(32*8, 64*8)
 
 	MDRV_VIDEO_START(netwars)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

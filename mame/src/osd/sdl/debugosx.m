@@ -63,6 +63,14 @@ static void console_create_window(running_machine *machine);
 
 
 //============================================================
+//  osd_init_debugger
+//============================================================
+
+void osd_init_debugger(running_machine *machine)
+{
+}
+
+//============================================================
 //  osd_wait_for_debugger
 //============================================================
 
@@ -340,7 +348,7 @@ void console_create_window(running_machine *machine)
 		return nil;
 	type = t;
 	machine = m;
-	view = machine->m_debug_view->alloc_view((debug_view_type)type, debugwin_view_update, self);
+	view = machine->debug_view().alloc_view((debug_view_type)type, debugwin_view_update, self);
 	if (view == nil) {
 		[self release];
 		return nil;
@@ -878,7 +886,7 @@ void console_create_window(running_machine *machine)
 
 @implementation MAMEDisassemblyView
 
-- (device_debug::breakpoint *)findBreakpointAtAddress:(offs_t)address inAddressSpace:(const address_space *)space {
+- (device_debug::breakpoint *)findBreakpointAtAddress:(offs_t)address inAddressSpace:(address_space *)space {
 	device_debug			*cpuinfo = space->cpu->debug();
 	device_debug::breakpoint	*bp;
 	for (bp = cpuinfo->breakpoint_first(); (bp != NULL) && (address != bp->address()); bp = bp->next()) {}
@@ -1081,7 +1089,7 @@ void console_create_window(running_machine *machine)
 
 - (IBAction)debugToggleBreakpoint:(id)sender {
 	if (view->cursor_visible()) {
-		const address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
+		address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
 		if (!useConsole || (debug_cpu_get_visible_cpu(machine) == space->cpu)) {
 			offs_t				address = downcast<debug_view_disasm *>(view)->selected_address();
 			device_debug::breakpoint *bp = [self findBreakpointAtAddress:address inAddressSpace:space];
@@ -1107,7 +1115,7 @@ void console_create_window(running_machine *machine)
 
 - (IBAction)debugToggleBreakpointEnable:(id)sender {
 	if (view->cursor_visible()) {
-		const address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
+		address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
 		if (!useConsole || (debug_cpu_get_visible_cpu(machine) == space->cpu)) {
 			offs_t				address = downcast<debug_view_disasm *>(view)->selected_address();
 			device_debug::breakpoint *bp = [self findBreakpointAtAddress:address inAddressSpace:space];
@@ -1131,7 +1139,7 @@ void console_create_window(running_machine *machine)
 
 - (IBAction)debugRunToCursor:(id)sender {
 	if (view->cursor_visible()) {
-		const address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
+		address_space *space = downcast<const debug_view_disasm_source *>(view->source())->space();
 		if (debug_cpu_get_visible_cpu(machine) == space->cpu) {
 			offs_t address = downcast<debug_view_disasm *>(view)->selected_address();
 			if (useConsole) {

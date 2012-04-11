@@ -34,8 +34,9 @@ struct _i8008_state
 	UINT8	HALT;
 	UINT8	flags; // temporary I/O only
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int					icount;
 	int 				pc_pos; // PC possition in ADDR
 
@@ -74,7 +75,7 @@ INLINE void POP_STACK(i8008_state *cpustate)
 
 INLINE UINT8 ROP(i8008_state *cpustate)
 {
-	UINT8 retVal = memory_decrypted_read_byte(cpustate->program, GET_PC.w.l);
+	UINT8 retVal = cpustate->direct->read_decrypted_byte(GET_PC.w.l);
 	GET_PC.w.l = (GET_PC.w.l + 1) & 0x3fff;
 	cpustate->PC = GET_PC;
 	return retVal;
@@ -91,7 +92,7 @@ INLINE UINT8 GET_REG(i8008_state *cpustate,UINT8 reg)
 		case 4 : retVal = cpustate->E; break;
 		case 5 : retVal = cpustate->H; break;
 		case 6 : retVal = cpustate->L; break;
-		default: retVal = memory_read_byte_8le(cpustate->program, (cpustate->H << 8) + cpustate->L); break;
+		default: retVal = cpustate->program->read_byte((cpustate->H << 8) + cpustate->L); break;
 	}
 	return retVal;
 }
@@ -106,13 +107,13 @@ INLINE void SET_REG(i8008_state *cpustate,UINT8 reg, UINT8 val)
 		case 4 : cpustate->E = val; break;
 		case 5 : cpustate->H = val; break;
 		case 6 : cpustate->L = val; break;
-		default: memory_write_byte_8le(cpustate->program, (cpustate->H << 8) + cpustate->L, val); break;
+		default: cpustate->program->write_byte((cpustate->H << 8) + cpustate->L, val); break;
 	}
 }
 
 INLINE UINT8 ARG(i8008_state *cpustate)
 {
-	UINT8 retVal = memory_raw_read_byte(cpustate->program, GET_PC.w.l);
+	UINT8 retVal = cpustate->direct->read_raw_byte(GET_PC.w.l);
 	GET_PC.w.l = (GET_PC.w.l + 1) & 0x3fff;
 	cpustate->PC = GET_PC;
 	return retVal;
@@ -391,11 +392,11 @@ static void execute_one(i8008_state *cpustate, int opcode)
 							if (((opcode>>4)&3)==0) {
 								// INP
 								cpustate->icount -= 8;
-								cpustate->A = memory_read_byte_8le(cpustate->io, (opcode >> 1) & 0x1f);
+								cpustate->A = cpustate->io->read_byte((opcode >> 1) & 0x1f);
 							} else {
 								// OUT
 								cpustate->icount -= 6;
-								memory_write_byte_8le(cpustate->io, (opcode >> 1) & 0x1f, cpustate->A);
+								cpustate->io->write_byte((opcode >> 1) & 0x1f, cpustate->A);
 							}
 							break;
 					}
@@ -543,6 +544,7 @@ static CPU_INIT( i8008 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
 	cpustate->irq_callback = irqcallback;

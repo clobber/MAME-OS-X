@@ -70,6 +70,7 @@
 #include "cpu/m6809/m6809.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
 
 
 #define MAIN_CPU_MASTER_CLOCK	        XTAL_11_2MHz
@@ -81,12 +82,11 @@
 #define AUDIO_CPU_2_CLOCK             AUDIO_2_MASTER_CLOCK
 
 
-class nyny_state
+class nyny_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, nyny_state(machine)); }
-
-	nyny_state(running_machine &machine) { }
+	nyny_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  videoram1;
@@ -129,7 +129,7 @@ static WRITE8_HANDLER( audio_2_command_w );
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 {
-	nyny_state *driver_state = (nyny_state *)device->machine->driver_data;
+	nyny_state *driver_state = device->machine->driver_data<nyny_state>();
 	int combined_state = pia6821_get_irq_a(driver_state->pia1) | pia6821_get_irq_b(driver_state->pia1) | pia6821_get_irq_b(driver_state->pia2);
 
 	cpu_set_input_line(driver_state->maincpu, M6809_IRQ_LINE, combined_state ? ASSERT_LINE : CLEAR_LINE);
@@ -138,7 +138,7 @@ static WRITE_LINE_DEVICE_HANDLER( main_cpu_irq )
 
 static WRITE_LINE_DEVICE_HANDLER( main_cpu_firq )
 {
-	nyny_state *driver_state = (nyny_state *)device->machine->driver_data;
+	nyny_state *driver_state = device->machine->driver_data<nyny_state>();
 	cpu_set_input_line(driver_state->maincpu, M6809_FIRQ_LINE, state ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -152,7 +152,7 @@ static WRITE_LINE_DEVICE_HANDLER( main_cpu_firq )
 
 static INTERRUPT_GEN( update_pia_1 )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 
 	/* update the different PIA pins from the input ports */
 
@@ -195,14 +195,14 @@ static const pia6821_interface pia_1_intf =
 
 static WRITE8_DEVICE_HANDLER( pia_2_port_a_w )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 	state->star_delay_counter = (state->star_delay_counter & 0x0f00) | data;
 }
 
 
 static WRITE8_DEVICE_HANDLER( pia_2_port_b_w )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 
 	/* bits 0-3 go to bits 8-11 of the star delay counter */
 	state->star_delay_counter = (state->star_delay_counter & 0x00ff) | ((data & 0x0f) << 8);
@@ -247,12 +247,12 @@ static const pia6821_interface pia_2_intf =
 
 static WRITE8_DEVICE_HANDLER( ic48_1_74123_output_changed )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 	pia6821_ca1_w(state->pia2, data);
 }
 
 
-static const ttl74123_config ic48_1_config =
+static const ttl74123_interface ic48_1_config =
 {
 	TTL74123_GROUNDED,	/* the hook up type */
 	RES_K(22),			/* resistor connected to RCext */
@@ -276,7 +276,7 @@ static const ttl74123_config ic48_1_config =
 
 static WRITE_LINE_DEVICE_HANDLER( flipscreen_w )
 {
-	nyny_state *driver_state = (nyny_state *)device->machine->driver_data;
+	nyny_state *driver_state = device->machine->driver_data<nyny_state>();
 	driver_state->flipscreen = state ? 0 : 1;
 }
 
@@ -298,7 +298,7 @@ static MC6845_BEGIN_UPDATE( begin_update )
 
 static MC6845_UPDATE_ROW( update_row )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 	UINT8 cx;
 	pen_t *pens = (pen_t *)param;
 	UINT8 x = 0;
@@ -361,14 +361,14 @@ static MC6845_UPDATE_ROW( update_row )
 
 INLINE void shift_star_generator( running_machine *machine )
 {
-	nyny_state *state = (nyny_state *)machine->driver_data;
+	nyny_state *state = machine->driver_data<nyny_state>();
 	state->star_shift_reg = (state->star_shift_reg << 1) | (((~state->star_shift_reg >> 15) & 0x01) ^ ((state->star_shift_reg >> 2) & 0x01));
 }
 
 
 static MC6845_END_UPDATE( end_update )
 {
-	nyny_state *state = (nyny_state *)device->machine->driver_data;
+	nyny_state *state = device->machine->driver_data<nyny_state>();
 
 	/* draw the star field into the bitmap */
 	int y;
@@ -406,7 +406,7 @@ static MC6845_END_UPDATE( end_update )
 
 static WRITE_LINE_DEVICE_HANDLER( display_enable_changed )
 {
-	nyny_state *driver_state = (nyny_state *)device->machine->driver_data;
+	nyny_state *driver_state = device->machine->driver_data<nyny_state>();
 	ttl74123_a_w(driver_state->ic48_1, 0, state);
 }
 
@@ -428,7 +428,7 @@ static const mc6845_interface mc6845_intf =
 
 static VIDEO_UPDATE( nyny )
 {
-	nyny_state *state = (nyny_state *)screen->machine->driver_data;
+	nyny_state *state = screen->machine->driver_data<nyny_state>();
 
 	mc6845_update(state->mc6845, bitmap, cliprect);
 
@@ -445,7 +445,7 @@ static VIDEO_UPDATE( nyny )
 
 static WRITE8_HANDLER( audio_1_command_w )
 {
-	nyny_state *state = (nyny_state *)space->machine->driver_data;
+	nyny_state *state = space->machine->driver_data<nyny_state>();
 
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line(state->audiocpu, M6800_IRQ_LINE, HOLD_LINE);
@@ -454,7 +454,7 @@ static WRITE8_HANDLER( audio_1_command_w )
 
 static WRITE8_HANDLER( audio_1_answer_w )
 {
-	nyny_state *state = (nyny_state *)space->machine->driver_data;
+	nyny_state *state = space->machine->driver_data<nyny_state>();
 
 	soundlatch3_w(space, 0, data);
 	cpu_set_input_line(state->maincpu, M6809_IRQ_LINE, HOLD_LINE);
@@ -500,7 +500,7 @@ static const ay8910_interface ay8910_64_interface =
 
 static WRITE8_HANDLER( audio_2_command_w )
 {
-	nyny_state *state = (nyny_state *)space->machine->driver_data;
+	nyny_state *state = space->machine->driver_data<nyny_state>();
 
 	soundlatch2_w(space, 0, (data & 0x60) >> 5);
 	cpu_set_input_line(state->audiocpu2, M6800_IRQ_LINE, BIT(data, 7) ? CLEAR_LINE : ASSERT_LINE);
@@ -516,7 +516,7 @@ static WRITE8_HANDLER( audio_2_command_w )
 
 static READ8_HANDLER( nyny_pia_1_2_r )
 {
-	nyny_state *state = (nyny_state *)space->machine->driver_data;
+	nyny_state *state = space->machine->driver_data<nyny_state>();
 	UINT8 ret = 0;
 
 	/* the address bits are directly connected to the chip selects */
@@ -529,7 +529,7 @@ static READ8_HANDLER( nyny_pia_1_2_r )
 
 static WRITE8_HANDLER( nyny_pia_1_2_w )
 {
-	nyny_state *state = (nyny_state *)space->machine->driver_data;
+	nyny_state *state = space->machine->driver_data<nyny_state>();
 
 	/* the address bits are directly connected to the chip selects */
 	if (BIT(offset, 2))  pia6821_w(state->pia1, offset & 0x03, data);
@@ -543,7 +543,7 @@ static ADDRESS_MAP_START( nyny_main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0x5fff) AM_RAM AM_BASE_MEMBER(nyny_state, videoram2)
 	AM_RANGE(0x6000, 0x7fff) AM_RAM AM_BASE_MEMBER(nyny_state, colorram2)
 	AM_RANGE(0x8000, 0x9fff) AM_RAM
-	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram) /* SRAM (coin counter, shown when holding F2) */
+	AM_RANGE(0xa000, 0xa0ff) AM_RAM AM_SHARE("nvram") /* SRAM (coin counter, shown when holding F2) */
 	AM_RANGE(0xa100, 0xa100) AM_MIRROR(0x00fe) AM_DEVWRITE("crtc", mc6845_address_w)
 	AM_RANGE(0xa101, 0xa101) AM_MIRROR(0x00fe) AM_DEVWRITE("crtc", mc6845_register_w)
 	AM_RANGE(0xa200, 0xa20f) AM_MIRROR(0x00f0) AM_READWRITE(nyny_pia_1_2_r, nyny_pia_1_2_w)
@@ -679,7 +679,7 @@ INPUT_PORTS_END
 
 static MACHINE_START( nyny )
 {
-	nyny_state *state = (nyny_state *)machine->driver_data;
+	nyny_state *state = machine->driver_data<nyny_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -698,7 +698,7 @@ static MACHINE_START( nyny )
 
 static MACHINE_RESET( nyny )
 {
-	nyny_state *state = (nyny_state *)machine->driver_data;
+	nyny_state *state = machine->driver_data<nyny_state>();
 
 	state->flipscreen = 0;
 	state->star_enable = 0;
@@ -712,10 +712,7 @@ static MACHINE_RESET( nyny )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( nyny )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(nyny_state)
+static MACHINE_CONFIG_START( nyny, nyny_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 1400000)	/* 1.40 MHz? The clock signal is generated by analog chips */
@@ -730,7 +727,7 @@ static MACHINE_DRIVER_START( nyny )
 
 	MDRV_MACHINE_START(nyny)
 	MDRV_MACHINE_RESET(nyny)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(nyny)
@@ -764,7 +761,7 @@ static MACHINE_DRIVER_START( nyny )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

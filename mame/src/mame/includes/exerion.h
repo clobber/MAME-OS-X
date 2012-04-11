@@ -18,12 +18,11 @@
 #define EXERION_VBSTART           (240)
 
 
-class exerion_state
+class exerion_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, exerion_state(machine)); }
-
-	exerion_state(running_machine &machine) { }
+	exerion_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  main_ram;

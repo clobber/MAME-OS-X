@@ -3,12 +3,11 @@
 #define MCU_INITIAL_SEED	0x81
 
 
-class chaknpop_state
+class chaknpop_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, chaknpop_state(machine)); }
-
-	chaknpop_state(running_machine &machine) { }
+	chaknpop_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  mcu_ram;

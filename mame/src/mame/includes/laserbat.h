@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class laserbat_state
+class laserbat_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, laserbat_state(machine)); }
-
-	laserbat_state(running_machine &machine) { }
+	laserbat_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* video-related */
 	tilemap_t    *bg_tilemap;

@@ -43,7 +43,7 @@ static WRITE_LINE_DEVICE_HANDLER( display_enable_changed );
 
 static VIDEO_START( qix )
 {
-	qix_state *state = (qix_state *)machine->driver_data;
+	qix_state *state = machine->driver_data<qix_state>();
 
 	/* allocate memory for the full video RAM */
 	state->videoram = auto_alloc_array(machine, UINT8, 256 * 256);
@@ -65,7 +65,7 @@ static VIDEO_START( qix )
 
 static WRITE_LINE_DEVICE_HANDLER( display_enable_changed )
 {
-	qix_state *driver_state = (qix_state *)device->machine->driver_data;
+	qix_state *driver_state = device->machine->driver_data<qix_state>();
 
 	/* on the rising edge, latch the scanline */
 	if (state)
@@ -88,7 +88,7 @@ static WRITE_LINE_DEVICE_HANDLER( display_enable_changed )
 
 WRITE8_DEVICE_HANDLER( qix_flip_screen_w )
 {
-	qix_state *state = (qix_state *)device->machine->driver_data;
+	qix_state *state = device->machine->driver_data<qix_state>();
 
 	state->flip = data;
 }
@@ -112,7 +112,7 @@ WRITE8_DEVICE_HANDLER( qix_flip_screen_w )
 
 static READ8_HANDLER( qix_videoram_r )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* add in the upper bit of the address latch */
 	offset += (state->videoram_address[0] & 0x80) << 8;
@@ -122,7 +122,7 @@ static READ8_HANDLER( qix_videoram_r )
 
 static WRITE8_HANDLER( qix_videoram_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* update the screen in case the game is writing "behind" the beam -
        Zookeeper likes to do this */
@@ -138,7 +138,7 @@ static WRITE8_HANDLER( qix_videoram_w )
 
 static WRITE8_HANDLER( slither_videoram_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* update the screen in case the game is writing "behind" the beam -
        Zookeeper likes to do this */
@@ -170,7 +170,7 @@ static WRITE8_HANDLER( slither_videoram_w )
 
 static READ8_HANDLER( qix_addresslatch_r )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* compute the value at the address latch */
 	offset = (state->videoram_address[0] << 8) | state->videoram_address[1];
@@ -180,7 +180,7 @@ static READ8_HANDLER( qix_addresslatch_r )
 
 static WRITE8_HANDLER( qix_addresslatch_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* update the screen in case the game is writing "behind" the beam */
 	space->machine->primary_screen->update_now();
@@ -195,7 +195,7 @@ static WRITE8_HANDLER( qix_addresslatch_w )
 
 static WRITE8_HANDLER( slither_addresslatch_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* update the screen in case the game is writing "behind" the beam */
 	space->machine->primary_screen->update_now();
@@ -220,7 +220,7 @@ static WRITE8_HANDLER( slither_addresslatch_w )
 
 static WRITE8_HANDLER( qix_paletteram_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	UINT8 old_data = state->paletteram[offset];
 
@@ -236,7 +236,7 @@ static WRITE8_HANDLER( qix_paletteram_w )
 
 WRITE8_HANDLER( qix_palettebank_w )
 {
-	qix_state *state = (qix_state *)space->machine->driver_data;
+	qix_state *state = space->machine->driver_data<qix_state>();
 
 	/* set the bank value */
 	if (state->palette_bank != (data & 3))
@@ -308,7 +308,7 @@ static void get_pens(qix_state *state, pen_t *pens)
 
 static MC6845_BEGIN_UPDATE( begin_update )
 {
-	qix_state *state = (qix_state *)device->machine->driver_data;
+	qix_state *state = device->machine->driver_data<qix_state>();
 
 #if 0
 	// note the confusing bit order!
@@ -326,7 +326,7 @@ static MC6845_BEGIN_UPDATE( begin_update )
 
 static MC6845_UPDATE_ROW( update_row )
 {
-	qix_state *state = (qix_state *)device->machine->driver_data;
+	qix_state *state = device->machine->driver_data<qix_state>();
 	UINT32 *dest = BITMAP_ADDR32(bitmap, y, 0);
 	UINT16 x;
 
@@ -367,7 +367,7 @@ static VIDEO_UPDATE( qix )
 static ADDRESS_MAP_START( qix_video_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_READWRITE(qix_videoram_r, qix_videoram_w)
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x03ff) AM_WRITE(qix_palettebank_w)
 	AM_RANGE(0x8c00, 0x8c00) AM_MIRROR(0x03fe) AM_READWRITE(qix_data_firq_r, qix_data_firq_w)
 	AM_RANGE(0x8c01, 0x8c01) AM_MIRROR(0x03fe) AM_READWRITE(qix_video_firq_ack_r, qix_video_firq_ack_w)
@@ -384,7 +384,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( zookeep_video_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_READWRITE(qix_videoram_r, qix_videoram_w)
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x03fe) AM_WRITE(qix_palettebank_w)
 	AM_RANGE(0x8801, 0x8801) AM_MIRROR(0x03fe) AM_WRITE(zookeep_bankswitch_w)
 	AM_RANGE(0x8c00, 0x8c00) AM_MIRROR(0x03fe) AM_READWRITE(qix_data_firq_r, qix_data_firq_w)
@@ -403,7 +403,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( slither_video_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_READWRITE(qix_videoram_r, slither_videoram_w)
 	AM_RANGE(0x8000, 0x83ff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x03ff) AM_WRITE(qix_palettebank_w)
 	AM_RANGE(0x8c00, 0x8c00) AM_MIRROR(0x03fe) AM_READWRITE(qix_data_firq_r, qix_data_firq_w)
 	AM_RANGE(0x8c01, 0x8c01) AM_MIRROR(0x03fe) AM_READWRITE(qix_video_firq_ack_r, qix_video_firq_ack_w)
@@ -446,7 +446,7 @@ static const m6809_config encryption_config =
 };
 
 
-MACHINE_DRIVER_START( qix_video )
+MACHINE_CONFIG_FRAGMENT( qix_video )
 	MDRV_CPU_ADD("videocpu", M6809, MAIN_CLOCK_OSC/4/4)	/* 1.25 MHz */
 	MDRV_CPU_PROGRAM_MAP(qix_video_map)
 	MDRV_CPU_CONFIG(encryption_config)	// for kram3
@@ -459,17 +459,17 @@ MACHINE_DRIVER_START( qix_video )
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
 	MDRV_SCREEN_RAW_PARAMS(QIX_CHARACTER_CLOCK*8, 256, 0, 256, 256, 0, 256)	/* temporary, CRTC will configure screen */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( zookeep_video )
+MACHINE_CONFIG_FRAGMENT( zookeep_video )
 	MDRV_CPU_MODIFY("videocpu")
 	MDRV_CPU_PROGRAM_MAP(zookeep_video_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( slither_video )
+MACHINE_CONFIG_FRAGMENT( slither_video )
 	MDRV_CPU_MODIFY("videocpu")
 	MDRV_CPU_CLOCK(SLITHER_CLOCK_OSC/4/4)	/* 1.34 MHz */
 	MDRV_CPU_PROGRAM_MAP(slither_video_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END

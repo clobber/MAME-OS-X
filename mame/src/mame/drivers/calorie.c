@@ -83,12 +83,11 @@ Notes:
 #include "sound/ay8910.h"
 
 
-class calorie_state
+class calorie_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, calorie_state(machine)); }
-
-	calorie_state(running_machine &machine) { }
+	calorie_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  fg_ram;
@@ -109,7 +108,7 @@ public:
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	calorie_state *state = (calorie_state *)machine->driver_data;
+	calorie_state *state = machine->driver_data<calorie_state>();
 	UINT8 *src = memory_region(machine, "user1");
 	int bg_base = (state->bg_bank & 0x0f) * 0x200;
 	int code  = src[bg_base + tile_index] | (((src[bg_base + tile_index + 0x100]) & 0x10) << 4);
@@ -121,7 +120,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	calorie_state *state = (calorie_state *)machine->driver_data;
+	calorie_state *state = machine->driver_data<calorie_state>();
 	int code  = ((state->fg_ram[tile_index + 0x400] & 0x30) << 4) | state->fg_ram[tile_index];
 	int color = state->fg_ram[tile_index + 0x400] & 0x0f;
 
@@ -131,7 +130,7 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 static VIDEO_START( calorie )
 {
-	calorie_state *state = (calorie_state *)machine->driver_data;
+	calorie_state *state = machine->driver_data<calorie_state>();
 
 	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows, 16, 16, 16, 16);
 	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
@@ -141,7 +140,7 @@ static VIDEO_START( calorie )
 
 static VIDEO_UPDATE( calorie )
 {
-	calorie_state *state = (calorie_state *)screen->machine->driver_data;
+	calorie_state *state = screen->machine->driver_data<calorie_state>();
 	int x;
 
 	if (state->bg_bank & 0x10)
@@ -200,14 +199,14 @@ static VIDEO_UPDATE( calorie )
 
 static WRITE8_HANDLER( fg_ram_w )
 {
-	calorie_state *state = (calorie_state *)space->machine->driver_data;
+	calorie_state *state = space->machine->driver_data<calorie_state>();
 	state->fg_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->fg_tilemap, offset & 0x3ff);
 }
 
 static WRITE8_HANDLER( bg_bank_w )
 {
-	calorie_state *state = (calorie_state *)space->machine->driver_data;
+	calorie_state *state = space->machine->driver_data<calorie_state>();
 	if((state->bg_bank & ~0x10) != (data & ~0x10))
 		tilemap_mark_all_tiles_dirty(state->bg_tilemap);
 
@@ -417,23 +416,20 @@ GFXDECODE_END
 
 static MACHINE_START( calorie )
 {
-	calorie_state *state = (calorie_state *)machine->driver_data;
+	calorie_state *state = machine->driver_data<calorie_state>();
 
 	state_save_register_global(machine, state->bg_bank);
 }
 
 static MACHINE_RESET( calorie )
 {
-	calorie_state *state = (calorie_state *)machine->driver_data;
+	calorie_state *state = machine->driver_data<calorie_state>();
 
 	state->bg_bank = 0;
 }
 
 
-static MACHINE_DRIVER_START( calorie )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(calorie_state)
+static MACHINE_CONFIG_START( calorie, calorie_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* 4 MHz */
@@ -473,7 +469,7 @@ static MACHINE_DRIVER_START( calorie )
 
 	MDRV_SOUND_ADD("ay3", AY8910, 1500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.8)  /* YM2149 really */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -554,8 +550,8 @@ static DRIVER_INIT( calorie )
 
 static DRIVER_INIT( calorieb )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
 }
 
 

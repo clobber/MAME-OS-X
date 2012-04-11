@@ -180,7 +180,6 @@ lev 7 : 0x7c : 0000 07e0 - input device clear?
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m68000/m68000.h"
-#include "deprecat.h"
 #include "sound/8950intf.h"
 
 static tilemap_t *tx_tilemap;
@@ -810,15 +809,13 @@ static const y8950_interface y8950_config = {
 	0 /* TODO */
 };
 
-static MACHINE_DRIVER_START( cybertnk )
+static MACHINE_CONFIG_START( cybertnk, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000,20000000/2)
 	MDRV_CPU_PROGRAM_MAP(master_mem)
-//  MDRV_CPU_VBLANK_INT_HACK(master_irq,2)
 	MDRV_CPU_VBLANK_INT("screen", irq1_line_hold)
 
 	MDRV_CPU_ADD("slave", M68000,20000000/2)
 	MDRV_CPU_PROGRAM_MAP(slave_mem)
-//  MDRV_CPU_VBLANK_INT_HACK(slave_irq,2)
 	MDRV_CPU_VBLANK_INT("screen", irq3_line_hold)
 
 	MDRV_CPU_ADD("audiocpu", Z80,3579500)
@@ -852,7 +849,7 @@ static MACHINE_DRIVER_START( cybertnk )
 	MDRV_SOUND_CONFIG(y8950_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

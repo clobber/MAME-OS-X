@@ -30,6 +30,7 @@
 #include "video/vector.h"
 #include "video/avgdvg.h"
 #include "machine/timekpr.h"
+#include "machine/nvram.h"
 #include "machine/6532riot.h"
 #include "sound/pokey.h"
 #include "sound/tms5220.h"
@@ -178,7 +179,7 @@ static READ16_HANDLER(tomcat_inputs2_r)
 static READ16_HANDLER(tomcat_320bio_r)
 {
 	dsp_BIO = 1;
-	cputag_suspend(space->machine, "maincpu", SUSPEND_REASON_SPIN, 1);
+	space->machine->device<cpu_device>("maincpu")->suspend(SUSPEND_REASON_SPIN, 1);
 	return 0;
 }
 
@@ -199,7 +200,7 @@ static READ16_HANDLER(dsp_BIO_r)
 		{
 			dsp_idle = 0;
 			dsp_BIO = 0;
-			cputag_resume(space->machine, "maincpu", SUSPEND_REASON_SPIN );
+			space->machine->device<cpu_device>("maincpu")->resume(SUSPEND_REASON_SPIN );
 			return 0;
 		}
 		else
@@ -257,7 +258,7 @@ static ADDRESS_MAP_START( tomcat_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x40e01a, 0x40e01b) AM_WRITE(tomcat_errh_w)
 	AM_RANGE(0x40e01c, 0x40e01d) AM_WRITE(tomcat_ackh_w)
 	AM_RANGE(0x40e01e, 0x40e01f) AM_WRITE(tomcat_txbuffh_w)
-	AM_RANGE(0x800000, 0x803fff) AM_RAM AM_BASE((UINT16**)&vectorram) AM_SIZE(&vectorram_size)
+	AM_RANGE(0x800000, 0x803fff) AM_RAM AM_BASE((UINT16**)&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size)
 	AM_RANGE(0xffa000, 0xffbfff) AM_READWRITE(tomcat_shared_ram_r, tomcat_shared_ram_w)
 	AM_RANGE(0xffc000, 0xffcfff) AM_RAM
 	AM_RANGE(0xffd000, 0xffdfff) AM_DEVREADWRITE8("m48t02", timekeeper_r, timekeeper_w, 0xff00)
@@ -333,6 +334,7 @@ static MACHINE_START(tomcat)
 	((UINT16*)tomcat_shared_ram)[0x0003] = 0x0000;
 
 	tomcat_nvram = auto_alloc_array(machine, UINT8, 0x800);
+	machine->device<nvram_device>("nvram")->set_base(tomcat_nvram, 0x800);
 
 	state_save_register_global_pointer(machine, tomcat_nvram, 0x800);
 	state_save_register_global(machine, tomcat_control_num);
@@ -340,17 +342,6 @@ static MACHINE_START(tomcat)
 	state_save_register_global(machine, dsp_idle);
 
 	dsp_BIO = 0;
-}
-
-static NVRAM_HANDLER(tomcat)
-{
-	if (read_or_write)
-		mame_fwrite(file, tomcat_nvram, 0x800);
-	else
-		if (file)
-			mame_fread(file, tomcat_nvram, 0x800);
-		else
-			memset(tomcat_nvram, 0x00, 0x800);
 }
 
 static const riot6532_interface tomcat_riot6532_intf =
@@ -374,7 +365,7 @@ static const riot6532_interface tomcat_riot6532_intf =
 	DEVCB_NULL	// connected to IRQ line of 6502
 };
 
-static MACHINE_DRIVER_START(tomcat)
+static MACHINE_CONFIG_START( tomcat, driver_device )
 	MDRV_CPU_ADD("maincpu", M68010, XTAL_12MHz / 2)
 	MDRV_CPU_PROGRAM_MAP(tomcat_map)
 	MDRV_CPU_VBLANK_INT_HACK(irq1_line_assert, 5)
@@ -394,7 +385,7 @@ static MACHINE_DRIVER_START(tomcat)
 
 	MDRV_MACHINE_START(tomcat)
 
-	MDRV_NVRAM_HANDLER(tomcat)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	MDRV_M48T02_ADD( "m48t02" )
 
@@ -421,6 +412,6 @@ static MACHINE_DRIVER_START(tomcat)
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_14_31818MHz / 4)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 GAME( 1985, tomcat, 0,        tomcat, tomcat, 0, ROT0, "Atari", "TomCat (prototype)", GAME_SUPPORTS_SAVE )

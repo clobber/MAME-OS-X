@@ -181,7 +181,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -194,7 +194,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER ( wwfsstar_scrollwrite )
 {
-	wwfsstar_state *state = (wwfsstar_state *)space->machine->driver_data;
+	wwfsstar_state *state = space->machine->driver_data<wwfsstar_state>();
 
 	switch (offset)
 	{
@@ -242,7 +242,7 @@ static WRITE16_HANDLER( wwfsstar_irqack_w )
 
 static TIMER_DEVICE_CALLBACK( wwfsstar_scanline )
 {
-	wwfsstar_state *state = (wwfsstar_state *)timer.machine->driver_data;
+	wwfsstar_state *state = timer.machine->driver_data<wwfsstar_state>();
 	int scanline = param;
 
 	/* Vblank is lowered on scanline 0 */
@@ -274,7 +274,7 @@ static TIMER_DEVICE_CALLBACK( wwfsstar_scanline )
 
 static CUSTOM_INPUT( wwfsstar_vblank_r )
 {
-	wwfsstar_state *state = (wwfsstar_state *)field->port->machine->driver_data;
+	wwfsstar_state *state = field->port->machine->driver_data<wwfsstar_state>();
 
 	return state->vblank;
 }
@@ -427,9 +427,7 @@ static const ym2151_interface ym2151_config =
  Machine Driver(s)
 *******************************************************************************/
 
-static MACHINE_DRIVER_START( wwfsstar )
-
-	MDRV_DRIVER_DATA( wwfsstar_state )
+static MACHINE_CONFIG_START( wwfsstar, wwfsstar_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)
@@ -461,7 +459,7 @@ static MACHINE_DRIVER_START( wwfsstar )
 	MDRV_OKIM6295_ADD("oki", XTAL_1_056MHz, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.47)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.47)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*******************************************************************************
  Rom Loaders / Game Drivers

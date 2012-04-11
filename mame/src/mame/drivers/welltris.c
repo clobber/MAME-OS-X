@@ -332,7 +332,7 @@ static WRITE16_HANDLER( sound_command_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		welltris_state *state = (welltris_state *)space->machine->driver_data;
+		welltris_state *state = space->machine->driver_data<welltris_state>();
 
 		state->pending_command = 1;
 		soundlatch_w(space, 0, data & 0xff);
@@ -342,13 +342,13 @@ static WRITE16_HANDLER( sound_command_w )
 
 static CUSTOM_INPUT( pending_sound_r )
 {
-	welltris_state *state = (welltris_state *)field->port->machine->driver_data;
+	welltris_state *state = field->port->machine->driver_data<welltris_state>();
 	return state->pending_command ? 1 : 0;
 }
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	welltris_state *state = (welltris_state *)space->machine->driver_data;
+	welltris_state *state = space->machine->driver_data<welltris_state>();
 
 	state->pending_command = 0;
 }
@@ -705,9 +705,7 @@ static DRIVER_INIT( quiz18k )
 
 
 
-static MACHINE_DRIVER_START( welltris )
-
-	MDRV_DRIVER_DATA( welltris_state )
+static MACHINE_CONFIG_START( welltris, welltris_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,20000000/2)	/* 10 MHz */
@@ -740,16 +738,15 @@ static MACHINE_DRIVER_START( welltris )
 	MDRV_SOUND_ROUTE(0, "mono", 0.25)
 	MDRV_SOUND_ROUTE(1, "mono", 0.75)
 	MDRV_SOUND_ROUTE(2, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( quiz18k )
+static MACHINE_CONFIG_DERIVED( quiz18k, welltris )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM( welltris )
 
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(15, 335-1, 0, 224-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

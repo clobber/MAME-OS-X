@@ -176,20 +176,7 @@ Notes:
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/namco.h"
-
-
-extern UINT8 *pacland_videoram,*pacland_videoram2,*pacland_spriteram;
-
-WRITE8_HANDLER( pacland_videoram_w );
-WRITE8_HANDLER( pacland_videoram2_w );
-WRITE8_HANDLER( pacland_scroll0_w );
-WRITE8_HANDLER( pacland_scroll1_w );
-WRITE8_HANDLER( pacland_bankswitch_w );
-
-PALETTE_INIT( pacland );
-VIDEO_START( pacland );
-VIDEO_UPDATE( pacland );
-
+#include "includes/pacland.h"
 
 static WRITE8_HANDLER( pacland_subreset_w )
 {
@@ -267,7 +254,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_BASE(&namco_wavedata)		/* PSG device, shared RAM */
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w)		/* PSG device, shared RAM */
 	AM_RANGE(0x2000, 0x3fff) AM_WRITE(watchdog_reset_w)		/* watchdog? */
 	AM_RANGE(0x4000, 0x7fff) AM_WRITE(pacland_irq_2_ctrl_w)
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
@@ -411,7 +398,7 @@ static const namco_interface namco_config =
 
 
 
-static MACHINE_DRIVER_START( pacland )
+static MACHINE_CONFIG_START( pacland, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 49152000/32)	/* 1.536 MHz */
@@ -446,7 +433,7 @@ static MACHINE_DRIVER_START( pacland )
 	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2/1024)
 	MDRV_SOUND_CONFIG(namco_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

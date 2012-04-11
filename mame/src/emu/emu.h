@@ -52,6 +52,7 @@
 // core emulator headers -- must be first
 #include "emucore.h"
 #include "eminline.h"
+#include "profiler.h"
 
 // commonly-referenecd utilities imported from lib/util
 #include "chd.h"
@@ -62,13 +63,20 @@
 #include "attotime.h"
 #include "fileio.h" // remove me once NVRAM is implemented as device
 #include "tokenize.h"
+#include "delegate.h"
 
 // memory and address spaces
 #include "memory.h"
+#include "addrmap.h"
+
+// define machine_config_constructor here due to circular dependency
+// between devices and the machine config
+class machine_config;
+class device_config;
+typedef device_config * (*machine_config_constructor)(machine_config &config, device_config *owner);
 
 // devices and callbacks
 #include "devintrf.h"
-#include "devcb.h"
 #include "distate.h"
 #include "dimemory.h"
 #include "diexec.h"
@@ -120,6 +128,7 @@
 #include "sound.h"
 
 // generic helpers
+#include "devcb.h"
 #include "drivers/xtal.h"
 #include "audio/generic.h"
 #include "machine/generic.h"

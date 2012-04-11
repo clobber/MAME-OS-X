@@ -46,12 +46,11 @@ Notes:
 #define SOUND_CLOCK      XTAL_45MHz
 
 
-class mwarr_state
+class mwarr_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mwarr_state(machine)); }
-
-	mwarr_state(running_machine &machine) { }
+	mwarr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *bg_videoram, *mlow_videoram, *mhigh_videoram, *tx_videoram, *sprites_buffer;
@@ -76,7 +75,7 @@ public:
 
 static WRITE16_HANDLER( bg_videoram_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 
 	COMBINE_DATA(&state->bg_videoram[offset]);
 	tilemap_mark_tile_dirty(state->bg_tilemap,offset);
@@ -84,7 +83,7 @@ static WRITE16_HANDLER( bg_videoram_w )
 
 static WRITE16_HANDLER( mlow_videoram_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 
 	COMBINE_DATA(&state->mlow_videoram[offset]);
 	tilemap_mark_tile_dirty(state->mlow_tilemap,offset);
@@ -92,7 +91,7 @@ static WRITE16_HANDLER( mlow_videoram_w )
 
 static WRITE16_HANDLER( mhigh_videoram_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 
 	COMBINE_DATA(&state->mhigh_videoram[offset]);
 	tilemap_mark_tile_dirty(state->mhigh_tilemap,offset);
@@ -100,7 +99,7 @@ static WRITE16_HANDLER( mhigh_videoram_w )
 
 static WRITE16_HANDLER( tx_videoram_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 
 	COMBINE_DATA(&state->tx_videoram[offset]);
 	tilemap_mark_tile_dirty(state->tx_tilemap,offset);
@@ -113,7 +112,7 @@ static WRITE16_DEVICE_HANDLER( oki1_bank_w )
 
 static WRITE16_HANDLER( sprites_commands_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 
 	if (state->which)
 	{
@@ -151,7 +150,7 @@ static WRITE16_HANDLER( sprites_commands_w )
 
 static WRITE16_HANDLER( mwarr_brightness_w )
 {
-	mwarr_state *state = (mwarr_state *)space->machine->driver_data;
+	mwarr_state *state = space->machine->driver_data<mwarr_state>();
 	int i;
 	double brightness;
 
@@ -190,8 +189,8 @@ static ADDRESS_MAP_START( mwarr_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x110014, 0x110015) AM_WRITE(mwarr_brightness_w)
 	AM_RANGE(0x110016, 0x110017) AM_WRITE(sprites_commands_w)
 	AM_RANGE(0x110000, 0x11ffff) AM_RAM AM_BASE_MEMBER(mwarr_state, mwarr_ram)
-	AM_RANGE(0x180000, 0x180001) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x190000, 0x190001) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x180000, 0x180001) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x190000, 0x190001) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
 ADDRESS_MAP_END
 
 
@@ -331,7 +330,7 @@ GFXDECODE_END
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 	int tileno = state->bg_videoram[tile_index] & 0x1fff;
 	int colour = (state->bg_videoram[tile_index] & 0xe000) >> 13;
 
@@ -340,7 +339,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_mlow_tile_info )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 	int tileno = state->mlow_videoram[tile_index] & 0x1fff;
 	int colour = (state->mlow_videoram[tile_index] & 0xe000) >> 13;
 
@@ -349,7 +348,7 @@ static TILE_GET_INFO( get_mlow_tile_info )
 
 static TILE_GET_INFO( get_mhigh_tile_info )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 	int tileno = state->mhigh_videoram[tile_index] & 0x1fff;
 	int colour = (state->mhigh_videoram[tile_index] & 0xe000) >> 13;
 
@@ -358,7 +357,7 @@ static TILE_GET_INFO( get_mhigh_tile_info )
 
 static TILE_GET_INFO( get_tx_tile_info )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 	int tileno = state->tx_videoram[tile_index] & 0x1fff;
 	int colour = (state->tx_videoram[tile_index] & 0xe000) >> 13;
 
@@ -367,7 +366,7 @@ static TILE_GET_INFO( get_tx_tile_info )
 
 static VIDEO_START( mwarr )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 
 	state->bg_tilemap    = tilemap_create(machine, get_bg_tile_info,    tilemap_scan_cols, 16, 16, 64, 16);
 	state->mlow_tilemap  = tilemap_create(machine, get_mlow_tile_info,  tilemap_scan_cols, 16, 16, 64, 16);
@@ -389,7 +388,7 @@ static VIDEO_START( mwarr )
 
 static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 	const UINT16 *source = state->sprites_buffer + 0x800 - 4;
 	const UINT16 *finish = state->sprites_buffer;
 	const gfx_element *gfx = machine->gfx[0];
@@ -460,7 +459,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 static VIDEO_UPDATE( mwarr )
 {
-	mwarr_state *state = (mwarr_state *)screen->machine->driver_data;
+	mwarr_state *state = screen->machine->driver_data<mwarr_state>();
 	int i;
 
 	bitmap_fill(screen->machine->priority_bitmap, cliprect, 0);
@@ -521,22 +520,19 @@ static VIDEO_UPDATE( mwarr )
 
 static MACHINE_START( mwarr )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 
 	state_save_register_global(machine, state->which);
 }
 
 static MACHINE_RESET( mwarr )
 {
-	mwarr_state *state = (mwarr_state *)machine->driver_data;
+	mwarr_state *state = machine->driver_data<mwarr_state>();
 
 	state->which = 0;
 }
 
-static MACHINE_DRIVER_START( mwarr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mwarr_state)
+static MACHINE_CONFIG_START( mwarr, mwarr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK)
@@ -568,7 +564,7 @@ static MACHINE_DRIVER_START( mwarr )
 
 	MDRV_OKIM6295_ADD("oki2", SOUND_CLOCK/48 , OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

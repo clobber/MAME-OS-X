@@ -727,7 +727,7 @@ void dp_full_sync(running_machine *machine)
 
 READ32_DEVICE_HANDLER( n64_dp_reg_r )
 {
-	_n64_state *state = (_n64_state *)device->machine->driver_data;
+	_n64_state *state = device->machine->driver_data<_n64_state>();
 
 	switch (offset)
 	{
@@ -753,7 +753,7 @@ READ32_DEVICE_HANDLER( n64_dp_reg_r )
 
 WRITE32_DEVICE_HANDLER( n64_dp_reg_w )
 {
-	_n64_state *state = (_n64_state *)device->machine->driver_data;
+	_n64_state *state = device->machine->driver_data<_n64_state>();
 
 	switch (offset)
 	{
@@ -764,9 +764,9 @@ WRITE32_DEVICE_HANDLER( n64_dp_reg_w )
 
 		case 0x04/4:		// DP_END_REG
 			state->m_rdp.SetEndReg(data);
-			profiler_mark_start(PROFILER_USER1);
+			g_profiler.start(PROFILER_USER1);
 			state->m_rdp.ProcessList();
-			profiler_mark_end();
+			g_profiler.stop();
 			break;
 
 		case 0x0c/4:		// DP_STATUS_REG
@@ -814,7 +814,7 @@ static UINT32 n64_vi_intr,  n64_vi_vburst;
 
 static void n64_vi_recalculate_resolution(running_machine *machine)
 {
-	_n64_state *state = (_n64_state *)machine->driver_data;
+	_n64_state *state = machine->driver_data<_n64_state>();
 
     int x_start = (n64_vi_hstart & 0x03ff0000) >> 16;
     int x_end = n64_vi_hstart & 0x000003ff;
@@ -913,7 +913,7 @@ READ32_HANDLER( n64_vi_reg_r )
 
 WRITE32_HANDLER( n64_vi_reg_w )
 {
-	_n64_state *state = (_n64_state *)space->machine->driver_data;
+	_n64_state *state = space->machine->driver_data<_n64_state>();
 
 	switch (offset)
 	{
@@ -1303,8 +1303,8 @@ WRITE32_HANDLER( n64_pi_reg_w )
 			{
 				for (i=0; i < dma_length; i++)
 				{
-					UINT8 b = memory_read_byte(space, pi_dram_addr);
-					memory_write_byte(space, pi_cart_addr & 0x1fffffff, b);
+					UINT8 b = space->read_byte(pi_dram_addr);
+					space->write_byte(pi_cart_addr & 0x1fffffff, b);
 					pi_cart_addr += 1;
 					pi_dram_addr += 1;
 				}
@@ -1331,13 +1331,13 @@ WRITE32_HANDLER( n64_pi_reg_w )
 			{
 				for (i=0; i < dma_length; i++)
 				{
-					/*UINT32 d = memory_read_dword(space, pi_cart_addr);
-                    memory_write_dword(space, pi_dram_addr, d);
+					/*UINT32 d = space->read_dword(pi_cart_addr);
+                    space->write_dword(pi_dram_addr, d);
                     pi_cart_addr += 4;
                     pi_dram_addr += 4;*/
 
-					UINT8 b = memory_read_byte(space, pi_cart_addr);
-					memory_write_byte(space, pi_dram_addr & 0x1fffffff, b);
+					UINT8 b = space->read_byte(pi_cart_addr);
+					space->write_byte(pi_dram_addr & 0x1fffffff, b);
 					pi_cart_addr += 1;
 					pi_dram_addr += 1;
 				}
@@ -1347,8 +1347,8 @@ WRITE32_HANDLER( n64_pi_reg_w )
 			if (pi_first_dma)
 			{
 				// TODO: CIC-6105 has different address...
-				memory_write_dword(space, 0x00000318, 0x400000);
-				memory_write_dword(space, 0x000003f0, 0x800000);
+				space->write_dword(0x00000318, 0x400000);
+				space->write_dword(0x000003f0, 0x800000);
 				pi_first_dma = 0;
 			}
 
@@ -1965,7 +1965,7 @@ static UINT32 cic_status = 0x00000000;
 READ32_HANDLER( n64_pif_ram_r )
 {
     /*mame_printf_debug( "pif_ram_r: %08X, %08X = %08X\n", offset << 2, mem_mask, ( ( pif_ram[offset*4+0] << 24 ) | ( pif_ram[offset*4+1] << 16 ) | ( pif_ram[offset*4+2] <<  8 ) | ( pif_ram[offset*4+3] <<  0 ) ) & mem_mask );*/
-    if(!space->debugger_access)
+    if(!space->debugger_access())
     {
     	if( offset == ( 0x24 / 4 ) )
     	{

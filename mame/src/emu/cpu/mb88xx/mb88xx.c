@@ -75,9 +75,10 @@ struct _mb88_state
     UINT8 pending_interrupt;
     device_irq_callback irqcallback;
     legacy_cpu_device *device;
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
     int icount;
 };
 
@@ -98,13 +99,13 @@ static TIMER_CALLBACK( serial_timer );
     MACROS
 ***************************************************************************/
 
-#define READOP(a)			(memory_decrypted_read_byte(cpustate->program, a))
+#define READOP(a)			(cpustate->direct->read_decrypted_byte(a))
 
-#define RDMEM(a)			(memory_read_byte_8be(cpustate->data, a))
-#define WRMEM(a,v)			(memory_write_byte_8be(cpustate->data, (a), (v)))
+#define RDMEM(a)			(cpustate->data->read_byte(a))
+#define WRMEM(a,v)			(cpustate->data->write_byte((a), (v)))
 
-#define READPORT(a)			(memory_read_byte_8be(cpustate->io, a))
-#define WRITEPORT(a,v)		(memory_write_byte_8be(cpustate->io, (a), (v)))
+#define READPORT(a)			(cpustate->io->read_byte(a))
+#define WRITEPORT(a,v)		(cpustate->io->write_byte((a), (v)))
 
 #define TEST_ST()			(cpustate->st & 1)
 #define TEST_ZF()			(cpustate->zf & 1)
@@ -144,6 +145,7 @@ static CPU_INIT( mb88 )
 	cpustate->irqcallback = irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 

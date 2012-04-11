@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class asuka_state
+class asuka_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, asuka_state(machine)); }
-
-	asuka_state(running_machine &machine) { }
+	asuka_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 //  UINT16 *    paletteram; // this currently uses generic palette handlers

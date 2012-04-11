@@ -29,7 +29,7 @@
 
 static WRITE8_HANDLER( cbasebal_bankswitch_w )
 {
-	cbasebal_state *state = (cbasebal_state *)space->machine->driver_data;
+	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
 
 	/* bits 0-4 select ROM bank */
 	//logerror("%04x: bankswitch %02x\n", cpu_get_pc(space->cpu), data);
@@ -44,7 +44,7 @@ static WRITE8_HANDLER( cbasebal_bankswitch_w )
 
 static READ8_HANDLER( bankedram_r )
 {
-	cbasebal_state *state = (cbasebal_state *)space->machine->driver_data;
+	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
 
 	switch (state->rambank)
 	{
@@ -63,7 +63,7 @@ static READ8_HANDLER( bankedram_r )
 
 static WRITE8_HANDLER( bankedram_w )
 {
-	cbasebal_state *state = (cbasebal_state *)space->machine->driver_data;
+	cbasebal_state *state = space->machine->driver_data<cbasebal_state>();
 
 	switch (state->rambank)
 	{
@@ -125,7 +125,7 @@ static ADDRESS_MAP_START( cbasebal_portmap, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x01, 0x01) AM_WRITE_PORT("IO_01")
 	AM_RANGE(0x02, 0x02) AM_WRITE_PORT("IO_02")
 	AM_RANGE(0x03, 0x03) AM_WRITE_PORT("IO_03")
-	AM_RANGE(0x05, 0x05) AM_DEVWRITE("oki", okim6295_w)
+	AM_RANGE(0x05, 0x05) AM_DEVWRITE_MODERN("oki", okim6295_device, write)
 	AM_RANGE(0x06, 0x07) AM_DEVWRITE("ymsnd", ym2413_w)
 	AM_RANGE(0x08, 0x09) AM_WRITE(cbasebal_scrollx_w)
 	AM_RANGE(0x0a, 0x0b) AM_WRITE(cbasebal_scrolly_w)
@@ -244,7 +244,7 @@ GFXDECODE_END
 
 static MACHINE_START( cbasebal )
 {
-	cbasebal_state *state = (cbasebal_state *)machine->driver_data;
+	cbasebal_state *state = machine->driver_data<cbasebal_state>();
 
 	memory_configure_bank(machine, "bank1", 0, 32, memory_region(machine, "maincpu") + 0x10000, 0x4000);
 
@@ -261,7 +261,7 @@ static MACHINE_START( cbasebal )
 
 static MACHINE_RESET( cbasebal )
 {
-	cbasebal_state *state = (cbasebal_state *)machine->driver_data;
+	cbasebal_state *state = machine->driver_data<cbasebal_state>();
 
 	state->rambank = 0;
 	state->tilebank = 0;
@@ -276,10 +276,7 @@ static MACHINE_RESET( cbasebal )
 	state->scroll_y[1] = 0;
 }
 
-static MACHINE_DRIVER_START( cbasebal )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cbasebal_state)
+static MACHINE_CONFIG_START( cbasebal, cbasebal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 6000000)	/* ??? */
@@ -316,7 +313,7 @@ static MACHINE_DRIVER_START( cbasebal )
 
 	MDRV_SOUND_ADD("ymsnd", YM2413, 3579545)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

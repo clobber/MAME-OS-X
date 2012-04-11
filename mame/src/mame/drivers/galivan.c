@@ -396,7 +396,7 @@ GFXDECODE_END
 
 static MACHINE_START( galivan )
 {
-	galivan_state *state = (galivan_state *)machine->driver_data;
+	galivan_state *state = machine->driver_data<galivan_state>();
 
 	/* configure ROM banking */
 	UINT8 *rombase = memory_region(machine, "maincpu");
@@ -413,7 +413,7 @@ static MACHINE_START( galivan )
 
 static MACHINE_START( ninjemak )
 {
-	galivan_state *state = (galivan_state *)machine->driver_data;
+	galivan_state *state = machine->driver_data<galivan_state>();
 
 	/* configure ROM banking */
 	UINT8 *rombase = memory_region(machine, "maincpu");
@@ -429,7 +429,7 @@ static MACHINE_START( ninjemak )
 
 static MACHINE_RESET( galivan )
 {
-	galivan_state *state = (galivan_state *)machine->driver_data;
+	galivan_state *state = machine->driver_data<galivan_state>();
 
 	machine->device("maincpu")->reset();
 
@@ -443,7 +443,7 @@ static MACHINE_RESET( galivan )
 
 static MACHINE_RESET( ninjemak )
 {
-	galivan_state *state = (galivan_state *)machine->driver_data;
+	galivan_state *state = machine->driver_data<galivan_state>();
 
 	machine->device("maincpu")->reset();
 
@@ -453,10 +453,7 @@ static MACHINE_RESET( ninjemak )
 	state->ninjemak_dispdisable = 0;
 }
 
-static MACHINE_DRIVER_START( galivan )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(galivan_state)
+static MACHINE_CONFIG_START( galivan, galivan_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,12000000/2)		/* 6 MHz? */
@@ -498,12 +495,9 @@ static MACHINE_DRIVER_START( galivan )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ninjemak )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(galivan_state)
+static MACHINE_CONFIG_START( ninjemak, galivan_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,12000000/2)		/* 6 MHz? */
@@ -544,7 +538,7 @@ static MACHINE_DRIVER_START( ninjemak )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

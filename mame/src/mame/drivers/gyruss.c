@@ -89,7 +89,7 @@ static const int gyruss_timer[10] =
 
 static READ8_DEVICE_HANDLER( gyruss_portA_r )
 {
-	gyruss_state *state = (gyruss_state *)device->machine->driver_data;
+	gyruss_state *state = device->machine->driver_data<gyruss_state>();
 	return gyruss_timer[(state->audiocpu->total_cycles() / 1024) % 10];
 }
 
@@ -101,7 +101,7 @@ static WRITE8_DEVICE_HANDLER( gyruss_dac_w )
 
 static WRITE8_HANDLER( gyruss_irq_clear_w )
 {
-	gyruss_state *state = (gyruss_state *)space->machine->driver_data;
+	gyruss_state *state = space->machine->driver_data<gyruss_state>();
 	cpu_set_input_line(state->audiocpu_2, 0, CLEAR_LINE);
 }
 
@@ -132,14 +132,14 @@ static WRITE8_DEVICE_HANDLER( gyruss_filter1_w )
 
 static WRITE8_HANDLER( gyruss_sh_irqtrigger_w )
 {
-	gyruss_state *state = (gyruss_state *)space->machine->driver_data;
+	gyruss_state *state = space->machine->driver_data<gyruss_state>();
 	/* writing to this register triggers IRQ on the sound CPU */
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( gyruss_i8039_irq_w )
 {
-	gyruss_state *state = (gyruss_state *)space->machine->driver_data;
+	gyruss_state *state = space->machine->driver_data<gyruss_state>();
 	cpu_set_input_line(state->audiocpu_2, 0, ASSERT_LINE);
 }
 
@@ -499,16 +499,13 @@ DISCRETE_SOUND_END
 
 static MACHINE_START( gyruss )
 {
-	gyruss_state *state = (gyruss_state *)machine->driver_data;
+	gyruss_state *state = machine->driver_data<gyruss_state>();
 
 	state->audiocpu = machine->device<cpu_device>("audiocpu");
 	state->audiocpu_2 = machine->device<cpu_device>("audio2");
 }
 
-static MACHINE_DRIVER_START( gyruss )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(gyruss_state)
+static MACHINE_CONFIG_START( gyruss, gyruss_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
@@ -583,7 +580,7 @@ static MACHINE_DRIVER_START( gyruss )
 	MDRV_SOUND_CONFIG_DISCRETE(gyruss_sound)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -109,7 +109,6 @@ Notes:
 #include "sound/st0016.h"
 #include "includes/st0016.h"
 
-READ8_HANDLER(st0016_dma_r);
 static UINT8 *shared;
 
 UINT32 *speglsht_framebuffer;
@@ -307,7 +306,7 @@ static const st0016_interface st0016_config =
 	&st0016_charram
 };
 
-static const r3000_cpu_core config =
+static const r3000_cpu_core r3000_config =
 {
 	0,
 	4096,	/* code cache size */
@@ -319,7 +318,7 @@ static MACHINE_RESET(speglsht)
 	memset(shared,0,0x1000);
 }
 
-static MACHINE_DRIVER_START( speglsht )
+static MACHINE_CONFIG_START( speglsht, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",Z80, 8000000) /* 8 MHz ? */
 	MDRV_CPU_PROGRAM_MAP(st0016_mem)
@@ -328,7 +327,7 @@ static MACHINE_DRIVER_START( speglsht )
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	MDRV_CPU_ADD("sub", R3000LE, 25000000)
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r3000_config)
 	MDRV_CPU_PROGRAM_MAP(speglsht_mem)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_assert)
 
@@ -355,7 +354,7 @@ static MACHINE_DRIVER_START( speglsht )
 	MDRV_SOUND_CONFIG(st0016_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( speglsht )
 	ROM_REGION( 0x210000, "maincpu", 0 )

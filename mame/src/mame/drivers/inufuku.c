@@ -83,7 +83,7 @@ TODO:
 
 static WRITE16_HANDLER( inufuku_soundcommand_w )
 {
-	inufuku_state *state = (inufuku_state *)space->machine->driver_data;
+	inufuku_state *state = space->machine->driver_data<inufuku_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		/* hack... sound doesn't work otherwise */
@@ -98,7 +98,7 @@ static WRITE16_HANDLER( inufuku_soundcommand_w )
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	inufuku_state *state = (inufuku_state *)space->machine->driver_data;
+	inufuku_state *state = space->machine->driver_data<inufuku_state>();
 	state->pending_command = 0;
 }
 
@@ -115,7 +115,7 @@ static WRITE8_HANDLER( inufuku_soundrombank_w )
 
 static CUSTOM_INPUT( soundflag_r )
 {
-	inufuku_state *state = (inufuku_state *)field->port->machine->driver_data;
+	inufuku_state *state = field->port->machine->driver_data<inufuku_state>();
 	UINT16 soundflag = state->pending_command ? 0 : 1;
 
 	return soundflag;
@@ -298,7 +298,7 @@ GFXDECODE_END
 
 static void irqhandler( running_device *device, int irq )
 {
-	inufuku_state *state = (inufuku_state *)device->machine->driver_data;
+	inufuku_state *state = device->machine->driver_data<inufuku_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -316,7 +316,7 @@ static const ym2610_interface ym2610_config =
 
 static MACHINE_START( inufuku )
 {
-	inufuku_state *state = (inufuku_state *)machine->driver_data;
+	inufuku_state *state = machine->driver_data<inufuku_state>();
 	UINT8 *ROM = memory_region(machine, "audiocpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x8000);
@@ -336,7 +336,7 @@ static MACHINE_START( inufuku )
 
 static MACHINE_RESET( inufuku )
 {
-	inufuku_state *state = (inufuku_state *)machine->driver_data;
+	inufuku_state *state = machine->driver_data<inufuku_state>();
 
 	state->pending_command = 1;
 	state->bg_scrollx = 0;
@@ -348,10 +348,7 @@ static MACHINE_RESET( inufuku )
 	state->tx_palettebank = 0;
 }
 
-static MACHINE_DRIVER_START( inufuku )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(inufuku_state)
+static MACHINE_CONFIG_START( inufuku, inufuku_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 32000000/2)	/* 16.00 MHz */
@@ -390,7 +387,7 @@ static MACHINE_DRIVER_START( inufuku )
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.75)
 	MDRV_SOUND_ROUTE(2, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /******************************************************************************

@@ -11,14 +11,12 @@
 #define TRAM_ENTRIES		0x4000
 #define MRAM_ENTRIES		0x8000
 
-class atarigt_state
+class atarigt_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, atarigt_state(machine)); }
+	atarigt_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 
-	atarigt_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
 	UINT8			is_primrage;
 	UINT16 *		colorram;
 
@@ -36,8 +34,8 @@ public:
 
 	UINT32 *		mo_command;
 
-	void			(*protection_w)(const address_space *space, offs_t offset, UINT16 data);
-	void			(*protection_r)(const address_space *space, offs_t offset, UINT16 *data);
+	void			(*protection_w)(address_space *space, offs_t offset, UINT16 data);
+	void			(*protection_r)(address_space *space, offs_t offset, UINT16 *data);
 };
 
 

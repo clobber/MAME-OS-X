@@ -19,12 +19,11 @@ struct jungler_star
 
 #define JUNGLER_MAX_STARS 1000
 
-class timeplt_state
+class timeplt_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, timeplt_state(machine)); }
-
-	timeplt_state(running_machine &machine) { }
+	timeplt_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  videoram;	// timeplt, tutankham, junofrst, rocnrope, pooyan, rallyx
@@ -76,8 +75,8 @@ public:
 
 WRITE8_HANDLER( timeplt_sh_irqtrigger_w );
 
-MACHINE_DRIVER_EXTERN( timeplt_sound );
-MACHINE_DRIVER_EXTERN( locomotn_sound );
+MACHINE_CONFIG_EXTERN( timeplt_sound );
+MACHINE_CONFIG_EXTERN( locomotn_sound );
 
 /*----------- defined in video/pooyan.c -----------*/
 

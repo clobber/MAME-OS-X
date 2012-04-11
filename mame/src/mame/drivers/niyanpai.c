@@ -41,6 +41,7 @@ Memo:
 #include "sound/dac.h"
 #include "sound/3812intf.h"
 #include "cpu/z80/z80daisy.h"
+#include "machine/nvram.h"
 #include "includes/niyanpai.h"
 
 
@@ -176,7 +177,7 @@ static Z80CTC_INTERFACE( ctc_intf )
 
 static MACHINE_RESET( niyanpai )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	// initialize TMPZ84C011 PIO
@@ -189,14 +190,7 @@ static MACHINE_RESET( niyanpai )
 
 static DRIVER_INIT( niyanpai )
 {
-	UINT8 *MAINROM = memory_region(machine, "maincpu");
 	UINT8 *SNDROM = memory_region(machine, "audiocpu");
-
-	// main program patch (USR0 -> IRQ LEVEL1)
-	MAINROM[(25 * 4) + 0] = MAINROM[(64 * 4) + 0];
-	MAINROM[(25 * 4) + 1] = MAINROM[(64 * 4) + 1];
-	MAINROM[(25 * 4) + 2] = MAINROM[(64 * 4) + 2];
-	MAINROM[(25 * 4) + 3] = MAINROM[(64 * 4) + 3];
 
 	// sound program patch
 	SNDROM[0x0213] = 0x00;			// DI -> NOP
@@ -246,7 +240,7 @@ static READ16_HANDLER( musobana_inputport_0_r )
 
 static CUSTOM_INPUT( musobana_outcoin_flag_r )
 {
-	const address_space *space = cputag_get_address_space(field->port->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(field->port->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	// tmp68301_parallel_interface[0x05]
 	//  bit 0   coin counter
 	//  bit 2   motor on
@@ -273,7 +267,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( niyanpai_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_SHARE("nvram")
 
 	AM_RANGE(0x0a0000, 0x0a08ff) AM_READWRITE(niyanpai_palette_r,niyanpai_palette_w)
 	AM_RANGE(0x0a0900, 0x0a11ff) AM_RAM	// palette work ram?
@@ -313,7 +307,7 @@ static ADDRESS_MAP_START( musobana_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0a0000, 0x0a08ff) AM_READWRITE(niyanpai_palette_r,niyanpai_palette_w)
 	AM_RANGE(0x0a0900, 0x0a11ff) AM_RAM				// palette work ram?
 
-	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0bf800, 0x0bffff) AM_RAM
 
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(niyanpai_sound_w)
@@ -352,7 +346,7 @@ static ADDRESS_MAP_START( mhhonban_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x060900, 0x0611ff) AM_RAM				// palette work ram?
 	AM_RANGE(0x07f800, 0x07ffff) AM_RAM
 
-	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x0a8000, 0x0a87ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x0bf000, 0x0bffff) AM_RAM
 
 	AM_RANGE(0x200000, 0x200001) AM_WRITE(niyanpai_sound_w)
@@ -761,7 +755,7 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( niyanpai_interrupt )
 {
-	cpu_set_input_line(device, 1, HOLD_LINE);
+	cpu_set_input_line_and_vector(device, 1, HOLD_LINE,0x100/4);
 }
 
 static const z80_daisy_config daisy_chain_sound[] =
@@ -771,7 +765,7 @@ static const z80_daisy_config daisy_chain_sound[] =
 };
 
 
-static MACHINE_DRIVER_START( niyanpai )
+static MACHINE_CONFIG_START( niyanpai, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12288000/2)	/* TMP68301, 6.144 MHz */
@@ -786,7 +780,7 @@ static MACHINE_DRIVER_START( niyanpai )
 	MDRV_Z80CTC_ADD("ctc", 8000000 /* same as "audiocpu" */, ctc_intf)
 
 	MDRV_MACHINE_RESET(niyanpai)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -812,23 +806,21 @@ static MACHINE_DRIVER_START( niyanpai )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( musobana )
+static MACHINE_CONFIG_DERIVED( musobana, niyanpai )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(niyanpai)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(musobana_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mhhonban )
+static MACHINE_CONFIG_DERIVED( mhhonban, niyanpai )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(niyanpai)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mhhonban_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( niyanpai )

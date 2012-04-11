@@ -83,7 +83,7 @@ static INTERRUPT_GEN( blockout_interrupt )
 
 static WRITE16_HANDLER( blockout_sound_command_w )
 {
-	blockout_state *state = (blockout_state *)space->machine->driver_data;
+	blockout_state *state = space->machine->driver_data<blockout_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -121,7 +121,7 @@ static ADDRESS_MAP_START( audio_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -237,7 +237,7 @@ INPUT_PORTS_END
 /* handler called by the 2151 emulator when the internal timers cause an IRQ */
 static void blockout_irq_handler(running_device *device, int irq)
 {
-	blockout_state *state = (blockout_state *)device->machine->driver_data;
+	blockout_state *state = device->machine->driver_data<blockout_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE, 0xff);
 }
 
@@ -255,7 +255,7 @@ static const ym2151_interface ym2151_config =
 
 static MACHINE_START( blockout )
 {
-	blockout_state *state = (blockout_state *)machine->driver_data;
+	blockout_state *state = machine->driver_data<blockout_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -264,15 +264,12 @@ static MACHINE_START( blockout )
 
 static MACHINE_RESET( blockout )
 {
-	blockout_state *state = (blockout_state *)machine->driver_data;
+	blockout_state *state = machine->driver_data<blockout_state>();
 
 	state->color = 0;
 }
 
-static MACHINE_DRIVER_START( blockout )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(blockout_state)
+static MACHINE_CONFIG_START( blockout, blockout_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)       /* MRH - 8.76 makes gfx/adpcm samples sync better -- but 10 is correct speed*/
@@ -309,7 +306,7 @@ static MACHINE_DRIVER_START( blockout )
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

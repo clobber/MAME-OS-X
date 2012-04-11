@@ -38,7 +38,7 @@ TO DO :
 
 static READ16_HANDLER( oneshot_in0_word_r )
 {
-	oneshot_state *state = (oneshot_state *)space->machine->driver_data;
+	oneshot_state *state = space->machine->driver_data<oneshot_state>();
 	int data = input_port_read(space->machine, "DSW1");
 
 	switch (data & 0x0c)
@@ -62,7 +62,7 @@ static READ16_HANDLER( oneshot_in0_word_r )
 
 static READ16_HANDLER( oneshot_gun_x_p1_r )
 {
-	oneshot_state *state = (oneshot_state *)space->machine->driver_data;
+	oneshot_state *state = space->machine->driver_data<oneshot_state>();
 
 	/* shots must be in a different location to register */
 	state->p1_wobble ^= 1;
@@ -72,13 +72,13 @@ static READ16_HANDLER( oneshot_gun_x_p1_r )
 
 static READ16_HANDLER( oneshot_gun_y_p1_r )
 {
-	oneshot_state *state = (oneshot_state *)space->machine->driver_data;
+	oneshot_state *state = space->machine->driver_data<oneshot_state>();
 	return state->gun_y_p1;
 }
 
 static READ16_HANDLER( oneshot_gun_x_p2_r )
 {
-	oneshot_state *state = (oneshot_state *)space->machine->driver_data;
+	oneshot_state *state = space->machine->driver_data<oneshot_state>();
 
 	/* shots must be in a different location to register */
 	state->p2_wobble ^= 1;
@@ -88,7 +88,7 @@ static READ16_HANDLER( oneshot_gun_x_p2_r )
 
 static READ16_HANDLER( oneshot_gun_y_p2_r )
 {
-	oneshot_state *state = (oneshot_state *)space->machine->driver_data;
+	oneshot_state *state = space->machine->driver_data<oneshot_state>();
 	return state->gun_y_p2;
 }
 
@@ -130,7 +130,7 @@ static ADDRESS_MAP_START( oneshot_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x8000) AM_READWRITE(soundlatch_r,soundlatch_w)
 	AM_RANGE(0x8001, 0x87ff) AM_RAM
 	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym3812_r,ym3812_w)
-	AM_RANGE(0xe010, 0xe010) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
+	AM_RANGE(0xe010, 0xe010) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 
@@ -332,7 +332,7 @@ GFXDECODE_END
 
 static void irq_handler(running_device *device, int irq)
 {
-	oneshot_state *state = (oneshot_state *)device->machine->driver_data;
+	oneshot_state *state = device->machine->driver_data<oneshot_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -343,7 +343,7 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( oneshot )
 {
-	oneshot_state *state = (oneshot_state *)machine->driver_data;
+	oneshot_state *state = machine->driver_data<oneshot_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -359,7 +359,7 @@ static MACHINE_START( oneshot )
 
 static MACHINE_RESET( oneshot )
 {
-	oneshot_state *state = (oneshot_state *)machine->driver_data;
+	oneshot_state *state = machine->driver_data<oneshot_state>();
 
 	state->gun_x_p1 = 0;
 	state->gun_y_p1 = 0;
@@ -370,10 +370,7 @@ static MACHINE_RESET( oneshot )
 	state->p2_wobble = 0;
 }
 
-static MACHINE_DRIVER_START( oneshot )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(oneshot_state)
+static MACHINE_CONFIG_START( oneshot, oneshot_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -408,16 +405,15 @@ static MACHINE_DRIVER_START( oneshot )
 
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( maddonna )
+static MACHINE_CONFIG_DERIVED( maddonna, oneshot )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(oneshot)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(maddonna) // no crosshair
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( oneshot )

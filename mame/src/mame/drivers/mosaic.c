@@ -14,7 +14,7 @@
 
 static WRITE8_HANDLER( protection_w )
 {
-	mosaic_state *state = (mosaic_state *)space->machine->driver_data;
+	mosaic_state *state = space->machine->driver_data<mosaic_state>();
 
 	if (!BIT(data, 7))
 	{
@@ -40,7 +40,7 @@ static WRITE8_HANDLER( protection_w )
 
 static READ8_HANDLER( protection_r )
 {
-	mosaic_state *state = (mosaic_state *)space->machine->driver_data;
+	mosaic_state *state = space->machine->driver_data<mosaic_state>();
 	int res = (state->prot_val >> 8) & 0xff;
 
 	logerror("%06x: protection_r %02x\n", cpu_get_pc(space->cpu), res);
@@ -52,7 +52,7 @@ static READ8_HANDLER( protection_r )
 
 static WRITE8_HANDLER( gfire2_protection_w )
 {
-	mosaic_state *state = (mosaic_state *)space->machine->driver_data;
+	mosaic_state *state = space->machine->driver_data<mosaic_state>();
 
 	logerror("%06x: protection_w %02x\n", cpu_get_pc(space->cpu), data);
 
@@ -81,7 +81,7 @@ static WRITE8_HANDLER( gfire2_protection_w )
 
 static READ8_HANDLER( gfire2_protection_r )
 {
-	mosaic_state *state = (mosaic_state *)space->machine->driver_data;
+	mosaic_state *state = space->machine->driver_data<mosaic_state>();
 	int res = state->prot_val & 0xff;
 
 	state->prot_val >>= 8;
@@ -255,22 +255,19 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( mosaic )
 {
-	mosaic_state *state = (mosaic_state *)machine->driver_data;
+	mosaic_state *state = machine->driver_data<mosaic_state>();
 
 	state_save_register_global(machine, state->prot_val);
 }
 
 static MACHINE_RESET( mosaic )
 {
-	mosaic_state *state = (mosaic_state *)machine->driver_data;
+	mosaic_state *state = machine->driver_data<mosaic_state>();
 
 	state->prot_val = 0;
 }
 
-static MACHINE_DRIVER_START( mosaic )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mosaic_state)
+static MACHINE_CONFIG_START( mosaic, mosaic_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z180, 7000000)	/* ??? */
@@ -301,14 +298,13 @@ static MACHINE_DRIVER_START( mosaic )
 	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gfire2 )
-	MDRV_IMPORT_FROM(mosaic)
+static MACHINE_CONFIG_DERIVED( gfire2, mosaic )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gfire2_map)
 	MDRV_CPU_IO_MAP(gfire2_io_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

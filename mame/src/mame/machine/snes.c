@@ -26,9 +26,9 @@
 /* -- Globals -- */
 UINT8  *snes_ram = NULL;		/* 65816 ram */
 
-static void snes_dma(const address_space *space, UINT8 channels);
-static void snes_hdma_init(const address_space *space);
-static void snes_hdma(const address_space *space);
+static void snes_dma(address_space *space, UINT8 channels);
+static void snes_hdma_init(address_space *space);
+static void snes_hdma(address_space *space);
 
 static READ8_HANDLER(snes_io_dma_r);
 static WRITE8_HANDLER(snes_io_dma_w);
@@ -48,6 +48,8 @@ struct snes_cart_info snes_cart;
 #include "machine/snesst10.c"
 #include "machine/snesbsx.c"
 
+#define USE_CYCLE_STEAL 1
+
 /*************************************
 
     Timers
@@ -56,7 +58,7 @@ struct snes_cart_info snes_cart;
 
 static TIMER_CALLBACK( snes_nmi_tick )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 
 	// pull NMI
 	cpu_set_input_line(state->maincpu, G65816_LINE_NMI, ASSERT_LINE);
@@ -67,7 +69,7 @@ static TIMER_CALLBACK( snes_nmi_tick )
 
 static void snes_hirq_tick( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 
 	// latch the counters and pull IRQ
 	// (don't need to switch to the 65816 context, we don't do anything dependant on it)
@@ -86,29 +88,29 @@ static TIMER_CALLBACK( snes_hirq_tick_callback )
 
 static TIMER_CALLBACK( snes_reset_oam_address )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	// make sure we're in the 65816's context since we're messing with the OAM and stuff
-	const address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 
 	if (!(snes_ppu.screen_disabled)) //Reset OAM address, byuu says it happens at H=10
 	{
-		memory_write_byte(space, OAMADDL, snes_ppu.oam.saved_address_low); /* Reset oam address */
-		memory_write_byte(space, OAMADDH, snes_ppu.oam.saved_address_high);
+		space->write_byte(OAMADDL, snes_ppu.oam.saved_address_low); /* Reset oam address */
+		space->write_byte(OAMADDH, snes_ppu.oam.saved_address_high);
 		snes_ppu.oam.first_sprite = snes_ppu.oam.priority_rotation ? (snes_ppu.oam.address >> 1) & 127 : 0;
 	}
 }
 
 static TIMER_CALLBACK( snes_reset_hdma )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 	snes_hdma_init(cpu0space);
 }
 
 static TIMER_CALLBACK( snes_update_io )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 	state->io_read(cpu0space->machine);
 	snes_ram[HVBJOY] &= 0xfe;		/* Clear busy bit */
 
@@ -117,7 +119,7 @@ static TIMER_CALLBACK( snes_update_io )
 
 static TIMER_CALLBACK( snes_scanline_tick )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 
 	/* Increase current line - we want to latch on this line during it, not after it */
 	snes_ppu.beam.current_vert = machine->primary_screen->vpos();
@@ -186,7 +188,7 @@ static TIMER_CALLBACK( snes_scanline_tick )
 	// hdma reset happens at scanline 0, H=~6
 	if (snes_ppu.beam.current_vert == 0)
 	{
-		const address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+		address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 		snes_hdma_init(cpu0space);
 	}
 
@@ -209,8 +211,8 @@ static TIMER_CALLBACK( snes_scanline_tick )
 /* This is called at the start of hblank *before* the scanline indicated in current_vert! */
 static TIMER_CALLBACK( snes_hblank_tick )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *cpu0space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 	int nextscan;
 
 	snes_ppu.beam.current_vert = machine->primary_screen->vpos();
@@ -296,7 +298,7 @@ READ8_HANDLER( snes_open_bus_r )
 		return 0xff;
 
 	recurse = 1;
-	result = memory_read_byte_8le(space, cpu_get_pc(space->cpu) - 1); //LAST opcode that's fetched on the bus
+	result = space->read_byte(cpu_get_pc(space->cpu) - 1); //LAST opcode that's fetched on the bus
 	recurse = 0;
 	return result;
 }
@@ -304,7 +306,7 @@ READ8_HANDLER( snes_open_bus_r )
 /* read & write to DMA addresses are defined separately, to be called by snessdd1 handlers */
 static READ8_HANDLER( snes_io_dma_r )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 
 	switch (offset)
 	{
@@ -352,7 +354,7 @@ static READ8_HANDLER( snes_io_dma_r )
 
 static WRITE8_HANDLER( snes_io_dma_w )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 
 	switch (offset)
 	{
@@ -418,7 +420,7 @@ static WRITE8_HANDLER( snes_io_dma_w )
  */
 READ8_HANDLER( snes_r_io )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0;
 
 	// PPU accesses are from 2100 to 213f
@@ -476,7 +478,7 @@ READ8_HANDLER( snes_r_io )
 	switch (offset)
 	{
 		case WMDATA:	/* Data to read from WRAM */
-			value = memory_read_byte(space, 0x7e0000 + state->wram_address++);
+			value = space->read_byte(0x7e0000 + state->wram_address++);
 			state->wram_address &= 0x1ffff;
 			return value;
 		case OLDJOY1:	/* Data for old NES controllers (JOYSER1) */
@@ -558,7 +560,7 @@ READ8_HANDLER( snes_r_io )
  */
 WRITE8_HANDLER( snes_w_io )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 
 	// PPU accesses are from 2100 to 213f
 	if (offset >= INIDISP && offset < APU00)
@@ -625,7 +627,7 @@ WRITE8_HANDLER( snes_w_io )
 	switch (offset)
 	{
 		case WMDATA:	/* Data to write to WRAM */
-			memory_write_byte(space, 0x7e0000 + state->wram_address++, data );
+			space->write_byte(0x7e0000 + state->wram_address++, data );
 			state->wram_address &= 0x1ffff;
 			return;
 		case WMADDL:	/* Address to read/write to wram (low) */
@@ -765,7 +767,7 @@ WRITE8_HANDLER( snes_w_io )
 
 WRITE_LINE_DEVICE_HANDLER( snes_extern_irq_w )
 {
-	snes_state *driver_state = (snes_state *)device->machine->driver_data;
+	snes_state *driver_state = device->machine->driver_data<snes_state>();
 	cpu_set_input_line(driver_state->maincpu, G65816_LINE_IRQ, state);
 }
 
@@ -844,6 +846,7 @@ address               |         |          |       |     |         |        |   
 
 */
 
+#if USE_CYCLE_STEAL
 /*FIXME: missing work RAM access steal / we need to do this less "aggressive" otherwise we lose too much CPU horsepower, why? */
 static int snes_bank_0x00_0x3f_cycles(running_machine *machine,UINT32 offset)
 {
@@ -905,16 +908,17 @@ static int snes_bank_0x80_0xbf_cycles(running_machine *machine,UINT32 offset)
 
 	return 0; //TODO: 6
 }
+#endif
 
 /* 0x000000 - 0x2fffff */
 READ8_HANDLER( snes_r_bank1 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0xff;
 	UINT16 address = offset & 0xffff;
 
 	if (address < 0x2000)											/* Mirror of Low RAM */
-		value = memory_read_byte(space, 0x7e0000 + address);
+		value = space->read_byte(0x7e0000 + address);
 	else if (address < 0x6000)										/* I/O */
 	{
 		if (state->cart[0].mode == SNES_MODE_BSX && address >= 0x5000)
@@ -957,8 +961,10 @@ READ8_HANDLER( snes_r_bank1 )
 	else
 		value = snes_ram[offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x00_0x3f_cycles(space->machine, offset));
+	#endif
 
 	return value;
 }
@@ -966,12 +972,12 @@ READ8_HANDLER( snes_r_bank1 )
 /* 0x300000 - 0x3fffff */
 READ8_HANDLER( snes_r_bank2 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0xff;
 	UINT16 address = offset & 0xffff;
 
 	if (address < 0x2000)											/* Mirror of Low RAM */
-		value = memory_read_byte(space, 0x7e0000 + address);
+		value = space->read_byte(0x7e0000 + address);
 	else if (address < 0x6000)										/* I/O */
 	{
 		if (state->cart[0].mode == SNES_MODE_BSX && address >= 0x5000)
@@ -1020,8 +1026,10 @@ READ8_HANDLER( snes_r_bank2 )
 	else
 		value = snes_ram[0x300000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x00_0x3f_cycles(space->machine, offset));
+	#endif
 
 	return value;
 }
@@ -1029,7 +1037,7 @@ READ8_HANDLER( snes_r_bank2 )
 /* 0x400000 - 0x5fffff */
 READ8_HANDLER( snes_r_bank3 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0xff;
 	UINT16 address = offset & 0xffff;
 
@@ -1061,8 +1069,10 @@ READ8_HANDLER( snes_r_bank3 )
 	else											/* Mode 21 & 25 + SuperFX games */
 		value = snes_ram[0x400000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -8);
+	#endif
 
 	return value;
 }
@@ -1070,7 +1080,7 @@ READ8_HANDLER( snes_r_bank3 )
 /* 0x600000 - 0x6fffff */
 READ8_HANDLER( snes_r_bank4 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0xff;
 	UINT16 address = offset & 0xffff;
 
@@ -1099,8 +1109,10 @@ READ8_HANDLER( snes_r_bank4 )
 	else if (state->cart[0].mode & 0x0a)					/* Mode 21 & 25 */
 		value = snes_ram[0x600000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -8);
+	#endif
 
 	return value;
 }
@@ -1108,7 +1120,7 @@ READ8_HANDLER( snes_r_bank4 )
 /* 0x700000 - 0x7dffff */
 READ8_HANDLER( snes_r_bank5 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value;
 	UINT16 address = offset & 0xffff;
 
@@ -1135,8 +1147,10 @@ READ8_HANDLER( snes_r_bank5 )
 	else
 		value = snes_ram[0x700000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -8);
+	#endif
 
 	return value;
 }
@@ -1144,22 +1158,22 @@ READ8_HANDLER( snes_r_bank5 )
 /* 0x800000 - 0xbfffff */
 READ8_HANDLER( snes_r_bank6 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0;
 	UINT16 address = offset & 0xffff;
 
 	if (state->has_addon_chip == HAS_SUPERFX)
-		value = memory_read_byte(space, offset);
+		value = space->read_byte(offset);
 	else if (address < 0x8000)
 	{
 		if (state->cart[0].mode != SNES_MODE_25)
-			value = memory_read_byte(space, offset);
+			value = space->read_byte(offset);
 		else if ((state->has_addon_chip == HAS_CX4) && (address >= 0x6000))
 			value = CX4_read(address - 0x6000);
 		else							/* Mode 25 has SRAM not mirrored from lower banks */
 		{
 			if (address < 0x6000)
-				value = memory_read_byte(space, offset);
+				value = space->read_byte(offset);
 			else if ((offset >= 0x300000) && (state->cart[0].sram > 0))
 			{
 //              int mask = state->cart[0].sram - 1; /* Limit SRAM size to what's actually present */
@@ -1183,8 +1197,10 @@ READ8_HANDLER( snes_r_bank6 )
 	else
 		value = snes_ram[0x800000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x80_0xbf_cycles(space->machine, offset));
+	#endif
 
 	return value;
 }
@@ -1192,7 +1208,7 @@ READ8_HANDLER( snes_r_bank6 )
 /* 0xc00000 - 0xffffff */
 READ8_HANDLER( snes_r_bank7 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT8 value = 0;
 	UINT16 address = offset & 0xffff;
 
@@ -1229,15 +1245,17 @@ READ8_HANDLER( snes_r_bank7 )
 	else if ((state->cart[0].mode & 5) && !(state->has_addon_chip == HAS_SUPERFX))		/* Mode 20 & 22 */
 	{
 		if (address < 0x8000)
-			value = memory_read_byte(space, 0x400000 + offset);
+			value = space->read_byte(0x400000 + offset);
 		else
 			value = snes_ram[0xc00000 + offset];
 	}
 	else								/* Mode 21 & 25 + SuperFX Games */
 		value = snes_ram[0xc00000 + offset];
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -((snes_ram[MEMSEL] & 1) ? 6 : 8));
+	#endif
 
 	return value;
 }
@@ -1246,11 +1264,11 @@ READ8_HANDLER( snes_r_bank7 )
 /* 0x000000 - 0x2fffff */
 WRITE8_HANDLER( snes_w_bank1 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (address < 0x2000)							/* Mirror of Low RAM */
-		memory_write_byte(space, 0x7e0000 + address, data);
+		space->write_byte(0x7e0000 + address, data);
 	else if (address < 0x6000)						/* I/O */
 	{
 		if (state->cart[0].mode == SNES_MODE_BSX && address >= 0x5000)
@@ -1290,18 +1308,20 @@ WRITE8_HANDLER( snes_w_bank1 )
 	else
 		logerror( "(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset );
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x00_0x3f_cycles(space->machine, offset));
+	#endif
 }
 
 /* 0x300000 - 0x3fffff */
 WRITE8_HANDLER( snes_w_bank2 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (address < 0x2000)							/* Mirror of Low RAM */
-		memory_write_byte(space, 0x7e0000 + address, data);
+		space->write_byte(0x7e0000 + address, data);
 	else if (address < 0x6000)						/* I/O */
 	{
 		if (state->cart[0].mode == SNES_MODE_BSX && address >= 0x5000)
@@ -1347,14 +1367,16 @@ WRITE8_HANDLER( snes_w_bank2 )
 	else
 		logerror("(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset + 0x300000);
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x00_0x3f_cycles(space->machine, offset));
+	#endif
 }
 
 /* 0x600000 - 0x6fffff */
 WRITE8_HANDLER( snes_w_bank4 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (state->has_addon_chip == HAS_SUPERFX)
@@ -1373,14 +1395,16 @@ WRITE8_HANDLER( snes_w_bank4 )
 	else if (state->cart[0].mode & 0x0a)
 		logerror("(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset + 0x600000);
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -8);
+	#endif
 }
 
 /* 0x700000 - 0x7dffff */
 WRITE8_HANDLER( snes_w_bank5 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (state->has_addon_chip == HAS_SUPERFX)
@@ -1398,29 +1422,31 @@ WRITE8_HANDLER( snes_w_bank5 )
 	else if (state->cart[0].mode & 0x0a)
 		logerror("(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset + 0x700000);
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -8);
+	#endif
 }
 
 
 /* 0x800000 - 0xbfffff */
 WRITE8_HANDLER( snes_w_bank6 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (state->has_addon_chip == HAS_SUPERFX)
-		memory_write_byte(space, offset, data);
+		space->write_byte(offset, data);
 	else if (address < 0x8000)
 	{
 		if ((state->has_addon_chip == HAS_CX4) && (address >= 0x6000))
 			CX4_write(space->machine, address - 0x6000, data);
 		else if (state->cart[0].mode != SNES_MODE_25)
-			memory_write_byte(space, offset, data);
+			space->write_byte(offset, data);
 		else	/* Mode 25 has SRAM not mirrored from lower banks */
 		{
 			if (address < 0x6000)
-				memory_write_byte(space, offset, data);
+				space->write_byte(offset, data);
 			else if ((offset >= 0x300000) && (state->cart[0].sram > 0))
 			{
 //              int mask = state->cart[0].sram - 1; /* Limit SRAM size to what's actually present */
@@ -1446,15 +1472,17 @@ WRITE8_HANDLER( snes_w_bank6 )
 	else
 		logerror("(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset + 0x800000);
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -snes_bank_0x80_0xbf_cycles(space->machine, offset));
+	#endif
 }
 
 
 /* 0xc00000 - 0xffffff */
 WRITE8_HANDLER( snes_w_bank7 )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 address = offset & 0xffff;
 
 	if (state->has_addon_chip == HAS_SUPERFX)
@@ -1486,8 +1514,10 @@ WRITE8_HANDLER( snes_w_bank7 )
 	else if (state->cart[0].mode & 0x0a)
 		logerror("(PC=%06x) Attempt to write to ROM address: %X\n",cpu_get_pc(space->cpu),offset + 0xc00000);
 
-	if(!space->debugger_access)
+	#if USE_CYCLE_STEAL
+	if(!space->debugger_access())
 		cpu_adjust_icount(space->cpu, -((snes_ram[MEMSEL] & 1) ? 6 : 8));
+	#endif
 }
 
 
@@ -1499,7 +1529,7 @@ WRITE8_HANDLER( snes_w_bank7 )
 
 static void nss_io_read( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	static const char *const portnames[2][4] =
 			{
 				{ "SERIAL1_DATA1_L", "SERIAL1_DATA1_H", "SERIAL1_DATA2_L", "SERIAL1_DATA2_H" },
@@ -1545,7 +1575,7 @@ static void nss_io_read( running_machine *machine )
 
 static UINT8 nss_oldjoy1_read( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	UINT8 res;
 
 	if (state->read_idx[0] >= 16)
@@ -1558,7 +1588,7 @@ static UINT8 nss_oldjoy1_read( running_machine *machine )
 
 static UINT8 nss_oldjoy2_read( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	UINT8 res;
 
 	if (state->read_idx[1] >= 16)
@@ -1577,7 +1607,7 @@ static UINT8 nss_oldjoy2_read( running_machine *machine )
 
 static void snes_init_timers( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 
 	/* init timers and stop them */
 	state->scanline_timer = timer_alloc(machine, snes_scanline_tick, NULL);
@@ -1597,21 +1627,21 @@ static void snes_init_timers( running_machine *machine )
 
 	// SNES hcounter has a 0-339 range.  hblank starts at counter 260.
 	// clayfighter sets an HIRQ at 260, apparently it wants it to be before hdma kicks off, so we'll delay 2 pixels.
-	state->hblank_offset = 268;
+	state->hblank_offset = 274;
 	timer_adjust_oneshot(state->hblank_timer, machine->primary_screen->time_until_pos(((snes_ram[STAT78] & 0x10) == SNES_NTSC) ? SNES_VTOTAL_NTSC - 1 : SNES_VTOTAL_PAL - 1, state->hblank_offset), 0);
 }
 
 static void snes_init_ram( running_machine *machine )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *cpu0space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *cpu0space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	/* Init work RAM - 0x55 isn't exactly right but it's close */
 	/* make sure it happens to the 65816 (CPU 0) */
 	for (i = 0; i < (128*1024); i++)
 	{
-		memory_write_byte(cpu0space, 0x7e0000 + i, 0x55);
+		cpu0space->write_byte(0x7e0000 + i, 0x55);
 	}
 
 	/* Inititialize registers/variables */
@@ -1677,30 +1707,30 @@ static void snes_init_ram( running_machine *machine )
 }
 
 
-static DIRECT_UPDATE_HANDLER( spc_direct )
+DIRECT_UPDATE_HANDLER( snes_spc_direct )
 {
-	direct->raw = direct->decrypted = spc_get_ram(space->machine->device("spc700"));
+	direct.explicit_configure(0x0000, 0xffff, 0xffff, spc_get_ram(machine->device("spc700")));
 	return ~0;
 }
 
-static DIRECT_UPDATE_HANDLER( snes_direct )
+DIRECT_UPDATE_HANDLER( snes_direct )
 {
-	direct->raw = direct->decrypted = snes_ram;
+	direct.explicit_configure(0x0000, 0xffff, 0xffff, snes_ram);
 	return ~0;
 }
 
 MACHINE_START( snes )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	int i;
-
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), snes_direct);
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), spc_direct);
 
 	state->maincpu = machine->device<_5a22_device>("maincpu");
 	state->soundcpu = machine->device<spc700_device>("soundcpu");
-	state->spc700 = machine->device<snes_sound_sound_device>("spc700");
+	state->spc700 = machine->device<snes_sound_device>("spc700");
 	state->superfx = machine->device<cpu_device>("superfx");
+
+	state->maincpu->space(AS_PROGRAM)->set_direct_update_handler(direct_update_delegate_create_static(snes_direct, *machine));
+	state->soundcpu->space(AS_PROGRAM)->set_direct_update_handler(direct_update_delegate_create_static(snes_spc_direct, *machine));
 
 	// power-on sets these registers like this
 	snes_ram[WRIO] = 0xff;
@@ -1796,7 +1826,7 @@ MACHINE_START( snes )
 
 MACHINE_RESET( snes )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	int i;
 
 	snes_init_ram(machine);
@@ -1835,8 +1865,8 @@ MACHINE_RESET( snes )
 /* for mame we use an init, maybe we will need more for the different games */
 DRIVER_INIT( snes )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT16 total_blocks, read_blocks;
 	UINT8 *rom;
 
@@ -1901,8 +1931,8 @@ DRIVER_INIT( snes )
 
 DRIVER_INIT( snes_hirom )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	snes_state *state = machine->driver_data<snes_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT16 total_blocks, read_blocks;
 	UINT8  *rom;
 
@@ -1976,20 +2006,22 @@ INLINE int dma_abus_valid( UINT32 address )
 	return 1;
 }
 
-INLINE UINT8 snes_abus_read( const address_space *space, UINT32 abus )
+INLINE UINT8 snes_abus_read( address_space *space, UINT32 abus )
 {
 	if (!dma_abus_valid(abus))
 		return 0;
 
-	return memory_read_byte(space, abus);
+	return space->read_byte(abus);
 }
 
-INLINE void snes_dma_transfer( const address_space *space, UINT8 dma, UINT32 abus, UINT16 bbus )
+INLINE void snes_dma_transfer( address_space *space, UINT8 dma, UINT32 abus, UINT16 bbus )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 
+	#if USE_CYCLE_STEAL
 	/* every byte transfer takes 8 master cycles */
 	cpu_adjust_icount(space->cpu,-8);
+	#endif
 
 	if (state->dma_channel[dma].dmap & 0x80)	/* PPU->CPU */
 	{
@@ -1997,7 +2029,7 @@ INLINE void snes_dma_transfer( const address_space *space, UINT8 dma, UINT32 abu
 		{
 			//illegal WRAM->WRAM transfer (bus conflict)
 			//no read occurs; write does occur
-			memory_write_byte(space, abus, 0x00);
+			space->write_byte(abus, 0x00);
 			return;
 		}
 		else
@@ -2005,7 +2037,7 @@ INLINE void snes_dma_transfer( const address_space *space, UINT8 dma, UINT32 abu
 			if (!dma_abus_valid(abus))
 				return;
 
-			memory_write_byte(space, abus, memory_read_byte(space, bbus));
+			space->write_byte(abus, space->read_byte(bbus));
 			return;
 		}
 	}
@@ -2020,7 +2052,7 @@ INLINE void snes_dma_transfer( const address_space *space, UINT8 dma, UINT32 abu
 		}
 		else
 		{
-			memory_write_byte(space, bbus, snes_abus_read(space, abus));
+			space->write_byte(bbus, snes_abus_read(space, abus));
 			return;
 		}
 	}
@@ -2030,19 +2062,19 @@ INLINE void snes_dma_transfer( const address_space *space, UINT8 dma, UINT32 abu
 check again if the transfer is direct/indirect at each step... is it worth? */
 INLINE UINT32 snes_get_hdma_addr( running_machine *machine, int dma )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	return (state->dma_channel[dma].bank << 16) | (state->dma_channel[dma].hdma_addr++);
 }
 
 INLINE UINT32 snes_get_hdma_iaddr( running_machine *machine, int dma )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	return (state->dma_channel[dma].ibank << 16) | (state->dma_channel[dma].trans_size++);
 }
 
 INLINE int is_last_active_channel( running_machine *machine, int dma )
 {
-	snes_state *state = (snes_state *)machine->driver_data;
+	snes_state *state = machine->driver_data<snes_state>();
 	int i;
 
 	for (i = dma + 1; i < 8; i++)
@@ -2055,9 +2087,9 @@ INLINE int is_last_active_channel( running_machine *machine, int dma )
 	return 1;
 }
 
-static void snes_hdma_update( const address_space *space, int dma )
+static void snes_hdma_update( address_space *space, int dma )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT32 abus = snes_get_hdma_addr(space->machine, dma);
 
 	state->dma_channel[dma].hdma_line_counter = snes_abus_read(space, abus);
@@ -2086,9 +2118,9 @@ static void snes_hdma_update( const address_space *space, int dma )
 	state->dma_channel[dma].do_transfer = 1;
 }
 
-static void snes_hdma_init( const address_space *space )
+static void snes_hdma_init( address_space *space )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	int i;
 
 	state->hdmaen = snes_ram[HDMAEN];
@@ -2102,9 +2134,9 @@ static void snes_hdma_init( const address_space *space )
 	}
 }
 
-static void snes_hdma( const address_space *space )
+static void snes_hdma( address_space *space )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	UINT16 bbus;
 	UINT32 abus;
 	int i;
@@ -2186,9 +2218,9 @@ static void snes_hdma( const address_space *space )
 	}
 }
 
-static void snes_dma( const address_space *space, UINT8 channels )
+static void snes_dma( address_space *space, UINT8 channels )
 {
-	snes_state *state = (snes_state *)space->machine->driver_data;
+	snes_state *state = space->machine->driver_data<snes_state>();
 	int i;
 	INT8 increment;
 	UINT16 bbus;
@@ -2197,8 +2229,10 @@ static void snes_dma( const address_space *space, UINT8 channels )
 
 	/* FIXME: we also need to round to the nearest 8 master cycles */
 
+	#if USE_CYCLE_STEAL
 	/* overhead steals 8 master cycles, correct? */
 	cpu_adjust_icount(space->cpu,-8);
+	#endif
 
 	/* Assume priority of the 8 DMA channels is 0-7 */
 	for (i = 0; i < 8; i++)
@@ -2309,13 +2343,17 @@ static void snes_dma( const address_space *space, UINT8 channels )
 			state->dma_channel[i].src_addr = abus;
 			state->dma_channel[i].trans_size = 0;
 
+			#if USE_CYCLE_STEAL
 			/* active channel takes 8 master cycles */
 			cpu_adjust_icount(space->cpu,-8);
+			#endif
 		}
 	}
 
 	/* finally, take yet another 8 master cycles for the aforementioned overhead */
+	#if USE_CYCLE_STEAL
 	cpu_adjust_icount(space->cpu,-8);
+	#endif
 }
 
 READ8_HANDLER( superfx_r_bank1 )

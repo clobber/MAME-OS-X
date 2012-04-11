@@ -6,14 +6,11 @@
 
 #include "machine/atarigen.h"
 
-class toobin_state
+class toobin_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, toobin_state(machine)); }
-
-	toobin_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	toobin_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 
 	UINT16 *		interrupt_scan;
 

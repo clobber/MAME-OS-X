@@ -5,12 +5,11 @@
 *************************************************************************/
 
 
-class cheekyms_state
+class cheekyms_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cheekyms_state(machine)); }
-
-	cheekyms_state(running_machine &machine) { }
+	cheekyms_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *        videoram;

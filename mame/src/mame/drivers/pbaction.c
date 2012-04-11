@@ -73,7 +73,7 @@ Stephh's notes (based on the game Z80 code and some tests) :
 
 static WRITE8_HANDLER( pbaction_sh_command_w )
 {
-	pbaction_state *state = (pbaction_state *)space->machine->driver_data;
+	pbaction_state *state = space->machine->driver_data<pbaction_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0x00);
 }
@@ -254,7 +254,7 @@ static INTERRUPT_GEN( pbaction_interrupt )
 
 static MACHINE_START( pbaction )
 {
-	pbaction_state *state = (pbaction_state *)machine->driver_data;
+	pbaction_state *state = machine->driver_data<pbaction_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -264,15 +264,12 @@ static MACHINE_START( pbaction )
 
 static MACHINE_RESET( pbaction )
 {
-	pbaction_state *state = (pbaction_state *)machine->driver_data;
+	pbaction_state *state = machine->driver_data<pbaction_state>();
 
 	state->scroll = 0;
 }
 
-static MACHINE_DRIVER_START( pbaction )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(pbaction_state)
+static MACHINE_CONFIG_START( pbaction, pbaction_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz? */
@@ -313,7 +310,7 @@ static MACHINE_DRIVER_START( pbaction )
 
 	MDRV_SOUND_ADD("ay3", AY8910, 1500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -463,7 +460,7 @@ ROM_END
 
 static READ8_HANDLER( pbactio3_prot_kludge_r )
 {
-	pbaction_state *state = (pbaction_state *)space->machine->driver_data;
+	pbaction_state *state = space->machine->driver_data<pbaction_state>();
 
 	/* on startup, the game expect this location to NOT act as RAM */
 	if (cpu_get_pc(space->cpu) == 0xab80)

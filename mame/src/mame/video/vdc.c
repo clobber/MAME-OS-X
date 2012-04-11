@@ -603,7 +603,7 @@ static UINT8 vdc_r( running_machine *machine, int which, offs_t offset )
 	{
 		case 0x00:
 			temp = vdc[which].status;
-			vdc[which].status &= ~(VDC_VD | VDC_RR | VDC_CR | VDC_OR | VDC_DS);
+			vdc[which].status &= ~(VDC_VD | VDC_DV | VDC_DS | VDC_RR | VDC_OR | VDC_CR);
 			cputag_set_input_line(machine, "maincpu", 0, CLEAR_LINE);
 			break;
 
@@ -876,9 +876,12 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 			sprites_drawn++;
 			if(sprites_drawn > 16)
 			{
-				vdc[which].status |= VDC_OR;
 				if(vdc[which].vdc_data[CR].w & CR_OV)
+				{
+					/* note: flag is set only if irq is taken, Mizubaku Daibouken relies on this behaviour */
+					vdc[which].status |= VDC_OR;
 					cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+				}
 				continue;  /* Should cause an interrupt */
 			}
 
@@ -991,9 +994,12 @@ static void pce_refresh_sprites(running_machine *machine, int which, int line, U
 				sprites_drawn++;
 				if( sprites_drawn > 16 )
 				{
-					vdc[which].status |= VDC_OR;
 					if(vdc[which].vdc_data[CR].w&CR_OV)
+					{
+						/* note: flag is set only if irq is taken, Mizubaku Daibouken relies on this behaviour */
+						vdc[which].status |= VDC_OR;
 						cputag_set_input_line(machine, "maincpu", 0, ASSERT_LINE);
+					}
 				}
 				else
 				{
@@ -1179,7 +1185,7 @@ READ8_HANDLER( vpc_r )
 
 static void vpc_init( running_machine *machine )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	vpc_w( space, 0, 0x11 );
 	vpc_w( space, 1, 0x11 );
 	vpc.window1.w = 0;

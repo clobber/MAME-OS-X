@@ -22,7 +22,7 @@
 
 static WRITE8_HANDLER( battlane_cpu_command_w )
 {
-	battlane_state *state = (battlane_state *)space->machine->driver_data;
+	battlane_state *state = space->machine->driver_data<battlane_state>();
 
 	state->cpu_control = data;
 
@@ -81,7 +81,7 @@ static WRITE8_HANDLER( battlane_cpu_command_w )
 
 static INTERRUPT_GEN( battlane_cpu1_interrupt )
 {
-	battlane_state *state = (battlane_state *)device->machine->driver_data;
+	battlane_state *state = device->machine->driver_data<battlane_state>();
 
 	/* See note in battlane_cpu_command_w */
 	if (~state->cpu_control & 0x08)
@@ -258,7 +258,7 @@ GFXDECODE_END
 
 static void irqhandler( running_device *device, int irq )
 {
-	battlane_state *state = (battlane_state *)device->machine->driver_data;
+	battlane_state *state = device->machine->driver_data<battlane_state>();
 	cpu_set_input_line(state->maincpu, M6809_FIRQ_LINE, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -276,7 +276,7 @@ static const ym3526_interface ym3526_config =
 
 static MACHINE_START( battlane )
 {
-	battlane_state *state = (battlane_state *)machine->driver_data;
+	battlane_state *state = machine->driver_data<battlane_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->subcpu = machine->device("sub");
@@ -287,16 +287,13 @@ static MACHINE_START( battlane )
 
 static MACHINE_RESET( battlane )
 {
-	battlane_state *state = (battlane_state *)machine->driver_data;
+	battlane_state *state = machine->driver_data<battlane_state>();
 
 	state->video_ctrl = 0;
 	state->cpu_control = 0;
 }
 
-static MACHINE_DRIVER_START( battlane )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(battlane_state)
+static MACHINE_CONFIG_START( battlane, battlane_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 1250000)        /* 1.25 MHz ? */
@@ -330,7 +327,7 @@ static MACHINE_DRIVER_START( battlane )
 	MDRV_SOUND_ADD("ymsnd", YM3526, 3000000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

@@ -20,7 +20,7 @@
 
 static SOUND_START( irem_audio )
 {
-	irem_z80_state *state = (irem_z80_state *)machine->driver_data;
+	irem_z80_state *state = machine->driver_data<irem_z80_state>();
 
 	state->adpcm1 = machine->device("msm1");
 	state->adpcm2 = machine->device("msm2");
@@ -58,7 +58,7 @@ WRITE8_HANDLER( irem_sound_cmd_w )
 
 static WRITE8_HANDLER( m6803_port1_w )
 {
-	irem_z80_state *state = (irem_z80_state *)space->machine->driver_data;
+	irem_z80_state *state = space->machine->driver_data<irem_z80_state>();
 
 	state->port1 = data;
 }
@@ -66,7 +66,7 @@ static WRITE8_HANDLER( m6803_port1_w )
 
 static WRITE8_HANDLER( m6803_port2_w )
 {
-	irem_z80_state *state = (irem_z80_state *)space->machine->driver_data;
+	irem_z80_state *state = space->machine->driver_data<irem_z80_state>();
 
 	/* write latch */
 	if ((state->port2 & 0x01) && !(data & 0x01))
@@ -102,7 +102,7 @@ static WRITE8_HANDLER( m6803_port2_w )
 
 static READ8_HANDLER( m6803_port1_r )
 {
-	irem_z80_state *state = (irem_z80_state *)space->machine->driver_data;
+	irem_z80_state *state = space->machine->driver_data<irem_z80_state>();
 
 	/* PSG 0 or 1? */
 	if (state->port2 & 0x08)
@@ -128,7 +128,7 @@ static READ8_HANDLER( m6803_port2_r )
 
 static WRITE8_DEVICE_HANDLER( ay8910_0_portb_w )
 {
-	irem_z80_state *state = (irem_z80_state *)device->machine->driver_data;
+	irem_z80_state *state = device->machine->driver_data<irem_z80_state>();
 
 	/* bits 2-4 select MSM5205 clock & 3b/4b playback mode */
 	msm5205_playmode_w(state->adpcm1, (data >> 2) & 7);
@@ -165,7 +165,7 @@ static WRITE8_HANDLER( sound_irq_ack_w )
 
 static WRITE8_HANDLER( m52_adpcm_w )
 {
-	irem_z80_state *state = (irem_z80_state *)space->machine->driver_data;
+	irem_z80_state *state = space->machine->driver_data<irem_z80_state>();
 
 	if (offset & 1)
 	{
@@ -181,7 +181,7 @@ static WRITE8_HANDLER( m52_adpcm_w )
 
 static WRITE8_HANDLER( m62_adpcm_w )
 {
-	irem_z80_state *state = (irem_z80_state *)space->machine->driver_data;
+	irem_z80_state *state = space->machine->driver_data<irem_z80_state>();
 
 	running_device *adpcm = (offset & 1) ? state->adpcm2 : state->adpcm1;
 	if (adpcm != NULL)
@@ -198,7 +198,7 @@ static WRITE8_HANDLER( m62_adpcm_w )
 
 static void adpcm_int(running_device *device)
 {
-	irem_z80_state *state = (irem_z80_state *)device->machine->driver_data;
+	irem_z80_state *state = device->machine->driver_data<irem_z80_state>();
 
 	cputag_set_input_line(device->machine, "iremsound", INPUT_LINE_NMI, PULSE_LINE);
 
@@ -390,7 +390,7 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( irem_audio_base )
+static MACHINE_CONFIG_FRAGMENT( irem_audio_base )
 
 	MDRV_SOUND_START(irem_audio)
 
@@ -416,9 +416,9 @@ static MACHINE_DRIVER_START( irem_audio_base )
 	MDRV_SOUND_ADD("msm2", MSM5205, XTAL_384kHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(irem_msm5205_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( m52_sound_c_audio )
+MACHINE_CONFIG_FRAGMENT( m52_sound_c_audio )
 
 	MDRV_SOUND_START(irem_audio)
 
@@ -446,21 +446,19 @@ MACHINE_DRIVER_START( m52_sound_c_audio )
 	MDRV_SOUND_CONFIG_DISCRETE(m52_sound_c)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( m52_large_audio )	/* 10 yard fight */
-	MDRV_IMPORT_FROM(irem_audio_base)
+MACHINE_CONFIG_DERIVED( m52_large_audio, irem_audio_base )	/* 10 yard fight */
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("iremsound")
 	MDRV_CPU_PROGRAM_MAP(m52_large_sound_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( m62_audio )
-	MDRV_IMPORT_FROM(irem_audio_base)
+MACHINE_CONFIG_DERIVED( m62_audio, irem_audio_base )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("iremsound")
 	MDRV_CPU_PROGRAM_MAP(m62_sound_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END

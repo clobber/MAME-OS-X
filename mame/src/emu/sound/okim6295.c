@@ -44,6 +44,9 @@
 //  GLOBAL VARIABLES
 //**************************************************************************
 
+// devices
+const device_type OKIM6295 = okim6295_device_config::static_alloc_device_config;
+
 // ADPCM state and tables
 bool adpcm_state::s_tables_computed = false;
 const INT8 adpcm_state::s_index_shift[8] = { -1, -1, -1, -1, 2, 4, 6, 8 };
@@ -118,15 +121,14 @@ device_t *okim6295_device_config::alloc_device(running_machine &machine) const
 
 
 //-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
+//  static_set_pin7 - configuration helper to set
+//  the pin 7 state
 //-------------------------------------------------
 
-void okim6295_device_config::device_config_complete()
+void okim6295_device_config::static_set_pin7(device_config *device, int pin7)
 {
-	// copy the pin7 state from inline data
-	m_pin7 = m_inline_data[INLINE_PIN7];
+	okim6295_device_config *okim6295 = downcast<okim6295_device_config *>(device);
+	okim6295->m_pin7 = pin7;
 }
 
 
@@ -159,7 +161,8 @@ okim6295_device::okim6295_device(running_machine &_machine, const okim6295_devic
 	  m_bank_installed(false),
 	  m_bank_offs(0),
 	  m_stream(NULL),
-	  m_pin7_state(m_config.m_pin7)
+	  m_pin7_state(m_config.m_pin7),
+	  m_direct(NULL)
 {
 }
 
@@ -170,6 +173,9 @@ okim6295_device::okim6295_device(running_machine &_machine, const okim6295_devic
 
 void okim6295_device::device_start()
 {
+	// find our direct access
+	m_direct = &space()->direct();
+
 	// create the stream
 	int divisor = m_config.m_pin7 ? 132 : 165;
 	m_stream = stream_create(this, 0, 1, clock() / divisor, this, static_stream_generate);
@@ -240,7 +246,7 @@ void okim6295_device::stream_generate(stream_sample_t **inputs, stream_sample_t 
 
 	// iterate over voices and accumulate sample data
 	for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++)
-		m_voice[voicenum].generate_adpcm(space(), outputs[0], samples);
+		m_voice[voicenum].generate_adpcm(*m_direct, outputs[0], samples);
 }
 
 
@@ -284,15 +290,10 @@ void okim6295_device::set_pin7(int pin7)
 
 
 //-------------------------------------------------
-//  status_read - read the status register
+//  read_status - read the status register
 //-------------------------------------------------
 
-READ8_DEVICE_HANDLER( okim6295_r )
-{
-	return downcast<okim6295_device *>(device)->status_read();
-}
-
-UINT8 okim6295_device::status_read()
+UINT8 okim6295_device::read_status()
 {
 	UINT8 result = 0xf0;	// naname expects bits 4-7 to be 1
 
@@ -307,21 +308,26 @@ UINT8 okim6295_device::status_read()
 
 
 //-------------------------------------------------
-//  data_write - write to the command/data register
+//  read - memory interface for read
 //-------------------------------------------------
 
-WRITE8_DEVICE_HANDLER( okim6295_w )
+READ8_MEMBER( okim6295_device::read )
 {
-	downcast<okim6295_device *>(device)->data_write(data);
+	return read_status();
 }
 
-void okim6295_device::data_write(UINT8 data)
+
+//-------------------------------------------------
+//  write_command - write to the command register
+//-------------------------------------------------
+
+void okim6295_device::write_command(UINT8 command)
 {
 	// if a command is pending, process the second half
 	if (m_command != -1)
 	{
 		// the manual explicitly says that it's not possible to start multiple voices at the same time
-		int voicemask = data >> 4;
+		int voicemask = command >> 4;
 		if (voicemask != 0 && voicemask != 1 && voicemask != 2 && voicemask != 4 && voicemask != 8)
 			popmessage("OKI6295 start %x contact MAMEDEV", voicemask);
 
@@ -337,14 +343,14 @@ void okim6295_device::data_write(UINT8 data)
 				// determine the start/stop positions
 				offs_t base = m_command * 8;
 
-				offs_t start = memory_raw_read_byte(space(), base + 0) << 16;
-				start |= memory_raw_read_byte(space(), base + 1) << 8;
-				start |= memory_raw_read_byte(space(), base + 2) << 0;
+				offs_t start = m_direct->read_raw_byte(base + 0) << 16;
+				start |= m_direct->read_raw_byte(base + 1) << 8;
+				start |= m_direct->read_raw_byte(base + 2) << 0;
 				start &= 0x3ffff;
 
-				offs_t stop = memory_raw_read_byte(space(), base + 3) << 16;
-				stop |= memory_raw_read_byte(space(), base + 4) << 8;
-				stop |= memory_raw_read_byte(space(), base + 5) << 0;
+				offs_t stop = m_direct->read_raw_byte(base + 3) << 16;
+				stop |= m_direct->read_raw_byte(base + 4) << 8;
+				stop |= m_direct->read_raw_byte(base + 5) << 0;
 				stop &= 0x3ffff;
 
 				// set up the voice to play this sample
@@ -359,7 +365,7 @@ void okim6295_device::data_write(UINT8 data)
 
 						// also reset the ADPCM parameters
 						voice.m_adpcm.reset();
-						voice.m_volume = s_volume_table[data & 0x0f];
+						voice.m_volume = s_volume_table[command & 0x0f];
 					}
 					else
 						logerror("OKIM6295:'%s' requested to play sample %02x on non-stopped voice\n",tag(),m_command);
@@ -378,8 +384,8 @@ void okim6295_device::data_write(UINT8 data)
 	}
 
 	// if this is the start of a command, remember the sample number for next time
-	else if (data & 0x80)
-		m_command = data & 0x7f;
+	else if (command & 0x80)
+		m_command = command & 0x7f;
 
 	// otherwise, see if this is a silence command
 	else
@@ -388,11 +394,21 @@ void okim6295_device::data_write(UINT8 data)
 		stream_update(m_stream);
 
 		// determine which voice(s) (voice is set by a 1 bit in bits 3-6 of the command
-		int voicemask = data >> 3;
+		int voicemask = command >> 3;
 		for (int voicenum = 0; voicenum < OKIM6295_VOICES; voicenum++, voicemask >>= 1)
 			if (voicemask & 1)
 				m_voice[voicenum].m_playing = false;
 	}
+}
+
+
+//-------------------------------------------------
+//  write - memory interface for write
+//-------------------------------------------------
+
+WRITE8_MEMBER( okim6295_device::write )
+{
+	write_command(data);
 }
 
 
@@ -420,7 +436,7 @@ okim6295_device::okim_voice::okim_voice()
 //  add them to an output stream
 //-------------------------------------------------
 
-void okim6295_device::okim_voice::generate_adpcm(const address_space *space, stream_sample_t *buffer, int samples)
+void okim6295_device::okim_voice::generate_adpcm(direct_read_data &direct, stream_sample_t *buffer, int samples)
 {
 	// skip if not active
 	if (!m_playing)
@@ -430,7 +446,7 @@ void okim6295_device::okim_voice::generate_adpcm(const address_space *space, str
 	while (samples-- != 0)
 	{
 		// fetch the next sample byte
-		int nibble = memory_raw_read_byte(space, m_base_offset + m_sample / 2) >> (((m_sample & 1) << 2) ^ 4);
+		int nibble = direct.read_raw_byte(m_base_offset + m_sample / 2) >> (((m_sample & 1) << 2) ^ 4);
 
 		// output to the buffer, scaling by the volume
 		// signal in range -2048..2047, volume in range 2..32 => signal * volume / 2 in range -32768..32767
@@ -529,5 +545,3 @@ void adpcm_state::compute_tables()
 		}
 	}
 }
-
-const device_type SOUND_OKIM6295 = okim6295_device_config::static_alloc_device_config;

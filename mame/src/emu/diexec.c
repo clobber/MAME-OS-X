@@ -78,7 +78,7 @@ device_config_execute_interface::device_config_execute_interface(const machine_c
 	  m_vblank_interrupts_per_frame(0),
 	  m_vblank_interrupt_screen(NULL),
 	  m_timed_interrupt(NULL),
-	  m_timed_interrupt_period(0)
+	  m_timed_interrupt_period(attotime_zero)
 {
 }
 
@@ -89,6 +89,51 @@ device_config_execute_interface::device_config_execute_interface(const machine_c
 
 device_config_execute_interface::~device_config_execute_interface()
 {
+}
+
+
+//-------------------------------------------------
+//  static_set_disable - configuration helper to
+//  set the disabled state of a device
+//-------------------------------------------------
+
+void device_config_execute_interface::static_set_disable(device_config *device)
+{
+	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
+	if (exec == NULL)
+		throw emu_fatalerror("MDRV_DEVICE_DISABLE called on device '%s' with no execute interface", device->tag());
+	exec->m_disabled = true;
+}
+
+
+//-------------------------------------------------
+//  static_set_vblank_int - configuration helper
+//  to set up VBLANK interrupts on the device
+//-------------------------------------------------
+
+void device_config_execute_interface::static_set_vblank_int(device_config *device, device_interrupt_func function, const char *tag, int rate)
+{
+	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
+	if (exec == NULL)
+		throw emu_fatalerror("MDRV_DEVICE_VBLANK_INT called on device '%s' with no execute interface", device->tag());
+	exec->m_vblank_interrupt = function;
+	exec->m_vblank_interrupts_per_frame = rate;
+	exec->m_vblank_interrupt_screen = tag;
+}
+
+
+//-------------------------------------------------
+//  static_set_periodic_int - configuration helper
+//  to set up periodic interrupts on the device
+//-------------------------------------------------
+
+void device_config_execute_interface::static_set_periodic_int(device_config *device, device_interrupt_func function, attotime rate)
+{
+	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
+	if (exec == NULL)
+		throw emu_fatalerror("MDRV_DEVICE_PERIODIC_INT called on device '%s' with no execute interface", device->tag());
+	exec->m_timed_interrupt = function;
+	exec->m_timed_interrupt_period = rate;
 }
 
 
@@ -161,39 +206,6 @@ UINT32 device_config_execute_interface::execute_default_irq_vector() const
 
 
 //-------------------------------------------------
-//  interface_process_token - token processing for
-//  the sound interface
-//-------------------------------------------------
-
-bool device_config_execute_interface::interface_process_token(UINT32 entrytype, const machine_config_token *&tokens)
-{
-	switch (entrytype)
-	{
-		// disable a device
-		case MCONFIG_TOKEN_DIEXEC_DISABLE:
-			m_disabled = true;
-			return true;
-
-		// VBLANK interrupt
-		case MCONFIG_TOKEN_DIEXEC_VBLANK_INT:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, m_vblank_interrupts_per_frame, 24);
-			m_vblank_interrupt = TOKEN_GET_PTR(tokens, cpu_interrupt);
-			m_vblank_interrupt_screen = TOKEN_GET_STRING(tokens);
-			return true;
-
-		// timed interrupt
-		case MCONFIG_TOKEN_DIEXEC_PERIODIC_INT:
-			m_timed_interrupt = TOKEN_GET_PTR(tokens, cpu_interrupt);
-			TOKEN_EXTRACT_UINT64(tokens, m_timed_interrupt_period);
-			return true;
-	}
-
-	return false;
-}
-
-
-//-------------------------------------------------
 //  interface_validity_check - validation for a
 //  device after the configuration has been
 //  constructed
@@ -234,12 +246,12 @@ bool device_config_execute_interface::interface_validity_check(const game_driver
 		error = true;
 	}
 
-	if (m_timed_interrupt != NULL && m_timed_interrupt_period == 0)
+	if (m_timed_interrupt != NULL && attotime_compare(m_timed_interrupt_period, attotime_zero) == 0)
 	{
 		mame_printf_error("%s: %s device '%s' has a timer interrupt handler with 0 period!\n", driver.source_file, driver.name, devconfig->tag());
 		error = true;
 	}
-	else if (m_timed_interrupt == NULL && m_timed_interrupt_period != 0)
+	else if (m_timed_interrupt == NULL && attotime_compare(m_timed_interrupt_period, attotime_zero) != 0)
 	{
 		mame_printf_error("%s: %s device '%s' has a no timer interrupt handler but has a non-0 period given!\n", driver.source_file, driver.name, devconfig->tag());
 		error = true;
@@ -267,8 +279,8 @@ device_execute_interface::device_execute_interface(running_machine &machine, con
 	  m_timedint_timer(NULL),
 	  m_iloops(0),
 	  m_partial_frame_timer(NULL),
-	  m_profiler(0),
-	  m_icount(NULL),
+	  m_profiler(PROFILER_IDLE),
+	  m_icountptr(NULL),
 	  m_cycles_running(0),
 	  m_cycles_stolen(0),
 	  m_suspend(0),
@@ -314,7 +326,7 @@ bool device_execute_interface::executing() const
 
 INT32 device_execute_interface::cycles_remaining() const
 {
-	return executing() ? *m_icount : 0;
+	return executing() ? *m_icountptr : 0;
 }
 
 
@@ -330,9 +342,9 @@ void device_execute_interface::eat_cycles(int cycles)
 		return;
 
 	// clamp cycles to the icount and update
-	if (cycles > *m_icount)
-		cycles = *m_icount;
-	*m_icount -= cycles;
+	if (cycles > *m_icountptr)
+		cycles = *m_icountptr;
+	*m_icountptr -= cycles;
 }
 
 
@@ -348,7 +360,7 @@ void device_execute_interface::adjust_icount(int delta)
 		return;
 
 	// aply the delta directly
-	*m_icount += delta;
+	*m_icountptr += delta;
 }
 
 
@@ -365,12 +377,12 @@ void device_execute_interface::abort_timeslice()
 		return;
 
 	// swallow the remaining cycles
-	if (m_icount != NULL)
+	if (m_icountptr != NULL)
 	{
-		int delta = *m_icount;
+		int delta = *m_icountptr;
 		m_cycles_stolen += delta;
 		m_cycles_running -= delta;
-		*m_icount -= delta;
+		*m_icountptr -= delta;
 	}
 }
 
@@ -480,8 +492,8 @@ attotime device_execute_interface::local_time() const
 	attotime result = m_localtime;
 	if (executing())
 	{
-		assert(m_cycles_running >= *m_icount);
-		int cycles = m_cycles_running - *m_icount;
+		assert(m_cycles_running >= *m_icountptr);
+		int cycles = m_cycles_running - *m_icountptr;
 		result = attotime_add(result, cycles_to_attotime(cycles));
 	}
 	return result;
@@ -497,8 +509,8 @@ UINT64 device_execute_interface::total_cycles() const
 {
 	if (executing())
 	{
-		assert(m_cycles_running >= *m_icount);
-		return m_totalcycles + m_cycles_running - *m_icount;
+		assert(m_cycles_running >= *m_icountptr);
+		return m_totalcycles + m_cycles_running - *m_icountptr;
 	}
 	else
 		return m_totalcycles;
@@ -538,7 +550,7 @@ void device_execute_interface::interface_pre_start()
 	// fill in the initial states
 	int index = m_machine.m_devicelist.index(&m_device);
 	m_suspend = SUSPEND_REASON_RESET;
-	m_profiler = index + PROFILER_DEVICE_FIRST;
+	m_profiler = profile_type(index + PROFILER_DEVICE_FIRST);
 	m_inttrigger = index + TRIGGER_INT;
 
 	// fill in the input states and IRQ callback information
@@ -548,7 +560,7 @@ void device_execute_interface::interface_pre_start()
 	// allocate timers if we need them
 	if (m_execute_config.m_vblank_interrupts_per_frame > 1)
 		m_partial_frame_timer = timer_alloc(&m_machine, static_trigger_partial_frame_interrupt, (void *)this);
-	if (m_execute_config.m_timed_interrupt_period != 0)
+	if (attotime_compare(m_execute_config.m_timed_interrupt_period, attotime_zero) != 0)
 		m_timedint_timer = timer_alloc(&m_machine, static_trigger_periodic_interrupt, (void *)this);
 
 	// register for save states
@@ -572,7 +584,7 @@ void device_execute_interface::interface_pre_start()
 void device_execute_interface::interface_post_start()
 {
 	// make sure somebody set us up the icount
-	assert_always(m_icount != NULL, "m_icount never initialized!");
+	assert_always(m_icountptr != NULL, "m_icountptr never initialized!");
 }
 
 
@@ -624,9 +636,9 @@ void device_execute_interface::interface_post_reset()
 	}
 
 	// reconfigure periodic interrupts
-	if (m_execute_config.m_timed_interrupt_period != 0)
+	if (attotime_compare(m_execute_config.m_timed_interrupt_period, attotime_zero) != 0)
 	{
-		attotime timedint_period = UINT64_ATTOTIME_TO_ATTOTIME(m_execute_config.m_timed_interrupt_period);
+		attotime timedint_period = m_execute_config.m_timed_interrupt_period;
 		assert(m_timedint_timer != NULL);
 		timer_adjust_periodic(m_timedint_timer, timedint_period, 0, timedint_period);
 	}

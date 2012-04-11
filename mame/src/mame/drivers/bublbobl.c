@@ -699,7 +699,7 @@ GFXDECODE_END
 // handler called by the 2203 emulator when the internal timers cause an IRQ
 static void irqhandler(running_device *device, int irq)
 {
-	bublbobl_state *state = (bublbobl_state *)device->machine->driver_data;
+	bublbobl_state *state = device->machine->driver_data<bublbobl_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -723,7 +723,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( common )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->mcu = machine->device("mcu");
@@ -738,7 +738,7 @@ static MACHINE_START( common )
 
 static MACHINE_RESET( common )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	state->sound_nmi_enable = 0;
 	state->pending_nmi = 0;
@@ -748,7 +748,7 @@ static MACHINE_RESET( common )
 
 static MACHINE_START( tokio )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -757,17 +757,14 @@ static MACHINE_START( tokio )
 
 static MACHINE_RESET( tokio )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_RESET_CALL(common);
 
 	state->tokio_prot_count = 0;
 }
 
-static MACHINE_DRIVER_START( tokio )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(bublbobl_state)
+static MACHINE_CONFIG_START( tokio, bublbobl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MAIN_XTAL/4)	// 6 MHz
@@ -805,12 +802,12 @@ static MACHINE_DRIVER_START( tokio )
 	MDRV_SOUND_ROUTE(1, "mono", 0.08)
 	MDRV_SOUND_ROUTE(2, "mono", 0.08)
 	MDRV_SOUND_ROUTE(3, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static MACHINE_START( bublbobl )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -830,7 +827,7 @@ static MACHINE_START( bublbobl )
 
 static MACHINE_RESET( bublbobl )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_RESET_CALL(common);
 
@@ -848,10 +845,7 @@ static MACHINE_RESET( bublbobl )
 	state->port4_out = 0;
 }
 
-static MACHINE_DRIVER_START( bublbobl )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(bublbobl_state)
+static MACHINE_CONFIG_START( bublbobl, bublbobl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MAIN_XTAL/4)	// 6 MHz
@@ -893,12 +887,12 @@ static MACHINE_DRIVER_START( bublbobl )
 
 	MDRV_SOUND_ADD("ym2", YM3526, MAIN_XTAL/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static MACHINE_START( boblbobl )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -908,7 +902,7 @@ static MACHINE_START( boblbobl )
 
 static MACHINE_RESET( boblbobl )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_RESET_CALL(common);
 
@@ -916,8 +910,7 @@ static MACHINE_RESET( boblbobl )
 	state->ic43_b = 0;
 }
 
-static MACHINE_DRIVER_START( boblbobl )
-	MDRV_IMPORT_FROM(bublbobl)
+static MACHINE_CONFIG_DERIVED( boblbobl, bublbobl )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bootleg_map)
@@ -927,12 +920,12 @@ static MACHINE_DRIVER_START( boblbobl )
 	MDRV_MACHINE_RESET(boblbobl)
 
 	MDRV_DEVICE_REMOVE("mcu")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static MACHINE_START( bub68705 )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -948,7 +941,7 @@ static MACHINE_START( bub68705 )
 
 static MACHINE_RESET( bub68705 )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	MACHINE_RESET_CALL(common);
 
@@ -962,8 +955,7 @@ static MACHINE_RESET( bub68705 )
 	state->latch = 0;
 }
 
-static MACHINE_DRIVER_START( bub68705 )
-	MDRV_IMPORT_FROM(bublbobl)
+static MACHINE_CONFIG_DERIVED( bub68705, bublbobl )
 	MDRV_DEVICE_REMOVE("mcu")
 
 	MDRV_CPU_ADD("mcu", M68705, 4000000)	// xtal is 4MHz, divided by 4 internally
@@ -972,7 +964,7 @@ static MACHINE_DRIVER_START( bub68705 )
 
 	MDRV_MACHINE_START(bub68705)
 	MDRV_MACHINE_RESET(bub68705)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1543,7 +1535,7 @@ static void configure_banks( running_machine* machine )
 
 static DRIVER_INIT( bublbobl )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 
 	configure_banks(machine);
 
@@ -1553,7 +1545,7 @@ static DRIVER_INIT( bublbobl )
 
 static DRIVER_INIT( tokio )
 {
-	bublbobl_state *state = (bublbobl_state *)machine->driver_data;
+	bublbobl_state *state = machine->driver_data<bublbobl_state>();
 	configure_banks(machine);
 
 	/* preemptively enable video, the bit is not mapped for this game and */

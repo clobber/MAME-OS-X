@@ -14,12 +14,11 @@ Japan). It has no sound.
 #include "cpu/z80/z80.h"
 
 
-class minivadr_state
+class minivadr_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, minivadr_state(machine)); }
-
-	minivadr_state(running_machine &machine) { }
+	minivadr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  videoram;
@@ -34,7 +33,7 @@ public:
 
 static VIDEO_UPDATE( minivadr )
 {
-	minivadr_state *state = (minivadr_state *)screen->machine->driver_data;
+	minivadr_state *state = screen->machine->driver_data<minivadr_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < state->videoram_size; offs++)
@@ -79,10 +78,7 @@ static INPUT_PORTS_START( minivadr )
 INPUT_PORTS_END
 
 
-static MACHINE_DRIVER_START( minivadr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(minivadr_state)
+static MACHINE_CONFIG_START( minivadr, minivadr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,24000000 / 6)		 /* 4 MHz ? */
@@ -100,7 +96,7 @@ static MACHINE_DRIVER_START( minivadr )
 	MDRV_VIDEO_UPDATE(minivadr)
 
 	/* the board has no sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

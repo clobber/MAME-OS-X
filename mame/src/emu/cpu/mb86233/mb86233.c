@@ -51,7 +51,8 @@ struct _mb86233_state
 	UINT32			extport[0x30];
 
 	legacy_cpu_device *device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 	int icount;
 
 	/* FIFO */
@@ -95,9 +96,9 @@ INLINE mb86233_state *get_safe_token(running_device *device)
 #define ALU(cs,a)			mb86233_alu(cs,a)
 #define GETREPCNT()			cpustate->repcnt
 
-#define ROPCODE(a)			memory_decrypted_read_dword(cpustate->program, a<<2)
-#define RDMEM(a)			memory_read_dword_32le(cpustate->program, (a<<2))
-#define WRMEM(a,v)			memory_write_dword_32le(cpustate->program, (a<<2), v)
+#define ROPCODE(a)			cpustate->direct->read_decrypted_dword(a<<2)
+#define RDMEM(a)			cpustate->program->read_dword((a<<2))
+#define WRMEM(a,v)			cpustate->program->write_dword((a<<2), v)
 
 /***************************************************************************
     Initialization and Shutdown
@@ -112,6 +113,7 @@ static CPU_INIT( mb86233 )
 	memset(cpustate, 0, sizeof( *cpustate ) );
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 
 	if ( _config )
 	{

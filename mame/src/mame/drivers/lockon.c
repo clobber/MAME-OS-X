@@ -53,7 +53,7 @@ static READ8_HANDLER( adc_r );
 
 static WRITE16_HANDLER( adrst_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
+	lockon_state *state = space->machine->driver_data<lockon_state>();
 	state->ctrl_reg = data & 0xff;
 
 	/* Bus mastering for shared access */
@@ -64,84 +64,84 @@ static WRITE16_HANDLER( adrst_w )
 
 static READ16_HANDLER( main_gnd_r )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
-	return memory_read_word(gndspace, V30_GND_ADDR | offset * 2);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
+	return gndspace->read_word(V30_GND_ADDR | offset * 2);
 }
 
 static WRITE16_HANDLER( main_gnd_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
 
 	if (ACCESSING_BITS_0_7)
-		memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 0), data);
+		gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 0), data);
 	if (ACCESSING_BITS_8_15)
-		memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 1), data >> 8);
+		gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 1), data >> 8);
 }
 
 static READ16_HANDLER( main_obj_r )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
-	return memory_read_word(objspace, V30_OBJ_ADDR | offset * 2);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
+	return objspace->read_word(V30_OBJ_ADDR | offset * 2);
 }
 
 static WRITE16_HANDLER( main_obj_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
 
 	if (ACCESSING_BITS_0_7)
-		memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 0), data);
+		objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 0), data);
 	if (ACCESSING_BITS_8_15)
-		memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
+		objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
 }
 
 static WRITE16_HANDLER( tst_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
+	lockon_state *state = space->machine->driver_data<lockon_state>();
 
 	if (offset < 0x800)
 	{
-		const address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
-		const address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
+		address_space *gndspace = cpu_get_address_space(state->ground, ADDRESS_SPACE_PROGRAM);
+		address_space *objspace = cpu_get_address_space(state->object, ADDRESS_SPACE_PROGRAM);
 
 		if (ACCESSING_BITS_0_7)
-			memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 0), data);
+			gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 0), data);
 		if (ACCESSING_BITS_8_15)
-			memory_write_byte(gndspace, V30_GND_ADDR | (offset * 2 + 1), data >> 8);
+			gndspace->write_byte(V30_GND_ADDR | (offset * 2 + 1), data >> 8);
 
 		if (ACCESSING_BITS_0_7)
-			memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 0), data);
+			objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 0), data);
 		if (ACCESSING_BITS_8_15)
-			memory_write_byte(objspace, V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
+			objspace->write_byte(V30_OBJ_ADDR | (offset * 2 + 1), data >> 8);
 	}
 }
 
 static READ16_HANDLER( main_z80_r )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *sndspace = cpu_get_address_space(state->audiocpu, ADDRESS_SPACE_PROGRAM);
-	return 0xff00 | memory_read_byte(sndspace, offset);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *sndspace = cpu_get_address_space(state->audiocpu, ADDRESS_SPACE_PROGRAM);
+	return 0xff00 | sndspace->read_byte(offset);
 }
 
 static WRITE16_HANDLER( main_z80_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
-	const address_space *sndspace = cpu_get_address_space(state->audiocpu, ADDRESS_SPACE_PROGRAM);
-	memory_write_byte(sndspace, offset, data);
+	lockon_state *state = space->machine->driver_data<lockon_state>();
+	address_space *sndspace = cpu_get_address_space(state->audiocpu, ADDRESS_SPACE_PROGRAM);
+	sndspace->write_byte(offset, data);
 }
 
 static WRITE16_HANDLER( inten_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
+	lockon_state *state = space->machine->driver_data<lockon_state>();
 	state->main_inten = 1;
 }
 
 static WRITE16_HANDLER( emres_w )
 {
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
+	lockon_state *state = space->machine->driver_data<lockon_state>();
 	watchdog_reset(space->machine);
 	state->main_inten = 0;
 }
@@ -392,7 +392,7 @@ static WRITE8_HANDLER( sound_vol )
 #define LO_RI		100000.0
 #define LO_RP		100000.0
 
-	lockon_state *state = (lockon_state *)space->machine->driver_data;
+	lockon_state *state = space->machine->driver_data<lockon_state>();
 
 	static const double gains[16] =
 	{
@@ -428,7 +428,7 @@ static WRITE8_HANDLER( sound_vol )
 
 static void ym2203_irq(running_device *device, int irq)
 {
-	lockon_state *state = (lockon_state *)device->machine->driver_data;
+	lockon_state *state = device->machine->driver_data<lockon_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
@@ -464,7 +464,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( lockon )
 {
-	lockon_state *state = (lockon_state *)machine->driver_data;
+	lockon_state *state = machine->driver_data<lockon_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -497,7 +497,7 @@ static MACHINE_START( lockon )
 
 static MACHINE_RESET( lockon )
 {
-	lockon_state *state = (lockon_state *)machine->driver_data;
+	lockon_state *state = machine->driver_data<lockon_state>();
 
 	state->ground_ctrl = 0;
 	state->scroll_h = 0;
@@ -517,10 +517,7 @@ static MACHINE_RESET( lockon )
 	state->main_inten = 0;
 }
 
-static MACHINE_DRIVER_START( lockon )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(lockon_state)
+static MACHINE_CONFIG_START( lockon, lockon_state )
 
 	MDRV_CPU_ADD("maincpu", V30, XTAL_16MHz / 2)
 	MDRV_CPU_PROGRAM_MAP(main_v30)
@@ -580,7 +577,7 @@ static MACHINE_DRIVER_START( lockon )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ADD("f2203.3r", FILTER_VOLUME, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

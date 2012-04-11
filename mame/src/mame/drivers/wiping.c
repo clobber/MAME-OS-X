@@ -101,7 +101,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
-	AM_RANGE(0x4000, 0x7fff) AM_WRITE(wiping_sound_w) AM_BASE(&wiping_soundregs)
+	AM_RANGE(0x4000, 0x7fff) AM_DEVWRITE("wiping", wiping_sound_w)
 	AM_RANGE(0x9000, 0x93ff) AM_READWRITE(shared1_r,shared1_w)
 	AM_RANGE(0x9800, 0x9bff) AM_READWRITE(shared2_r,shared2_w)
 	AM_RANGE(0xa001, 0xa001) AM_WRITE(interrupt_enable_w)
@@ -278,7 +278,7 @@ GFXDECODE_END
 
 
 
-static MACHINE_DRIVER_START( wiping )
+static MACHINE_CONFIG_START( wiping, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* 3.072 MHz */
@@ -308,7 +308,7 @@ static MACHINE_DRIVER_START( wiping )
 
 	MDRV_SOUND_ADD("wiping", WIPING, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

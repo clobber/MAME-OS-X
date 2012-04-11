@@ -32,7 +32,7 @@ static WRITE8_HANDLER( contra_bankswitch_w )
 
 static WRITE8_HANDLER( contra_sh_irqtrigger_w )
 {
-	contra_state *state = (contra_state *)space->machine->driver_data;
+	contra_state *state = space->machine->driver_data<contra_state>();
 	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 }
 
@@ -171,7 +171,7 @@ GFXDECODE_END
 
 static MACHINE_START( contra )
 {
-	contra_state *state = (contra_state *)machine->driver_data;
+	contra_state *state = machine->driver_data<contra_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 12, &ROM[0x10000], 0x2000);
@@ -181,10 +181,7 @@ static MACHINE_START( contra )
 	state->k007121_2 = machine->device("k007121_2");
 }
 
-static MACHINE_DRIVER_START( contra )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(contra_state)
+static MACHINE_CONFIG_START( contra, contra_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, XTAL_24MHz/16) /* 1500000? */
@@ -222,7 +219,7 @@ static MACHINE_DRIVER_START( contra )
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_3_579545MHz)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( contra )

@@ -92,27 +92,27 @@ Notes:
 
 static READ16_HANDLER( control_r )
 {
-	bishi_state *state = (bishi_state *)space->machine->driver_data;
+	bishi_state *state = space->machine->driver_data<bishi_state>();
 	return state->cur_control;
 }
 
 static WRITE16_HANDLER( control_w )
 {
 	// bit 8 = interrupt gate
-	bishi_state *state = (bishi_state *)space->machine->driver_data;
+	bishi_state *state = space->machine->driver_data<bishi_state>();
 	COMBINE_DATA(&state->cur_control);
 }
 
 static WRITE16_HANDLER( control2_w )
 {
 	// bit 12 = part of the banking calculation for the K056832 ROM readback
-	bishi_state *state = (bishi_state *)space->machine->driver_data;
+	bishi_state *state = space->machine->driver_data<bishi_state>();
 	COMBINE_DATA(&state->cur_control2);
 }
 
 static INTERRUPT_GEN(bishi_interrupt)
 {
-	bishi_state *state = (bishi_state *)device->machine->driver_data;
+	bishi_state *state = device->machine->driver_data<bishi_state>();
 	if (state->cur_control & 0x800)
 	{
 		switch (cpu_getiloops(device))
@@ -136,7 +136,7 @@ static READ16_HANDLER( bishi_mirror_r )
 
 static READ16_HANDLER( bishi_K056832_rom_r )
 {
-	bishi_state *state = (bishi_state *)space->machine->driver_data;
+	bishi_state *state = space->machine->driver_data<bishi_state>();
 	UINT16 ouroffs;
 
 	ouroffs = (offset >> 1) * 8;
@@ -369,7 +369,7 @@ INPUT_PORTS_END
 
 static void sound_irq_gen(running_device *device, int state)
 {
-	bishi_state *bishi = (bishi_state *)device->machine->driver_data;
+	bishi_state *bishi = device->machine->driver_data<bishi_state>();
 	if (state)
 		cpu_set_input_line(bishi->maincpu, M68K_IRQ_1, ASSERT_LINE);
 	else
@@ -400,7 +400,7 @@ static const k054338_interface bishi_k054338_intf =
 
 static MACHINE_START( bishi )
 {
-	bishi_state *state = (bishi_state *)machine->driver_data;
+	bishi_state *state = machine->driver_data<bishi_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->k056832 = machine->device("k056832");
@@ -413,15 +413,12 @@ static MACHINE_START( bishi )
 
 static MACHINE_RESET( bishi )
 {
-	bishi_state *state = (bishi_state *)machine->driver_data;
+	bishi_state *state = machine->driver_data<bishi_state>();
 	state->cur_control = 0;
 	state->cur_control2 = 0;
 }
 
-static MACHINE_DRIVER_START( bishi )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(bishi_state)
+static MACHINE_CONFIG_START( bishi, bishi_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK) /* 12MHz (24MHz OSC / 2 ) */
@@ -457,7 +454,7 @@ static MACHINE_DRIVER_START( bishi )
 	MDRV_SOUND_CONFIG(ymz280b_intf)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 // ROM definitions
 

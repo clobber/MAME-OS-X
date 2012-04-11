@@ -36,7 +36,7 @@ static WRITE8_HANDLER( xyonix_irqack_w )
 static void handle_coins(running_machine *machine, int coin)
 {
 	static const int coinage_table[4][2] = {{2,3},{2,1},{1,2},{1,1}};
-	xyonix_state *state = (xyonix_state *)machine->driver_data;
+	xyonix_state *state = machine->driver_data<xyonix_state>();
 	int tmp = 0;
 
 	//popmessage("Coin %d", state->coin);
@@ -74,7 +74,7 @@ static void handle_coins(running_machine *machine, int coin)
 
 static READ8_HANDLER ( xyonix_io_r )
 {
-	xyonix_state *state = (xyonix_state *)space->machine->driver_data;
+	xyonix_state *state = space->machine->driver_data<xyonix_state>();
 	int regPC = cpu_get_pc(space->cpu);
 
 	if (regPC == 0x27ba)
@@ -126,7 +126,7 @@ static READ8_HANDLER ( xyonix_io_r )
 
 static WRITE8_HANDLER ( xyonix_io_w )
 {
-	xyonix_state *state = (xyonix_state *)space->machine->driver_data;
+	xyonix_state *state = space->machine->driver_data<xyonix_state>();
 
 	//logerror ("xyonix_port_e0_w %02x - PC = %04x\n", data, cpu_get_pc(space->cpu));
 	state->e0_data = data;
@@ -214,9 +214,7 @@ GFXDECODE_END
 
 /* MACHINE driver *************************************************************/
 
-static MACHINE_DRIVER_START( xyonix )
-
-	MDRV_DRIVER_DATA( xyonix_state )
+static MACHINE_CONFIG_START( xyonix, xyonix_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,16000000 / 4)		 /* 4 MHz ? */
@@ -248,7 +246,7 @@ static MACHINE_DRIVER_START( xyonix )
 
 	MDRV_SOUND_ADD("sn2", SN76496, 16000000/4)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* ROM Loading ***************************************************************/
 

@@ -58,6 +58,40 @@
 // shorthand for accessing devices by machine/type/tag
 #define devtag_reset(mach,tag)								(mach)->device(tag)->reset()
 
+// often derived devices need only a different name and a simple parameter to differentiate them
+// these are provided as macros because you can't pass string literals to templates, annoyingly enough
+// use this to declare the existence of a derived device in the header file
+#define DECLARE_TRIVIAL_DERIVED_DEVICE(_ConfigClass, _ConfigBase, _DeviceClass, _DeviceBase) \
+typedef _DeviceBase _DeviceClass;														\
+class _ConfigClass;																		\
+																						\
+class _ConfigClass : public _ConfigBase 												\
+{																						\
+protected:																				\
+	_ConfigClass(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock, UINT32 param = 0); \
+																						\
+public: 																				\
+	static device_config *static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock); \
+	virtual device_t *alloc_device(running_machine &machine) const;						\
+};																						\
+
+// use this macro to define the actual implementation in the source file
+#define DEFINE_TRIVIAL_DERIVED_DEVICE(_ConfigClass, _ConfigBase, _DeviceClass, _DeviceBase, _Name, _Param) \
+_ConfigClass::_ConfigClass(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock, UINT32 param) \
+	: _ConfigBase(mconfig, static_alloc_device_config, _Name, tag, owner, clock, param)	\
+{																						\
+}																						\
+																						\
+device_config *_ConfigClass::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock) \
+{																						\
+	return global_alloc(_ConfigClass(mconfig, tag, owner, clock, _Param));				\
+}																						\
+																						\
+device_t *_ConfigClass::alloc_device(running_machine &machine) const					\
+{																						\
+	return auto_alloc(&machine, _DeviceClass(machine, *this));							\
+}																						\
+
 
 
 //**************************************************************************
@@ -66,32 +100,13 @@
 
 // configure devices
 #define MDRV_DEVICE_CONFIG(_config) \
-	TOKEN_UINT32_PACK1(MCONFIG_TOKEN_DEVICE_CONFIG, 8), \
-	TOKEN_PTR(voidptr, &(_config)),
+	device_config::static_set_static_config(device, &(_config)); \
 
 #define MDRV_DEVICE_CONFIG_CLEAR() \
-	TOKEN_UINT32_PACK1(MCONFIG_TOKEN_DEVICE_CONFIG, 8), \
-	TOKEN_PTR(voidptr, NULL),
+	device_config::static_set_static_config(device, NULL); \
 
 #define MDRV_DEVICE_CLOCK(_clock) \
-	TOKEN_UINT64_PACK2(MCONFIG_TOKEN_DEVICE_CLOCK, 8, _clock, 32),
-
-#define MDRV_DEVICE_INLINE_DATA16(_index, _data) \
-	TOKEN_UINT32_PACK3(MCONFIG_TOKEN_DEVICE_INLINE_DATA16, 8, _index, 8, (UINT16)(_data), 16), \
-
-#define MDRV_DEVICE_INLINE_DATA32(_index, _data) \
-	TOKEN_UINT32_PACK2(MCONFIG_TOKEN_DEVICE_INLINE_DATA32, 8, _index, 8), \
-	TOKEN_UINT32((UINT32)(_data)),
-
-#define MDRV_DEVICE_INLINE_DATA64(_index, _data) \
-	TOKEN_UINT32_PACK2(MCONFIG_TOKEN_DEVICE_INLINE_DATA64, 8, _index, 8), \
-	TOKEN_UINT64((UINT64)(_data)),
-
-#ifdef PTR64
-#define MDRV_DEVICE_INLINE_DATAPTR(_index, _data) MDRV_DEVICE_INLINE_DATA64(_index, (FPTR)(_data))
-#else
-#define MDRV_DEVICE_INLINE_DATAPTR(_index, _data) MDRV_DEVICE_INLINE_DATA32(_index, (FPTR)(_data))
-#endif
+	device_config::static_set_clock(device, _clock); \
 
 
 
@@ -110,8 +125,8 @@ class device_execute_interface;
 class device_memory_interface;
 class device_state_interface;
 struct rom_entry;
-union machine_config_token;
 class machine_config;
+class emu_timer;
 
 
 // exception classes
@@ -120,6 +135,15 @@ class device_missing_dependencies : public emu_exception { };
 
 // a device_type is simply a pointer to its alloc function
 typedef device_config *(*device_type)(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock);
+
+
+// timer IDs for devices
+typedef UINT32 device_timer_id;
+
+
+// read/write types for I/O lines (similar to read/write handlers but no offset)
+typedef int (*read_line_device_func)(device_t *device);
+typedef void (*write_line_device_func)(device_t *device, int state);
 
 
 
@@ -214,7 +238,6 @@ public:
 	void import_config_list(const device_config_list &list, running_machine &machine);
 
 	void start_all();
-	void debug_setup_all();
 	void reset_all();
 };
 
@@ -234,7 +257,7 @@ class device_config
 
 protected:
 	// construction/destruction
-	device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock);
+	device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock, UINT32 param = 0);
 	virtual ~device_config();
 
 public:
@@ -263,11 +286,15 @@ public:
 	const char *name() const { return m_name; }
 	const char *tag() const { return m_tag; }
 	const void *static_config() const { return m_static_config; }
+	const machine_config &mconfig() const { return m_machine_config; }
 
 	// methods that wrap both interface-level and device-level behavior
-	void process_token(UINT32 entrytype, const machine_config_token *&tokens);
 	void config_complete();
 	bool validity_check(const game_driver &driver) const;
+
+	// configuration helpers
+	static void static_set_clock(device_config *device, UINT32 clock) { device->m_clock = clock; }
+	static void static_set_static_config(device_config *device, const void *config) { device->m_static_config = config; }
 
 	//------------------- begin derived class overrides
 
@@ -276,14 +303,13 @@ public:
 
 	// optional operation overrides
 protected:
-	virtual bool device_process_token(UINT32 entrytype, const machine_config_token *&tokens);
 	virtual void device_config_complete();
 	virtual bool device_validity_check(const game_driver &driver) const;
 
 public:
 	// optional information overrides
 	virtual const rom_entry *rom_region() const;
-	virtual const machine_config_token *machine_config_tokens() const;
+	virtual machine_config_constructor machine_config_additions() const;
 
 	//------------------- end derived class overrides
 
@@ -298,7 +324,6 @@ protected:
 
 	const machine_config &	m_machine_config;		// reference to the machine's configuration
 	const void *			m_static_config;		// static device configuration
-	UINT64					m_inline_data[16];		// array of inline configuration values
 
 	astring					m_name;					// name of the device
 
@@ -333,7 +358,6 @@ public:
 
 	// optional operation overrides
 	virtual void interface_config_complete();
-	virtual bool interface_process_token(UINT32 entrytype, const machine_config_token *&tokens);
 	virtual bool interface_validity_check(const game_driver &driver) const;
 
 protected:
@@ -347,7 +371,7 @@ protected:
 // ======================> device_t
 
 // device_t represents a device that is live and attached to a running_machine
-class device_t
+class device_t : public bindable_object
 {
 	DISABLE_COPYING(device_t);
 
@@ -387,6 +411,8 @@ public:
 	const region_info *subregion(const char *tag) const;
 	device_t *subdevice(const char *tag) const;
 	device_t *siblingdevice(const char *tag) const;
+	template<class T> inline T *subdevice(const char *tag) { return downcast<T *>(subdevice(tag)); }
+	template<class T> inline T *siblingdevice(const char *tag) { return downcast<T *>(siblingdevice(tag)); }
 
 	// configuration helpers
 	const device_config &baseconfig() const { return m_baseconfig; }
@@ -404,10 +430,10 @@ public:
 	void set_clock_scale(double clockscale);
 	attotime clocks_to_attotime(UINT64 clocks) const;
 	UINT64 attotime_to_clocks(attotime duration) const;
+	void timer_fired(emu_timer &timer, device_timer_id id, int param, void *ptr) { device_timer(timer, id, param, ptr); }
 
 	// debugging
 	device_debug *debug() const { return m_debug; }
-	void set_debug(device_debug &debug) { m_debug = &debug; }
 
 	// basic information getters ... pass through to underlying config
 	device_type type() const { return m_baseconfig.type(); }
@@ -416,7 +442,7 @@ public:
 
 	// machine and ROM configuration getters ... pass through to underlying config
 	const rom_entry *rom_region() const { return m_baseconfig.rom_region(); }
-	const machine_config_token *machine_config_tokens() const { return m_baseconfig.machine_config_tokens(); }
+	machine_config_constructor machine_config_additions() const { return m_baseconfig.machine_config_additions(); }
 
 public:
 	running_machine *		machine;
@@ -439,6 +465,7 @@ protected:
 	virtual void device_post_load();
 	virtual void device_clock_changed();
 	virtual void device_debug_setup();
+	virtual void device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr);
 
 	//------------------- end derived class overrides
 
@@ -463,6 +490,111 @@ protected:
 	UINT32					m_unscaled_clock;		// unscaled clock
 	double					m_clock_scale;			// clock scale factor
 	attoseconds_t			m_attoseconds_per_clock;// period in attoseconds
+
+	// helper class to request auto-object discovery in the constructor of a derived class
+	class auto_finder_base
+	{
+	public:
+		// construction/destruction
+		auto_finder_base(device_t &base, const char *tag);
+		virtual ~auto_finder_base();
+
+		// getters
+		virtual void findit(device_t &base) = 0;
+
+		// helpers
+		device_t *find_device(device_t &device, const char *tag);
+		void *find_shared_ptr(device_t &device, const char *tag);
+		size_t find_shared_size(device_t &device, const char *tag);
+
+		// internal state
+		auto_finder_base *m_next;
+		const char *m_tag;
+	};
+
+	// templated version bound to a specific type
+	template<typename _TargetType, bool _Required>
+	class auto_finder_type : public auto_finder_base
+	{
+	public:
+		// construction/destruction
+		auto_finder_type(device_t &base, const char *tag)
+			: auto_finder_base(base, tag),
+			  m_target(0) { }
+
+		// operators to make use transparent
+		operator _TargetType() { return m_target; }
+		operator _TargetType() const { return m_target; }
+		_TargetType operator->() { return m_target; }
+
+		// setter for setting the object
+		void set_target(_TargetType target)
+		{
+			m_target = target;
+			if (target == 0 && _Required)
+				throw emu_fatalerror("Unable to find required object '%s'", this->m_tag);
+		}
+
+		// internal state
+		_TargetType m_target;
+	};
+
+	// optional device finder
+	template<class _DeviceClass>
+	class optional_device : public auto_finder_type<_DeviceClass *, false>
+	{
+	public:
+		optional_device(device_t &base, const char *tag) : auto_finder_type<_DeviceClass *, false>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(downcast<_DeviceClass *>(this->find_device(base, this->m_tag))); }
+	};
+
+	// required devices are similar but throw an error if they are not found
+	template<class _DeviceClass>
+	class required_device : public auto_finder_type<_DeviceClass *, true>
+	{
+	public:
+		required_device(device_t &base, const char *tag) : auto_finder_type<_DeviceClass *, true>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(downcast<_DeviceClass *>(this->find_device(base, this->m_tag))); }
+	};
+
+	// optional shared pointer finder
+	template<typename _PointerType>
+	class optional_shared_ptr : public auto_finder_type<_PointerType *, false>
+	{
+	public:
+		optional_shared_ptr(device_t &base, const char *tag) : auto_finder_type<_PointerType *, false>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(reinterpret_cast<_PointerType *>(this->find_shared_ptr(base, this->m_tag))); }
+	};
+
+	// required shared pointer finder
+	template<typename _PointerType>
+	class required_shared_ptr : public auto_finder_type<_PointerType *, true>
+	{
+	public:
+		required_shared_ptr(device_t &base, const char *tag) : auto_finder_type<_PointerType *, true>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(reinterpret_cast<_PointerType *>(this->find_shared_ptr(base, this->m_tag))); }
+	};
+
+	// optional shared pointer size finder
+	class optional_shared_size : public auto_finder_type<size_t, false>
+	{
+	public:
+		optional_shared_size(device_t &base, const char *tag) : auto_finder_type<size_t, false>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(find_shared_size(base, this->m_tag)); }
+	};
+
+	// required shared pointer size finder
+	class required_shared_size : public auto_finder_type<size_t, true>
+	{
+	public:
+		required_shared_size(device_t &base, const char *tag) : auto_finder_type<size_t, true>(base, tag) { }
+		virtual void findit(device_t &base) { this->set_target(find_shared_size(base, this->m_tag)); }
+	};
+
+	// internal helpers
+	void register_auto_finder(auto_finder_base &autodev);
+
+	auto_finder_base *		m_auto_finder_list;
 };
 
 
@@ -529,7 +661,8 @@ inline device_config *device_config::typenext() const
 // create a tag for an object that is owned by this device
 inline astring &device_config::subtag(astring &dest, const char *_tag) const
 {
-	return (this != NULL) ? dest.cpy(m_tag).cat(":").cat(_tag) : dest.cpy(_tag);
+	// temp. for now: don't include the root tag in the full tag name
+	return (this != NULL && m_owner != NULL) ? dest.cpy(m_tag).cat(":").cat(_tag) : dest.cpy(_tag);
 }
 
 // create a tag for an object that a sibling to this device

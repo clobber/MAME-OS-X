@@ -184,8 +184,9 @@ Notes:
 #include "cpu/v60/v60.h"
 #include "deprecat.h"
 #include "machine/eeprom.h"
+#include "machine/nvram.h"
 #include "sound/es5506.h"
-#include "includes/seta.h"
+#include "includes/ssv.h"
 
 /***************************************************************************
 
@@ -195,25 +196,24 @@ Notes:
 
 ***************************************************************************/
 
-static UINT8 requested_int;
-static UINT16 *ssv_irq_vectors;
-static UINT16 irq_enable;
-static UINT16 *ssv_mainram;
-
 /* Update the IRQ state based on all possible causes */
 static void update_irq_state(running_machine *machine)
 {
-	cputag_set_input_line(machine, "maincpu", 0, (requested_int & irq_enable)? ASSERT_LINE : CLEAR_LINE);
+	ssv_state *state = machine->driver_data<ssv_state>();
+
+	cputag_set_input_line(machine, "maincpu", 0, (state->requested_int & state->irq_enable)? ASSERT_LINE : CLEAR_LINE);
 }
 
 static IRQ_CALLBACK(ssv_irq_callback)
 {
+	ssv_state *state = device->machine->driver_data<ssv_state>();
+
 	int i;
 	for ( i = 0; i <= 7; i++ )
 	{
-		if (requested_int & (1 << i))
+		if (state->requested_int & (1 << i))
 		{
-			UINT16 vector = ssv_irq_vectors[i * (16/2)] & 7;
+			UINT16 vector = state->irq_vectors[i * (16/2)] & 7;
 			return vector;
 		}
 	}
@@ -222,8 +222,10 @@ static IRQ_CALLBACK(ssv_irq_callback)
 
 static WRITE16_HANDLER( ssv_irq_ack_w )
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
 	int level = ((offset * 2) & 0x70) >> 4;
-	requested_int &= ~(1 << level);
+
+	state->requested_int &= ~(1 << level);
 
 	update_irq_state(space->machine);
 }
@@ -248,38 +250,42 @@ static WRITE16_HANDLER( ssv_irq_ack_w )
 */
 static WRITE16_HANDLER( ssv_irq_enable_w )
 {
-	COMBINE_DATA(&irq_enable);
-}
+	ssv_state *state = space->machine->driver_data<ssv_state>();
 
-static int interrupt_ultrax;
+	COMBINE_DATA(&state->irq_enable);
+}
 
 static INTERRUPT_GEN( ssv_interrupt )
 {
+	ssv_state *state = device->machine->driver_data<ssv_state>();
+
 	if (cpu_getiloops(device))
 	{
-		if(interrupt_ultrax)
+		if (state->interrupt_ultrax)
 		{
-			requested_int |= 1 << 1;	// needed by ultrax to coin up, breaks cairblad
+			state->requested_int |= 1 << 1;	// needed by ultrax to coin up, breaks cairblad
 			update_irq_state(device->machine);
 		}
 	}
 	else
 	{
-		requested_int |= 1 << 3;	// vblank
+		state->requested_int |= 1 << 3;	// vblank
 		update_irq_state(device->machine);
 	}
 }
 
 static INTERRUPT_GEN( gdfs_interrupt )
 {
+	ssv_state *state = device->machine->driver_data<ssv_state>();
+
 	if (cpu_getiloops(device))
 	{
-		requested_int |= 1 << 6;	// reads lightgun (4 times for 4 axis)
+		state->requested_int |= 1 << 6;	// reads lightgun (4 times for 4 axis)
 		update_irq_state(device->machine);
 	}
 	else
 	{
-		requested_int |= 1 << 3;	// vblank
+		state->requested_int |= 1 << 3;	// vblank
 		update_irq_state(device->machine);
 	}
 }
@@ -317,7 +323,7 @@ static WRITE16_HANDLER( ssv_lockout_w )
 		coin_counter_w(space->machine, 1, data & 0x04);
 		coin_counter_w(space->machine, 0, data & 0x08);
 //                        data & 0x40?
-		ssv_enable_video( data & 0x80);
+		ssv_enable_video( space->machine, data & 0x80);
 	}
 }
 
@@ -332,37 +338,18 @@ static WRITE16_HANDLER( ssv_lockout_inv_w )
 		coin_counter_w(space->machine, 1, data & 0x04);
 		coin_counter_w(space->machine, 0, data & 0x08);
 //                        data & 0x40?
-		ssv_enable_video( data & 0x80);
+		ssv_enable_video( space->machine, data & 0x80);
 	}
 }
 
 static MACHINE_RESET( ssv )
 {
-	requested_int = 0;
+	ssv_state *state = machine->driver_data<ssv_state>();
+	state->requested_int = 0;
 	cpu_set_irq_callback(machine->device("maincpu"), ssv_irq_callback);
 	memory_set_bankptr(machine, "bank1", memory_region(machine, "user1"));
 }
 
-
-/***************************************************************************
-
-
-                            Non-Volatile RAM
-
-
-***************************************************************************/
-
-static UINT16 *ssv_nvram;
-static size_t    ssv_nvram_size;
-
-static NVRAM_HANDLER( ssv )
-{
-	if (read_or_write)
-		mame_fwrite(file, ssv_nvram, ssv_nvram_size);
-	else
-		if (file)
-			mame_fread(file, ssv_nvram, ssv_nvram_size);
-}
 
 /***************************************************************************
 
@@ -373,10 +360,11 @@ static NVRAM_HANDLER( ssv )
 ***************************************************************************/
 
 
-static UINT16 *dsp_ram;
-
 static WRITE16_HANDLER( dsp_w )
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	UINT16 *dsp_ram = state->dsp_ram;
+
 	COMBINE_DATA(dsp_ram+offset);
 	if(offset == 0x21 && dsp_ram[0x21]) {
 		switch(dsp_ram[0x20]) {
@@ -407,13 +395,13 @@ static READ16_HANDLER( fake_r )   {   return ssv_scroll[offset];  }
 #endif
 
 #define SSV_MAP( _ROM  )																							\
-	AM_RANGE(0x000000, 0x00ffff) AM_RAM AM_BASE(&ssv_mainram)										/*  RAM     */	\
-	AM_RANGE(0x100000, 0x13ffff) AM_RAM AM_BASE_GENERIC(spriteram)										/*  Sprites */	\
-	AM_RANGE(0x140000, 0x15ffff) AM_RAM_WRITE(paletteram16_xrgb_swap_word_w) AM_BASE_GENERIC(paletteram)	/*  Palette */	\
+	AM_RANGE(0x000000, 0x00ffff) AM_RAM AM_BASE_MEMBER(ssv_state, mainram)										/*  RAM     */	\
+	AM_RANGE(0x100000, 0x13ffff) AM_RAM AM_BASE_MEMBER(ssv_state, spriteram)										/*  Sprites */	\
+	AM_RANGE(0x140000, 0x15ffff) AM_RAM_WRITE(paletteram16_xrgb_swap_word_w) AM_BASE_MEMBER(ssv_state, paletteram)	/*  Palette */	\
 	AM_RANGE(0x160000, 0x17ffff) AM_RAM																/*          */	\
 	AM_RANGE(0x1c0000, 0x1c0001) AM_READ(ssv_vblank_r			)									/*  Vblank? */	\
 /**/AM_RANGE(0x1c0002, 0x1c007f) AM_READONLY									/*  Scroll  */	\
-	AM_RANGE(0x1c0000, 0x1c007f) AM_WRITE(ssv_scroll_w) AM_BASE(&ssv_scroll)                		/*  Scroll  */  \
+	AM_RANGE(0x1c0000, 0x1c007f) AM_WRITE(ssv_scroll_w) AM_BASE_MEMBER(ssv_state, scroll)               		/*  Scroll  */  \
 	AM_RANGE(0x210002, 0x210003) AM_READ_PORT("DSW1")																\
 	AM_RANGE(0x210004, 0x210005) AM_READ_PORT("DSW2")																\
 	AM_RANGE(0x210008, 0x210009) AM_READ_PORT("P1")																	\
@@ -421,16 +409,15 @@ static READ16_HANDLER( fake_r )   {   return ssv_scroll[offset];  }
 	AM_RANGE(0x21000c, 0x21000d) AM_READ_PORT("SYSTEM")																\
 	AM_RANGE(0x21000e, 0x21000f) AM_READNOP AM_WRITE(ssv_lockout_w)								/*  Lockout */	\
 	AM_RANGE(0x210010, 0x210011) AM_WRITENOP                                                        				\
-	AM_RANGE(0x230000, 0x230071) AM_WRITEONLY AM_BASE(&ssv_irq_vectors)	        		    /*  IRQ Vec */	\
+	AM_RANGE(0x230000, 0x230071) AM_WRITEONLY AM_BASE_MEMBER(ssv_state, irq_vectors)	        		    /*  IRQ Vec */	\
 	AM_RANGE(0x240000, 0x240071) AM_WRITE(ssv_irq_ack_w )                               			/*  IRQ Ack */	\
 	AM_RANGE(0x260000, 0x260001) AM_WRITE(ssv_irq_enable_w)                             			/*  IRQ En  */  \
 	AM_RANGE(0x300000, 0x30007f) AM_DEVREADWRITE8("ensoniq", es5506_r, es5506_w, 0x00ff)			/*  Sound   */	\
-	AM_RANGE(0x482000, 0x482fff) AM_RAM_WRITE(dsp_w) AM_BASE(&dsp_ram)												\
+	AM_RANGE(0x482000, 0x482fff) AM_RAM_WRITE(dsp_w) AM_BASE_MEMBER(ssv_state, dsp_ram)												\
 	AM_RANGE(_ROM, 0xffffff) AM_ROMBANK("bank1")														/*  ROM     */	\
 //AM_RANGE(0x990000, 0x99007f) AM_READ(fake_r)
 
 
-static UINT16 *ssv_input_sel;
 
 /***************************************************************************
                                 Drift Out '94
@@ -449,7 +436,7 @@ static ADDRESS_MAP_START( drifto94_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500000, 0x500001) AM_WRITENOP										// ??
 	AM_RANGE(0x510000, 0x510001) AM_READ(drifto94_rand_r		)						// ??
 	AM_RANGE(0x520000, 0x520001) AM_READ(drifto94_rand_r		)						// ??
-	AM_RANGE(0x580000, 0x5807ff) AM_RAM AM_BASE(&ssv_nvram) AM_SIZE(&ssv_nvram_size)	// NVRAM
+	AM_RANGE(0x580000, 0x5807ff) AM_RAM AM_SHARE("nvram")	// NVRAM
 	SSV_MAP( 0xc00000 )
 ADDRESS_MAP_END
 
@@ -458,19 +445,17 @@ ADDRESS_MAP_END
                      Mobil Suit Gundam Final Shooting
 ***************************************************************************/
 
-static int gdfs_gfxram_bank, gdfs_lightgun_select;
-static UINT16 *gdfs_blitram;
-
 static READ16_DEVICE_HANDLER( gdfs_eeprom_r )
 {
+	ssv_state *state = device->machine->driver_data<ssv_state>();
 	static const char *const gunnames[] = { "GUNX1", "GUNY1", "GUNX2", "GUNY2" };
 
-	return (((gdfs_lightgun_select & 1) ? 0 : 0xff) ^ input_port_read(device->machine, gunnames[gdfs_lightgun_select])) | (eeprom_read_bit(device) << 8);
+	return (((state->gdfs_lightgun_select & 1) ? 0 : 0xff) ^ input_port_read(device->machine, gunnames[state->gdfs_lightgun_select])) | (eeprom_read_bit(device) << 8);
 }
 
 static WRITE16_DEVICE_HANDLER( gdfs_eeprom_w )
 {
-	static UINT16 data_old;
+	ssv_state *state = device->machine->driver_data<ssv_state>();
 
 	if (data & ~0x7b00)
 		logerror("%s - Unknown EEPROM bit written %04X\n",cpuexec_describe_context(device->machine),data);
@@ -489,23 +474,26 @@ static WRITE16_DEVICE_HANDLER( gdfs_eeprom_w )
 		// clock line asserted: write latch or select next bit to read
 		eeprom_set_clock_line(device, (data & 0x2000) ? ASSERT_LINE : CLEAR_LINE );
 
-		if (!(data_old & 0x0800) && (data & 0x0800))	// rising clock
-			gdfs_lightgun_select = (data & 0x0300) >> 8;
+		if (!(state->gdfs_eeprom_old & 0x0800) && (data & 0x0800))	// rising clock
+			state->gdfs_lightgun_select = (data & 0x0300) >> 8;
 	}
 
-	COMBINE_DATA(&data_old);
+	COMBINE_DATA(&state->gdfs_eeprom_old);
 }
 
 
 static READ16_HANDLER( gdfs_gfxram_r )
 {
-	return eaglshot_gfxram[offset + gdfs_gfxram_bank * 0x100000/2];
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	return state->eaglshot_gfxram[offset + state->gdfs_gfxram_bank * 0x100000/2];
 }
 
 static WRITE16_HANDLER( gdfs_gfxram_w )
 {
-	offset += gdfs_gfxram_bank * 0x100000/2;
-	COMBINE_DATA(&eaglshot_gfxram[offset]);
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	offset += state->gdfs_gfxram_bank * 0x100000/2;
+	COMBINE_DATA(&state->eaglshot_gfxram[offset]);
 	gfx_element_mark_dirty(space->machine->gfx[2], offset / (16*8/2));
 }
 
@@ -524,6 +512,9 @@ static READ16_HANDLER( gdfs_blitram_r )
 
 static WRITE16_HANDLER( gdfs_blitram_w )
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	UINT16 *gdfs_blitram = state->gdfs_blitram;
+
 	COMBINE_DATA(&gdfs_blitram[offset]);
 
 	switch (offset)
@@ -534,7 +525,7 @@ static WRITE16_HANDLER( gdfs_blitram_w )
 				logerror("CPU #0 PC: %06X - Unknown gdfs_gfxram_bank bit written %04X\n",cpu_get_pc(space->cpu),data);
 
 			if (ACCESSING_BITS_0_7)
-				gdfs_gfxram_bank = data & 3;
+				state->gdfs_gfxram_bank = data & 3;
 		}
 		break;
 
@@ -556,7 +547,7 @@ static WRITE16_HANDLER( gdfs_blitram_w )
 
 			if ( (src+len <= size) && (dst+len <= 4 * 0x100000) )
 			{
-				memcpy( &eaglshot_gfxram[dst/2], &rom[src], len );
+				memcpy( &state->eaglshot_gfxram[dst/2], &rom[src], len );
 
 				if (len % (16*8))	len = len / (16*8) + 1;
 				else				len = len / (16*8);
@@ -581,14 +572,14 @@ static WRITE16_HANDLER( gdfs_blitram_w )
 }
 
 static ADDRESS_MAP_START( gdfs_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x400000, 0x41ffff) AM_RAM_WRITE(gdfs_tmapram_w) AM_BASE(&gdfs_tmapram)
+	AM_RANGE(0x400000, 0x41ffff) AM_RAM_WRITE(gdfs_tmapram_w) AM_BASE_MEMBER(ssv_state, gdfs_tmapram)
 	AM_RANGE(0x420000, 0x43ffff) AM_RAM
-	AM_RANGE(0x440000, 0x44003f) AM_RAM AM_BASE(&gdfs_tmapscroll)
+	AM_RANGE(0x440000, 0x44003f) AM_RAM AM_BASE_MEMBER(ssv_state, gdfs_tmapscroll)
 	AM_RANGE(0x500000, 0x500001) AM_DEVWRITE("eeprom", gdfs_eeprom_w)
 	AM_RANGE(0x540000, 0x540001) AM_DEVREAD("eeprom", gdfs_eeprom_r)
 	AM_RANGE(0x600000, 0x600fff) AM_RAM
-	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_GENERIC(spriteram2)
-	AM_RANGE(0x8c0000, 0x8c00ff) AM_READWRITE(gdfs_blitram_r, gdfs_blitram_w) AM_BASE(&gdfs_blitram)
+	AM_RANGE(0x800000, 0x87ffff) AM_RAM AM_BASE_MEMBER(ssv_state, spriteram2)
+	AM_RANGE(0x8c0000, 0x8c00ff) AM_READWRITE(gdfs_blitram_r, gdfs_blitram_w) AM_BASE_MEMBER(ssv_state, gdfs_blitram)
 	AM_RANGE(0x900000, 0x9fffff) AM_READWRITE(gdfs_gfxram_r, gdfs_gfxram_w)
 	SSV_MAP( 0xc00000 )
 ADDRESS_MAP_END
@@ -608,7 +599,9 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( hypreact_input_r )
 {
-	UINT16 input_sel = *ssv_input_sel;
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	UINT16 input_sel = *state->input_sel;
+
 	if (input_sel & 0x0001)	return input_port_read(space->machine, "KEY0");
 	if (input_sel & 0x0002)	return input_port_read(space->machine, "KEY1");
 	if (input_sel & 0x0004)	return input_port_read(space->machine, "KEY2");
@@ -623,7 +616,7 @@ static ADDRESS_MAP_START( hypreact_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x21000e, 0x21000f) AM_WRITE(ssv_lockout_inv_w)			// Inverted lockout lines
 //  AM_RANGE(0x280000, 0x280001) AM_READNOP                       // ? read at the start, value not used
 	AM_RANGE(0xc00000, 0xc00001) AM_READ(hypreact_input_r)				// Inputs
-	AM_RANGE(0xc00006, 0xc00007) AM_RAM AM_BASE(&ssv_input_sel)			//
+	AM_RANGE(0xc00006, 0xc00007) AM_RAM AM_BASE_MEMBER(ssv_state, input_sel)			//
 	AM_RANGE(0xc00008, 0xc00009) AM_NOP									//
 	SSV_MAP( 0xf00000 )
 ADDRESS_MAP_END
@@ -640,7 +633,7 @@ static ADDRESS_MAP_START( hypreac2_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x280000, 0x280001) AM_READNOP                           // ? read at the start, value not used
 	AM_RANGE(0x500000, 0x500001) AM_READ(hypreact_input_r)					// Inputs
 	AM_RANGE(0x500002, 0x500003) AM_READ(hypreact_input_r)					// (again?)
-	AM_RANGE(0x520000, 0x520001) AM_WRITEONLY AM_BASE(&ssv_input_sel)	// Inputs
+	AM_RANGE(0x520000, 0x520001) AM_WRITEONLY AM_BASE_MEMBER(ssv_state, input_sel)	// Inputs
 //  0x540000, 0x540003  communication with other units
 	SSV_MAP( 0xe00000 )
 ADDRESS_MAP_END
@@ -656,7 +649,7 @@ static ADDRESS_MAP_START( janjans1_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x210000, 0x210001) AM_WRITENOP							// koikois2 but not janjans1
 //  AM_RANGE(0x210002, 0x210003) AM_WRITENOP                          // ? 1 at the start
 	AM_RANGE(0x210006, 0x210007) AM_READNOP
-	AM_RANGE(0x800000, 0x800001) AM_WRITEONLY AM_BASE(&ssv_input_sel)	// Inputs
+	AM_RANGE(0x800000, 0x800001) AM_WRITEONLY AM_BASE_MEMBER(ssv_state, input_sel)	// Inputs
 	AM_RANGE(0x800002, 0x800003) AM_READ(srmp4_input_r)						// Inputs
 	SSV_MAP( 0xc00000 )
 ADDRESS_MAP_END
@@ -684,7 +677,7 @@ static ADDRESS_MAP_START( meosism_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  AM_RANGE(0x210002, 0x210003) AM_WRITENOP                                      // ? 5 at the start
 //  AM_RANGE(0x280000, 0x280001) AM_READNOP                                       // ? read once, value not used
 //  AM_RANGE(0x500004, 0x500005) AM_WRITENOP                                      // ? 0,58,18
-	AM_RANGE(0x580000, 0x58ffff) AM_RAM AM_BASE(&ssv_nvram) AM_SIZE(&ssv_nvram_size)	// NVRAM
+	AM_RANGE(0x580000, 0x58ffff) AM_RAM AM_SHARE("nvram")	// NVRAM
 	SSV_MAP( 0xf00000 )
 ADDRESS_MAP_END
 
@@ -696,12 +689,16 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( ssv_mainram_r )
 {
-	return ssv_mainram[offset];
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	return state->mainram[offset];
 }
 
 static WRITE16_HANDLER( ssv_mainram_w )
 {
-	COMBINE_DATA(&ssv_mainram[offset]);
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	COMBINE_DATA(&state->mainram[offset]);
 }
 
 static ADDRESS_MAP_START( mslider_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -730,7 +727,9 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( srmp4_input_r )
 {
-	UINT16 input_sel = *ssv_input_sel;
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	UINT16 input_sel = *state->input_sel;
+
 	if (input_sel & 0x0002)	return input_port_read(space->machine, "KEY0");
 	if (input_sel & 0x0004)	return input_port_read(space->machine, "KEY1");
 	if (input_sel & 0x0008)	return input_port_read(space->machine, "KEY2");
@@ -743,7 +742,7 @@ static ADDRESS_MAP_START( srmp4_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x210000, 0x210001) AM_READ(watchdog_reset16_r)				// Watchdog
 //  AM_RANGE(0x210002, 0x210003) AM_WRITENOP                          // ? 1,5 at the start
 	AM_RANGE(0xc0000a, 0xc0000b) AM_READ(srmp4_input_r)						// Inputs
-	AM_RANGE(0xc0000e, 0xc0000f) AM_WRITEONLY AM_BASE(&ssv_input_sel)	// Inputs
+	AM_RANGE(0xc0000e, 0xc0000f) AM_WRITEONLY AM_BASE_MEMBER(ssv_state, input_sel)	// Inputs
 	AM_RANGE(0xc00010, 0xc00011) AM_WRITENOP							//
 	SSV_MAP( 0xf00000 )
 ADDRESS_MAP_END
@@ -777,7 +776,9 @@ static WRITE16_HANDLER( srmp7_sound_bank_w )
 
 static READ16_HANDLER( srmp7_input_r )
 {
-	UINT16 input_sel = *ssv_input_sel;
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+	UINT16 input_sel = *state->input_sel;
+
 	if (input_sel & 0x0002)	return input_port_read(space->machine, "KEY0");
 	if (input_sel & 0x0004)	return input_port_read(space->machine, "KEY1");
 	if (input_sel & 0x0008)	return input_port_read(space->machine, "KEY2");
@@ -795,7 +796,7 @@ static ADDRESS_MAP_START( srmp7_map, ADDRESS_SPACE_PROGRAM, 16 )
 //  0x540000, 0x540003, related to lev 5 irq?
 	AM_RANGE(0x580000, 0x580001) AM_WRITE(srmp7_sound_bank_w)				// Sound Bank
 	AM_RANGE(0x600000, 0x600001) AM_READ(srmp7_input_r)						// Inputs
-	AM_RANGE(0x680000, 0x680001) AM_WRITEONLY AM_BASE(&ssv_input_sel)	// Inputs
+	AM_RANGE(0x680000, 0x680001) AM_WRITEONLY AM_BASE_MEMBER(ssv_state, input_sel)	// Inputs
 	SSV_MAP( 0xc00000 )
 ADDRESS_MAP_END
 
@@ -821,7 +822,6 @@ ADDRESS_MAP_END
                             Pachinko Sexy Reaction
 ***************************************************************************/
 
-static UINT16 serial;
 
 static READ16_HANDLER( sxyreact_ballswitch_r )
 {
@@ -830,22 +830,25 @@ static READ16_HANDLER( sxyreact_ballswitch_r )
 
 static READ16_HANDLER( sxyreact_dial_r )
 {
-	return ((serial >> 1) & 0x80);
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	return ((state->sxyreact_serial >> 1) & 0x80);
 }
+
 
 static WRITE16_HANDLER( sxyreact_dial_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		static int old;
+		ssv_state *state = space->machine->driver_data<ssv_state>();
 
 		if (data & 0x20)
-			serial = input_port_read_safe(space->machine, "PADDLE", 0) & 0xff;
+			state->sxyreact_serial = input_port_read_safe(space->machine, "PADDLE", 0) & 0xff;
 
-		if ( (old & 0x40) && !(data & 0x40) )	// $40 -> $00
-			serial <<= 1;						// shift 1 bit
+		if ( (state->sxyreact_dial & 0x40) && !(data & 0x40) )	// $40 -> $00
+			state->sxyreact_serial <<= 1;						// shift 1 bit
 
-		old = data;
+		state->sxyreact_dial = data;
 	}
 }
 
@@ -862,7 +865,7 @@ static ADDRESS_MAP_START( sxyreact_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500002, 0x500003) AM_READ(sxyreact_ballswitch_r)							// ?
 	AM_RANGE(0x500004, 0x500005) AM_READWRITE(sxyreact_dial_r, sxyreact_motor_w)		// Dial Value (serial)
 	AM_RANGE(0x520000, 0x520001) AM_WRITE(sxyreact_dial_w)								// Dial Value (advance 1 bit)
-	AM_RANGE(0x580000, 0x58ffff) AM_RAM AM_BASE(&ssv_nvram) AM_SIZE(&ssv_nvram_size)	// NVRAM
+	AM_RANGE(0x580000, 0x58ffff) AM_RAM AM_SHARE("nvram")	// NVRAM
 	SSV_MAP( 0xe00000 )
 ADDRESS_MAP_END
 
@@ -899,35 +902,41 @@ ADDRESS_MAP_END
 
 /* from st0016.c */
 
-static UINT32 latches[8];
-
 static READ32_HANDLER(latch32_r)
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
 	if(!offset)
-		latches[2]&=~2;
-	return latches[offset];
+		state->latches[2]&=~2;
+	return state->latches[offset];
 }
 
 static WRITE32_HANDLER(latch32_w)
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
 	if(!offset)
-		latches[2]|=1;
-	COMBINE_DATA(&latches[offset]);
+		state->latches[2]|=1;
+	COMBINE_DATA(&state->latches[offset]);
 	timer_call_after_resynch(space->machine, NULL, 0, NULL);
 }
 
 static READ16_HANDLER(latch16_r)
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
 	if(!offset)
-		latches[2]&=~1;
-	return latches[offset];
+		state->latches[2]&=~1;
+	return state->latches[offset];
 }
 
 static WRITE16_HANDLER(latch16_w)
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
 	if(!offset)
-		latches[2]|=2;
-	latches[offset]=data;
+		state->latches[2]|=2;
+	state->latches[offset]=data;
 	timer_call_after_resynch(space->machine, NULL, 0, NULL);
 }
 
@@ -953,14 +962,13 @@ ADDRESS_MAP_END
   Eagle Shot Golf
 ***************************************************************************/
 
-static UINT8 trackball_select, gfxrom_select;
-
 static READ16_HANDLER( eaglshot_gfxrom_r )
 {
+	ssv_state *state = space->machine->driver_data<ssv_state>();
 	UINT8 *rom	=	memory_region(space->machine, "gfx1");
 	size_t size	=	memory_region_length(space->machine, "gfx1");
 
-	offset = offset * 2 + gfxrom_select * 0x200000;
+	offset = offset * 2 + state->gfxrom_select * 0x200000;
 
 	if (offset > size)
 		return 0xffff;
@@ -971,12 +979,17 @@ static READ16_HANDLER( eaglshot_gfxrom_r )
 static WRITE16_HANDLER( eaglshot_gfxrom_w )
 {
 	if (ACCESSING_BITS_0_7)
-		gfxrom_select = data;
+	{
+		ssv_state *state = space->machine->driver_data<ssv_state>();
+		state->gfxrom_select = data;
+	}
 }
 
 static READ16_HANDLER( eaglshot_trackball_r )
 {
-	switch(trackball_select)
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	switch(state->trackball_select)
 	{
 		case 0x60:	return (input_port_read(space->machine, "TRACKX") >> 8) & 0xff;
 		case 0x40:	return (input_port_read(space->machine, "TRACKX") >> 0) & 0xff;
@@ -990,20 +1003,27 @@ static READ16_HANDLER( eaglshot_trackball_r )
 static WRITE16_HANDLER( eaglshot_trackball_w )
 {
 	if (ACCESSING_BITS_0_7)
-		trackball_select = data;
+	{
+		ssv_state *state = space->machine->driver_data<ssv_state>();
+		state->trackball_select = data;
+	}
 }
 
 
 
 static READ16_HANDLER( eaglshot_gfxram_r )
 {
-	return eaglshot_gfxram[offset + (ssv_scroll[0x76/2] & 0xf) * 0x40000/2];
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	return state->eaglshot_gfxram[offset + (state->scroll[0x76/2] & 0xf) * 0x40000/2];
 }
 
 static WRITE16_HANDLER( eaglshot_gfxram_w )
 {
-	offset += (ssv_scroll[0x76/2] & 0xf) * 0x40000/2;
-	COMBINE_DATA(&eaglshot_gfxram[offset]);
+	ssv_state *state = space->machine->driver_data<ssv_state>();
+
+	offset += (state->scroll[0x76/2] & 0xf) * 0x40000/2;
+	COMBINE_DATA(&state->eaglshot_gfxram[offset]);
 	gfx_element_mark_dirty(space->machine->gfx[0], offset / (16*8/2));
 	gfx_element_mark_dirty(space->machine->gfx[1], offset / (16*8/2));
 }
@@ -1017,7 +1037,7 @@ static ADDRESS_MAP_START( eaglshot_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800000, 0x800001) AM_WRITE(eaglshot_gfxrom_w)
 	AM_RANGE(0x900000, 0x900001) AM_WRITE(eaglshot_trackball_w)
 	AM_RANGE(0xa00000, 0xbfffff) AM_READ(eaglshot_gfxrom_r)
-	AM_RANGE(0xc00000, 0xc007ff) AM_RAM AM_BASE(&ssv_nvram) AM_SIZE(&ssv_nvram_size)	// NVRAM
+	AM_RANGE(0xc00000, 0xc007ff) AM_RAM AM_SHARE("nvram")	// NVRAM
 	AM_RANGE(0xd00000, 0xd00001) AM_READ(eaglshot_trackball_r)
 	SSV_MAP( 0xf00000 )
 ADDRESS_MAP_END
@@ -2601,59 +2621,55 @@ static const es5506_interface es5506_config =
 
 ***************************************************************************/
 
-static void init_ssv(int sprites_offsx, int sprites_offsy, int tilemap_offsx, int tilemap_offsy)
+static void init_ssv(running_machine *machine, int interrupt_ultrax)
 {
+	ssv_state *state = machine->driver_data<ssv_state>();
 	int i;
 	for (i = 0; i < 16; i++)
-		ssv_tile_code[i]	=	( (i & 8) ? (1 << 16) : 0 ) +
+		state->tile_code[i]	=	( (i & 8) ? (1 << 16) : 0 ) +
 								( (i & 4) ? (2 << 16) : 0 ) +
 								( (i & 2) ? (4 << 16) : 0 ) +
 								( (i & 1) ? (8 << 16) : 0 ) ;
-	ssv_enable_video(1);
-	ssv_special = 0;
-	interrupt_ultrax = 0;
-
-	ssv_sprites_offsx = sprites_offsx;
-	ssv_sprites_offsy = sprites_offsy;
-	ssv_tilemap_offsx = tilemap_offsx;
-	ssv_tilemap_offsy = tilemap_offsy;
+	ssv_enable_video(machine, 1);
+	state->interrupt_ultrax = interrupt_ultrax;
 }
 
-static void init_hypreac2(void)
+static void init_hypreac2(running_machine *machine)
 {
+	ssv_state *state = machine->driver_data<ssv_state>();
 	int i;
 
 	for (i = 0; i < 16; i++)
-		ssv_tile_code[i]	=	(i << 16);
+		state->tile_code[i]	=	(i << 16);
 }
 
-
-static DRIVER_INIT( drifto94 )		{	init_ssv(-8, +0xf0, +0, -0xf0);	}
-static DRIVER_INIT( eaglshot )		{	init_ssv(-8, +0xf0, +0, -0xef); init_hypreac2();	}
-static DRIVER_INIT( gdfs )			{	init_ssv(-8, +0x01, +0, +0x00);	}
-static DRIVER_INIT( hypreact )		{	init_ssv(+0, +0xf0, +0, -0xf7);	}
-static DRIVER_INIT( hypreac2 )		{	init_ssv(+0, +0xf0, +0, -0xf8); init_hypreac2();	}
-static DRIVER_INIT( janjans1 )		{	init_ssv(+0, +0xe8, +0, -0xf0);	}
-static DRIVER_INIT( keithlcy )		{	init_ssv(-8, +0xf1, +0, -0xf0);	}
-static DRIVER_INIT( meosism )		{	init_ssv(+0, +0xe8, +0, -0xef);	}
-static DRIVER_INIT( mslider )		{	init_ssv(-16,+0xf0, +8, -0xf1);	}
-static DRIVER_INIT( ryorioh )		{	init_ssv(+0, +0xe8, +0, -0xf0);	}
-static DRIVER_INIT( srmp4 )			{	init_ssv(-8, +0xf0, +0, -0xf0);
+static DRIVER_INIT( drifto94 )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( eaglshot )		{	init_ssv(machine, 0); init_hypreac2(machine);	}
+static DRIVER_INIT( gdfs )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( hypreact )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( hypreac2 )		{	init_ssv(machine, 0); init_hypreac2(machine);	}
+static DRIVER_INIT( janjans1 )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( keithlcy )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( meosism )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( mslider )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( ryorioh )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( srmp4 )			{	init_ssv(machine, 0);
 //  ((UINT16 *)memory_region(machine, "user1"))[0x2b38/2] = 0x037a;   /* patch to see gal test mode */
 }
-static DRIVER_INIT( srmp7 )		{	init_ssv(+0, -0x0f, +0, -0xf0);	}
-static DRIVER_INIT( stmblade )		{	init_ssv(-8, +0xef, +0, -0xf0);	}
-static DRIVER_INIT( survarts )		{	init_ssv(+0, +0xe8, +0, -0xef);	}
-static DRIVER_INIT( dynagear )		{	init_ssv(-8, +0xec, +0, -0xef);	}
-static DRIVER_INIT( sxyreact )		{	init_ssv(+0, +0xe8, +0, -0xef); init_hypreac2();	}	// different
-static DRIVER_INIT( sxyreac2 )		{	init_ssv(+0, +0xe8, +0, -0xef); init_hypreac2();	}
-static DRIVER_INIT( twineag2 )		{	init_ssv(-6, +0x01, -2, +0x00); interrupt_ultrax=1;	}
-static DRIVER_INIT( ultrax )		{	init_ssv(-8, +0x01, +0, +0x00); interrupt_ultrax=1;	}
-static DRIVER_INIT( vasara )		{	init_ssv(+0, +0xf0, +0, -0xf8);	}
-static DRIVER_INIT( jsk )			{	init_ssv(-8, +0xf5, +0, -0xf4);	}
+static DRIVER_INIT( srmp7 )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( stmblade )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( survarts )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( dynagear )		{	init_ssv(machine, 0);	}
+static DRIVER_INIT( sxyreact )		{	init_ssv(machine, 0); init_hypreac2(machine);	}
+static DRIVER_INIT( cairblad )		{	init_ssv(machine, 0); init_hypreac2(machine);	}
+static DRIVER_INIT( sxyreac2 )		{	init_ssv(machine, 0); init_hypreac2(machine);	}
+static DRIVER_INIT( twineag2 )		{	init_ssv(machine, 1);	}
+static DRIVER_INIT( ultrax )			{	init_ssv(machine, 1);	}
+static DRIVER_INIT( vasara )			{	init_ssv(machine, 0);	}
+static DRIVER_INIT( jsk )			{	init_ssv(machine, 0);	}
 
 
-static MACHINE_DRIVER_START( ssv )
+static MACHINE_CONFIG_START( ssv, ssv_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", V60, 16000000) /* Based on STA-0001 & STA-0001B System boards */
@@ -2665,7 +2681,7 @@ static MACHINE_DRIVER_START( ssv )
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(0x180, 0x100)
+	MDRV_SCREEN_SIZE(0x1c6, 0x106)
 	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
 
 	MDRV_GFXDECODE(ssv)
@@ -2680,28 +2696,26 @@ static MACHINE_DRIVER_START( ssv )
 	MDRV_SOUND_CONFIG(es5506_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( drifto94 )
+static MACHINE_CONFIG_DERIVED( drifto94, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(drifto94_map)
 
-	MDRV_NVRAM_HANDLER(ssv)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 4, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcd-0x25)*2-1, 0, (0x101-0x13)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gdfs )
+static MACHINE_CONFIG_DERIVED( gdfs, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gdfs_map)
 	MDRV_CPU_VBLANK_INT_HACK(gdfs_interrupt,1+4)
@@ -2710,231 +2724,251 @@ static MACHINE_DRIVER_START( gdfs )
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd5-0x2c)*2-1, 0, (0x102-0x12)-1)
 
 	MDRV_GFXDECODE(gdfs)
 	MDRV_VIDEO_START(gdfs)
 	MDRV_VIDEO_UPDATE(gdfs)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hypreact )
+static MACHINE_CONFIG_DERIVED( hypreact, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(hypreact_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(8, 0x148-1, 16, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb-0x22)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hypreac2 )
+static MACHINE_CONFIG_DERIVED( hypreac2, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(hypreac2_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 8, 0xf8-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb-0x22)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( janjans1 )
+static MACHINE_CONFIG_DERIVED( janjans1, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(janjans1_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb-0x23)*2-1, 0, (0xfe - 0x0f)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( keithlcy )
+static MACHINE_CONFIG_DERIVED( keithlcy, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(keithlcy_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 4, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcd-0x25)*2-1, 0, (0x101 - 0x13)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( meosism )
+static MACHINE_CONFIG_DERIVED( meosism, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(meosism_map)
 
-	MDRV_NVRAM_HANDLER(ssv)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd5-0x2c)*2-1, 0, (0xfe - 0x12)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mslider )
+static MACHINE_CONFIG_DERIVED( mslider, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mslider_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd6-0x26)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ryorioh )
+static MACHINE_CONFIG_DERIVED( ryorioh, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ryorioh_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb-0x23)*2-1, 0, (0xfe - 0x0f)-1)
+MACHINE_CONFIG_END
 
-
-static MACHINE_DRIVER_START( srmp4 )
+static MACHINE_CONFIG_DERIVED( vasara, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(ryorioh_map)
+
+	/* video hardware */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcc-0x24)*2-1, 0,(0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( srmp4, ssv )
+
+	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(srmp4_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 4, 0xf4-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4-0x2c)*2-1, 0, (0x102 - 0x12)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( srmp7 )
+static MACHINE_CONFIG_DERIVED( srmp7, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(srmp7_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4-0x2c)*2-1, 0, (0xfd - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( stmblade )
+static MACHINE_CONFIG_DERIVED( stmblade, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(drifto94_map)
 
-	MDRV_NVRAM_HANDLER(ssv)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x158-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd6-0x26)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( survarts )
+static MACHINE_CONFIG_DERIVED( survarts, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(survarts_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 4, 0xf4-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4-0x2c)*2-1, 0, (0x102 - 0x12)-1)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( dynagear )
+
+static MACHINE_CONFIG_DERIVED( dynagear, survarts )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(survarts)
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(8, 0x158-16-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4-0x2c)*2-1, 0, (0x102 - 0x12)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( eaglshot )
+static MACHINE_CONFIG_DERIVED( eaglshot, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(eaglshot_map)
 
-	MDRV_NVRAM_HANDLER(ssv)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x140-1, 8, 0xe8-1)
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xca - 0x2a)*2-1, 0, (0xf6 - 0x16)-1)
 
 	MDRV_GFXDECODE(eaglshot)
 	MDRV_VIDEO_START(eaglshot)
 	MDRV_VIDEO_UPDATE(eaglshot)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( sxyreact )
+static MACHINE_CONFIG_DERIVED( sxyreact, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(sxyreact_map)
 
-	MDRV_NVRAM_HANDLER(ssv)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb - 0x22)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
-
-static MACHINE_DRIVER_START( twineag2 )
+static MACHINE_CONFIG_DERIVED( sxyreac2, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(sxyreact_map)
+
+	MDRV_NVRAM_ADD_0FILL("nvram")
+
+	/* video hardware */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb - 0x23)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( cairblad, ssv )
+
+	/* basic machine hardware */
+	MDRV_CPU_MODIFY("maincpu")
+	MDRV_CPU_PROGRAM_MAP(sxyreact_map)
+
+	MDRV_NVRAM_ADD_0FILL("nvram")
+
+	/* video hardware */
+	MDRV_SCREEN_MODIFY("screen")
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xcb - 0x22)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( twineag2, ssv )
+
+	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(twineag2_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4 - 0x2c)*2-1, 0, (0x102 - 0x12)-1)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ultrax )
+static MACHINE_CONFIG_DERIVED( ultrax, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ultrax_map)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xd4 - 0x2c)*2-1, 0, (0x102 - 0x12)-1)
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( jsk )
+static MACHINE_CONFIG_DERIVED( jsk, ssv )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ssv)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(jsk_map)
 
@@ -2943,8 +2977,8 @@ static MACHINE_DRIVER_START( jsk )
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0, 0x150-1, 0, 0xf0-1)
-MACHINE_DRIVER_END
+	MDRV_SCREEN_VISIBLE_AREA(0, (0xca - 0x22)*2-1, 0, (0xfe - 0x0e)-1)
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -4604,9 +4638,9 @@ GAME( 1997,  mslider,  0,        mslider,  mslider,  mslider,  ROT0,   "Visco / 
 GAME( 1997,  srmp7,    0,        srmp7,    srmp7,    srmp7,    ROT0,   "Seta",               "Super Real Mahjong P7 (Japan)",                    GAME_NO_COCKTAIL | GAME_IMPERFECT_SOUND )
 GAME( 1998,  ryorioh,  0,        ryorioh,  ryorioh,  ryorioh,  ROT0,   "Visco",              "Gourmet Battle Quiz Ryohrioh CooKing (Japan)",     GAME_NO_COCKTAIL )
 GAME( 1998,  sxyreact, 0,        sxyreact, sxyreact, sxyreact, ROT0,   "Sammy",              "Pachinko Sexy Reaction (Japan)",                   GAME_NO_COCKTAIL )
-GAME( 1999,  sxyreac2, 0,        sxyreact, sxyreact, sxyreac2, ROT0,   "Sammy",              "Pachinko Sexy Reaction 2 (Japan)",                 GAME_NO_COCKTAIL )
-GAME( 1999,  cairblad, 0,        sxyreact, cairblad, sxyreact, ROT270, "Sammy",              "Change Air Blade (Japan)",                         GAME_NO_COCKTAIL )
+GAME( 1999,  sxyreac2, 0,        sxyreac2, sxyreact, sxyreac2, ROT0,   "Sammy",              "Pachinko Sexy Reaction 2 (Japan)",                 GAME_NO_COCKTAIL )
+GAME( 1999,  cairblad, 0,        cairblad, cairblad, cairblad, ROT270, "Sammy",              "Change Air Blade (Japan)",                         GAME_NO_COCKTAIL )
 GAME( 2000,  janjans2, 0,        janjans1, janjans2, janjans1, ROT0,   "Visco",              "Lovely Pop Mahjong JangJang Shimasho 2 (Japan)",   GAME_NO_COCKTAIL | GAME_IMPERFECT_GRAPHICS )
-GAME( 2000,  vasara,   0,        ryorioh,  vasara,   vasara,   ROT270, "Visco",              "Vasara",                                           GAME_NO_COCKTAIL )
-GAME( 2001,  vasara2,  0,        ryorioh,  vasara2,  vasara,   ROT270, "Visco",              "Vasara 2 (set 1)",                                 GAME_NO_COCKTAIL )
-GAME( 2001,  vasara2a, vasara2,  ryorioh,  vasara2,  vasara,   ROT270, "Visco",              "Vasara 2 (set 2)",                                 GAME_NO_COCKTAIL )
+GAME( 2000,  vasara,   0,        vasara,   vasara,   vasara,   ROT270, "Visco",              "Vasara",                                           GAME_NO_COCKTAIL )
+GAME( 2001,  vasara2,  0,        vasara,   vasara2,  vasara,   ROT270, "Visco",              "Vasara 2 (set 1)",                                 GAME_NO_COCKTAIL )
+GAME( 2001,  vasara2a, vasara2,  vasara,   vasara2,  vasara,   ROT270, "Visco",              "Vasara 2 (set 2)",                                 GAME_NO_COCKTAIL )

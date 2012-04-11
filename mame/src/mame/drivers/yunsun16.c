@@ -127,7 +127,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x800114, 0x800117) AM_RAM AM_BASE_MEMBER(yunsun16_state, scrollram_0)	// Scrolling
 	AM_RANGE(0x800154, 0x800155) AM_RAM AM_BASE_MEMBER(yunsun16_state, priorityram)	// Priority
 	AM_RANGE(0x800180, 0x800181) AM_WRITE(yunsun16_sound_bank_w)	// Sound
-	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)	// Sound
+	AM_RANGE(0x800188, 0x800189) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	// Sound
 	AM_RANGE(0x8001fe, 0x8001ff) AM_WRITENOP	// ? 0 (during int)
 	AM_RANGE(0x900000, 0x903fff) AM_RAM_WRITE(paletteram16_xRRRRRGGGGGBBBBB_word_w) AM_BASE_GENERIC(paletteram)	// Palette
 	AM_RANGE(0x908000, 0x90bfff) AM_RAM_WRITE(yunsun16_vram_1_w) AM_BASE_MEMBER(yunsun16_state, vram_1)	// Layer 1
@@ -139,7 +139,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( magicbub_sound_command_w )
 {
-	yunsun16_state *state = (yunsun16_state *)space->machine->driver_data;
+	yunsun16_state *state = space->machine->driver_data<yunsun16_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 /*
@@ -177,7 +177,7 @@ static ADDRESS_MAP_START( sound_port_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x10, 0x11) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w )
 	AM_RANGE(0x18, 0x18) AM_READ(soundlatch_r )						// From Main CPU
-	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w )		// M6295
+	AM_RANGE(0x1c, 0x1c) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)		// M6295
 ADDRESS_MAP_END
 
 
@@ -410,22 +410,22 @@ static INPUT_PORTS_START( bombkick )
 	PORT_DIPSETTING(      0x0003, "3" )
 	PORT_DIPSETTING(      0x0002, "4" )
 	PORT_DIPSETTING(      0x0001, "5" )
-	PORT_DIPNAME( 0x0004, 0x0004, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0004, 0x0004, "DSW 2:3 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0004, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0008, 0x0008, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0008, 0x0008, "DSW 2:4 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0008, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0010, 0x0000, "DON'T CHANGE IT!" )      /* Must be ON  ! - read notes */
+	PORT_DIPNAME( 0x0010, 0x0000, "DSW 2:5 - LEAVE ON!" )	/* Must be ON  ! - read notes */
 	PORT_DIPSETTING(      0x0010, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0020, 0x0020, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0020, 0x0020, "DSW 2:6 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0020, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0040, 0x0000, "DON'T CHANGE IT!" )      /* Must be ON  ! - read notes */
+	PORT_DIPNAME( 0x0040, 0x0000, "DSW 2:7 - LEAVE ON!" )	/* Must be ON  ! - read notes */
 	PORT_DIPSETTING(      0x0040, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
-	PORT_DIPNAME( 0x0080, 0x0080, "DON'T CHANGE IT!" )      /* Must be OFF ! - read notes */
+	PORT_DIPNAME( 0x0080, 0x0080, "DSW 2:8 - LEAVE OFF!" )	/* Must be OFF ! - read notes */
 	PORT_DIPSETTING(      0x0080, DEF_STR( Off ) )
 	PORT_DIPSETTING(      0x0000, DEF_STR( On ) )
 INPUT_PORTS_END
@@ -557,7 +557,7 @@ GFXDECODE_END
 
 static MACHINE_START( yunsun16 )
 {
-	yunsun16_state *state = (yunsun16_state *)machine->driver_data;
+	yunsun16_state *state = machine->driver_data<yunsun16_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -567,7 +567,7 @@ static MACHINE_START( yunsun16 )
 
 static MACHINE_RESET( yunsun16 )
 {
-	yunsun16_state *state = (yunsun16_state *)machine->driver_data;
+	yunsun16_state *state = machine->driver_data<yunsun16_state>();
 
 	state->sprites_scrolldx = -0x40;
 	state->sprites_scrolldy = -0x0f;
@@ -579,7 +579,7 @@ static MACHINE_RESET( yunsun16 )
 
 static void soundirq(running_device *device, int state)
 {
-	yunsun16_state *yunsun16 = (yunsun16_state *)device->machine->driver_data;
+	yunsun16_state *yunsun16 = device->machine->driver_data<yunsun16_state>();
 	cpu_set_input_line(yunsun16->audiocpu, 0, state);
 }
 
@@ -588,10 +588,7 @@ static const ym3812_interface magicbub_ym3812_intf =
 	soundirq	/* IRQ Line */
 };
 
-static MACHINE_DRIVER_START( magicbub )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(yunsun16_state)
+static MACHINE_CONFIG_START( magicbub, yunsun16_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)
@@ -624,23 +621,20 @@ static MACHINE_DRIVER_START( magicbub )
 
 	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_CONFIG(magicbub_ym3812_intf)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.20)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.20)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
                                 Shocking
 ***************************************************************************/
 
-static MACHINE_DRIVER_START( shocking )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(yunsun16_state)
+static MACHINE_CONFIG_START( shocking, yunsun16_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)
@@ -670,7 +664,7 @@ static MACHINE_DRIVER_START( shocking )
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

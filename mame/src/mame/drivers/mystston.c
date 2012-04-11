@@ -72,7 +72,7 @@ static INPUT_CHANGED( coin_inserted )
 
 static WRITE8_HANDLER( mystston_ay8910_select_w )
 {
-	mystston_state *state = (mystston_state *)space->machine->driver_data;
+	mystston_state *state = space->machine->driver_data<mystston_state>();
 
 	/* bit 5 goes to 8910 #0 BDIR pin */
 	if (((*state->ay8910_select & 0x20) == 0x20) && ((data & 0x20) == 0x00))
@@ -201,16 +201,14 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( mystston )
-
-	MDRV_DRIVER_DATA(mystston_state)
+static MACHINE_CONFIG_START( mystston, mystston_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, CPU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(mystston_video)
+	MDRV_FRAGMENT_ADD(mystston_video)
 
 	/* audio hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -220,7 +218,7 @@ static MACHINE_DRIVER_START( mystston )
 
 	MDRV_SOUND_ADD("ay2", AY8910, AY8910_CLOCK)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

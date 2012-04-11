@@ -60,13 +60,13 @@ Head Panic
 
 static WRITE16_HANDLER( esd16_spriteram_w )
 {
-	esd16_state *state = (esd16_state *)space->machine->driver_data;
+	esd16_state *state = space->machine->driver_data<esd16_state>();
 	COMBINE_DATA(&state->spriteram[offset]);
 }
 
 static WRITE16_HANDLER( esd16_sound_command_w )
 {
-	esd16_state *state = (esd16_state *)space->machine->driver_data;
+	esd16_state *state = space->machine->driver_data<esd16_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		soundlatch_w(space, 0, data & 0xff);
@@ -105,7 +105,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER(hedpanic_platform_w)
 {
-	esd16_state *state = (esd16_state *)space->machine->driver_data;
+	esd16_state *state = space->machine->driver_data<esd16_state>();
 	int offsets = state->headpanic_platform_x[0] + 0x40 * state->headpanic_platform_y[0];
 
 	state->vram_1[offsets] = data;
@@ -115,7 +115,7 @@ static WRITE16_HANDLER(hedpanic_platform_w)
 
 static READ16_HANDLER( esd_eeprom_r )
 {
-	esd16_state *state = (esd16_state *)space->machine->driver_data;
+	esd16_state *state = space->machine->driver_data<esd16_state>();
 	if (ACCESSING_BITS_8_15)
 	{
 		return ((eeprom_read_bit(state->eeprom) & 0x01) << 15);
@@ -240,7 +240,7 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( esd16_sound_command_r )
 {
-	esd16_state *state = (esd16_state *)space->machine->driver_data;
+	esd16_state *state = space->machine->driver_data<esd16_state>();
 
 	/* Clear IRQ only after reading the command, or some get lost */
 	cpu_set_input_line(state->audio_cpu, 0, CLEAR_LINE);
@@ -250,7 +250,7 @@ static READ8_HANDLER( esd16_sound_command_r )
 static ADDRESS_MAP_START( multchmp_sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x01) AM_DEVWRITE("ymsnd", ym3812_w)	// YM3812
-	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)	// M6295
+	AM_RANGE(0x02, 0x02) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)	// M6295
 	AM_RANGE(0x03, 0x03) AM_READ(esd16_sound_command_r)	// From Main CPU
 	AM_RANGE(0x04, 0x04) AM_WRITENOP	// ? $00, $30
 	AM_RANGE(0x05, 0x05) AM_WRITE(esd16_sound_rombank_w)	// ROM Bank
@@ -518,7 +518,7 @@ GFXDECODE_END
 
 static MACHINE_START( esd16 )
 {
-	esd16_state *state = (esd16_state *)machine->driver_data;
+	esd16_state *state = machine->driver_data<esd16_state>();
 	UINT8 *AUDIO = memory_region(machine, "audiocpu");
 
 	memory_configure_bank(machine, "bank1", 0, 17, &AUDIO[0x0000], 0x4000);
@@ -531,15 +531,12 @@ static MACHINE_START( esd16 )
 
 static MACHINE_RESET( esd16 )
 {
-	esd16_state *state = (esd16_state *)machine->driver_data;
+	esd16_state *state = machine->driver_data<esd16_state>();
 
 	state->tilemap0_color = 0;
 }
 
-static MACHINE_DRIVER_START( multchmp )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(esd16_state)
+static MACHINE_CONFIG_START( multchmp, esd16_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",M68000, 16000000)
@@ -576,12 +573,11 @@ static MACHINE_DRIVER_START( multchmp )
 
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( hedpanic )
+static MACHINE_CONFIG_DERIVED( hedpanic, multchmp )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(multchmp)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(hedpanic_map)
@@ -593,43 +589,39 @@ static MACHINE_DRIVER_START( hedpanic )
 	MDRV_GFXDECODE(hedpanic)
 	MDRV_VIDEO_UPDATE(hedpanic)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mchampdx )
+static MACHINE_CONFIG_DERIVED( mchampdx, hedpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hedpanic)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mchampdx_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tangtang )
+static MACHINE_CONFIG_DERIVED( tangtang, hedpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hedpanic)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(tangtang_map)
 
 	MDRV_GFXDECODE(tangtang)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( swatpolc )
+static MACHINE_CONFIG_DERIVED( swatpolc, hedpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hedpanic)
 
 	MDRV_GFXDECODE(tangtang)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( hedpanio )
+static MACHINE_CONFIG_DERIVED( hedpanio, hedpanic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hedpanic)
 
 	MDRV_VIDEO_UPDATE(hedpanio)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

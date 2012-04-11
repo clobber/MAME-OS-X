@@ -29,6 +29,7 @@
 #include "cpu/tms32025/tms32025.h"
 #include "video/tlc34076.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
 #include "includes/coolpool.h"
 
 
@@ -59,7 +60,7 @@ static UINT8 nvram_write_enable;
 
 static void amerdart_scanline(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
-	coolpool_state *state = (coolpool_state *)screen.machine->driver_data;
+	coolpool_state *state = screen.machine->driver_data<coolpool_state>();
 
 	UINT16 *vram = &state->vram_base[(params->rowaddr << 8) & 0xff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
@@ -88,11 +89,11 @@ static void amerdart_scanline(screen_device &screen, bitmap_t *bitmap, int scanl
 
 static void coolpool_scanline(screen_device &screen, bitmap_t *bitmap, int scanline, const tms34010_display_params *params)
 {
-	coolpool_state *state = (coolpool_state *)screen.machine->driver_data;
+	coolpool_state *state = screen.machine->driver_data<coolpool_state>();
 
 	UINT16 *vram = &state->vram_base[(params->rowaddr << 8) & 0x1ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
-	const rgb_t *pens = tlc34076_get_pens();
+	const rgb_t *pens = tlc34076_get_pens(screen.machine->device("tlc34076"));
 	int coladdr = params->coladdr;
 	int x;
 
@@ -112,17 +113,17 @@ static void coolpool_scanline(screen_device &screen, bitmap_t *bitmap, int scanl
  *
  *************************************/
 
-static void coolpool_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void coolpool_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	memcpy(shiftreg, &state->vram_base[TOWORD(address) & ~TOWORD(0xfff)], TOBYTE(0x1000));
 }
 
 
-static void coolpool_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void coolpool_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	memcpy(&state->vram_base[TOWORD(address) & ~TOWORD(0xfff)], shiftreg, TOBYTE(0x1000));
 }
@@ -137,7 +138,7 @@ static void coolpool_from_shiftreg(const address_space *space, UINT32 address, U
 
 static MACHINE_RESET( amerdart )
 {
-	coolpool_state *state = (coolpool_state *)machine->driver_data;
+	coolpool_state *state = machine->driver_data<coolpool_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->dsp = machine->device("dsp");
@@ -148,7 +149,6 @@ static MACHINE_RESET( amerdart )
 
 static MACHINE_RESET( coolpool )
 {
-	tlc34076_reset(6);
 	nvram_write_enable = 0;
 }
 
@@ -188,7 +188,10 @@ static WRITE16_HANDLER( nvram_data_w )
 	if (ACCESSING_BITS_0_7)
 	{
 		if (nvram_write_enable)
-			space->machine->generic.nvram.u16[offset] = data & 0xff;
+		{
+			coolpool_state *state = space->machine->driver_data<coolpool_state>();
+			state->m_nvram[offset] = data & 0xff;
+		}
 	}
 }
 
@@ -209,7 +212,7 @@ static WRITE16_HANDLER( nvram_thrash_data_w )
 
 static TIMER_DEVICE_CALLBACK( amerdart_audio_int_gen )
 {
-	coolpool_state *state = (coolpool_state *)timer.machine->driver_data;
+	coolpool_state *state = timer.machine->driver_data<coolpool_state>();
 
 	cpu_set_input_line(state->dsp, 0, ASSERT_LINE);
 	cpu_set_input_line(state->dsp, 0, CLEAR_LINE);
@@ -230,7 +233,7 @@ static WRITE16_HANDLER( amerdart_misc_w )
 
 static READ16_HANDLER( amerdart_dsp_bio_line_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	static UINT8 old_cmd;
 	static UINT8 same_cmd_count;
@@ -253,7 +256,7 @@ static READ16_HANDLER( amerdart_dsp_bio_line_r )
 
 static READ16_HANDLER( amerdart_iop_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 //  logerror("%08x:IOP read %04x\n",cpu_get_pc(space->cpu),state->iop_answer);
 	cputag_set_input_line(space->machine, "maincpu", 1, CLEAR_LINE);
@@ -263,7 +266,7 @@ static READ16_HANDLER( amerdart_iop_r )
 
 static WRITE16_HANDLER( amerdart_iop_w )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 //  logerror("%08x:IOP write %04x\n", cpu_get_pc(space->cpu), data);
 	COMBINE_DATA(&state->iop_cmd);
@@ -272,7 +275,7 @@ static WRITE16_HANDLER( amerdart_iop_w )
 
 static READ16_HANDLER( amerdart_dsp_cmd_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 //  logerror("%08x:DSP cmd_r %04x\n", cpu_get_pc(space->cpu), state->iop_cmd);
 	state->cmd_pending = 0;
@@ -281,7 +284,7 @@ static READ16_HANDLER( amerdart_dsp_cmd_r )
 
 static WRITE16_HANDLER( amerdart_dsp_answer_w )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 //  logerror("%08x:DSP answer %04x\n", cpu_get_pc(space->cpu), data);
 	state->iop_answer = data;
@@ -318,9 +321,9 @@ static int amerdart_trackball_dec(int data)
 	return data;
 }
 
-static int amerdart_trackball_direction(const address_space *space, int num, int data)
+static int amerdart_trackball_direction(address_space *space, int num, int data)
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	UINT16 result_x = (data & 0x0c) >> 2;
 	UINT16 result_y = (data & 0x03) >> 0;
@@ -410,7 +413,7 @@ static READ16_HANDLER( amerdart_trackball_r )
 
 */
 
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 
 	state->result = (state->lastresult | 0x00ff);
@@ -467,7 +470,7 @@ static WRITE16_HANDLER( coolpool_misc_w )
 
 static TIMER_CALLBACK( deferred_iop_w )
 {
-	coolpool_state *state = (coolpool_state *)machine->driver_data;
+	coolpool_state *state = machine->driver_data<coolpool_state>();
 
 	state->iop_cmd = param;
 	state->cmd_pending = 1;
@@ -487,7 +490,7 @@ static WRITE16_HANDLER( coolpool_iop_w )
 
 static READ16_HANDLER( coolpool_iop_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	logerror("%08x:IOP read %04x\n",cpu_get_pc(space->cpu),state->iop_answer);
 	cputag_set_input_line(space->machine, "maincpu", 1, CLEAR_LINE);
@@ -506,7 +509,7 @@ static READ16_HANDLER( coolpool_iop_r )
 
 static READ16_HANDLER( dsp_cmd_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	state->cmd_pending = 0;
 	logerror("%08x:IOP cmd_r %04x\n", cpu_get_pc(space->cpu), state->iop_cmd);
@@ -516,7 +519,7 @@ static READ16_HANDLER( dsp_cmd_r )
 
 static WRITE16_HANDLER( dsp_answer_w )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	logerror("%08x:IOP answer %04x\n", cpu_get_pc(space->cpu), data);
 	state->iop_answer = data;
@@ -526,7 +529,7 @@ static WRITE16_HANDLER( dsp_answer_w )
 
 static READ16_HANDLER( dsp_bio_line_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	return state->cmd_pending ? CLEAR_LINE : ASSERT_LINE;
 }
@@ -547,7 +550,7 @@ static READ16_HANDLER( dsp_hold_line_r )
 
 static READ16_HANDLER( dsp_rom_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 	UINT8 *rom = memory_region(space->machine, "user2");
 
 	return rom[state->iop_romaddr & (memory_region_length(space->machine, "user2") - 1)];
@@ -556,7 +559,7 @@ static READ16_HANDLER( dsp_rom_r )
 
 static WRITE16_HANDLER( dsp_romaddr_w )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	switch (offset)
 	{
@@ -586,7 +589,7 @@ static WRITE16_DEVICE_HANDLER( dsp_dac_w )
 
 static READ16_HANDLER( coolpool_input_r )
 {
-	coolpool_state *state = (coolpool_state *)space->machine->driver_data;
+	coolpool_state *state = space->machine->driver_data<coolpool_state>();
 
 	state->result = (input_port_read(space->machine, "IN1") & 0x00ff) | (state->lastresult & 0xff00);
 	state->newx[1] = input_port_read(space->machine, "XAXIS");
@@ -658,7 +661,7 @@ static ADDRESS_MAP_START( amerdart_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x000fffff) AM_RAM AM_BASE_MEMBER(coolpool_state,vram_base)
 	AM_RANGE(0x04000000, 0x0400000f) AM_WRITE(amerdart_misc_w)
 	AM_RANGE(0x05000000, 0x0500000f) AM_READWRITE(amerdart_iop_r, amerdart_iop_w)
-	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_SHARE("nvram")
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xffb00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -666,11 +669,11 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( coolpool_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(coolpool_state,vram_base)
-	AM_RANGE(0x01000000, 0x010000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)	// IMSG176P-40
+	AM_RANGE(0x01000000, 0x010000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)	// IMSG176P-40
 	AM_RANGE(0x02000000, 0x020000ff) AM_READWRITE(coolpool_iop_r, coolpool_iop_w)
 	AM_RANGE(0x03000000, 0x0300000f) AM_WRITE(coolpool_misc_w)
 	AM_RANGE(0x03000000, 0x03ffffff) AM_ROM AM_REGION("gfx1", 0)
-	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x06000000, 0x06007fff) AM_RAM_WRITE(nvram_thrash_data_w) AM_SHARE("nvram")
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xffe00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
@@ -680,8 +683,8 @@ static ADDRESS_MAP_START( nballsht_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x001fffff) AM_RAM AM_BASE_MEMBER(coolpool_state,vram_base)
 	AM_RANGE(0x02000000, 0x020000ff) AM_READWRITE(coolpool_iop_r, coolpool_iop_w)
 	AM_RANGE(0x03000000, 0x0300000f) AM_WRITE(coolpool_misc_w)
-	AM_RANGE(0x04000000, 0x040000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)	// IMSG176P-40
-	AM_RANGE(0x06000000, 0x0601ffff) AM_MIRROR(0x00020000) AM_RAM_WRITE(nvram_thrash_data_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x04000000, 0x040000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)	// IMSG176P-40
+	AM_RANGE(0x06000000, 0x0601ffff) AM_MIRROR(0x00020000) AM_RAM_WRITE(nvram_thrash_data_w) AM_SHARE("nvram")
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
 	AM_RANGE(0xff000000, 0xff7fffff) AM_ROM AM_REGION("gfx1", 0)
 	AM_RANGE(0xffc00000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
@@ -863,9 +866,7 @@ static const tms34010_config tms_config_coolpool =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( amerdart )
-
-	MDRV_DRIVER_DATA( coolpool_state )
+static MACHINE_CONFIG_START( amerdart, coolpool_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS34010, XTAL_40MHz)
@@ -879,7 +880,7 @@ static MACHINE_DRIVER_START( amerdart )
 	MDRV_TIMER_ADD_SCANLINE("audioint", amerdart_audio_int_gen, "screen", 0, 1)
 
 	MDRV_MACHINE_RESET(amerdart)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	MDRV_TIMER_ADD("nvram_timer", nvram_write_timeout)
 
@@ -895,12 +896,10 @@ static MACHINE_DRIVER_START( amerdart )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( coolpool )
-
-	MDRV_DRIVER_DATA( coolpool_state )
+static MACHINE_CONFIG_START( coolpool, coolpool_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS34010, XTAL_40MHz)
@@ -912,11 +911,13 @@ static MACHINE_DRIVER_START( coolpool )
 	MDRV_CPU_IO_MAP(coolpool_dsp_io_map)
 
 	MDRV_MACHINE_RESET(coolpool)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	MDRV_TIMER_ADD("nvram_timer", nvram_write_timeout)
 
 	/* video hardware */
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
+
 	MDRV_VIDEO_UPDATE(tms340x0)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -928,15 +929,14 @@ static MACHINE_DRIVER_START( coolpool )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( 9ballsht )
-	MDRV_IMPORT_FROM(coolpool)
+static MACHINE_CONFIG_DERIVED( 9ballsht, coolpool )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(nballsht_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1180,7 +1180,7 @@ ROM_END
 
 static void register_state_save(running_machine *machine)
 {
-	coolpool_state *state = (coolpool_state *)machine->driver_data;
+	coolpool_state *state = machine->driver_data<coolpool_state>();
 
 	state_save_register_global_array(machine, state->oldx);
 	state_save_register_global_array(machine, state->oldy);
@@ -1197,7 +1197,7 @@ static void register_state_save(running_machine *machine)
 
 static DRIVER_INIT( amerdart )
 {
-	coolpool_state *state = (coolpool_state *)machine->driver_data;
+	coolpool_state *state = machine->driver_data<coolpool_state>();
 
 	state->lastresult = 0xffff;
 

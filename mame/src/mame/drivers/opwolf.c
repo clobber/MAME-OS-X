@@ -282,17 +282,18 @@ register. So what is controlling priority.
 #include "audio/taitosnd.h"
 #include "sound/2151intf.h"
 #include "sound/msm5205.h"
+#include "includes/rastan.h"
 #include "includes/opwolf.h"
 
 static READ16_HANDLER( cchip_r )
 {
-	opwolf_state *state = (opwolf_state *)space->machine->driver_data;
+	opwolf_state *state = space->machine->driver_data<opwolf_state>();
 	return state->cchip_ram[offset];
 }
 
 static WRITE16_HANDLER( cchip_w )
 {
-	opwolf_state *state = (opwolf_state *)space->machine->driver_data;
+	opwolf_state *state = space->machine->driver_data<opwolf_state>();
 	state->cchip_ram[offset] = data &0xff;
 }
 
@@ -317,7 +318,7 @@ static READ16_HANDLER( opwolf_dsw_r )
 
 static READ16_HANDLER( opwolf_lightgun_r )
 {
-	opwolf_state *state = (opwolf_state *)space->machine->driver_data;
+	opwolf_state *state = space->machine->driver_data<opwolf_state>();
 	int scaled;
 
 	switch (offset)
@@ -431,7 +432,7 @@ ADDRESS_MAP_END
 
 static MACHINE_START( opwolf )
 {
-	opwolf_state *state = (opwolf_state *)machine->driver_data;
+	opwolf_state *state = machine->driver_data<opwolf_state>();
 
 	state->maincpu = machine->device<cpu_device>("maincpu");
 	state->audiocpu = machine->device<cpu_device>("audiocpu");
@@ -451,7 +452,7 @@ static MACHINE_START( opwolf )
 
 static MACHINE_RESET( opwolf )
 {
-	opwolf_state *state = (opwolf_state *)machine->driver_data;
+	opwolf_state *state = machine->driver_data<opwolf_state>();
 
 	state->adpcm_b[0] = state->adpcm_b[1] = 0;
 	state->adpcm_c[0] = state->adpcm_c[1] = 0;
@@ -468,7 +469,7 @@ static MACHINE_RESET( opwolf )
 
 static void opwolf_msm5205_vck( running_device *device )
 {
-	opwolf_state *state = (opwolf_state *)device->machine->driver_data;
+	opwolf_state *state = device->machine->driver_data<opwolf_state>();
 	int chip = (strcmp(device->tag(), "msm1") == 0) ? 0 : 1;
 	if (state->adpcm_data[chip] != -1)
 	{
@@ -487,7 +488,7 @@ static void opwolf_msm5205_vck( running_device *device )
 
 static WRITE8_DEVICE_HANDLER( opwolf_adpcm_b_w )
 {
-	opwolf_state *state = (opwolf_state *)device->machine->driver_data;
+	opwolf_state *state = device->machine->driver_data<opwolf_state>();
 	int start;
 	int end;
 
@@ -510,7 +511,7 @@ static WRITE8_DEVICE_HANDLER( opwolf_adpcm_b_w )
 
 static WRITE8_DEVICE_HANDLER( opwolf_adpcm_c_w )
 {
-	opwolf_state *state = (opwolf_state *)device->machine->driver_data;
+	opwolf_state *state = device->machine->driver_data<opwolf_state>();
 	int start;
 	int end;
 
@@ -695,7 +696,7 @@ GFXDECODE_END
 
 static void irq_handler( running_device *device, int irq )
 {
-	opwolf_state *state = (opwolf_state *)device->machine->driver_data;
+	opwolf_state *state = device->machine->driver_data<opwolf_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -735,10 +736,7 @@ static const tc0140syt_interface opwolf_tc0140syt_intf =
 	"maincpu", "audiocpu"
 };
 
-static MACHINE_DRIVER_START( opwolf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(opwolf_state)
+static MACHINE_CONFIG_START( opwolf, opwolf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK )	/* 8 MHz */
@@ -788,13 +786,10 @@ static MACHINE_DRIVER_START( opwolf )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", opwolf_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( opwolfb ) /* OSC clocks unknown for the bootleg, but changed to match original sets */
-
-	/* driver data */
-	MDRV_DRIVER_DATA(opwolf_state)
+static MACHINE_CONFIG_START( opwolfb, opwolf_state ) /* OSC clocks unknown for the bootleg, but changed to match original sets */
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK )	/* 8 MHz ??? */
@@ -847,7 +842,7 @@ static MACHINE_DRIVER_START( opwolfb ) /* OSC clocks unknown for the bootleg, bu
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", opwolf_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -991,7 +986,7 @@ ROM_END
 
 static DRIVER_INIT( opwolf )
 {
-	opwolf_state *state = (opwolf_state *)machine->driver_data;
+	opwolf_state *state = machine->driver_data<opwolf_state>();
 	UINT16* rom = (UINT16*)memory_region(machine, "maincpu");
 
 	state->opwolf_region = rom[0x03fffe / 2] & 0xff;
@@ -1008,7 +1003,7 @@ static DRIVER_INIT( opwolf )
 
 static DRIVER_INIT( opwolfb )
 {
-	opwolf_state *state = (opwolf_state *)machine->driver_data;
+	opwolf_state *state = machine->driver_data<opwolf_state>();
 	UINT16* rom = (UINT16*)memory_region(machine, "maincpu");
 
 	state->opwolf_region = rom[0x03fffe / 2] & 0xff;

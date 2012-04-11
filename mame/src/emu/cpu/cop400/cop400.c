@@ -89,9 +89,10 @@ struct _cop400_state
 {
 	const cop400_interface *intf;
 
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
 
     UINT8 featuremask;
 
@@ -160,11 +161,11 @@ struct _cop400_opcode_map {
     MACROS
 ***************************************************************************/
 
-#define ROM(a)			memory_decrypted_read_byte(cpustate->program, a)
-#define RAM_R(a)		memory_read_byte_8le(cpustate->data, a)
-#define RAM_W(a, v)		memory_write_byte_8le(cpustate->data, a, v)
-#define IN(a)			memory_read_byte_8le(cpustate->io, a)
-#define OUT(a, v)		memory_write_byte_8le(cpustate->io, a, v)
+#define ROM(a)			cpustate->direct->read_decrypted_byte(a)
+#define RAM_R(a)		cpustate->data->read_byte(a)
+#define RAM_W(a, v)		cpustate->data->write_byte(a, v)
+#define IN(a)			cpustate->io->read_byte(a)
+#define OUT(a, v)		cpustate->io->write_byte(a, v)
 
 #define IN_G()			(IN(COP400_PORT_G) & cpustate->g_mask)
 #define IN_L()			IN(COP400_PORT_L)
@@ -873,6 +874,7 @@ static void cop400_init(legacy_cpu_device *device, UINT8 g_mask, UINT8 d_mask, U
 	/* find address spaces */
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1258,9 +1260,11 @@ static ADDRESS_MAP_START( data_128b, ADDRESS_SPACE_DATA, 8 )
 	AM_RANGE(0x00, 0x7f) AM_RAM
 ADDRESS_MAP_END
 
+#ifdef UNUSED_CODE
 static ADDRESS_MAP_START( data_160b, ADDRESS_SPACE_DATA, 8 )
 	AM_RANGE(0x00, 0x9f) AM_RAM
 ADDRESS_MAP_END
+#endif
 
 /***************************************************************************
     VALIDITY CHECKS

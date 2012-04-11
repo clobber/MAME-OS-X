@@ -202,19 +202,9 @@ the entire size of the screen.
 #include "cpu/m68000/m68000.h"
 #include "sound/2608intf.h"
 #include "sound/2610intf.h"
+#include "includes/bbusters.h"
+#include "machine/nvram.h"
 
-
-VIDEO_START( bbuster );
-VIDEO_START( mechatt );
-VIDEO_UPDATE( bbuster );
-VIDEO_UPDATE( mechatt );
-
-static UINT16 *bbusters_ram, *eprom_data;
-extern UINT16 *bbusters_pf1_data,*bbusters_pf2_data,*bbusters_pf1_scroll_data,*bbusters_pf2_scroll_data;
-
-WRITE16_HANDLER( bbusters_pf1_w );
-WRITE16_HANDLER( bbusters_pf2_w );
-WRITE16_HANDLER( bbusters_video_w );
 
 /******************************************************************************/
 
@@ -247,45 +237,43 @@ Country :
 
 /******************************************************************************/
 
-static int sound_status;
-
 static READ16_HANDLER( sound_status_r )
 {
-	return sound_status;
+	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+
+	return state->sound_status;
 }
 
 static WRITE8_HANDLER( sound_status_w )
 {
-	sound_status = data;
+	bbusters_state *state = space->machine->driver_data<bbusters_state>();
 
+	state->sound_status = data;
 }
 
 static WRITE16_HANDLER( sound_cpu_w )
 {
-
 	if (ACCESSING_BITS_0_7)
 	{
-
-
 		soundlatch_w(space, 0, data&0xff);
 		cputag_set_input_line(space->machine, "audiocpu", INPUT_LINE_NMI, PULSE_LINE);
 	}
-
 }
 
 /* Eprom is byte wide, top half of word _must_ be 0xff */
 static READ16_HANDLER( eprom_r )
 {
-	return (eprom_data[offset]&0xff) | 0xff00;
-}
+	bbusters_state *state = space->machine->driver_data<bbusters_state>();
 
-static int gun_select;
+	return (state->eprom_data[offset]&0xff) | 0xff00;
+}
 
 static READ16_HANDLER( control_3_r )
 {
+	bbusters_state *state = space->machine->driver_data<bbusters_state>();
 	static const char *const port[] = { "GUNX1", "GUNY1", "GUNX2", "GUNY2", "GUNX3", "GUNY3" };
 
-	UINT16 retdata =  input_port_read(space->machine, port[gun_select]);
+	UINT16 retdata = input_port_read(space->machine, port[state->gun_select]);
 
 	retdata >>=1; // by lowering the precision of the gun reading hardware the game seems to work better
 
@@ -294,20 +282,19 @@ static READ16_HANDLER( control_3_r )
 
 static WRITE16_HANDLER( gun_select_w )
 {
+	bbusters_state *state = space->machine->driver_data<bbusters_state>();
+
 	logerror("%08x: gun r\n",cpu_get_pc(space->cpu));
 
 	cpu_set_input_line(space->cpu, 2, HOLD_LINE);
 
-	gun_select = data & 0xff;
-
+	state->gun_select = data & 0xff;
 }
 
 static WRITE16_HANDLER( two_gun_output_w )
 {
 	output_set_value("Player1_Gun_Recoil",(data & 0x01));
 	output_set_value("Player2_Gun_Recoil",(data & 0x02)>>1);
-
-
 }
 
 static WRITE16_HANDLER( three_gun_output_w )
@@ -315,15 +302,12 @@ static WRITE16_HANDLER( three_gun_output_w )
 	output_set_value("Player1_Gun_Recoil",(data & 0x01));
 	output_set_value("Player2_Gun_Recoil",(data & 0x02)>>1);
 	output_set_value("Player3_Gun_Recoil",(data & 0x04)>>2);
-
-
 }
 
 static READ16_HANDLER( kludge_r )
 {
 	// might latch the gun value?
 	return 0x0000;
-
 }
 
 static READ16_HANDLER( mechatt_gun_r )
@@ -345,17 +329,17 @@ static READ16_HANDLER( mechatt_gun_r )
 
 static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x080000, 0x08ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, videoram)
 	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_RAM		/* service mode */
 	AM_RANGE(0x0a8000, 0x0a8fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram2)
 	AM_RANGE(0x0a9000, 0x0affff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
-	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
+	AM_RANGE(0x0b0000, 0x0b1fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, pf1_data)
+	AM_RANGE(0x0b2000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, pf2_data)
 	AM_RANGE(0x0b4000, 0x0b5fff) AM_RAM		/* service mode */
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
-	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf1_scroll_data)
+	AM_RANGE(0x0b8008, 0x0b800b) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf2_scroll_data)
 	AM_RANGE(0x0d0000, 0x0d0fff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("COINS")	/* Coins */
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("IN0")	/* Player 1 & 2 */
@@ -368,21 +352,21 @@ static ADDRESS_MAP_START( bbusters_map, ADDRESS_SPACE_PROGRAM, 16 )
 	/* AM_RANGE(0x0f0008, 0x0f0009) AM_WRITENOP */
 	AM_RANGE(0x0f0008, 0x0f0009) AM_WRITE(three_gun_output_w)
 	AM_RANGE(0x0f0018, 0x0f0019) AM_WRITE(sound_cpu_w)
-	AM_RANGE(0x0f8000, 0x0f80ff) AM_READ(eprom_r) AM_WRITEONLY AM_BASE(&eprom_data) /* Eeprom */
+	AM_RANGE(0x0f8000, 0x0f80ff) AM_READ(eprom_r) AM_WRITEONLY AM_SHARE("eeprom") /* Eeprom */
 ADDRESS_MAP_END
 
 /*******************************************************************************/
 
 static ADDRESS_MAP_START( mechatt_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x06ffff) AM_ROM
-	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE(&bbusters_ram)
-	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x070000, 0x07ffff) AM_RAM AM_BASE_MEMBER(bbusters_state, ram)
+	AM_RANGE(0x090000, 0x090fff) AM_RAM_WRITE(bbusters_video_w) AM_BASE_MEMBER(bbusters_state, videoram)
 	AM_RANGE(0x0a0000, 0x0a0fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x0a1000, 0x0a7fff) AM_WRITENOP
-	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE(&bbusters_pf1_data)
-	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE(&bbusters_pf1_scroll_data)
-	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE(&bbusters_pf2_data)
-	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE(&bbusters_pf2_scroll_data)
+	AM_RANGE(0x0b0000, 0x0b3fff) AM_RAM_WRITE(bbusters_pf1_w) AM_BASE_MEMBER(bbusters_state, pf1_data)
+	AM_RANGE(0x0b8000, 0x0b8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf1_scroll_data)
+	AM_RANGE(0x0c0000, 0x0c3fff) AM_RAM_WRITE(bbusters_pf2_w) AM_BASE_MEMBER(bbusters_state, pf2_data)
+	AM_RANGE(0x0c8000, 0x0c8003) AM_WRITEONLY AM_BASE_MEMBER(bbusters_state, pf2_scroll_data)
 	AM_RANGE(0x0d0000, 0x0d07ff) AM_RAM_WRITE(paletteram16_RRRRGGGGBBBBxxxx_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x0e0000, 0x0e0001) AM_READ_PORT("IN0")
 	AM_RANGE(0x0e0002, 0x0e0003) AM_READ_PORT("DSW1")
@@ -680,43 +664,9 @@ static const ym2610_interface ym2610_config =
 
 /******************************************************************************/
 
-// default eeprom with reasonable calibration for MAME
-static const unsigned char bbusters_default_eeprom[128] = {
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00, 0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00,	0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-	                                    /*y*/                   /*y*/
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x74, 0x00,	0x00, 0x00, 0xEE, 0x00,
-	0x00, 0x00, 0x00, 0x00,	0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0xFE, 0x00,
-
-
-	0x42, 0x00, 0x45, 0x00, 0x41, 0x00, 0x53, 0x00,	0x54, 0x00, 0x20, 0x00,
-	0x42, 0x00, 0x55, 0x00, 0x53, 0x00, 0x54, 0x00, 0x45, 0x00, 0x52, 0x00,
-	0x53, 0x00, 0x20, 0x00, 0x54, 0x00, 0x4D, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
-
-
-static NVRAM_HANDLER( bbusters )
-{
-	if( read_or_write ) {
-		mame_fwrite (file, eprom_data, 0x80);
-	}
-	else {
-		if (file)
-			mame_fread (file, eprom_data, 0x80);
-		else
-			memcpy(eprom_data, bbusters_default_eeprom, 0x80);
-	}
-}
-
 static VIDEO_EOF( bbuster )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	buffer_spriteram16_w(space,0,0,0xffff);
 	buffer_spriteram16_2_w(space,0,0,0xffff);
@@ -724,11 +674,11 @@ static VIDEO_EOF( bbuster )
 
 static VIDEO_EOF( mechatt )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	buffer_spriteram16_w(space,0,0,0xffff);
 }
 
-static MACHINE_DRIVER_START( bbusters )
+static MACHINE_CONFIG_START( bbusters, bbusters_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -739,7 +689,7 @@ static MACHINE_DRIVER_START( bbusters )
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	MDRV_CPU_IO_MAP(sound_portmap)
 
-	MDRV_NVRAM_HANDLER(bbusters)
+	MDRV_NVRAM_ADD_0FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
@@ -765,9 +715,9 @@ static MACHINE_DRIVER_START( bbusters )
 	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
 	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mechatt )
+static MACHINE_CONFIG_START( mechatt, bbusters_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -802,7 +752,7 @@ static MACHINE_DRIVER_START( mechatt )
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.50)
 	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
 	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 
@@ -849,6 +799,9 @@ ROM_START( bbusters )
 
 	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcmb.l3",  0x000000, 0x80000, CRC(c8d5dd53) SHA1(0f7e94532cc14852ca12c1b792e5479667af899e) )
+
+	ROM_REGION( 0x100, "eeprom", 0 )
+	ROM_LOAD( "bbusters-eeprom.bin", 0x00, 0x100, CRC(a52ebd66) SHA1(de04db6f1510700c61bf152799452a80220ae87c) )
 ROM_END
 
 ROM_START( bbustersu )
@@ -894,6 +847,9 @@ ROM_START( bbustersu )
 
 	ROM_REGION( 0x80000, "ymsnd.deltat", 0 )
 	ROM_LOAD( "bb-pcma.l5",  0x000000, 0x80000, CRC(44cd5bfe) SHA1(26a612191a0aa614c090203485aba17c99c763ee) )
+
+	ROM_REGION( 0x100, "eeprom", 0 )
+	ROM_LOAD( "bbusters-eeprom.bin", 0x00, 0x100, CRC(a52ebd66) SHA1(de04db6f1510700c61bf152799452a80220ae87c) )
 ROM_END
 
 

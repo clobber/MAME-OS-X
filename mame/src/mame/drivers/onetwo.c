@@ -46,12 +46,11 @@ Note: this is quite clearly a 'Korean bootleg' of Shisensho - Joshiryo-Hen / Mat
 
 #define MASTER_CLOCK        XTAL_4MHz
 
-class onetwo_state
+class onetwo_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, onetwo_state(machine)); }
-
-	onetwo_state(running_machine &machine) { }
+	onetwo_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  fgram;
@@ -76,7 +75,7 @@ public:
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	onetwo_state *state = (onetwo_state *)machine->driver_data;
+	onetwo_state *state = machine->driver_data<onetwo_state>();
 	int code = (state->fgram[tile_index * 2 + 1] << 8) | state->fgram[tile_index * 2];
 	int color = (state->fgram[tile_index * 2 + 1] & 0x80) >> 7;
 
@@ -87,13 +86,13 @@ static TILE_GET_INFO( get_fg_tile_info )
 
 static VIDEO_START( onetwo )
 {
-	onetwo_state *state = (onetwo_state *)machine->driver_data;
+	onetwo_state *state = machine->driver_data<onetwo_state>();
 	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 }
 
 static VIDEO_UPDATE( onetwo )
 {
-	onetwo_state *state = (onetwo_state *)screen->machine->driver_data;
+	onetwo_state *state = screen->machine->driver_data<onetwo_state>();
 	tilemap_draw(bitmap, cliprect, state->fg_tilemap, 0, 0);
 	return 0;
 }
@@ -106,7 +105,7 @@ static VIDEO_UPDATE( onetwo )
 
 static WRITE8_HANDLER( onetwo_fgram_w )
 {
-	onetwo_state *state = (onetwo_state *)space->machine->driver_data;
+	onetwo_state *state = space->machine->driver_data<onetwo_state>();
 	state->fgram[offset] = data;
 	tilemap_mark_tile_dirty(state->fg_tilemap, offset / 2);
 }
@@ -125,14 +124,14 @@ static WRITE8_HANDLER( onetwo_coin_counters_w )
 
 static WRITE8_HANDLER( onetwo_soundlatch_w )
 {
-	onetwo_state *state = (onetwo_state *)space->machine->driver_data;
+	onetwo_state *state = space->machine->driver_data<onetwo_state>();
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static void set_color(running_machine *machine, int offset)
 {
-	onetwo_state *state = (onetwo_state *)machine->driver_data;
+	onetwo_state *state = machine->driver_data<onetwo_state>();
 	int r, g, b;
 
 	r = state->paletteram[offset] & 0x1f;
@@ -143,14 +142,14 @@ static void set_color(running_machine *machine, int offset)
 
 static WRITE8_HANDLER(palette1_w)
 {
-	onetwo_state *state = (onetwo_state *)space->machine->driver_data;
+	onetwo_state *state = space->machine->driver_data<onetwo_state>();
 	state->paletteram[offset] = data;
 	set_color(space->machine, offset);
 }
 
 static WRITE8_HANDLER(palette2_w)
 {
-	onetwo_state *state = (onetwo_state *)space->machine->driver_data;
+	onetwo_state *state = space->machine->driver_data<onetwo_state>();
 	state->paletteram2[offset] = data;
 	set_color(space->machine, offset);
 }
@@ -189,7 +188,7 @@ static ADDRESS_MAP_START( sound_cpu_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_DEVREADWRITE("ymsnd", ym3812_status_port_r, ym3812_control_port_w)
 	AM_RANGE(0x20, 0x20) AM_DEVWRITE("ymsnd", ym3812_write_port_w)
-	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x40, 0x40) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(soundlatch_clear_w)
 ADDRESS_MAP_END
 
@@ -326,7 +325,7 @@ GFXDECODE_END
 
 static void irqhandler(running_device *device, int linestate)
 {
-	onetwo_state *state = (onetwo_state *)device->machine->driver_data;
+	onetwo_state *state = device->machine->driver_data<onetwo_state>();
 	cpu_set_input_line(state->audiocpu, 0, linestate);
 }
 
@@ -343,7 +342,7 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( onetwo )
 {
-	onetwo_state *state = (onetwo_state *)machine->driver_data;
+	onetwo_state *state = machine->driver_data<onetwo_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x4000);
@@ -352,10 +351,7 @@ static MACHINE_START( onetwo )
 	state->audiocpu = machine->device("audiocpu");
 }
 
-static MACHINE_DRIVER_START( onetwo )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(onetwo_state)
+static MACHINE_CONFIG_START( onetwo, onetwo_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,MASTER_CLOCK)	/* 4 MHz */
@@ -392,7 +388,7 @@ static MACHINE_DRIVER_START( onetwo )
 
 	MDRV_OKIM6295_ADD("oki", 1056000*2, OKIM6295_PIN7_LOW) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

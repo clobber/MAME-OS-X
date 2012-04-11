@@ -1,9 +1,8 @@
-class mjkjidai_state
+class mjkjidai_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mjkjidai_state(machine)); }
-
-	mjkjidai_state(running_machine &machine) { }
+	mjkjidai_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *videoram;
 	UINT8 *spriteram1;

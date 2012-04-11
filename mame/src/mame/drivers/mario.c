@@ -101,6 +101,9 @@ write:
  *
  *************************************/
 
+static UINT8 memory_read_byte(address_space *space, offs_t address) { return space->read_byte(address); }
+static void memory_write_byte(address_space *space, offs_t address, UINT8 data) { space->write_byte(address, data); }
+
 static Z80DMA_INTERFACE( mario_dma )
 {
 	DEVCB_CPU_INPUT_LINE("maincpu", INPUT_LINE_HALT),
@@ -314,10 +317,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( mario_base )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mario_state)
+static MACHINE_CONFIG_START( mario_base, mario_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, Z80_CLOCK)	/* verified on pcb */
@@ -339,30 +339,28 @@ static MACHINE_DRIVER_START( mario_base )
 	MDRV_VIDEO_START(mario)
 	MDRV_VIDEO_UPDATE(mario)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mario )
+static MACHINE_CONFIG_DERIVED( mario, mario_base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mario_base )
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(mario_audio)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(mario_audio)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( masao )
+static MACHINE_CONFIG_DERIVED( masao, mario_base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mario_base )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(4000000)        /* 4.000 MHz (?) */
 	MDRV_CPU_PROGRAM_MAP(masao_map)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(masao_audio)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(masao_audio)
+MACHINE_CONFIG_END
 
 
 /*************************************

@@ -123,6 +123,7 @@ public:
 	FPTR sp() const { return m_stackframe.AddrStack.Offset; }
 	FPTR frame() const { return m_stackframe.AddrFrame.Offset; }
 
+	bool reset();
 	void reset(CONTEXT &context, HANDLE thread);
 	bool unwind();
 
@@ -138,6 +139,7 @@ private:
 	dynamic_bind<BOOL (WINAPI *)(HANDLE, LPCTSTR, BOOL)> m_sym_initialize;
 	dynamic_bind<PVOID (WINAPI *)(HANDLE, DWORD64)> m_sym_function_table_access_64;
 	dynamic_bind<DWORD64 (WINAPI *)(HANDLE, DWORD64)> m_sym_get_module_base_64;
+	dynamic_bind<VOID (WINAPI *)(PCONTEXT)> m_rtl_capture_context;
 
 	static bool		s_initialized;
 };
@@ -252,6 +254,8 @@ static HANDLE watchdog_reset_event;
 static HANDLE watchdog_exit_event;
 static HANDLE watchdog_thread;
 
+static running_machine *g_current_machine;
+
 
 #ifndef MESS
 static const TCHAR helpfile[] = TEXT("docs\\windows.txt");
@@ -276,7 +280,7 @@ bool stack_walker::s_initialized = false;
 //**************************************************************************
 
 static void osd_exit(running_machine &machine);
-
+static BOOL WINAPI control_handler(DWORD type);
 static int is_double_click_start(int argc);
 static DWORD WINAPI watchdog_thread_entry(LPVOID lpParameter);
 static LONG WINAPI exception_filter(struct _EXCEPTION_POINTERS *info);
@@ -304,6 +308,7 @@ const options_entry mame_win_options[] =
 	{ "multithreading;mt",        "0",        OPTION_BOOLEAN,    "enable multithreading; this enables rendering and blitting on a separate thread" },
 	{ "numprocessors;np",         "auto",     0,				 "number of processors; this overrides the number the system reports" },
 	{ "profile",                  "0",        0,                 "enable profiling, specifying the stack depth to track" },
+	{ "bench",                    "0",        0,                 "benchmark for the given number of emulated seconds; implies -video none -nosound -nothrottle" },
 
 	// video options
 	{ NULL,                       NULL,       OPTION_HEADER,     "WINDOWS VIDEO OPTIONS" },
@@ -313,7 +318,6 @@ const options_entry mame_win_options[] =
 	{ "maximize;max",             "1",        OPTION_BOOLEAN,    "default to maximized windows; otherwise, windows will be minimized" },
 	{ "keepaspect;ka",            "1",        OPTION_BOOLEAN,    "constrain to the proper aspect ratio" },
 	{ "prescale",                 "1",        0,                 "scale screen rendering by this amount in software" },
-	{ "effect",                   "none",     0,                 "name of a PNG file to use for visual effects, or 'none'" },
 	{ "waitvsync",                "0",        OPTION_BOOLEAN,    "enable waiting for the start of VBLANK before flipping screens; reduces tearing effects" },
 	{ "syncrefresh",              "0",        OPTION_BOOLEAN,    "enable using the start of VBLANK for throttling instead of the game time" },
 
@@ -388,6 +392,9 @@ int main(int argc, char *argv[])
 	// initialize common controls
 	InitCommonControls();
 
+	// set a handler to catch ctrl-c
+	SetConsoleCtrlHandler(control_handler, TRUE);
+
 	// allocate symbols
 	symbol_manager local_symbols(argv[0]);
 	symbols = &local_symbols;
@@ -395,6 +402,10 @@ int main(int argc, char *argv[])
 	// set up exception handling
 	pass_thru_filter = SetUnhandledExceptionFilter(exception_filter);
 	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+
+	// enable stack crawls for asserts
+	extern void (*s_debugger_stack_crawler)();
+	s_debugger_stack_crawler = winmain_dump_stack;
 
 	// if we're a GUI app, out errors to message boxes
 	if (win_is_gui_application() || is_double_click_start(argc))
@@ -412,6 +423,43 @@ int main(int argc, char *argv[])
 	// free symbols
 	symbols = NULL;
 	return result;
+}
+
+
+//============================================================
+//  control_handler
+//============================================================
+
+static BOOL WINAPI control_handler(DWORD type)
+{
+	// indicate to the user that we detected something
+	switch (type)
+	{
+		case CTRL_C_EVENT:			fprintf(stderr, "Caught Ctrl+C");					break;
+		case CTRL_BREAK_EVENT:		fprintf(stderr, "Caught Ctrl+break");				break;
+		case CTRL_CLOSE_EVENT:		fprintf(stderr, "Caught console close");			break;
+		case CTRL_LOGOFF_EVENT:		fprintf(stderr, "Caught logoff");					break;
+		case CTRL_SHUTDOWN_EVENT:	fprintf(stderr, "Caught shutdown");					break;
+		default:					fprintf(stderr, "Caught unexpected console event");	break;
+	}
+
+	// if we don't have a machine yet, or if we are handling ctrl+c/ctrl+break,
+	// just terminate hard, without throwing or handling any atexit stuff
+	if (g_current_machine == NULL || type == CTRL_C_EVENT || type == CTRL_BREAK_EVENT)
+	{
+		fprintf(stderr, ", exiting\n");
+		TerminateProcess(GetCurrentProcess(), MAMERR_FATALERROR);
+	}
+
+	// all other situations attempt to do a clean exit
+	else
+	{
+		fprintf(stderr, ", exit requested\n");
+		g_current_machine->schedule_exit();
+	}
+
+	// in all cases we handled it
+	return TRUE;
 }
 
 
@@ -451,13 +499,23 @@ void osd_init(running_machine *machine)
 {
 	const char *stemp;
 
+	// determine if we are benchmarking, and adjust options appropriately
+	int bench = options_get_int(machine->options(), WINOPTION_BENCH);
+	if (bench > 0)
+	{
+		options_set_bool(machine->options(), OPTION_THROTTLE, false, OPTION_PRIORITY_MAXIMUM);
+		options_set_bool(machine->options(), OPTION_SOUND, false, OPTION_PRIORITY_MAXIMUM);
+		options_set_string(machine->options(), WINOPTION_VIDEO, "none", OPTION_PRIORITY_MAXIMUM);
+		options_set_int(machine->options(), OPTION_SECONDS_TO_RUN, bench, OPTION_PRIORITY_MAXIMUM);
+	}
+
 	// determine if we are profiling, and adjust options appropriately
 	int profile = options_get_int(machine->options(), WINOPTION_PROFILE);
 	if (profile > 0)
 	{
 		options_set_bool(machine->options(), OPTION_THROTTLE, false, OPTION_PRIORITY_MAXIMUM);
 		options_set_bool(machine->options(), WINOPTION_MULTITHREADING, false, OPTION_PRIORITY_MAXIMUM);
-		options_set_bool(machine->options(), WINOPTION_NUMPROCESSORS, 1, OPTION_PRIORITY_MAXIMUM);
+		options_set_int(machine->options(), WINOPTION_NUMPROCESSORS, 1, OPTION_PRIORITY_MAXIMUM);
 	}
 
 	// thread priority
@@ -528,6 +586,9 @@ void osd_init(running_machine *machine)
 		profiler = global_alloc(sampling_profiler(1000, profile - 1));
 		profiler->start();
 	}
+
+	// note the existence of a machine
+	g_current_machine = machine;
 }
 
 
@@ -537,6 +598,9 @@ void osd_init(running_machine *machine)
 
 static void osd_exit(running_machine &machine)
 {
+	// no longer have a machine
+	g_current_machine = NULL;
+
 	// take down the watchdog thread if it exists
 	if (watchdog_thread != NULL)
 	{
@@ -568,6 +632,23 @@ static void osd_exit(running_machine &machine)
 
 	// one last pass at events
 	winwindow_process_events(&machine, 0);
+}
+
+
+//============================================================
+//  winmain_dump_stack
+//============================================================
+
+void winmain_dump_stack()
+{
+	// set up the stack walker
+	stack_walker walker;
+	if (!walker.reset())
+		return;
+
+	// walk the stack
+	while (walker.unwind())
+		fprintf(stderr, "  %p: %p%s\n", (void *)walker.frame(), (void *)walker.ip(), (symbols == NULL) ? "" : symbols->symbol_for_address(walker.ip()));
 }
 
 
@@ -744,12 +825,11 @@ static LONG WINAPI exception_filter(struct _EXCEPTION_POINTERS *info)
 
 	// walk the stack
 	while (walker.unwind())
-		fprintf(stderr, "  %p: %p%s\n", (void *)walker.frame(), (void *)walker.ip(), symbols->symbol_for_address(walker.ip()));
+		fprintf(stderr, "  %p: %p%s\n", (void *)walker.frame(), (void *)walker.ip(), (symbols == NULL) ? "" : symbols->symbol_for_address(walker.ip()));
 
 	// exit
 	return EXCEPTION_CONTINUE_SEARCH;
 }
-
 
 
 //**************************************************************************
@@ -767,7 +847,8 @@ stack_walker::stack_walker()
 	  m_stack_walk_64(TEXT("dbghelp.dll"), "StackWalk64"),
 	  m_sym_initialize(TEXT("dbghelp.dll"), "SymInitialize"),
 	  m_sym_function_table_access_64(TEXT("dbghelp.dll"), "SymFunctionTableAccess64"),
-	  m_sym_get_module_base_64(TEXT("dbghelp.dll"), "SymGetModuleBase64")
+	  m_sym_get_module_base_64(TEXT("dbghelp.dll"), "SymGetModuleBase64"),
+	  m_rtl_capture_context(TEXT("kernel32.dll"), "RtlCaptureContext")
 {
 	// zap the structs
 	memset(&m_stackframe, 0, sizeof(m_stackframe));
@@ -785,6 +866,34 @@ stack_walker::stack_walker()
 //-------------------------------------------------
 //  reset - set up a new context
 //-------------------------------------------------
+
+bool stack_walker::reset()
+{
+	// set up the initial state
+	if (!m_rtl_capture_context)
+		return false;
+	(*m_rtl_capture_context)(&m_context);
+	m_thread = GetCurrentThread();
+	m_first = true;
+
+	// initialize the stackframe
+	memset(&m_stackframe, 0, sizeof(m_stackframe));
+	m_stackframe.AddrPC.Mode = AddrModeFlat;
+	m_stackframe.AddrFrame.Mode = AddrModeFlat;
+	m_stackframe.AddrStack.Mode = AddrModeFlat;
+
+	// pull architecture-specific fields from the context
+#ifdef PTR64
+	m_stackframe.AddrPC.Offset = m_context.Rip;
+	m_stackframe.AddrFrame.Offset = m_context.Rsp;
+	m_stackframe.AddrStack.Offset = m_context.Rsp;
+#else
+	m_stackframe.AddrPC.Offset = m_context.Eip;
+	m_stackframe.AddrFrame.Offset = m_context.Ebp;
+	m_stackframe.AddrStack.Offset = m_context.Esp;
+#endif
+	return true;
+}
 
 void stack_walker::reset(CONTEXT &initial, HANDLE thread)
 {

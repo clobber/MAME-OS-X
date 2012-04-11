@@ -82,13 +82,13 @@ static PALETTE_INIT( copsnrob )
 
 static READ8_HANDLER( copsnrob_misc_r )
 {
-	copsnrob_state *state = (copsnrob_state *)space->machine->driver_data;
+	copsnrob_state *state = space->machine->driver_data<copsnrob_state>();
 	return state->misc | (input_port_read(space->machine, "IN0") & 0x80);
 }
 
 static WRITE8_HANDLER( copsnrob_misc_w )
 {
-	copsnrob_state *state = (copsnrob_state *)space->machine->driver_data;
+	copsnrob_state *state = space->machine->driver_data<copsnrob_state>();
 	state->misc = data & 0x7f;
 	set_led_status(space->machine, 1, ~data & 0x40);
 }
@@ -258,23 +258,20 @@ GFXDECODE_END
 
 static MACHINE_START( copsnrob )
 {
-	copsnrob_state *state = (copsnrob_state *)machine->driver_data;
+	copsnrob_state *state = machine->driver_data<copsnrob_state>();
 
 	state_save_register_global(machine, state->misc);
 }
 
 static MACHINE_RESET( copsnrob )
 {
-	copsnrob_state *state = (copsnrob_state *)machine->driver_data;
+	copsnrob_state *state = machine->driver_data<copsnrob_state>();
 
 	state->misc = 0;
 }
 
 
-static MACHINE_DRIVER_START( copsnrob )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(copsnrob_state)
+static MACHINE_CONFIG_START( copsnrob, copsnrob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502,14318180/16)		/* 894886.25 kHz */
@@ -296,7 +293,7 @@ static MACHINE_DRIVER_START( copsnrob )
 
 	MDRV_PALETTE_INIT(copsnrob)
 	MDRV_VIDEO_UPDATE(copsnrob)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

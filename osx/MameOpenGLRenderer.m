@@ -150,7 +150,8 @@ INLINE void set_blendmode(int blendmode)
     [mTextureTable performHousekeeping];
     
     render_primitive * prim;
-    for (prim = primlist->head; prim != NULL; prim = prim->next)
+    //for (prim = primlist->head; prim != NULL; prim = prim->next)
+    for (prim = primlist->first(); prim != NULL; prim = prim->next())
     {
         if (prim->texture.base != NULL)
         {
@@ -159,16 +160,17 @@ INLINE void set_blendmode(int blendmode)
     }
     
     // now draw
-    for (prim = primlist->head; prim != NULL; prim = prim->next)
+    //for (prim = primlist->head; prim != NULL; prim = prim->next)
+    for (prim = primlist->first(); prim != NULL; prim = prim->next())
     {
         set_blendmode(PRIMFLAG_GET_BLENDMODE(prim->flags));
         switch (prim->type)
         {
-            case RENDER_PRIMITIVE_LINE:
+            case render_primitive::LINE:
                 [self renderLine: prim];
                 break;
                 
-            case RENDER_PRIMITIVE_QUAD:
+            case render_primitive::QUAD:
             {
                 MameOpenGLTexture * texture = [mTextureTable findTextureForPrimitive: prim];
                 if (texture == nil)

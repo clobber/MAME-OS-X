@@ -44,6 +44,7 @@
 #include "emu.h"
 #include "cpu/i86/i86.h"
 #include "machine/eeprom.h"
+#include "machine/nvram.h"
 #include "cpu/z80/z80.h"
 #include "includes/leland.h"
 #include "sound/ay8910.h"
@@ -64,8 +65,7 @@
 static ADDRESS_MAP_START( master_map_program, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x9fff) AM_ROMBANK("bank1")
-	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank2")
-	AM_RANGE(0xa000, 0xdfff) AM_WRITE(leland_battery_ram_w)
+	AM_RANGE(0xa000, 0xdfff) AM_ROMBANK("bank2") AM_WRITE(leland_battery_ram_w) AM_SHARE("battery")
 	AM_RANGE(0xe000, 0xefff) AM_RAM
 	AM_RANGE(0xf000, 0xf3ff) AM_READWRITE(leland_gated_paletteram_r, leland_gated_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xf800, 0xf801) AM_WRITE(leland_master_video_addr_w)
@@ -75,9 +75,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( master_map_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0xf0, 0xf0) AM_WRITE(leland_master_alt_bankswitch_w)
-    AM_RANGE(0xf2, 0xf2) AM_READWRITE(leland_80186_response_r, leland_80186_command_lo_w)
-	AM_RANGE(0xf4, 0xf4) AM_WRITE(leland_80186_command_hi_w)
-    AM_RANGE(0xfd, 0xff) AM_READWRITE(leland_master_analog_key_r, leland_master_analog_key_w)
+	AM_RANGE(0xf2, 0xf2) AM_DEVREADWRITE("custom", leland_80186_response_r, leland_80186_command_lo_w)
+	AM_RANGE(0xf4, 0xf4) AM_DEVWRITE("custom", leland_80186_command_hi_w)
+	AM_RANGE(0xfd, 0xff) AM_READWRITE(leland_master_analog_key_r, leland_master_analog_key_w)
 ADDRESS_MAP_END
 
 
@@ -731,7 +731,7 @@ static const eeprom_interface eeprom_intf =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( leland )
+static MACHINE_CONFIG_START( leland, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("master", Z80, MASTER_CLOCK/2)
@@ -745,12 +745,12 @@ static MACHINE_DRIVER_START( leland )
 
 	MDRV_MACHINE_START(leland)
 	MDRV_MACHINE_RESET(leland)
-	MDRV_NVRAM_HANDLER(leland)
 
 	MDRV_EEPROM_ADD("eeprom", eeprom_intf)
+	MDRV_NVRAM_ADD_0FILL("battery")
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(leland_video)
+	MDRV_FRAGMENT_ADD(leland_video)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -765,13 +765,12 @@ static MACHINE_DRIVER_START( leland )
 
 	MDRV_SOUND_ADD("custom", LELAND, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( redline )
+static MACHINE_CONFIG_DERIVED( redline, leland )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(leland)
 
 	MDRV_CPU_ADD("audiocpu", I80186, MCU_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(leland_80186_map_program)
@@ -780,13 +779,12 @@ static MACHINE_DRIVER_START( redline )
 	/* sound hardware */
 	MDRV_SOUND_REPLACE("custom", REDLINE_80186, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( quarterb )
+static MACHINE_CONFIG_DERIVED( quarterb, redline )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(redline)
 
 	MDRV_CPU_MODIFY("audiocpu")
 	MDRV_CPU_IO_MAP(leland_80186_map_io)
@@ -794,17 +792,16 @@ static MACHINE_DRIVER_START( quarterb )
 	/* sound hardware */
 	MDRV_SOUND_REPLACE("custom", LELAND_80186, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( lelandi )
+static MACHINE_CONFIG_DERIVED( lelandi, quarterb )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(quarterb)
 
 	MDRV_CPU_MODIFY("slave")
 	MDRV_CPU_PROGRAM_MAP(slave_large_map_program)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1597,15 +1594,15 @@ ROM_START( aafb )
 	ROM_LOAD( "03-28002.u8",   0x70000, 0x10000, CRC(c3e09811) SHA1(9b6e036a53000c9bcb104677d9c71743f02fd841) )
 
 	ROM_REGION( 0x100000, "audiocpu", 0 )
-    ROM_LOAD16_BYTE( "24019-01.u25", 0x040001, 0x10000, CRC(9e344768) SHA1(7f16d29c52f3d7f0046f414185c4d889f6128597) )
-    ROM_LOAD16_BYTE( "24016-01.u13", 0x040000, 0x10000, CRC(6997025f) SHA1(5eda3bcae896933385fe97a4e1396ae2da7576cb) )
-    ROM_LOAD16_BYTE( "24020-01.u26", 0x060001, 0x10000, CRC(0788f2a5) SHA1(75eb1ab00185f8efa71f1d46197b5f6d20d721f2) )
-    ROM_LOAD16_BYTE( "24017-01.u14", 0x060000, 0x10000, CRC(a48bd721) SHA1(e099074165594a7c289a25c522005db7e9554ca1) )
-    ROM_LOAD16_BYTE( "24021-01.u27", 0x0e0001, 0x10000, CRC(94081899) SHA1(289eb2f494d1110d169552e8898296e4a47fcb1d) )
-    ROM_LOAD16_BYTE( "24018-01.u15", 0x0e0000, 0x10000, CRC(76eb6077) SHA1(255731c63f4a846bb01d4203a786eb34a4734e66) )
+	ROM_LOAD16_BYTE( "24019-01.u25", 0x040001, 0x10000, CRC(9e344768) SHA1(7f16d29c52f3d7f0046f414185c4d889f6128597) )
+	ROM_LOAD16_BYTE( "24016-01.u13", 0x040000, 0x10000, CRC(6997025f) SHA1(5eda3bcae896933385fe97a4e1396ae2da7576cb) )
+	ROM_LOAD16_BYTE( "24020-01.u26", 0x060001, 0x10000, CRC(0788f2a5) SHA1(75eb1ab00185f8efa71f1d46197b5f6d20d721f2) )
+	ROM_LOAD16_BYTE( "24017-01.u14", 0x060000, 0x10000, CRC(a48bd721) SHA1(e099074165594a7c289a25c522005db7e9554ca1) )
+	ROM_LOAD16_BYTE( "24021-01.u27", 0x0e0001, 0x10000, CRC(94081899) SHA1(289eb2f494d1110d169552e8898296e4a47fcb1d) )
+	ROM_LOAD16_BYTE( "24018-01.u15", 0x0e0000, 0x10000, CRC(76eb6077) SHA1(255731c63f4a846bb01d4203a786eb34a4734e66) )
 
 	ROM_REGION( 0x0c000, "gfx1", 0 )
-	ROM_LOAD( "03-28008.u93", 0x00000, 0x04000, NO_DUMP )
+	ROM_LOAD( "03-28008.u93", 0x00000, 0x04000, CRC(68f8addc) SHA1(a52c408e2e9022f96fb766065d7266deb0df2e5f) )
 	ROM_LOAD( "03-28009.u94", 0x04000, 0x04000, CRC(669791ac) SHA1(e8b7bdec313ea9d40f89f13499a31f0b125951a8) )
 	ROM_LOAD( "03-28010.u95", 0x08000, 0x04000, CRC(bd62aa8a) SHA1(c8a177a11ec94671bb3bd5883b40692495c049a2) )
 
@@ -1627,7 +1624,7 @@ ROM_END
 ROM_START( aafbb )
 	ROM_REGION( 0x20000, "master", 0 )
 	ROM_LOAD( "24014-02.u58",   0x00000, 0x10000, CRC(5db4a3d0) SHA1(f759ab16de48562db1640bc5df68be188725aecf) )
-	ROM_LOAD( "24015-02.u59",   0x10000, 0x10000, CRC(f384f716) SHA1(e689ec6b76bfdf58a059409850c397d407740dda) )
+	ROM_LOAD( "24015-02.u59",   0x10000, 0x10000, BAD_DUMP CRC(f384f716) SHA1(e689ec6b76bfdf58a059409850c397d407740dda) )
 
 	ROM_REGION( 0x80000, "slave", 0 )
 	ROM_LOAD( "24000-02.u3",   0x00000, 0x02000, CRC(52df0354) SHA1(a39a2538b733e336eac5a1491c42c89fd4f4d1aa) )
@@ -1769,12 +1766,12 @@ ROM_START( offroad )
 	ROM_LOAD( "22112-01.u8",  0x70000, 0x10000, CRC(3eef38d3) SHA1(9131960592a44c8567ab483f72955d2cc8898445) )
 
 	ROM_REGION( 0x100000, "audiocpu", 0 )
-    ROM_LOAD16_BYTE( "22116-03.u25", 0x040001, 0x10000, CRC(95bb31d3) SHA1(e7bc43b63126fd33663865b2e41bacc58e962628) )
-    ROM_LOAD16_BYTE( "22113-03.u13", 0x040000, 0x10000, CRC(71b28df6) SHA1(caf8e4c98a1650dbaedf83f4d38da920d0976f78) )
-    ROM_LOAD16_BYTE( "22117-03.u26", 0x060001, 0x10000, CRC(703d81ce) SHA1(caf5363fb468a461a260e0ec636b0a7a8dc9cd3d) )
-    ROM_LOAD16_BYTE( "22114-03.u14", 0x060000, 0x10000, CRC(f8b31bf8) SHA1(cb8133effe5484c5b4c40b77769f6ec72441c333) )
-    ROM_LOAD16_BYTE( "22118-03.u27", 0x0e0001, 0x10000, CRC(806ccf8b) SHA1(7335a85fc84d5c2f7537548c3856c9cd2f267609) )
-    ROM_LOAD16_BYTE( "22115-03.u15", 0x0e0000, 0x10000, CRC(c8439a7a) SHA1(9a8bb1fca8d3414dcfd4839bc0c4289e4d810943) )
+	ROM_LOAD16_BYTE( "22116-03.u25", 0x040001, 0x10000, CRC(95bb31d3) SHA1(e7bc43b63126fd33663865b2e41bacc58e962628) )
+	ROM_LOAD16_BYTE( "22113-03.u13", 0x040000, 0x10000, CRC(71b28df6) SHA1(caf8e4c98a1650dbaedf83f4d38da920d0976f78) )
+	ROM_LOAD16_BYTE( "22117-03.u26", 0x060001, 0x10000, CRC(703d81ce) SHA1(caf5363fb468a461a260e0ec636b0a7a8dc9cd3d) )
+	ROM_LOAD16_BYTE( "22114-03.u14", 0x060000, 0x10000, CRC(f8b31bf8) SHA1(cb8133effe5484c5b4c40b77769f6ec72441c333) )
+	ROM_LOAD16_BYTE( "22118-03.u27", 0x0e0001, 0x10000, CRC(806ccf8b) SHA1(7335a85fc84d5c2f7537548c3856c9cd2f267609) )
+	ROM_LOAD16_BYTE( "22115-03.u15", 0x0e0000, 0x10000, CRC(c8439a7a) SHA1(9a8bb1fca8d3414dcfd4839bc0c4289e4d810943) )
 
 	ROM_REGION( 0x18000, "gfx1", 0 )
 	ROM_LOAD( "22105-01.u93", 0x00000, 0x08000, CRC(4426e367) SHA1(298203112d724feb9a75a7bfc34b3dbb4d7fffe7) )
@@ -2321,7 +2318,7 @@ GAME( 1988, teamqb2,  teamqb,  lelandi,  teamqb,   teamqb,   ROT270, "Leland Cor
 GAME( 1989, aafb,     0,       lelandi,  teamqb,   aafb,     ROT270, "Leland Corp.", "All American Football (rev E)", 0 )
 GAME( 1989, aafbd2p,  aafb,    lelandi,  aafb2p,   aafbd2p,  ROT270, "Leland Corp.", "All American Football (rev D, 2 Players)", 0 )
 GAME( 1989, aafbc,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev C)", 0 )
-GAME( 1989, aafbb,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev B)", 0 )
+GAME( 1989, aafbb,    aafb,    lelandi,  teamqb,   aafbb,    ROT270, "Leland Corp.", "All American Football (rev B)", GAME_NOT_WORKING )
 
 /* huge master banks, large slave banks, 80186 sound */
 GAME( 1989, offroad,    0,       lelandi,  offroad,    offroad,  ROT0,   "Leland Corp.", "Ironman Ivan Stewart's Super Off-Road", 0 )

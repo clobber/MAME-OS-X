@@ -183,16 +183,13 @@ GFXDECODE_END
 
 static MACHINE_RESET( carjmbre )
 {
-	carjmbre_state *state = (carjmbre_state *)machine->driver_data;
+	carjmbre_state *state = machine->driver_data<carjmbre_state>();
 
 	state->flipscreen = 0;
 	state->bgcolor = 0;
 }
 
-static MACHINE_DRIVER_START( carjmbre )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(carjmbre_state)
+static MACHINE_CONFIG_START( carjmbre, carjmbre_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)
@@ -229,7 +226,7 @@ static MACHINE_DRIVER_START( carjmbre )
 
 	MDRV_SOUND_ADD("ay2", AY8910, XTAL_18_432MHz/6/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.12)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

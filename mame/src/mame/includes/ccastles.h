@@ -4,18 +4,21 @@
 
 *************************************************************************/
 
-class ccastles_state
+#include "cpu/m6502/m6502.h"
+#include "machine/x2212.h"
+
+class ccastles_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ccastles_state(machine)); }
-
-	ccastles_state(running_machine &machine) { }
+	ccastles_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  maincpu(*this, "maincpu"),
+		  nvram_4b(*this, "nvram_4b"),
+		  nvram_4a(*this, "nvram_4a") { }
 
 	/* memory pointers */
 	UINT8 *  videoram;
 	UINT8 *  spriteram;
-//  UINT8 *  nvram_stage;   // currently this uses generic nvram handlers
-//  UINT8 *  nvram;     // currently this uses generic nvram handlers
 
 	/* video-related */
 	const UINT8 *syncprom;
@@ -36,7 +39,9 @@ public:
 	UINT8    nvram_store[2];
 
 	/* devices */
-	running_device *maincpu;
+	required_device<m6502_device> maincpu;
+	required_device<x2212_device> nvram_4b;
+	required_device<x2212_device> nvram_4a;
 };
 
 

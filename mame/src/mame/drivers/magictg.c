@@ -125,7 +125,7 @@ static VIDEO_UPDATE(magictg)
 }
 
 /* ?? */
-static const mips3_config config =
+static const mips3_config r4600_config =
 {
 	16384,				/* code cache size */
 	16384				/* data cache size */
@@ -139,10 +139,10 @@ ADDRESS_MAP_END
 
 
 
-static MACHINE_DRIVER_START( magictg )
+static MACHINE_CONFIG_START( magictg, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", R4600BE, 10000000)  // ?? what cpu?
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r4600_config)
 	MDRV_CPU_PROGRAM_MAP(magictg_map)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -156,7 +156,7 @@ static MACHINE_DRIVER_START( magictg )
 
 	MDRV_VIDEO_START(magictg)
 	MDRV_VIDEO_UPDATE(magictg)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static INPUT_PORTS_START( magictg )
 	PORT_START("IPT_TEST")

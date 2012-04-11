@@ -14,48 +14,152 @@
 #define	LOG		(0)
 
 
-typedef struct _ttl74123_t ttl74123_t;
+//**************************************************************************
+//  DEVICE DEFINITIONS
+//**************************************************************************
 
-struct _ttl74123_t
+const device_type TTL74123 = ttl74123_device_config::static_alloc_device_config;
+
+
+//**************************************************************************
+//  DEVICE CONFIGURATION
+//**************************************************************************
+
+//-------------------------------------------------
+//  ttl74123_device_config - constructor
+//-------------------------------------------------
+
+ttl74123_device_config::ttl74123_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
+	: device_config(mconfig, static_alloc_device_config, "TTL74123", tag, owner, clock)
 {
-	const ttl74123_config *intf;
-
-	UINT8 a;			/* pin 1/9 */
-	UINT8 b;			/* pin 2/10 */
-	UINT8 clear;		/* pin 3/11 */
-	emu_timer *timer;
-};
-
-/* ----------------------------------------------------------------------- */
-
-INLINE ttl74123_t *get_safe_token(running_device *device) {
-	assert( device != NULL );
-	assert( device->type() == TTL74123 );
-	return ( ttl74123_t * ) downcast<legacy_device_base *>(device)->token();
 }
 
 
-static attotime compute_duration(ttl74123_t *chip)
+//-------------------------------------------------
+//  static_alloc_device_config - allocate a new
+//  configuration object
+//-------------------------------------------------
+
+device_config *ttl74123_device_config::static_alloc_device_config(const machine_config &mconfig, const char *tag, const device_config *owner, UINT32 clock)
+{
+	return global_alloc(ttl74123_device_config(mconfig, tag, owner, clock));
+}
+
+
+//-------------------------------------------------
+//  alloc_device - allocate a new device object
+//-------------------------------------------------
+
+device_t *ttl74123_device_config::alloc_device(running_machine &machine) const
+{
+	return auto_alloc(&machine, ttl74123_device(machine, *this));
+}
+
+
+//-------------------------------------------------
+//  device_config_complete - perform any
+//  operations now that the configuration is
+//  complete
+//-------------------------------------------------
+
+void ttl74123_device_config::device_config_complete()
+{
+	// inherit a copy of the static data
+	const ttl74123_interface *intf = reinterpret_cast<const ttl74123_interface *>(static_config());
+	if (intf != NULL)
+		*static_cast<ttl74123_interface *>(this) = *intf;
+
+	// or initialize to defaults if none provided
+	else
+	{
+		m_connection_type = TTL74123_NOT_GROUNDED_NO_DIODE;
+		m_res = 1.0;
+		m_cap = 1.0;
+		m_a = 0;
+		m_b = 0;
+		m_clear = 0;
+    	memset(&m_output_changed_cb, 0, sizeof(m_output_changed_cb));
+	}
+}
+
+
+
+//**************************************************************************
+//  LIVE DEVICE
+//**************************************************************************
+
+//-------------------------------------------------
+//  ttl74123_device - constructor
+//-------------------------------------------------
+
+ttl74123_device::ttl74123_device(running_machine &_machine, const ttl74123_device_config &config)
+	: device_t(_machine, config),
+	  m_config(config)
+{
+
+}
+
+
+//-------------------------------------------------
+//  device_start - device-specific startup
+//-------------------------------------------------
+
+void ttl74123_device::device_start()
+{
+	m_timer = timer_alloc(&m_machine, clear_callback, (void *)this);
+
+	/* start with the defaults */
+	m_a = m_config.m_a;
+	m_b = m_config.m_b;
+	m_clear = m_config.m_clear;
+
+	/* register for state saving */
+	state_save_register_device_item(this, 0, m_a);
+	state_save_register_device_item(this, 0, m_b);
+	state_save_register_device_item(this, 0, m_clear);
+}
+
+
+//-------------------------------------------------
+//  device_reset - device-specific reset
+//-------------------------------------------------
+
+void ttl74123_device::device_reset()
+{
+	set_output();
+}
+
+
+
+//-------------------------------------------------
+//  compute_duration - compute timer duration
+//-------------------------------------------------
+
+attotime ttl74123_device::compute_duration()
 {
 	double duration;
 
-	switch (chip->intf->connection_type)
+	switch (m_config.m_connection_type)
 	{
 	case TTL74123_NOT_GROUNDED_NO_DIODE:
-		duration = 0.28 * chip->intf->res * chip->intf->cap * (1.0 + (700.0 / chip->intf->res));
+		duration = 0.28 * m_config.m_res * m_config.m_cap * (1.0 + (700.0 / m_config.m_res));
 		break;
 
 	case TTL74123_NOT_GROUNDED_DIODE:
-		duration = 0.25 * chip->intf->res * chip->intf->cap * (1.0 + (700.0 / chip->intf->res));
+		duration = 0.25 * m_config.m_res * m_config.m_cap * (1.0 + (700.0 / m_config.m_res));
 		break;
 
 	case TTL74123_GROUNDED:
 	default:
-		if (chip->intf->cap < CAP_U(0.1))
+		if (m_config.m_cap < CAP_U(0.1))
+		{
 			/* this is really a curve - a very flat one in the 0.1uF-.01uF range */
-			duration = 0.32 * chip->intf->res * chip->intf->cap;
+			duration = 0.32 * m_config.m_res * m_config.m_cap;
+		}
 		else
-			duration = 0.33 * chip->intf->res * chip->intf->cap;
+		{
+			duration = 0.33 * m_config.m_res * m_config.m_cap;
+		}
 		break;
 	}
 
@@ -63,179 +167,183 @@ static attotime compute_duration(ttl74123_t *chip)
 }
 
 
-static int timer_running(ttl74123_t *chip)
+//-------------------------------------------------
+//  timer_running - is the timer running?
+//-------------------------------------------------
+
+int ttl74123_device::timer_running()
 {
-	return (attotime_compare(timer_timeleft(chip->timer), attotime_zero) > 0) &&
-		   (attotime_compare(timer_timeleft(chip->timer), attotime_never) != 0);
+	return (attotime_compare(timer_timeleft(m_timer), attotime_zero) > 0) &&
+		   (attotime_compare(timer_timeleft(m_timer), attotime_never) != 0);
 }
 
 
-static TIMER_CALLBACK( output_callback )
-{
-	running_device *device = (running_device *)ptr;
-	ttl74123_t *chip = get_safe_token(device);
+/*-------------------------------------------------
+    TIMER_CALLBACK( output_callback )
+-------------------------------------------------*/
 
-	chip->intf->output_changed_cb(device, 0, param);
+TIMER_CALLBACK( ttl74123_device::output_callback )
+{
+	ttl74123_device *dev = reinterpret_cast<ttl74123_device*>(ptr);
+	dev->output(param);
+}
+
+void ttl74123_device::output(INT32 param)
+{
+	m_config.m_output_changed_cb(this, 0, param);
 }
 
 
-static void set_output(running_device *device)
+//-------------------------------------------------
+//  set_output - set the output line state
+//-------------------------------------------------
+
+void ttl74123_device::set_output()
 {
-	ttl74123_t *chip = get_safe_token(device);
-	int output = timer_running(chip);
+	int output = timer_running();
 
-	timer_set( device->machine, attotime_zero, (void *) device, output, output_callback );
+	timer_set( &m_machine, attotime_zero, (void *)this, output, output_callback );
 
-	if (LOG) logerror("74123 %s:  Output: %d\n", device->tag(), output);
+	if (LOG) logerror("74123 %s:  Output: %d\n", tag(), output);
 }
 
 
-static TIMER_CALLBACK( clear_callback )
-{
-	running_device *device = (running_device *)ptr;
-	ttl74123_t *chip = get_safe_token(device);
-	int output = timer_running(chip);
+/*-------------------------------------------------
+    TIMER_CALLBACK( clear_callback )
+-------------------------------------------------*/
 
-	chip->intf->output_changed_cb(device, 0, output);
+TIMER_CALLBACK( ttl74123_device::clear_callback )
+{
+	ttl74123_device *dev = reinterpret_cast<ttl74123_device*>(ptr);
+	dev->clear();
+}
+
+void ttl74123_device::clear()
+{
+	int output = timer_running();
+
+	m_config.m_output_changed_cb(this, 0, output);
 }
 
 
+//-------------------------------------------------
+//  start_pulse - begin timing
+//-------------------------------------------------
 
-
-static void start_pulse(running_device *device)
+void ttl74123_device::start_pulse()
 {
-	ttl74123_t *chip = get_safe_token(device);
+	attotime duration = compute_duration();
 
-	attotime duration = compute_duration(chip);
-
-	if (timer_running(chip))
+	if(timer_running())
 	{
 		/* retriggering, but not if we are called to quickly */
-		attotime delay_time = attotime_make(0, ATTOSECONDS_PER_SECOND * chip->intf->cap * 220);
+		attotime delay_time = attotime_make(0, ATTOSECONDS_PER_SECOND * m_config.m_cap * 220);
 
-		if (attotime_compare(timer_timeelapsed(chip->timer), delay_time) >= 0)
+		if(attotime_compare(timer_timeelapsed(m_timer), delay_time) >= 0)
 		{
-			timer_adjust_oneshot(chip->timer, duration, 0);
+			timer_adjust_oneshot(m_timer, duration, 0);
 
-			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", device->tag(), attotime_to_double(duration));
+			if (LOG) logerror("74123 %s:  Retriggering pulse.  Duration: %f\n", tag(), attotime_to_double(duration));
 		}
 		else
 		{
-			if (LOG) logerror("74123 %s:  Retriggering failed.\n", device->tag());
+			if (LOG) logerror("74123 %s:  Retriggering failed.\n", tag());
 		}
 	}
 	else
 	{
 		/* starting */
-		timer_adjust_oneshot(chip->timer, duration, 0);
+		timer_adjust_oneshot(m_timer, duration, 0);
 
-		set_output(device);
+		set_output();
 
-		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", device->tag(), attotime_to_double(duration));
+		if (LOG) logerror("74123 %s:  Starting pulse.  Duration: %f\n", tag(), attotime_to_double(duration));
 	}
 }
 
+
+//-------------------------------------------------
+//  a_w - write register a data
+//-------------------------------------------------
 
 WRITE8_DEVICE_HANDLER( ttl74123_a_w )
 {
-	ttl74123_t *chip = get_safe_token(device);
-
-	/* start/regtrigger pulse if B=HI and falling edge on A (while clear is HI) */
-	if (!data && chip->a && chip->b && chip->clear)
-		start_pulse(device);
-
-	chip->a = data;
+	ttl74123_device *dev = downcast<ttl74123_device *>(device);
+	dev->a_w(data);
 }
 
+void ttl74123_device::a_w(UINT8 data)
+{
+	/* start/regtrigger pulse if B=HI and falling edge on A (while clear is HI) */
+	if (!data && m_a && m_b && m_clear)
+	{
+		start_pulse();
+	}
+
+	m_a = data;
+}
+
+
+//-------------------------------------------------
+//  b_w - write register b data
+//-------------------------------------------------
 
 WRITE8_DEVICE_HANDLER( ttl74123_b_w )
 {
-	ttl74123_t *chip = get_safe_token(device);
-
-	/* start/regtrigger pulse if A=LO and rising edge on B (while clear is HI) */
-	if (data && !chip->b && !chip->a && chip->clear)
-		start_pulse(device);
-
-	chip->b = data;
+	ttl74123_device *dev = downcast<ttl74123_device *>(device);
+	dev->b_w(data);
 }
 
+void ttl74123_device::b_w(UINT8 data)
+{
+	/* start/regtrigger pulse if A=LO and rising edge on B (while clear is HI) */
+	if (data && !m_b && !m_a && m_clear)
+	{
+		start_pulse();
+	}
+
+	m_b = data;
+}
+
+
+//-------------------------------------------------
+//  clear_w - write register clear data
+//-------------------------------------------------
 
 WRITE8_DEVICE_HANDLER( ttl74123_clear_w )
 {
-	ttl74123_t *chip = get_safe_token(device);
-
-	/* start/regtrigger pulse if B=HI and A=LO and rising edge on clear */
-	if (data && !chip->a && chip->b && !chip->clear)
-		start_pulse(device);
-	else if (!data) 	/* clear the output  */
-	{
-		timer_adjust_oneshot(chip->timer, attotime_zero, 0);
-
-		if (LOG) logerror("74123 #%s:  Cleared\n", device->tag() );
-	}
-	chip->clear = data;
+	ttl74123_device *dev = downcast<ttl74123_device *>(device);
+	dev->clear_w(data);
 }
+
+void ttl74123_device::clear_w(UINT8 data)
+{
+	/* start/regtrigger pulse if B=HI and A=LO and rising edge on clear */
+	if (data && !m_a && m_b && !m_clear)
+	{
+		start_pulse();
+	}
+	else if (!data)	 /* clear the output  */
+	{
+		timer_adjust_oneshot(m_timer, attotime_zero, 0);
+
+		if (LOG) logerror("74123 #%s:  Cleared\n", tag() );
+	}
+	m_clear = data;
+}
+
+
+//-------------------------------------------------
+//  reset_w - reset device
+//-------------------------------------------------
 
 WRITE8_DEVICE_HANDLER( ttl74123_reset_w )
 {
-	set_output(device);
+	ttl74123_device *dev = downcast<ttl74123_device *>(device);
+	dev->reset_w();
 }
 
-/* ----------------------------------------------------------------------- */
-
-/* device interface */
-
-static DEVICE_START( ttl74123 )
+void ttl74123_device::reset_w()
 {
-	ttl74123_t *chip = get_safe_token(device);
-
-	/* validate arguments */
-	chip->intf = (ttl74123_config *)device->baseconfig().static_config();
-
-	assert_always(chip->intf, "No interface specified");
-	assert_always((chip->intf->connection_type != TTL74123_GROUNDED) || (chip->intf->cap >= CAP_U(0.01)), "Only capacitors >= 0.01uF supported for GROUNDED type");
-	assert_always(chip->intf->cap >= CAP_P(1000), "Only capacitors >= 1000pF supported ");
-
-	chip->timer = timer_alloc(device->machine, clear_callback, (void *) device);
-
-	/* start with the defaults */
-	chip->a = chip->intf->a;
-    chip->b = chip->intf->b;
-	chip->clear = chip->intf->clear;
-
-	/* register for state saving */
-	state_save_register_device_item(device, 0, chip->a);
-	state_save_register_device_item(device, 0, chip->b);
-	state_save_register_device_item(device, 0, chip->clear);
+	set_output();
 }
-
-
-static DEVICE_RESET( ttl74123 )
-{
-	set_output(device);
-}
-
-
-DEVICE_GET_INFO( ttl74123 )
-{
-	switch (state)
-	{
-		/* --- the following bits of info are returned as 64-bit signed integers --- */
-		case DEVINFO_INT_TOKEN_BYTES:					info->i = sizeof(ttl74123_t);						break;
-		case DEVINFO_INT_INLINE_CONFIG_BYTES:			info->i = 0;										break;
-
-		/* --- the following bits of info are returned as pointers to data or functions --- */
-		case DEVINFO_FCT_START:							info->start = DEVICE_START_NAME(ttl74123);			break;
-		case DEVINFO_FCT_STOP:							/* Nothing */										break;
-		case DEVINFO_FCT_RESET:							info->reset = DEVICE_RESET_NAME(ttl74123);			break;
-
-		/* --- the following bits of info are returned as NULL-terminated strings --- */
-		case DEVINFO_STR_NAME:							strcpy(info->s, "74123");							break;
-		case DEVINFO_STR_FAMILY:						strcpy(info->s, "TTL");								break;
-		case DEVINFO_STR_VERSION:						strcpy(info->s, "1.0");								break;
-		case DEVINFO_STR_SOURCE_FILE:					strcpy(info->s, __FILE__);							break;
-		case DEVINFO_STR_CREDITS:						strcpy(info->s, "Copyright Nicola Salmoria and the MAME Team"); break;
-	}
-}
-
-DEFINE_LEGACY_DEVICE(TTL74123, ttl74123);

@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class suprslam_state
+class suprslam_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, suprslam_state(machine)); }
-
-	suprslam_state(running_machine &machine) { }
+	suprslam_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *    screen_videoram;

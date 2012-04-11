@@ -116,9 +116,10 @@ struct _m6800_state
 	legacy_cpu_device *device;
 
 	/* Memory spaces */
-    const address_space *program;
-    const address_space *data;
-    const address_space *io;
+    address_space *program;
+    direct_read_data *direct;
+    address_space *data;
+    address_space *io;
 
 	void	(* const * insn)(m6800_state *);	/* instruction table */
 	const UINT8 *cycles;			/* clock cycle of instruction table */
@@ -206,26 +207,26 @@ static UINT32 timer_next;
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-#define RM(Addr) ((unsigned)memory_read_byte_8be(cpustate->program, Addr))
+#define RM(Addr) ((unsigned)cpustate->program->read_byte(Addr))
 
 /****************************************************************************/
 /* Write a byte to given memory location                                    */
 /****************************************************************************/
-#define WM(Addr,Value) (memory_write_byte_8be(cpustate->program, Addr,Value))
+#define WM(Addr,Value) (cpustate->program->write_byte(Addr,Value))
 
 /****************************************************************************/
 /* M6800_RDOP() is identical to M6800_RDMEM() except it is used for reading */
 /* opcodes. In case of system with memory mapped I/O, this function can be  */
 /* used to greatly speed up emulation                                       */
 /****************************************************************************/
-#define M_RDOP(Addr) ((unsigned)memory_decrypted_read_byte(cpustate->program, Addr))
+#define M_RDOP(Addr) ((unsigned)cpustate->direct->read_decrypted_byte(Addr))
 
 /****************************************************************************/
 /* M6800_RDOP_ARG() is identical to M6800_RDOP() but it's used for reading  */
 /* opcode arguments. This difference can be used to support systems that    */
 /* use different encoding mechanisms for opcodes and opcode arguments       */
 /****************************************************************************/
-#define M_RDOP_ARG(Addr) ((unsigned)memory_raw_read_byte(cpustate->program, Addr))
+#define M_RDOP_ARG(Addr) ((unsigned)cpustate->direct->read_raw_byte(Addr))
 
 /* macros to access memory */
 #define IMMBYTE(b)	b = M_RDOP_ARG(PCD); PC++
@@ -675,15 +676,15 @@ static void m6800_tx(m6800_state *cpustate, int value)
 	cpustate->port2_data = (cpustate->port2_data & 0xef) | (value << 4);
 
 	if(cpustate->port2_ddr == 0xff)
-		memory_write_byte_8be(cpustate->io, M6803_PORT2,cpustate->port2_data);
+		cpustate->io->write_byte(M6803_PORT2,cpustate->port2_data);
 	else
-		memory_write_byte_8be(cpustate->io, M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
-			| (memory_read_byte_8be(cpustate->io, M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
+		cpustate->io->write_byte(M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
+			| (cpustate->io->read_byte(M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
 }
 
 static int m6800_rx(m6800_state *cpustate)
 {
-	return (memory_read_byte_8be(cpustate->io, M6803_PORT2) & M6800_PORT2_IO3) >> 3;
+	return (cpustate->io->read_byte(M6803_PORT2) & M6800_PORT2_IO3) >> 3;
 }
 
 static TIMER_CALLBACK(m6800_tx_tick)
@@ -911,6 +912,7 @@ static CPU_INIT( m6800 )
 	m6800_state *cpustate = get_safe_token(device);
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -954,6 +956,8 @@ static CPU_RESET( m6800 )
 	cpustate->txstate = M6800_TX_STATE_INIT;
 	cpustate->txbits = cpustate->rxbits = 0;
 	cpustate->trcsr_read = 0;
+
+	cpustate->cc = 0xc0;
 }
 
 /****************************************************************************
@@ -995,273 +999,6 @@ static void set_irq_line(m6800_state *cpustate, int irqline, int state)
 }
 
 /****************************************************************************
- * Execute one instruction
- ****************************************************************************/
-
-INLINE void m6800_execute_one(m6800_state *cpustate, UINT8 ireg)
-{
-	switch( ireg )
-	{
-		case 0x00: illegal(cpustate); break;
-		case 0x01: nop(cpustate); break;
-		case 0x02: illegal(cpustate); break;
-		case 0x03: illegal(cpustate); break;
-		case 0x04: illegal(cpustate); break;
-		case 0x05: illegal(cpustate); break;
-		case 0x06: tap(cpustate); break;
-		case 0x07: tpa(cpustate); break;
-		case 0x08: inx(cpustate); break;
-		case 0x09: dex(cpustate); break;
-		case 0x0A: CLV; break;
-		case 0x0B: SEV; break;
-		case 0x0C: CLC; break;
-		case 0x0D: SEC; break;
-		case 0x0E: cli(cpustate); break;
-		case 0x0F: sei(cpustate); break;
-		case 0x10: sba(cpustate); break;
-		case 0x11: cba(cpustate); break;
-		case 0x12: illegal(cpustate); break;
-		case 0x13: illegal(cpustate); break;
-		case 0x14: illegal(cpustate); break;
-		case 0x15: illegal(cpustate); break;
-		case 0x16: tab(cpustate); break;
-		case 0x17: tba(cpustate); break;
-		case 0x18: illegal(cpustate); break;
-		case 0x19: daa(cpustate); break;
-		case 0x1a: illegal(cpustate); break;
-		case 0x1b: aba(cpustate); break;
-		case 0x1c: illegal(cpustate); break;
-		case 0x1d: illegal(cpustate); break;
-		case 0x1e: illegal(cpustate); break;
-		case 0x1f: illegal(cpustate); break;
-		case 0x20: bra(cpustate); break;
-		case 0x21: brn(cpustate); break;
-		case 0x22: bhi(cpustate); break;
-		case 0x23: bls(cpustate); break;
-		case 0x24: bcc(cpustate); break;
-		case 0x25: bcs(cpustate); break;
-		case 0x26: bne(cpustate); break;
-		case 0x27: beq(cpustate); break;
-		case 0x28: bvc(cpustate); break;
-		case 0x29: bvs(cpustate); break;
-		case 0x2a: bpl(cpustate); break;
-		case 0x2b: bmi(cpustate); break;
-		case 0x2c: bge(cpustate); break;
-		case 0x2d: blt(cpustate); break;
-		case 0x2e: bgt(cpustate); break;
-		case 0x2f: ble(cpustate); break;
-		case 0x30: tsx(cpustate); break;
-		case 0x31: ins(cpustate); break;
-		case 0x32: pula(cpustate); break;
-		case 0x33: pulb(cpustate); break;
-		case 0x34: des(cpustate); break;
-		case 0x35: txs(cpustate); break;
-		case 0x36: psha(cpustate); break;
-		case 0x37: pshb(cpustate); break;
-		case 0x38: illegal(cpustate); break;
-		case 0x39: rts(cpustate); break;
-		case 0x3a: illegal(cpustate); break;
-		case 0x3b: rti(cpustate); break;
-		case 0x3c: illegal(cpustate); break;
-		case 0x3d: illegal(cpustate); break;
-		case 0x3e: wai(cpustate); break;
-		case 0x3f: swi(cpustate); break;
-		case 0x40: nega(cpustate); break;
-		case 0x41: illegal(cpustate); break;
-		case 0x42: illegal(cpustate); break;
-		case 0x43: coma(cpustate); break;
-		case 0x44: lsra(cpustate); break;
-		case 0x45: illegal(cpustate); break;
-		case 0x46: rora(cpustate); break;
-		case 0x47: asra(cpustate); break;
-		case 0x48: asla(cpustate); break;
-		case 0x49: rola(cpustate); break;
-		case 0x4a: deca(cpustate); break;
-		case 0x4b: illegal(cpustate); break;
-		case 0x4c: inca(cpustate); break;
-		case 0x4d: tsta(cpustate); break;
-		case 0x4e: illegal(cpustate); break;
-		case 0x4f: clra(cpustate); break;
-		case 0x50: negb(cpustate); break;
-		case 0x51: illegal(cpustate); break;
-		case 0x52: illegal(cpustate); break;
-		case 0x53: comb(cpustate); break;
-		case 0x54: lsrb(cpustate); break;
-		case 0x55: illegal(cpustate); break;
-		case 0x56: rorb(cpustate); break;
-		case 0x57: asrb(cpustate); break;
-		case 0x58: aslb(cpustate); break;
-		case 0x59: rolb(cpustate); break;
-		case 0x5a: decb(cpustate); break;
-		case 0x5b: illegal(cpustate); break;
-		case 0x5c: incb(cpustate); break;
-		case 0x5d: tstb(cpustate); break;
-		case 0x5e: illegal(cpustate); break;
-		case 0x5f: clrb(cpustate); break;
-		case 0x60: neg_ix(cpustate); break;
-		case 0x61: illegal(cpustate); break;
-		case 0x62: illegal(cpustate); break;
-		case 0x63: com_ix(cpustate); break;
-		case 0x64: lsr_ix(cpustate); break;
-		case 0x65: illegal(cpustate); break;
-		case 0x66: ror_ix(cpustate); break;
-		case 0x67: asr_ix(cpustate); break;
-		case 0x68: asl_ix(cpustate); break;
-		case 0x69: rol_ix(cpustate); break;
-		case 0x6a: dec_ix(cpustate); break;
-		case 0x6b: illegal(cpustate); break;
-		case 0x6c: inc_ix(cpustate); break;
-		case 0x6d: tst_ix(cpustate); break;
-		case 0x6e: jmp_ix(cpustate); break;
-		case 0x6f: clr_ix(cpustate); break;
-		case 0x70: neg_ex(cpustate); break;
-		case 0x71: illegal(cpustate); break;
-		case 0x72: illegal(cpustate); break;
-		case 0x73: com_ex(cpustate); break;
-		case 0x74: lsr_ex(cpustate); break;
-		case 0x75: illegal(cpustate); break;
-		case 0x76: ror_ex(cpustate); break;
-		case 0x77: asr_ex(cpustate); break;
-		case 0x78: asl_ex(cpustate); break;
-		case 0x79: rol_ex(cpustate); break;
-		case 0x7a: dec_ex(cpustate); break;
-		case 0x7b: illegal(cpustate); break;
-		case 0x7c: inc_ex(cpustate); break;
-		case 0x7d: tst_ex(cpustate); break;
-		case 0x7e: jmp_ex(cpustate); break;
-		case 0x7f: clr_ex(cpustate); break;
-		case 0x80: suba_im(cpustate); break;
-		case 0x81: cmpa_im(cpustate); break;
-		case 0x82: sbca_im(cpustate); break;
-		case 0x83: illegal(cpustate); break;
-		case 0x84: anda_im(cpustate); break;
-		case 0x85: bita_im(cpustate); break;
-		case 0x86: lda_im(cpustate); break;
-		case 0x87: sta_im(cpustate); break;
-		case 0x88: eora_im(cpustate); break;
-		case 0x89: adca_im(cpustate); break;
-		case 0x8a: ora_im(cpustate); break;
-		case 0x8b: adda_im(cpustate); break;
-		case 0x8c: cmpx_im(cpustate); break;
-		case 0x8d: bsr(cpustate); break;
-		case 0x8e: lds_im(cpustate); break;
-		case 0x8f: sts_im(cpustate); /* orthogonality */ break;
-		case 0x90: suba_di(cpustate); break;
-		case 0x91: cmpa_di(cpustate); break;
-		case 0x92: sbca_di(cpustate); break;
-		case 0x93: illegal(cpustate); break;
-		case 0x94: anda_di(cpustate); break;
-		case 0x95: bita_di(cpustate); break;
-		case 0x96: lda_di(cpustate); break;
-		case 0x97: sta_di(cpustate); break;
-		case 0x98: eora_di(cpustate); break;
-		case 0x99: adca_di(cpustate); break;
-		case 0x9a: ora_di(cpustate); break;
-		case 0x9b: adda_di(cpustate); break;
-		case 0x9c: cmpx_di(cpustate); break;
-		case 0x9d: jsr_di(cpustate); break;
-		case 0x9e: lds_di(cpustate); break;
-		case 0x9f: sts_di(cpustate); break;
-		case 0xa0: suba_ix(cpustate); break;
-		case 0xa1: cmpa_ix(cpustate); break;
-		case 0xa2: sbca_ix(cpustate); break;
-		case 0xa3: illegal(cpustate); break;
-		case 0xa4: anda_ix(cpustate); break;
-		case 0xa5: bita_ix(cpustate); break;
-		case 0xa6: lda_ix(cpustate); break;
-		case 0xa7: sta_ix(cpustate); break;
-		case 0xa8: eora_ix(cpustate); break;
-		case 0xa9: adca_ix(cpustate); break;
-		case 0xaa: ora_ix(cpustate); break;
-		case 0xab: adda_ix(cpustate); break;
-		case 0xac: cmpx_ix(cpustate); break;
-		case 0xad: jsr_ix(cpustate); break;
-		case 0xae: lds_ix(cpustate); break;
-		case 0xaf: sts_ix(cpustate); break;
-		case 0xb0: suba_ex(cpustate); break;
-		case 0xb1: cmpa_ex(cpustate); break;
-		case 0xb2: sbca_ex(cpustate); break;
-		case 0xb3: illegal(cpustate); break;
-		case 0xb4: anda_ex(cpustate); break;
-		case 0xb5: bita_ex(cpustate); break;
-		case 0xb6: lda_ex(cpustate); break;
-		case 0xb7: sta_ex(cpustate); break;
-		case 0xb8: eora_ex(cpustate); break;
-		case 0xb9: adca_ex(cpustate); break;
-		case 0xba: ora_ex(cpustate); break;
-		case 0xbb: adda_ex(cpustate); break;
-		case 0xbc: cmpx_ex(cpustate); break;
-		case 0xbd: jsr_ex(cpustate); break;
-		case 0xbe: lds_ex(cpustate); break;
-		case 0xbf: sts_ex(cpustate); break;
-		case 0xc0: subb_im(cpustate); break;
-		case 0xc1: cmpb_im(cpustate); break;
-		case 0xc2: sbcb_im(cpustate); break;
-		case 0xc3: illegal(cpustate); break;
-		case 0xc4: andb_im(cpustate); break;
-		case 0xc5: bitb_im(cpustate); break;
-		case 0xc6: ldb_im(cpustate); break;
-		case 0xc7: stb_im(cpustate); break;
-		case 0xc8: eorb_im(cpustate); break;
-		case 0xc9: adcb_im(cpustate); break;
-		case 0xca: orb_im(cpustate); break;
-		case 0xcb: addb_im(cpustate); break;
-		case 0xcc: illegal(cpustate); break;
-		case 0xcd: illegal(cpustate); break;
-		case 0xce: ldx_im(cpustate); break;
-		case 0xcf: stx_im(cpustate); break;
-		case 0xd0: subb_di(cpustate); break;
-		case 0xd1: cmpb_di(cpustate); break;
-		case 0xd2: sbcb_di(cpustate); break;
-		case 0xd3: illegal(cpustate); break;
-		case 0xd4: andb_di(cpustate); break;
-		case 0xd5: bitb_di(cpustate); break;
-		case 0xd6: ldb_di(cpustate); break;
-		case 0xd7: stb_di(cpustate); break;
-		case 0xd8: eorb_di(cpustate); break;
-		case 0xd9: adcb_di(cpustate); break;
-		case 0xda: orb_di(cpustate); break;
-		case 0xdb: addb_di(cpustate); break;
-		case 0xdc: illegal(cpustate); break;
-		case 0xdd: illegal(cpustate); break;
-		case 0xde: ldx_di(cpustate); break;
-		case 0xdf: stx_di(cpustate); break;
-		case 0xe0: subb_ix(cpustate); break;
-		case 0xe1: cmpb_ix(cpustate); break;
-		case 0xe2: sbcb_ix(cpustate); break;
-		case 0xe3: illegal(cpustate); break;
-		case 0xe4: andb_ix(cpustate); break;
-		case 0xe5: bitb_ix(cpustate); break;
-		case 0xe6: ldb_ix(cpustate); break;
-		case 0xe7: stb_ix(cpustate); break;
-		case 0xe8: eorb_ix(cpustate); break;
-		case 0xe9: adcb_ix(cpustate); break;
-		case 0xea: orb_ix(cpustate); break;
-		case 0xeb: addb_ix(cpustate); break;
-		case 0xec: illegal(cpustate); break;
-		case 0xed: illegal(cpustate); break;
-		case 0xee: ldx_ix(cpustate); break;
-		case 0xef: stx_ix(cpustate); break;
-		case 0xf0: subb_ex(cpustate); break;
-		case 0xf1: cmpb_ex(cpustate); break;
-		case 0xf2: sbcb_ex(cpustate); break;
-		case 0xf3: illegal(cpustate); break;
-		case 0xf4: andb_ex(cpustate); break;
-		case 0xf5: bitb_ex(cpustate); break;
-		case 0xf6: ldb_ex(cpustate); break;
-		case 0xf7: stb_ex(cpustate); break;
-		case 0xf8: eorb_ex(cpustate); break;
-		case 0xf9: adcb_ex(cpustate); break;
-		case 0xfa: orb_ex(cpustate); break;
-		case 0xfb: addb_ex(cpustate); break;
-		case 0xfc: addx_ex(cpustate); break;
-		case 0xfd: illegal(cpustate); break;
-		case 0xfe: ldx_ex(cpustate); break;
-		case 0xff: stx_ex(cpustate); break;
-	}
-}
-
-/****************************************************************************
  * Execute cycles CPU cycles. Return number of cycles really executed
  ****************************************************************************/
 static CPU_EXECUTE( m6800 )
@@ -1275,7 +1012,7 @@ static CPU_EXECUTE( m6800 )
 
 	do
 	{
-		if( cpustate->wai_state & M6800_WAI )
+		if( cpustate->wai_state & (M6800_WAI|M6800_SLP) )
 		{
 			EAT_CYCLES;
 		}
@@ -1285,8 +1022,8 @@ static CPU_EXECUTE( m6800 )
 			debugger_instruction_hook(device, PCD);
 			ireg=M_RDOP(PCD);
 			PC++;
-			m6800_execute_one(cpustate, ireg);
-			increment_counter(cpustate, cycles_6800[ireg]);
+			(*cpustate->insn[ireg])(cpustate);
+			increment_counter(cpustate, cpustate->cycles[ireg]);
 		}
 	} while( cpustate->icount>0 );
 }
@@ -1304,6 +1041,7 @@ static CPU_INIT( m6801 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1327,6 +1065,7 @@ static CPU_INIT( m6802 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1346,6 +1085,7 @@ static CPU_INIT( m6803 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1355,304 +1095,6 @@ static CPU_INIT( m6803 )
 
 	state_register(cpustate, "m6803");
 }
-
-/****************************************************************************
- * Execute one instruction
- ****************************************************************************/
-
-INLINE void m6803_execute_one(m6800_state *cpustate, UINT8 ireg)
-{
-	switch( ireg )
-	{
-		case 0x00: illegal(cpustate); break;
-		case 0x01: nop(cpustate); break;
-		case 0x02: illegal(cpustate); break;
-		case 0x03: illegal(cpustate); break;
-		case 0x04: lsrd(cpustate); /* 6803 only */; break;
-		case 0x05: asld(cpustate); /* 6803 only */; break;
-		case 0x06: tap(cpustate); break;
-		case 0x07: tpa(cpustate); break;
-		case 0x08: inx(cpustate); break;
-		case 0x09: dex(cpustate); break;
-		case 0x0A: CLV; break;
-		case 0x0B: SEV; break;
-		case 0x0C: CLC; break;
-		case 0x0D: SEC; break;
-		case 0x0E: cli(cpustate); break;
-		case 0x0F: sei(cpustate); break;
-		case 0x10: sba(cpustate); break;
-		case 0x11: cba(cpustate); break;
-		case 0x12: illegal(cpustate); break;
-		case 0x13: illegal(cpustate); break;
-		case 0x14: illegal(cpustate); break;
-		case 0x15: illegal(cpustate); break;
-		case 0x16: tab(cpustate); break;
-		case 0x17: tba(cpustate); break;
-		case 0x18: illegal(cpustate); break;
-		case 0x19: daa(cpustate); break;
-		case 0x1a: illegal(cpustate); break;
-		case 0x1b: aba(cpustate); break;
-		case 0x1c: illegal(cpustate); break;
-		case 0x1d: illegal(cpustate); break;
-		case 0x1e: illegal(cpustate); break;
-		case 0x1f: illegal(cpustate); break;
-		case 0x20: bra(cpustate); break;
-		case 0x21: brn(cpustate); break;
-		case 0x22: bhi(cpustate); break;
-		case 0x23: bls(cpustate); break;
-		case 0x24: bcc(cpustate); break;
-		case 0x25: bcs(cpustate); break;
-		case 0x26: bne(cpustate); break;
-		case 0x27: beq(cpustate); break;
-		case 0x28: bvc(cpustate); break;
-		case 0x29: bvs(cpustate); break;
-		case 0x2a: bpl(cpustate); break;
-		case 0x2b: bmi(cpustate); break;
-		case 0x2c: bge(cpustate); break;
-		case 0x2d: blt(cpustate); break;
-		case 0x2e: bgt(cpustate); break;
-		case 0x2f: ble(cpustate); break;
-		case 0x30: tsx(cpustate); break;
-		case 0x31: ins(cpustate); break;
-		case 0x32: pula(cpustate); break;
-		case 0x33: pulb(cpustate); break;
-		case 0x34: des(cpustate); break;
-		case 0x35: txs(cpustate); break;
-		case 0x36: psha(cpustate); break;
-		case 0x37: pshb(cpustate); break;
-		case 0x38: pulx(cpustate); /* 6803 only */ break;
-		case 0x39: rts(cpustate); break;
-		case 0x3a: abx(cpustate); /* 6803 only */ break;
-		case 0x3b: rti(cpustate); break;
-		case 0x3c: pshx(cpustate); /* 6803 only */ break;
-		case 0x3d: mul(cpustate); /* 6803 only */ break;
-		case 0x3e: wai(cpustate); break;
-		case 0x3f: swi(cpustate); break;
-		case 0x40: nega(cpustate); break;
-		case 0x41: illegal(cpustate); break;
-		case 0x42: illegal(cpustate); break;
-		case 0x43: coma(cpustate); break;
-		case 0x44: lsra(cpustate); break;
-		case 0x45: illegal(cpustate); break;
-		case 0x46: rora(cpustate); break;
-		case 0x47: asra(cpustate); break;
-		case 0x48: asla(cpustate); break;
-		case 0x49: rola(cpustate); break;
-		case 0x4a: deca(cpustate); break;
-		case 0x4b: illegal(cpustate); break;
-		case 0x4c: inca(cpustate); break;
-		case 0x4d: tsta(cpustate); break;
-		case 0x4e: illegal(cpustate); break;
-		case 0x4f: clra(cpustate); break;
-		case 0x50: negb(cpustate); break;
-		case 0x51: illegal(cpustate); break;
-		case 0x52: illegal(cpustate); break;
-		case 0x53: comb(cpustate); break;
-		case 0x54: lsrb(cpustate); break;
-		case 0x55: illegal(cpustate); break;
-		case 0x56: rorb(cpustate); break;
-		case 0x57: asrb(cpustate); break;
-		case 0x58: aslb(cpustate); break;
-		case 0x59: rolb(cpustate); break;
-		case 0x5a: decb(cpustate); break;
-		case 0x5b: illegal(cpustate); break;
-		case 0x5c: incb(cpustate); break;
-		case 0x5d: tstb(cpustate); break;
-		case 0x5e: illegal(cpustate); break;
-		case 0x5f: clrb(cpustate); break;
-		case 0x60: neg_ix(cpustate); break;
-		case 0x61: illegal(cpustate); break;
-		case 0x62: illegal(cpustate); break;
-		case 0x63: com_ix(cpustate); break;
-		case 0x64: lsr_ix(cpustate); break;
-		case 0x65: illegal(cpustate); break;
-		case 0x66: ror_ix(cpustate); break;
-		case 0x67: asr_ix(cpustate); break;
-		case 0x68: asl_ix(cpustate); break;
-		case 0x69: rol_ix(cpustate); break;
-		case 0x6a: dec_ix(cpustate); break;
-		case 0x6b: illegal(cpustate); break;
-		case 0x6c: inc_ix(cpustate); break;
-		case 0x6d: tst_ix(cpustate); break;
-		case 0x6e: jmp_ix(cpustate); break;
-		case 0x6f: clr_ix(cpustate); break;
-		case 0x70: neg_ex(cpustate); break;
-		case 0x71: illegal(cpustate); break;
-		case 0x72: illegal(cpustate); break;
-		case 0x73: com_ex(cpustate); break;
-		case 0x74: lsr_ex(cpustate); break;
-		case 0x75: illegal(cpustate); break;
-		case 0x76: ror_ex(cpustate); break;
-		case 0x77: asr_ex(cpustate); break;
-		case 0x78: asl_ex(cpustate); break;
-		case 0x79: rol_ex(cpustate); break;
-		case 0x7a: dec_ex(cpustate); break;
-		case 0x7b: illegal(cpustate); break;
-		case 0x7c: inc_ex(cpustate); break;
-		case 0x7d: tst_ex(cpustate); break;
-		case 0x7e: jmp_ex(cpustate); break;
-		case 0x7f: clr_ex(cpustate); break;
-		case 0x80: suba_im(cpustate); break;
-		case 0x81: cmpa_im(cpustate); break;
-		case 0x82: sbca_im(cpustate); break;
-		case 0x83: subd_im(cpustate); /* 6803 only */ break;
-		case 0x84: anda_im(cpustate); break;
-		case 0x85: bita_im(cpustate); break;
-		case 0x86: lda_im(cpustate); break;
-		case 0x87: sta_im(cpustate); break;
-		case 0x88: eora_im(cpustate); break;
-		case 0x89: adca_im(cpustate); break;
-		case 0x8a: ora_im(cpustate); break;
-		case 0x8b: adda_im(cpustate); break;
-		case 0x8c: cpx_im(cpustate); /* 6803 difference */ break;
-		case 0x8d: bsr(cpustate); break;
-		case 0x8e: lds_im(cpustate); break;
-		case 0x8f: sts_im(cpustate); /* orthogonality */ break;
-		case 0x90: suba_di(cpustate); break;
-		case 0x91: cmpa_di(cpustate); break;
-		case 0x92: sbca_di(cpustate); break;
-		case 0x93: subd_di(cpustate); /* 6803 only */ break;
-		case 0x94: anda_di(cpustate); break;
-		case 0x95: bita_di(cpustate); break;
-		case 0x96: lda_di(cpustate); break;
-		case 0x97: sta_di(cpustate); break;
-		case 0x98: eora_di(cpustate); break;
-		case 0x99: adca_di(cpustate); break;
-		case 0x9a: ora_di(cpustate); break;
-		case 0x9b: adda_di(cpustate); break;
-		case 0x9c: cpx_di(cpustate); /* 6803 difference */ break;
-		case 0x9d: jsr_di(cpustate); break;
-		case 0x9e: lds_di(cpustate); break;
-		case 0x9f: sts_di(cpustate); break;
-		case 0xa0: suba_ix(cpustate); break;
-		case 0xa1: cmpa_ix(cpustate); break;
-		case 0xa2: sbca_ix(cpustate); break;
-		case 0xa3: subd_ix(cpustate); /* 6803 only */ break;
-		case 0xa4: anda_ix(cpustate); break;
-		case 0xa5: bita_ix(cpustate); break;
-		case 0xa6: lda_ix(cpustate); break;
-		case 0xa7: sta_ix(cpustate); break;
-		case 0xa8: eora_ix(cpustate); break;
-		case 0xa9: adca_ix(cpustate); break;
-		case 0xaa: ora_ix(cpustate); break;
-		case 0xab: adda_ix(cpustate); break;
-		case 0xac: cpx_ix(cpustate); /* 6803 difference */ break;
-		case 0xad: jsr_ix(cpustate); break;
-		case 0xae: lds_ix(cpustate); break;
-		case 0xaf: sts_ix(cpustate); break;
-		case 0xb0: suba_ex(cpustate); break;
-		case 0xb1: cmpa_ex(cpustate); break;
-		case 0xb2: sbca_ex(cpustate); break;
-		case 0xb3: subd_ex(cpustate); /* 6803 only */ break;
-		case 0xb4: anda_ex(cpustate); break;
-		case 0xb5: bita_ex(cpustate); break;
-		case 0xb6: lda_ex(cpustate); break;
-		case 0xb7: sta_ex(cpustate); break;
-		case 0xb8: eora_ex(cpustate); break;
-		case 0xb9: adca_ex(cpustate); break;
-		case 0xba: ora_ex(cpustate); break;
-		case 0xbb: adda_ex(cpustate); break;
-		case 0xbc: cpx_ex(cpustate); /* 6803 difference */ break;
-		case 0xbd: jsr_ex(cpustate); break;
-		case 0xbe: lds_ex(cpustate); break;
-		case 0xbf: sts_ex(cpustate); break;
-		case 0xc0: subb_im(cpustate); break;
-		case 0xc1: cmpb_im(cpustate); break;
-		case 0xc2: sbcb_im(cpustate); break;
-		case 0xc3: addd_im(cpustate); /* 6803 only */ break;
-		case 0xc4: andb_im(cpustate); break;
-		case 0xc5: bitb_im(cpustate); break;
-		case 0xc6: ldb_im(cpustate); break;
-		case 0xc7: stb_im(cpustate); break;
-		case 0xc8: eorb_im(cpustate); break;
-		case 0xc9: adcb_im(cpustate); break;
-		case 0xca: orb_im(cpustate); break;
-		case 0xcb: addb_im(cpustate); break;
-		case 0xcc: ldd_im(cpustate); /* 6803 only */ break;
-		case 0xcd: std_im(cpustate); /* 6803 only -- orthogonality */ break;
-		case 0xce: ldx_im(cpustate); break;
-		case 0xcf: stx_im(cpustate); break;
-		case 0xd0: subb_di(cpustate); break;
-		case 0xd1: cmpb_di(cpustate); break;
-		case 0xd2: sbcb_di(cpustate); break;
-		case 0xd3: addd_di(cpustate); /* 6803 only */ break;
-		case 0xd4: andb_di(cpustate); break;
-		case 0xd5: bitb_di(cpustate); break;
-		case 0xd6: ldb_di(cpustate); break;
-		case 0xd7: stb_di(cpustate); break;
-		case 0xd8: eorb_di(cpustate); break;
-		case 0xd9: adcb_di(cpustate); break;
-		case 0xda: orb_di(cpustate); break;
-		case 0xdb: addb_di(cpustate); break;
-		case 0xdc: ldd_di(cpustate); /* 6803 only */ break;
-		case 0xdd: std_di(cpustate); /* 6803 only */ break;
-		case 0xde: ldx_di(cpustate); break;
-		case 0xdf: stx_di(cpustate); break;
-		case 0xe0: subb_ix(cpustate); break;
-		case 0xe1: cmpb_ix(cpustate); break;
-		case 0xe2: sbcb_ix(cpustate); break;
-		case 0xe3: addd_ix(cpustate); /* 6803 only */ break;
-		case 0xe4: andb_ix(cpustate); break;
-		case 0xe5: bitb_ix(cpustate); break;
-		case 0xe6: ldb_ix(cpustate); break;
-		case 0xe7: stb_ix(cpustate); break;
-		case 0xe8: eorb_ix(cpustate); break;
-		case 0xe9: adcb_ix(cpustate); break;
-		case 0xea: orb_ix(cpustate); break;
-		case 0xeb: addb_ix(cpustate); break;
-		case 0xec: ldd_ix(cpustate); /* 6803 only */ break;
-		case 0xed: std_ix(cpustate); /* 6803 only */ break;
-		case 0xee: ldx_ix(cpustate); break;
-		case 0xef: stx_ix(cpustate); break;
-		case 0xf0: subb_ex(cpustate); break;
-		case 0xf1: cmpb_ex(cpustate); break;
-		case 0xf2: sbcb_ex(cpustate); break;
-		case 0xf3: addd_ex(cpustate); /* 6803 only */ break;
-		case 0xf4: andb_ex(cpustate); break;
-		case 0xf5: bitb_ex(cpustate); break;
-		case 0xf6: ldb_ex(cpustate); break;
-		case 0xf7: stb_ex(cpustate); break;
-		case 0xf8: eorb_ex(cpustate); break;
-		case 0xf9: adcb_ex(cpustate); break;
-		case 0xfa: orb_ex(cpustate); break;
-		case 0xfb: addb_ex(cpustate); break;
-		case 0xfc: ldd_ex(cpustate); /* 6803 only */ break;
-		case 0xfd: std_ex(cpustate); /* 6803 only */ break;
-		case 0xfe: ldx_ex(cpustate); break;
-		case 0xff: stx_ex(cpustate); break;
-	}
-}
-
-/****************************************************************************
- * Execute cycles CPU cycles. Return number of cycles really executed
- ****************************************************************************/
-static CPU_EXECUTE( m6803 )
-{
-	m6800_state *cpustate = get_safe_token(device);
-	UINT8 ireg;
-
-	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
-
-	CLEANUP_COUNTERS();
-
-	do
-	{
-		if( cpustate->wai_state & M6800_WAI )
-		{
-			EAT_CYCLES;
-		}
-		else
-		{
-			pPPC = pPC;
-			debugger_instruction_hook(device, PCD);
-			ireg=M_RDOP(PCD);
-			PC++;
-			m6803_execute_one(cpustate, ireg);
-			increment_counter(cpustate, cycles_6803[ireg]);
-		}
-	} while( cpustate->icount>0 );
-}
-
 
 static READ8_HANDLER( m6803_internal_registers_r );
 static WRITE8_HANDLER( m6803_internal_registers_w );
@@ -1677,6 +1119,7 @@ static CPU_INIT( m6808 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1697,6 +1140,7 @@ static CPU_INIT( hd63701 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -1705,303 +1149,6 @@ static CPU_INIT( hd63701 )
 	cpustate->m6800_tx_timer = timer_alloc(device->machine, m6800_tx_tick, cpustate);
 
 	state_register(cpustate, "hd63701");
-}
-
-/****************************************************************************
- * Execute one instruction
- ****************************************************************************/
-
-INLINE void hd63071_execute_one(m6800_state *cpustate, UINT8 ireg)
-{
-	switch( ireg )
-	{
-		case 0x00: trap(cpustate); break;
-		case 0x01: nop(cpustate); break;
-		case 0x02: trap(cpustate); break;
-		case 0x03: trap(cpustate); break;
-		case 0x04: lsrd(cpustate); /* 6803 only */; break;
-		case 0x05: asld(cpustate); /* 6803 only */; break;
-		case 0x06: tap(cpustate); break;
-		case 0x07: tpa(cpustate); break;
-		case 0x08: inx(cpustate); break;
-		case 0x09: dex(cpustate); break;
-		case 0x0A: CLV; break;
-		case 0x0B: SEV; break;
-		case 0x0C: CLC; break;
-		case 0x0D: SEC; break;
-		case 0x0E: cli(cpustate); break;
-		case 0x0F: sei(cpustate); break;
-		case 0x10: sba(cpustate); break;
-		case 0x11: cba(cpustate); break;
-		case 0x12: undoc1(cpustate); break;
-		case 0x13: undoc2(cpustate); break;
-		case 0x14: trap(cpustate); break;
-		case 0x15: trap(cpustate); break;
-		case 0x16: tab(cpustate); break;
-		case 0x17: tba(cpustate); break;
-		case 0x18: xgdx(cpustate); /* HD63701YO only */; break;
-		case 0x19: daa(cpustate); break;
-		case 0x1a: slp(cpustate); break;
-		case 0x1b: aba(cpustate); break;
-		case 0x1c: trap(cpustate); break;
-		case 0x1d: trap(cpustate); break;
-		case 0x1e: trap(cpustate); break;
-		case 0x1f: trap(cpustate); break;
-		case 0x20: bra(cpustate); break;
-		case 0x21: brn(cpustate); break;
-		case 0x22: bhi(cpustate); break;
-		case 0x23: bls(cpustate); break;
-		case 0x24: bcc(cpustate); break;
-		case 0x25: bcs(cpustate); break;
-		case 0x26: bne(cpustate); break;
-		case 0x27: beq(cpustate); break;
-		case 0x28: bvc(cpustate); break;
-		case 0x29: bvs(cpustate); break;
-		case 0x2a: bpl(cpustate); break;
-		case 0x2b: bmi(cpustate); break;
-		case 0x2c: bge(cpustate); break;
-		case 0x2d: blt(cpustate); break;
-		case 0x2e: bgt(cpustate); break;
-		case 0x2f: ble(cpustate); break;
-		case 0x30: tsx(cpustate); break;
-		case 0x31: ins(cpustate); break;
-		case 0x32: pula(cpustate); break;
-		case 0x33: pulb(cpustate); break;
-		case 0x34: des(cpustate); break;
-		case 0x35: txs(cpustate); break;
-		case 0x36: psha(cpustate); break;
-		case 0x37: pshb(cpustate); break;
-		case 0x38: pulx(cpustate); /* 6803 only */ break;
-		case 0x39: rts(cpustate); break;
-		case 0x3a: abx(cpustate); /* 6803 only */ break;
-		case 0x3b: rti(cpustate); break;
-		case 0x3c: pshx(cpustate); /* 6803 only */ break;
-		case 0x3d: mul(cpustate); /* 6803 only */ break;
-		case 0x3e: wai(cpustate); break;
-		case 0x3f: swi(cpustate); break;
-		case 0x40: nega(cpustate); break;
-		case 0x41: trap(cpustate); break;
-		case 0x42: trap(cpustate); break;
-		case 0x43: coma(cpustate); break;
-		case 0x44: lsra(cpustate); break;
-		case 0x45: trap(cpustate); break;
-		case 0x46: rora(cpustate); break;
-		case 0x47: asra(cpustate); break;
-		case 0x48: asla(cpustate); break;
-		case 0x49: rola(cpustate); break;
-		case 0x4a: deca(cpustate); break;
-		case 0x4b: trap(cpustate); break;
-		case 0x4c: inca(cpustate); break;
-		case 0x4d: tsta(cpustate); break;
-		case 0x4e: trap(cpustate); break;
-		case 0x4f: clra(cpustate); break;
-		case 0x50: negb(cpustate); break;
-		case 0x51: trap(cpustate); break;
-		case 0x52: trap(cpustate); break;
-		case 0x53: comb(cpustate); break;
-		case 0x54: lsrb(cpustate); break;
-		case 0x55: trap(cpustate); break;
-		case 0x56: rorb(cpustate); break;
-		case 0x57: asrb(cpustate); break;
-		case 0x58: aslb(cpustate); break;
-		case 0x59: rolb(cpustate); break;
-		case 0x5a: decb(cpustate); break;
-		case 0x5b: trap(cpustate); break;
-		case 0x5c: incb(cpustate); break;
-		case 0x5d: tstb(cpustate); break;
-		case 0x5e: trap(cpustate); break;
-		case 0x5f: clrb(cpustate); break;
-		case 0x60: neg_ix(cpustate); break;
-		case 0x61: aim_ix(cpustate); /* HD63701YO only */; break;
-		case 0x62: oim_ix(cpustate); /* HD63701YO only */; break;
-		case 0x63: com_ix(cpustate); break;
-		case 0x64: lsr_ix(cpustate); break;
-		case 0x65: eim_ix(cpustate); /* HD63701YO only */; break;
-		case 0x66: ror_ix(cpustate); break;
-		case 0x67: asr_ix(cpustate); break;
-		case 0x68: asl_ix(cpustate); break;
-		case 0x69: rol_ix(cpustate); break;
-		case 0x6a: dec_ix(cpustate); break;
-		case 0x6b: tim_ix(cpustate); /* HD63701YO only */; break;
-		case 0x6c: inc_ix(cpustate); break;
-		case 0x6d: tst_ix(cpustate); break;
-		case 0x6e: jmp_ix(cpustate); break;
-		case 0x6f: clr_ix(cpustate); break;
-		case 0x70: neg_ex(cpustate); break;
-		case 0x71: aim_di(cpustate); /* HD63701YO only */; break;
-		case 0x72: oim_di(cpustate); /* HD63701YO only */; break;
-		case 0x73: com_ex(cpustate); break;
-		case 0x74: lsr_ex(cpustate); break;
-		case 0x75: eim_di(cpustate); /* HD63701YO only */; break;
-		case 0x76: ror_ex(cpustate); break;
-		case 0x77: asr_ex(cpustate); break;
-		case 0x78: asl_ex(cpustate); break;
-		case 0x79: rol_ex(cpustate); break;
-		case 0x7a: dec_ex(cpustate); break;
-		case 0x7b: tim_di(cpustate); /* HD63701YO only */; break;
-		case 0x7c: inc_ex(cpustate); break;
-		case 0x7d: tst_ex(cpustate); break;
-		case 0x7e: jmp_ex(cpustate); break;
-		case 0x7f: clr_ex(cpustate); break;
-		case 0x80: suba_im(cpustate); break;
-		case 0x81: cmpa_im(cpustate); break;
-		case 0x82: sbca_im(cpustate); break;
-		case 0x83: subd_im(cpustate); /* 6803 only */ break;
-		case 0x84: anda_im(cpustate); break;
-		case 0x85: bita_im(cpustate); break;
-		case 0x86: lda_im(cpustate); break;
-		case 0x87: sta_im(cpustate); break;
-		case 0x88: eora_im(cpustate); break;
-		case 0x89: adca_im(cpustate); break;
-		case 0x8a: ora_im(cpustate); break;
-		case 0x8b: adda_im(cpustate); break;
-		case 0x8c: cpx_im(cpustate); /* 6803 difference */ break;
-		case 0x8d: bsr(cpustate); break;
-		case 0x8e: lds_im(cpustate); break;
-		case 0x8f: sts_im(cpustate); /* orthogonality */ break;
-		case 0x90: suba_di(cpustate); break;
-		case 0x91: cmpa_di(cpustate); break;
-		case 0x92: sbca_di(cpustate); break;
-		case 0x93: subd_di(cpustate); /* 6803 only */ break;
-		case 0x94: anda_di(cpustate); break;
-		case 0x95: bita_di(cpustate); break;
-		case 0x96: lda_di(cpustate); break;
-		case 0x97: sta_di(cpustate); break;
-		case 0x98: eora_di(cpustate); break;
-		case 0x99: adca_di(cpustate); break;
-		case 0x9a: ora_di(cpustate); break;
-		case 0x9b: adda_di(cpustate); break;
-		case 0x9c: cpx_di(cpustate); /* 6803 difference */ break;
-		case 0x9d: jsr_di(cpustate); break;
-		case 0x9e: lds_di(cpustate); break;
-		case 0x9f: sts_di(cpustate); break;
-		case 0xa0: suba_ix(cpustate); break;
-		case 0xa1: cmpa_ix(cpustate); break;
-		case 0xa2: sbca_ix(cpustate); break;
-		case 0xa3: subd_ix(cpustate); /* 6803 only */ break;
-		case 0xa4: anda_ix(cpustate); break;
-		case 0xa5: bita_ix(cpustate); break;
-		case 0xa6: lda_ix(cpustate); break;
-		case 0xa7: sta_ix(cpustate); break;
-		case 0xa8: eora_ix(cpustate); break;
-		case 0xa9: adca_ix(cpustate); break;
-		case 0xaa: ora_ix(cpustate); break;
-		case 0xab: adda_ix(cpustate); break;
-		case 0xac: cpx_ix(cpustate); /* 6803 difference */ break;
-		case 0xad: jsr_ix(cpustate); break;
-		case 0xae: lds_ix(cpustate); break;
-		case 0xaf: sts_ix(cpustate); break;
-		case 0xb0: suba_ex(cpustate); break;
-		case 0xb1: cmpa_ex(cpustate); break;
-		case 0xb2: sbca_ex(cpustate); break;
-		case 0xb3: subd_ex(cpustate); /* 6803 only */ break;
-		case 0xb4: anda_ex(cpustate); break;
-		case 0xb5: bita_ex(cpustate); break;
-		case 0xb6: lda_ex(cpustate); break;
-		case 0xb7: sta_ex(cpustate); break;
-		case 0xb8: eora_ex(cpustate); break;
-		case 0xb9: adca_ex(cpustate); break;
-		case 0xba: ora_ex(cpustate); break;
-		case 0xbb: adda_ex(cpustate); break;
-		case 0xbc: cpx_ex(cpustate); /* 6803 difference */ break;
-		case 0xbd: jsr_ex(cpustate); break;
-		case 0xbe: lds_ex(cpustate); break;
-		case 0xbf: sts_ex(cpustate); break;
-		case 0xc0: subb_im(cpustate); break;
-		case 0xc1: cmpb_im(cpustate); break;
-		case 0xc2: sbcb_im(cpustate); break;
-		case 0xc3: addd_im(cpustate); /* 6803 only */ break;
-		case 0xc4: andb_im(cpustate); break;
-		case 0xc5: bitb_im(cpustate); break;
-		case 0xc6: ldb_im(cpustate); break;
-		case 0xc7: stb_im(cpustate); break;
-		case 0xc8: eorb_im(cpustate); break;
-		case 0xc9: adcb_im(cpustate); break;
-		case 0xca: orb_im(cpustate); break;
-		case 0xcb: addb_im(cpustate); break;
-		case 0xcc: ldd_im(cpustate); /* 6803 only */ break;
-		case 0xcd: std_im(cpustate); /* 6803 only -- orthogonality */ break;
-		case 0xce: ldx_im(cpustate); break;
-		case 0xcf: stx_im(cpustate); break;
-		case 0xd0: subb_di(cpustate); break;
-		case 0xd1: cmpb_di(cpustate); break;
-		case 0xd2: sbcb_di(cpustate); break;
-		case 0xd3: addd_di(cpustate); /* 6803 only */ break;
-		case 0xd4: andb_di(cpustate); break;
-		case 0xd5: bitb_di(cpustate); break;
-		case 0xd6: ldb_di(cpustate); break;
-		case 0xd7: stb_di(cpustate); break;
-		case 0xd8: eorb_di(cpustate); break;
-		case 0xd9: adcb_di(cpustate); break;
-		case 0xda: orb_di(cpustate); break;
-		case 0xdb: addb_di(cpustate); break;
-		case 0xdc: ldd_di(cpustate); /* 6803 only */ break;
-		case 0xdd: std_di(cpustate); /* 6803 only */ break;
-		case 0xde: ldx_di(cpustate); break;
-		case 0xdf: stx_di(cpustate); break;
-		case 0xe0: subb_ix(cpustate); break;
-		case 0xe1: cmpb_ix(cpustate); break;
-		case 0xe2: sbcb_ix(cpustate); break;
-		case 0xe3: addd_ix(cpustate); /* 6803 only */ break;
-		case 0xe4: andb_ix(cpustate); break;
-		case 0xe5: bitb_ix(cpustate); break;
-		case 0xe6: ldb_ix(cpustate); break;
-		case 0xe7: stb_ix(cpustate); break;
-		case 0xe8: eorb_ix(cpustate); break;
-		case 0xe9: adcb_ix(cpustate); break;
-		case 0xea: orb_ix(cpustate); break;
-		case 0xeb: addb_ix(cpustate); break;
-		case 0xec: ldd_ix(cpustate); /* 6803 only */ break;
-		case 0xed: std_ix(cpustate); /* 6803 only */ break;
-		case 0xee: ldx_ix(cpustate); break;
-		case 0xef: stx_ix(cpustate); break;
-		case 0xf0: subb_ex(cpustate); break;
-		case 0xf1: cmpb_ex(cpustate); break;
-		case 0xf2: sbcb_ex(cpustate); break;
-		case 0xf3: addd_ex(cpustate); /* 6803 only */ break;
-		case 0xf4: andb_ex(cpustate); break;
-		case 0xf5: bitb_ex(cpustate); break;
-		case 0xf6: ldb_ex(cpustate); break;
-		case 0xf7: stb_ex(cpustate); break;
-		case 0xf8: eorb_ex(cpustate); break;
-		case 0xf9: adcb_ex(cpustate); break;
-		case 0xfa: orb_ex(cpustate); break;
-		case 0xfb: addb_ex(cpustate); break;
-		case 0xfc: ldd_ex(cpustate); /* 6803 only */ break;
-		case 0xfd: std_ex(cpustate); /* 6803 only */ break;
-		case 0xfe: ldx_ex(cpustate); break;
-		case 0xff: stx_ex(cpustate); break;
-	}
-}
-
-/****************************************************************************
- * Execute cycles CPU cycles. Return number of cycles really executed
- ****************************************************************************/
-static CPU_EXECUTE( hd63701 )
-{
-	m6800_state *cpustate = get_safe_token(device);
-	UINT8 ireg;
-
-	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
-
-	CLEANUP_COUNTERS();
-
-	do
-	{
-		if( cpustate->wai_state & (M6800_WAI|M6800_SLP) )
-		{
-			EAT_CYCLES;
-		}
-		else
-		{
-			pPPC = pPC;
-			debugger_instruction_hook(device, PCD);
-			ireg=M_RDOP(PCD);
-			PC++;
-			hd63071_execute_one(cpustate, ireg);
-			increment_counter(cpustate, cycles_63701[ireg]);
-		}
-	} while( cpustate->icount>0 );
 }
 
 /*
@@ -2042,6 +1189,7 @@ static CPU_INIT( nsc8105 )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 
@@ -2049,305 +1197,6 @@ static CPU_INIT( nsc8105 )
 	cpustate->cycles = cycles_nsc8105;
 	state_register(cpustate, "nsc8105");
 }
-
-/****************************************************************************
- * Execute one instruction
- ****************************************************************************/
-
-INLINE void nsc8105_execute_one(m6800_state *cpustate, UINT8 ireg)
-{
-	switch( ireg )
-	{
-		case 0x00: illegal(cpustate); break;
-		case 0x01: illegal(cpustate); break;
-		case 0x02: nop(cpustate); break;
-		case 0x03: illegal(cpustate); break;
-		case 0x04: illegal(cpustate); break;
-		case 0x05: tap(cpustate); break;
-		case 0x06: illegal(cpustate); break;
-		case 0x07: tpa(cpustate); break;
-		case 0x08: inx(cpustate); break;
-		case 0x09: CLV; break;
-		case 0x0a: dex(cpustate); break;
-		case 0x0b: SEV; break;
-		case 0x0c: CLC; break;
-		case 0x0d: cli(cpustate); break;
-		case 0x0e: SEC; break;
-		case 0x0f: sei(cpustate); break;
-		case 0x10: sba(cpustate); break;
-		case 0x11: illegal(cpustate); break;
-		case 0x12: cba(cpustate); break;
-		case 0x13: illegal(cpustate); break;
-		case 0x14: illegal(cpustate); break;
-		case 0x15: tab(cpustate); break;
-		case 0x16: illegal(cpustate); break;
-		case 0x17: tba(cpustate); break;
-		case 0x18: illegal(cpustate); break;
-		case 0x19: illegal(cpustate); break;
-		case 0x1a: daa(cpustate); break;
-		case 0x1b: aba(cpustate); break;
-		case 0x1c: illegal(cpustate); break;
-		case 0x1d: illegal(cpustate); break;
-		case 0x1e: illegal(cpustate); break;
-		case 0x1f: illegal(cpustate); break;
-		case 0x20: bra(cpustate); break;
-		case 0x21: bhi(cpustate); break;
-		case 0x22: brn(cpustate); break;
-		case 0x23: bls(cpustate); break;
-		case 0x24: bcc(cpustate); break;
-		case 0x25: bne(cpustate); break;
-		case 0x26: bcs(cpustate); break;
-		case 0x27: beq(cpustate); break;
-		case 0x28: bvc(cpustate); break;
-		case 0x29: bpl(cpustate); break;
-		case 0x2a: bvs(cpustate); break;
-		case 0x2b: bmi(cpustate); break;
-		case 0x2c: bge(cpustate); break;
-		case 0x2d: bgt(cpustate); break;
-		case 0x2e: blt(cpustate); break;
-		case 0x2f: ble(cpustate); break;
-		case 0x30: tsx(cpustate); break;
-		case 0x31: pula(cpustate); break;
-		case 0x32: ins(cpustate); break;
-		case 0x33: pulb(cpustate); break;
-		case 0x34: des(cpustate); break;
-		case 0x35: psha(cpustate); break;
-		case 0x36: txs(cpustate); break;
-		case 0x37: pshb(cpustate); break;
-		case 0x38: illegal(cpustate); break;
-		case 0x39: illegal(cpustate); break;
-		case 0x3a: rts(cpustate); break;
-		case 0x3b: rti(cpustate); break;
-		case 0x3c: illegal(cpustate); break;
-		case 0x3d: wai(cpustate); break;
-		case 0x3e: illegal(cpustate); break;
-		case 0x3f: swi(cpustate); break;
-		case 0x40: suba_im(cpustate); break;
-		case 0x41: sbca_im(cpustate); break;
-		case 0x42: cmpa_im(cpustate); break;
-		case 0x43: illegal(cpustate); break;
-		case 0x44: anda_im(cpustate); break;
-		case 0x45: lda_im(cpustate); break;
-		case 0x46: bita_im(cpustate); break;
-		case 0x47: sta_im(cpustate); break;
-		case 0x48: eora_im(cpustate); break;
-		case 0x49: ora_im(cpustate); break;
-		case 0x4a: adca_im(cpustate); break;
-		case 0x4b: adda_im(cpustate); break;
-		case 0x4c: cmpx_im(cpustate); break;
-		case 0x4d: lds_im(cpustate); break;
-		case 0x4e: bsr(cpustate); break;
-		case 0x4f: sts_im(cpustate); /* orthogonality */ break;
-		case 0x50: suba_di(cpustate); break;
-		case 0x51: sbca_di(cpustate); break;
-		case 0x52: cmpa_di(cpustate); break;
-		case 0x53: illegal(cpustate); break;
-		case 0x54: anda_di(cpustate); break;
-		case 0x55: lda_di(cpustate); break;
-		case 0x56: bita_di(cpustate); break;
-		case 0x57: sta_di(cpustate); break;
-		case 0x58: eora_di(cpustate); break;
-		case 0x59: ora_di(cpustate); break;
-		case 0x5a: adca_di(cpustate); break;
-		case 0x5b: adda_di(cpustate); break;
-		case 0x5c: cmpx_di(cpustate); break;
-		case 0x5d: lds_di(cpustate); break;
-		case 0x5e: jsr_di(cpustate); break;
-		case 0x5f: sts_di(cpustate); break;
-		case 0x60: suba_ix(cpustate); break;
-		case 0x61: sbca_ix(cpustate); break;
-		case 0x62: cmpa_ix(cpustate); break;
-		case 0x63: illegal(cpustate); break;
-		case 0x64: anda_ix(cpustate); break;
-		case 0x65: lda_ix(cpustate); break;
-		case 0x66: bita_ix(cpustate); break;
-		case 0x67: sta_ix(cpustate); break;
-		case 0x68: eora_ix(cpustate); break;
-		case 0x69: ora_ix(cpustate); break;
-		case 0x6a: adca_ix(cpustate); break;
-		case 0x6b: adda_ix(cpustate); break;
-		case 0x6c: cmpx_ix(cpustate); break;
-		case 0x6d: lds_ix(cpustate); break;
-		case 0x6e: jsr_ix(cpustate); break;
-		case 0x6f: sts_ix(cpustate); break;
-		case 0x70: suba_ex(cpustate); break;
-		case 0x71: sbca_ex(cpustate); break;
-		case 0x72: cmpa_ex(cpustate); break;
-		case 0x73: illegal(cpustate); break;
-		case 0x74: anda_ex(cpustate); break;
-		case 0x75: lda_ex(cpustate); break;
-		case 0x76: bita_ex(cpustate); break;
-		case 0x77: sta_ex(cpustate); break;
-		case 0x78: eora_ex(cpustate); break;
-		case 0x79: ora_ex(cpustate); break;
-		case 0x7a: adca_ex(cpustate); break;
-		case 0x7b: adda_ex(cpustate); break;
-		case 0x7c: cmpx_ex(cpustate); break;
-		case 0x7d: lds_ex(cpustate); break;
-		case 0x7e: jsr_ex(cpustate); break;
-		case 0x7f: sts_ex(cpustate); break;
-		case 0x80: nega(cpustate); break;
-		case 0x81: illegal(cpustate); break;
-		case 0x82: illegal(cpustate); break;
-		case 0x83: coma(cpustate); break;
-		case 0x84: lsra(cpustate); break;
-		case 0x85: rora(cpustate); break;
-		case 0x86: illegal(cpustate); break;
-		case 0x87: asra(cpustate); break;
-		case 0x88: asla(cpustate); break;
-		case 0x89: deca(cpustate); break;
-		case 0x8a: rola(cpustate); break;
-		case 0x8b: illegal(cpustate); break;
-		case 0x8c: inca(cpustate); break;
-		case 0x8d: illegal(cpustate); break;
-		case 0x8e: tsta(cpustate); break;
-		case 0x8f: clra(cpustate); break;
-		case 0x90: negb(cpustate); break;
-		case 0x91: illegal(cpustate); break;
-		case 0x92: illegal(cpustate); break;
-		case 0x93: comb(cpustate); break;
-		case 0x94: lsrb(cpustate); break;
-		case 0x95: rorb(cpustate); break;
-		case 0x96: illegal(cpustate); break;
-		case 0x97: asrb(cpustate); break;
-		case 0x98: aslb(cpustate); break;
-		case 0x99: decb(cpustate); break;
-		case 0x9a: rolb(cpustate); break;
-		case 0x9b: illegal(cpustate); break;
-		case 0x9c: incb(cpustate); break;
-		case 0x9d: illegal(cpustate); break;
-		case 0x9e: tstb(cpustate); break;
-		case 0x9f: clrb(cpustate); break;
-		case 0xa0: neg_ix(cpustate); break;
-		case 0xa1: illegal(cpustate); break;
-		case 0xa2: illegal(cpustate); break;
-		case 0xa3: com_ix(cpustate); break;
-		case 0xa4: lsr_ix(cpustate); break;
-		case 0xa5: ror_ix(cpustate); break;
-		case 0xa6: illegal(cpustate); break;
-		case 0xa7: asr_ix(cpustate); break;
-		case 0xa8: asl_ix(cpustate); break;
-		case 0xa9: dec_ix(cpustate); break;
-		case 0xaa: rol_ix(cpustate); break;
-		case 0xab: illegal(cpustate); break;
-		case 0xac: inc_ix(cpustate); break;
-		case 0xad: jmp_ix(cpustate); break;
-		case 0xae: tst_ix(cpustate); break;
-		case 0xaf: clr_ix(cpustate); break;
-		case 0xb0: neg_ex(cpustate); break;
-		case 0xb1: illegal(cpustate); break;
-		case 0xb2: illegal(cpustate); break;
-		case 0xb3: com_ex(cpustate); break;
-		case 0xb4: lsr_ex(cpustate); break;
-		case 0xb5: ror_ex(cpustate); break;
-		case 0xb6: illegal(cpustate); break;
-		case 0xb7: asr_ex(cpustate); break;
-		case 0xb8: asl_ex(cpustate); break;
-		case 0xb9: dec_ex(cpustate); break;
-		case 0xba: rol_ex(cpustate); break;
-		case 0xbb: illegal(cpustate); break;
-		case 0xbc: inc_ex(cpustate); break;
-		case 0xbd: jmp_ex(cpustate); break;
-		case 0xbe: tst_ex(cpustate); break;
-		case 0xbf: clr_ex(cpustate); break;
-		case 0xc0: subb_im(cpustate); break;
-		case 0xc1: sbcb_im(cpustate); break;
-		case 0xc2: cmpb_im(cpustate); break;
-		case 0xc3: illegal(cpustate); break;
-		case 0xc4: andb_im(cpustate); break;
-		case 0xc5: ldb_im(cpustate); break;
-		case 0xc6: bitb_im(cpustate); break;
-		case 0xc7: stb_im(cpustate); break;
-		case 0xc8: eorb_im(cpustate); break;
-		case 0xc9: orb_im(cpustate); break;
-		case 0xca: adcb_im(cpustate); break;
-		case 0xcb: addb_im(cpustate); break;
-		case 0xcc: illegal(cpustate); break;
-		case 0xcd: ldx_im(cpustate); break;
-		case 0xce: illegal(cpustate); break;
-		case 0xcf: stx_im(cpustate); break;
-		case 0xd0: subb_di(cpustate); break;
-		case 0xd1: sbcb_di(cpustate); break;
-		case 0xd2: cmpb_di(cpustate); break;
-		case 0xd3: illegal(cpustate); break;
-		case 0xd4: andb_di(cpustate); break;
-		case 0xd5: ldb_di(cpustate); break;
-		case 0xd6: bitb_di(cpustate); break;
-		case 0xd7: stb_di(cpustate); break;
-		case 0xd8: eorb_di(cpustate); break;
-		case 0xd9: orb_di(cpustate); break;
-		case 0xda: adcb_di(cpustate); break;
-		case 0xdb: addb_di(cpustate); break;
-		case 0xdc: illegal(cpustate); break;
-		case 0xdd: ldx_di(cpustate); break;
-		case 0xde: illegal(cpustate); break;
-		case 0xdf: stx_di(cpustate); break;
-		case 0xe0: subb_ix(cpustate); break;
-		case 0xe1: sbcb_ix(cpustate); break;
-		case 0xe2: cmpb_ix(cpustate); break;
-		case 0xe3: illegal(cpustate); break;
-		case 0xe4: andb_ix(cpustate); break;
-		case 0xe5: ldb_ix(cpustate); break;
-		case 0xe6: bitb_ix(cpustate); break;
-		case 0xe7: stb_ix(cpustate); break;
-		case 0xe8: eorb_ix(cpustate); break;
-		case 0xe9: orb_ix(cpustate); break;
-		case 0xea: adcb_ix(cpustate); break;
-		case 0xeb: addb_ix(cpustate); break;
-		case 0xec: adcx_im(cpustate); break; /* NSC8105 only */
-		case 0xed: ldx_ix(cpustate); break;
-		case 0xee: illegal(cpustate); break;
-		case 0xef: stx_ix(cpustate); break;
-		case 0xf0: subb_ex(cpustate); break;
-		case 0xf1: sbcb_ex(cpustate); break;
-		case 0xf2: cmpb_ex(cpustate); break;
-		case 0xf3: illegal(cpustate); break;
-		case 0xf4: andb_ex(cpustate); break;
-		case 0xf5: ldb_ex(cpustate); break;
-		case 0xf6: bitb_ex(cpustate); break;
-		case 0xf7: stb_ex(cpustate); break;
-		case 0xf8: eorb_ex(cpustate); break;
-		case 0xf9: orb_ex(cpustate); break;
-		case 0xfa: adcb_ex(cpustate); break;
-		case 0xfb: addb_ex(cpustate); break;
-		case 0xfc: addx_ex(cpustate); break;
-		case 0xfd: ldx_ex(cpustate); break;
-		case 0xfe: illegal(cpustate); break;
-		case 0xff: stx_ex(cpustate); break;
-	}
-}
-
-/****************************************************************************
- * Execute cycles CPU cycles. Return number of cycles really executed
- ****************************************************************************/
-static CPU_EXECUTE( nsc8105 )
-{
-	m6800_state *cpustate = get_safe_token(device);
-	UINT8 ireg;
-
-	CHECK_IRQ_LINES(cpustate); /* HJB 990417 */
-
-	CLEANUP_COUNTERS();
-
-	do
-	{
-		if( cpustate->wai_state & M6800_WAI )
-		{
-			EAT_CYCLES;
-		}
-		else
-		{
-			pPPC = pPC;
-			debugger_instruction_hook(device, PCD);
-			ireg=M_RDOP(PCD);
-			PC++;
-			nsc8105_execute_one(cpustate, ireg);
-			increment_counter(cpustate, cycles_nsc8105[ireg]);
-		}
-	} while( cpustate->icount>0 );
-}
-
-
 
 static READ8_HANDLER( m6803_internal_registers_r )
 {
@@ -2360,20 +1209,20 @@ static READ8_HANDLER( m6803_internal_registers_r )
 		case 0x01:
 			return cpustate->port2_ddr;
 		case 0x02:
-			return (memory_read_byte_8be(cpustate->io, M6803_PORT1) & (cpustate->port1_ddr ^ 0xff))
+			return (cpustate->io->read_byte(M6803_PORT1) & (cpustate->port1_ddr ^ 0xff))
 					| (cpustate->port1_data & cpustate->port1_ddr);
 		case 0x03:
-			return (memory_read_byte_8be(cpustate->io, M6803_PORT2) & (cpustate->port2_ddr ^ 0xff))
+			return (cpustate->io->read_byte(M6803_PORT2) & (cpustate->port2_ddr ^ 0xff))
 					| (cpustate->port2_data & cpustate->port2_ddr);
 		case 0x04:
 			return cpustate->port3_ddr;
 		case 0x05:
 			return cpustate->port4_ddr;
 		case 0x06:
-			return (memory_read_byte_8be(cpustate->io, M6803_PORT3) & (cpustate->port3_ddr ^ 0xff))
+			return (cpustate->io->read_byte(M6803_PORT3) & (cpustate->port3_ddr ^ 0xff))
 					| (cpustate->port3_data & cpustate->port3_ddr);
 		case 0x07:
-			return (memory_read_byte_8be(cpustate->io, M6803_PORT4) & (cpustate->port4_ddr ^ 0xff))
+			return (cpustate->io->read_byte(M6803_PORT4) & (cpustate->port4_ddr ^ 0xff))
 					| (cpustate->port4_data & cpustate->port4_ddr);
 		case 0x08:
 			cpustate->pending_tcsr = 0;
@@ -2458,10 +1307,10 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 			{
 				cpustate->port1_ddr = data;
 				if(cpustate->port1_ddr == 0xff)
-					memory_write_byte_8be(cpustate->io, M6803_PORT1,cpustate->port1_data);
+					cpustate->io->write_byte(M6803_PORT1,cpustate->port1_data);
 				else
-					memory_write_byte_8be(cpustate->io, M6803_PORT1,(cpustate->port1_data & cpustate->port1_ddr)
-						| (memory_read_byte_8be(cpustate->io, M6803_PORT1) & (cpustate->port1_ddr ^ 0xff)));
+					cpustate->io->write_byte(M6803_PORT1,(cpustate->port1_data & cpustate->port1_ddr)
+						| (cpustate->io->read_byte(M6803_PORT1) & (cpustate->port1_ddr ^ 0xff)));
 			}
 			break;
 		case 0x01:
@@ -2469,10 +1318,10 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 			{
 				cpustate->port2_ddr = data;
 				if(cpustate->port2_ddr == 0xff)
-					memory_write_byte_8be(cpustate->io, M6803_PORT2,cpustate->port2_data);
+					cpustate->io->write_byte(M6803_PORT2,cpustate->port2_data);
 				else
-					memory_write_byte_8be(cpustate->io, M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
-						| (memory_read_byte_8be(cpustate->io, M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
+					cpustate->io->write_byte(M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
+						| (cpustate->io->read_byte(M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
 
 				if (cpustate->port2_ddr & 2)
 					logerror("CPU '%s' PC %04x: warning - port 2 bit 1 set as output (OLVL) - not supported\n",space->cpu->tag(),cpu_get_pc(space->cpu));
@@ -2481,10 +1330,10 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 		case 0x02:
 			cpustate->port1_data = data;
 			if(cpustate->port1_ddr == 0xff)
-				memory_write_byte_8be(cpustate->io, M6803_PORT1,cpustate->port1_data);
+				cpustate->io->write_byte(M6803_PORT1,cpustate->port1_data);
 			else
-				memory_write_byte_8be(cpustate->io, M6803_PORT1,(cpustate->port1_data & cpustate->port1_ddr)
-					| (memory_read_byte_8be(cpustate->io, M6803_PORT1) & (cpustate->port1_ddr ^ 0xff)));
+				cpustate->io->write_byte(M6803_PORT1,(cpustate->port1_data & cpustate->port1_ddr)
+					| (cpustate->io->read_byte(M6803_PORT1) & (cpustate->port1_ddr ^ 0xff)));
 			break;
 		case 0x03:
 			if (cpustate->trcsr & M6800_TRCSR_TE)
@@ -2496,20 +1345,20 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 				cpustate->port2_data = data;
 			}
 			if(cpustate->port2_ddr == 0xff)
-				memory_write_byte_8be(cpustate->io, M6803_PORT2,cpustate->port2_data);
+				cpustate->io->write_byte(M6803_PORT2,cpustate->port2_data);
 			else
-				memory_write_byte_8be(cpustate->io, M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
-					| (memory_read_byte_8be(cpustate->io, M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
+				cpustate->io->write_byte(M6803_PORT2,(cpustate->port2_data & cpustate->port2_ddr)
+					| (cpustate->io->read_byte(M6803_PORT2) & (cpustate->port2_ddr ^ 0xff)));
 			break;
 		case 0x04:
 			if (cpustate->port3_ddr != data)
 			{
 				cpustate->port3_ddr = data;
 				if(cpustate->port3_ddr == 0xff)
-					memory_write_byte_8be(cpustate->io, M6803_PORT3,cpustate->port3_data);
+					cpustate->io->write_byte(M6803_PORT3,cpustate->port3_data);
 				else
-					memory_write_byte_8be(cpustate->io, M6803_PORT3,(cpustate->port3_data & cpustate->port3_ddr)
-						| (memory_read_byte_8be(cpustate->io, M6803_PORT3) & (cpustate->port3_ddr ^ 0xff)));
+					cpustate->io->write_byte(M6803_PORT3,(cpustate->port3_data & cpustate->port3_ddr)
+						| (cpustate->io->read_byte(M6803_PORT3) & (cpustate->port3_ddr ^ 0xff)));
 			}
 			break;
 		case 0x05:
@@ -2517,27 +1366,27 @@ static WRITE8_HANDLER( m6803_internal_registers_w )
 			{
 				cpustate->port4_ddr = data;
 				if(cpustate->port4_ddr == 0xff)
-					memory_write_byte_8be(cpustate->io, M6803_PORT4,cpustate->port4_data);
+					cpustate->io->write_byte(M6803_PORT4,cpustate->port4_data);
 				else
-					memory_write_byte_8be(cpustate->io, M6803_PORT4,(cpustate->port4_data & cpustate->port4_ddr)
-						| (memory_read_byte_8be(cpustate->io, M6803_PORT4) & (cpustate->port4_ddr ^ 0xff)));
+					cpustate->io->write_byte(M6803_PORT4,(cpustate->port4_data & cpustate->port4_ddr)
+						| (cpustate->io->read_byte(M6803_PORT4) & (cpustate->port4_ddr ^ 0xff)));
 			}
 			break;
 		case 0x06:
 			cpustate->port3_data = data;
 			if(cpustate->port3_ddr == 0xff)
-				memory_write_byte_8be(cpustate->io, M6803_PORT3,cpustate->port3_data);
+				cpustate->io->write_byte(M6803_PORT3,cpustate->port3_data);
 			else
-				memory_write_byte_8be(cpustate->io, M6803_PORT3,(cpustate->port3_data & cpustate->port3_ddr)
-					| (memory_read_byte_8be(cpustate->io, M6803_PORT3) & (cpustate->port3_ddr ^ 0xff)));
+				cpustate->io->write_byte(M6803_PORT3,(cpustate->port3_data & cpustate->port3_ddr)
+					| (cpustate->io->read_byte(M6803_PORT3) & (cpustate->port3_ddr ^ 0xff)));
 			break;
 		case 0x07:
 			cpustate->port4_data = data;
 			if(cpustate->port4_ddr == 0xff)
-				memory_write_byte_8be(cpustate->io, M6803_PORT4,cpustate->port4_data);
+				cpustate->io->write_byte(M6803_PORT4,cpustate->port4_data);
 			else
-				memory_write_byte_8be(cpustate->io, M6803_PORT4,(cpustate->port4_data & cpustate->port4_ddr)
-					| (memory_read_byte_8be(cpustate->io, M6803_PORT4) & (cpustate->port4_ddr ^ 0xff)));
+				cpustate->io->write_byte(M6803_PORT4,(cpustate->port4_data & cpustate->port4_ddr)
+					| (cpustate->io->read_byte(M6803_PORT4) & (cpustate->port4_ddr ^ 0xff)));
 			break;
 		case 0x08:
 			cpustate->tcsr = data;
@@ -2768,7 +1617,6 @@ CPU_GET_INFO( m6801 )
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6801);				break;
-		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(m6803);			break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6801);			break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
@@ -2817,7 +1665,6 @@ CPU_GET_INFO( m6803 )
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(m6803);				break;
-		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(m6803);			break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(m6803);			break;
 
 		case DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACE_PROGRAM: info->internal_map8 = ADDRESS_MAP_NAME(m6803_mem); break;
@@ -2868,7 +1715,6 @@ CPU_GET_INFO( hd63701 )
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(hd63701);				break;
-		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(hd63701);		break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(hd63701);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */
@@ -2892,7 +1738,6 @@ CPU_GET_INFO( nsc8105 )
 
 		/* --- the following bits of info are returned as pointers to data or functions --- */
 		case CPUINFO_FCT_INIT:							info->init = CPU_INIT_NAME(nsc8105);				break;
-		case CPUINFO_FCT_EXECUTE:						info->execute = CPU_EXECUTE_NAME(nsc8105);		break;
 		case CPUINFO_FCT_DISASSEMBLE:					info->disassemble = CPU_DISASSEMBLE_NAME(nsc8105);		break;
 
 		/* --- the following bits of info are returned as NULL-terminated strings --- */

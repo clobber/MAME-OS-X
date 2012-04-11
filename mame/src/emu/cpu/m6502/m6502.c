@@ -70,8 +70,9 @@ struct _m6502_Regs
 
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *space;
-	const address_space *io;
+	address_space *space;
+	direct_read_data *direct;
+	address_space *io;
 	int		int_occured;
 	int		icount;
 
@@ -99,8 +100,8 @@ INLINE m6502_Regs *get_safe_token(running_device *device)
 	return (m6502_Regs *)downcast<legacy_cpu_device *>(device)->token();
 }
 
-static UINT8 default_rdmem_id(const address_space *space, offs_t offset) { return memory_read_byte_8le(space, offset); }
-static void default_wdmem_id(const address_space *space, offs_t offset, UINT8 data) { memory_write_byte_8le(space, offset, data); }
+static UINT8 default_rdmem_id(address_space *space, offs_t offset) { return space->read_byte(offset); }
+static void default_wdmem_id(address_space *space, offs_t offset, UINT8 data) { space->write_byte(offset, data); }
 
 /***************************************************************
  * include the opcode macros, functions and tables
@@ -135,6 +136,7 @@ static void m6502_common_init(legacy_cpu_device *device, device_irq_callback irq
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->space = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->space->direct();
 	cpustate->subtype = subtype;
 	cpustate->insn = insn;
 	cpustate->rdmem_id = default_rdmem_id;

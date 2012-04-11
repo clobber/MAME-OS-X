@@ -346,8 +346,10 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap )
 
 static void draw_layer( running_machine *machine, bitmap_t *bitmap, int opaque )
 {
+	twin16_state *state = machine->driver_data<twin16_state>();
+	UINT16 *videoram = state->videoram;
 	const UINT16 *gfx_base;
-	const UINT16 *source = machine->generic.videoram.u16;
+	const UINT16 *source = videoram;
 	int i, xxor, yxor;
 	int bank_table[4];
 	int dx, dy, palette;
@@ -547,7 +549,7 @@ VIDEO_EOF( twin16 )
 		memcpy(twin16_sprite_buffer,&machine->generic.spriteram.u16[0x1800],0x800*sizeof(UINT16));
 	}
 	else {
-		const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 		buffer_spriteram16_w(space,0,0,0xffff);
 	}
 }

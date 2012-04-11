@@ -27,7 +27,7 @@
 
 static READ8_HANDLER( deco16_bank_r )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	const UINT8 *ROM = memory_region(space->machine, "user1");
 
 	/* The tilemap bank can be swapped into main memory */
@@ -67,7 +67,7 @@ static READ8_HANDLER( deco16_io_r )
 
 static WRITE8_HANDLER( deco16_bank_w )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	state->bank = data;
 
 	if (state->bank)
@@ -78,7 +78,7 @@ static WRITE8_HANDLER( deco16_bank_w )
 
 static READ8_HANDLER( prosoccr_bank_r )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	const UINT8 *ROM = memory_region(space->machine, "user1");
 
 	/* The tilemap bank can be swapped into main memory */
@@ -108,7 +108,7 @@ static READ8_HANDLER( prosoccr_bank_r )
 
 static READ8_HANDLER( prosoccr_charram_r )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	UINT8 *SRC_GFX = memory_region(space->machine, "shared_gfx");
 
 	if (state->gfx_rom_readback)
@@ -130,7 +130,7 @@ static READ8_HANDLER( prosoccr_charram_r )
 
 static WRITE8_HANDLER( prosoccr_charram_w )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	UINT8 *FG_GFX = memory_region(space->machine, "fg_gfx");
 
 	if (state->bank)
@@ -168,7 +168,7 @@ static WRITE8_HANDLER( prosoccr_charram_w )
 
 static WRITE8_HANDLER( prosoccr_char_bank_w )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	state->gfx_rom_readback = data & 1; //enable GFX rom read-back
 
 	if (data & 0xfe)
@@ -177,7 +177,7 @@ static WRITE8_HANDLER( prosoccr_char_bank_w )
 
 static WRITE8_HANDLER( prosoccr_io_bank_w )
 {
-	liberate_state *state = (liberate_state *)space->machine->driver_data;
+	liberate_state *state = space->machine->driver_data<liberate_state>();
 	state->bank = data & 1;
 
 	if (state->bank)
@@ -769,7 +769,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( deco16_interrupt )
 {
-	liberate_state *state = (liberate_state *)device->machine->driver_data;
+	liberate_state *state = device->machine->driver_data<liberate_state>();
 	int p = ~input_port_read(device->machine, "IN3");
 	if ((p & 0x43) && !state->latch)
 	{
@@ -799,7 +799,7 @@ static INTERRUPT_GEN( prosport_interrupt )
 
 static MACHINE_START( liberate )
 {
-	liberate_state *state = (liberate_state *)machine->driver_data;
+	liberate_state *state = machine->driver_data<liberate_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -815,7 +815,7 @@ static MACHINE_START( liberate )
 
 static MACHINE_RESET( liberate )
 {
-	liberate_state *state = (liberate_state *)machine->driver_data;
+	liberate_state *state = machine->driver_data<liberate_state>();
 
 	memset(state->io_ram, 0, ARRAY_LENGTH(state->io_ram));
 
@@ -826,9 +826,7 @@ static MACHINE_RESET( liberate )
 	state->bank = 0;
 }
 
-static MACHINE_DRIVER_START( liberate )
-
-	MDRV_DRIVER_DATA(liberate_state)
+static MACHINE_CONFIG_START( liberate, liberate_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",DECO16, 2000000)
@@ -868,27 +866,23 @@ static MACHINE_DRIVER_START( liberate )
 
 	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( liberatb )
-	MDRV_IMPORT_FROM(liberate)
+static MACHINE_CONFIG_DERIVED( liberatb, liberate )
 
 	/* basic machine hardware */
 	MDRV_CPU_REPLACE("maincpu", M6502, 2000000)
 	MDRV_CPU_PROGRAM_MAP(liberatb_map)
 	MDRV_CPU_VBLANK_INT("screen", deco16_interrupt)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( boomrang )
-	MDRV_IMPORT_FROM(liberate)
+static MACHINE_CONFIG_DERIVED( boomrang, liberate )
 
 	MDRV_VIDEO_START(boomrang)
 	MDRV_VIDEO_UPDATE(boomrang)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( prosoccr )
-
-	MDRV_IMPORT_FROM(liberate)
+static MACHINE_CONFIG_DERIVED( prosoccr, liberate )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -909,11 +903,9 @@ static MACHINE_DRIVER_START( prosoccr )
 
 	MDRV_VIDEO_START(prosoccr)
 	MDRV_VIDEO_UPDATE(prosoccr)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( prosport )
-
-	MDRV_DRIVER_DATA(liberate_state)
+static MACHINE_CONFIG_START( prosport, liberate_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", DECO16, 2000000)
@@ -952,7 +944,7 @@ static MACHINE_DRIVER_START( prosport )
 
 	MDRV_SOUND_ADD("ay2", AY8910, 1500000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -1364,7 +1356,7 @@ ROM_END
 
 static void sound_cpu_decrypt(running_machine *machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x4000);
 	UINT8 *rom = memory_region(machine, "audiocpu");
 	int i;
@@ -1373,7 +1365,7 @@ static void sound_cpu_decrypt(running_machine *machine)
 	for (i = 0xc000; i < 0x10000; i++)
 		decrypted[i - 0xc000] = ((rom[i] & 0x20) << 1) | ((rom[i] & 0x40) >> 1) | (rom[i] & 0x9f);
 
-	memory_set_decrypted_region(space, 0xc000, 0xffff, decrypted);
+	space->set_decrypted_region(0xc000, 0xffff, decrypted);
 }
 
 static DRIVER_INIT( prosport )
@@ -1398,11 +1390,11 @@ static DRIVER_INIT( yellowcb )
 static DRIVER_INIT( liberate )
 {
 	int A;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x10000);
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypted);
+	space->set_decrypted_region(0x0000, 0xffff, decrypted);
 
 	/* Swap bits for opcodes only, not data */
 	for (A = 0; A < 0x10000; A++) {

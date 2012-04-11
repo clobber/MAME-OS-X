@@ -78,9 +78,11 @@ legacy_cpu_device_config::legacy_cpu_device_config(const machine_config &mconfig
 		m_space_config[spacenum].m_addrbus_width = get_legacy_config_int(DEVINFO_INT_ADDRBUS_WIDTH + spacenum);
 		m_space_config[spacenum].m_addrbus_shift = get_legacy_config_int(DEVINFO_INT_ADDRBUS_SHIFT + spacenum);
 		m_space_config[spacenum].m_logaddr_width = get_legacy_config_int(CPUINFO_INT_LOGADDR_WIDTH + spacenum);
+		if (m_space_config[spacenum].m_logaddr_width == 0)
+			m_space_config[spacenum].m_logaddr_width = m_space_config[spacenum].m_addrbus_width;
 		m_space_config[spacenum].m_page_shift = get_legacy_config_int(CPUINFO_INT_PAGE_SHIFT + spacenum);
-		m_space_config[spacenum].m_internal_map = reinterpret_cast<const addrmap_token *>(get_legacy_config_ptr(DEVINFO_PTR_INTERNAL_MEMORY_MAP + spacenum));
-		m_space_config[spacenum].m_default_map = reinterpret_cast<const addrmap_token *>(get_legacy_config_ptr(DEVINFO_PTR_DEFAULT_MEMORY_MAP + spacenum));
+		m_space_config[spacenum].m_internal_map = reinterpret_cast<address_map_constructor>(get_legacy_config_fct(DEVINFO_PTR_INTERNAL_MEMORY_MAP + spacenum));
+		m_space_config[spacenum].m_default_map = reinterpret_cast<address_map_constructor>(get_legacy_config_fct(DEVINFO_PTR_DEFAULT_MEMORY_MAP + spacenum));
 	}
 
 	// set the real name
@@ -223,7 +225,8 @@ legacy_cpu_device::legacy_cpu_device(running_machine &machine, const legacy_cpu_
 	  m_state_export(reinterpret_cast<cpu_state_io_func>(m_cpu_config.get_legacy_config_fct(CPUINFO_FCT_EXPORT_STATE))),
 	  m_string_export(reinterpret_cast<cpu_string_io_func>(m_cpu_config.get_legacy_config_fct(CPUINFO_FCT_EXPORT_STRING))),
 	  m_exit(reinterpret_cast<cpu_exit_func>(m_cpu_config.get_legacy_config_fct(CPUINFO_FCT_EXIT))),
-	  m_using_legacy_state(false)
+	  m_using_legacy_state(false),
+	  m_inited(false)
 {
 	memset(&m_partial_frame_period, 0, sizeof(m_partial_frame_period));
 
@@ -243,7 +246,7 @@ legacy_cpu_device::legacy_cpu_device(running_machine &machine, const legacy_cpu_
 legacy_cpu_device::~legacy_cpu_device()
 {
 	// call the CPU's exit function if present
-	if (m_exit != NULL)
+	if (m_inited && m_exit != NULL)
 		(*m_exit)(this);
 }
 
@@ -257,9 +260,10 @@ void legacy_cpu_device::device_start()
 	// standard init
 	cpu_init_func init = reinterpret_cast<cpu_init_func>(m_cpu_config.get_legacy_config_fct(CPUINFO_FCT_INIT));
 	(*init)(this, static_standard_irq_callback);
+	m_inited = true;
 
 	// fetch information about the CPU states
-	if (m_state_list == NULL)
+	if (m_state_list.count() == 0)
 	{
 		m_using_legacy_state = true;
 		for (int index = 0; index < MAX_REGS; index++)
@@ -297,9 +301,9 @@ void legacy_cpu_device::device_start()
 	}
 
 	// get our icount pointer
-	m_icount = reinterpret_cast<int *>(get_legacy_runtime_ptr(CPUINFO_PTR_INSTRUCTION_COUNTER));
-	assert(m_icount != 0);
-	*m_icount = 0;
+	m_icountptr = reinterpret_cast<int *>(get_legacy_runtime_ptr(CPUINFO_PTR_INSTRUCTION_COUNTER));
+	assert(m_icountptr != 0);
+	*m_icountptr = 0;
 }
 
 

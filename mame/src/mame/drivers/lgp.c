@@ -78,6 +78,8 @@ static running_device *laserdisc;
 static UINT8 *tile_ram;
 static UINT8 *tile_control_ram;
 
+static emu_timer *irq_timer;
+
 
 /* VIDEO GOODS */
 static VIDEO_UPDATE( lgp )
@@ -327,18 +329,19 @@ static INTERRUPT_GEN( vblank_callback_lgp )
 
 	// IRQ
 	cpu_set_input_line(device, 0, ASSERT_LINE);
-	timer_set(device->machine, ATTOTIME_IN_USEC(50), NULL, 0, irq_stop);
+	timer_adjust_oneshot(irq_timer, ATTOTIME_IN_USEC(50), 0);
 }
 
 
 static MACHINE_START( lgp )
 {
 	laserdisc = machine->device("laserdisc");
+    irq_timer = timer_alloc(machine, irq_stop, 0);
 }
 
 
 /* DRIVER */
-static MACHINE_DRIVER_START( lgp )
+static MACHINE_CONFIG_START( lgp, driver_device )
 	/* main cpu */
 	MDRV_CPU_ADD("maincpu", Z80, CPU_PCB_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(main_program_map)
@@ -366,10 +369,10 @@ static MACHINE_DRIVER_START( lgp )
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ldsound", LASERDISC, 0)
+	MDRV_SOUND_ADD("ldsound", LASERDISC_SOUND, 0)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( lgp )

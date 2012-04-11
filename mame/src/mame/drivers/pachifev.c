@@ -20,22 +20,60 @@ Driver by Tomasz Slanina
 
 - TODO:
   - what's the correct game title - Pachifever ? Fever 777 ?
-  - remaing DSW
   - unknown writes ($ffxx range)
+  - coins : try to understand why they don't always register (use PORT_IMPULSE ?)
   - controls : unused bits (is the BUTTON1 used _only_ for entering initials?)
   - controls : make PLUNGER (or whatever it is in reality) implementation more clear
+               and find a better way to handle cocktail mode;
                here's some code used to read plunger pos(angle?):
 
-0284: 04CC             clr  R12            ; CRU address
-0286: 0208 FF00        li   R8,>ff00     ; R8=ff00 - initial data ($ff)
-028A: D688             movb R8,*R10     ; ff-> ff40  - write to output
-028C: 3449             stcr R9,1        ; CRU read (one bit)
-028E: 1603             jne  >0296        ; not zer0 - end
-0290: 0228 FC00        ai   R8,>fc00    ; R8=R8-4
-0294: 18FA             joc  >028a        ; loop
+0284: 04CC             clr  R12             ; CRU address
+0286: 0208 FF00        li   R8,>ff00        ; R8=ff00 - initial data ($ff)
+028A: D688             movb R8,*R10         ; ff-> ff40  - write to output
+028C: 3449             stcr R9,1            ; CRU read (one bit)
+028E: 1603             jne  >0296           ; not zer0 - end
+0290: 0228 FC00        ai   R8,>fc00        ; R8=R8-4
+0294: 18FA             joc  >028a           ; loop
 
-0296: D6A0 020F        movb @>020f,*R10  ; 00 ->ff40 - end of controls read
-029A: 045B             b    *R11        ; b $1ca - process data in R8
+0296: D6A0 020F        movb @>020f,*R10     ; 00 ->ff40 - end of controls read
+029A: 045B             b    *R11            ; b $1ca - process data in R8
+
+
+Stephh's notes (based on the game TMS9995 code and some tests) :
+
+  - "Difficulty" Dip Switch is a guess, but I can't see what else it can be. The values (-8 to +8) are
+    correct, but it's impossible for me to tell what are the easiest and the hardest settings.
+  - In "attract mode", the game plays the 4th level. This "attract mode" will end when the computer's
+    balls reaches the limit or when the time is over (same rules as for the players - see gameplay below).
+  - Gameplay :
+      * On levels 1 to 3, your number of balls must reach the limit based on DSW2 bits 6 and 7
+        to complete the level; once this is done, you go to next level or bonus stage (after level 3).
+        Time is reset to value based on DSW2 bits 6 and 7 only at the begining of level 1,
+        while balls are reset on each level to value based on DSW1 bits 4 and 5.
+      * On the bonus stage, you only have 3 balls (which are decremented from your number of balls)
+        to get maximum bonus time, bonus balls, and points. During this stage, time is not decremented.
+      * On level 4, your number of balls must reach the limit based on DSW2 bits 4 and 5 (making the game
+        sometimes harder) to complete the level; once this is done, the game is over for current player.
+        The main difference with levels 1 to 3 is that balls are not reset at the begining of the level.
+      * Once time or game is over, the game switches player 2 (if available). When all players have ended
+        their game, they can decide to continue : a message is displayed but you don't see any timer.
+        When you continue, only the balls aren't reset, while score, time and level (GASP !) are.
+        If you want to continue in a 2 players game, BOTH players will have to continue, which means that
+        you must have at least 2 credits ("REPLAY") and that you can't continue player 2 without player 1.
+      * If you manage to get a score, use BUTTON1 to cycle through avaiable symbols (letters A-Z and '.'),
+        and pull the plunger to at least 63% (the code expects a value >= 0xa0) to go to next initial.
+        Be aware that again there is a timer to do so, but that again the timer is not displayed.
+  - Usefull addresses :
+      * 0xe001.b : level (0x00-0x04 : 0x01 = level 1 - 0x02 = level 2 - 0x00 = level 3 - 0x3 = bonus - 0x04 = level 4)
+      * 0xe00f.b : player (0x00 = P1 - 0x01 = P2)
+      * 0xe016.w : P1 balls (MSB first)
+      * 0xe018.d : P1 score (MSB first)
+      * 0xe01c.w : P1 time  (MSB first)
+      * 0xe01e.w : P2 balls (MSB first)
+      * 0xe024.w : P2 time  (MSB first)
+      * 0xe020.d : P1 score (MSB first)
+      * 0xe028.w : limit (DSW2 bits 6 and 7) for levels 1 to 3 (MSB first)
+      * 0xe02a.w : limit (DSW2 bits 4 and 5) for level  4      (MSB first)
 
 ***********************************************************************************************************/
 
@@ -48,12 +86,11 @@ Driver by Tomasz Slanina
 #define USE_MSM 0
 #define NUM_PLUNGER_REPEATS    50
 
-class pachifev_state
+class pachifev_state : public driver_device
 {
 public:
-    static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, pachifev_state(machine)); }
-
-    pachifev_state(running_machine &machine) { }
+    pachifev_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
  /* controls related */
 
@@ -69,7 +106,7 @@ static WRITE8_HANDLER(controls_w)
 {
     if(!data)
     {
-        pachifev_state *state = (pachifev_state *)space->machine->driver_data;
+        pachifev_state *state = space->machine->driver_data<pachifev_state>();
 
         /*end of input read*/
         state->power=0;
@@ -84,7 +121,7 @@ static WRITE8_HANDLER(controls_w)
 
 static READ8_HANDLER(controls_r)
 {
-    pachifev_state *state = (pachifev_state *)space->machine->driver_data;
+    pachifev_state *state = space->machine->driver_data<pachifev_state>();
     int output_bit=(state->power < state->max_power)?0:1;
     ++state->power;
     return output_bit;
@@ -114,68 +151,94 @@ static ADDRESS_MAP_START( pachifev_cru, ADDRESS_SPACE_IO, 8 )
     AM_RANGE(0x000, 0x000) AM_READ(controls_r)
 ADDRESS_MAP_END
 
+
+/* verified from TMS9995 code */
 static INPUT_PORTS_START( pachifev )
+	/* 0xff00, cpl'ed -> 0xf0a0 (internal RAM) */
     PORT_START("IN0")
-    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )  /* used to enter player initials in top 5 */
-    PORT_BIT( 0x4d, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )                 /* select initial for player 1 and player 2 (upright) */
     PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_START1 )
     PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_START2 )
     PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
+    PORT_BIT( 0x4d, IP_ACTIVE_LOW, IPT_UNUSED )
 
+	/* 0xff02, cpl'ed -> 0xf0a1 (internal RAM) */
     PORT_START("IN1")
-    PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+    PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_COCKTAIL   /* select initial for player 2 (cocktail) */
+    PORT_BIT( 0xfd, IP_ACTIVE_LOW, IPT_UNUSED )
 
+	/* 0xff04, cpl'ed -> 0xf0a2 (internal RAM) */
     PORT_START("DSW1")
-    PORT_DIPUNKNOWN( 0x07, 0x07 )
-
+	PORT_DIPNAME( 0x07, 0x07, "Difficulty ?" )              /* table at 0x5000 - see notes */
+	PORT_DIPSETTING(    0x07, "-8" )
+	PORT_DIPSETTING(    0x06, "-6" )
+	PORT_DIPSETTING(    0x05, "-4" )
+	PORT_DIPSETTING(    0x04, "-2" )
+	PORT_DIPSETTING(    0x03, "+2" )
+	PORT_DIPSETTING(    0x02, "+4" )
+	PORT_DIPSETTING(    0x01, "+6" )
+	PORT_DIPSETTING(    0x00, "+8" )
     PORT_DIPNAME( 0x08, 0x08, DEF_STR( Cabinet ) )
     PORT_DIPSETTING(    0x08, DEF_STR( Upright ) )
     PORT_DIPSETTING(    0x00, DEF_STR( Cocktail ) )
-
-    PORT_DIPNAME( 0x30, 0x10, "Balls" )
-    PORT_DIPSETTING(    0x00, "200")
-    PORT_DIPSETTING(    0x10, "100")
-    PORT_DIPSETTING(    0x20, "50")
-    PORT_DIPSETTING(    0x30, "25")
-
-    PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coin_A ) )
-    PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ))
+    PORT_DIPNAME( 0x30, 0x00, "Balls" )                     /* table at 0x5020 */
+    PORT_DIPSETTING(    0x30, "25" )
+    PORT_DIPSETTING(    0x20, "50" )
+    PORT_DIPSETTING(    0x10, "100" )
+    PORT_DIPSETTING(    0x00, "200" )
+    PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Coinage ) )
+    PORT_DIPSETTING(    0xc0, DEF_STR( 1C_1C ) )
     PORT_DIPSETTING(    0x80, DEF_STR( 1C_2C ) )
     PORT_DIPSETTING(    0x40, DEF_STR( 1C_3C ) )
     PORT_DIPSETTING(    0x00, DEF_STR( 1C_4C ) )
 
+	/* 0xff06, cpl'ed -> 0xf0a3 (internal RAM) */
     PORT_START("DSW2")
+    PORT_DIPNAME( 0x03, 0x00, "Time" )                      /* table at 0x5028 */
+    PORT_DIPSETTING(    0x00, "180" )
+    PORT_DIPSETTING(    0x01, "120" )
+    PORT_DIPSETTING(    0x02, "150" )
+    PORT_DIPSETTING(    0x03, "90" )
+	PORT_DIPUNUSED( 0x04, 0x04 )
+	PORT_DIPUNUSED( 0x08, 0x08 )
+    PORT_DIPNAME( 0x30, 0x30, "Limit (Level 4)" )           /* table at 0x5038 - stored at 0xe02a.w */
+    PORT_DIPSETTING(    0x30, "500" )
+    PORT_DIPSETTING(    0x20, "1000" )
+    PORT_DIPSETTING(    0x10, "1500" )
+    PORT_DIPSETTING(    0x00, "2000" )
+    PORT_DIPNAME( 0xc0, 0xc0, "Limit (Levels 1 to 3)" )     /* table at 0x5030 - stored at 0xe028.w */
+    PORT_DIPSETTING(    0xc0, "300" )
+    PORT_DIPSETTING(    0x80, "500" )
+    PORT_DIPSETTING(    0x40, "1000" )
+    PORT_DIPSETTING(    0x00, "1500" )
 
-    PORT_DIPNAME( 0x03, 0x01, "Time" )
-    PORT_DIPSETTING(    0x00, "180")
-    PORT_DIPSETTING(    0x01, "120")
-    PORT_DIPSETTING(    0x02, "150")
-    PORT_DIPSETTING(    0x03, "90")
-
-    PORT_DIPUNKNOWN( 0x0c, 0x0c )
-
-    PORT_DIPNAME( 0x30, 0x20, "Limit (attract)" ) /* attract mode only??? */
-    PORT_DIPSETTING(    0x00, "2000")
-    PORT_DIPSETTING(    0x10, "1500")
-    PORT_DIPSETTING(    0x20, "1000")
-    PORT_DIPSETTING(    0x30, "500")
-
-    PORT_DIPNAME( 0xc0, 0xc0, "Limit (game)" )  /* ball limit in game */
-    PORT_DIPSETTING(    0x00, "1500")
-    PORT_DIPSETTING(    0x40, "1000")
-    PORT_DIPSETTING(    0x80, "500")
-    PORT_DIPSETTING(    0xc0, "300")
-
+	/* 0xff08, cpl'ed -> 0xf0a4 (internal RAM) */
     PORT_START("DSW3")
     PORT_DIPNAME( 0x01, 0x00, DEF_STR( Demo_Sounds ) )
     PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
     PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED( 0x02, 0x02 )
+	PORT_DIPUNUSED( 0x04, 0x04 )
+    PORT_DIPNAME( 0x18, 0x18, "Bonus Time" )                /* table at 0x3500 */
+    PORT_DIPSETTING(    0x18, "5" )
+    PORT_DIPSETTING(    0x10, "8" )
+    PORT_DIPSETTING(    0x08, "10" )
+    PORT_DIPSETTING(    0x00, "15" )
+	PORT_DIPNAME( 0xe0, 0xe0, "Bonus Ball" )                /* table at 0x3508 */
+	PORT_DIPSETTING(    0xe0, "3" )
+	PORT_DIPSETTING(    0xc0, "4" )
+	PORT_DIPSETTING(    0xa0, "5" )
+	PORT_DIPSETTING(    0x80, "8" )
+	PORT_DIPSETTING(    0x60, "10" )
+	PORT_DIPSETTING(    0x40, "11" )
+	PORT_DIPSETTING(    0x20, "13" )
+	PORT_DIPSETTING(    0x00, "15" )
 
-    PORT_DIPUNKNOWN( 0xfe, 0xfe )
-
-    PORT_START("PLUNGER")
+    PORT_START("PLUNGER_P1")
     PORT_BIT( 0x3f, 0x00, IPT_POSITIONAL ) PORT_MINMAX(0x00,0x3f) PORT_SENSITIVITY(30) PORT_KEYDELTA(4) PORT_CENTERDELTA(0xff)
 
+    PORT_START("PLUNGER_P2")
+    PORT_BIT( 0x3f, 0x00, IPT_POSITIONAL ) PORT_MINMAX(0x00,0x3f) PORT_SENSITIVITY(30) PORT_KEYDELTA(4) PORT_CENTERDELTA(0xff) PORT_COCKTAIL
 INPUT_PORTS_END
 
 
@@ -220,7 +283,7 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_RESET( pachifev )
 {
-    pachifev_state *state = (pachifev_state *)machine->driver_data;
+    pachifev_state *state = machine->driver_data<pachifev_state>();
 
     state->power=0;
     state->max_power=0;
@@ -239,8 +302,19 @@ static INTERRUPT_GEN( pachifev_vblank_irq )
     TMS9928A_interrupt(device->machine);
 
     {
-        pachifev_state *state = (pachifev_state *)device->machine->driver_data;
-        int current_power=input_port_read(device->machine, "PLUNGER") & 0x3f;
+		static const char *const inname[2] = { "PLUNGER_P1", "PLUNGER_P2" };
+        pachifev_state *state = device->machine->driver_data<pachifev_state>();
+
+		/* I wish I had found a better way to handle cocktail inputs, but I can't find a way to access internal RAM */
+		/* (bit 5 of 0xf0aa : 0 = player 1 and 1 = player 2 - bit 6 of 0xf0aa : 0 = upright and 1 = cocktail). */
+		/* All I found is that in main RAM, 0xe00f.b determines the player : 0x00 = player 1 and 0x01 = player 2. */
+		address_space *ramspace = cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM);
+		UINT8 player = 0;
+
+		if ((ramspace->read_byte(0xe00f) == 0x01) && ((input_port_read(device->machine, "DSW1") & 0x08) == 0x00))
+			player = 1;
+
+        int current_power=input_port_read(device->machine, inname[player]) & 0x3f;
         if(current_power != state->previous_power)
         {
             popmessage    ("%d%%", (current_power * 100) / 0x3f);
@@ -270,7 +344,7 @@ static MACHINE_START( pachifev)
     /* configure VDP */
     TMS9928A_configure(&tms9928a_interface);
     {
-        pachifev_state *state = (pachifev_state *)machine->driver_data;
+        pachifev_state *state = machine->driver_data<pachifev_state>();
 
         state_save_register_global(machine, state->power);
         state_save_register_global(machine, state->max_power);
@@ -285,9 +359,7 @@ static const struct tms9995reset_param pachifev_processor_config =
     1,0,0
 };
 
-static MACHINE_DRIVER_START( pachifev )
-
-    MDRV_DRIVER_DATA(pachifev_state)
+static MACHINE_CONFIG_START( pachifev, pachifev_state )
 
     /* basic machine hardware */
     MDRV_CPU_ADD("maincpu", TMS9995, XTAL_12MHz)
@@ -301,7 +373,7 @@ static MACHINE_DRIVER_START( pachifev )
 
     /* video hardware */
 
-    MDRV_IMPORT_FROM(tms9928a)
+    MDRV_FRAGMENT_ADD(tms9928a)
     MDRV_SCREEN_MODIFY("screen")
     MDRV_SCREEN_REFRESH_RATE((float)XTAL_10_738635MHz/2/342/262)
     MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500)) /* not accurate */
@@ -317,7 +389,7 @@ static MACHINE_DRIVER_START( pachifev )
     MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
     MDRV_SOUND_ADD("sn76_2", SN76489A, XTAL_10_738635MHz/3) /* guess */
     MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( pachifev )
     ROM_REGION( 0x10000, "maincpu", 0 )

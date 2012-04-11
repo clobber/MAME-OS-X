@@ -416,7 +416,7 @@ static GFXDECODE_START( cshooter )
 	GFXDECODE_ENTRY( "gfx1", 128/8, cshooter_charlayout,   0, 64  )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( cshooter )
+static MACHINE_CONFIG_START( cshooter, driver_device )
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(cshooter_map)
 	MDRV_CPU_VBLANK_INT_HACK(cshooter_interrupt,2)
@@ -443,9 +443,9 @@ static MACHINE_DRIVER_START( cshooter )
 	/* sound hardware */
 	/* YM2151 and ym3931 seibu custom cpu running at XTAL_14_31818MHz/4 */
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( airraid )
+static MACHINE_CONFIG_START( airraid, driver_device )
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		 /* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(airraid_map)
 	MDRV_CPU_VBLANK_INT_HACK(cshooter_interrupt,2)
@@ -471,7 +471,7 @@ static MACHINE_DRIVER_START( airraid )
 
 	/* sound hardware */
 	/* YM2151 and ym3931 seibu custom cpu running at XTAL_14_31818MHz/4 */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -661,12 +661,12 @@ static DRIVER_INIT( cshooter )
 
 static DRIVER_INIT( cshootere )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int A;
 	UINT8 *rom = memory_region(machine, "maincpu");
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x8000);
 
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, decrypt);
+	space->set_decrypted_region(0x0000, 0x7fff, decrypt);
 
 	for (A = 0x0000;A < 0x8000;A++)
 	{

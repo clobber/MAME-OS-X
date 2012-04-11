@@ -141,7 +141,7 @@ static ADDRESS_MAP_START( williams_adpcm_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_MIRROR(0x03ff) AM_WRITE(adpcm_bank_select_w)
 	AM_RANGE(0x2400, 0x2401) AM_MIRROR(0x03fe) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0x2800, 0x2800) AM_MIRROR(0x03ff) AM_DEVWRITE("dac", dac_w)
-	AM_RANGE(0x2c00, 0x2c00) AM_MIRROR(0x03ff) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x2c00, 0x2c00) AM_MIRROR(0x03ff) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x3000, 0x3000) AM_MIRROR(0x03ff) AM_READ(adpcm_command_r)
 	AM_RANGE(0x3400, 0x3400) AM_MIRROR(0x03ff) AM_DEVWRITE("oki", adpcm_6295_bank_select_w)
 	AM_RANGE(0x3c00, 0x3c00) AM_MIRROR(0x03ff) AM_WRITE(adpcm_talkback_w)
@@ -193,7 +193,7 @@ static const ym2151_interface adpcm_ym2151_interface =
     MACHINE DRIVERS
 ****************************************************************************/
 
-MACHINE_DRIVER_START( williams_cvsd_sound )
+MACHINE_CONFIG_FRAGMENT( williams_cvsd_sound )
 	MDRV_CPU_ADD("cvsdcpu", M6809E, CVSD_MASTER_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(williams_cvsd_map)
 
@@ -210,10 +210,10 @@ MACHINE_DRIVER_START( williams_cvsd_sound )
 
 	MDRV_SOUND_ADD("cvsd", HC55516, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( williams_narc_sound )
+MACHINE_CONFIG_FRAGMENT( williams_narc_sound )
 	MDRV_CPU_ADD("narc1cpu", M6809E, NARC_MASTER_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(williams_narc_master_map)
 
@@ -238,10 +238,10 @@ MACHINE_DRIVER_START( williams_narc_sound )
 	MDRV_SOUND_ADD("cvsd", HC55516, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( williams_adpcm_sound )
+MACHINE_CONFIG_FRAGMENT( williams_adpcm_sound )
 	MDRV_CPU_ADD("adpcm", M6809E, ADPCM_MASTER_CLOCK)
 	MDRV_CPU_PROGRAM_MAP(williams_adpcm_map)
 
@@ -256,7 +256,7 @@ MACHINE_DRIVER_START( williams_adpcm_sound )
 
 	MDRV_OKIM6295_ADD("oki", ADPCM_MASTER_CLOCK/8, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -486,7 +486,7 @@ void williams_cvsd_data_w(running_machine *machine, int data)
 
 void williams_cvsd_reset_w(int state)
 {
-	const address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
 
 	/* going high halts the CPU */
 	if (state)
@@ -581,7 +581,7 @@ static WRITE8_HANDLER( narc_slave_sync_w )
 
 void williams_narc_data_w(int data)
 {
-	const address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
 
 	soundlatch_w(space, 0, data & 0xff);
 	cpu_set_input_line(sound_cpu, INPUT_LINE_NMI, (data & 0x100) ? CLEAR_LINE : ASSERT_LINE);
@@ -598,7 +598,7 @@ void williams_narc_reset_w(int state)
 	/* going high halts the CPU */
 	if (state)
 	{
-		const address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
+		address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
 		narc_master_bank_select_w(space, 0, 0);
 		narc_slave_bank_select_w(space, 0, 0);
 		init_audio_state(space->machine);
@@ -668,7 +668,7 @@ static WRITE8_HANDLER( adpcm_talkback_w )
 
 void williams_adpcm_data_w(int data)
 {
-	const address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
 	soundlatch_w(space, 0, data & 0xff);
 	if (!(data & 0x200))
 	{
@@ -684,7 +684,7 @@ void williams_adpcm_reset_w(int state)
 	/* going high halts the CPU */
 	if (state)
 	{
-		const address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
+		address_space *space = cpu_get_address_space(sound_cpu, ADDRESS_SPACE_PROGRAM);
 		adpcm_bank_select_w(space, 0, 0);
 		init_audio_state(space->machine);
 		cpu_set_input_line(sound_cpu, INPUT_LINE_RESET, ASSERT_LINE);

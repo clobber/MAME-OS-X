@@ -62,13 +62,13 @@ Notes:
 
 static WRITE8_HANDLER( avengers_adpcm_w )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	state->adpcm = data;
 }
 
 static READ8_HANDLER( avengers_adpcm_r )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	return state->adpcm;
 }
 
@@ -97,7 +97,7 @@ static INTERRUPT_GEN( lwings_interrupt )
 
 static WRITE8_HANDLER( avengers_protection_w )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	int pc = cpu_get_pc(space->cpu);
 
 	if (pc == 0x2eeb)
@@ -125,13 +125,13 @@ static WRITE8_HANDLER( avengers_protection_w )
 
 static WRITE8_HANDLER( avengers_prot_bank_w )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	state->palette_pen = data * 64;
 }
 
 static int avengers_fetch_paldata( running_machine *machine )
 {
-	lwings_state *state = (lwings_state *)machine->driver_data;
+	lwings_state *state = machine->driver_data<lwings_state>();
 
 	static const char pal_data[] =
 	/* page 1: 0x03,0x02,0x01,0x00 */
@@ -224,7 +224,7 @@ static int avengers_fetch_paldata( running_machine *machine )
 
 static READ8_HANDLER( avengers_protection_r )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	static const int xpos[8] = { 10, 7,  0, -7, -10, -7,   0,  7 };
 	static const int ypos[8] = {  0, 7, 10,  7,   0, -7, -10, -7 };
 	int best_dist = 0;
@@ -261,7 +261,7 @@ static READ8_HANDLER( avengers_protection_r )
 
 static READ8_HANDLER( avengers_soundlatch2_r )
 {
-	lwings_state *state = (lwings_state *)space->machine->driver_data;
+	lwings_state *state = space->machine->driver_data<lwings_state>();
 	UINT8 data = *state->soundlatch2 | state->soundstate;
 	state->soundstate = 0;
 	return(data);
@@ -742,7 +742,7 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( lwings )
 {
-	lwings_state *state = (lwings_state *)machine->driver_data;
+	lwings_state *state = machine->driver_data<lwings_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
@@ -758,7 +758,7 @@ static MACHINE_START( lwings )
 
 static MACHINE_RESET( lwings )
 {
-	lwings_state *state = (lwings_state *)machine->driver_data;
+	lwings_state *state = machine->driver_data<lwings_state>();
 
 	state->bg2_image = 0;
 	state->scroll_x[0] = 0;
@@ -774,10 +774,7 @@ static MACHINE_RESET( lwings )
 	state->adpcm = 0;
 }
 
-static MACHINE_DRIVER_START( lwings )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(lwings_state)
+static MACHINE_CONFIG_START( lwings, lwings_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* verified on PCB */
@@ -822,10 +819,9 @@ static MACHINE_DRIVER_START( lwings )
 	MDRV_SOUND_ROUTE(1, "mono", 0.20)
 	MDRV_SOUND_ROUTE(2, "mono", 0.20)
 	MDRV_SOUND_ROUTE(3, "mono", 0.10)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( trojan )
-	MDRV_IMPORT_FROM( lwings )
+static MACHINE_CONFIG_DERIVED( trojan, lwings )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(XTAL_12MHz/4)			/* verified on PCB */
@@ -850,10 +846,9 @@ static MACHINE_DRIVER_START( trojan )
 	MDRV_SOUND_ADD("5205", MSM5205, XTAL_455kHz)	/* verified on PCB */
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( avengers )
-	MDRV_IMPORT_FROM( trojan )
+static MACHINE_CONFIG_DERIVED( avengers, trojan )
 
 	MDRV_CPU_MODIFY("maincpu") //AT: (avengers37b16gre)
 	MDRV_CPU_PROGRAM_MAP(avengers_map)
@@ -864,7 +859,7 @@ static MACHINE_DRIVER_START( avengers )
 
 	/* video hardware */
 	MDRV_VIDEO_START(avengers)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

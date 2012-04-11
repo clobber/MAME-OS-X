@@ -87,6 +87,7 @@ TODO :  This is a partially working driver.  Most of the memory maps for
 #include "video/tlc34076.h"
 #include "video/mc6845.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
 
 
 static UINT16* m68k_framebuffer[2];
@@ -102,7 +103,7 @@ static int crtc_select;
 static VIDEO_UPDATE( vcombat )
 {
 	int y;
-	const rgb_t *const pens = tlc34076_get_pens();
+	const rgb_t *const pens = tlc34076_get_pens(screen->machine->device("tlc34076"));
 	running_device *aux = screen->machine->device("aux");
 
 	UINT16 *m68k_buf = m68k_framebuffer[(*framebuffer_ctrl & 0x20) ? 1 : 0];
@@ -327,7 +328,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 
 	AM_RANGE(0x60000c, 0x60000d) AM_WRITE(crtc_w)
 	AM_RANGE(0x600010, 0x600011) AM_RAM AM_BASE(&framebuffer_ctrl)
-	AM_RANGE(0x700000, 0x7007ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x700000, 0x7007ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x701000, 0x701001) AM_READ(main_irqiack_r)
 	AM_RANGE(0x702000, 0x702001) AM_READ(control_3_r)
 	AM_RANGE(0x705000, 0x705001) AM_RAM AM_SHARE("share4")		/* M1->M0 */
@@ -335,7 +336,7 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	//AM_RANGE(0x703000, 0x703001)      /* Headset rotation axis? */
 	//AM_RANGE(0x704000, 0x704001)      /* Headset rotation axis? */
 
-	AM_RANGE(0x706000, 0x70601f) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
+	AM_RANGE(0x706000, 0x70601f) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 ADDRESS_MAP_END
 
 
@@ -375,9 +376,6 @@ ADDRESS_MAP_END
 
 static MACHINE_RESET( vcombat )
 {
-	/* Setup the Bt476 VGA RAMDAC palette chip */
-	tlc34076_reset(6);
-
 	i860_set_pin(machine->device("vid_0"), DEC_PIN_BUS_HOLD, 1);
 	i860_set_pin(machine->device("vid_1"), DEC_PIN_BUS_HOLD, 1);
 
@@ -386,30 +384,27 @@ static MACHINE_RESET( vcombat )
 
 static MACHINE_RESET( shadfgtr )
 {
-	/* Setup the Bt476 VGA RAMDAC palette chip */
-	tlc34076_reset(6);
-
 	i860_set_pin(machine->device("vid_0"), DEC_PIN_BUS_HOLD, 1);
 
 	crtc_select = 0;
 }
 
 
-static DIRECT_UPDATE_HANDLER( vid_0_direct_handler )
+DIRECT_UPDATE_HANDLER( vcombat_vid_0_direct_handler )
 {
 	if (address >= 0xfffc0000 && address <= 0xffffffff)
 	{
-		direct->raw = direct->decrypted = ((UINT8*)vid_0_shared_RAM) - 0xfffc0000;
+		direct.explicit_configure(0xfffc0000, 0xffffffff, 0x3ffff, vid_0_shared_RAM);
 		return ~0;
 	}
 	return address;
 }
 
-static DIRECT_UPDATE_HANDLER( vid_1_direct_handler )
+DIRECT_UPDATE_HANDLER( vcombat_vid_1_direct_handler )
 {
 	if (address >= 0xfffc0000 && address <= 0xffffffff)
 	{
-		direct->raw = direct->decrypted = ((UINT8*)vid_1_shared_RAM) - 0xfffc0000;
+		direct.explicit_configure(0xfffc0000, 0xffffffff, 0x3ffff, vid_1_shared_RAM);
 		return ~0;
 	}
 	return address;
@@ -421,8 +416,11 @@ static DRIVER_INIT( vcombat )
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	/* The two i860s execute out of RAM */
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "vid_0", ADDRESS_SPACE_PROGRAM), vid_0_direct_handler);
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "vid_1", ADDRESS_SPACE_PROGRAM), vid_1_direct_handler);
+	address_space *space = machine->device<i860_device>("vid_0")->space(AS_PROGRAM);
+	space->set_direct_update_handler(direct_update_delegate_create_static(vcombat_vid_0_direct_handler, *machine));
+
+	space = machine->device<i860_device>("vid_1")->space(AS_PROGRAM);
+	space->set_direct_update_handler(direct_update_delegate_create_static(vcombat_vid_1_direct_handler, *machine));
 
 	/* Allocate the 68000 framebuffers */
 	m68k_framebuffer[0] = auto_alloc_array(machine, UINT16, 0x8000);
@@ -465,7 +463,8 @@ static DRIVER_INIT( shadfgtr )
 	i860_framebuffer[1][1] = NULL;
 
 	/* The i860 executes out of RAM */
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "vid_0", ADDRESS_SPACE_PROGRAM), vid_0_direct_handler);
+	address_space *space = machine->device<i860_device>("vid_0")->space(AS_PROGRAM);
+	space->set_direct_update_handler(direct_update_delegate_create_static(vcombat_vid_0_direct_handler, *machine));
 }
 
 
@@ -548,7 +547,7 @@ static const mc6845_interface mc6845_intf =
 };
 
 
-static MACHINE_DRIVER_START( vcombat )
+static MACHINE_CONFIG_START( vcombat, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_12MHz)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT("screen", irq1_line_assert)
@@ -566,7 +565,7 @@ static MACHINE_DRIVER_START( vcombat )
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 	MDRV_CPU_PERIODIC_INT(irq1_line_hold, 15000)	/* Remove this if MC6845 is enabled */
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 	MDRV_MACHINE_RESET(vcombat)
 
 /* Temporary hack for experimenting with timing. */
@@ -574,6 +573,8 @@ static MACHINE_DRIVER_START( vcombat )
 	//MDRV_QUANTUM_TIME(HZ(1200))
 	MDRV_QUANTUM_PERFECT_CPU("maincpu")
 #endif
+
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
 
 	/* Disabled for now as it can't handle multiple screens */
 //  MDRV_MC6845_ADD("crtc", MC6845, 6000000 / 16, mc6845_intf)
@@ -593,10 +594,10 @@ static MACHINE_DRIVER_START( vcombat )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( shadfgtr )
+static MACHINE_CONFIG_START( shadfgtr, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_12MHz)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 	MDRV_CPU_VBLANK_INT("screen", irq1_line_assert)
@@ -609,8 +610,10 @@ static MACHINE_DRIVER_START( shadfgtr )
 	MDRV_CPU_ADD("soundcpu", M68000, XTAL_12MHz)
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 	MDRV_MACHINE_RESET(shadfgtr)
+
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
 
 	MDRV_MC6845_ADD("crtc", MC6845, XTAL_20MHz / 4 / 16, mc6845_intf)
 
@@ -624,7 +627,7 @@ static MACHINE_DRIVER_START( shadfgtr )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( vcombat )

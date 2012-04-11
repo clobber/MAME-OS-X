@@ -114,7 +114,7 @@ static WRITE8_HANDLER( z80_bankswitch_w )
 #if 0
 static void sound_nmi_callback( running_machine *machine, int param )
 {
-	simpsons_state *state = (simpsons_state *)machine->driver_data;
+	simpsons_state *state = machine->driver_data<simpsons_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, (state->nmi_enabled) ? CLEAR_LINE : ASSERT_LINE );
 	state->nmi_enabled = 0;
 }
@@ -122,13 +122,13 @@ static void sound_nmi_callback( running_machine *machine, int param )
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	simpsons_state *state = (simpsons_state *)machine->driver_data;
+	simpsons_state *state = machine->driver_data<simpsons_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( z80_arm_nmi_w )
 {
-	simpsons_state *state = (simpsons_state *)space->machine->driver_data;
+	simpsons_state *state = space->machine->driver_data<simpsons_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
 	timer_set(space->machine, ATTOTIME_IN_USEC(25), NULL, 0, nmi_callback);	/* kludge until the K053260 is emulated correctly */
 }
@@ -229,7 +229,7 @@ INPUT_PORTS_END
 
 static void simpsons_objdma( running_machine *machine )
 {
-	simpsons_state *state = (simpsons_state *)machine->driver_data;
+	simpsons_state *state = machine->driver_data<simpsons_state>();
 	int counter, num_inactive;
 	UINT16 *src, *dst;
 
@@ -255,7 +255,7 @@ static void simpsons_objdma( running_machine *machine )
 
 static TIMER_CALLBACK( dmaend_callback )
 {
-	simpsons_state *state = (simpsons_state *)machine->driver_data;
+	simpsons_state *state = machine->driver_data<simpsons_state>();
 	if (state->firq_enabled)
 		cpu_set_input_line(state->maincpu, KONAMI_FIRQ_LINE, HOLD_LINE);
 }
@@ -263,7 +263,7 @@ static TIMER_CALLBACK( dmaend_callback )
 
 static INTERRUPT_GEN( simpsons_irq )
 {
-	simpsons_state *state = (simpsons_state *)device->machine->driver_data;
+	simpsons_state *state = device->machine->driver_data<simpsons_state>();
 
 	if (k053246_is_irq_enabled(state->k053246))
 	{
@@ -305,10 +305,7 @@ static const eeprom_interface eeprom_intf =
 	"0100110000000" /* unlock command */
 };
 
-static MACHINE_DRIVER_START( simpsons )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(simpsons_state)
+static MACHINE_CONFIG_START( simpsons, simpsons_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", KONAMI, XTAL_24MHz/2/4) /* pin 18 of konami cpu is 12Mhz, while pin 17 is 3mhz. Clock probably divided internally by 4  */
@@ -354,7 +351,7 @@ static MACHINE_DRIVER_START( simpsons )
 	MDRV_SOUND_ADD("k053260", K053260, XTAL_3_579545MHz) /* verified on pcb */
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

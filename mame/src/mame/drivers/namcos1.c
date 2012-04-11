@@ -344,6 +344,7 @@ C - uses sub board with support for player 3 and 4 controls
 #include "sound/2151intf.h"
 #include "sound/namco.h"
 #include "sound/dac.h"
+#include "machine/nvram.h"
 #include "includes/namcos1.h"
 
 static int dac0_value, dac1_value, dac0_gain, dac1_gain;
@@ -466,7 +467,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank17")	/* Banked ROMs */
 	AM_RANGE(0x4000, 0x4001) AM_DEVREAD("ymsnd", ym2151_status_port_r)
 	AM_RANGE(0x4000, 0x4001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x5000, 0x53ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_MIRROR(0x400) AM_BASE(&namco_wavedata) /* PSG ( Shared ) */
+	AM_RANGE(0x5000, 0x53ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_MIRROR(0x400) /* PSG ( Shared ) */
 	AM_RANGE(0x7000, 0x77ff) AM_RAMBANK("bank18")	/* TRIRAM (shared) */
 	AM_RANGE(0x8000, 0x9fff) AM_RAM	/* Sound RAM 3 */
 	AM_RANGE(0xc000, 0xc001) AM_WRITE(namcos1_sound_bankswitch_w) /* ROM bank selector */
@@ -485,7 +486,7 @@ static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0xbfff) AM_ROMBANK("bank20") /* banked ROM */
 	AM_RANGE(0xc000, 0xc000) AM_WRITE(namcos1_mcu_patch_w)	/* kludge! see notes */
 	AM_RANGE(0xc000, 0xc7ff) AM_RAMBANK("bank19")	/* TRIRAM (shared) */
-	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram) /* EEPROM */
+	AM_RANGE(0xc800, 0xcfff) AM_RAM AM_SHARE("nvram") /* EEPROM */
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(namcos1_dac0_w)
 	AM_RANGE(0xd400, 0xd400) AM_WRITE(namcos1_dac1_w)
 	AM_RANGE(0xd800, 0xd800) AM_WRITE(namcos1_mcu_bankswitch_w) /* ROM bank selector */
@@ -1077,7 +1078,7 @@ static const namco_interface namco_config =
     LPF info : Fco = 3.3KHz , g = -12dB/oct
 */
 
-static MACHINE_DRIVER_START( ns1 )
+static MACHINE_CONFIG_START( ns1, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809,49152000/32)
@@ -1101,7 +1102,7 @@ static MACHINE_DRIVER_START( ns1 )
 	MDRV_QUANTUM_TIME(HZ(38400))
 
 	MDRV_MACHINE_RESET(namcos1)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
@@ -1136,7 +1137,7 @@ static MACHINE_DRIVER_START( ns1 )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -2529,43 +2530,6 @@ ROM_START( soukobdx )
 	ROM_REGION( 0x100000, "gfx3", 0 ) /* sprites */
 	ROM_LOAD( "sb1_obj0.bin",       0x00000, 0x10000, CRC(ed810da4) SHA1(b3172b50b15d0e2fd40d38d32abf4de22b6f7a85) )
 ROM_END
-
-
-/*
-Puzzle Club
-Yunsung, 2000
-
-PCB Layout
-----------
-
-YS-2113
-|----------------------------------------------|
-|ROM1.128 ROM2.137 ROM3.7  62256  ROM5.97      |
-|  6116 Z80  6295  ROM4.2  62256  ROM6.95      |
-|  YMXXXX   16MHz     PAL         ROM7.105     |
-|  YM3014             PAL  PAL    ROM8.83      |
-|          62256    68000         ROM9.82      |
-|          62256           6116     14.38383MHz|
-|                          6116   PAL     PAL  |
-|J           6116   QL2003        PAL          |
-|A           6116                 PAL          |
-|M           6116   QL12X16B      PAL          |
-|M DIP1      6116                 PAL          |
-|A DIP2                                        |
-|            62256  QL2003                     |
-|            62256                             |
-|                                              |
-|  ROM11.166  ROM10.167                        |
-|                   QL2003        PAL          |
-|  ROM13.164  ROM12.165           PAL          |
-|----------------------------------------------|
-Notes:
-      68000 clock : 16.000MHz
-      Z80 clock   : 4.000MHz (16/4)
-      M6295 clock : 1.000MHz (16/16). Sample Rate = 1000000 / 132
-      YMXXXX clock: 4.000MHz (16/4). Chip is either YM2151 or YM3812
-      VSync       : 60Hz
-*/
 
 ROM_START( puzlclub )
 	ROM_REGION( 0x2c000, "audiocpu", 0 )       /* 176k for the sound cpu */

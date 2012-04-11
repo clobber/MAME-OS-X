@@ -53,6 +53,8 @@ const UINT8 WATCHPOINT_READ				= 1;
 const UINT8 WATCHPOINT_WRITE			= 2;
 const UINT8 WATCHPOINT_READWRITE		= WATCHPOINT_READ | WATCHPOINT_WRITE;
 
+const int COMMENT_VERSION				= 1;
+
 
 
 //**************************************************************************
@@ -62,7 +64,7 @@ const UINT8 WATCHPOINT_READWRITE		= WATCHPOINT_READ | WATCHPOINT_WRITE;
 typedef int (*debug_instruction_hook_func)(device_t &device, offs_t curpc);
 
 
-class debug_cpu_comment_group;
+typedef struct _xml_data_node xml_data_node;
 
 
 class device_debug
@@ -107,12 +109,12 @@ public:
 
 	public:
 		// construction/destruction
-		watchpoint(int index, const address_space &space, int type, offs_t address, offs_t length, parsed_expression *condition = NULL, const char *action = NULL);
+		watchpoint(int index, address_space &space, int type, offs_t address, offs_t length, parsed_expression *condition = NULL, const char *action = NULL);
 		~watchpoint();
 
 		// getters
 		watchpoint *next() const { return m_next; }
-		const address_space &space() const { return m_space; }
+		address_space &space() const { return m_space; }
 		int index() const { return m_index; }
 		int type() const { return m_type; }
 		bool enabled() const { return m_enabled; }
@@ -126,7 +128,7 @@ public:
 		bool hit(int type, offs_t address, int size);
 
 		watchpoint *		m_next;						// next in the list
-		const address_space &m_space;					// address space
+		address_space &		m_space;					// address space
 		int					m_index;					// user reported index
 		bool				m_enabled;					// enabled?
 		UINT8				m_type;						// type (read/write)
@@ -138,7 +140,7 @@ public:
 
 public:
 	// construction/destruction
-	device_debug(device_t &device, symbol_table *globalsyms);
+	device_debug(device_t &device);
 	~device_debug();
 
 	// getters
@@ -146,7 +148,7 @@ public:
 
 	// commonly-used pass-throughs
 	offs_t pc() const { return (m_state != NULL) ? m_state->pc() : 0; }
-	int logaddrchars(int spacenum = AS_PROGRAM) const { return (m_memory != NULL && m_memory->space(spacenum) != NULL) ? m_memory->space(spacenum)->logaddrchars : 8; }
+	int logaddrchars(int spacenum = AS_PROGRAM) const { return (m_memory != NULL && m_memory->space(spacenum) != NULL) ? m_memory->space(spacenum)->logaddrchars() : 8; }
 	int min_opcode_bytes() const { return (m_disasm != NULL) ? m_disasm->max_opcode_bytes() : 1; }
 	int max_opcode_bytes() const { return (m_disasm != NULL) ? m_disasm->max_opcode_bytes() : 1; }
 
@@ -156,15 +158,15 @@ public:
 	void interrupt_hook(int irqline);
 	void exception_hook(int exception);
 	void instruction_hook(offs_t curpc);
-	void memory_read_hook(const address_space &space, offs_t address, UINT64 mem_mask);
-	void memory_write_hook(const address_space &space, offs_t address, UINT64 data, UINT64 mem_mask);
+	void memory_read_hook(address_space &space, offs_t address, UINT64 mem_mask);
+	void memory_write_hook(address_space &space, offs_t address, UINT64 data, UINT64 mem_mask);
 
 	// hooks into our operations
 	void set_instruction_hook(debug_instruction_hook_func hook);
 	void set_dasm_override(dasm_override_func dasm_override) { m_dasm_override = dasm_override; }
 
 	// disassembly
-	offs_t disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram);
+	offs_t disassemble(char *buffer, offs_t pc, const UINT8 *oprom, const UINT8 *opram) const;
 
 	// debugger focus
 	void ignore(bool ignore = true);
@@ -194,7 +196,7 @@ public:
 
 	// watchpoints
 	watchpoint *watchpoint_first(int spacenum) const { return m_wplist[spacenum]; }
-	int watchpoint_set(const address_space &space, int type, offs_t address, offs_t length, parsed_expression *condition, const char *action);
+	int watchpoint_set(address_space &space, int type, offs_t address, offs_t length, parsed_expression *condition, const char *action);
 	bool watchpoint_clear(int wpnum);
 	void watchpoint_clear_all();
 	bool watchpoint_enable(int index, bool enable = true);
@@ -203,6 +205,17 @@ public:
 	// hotspots
 	bool hotspot_tracking_enabled() const { return (m_hotspots != NULL); }
 	void hotspot_track(int numspots, int threshhold);
+
+	// comments
+	void comment_add(offs_t address, const char *comment, rgb_t color);
+	bool comment_remove(offs_t addr);
+	const char *comment_text(offs_t addr) const;
+	UINT32 comment_count() const { return m_comment_list.count(); }
+	UINT32 comment_change_count() const { return m_comment_change; }
+	bool comment_export(xml_data_node &node);
+	bool comment_import(xml_data_node &node);
+	void comment_dump(offs_t addr = ~0);
+	UINT32 compute_opcode_crc32(offs_t address) const;
 
 	// history
 	offs_t history_pc(int index) const;
@@ -225,9 +238,9 @@ private:
 	// breakpoint and watchpoint helpers
 	void breakpoint_update_flags();
 	void breakpoint_check(offs_t pc);
-	void watchpoint_update_flags(const address_space &space);
-	void watchpoint_check(const address_space &space, int type, offs_t address, UINT64 value_to_write, UINT64 mem_mask);
-	void hotspot_check(const address_space &space, offs_t address);
+	void watchpoint_update_flags(address_space &space);
+	void watchpoint_check(address_space &space, int type, offs_t address, UINT64 value_to_write, UINT64 mem_mask);
+	void hotspot_check(address_space &space, offs_t address);
 
 	// symbol get/set callbacks
 	static UINT64 get_current_pc(void *globalref, void *ref);
@@ -304,12 +317,29 @@ private:
 	{
 		offs_t				m_access;					// access address
 		offs_t				m_pc;						// PC of the access
-		const address_space *m_space;					// space where the access occurred
+		address_space *		m_space;					// space where the access occurred
 		UINT32				m_count;					// number of hits
 	};
 	hotspot_entry *			m_hotspots;					// hotspot list
 	int						m_hotspot_count;			// number of hotspots
 	int						m_hotspot_threshhold;		// threshhold for the number of hits to print
+
+	// comments
+	class dasm_comment
+	{
+	public:
+		dasm_comment(const char *text, offs_t address, rgb_t color, UINT32 crc);
+
+		dasm_comment *next() const { return m_next; }
+
+		dasm_comment *		m_next;						// next comment in the list
+		offs_t				m_address;					// address in question
+		rgb_t				m_color;					// color to use
+		UINT32				m_crc;						// CRC of code
+		astring				m_text;						// text
+	};
+	simple_list<dasm_comment> m_comment_list;			// list of comments
+	UINT32					m_comment_change;			// change counter for comments
 
 	// internal flag values
 	static const UINT32 DEBUG_FLAG_OBSERVING		= 0x00000001;		// observing this CPU
@@ -332,9 +362,6 @@ private:
 	static const UINT32 DEBUG_FLAG_TRACING_ANY		= DEBUG_FLAG_TRACING | DEBUG_FLAG_TRACING_OVER;
 	static const UINT32 DEBUG_FLAG_TRANSIENT		= DEBUG_FLAG_STEPPING_ANY | DEBUG_FLAG_STOP_PC | DEBUG_FLAG_STOP_CONTEXT |
 			DEBUG_FLAG_STOP_INTERRUPT | DEBUG_FLAG_STOP_EXCEPTION | DEBUG_FLAG_STOP_VBLANK | DEBUG_FLAG_STOP_TIME;
-
-public: // until comments get folded in
-	debug_cpu_comment_group *m_comments;				// disassembly comments
 };
 
 
@@ -391,43 +418,53 @@ void debug_cpu_source_script(running_machine *machine, const char *file);
 
 
 
+/* ----- debugger comment helpers ----- */
+
+// save all comments for a given machine
+bool debug_comment_save(running_machine *machine);
+
+// load all comments for a given machine
+bool debug_comment_load(running_machine *machine);
+
+
+
 /* ----- debugger memory accessors ----- */
 
 /* return the physical address corresponding to the given logical address */
-int debug_cpu_translate(const address_space *space, int intention, offs_t *address);
+int debug_cpu_translate(address_space *space, int intention, offs_t *address);
 
 /* return a byte from the the specified memory space */
-UINT8 debug_read_byte(const address_space *space, offs_t address, int apply_translation);
+UINT8 debug_read_byte(address_space *space, offs_t address, int apply_translation);
 
 /* return a word from the the specified memory space */
-UINT16 debug_read_word(const address_space *space, offs_t address, int apply_translation);
+UINT16 debug_read_word(address_space *space, offs_t address, int apply_translation);
 
 /* return a dword from the the specified memory space */
-UINT32 debug_read_dword(const address_space *space, offs_t address, int apply_translation);
+UINT32 debug_read_dword(address_space *space, offs_t address, int apply_translation);
 
 /* return a qword from the the specified memory space */
-UINT64 debug_read_qword(const address_space *space, offs_t address, int apply_translation);
+UINT64 debug_read_qword(address_space *space, offs_t address, int apply_translation);
 
 /* return 1,2,4 or 8 bytes from the specified memory space */
-UINT64 debug_read_memory(const address_space *space, offs_t address, int size, int apply_translation);
+UINT64 debug_read_memory(address_space *space, offs_t address, int size, int apply_translation);
 
 /* write a byte to the specified memory space */
-void debug_write_byte(const address_space *space, offs_t address, UINT8 data, int apply_translation);
+void debug_write_byte(address_space *space, offs_t address, UINT8 data, int apply_translation);
 
 /* write a word to the specified memory space */
-void debug_write_word(const address_space *space, offs_t address, UINT16 data, int apply_translation);
+void debug_write_word(address_space *space, offs_t address, UINT16 data, int apply_translation);
 
 /* write a dword to the specified memory space */
-void debug_write_dword(const address_space *space, offs_t address, UINT32 data, int apply_translation);
+void debug_write_dword(address_space *space, offs_t address, UINT32 data, int apply_translation);
 
 /* write a qword to the specified memory space */
-void debug_write_qword(const address_space *space, offs_t address, UINT64 data, int apply_translation);
+void debug_write_qword(address_space *space, offs_t address, UINT64 data, int apply_translation);
 
 /* write 1,2,4 or 8 bytes to the specified memory space */
-void debug_write_memory(const address_space *space, offs_t address, UINT64 data, int size, int apply_translation);
+void debug_write_memory(address_space *space, offs_t address, UINT64 data, int size, int apply_translation);
 
 /* read 1,2,4 or 8 bytes at the given offset from opcode space */
-UINT64 debug_read_opcode(const address_space *space, offs_t offset, int size, int arg);
+UINT64 debug_read_opcode(address_space *space, offs_t offset, int size, int arg);
 
 
 #endif

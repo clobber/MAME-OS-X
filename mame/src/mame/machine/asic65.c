@@ -42,11 +42,6 @@ static struct _asic65_t
 	FILE * log;
 } asic65;
 
-WRITE16_HANDLER( asic65_data_w );
-
-READ16_HANDLER( asic65_r );
-READ16_HANDLER( asic65_io_r );
-
 
 #define PARAM_WRITE		0
 #define COMMAND_WRITE	1
@@ -144,7 +139,7 @@ void asic65_config(running_machine *machine, int asictype)
 
 void asic65_reset(running_machine *machine, int state)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	/* rom-based means reset and clear states */
 	if (asic65.cpu != NULL)
@@ -153,7 +148,7 @@ void asic65_reset(running_machine *machine, int state)
 	/* otherwise, do it manually */
 	else
 	{
-		cputag_suspend(machine, "asic65", SUSPEND_REASON_DISABLE, 1);
+		machine->device<cpu_device>("asic65")->suspend(SUSPEND_REASON_DISABLE, 1);
 
 		/* if reset is being signalled, clear everything */
 		if (state && !asic65.reset_state)
@@ -538,13 +533,13 @@ ADDRESS_MAP_END
  *
  *************************************/
 
-MACHINE_DRIVER_START( asic65 )
+MACHINE_CONFIG_FRAGMENT( asic65 )
 
 	/* ASIC65 */
 	MDRV_CPU_ADD("asic65", TMS32010, 20000000)
 	MDRV_CPU_PROGRAM_MAP(asic65_program_map)
 	MDRV_CPU_IO_MAP(asic65_io_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

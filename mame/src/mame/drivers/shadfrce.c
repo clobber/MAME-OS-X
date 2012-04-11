@@ -236,7 +236,7 @@ static WRITE16_HANDLER( shadfrce_flip_screen )
 
 static READ16_HANDLER( shadfrce_input_ports_r )
 {
-	shadfrce_state *state = (shadfrce_state *)space->machine->driver_data;
+	shadfrce_state *state = space->machine->driver_data<shadfrce_state>();
 	UINT16 data = 0xffff;
 
 	switch (offset)
@@ -283,7 +283,7 @@ static WRITE16_HANDLER( shadfrce_irq_ack_w )
 
 static WRITE16_HANDLER( shadfrce_irq_w )
 {
-	shadfrce_state *state = (shadfrce_state *)space->machine->driver_data;
+	shadfrce_state *state = space->machine->driver_data<shadfrce_state>();
 
 	state->irqs_enable = data & 1;	/* maybe, it's set/unset inside every trap instruction which is executed */
 	state->video_enable = data & 8;	/* probably */
@@ -305,14 +305,14 @@ static WRITE16_HANDLER( shadfrce_irq_w )
 
 static WRITE16_HANDLER( shadfrce_scanline_w )
 {
-	shadfrce_state *state = (shadfrce_state *)space->machine->driver_data;
+	shadfrce_state *state = space->machine->driver_data<shadfrce_state>();
 
 	state->raster_scanline = data;	/* guess, 0 is always written */
 }
 
 static TIMER_DEVICE_CALLBACK( shadfrce_scanline )
 {
-	shadfrce_state *state = (shadfrce_state *)timer.machine->driver_data;
+	shadfrce_state *state = timer.machine->driver_data<shadfrce_state>();
 	int scanline = param;
 
 	/* Vblank is lowered on scanline 0 */
@@ -403,7 +403,7 @@ static ADDRESS_MAP_START( shadfrce_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xe800, 0xe800) AM_DEVWRITE("oki", oki_bankswitch_w)
 	AM_RANGE(0xf000, 0xffff) AM_RAM
@@ -556,9 +556,7 @@ static const ym2151_interface ym2151_config =
 	irq_handler
 };
 
-static MACHINE_DRIVER_START( shadfrce )
-
-	MDRV_DRIVER_DATA( shadfrce_state )
+static MACHINE_CONFIG_START( shadfrce, shadfrce_state )
 
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)			/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(shadfrce_map)
@@ -589,7 +587,7 @@ static MACHINE_DRIVER_START( shadfrce )
 	MDRV_OKIM6295_ADD("oki", XTAL_13_4952MHz/8, OKIM6295_PIN7_HIGH)	/* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* Rom Defs. */
 

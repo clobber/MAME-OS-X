@@ -128,7 +128,7 @@ static WRITE8_HANDLER( vendetta_eeprom_w )
 	/* bit 6 - IRQ enable */
 	/* bit 7 - Unused */
 
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 
 	if (data == 0xff ) /* this is a bug in the eeprom write code */
 		return;
@@ -145,13 +145,13 @@ static WRITE8_HANDLER( vendetta_eeprom_w )
 
 static READ8_HANDLER( vendetta_K052109_r )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 	return k052109_r(state->k052109, offset + 0x2000);
 }
 
 static WRITE8_HANDLER( vendetta_K052109_w )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 
 	// *************************************************************************************
 	// *  Escape Kids uses 052109's mirrored Tilemap ROM bank selector, but only during    *
@@ -165,8 +165,8 @@ static WRITE8_HANDLER( vendetta_K052109_w )
 
 static void vendetta_video_banking( running_machine *machine, int select )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	vendetta_state *state = machine->driver_data<vendetta_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	if (select & 1)
 	{
@@ -184,7 +184,7 @@ static void vendetta_video_banking( running_machine *machine, int select )
 
 static WRITE8_HANDLER( vendetta_5fe0_w )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 
 	/* bit 0,1 coin counters */
 	coin_counter_w(space->machine, 0, data & 0x01);
@@ -203,13 +203,13 @@ static WRITE8_HANDLER( vendetta_5fe0_w )
 
 static TIMER_CALLBACK( z80_nmi_callback )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
+	vendetta_state *state = machine->driver_data<vendetta_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, ASSERT_LINE);
 }
 
 static WRITE8_HANDLER( z80_arm_nmi_w )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, CLEAR_LINE);
 
 	timer_set(space->machine, ATTOTIME_IN_USEC(25), NULL, 0, z80_nmi_callback);
@@ -217,13 +217,13 @@ static WRITE8_HANDLER( z80_arm_nmi_w )
 
 static WRITE8_HANDLER( z80_irq_w )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
 
 static READ8_HANDLER( vendetta_sound_interrupt_r )
 {
-	vendetta_state *state = (vendetta_state *)space->machine->driver_data;
+	vendetta_state *state = space->machine->driver_data<vendetta_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 	return 0x00;
 }
@@ -411,7 +411,7 @@ INPUT_PORTS_END
 
 static INTERRUPT_GEN( vendetta_irq )
 {
-	vendetta_state *state = (vendetta_state *)device->machine->driver_data;
+	vendetta_state *state = device->machine->driver_data<vendetta_state>();
 	if (state->irq_enabled)
 		cpu_set_input_line(device, KONAMI_IRQ_LINE, HOLD_LINE);
 }
@@ -454,7 +454,7 @@ static const k053247_interface esckids_k053246_intf =
 
 static MACHINE_START( vendetta )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
+	vendetta_state *state = machine->driver_data<vendetta_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 28, &ROM[0x10000], 0x2000);
@@ -479,7 +479,7 @@ static MACHINE_START( vendetta )
 
 static MACHINE_RESET( vendetta )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
+	vendetta_state *state = machine->driver_data<vendetta_state>();
 	int i;
 
 	konami_configure_set_lines(machine->device("maincpu"), vendetta_banking);
@@ -497,10 +497,7 @@ static MACHINE_RESET( vendetta )
 	vendetta_video_banking(machine, 0);
 }
 
-static MACHINE_DRIVER_START( vendetta )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(vendetta_state)
+static MACHINE_CONFIG_START( vendetta, vendetta_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", KONAMI, 6000000)	/* this is strange, seems an overclock but */
@@ -546,13 +543,12 @@ static MACHINE_DRIVER_START( vendetta )
 	MDRV_SOUND_ADD("k053260", K053260, 3579545)	/* verified with PCB */
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( esckids )
+static MACHINE_CONFIG_DERIVED( esckids, vendetta )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(vendetta)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(esckids_map)
 
@@ -565,7 +561,7 @@ static MACHINE_DRIVER_START( esckids )
 	MDRV_K052109_ADD("k052109", esckids_k052109_intf)
 	MDRV_DEVICE_REMOVE("k053246")
 	MDRV_K053246_ADD("k053246", esckids_k053246_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -793,13 +789,13 @@ static KONAMI_SETLINES_CALLBACK( vendetta_banking )
 
 static DRIVER_INIT( vendetta )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
+	vendetta_state *state = machine->driver_data<vendetta_state>();
 	state->video_banking_base = 0x4000;
 }
 
 static DRIVER_INIT( esckids )
 {
-	vendetta_state *state = (vendetta_state *)machine->driver_data;
+	vendetta_state *state = machine->driver_data<vendetta_state>();
 	state->video_banking_base = 0x2000;
 }
 

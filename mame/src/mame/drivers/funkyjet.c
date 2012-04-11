@@ -122,7 +122,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP /* YM2203 - this board doesn't have one */
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x130000, 0x130001) AM_NOP /* This board only has 1 oki chip */
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
@@ -277,7 +277,7 @@ GFXDECODE_END
 
 static void sound_irq( running_device *device, int state )
 {
-	funkyjet_state *driver_state = (funkyjet_state *)device->machine->driver_data;
+	funkyjet_state *driver_state = device->machine->driver_data<funkyjet_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
 }
 
@@ -298,17 +298,14 @@ static const deco16ic_interface funkyjet_deco16ic_intf =
 
 static MACHINE_START( funkyjet )
 {
-	funkyjet_state *state = (funkyjet_state *)machine->driver_data;
+	funkyjet_state *state = machine->driver_data<funkyjet_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
 	state->deco16ic = machine->device("deco_custom");
 }
 
-static MACHINE_DRIVER_START( funkyjet )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(funkyjet_state)
+static MACHINE_CONFIG_START( funkyjet, funkyjet_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000) /* 28 MHz crystal */
@@ -346,7 +343,7 @@ static MACHINE_DRIVER_START( funkyjet )
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 

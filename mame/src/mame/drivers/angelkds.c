@@ -489,32 +489,32 @@ sound related ?
 
 static WRITE8_HANDLER( angelkds_main_sound_w )
 {
-	angelkds_state *state = (angelkds_state *)space->machine->driver_data;
+	angelkds_state *state = space->machine->driver_data<angelkds_state>();
 	state->sound[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_main_sound_r )
 {
-	angelkds_state *state = (angelkds_state *)space->machine->driver_data;
+	angelkds_state *state = space->machine->driver_data<angelkds_state>();
 	return state->sound2[offset];
 }
 
 static WRITE8_HANDLER( angelkds_sub_sound_w )
 {
-	angelkds_state *state = (angelkds_state *)space->machine->driver_data;
+	angelkds_state *state = space->machine->driver_data<angelkds_state>();
 	state->sound2[offset] = data;
 }
 
 static READ8_HANDLER( angelkds_sub_sound_r )
 {
-	angelkds_state *state = (angelkds_state *)space->machine->driver_data;
+	angelkds_state *state = space->machine->driver_data<angelkds_state>();
 	return state->sound[offset];
 }
 
 
 static void irqhandler( running_device *device, int irq )
 {
-	angelkds_state *state = (angelkds_state *)device->machine->driver_data;
+	angelkds_state *state = device->machine->driver_data<angelkds_state>();
 	cpu_set_input_line(state->subcpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -575,7 +575,7 @@ GFXDECODE_END
 
 static MACHINE_START( angelkds )
 {
-	angelkds_state *state = (angelkds_state *)machine->driver_data;
+	angelkds_state *state = machine->driver_data<angelkds_state>();
 
 	state->subcpu = machine->device("sub");
 
@@ -589,7 +589,7 @@ static MACHINE_START( angelkds )
 
 static MACHINE_RESET( angelkds )
 {
-	angelkds_state *state = (angelkds_state *)machine->driver_data;
+	angelkds_state *state = machine->driver_data<angelkds_state>();
 	int i;
 
 	for (i = 0; i < 4; i++)
@@ -604,10 +604,7 @@ static MACHINE_RESET( angelkds )
 	state->bgtopbank = 0;
 }
 
-static MACHINE_DRIVER_START( angelkds )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(angelkds_state)
+static MACHINE_CONFIG_START( angelkds, angelkds_state )
 
 	MDRV_CPU_ADD("maincpu", Z80, 8000000) /* 8MHz? 6 seems too slow? */
 	MDRV_CPU_PROGRAM_MAP(main_map)
@@ -650,7 +647,7 @@ static MACHINE_DRIVER_START( angelkds )
 	MDRV_SOUND_ROUTE(1, "mono", 0.65)
 	MDRV_SOUND_ROUTE(2, "mono", 0.65)
 	MDRV_SOUND_ROUTE(3, "mono", 0.45)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*** Rom Loading
 

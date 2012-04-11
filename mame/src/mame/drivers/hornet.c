@@ -328,6 +328,7 @@ static UINT32 *sharc_dataram[2];
 static UINT8 *jvs_sdata;
 static UINT32 jvs_sdata_ptr = 0;
 
+static emu_timer *sound_irq_timer;
 
 static READ32_HANDLER( hornet_k037122_sram_r )
 {
@@ -829,6 +830,7 @@ static const sharc_config sharc_cfg =
     NMI:    SCI
 
 */
+static TIMER_CALLBACK( irq_off );
 
 static MACHINE_START( hornet )
 {
@@ -845,6 +847,8 @@ static MACHINE_START( hornet )
 	state_save_register_global(machine, led_reg1);
 	state_save_register_global_pointer(machine, jvs_sdata, 1024);
 	state_save_register_global(machine, jvs_sdata_ptr);
+
+    sound_irq_timer = timer_alloc(machine, irq_off, 0);
 }
 
 static MACHINE_RESET( hornet )
@@ -882,7 +886,7 @@ static void sound_irq_callback( running_machine *machine, int irq )
 	int line = (irq == 0) ? INPUT_LINE_IRQ1 : INPUT_LINE_IRQ2;
 
 	cputag_set_input_line(machine, "audiocpu", line, ASSERT_LINE);
-	timer_set(machine, ATTOTIME_IN_USEC(1), NULL, line, irq_off);
+    timer_adjust_oneshot(sound_irq_timer, ATTOTIME_IN_USEC(1), line);
 }
 
 static const k056800_interface hornet_k056800_interface =
@@ -915,7 +919,7 @@ static const k037122_interface hornet_k037122_intf_r =
 	"rscreen", 1
 };
 
-static MACHINE_DRIVER_START( hornet )
+static MACHINE_CONFIG_START( hornet, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", PPC403GA, 64000000/2)	/* PowerPC 403GA 32MHz */
@@ -966,7 +970,7 @@ static MACHINE_DRIVER_START( hornet )
 	MDRV_M48T58_ADD( "m48t58" )
 
 	MDRV_ADC12138_ADD( "adc12138", hornet_adc_interface )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static MACHINE_RESET( hornet_2board )
@@ -986,9 +990,7 @@ static MACHINE_RESET( hornet_2board )
 		memory_set_bankptr(machine, "bank5", usr5);
 }
 
-static MACHINE_DRIVER_START( hornet_2board )
-
-	MDRV_IMPORT_FROM(hornet)
+static MACHINE_CONFIG_DERIVED( hornet_2board, hornet )
 
 	MDRV_CPU_ADD("dsp2", ADSP21062, 36000000)
 	MDRV_CPU_CONFIG(sharc_cfg)
@@ -1031,17 +1033,15 @@ static MACHINE_DRIVER_START( hornet_2board )
 	MDRV_SCREEN_REFRESH_RATE(60)
 	MDRV_SCREEN_SIZE(512, 384)
 	MDRV_SCREEN_VISIBLE_AREA(0, 511, 0, 383)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( terabrst )
-	MDRV_IMPORT_FROM(hornet_2board)
+static MACHINE_CONFIG_DERIVED( terabrst, hornet_2board )
 
 	MDRV_CPU_ADD("gn680", M68000, 32000000/2)	/* 16MHz */
 	MDRV_CPU_PROGRAM_MAP(gn680_memmap)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( hornet_2board_v2 )
-	MDRV_IMPORT_FROM(hornet_2board)
+static MACHINE_CONFIG_DERIVED( hornet_2board_v2, hornet_2board )
 
 	MDRV_DEVICE_REMOVE("voodoo0")
 	MDRV_3DFX_VOODOO_2_ADD("voodoo0", STD_VOODOO_2_CLOCK, 2, "lscreen")
@@ -1054,7 +1054,7 @@ static MACHINE_DRIVER_START( hornet_2board_v2 )
 	MDRV_3DFX_VOODOO_CPU("dsp2")
 	MDRV_3DFX_VOODOO_TMU_MEMORY(0, 4)
 	MDRV_3DFX_VOODOO_VBLANK(voodoo_vblank_1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*****************************************************************************/

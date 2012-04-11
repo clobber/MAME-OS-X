@@ -100,8 +100,8 @@ struct _win_window_info
 	render_target *		target;
 	int					targetview;
 	int					targetorient;
-	int					targetlayerconfig;
-	const render_primitive_list *primlist;
+	render_layer_config	targetlayerconfig;
+	render_primitive_list *primlist;
 
 	// input info
 	DWORD				lastclicktime;
@@ -121,7 +121,7 @@ struct _win_draw_callbacks
 	void (*exit)(void);
 
 	int (*window_init)(win_window_info *window);
-	const render_primitive_list *(*window_get_primitives)(win_window_info *window);
+	render_primitive_list *(*window_get_primitives)(win_window_info *window);
 	int (*window_draw)(win_window_info *window, HDC dc, int update);
 	void (*window_destroy)(win_window_info *window);
 };

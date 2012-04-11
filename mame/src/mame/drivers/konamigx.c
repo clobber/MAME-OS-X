@@ -185,7 +185,7 @@ static struct sprite_entry {
 	UINT32 adr;
 } sprites[0x100];
 
-static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr, int count)
+static void generate_sprites(address_space *space, UINT32 src, UINT32 spr, int count)
 {
 	int i;
 	int scount;
@@ -196,9 +196,9 @@ static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr,
 	for(i=0; i<count; i++) {
 		UINT32 adr = src + 0x100*i;
 		int pri;
-		if(!memory_read_word(space, adr+2))
+		if(!space->read_word(adr+2))
 			continue;
-		pri = memory_read_word(space, adr+28);
+		pri = space->read_word(adr+28);
 
 		if(pri < 256) {
 			sprites[ecount].pri = pri;
@@ -211,39 +211,39 @@ static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr,
 	for(i=0; i<ecount; i++) {
 		UINT32 adr = sprites[i].adr;
 		if(adr) {
-			UINT32 set =(memory_read_word(space, adr) << 16)|memory_read_word(space, adr+2);
-			UINT16 glob_x = memory_read_word(space, adr+4);
-			UINT16 glob_y = memory_read_word(space, adr+8);
-			UINT16 flip_x = memory_read_word(space, adr+12) ? 0x1000 : 0x0000;
-			UINT16 flip_y = memory_read_word(space, adr+14) ? 0x2000 : 0x0000;
+			UINT32 set =(space->read_word(adr) << 16)|space->read_word(adr+2);
+			UINT16 glob_x = space->read_word(adr+4);
+			UINT16 glob_y = space->read_word(adr+8);
+			UINT16 flip_x = space->read_word(adr+12) ? 0x1000 : 0x0000;
+			UINT16 flip_y = space->read_word(adr+14) ? 0x2000 : 0x0000;
 			UINT16 glob_f = flip_x | (flip_y ^ 0x2000);
-			UINT16 zoom_x = memory_read_word(space, adr+20);
-			UINT16 zoom_y = memory_read_word(space, adr+22);
+			UINT16 zoom_x = space->read_word(adr+20);
+			UINT16 zoom_y = space->read_word(adr+22);
 			UINT16 color_val    = 0x0000;
 			UINT16 color_mask   = 0xffff;
 			UINT16 color_set    = 0x0000;
 			UINT16 color_rotate = 0x0000;
 			UINT16 v;
 
-			v = memory_read_word(space, adr+24);
+			v = space->read_word(adr+24);
 			if(v & 0x8000) {
 				color_mask = 0xf3ff;
 				color_val |= (v & 3) << 10;
 			}
 
-			v = memory_read_word(space, adr+26);
+			v = space->read_word(adr+26);
 			if(v & 0x8000) {
 				color_mask &= 0xfcff;
 				color_val  |= (v & 3) << 8;
 			}
 
-			v = memory_read_word(space, adr+18);
+			v = space->read_word(adr+18);
 			if(v & 0x8000) {
 				color_mask &= 0xff1f;
 				color_val  |= v & 0xe0;
 			}
 
-			v = memory_read_word(space, adr+16);
+			v = space->read_word(adr+16);
 			if(v & 0x8000)
 				color_set = v & 0x1f;
 			if(v & 0x4000)
@@ -256,14 +256,14 @@ static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr,
 
 			if(set >= 0x200000 && set < 0xd00000)
 			{
-				UINT16 count2 = memory_read_word(space, set);
+				UINT16 count2 = space->read_word(set);
 				set += 2;
 				while(count2) {
-					UINT16 idx  = memory_read_word(space, set);
-					UINT16 flip = memory_read_word(space, set+2);
-					UINT16 col  = memory_read_word(space, set+4);
-					short y = memory_read_word(space, set+6);
-					short x = memory_read_word(space, set+8);
+					UINT16 idx  = space->read_word(set);
+					UINT16 flip = space->read_word(set+2);
+					UINT16 col  = space->read_word(set+4);
+					short y = space->read_word(set+6);
+					short x = space->read_word(set+8);
 
 					if(idx == 0xffff) {
 						set = (flip<<16) | col;
@@ -298,13 +298,13 @@ static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr,
 					if(color_rotate)
 						col = (col & 0xffe0) | ((col + color_rotate) & 0x1f);
 
-					memory_write_word(space, spr   , (flip ^ glob_f) | sprites[i].pri);
-					memory_write_word(space, spr+ 2, idx);
-					memory_write_word(space, spr+ 4, y);
-					memory_write_word(space, spr+ 6, x);
-					memory_write_word(space, spr+ 8, zoom_y);
-					memory_write_word(space, spr+10, zoom_x);
-					memory_write_word(space, spr+12, col);
+					space->write_word(spr   , (flip ^ glob_f) | sprites[i].pri);
+					space->write_word(spr+ 2, idx);
+					space->write_word(spr+ 4, y);
+					space->write_word(spr+ 6, x);
+					space->write_word(spr+ 8, zoom_y);
+					space->write_word(spr+10, zoom_x);
+					space->write_word(spr+12, col);
 					spr += 16;
 					scount++;
 					if(scount == 256)
@@ -317,45 +317,45 @@ static void generate_sprites(const address_space *space, UINT32 src, UINT32 spr,
 		}
 	}
 	while(scount < 256) {
-		memory_write_word(space, spr, scount);
+		space->write_word(spr, scount);
 		scount++;
 		spr += 16;
 	}
 }
 
-static void tkmmpzdm_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void tkmmpzdm_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	konamigx_esc_alert(gx_workram, 0x0142, 0x100, 0);
 }
 
-static void dragoonj_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void dragoonj_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	konamigx_esc_alert(gx_workram, 0x5c00, 0x100, 0);
 }
 
-static void sal2_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void sal2_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	konamigx_esc_alert(gx_workram, 0x1c8c, 0x172, 1);
 }
 
-static void sexyparo_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void sexyparo_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	// The d20000 should probably be p3
 	generate_sprites(space, 0xc00604, 0xd20000, 0xfc);
 }
 
-static void tbyahhoo_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void tbyahhoo_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	generate_sprites(space, 0xc00000, 0xd20000, 0x100);
 }
 
-static void daiskiss_esc(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
+static void daiskiss_esc(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4)
 {
 	generate_sprites(space, 0xc00000, 0xd20000, 0x100);
 }
 
 static UINT8 esc_program[4096];
-static void (*esc_cb)(const address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4);
+static void (*esc_cb)(address_space *space, UINT32 p1, UINT32 p2, UINT32 p3, UINT32 p4);
 
 static WRITE32_HANDLER( esc_w )
 {
@@ -375,7 +375,7 @@ static WRITE32_HANDLER( esc_w )
 	}
 
 	/* the master opcode can be at an unaligned address, so get it "safely" */
-	opcode = (memory_read_word(space, data+2))|(memory_read_word(space, data)<<16);
+	opcode = (space->read_word(data+2))|(space->read_word(data)<<16);
 
 	/* if there's an OBJECT_MAGIC_ID, that means
        there is a valid ESC command packet. */
@@ -383,15 +383,15 @@ static WRITE32_HANDLER( esc_w )
 	{
 		int i;
 		/* get the subop now */
-		opcode = memory_read_byte(space, data+8);
-		params = (memory_read_word(space, data+12) << 16) | memory_read_word(space, data+14);
+		opcode = space->read_byte(data+8);
+		params = (space->read_word(data+12) << 16) | space->read_word(data+14);
 
 		switch(opcode) {
 		case 5: // Reset
 			break;
 		case 2: // Load program
 			for(i=0; i<4096; i++)
-				esc_program[i] = memory_read_byte(space, params+i);
+				esc_program[i] = space->read_byte(params+i);
 /*
             {
                 FILE *f;
@@ -406,10 +406,10 @@ static WRITE32_HANDLER( esc_w )
 			break;
 		case 1: // Run program
 			if(esc_cb) {
-				UINT32 p1 = (memory_read_word(space, params+0)<<16) | memory_read_word(space, params+2);
-				UINT32 p2 = (memory_read_word(space, params+4)<<16) | memory_read_word(space, params+6);
-				UINT32 p3 = (memory_read_word(space, params+8)<<16) | memory_read_word(space, params+10);
-				UINT32 p4 = (memory_read_word(space, params+12)<<16) | memory_read_word(space, params+14);
+				UINT32 p1 = (space->read_word(params+0)<<16) | space->read_word(params+2);
+				UINT32 p2 = (space->read_word(params+4)<<16) | space->read_word(params+6);
+				UINT32 p3 = (space->read_word(params+8)<<16) | space->read_word(params+10);
+				UINT32 p4 = (space->read_word(params+12)<<16) | space->read_word(params+14);
 				esc_cb(space, p1, p2, p3, p4);
 			}
 			break;
@@ -417,7 +417,7 @@ static WRITE32_HANDLER( esc_w )
 //          logerror("Unknown ESC opcode %d\n", opcode);
 			break;
 		}
-		memory_write_byte(space, data+9, ESTATE_END);
+		space->write_byte(data+9, ESTATE_END);
 
 		if (konamigx_wrport1_1 & 0x10)
 		{
@@ -1063,20 +1063,20 @@ static WRITE32_HANDLER( type4_prot_w )
 					// memcpy from c01000 to c01400 for 0x400 bytes (startup check for type 4 games)
 					for (i = 0; i < 0x400; i += 2)
 					{
-						memory_write_word(space, 0xc01400+i, memory_read_word(space, 0xc01000+i));
+						space->write_word(0xc01400+i, space->read_word(0xc01000+i));
 					}
 				}
 				else if(last_prot_op == 0x57a)	// winspike
 				{
 					/* player 1 input buffer protection */
-					memory_write_dword(space, 0xc10f00, memory_read_dword(space, 0xc00f10));
-					memory_write_dword(space, 0xc10f04, memory_read_dword(space, 0xc00f14));
+					space->write_dword(0xc10f00, space->read_dword(0xc00f10));
+					space->write_dword(0xc10f04, space->read_dword(0xc00f14));
 					/* player 2 input buffer protection */
-					memory_write_dword(space, 0xc10f20, memory_read_dword(space, 0xc00f20));
-					memory_write_dword(space, 0xc10f24, memory_read_dword(space, 0xc00f24));
+					space->write_dword(0xc10f20, space->read_dword(0xc00f20));
+					space->write_dword(0xc10f24, space->read_dword(0xc00f24));
 					/* ... */
-					memory_write_dword(space, 0xc0fe00, memory_read_dword(space, 0xc00f30));
-					memory_write_dword(space, 0xc0fe04, memory_read_dword(space, 0xc00f34));
+					space->write_dword(0xc0fe00, space->read_dword(0xc00f30));
+					space->write_dword(0xc0fe04, space->read_dword(0xc00f34));
 				}
 				else if(last_prot_op == 0xd97)	// rushhero
 				{
@@ -1088,7 +1088,7 @@ static WRITE32_HANDLER( type4_prot_w )
 					{
 						for (i = 0; i <= 0x10; i += 4)
 						{
-							memory_write_dword(space, dst + i, memory_read_dword(space, src+i));
+							space->write_dword(dst + i, space->read_dword(src+i));
 						}
 
 						src -= 0x10;
@@ -1096,10 +1096,10 @@ static WRITE32_HANDLER( type4_prot_w )
 					}
 
 					/* Input buffer copiers, only this command is executed so it's safe to assume that's polled here */
-					memory_write_byte(space, 0xc01cc0, ~memory_read_byte(space, 0xc00507));
-					memory_write_byte(space, 0xc01cc1, ~memory_read_byte(space, 0xc00527));
-					memory_write_byte(space, 0xc01cc4, ~memory_read_byte(space, 0xc00547));
-					memory_write_byte(space, 0xc01cc5, ~memory_read_byte(space, 0xc00567));
+					space->write_byte(0xc01cc0, ~space->read_byte(0xc00507));
+					space->write_byte(0xc01cc1, ~space->read_byte(0xc00527));
+					space->write_byte(0xc01cc4, ~space->read_byte(0xc00547));
+					space->write_byte(0xc01cc5, ~space->read_byte(0xc00567));
 				}
 				else if(last_prot_op == 0xb16) // slamdnk2
 				{
@@ -1109,7 +1109,7 @@ static WRITE32_HANDLER( type4_prot_w )
 
 					for (spr = 0; spr < 0x100; spr++)
 					{
-						memory_write_word(space, dst, memory_read_word(space, src));
+						space->write_word(dst, space->read_word(src));
 						src += 4;
 						dst += 2;
 					}
@@ -1121,14 +1121,14 @@ static WRITE32_HANDLER( type4_prot_w )
 					int adr;
 					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
 					for (adr = 0; adr < 0x400; adr += 2)
-						memory_write_word(space, 0xc01c00+adr, memory_read_word(space, 0xc01800+adr));
+						space->write_word(0xc01c00+adr, space->read_word(0xc01800+adr));
 				}
 				else if(last_prot_op == 0x115d) // vsnetscr screen 2
 				{
 					int adr;
 					//printf("GXT4: command %x %d (PC=%x)\n", last_prot_op, cc++, cpu_get_pc(space->cpu));
 					for (adr = 0; adr < 0x400; adr += 2)
-						memory_write_word(space, 0xc18c00+adr, memory_read_word(space, 0xc18800+adr));
+						space->write_word(0xc18c00+adr, space->read_word(0xc18800+adr));
 				}
 				else
 				{
@@ -1785,7 +1785,7 @@ static GFXDECODE_START( type4 )
 	GFXDECODE_ENTRY( "gfx3", 0, bglayout_8bpp, 0x1800, 8 )
 GFXDECODE_END
 
-static MACHINE_DRIVER_START( konamigx )
+static MACHINE_CONFIG_START( konamigx, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68EC020, 24000000)
 	MDRV_CPU_PROGRAM_MAP(gx_type2_map)
@@ -1836,34 +1836,29 @@ static MACHINE_DRIVER_START( konamigx )
 	MDRV_SOUND_CONFIG(k054539_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( dragoonj )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( dragoonj, konamigx )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(26400000) // needs higher clock to stop sprite flickerings
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
 	MDRV_VIDEO_START(dragoonj)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( le2 )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( le2, konamigx )
 	MDRV_VIDEO_START(le2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( konamigx_6bpp )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( konamigx_6bpp, konamigx )
 	MDRV_VIDEO_START(konamigx_6bpp)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( konamigx_6bpp_2 )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( konamigx_6bpp_2, konamigx )
 	MDRV_VIDEO_START(konamigx_6bpp_2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( opengolf )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( opengolf, konamigx )
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_RAW_PARAMS(8000000, 384+24+64+40, 0, 383, 224+16+8+16, 0, 223)
 	MDRV_SCREEN_VISIBLE_AREA(40, 40+384-1, 16, 16+224-1)
@@ -1874,10 +1869,9 @@ static MACHINE_DRIVER_START( opengolf )
 	MDRV_CPU_PROGRAM_MAP(gx_type1_map)
 
 	MDRV_ADC0834_ADD( "adc0834", konamigx_adc_interface )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( racinfrc )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( racinfrc, konamigx )
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_RAW_PARAMS(8000000, 384+24+64+40, 0, 383, 224+16+8+16, 0, 223)
 	MDRV_SCREEN_VISIBLE_AREA(32, 32+384-1, 16, 16+224-1)
@@ -1888,10 +1882,9 @@ static MACHINE_DRIVER_START( racinfrc )
 	MDRV_CPU_PROGRAM_MAP(gx_type1_map)
 
 	MDRV_ADC0834_ADD( "adc0834", konamigx_adc_interface )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gxtype3 )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( gxtype3, konamigx )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gx_type3_map)
@@ -1914,10 +1907,9 @@ static MACHINE_DRIVER_START( gxtype3 )
 
 
 	MDRV_GFXDECODE(type34)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gxtype4 )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( gxtype4, konamigx )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gx_type4_map)
@@ -1940,10 +1932,9 @@ static MACHINE_DRIVER_START( gxtype4 )
 	MDRV_PALETTE_LENGTH(8192)
 	MDRV_GFXDECODE(type4)
 	MDRV_VIDEO_START(konamigx_type4)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gxtype4_vsn )
-	MDRV_IMPORT_FROM(gxtype4)
+static MACHINE_CONFIG_DERIVED( gxtype4_vsn, gxtype4 )
 
 	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
 
@@ -1956,23 +1947,21 @@ static MACHINE_DRIVER_START( gxtype4_vsn )
 	MDRV_SCREEN_VISIBLE_AREA(0, 576-1, 16, 32*8-1-16)
 
 	MDRV_VIDEO_START(konamigx_type4_vsn)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gxtype4sd2 )
-	MDRV_IMPORT_FROM(gxtype4)
+static MACHINE_CONFIG_DERIVED( gxtype4sd2, gxtype4 )
 
 	MDRV_VIDEO_START(konamigx_type4_sd2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
-static MACHINE_DRIVER_START( winspike )
-	MDRV_IMPORT_FROM(konamigx)
+static MACHINE_CONFIG_DERIVED( winspike, konamigx )
 
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(38, 38+384-1, 16, 16+224-1)
 	MDRV_VIDEO_START(winspike)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /**********************************************************************************/

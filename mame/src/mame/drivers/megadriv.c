@@ -36,10 +36,22 @@
 
     Fix 32X support (not used by any arcade systems?)
      - this seems to require far greater sync and timing accuracy on rom / ram access than MAME can provide
-     - World Series Baseball 95 (and others) are odd, they write data to the normal DRAM framebuffer
-       expecting it to act like the 'overwrite area' (where 00 bytes ignored)  this can't be right..
-
-
+     - split NTSC / PAL drivers
+     - 36greatju: missing backup ram, has issues with golfer select due of that
+     - bcracers: write to undefined PWM register?
+     - fifa96 / nbajamte: dies on the gameplay, waiting for a comm change that never occurs;
+     - marsch1: doesn't boot, Master / Slave communicates through SCI
+     - nbajamte: missing I2C hookup, startup fails due of that (same I2C type as plain MD version);
+     - nflquart: black screen, missing h irq?
+     - sangoku4: black screen after the Sega logo
+     - soulstar: OSD and player sprite isn't drawn;
+     - tempo: intro is too fast, mostly noticeable with the PWM sound that cuts off too early when it gets to the title screen;
+     - tmek: gameplay is clearly too fast
+     - vrdxu: has 3d geometry bugs, caused by a SH-2 DRC bug;
+     - vrdxu: crashes if you attempt to enter into main menu;
+     - wwfraw: writes fb data to the cart area and expects it to be read back, kludging the cart area to be writeable makes the 32x gfxs to appear, why?
+     - wwfwre: no 32x gfxs
+     - xmen: black screen after that you choose the level, needs bare minimum SH-2 SCI support
 
     Add PicoDrive support (not arcade)
 
@@ -62,19 +74,207 @@ On SegaC2 the VDP never turns on the IRQ6 enable register
   vdp line state change, which can be configured in the init
   rather than hardcoding them.
 
+32x Marsch tests documentation (keep start pressed at start-up for individual tests):
+
+MD side check:
+#1 Communication Check
+#2 FM Bit
+#3 Irq Register
+#4 Bank Control Register
+#5 DREQ Control FULL bit
+#6 DREQ SRC Address
+#7 DREQ DST Address
+#8 DREQ SIZE Address
+#9 SEGA TV Register
+#10 H IRQ Vector
+#11 PWM Control Register
+#12 PWM Frequency Register
+#13 PWM Lch Pulse Width Register
+#14 PWM Rch Pulse Width Register
+#15 PWM MONO Pulse Width Register
+32x side check:
+#16 SH-2 Master Communication Check
+#17 SH-2 Slave Communication Check
+#18 SH-2 Master FM Bit
+#19 SH-2 Slave FM Bit
+#20 SH-2 Master IRQ Mask Register
+#21 SH-2 Slave IRQ Mask Register
+#22 SH-2 Master H Counter Register
+#23 SH-2 Slave H Counter Register
+#24 SH-2 Master PWM Timer Register
+#25 SH-2 Slave PWM Timer Register
+#26 SH-2 Master PWM Cont. Register
+#27 SH-2 Slave PWM Cont. Register
+#28 SH-2 Master PWM Freq. Register
+#29 SH-2 Slave PWM Freq. Register
+#30 SH-2 Master PWM Lch Register
+#31 SH-2 Slave PWM Lch Register
+#32 SH-2 Master PWM Rch Register
+#33 SH-2 Slave PWM Rch Register
+#34 SH-2 Master PWM Mono Register
+#35 SH-2 Slave PWM Mono Register
+#36 SH-2 Master ROM Read Check
+#37 SH-2 Slave ROM Read Check
+#38 SH-2 Serial Communication (ERROR - returns a Timeout Error)
+MD & 32x check:
+#39 MD&SH-2 Master Communication
+#40 MD&SH-2 Slave Communication
+#41 MD&SH-2 Master FM Bit R/W
+#42 MD&SH-2 Slave FM Bit R/W
+#43 MD&SH-2 Master DREQ CTL
+#44 MD&SH-2 Slave DREQ CTL
+#45 MD&SH-2 Master DREQ SRC address
+#46 MD&SH-2 Slave DREQ SRC address
+#47 MD&SH-2 Master DREQ DST address
+#48 MD&SH-2 Slave DREQ DST address
+#49 MD&SH-2 Master DREQ SIZE address
+#50 MD&SH-2 Slave DREQ SIZE address
+#51 SH-2 Master V IRQ
+#52 SH-2 Slave V IRQ
+#53 SH2 Master H IRQ (MD 0)
+#54 SH2 Slave H IRQ (MD 0)
+#55 SH2 Master H IRQ (MD 1)
+#56 SH2 Slave H IRQ (MD 1)
+#57 SH2 Master H IRQ (MD 2)
+#58 SH2 Slave H IRQ (MD 2)
+MD VDP check:
+#59 Bitmap Mode Register
+#60 Shift Register
+#61 Auto Fill Length Register
+#62 Auto Fill Start Address Register
+#63 V Blank BIT
+#64 H Blank BIT
+#65 Palette Enable BIT
+SH-2 VDP check:
+#66 Frame Swap BIT
+#67 SH-2 Master Bitmap MD
+#68 SH-2 Slave Bitmap MD
+#69 SH-2 Master Shift
+#70 SH-2 Slave Shift
+#71 SH-2 Master Fill SIZE
+#72 SH-2 Slave Fill SIZE
+#73 SH-2 Master Fill START
+#74 SH-2 Slave Fill START
+#75 SH-2 Master V Blank Bit
+#76 SH-2 Slave V Blank Bit
+#77 SH-2 Master H Blank Bit
+#78 SH-2 Slave H Blank Bit
+#79 SH-2 Master Palette Enable Bit
+#80 SH-2 Slave Palette Enable Bit
+#81 SH-2 Master Frame Swap Bit
+#82 SH-2 Slave Frame Swap Bit
+Framebuffer Check:
+#83 MD Frame Buffer 0
+#84 MD Frame Buffer 1
+#85 SH-2 Master Frame Buffer 0
+#86 SH-2 Slave Frame Buffer 0
+#87 SH-2 Master Frame Buffer 1
+#88 SH-2 Slave Frame Buffer 1
+#89 MD Frame Buffer 0 Overwrite
+#90 MD Frame Buffer 1 Overwrite
+#91 MD Frame Buffer 0 Byte Write
+#92 MD Frame Buffer 1 Byte Write
+#93 SH-2 Master Frame Buffer 0 Overwrite
+#94 SH-2 Slave Frame Buffer 0 Overwrite
+#95 SH-2 Master Frame Buffer 1 Overwrite
+#96 SH-2 Slave Frame Buffer 1 Overwrite
+#97 SH-2 Master Frame Buffer 0 Byte Write
+#98 SH-2 Slave Frame Buffer 0 Byte Write
+#99 SH-2 Master Frame Buffer 1 Byte Write
+#100 SH-2 Slave Frame Buffer 1 Byte Write
+#101 MD Frame Buffer 0 Fill Data
+#102 MD Frame Buffer 1 Fill Data
+#103 MD Frame Buffer 0 Fill Length & Address
+#104 MD Frame Buffer 1 Fill Length & Address
+#105 SH-2 Master Frame Buffer 0 Fill Data
+#106 SH-2 Slave Frame Buffer 0 Fill Data
+#107 SH-2 Master Frame Buffer 1 Fill Data
+#108 SH-2 Slave Frame Buffer 1 Fill Data
+#109 SH-2 Master Frame Buffer 0 Fill Address
+#110 SH-2 Slave Frame Buffer 0 Fill Address
+#111 SH-2 Master Frame Buffer 1 Fill Address
+#112 SH-2 Slave Frame Buffer 1 Fill Address
+#113 MD Palette R/W (Blank Mode)
+#114 MD Palette R/W (Display Mode)
+#115 MD Palette R/W (Fill Mode)
+#116 SH-2 Master Palette R/W (Blank Mode)
+#117 SH-2 Slave Palette R/W (Blank Mode)
+#118 SH-2 Master Palette R/W (Display Mode)
+#119 SH-2 Slave Palette R/W (Display Mode)
+#120 SH-2 Master Palette R/W (Fill Mode)
+#121 SH-2 Slave Palette R/W (Fill Mode)
+MD or SH-2 DMA check:
+#122 SH-2 Master CPU Write DMA (68S) (ERROR)
+#123 SH-2 Slave CPU Write DMA (68S) (ERROR)
+#124 MD ROM to VRAM DMA (asserts after this)
+-----
+#127 SH-2 Master ROM to SDRAM DMA
+#128 SH-2 Slave ROM to SDRAM DMA
+#129 SH-2 Master ROM to Frame DMA
+#130 SH-2 Slave ROM to Frame DMA
+#131 SH-2 Master SDRAM to Frame DMA
+#132 SH-2 Slave SDRAM to Frame DMA
+#133 SH-2 Master Frame to SDRAM DMA
+#134 SH-2 Slave Frame to SDRAM DMA
+Sound Test (these don't explicitly fails):
+#135 MD 68k Monaural Sound
+#136 MD 68k L Sound
+#137 MD 68k R Sound
+#138 MD 68k L -> R Sound
+#139 MD 68k R -> L Sound
+#140 SH-2 Master Monaural Sound
+#141 SH-2 Master L Sound
+#142 SH-2 Master R Sound
+#143 SH-2 Master L -> R Pan
+#144 SH-2 Master R -> L Pan
+#145 SH-2 Slave Monaural Sound
+#146 SH-2 Slave L Sound
+#147 SH-2 Slave R Sound
+#148 SH-2 Slave L -> R Pan
+#149 SH-2 Slave R -> L Pan
+#150 SH-2 Master PWM Interrupt
+#151 SH-2 Slave PWM Interrupt
+#152 SH-2 Master PWM DMA Write (!)
+#153 SH-2 Slave PWM DMA Write (!)
+#154 Z80 PWM Monaural Sound (!)
+#155 Z80 PWM L Sound (!)
+#156 Z80 PWM R Sound (!)
+GFX check (these don't explicitly fails):
+#157 Direct Color Mode
+#158 Packed Pixel Mode
+#159 Runlength Mode
+#160 Runlength Mode
+#161 Runlength Mode
+
+
+----------------------------
+SegaCD notes
+----------------------------
+
+the use of the MAME tilemap system for the SegaCD 'Roz tilemap' isn't intended as a long-term
+solution.  (In reality it's not a displayable tilemap anyway, just a source buffer which has
+a tilemap-like structure, from which data is copied)
+
 */
 
 
 #include "emu.h"
+#include "coreutil.h"
 #include "cpu/z80/z80.h"
-#include "deprecat.h"
 #include "sound/sn76496.h"
 #include "sound/2612intf.h"
 #include "sound/upd7759.h"
 #include "sound/fm.h"
+#include "sound/dac.h"
 #include "cpu/m68000/m68000.h"
 #include "includes/megadriv.h"
 #include "cpu/sh2/sh2.h"
+#include "cpu/sh2/sh2comn.h"
+#include "sound/cdda.h"
+#ifdef MESS
+#include "devices/chd_cd.h"
+#endif
+#include "sound/rf5c68.h"
 
 #define MEGADRIV_VDP_VRAM(address) megadrive_vdp_vram[(address)&0x7fff]
 
@@ -104,6 +304,7 @@ static int _32x_adapter_enabled;
 static int _32x_access_auth;
 static int _32x_screenshift;
 static int _32x_videopriority;
+
 static int _32x_displaymode;
 static int _32x_240mode;
 
@@ -116,12 +317,23 @@ static int sh2_master_cmdint_enable, sh2_slave_cmdint_enable;
 static int sh2_master_pwmint_enable, sh2_slave_pwmint_enable;
 static int sh2_hint_in_vbl;
 
+static int sh2_master_vint_pending;
+static int sh2_slave_vint_pending;
+static int _32x_fb_swap;
+static int _32x_hcount_reg,_32x_hcount_compare_val;
+
+void _32x_check_irqs(running_machine* machine);
+
 #define SH2_VRES_IRQ_LEVEL 14
 #define SH2_VINT_IRQ_LEVEL 12
 #define SH2_HINT_IRQ_LEVEL 10
 #define SH2_CINT_IRQ_LEVEL 8
 #define SH2_PINT_IRQ_LEVEL 6
 
+// Fifa96 needs the CPUs swapped for the gameplay to enter due to some race conditions
+// when using the DRC core.  Needs further investigation, the non-DRC core works either
+// way
+#define _32X_SWAP_MASTER_SLAVE_HACK
 
 static UINT16* _32x_dram0;
 static UINT16* _32x_dram1;
@@ -130,6 +342,12 @@ static UINT16* _32x_palette;
 static UINT16* _32x_palette_lookup;
 /* SegaCD! */
 static cpu_device *_segacd_68k_cpu;
+static emu_timer *segacd_gfx_conversion_timer;
+static emu_timer *segacd_dmna_ret_timer;
+static emu_timer *segacd_irq3_timer;
+static int segacd_wordram_mapped = 0;
+static TIMER_CALLBACK( segacd_irq3_timer_callback );
+
 /* SVP (virtua racing) */
 static cpu_device *_svp_cpu;
 
@@ -170,11 +388,34 @@ static timer_device* irq4_on_timer;
 static bitmap_t* render_bitmap;
 //emu_timer* vblankirq_off_timer;
 
+/* Sega CD stuff */
+static int sega_cd_connected = 0x00;
+static UINT16 segacd_irq_mask;
+static UINT8 segacd_cdd_rx[10];
+static UINT8 segacd_cdd_tx[10];
+static struct
+{
+	UINT8 buffer[5];
+	UINT8 ctrl;
+}segacd_cdd;
+#ifdef MESS
+static struct
+{
+	UINT32	current_frame;
+	UINT32	end_frame;
+	UINT32	last_frame;
+
+	cdrom_file	*cd;
+	const cdrom_toc*	toc;
+}segacd;
+#endif
+
+static void segacd_mark_tiles_dirty(running_machine* machine, int offset);
 
 #ifdef UNUSED_FUNCTION
 /* taken from segaic16.c */
 /* doesn't seem to meet my needs, not used */
-static UINT16 read_next_instruction(const address_space *space)
+static UINT16 read_next_instruction(address_space *space)
 {
 	static UINT8 recurse = 0;
 	UINT16 result;
@@ -193,7 +434,7 @@ static UINT16 read_next_instruction(const address_space *space)
 
 	/* read original encrypted memory at that address */
 	recurse = 1;
-	result = memory_read_word(space, cpu_get_pc(space->cpu));
+	result = space->read_word(cpu_get_pc(space->cpu));
 	recurse = 0;
 	return result;
 }
@@ -619,22 +860,39 @@ static UINT16 (*vdp_get_word_from_68k_mem)(running_machine *machine, UINT32 sour
 
 static UINT16 vdp_get_word_from_68k_mem_default(running_machine *machine, UINT32 source)
 {
+	// should we limit the valid areas here?
+	// how does this behave with the segacd etc?
+	// note, the RV bit on 32x is important for this to work, because it causes a normal cart mapping - see tempo
+	address_space *space68k = machine->device<legacy_cpu_device>("maincpu")->space();
+
+	//printf("vdp_get_word_from_68k_mem_default %08x\n", source);
+
 	if (( source >= 0x000000 ) && ( source <= 0x3fffff ))
 	{
-		UINT16 *rom = (UINT16*)memory_region(machine, "maincpu");
-		return rom[(source&0x3fffff)>>1];
+		if (_svp_cpu != NULL)
+		{
+			source -= 2; // the SVP introduces some kind of DMA 'lag', which we have to compensate for, this is obvious even on gfx DMAd from ROM (the Speedometer)
+		}
+
+		// likewise segaCD, at least when reading wordram?
+		// we might need to check what mode we're in here..
+		if (segacd_wordram_mapped)
+		{
+			source -= 2;
+		}
+
+		return space68k->read_word(source);
 	}
 	else if (( source >= 0xe00000 ) && ( source <= 0xffffff ))
 	{
-//      mame_printf_debug("dma\n");
-	//  return ((megadrive_ram[(source&0xffff)>>1]&0xff00)>>8)|((megadrive_ram[(source&0xffff)>>1]&0x00ff)<<8);
-		return megadrive_ram[(source&0xffff)>>1];
+		return space68k->read_word(source);
 	}
 	else
 	{
 		printf("DMA Read unmapped %06x\n",source);
 		return mame_rand(machine);
 	}
+
 
 }
 
@@ -1533,227 +1791,6 @@ INPUT_PORTS_START( megadri6 )
 	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_BUTTON8 ) PORT_PLAYER(2) PORT_NAME("P2 MODE") // mode
 INPUT_PORTS_END
 
-/* verified from M68000 code */
-INPUT_PORTS_START( ssf2ghw )
-	PORT_INCLUDE( md_common )
-
-	PORT_MODIFY("PAD1")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-
-	PORT_MODIFY("PAD2")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
-
-	PORT_START("EXTRA1")	/* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("EXTRA2")	/* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN0")		/* 3rd I/O port */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-
-	PORT_START("DSWA")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x07, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
-//  PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
-
-	PORT_START("DSWB")
-	PORT_DIPNAME( 0x07, 0x03, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x07, "0 (Easiest)" )
-	PORT_DIPSETTING(    0x06, "1" )
-	PORT_DIPSETTING(    0x05, "2" )
-	PORT_DIPSETTING(    0x04, "3" )
-	PORT_DIPSETTING(    0x03, "4" )
-	PORT_DIPSETTING(    0x02, "5" )
-	PORT_DIPSETTING(    0x01, "6" )
-	PORT_DIPSETTING(    0x00, "7 (Hardest)" )
-
-	PORT_START("DSWC")
-	PORT_DIPNAME( 0x0f, 0x0b, "Speed" )
-	PORT_DIPSETTING(    0x0f, "0 (Slowest)" )
-	PORT_DIPSETTING(    0x0e, "1" )
-	PORT_DIPSETTING(    0x0d, "2" )
-	PORT_DIPSETTING(    0x0c, "3" )
-	PORT_DIPSETTING(    0x0b, "4" )
-	PORT_DIPSETTING(    0x0a, "5" )
-	PORT_DIPSETTING(    0x09, "6" )
-	PORT_DIPSETTING(    0x08, "7" )
-	PORT_DIPSETTING(    0x07, "8" )
-	PORT_DIPSETTING(    0x06, "9" )
-	PORT_DIPSETTING(    0x05, "10 (Fastest)" )
-//  PORT_DIPSETTING(    0x04, "10 (Fastest)" )
-//  PORT_DIPSETTING(    0x03, "10 (Fastest)" )
-//  PORT_DIPSETTING(    0x02, "10 (Fastest)" )
-//  PORT_DIPSETTING(    0x01, "10 (Fastest)" )
-//  PORT_DIPSETTING(    0x00, "10 (Fastest)" )
-INPUT_PORTS_END
-
-/* verified from M68000 code */
-INPUT_PORTS_START( mk3ghw )
-	PORT_INCLUDE( md_common )
-
-	PORT_MODIFY("PAD1")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 )
-
-	PORT_MODIFY("PAD2")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
-
-	PORT_START("EXTRA1")	/* Extra buttons for Joypad 1 (6 button + start + mode) NOT READ DIRECTLY */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(1)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("EXTRA2")	/* Extra buttons for Joypad 2 (6 button + start + mode) NOT READ DIRECTLY */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_BUTTON6 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_BUTTON5 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0004, IP_ACTIVE_LOW, IPT_BUTTON4 ) PORT_PLAYER(2)
-	PORT_BIT( 0x0008, IP_ACTIVE_LOW, IPT_UNUSED )
-
-	PORT_START("IN0")
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-
-	PORT_START("DSWA")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x07, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
-//  PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
-
-	PORT_START("DSWB")
-	PORT_DIPNAME( 0x07, 0x07, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x07, DEF_STR( Easiest ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( Hardest ) )
-//  PORT_DIPSETTING(    0x02, DEF_STR( Hardest ) )
-//  PORT_DIPSETTING(    0x01, DEF_STR( Hardest ) )
-//  PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-	PORT_DIPUNUSED( 0x08, IP_ACTIVE_HIGH )
-	PORT_DIPUNUSED( 0x10, IP_ACTIVE_HIGH )
-	PORT_DIPUNUSED( 0x20, IP_ACTIVE_HIGH )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, "Blood" )
-	PORT_DIPSETTING(    0x00, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( On ) )
-
-	PORT_START("DSWC")        /* not even read in this set */
-INPUT_PORTS_END
-
-/* verified from M68000 code */
-INPUT_PORTS_START( aladbl )
-	PORT_INCLUDE( md_common )
-
-	PORT_MODIFY("PAD1")		/* Joypad 1 (3 button + start) NOT READ DIRECTLY */
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_NAME("P1 Throw") // a
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1) PORT_NAME("P1 Sword") // b
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(1) PORT_NAME("P1 Jump") // c
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 ) // start
-
-	PORT_MODIFY("PAD2")		/* Joypad 2 (3 button + start) NOT READ DIRECTLY - not used */
-	PORT_BIT( 0x00ff, IP_ACTIVE_LOW, IPT_UNUSED )
-
-    /* As I don't know how it is on real hardware, this is more a guess than anything */
-	PORT_START("MCU")
-	PORT_DIPNAME( 0x07, 0x01, DEF_STR( Coinage ) )          /* code at 0x1b2a50 - unsure if there are so many settings */
-//  PORT_DIPSETTING(    0x00, "INVALID" )                   /* adds 0 credit */
-	PORT_DIPSETTING(    0x01, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 1C_5C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 1C_6C ) )
-    PORT_DIPSETTING(    0x07, DEF_STR( 1C_7C ) )
-//  PORT_BIT( 0x0010, IP_ACTIVE_HIGH, IPT_SPECIAL )         /* to avoid it being changed and corrupting Coinage settings */
-	PORT_DIPNAME( 0x30, 0x00, DEF_STR( Difficulty ) )       /* code at 0x1b2680 */
-	PORT_DIPSETTING(    0x10, DEF_STR( Easy ) )             /* "PRACTICE" */
-	PORT_DIPSETTING(    0x00, DEF_STR( Normal ) )           /* "NORMAL" */
-	PORT_DIPSETTING(    0x20, DEF_STR( Hard ) )             /* "DIFFICULT" */
-//  PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
-	PORT_DIPUNUSED( 0x40, IP_ACTIVE_HIGH )
-	PORT_DIPUNUSED( 0x80, IP_ACTIVE_HIGH )
-	PORT_BIT( 0x0100, IP_ACTIVE_HIGH, IPT_COIN1 ) PORT_IMPULSE(1)     /* needed to avoid credits getting mad */
-INPUT_PORTS_END
-
-/* verified from M68000 code */
-INPUT_PORTS_START( ssgbl )
-	PORT_INCLUDE( md_common )
-
-	PORT_MODIFY("PAD1")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(1) PORT_NAME("P1 Shoot") // a
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(1) PORT_NAME("P1 Jump") // b
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED ) // c (duplicate shoot button)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 ) // start
-
-	PORT_MODIFY("PAD2")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_NAME("P1 Shoot") // a
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_NAME("P1 Jump") // b
-	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED ) // c (duplicate shoot button)
-	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
-
-	PORT_START("IN0")		/* 3rd I/O port */
-	PORT_BIT( 0x0001, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x0002, IP_ACTIVE_LOW, IPT_COIN2 )
-
-	PORT_START("DSWA")
-	PORT_DIPNAME( 0x07, 0x00, DEF_STR( Coinage ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( 4C_1C ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( 3C_1C ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( 2C_1C ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( 1C_1C ) )
-	PORT_DIPSETTING(    0x07, DEF_STR( 1C_2C ) )
-	PORT_DIPSETTING(    0x06, DEF_STR( 1C_3C ) )
-	PORT_DIPSETTING(    0x05, DEF_STR( 1C_4C ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( 1C_5C ) )
-
-	PORT_START("DSWB")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x03, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Medium ) )
-	PORT_DIPSETTING(    0x01, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
-
-	PORT_START("DSWC")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Lives ) )
-	PORT_DIPSETTING(    0x03, "3" )
-	PORT_DIPSETTING(    0x02, "4" )
-	PORT_DIPSETTING(    0x01, "5" )
-	PORT_DIPSETTING(    0x00, "6" )
-INPUT_PORTS_END
-
 UINT8 megadrive_io_data_regs[3];
 UINT8 megadrive_io_ctrl_regs[3];
 static UINT8 megadrive_io_tx_regs[3];
@@ -1765,10 +1802,10 @@ static void megadrive_init_io(running_machine *machine)
 	if (ipt == INPUT_PORTS_NAME(megadri6))
 		init_megadri6_io(machine);
 
-	if (ipt == INPUT_PORTS_NAME(ssf2ghw))
+	if (ipt == INPUT_PORTS_NAME(ssf2mdb))
 		init_megadri6_io(machine);
 
-	if (ipt == INPUT_PORTS_NAME(mk3ghw))
+	if (ipt == INPUT_PORTS_NAME(mk3mdb))
 		init_megadri6_io(machine);
 }
 
@@ -1944,11 +1981,11 @@ READ16_HANDLER( megadriv_68k_io_read )
 			logerror("%06x read version register\n", cpu_get_pc(space->cpu));
 			retdata = megadrive_region_export<<7 | // Export
 			          megadrive_region_pal<<6 | // NTSC
-			          0x20 | // No Sega CD
+			          (sega_cd_connected?0x00:0x20) | // 0x20 = no sega cd
 			          0x00 | // Unused (Always 0)
-			          0x01 | // Bit 3 of Version Number
-			          0x01 | // Bit 2 of Version Number
-			          0x01 | // Bit 1 of Version Number
+			          0x00 | // Bit 3 of Version Number
+			          0x00 | // Bit 2 of Version Number
+			          0x00 | // Bit 1 of Version Number
 			          0x01 ; // Bit 0 of Version Number
 			break;
 
@@ -2004,7 +2041,7 @@ static void megadrive_io_write_data_port_6button(running_machine *machine, int p
 		if (((megadrive_io_data_regs[portnum]&0x40)==0x00) && ((data&0x40) == 0x40))
 		{
 			io_stage[portnum]++;
-			timer_adjust_oneshot(io_timeout[portnum], cputag_clocks_to_attotime(machine, "maincpu", 8192), 0);
+			timer_adjust_oneshot(io_timeout[portnum], machine->device<cpu_device>("maincpu")->cycles_to_attotime(8192), 0);
 		}
 
 	}
@@ -2211,7 +2248,7 @@ static TIMER_CALLBACK( megadriv_z80_run_state )
 	if ( genz80.z80_is_reset )
 	{
 		devtag_reset( machine, "genesis_snd_z80" );
-		cputag_suspend( machine, "genesis_snd_z80", SUSPEND_REASON_HALT, 1 );
+		machine->device<cpu_device>( "genesis_snd_z80" )->suspend(SUSPEND_REASON_HALT, 1 );
 		devtag_reset( machine, "ymsnd" );
 	}
 	else
@@ -2219,11 +2256,11 @@ static TIMER_CALLBACK( megadriv_z80_run_state )
 		/* Check if z80 has the bus */
 		if ( genz80.z80_has_bus )
 		{
-			cputag_resume( machine, "genesis_snd_z80", SUSPEND_REASON_HALT );
+			machine->device<cpu_device>( "genesis_snd_z80" )->resume(SUSPEND_REASON_HALT );
 		}
 		else
 		{
-			cputag_suspend( machine, "genesis_snd_z80", SUSPEND_REASON_HALT, 1 );
+			machine->device<cpu_device>( "genesis_snd_z80" )->suspend(SUSPEND_REASON_HALT, 1 );
 		}
 	}
 }
@@ -2321,48 +2358,22 @@ static WRITE16_HANDLER ( megadriv_68k_req_z80_reset )
 	timer_set( space->machine, attotime_zero, NULL, 0, megadriv_z80_run_state );
 }
 
+
+// just directly access the 68k space, this makes it easier to deal with
+// add-on hardware which changes the cpu mapping like the 32x and SegaCD.
+// - we might need to add exceptions for example, z80 reading / writing the
+//   z80 area of the 68k if games misbehave
 static READ8_HANDLER( z80_read_68k_banked_data )
 {
-	// genz80.z80_bank_addr contains the address to read
+	address_space *space68k = space->machine->device<legacy_cpu_device>("maincpu")->space();
+	UINT8 ret = space68k->read_byte(genz80.z80_bank_addr+offset);
+	return ret;
+}
 
-	if ((genz80.z80_bank_addr >= 0x000000) && (genz80.z80_bank_addr <= 0x3fffff)) // ROM Addresses
-	{
-		UINT32 fulladdress;
-		fulladdress = genz80.z80_bank_addr + offset;
-
-		return memory_region(space->machine, "maincpu")[fulladdress^1]; // ^1? better..
-
-
-	}
-	else
-	{
-		if (_32x_is_connected)
-		{
-			if ((genz80.z80_bank_addr >= 0x880000) && (genz80.z80_bank_addr <= 0x900000)) // 'fixed' 512kb 32x rom
-			{
-				UINT32 fulladdress;
-				fulladdress = (genz80.z80_bank_addr + offset)&0x3ffff;
-
-				return memory_region(space->machine, "gamecart")[fulladdress^1]; // ^1? better..
-
-
-			}
-			else if ((genz80.z80_bank_addr >= 0x900000) && (genz80.z80_bank_addr <= 0x9fffff)) // 'banked' 1mb 32x rom
-			{
-				UINT32 fulladdress;
-				fulladdress = (genz80.z80_bank_addr + offset)&0x7ffff;
-
-				fulladdress |= (_32x_68k_a15104_reg&0x3)*0x80000;
-
-				return memory_region(space->machine, "gamecart")[fulladdress^1]; // ^1? better..
-
-			}
-		}
-
-		printf("unhandled z80 bank read, gen.z80_bank_addr %08x\n",genz80.z80_bank_addr);
-		return 0x0000;
-	}
-
+static WRITE8_HANDLER( z80_write_68k_banked_data )
+{
+	address_space *space68k = space->machine->device<legacy_cpu_device>("maincpu")->space();
+	space68k->write_byte(genz80.z80_bank_addr+offset,data);
 }
 
 
@@ -2383,37 +2394,7 @@ static WRITE8_HANDLER( megadriv_z80_vdp_write )
 
 }
 
-static WRITE8_HANDLER( z80_write_68k_banked_data )
-{
-	UINT32 fulladdress;
-	fulladdress = genz80.z80_bank_addr + offset;
 
-
-//  mame_printf_debug("z80_write_68k_banked_data %04x %02x\n",offset,data);
-	if ((fulladdress >= 0x000000) && (fulladdress <= 0x3fffff)) // ROM Addresses
-	{
-
-		//mame_printf_debug("z80 write to 68k rom??\n");
-	}
-	else if ((fulladdress >= 0xe00000) && (fulladdress <= 0xffffff)) // ROM Addresses
-	{
-		fulladdress &=0xffff;
-		/* Cheese Cat-Astrophe Starring Speedy Gonzales (E) (M4) [!] has no sound without this */
-		if (fulladdress&1) megadrive_ram[fulladdress>>1] = (megadrive_ram[fulladdress>>1]&0xff00) | (data);
-		else  megadrive_ram[fulladdress>>1] = (megadrive_ram[fulladdress>>1]&0x00ff) | (data <<8);
-	}
-	else if (fulladdress == 0xc00011)
-	{
-		/* quite a few early games write here, most of the later ones don't */
-		sn76496_w(space->machine->device("snsnd"), 0, data);
-	}
-	else
-	{
-
-		//printf("z80 write to 68k address %06x\n",fulladdress);
-	}
-
-}
 
 static READ8_HANDLER( megadriv_z80_vdp_read )
 {
@@ -2468,12 +2449,11 @@ static ADDRESS_MAP_START( md_bootleg_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xe00000, 0xe0ffff) AM_RAM AM_MIRROR(0x1f0000) AM_BASE(&megadrive_ram)
 ADDRESS_MAP_END
 
-MACHINE_DRIVER_START( md_bootleg )
-	MDRV_IMPORT_FROM(megadriv)
+MACHINE_CONFIG_DERIVED( md_bootleg, megadriv )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(md_bootleg_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /****************************************** 32X related ******************************************/
@@ -2483,19 +2463,8 @@ MACHINE_DRIVER_END
 /**********************************************************************************************/
 
 
-static READ16_HANDLER( _32x_68k_a15180_r );
-static READ16_HANDLER( _32x_68k_a15182_r );
-static READ16_HANDLER( _32x_68k_a15184_r );
-static READ16_HANDLER( _32x_68k_a15186_r );
-static READ16_HANDLER( _32x_68k_a15188_r );
-static READ16_HANDLER( _32x_68k_a1518a_r );
-
-static WRITE16_HANDLER( _32x_68k_a15180_w );
-static WRITE16_HANDLER( _32x_68k_a15182_w );
-static WRITE16_HANDLER( _32x_68k_a15184_w );
-static WRITE16_HANDLER( _32x_68k_a15186_w );
-static WRITE16_HANDLER( _32x_68k_a15188_w );
-static WRITE16_HANDLER( _32x_68k_a1518a_w );
+static READ16_HANDLER( _32x_common_vdp_regs_r );
+static WRITE16_HANDLER( _32x_common_vdp_regs_w );
 
 static UINT16 _32x_autofill_length;
 static UINT16 _32x_autofill_address;
@@ -2536,17 +2505,42 @@ static READ16_HANDLER( _32x_68k_dram_r )
 
 static WRITE16_HANDLER( _32x_68k_dram_w )
 {
-	COMBINE_DATA(&_32x_access_dram[offset]);
+	if ((mem_mask&0xffff) == 0xffff)
+	{
+		// 16-bit accesses are normal
+		COMBINE_DATA(&_32x_access_dram[offset]);
+	}
+	else
+	{
+		// 8-bit writes act as if they were going to the overwrite region!
+		// bc-racers and world series baseball rely on this!
+		// (tested on real hw)
+
+		if ((mem_mask & 0xffff) == 0xff00)
+		{
+			if ((data & 0xff00) != 0x0000)
+			{
+				_32x_access_dram[offset] = (data & 0xff00) |  (_32x_access_dram[offset] & 0x00ff);
+			}
+		}
+		else if ((mem_mask & 0xffff) == 0x00ff)
+		{
+			if ((data & 0x00ff) != 0x0000)
+			{
+				_32x_access_dram[offset] = (data & 0x00ff) |  (_32x_access_dram[offset] & 0xff00);
+			}
+		}
+	}
 }
 
 static READ16_HANDLER( _32x_68k_dram_overwrite_r )
 {
-	return _32x_access_dram[offset+0x10000];
+	return _32x_access_dram[offset];
 }
 
 static WRITE16_HANDLER( _32x_68k_dram_overwrite_w )
 {
-	COMBINE_DATA(&_32x_access_dram[offset+0x10000]);
+	//COMBINE_DATA(&_32x_access_dram[offset+0x10000]);
 
 	if (ACCESSING_BITS_8_15)
 	{
@@ -2565,6 +2559,21 @@ static WRITE16_HANDLER( _32x_68k_dram_overwrite_w )
 	}
 }
 
+/**********************************************************************************************/
+// 68k side a15112
+// FIFO
+/**********************************************************************************************/
+
+static UINT16 fifo_block_a[4];
+static UINT16 fifo_block_b[4];
+static UINT16* current_fifo_block;
+static UINT16* current_fifo_readblock;
+int current_fifo_write_pos;
+int current_fifo_read_pos;
+int fifo_block_a_full;
+int fifo_block_b_full;
+
+
 
 
 /*
@@ -2575,21 +2584,21 @@ static WRITE16_HANDLER( _32x_68k_dram_overwrite_w )
 
  F = Fifo FULL
  K = 68k CPU Write mode (0 = no, 1 = CPU write)
- 0 = always 0
- R = RV (0 = no operation, 1 = DMA Start allowed)
+ 0 = always 0? no, marsch test wants it to be latched or 1
+ R = RV (0 = no operation, 1 = DMA Start allowed) <-- RV bit actually affects memory mapping, this is misleading..  it just sets the memory up in a suitable way to use the genesis VDP DMA
 
 */
 
 static UINT16 a15106_reg;
 
 
-static READ16_HANDLER( _32x_68k_a15106_r)
+static READ16_HANDLER( _32x_68k_a15106_r )
 {
 	UINT16 retval;
 
 	retval = a15106_reg;
 
-	//if (fifo_full) retval |= 0x0080;
+	if (fifo_block_a_full && fifo_block_b_full) retval |= 0x8080;
 
 	return retval;
 }
@@ -2598,7 +2607,33 @@ static WRITE16_HANDLER( _32x_68k_a15106_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		a15106_reg = data & 0x5;
+		a15106_reg = data & 0x7;
+
+        if (a15106_reg & 0x1) /* NBA Jam TE relies on this */
+		{
+
+			// install the game rom in the normal 0x000000-0x03fffff space used by the genesis - this allows VDP DMA operations to work as they have to be from this area or RAM
+			// it should also UNMAP the banked rom area...
+			memory_install_rom(space, 0x0000100, 0x03fffff, 0, 0, memory_region(space->machine, "gamecart") + 0x100);
+		}
+		else
+		{
+			// we should be careful and map back any rom overlay (hint) and backup ram too I think...
+
+			// this is actually blank / nop area
+			// we should also map the banked area back (we don't currently unmap it tho)
+			memory_install_rom(space, 0x0000100, 0x03fffff, 0, 0, memory_region(space->machine, "maincpu")+0x100);
+		}
+
+		if((a15106_reg & 4) == 0) // clears the FIFO state
+		{
+			current_fifo_block = fifo_block_a;
+			current_fifo_readblock = fifo_block_b;
+			current_fifo_write_pos = 0;
+			current_fifo_read_pos = 0;
+			fifo_block_a_full = 0;
+			fifo_block_b_full = 0;
+		}
 
 		//printf("_32x_68k_a15106_w %04x\n", data);
 		/*
@@ -2616,6 +2651,226 @@ static WRITE16_HANDLER( _32x_68k_a15106_w )
 	}
 }
 
+static UINT16 dreq_src_addr[2],dreq_dst_addr[2],dreq_size;
+
+static READ16_HANDLER( _32x_dreq_common_r )
+{
+	address_space* _68kspace = cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+
+	switch (offset)
+	{
+		case 0x00/2: // a15108 / 4008
+		case 0x02/2: // a1510a / 400a
+			return dreq_src_addr[offset&1];
+
+		case 0x04/2: // a1510c / 400c
+		case 0x06/2: // a1510e / 400e
+			return dreq_dst_addr[offset&1];
+
+		case 0x08/2: // a15110 / 4010
+			return dreq_size;
+
+		case 0x0a/2: // a15112 / 4012
+			if (space == _68kspace)
+			{
+				printf("attempting to READ FIFO with 68k!\n");
+				return 0xffff;
+			}
+
+			UINT16 retdat = current_fifo_readblock[current_fifo_read_pos];
+
+			current_fifo_read_pos++;
+
+		//  printf("reading FIFO!\n");
+
+			if (current_fifo_readblock == fifo_block_a && !fifo_block_a_full)
+				printf("Fifo block a isn't filled!\n");
+
+			if (current_fifo_readblock == fifo_block_b && !fifo_block_b_full)
+				printf("%08x Fifo block b isn't filled!\n",cpu_get_pc(space->cpu));
+
+
+			if (current_fifo_read_pos==4)
+			{
+				if (current_fifo_readblock == fifo_block_a)
+				{
+					fifo_block_a_full = 0;
+
+					if (fifo_block_b_full)
+					{
+						current_fifo_readblock = fifo_block_b;
+						current_fifo_block = fifo_block_a;
+					}
+
+					current_fifo_read_pos = 0;
+				}
+				else if (current_fifo_readblock == fifo_block_b)
+				{
+					fifo_block_b_full = 0;
+
+					if (fifo_block_a_full)
+					{
+						current_fifo_readblock = fifo_block_a;
+						current_fifo_block = fifo_block_b;
+					}
+
+					current_fifo_read_pos = 0;
+				}
+			}
+
+			return retdat;
+	}
+
+	return 0x0000;
+}
+
+static WRITE16_HANDLER( _32x_dreq_common_w )
+{
+	address_space* _68kspace = cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+
+	switch (offset)
+	{
+		case 0x00/2: // a15108 / 4008
+		case 0x02/2: // a1510a / 400a
+			if (space != _68kspace)
+			{
+				printf("attempting to WRITE DREQ SRC with SH2!\n");
+				return;
+			}
+
+			dreq_src_addr[offset&1] = ((offset&1) == 0) ? (data & 0xff) : (data & 0xfffe);
+
+			//if((dreq_src_addr[0]<<16)|dreq_src_addr[1])
+			//  printf("DREQ set SRC = %08x\n",(dreq_src_addr[0]<<16)|dreq_src_addr[1]);
+
+			break;
+
+		case 0x04/2: // a1510c / 400c
+		case 0x06/2: // a1510e / 400e
+			if (space != _68kspace)
+			{
+				printf("attempting to WRITE DREQ DST with SH2!\n");
+				return;
+			}
+
+			dreq_dst_addr[offset&1] = ((offset&1) == 0) ? (data & 0xff) : (data & 0xffff);
+
+			//if((dreq_dst_addr[0]<<16)|dreq_dst_addr[1])
+			//  printf("DREQ set DST = %08x\n",(dreq_dst_addr[0]<<16)|dreq_dst_addr[1]);
+
+			break;
+
+		case 0x08/2: // a15110 / 4010
+			if (space != _68kspace)
+			{
+				printf("attempting to WRITE DREQ SIZE with SH2!\n");
+				return;
+			}
+
+			dreq_size = data & 0xfffc;
+
+			//  if(dreq_size)
+			//      printf("DREQ set SIZE = %04x\n",dreq_size);
+
+			break;
+
+		case 0x0a/2: // a15112 / 4012 - FIFO Write (68k only!)
+			if (space != _68kspace)
+			{
+				printf("attempting to WRITE FIFO with SH2!\n");
+				return;
+			}
+
+			if (current_fifo_block==fifo_block_a && fifo_block_a_full)
+			{
+				printf("attempt to write to Full Fifo block a!\n");
+				return;
+			}
+
+			if (current_fifo_block==fifo_block_b && fifo_block_b_full)
+			{
+				printf("attempt to write to Full Fifo block b!\n");
+				return;
+			}
+
+			if((a15106_reg & 4) == 0)
+			{
+				printf("attempting to WRITE FIFO with 68S cleared!");
+				return;
+			}
+
+			current_fifo_block[current_fifo_write_pos] = data;
+			current_fifo_write_pos++;
+
+			if (current_fifo_write_pos==4)
+			{
+				if (current_fifo_block==fifo_block_a)
+				{
+					fifo_block_a_full = 1;
+					if (!fifo_block_b_full)
+					{
+						current_fifo_block = fifo_block_b;
+						current_fifo_readblock = fifo_block_a;
+						// incase we have a stalled DMA in progress, let the SH2 know there is data available
+						sh2_notify_dma_data_available(space->machine->device("32x_master_sh2"));
+						sh2_notify_dma_data_available(space->machine->device("32x_slave_sh2"));
+
+					}
+					current_fifo_write_pos = 0;
+				}
+				else
+				{
+					fifo_block_b_full = 1;
+
+					if (!fifo_block_a_full)
+					{
+						current_fifo_block = fifo_block_a;
+						current_fifo_readblock = fifo_block_b;
+						// incase we have a stalled DMA in progress, let the SH2 know there is data available
+						sh2_notify_dma_data_available(space->machine->device("32x_master_sh2"));
+						sh2_notify_dma_data_available(space->machine->device("32x_slave_sh2"));
+
+					}
+
+					current_fifo_write_pos = 0;
+				}
+			}
+
+			break;
+	}
+}
+
+
+static UINT8 sega_tv;
+
+static READ16_HANDLER( _32x_68k_a1511a_r )
+{
+	return sega_tv;
+}
+
+static WRITE16_HANDLER( _32x_68k_a1511a_w )
+{
+	sega_tv = data & 1;
+
+	printf("SEGA TV register set = %04x\n",data);
+}
+
+/*
+000070 H interrupt vector can be overwritten apparently
+*/
+
+static UINT16 hint_vector[2];
+
+static READ16_HANDLER( _32x_68k_hint_vector_r )
+{
+	return hint_vector[offset];
+}
+
+static WRITE16_HANDLER( _32x_68k_hint_vector_w )
+{
+	hint_vector[offset] = data;
+}
+
 // returns MARS, the system ID of the 32x
 static READ16_HANDLER( _32x_68k_MARS_r )
 {
@@ -2630,6 +2885,7 @@ static READ16_HANDLER( _32x_68k_MARS_r )
 
     return 0x0000;
 }
+
 
 /**********************************************************************************************/
 // 68k side a15100
@@ -2661,33 +2917,26 @@ static WRITE16_HANDLER( _32x_68k_a15100_w )
 			memory_install_rom(space, 0x0880000, 0x08fffff, 0, 0, memory_region(space->machine, "gamecart")); // 'fixed' 512kb rom bank
 
 			memory_install_read_bank(space, 0x0900000, 0x09fffff, 0, 0, "bank12"); // 'bankable' 1024kb rom bank
-			memory_set_bankptr(space->machine,  "bank12", memory_region(space->machine, "gamecart") );
+			memory_set_bankptr(space->machine,  "bank12", memory_region(space->machine, "gamecart")+((_32x_68k_a15104_reg&0x3)*0x100000) );
 
 			memory_install_rom(space, 0x0000000, 0x03fffff, 0, 0, memory_region(space->machine, "32x_68k_bios"));
 
-			memory_install_readwrite16_handler(space, 0x0a15180, 0x0a15181, 0, 0, _32x_68k_a15180_r, _32x_68k_a15180_w); // mode control regs
-			memory_install_readwrite16_handler(space, 0x0a15182, 0x0a15183, 0, 0, _32x_68k_a15182_r, _32x_68k_a15182_w); // screen shift
-			memory_install_readwrite16_handler(space, 0x0a15184, 0x0a15185, 0, 0, _32x_68k_a15184_r, _32x_68k_a15184_w); // autofill length reg
-			memory_install_readwrite16_handler(space, 0x0a15186, 0x0a15187, 0, 0, _32x_68k_a15186_r, _32x_68k_a15186_w); // autofill address reg
-			memory_install_readwrite16_handler(space, 0x0a15188, 0x0a15189, 0, 0, _32x_68k_a15188_r, _32x_68k_a15188_w); // autofill data reg / start fill
-			memory_install_readwrite16_handler(space, 0x0a1518a, 0x0a1518b, 0, 0, _32x_68k_a1518a_r, _32x_68k_a1518a_w); // framebuffer control regs
-
+			/* VDP area */
+			memory_install_readwrite16_handler(space, 0x0a15180, 0x0a1518b, 0, 0, _32x_common_vdp_regs_r, _32x_common_vdp_regs_w); // common / shared VDP regs
 			memory_install_readwrite16_handler(space, 0x0a15200, 0x0a153ff, 0, 0, _32x_68k_palette_r, _32x_68k_palette_w); // access to 'palette' xRRRRRGGGGGBBBBB
-
 			memory_install_readwrite16_handler(space, 0x0840000, 0x085ffff, 0, 0, _32x_68k_dram_r, _32x_68k_dram_w); // access to 'display ram' (framebuffer)
 			memory_install_readwrite16_handler(space, 0x0860000, 0x087ffff, 0, 0, _32x_68k_dram_overwrite_r, _32x_68k_dram_overwrite_w); // access to 'display ram' (framebuffer)
 
 
 
-
+			memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000070, 0x000073, 0, 0, _32x_68k_hint_vector_r, _32x_68k_hint_vector_w); // h interrupt vector
 		}
 		else
 		{
 			_32x_adapter_enabled = 0;
 
 			memory_install_rom(space, 0x0000000, 0x03fffff, 0, 0, memory_region(space->machine, "gamecart"));
-
-
+			memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000070, 0x000073, 0, 0, _32x_68k_hint_vector_r, _32x_68k_hint_vector_w); // h interrupt vector
 		}
 	}
 
@@ -2708,23 +2957,25 @@ static int _32x_68k_a15102_reg;
 static READ16_HANDLER( _32x_68k_a15102_r )
 {
 	//printf("_32x_68k_a15102_r\n");
-	return 0x0000;//_32x_68k_a15102_reg;
+	return _32x_68k_a15102_reg;
 }
 
 static WRITE16_HANDLER( _32x_68k_a15102_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		_32x_68k_a15102_reg = data;
+		_32x_68k_a15102_reg = data & 3;
 
 		if (data&0x1)
 		{
 			if (sh2_master_cmdint_enable) cpu_set_input_line(_32x_master_cpu,SH2_CINT_IRQ_LEVEL,ASSERT_LINE);
+			else printf("master cmdint when masked!\n");
 		}
 
 		if (data&0x2)
 		{
 			if (sh2_slave_cmdint_enable) cpu_set_input_line(_32x_slave_cpu,SH2_CINT_IRQ_LEVEL,ASSERT_LINE);
+			else printf("slave cmdint when masked!\n");
 		}
 	}
 }
@@ -2780,204 +3031,372 @@ static WRITE16_HANDLER( _32x_68k_commsram_w )
 }
 
 /**********************************************************************************************/
+// 68k side a15130 - a1513f
+// PWM registers
+// access from the SH2 via 4030 - 403f
+/**********************************************************************************************/
+
+/*
+TODO:
+- noticeable static noise on Virtua Fighter Sega logo at start-up
+- Understand if Speaker OFF makes the FIFO to advance or not
+*/
+
+#define PWM_FIFO_SIZE pwm_tm_reg // guess, Marsch calls this register as FIFO width
+#define PWM_CLOCK megadrive_region_pal ? ((MASTER_CLOCK_PAL*3) / 7) : ((MASTER_CLOCK_NTSC*3) / 7)
+
+static UINT16 pwm_ctrl,pwm_cycle,pwm_tm_reg;
+static UINT16 cur_lch[0x10],cur_rch[0x10];
+static UINT16 pwm_cycle_reg; //used for latching
+static UINT8 pwm_timer_tick;
+static UINT8 lch_index_r,rch_index_r,lch_index_w,rch_index_w;
+static UINT16 lch_fifo_state,rch_fifo_state;
+
+static emu_timer *_32x_pwm_timer;
+
+static void calculate_pwm_timer(void)
+{
+	if(pwm_tm_reg == 0) { pwm_tm_reg = 16; } // zero gives max range
+	if(pwm_cycle == 0) { pwm_cycle = 4095; } // zero gives max range
+
+	/* if both RMD and LMD are set to OFF or pwm cycle register is one, then PWM timer ticks doesn't occur */
+	if(pwm_cycle == 1 || ((pwm_ctrl & 0xf) == 0))
+		timer_adjust_oneshot(_32x_pwm_timer, attotime_never, 0);
+	else
+	{
+		pwm_timer_tick = 0;
+		lch_fifo_state = rch_fifo_state = 0x4000;
+		lch_index_r = rch_index_r = 0;
+		lch_index_w = rch_index_w = 0;
+		timer_adjust_oneshot(_32x_pwm_timer, ATTOTIME_IN_HZ((PWM_CLOCK) / (pwm_cycle - 1)), 0);
+	}
+}
+
+static TIMER_CALLBACK( _32x_pwm_callback )
+{
+	if(lch_index_r < PWM_FIFO_SIZE)
+	{
+		switch(pwm_ctrl & 3)
+		{
+			case 0: lch_index_r++; /*Speaker OFF*/ break;
+			case 1: dac_signed_data_16_w(machine->device("lch_pwm"), cur_lch[lch_index_r++]); break;
+			case 2: dac_signed_data_16_w(machine->device("rch_pwm"), cur_lch[lch_index_r++]); break;
+			case 3: popmessage("Undefined PWM Lch value 3, contact MESSdev"); break;
+		}
+
+		lch_index_w = 0;
+	}
+
+	lch_fifo_state = (lch_index_r == PWM_FIFO_SIZE) ? 0x4000 : 0x0000;
+
+	if(rch_index_r < PWM_FIFO_SIZE)
+	{
+		switch((pwm_ctrl & 0xc) >> 2)
+		{
+			case 0: rch_index_r++; /*Speaker OFF*/ break;
+			case 1: dac_signed_data_16_w(machine->device("rch_pwm"), cur_rch[rch_index_r++]); break;
+			case 2: dac_signed_data_16_w(machine->device("lch_pwm"), cur_rch[rch_index_r++]); break;
+			case 3: popmessage("Undefined PWM Rch value 3, contact MESSdev"); break;
+		}
+
+		rch_index_w = 0;
+	}
+
+	rch_fifo_state = (rch_index_r == PWM_FIFO_SIZE) ? 0x4000 : 0x0000;
+
+	pwm_timer_tick++;
+
+	if(pwm_timer_tick == pwm_tm_reg)
+	{
+		pwm_timer_tick = 0;
+		if(sh2_master_pwmint_enable) { cpu_set_input_line(_32x_master_cpu, SH2_PINT_IRQ_LEVEL,ASSERT_LINE); }
+		if(sh2_slave_pwmint_enable) { cpu_set_input_line(_32x_slave_cpu, SH2_PINT_IRQ_LEVEL,ASSERT_LINE); }
+	}
+
+	timer_adjust_oneshot(_32x_pwm_timer, ATTOTIME_IN_HZ((PWM_CLOCK) / (pwm_cycle - 1)), 0);
+}
+
+static READ16_HANDLER( _32x_pwm_r )
+{
+	switch(offset)
+	{
+		case 0x00/2: return pwm_ctrl; //control register
+		case 0x02/2: return pwm_cycle_reg; // cycle register
+		case 0x04/2: return lch_fifo_state; // l ch
+		case 0x06/2: return rch_fifo_state; // r ch
+		case 0x08/2: return lch_fifo_state & rch_fifo_state; // mono ch
+	}
+
+	printf("Read at undefined PWM register %02x\n",offset);
+	return 0xffff;
+}
+
+static WRITE16_HANDLER( _32x_pwm_w )
+{
+	switch(offset)
+	{
+		case 0x00/2:
+			pwm_ctrl = data & 0xffff;
+			pwm_tm_reg = (pwm_ctrl & 0xf00) >> 8;
+			calculate_pwm_timer();
+			break;
+		case 0x02/2:
+			pwm_cycle = pwm_cycle_reg = data & 0xfff;
+			calculate_pwm_timer();
+			break;
+		case 0x04/2:
+			if(lch_index_w < PWM_FIFO_SIZE)
+			{
+				cur_lch[lch_index_w++] = ((data & 0xfff) << 4) | (data & 0xf);
+				lch_index_r = 0;
+			}
+
+			lch_fifo_state = (lch_index_w == PWM_FIFO_SIZE) ? 0x8000 : 0x0000;
+			break;
+		case 0x06/2:
+			if(rch_index_w < PWM_FIFO_SIZE)
+			{
+				cur_rch[rch_index_w++] = ((data & 0xfff) << 4) | (data & 0xf);
+				rch_index_r = 0;
+			}
+
+			rch_fifo_state = (rch_index_w == PWM_FIFO_SIZE) ? 0x8000 : 0x0000;
+
+			break;
+		case 0x08/2:
+			if(lch_index_w < PWM_FIFO_SIZE)
+			{
+				cur_lch[lch_index_w++] = ((data & 0xfff) << 4) | (data & 0xf);
+				lch_index_r = 0;
+			}
+
+			if(rch_index_w < PWM_FIFO_SIZE)
+			{
+				cur_rch[rch_index_w++] = ((data & 0xfff) << 4) | (data & 0xf);
+				rch_index_r = 0;
+			}
+
+			lch_fifo_state = (lch_index_w == PWM_FIFO_SIZE) ? 0x8000 : 0x0000;
+			rch_fifo_state = (rch_index_w == PWM_FIFO_SIZE) ? 0x8000 : 0x0000;
+
+			break;
+		default:
+			printf("Write at undefined PWM register %02x %04x\n",offset,data);
+			break;
+	}
+}
+
+static WRITE16_HANDLER( _32x_68k_pwm_w )
+{
+	if(offset == 0/2)
+		_32x_pwm_w(space,offset,(data & 0x7f) | (pwm_ctrl & 0xff80),mem_mask);
+	else
+		_32x_pwm_w(space,offset,data,mem_mask);
+}
+
+/**********************************************************************************************/
 // 68k side a15180
 // framebuffer control
 // also accessed from the SH2 @ 4100
 /**********************************************************************************************/
 
-static READ16_HANDLER( _32x_68k_a15180_r )
+static UINT16 _32x_a1518a_reg;
+
+static READ16_HANDLER( _32x_common_vdp_regs_r )
 {
-	// the flag is inverted compared to the megadrive
-	int ntsc;
-	if (megadrive_region_pal) ntsc = 0;
-	else ntsc = 1;
+	// what happens if the z80 accesses it, what authorization do we use?
 
-	return (ntsc << 15) |
-	       (_32x_videopriority << 7 ) |
-	       ( _32x_240mode << 6 ) |
-	       ( _32x_displaymode << 0 );
 
+
+//  printf("_32x_68k_a15180_r (a15180) %04x\n",mem_mask);
+
+	// read needs authorization too I think, undefined behavior otherwise
+	switch (offset)
+	{
+		case 0x00:
+
+		// the flag is inverted compared to the megadrive
+		int ntsc;
+		if (megadrive_region_pal) ntsc = 0;
+		else ntsc = 1;
+
+		return (ntsc << 15) |
+			   (_32x_videopriority << 7 ) |
+			   ( _32x_240mode << 6 ) |
+			   ( _32x_displaymode << 0 );
+
+
+
+		case 0x02/2:
+			return _32x_screenshift;
+
+		case 0x04/2:
+			return _32x_autofill_length;
+
+		case 0x06/2:
+			return _32x_autofill_address;
+
+		case 0x08/2:
+			return _32x_autofill_data;
+
+		case 0x0a/2:
+			UINT16 retdata = _32x_a1518a_reg;
+			UINT16 hpos = get_hposition();
+			int megadrive_hblank_flag = 0;
+
+			if (megadrive_vblank_flag) retdata |= 0x8000;
+
+			if (hpos>400) megadrive_hblank_flag = 1;
+			if (hpos>460) megadrive_hblank_flag = 0;
+
+			if (megadrive_hblank_flag) retdata |= 0x4000;
+
+			if (megadrive_vblank_flag) { retdata |= 2; } // framebuffer approval (TODO: condition is unknown at current time)
+
+			if (megadrive_hblank_flag && megadrive_vblank_flag) { retdata |= 0x2000; } // palette approval (TODO: active high or low?)
+
+			return retdata;
+	}
+
+	return 0x0000;
 }
 
-static WRITE16_HANDLER( _32x_68k_a15180_w )
+
+void _32x_check_framebuffer_swap(void)
 {
-//  printf("_32x_68k_a15180_w (a15180) %04x %04x\n",data,mem_mask);
-	if (ACCESSING_BITS_0_7)
-	{
-		_32x_videopriority = (data & 0x80) >> 7;
-		_32x_240mode   = (data & 0x40) >> 6;
-		_32x_displaymode   = (data & 0x03) >> 0;
-	}
 
-	if (ACCESSING_BITS_8_15)
-	{
-		// nothing?  (pal flag is read only)
-	}
-}
-
-/**********************************************************************************************/
-// 68k side a15182
-// screenshift register
-// also accessed from the SH2 @ 4102
-// used to shift 32x framebuffer by 1 pixel
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_68k_a15182_r )
-{
-	return _32x_screenshift;
-}
-
-static WRITE16_HANDLER( _32x_68k_a15182_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		_32x_screenshift = data & 1; // allows 1 pixel shifting
-	}
-	if (ACCESSING_BITS_8_15)
+	if(_32x_is_connected)
 	{
 
-	}
-}
-
-/**********************************************************************************************/
-// 68k side a15184
-// autofill length
-// also accessed from the SH2 @ 4104
-/**********************************************************************************************/
-
-
-static READ16_HANDLER( _32x_68k_a15184_r )
-{
-	return _32x_autofill_length;
-}
-
-static WRITE16_HANDLER( _32x_68k_a15184_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		_32x_autofill_length = data & 0xff;
-	}
-
-	if (ACCESSING_BITS_8_15)
-	{
-
-	}
-}
-
-/**********************************************************************************************/
-// 68k side a15186
-// auto fill addres
-// also accessed from the SH2 @ 4106
-/**********************************************************************************************/
-
-
-static READ16_HANDLER( _32x_68k_a15186_r )
-{
-	return _32x_autofill_address;
-}
-
-static WRITE16_HANDLER( _32x_68k_a15186_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		_32x_autofill_address = (_32x_autofill_address & 0xff00) | (data & 0x00ff);
-	}
-
-	if (ACCESSING_BITS_8_15)
-	{
-		_32x_autofill_address = (_32x_autofill_address & 0x00ff) | (data & 0xff00);
-	}
-}
-
-/**********************************************************************************************/
-// 68k side a15188
-// auto fill data (start command)
-// also accessed from the SH2 @ 4108
-/**********************************************************************************************/
-
-
-static READ16_HANDLER( _32x_68k_a15188_r )
-{
-	return _32x_autofill_data;
-}
-
-static WRITE16_HANDLER( _32x_68k_a15188_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		_32x_autofill_data = (_32x_autofill_data & 0xff00) | (data & 0x00ff);
-	}
-
-	if (ACCESSING_BITS_8_15)
-	{
-		_32x_autofill_data = (_32x_autofill_data & 0x00ff) | (data & 0xff00);
-	}
-
-	// do the fill - shouldn't be instant..
-	{
-		int i;
-		for (i=0; i<_32x_autofill_length+1;i++)
+		// this logic should be correct, but makes things worse?
+		//if (genesis_scanline_counter >= megadrive_irq6_scanline)
 		{
-			_32x_access_dram[_32x_autofill_address] = _32x_autofill_data;
-			_32x_autofill_address = (_32x_autofill_address & 0xff00) | ((_32x_autofill_address+1) & 0x00ff);
+			_32x_a1518a_reg = _32x_fb_swap & 1;
+
+
+
+			if (_32x_fb_swap & 1)
+			{
+				_32x_access_dram = _32x_dram0;
+				_32x_display_dram = _32x_dram1;
+			}
+			else
+			{
+				_32x_display_dram = _32x_dram0;
+				_32x_access_dram = _32x_dram1;
+			}
 		}
 	}
 }
 
 
-/**********************************************************************************************/
-// 68k side a1518a
-// framebuffer status / control
-// also accessed from the SH2 @ 410A
-
-/*
-vhp- ---- ---- --fb
-
-v = 1=vblank   r/o
-h = 1=hblank   r/o
-p = 0=palette access approval   r/o
-- = unused
-f = 0=MD framebuffer access, 1 = SH2   r/o
-b = 0=DRAM0 accessed by VDP, 1=DRAM1   r/w
-
-*/
-
-/**********************************************************************************************/
-
-static UINT16 _32x_a1518a_reg;
-static READ16_HANDLER( _32x_68k_a1518a_r )
+static WRITE16_HANDLER( _32x_common_vdp_regs_w )
 {
-	UINT16 retdata = _32x_a1518a_reg;
-	UINT16 hpos = get_hposition();
-	int megadrive_hblank_flag = 0;
+	// what happens if the z80 accesses it, what authorization do we use? which address space do we get?? the z80 *can* write here and to the framebuffer via the window
 
-	if (megadrive_vblank_flag) retdata |= 0x8000;
+	address_space* _68kspace = cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
-	if (hpos>400) megadrive_hblank_flag = 1;
-	if (hpos>460) megadrive_hblank_flag = 0;
-
-	if (megadrive_hblank_flag) retdata |= 0x4000;
-
-	return retdata;
-}
-
-static WRITE16_HANDLER( _32x_68k_a1518a_w )
-{
-	// bit 0 is the framebuffer select;
-	_32x_a1518a_reg = (_32x_a1518a_reg & 0xfffe) | (data & 1);
-
-	if (_32x_a1518a_reg & 1)
+	if (space!= _68kspace)
 	{
-		_32x_access_dram = _32x_dram0;
-		_32x_display_dram = _32x_dram1;
+		if (_32x_access_auth!=1)
+			return;
 	}
-	else
-	{
-		_32x_display_dram = _32x_dram0;
-		_32x_access_dram = _32x_dram1;
-	}
-}
 
+	if (space== _68kspace)
+	{
+		if (_32x_access_auth!=0)
+			return;
+	}
+
+
+	switch (offset)
+	{
+
+		case 0x00:
+			//printf("_32x_68k_a15180_w (a15180) %04x %04x   source _32x_access_auth %04x\n",data,mem_mask, _32x_access_auth);
+
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_videopriority = (data & 0x80) >> 7;
+				_32x_240mode   = (data & 0x40) >> 6;
+				_32x_displaymode   = (data & 0x03) >> 0;
+			}
+			break;
+
+		case 0x02/2:
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_screenshift = data & 1; // allows 1 pixel shifting
+			}
+			if (ACCESSING_BITS_8_15)
+			{
+
+			}
+			break;
+
+		case 0x04/2:
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_autofill_length = data & 0xff;
+			}
+
+			if (ACCESSING_BITS_8_15)
+			{
+
+			}
+			break;
+
+		case 0x06/2:
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_autofill_address = (_32x_autofill_address & 0xff00) | (data & 0x00ff);
+			}
+
+			if (ACCESSING_BITS_8_15)
+			{
+				_32x_autofill_address = (_32x_autofill_address & 0x00ff) | (data & 0xff00);
+			}
+			break;
+
+		case 0x08/2:
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_autofill_data = (_32x_autofill_data & 0xff00) | (data & 0x00ff);
+			}
+
+			if (ACCESSING_BITS_8_15)
+			{
+				_32x_autofill_data = (_32x_autofill_data & 0x00ff) | (data & 0xff00);
+			}
+
+			// do the fill - shouldn't be instant..
+			{
+				int i;
+				for (i=0; i<_32x_autofill_length+1;i++)
+				{
+					_32x_access_dram[_32x_autofill_address] = _32x_autofill_data;
+					_32x_autofill_address = (_32x_autofill_address & 0xff00) | ((_32x_autofill_address+1) & 0x00ff);
+				}
+			}
+			break;
+
+		case 0x0a/2:
+			// bit 0 is the framebuffer select, change is delayed until vblank;
+		//  _32x_a1518a_reg = (_32x_a1518a_reg & 0xfffe);
+			if (ACCESSING_BITS_0_7)
+			{
+				_32x_fb_swap = data & 1;
+
+				_32x_check_framebuffer_swap();
+			}
+
+			break;
+
+
+	}
+
+
+}
 
 
 /**********************************************************************************************/
@@ -3003,13 +3422,12 @@ P = PWM Interrupt Mask (0 masked, 1 allowed)
 /**********************************************************************************************/
 
 /* MASTER */
-
 static READ16_HANDLER( _32x_sh2_master_4000_r )
 {
 	UINT16 retvalue = 0x0200;
 	retvalue |= _32x_access_auth << 15;
 
-	retvalue |=	sh2_hint_in_vbl;;
+	retvalue |=	sh2_hint_in_vbl;
 	retvalue |= sh2_master_vint_enable;
 	retvalue |= sh2_master_hint_enable;
 	retvalue |= sh2_master_cmdint_enable;
@@ -3022,7 +3440,7 @@ static WRITE16_HANDLER( _32x_sh2_master_4000_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		_32x_access_auth = (data &0x80) >> 7;
+		_32x_access_auth = (data &0x8000) >> 15;
 	}
 
 	if (ACCESSING_BITS_0_7)
@@ -3033,9 +3451,10 @@ static WRITE16_HANDLER( _32x_sh2_master_4000_w )
 		sh2_master_cmdint_enable = data & 0x2;
 		sh2_master_pwmint_enable = data & 0x1;
 
-		if (sh2_master_hint_enable) printf("sh2_master_hint_enable enable!\n");
-		if (sh2_master_pwmint_enable) printf("sh2_master_pwn_enable enable!\n");
+		//if (sh2_master_hint_enable) printf("sh2_master_hint_enable enable!\n");
+		//if (sh2_master_pwmint_enable) printf("sh2_master_pwn_enable enable!\n");
 
+		_32x_check_irqs(space->machine);
 	}
 }
 
@@ -3045,7 +3464,7 @@ static READ16_HANDLER( _32x_sh2_slave_4000_r )
 {
 	UINT16 retvalue = 0x0200;
 	retvalue |= _32x_access_auth << 15;
-	retvalue |=	sh2_hint_in_vbl;;
+	retvalue |=	sh2_hint_in_vbl;
 	retvalue |= sh2_slave_vint_enable;
 	retvalue |= sh2_slave_hint_enable;
 	retvalue |= sh2_slave_cmdint_enable;
@@ -3059,8 +3478,7 @@ static WRITE16_HANDLER( _32x_sh2_slave_4000_w )
 {
 	if (ACCESSING_BITS_8_15)
 	{
-		_32x_access_auth = (data &0x80) >> 7;
-
+		_32x_access_auth = (data &0x8000) >> 15;
 	}
 
 	if (ACCESSING_BITS_0_7)
@@ -3071,8 +3489,10 @@ static WRITE16_HANDLER( _32x_sh2_slave_4000_w )
 		sh2_slave_cmdint_enable = data & 0x2;
 		sh2_slave_pwmint_enable = data & 0x1;
 
-		if (sh2_slave_hint_enable) printf("sh2_slave_hint_enable enable!\n");
-		if (sh2_slave_pwmint_enable) printf("sh2_slave_pwm_enable enable!\n");
+		//if (sh2_slave_hint_enable) printf("sh2_slave_hint_enable enable!\n");
+		//if (sh2_slave_pwmint_enable) printf("sh2_slave_pwm_enable enable!\n");
+
+		_32x_check_irqs(space->machine);
 
 	}
 }
@@ -3082,7 +3502,6 @@ static WRITE16_HANDLER( _32x_sh2_slave_4000_w )
 // Reserved  ( Stand By Change Register )
 // Shouldn't be used
 /**********************************************************************************************/
-
 
 static READ16_HANDLER( _32x_sh2_common_4002_r )
 {
@@ -3101,48 +3520,40 @@ static WRITE16_HANDLER( _32x_sh2_common_4002_w )
 // H Count Register (H Interrupt)
 // 0 = every line
 /**********************************************************************************************/
+static READ16_HANDLER( _32x_sh2_common_4004_r )
+{
+	return _32x_hcount_reg;
+}
+
+static WRITE16_HANDLER( _32x_sh2_common_4004_w )
+{
+	_32x_hcount_reg = data & 0xff;
+}
+
 
 /**********************************************************************************************/
 // SH2 side 4006
 // DReq Control Register
 /**********************************************************************************************/
 
-/**********************************************************************************************/
-// SH2 side 4008
-// 68k To SH2 DReq Source Address Register ( High Bits )
-/**********************************************************************************************/
+static READ16_HANDLER( _32x_sh2_common_4006_r )
+{
+	//printf("DREQ read!\n"); // tempo reads it, shut up for now
+	return _32x_68k_a15106_r(space,offset,mem_mask);
+}
 
-/**********************************************************************************************/
-// SH2 side 400A
-// 68k To SH2 DReq Source Address Register ( Low Bits )
-/**********************************************************************************************/
+static WRITE16_HANDLER( _32x_sh2_common_4006_w )
+{
+	printf("DREQ write!\n"); //register is read only on SH-2 side
+}
 
-/**********************************************************************************************/
-// SH2 side 400C
-// 68k To SH2 DReq Destination Address Register ( High Bits )
-/**********************************************************************************************/
-
-/**********************************************************************************************/
-// SH2 side 400E
-// 68k To SH2 DReq Destination Address Register ( Low Bits )
-/**********************************************************************************************/
-
-/**********************************************************************************************/
-// SH2 side 4010
-// 68k To SH2 DReq Length Register
-/**********************************************************************************************/
-
-/**********************************************************************************************/
-// SH2 side 4012
-// FIFO Register (read)
-/**********************************************************************************************/
 
 /**********************************************************************************************/
 // SH2 side 4014
 // VRES (md reset button interrupt) clear
 /**********************************************************************************************/
 
-static WRITE16_HANDLER( _32x_sh2_master_4014_w ){cpu_set_input_line(_32x_master_cpu,SH2_VRES_IRQ_LEVEL,CLEAR_LINE);}
+static WRITE16_HANDLER( _32x_sh2_master_4014_w ){ cpu_set_input_line(_32x_master_cpu,SH2_VRES_IRQ_LEVEL,CLEAR_LINE);}
 static WRITE16_HANDLER( _32x_sh2_slave_4014_w ) { cpu_set_input_line(_32x_slave_cpu, SH2_VRES_IRQ_LEVEL,CLEAR_LINE);}
 
 /**********************************************************************************************/
@@ -3150,8 +3561,8 @@ static WRITE16_HANDLER( _32x_sh2_slave_4014_w ) { cpu_set_input_line(_32x_slave_
 // VINT (vertical interrupt) clear
 /**********************************************************************************************/
 
-static WRITE16_HANDLER( _32x_sh2_master_4016_w ){cpu_set_input_line(_32x_master_cpu,SH2_VINT_IRQ_LEVEL,CLEAR_LINE);}
-static WRITE16_HANDLER( _32x_sh2_slave_4016_w ) { cpu_set_input_line(_32x_slave_cpu, SH2_VINT_IRQ_LEVEL,CLEAR_LINE);}
+static WRITE16_HANDLER( _32x_sh2_master_4016_w ){ sh2_master_vint_pending = 0; _32x_check_irqs(space->machine); }
+static WRITE16_HANDLER( _32x_sh2_slave_4016_w ) { sh2_slave_vint_pending = 0; _32x_check_irqs(space->machine); }
 
 /**********************************************************************************************/
 // SH2 side 4018
@@ -3164,10 +3575,11 @@ static WRITE16_HANDLER( _32x_sh2_slave_4018_w ) { cpu_set_input_line(_32x_slave_
 /**********************************************************************************************/
 // SH2 side 401A
 // HINT (control register interrupt) clear
+// Note: flag cleared here is a guess, according to After Burner behaviour
 /**********************************************************************************************/
 
-static WRITE16_HANDLER( _32x_sh2_master_401a_w ){ cpu_set_input_line(_32x_master_cpu,SH2_CINT_IRQ_LEVEL,CLEAR_LINE);}
-static WRITE16_HANDLER( _32x_sh2_slave_401a_w ) { cpu_set_input_line(_32x_slave_cpu, SH2_CINT_IRQ_LEVEL,CLEAR_LINE);}
+static WRITE16_HANDLER( _32x_sh2_master_401a_w ){ _32x_68k_a15102_reg &= ~1; cpu_set_input_line(_32x_master_cpu,SH2_CINT_IRQ_LEVEL,CLEAR_LINE);}
+static WRITE16_HANDLER( _32x_sh2_slave_401a_w ) { _32x_68k_a15102_reg &= ~2; cpu_set_input_line(_32x_slave_cpu, SH2_CINT_IRQ_LEVEL,CLEAR_LINE);}
 
 /**********************************************************************************************/
 // SH2 side 401C
@@ -3212,6 +3624,7 @@ static WRITE16_HANDLER( _32x_sh2_commsram16_w ) { _32x_68k_commsram_w(space, off
 // Cycle Register
 /**********************************************************************************************/
 
+
 /**********************************************************************************************/
 // SH2 side 4034
 // LCH Pulse Width Register
@@ -3227,63 +3640,11 @@ static WRITE16_HANDLER( _32x_sh2_commsram16_w ) { _32x_68k_commsram_w(space, off
 // Mono Pulse Width Register
 /**********************************************************************************************/
 
-/**********************************************************************************************/
-// SH2 side 4100
-// Access to Framebuffer control
-// maps through to 68k at a15180
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_4100_r ) { return _32x_68k_a15180_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_4100_w ) { _32x_68k_a15180_w(space,offset,data,mem_mask); }
-
-/**********************************************************************************************/
-// SH2 side 4102
-// Screenshift register
-// maps through to 68k at a15182
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_4102_r ) { return _32x_68k_a15182_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_4102_w ) { _32x_68k_a15182_w(space,offset,data,mem_mask); }
-
-/**********************************************************************************************/
-// SH2 side 4104
-// autofill length
-// maps through to 68k at a15184
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_4104_r ) { return _32x_68k_a15184_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_4104_w ) { _32x_68k_a15184_w(space,offset,data,mem_mask); }
-
-/**********************************************************************************************/
-// SH2 side 4106
-// autofill address
-// maps through to 68k at a15186
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_4106_r ) { return _32x_68k_a15186_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_4106_w ) { _32x_68k_a15186_w(space,offset,data,mem_mask); }
-
-/**********************************************************************************************/
-// SH2 side 4108
-// autofill start
-// maps through to 68k at a15188
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_4108_r ) { return _32x_68k_a15188_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_4108_w ) { _32x_68k_a15188_w(space,offset,data,mem_mask); }
-
-/**********************************************************************************************/
-// SH2 side 410a
-// framebuffer status / control
-// maps through to 68k at a1518a
-/**********************************************************************************************/
-
-static READ16_HANDLER( _32x_sh2_common_410a_r ) { return _32x_68k_a1518a_r(space,offset,mem_mask); }
-static WRITE16_HANDLER( _32x_sh2_common_410a_w ) { _32x_68k_a1518a_w(space,offset,data,mem_mask); }
+/* 4100 - 43ff are VDP registers, you need permission to access them - ensure this is true for all! */
 
 /**********************************************************************************************/
 // SH2 side 4200 - 43ff
-// framebuffer status / control
+// palette
 // maps through to 68k at a15200 - a153ff
 /**********************************************************************************************/
 
@@ -3316,7 +3677,7 @@ static WRITE16_HANDLER( _32x_sh2_framebuffer_overwrite_dram16_w ) { _32x_68k_dra
 
 
 /* the 32x treats everything as 16-bit registers, so we remap the 32-bit read & writes
-   to 2x 16-bit handlers here */
+   to 2x 16-bit handlers here (TODO: nuke this eventually) */
 
 #define _32X_MAP_READHANDLERS(NAMEA,NAMEB)                                          \
 static READ32_HANDLER( _32x_sh2_##NAMEA##_##NAMEB##_r )                             \
@@ -3395,6 +3756,9 @@ _32X_MAP_WRITEHANDLERS(master_4000,common_4002) // _32x_sh2_master_4000_common_4
 _32X_MAP_READHANDLERS(slave_4000,common_4002)  // _32x_sh2_slave_4000_common_4002_r
 _32X_MAP_WRITEHANDLERS(slave_4000,common_4002) // _32x_sh2_slave_4000_common_4002_w
 
+_32X_MAP_READHANDLERS(common_4004,common_4006)
+_32X_MAP_WRITEHANDLERS(common_4004,common_4006)
+
 _32X_MAP_WRITEHANDLERS(master_4014,master_4016) // _32x_sh2_master_4014_master_4016_w
 _32X_MAP_WRITEHANDLERS(master_4018,master_401a) // _32x_sh2_master_4018_master_401a_w
 _32X_MAP_WRITEHANDLERS(master_401c,master_401e) // _32x_sh2_master_401c_master_401e_w
@@ -3405,16 +3769,6 @@ _32X_MAP_WRITEHANDLERS(slave_401c,slave_401e) // _32x_sh2_slave_401c_slave_401e_
 
 _32X_MAP_RAM_READHANDLERS(commsram) // _32x_sh2_commsram_r
 _32X_MAP_RAM_WRITEHANDLERS(commsram) // _32x_sh2_commsram_w
-
-_32X_MAP_READHANDLERS(common_4100,common_4102) // _32x_sh2_common_4100_common_4102_r
-_32X_MAP_WRITEHANDLERS(common_4100,common_4102) // _32x_sh2_common_4100_common_4102_w
-
-_32X_MAP_READHANDLERS(common_4104,common_4106) // _32x_sh2_common_4104_common_4106_r
-_32X_MAP_WRITEHANDLERS(common_4104,common_4106) // _32x_sh2_common_4104_common_4106_w
-
-_32X_MAP_READHANDLERS(common_4108,common_410a) // _32x_sh2_common_4108_common_410a_r
-_32X_MAP_WRITEHANDLERS(common_4108,common_410a) // _32x_sh2_common_4108_common_410a_w
-
 
 _32X_MAP_RAM_READHANDLERS(framebuffer_dram) // _32x_sh2_framebuffer_dram_r
 _32X_MAP_RAM_WRITEHANDLERS(framebuffer_dram) // _32x_sh2_framebuffer_dram_w
@@ -3434,22 +3788,27 @@ static ADDRESS_MAP_START( sh2_main_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM
 
 	AM_RANGE(0x00004000, 0x00004003) AM_READWRITE( _32x_sh2_master_4000_common_4002_r, _32x_sh2_master_4000_common_4002_w )
+	AM_RANGE(0x00004004, 0x00004007) AM_READWRITE( _32x_sh2_common_4004_common_4006_r, _32x_sh2_common_4004_common_4006_w)
 
-	AM_RANGE(0x00004014, 0x00004017) AM_WRITE( _32x_sh2_master_4014_master_4016_w ) // IRQ clear
-	AM_RANGE(0x00004018, 0x0000401b) AM_WRITE( _32x_sh2_master_4018_master_401a_w ) // IRQ clear
-	AM_RANGE(0x0000401c, 0x0000401f) AM_WRITE( _32x_sh2_master_401c_master_401e_w ) // IRQ clear
+	AM_RANGE(0x00004008, 0x00004013) AM_READWRITE16( _32x_dreq_common_r, _32x_dreq_common_w, 0xffffffff )
+
+	AM_RANGE(0x00004014, 0x00004017) AM_READNOP AM_WRITE( _32x_sh2_master_4014_master_4016_w ) // IRQ clear
+	AM_RANGE(0x00004018, 0x0000401b) AM_READNOP AM_WRITE( _32x_sh2_master_4018_master_401a_w ) // IRQ clear
+	AM_RANGE(0x0000401c, 0x0000401f) AM_READNOP AM_WRITE( _32x_sh2_master_401c_master_401e_w ) // IRQ clear
 
 	AM_RANGE(0x00004020, 0x0000402f) AM_READWRITE( _32x_sh2_commsram_r, _32x_sh2_commsram_w )
-	AM_RANGE(0x00004100, 0x00004103) AM_READWRITE( _32x_sh2_common_4100_common_4102_r, _32x_sh2_common_4100_common_4102_w )
-	AM_RANGE(0x00004104, 0x00004107) AM_READWRITE( _32x_sh2_common_4104_common_4106_r, _32x_sh2_common_4104_common_4106_w )
-	AM_RANGE(0x00004108, 0x0000410b) AM_READWRITE( _32x_sh2_common_4108_common_410a_r, _32x_sh2_common_4108_common_410a_w )
-	AM_RANGE(0x00004200, 0x000043ff) AM_READWRITE(_32x_sh2_paletteram_r, _32x_sh2_paletteram_w)
+	AM_RANGE(0x00004030, 0x0000403f) AM_READWRITE16( _32x_pwm_r, _32x_pwm_w, 0xffffffff )
+
+	AM_RANGE(0x00004100, 0x0000410b) AM_READWRITE16( _32x_common_vdp_regs_r, _32x_common_vdp_regs_w , 0xffffffff)
+	AM_RANGE(0x00004200, 0x000043ff) AM_READWRITE( _32x_sh2_paletteram_r, _32x_sh2_paletteram_w)
 
 	AM_RANGE(0x04000000, 0x0401ffff) AM_READWRITE(_32x_sh2_framebuffer_dram_r, _32x_sh2_framebuffer_dram_w)
 	AM_RANGE(0x04020000, 0x0403ffff) AM_READWRITE(_32x_sh2_framebuffer_overwrite_dram_r, _32x_sh2_framebuffer_overwrite_dram_w)
 
 	AM_RANGE(0x06000000, 0x0603ffff) AM_RAM AM_SHARE("share10")
-	AM_RANGE(0x02000000, 0x023fffff) AM_ROM AM_REGION("gamecart_sh2", 0)
+	AM_RANGE(0x02000000, 0x023fffff) AM_ROM AM_REGION("gamecart_sh2", 0) // program is writeable (wwfraw)
+
+	AM_RANGE(0x22000000, 0x223fffff) AM_ROM AM_REGION("gamecart_sh2", 0) // cart mirror (fifa96)
 
 	AM_RANGE(0xc0000000, 0xc0000fff) AM_RAM
 ADDRESS_MAP_END
@@ -3458,32 +3817,2045 @@ static ADDRESS_MAP_START( sh2_slave_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x00000000, 0x00003fff) AM_ROM
 
 	AM_RANGE(0x00004000, 0x00004003) AM_READWRITE( _32x_sh2_slave_4000_common_4002_r, _32x_sh2_slave_4000_common_4002_w )
+	AM_RANGE(0x00004004, 0x00004007) AM_READWRITE( _32x_sh2_common_4004_common_4006_r, _32x_sh2_common_4004_common_4006_w)
 
-	AM_RANGE(0x00004014, 0x00004017) AM_WRITE( _32x_sh2_slave_4014_slave_4016_w ) // IRQ clear
-	AM_RANGE(0x00004018, 0x0000401b) AM_WRITE( _32x_sh2_slave_4018_slave_401a_w ) // IRQ clear
-	AM_RANGE(0x0000401c, 0x0000401f) AM_WRITE( _32x_sh2_slave_401c_slave_401e_w ) // IRQ clear
+	AM_RANGE(0x00004008, 0x00004013) AM_READWRITE16( _32x_dreq_common_r, _32x_dreq_common_w, 0xffffffff )
+
+	AM_RANGE(0x00004014, 0x00004017) AM_READNOP AM_WRITE( _32x_sh2_slave_4014_slave_4016_w ) // IRQ clear
+	AM_RANGE(0x00004018, 0x0000401b) AM_READNOP AM_WRITE( _32x_sh2_slave_4018_slave_401a_w ) // IRQ clear
+	AM_RANGE(0x0000401c, 0x0000401f) AM_READNOP AM_WRITE( _32x_sh2_slave_401c_slave_401e_w ) // IRQ clear
 
 	AM_RANGE(0x00004020, 0x0000402f) AM_READWRITE( _32x_sh2_commsram_r, _32x_sh2_commsram_w )
-	AM_RANGE(0x00004100, 0x00004103) AM_READWRITE( _32x_sh2_common_4100_common_4102_r, _32x_sh2_common_4100_common_4102_w )
-	AM_RANGE(0x00004104, 0x00004107) AM_READWRITE( _32x_sh2_common_4104_common_4106_r, _32x_sh2_common_4104_common_4106_w )
-	AM_RANGE(0x00004108, 0x0000410b) AM_READWRITE( _32x_sh2_common_4108_common_410a_r, _32x_sh2_common_4108_common_410a_w )
+	AM_RANGE(0x00004030, 0x0000403f) AM_READWRITE16( _32x_pwm_r, _32x_pwm_w, 0xffffffff )
+
+	AM_RANGE(0x00004100, 0x0000410b) AM_READWRITE16( _32x_common_vdp_regs_r, _32x_common_vdp_regs_w , 0xffffffff)
 	AM_RANGE(0x00004200, 0x000043ff) AM_READWRITE(_32x_sh2_paletteram_r, _32x_sh2_paletteram_w)
 
 	AM_RANGE(0x04000000, 0x0401ffff) AM_READWRITE(_32x_sh2_framebuffer_dram_r, _32x_sh2_framebuffer_dram_w)
 	AM_RANGE(0x04020000, 0x0403ffff) AM_READWRITE(_32x_sh2_framebuffer_overwrite_dram_r, _32x_sh2_framebuffer_overwrite_dram_w)
 
 	AM_RANGE(0x06000000, 0x0603ffff) AM_RAM AM_SHARE("share10")
-	AM_RANGE(0x02000000, 0x023fffff) AM_ROM AM_REGION("gamecart_sh2", 0)
+	AM_RANGE(0x02000000, 0x023fffff) AM_ROM AM_REGION("gamecart_sh2", 0) // program is writeable (wwfraw)
+
+	AM_RANGE(0x22000000, 0x223fffff) AM_ROM AM_REGION("gamecart_sh2", 0) // cart mirror (fifa96)
 
 	AM_RANGE(0xc0000000, 0xc0000fff) AM_RAM
 ADDRESS_MAP_END
 
+/****************************************** END 32X related *************************************/
+
+
+/*************************************************************************************************
+ Sega CD related
+*************************************************************************************************/
+
+static UINT16* segacd_4meg_prgram;  // pointer to SubCPU PrgRAM
+static UINT16 segacd_hint_register;
+static UINT16 segacd_imagebuffer_vdot_size;
+static UINT16 segacd_imagebuffer_vcell_size;
+static UINT16 segacd_imagebuffer_hdot_size;
+
+static UINT16 a12000_halt_reset_reg = 0x0000;
+int segacd_conversion_active = 0;
+static UINT16 segacd_stampmap_base_address;
+static UINT16 segacd_imagebuffer_start_address;
+static UINT16 segacd_imagebuffer_offset;
+static tilemap_t    *segacd_stampmap[4];
+//static void segacd_mark_stampmaps_dirty(void);
+
+
+static WRITE16_HANDLER( scd_a12000_halt_reset_w )
+{
+	COMBINE_DATA(&a12000_halt_reset_reg);
+
+	if (ACCESSING_BITS_0_7)
+	{
+		// reset line
+		if (a12000_halt_reset_reg&0x0001)
+			cputag_set_input_line(space->machine, "segacd_68k", INPUT_LINE_RESET, CLEAR_LINE);
+		else
+			cputag_set_input_line(space->machine, "segacd_68k", INPUT_LINE_RESET, ASSERT_LINE);
+
+		// request BUS
+		if (a12000_halt_reset_reg&0x0002)
+			cputag_set_input_line(space->machine, "segacd_68k", INPUT_LINE_HALT, ASSERT_LINE);
+		else
+			cputag_set_input_line(space->machine, "segacd_68k", INPUT_LINE_HALT, CLEAR_LINE);
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		if (a12000_halt_reset_reg&0x0100)
+		{
+			// check if it's masked! (irq check function?)
+			cputag_set_input_line(space->machine, "segacd_68k", 2, ASSERT_LINE);
+		}
+
+		if (a12000_halt_reset_reg&0x8000)
+		{
+			printf("a12000_halt_reset_reg & 0x8000 set\n"); // irq2 mask?
+		}
+
+
+	}
+}
+
+static READ16_HANDLER( scd_a12000_halt_reset_r )
+{
+	return a12000_halt_reset_reg;
+}
+
+
+/********************************************************************************
+ MEMORY MODE CONTROL
+  - main / sub sides differ!
+********************************************************************************/
+
+//
+// we might need a delay on the segacd_maincpu_has_ram_access registers, as they actually indicate requests being made
+// so probably don't change instantly...
+//
+
+int segacd_dmna = 0;
+int segacd_ret = 0;
+
+static TIMER_CALLBACK( segacd_dmna_ret_timer_callback )
+{
+
+	// this is the initial state, and the state after changing modes?
+	if ((segacd_dmna==0) && (segacd_ret ==0))
+	{
+		//printf("aaa %d %d\n", segacd_dmna, segacd_ret);
+		segacd_dmna = 0;
+		segacd_ret = 1;
+		//printf("bbb %d %d\n", segacd_dmna, segacd_ret);
+	}
+	else if ((segacd_dmna==1) && (segacd_ret == 1))
+	{
+		//printf("aaa %d %d\n", segacd_dmna, segacd_ret);
+		segacd_dmna = 1;
+		segacd_ret = 0;
+		//printf("bbb %d %d\n", segacd_dmna, segacd_ret);
+	}
+	else if ((segacd_dmna==1) && (segacd_ret == 0))
+	{
+		//printf("aaa %d %d\n", segacd_dmna, segacd_ret);
+		segacd_dmna = 0;
+		segacd_ret = 1;
+		//printf("bbb %d %d\n", segacd_dmna, segacd_ret);
+	}
+	else
+	{
+		printf("huh? %d %d\n", segacd_dmna, segacd_ret);
+	}
+}
+
+
+static UINT8 segacd_ram_writeprotect_bits;
+static int segacd_ram_mode;
+static int segacd_ram_mode_old;
+
+//static int segacd_maincpu_has_ram_access = 0;
+static int segacd_4meg_prgbank = 0; // which bank the MainCPU can see of the SubCPU PrgRAM
+static int segacd_memory_priority_mode = 0;
+static int segacd_stampsize;
+
+
+static READ16_HANDLER( scd_a12002_memory_mode_r )
+{
+	return (segacd_ram_writeprotect_bits << 8) |
+		   (segacd_4meg_prgbank << 6) |
+		   (segacd_ram_mode << 2) |
+		   ((segacd_dmna) << 1) |
+		   ((segacd_ret) << 0);
+}
+
+
+/* I'm still not 100% clear how this works, the sources I have are a bit vague,
+   it might still be incorrect in both modes
+
+  for a simple way to swap blocks of ram between cpus this is stupidly convoluted
+
+ */
+
+// DMNA = Decleration Mainram No Access (bit 0)
+// RET = Return access (bit 1)
+
+/* In Mode 0
+
+*/
+
+/* In Mode 1
+
+
+RET
+
+0 = Main CPU Accesses WordRam0 (1st Half of WordRAM)
+    Sub CPU  Accesses WordRam1 (2nd Half of WordRAM)
+
+1 = Main CPU Accesses WordRam1 (2nd Half of WordRAM)
+    Sub  CPU Accesses WordRam0 (1st Half of WordRAM)
+
+DMNA
+
+Setting this bis sends a Swap request to the SUB-CPU (Main CPU access only?)
+  1 = Swap Reqested / In Progress
+  0 = Swap Complete
+
+ (personal note, is this just a software flag? in this mode? sub p11/p12)
+
+*/
+
+static WRITE16_HANDLER( scd_a12002_memory_mode_w )
+{
+	//printf("scd_a12002_memory_mode_w %04x %04x\n", data, mem_mask);
+
+	if (ACCESSING_BITS_0_7)
+	{
+
+		//if (data&0x0001) printf("ret bit set (invalid? can't set from main68k?)\n");
+		if (data&0x0002)
+		{
+			//printf("dmna set (swap requested)\n"); // give ram to sub?
+
+			// this should take some time?
+
+			//segacd_ret = 1;
+
+			//printf("main cpu dmna set dmna: %d ret: %d\n", segacd_dmna, segacd_ret);
+			if (segacd_ram_mode==0)
+			{
+				if (!timer_enabled(segacd_dmna_ret_timer))
+				{
+					if (!segacd_dmna)
+					{
+						//printf("main dmna\n");
+						segacd_dmna = 1;
+						timer_adjust_oneshot(segacd_dmna_ret_timer, ATTOTIME_IN_USEC(100), 0);
+					}
+				}
+			}
+			else
+			{
+				printf("dmna bit in mode 1\n");
+			}
+		}
+
+
+		//if (data&0x0004) printf("mode set (invalid? can't set from main68k?)\n");
+		//if (data&0x0038) printf("unknown bits set\n");
+
+		//if (data&0x00c0)
+		{
+			//printf("bank set to %02x\n", (data&0x00c0)>>6);
+			segacd_4meg_prgbank = (data&0x00c0)>>6;
+
+		}
+
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		if (data & 0xff00)
+		{
+			printf("write protect bits set %02x\n", data >> 8);
+		}
+
+		segacd_ram_writeprotect_bits = data >> 8;
+	}
+
+}
+
+// can't read the bank?
+static READ16_HANDLER( segacd_sub_memory_mode_r )
+{
+	return (segacd_ram_writeprotect_bits << 8) |
+		 /*(segacd_4meg_prgbank << 6) | */
+		   (segacd_memory_priority_mode << 3) |
+		   (segacd_ram_mode << 2) |
+		   ((segacd_dmna) << 1) |
+		   ((segacd_ret) << 0);
+}
+
+static WRITE16_HANDLER( segacd_sub_memory_mode_w )
+{
+	//printf("segacd_sub_memory_mode_w %04x %04x\n", data, mem_mask);
+
+	if (ACCESSING_BITS_0_7)
+	{
+		if (data&0x0001)
+		{
+			//printf("ret bit set\n");
+			//segacd_dmna = 0;
+
+
+			//printf("sub cpu ret set dmna: %d ret: %d\n", segacd_dmna, segacd_ret);
+
+			if (segacd_ram_mode==0)
+			{
+				if (!timer_enabled(segacd_dmna_ret_timer))
+				{
+					if (segacd_dmna)
+					{
+					//  printf("sub ret\n");
+					//  segacd_ret = 1;
+					//  segacd_dmna = 0;
+						timer_adjust_oneshot(segacd_dmna_ret_timer, ATTOTIME_IN_USEC(100), 0);
+					}
+				}
+			}
+			else
+			{
+				// in mode 1 this changes the word ram 1 to main cpu and word ram 0 to sub cpu?
+				// but should be proceeded by a dmna request? is this only valid if dmna has been
+				// set to 1 by the main CPU first?
+				printf("ret bit in mode 1\n");
+				segacd_ret = 1;
+			}
+		}
+		else
+		{
+			// in mode 1 this changes the word ram 0 to main cpu and word ram 1 to sub cpu?
+			// but should be proceeded by a dmna request? is this only valid if dmna has been
+			// set to 1 by the main CPU first?
+			if (segacd_ram_mode==1)
+			{
+				segacd_ret = 0;
+			}
+		}
+
+
+		//if (data&0x0002) printf("dmna set (swap requested) (invalid, can't be set from sub68k?\n");
+
+		//if (data&0x0004)
+		{
+			segacd_ram_mode = (data&0x0004)>>2;
+			if (segacd_ram_mode!=segacd_ram_mode_old)
+			{
+				printf("mode set %d\n", segacd_ram_mode);
+				segacd_ram_mode_old = segacd_ram_mode;
+
+				if (segacd_ram_mode==0)
+				{
+					// reset it flags etc.?
+					segacd_ret = 0;
+					segacd_dmna = 0;
+					timer_adjust_oneshot(segacd_dmna_ret_timer, ATTOTIME_IN_USEC(100), 0);
+				}
+				else
+				{
+					segacd_ret = 0;
+					segacd_dmna = 0;
+
+
+				}
+			}
+		}
+
+		//if (data&0x0018)
+		{
+
+			segacd_memory_priority_mode = (data&0x0018)>>3;
+			//printf("priority mode bits set to %d\n", segacd_memory_priority_mode);
+
+		}
+
+		//if (data&0x00e0) printf("unknown bits set\n");
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		if (data & 0xff00)
+		{
+			printf("write protect bits set %02x (invalid, can only be set by main68k)\n", data >> 8);
+		}
+	}
+
+}
+
+
+/********************************************************************************
+ END MEMORY MODE CONTROL
+********************************************************************************/
+
+/********************************************************************************
+ COMMUNICATION FLAGS
+  - main / sub sides differ in which bits are write only
+********************************************************************************/
+
+static UINT16 segacd_comms_flags = 0x0000;
+
+static READ16_HANDLER( segacd_comms_flags_r )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	return segacd_comms_flags;
+}
+
+static WRITE16_HANDLER( segacd_comms_flags_subcpu_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		segacd_comms_flags = (segacd_comms_flags & 0xff00) | (data & 0x00ff);
+		timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		if (data & 0xff00)
+		{
+			printf("sub cpu attempting to write non-zero data to read-only comms flags!\n");
+		}
+	}
+}
+
+static WRITE16_HANDLER( segacd_comms_flags_maincpu_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		if (data & 0x00ff)
+		{
+			printf("main cpu attempting to write non-zero data to read-only comms flags!\n");
+		}
+
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		segacd_comms_flags = (segacd_comms_flags & 0x00ff) | (data & 0xff00);
+		timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	}
+}
+
+
+
+static WRITE16_HANDLER( scd_4m_prgbank_ram_w )
+{
+	UINT16 realoffset = ((segacd_4meg_prgbank * 0x20000)/2) + offset;
+
+	// todo:
+	// check for write protection? (or does that only apply to writes on the SubCPU side?
+
+	COMBINE_DATA(&segacd_4meg_prgram[realoffset]);
+
+}
+
+
+/* Callback when the genesis enters interrupt code */
+static IRQ_CALLBACK(segacd_sub_int_callback)
+{
+	if (irqline==2)
+	{
+		// clear this bit
+		a12000_halt_reset_reg &= ~0x0100;
+		cputag_set_input_line(device->machine, "segacd_68k", 2, CLEAR_LINE);
+	}
+
+	return (0x60+irqline*4)/4; // vector address
+}
+
+UINT16 segacd_comms_part1[0x8];
+UINT16 segacd_comms_part2[0x8];
+
+static READ16_HANDLER( segacd_comms_main_part1_r )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	return segacd_comms_part1[offset];
+}
+
+static WRITE16_HANDLER( segacd_comms_main_part1_w )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	COMBINE_DATA(&segacd_comms_part1[offset]);
+}
+
+static READ16_HANDLER( segacd_comms_main_part2_r )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	return segacd_comms_part2[offset];
+}
+
+static WRITE16_HANDLER( segacd_comms_main_part2_w )
+{
+	printf("Sega CD main CPU attempting to write to read only comms regs\n");
+}
+
+
+static READ16_HANDLER( segacd_comms_sub_part1_r )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	return segacd_comms_part1[offset];
+}
+
+static WRITE16_HANDLER( segacd_comms_sub_part1_w )
+{
+	printf("Sega CD sub CPU attempting to write to read only comms regs\n");
+}
+
+static READ16_HANDLER( segacd_comms_sub_part2_r )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	return segacd_comms_part2[offset];
+}
+
+static WRITE16_HANDLER( segacd_comms_sub_part2_w )
+{
+	timer_call_after_resynch(space->machine, NULL, 0, NULL);
+	COMBINE_DATA(&segacd_comms_part2[offset]);
+}
+
+/**************************************************************
+ CDC Stuff ********
+**************************************************************/
+
+static int segacd_cdc_regaddress;
+static int segacd_cdc_destination_device;
+static UINT8 segacd_cdc_registers[0x10];
+
+
+static WRITE16_HANDLER( segacd_cdc_mode_address_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		segacd_cdc_regaddress = data & 0x0f;
+		if (data & 0xf0) printf("unknown bits set in register address write %04x\n", data);
+
+		printf("CDC register address set to %02x\n" , segacd_cdc_regaddress);
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		segacd_cdc_destination_device = (data & 0x0700)>>8;
+		if (data & 0xf800) printf("unknown bits set in destination address write %04x\n",data);
+
+		printf("destination set to: ");
+		switch (segacd_cdc_destination_device&0x7)
+		{
+			case 0x00: printf("Illegal\n"); break;
+			case 0x01: printf("Illegal\n"); break;
+			case 0x02: printf("Main Cpu Read\n"); break;
+			case 0x03: printf("Sub Cpu Read\n"); break;
+			case 0x04: printf("RFC5164 PCM\n"); break;
+			case 0x05: printf("PRG RAM\n"); break;
+			case 0x06: printf("Illegal\n"); break;
+			case 0x07: printf("2M AM (2M Mode) / SUB CPU 1H RAM\n"); break;
+		}
+	}
+}
+
+static READ16_HANDLER( segacd_cdc_mode_address_r )
+{
+	UINT16 retdata = 0x0000;
+
+	if (ACCESSING_BITS_0_7)
+	{
+		retdata |= segacd_cdc_regaddress;
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		retdata |= segacd_cdc_destination_device << 8;
+
+		// todo: hook them up
+		int data_set_ready = 0;
+		int end_of_data_transfer = 0;
+
+		if (data_set_ready) retdata |= 0x4000;
+		if (end_of_data_transfer) retdata |= 0x8000;
+
+	}
+
+	return retdata;
+}
+
+static WRITE16_HANDLER( segacd_cdc_data_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		segacd_cdc_registers[segacd_cdc_regaddress] = data;
+		printf("CDC Register %02x set to %02x\n", segacd_cdc_regaddress, data & 0xff);
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		// nothing here?
+	}
+}
+
+static READ16_HANDLER( segacd_cdc_data_r )
+{
+	UINT16 retdata = 0x0000;
+
+	if (ACCESSING_BITS_0_7)
+	{
+		retdata |= segacd_cdc_registers[segacd_cdc_regaddress];
+		printf("CDC Register %02x Read\n", segacd_cdc_regaddress);
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		// nothing here?
+	}
+
+	return retdata;
+}
+
+
+static UINT16* segacd_dataram;
+static UINT16* segacd_dataram2;
+
+
+static READ16_HANDLER( segacd_main_dataram_part1_r )
+{
+	if (segacd_ram_mode==0)
+	{
+		// is this correct?
+		if (!segacd_dmna)
+		{
+			//printf("segacd_main_dataram_part1_r in mode 0 %08x %04x\n", offset*2, segacd_dataram[offset]);
+
+			return segacd_dataram[offset];
+
+		}
+		else
+		{
+			printf("Illegal: segacd_main_dataram_part1_r in mode 0 without permission\n");
+			return 0xffff;
+		}
+
+	}
+	else if (segacd_ram_mode==1)
+	{
+
+		if (offset<0x20000/2)
+		{
+			// wordram accees
+			//printf("Unspported: segacd_main_dataram_part1_r (word RAM) in mode 1\n");
+
+			// ret bit set by sub cpu determines which half of WorkRAM we have access to?
+			if (segacd_ret)
+			{
+				return segacd_dataram[offset+0x20000/2];
+			}
+			else
+			{
+				return segacd_dataram[offset+0x00000/2];
+			}
+
+		}
+		else
+		{
+			printf("Unspported: segacd_main_dataram_part1_r (Cell rearranged RAM) in mode 1\n");
+			return 0x0000;
+		}
+	}
+
+	return 0x0000;
+}
+
+static WRITE16_HANDLER( segacd_main_dataram_part1_w )
+{
+	if (segacd_ram_mode==0)
+	{
+		// is this correct?
+		if (!segacd_dmna)
+		{
+			COMBINE_DATA(&segacd_dataram[offset]);
+			segacd_mark_tiles_dirty(space->machine, offset);
+		}
+		else
+		{
+			printf("Illegal: segacd_main_dataram_part1_w in mode 0 without permission\n");
+		}
+
+	}
+	else if (segacd_ram_mode==1)
+	{
+		if (offset<0x20000/2)
+		{
+			//printf("Unspported: segacd_main_dataram_part1_w (word RAM) in mode 1\n");
+			// wordram accees
+
+			// ret bit set by sub cpu determines which half of WorkRAM we have access to?
+			if (segacd_ret)
+			{
+				COMBINE_DATA(&segacd_dataram[offset+0x20000/2]);
+			}
+			else
+			{
+				COMBINE_DATA(&segacd_dataram[offset+0x00000/2]);
+			}
+		}
+		else
+		{
+			printf("Unspported: segacd_main_dataram_part1_w (Cell rearranged RAM) in mode 1 (illega?)\n"); // is this legal??
+		}
+	}
+}
+
+static READ16_HANDLER( scd_hint_vector_r )
+{
+//  printf("read HINT offset %d\n", offset);
+
+	switch (offset&1)
+	{
+		case 0x00:
+			//return 0x00ff; // doesn't make much sense..
+			return 0xffff;
+		case 0x01:
+			return segacd_hint_register;
+	}
+
+	return 0;
+
+}
+
+static READ16_HANDLER( scd_a12006_hint_register_r )
+{
+	return segacd_hint_register;
+}
+
+static WRITE16_HANDLER( scd_a12006_hint_register_w )
+{
+	COMBINE_DATA(&segacd_hint_register);
+}
+
+
+static TIMER_CALLBACK( segacd_gfx_conversion_timer_callback )
+{
+	// todo irqmask
+
+	//printf("segacd_gfx_conversion_timer_callback\n");
+
+	if (segacd_irq_mask & 0x02)
+		cputag_set_input_line(machine, "segacd_68k", 1, HOLD_LINE);
+
+	segacd_conversion_active = 0;
+}
+
+
+// the tiles in RAM are 8x8 tiles
+// they are referenced in the cell look-up map as either 16x16 or 32x32 tiles (made of 4 / 16 8x8 tiles)
+
+#define SEGACD_BYTES_PER_TILE16 (128)
+#define SEGACD_BYTES_PER_TILE32 (512)
+
+#define SEGACD_NUM_TILES16 (0x40000/SEGACD_BYTES_PER_TILE16)
+#define SEGACD_NUM_TILES32 (0x40000/SEGACD_BYTES_PER_TILE32)
+
+/*
+static const gfx_layout sega_8x8_layout =
+{
+    8,8,
+    SEGACD_NUM_TILES16,
+    4,
+    { 0,1,2,3 },
+    { 8,12,0,4,24,28,16,20 },
+    { 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32 },
+    8*32
+};
+*/
+
+/* also create pre-rotated versions.. - it might still be possible to use these decodes with our own copying routines */
+
+
+#define _16x16_SEQUENCE_1  { 8,12,0,4,24,28,16,20, 512+8, 512+12, 512+0, 512+4, 512+24, 512+28, 512+16, 512+20 },
+#define _16x16_SEQUENCE_1_FLIP  { 512+20,512+16,512+28,512+24,512+4,512+0, 512+12,512+8, 20,16,28,24,4,0,12,8 },
+
+#define _16x16_SEQUENCE_2  { 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32, 8*32, 9*32,10*32,11*32,12*32,13*32,14*32,15*32 },
+#define _16x16_SEQUENCE_2_FLIP  { 15*32, 14*32, 13*32, 12*32, 11*32, 10*32, 9*32, 8*32, 7*32, 6*32, 5*32, 4*32, 3*32, 2*32, 1*32, 0*32 },
+
+
+#define _16x16_START \
+{ \
+	16,16, \
+	SEGACD_NUM_TILES16, \
+	4, \
+	{ 0,1,2,3 }, \
+
+#define _16x16_END \
+		8*128 \
+}; \
+
+#define _32x32_START \
+{ \
+	32,32, \
+	SEGACD_NUM_TILES32, \
+	4, \
+	{ 0,1,2,3 }, \
+
+
+#define _32x32_END \
+	8*512 \
+}; \
+
+
+
+#define _32x32_SEQUENCE_1 \
+	{ 8,12,0,4,24,28,16,20, \
+	1024+8, 1024+12, 1024+0, 1024+4, 1024+24, 1024+28, 1024+16, 1024+20, \
+	2048+8, 2048+12, 2048+0, 2048+4, 2048+24, 2048+28, 2048+16, 2048+20, \
+	3072+8, 3072+12, 3072+0, 3072+4, 3072+24, 3072+28, 3072+16, 3072+20  \
+	}, \
+
+#define _32x32_SEQUENCE_1_FLIP \
+{ 3072+20, 3072+16, 3072+28, 3072+24, 3072+4, 3072+0, 3072+12, 3072+8, \
+  2048+20, 2048+16, 2048+28, 2048+24, 2048+4, 2048+0, 2048+12, 2048+8, \
+  1024+20, 1024+16, 1024+28, 1024+24, 1024+4, 1024+0, 1024+12, 1024+8, \
+  20, 16, 28, 24, 4, 0, 12, 8}, \
+
+
+#define _32x32_SEQUENCE_2 \
+		{ 0*32, 1*32, 2*32, 3*32, 4*32, 5*32, 6*32, 7*32, \
+    	8*32, 9*32, 10*32, 11*32, 12*32, 13*32, 14*32, 15*32, \
+	 16*32,17*32,18*32,19*32,20*32,21*32,22*32,23*32, \
+	 24*32,25*32, 26*32, 27*32, 28*32, 29*32, 30*32, 31*32}, \
+
+#define _32x32_SEQUENCE_2_FLIP \
+{ 31*32, 30*32, 29*32, 28*32, 27*32, 26*32, 25*32, 24*32, \
+  23*32, 22*32, 21*32, 20*32, 19*32, 18*32, 17*32, 16*32, \
+  15*32, 14*32, 13*32, 12*32, 11*32, 10*32, 9*32 , 8*32 , \
+  7*32 , 6*32 , 5*32 , 4*32 , 3*32 , 2*32 , 1*32 , 0*32}, \
+
+
+/* 16x16 decodes */
+static const gfx_layout sega_16x16_r00_f0_layout =
+_16x16_START
+	_16x16_SEQUENCE_1
+	_16x16_SEQUENCE_2
+_16x16_END
+
+static const gfx_layout sega_16x16_r01_f0_layout =
+_16x16_START
+	_16x16_SEQUENCE_2
+	_16x16_SEQUENCE_1_FLIP
+_16x16_END
+
+static const gfx_layout sega_16x16_r10_f0_layout =
+_16x16_START
+	_16x16_SEQUENCE_1_FLIP
+	_16x16_SEQUENCE_2_FLIP
+_16x16_END
+
+static const gfx_layout sega_16x16_r11_f0_layout =
+_16x16_START
+	_16x16_SEQUENCE_2_FLIP
+	_16x16_SEQUENCE_1
+_16x16_END
+
+static const gfx_layout sega_16x16_r00_f1_layout =
+_16x16_START
+	_16x16_SEQUENCE_1_FLIP
+	_16x16_SEQUENCE_2
+_16x16_END
+
+static const gfx_layout sega_16x16_r01_f1_layout =
+_16x16_START
+	_16x16_SEQUENCE_2
+	_16x16_SEQUENCE_1
+_16x16_END
+
+static const gfx_layout sega_16x16_r10_f1_layout =
+_16x16_START
+	_16x16_SEQUENCE_1
+	_16x16_SEQUENCE_2_FLIP
+_16x16_END
+
+static const gfx_layout sega_16x16_r11_f1_layout =
+_16x16_START
+	_16x16_SEQUENCE_2_FLIP
+	_16x16_SEQUENCE_1_FLIP
+_16x16_END
+
+/* 32x32 decodes */
+static const gfx_layout sega_32x32_r00_f0_layout =
+_32x32_START
+	_32x32_SEQUENCE_1
+	_32x32_SEQUENCE_2
+_32x32_END
+
+static const gfx_layout sega_32x32_r01_f0_layout =
+_32x32_START
+	_32x32_SEQUENCE_2
+	_32x32_SEQUENCE_1_FLIP
+_32x32_END
+
+static const gfx_layout sega_32x32_r10_f0_layout =
+_32x32_START
+	_32x32_SEQUENCE_1_FLIP
+	_32x32_SEQUENCE_2_FLIP
+_32x32_END
+
+static const gfx_layout sega_32x32_r11_f0_layout =
+_32x32_START
+	_32x32_SEQUENCE_2_FLIP
+	_32x32_SEQUENCE_1
+_32x32_END
+
+static const gfx_layout sega_32x32_r00_f1_layout =
+_32x32_START
+	_32x32_SEQUENCE_1_FLIP
+	_32x32_SEQUENCE_2
+_32x32_END
+
+static const gfx_layout sega_32x32_r01_f1_layout =
+_32x32_START
+	_32x32_SEQUENCE_2
+	_32x32_SEQUENCE_1
+_32x32_END
+
+static const gfx_layout sega_32x32_r10_f1_layout =
+_32x32_START
+	_32x32_SEQUENCE_1
+	_32x32_SEQUENCE_2_FLIP
+_32x32_END
+
+static const gfx_layout sega_32x32_r11_f1_layout =
+_32x32_START
+	_32x32_SEQUENCE_2_FLIP
+	_32x32_SEQUENCE_1_FLIP
+_32x32_END
+
+
+static void segacd_mark_tiles_dirty(running_machine* machine, int offset)
+{
+	gfx_element_mark_dirty(machine->gfx[0], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[1], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[2], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[3], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[4], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[5], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[6], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+	gfx_element_mark_dirty(machine->gfx[7], (offset*2)/(SEGACD_BYTES_PER_TILE16));
+
+	gfx_element_mark_dirty(machine->gfx[8], (offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[9], (offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[10],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[11],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[12],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[13],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[14],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+	gfx_element_mark_dirty(machine->gfx[15],(offset*2)/(SEGACD_BYTES_PER_TILE32));
+}
+
+
+// mame specific.. map registers to which tilemap cache we use
+static int segacd_get_active_stampmap_tilemap(void)
+{
+	return (segacd_stampsize & 0x6)>>1;
+}
+
+#if 0
+static void segacd_mark_stampmaps_dirty(void)
+{
+	tilemap_mark_all_tiles_dirty(segacd_stampmap[segacd_get_active_stampmap_tilemap()]);
+
+	//tilemap_mark_all_tiles_dirty(segacd_stampmap[0]);
+	//tilemap_mark_all_tiles_dirty(segacd_stampmap[1]);
+	//tilemap_mark_all_tiles_dirty(segacd_stampmap[2]);
+	//tilemap_mark_all_tiles_dirty(segacd_stampmap[3]);
+}
+#endif
+
+void SCD_GET_TILE_INFO_16x16_1x1( int& tile_region, int& tileno, int tile_index )
+{
+	tile_region = 0; // 16x16 tiles
+	int tile_base = (segacd_stampmap_base_address & 0xff80) * 4;
+
+	int tiledat = segacd_dataram[((tile_base>>1)+tile_index) & 0x1ffff];
+	tileno = tiledat & 0x07ff;
+	int xflip =  tiledat & 0x8000;
+	int roll  =  (tiledat & 0x6000)>>13;
+
+	if (xflip) tile_region += 4;
+	tile_region+=roll;
+}
+
+void SCD_GET_TILE_INFO_32x32_1x1( int& tile_region, int& tileno, int tile_index )
+{
+	tile_region = 8; // 32x32 tiles
+	int tile_base = (segacd_stampmap_base_address & 0xffe0) * 4;
+
+	int tiledat = segacd_dataram[((tile_base>>1)+tile_index) & 0x1ffff];
+	tileno = (tiledat & 0x07fc)>>2;
+	int xflip =  tiledat & 0x8000;
+	int roll  =  (tiledat & 0x6000)>>13;
+
+	if (xflip) tile_region += 4;
+	tile_region+=roll;
+}
+
+
+void SCD_GET_TILE_INFO_16x16_16x16( int& tile_region, int& tileno, int tile_index )
+{
+	tile_region = 0; // 16x16 tiles
+	int tile_base = (0x8000) * 4; // fixed address in this mode
+
+	int tiledat = segacd_dataram[((tile_base>>1)+tile_index) & 0x1ffff];
+	tileno = tiledat & 0x07ff;
+	int xflip =  tiledat & 0x8000;
+	int roll  =  (tiledat & 0x6000)>>13;
+
+	if (xflip) tile_region += 4;
+	tile_region+=roll;
+}
+
+
+void SCD_GET_TILE_INFO_32x32_16x16( int& tile_region, int& tileno, int tile_index )
+{
+	tile_region = 8; // 32x32 tiles
+	int tile_base = (segacd_stampmap_base_address & 0xe000) * 4;
+
+	int tiledat = segacd_dataram[((tile_base>>1)+tile_index) & 0x1ffff];
+	tileno = (tiledat & 0x07fc)>>2;
+	int xflip =  tiledat & 0x8000;
+	int roll  =  (tiledat & 0x6000)>>13;
+
+	if (xflip) tile_region += 4;
+	tile_region+=roll;
+}
+
+/* Tilemap callbacks (we don't actually use the tilemaps due to the excessive overhead */
+
+
+
+static TILE_GET_INFO( get_stampmap_16x16_1x1_tile_info )
+{
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_16x16_1x1(tile_region,tileno,(int)tile_index);
+	SET_TILE_INFO(tile_region, tileno, 0, 0);
+}
+
+static TILE_GET_INFO( get_stampmap_32x32_1x1_tile_info )
+{
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_32x32_1x1(tile_region,tileno,(int)tile_index);
+	SET_TILE_INFO(tile_region, tileno, 0, 0);
+}
+
+
+static TILE_GET_INFO( get_stampmap_16x16_16x16_tile_info )
+{
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_16x16_16x16(tile_region,tileno,(int)tile_index);
+	SET_TILE_INFO(tile_region, tileno, 0, 0);
+}
+
+static TILE_GET_INFO( get_stampmap_32x32_16x16_tile_info )
+{
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_32x32_16x16(tile_region,tileno,(int)tile_index);
+	SET_TILE_INFO(tile_region, tileno, 0, 0);
+}
+
+// non-tilemap functions to get a pixel from a 'tilemap' based on the above, but looking up each pixel, as to avoid the heavy cache bitmap
+
+INLINE UINT8 get_stampmap_16x16_1x1_tile_info_pixel(running_machine* machine, int xpos, int ypos)
+{
+	const int tilesize = 4; // 0xf pixels
+	const int tilemapsize = 0x0f;
+
+	int wraparound = segacd_stampsize&1;
+
+	int xtile = xpos / (1<<tilesize);
+	int ytile = ypos / (1<<tilesize);
+
+	if (wraparound)
+	{
+		// wrap...
+		xtile &= tilemapsize;
+		ytile &= tilemapsize;
+	}
+	else
+	{
+		if (xtile>tilemapsize) return 0;
+		if (xtile<0) return 0;
+
+		if (ytile>tilemapsize) return 0;
+		if (ytile<0) return 0;
+	}
+
+	int tile_index = (ytile * (tilemapsize+1)) + xtile;
+
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_16x16_1x1(tile_region,tileno,(int)tile_index);
+
+	const gfx_element *gfx = machine->gfx[tile_region];
+	tileno %= gfx->total_elements;
+	const UINT8* srcdata = gfx_element_get_data(gfx, tileno);
+	return srcdata[((ypos&((1<<tilesize)-1))*(1<<tilesize))+(xpos&((1<<tilesize)-1))];
+}
+
+INLINE UINT8 get_stampmap_32x32_1x1_tile_info_pixel(running_machine* machine, int xpos, int ypos)
+{
+	const int tilesize = 5; // 0x1f pixels
+	const int tilemapsize = 0x07;
+
+	int wraparound = segacd_stampsize&1;
+
+	int xtile = xpos / (1<<tilesize);
+	int ytile = ypos / (1<<tilesize);
+
+	if (wraparound)
+	{
+		// wrap...
+		xtile &= tilemapsize;
+		ytile &= tilemapsize;
+	}
+	else
+	{
+		if (xtile>tilemapsize) return 0;
+		if (xtile<0) return 0;
+
+		if (ytile>tilemapsize) return 0;
+		if (ytile<0) return 0;
+	}
+
+	int tile_index = (ytile * (tilemapsize+1)) + xtile;
+
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_32x32_1x1(tile_region,tileno,(int)tile_index);
+
+	const gfx_element *gfx = machine->gfx[tile_region];
+	tileno %= gfx->total_elements;
+	const UINT8* srcdata = gfx_element_get_data(gfx, tileno);
+	return srcdata[((ypos&((1<<tilesize)-1))*(1<<tilesize))+(xpos&((1<<tilesize)-1))];
+}
+
+INLINE UINT8 get_stampmap_16x16_16x16_tile_info_pixel(running_machine* machine, int xpos, int ypos)
+{
+	const int tilesize = 4; // 0xf pixels
+	const int tilemapsize = 0xff;
+
+	int wraparound = segacd_stampsize&1;
+
+	int xtile = xpos / (1<<tilesize);
+	int ytile = ypos / (1<<tilesize);
+
+	if (wraparound)
+	{
+		// wrap...
+		xtile &= tilemapsize;
+		ytile &= tilemapsize;
+	}
+	else
+	{
+		if (xtile>tilemapsize) return 0;
+		if (xtile<0) return 0;
+
+		if (ytile>tilemapsize) return 0;
+		if (ytile<0) return 0;
+	}
+
+	int tile_index = (ytile * (tilemapsize+1)) + xtile;
+
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_16x16_16x16(tile_region,tileno,(int)tile_index);
+
+	const gfx_element *gfx = machine->gfx[tile_region];
+	tileno %= gfx->total_elements;
+	const UINT8* srcdata = gfx_element_get_data(gfx, tileno);
+	return srcdata[((ypos&((1<<tilesize)-1))*(1<<tilesize))+(xpos&((1<<tilesize)-1))];
+}
+
+INLINE UINT8 get_stampmap_32x32_16x16_tile_info_pixel(running_machine* machine, int xpos, int ypos)
+{
+	const int tilesize = 5; // 0x1f pixels
+	const int tilemapsize = 0x7f;
+
+	int wraparound = segacd_stampsize&1;
+
+	int xtile = xpos / (1<<tilesize);
+	int ytile = ypos / (1<<tilesize);
+
+	if (wraparound)
+	{
+		// wrap...
+		xtile &= tilemapsize;
+		ytile &= tilemapsize;
+	}
+	else
+	{
+		if (xtile>tilemapsize) return 0;
+		if (xtile<0) return 0;
+
+		if (ytile>tilemapsize) return 0;
+		if (ytile<0) return 0;
+	}
+
+	int tile_index = (ytile * (tilemapsize+1)) + xtile;
+
+	int tile_region, tileno;
+	SCD_GET_TILE_INFO_32x32_16x16(tile_region,tileno,(int)tile_index);
+
+	const gfx_element *gfx = machine->gfx[tile_region];
+	tileno %= gfx->total_elements;
+	const UINT8* srcdata = gfx_element_get_data(gfx, tileno);
+	return srcdata[((ypos&((1<<tilesize)-1))*(1<<tilesize))+(xpos&((1<<tilesize)-1))];
+}
+
+
+
+
+/* main CPU map set up in INIT */
+void segacd_init_main_cpu( running_machine* machine )
+{
+	address_space* space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+
+	segacd_4meg_prgbank = 0;
+
+
+	memory_unmap_readwrite(space, 0x20000,0x3fffff,0,0);
+
+	memory_install_read_bank(space, 0x0020000, 0x003ffff, 0, 0, "scd_4m_prgbank");
+	memory_set_bankptr(space->machine,  "scd_4m_prgbank", segacd_4meg_prgram + segacd_4meg_prgbank * 0x20000 );
+	memory_install_write16_handler (space, 0x0020000, 0x003ffff, 0, 0, scd_4m_prgbank_ram_w );
+	segacd_wordram_mapped = 1;
+
+
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x200000, 0x23ffff, 0, 0, segacd_main_dataram_part1_r, segacd_main_dataram_part1_w); // RAM shared with sub
+
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa12000, 0xa12001, 0, 0, scd_a12000_halt_reset_r, scd_a12000_halt_reset_w); // sub-cpu control
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa12002, 0xa12003, 0, 0, scd_a12002_memory_mode_r, scd_a12002_memory_mode_w); // memory mode / write protect
+
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa12006, 0xa12007, 0, 0, scd_a12006_hint_register_r, scd_a12006_hint_register_w); // where HINT points on main CPU
+
+
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa1200e, 0xa1200f, 0, 0, segacd_comms_flags_r, segacd_comms_flags_maincpu_w); // communication flags block
+
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa12010, 0xa1201f, 0, 0, segacd_comms_main_part1_r, segacd_comms_main_part1_w);
+	memory_install_readwrite16_handler(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa12020, 0xa1202f, 0, 0, segacd_comms_main_part2_r, segacd_comms_main_part2_w);
+
+
+	cpu_set_irq_callback(machine->device("segacd_68k"), segacd_sub_int_callback);
+
+	memory_install_read16_handler (space, 0x0000070, 0x0000073, 0, 0, scd_hint_vector_r );
+
+	segacd_gfx_conversion_timer = timer_alloc(machine, segacd_gfx_conversion_timer_callback, 0);
+	timer_adjust_oneshot(segacd_gfx_conversion_timer, attotime_never, 0);
+
+	segacd_dmna_ret_timer = timer_alloc(machine, segacd_dmna_ret_timer_callback, 0);
+	timer_adjust_oneshot(segacd_gfx_conversion_timer, attotime_never, 0);
+
+
+	segacd_irq3_timer = timer_alloc(machine, segacd_irq3_timer_callback, 0);
+	timer_adjust_oneshot(segacd_irq3_timer, attotime_never, 0);
+
+
+
+	/* create the char set (gfx will then be updated dynamically from RAM) */
+	machine->gfx[0] = gfx_element_alloc(machine, &sega_16x16_r00_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[1] = gfx_element_alloc(machine, &sega_16x16_r01_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[2] = gfx_element_alloc(machine, &sega_16x16_r10_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[3] = gfx_element_alloc(machine, &sega_16x16_r11_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[4] = gfx_element_alloc(machine, &sega_16x16_r00_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[5] = gfx_element_alloc(machine, &sega_16x16_r01_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[6] = gfx_element_alloc(machine, &sega_16x16_r10_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[7] = gfx_element_alloc(machine, &sega_16x16_r11_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+
+	machine->gfx[8] = gfx_element_alloc(machine, &sega_32x32_r00_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[9] = gfx_element_alloc(machine, &sega_32x32_r01_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[10]= gfx_element_alloc(machine, &sega_32x32_r10_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[11]= gfx_element_alloc(machine, &sega_32x32_r11_f0_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[12]= gfx_element_alloc(machine, &sega_32x32_r00_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[13]= gfx_element_alloc(machine, &sega_32x32_r01_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[14]= gfx_element_alloc(machine, &sega_32x32_r10_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+	machine->gfx[15]= gfx_element_alloc(machine, &sega_32x32_r11_f1_layout, (UINT8 *)segacd_dataram, 0, 0);
+
+	/* as a temporary measure we use the MAME tilemaps, this is hideously inefficient as we have to mark the active one as
+       dirty before each operation due to the RAM based tiles.  For the larger tilemaps this means we have to re-render a 4096x4096
+       bitmap to the tilemap cache on each blit operation just to copy the few needed tiles out of it, needless to say, this is SLOW.
+       Eventually the tilemaps will be replaced with a get_pixel function which will perform all the needed lookups on a per-pixel
+       basis instead of re-rendering the whole thing */
+	segacd_stampmap[0] = tilemap_create(machine, get_stampmap_16x16_1x1_tile_info, tilemap_scan_rows, 16, 16, 16, 16);
+	segacd_stampmap[1] = tilemap_create(machine, get_stampmap_32x32_1x1_tile_info, tilemap_scan_rows, 32, 32, 8, 8);
+	segacd_stampmap[2] = tilemap_create(machine, get_stampmap_16x16_16x16_tile_info, tilemap_scan_rows, 16, 16, 256, 256); // 128kb!
+	segacd_stampmap[3] = tilemap_create(machine, get_stampmap_32x32_16x16_tile_info, tilemap_scan_rows, 32, 32, 128, 128); // 32kb!
+}
+
+
+
+static MACHINE_RESET( segacd )
+{
+	int i;
+	cpu_set_input_line(_segacd_68k_cpu, INPUT_LINE_RESET, ASSERT_LINE);
+	cpu_set_input_line(_segacd_68k_cpu, INPUT_LINE_HALT, ASSERT_LINE);
+
+	segacd_hint_register = 0xffff; // -1
+
+	for(i=0;i<10;i++)
+	{
+		segacd_cdd_rx[i] = 0;
+	}
+
+	segacd_cdd_rx[9] = 0xf; // default checksum
+
+	/* init cd-rom device */
+
+	#ifdef MESS
+	{
+		running_device *device;
+
+		device = machine->device("cdrom");
+		if ( device )
+		{
+			segacd.cd = mess_cd_get_cdrom_file(device);
+			if ( segacd.cd )
+			{
+				segacd.toc = cdrom_get_toc( segacd.cd );
+				cdda_set_cdrom( machine->device("cdda"), segacd.cd );
+				segacd.last_frame = cdrom_get_track_start( segacd.cd, cdrom_get_last_track( segacd.cd ) - 1 );
+				segacd.last_frame += segacd.toc->tracks[ cdrom_get_last_track( segacd.cd ) - 1 ].frames;
+				segacd.end_frame = segacd.last_frame;
+			}
+		}
+	}
+	#endif
+
+	segacd_dmna = 0;
+	segacd_ret = 0;
+
+	segacd_ram_mode = 0;
+	segacd_ram_mode_old = 0;
+
+	timer_adjust_oneshot(segacd_dmna_ret_timer, attotime_zero, 0);
+}
+
+
+static int segacd_redled = 0;
+static int segacd_greenled = 0;
+static int segacd_ready = 1; // actually set 100ms after startup?
+
+static READ16_HANDLER( segacd_sub_led_ready_r )
+{
+	UINT16 retdata = 0x0000;
+
+	if (ACCESSING_BITS_0_7)
+	{
+		retdata |= segacd_ready;
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		retdata |= segacd_redled << 8;
+		retdata |= segacd_greenled << 9;
+	}
+
+	return retdata;
+}
+
+static WRITE16_HANDLER( segacd_sub_led_ready_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		if ((data&0x01) == 0x00)
+		{
+			// reset CD unit
+		}
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		segacd_redled = (data >> 8)&1;
+		segacd_greenled = (data >> 9)&1;
+
+		//popmessage("%02x %02x",segacd_greenled,segacd_redled);
+	}
+
+}
+
+
+
+static READ16_HANDLER( segacd_sub_dataram_part1_r )
+{
+	if (segacd_ram_mode==0)
+	{
+		// is this correct?
+		if (segacd_dmna)
+			return segacd_dataram[offset];
+		else
+		{
+			printf("Illegal: segacd_sub_dataram_part1_r in mode 0 without permission\n");
+			return 0x0000;
+		}
+	}
+	else if (segacd_ram_mode==1)
+	{
+		printf("Unspported: segacd_sub_dataram_part1_r in mode 1 (Word RAM Expander - 1 Byte Per Pixel)\n");
+		return 0x0000;
+	}
+
+	return 0x0000;
+}
+
+static WRITE16_HANDLER( segacd_sub_dataram_part1_w )
+{
+	if (segacd_ram_mode==0)
+	{
+		// is this correct?
+		if (segacd_dmna)
+		{
+			COMBINE_DATA(&segacd_dataram[offset]);
+			segacd_mark_tiles_dirty(space->machine, offset);
+		}
+		else
+		{
+			printf("Illegal: segacd_sub_dataram_part1_w in mode 0 without permission\n");
+		}
+	}
+	else if (segacd_ram_mode==1)
+	{
+		printf("Unspported: segacd_sub_dataram_part1_w in mode 1 (Word RAM Expander - 1 Byte Per Pixel)\n");
+	}
+}
+
+static READ16_HANDLER( segacd_sub_dataram_part2_r )
+{
+	if (segacd_ram_mode==0)
+	{
+		printf("ILLEGAL segacd_sub_dataram_part2_r in mode 0\n"); // not mapepd to anything in mode 0
+		return 0x0000;
+	}
+	else if (segacd_ram_mode==1)
+	{
+		//printf("Unsupported: segacd_sub_dataram_part2_r in mode 1 (Word RAM)\n");
+		// ret bit set by sub cpu determines which half of WorkRAM we have access to?
+		if (!segacd_ret)
+		{
+			return segacd_dataram[offset+0x20000/2];
+		}
+		else
+		{
+			return segacd_dataram[offset+0x00000/2];
+		}
+
+	}
+
+	return 0x0000;
+}
+
+static WRITE16_HANDLER( segacd_sub_dataram_part2_w )
+{
+	if (segacd_ram_mode==0)
+	{
+		printf("ILLEGAL segacd_sub_dataram_part2_w in mode 0\n"); // not mapepd to anything in mode 0
+	}
+	else if (segacd_ram_mode==1)
+	{
+		//printf("Unsupported: segacd_sub_dataram_part2_w in mode 1 (Word RAM)\n");
+		// ret bit set by sub cpu determines which half of WorkRAM we have access to?
+		if (!segacd_ret)
+		{
+			COMBINE_DATA(&segacd_dataram[offset+0x20000/2]);
+		}
+		else
+		{
+			COMBINE_DATA(&segacd_dataram[offset+0x00000/2]);
+		}
+
+	}
+}
+
+static TIMER_CALLBACK( execute_hock_irq )
+{
+	int i,cdd_crc;
+
+	segacd_cdd.ctrl &= ~4; // clear HOCK flag
+
+	segacd_cdd_rx[0] = (segacd_cdd.buffer[0] & 0xf0) >> 4;
+	segacd_cdd_rx[1] = (segacd_cdd.buffer[0] & 0x0f) >> 0;
+	segacd_cdd_rx[2] = (segacd_cdd.buffer[1] & 0xf0) >> 4;
+	segacd_cdd_rx[3] = (segacd_cdd.buffer[1] & 0x0f) >> 0;
+	segacd_cdd_rx[4] = (segacd_cdd.buffer[2] & 0xf0) >> 4;
+	segacd_cdd_rx[5] = (segacd_cdd.buffer[2] & 0x0f) >> 0;
+	segacd_cdd_rx[6] = (segacd_cdd.buffer[3] & 0xf0) >> 4;
+	segacd_cdd_rx[7] = (segacd_cdd.buffer[3] & 0x0f) >> 0;
+	segacd_cdd_rx[8] = (segacd_cdd.buffer[4] & 0x0f) >> 0;
+
+	/* Do checksum calculation of the above registers */
+	cdd_crc = 0;
+	for(i=0;i<9;i++)
+		cdd_crc += segacd_cdd_rx[i];
+
+	segacd_cdd_rx[9] = ((cdd_crc & 0xf) ^ 0xf);
+
+	cputag_set_input_line(machine, "segacd_68k", 4, HOLD_LINE);
+}
+
+static void cdd_hock_irq(running_machine *machine,UINT8 dir)
+{
+	if((segacd_cdd.ctrl & 4 || dir) && segacd_irq_mask & 0x10) // export status, check if bit 2 (HOst ClocK) and irq is enabled
+	{
+		segacd_cdd.ctrl |= 4; // enable Hock bit if it isn't already active
+		timer_set(machine, ATTOTIME_IN_HZ(75), NULL,0, execute_hock_irq); // 1 / 75th of a second
+	}
+}
+
+static READ16_HANDLER( segacd_irq_mask_r )
+{
+	return segacd_irq_mask;
+}
+
+static WRITE16_HANDLER( segacd_irq_mask_w )
+{
+	segacd_irq_mask = data & 0x7e;
+
+	cdd_hock_irq(space->machine,0);
+	// check here other pending IRQs
+}
+
+static READ16_HANDLER( segacd_cdd_ctrl_r )
+{
+	return segacd_cdd.ctrl;
+}
+
+static WRITE16_HANDLER( segacd_cdd_ctrl_w )
+{
+	segacd_cdd.ctrl = data;
+
+	cdd_hock_irq(space->machine,0);
+}
+
+/* 68k <- CDD communication comms are 4-bit wide */
+static READ8_HANDLER( segacd_cdd_rx_r )
+{
+	return (segacd_cdd_rx[offset] & 0xf);
+}
+
+static const char *const segacd_cdd_cmd[] =
+{
+	"Status",
+	"Stop All",
+	"Get TOC Info",
+	"Read",
+	"Seek",
+	"Pause/Stop",
+	"Resume",
+	"Fast Forward",
+	"Fast Rewind",
+	"Recover Initial state",
+	"Close Tray",
+	"Open Tray",
+	"Unknown 0xE",
+	"Unknown 0xF"
+};
+
+static const char *const segacd_cdd_get_toc_cmd[] =
+{
+	"Get Current Position",
+	"Get Elapsed Time of Current Track",
+	"Get Current Track",
+	"Get Total Length",
+	"Get First and Last Track Number",
+	"Get Track Addresses",
+	"Invalid 0x6",
+	"Invalid 0x7",
+	"Invalid 0x8",
+	"Invalid 0x9",
+	"Invalid 0xA",
+	"Invalid 0xB",
+	"Invalid 0xC",
+	"Invalid 0xD",
+	"Invalid 0xE",
+	"Invalid 0xF",
+};
+
+#ifdef MESS
+
+#define LOG_CDD 1
+
+static void segacd_cdd_get_status(running_machine *machine)
+{
+	segacd_cdd.buffer[0] = 0;
+	segacd_cdd.buffer[1] = 0;
+	segacd_cdd.buffer[2] = 0;
+	segacd_cdd.buffer[3] = 0;
+	segacd_cdd.buffer[4] = 0;
+
+	cdd_hock_irq(machine,1);
+}
+
+static void segacd_cdd_stop_all(running_machine *machine)
+{
+	segacd_cdd.ctrl |= 0x100;
+
+	segacd_cdd.buffer[0] = 0;
+	segacd_cdd.buffer[1] = 0;
+	segacd_cdd.buffer[2] = 0;
+	segacd_cdd.buffer[3] = 0;
+	segacd_cdd.buffer[4] = 0;
+
+	cdd_hock_irq(machine,1);
+}
+
+
+static void segacd_cdd_get_toc_info(running_machine *machine)
+{
+	segacd_cdd.buffer[0] = (segacd_cdd_tx[3] & 0xf) | (segacd_cdd.buffer[0] & 0xf0);
+
+	#if LOG_CDD
+	printf("CDD: TOC command %s issued\n",segacd_cdd_get_toc_cmd[segacd_cdd_tx[3] & 0xf]);
+	#endif
+
+	if ( ! segacd.cd ) // no cd is present
+	{
+		segacd_cdd.buffer[0] = (0) | (segacd_cdd.buffer[0] & 0xf0);
+		segacd_cdd.buffer[1] = 0;
+		segacd_cdd.buffer[2] = 0;
+		segacd_cdd.buffer[3] = 0;
+		segacd_cdd.buffer[4] = 0;
+
+		cdd_hock_irq(machine,1);
+		return;
+	}
+	else
+	{
+		switch(segacd_cdd_tx[3] & 0xf)
+		{
+			case 0x2: //Get Current Track
+			{
+				segacd_cdd.buffer[0] = (0x2 & 0xf) | (segacd_cdd.buffer[0] & 0xf0);
+
+				segacd_cdd.buffer[0] = 1; // current track number, TODO
+				segacd_cdd.buffer[1] = 0;
+				segacd_cdd.buffer[2] = 0;
+				segacd_cdd.buffer[3] = 0;
+				segacd_cdd.buffer[4] = 0;
+				cdd_hock_irq(machine,1);
+				return;
+			}
+			case 0x3: //Get Total Length (in MSF)
+			{
+				UINT32 frame,msf;
+
+				frame = segacd.toc->tracks[segacd.toc->numtrks-1].physframeofs;
+				frame += segacd.toc->tracks[segacd.toc->numtrks-1].frames;
+				msf = lba_to_msf( frame );
+
+				segacd_cdd.buffer[0] = (0x3 & 0xf) | (segacd_cdd.buffer[0] & 0xf0);
+				segacd_cdd.buffer[1] = ((msf >> 16) & 0xff);
+				segacd_cdd.buffer[2] = ((msf >> 8) & 0xff);
+				segacd_cdd.buffer[3] = ((msf >> 0) & 0xff);
+				segacd_cdd.buffer[4] = 0;
+
+				cdd_hock_irq(machine,1);
+				return;
+
+			}
+		case 0x4: //Get First and Last Track Number
+			{
+				segacd_cdd.buffer[0] = (0x4 & 0xf) | (segacd_cdd.buffer[0] & 0xf0);
+				segacd_cdd.buffer[1] = dec_2_bcd(1);
+				segacd_cdd.buffer[2] = dec_2_bcd(segacd.toc->numtrks);
+				segacd_cdd.buffer[3] = 0;
+				segacd_cdd.buffer[4] = 0;
+
+				cdd_hock_irq(machine,1);
+			}
+			return;
+			//default: logerror("CDD: unhandled TOC command %s issued\n",segacd_cdd_get_toc_cmd[segacd_cdd_tx[3] & 0xf]);
+		}
+	}
+
+	cdd_hock_irq(machine,1);
+}
+
+#endif
+
+static WRITE8_HANDLER( segacd_cdd_tx_w )
+{
+	//printf("CDD Communication write %02x -> [%02x]\n",data,offset);
+	segacd_cdd_tx[offset] = data & 0xf;
+
+	#ifdef MESS
+	if(offset == 9) //execute the command when crc is sent (TODO: I wonder if we need to check if crc is valid. Plus obviously this shouldn't be instant)
+	{
+		#if LOG_CDD
+		if(segacd_cdd_tx[0] != 0)
+			printf("CDD: command %s issued\n",segacd_cdd_cmd[segacd_cdd_tx[0] & 0xf]);
+		#endif
+
+		switch(segacd_cdd_tx[0] & 0xf)
+		{
+			case 0x0: segacd_cdd_get_status(space->machine); break;
+			case 0x1: segacd_cdd_stop_all(space->machine); break;
+			case 0x2: segacd_cdd_get_toc_info(space->machine); break;
+			//default: logerror("CDD: unhandled command %s issued\n",segacd_cdd_cmd[segacd_cdd_tx[0] & 0xf]);
+		}
+	}
+	#endif
+}
+
+
+
+static READ16_HANDLER( segacd_stampsize_r )
+{
+	UINT16 retdata = 0x0000;
+
+	retdata |= segacd_conversion_active<<15;
+
+	retdata |= segacd_stampsize & 0x7;
+
+	return retdata;
+
+}
+
+static WRITE16_HANDLER( segacd_stampsize_w )
+{
+	printf("segacd_stampsize_w %04x %04x\n",data, mem_mask);
+	if (ACCESSING_BITS_0_7)
+	{
+		segacd_stampsize = data & 0x07;
+		if (data & 0xf8)
+			printf("    unused bits (LSB) set in stampsize!\n");
+
+		if (data&1) printf("    Repeat On\n");
+		else printf("    Repeat Off\n");
+
+		if (data&2) printf("    32x32 dots\n");
+		else printf("    16x16 dots\n");
+
+		if (data&4) printf("    16x16 screens\n");
+		else printf("    1x1 screen\n");
+
+
+	}
+
+	if (ACCESSING_BITS_8_15)
+	{
+		if (data&0xff00) printf("    unused bits (MSB) set in stampsize!\n");
+	}
+}
+
+// these functions won't cope if
+//
+// the lower 3 bits of segacd_imagebuffer_hdot_size are set
+
+// this really needs to be doing it's own lookups rather than depending on the inefficient MAME cache..
+INLINE UINT8 read_pixel_from_stampmap( running_machine* machine, bitmap_t* srcbitmap, int x, int y)
+{
+/*
+    if (!srcbitmap)
+    {
+        return mame_rand(machine);
+    }
+
+    if (x >= srcbitmap->width) return 0;
+    if (y >= srcbitmap->height) return 0;
+
+    UINT16* cacheptr = BITMAP_ADDR16( srcbitmap, y, x);
+
+    return cacheptr[0] & 0xf;
+*/
+
+	switch (segacd_get_active_stampmap_tilemap()&3)
+	{
+		case 0x00: return get_stampmap_16x16_1x1_tile_info_pixel( machine, x, y );
+		case 0x01: return get_stampmap_32x32_1x1_tile_info_pixel( machine, x, y );
+		case 0x02: return get_stampmap_16x16_16x16_tile_info_pixel( machine, x, y );
+		case 0x03: return get_stampmap_32x32_16x16_tile_info_pixel( machine, x, y );
+	}
+
+	return 0;
+}
+
+INLINE void write_pixel_to_imagebuffer( running_machine* machine, UINT32 pix, int line, int xpos )
+{
+
+	UINT32 bufferstart = (segacd_imagebuffer_start_address&0xfff8)*2;
+	UINT32 bufferend = bufferstart + (((segacd_imagebuffer_vcell_size+1) * (segacd_imagebuffer_hdot_size>>3)*0x20)/2);
+	UINT32 offset;
+
+	offset = bufferstart+(((segacd_imagebuffer_vcell_size+1)*0x10)*xpos);
+
+	// lines of each output cell
+	offset+= (line*2);
+
+	while (offset>=bufferend)
+		offset-= bufferend;
+
+
+	switch (segacd_memory_priority_mode)
+	{
+		case 0x00: // normal write, just write the data
+			segacd_dataram[offset] = pix >> 16;
+			segacd_dataram[offset+1] = pix & 0xffff;
+			break;
+
+		case 0x01: // underwrite, only write if the existing data is 0
+			if ((segacd_dataram[offset]&0xf000) == 0x0000) segacd_dataram[offset] |= (pix>>16)&0xf000;
+			if ((segacd_dataram[offset]&0x0f00) == 0x0000) segacd_dataram[offset] |= (pix>>16)&0x0f00;
+			if ((segacd_dataram[offset]&0x00f0) == 0x0000) segacd_dataram[offset] |= (pix>>16)&0x00f0;
+			if ((segacd_dataram[offset]&0x000f) == 0x0000) segacd_dataram[offset] |= (pix>>16)&0x000f;
+			if ((segacd_dataram[offset+1]&0xf000) == 0x0000) segacd_dataram[offset+1] |= (pix)&0xf000;
+			if ((segacd_dataram[offset+1]&0x0f00) == 0x0000) segacd_dataram[offset+1] |= (pix)&0x0f00;
+			if ((segacd_dataram[offset+1]&0x00f0) == 0x0000) segacd_dataram[offset+1] |= (pix)&0x00f0;
+			if ((segacd_dataram[offset+1]&0x000f) == 0x0000) segacd_dataram[offset+1] |= (pix)&0x000f;
+			break;
+
+		case 0x02: // overwrite, only write non-zero data
+			if ((pix>>16)&0xf000) segacd_dataram[offset] = (segacd_dataram[offset] & 0x0fff) | ((pix>>16)&0xf000);
+			if ((pix>>16)&0x0f00) segacd_dataram[offset] = (segacd_dataram[offset] & 0xf0ff) | ((pix>>16)&0x0f00);
+			if ((pix>>16)&0x00f0) segacd_dataram[offset] = (segacd_dataram[offset] & 0xff0f) | ((pix>>16)&0x00f0);
+			if ((pix>>16)&0x000f) segacd_dataram[offset] = (segacd_dataram[offset] & 0xfff0) | ((pix>>16)&0x000f);
+			if ((pix)&0xf000) segacd_dataram[offset+1] = (segacd_dataram[offset+1] & 0x0fff) | ((pix)&0xf000);
+			if ((pix)&0x0f00) segacd_dataram[offset+1] = (segacd_dataram[offset+1] & 0xf0ff) | ((pix)&0x0f00);
+			if ((pix)&0x00f0) segacd_dataram[offset+1] = (segacd_dataram[offset+1] & 0xff0f) | ((pix)&0x00f0);
+			if ((pix)&0x000f) segacd_dataram[offset+1] = (segacd_dataram[offset+1] & 0xfff0) | ((pix)&0x000f);
+			break;
+
+		default:
+		case 0x03: // invalid?
+			segacd_dataram[offset] = mame_rand(machine);
+			segacd_dataram[offset+1] = mame_rand(machine);
+			break;
+
+	}
+
+	segacd_mark_tiles_dirty(machine, offset);
+	segacd_mark_tiles_dirty(machine, offset+1);
+
+}
+
+// this triggers the conversion operation, which will cause an IRQ1 when finished
+WRITE16_HANDLER( segacd_trace_vector_base_address_w )
+{
+	if (segacd_ram_mode==1)
+	{
+		printf("ILLEGAL: segacd_trace_vector_base_address_w %04x %04x in mode 1!\n",data,mem_mask);
+	}
+
+	//printf("segacd_trace_vector_base_address_w %04x %04x\n",data,mem_mask);
+
+	{
+		int base = (data & 0xfffe) * 4;
+
+		//printf("actual base = %06x\n", base + 0x80000);
+
+		// nasty nasty nasty
+		//segacd_mark_stampmaps_dirty();
+
+		segacd_conversion_active = 1;
+
+		// todo: proper time calculation
+		timer_adjust_oneshot(segacd_gfx_conversion_timer, ATTOTIME_IN_HZ(500), 0);
+
+
+		int line;
+		//bitmap_t *srcbitmap = tilemap_get_pixmap(segacd_stampmap[segacd_get_active_stampmap_tilemap()]);
+		bitmap_t *srcbitmap = 0;
+
+		for (line=0;line<segacd_imagebuffer_vdot_size;line++)
+		{
+			int currbase = base + line * 0x8;
+
+			// are the 256x256 tile modes using the same sign bits?
+			INT16 tilemapxoffs,tilemapyoffs;
+			INT16 deltax,deltay;
+
+			tilemapxoffs = segacd_dataram[(currbase+0x0)>>1];
+			tilemapyoffs = segacd_dataram[(currbase+0x2)>>1];
+			deltax = segacd_dataram[(currbase+0x4)>>1]; // x-zoom
+			deltay = segacd_dataram[(currbase+0x6)>>1]; // rotation
+
+			//printf("%06x:  %04x (%d) %04x (%d) %04x %04x\n", currbase, tilemapxoffs, tilemapxoffs>>3, tilemapyoffs, tilemapyoffs>>3, deltax, deltay);
+
+			int xbase = tilemapxoffs * 256;
+			int ybase = tilemapyoffs * 256;
+			int count;
+
+			for (count=0;count<(segacd_imagebuffer_hdot_size>>3);count++)
+			{
+				int i;
+				UINT32 pixblock = 0x00000000;
+				for (i=7*4;i>=0;i-=4)
+				{
+					pixblock |= read_pixel_from_stampmap(space->machine, srcbitmap, xbase>>(3+8), ybase>>(3+8)) << (i);
+
+
+					xbase += deltax;
+					ybase += deltay;
+
+					// clamp to 24-bits, seems to be required for all the intro effects to work
+					xbase &= 0xffffff;
+					ybase &= 0xffffff;
+
+
+				}
+
+
+
+
+				write_pixel_to_imagebuffer(space->machine, pixblock, line, count);
+			}
+
+		}
+	}
+
+}
+
+// actually just the low 8 bits?
+READ16_HANDLER( segacd_imagebuffer_vdot_size_r )
+{
+	return segacd_imagebuffer_vdot_size;
+}
+
+WRITE16_HANDLER( segacd_imagebuffer_vdot_size_w )
+{
+	//printf("segacd_imagebuffer_vdot_size_w %04x %04x\n",data,mem_mask);
+	COMBINE_DATA(&segacd_imagebuffer_vdot_size);
+}
+
+
+// basically the 'tilemap' base address, for the 16x16 / 32x32 source tiles
+static READ16_HANDLER( segacd_stampmap_base_address_r )
+{
+	// different bits are valid in different modes, but I'm guessing the register
+	// always returns all the bits set, even if they're not used?
+	return segacd_stampmap_base_address;
+
+}
+
+static WRITE16_HANDLER( segacd_stampmap_base_address_w )
+{ // WORD ACCESS
+
+	// low 3 bitsa aren't used, are they stored?
+	COMBINE_DATA(&segacd_stampmap_base_address);
+}
+
+// destination for 'rendering' the section of the tilemap(stampmap) requested
+static READ16_HANDLER( segacd_imagebuffer_start_address_r )
+{
+	return segacd_imagebuffer_start_address;
+}
+
+static WRITE16_HANDLER( segacd_imagebuffer_start_address_w )
+{
+	COMBINE_DATA(&segacd_imagebuffer_start_address);
+
+	//int base = (segacd_imagebuffer_start_address & 0xfffe) * 4;
+	//printf("segacd_imagebuffer_start_address_w %04x %04x (actual base = %06x)\n", data, segacd_imagebuffer_start_address, base);
+}
+
+static READ16_HANDLER( segacd_imagebuffer_offset_r )
+{
+	return segacd_imagebuffer_offset;
+}
+
+static WRITE16_HANDLER( segacd_imagebuffer_offset_w )
+{
+	COMBINE_DATA(&segacd_imagebuffer_offset);
+	printf("segacd_imagebuffer_offset_w %04x\n", segacd_imagebuffer_offset);
+}
+
+static READ16_HANDLER( segacd_imagebuffer_vcell_size_r )
+{
+	return segacd_imagebuffer_vcell_size;
+}
+
+static WRITE16_HANDLER( segacd_imagebuffer_vcell_size_w )
+{
+	COMBINE_DATA(&segacd_imagebuffer_vcell_size);
+}
+
+
+static READ16_HANDLER( segacd_imagebuffer_hdot_size_r )
+{
+	return segacd_imagebuffer_hdot_size;
+}
+
+static WRITE16_HANDLER( segacd_imagebuffer_hdot_size_w )
+{
+	COMBINE_DATA(&segacd_imagebuffer_hdot_size);
+}
+
+static UINT16 segacd_irq3_timer_reg;
+
+static READ16_HANDLER( segacd_irq3timer_r )
+{
+	return segacd_irq3_timer_reg; // always returns value written, not current counter!
+}
+
+#define SEGACD_IRQ3_TIMER_SPEED (ATTOTIME_IN_NSEC(segacd_irq3_timer_reg*30720))
+
+static WRITE16_HANDLER( segacd_irq3timer_w )
+{
+	if (ACCESSING_BITS_0_7)
+	{
+		segacd_irq3_timer_reg = data & 0xff;
+
+		// time = reg * 30.72 us
+
+		if (segacd_irq3_timer_reg)
+			timer_adjust_oneshot(segacd_irq3_timer, SEGACD_IRQ3_TIMER_SPEED, 0);
+		else
+			timer_adjust_oneshot(segacd_irq3_timer, attotime_never, 0);
+
+		printf("segacd_irq3timer_w %02x\n", segacd_irq3_timer_reg);
+	}
+}
+
+static TIMER_CALLBACK( segacd_irq3_timer_callback )
+{
+	if (segacd_irq_mask & 0x08)
+		cputag_set_input_line(machine, "segacd_68k", 3, HOLD_LINE);
+
+	timer_adjust_oneshot(segacd_irq3_timer, SEGACD_IRQ3_TIMER_SPEED, 0);
+}
+
+
 static ADDRESS_MAP_START( segacd_map, ADDRESS_SPACE_PROGRAM, 16 )
-	AM_RANGE(0x0000000, 0x0003fff) AM_RAM
+	AM_RANGE(0x000000, 0x07ffff) AM_RAM AM_BASE(&segacd_4meg_prgram)
+
+	AM_RANGE(0x080000, 0x0bffff) AM_READWRITE(segacd_sub_dataram_part1_r, segacd_sub_dataram_part1_w) AM_BASE(&segacd_dataram)
+	AM_RANGE(0x0c0000, 0x0dffff) AM_READWRITE(segacd_sub_dataram_part2_r, segacd_sub_dataram_part2_w) AM_BASE(&segacd_dataram2)
+
+	AM_RANGE(0xfe0000, 0xfe3fff) AM_RAM // backup RAM, odd bytes only!
+
+	AM_RANGE(0xff0000, 0xff001f) AM_DEVWRITE8("rfsnd", rf5c68_w, 0x00ff)  // PCM, RF5C164
+	AM_RANGE(0xff2000, 0xff3fff) AM_DEVREADWRITE8("rfsnd", rf5c68_mem_r, rf5c68_mem_w,0x00ff)  // PCM, RF5C164
+
+
+	AM_RANGE(0xff8000 ,0xff8001) AM_READWRITE(segacd_sub_led_ready_r, segacd_sub_led_ready_w)
+	AM_RANGE(0xff8002 ,0xff8003) AM_READWRITE(segacd_sub_memory_mode_r, segacd_sub_memory_mode_w)
+
+	AM_RANGE(0xff8004 ,0xff8005) AM_READWRITE(segacd_cdc_mode_address_r, segacd_cdc_mode_address_w)
+	AM_RANGE(0xff8006 ,0xff8007) AM_READWRITE(segacd_cdc_data_r, segacd_cdc_data_w)
+//  AM_RANGE(0xff8008, 0xff8009) // CDC Host Data
+//  AM_RANGE(0xff800a, 0xff800b) // CDC DMA Address
+//  AM_RANGE(0xff800c, 0xff800d) // Stopwatch timer
+	AM_RANGE(0xff800e ,0xff800f) AM_READWRITE(segacd_comms_flags_r, segacd_comms_flags_subcpu_w)
+	AM_RANGE(0xff8010 ,0xff801f) AM_READWRITE(segacd_comms_sub_part1_r, segacd_comms_sub_part1_w)
+	AM_RANGE(0xff8020 ,0xff802f) AM_READWRITE(segacd_comms_sub_part2_r, segacd_comms_sub_part2_w)
+	AM_RANGE(0xff8030, 0xff8031) AM_READWRITE(segacd_irq3timer_r, segacd_irq3timer_w) // Timer W/INT3
+	AM_RANGE(0xff8032, 0xff8033) AM_READWRITE(segacd_irq_mask_r,segacd_irq_mask_w)
+	AM_RANGE(0xff8034, 0xff8035) AM_NOP // CD Fader
+	AM_RANGE(0xff8036, 0xff8037) AM_READWRITE(segacd_cdd_ctrl_r,segacd_cdd_ctrl_w)
+	AM_RANGE(0xff8038, 0xff8041) AM_READ8(segacd_cdd_rx_r,0xffff)
+	AM_RANGE(0xff8042, 0xff804b) AM_WRITE8(segacd_cdd_tx_w,0xffff)
+//  AM_RANGE(0xff804c, 0xff804d) // Font Color
+//  AM_RANGE(0xff804e, 0xff804f) // Font bit
+//  AM_RANGE(0xff8050, 0xff8057) // Font data (read only)
+	AM_RANGE(0xff8058, 0xff8059) AM_READWRITE(segacd_stampsize_r, segacd_stampsize_w) // Stamp size
+	AM_RANGE(0xff805a, 0xff805b) AM_READWRITE(segacd_stampmap_base_address_r, segacd_stampmap_base_address_w) // Stamp map base address
+	AM_RANGE(0xff805c, 0xff805d) AM_READWRITE(segacd_imagebuffer_vcell_size_r, segacd_imagebuffer_vcell_size_w)// Image buffer V cell size
+	AM_RANGE(0xff805e, 0xff805f) AM_READWRITE(segacd_imagebuffer_start_address_r, segacd_imagebuffer_start_address_w) // Image buffer start address
+	AM_RANGE(0xff8060, 0xff8061) AM_READWRITE(segacd_imagebuffer_offset_r, segacd_imagebuffer_offset_w)
+	AM_RANGE(0xff8062, 0xff8063) AM_READWRITE(segacd_imagebuffer_hdot_size_r, segacd_imagebuffer_hdot_size_w) // Image buffer H dot size
+	AM_RANGE(0xff8064, 0xff8065) AM_READWRITE(segacd_imagebuffer_vdot_size_r, segacd_imagebuffer_vdot_size_w ) // Image buffer V dot size
+	AM_RANGE(0xff8066, 0xff8067) AM_WRITE(segacd_trace_vector_base_address_w)// Trace vector base address
+//  AM_RANGE(0xff8068, 0xff8069) // Subcode address
+
+//  AM_RANGE(0xff8100, 0xff817f) // Subcode buffer area
+//  AM_RANGE(0xff8180, 0xff81ff) // mirror of subcode buffer area
+
 ADDRESS_MAP_END
 
 
-/****************************************** END 32X related *************************************/
+
+
+
+
+
 
 /****************************************** SVP related *****************************************/
 
@@ -3545,7 +5917,7 @@ INLINE void overwrite_write(UINT16 *dst, UINT16 d)
 	if (d & 0x000f) { *dst &= ~0x000f; *dst |= d & 0x000f; }
 }
 
-static UINT32 pm_io(const address_space *space, int reg, int write, UINT32 d)
+static UINT32 pm_io(address_space *space, int reg, int write, UINT32 d)
 {
 	if (svp.emu_status & SSP_PMC_SET)
 	{
@@ -3797,33 +6169,6 @@ static ADDRESS_MAP_START( svp_ext_map, ADDRESS_SPACE_IO, 16 )
 ADDRESS_MAP_END
 
 
-/* DMA read function for SVP */
-static UINT16 vdp_get_word_from_68k_mem_svp(running_machine *machine, UINT32 source)
-{
-	if ((source & 0xe00000) == 0x000000)
-	{
-		UINT16 *rom = (UINT16*)memory_region(machine, "maincpu");
-		source -= 2; // DMA latency
-		return rom[source >> 1];
-	}
-	else if ((source & 0xfe0000) == 0x300000)
-	{
-		UINT16 *dram = (UINT16*)svp.dram;
-		source &= 0x1fffe;
-		source -= 2;
-		return dram[source >> 1];
-	}
-	else if ((source & 0xe00000) == 0xe00000)
-	{
-		return megadrive_ram[(source&0xffff)>>1];
-	}
-	else
-	{
-		mame_printf_debug("DMA Read unmapped %06x\n",source);
-		return mame_rand(machine);
-	}
-}
-
 /* emulate testmode plug */
 static UINT8 megadrive_io_read_data_port_svp(running_machine *machine, int portnum)
 {
@@ -3864,7 +6209,6 @@ static void svp_init(running_machine *machine)
 	ROM = memory_region(machine, "maincpu");
 	memory_set_bankptr(machine,  "bank4", ROM + 0x800 );
 
-	vdp_get_word_from_68k_mem = vdp_get_word_from_68k_mem_svp;
 	megadrive_io_read_data_port_ptr	= megadrive_io_read_data_port_svp;
 }
 
@@ -3879,23 +6223,21 @@ INPUT_PORTS_START( megdsvp )
 	PORT_DIPSETTING( 0x01, DEF_STR( On ) )
 INPUT_PORTS_END
 
-MACHINE_DRIVER_START( megdsvp )
-	MDRV_IMPORT_FROM(megadriv)
+MACHINE_CONFIG_DERIVED( megdsvp, megadriv )
 
 	MDRV_CPU_ADD("svp", SSP1601, MASTER_CLOCK_NTSC / 7 * 3) /* ~23 MHz (guessed) */
 	MDRV_CPU_PROGRAM_MAP(svp_ssp_map)
 	MDRV_CPU_IO_MAP(svp_ext_map)
 	/* IRQs are not used by this CPU */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( megdsvppal )
-	MDRV_IMPORT_FROM(megadpal)
+MACHINE_CONFIG_DERIVED( megdsvppal, megadpal )
 
 	MDRV_CPU_ADD("svp", SSP1601, MASTER_CLOCK_PAL / 7 * 3) /* ~23 MHz (guessed) */
 	MDRV_CPU_PROGRAM_MAP(svp_ssp_map)
 	MDRV_CPU_IO_MAP(svp_ext_map)
 	/* IRQs are not used by this CPU */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /****************************************** END SVP related *************************************/
 
@@ -3964,7 +6306,7 @@ VIDEO_UPDATE(megadriv)
 	/* reference */
 
 //  time_elapsed_since_crap = frame_timer->time_elapsed();
-//  xxx = cputag_attotime_to_clocks(screen->machine, "maincpu", time_elapsed_since_crap);
+//  xxx = screen->machine->device<device>("maincpu")->attotime_to_cycles(time_elapsed_since_crap);
 //  mame_printf_debug("update cycles %d, %08x %08x\n",xxx, (UINT32)(time_elapsed_since_crap.attoseconds>>32),(UINT32)(time_elapsed_since_crap.attoseconds&0xffffffff));
 
 	return 0;
@@ -5341,6 +7683,8 @@ static void genesis_render_videobuffer_to_screenbuffer(running_machine *machine,
 		}
 	}
 
+	int _32x_priority = _32x_videopriority;
+
 
 	if (!MEGADRIVE_REG0C_SHADOW_HIGLIGHT)
 	{
@@ -5349,32 +7693,31 @@ static void genesis_render_videobuffer_to_screenbuffer(running_machine *machine,
 		{
 			UINT32 dat;
 			dat = video_renderline[x];
+			int drawn = 0;
+
+			// low priority 32x - if it's the bg pen, we have a 32x, and it's display is enabled...
 			if ((dat&0x20000) && (_32x_is_connected) && (_32x_displaymode != 0))
 			{
-				if (_32x_linerender[x]&0x8000)
+				if (!_32x_priority)
 				{
-					if (_32x_videopriority)
+					if (!(_32x_linerender[x]&0x8000))
 					{
 						lineptr[x] = _32x_linerender[x]&0x7fff;
-					}
-					else
-					{
-						// display md bg?
+						drawn = 1;
 					}
 				}
 				else
 				{
-					if (_32x_videopriority)
-					{
-						// display md bg?
-					}
-					else
+					if ((_32x_linerender[x]&0x8000))
 					{
 						lineptr[x] = _32x_linerender[x]&0x7fff;
+						drawn = 1;
 					}
 				}
 			}
-			else
+
+
+			if (drawn==0)
 			{
 				if (dat&0x10000)
 					lineptr[x] = megadrive_vdp_palette_lookup_sprite[(dat&0x0f) | segac2_sp_pal_lookup[(dat&0x30)>>4]];
@@ -5382,42 +7725,43 @@ static void genesis_render_videobuffer_to_screenbuffer(running_machine *machine,
 					lineptr[x] = megadrive_vdp_palette_lookup[(dat&0x0f) | segac2_bg_pal_lookup[(dat&0x30)>>4]];
 			}
 
+
+
 		}
 	}
 	else
 	{
+
 		for (x=0;x<320;x++)
 		{
 			UINT32 dat;
 			dat = video_renderline[x];
 
+			int drawn = 0;
+
+			// low priority 32x - if it's the bg pen, we have a 32x, and it's display is enabled...
 			if ((dat&0x20000) && (_32x_is_connected) && (_32x_displaymode != 0))
 			{
-				if (_32x_linerender[x]&0x8000)
+				if (!_32x_priority)
 				{
-					if (_32x_videopriority)
+					if (!(_32x_linerender[x]&0x8000))
 					{
 						lineptr[x] = _32x_linerender[x]&0x7fff;
-					}
-					else
-					{
-						// display md bg?
+						drawn = 1;
 					}
 				}
 				else
 				{
-					if (_32x_videopriority)
-					{
-						// display md bg?
-					}
-					else
+					if ((_32x_linerender[x]&0x8000))
 					{
 						lineptr[x] = _32x_linerender[x]&0x7fff;
+						drawn = 1;
 					}
 				}
-
 			}
-			else
+
+
+			if (drawn==0)
 			{
 				/* Verify my handling.. I'm not sure all cases are correct */
 				switch (dat&0x1e000)
@@ -5456,37 +7800,28 @@ static void genesis_render_videobuffer_to_screenbuffer(running_machine *machine,
 					break;
 				}
 			}
+
+
+
 		}
 
 	}
 
 
-	if (_32x_is_connected && ( _32x_displaymode != 0))
+	// high priority 32x
+	if ((_32x_is_connected) && (_32x_displaymode != 0))
 	{
 		for (x=0;x<320;x++)
 		{
-			if (_32x_linerender[x]&0x8000)
+			if (!_32x_priority)
 			{
-				if (_32x_videopriority)
-				{
-					// display md screen?
-
-				}
-				else
-				{
+				if ((_32x_linerender[x]&0x8000))
 					lineptr[x] = _32x_linerender[x]&0x7fff;
-				}
 			}
 			else
 			{
-				if (_32x_videopriority)
-				{
+				if (!(_32x_linerender[x]&0x8000))
 					lineptr[x] = _32x_linerender[x]&0x7fff;
-				}
-				else
-				{
-					// display md screen?
-				}
 			}
 		}
 	}
@@ -5806,6 +8141,17 @@ static TIMER_DEVICE_CALLBACK( render_timer_callback )
 	}
 }
 
+void _32x_check_irqs(running_machine* machine)
+{
+
+	if (sh2_master_vint_enable && sh2_master_vint_pending) cpu_set_input_line(_32x_master_cpu,SH2_VINT_IRQ_LEVEL,ASSERT_LINE);
+	else cpu_set_input_line(_32x_master_cpu,SH2_VINT_IRQ_LEVEL,CLEAR_LINE);
+
+	if (sh2_slave_vint_enable && sh2_slave_vint_pending) cpu_set_input_line(_32x_slave_cpu,SH2_VINT_IRQ_LEVEL,ASSERT_LINE);
+	else cpu_set_input_line(_32x_slave_cpu,SH2_VINT_IRQ_LEVEL,CLEAR_LINE);
+}
+
+
 
 static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 {
@@ -5838,22 +8184,20 @@ static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 			// 32x interrupt!
 			if (_32x_is_connected)
 			{
-				if (sh2_master_vint_enable) cpu_set_input_line(_32x_master_cpu,SH2_VINT_IRQ_LEVEL,ASSERT_LINE);
-				if (sh2_slave_vint_enable) cpu_set_input_line(_32x_slave_cpu,SH2_VINT_IRQ_LEVEL,ASSERT_LINE);
+				sh2_master_vint_pending = 1;
+				sh2_slave_vint_pending = 1;
+				_32x_check_irqs(timer.machine);
 			}
 
 		}
 
-		if (megadrive_vblank_flag>=224)
-			megadrive_vblank_flag = 1;
 
-		if (megadrive_vblank_flag>=236)
-			megadrive_vblank_flag = 0;
+
+		_32x_check_framebuffer_swap();
+
 
 	//  if (genesis_scanline_counter==0) irq4counter = MEGADRIVE_REG0A_HINT_VALUE;
 		// irq4counter = MEGADRIVE_REG0A_HINT_VALUE;
-
-
 
 		if (genesis_scanline_counter<=224)
 		{
@@ -5881,7 +8225,21 @@ static TIMER_DEVICE_CALLBACK( scanline_timer_callback )
 
 		//if (genesis_scanline_counter==0) irq4_on_timer->adjust(ATTOTIME_IN_USEC(2));
 
+		if(_32x_is_connected)
+		{
+			_32x_hcount_compare_val++;
 
+			if(_32x_hcount_compare_val >= _32x_hcount_reg)
+			{
+				_32x_hcount_compare_val = -1;
+
+				if(genesis_scanline_counter < 224 || sh2_hint_in_vbl)
+				{
+					if(sh2_master_hint_enable) { cpu_set_input_line(_32x_master_cpu,SH2_HINT_IRQ_LEVEL,ASSERT_LINE); }
+					if(sh2_slave_hint_enable) { cpu_set_input_line(_32x_slave_cpu,SH2_HINT_IRQ_LEVEL,ASSERT_LINE); }
+				}
+			}
+		}
 
 
 		if (timer.machine->device("genesis_snd_z80") != NULL)
@@ -6024,10 +8382,21 @@ MACHINE_RESET( megadriv )
 
 	if (_segacd_68k_cpu != NULL )
 	{
-		cpu_set_input_line(_segacd_68k_cpu, INPUT_LINE_RESET, ASSERT_LINE);
-		cpu_set_input_line(_segacd_68k_cpu, INPUT_LINE_HALT, ASSERT_LINE);
+		MACHINE_RESET_CALL( segacd );
 	}
 
+
+	if(_32x_is_connected)
+	{
+		current_fifo_block = fifo_block_a;
+		current_fifo_readblock = fifo_block_b;
+		current_fifo_write_pos = 0;
+		current_fifo_read_pos = 0;
+		fifo_block_a_full = 0;
+		fifo_block_b_full = 0;
+
+		_32x_hcount_compare_val = -1;
+	}
 }
 
 void megadriv_stop_scanline_timer(void)
@@ -6145,7 +8514,7 @@ int megadrive_z80irq_hpos = 320;
 		frametime = ATTOSECONDS_PER_SECOND/megadriv_framerate;
 
 		//time_elapsed_since_crap = frame_timer->time_elapsed();
-		//xxx = cputag_attotime_to_clocks(machine, "maincpu",time_elapsed_since_crap);
+		//xxx = machine->device<cpudevice>("maincpu")->attotime_to_cycles(time_elapsed_since_crap);
 		//mame_printf_debug("---------- cycles %d, %08x %08x\n",xxx, (UINT32)(time_elapsed_since_crap.attoseconds>>32),(UINT32)(time_elapsed_since_crap.attoseconds&0xffffffff));
 		//mame_printf_debug("---------- framet %d, %08x %08x\n",xxx, (UINT32)(frametime>>32),(UINT32)(frametime&0xffffffff));
 		frame_timer->adjust(attotime_zero);
@@ -6153,6 +8522,8 @@ int megadrive_z80irq_hpos = 320;
 
 	scanline_timer->adjust(attotime_zero);
 
+	if(_32x_is_connected)
+		_32x_hcount_compare_val = -1;
 }
 
 
@@ -6184,16 +8555,16 @@ static NVRAM_HANDLER( megadriv )
 #endif
 
 
-MACHINE_DRIVER_START( megadriv_timers )
+MACHINE_CONFIG_FRAGMENT( megadriv_timers )
 	MDRV_TIMER_ADD("frame_timer", frame_timer_callback)
 	MDRV_TIMER_ADD("scanline_timer", scanline_timer_callback)
 	MDRV_TIMER_ADD("render_timer", render_timer_callback)
 	MDRV_TIMER_ADD("irq6_timer", irq6_on_callback)
 	MDRV_TIMER_ADD("irq4_timer", irq4_on_callback)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( megadriv )
+MACHINE_CONFIG_START( megadriv, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK_NTSC / 7) /* 7.67 MHz */
 	MDRV_CPU_PROGRAM_MAP(megadriv_map)
 	/* IRQs are handled via the timers */
@@ -6206,7 +8577,7 @@ MACHINE_DRIVER_START( megadriv )
 	MDRV_MACHINE_START(megadriv)
 	MDRV_MACHINE_RESET(megadriv)
 
-	MDRV_IMPORT_FROM(megadriv_timers)
+	MDRV_FRAGMENT_ADD(megadriv_timers)
 
 	MDRV_SCREEN_ADD("megadriv", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
@@ -6236,11 +8607,11 @@ MACHINE_DRIVER_START( megadriv )
 	MDRV_SOUND_ADD("snsnd", SMSIII, MASTER_CLOCK_NTSC/15)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25) /* 3.58 MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker",0.25) /* 3.58 MHz */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /************ PAL hardware has a different master clock *************/
 
-MACHINE_DRIVER_START( megadpal )
+MACHINE_CONFIG_START( megadpal, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK_PAL / 7) /* 7.67 MHz */
 	MDRV_CPU_PROGRAM_MAP(megadriv_map)
 	/* IRQs are handled via the timers */
@@ -6253,7 +8624,7 @@ MACHINE_DRIVER_START( megadpal )
 	MDRV_MACHINE_START(megadriv)
 	MDRV_MACHINE_RESET(megadriv)
 
-	MDRV_IMPORT_FROM(megadriv_timers)
+	MDRV_FRAGMENT_ADD(megadriv_timers)
 
 	MDRV_SCREEN_ADD("megadriv", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
@@ -6283,23 +8654,47 @@ MACHINE_DRIVER_START( megadpal )
 	MDRV_SOUND_ADD("snsnd", SMSIII, MASTER_CLOCK_PAL/15)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.25) /* 3.58 MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker",0.25) /* 3.58 MHz */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
-static const sh2_cpu_core sh2_conf_master = { 0, NULL };
-static const sh2_cpu_core sh2_conf_slave  = { 1, NULL };
+static int _32x_fifo_available_callback(UINT32 src, UINT32 dst, UINT32 data, int size)
+{
+	if (src==0x4012)
+	{
+		if (current_fifo_readblock==fifo_block_a && fifo_block_a_full)
+			return 1;
 
-MACHINE_DRIVER_START( genesis_32x )
-	MDRV_IMPORT_FROM(megadriv)
+		if (current_fifo_readblock==fifo_block_b && fifo_block_b_full)
+			return 1;
 
+		return 0;
+	}
+
+	return 1;
+}
+
+
+static const sh2_cpu_core sh2_conf_master = { 0, NULL, _32x_fifo_available_callback };
+static const sh2_cpu_core sh2_conf_slave  = { 1, NULL, _32x_fifo_available_callback };
+
+MACHINE_CONFIG_DERIVED( genesis_32x, megadriv )
+
+#ifndef _32X_SWAP_MASTER_SLAVE_HACK
 	MDRV_CPU_ADD("32x_master_sh2", SH2, (MASTER_CLOCK_NTSC*3)/7 )
 	MDRV_CPU_PROGRAM_MAP(sh2_main_map)
 	MDRV_CPU_CONFIG(sh2_conf_master)
+#endif
 
 	MDRV_CPU_ADD("32x_slave_sh2", SH2, (MASTER_CLOCK_NTSC*3)/7 )
 	MDRV_CPU_PROGRAM_MAP(sh2_slave_map)
 	MDRV_CPU_CONFIG(sh2_conf_slave)
+
+#ifdef _32X_SWAP_MASTER_SLAVE_HACK
+	MDRV_CPU_ADD("32x_master_sh2", SH2, (MASTER_CLOCK_NTSC*3)/7 )
+	MDRV_CPU_PROGRAM_MAP(sh2_main_map)
+	MDRV_CPU_CONFIG(sh2_conf_master)
+#endif
 
 	// brutal needs at least 30000 or the backgrounds don't animate properly / lock up, and the game
 	// freezes.  Some stage seem to need as high as 80000 ?   this *KILLS* performance
@@ -6307,35 +8702,114 @@ MACHINE_DRIVER_START( genesis_32x )
 	// boosting the interleave here actually makes Kolibri run incorrectly however, that
 	// one works best just boosting the interleave on communications?!
 	MDRV_QUANTUM_TIME(HZ(1800000))
-MACHINE_DRIVER_END
+
+	// we need to remove and re-add the sound system because the balance is different
+	// due to MAME / MESS having severe issues if the dac output is > 0.40? (sound is corrupted even if DAC is slient?!)
+	MDRV_DEVICE_REMOVE("ymsnd")
+	MDRV_DEVICE_REMOVE("snsnd")
 
 
-MACHINE_DRIVER_START( genesis_32x_pal )
-	MDRV_IMPORT_FROM(megadpal)
+	MDRV_SOUND_ADD("ymsnd", YM2612, MASTER_CLOCK_NTSC/7)
+	MDRV_SOUND_ROUTE(0, "lspeaker", (0.50)/2)
+	MDRV_SOUND_ROUTE(1, "rspeaker", (0.50)/2)
 
+	/* sound hardware */
+	MDRV_SOUND_ADD("snsnd", SMSIII, MASTER_CLOCK_NTSC/15)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", (0.25)/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", (0.25)/2)
+
+	MDRV_SOUND_ADD("lch_pwm", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+
+	MDRV_SOUND_ADD("rch_pwm", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+MACHINE_CONFIG_END
+
+
+MACHINE_CONFIG_DERIVED( genesis_32x_pal, megadpal )
+
+#ifndef _32X_SWAP_MASTER_SLAVE_HACK
 	MDRV_CPU_ADD("32x_master_sh2", SH2, (MASTER_CLOCK_PAL*3)/7 )
 	MDRV_CPU_PROGRAM_MAP(sh2_main_map)
 	MDRV_CPU_CONFIG(sh2_conf_master)
+#endif
 
 	MDRV_CPU_ADD("32x_slave_sh2", SH2, (MASTER_CLOCK_PAL*3)/7 )
 	MDRV_CPU_PROGRAM_MAP(sh2_slave_map)
 	MDRV_CPU_CONFIG(sh2_conf_slave)
 
-MACHINE_DRIVER_END
+#ifdef _32X_SWAP_MASTER_SLAVE_HACK
+	MDRV_CPU_ADD("32x_master_sh2", SH2, (MASTER_CLOCK_PAL*3)/7 )
+	MDRV_CPU_PROGRAM_MAP(sh2_main_map)
+	MDRV_CPU_CONFIG(sh2_conf_master)
+#endif
 
-MACHINE_DRIVER_START( genesis_scd )
-	MDRV_IMPORT_FROM(megadriv)
+	// brutal needs at least 30000 or the backgrounds don't animate properly / lock up, and the game
+	// freezes.  Some stage seem to need as high as 80000 ?   this *KILLS* performance
+	//
+	// boosting the interleave here actually makes Kolibri run incorrectly however, that
+	// one works best just boosting the interleave on communications?!
+	MDRV_QUANTUM_TIME(HZ(1800000))
+
+	// we need to remove and re-add the sound system because the balance is different
+	// due to MAME / MESS having severe issues if the dac output is > 0.40? (sound is corrupted even if DAC is slient?!)
+	MDRV_DEVICE_REMOVE("ymsnd")
+	MDRV_DEVICE_REMOVE("snsnd")
+
+
+	MDRV_SOUND_ADD("ymsnd", YM2612, MASTER_CLOCK_PAL/7)
+	MDRV_SOUND_ROUTE(0, "lspeaker", (0.50)/2)
+	MDRV_SOUND_ROUTE(1, "rspeaker", (0.50)/2)
+
+	/* sound hardware */
+	MDRV_SOUND_ADD("snsnd", SMSIII, MASTER_CLOCK_PAL/15)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", (0.25)/2)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", (0.25)/2)
+
+	MDRV_SOUND_ADD("lch_pwm", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
+
+	MDRV_SOUND_ADD("rch_pwm", DAC, 0)
+	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
+MACHINE_CONFIG_END
+
+
+
+MACHINE_CONFIG_DERIVED( genesis_scd, megadriv )
 
 	MDRV_CPU_ADD("segacd_68k", M68000, SEGACD_CLOCK ) /* 12.5 MHz */
 	MDRV_CPU_PROGRAM_MAP(segacd_map)
-MACHINE_DRIVER_END
 
-MACHINE_DRIVER_START( genesis_32x_scd )
-	MDRV_IMPORT_FROM(genesis_32x)
+	MDRV_SOUND_ADD( "cdda", CDDA, 0 )
+	MDRV_SOUND_ROUTE( 0, "lspeaker", 1.00 )
+	MDRV_SOUND_ROUTE( 1, "rspeaker", 1.00 )
+
+	MDRV_SOUND_ADD("rfsnd", RF5C68, SEGACD_CLOCK) // RF5C164!
+	MDRV_SOUND_ROUTE( 0, "lspeaker", 0.25 )
+	MDRV_SOUND_ROUTE( 1, "rspeaker", 0.25 )
+
+	#ifdef MESS
+	MDRV_CDROM_ADD( "cdrom" )
+	#endif
+MACHINE_CONFIG_END
+
+MACHINE_CONFIG_DERIVED( genesis_32x_scd, genesis_32x )
 
 	MDRV_CPU_ADD("segacd_68k", M68000, SEGACD_CLOCK ) /* 12.5 MHz */
 	MDRV_CPU_PROGRAM_MAP(segacd_map)
-MACHINE_DRIVER_END
+
+	MDRV_SOUND_ADD( "cdda", CDDA, 0 )
+	MDRV_SOUND_ROUTE( 0, "lspeaker", 1.00 )
+	MDRV_SOUND_ROUTE( 1, "rspeaker", 1.00 )
+
+	MDRV_SOUND_ADD("rfsnd", RF5C68, SEGACD_CLOCK) // RF5C164
+	MDRV_SOUND_ROUTE( 0, "lspeaker", 0.25 )
+	MDRV_SOUND_ROUTE( 1, "rspeaker", 0.25 )
+
+	#ifdef MESS
+	MDRV_CDROM_ADD( "cdrom" )
+	#endif
+MACHINE_CONFIG_END
 
 
 /* Callback when the genesis enters interrupt code */
@@ -6397,10 +8871,20 @@ static void megadriv_init_common(running_machine *machine)
 		_32x_is_connected = 0;
 	}
 
+	if(_32x_is_connected)
+	{
+		_32x_pwm_timer = timer_alloc(machine, _32x_pwm_callback, 0);
+		timer_adjust_oneshot(_32x_pwm_timer, attotime_never, 0);
+	}
+
+	sega_cd_connected = 0;
+	segacd_wordram_mapped = 0;
 	_segacd_68k_cpu = machine->device<cpu_device>("segacd_68k");
 	if (_segacd_68k_cpu != NULL)
 	{
 		printf("Sega CD secondary 68k cpu found '%s'\n", _segacd_68k_cpu->tag() );
+		sega_cd_connected = 1;
+		segacd_init_main_cpu(machine);
 	}
 
 	_svp_cpu = machine->device<cpu_device>("svp");
@@ -6418,7 +8902,7 @@ static void megadriv_init_common(running_machine *machine)
 
 	m68k_set_tas_callback(machine->device("maincpu"), megadriv_tas_callback);
 
-	if ((ipt == INPUT_PORTS_NAME(megadri6)) || (ipt == INPUT_PORTS_NAME(ssf2ghw)) || (ipt == INPUT_PORTS_NAME(mk3ghw)))
+	if ((ipt == INPUT_PORTS_NAME(megadri6)) || (ipt == INPUT_PORTS_NAME(ssf2mdb)) || (ipt == INPUT_PORTS_NAME(mk3mdb)))
 	{
 		megadrive_io_read_data_port_ptr	= megadrive_io_read_data_port_6button;
 		megadrive_io_write_data_port_ptr = megadrive_io_write_data_port_6button;
@@ -6597,6 +9081,7 @@ DRIVER_INIT( _32x )
 	if (_32x_adapter_enabled == 0)
 	{
 		memory_install_rom(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0000000, 0x03fffff, 0, 0, memory_region(machine, "gamecart"));
+		memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x000070, 0x000073, 0, 0, _32x_68k_hint_vector_r, _32x_68k_hint_vector_w); // h interrupt vector
 	};
 
 
@@ -6605,12 +9090,14 @@ DRIVER_INIT( _32x )
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15102, 0xa15103, 0, 0, _32x_68k_a15102_r, _32x_68k_a15102_w); // send irq to sh2
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15104, 0xa15105, 0, 0, _32x_68k_a15104_r, _32x_68k_a15104_w); // 68k BANK rom set
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15106, 0xa15107, 0, 0, _32x_68k_a15106_r, _32x_68k_a15106_w); // dreq stuff
+	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15108, 0xa15113, 0, 0, _32x_dreq_common_r, _32x_dreq_common_w); // dreq src / dst / length /fifo
+
+	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa1511a, 0xa1511b, 0, 0, _32x_68k_a1511a_r, _32x_68k_a1511a_w); // SEGA TV
 
 	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15120, 0xa1512f, 0, 0, _32x_68k_commsram_r, _32x_68k_commsram_w); // comms reg 0-7
+	memory_install_readwrite16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xa15130, 0xa1513f, 0, 0, _32x_pwm_r, _32x_68k_pwm_w);
 
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0a130ec, 0x0a130ef, 0, 0, _32x_68k_MARS_r); // system ID
-
-
 
 
 	/* Interrupts are masked / disabled at first */
@@ -6618,6 +9105,7 @@ DRIVER_INIT( _32x )
 	sh2_master_hint_enable = sh2_slave_hint_enable = 0;
 	sh2_master_cmdint_enable = sh2_slave_cmdint_enable = 0;
 	sh2_master_pwmint_enable = sh2_slave_pwmint_enable = 0;
+	sh2_master_vint_pending = sh2_slave_vint_pending = 0;
 
 	// start in a reset state
 	sh2_are_running = 0;
@@ -6644,55 +9132,7 @@ DRIVER_INIT( _32x )
 
 ROM_START( 32x_bios )
 
-	ROM_REGION16_BE( 0x400000, "gamecart", 0 ) /* 68000 Code */
-	// test sets
-//  ROM_LOAD( "32xquin.rom",  0x000000,  0x05d124, CRC(93d4b0a3) SHA1(128bd0b6e048c749da1a2f4c3abd6a867539a293))
-//  ROM_LOAD( "32x_babe.rom", 0x000000,  0x014f80, CRC(816b0cb4) SHA1(dc16d3170d5809b57192e03864b7136935eada64) )
-//  ROM_LOAD( "32x_hot.rom",  0x000000,  0x01235c, CRC(da9c93c9) SHA1(a62652eb8ad8c62b36f6b1ffb96922d045c4e3ac))
-//  ROM_LOAD( "32x_rot.bin",  0x000000,  0x001638, CRC(98c25033) SHA1(8d9ab3084bd29e60b8cdf4b9f1cb755eb4c88d29) )
-//  ROM_LOAD( "32x_3d.bin",   0x000000,  0x006568, CRC(0171743e) SHA1(bbe6fec182baae5e4d47d263fae6b419db5366ae) )
-//  ROM_LOAD( "32x_h15.bin",  0x000000,  0x024564, CRC(938f4e1d) SHA1(ab7270121be53c6c82c4cb45f8f41dd24eb3a2a5) ) // test demo for 15bpp mode
-//  ROM_LOAD( "32x_spin.bin", 0x000000,  0x012c28, CRC(3d1d1191) SHA1(221a74408653e18cef8ce2f9b4d33ed93e4218b7) )
-//  ROM_LOAD( "32x_ecco.bin", 0x000000,  0x300000, CRC(b06178df) SHA1(10409f2245b058e8a32cba51e1ea391ca4480108) ) // fails after sega logo
-
-	// actual games, for testing
-//  ROM_LOAD( "32x_knux.rom", 0x000000,  0x300000, CRC(d0b0b842) SHA1(0c2fff7bc79ed26507c08ac47464c3af19f7ced7) )
-//  ROM_LOAD( "32x_doom.bin", 0x000000,  0x300000, CRC(208332fd) SHA1(b68e9c7af81853b8f05b8696033dfe4c80327e38) ) // works!
-//  ROM_LOAD( "32x_koli.bin", 0x000000,  0x300000, CRC(20ca53ef) SHA1(191ae0b525ecf32664086d8d748e0b35f776ddfe) ) // works but needs sync ONLY on command writes / reads or game stutters?!
-//  ROM_LOAD( "32x_head.bin", 0x000000,  0x300000, CRC(ef5553ff) SHA1(4e872fbb44ecb2bd730abd8cc8f32f96b10582c0) ) // doesn't boot
-//  ROM_LOAD( "32x_pit.bin",  0x000000,  0x300000, CRC(f9126f15) SHA1(ee864d1677c6d976d0846eb5f8d8edb839acfb76) ) // ok, needs vram fill on intro screens tho?
-//  ROM_LOAD( "32x_spid.bin", 0x000000,  0x300000, CRC(29dce257) SHA1(7cc2ea1e10f110338ad880bd3e7ff3bce72e7e9e) ) // needs cmdint status reads, overwrite image support wrong? priority handling wrong??
-//  ROM_LOAD( "32x_carn.bin", 0x000000,  0x300000, CRC(7c7be6a2) SHA1(9a563ed821b483148339561ebd2b876efa58847b) ) // ?? doesn't boot
-//  ROM_LOAD( "32x_raw.bin",  0x000000,  0x400000, CRC(8eb7cd2c) SHA1(94b974f2f69f0c10bc18b349fa4ff95ca56fa47b) ) // needs cmdint status reads
-//  ROM_LOAD( "32x_darx.bin", 0x000000,  0x200000, CRC(22d7c906) SHA1(108b4ffed8643abdefa921cfb58389b119b47f3d) ) // ?? probably abuses the hardware, euro only ;D
-//  ROM_LOAD( "32x_prim.bin", 0x000000,  0x400000, CRC(e78a4d28) SHA1(5084dcca51d76173c383ab7d04cbc661673545f7) ) // needs tight sync or fails after sega logo - works with tight sync, but VERY slow
-//  ROM_LOAD( "32x_brut.bin", 0x000000,  0x300000, CRC(7a72c939) SHA1(40aa2c787f37772cdbd7280b8be06b15421fabae) ) // needs *very* heavy sync to work..
-//  ROM_LOAD( "32x_temp.bin", 0x000000,  0x300000, CRC(14e5c575) SHA1(6673ba83570b4f2c1b4a22415a56594c3cc6c6a9) ) // works (heavy slowdowns) RV emulation - really should hide 68k rom when transfer is off
-//  ROM_LOAD( "32x_vr.bin",   0x000000,  0x300000, CRC(7896b62e) SHA1(18dfdeb50780c2623e60a6587d7ed701a1cf81f1) ) // doesn't work
-//  ROM_LOAD( "32x_vf.bin",   0x000000,  0x400000, CRC(b5de9626) SHA1(f35754f4bfe3a53722d7a799f88face0fd13c424) ) // locks up when starting game
-//  ROM_LOAD( "32x_zaxx.bin", 0x000000,  0x200000, CRC(447d44be) SHA1(60c390f76c394bdd221936c21aecbf98aec49a3d) ) // nothing
-//  ROM_LOAD( "32x_trek.bin", 0x000000,  0x200000, CRC(dd9708b9) SHA1(e5248328b64a1ec4f1079c88ee53ef8d48e99e58) ) // boots, seems to run.. enables hints tho
-//  ROM_LOAD( "32x_sw.bin",   0x000000,  0x280000, CRC(2f16b44a) SHA1(f4ffaaf1d8330ea971643021be3f3203e1ea065d) ) // gets stuck in impossible (buggy?) 68k loop
-//  ROM_LOAD( "32x_wwfa.bin", 0x000000,  0x400000, CRC(61833503) SHA1(551eedc963cba0e1410b3d229b332ef9ea061469) ) // 32x game gfx missing, doesn't progress properly into game
-//  ROM_LOAD( "32x_shar.bin", 0x000000,  0x200000, CRC(86e7f989) SHA1(f32a52a7082761982024e40291dbd962a835b231) ) // doesn't boot
-//  ROM_LOAD( "32x_golf.bin", 0x000000,  0x300000, CRC(d3d0a2fe) SHA1(dc77b1e5c888c2c4284766915a5020bb14ee681d) ) // works
-//  ROM_LOAD( "32x_moto.bin", 0x000000,  0x200000, CRC(a21c5761) SHA1(5f1a107991aaf9eff0b3ce864b2e3151f56abe7b) ) // works (with sound!)
-//  ROM_LOAD( "32x_tmek.bin", 0x000000,  0x300000, CRC(66d2c48f) SHA1(173c8425921d83db3e8d181158e7599364f4c0f6) ) // works?
-//  ROM_LOAD( "32x_bcr.bin",  0x000000,  0x300000, CRC(936c3d27) SHA1(9b5fd499eaa442d48a2c97fceb1d505dc8e8ddff) ) // overwrite image problems, locks going ingame
-//  ROM_LOAD( "32x_blak.bin", 0x000000,  0x300000, CRC(d1a60a47) SHA1(4bf120cf056fe1417ca5b02fa0372ef33cb8ec11) ) // works?
-//  ROM_LOAD( "32x_shad.bin", 0x000000,  0x200000, CRC(60c49e4d) SHA1(561c8c63dbcabc0b1b6f31673ca75a0bde7abc72) ) // works (nasty sound)
-//  ROM_LOAD( "32x_abur.bin", 0x000000,  0x200000, CRC(204044c4) SHA1(9cf575feb036e2f26e78350154d5eb2fd3825325) ) // doesn't boot
-//  ROM_LOAD( "32x_darx.bin", 0x000000,  0x200000, CRC(22d7c906) SHA1(108b4ffed8643abdefa921cfb58389b119b47f3d) ) // doesn't boot (PAL only too)
-//  ROM_LOAD( "32x_fifa.bin", 0x000000,  0x300000, CRC(fb14a7c8) SHA1(131ebb717dee4dd1d8f5ab2b9393c23785d3a359) ) // crash
-//  ROM_LOAD( "32x_tman.bin", 0x000000,  0x400000, CRC(14eac7a6) SHA1(7588b0b8f4e93d5fdc920d3ab7e464154e423da9) ) // ok, some bad gfx
-//  ROM_LOAD( "32x_nba.bin",  0x000000,  0x400000, CRC(6b7994aa) SHA1(c8af3e74c49514669ba6652ec0c81bccf77873b6) ) // crash
-//  ROM_LOAD( "32x_nfl.bin",  0x000000,  0x300000, CRC(0bc7018d) SHA1(a0dc24f2f3a7fc5bfd12791cf25af7f7888843cf) ) // doesn't boot
-//  ROM_LOAD( "32x_rbi.bin",  0x000000,  0x200000, CRC(ff795fdc) SHA1(4f90433a4403fd74cafeea49272689046de4ae43) ) // doesn't boot
-	ROM_LOAD( "32x_wsb.bin",  0x000000,  0x300000, CRC(6de1bc75) SHA1(ab3026eae46a775adb7eaebc13702699557ddc41) ) // working - overwrite problems
-//  ROM_LOAD( "32x_mk2.bin",  0x000000,  0x400000, CRC(211085ce) SHA1(f75698de887d0ef980f73e35fc4615887a9ad58f) ) // working
-//  ROM_LOAD( "32x_sang.bin", 0x000000,  0x400000, CRC(e4de7625) SHA1(74a3ba27c55cff12409bf6c9324ece6247abbad1) ) // hangs after sega logo
-
-//  ROM_LOAD( "32x_mars.bin", 0x000000,  0x400000, CRC(8f7260fb) SHA1(7654c6d3cf2883c30df51cf38d723ab7902280c4) ) // official hw test program? reports lots of errors seems to get stuck on test 39?
+	ROM_REGION16_BE( 0x400000, "gamecart", ROMREGION_ERASEFF ) /* 68000 Code */
 
 	ROM_REGION32_BE( 0x400000, "gamecart_sh2", 0 ) /* Copy for the SH2 */
 	ROM_COPY( "gamecart", 0x0, 0x0, 0x400000)
@@ -6703,11 +9143,14 @@ ROM_START( 32x_bios )
 
 	ROM_REGION16_BE( 0x400000, "maincpu", ROMREGION_ERASE00 )
 	// temp, rom should only be visible here when one of the regs is set, tempo needs it
-	ROM_COPY( "gamecart", 0x0, 0x0, 0x400000)
 	ROM_COPY( "32x_68k_bios", 0x0, 0x0, 0x100)
 
 	ROM_REGION( 0x400000, "32x_master_sh2", 0 ) /* SH2 Code */
-	ROM_LOAD( "32x_m_bios.bin", 0x000000,  0x000800, CRC(dd9c46b8) SHA1(1e5b0b2441a4979b6966d942b20cc76c413b8c5e) )
+	ROM_SYSTEM_BIOS( 0, "retail", "Mars Version 1.0 (retail)" )
+	ROMX_LOAD( "32x_m_bios.bin", 0x000000,  0x000800, CRC(dd9c46b8) SHA1(1e5b0b2441a4979b6966d942b20cc76c413b8c5e), ROM_BIOS(1) )
+	ROM_SYSTEM_BIOS( 1, "sdk", "Mars Version 1.0 (early sdk)" )
+	ROMX_LOAD( "32x_m_bios_sdk.bin", 0x000000,  0x000800, BAD_DUMP CRC(c7102c53) SHA1(ed73a47f186b373b8eff765f84ef26c3d9ef6cb0), ROM_BIOS(2) )
+
 
 	ROM_REGION( 0x400000, "32x_slave_sh2", 0 ) /* SH2 Code */
 	ROM_LOAD( "32x_s_bios.bin", 0x000000,  0x000400, CRC(bfda1fe5) SHA1(4103668c1bbd66c5e24558e73d4f3f92061a109a) )

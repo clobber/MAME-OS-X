@@ -74,6 +74,8 @@ static VIDEO_START( common )
 	local_videoram = auto_alloc_array_clear(machine, UINT16, 0x80000/2);
 	pen_map = auto_alloc_array(machine, pen_t, 65536);
 
+	machine->device<nvram_device>("nvram")->set_base(midyunit_cmos_ram, 0x2000 * 4);
+
 	/* reset all the globals */
 	midyunit_cmos_page = 0;
 	autoerase_enable = 0;
@@ -200,13 +202,13 @@ READ16_HANDLER( midyunit_vram_r )
  *
  *************************************/
 
-void midyunit_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midyunit_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(shiftreg, &local_videoram[address >> 3], 2 * 512 * sizeof(UINT16));
 }
 
 
-void midyunit_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midyunit_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(&local_videoram[address >> 3], shiftreg, 2 * 512 * sizeof(UINT16));
 }
@@ -469,7 +471,7 @@ if (LOG_DMA)
 	}
 }
 
-	profiler_mark_start(PROFILER_USER1);
+	g_profiler.start(PROFILER_USER1);
 
 	/* fill in the basic data */
 	dma_state.rowbytes = (INT16)dma_register[DMA_ROWBYTES];
@@ -541,7 +543,7 @@ if (LOG_DMA)
 	/* signal we're done */
 	timer_set(space->machine, ATTOTIME_IN_NSEC(41 * dma_state.width * dma_state.height), NULL, 0, dma_callback);
 
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 

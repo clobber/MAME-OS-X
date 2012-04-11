@@ -448,9 +448,9 @@ DISCRETE_SOUND_END
  *
  ****************************************************************/
 
-static void set_ea(const address_space *space, int ea)
+static void set_ea(address_space *space, int ea)
 {
-	mario_state	*state = (mario_state *)space->machine->driver_data;
+	mario_state	*state = space->machine->driver_data<mario_state>();
 	//printf("ea: %d\n", ea);
 	//cputag_set_input_line(machine, "audiocpu", MCS48_INPUT_EA, (ea) ? ASSERT_LINE : CLEAR_LINE);
 	if (state->eabank != NULL)
@@ -465,7 +465,7 @@ static void set_ea(const address_space *space, int ea)
 
 static SOUND_START( mario )
 {
-	mario_state	*state = (mario_state *)machine->driver_data;
+	mario_state	*state = machine->driver_data<mario_state>();
 	running_device *audiocpu = machine->device("audiocpu");
 #if USE_8039
 	UINT8 *SND = memory_region(machine, "audiocpu");
@@ -488,8 +488,8 @@ static SOUND_START( mario )
 
 static SOUND_RESET( mario )
 {
-	mario_state	*state = (mario_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	mario_state	*state = machine->driver_data<mario_state>();
+	address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
 
 #if USE_8039
     set_ea(machine, 1);
@@ -567,7 +567,7 @@ static WRITE8_HANDLER( mario_sh_p2_w )
 
 WRITE8_HANDLER( masao_sh_irqtrigger_w )
 {
-	mario_state	*state = (mario_state *)space->machine->driver_data;
+	mario_state	*state = space->machine->driver_data<mario_state>();
 
 	if (state->last == 1 && data == 0)
 	{
@@ -600,7 +600,7 @@ WRITE8_DEVICE_HANDLER( mario_sh2_w )
 /* Misc samples */
 WRITE8_HANDLER( mario_sh3_w )
 {
-	mario_state	*state = (mario_state *)space->machine->driver_data;
+	mario_state	*state = space->machine->driver_data<mario_state>();
 
 	switch (offset)
 	{
@@ -683,7 +683,7 @@ static const ay8910_interface ay8910_config =
  *
  *************************************/
 
-MACHINE_DRIVER_START( mario_audio )
+MACHINE_CONFIG_FRAGMENT( mario_audio )
 
 #if USE_8039
 	MDRV_CPU_ADD("audiocpu", I8039, I8035_CLOCK)         /* 730 kHz */
@@ -701,9 +701,9 @@ MACHINE_DRIVER_START( mario_audio )
 	MDRV_SOUND_CONFIG_DISCRETE(mario)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.5)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-MACHINE_DRIVER_START( masao_audio )
+MACHINE_CONFIG_FRAGMENT( masao_audio )
 
 	MDRV_CPU_ADD("audiocpu", Z80,24576000/16)	/* ???? */
 	MDRV_CPU_PROGRAM_MAP(masao_sound_map)
@@ -717,5 +717,5 @@ MACHINE_DRIVER_START( masao_audio )
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 

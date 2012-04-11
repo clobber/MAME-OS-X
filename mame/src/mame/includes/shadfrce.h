@@ -1,9 +1,8 @@
-class shadfrce_state
+class shadfrce_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, shadfrce_state(machine)); }
-
-	shadfrce_state(running_machine &machine) { }
+	shadfrce_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	tilemap_t *fgtilemap;
 	tilemap_t *bg0tilemap;

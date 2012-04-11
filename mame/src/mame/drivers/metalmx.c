@@ -255,7 +255,6 @@ Logic:
 
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
-#include "cpu/adsp2100/adsp2100.h"
 #include "cpu/tms34010/tms34010.h"
 #include "cpu/dsp32/dsp32.h"
 #include "audio/cage.h"
@@ -285,7 +284,7 @@ static VIDEO_START( metalmx )
 static VIDEO_UPDATE( metalmx )
 {
 	/* TODO: TMS34020 should take care of this */
-	metalmx_state *state = (metalmx_state *)screen->machine->driver_data;
+	metalmx_state *state = screen->machine->driver_data<metalmx_state>();
 
 //  UINT32 *src_base = &gsp_vram[(vreg_base[0x40/4] & 0x40) ? 0x20000 : 0];
 	UINT16 *src_base = state->gsp_vram;
@@ -333,7 +332,7 @@ static WRITE32_HANDLER( motor_w )
 
 static WRITE32_HANDLER( reset_w )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	if (ACCESSING_BITS_16_31)
 	{
@@ -382,7 +381,7 @@ static void cage_irq_callback(running_machine *machine, int reason)
 
 static WRITE32_HANDLER( dsp32c_1_w )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	offset <<= 1;
 
@@ -396,7 +395,7 @@ static WRITE32_HANDLER( dsp32c_1_w )
 
 static READ32_HANDLER( dsp32c_1_r )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 	UINT32 data;
 
 	offset <<= 1;
@@ -414,7 +413,7 @@ static READ32_HANDLER( dsp32c_1_r )
 
 static WRITE32_HANDLER( dsp32c_2_w )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	offset <<= 1;
 
@@ -428,7 +427,7 @@ static WRITE32_HANDLER( dsp32c_2_w )
 
 static READ32_HANDLER( dsp32c_2_r )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 	UINT32 data;
 
 	offset <<= 1;
@@ -453,33 +452,33 @@ static READ32_HANDLER( dsp32c_2_r )
 
 static WRITE32_HANDLER( host_gsp_w )
 {
-	const address_space *gsp_space = cputag_get_address_space(space->machine, "gsp", ADDRESS_SPACE_PROGRAM);
+	address_space *gsp_space = cputag_get_address_space(space->machine, "gsp", ADDRESS_SPACE_PROGRAM);
 
-	memory_write_word(gsp_space, (0xc0000000 + (offset << 5) + 0x10) / 8, data);
-	memory_write_word(gsp_space, (0xc0000000 + (offset << 5))/ 8 , data >> 16);
+	gsp_space->write_word((0xc0000000 + (offset << 5) + 0x10) / 8, data);
+	gsp_space->write_word((0xc0000000 + (offset << 5))/ 8 , data >> 16);
 }
 
 static READ32_HANDLER( host_gsp_r )
 {
-	const address_space *gsp_space = cputag_get_address_space(space->machine, "gsp", ADDRESS_SPACE_PROGRAM);
+	address_space *gsp_space = cputag_get_address_space(space->machine, "gsp", ADDRESS_SPACE_PROGRAM);
 	UINT32 val;
 
-	val  = memory_read_word(gsp_space, (0xc0000000 + (offset << 5) + 0x10) / 8);
-	val |= memory_read_word(gsp_space, (0xc0000000 + (offset << 5)) / 8) << 16;
+	val  = gsp_space->read_word((0xc0000000 + (offset << 5) + 0x10) / 8);
+	val |= gsp_space->read_word((0xc0000000 + (offset << 5)) / 8) << 16;
 	return val;
 }
 
 
 static READ32_HANDLER( host_dram_r )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	return (state->gsp_dram[offset * 2] << 16) | state->gsp_dram[offset * 2 + 1];
 }
 
 static WRITE32_HANDLER( host_dram_w )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	COMBINE_DATA(state->gsp_dram + offset * 2 + 1);
 	data >>= 16;
@@ -489,14 +488,14 @@ static WRITE32_HANDLER( host_dram_w )
 
 static READ32_HANDLER( host_vram_r )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	return (state->gsp_vram[offset * 2] << 16) | state->gsp_vram[offset * 2 + 1];
 }
 
 static WRITE32_HANDLER( host_vram_w )
 {
-	metalmx_state *state = (metalmx_state *)space->machine->driver_data;
+	metalmx_state *state = space->machine->driver_data<metalmx_state>();
 
 	COMBINE_DATA(state->gsp_vram + offset * 2 + 1);
 	data >>= 16;
@@ -740,14 +739,13 @@ static const dsp32_config dsp32c_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( metalmx )
-	MDRV_DRIVER_DATA(metalmx_state)
+static MACHINE_CONFIG_START( metalmx, metalmx_state )
 
 	MDRV_CPU_ADD("maincpu", M68EC020, XTAL_14_31818MHz)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 
 	MDRV_CPU_ADD("adsp", ADSP2105, XTAL_10MHz)
-	MDRV_CPU_CONFIG(adsp_config)
+	MDRV_ADSP21XX_CONFIG(adsp_config)
 	MDRV_CPU_PROGRAM_MAP(adsp_program_map)
 	MDRV_CPU_DATA_MAP(adsp_data_map)
 
@@ -778,22 +776,16 @@ static MACHINE_DRIVER_START( metalmx )
 	MDRV_VIDEO_START(metalmx)
 	MDRV_VIDEO_UPDATE(metalmx)
 
-	MDRV_IMPORT_FROM(cage)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(cage)
+MACHINE_CONFIG_END
 
 
 static DRIVER_INIT( metalmx )
 {
 	UINT8 *adsp_boot = (UINT8*)memory_region(machine, "adsp");
-	metalmx_state *state = (metalmx_state *)machine->driver_data;
+	metalmx_state *state = machine->driver_data<metalmx_state>();
 
-	state->maincpu = machine->device("maincpu");
-	state->adsp = machine->device("adsp");
-	state->gsp = machine->device("gsp");
-	state->dsp32c_1 = machine->device("dsp32c_1");
-	state->dsp32c_2 = machine->device("dsp32c_2");
-
-	adsp2105_load_boot_data(adsp_boot, state->adsp_internal_program_ram);
+	state->adsp->load_boot_data(adsp_boot, state->adsp_internal_program_ram);
 
 	cage_init(machine, 0); // TODO: speedup address
 	cage_set_irq_handler(cage_irq_callback);
@@ -801,7 +793,7 @@ static DRIVER_INIT( metalmx )
 
 static MACHINE_RESET( metalmx )
 {
-	metalmx_state *state = (metalmx_state *)machine->driver_data;
+	metalmx_state *state = machine->driver_data<metalmx_state>();
 
 	cpu_set_input_line(state->dsp32c_1, INPUT_LINE_RESET, ASSERT_LINE);
 	cpu_set_input_line(state->dsp32c_2, INPUT_LINE_RESET, ASSERT_LINE);

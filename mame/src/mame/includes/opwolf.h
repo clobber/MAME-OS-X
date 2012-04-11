@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class opwolf_state
+class opwolf_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, opwolf_state(machine)); }
-
-	opwolf_state(running_machine &machine) { }
+	opwolf_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *      cchip_ram;
@@ -58,10 +57,3 @@ READ16_HANDLER( opwolf_cchip_data_r );
 WRITE16_HANDLER( opwolf_cchip_status_w );
 WRITE16_HANDLER( opwolf_cchip_data_w );
 WRITE16_HANDLER( opwolf_cchip_bank_w );
-
-
-/*----------- defined in video/rastan.c -----------*/
-
-WRITE16_HANDLER( opwolf_spritectrl_w );
-
-VIDEO_UPDATE( opwolf );

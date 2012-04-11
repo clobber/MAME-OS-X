@@ -6,14 +6,11 @@
 
 #include "machine/atarigen.h"
 
-class skullxbo_state
+class skullxbo_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, skullxbo_state(machine)); }
-
-	skullxbo_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	skullxbo_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 };
 
 

@@ -30,7 +30,7 @@ Revisions:
 
 static READ8_HANDLER( aeroboto_201_r )
 {
-	aeroboto_state *state = (aeroboto_state *)space->machine->driver_data;
+	aeroboto_state *state = space->machine->driver_data<aeroboto_state>();
 	/* if you keep a button pressed during boot, the game will expect this */
 	/* serie of values to be returned from 3004, and display "PASS 201" if it is */
 	static const UINT8 res[4] = { 0xff, 0x9f, 0x1b, 0x03 };
@@ -42,7 +42,7 @@ static READ8_HANDLER( aeroboto_201_r )
 
 static INTERRUPT_GEN( aeroboto_interrupt )
 {
-	aeroboto_state *state = (aeroboto_state *)device->machine->driver_data;
+	aeroboto_state *state = device->machine->driver_data<aeroboto_state>();
 
 	if (!state->disable_irq)
 		cpu_set_input_line(device, 0, ASSERT_LINE);
@@ -58,7 +58,7 @@ static READ8_HANDLER( aeroboto_irq_ack_r )
 
 static READ8_HANDLER( aeroboto_2973_r )
 {
-	aeroboto_state *state = (aeroboto_state *)space->machine->driver_data;
+	aeroboto_state *state = space->machine->driver_data<aeroboto_state>();
 
 	state->mainram[0x02be] = 0;
 	return 0xff;
@@ -66,7 +66,7 @@ static READ8_HANDLER( aeroboto_2973_r )
 
 static WRITE8_HANDLER ( aeroboto_1a2_w )
 {
-	aeroboto_state *state = (aeroboto_state *)space->machine->driver_data;
+	aeroboto_state *state = space->machine->driver_data<aeroboto_state>();
 
 	state->mainram[0x01a2] = data;
 	if (data)
@@ -228,7 +228,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( formatz )
 {
-	aeroboto_state *state = (aeroboto_state *)machine->driver_data;
+	aeroboto_state *state = machine->driver_data<aeroboto_state>();
 
 	state->stars_rom = memory_region(machine, "gfx2");
 	state->stars_length = memory_region_length(machine, "gfx2");
@@ -239,7 +239,7 @@ static MACHINE_START( formatz )
 
 static MACHINE_RESET( formatz )
 {
-	aeroboto_state *state = (aeroboto_state *)machine->driver_data;
+	aeroboto_state *state = machine->driver_data<aeroboto_state>();
 
 	state->disable_irq = 0;
 	state->count = 0;
@@ -252,10 +252,7 @@ static MACHINE_RESET( formatz )
 	state->sy = 0;
 }
 
-static MACHINE_DRIVER_START( formatz )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(aeroboto_state)
+static MACHINE_CONFIG_START( formatz, aeroboto_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, XTAL_10MHz/8) /* verified on pcb */
@@ -294,7 +291,7 @@ static MACHINE_DRIVER_START( formatz )
 
 	MDRV_SOUND_ADD("ay2", AY8910, XTAL_10MHz/16) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -4,8 +4,8 @@
     AMERICAN POKER 2
     ----------------
 
-    Company:    Novomatic.
-    Year:       1990.
+    Company:  Novomatic.
+    Year:     1990.
 
     Driver by Roberto Fresca, with a lot of help of Grull Osgo.
     Based on a preliminary work of Curt Coder.
@@ -19,6 +19,7 @@
     ampkr2b1 |  clone   |  American Poker II (bootleg, set 1).
     ampkr2b2 |  clone   |  American Poker II (bootleg, set 2).
     ampkr2b3 |  clone   |  American Poker II (bootleg, set 3).
+    ampkr2b4 |  clone   |  American Poker II (bootleg, set 4).
     ampkr228 |  clone   |  American Poker II (iamp2 v28).
     pkrdewin |  clone   |  Poker De Win.
     ampkr95  |  clone   |  American Poker 95.
@@ -26,6 +27,7 @@
     rabbitpk |  clone   |  Rabbit Poker / Arizona Poker 1.1? (with PIC)
     sigmapkr |  parent  |  Sigma Poker.
     sigma2k  |  parent  |  Sigma Poker 2000.
+    piccolop |  parent  |  Piccolo Poker 100.
 
 
 *********************************************************************************
@@ -110,6 +112,20 @@
     3) Press HOLD3 to navegate between options, and highlight "Clear All Informations"
     4) Keep pressed HOLD1 for more than 3 seconds.
     5) Turn OFF the Supervisor Key (0).
+
+
+    Piccolo Poker 100:
+
+    To 'init' (boot) the machine:
+    1) Turn ON the Operator Key (9).
+    2) Press the DOOR key (O). You are entering the Operator Mode.
+    3) Turn OFF the Operator Key (9).
+    4) Reset the machine. (sometimes you must reset manually the machine due to watchdog issues).
+
+    If you win some credits, you'll be on troubles due to unemulated hopper.
+    Just discharge the credits one by one pressing quickly the door switch (O)
+    If you want to play without the hopper issues, just leave the door open (O). In this mode,
+    the game is playable but doesn't contabilize in the meters.
 
 
 *********************************************************************************
@@ -279,6 +295,15 @@
     --- DRIVER UPDATES ---
 
 
+    [2010-09-28]
+
+    Piccolo Poker 100 from Admiral - Novomatic.
+    - Added a workaround to get the game booting.
+    - Created inputs from the scratch.
+    - Promoted to 'working'.
+    - Added technical and game notes.
+
+
     [2009-08-17]
 
     - Added Rabbit Poker / Arizona Poker? set (with GAL22V10 and PIC16F84A).
@@ -357,6 +382,8 @@
 
     - Find why the watchdog sometimes stop to work.
     - Analyze the write to port 0x21 after reset.
+    - Proper lamps for Piccolo Poker.
+    - Hopper emulation.
 
 
 *********************************************************************************/
@@ -367,16 +394,10 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
+#include "machine/nvram.h"
 #include "ampoker2.lh"
 #include "sigmapkr.lh"
-
-/* from video */
-extern WRITE8_HANDLER( ampoker2_videoram_w );
-extern PALETTE_INIT( ampoker2 );
-extern VIDEO_START( ampoker2 );
-extern VIDEO_START( sigma2k );
-extern VIDEO_UPDATE( ampoker2 );
-
+#include "includes/ampoker2.h"
 
 /**********************
 * Read/Write Handlers *
@@ -583,8 +604,8 @@ static WRITE8_HANDLER( ampoker2_watchdog_reset_w )
 
 static ADDRESS_MAP_START( ampoker2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(ampoker2_videoram_w) AM_BASE_MEMBER(ampoker2_state, videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( ampoker2_io_map, ADDRESS_SPACE_IO, 8 )
@@ -721,7 +742,7 @@ static INPUT_PORTS_START( ampoker2 )
 
 	PORT_START("IN7")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* not used */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credits") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credit") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_IMPULSE(2)
 	PORT_DIPNAME( 0x08, 0x08, "Jackpot" )        PORT_DIPLOCATION("SW1:8") /* DSW8 */
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
@@ -806,7 +827,7 @@ static INPUT_PORTS_START( ampkr95 )
 
 	PORT_START("IN7")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* not used */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credits") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credit") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_IMPULSE(2)
 	PORT_DIPNAME( 0x08, 0x08, "Jackpot" )        PORT_DIPLOCATION("SW1:8") /* DSW8 */
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
@@ -891,7 +912,7 @@ static INPUT_PORTS_START( sigmapkr )
 
 	PORT_START("IN7")
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN ) /* not used */
-	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credits") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("Remote Credit") PORT_IMPULSE(12) PORT_CODE(KEYCODE_3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN4 ) PORT_IMPULSE(2)
 	PORT_DIPNAME( 0x08, 0x08, "Jackpot" )        PORT_DIPLOCATION("SW1:8") /* DSW8 */
 	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
@@ -997,6 +1018,94 @@ static INPUT_PORTS_START( sigma2k )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( piccolop )
+	PORT_START("IN0")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN0-2") PORT_CODE(KEYCODE_1_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN2 ) PORT_IMPULSE(2)
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN3 ) PORT_IMPULSE(2)
+
+	PORT_START("IN1")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_GAMBLE_DEAL ) PORT_NAME("Deal/Take")
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_GAMBLE_SERVICE ) PORT_NAME("Operator Key") PORT_TOGGLE
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN1-5") PORT_CODE(KEYCODE_2_PAD)
+
+	PORT_START("IN2")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN2-2") PORT_CODE(KEYCODE_3_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_GAMBLE_DOOR ) PORT_NAME("Door Switch")
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD1 )
+
+	PORT_START("IN3")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Hopper Out") PORT_CODE(KEYCODE_G)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Supervisor Key") PORT_TOGGLE PORT_CODE(KEYCODE_0)
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD3 )
+
+	PORT_START("IN4")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Hopper Low") PORT_CODE(KEYCODE_H)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_POKER_HOLD4 ) PORT_NAME("Hold 4 / Red")
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD2 )
+
+	PORT_START("IN5")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Return Line") PORT_CODE(KEYCODE_J)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("TILT") PORT_CODE(KEYCODE_K)
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_POKER_HOLD5 ) PORT_NAME("Hold 5 / Black")
+
+	PORT_START("IN6")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN6-2") PORT_CODE(KEYCODE_4_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN6-3") PORT_CODE(KEYCODE_5_PAD)
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_COIN1 ) PORT_IMPULSE(2)
+
+	PORT_START("IN7")
+	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_UNKNOWN)	// lack of v-sync if low
+	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN7-2") PORT_CODE(KEYCODE_6_PAD)
+	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_OTHER ) PORT_NAME("IN7-3") PORT_CODE(KEYCODE_7_PAD)
+	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_SERVICE ) PORT_NAME("Coin Refill") PORT_CODE(KEYCODE_R)
+INPUT_PORTS_END
+
 
 /*************************
 *    Graphics Layouts    *
@@ -1054,7 +1163,7 @@ static const ay8910_interface ay8910_config =
 *     Machine Driver     *
 *************************/
 
-static MACHINE_DRIVER_START( ampoker2 )
+static MACHINE_CONFIG_START( ampoker2, ampoker2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/2)		/* 3 MHz */
@@ -1063,7 +1172,7 @@ static MACHINE_DRIVER_START( ampoker2 )
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse, 1536)
 	MDRV_WATCHDOG_TIME_INIT(MSEC(200))	/* 200 ms, measured */
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -1087,16 +1196,16 @@ static MACHINE_DRIVER_START( ampoker2 )
 	MDRV_SOUND_ADD("aysnd", AY8910,MASTER_CLOCK/4)	/* 1.5 MHz, measured */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sigma2k )
+static MACHINE_CONFIG_DERIVED( sigma2k, ampoker2 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(ampoker2)
 
 	/* video hardware */
 	MDRV_GFXDECODE(sigma2k)
 	MDRV_VIDEO_START(sigma2k)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************
@@ -1265,6 +1374,30 @@ ROM_START( rabbitpk )
 	ROM_LOAD( "82s147an.u48", 0x0000, 0x0200, CRC(9bc8e543) SHA1(e4882868a43e21a509a180b9731600d1dd63b5cc) )
 ROM_END
 
+/*
+
+Piccolo Poker (Admiral, licenced by Novomatic).
+Seems a interesting American Poker II variant.
+
+Roms have swapped halves.
+Rechecked on PCB.
+
+*/
+ROM_START( piccolop )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "v4.1.bin", 0x4000, 0x4000, CRC(ae092c43) SHA1(191e233310d59d3b4eb71c7081799835efcae069) )
+	ROM_CONTINUE(         0x0000, 0x4000)
+	ROM_LOAD( "v4.2.bin", 0xc000, 0x4000, CRC(69fb6fd5) SHA1(e95c2793aaa11b9501ca544dd0a045e8e7bc52bf) )
+	ROM_CONTINUE(         0x8000, 0x4000)
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "zei_8.11.bin", 0x4000, 0x4000, CRC(1b003672) SHA1(e58bd58023f332c30851204491b7e0bd7c5d9631) )
+	ROM_CONTINUE(             0x0000, 0x4000)
+
+	ROM_REGION( 0x200, "proms", 0 )  /* not dumped. using the ampoker2 one instead */
+	ROM_LOAD( "82s147an.u48", 0x0000, 0x0200, CRC(9bc8e543) SHA1(e4882868a43e21a509a180b9731600d1dd63b5cc) )
+ROM_END
+
 
 /*************************
 *      Driver Init       *
@@ -1292,21 +1425,64 @@ static DRIVER_INIT( rabbitpk )
 	}
 }
 
+static DRIVER_INIT( piccolop )
+{
+/*
+  The protection is based on a stuck bit at RAM offset $C416.
+
+  1382: 41            ld   b,c
+  1383: 80            add  a,b
+  1384: 00            nop  ------\
+  1385: 00            nop         |  Obvious patch...
+  1386: 00            nop         |  Dunno if was made originarily.
+  1387: 00            nop  ------/
+  1388: 3E 08         ld   a,$08
+  138A: D3 37         out  ($37),a   ; Sets bit3 to keep happy the watchdog reset.
+  138C: 32 01 C0      ld   ($C001),a
+  138F: 18 FE         jr   $138F     ; INFINITE LOOP --- WTH???
+
+  1541: 21 16 C4      ld   hl,$C416  ; Load $C416 into HL...
+  1544: CB 4E         bit  1,(hl)
+  1546: 7E            ld   a,(hl)    ; Load the $C416 contents...
+  1547: E6 E0         and  $E0       ; AND $E0
+  1549: FE 40         cp   $40       ; Compare with $40
+  154B: C2 88 13      jp   nz,$1388  ; Jumps to stuck!
+
+  154E: FD 21 AA C0   ld   iy,$C0AA  ; Else continue...
+  1552: 11 16 C5      ld   de,$C516
+  1555: 21 88 57      ld   hl,$5788
+  1558: 06 08         ld   b,$08
+  155A: 1A            ld   a,(de)
+  155B: BE            cp   (hl)
+  155C: C2 13 2A      jp   nz,$2A13
+
+*/
+
+	UINT8 *rom = memory_region(machine, "maincpu");
+
+	/* NOP'ing the mortal jump... */
+	rom[0x154b] = 0x00;
+	rom[0x154c] = 0x00;
+	rom[0x154d] = 0x00;
+
+}
+
 
 /*************************
 *      Game Drivers      *
 *************************/
 
-/*     YEAR  NAME      PARENT    MACHINE   INPUT     INIT      ROT    COMPANY       FULLNAME                             FLAGS  LAYOUT      */
-GAMEL( 1990, ampoker2, 0,        ampoker2, ampoker2, 0,        ROT0, "Novomatic",  "American Poker II",                  GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1990, ampkr2b1, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "American Poker II (bootleg, set 1)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1990, ampkr2b2, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "American Poker II (bootleg, set 2)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1994, ampkr2b3, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "American Poker II (bootleg, set 3)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1994, ampkr2b4, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "American Poker II (bootleg, set 4)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1994, ampkr228, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg?",   "American Poker II (iamp2 v28)",      GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1995, ampkr95,  ampoker2, ampoker2, ampkr95,  0,        ROT0, "bootleg",    "American Poker 95",                  GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1990, pkrdewin, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "Poker De Win",                       GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1990, videomat, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",    "Videomat (Polish bootleg)",          GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1990, rabbitpk, ampoker2, ampoker2, ampoker2, rabbitpk, ROT0, "bootleg",    "Rabbit Poker (Arizona Poker v1.1?)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
-GAMEL( 1995, sigmapkr, 0,        ampoker2, sigmapkr, 0,        ROT0, "Sigma Inc.", "Sigma Poker",                        GAME_SUPPORTS_SAVE,     layout_sigmapkr )
-GAMEL( 1998, sigma2k,  0,        sigma2k,  sigma2k,  0,        ROT0, "Sigma Inc.", "Sigma Poker 2000",                   GAME_SUPPORTS_SAVE,     layout_sigmapkr )
+/*     YEAR  NAME      PARENT    MACHINE   INPUT     INIT      ROT    COMPANY              FULLNAME                             FLAGS  LAYOUT      */
+GAMEL( 1990, ampoker2, 0,        ampoker2, ampoker2, 0,        ROT0, "Novomatic",         "American Poker II",                  GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1990, ampkr2b1, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "American Poker II (bootleg, set 1)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1990, ampkr2b2, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "American Poker II (bootleg, set 2)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1994, ampkr2b3, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "American Poker II (bootleg, set 3)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1994, ampkr2b4, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "American Poker II (bootleg, set 4)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1994, ampkr228, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg?",          "American Poker II (iamp2 v28)",      GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1995, ampkr95,  ampoker2, ampoker2, ampkr95,  0,        ROT0, "bootleg",           "American Poker 95",                  GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1990, pkrdewin, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "Poker De Win",                       GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1990, videomat, ampoker2, ampoker2, ampoker2, 0,        ROT0, "bootleg",           "Videomat (Polish bootleg)",          GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1990, rabbitpk, ampoker2, ampoker2, ampoker2, rabbitpk, ROT0, "bootleg",           "Rabbit Poker (Arizona Poker v1.1?)", GAME_SUPPORTS_SAVE,     layout_ampoker2 )
+GAMEL( 1995, sigmapkr, 0,        ampoker2, sigmapkr, 0,        ROT0, "Sigma Inc.",        "Sigma Poker",                        GAME_SUPPORTS_SAVE,     layout_sigmapkr )
+GAMEL( 1998, sigma2k,  0,        sigma2k,  sigma2k,  0,        ROT0, "Sigma Inc.",        "Sigma Poker 2000",                   GAME_SUPPORTS_SAVE,     layout_sigmapkr )
+GAME(  1990, piccolop, ampoker2, ampoker2, piccolop, piccolop, ROT0, "Admiral/Novomatic", "Piccolo Poker 100",                  GAME_SUPPORTS_SAVE )

@@ -299,7 +299,7 @@ static INPUT_CHANGED( service_switch )
 
 static INTERRUPT_GEN( vblank_int )
 {
-	zaxxon_state *state = (zaxxon_state *)device->machine->driver_data;
+	zaxxon_state *state = device->machine->driver_data<zaxxon_state>();
 
 	if (state->int_enabled)
 		cpu_set_input_line(device, 0, ASSERT_LINE);
@@ -308,7 +308,7 @@ static INTERRUPT_GEN( vblank_int )
 
 static WRITE8_HANDLER( int_enable_w )
 {
-	zaxxon_state *state = (zaxxon_state *)space->machine->driver_data;
+	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
 
 	state->int_enabled = data & 1;
 	if (!state->int_enabled)
@@ -325,7 +325,7 @@ static WRITE8_HANDLER( int_enable_w )
 
 static MACHINE_START( zaxxon )
 {
-	zaxxon_state *state = (zaxxon_state *)machine->driver_data;
+	zaxxon_state *state = machine->driver_data<zaxxon_state>();
 
 	/* register for save states */
 	state_save_register_global(machine, state->int_enabled);
@@ -350,7 +350,7 @@ static MACHINE_RESET( razmataz )
 
 static READ8_HANDLER( razmataz_counter_r )
 {
-	zaxxon_state *state = (zaxxon_state *)space->machine->driver_data;
+	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
 
 	/* this behavior is really unknown; however, the code is using this */
 	/* counter as a sort of timeout when talking to the sound board */
@@ -362,7 +362,7 @@ static READ8_HANDLER( razmataz_counter_r )
 
 static CUSTOM_INPUT( razmataz_dial_r )
 {
-	zaxxon_state *state = (zaxxon_state *)field->port->machine->driver_data;
+	zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
 	static const char *const dialname[2] = { "DIAL0", "DIAL1" };
 	int num = (FPTR)param;
 	int delta, res;
@@ -403,7 +403,7 @@ static WRITE8_HANDLER( zaxxon_coin_counter_w )
 // the coin input, which then needs to be explicitly cleared by the game.
 static WRITE8_HANDLER( zaxxon_coin_enable_w )
 {
-	zaxxon_state *state = (zaxxon_state *)space->machine->driver_data;
+	zaxxon_state *state = space->machine->driver_data<zaxxon_state>();
 
 	state->coin_enable[offset] = data & 1;
 	if (!state->coin_enable[offset])
@@ -415,7 +415,7 @@ static INPUT_CHANGED( zaxxon_coin_inserted )
 {
 	if (newval)
 	{
-		zaxxon_state *state = (zaxxon_state *)field->port->machine->driver_data;
+		zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
 
 		state->coin_status[(int)(FPTR)param] = state->coin_enable[(int)(FPTR)param];
 	}
@@ -424,7 +424,7 @@ static INPUT_CHANGED( zaxxon_coin_inserted )
 
 static CUSTOM_INPUT( zaxxon_coin_r )
 {
-	zaxxon_state *state = (zaxxon_state *)field->port->machine->driver_data;
+	zaxxon_state *state = field->port->machine->driver_data<zaxxon_state>();
 
 	return state->coin_status[(int)(FPTR)param];
 }
@@ -934,9 +934,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( root )
-
-	MDRV_DRIVER_DATA(zaxxon_state)
+static MACHINE_CONFIG_START( root, zaxxon_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/16)
@@ -958,32 +956,29 @@ static MACHINE_DRIVER_START( root )
 	MDRV_PALETTE_INIT(zaxxon)
 	MDRV_VIDEO_START(zaxxon)
 	MDRV_VIDEO_UPDATE(zaxxon)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( zaxxon )
-	MDRV_IMPORT_FROM(root)
+static MACHINE_CONFIG_DERIVED( zaxxon, root )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_IMPORT_FROM(zaxxon_samples)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(zaxxon_samples)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( futspy )
-	MDRV_IMPORT_FROM(root)
+static MACHINE_CONFIG_DERIVED( futspy, root )
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(futspy)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_IMPORT_FROM(zaxxon_samples)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(zaxxon_samples)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( razmataz )
-	MDRV_IMPORT_FROM(root)
+static MACHINE_CONFIG_DERIVED( razmataz, root )
 
 	MDRV_MACHINE_RESET(razmataz)
 
@@ -993,12 +988,11 @@ static MACHINE_DRIVER_START( razmataz )
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
-	MDRV_IMPORT_FROM(sega_universal_sound_board_rom)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(sega_universal_sound_board_rom)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( congo )
-	MDRV_IMPORT_FROM(root)
+static MACHINE_CONFIG_DERIVED( congo, root )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(congo_map)
@@ -1023,8 +1017,8 @@ static MACHINE_DRIVER_START( congo )
 	MDRV_SOUND_ADD("sn2", SN76496, SOUND_CLOCK/4)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_IMPORT_FROM(congo_samples)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(congo_samples)
+MACHINE_CONFIG_END
 
 
 
@@ -1450,12 +1444,12 @@ static void zaxxonj_decode(running_machine *machine, const char *cputag)
 	};
 
 	int A;
-	const address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, cputag);
 	int size = memory_region_length(machine, cputag);
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, size);
 
-	memory_set_decrypted_region(space, 0x0000, size - 1, decrypt);
+	space->set_decrypted_region(0x0000, size - 1, decrypt);
 
 	for (A = 0x0000; A < size; A++)
 	{
@@ -1510,7 +1504,7 @@ static DRIVER_INIT( futspy )
 
 static DRIVER_INIT( razmataz )
 {
-	zaxxon_state *state = (zaxxon_state *)machine->driver_data;
+	zaxxon_state *state = machine->driver_data<zaxxon_state>();
 
 	nprinces_decode(machine, "maincpu");
 

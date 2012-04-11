@@ -37,15 +37,15 @@
 
 static void update_interrupts(running_machine *machine)
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
-	cputag_set_input_line(machine, "maincpu", 1, state->atarigen.sound_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "extra", 1, state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cyberbal_state *state = machine->driver_data<cyberbal_state>();
+	cputag_set_input_line(machine, "maincpu", 1, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "extra", 1, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static MACHINE_START( cyberbal )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
+	cyberbal_state *state = machine->driver_data<cyberbal_state>();
 	atarigen_init(machine);
 
 	state_save_register_global(machine, state->fast_68k_int);
@@ -59,11 +59,11 @@ static MACHINE_START( cyberbal )
 
 static MACHINE_RESET( cyberbal )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
+	cyberbal_state *state = machine->driver_data<cyberbal_state>();
 
-	atarigen_eeprom_reset(&state->atarigen);
-	atarigen_slapstic_reset(&state->atarigen);
-	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
+	atarigen_eeprom_reset(state);
+	atarigen_slapstic_reset(state);
+	atarigen_interrupt_reset(state, update_interrupts);
 	atarigen_scanline_timer_reset(*machine->primary_screen, cyberbal_scanline_update, 8);
 	atarigen_sound_io_reset(machine->device("audiocpu"));
 
@@ -76,18 +76,18 @@ static MACHINE_RESET( cyberbal )
 
 static void cyberbal2p_update_interrupts(running_machine *machine)
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
-	cputag_set_input_line(machine, "maincpu", 1, state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 3, state->atarigen.sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cyberbal_state *state = machine->driver_data<cyberbal_state>();
+	cputag_set_input_line(machine, "maincpu", 1, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 3, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
 static MACHINE_RESET( cyberbal2p )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
+	cyberbal_state *state = machine->driver_data<cyberbal_state>();
 
-	atarigen_eeprom_reset(&state->atarigen);
-	atarigen_interrupt_reset(&state->atarigen, cyberbal2p_update_interrupts);
+	atarigen_eeprom_reset(state);
+	atarigen_interrupt_reset(state, cyberbal2p_update_interrupts);
 	atarigen_scanline_timer_reset(*machine->primary_screen, cyberbal_scanline_update, 8);
 	atarijsa_reset();
 }
@@ -102,27 +102,27 @@ static MACHINE_RESET( cyberbal2p )
 
 static READ16_HANDLER( special_port0_r )
 {
-	cyberbal_state *state = (cyberbal_state *)space->machine->driver_data;
+	cyberbal_state *state = space->machine->driver_data<cyberbal_state>();
 	int temp = input_port_read(space->machine, "IN0");
-	if (state->atarigen.cpu_to_sound_ready) temp ^= 0x0080;
+	if (state->cpu_to_sound_ready) temp ^= 0x0080;
 	return temp;
 }
 
 
 static READ16_HANDLER( special_port2_r )
 {
-	cyberbal_state *state = (cyberbal_state *)space->machine->driver_data;
+	cyberbal_state *state = space->machine->driver_data<cyberbal_state>();
 	int temp = input_port_read(space->machine, "IN2");
-	if (state->atarigen.cpu_to_sound_ready) temp ^= 0x2000;
+	if (state->cpu_to_sound_ready) temp ^= 0x2000;
 	return temp;
 }
 
 
 static READ16_HANDLER( sound_state_r )
 {
-	cyberbal_state *state = (cyberbal_state *)space->machine->driver_data;
+	cyberbal_state *state = space->machine->driver_data<cyberbal_state>();
 	int temp = 0xffff;
-	if (state->atarigen.cpu_to_sound_ready) temp ^= 0xffff;
+	if (state->cpu_to_sound_ready) temp ^= 0xffff;
 	return temp;
 }
 
@@ -149,7 +149,7 @@ static WRITE16_HANDLER( p2_reset_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
-	AM_RANGE(0xfc0000, 0xfc0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE_SIZE_MEMBER(cyberbal_state, atarigen.eeprom, atarigen.eeprom_size)
+	AM_RANGE(0xfc0000, 0xfc0fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0xfc8000, 0xfcffff) AM_READ(atarigen_sound_upper_r)
 	AM_RANGE(0xfd0000, 0xfd1fff) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0xfd2000, 0xfd3fff) AM_WRITE(atarigen_sound_reset_w)
@@ -160,12 +160,12 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfe1000, 0xfe1fff) AM_READ_PORT("IN1")
 	AM_RANGE(0xfe8000, 0xfe8fff) AM_RAM_WRITE(cyberbal_paletteram_1_w) AM_SHARE("share1") AM_BASE_MEMBER(cyberbal_state, paletteram_1)
 	AM_RANGE(0xfec000, 0xfecfff) AM_RAM_WRITE(cyberbal_paletteram_0_w) AM_SHARE("share2") AM_BASE_MEMBER(cyberbal_state, paletteram_0)
-	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(atarigen_playfield2_w)   AM_SHARE("share3") AM_BASE_MEMBER(cyberbal_state, atarigen.playfield2)
-	AM_RANGE(0xff2000, 0xff2fff) AM_RAM_WRITE(atarigen_alpha2_w)       AM_SHARE("share4") AM_BASE_MEMBER(cyberbal_state, atarigen.alpha2)
+	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(atarigen_playfield2_w)   AM_SHARE("share3") AM_BASE_MEMBER(cyberbal_state, playfield2)
+	AM_RANGE(0xff2000, 0xff2fff) AM_RAM_WRITE(atarigen_alpha2_w)       AM_SHARE("share4") AM_BASE_MEMBER(cyberbal_state, alpha2)
 	AM_RANGE(0xff3000, 0xff37ff) AM_RAM_WRITE(atarimo_1_spriteram_w)   AM_SHARE("share5") AM_BASE(&atarimo_1_spriteram)
 	AM_RANGE(0xff3800, 0xff3fff) AM_RAM                                           AM_SHARE("share6")
-	AM_RANGE(0xff4000, 0xff5fff) AM_RAM_WRITE(atarigen_playfield_w)    AM_SHARE("share7") AM_BASE_MEMBER(cyberbal_state, atarigen.playfield)
-	AM_RANGE(0xff6000, 0xff6fff) AM_RAM_WRITE(atarigen_alpha_w)        AM_SHARE("share8") AM_BASE_MEMBER(cyberbal_state, atarigen.alpha)
+	AM_RANGE(0xff4000, 0xff5fff) AM_RAM_WRITE(atarigen_playfield_w)    AM_SHARE("share7") AM_BASE_MEMBER(cyberbal_state, playfield)
+	AM_RANGE(0xff6000, 0xff6fff) AM_RAM_WRITE(atarigen_alpha_w)        AM_SHARE("share8") AM_BASE_MEMBER(cyberbal_state, alpha)
 	AM_RANGE(0xff7000, 0xff77ff) AM_RAM_WRITE(atarimo_0_spriteram_w)   AM_SHARE("share9") AM_BASE(&atarimo_0_spriteram)
 	AM_RANGE(0xff7800, 0xff9fff) AM_RAM                                           AM_SHARE("share10")
 	AM_RANGE(0xffa000, 0xffbfff) AM_READONLY AM_WRITENOP               AM_SHARE("share11")
@@ -253,7 +253,7 @@ static ADDRESS_MAP_START( cyberbal2p_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfc2000, 0xfc2003) AM_READ_PORT("IN1")
 	AM_RANGE(0xfc4000, 0xfc4003) AM_READ(special_port2_r)
 	AM_RANGE(0xfc6000, 0xfc6003) AM_READ(atarigen_sound_upper_r)
-	AM_RANGE(0xfc8000, 0xfc8fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE_SIZE_MEMBER(cyberbal_state, atarigen.eeprom, atarigen.eeprom_size)
+	AM_RANGE(0xfc8000, 0xfc8fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0xfca000, 0xfcafff) AM_RAM_WRITE(atarigen_666_paletteram_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0xfd0000, 0xfd0003) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0xfd2000, 0xfd2003) AM_WRITE(atarigen_sound_reset_w)
@@ -261,8 +261,8 @@ static ADDRESS_MAP_START( cyberbal2p_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfd6000, 0xfd6003) AM_WRITE(atarigen_video_int_ack_w)
 	AM_RANGE(0xfd8000, 0xfd8003) AM_WRITE(atarigen_sound_upper_w)
 	AM_RANGE(0xfe0000, 0xfe0003) AM_READ(sound_state_r)
-	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(cyberbal_state, atarigen.playfield)
-	AM_RANGE(0xff2000, 0xff2fff) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(cyberbal_state, atarigen.alpha)
+	AM_RANGE(0xff0000, 0xff1fff) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(cyberbal_state, playfield)
+	AM_RANGE(0xff2000, 0xff2fff) AM_RAM_WRITE(atarigen_alpha_w) AM_BASE_MEMBER(cyberbal_state, alpha)
 	AM_RANGE(0xff3000, 0xff37ff) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
 	AM_RANGE(0xff3800, 0xffffff) AM_RAM
 ADDRESS_MAP_END
@@ -429,8 +429,7 @@ static const ym2151_interface ym2151_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( cyberbal )
-	MDRV_DRIVER_DATA(cyberbal_state)
+static MACHINE_CONFIG_START( cyberbal, cyberbal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
@@ -452,7 +451,7 @@ static MACHINE_DRIVER_START( cyberbal )
 
 	MDRV_MACHINE_START(cyberbal)
 	MDRV_MACHINE_RESET(cyberbal)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MDRV_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -487,11 +486,10 @@ static MACHINE_DRIVER_START( cyberbal )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cyberbal2p )
-	MDRV_DRIVER_DATA(cyberbal_state)
+static MACHINE_CONFIG_START( cyberbal2p, cyberbal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
@@ -500,7 +498,7 @@ static MACHINE_DRIVER_START( cyberbal2p )
 
 	MDRV_MACHINE_START(cyberbal)
 	MDRV_MACHINE_RESET(cyberbal2p)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MDRV_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -517,8 +515,8 @@ static MACHINE_DRIVER_START( cyberbal2p )
 	MDRV_VIDEO_UPDATE(cyberbal)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_ii_mono)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(jsa_ii_mono)
+MACHINE_CONFIG_END
 
 
 
@@ -583,6 +581,9 @@ ROM_START( cyberbal )
 	ROM_LOAD( "gal16v8-136064-1028.b56", 0x0400, 0x0117, CRC(12d1a257) SHA1(32914dffd58ce694913c2108a27b078422a9dc63) )
 	ROM_LOAD( "gal16v8-136064-1029.d58", 0x0600, 0x0117, CRC(fd39d238) SHA1(55c1b9a56c9b2bfa434eed54f7baea436ea141b8) )
 	ROM_LOAD( "gal16v8-136064-1030.d91", 0x0800, 0x0117, CRC(84102588) SHA1(b6bffb47e5975c96b056d07357eb020caf3f0a0a) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -634,6 +635,9 @@ ROM_START( cyberbal2 )
 	ROM_REGION( 0x020000, "gfx3", 0 )
 	ROM_LOAD( "136064-1121.15n", 0x000000, 0x010000, CRC(0ca1e3b3) SHA1(d934bc9a1def4404fb86175878404cbb18127a11) )
 	ROM_LOAD( "136064-1122.16n", 0x010000, 0x010000, CRC(882f4e1c) SHA1(f7517ff03502ff029fb375260a35e45414567433) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -685,6 +689,9 @@ ROM_START( cyberbalp )
 	ROM_REGION( 0x020000, "gfx3", 0 )
 	ROM_LOAD( "136064-1121.15n", 0x000000, 0x010000, CRC(0ca1e3b3) SHA1(d934bc9a1def4404fb86175878404cbb18127a11) )
 	ROM_LOAD( "136064-1122.16n", 0x010000, 0x010000, CRC(882f4e1c) SHA1(f7517ff03502ff029fb375260a35e45414567433) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -732,6 +739,9 @@ ROM_START( cyberbal2p )
 	ROM_LOAD( "136071-1044.7j",  0x010000, 0x010000, CRC(87208e1e) SHA1(3647867ddc36df7633ed740c0b9365a979ef5621) )
 	ROM_LOAD( "136071-1045.7e",  0x020000, 0x010000, CRC(f82558b9) SHA1(afbecccc6203db9bdcf60638e0f4e95040d7aaf2) )
 	ROM_LOAD( "136071-1046.7d",  0x030000, 0x010000, CRC(d96437ad) SHA1(b0b5cd75de4048e54b9d7d09a75381eb73c22ee1) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -779,6 +789,9 @@ ROM_START( cyberbal2p3 )
 	ROM_LOAD( "136071-1044.7j",  0x010000, 0x010000, CRC(87208e1e) SHA1(3647867ddc36df7633ed740c0b9365a979ef5621) )
 	ROM_LOAD( "136071-1045.7e",  0x020000, 0x010000, CRC(f82558b9) SHA1(afbecccc6203db9bdcf60638e0f4e95040d7aaf2) )
 	ROM_LOAD( "136071-1046.7d",  0x030000, 0x010000, CRC(d96437ad) SHA1(b0b5cd75de4048e54b9d7d09a75381eb73c22ee1) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -826,6 +839,9 @@ ROM_START( cyberbal2p2 )
 	ROM_LOAD( "136071-1044.7j",  0x010000, 0x010000, CRC(87208e1e) SHA1(3647867ddc36df7633ed740c0b9365a979ef5621) )
 	ROM_LOAD( "136071-1045.7e",  0x020000, 0x010000, CRC(f82558b9) SHA1(afbecccc6203db9bdcf60638e0f4e95040d7aaf2) )
 	ROM_LOAD( "136071-1046.7d",  0x030000, 0x010000, CRC(d96437ad) SHA1(b0b5cd75de4048e54b9d7d09a75381eb73c22ee1) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -873,6 +889,9 @@ ROM_START( cyberbal2p1 )
 	ROM_LOAD( "136071-1044.7j",  0x010000, 0x010000, CRC(87208e1e) SHA1(3647867ddc36df7633ed740c0b9365a979ef5621) )
 	ROM_LOAD( "136071-1045.7e",  0x020000, 0x010000, CRC(f82558b9) SHA1(afbecccc6203db9bdcf60638e0f4e95040d7aaf2) )
 	ROM_LOAD( "136071-1046.7d",  0x030000, 0x010000, CRC(d96437ad) SHA1(b0b5cd75de4048e54b9d7d09a75381eb73c22ee1) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -922,6 +941,9 @@ ROM_START( cyberbalt )
 	ROM_REGION( 0x020000, "gfx3", 0 )
 	ROM_LOAD( "136073-1005.15n", 0x000000, 0x010000, CRC(833b4768) SHA1(754f00089d439fb0aa1f650c1fef73cf7e5f33a1) )
 	ROM_LOAD( "136073-1006.16n", 0x010000, 0x010000, CRC(4976cffd) SHA1(4cac8d9bd30743da6e6e4f013e6101ebc27060b6) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -971,6 +993,9 @@ ROM_START( cyberbalt1 )
 	ROM_REGION( 0x020000, "gfx3", 0 )
 	ROM_LOAD( "136073-1005.15n", 0x000000, 0x010000, CRC(833b4768) SHA1(754f00089d439fb0aa1f650c1fef73cf7e5f33a1) )
 	ROM_LOAD( "136073-1006.16n", 0x010000, 0x010000, CRC(4976cffd) SHA1(4cac8d9bd30743da6e6e4f013e6101ebc27060b6) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "cyberbal-eeprom.bin", 0x0000, 0x1000, CRC(72334788) SHA1(101a8057d616969ece4050a1e15593280099c5a5) )
 ROM_END
 
 
@@ -981,40 +1006,20 @@ ROM_END
  *
  *************************************/
 
-static const UINT16 default_eeprom[] =
-{
-	0x0001,0x01FF,0x0F00,0x011A,0x014A,0x0100,0x01A1,0x0200,
-	0x010E,0x01AF,0x0300,0x01FF,0x0114,0x0144,0x01FF,0x0F00,
-	0x011A,0x014A,0x0100,0x01A1,0x0200,0x010E,0x01AF,0x0300,
-	0x01FF,0x0114,0x0144,0x01FF,0x0E00,0x01FF,0x0E00,0x01FF,
-	0x0E00,0x01FF,0x0E00,0x01FF,0x0E00,0x01FF,0x0E00,0x01FF,
-	0x0E00,0x01A8,0x0131,0x010B,0x0100,0x014C,0x0A00,0x01FF,
-	0x0E00,0x01FF,0x0E00,0x01FF,0x0E00,0xB5FF,0x0E00,0x01FF,
-	0x0E00,0x01FF,0x0E00,0x01FF,0x0E00,0x01FF,0x0E00,0x01FF,
-	0x0E00,0x01FF,0x0E00,0x0000
-};
-
-
 static DRIVER_INIT( cyberbal )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
-	state->atarigen.eeprom_default = default_eeprom;
 	atarigen_slapstic_init(machine->device("maincpu"), 0x018000, 0, 0);
 }
 
 
 static DRIVER_INIT( cyberbalt )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
-	state->atarigen.eeprom_default = default_eeprom;
 	atarigen_slapstic_init(machine->device("maincpu"), 0x018000, 0, 116);
 }
 
 
 static DRIVER_INIT( cyberbal2p )
 {
-	cyberbal_state *state = (cyberbal_state *)machine->driver_data;
-	state->atarigen.eeprom_default = default_eeprom;
 	atarijsa_init(machine, "IN2", 0x8000);
 }
 
@@ -1037,4 +1042,3 @@ GAME( 1989, cyberbal2p1, cyberbal, cyberbal2p, cyberbal2p, cyberbal2p, ROT0, "At
 
 GAMEL(1989, cyberbalt,  cyberbal, cyberbal, cyberbal, cyberbalt,  ROT0, "Atari Games", "Tournament Cyberball 2072 (rev 2)", 0, layout_dualhsxs )
 GAMEL(1989, cyberbalt1, cyberbal, cyberbal, cyberbal, cyberbalt,  ROT0, "Atari Games", "Tournament Cyberball 2072 (rev 1)", 0, layout_dualhsxs )
-

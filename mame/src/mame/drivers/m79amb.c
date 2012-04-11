@@ -58,12 +58,11 @@ and two large (paddles pretending to be) guns.
 #include "includes/m79amb.h"
 #include "cpu/i8085/i8085.h"
 
-class m79amb_state
+class m79amb_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, m79amb_state(machine)); }
-
-	m79amb_state(running_machine &machine) { }
+	m79amb_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *        videoram;
@@ -77,13 +76,13 @@ public:
 
 static WRITE8_HANDLER( ramtek_videoram_w )
 {
-	m79amb_state *state = (m79amb_state *)space->machine->driver_data;
+	m79amb_state *state = space->machine->driver_data<m79amb_state>();
 	state->videoram[offset] = data & ~*state->mask;
 }
 
 static VIDEO_UPDATE( ramtek )
 {
-	m79amb_state *state = (m79amb_state *)screen->machine->driver_data;
+	m79amb_state *state = screen->machine->driver_data<m79amb_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -110,7 +109,7 @@ static VIDEO_UPDATE( ramtek )
 
 static READ8_HANDLER( gray5bit_controller0_r )
 {
-	m79amb_state *state = (m79amb_state *)space->machine->driver_data;
+	m79amb_state *state = space->machine->driver_data<m79amb_state>();
 	UINT8 port_data = input_port_read(space->machine, "8004");
 	UINT8 gun_pos = input_port_read(space->machine, "GUN1");
 
@@ -119,7 +118,7 @@ static READ8_HANDLER( gray5bit_controller0_r )
 
 static READ8_HANDLER( gray5bit_controller1_r )
 {
-	m79amb_state *state = (m79amb_state *)space->machine->driver_data;
+	m79amb_state *state = space->machine->driver_data<m79amb_state>();
 	UINT8 port_data = input_port_read(space->machine, "8005");
 	UINT8 gun_pos = input_port_read(space->machine, "GUN2");
 
@@ -204,10 +203,7 @@ static INTERRUPT_GEN( m79amb_interrupt )
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, 0xcf);  /* RST 08h */
 }
 
-static MACHINE_DRIVER_START( m79amb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(m79amb_state)
+static MACHINE_CONFIG_START( m79amb, m79amb_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8080, XTAL_19_6608MHz / 10)
@@ -231,7 +227,7 @@ static MACHINE_DRIVER_START( m79amb )
 	MDRV_SOUND_CONFIG_DISCRETE(m79amb)
 
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -292,7 +288,7 @@ static const UINT8 lut_pos[0x20] = {
 
 static DRIVER_INIT( m79amb )
 {
-	m79amb_state *state = (m79amb_state *)machine->driver_data;
+	m79amb_state *state = machine->driver_data<m79amb_state>();
 	UINT8 *rom = memory_region(machine, "maincpu");
 	int i, j;
 

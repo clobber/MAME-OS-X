@@ -17,21 +17,7 @@ Notes:
 #include "cpu/m6809/m6809.h"
 #include "cpu/m6800/m6800.h"
 #include "sound/namco.h"
-
-extern UINT8 *skykid_textram, *skykid_videoram, *skykid_spriteram;
-
-/* from video/skykid.c */
-VIDEO_START( skykid );
-READ8_HANDLER( skykid_videoram_r );
-WRITE8_HANDLER( skykid_videoram_w );
-READ8_HANDLER( skykid_textram_r );
-WRITE8_HANDLER( skykid_textram_w );
-WRITE8_HANDLER( skykid_scroll_x_w );
-WRITE8_HANDLER( skykid_scroll_y_w );
-WRITE8_HANDLER( skykid_flipscreen_priority_w );
-VIDEO_UPDATE( skykid );
-PALETTE_INIT( skykid );
-
+#include "includes/skykid.h"
 
 static UINT8 inputport_selected;
 
@@ -120,7 +106,7 @@ static ADDRESS_MAP_START( skykid_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4800, 0x5fff) AM_RAM AM_BASE(&skykid_spriteram)	/* RAM + Sprite RAM */
 	AM_RANGE(0x6000, 0x60ff) AM_WRITE(skykid_scroll_y_w)		/* Y scroll register map */
 	AM_RANGE(0x6200, 0x63ff) AM_WRITE(skykid_scroll_x_w)		/* X scroll register map */
-	AM_RANGE(0x6800, 0x6bff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) AM_BASE(&namco_wavedata)/* PSG device, shared RAM */
+	AM_RANGE(0x6800, 0x6bff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
 	AM_RANGE(0x7000, 0x7fff) AM_WRITE(skykid_irq_1_ctrl_w)		/* IRQ control */
 	AM_RANGE(0x7800, 0x7fff) AM_READ(watchdog_reset_r)			/* watchdog reset */
 	AM_RANGE(0x8000, 0xffff) AM_ROM					/* ROM */
@@ -132,7 +118,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mcu_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r, hd63701_internal_registers_w)
 	AM_RANGE(0x0080, 0x00ff) AM_RAM
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) AM_BASE(&namco_wavedata)		/* PSG device, shared RAM */
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
 	AM_RANGE(0x2000, 0x3fff) AM_WRITE(watchdog_reset_w)		/* watchdog? */
 	AM_RANGE(0x4000, 0x7fff) AM_WRITE(skykid_irq_2_ctrl_w)
 	AM_RANGE(0x8000, 0xbfff) AM_ROM
@@ -439,7 +425,7 @@ static const namco_interface namco_config =
 
 
 
-static MACHINE_DRIVER_START( skykid )
+static MACHINE_CONFIG_START( skykid, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809,49152000/32)
@@ -476,7 +462,7 @@ static MACHINE_DRIVER_START( skykid )
 	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
 	MDRV_SOUND_CONFIG(namco_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( skykid )

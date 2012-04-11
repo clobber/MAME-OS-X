@@ -22,7 +22,6 @@
 
 
 #include "i86time.c"
-#include "i86mem.h"
 
 /***************************************************************************/
 /* cpu state                                                               */
@@ -38,6 +37,7 @@ typedef struct _i80286_state i80286_state;
 struct _i80286_state
 {
     i80286basicregs regs;
+    offs_t fetch_xor;
 	UINT32	amask;			/* address mask */
     UINT32  pc;
     UINT32  prevpc;
@@ -59,8 +59,9 @@ struct _i80286_state
 	} ldtr, tr;
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	INT32	AuxVal, OverVal, SignVal, ZeroVal, CarryVal, DirVal; /* 0 or non-0 valued flags */
 	UINT8	ParityVal;
 	UINT8	TF, IF; 	/* 0 or 1 valued flags */
@@ -73,7 +74,6 @@ struct _i80286_state
 
 	int halted;         /* Is the CPU halted ? */
 
-	memory_interface	mem;
 	int icount;
 	unsigned prefix_base;
 	char seg_prefix;
@@ -113,7 +113,6 @@ static struct i80x86_timing timing;
 #include "instr86.c"
 #include "instr186.c"
 #include "instr286.c"
-#include "i86mem.c"
 
 static void i80286_urinit(void)
 {
@@ -294,6 +293,7 @@ static CPU_INIT( i80286 )
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
 	cpustate->io = device->space(AS_IO);
+	cpustate->direct = &cpustate->program->direct();
 
 	/* If a reset parameter is given, take it as pointer to an address mask */
 	if( device->baseconfig().static_config() )
@@ -301,7 +301,7 @@ static CPU_INIT( i80286 )
 	else
 		cpustate->amask = 0x00ffff;
 
-	configure_memory_16bit(cpustate);
+	cpustate->fetch_xor = BYTE_XOR_LE(0);
 }
 
 

@@ -355,7 +355,7 @@ static READ16_HANDLER( ninjak_input_r )
 
 static READ16_HANDLER( cameltry_paddle_r )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 	int curr, res = 0xff;
 
 	switch (offset)
@@ -400,7 +400,7 @@ static READ16_HANDLER( mjnquest_dsw_r )
 
 static READ16_HANDLER( mjnquest_input_r )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 	switch (state->mjnquest_input)
 	{
 		case 0x01:
@@ -427,7 +427,7 @@ static READ16_HANDLER( mjnquest_input_r )
 
 static WRITE16_HANDLER( mjnquest_inputselect_w )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 	state->mjnquest_input = (data >> 6);
 }
 
@@ -577,7 +577,7 @@ driftout  8000 0000/8  0000 0000    The first control changes from 8000 to 0000 
 
 static TIMER_CALLBACK( taitof2_interrupt6 )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 	cpu_set_input_line(state->maincpu, 6, HOLD_LINE);
 }
 
@@ -605,7 +605,7 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 
 static READ8_HANDLER( driveout_sound_command_r)
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 
 	cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
 //  logerror("sound IRQ OFF (sound command=%02x)\n", state->driveout_sound_latch);
@@ -615,13 +615,13 @@ static READ8_HANDLER( driveout_sound_command_r)
 
 static void reset_driveout_sound_region( running_machine *machine )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 	state->oki->set_bank_base(state->oki_bank * 0x40000);
 }
 
 static WRITE8_HANDLER( oki_bank_w )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 	if ((data & 4) && (state->oki_bank != (data & 3)) )
 	{
 		state->oki_bank = (data & 3);
@@ -632,7 +632,7 @@ static WRITE8_HANDLER( oki_bank_w )
 
 static WRITE16_HANDLER( driveout_sound_command_w )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 
 	if (ACCESSING_BITS_8_15)
 	{
@@ -668,7 +668,7 @@ static WRITE16_HANDLER( driveout_sound_command_w )
 
 static WRITE16_HANDLER( cchip2_word_w )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 
 	logerror("cchip2_w pc: %06x offset %04x: %02x\n", cpu_get_pc(space->cpu), offset, data);
 
@@ -677,7 +677,7 @@ static WRITE16_HANDLER( cchip2_word_w )
 
 static READ16_HANDLER( cchip2_word_r )
 {
-	taitof2_state *state = (taitof2_state *)space->machine->driver_data;
+	taitof2_state *state = space->machine->driver_data<taitof2_state>();
 
 	/* C-Chip ID */
 	if (offset == 0x401)
@@ -1188,7 +1188,7 @@ static ADDRESS_MAP_START( cameltrya_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("tc0140syt", tc0140syt_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_DEVREADWRITE("tc0140syt", tc0140syt_slave_comm_r, tc0140syt_slave_comm_w)
 //  AM_RANGE(0xb000, 0xb000) AM_WRITE(unknown_w)    // probably controlling sample player?
-	AM_RANGE(0xb000, 0xb001) AM_MIRROR(0x0001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xb000, 0xb001) AM_MIRROR(0x0001) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 
@@ -1196,7 +1196,7 @@ static ADDRESS_MAP_START( driveout_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(oki_bank_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(driveout_sound_command_r)
 ADDRESS_MAP_END
 
@@ -3138,7 +3138,7 @@ GFXDECODE_END
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irq_handler( running_device *device, int irq )
 {
-	taitof2_state *state = (taitof2_state *)device->machine->driver_data;
+	taitof2_state *state = device->machine->driver_data<taitof2_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -3346,7 +3346,7 @@ static const tc0140syt_interface taitof2_tc0140syt_intf =
 
 static MACHINE_START( common )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");;
@@ -3365,10 +3365,7 @@ static MACHINE_START( f2 )
 	memory_configure_bank(machine, "bank2", 0, 8, memory_region(machine, "audiocpu") + 0x10000, 0x4000);
 }
 
-static MACHINE_DRIVER_START( taito_f2 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitof2_state)
+static MACHINE_CONFIG_START( taito_f2, taitof2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 24000000/2)	/* 12 MHz */
@@ -3405,29 +3402,26 @@ static MACHINE_DRIVER_START( taito_f2 )
 	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitof2_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( taito_f2_tc0220ioc )
+static MACHINE_CONFIG_DERIVED( taito_f2_tc0220ioc, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 
 	MDRV_TC0220IOC_ADD("tc0220ioc", taitof2_io220_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( taito_f2_tc0510nio )
+static MACHINE_CONFIG_DERIVED( taito_f2_tc0510nio, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 
 	MDRV_TC0510NIO_ADD("tc0510nio", taitof2_io510_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( finalb )
+static MACHINE_CONFIG_DERIVED( finalb, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(finalb_map)
 
@@ -3438,13 +3432,12 @@ static MACHINE_DRIVER_START( finalb )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", finalb_tc0100scn_intf)
 	MDRV_TC0110PCR_ADD("tc0110pcr", taitof2_tc0110pcr_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( dondokod )
+static MACHINE_CONFIG_DERIVED( dondokod, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(dondokod_map)
 
@@ -3457,13 +3450,12 @@ static MACHINE_DRIVER_START( dondokod )
 	MDRV_TC0100SCN_ADD("tc0100scn", dondokod_tc0100scn_intf)
 	MDRV_TC0430GRW_ADD("tc0280grd", taitof2_tc0280grd_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( megab )
+static MACHINE_CONFIG_DERIVED( megab, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(megab_map)
 
@@ -3473,13 +3465,12 @@ static MACHINE_DRIVER_START( megab )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( thundfox )
+static MACHINE_CONFIG_DERIVED( thundfox, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(thundfox_map)
 
@@ -3492,13 +3483,12 @@ static MACHINE_DRIVER_START( thundfox )
 	MDRV_TC0100SCN_ADD("tc0100scn_1", thundfox_tc0100scn_intf_1)
 	MDRV_TC0100SCN_ADD("tc0100scn_2", thundfox_tc0100scn_intf_2)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cameltry )
+static MACHINE_CONFIG_DERIVED( cameltry, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(cameltry_map)
 
@@ -3510,13 +3500,12 @@ static MACHINE_DRIVER_START( cameltry )
 	MDRV_TC0100SCN_ADD("tc0100scn", dondokod_tc0100scn_intf)
 	MDRV_TC0430GRW_ADD("tc0280grd", taitof2_tc0280grd_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qtorimon )
+static MACHINE_CONFIG_DERIVED( qtorimon, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qtorimon_map)
 
@@ -3526,13 +3515,12 @@ static MACHINE_DRIVER_START( qtorimon )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", taitof2_tc0100scn_intf)
 	MDRV_TC0110PCR_ADD("tc0110pcr", taitof2_tc0110pcr_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( liquidk )
+static MACHINE_CONFIG_DERIVED( liquidk, taito_f2_tc0220ioc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0220ioc)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(liquidk_map)
 
@@ -3543,13 +3531,12 @@ static MACHINE_DRIVER_START( liquidk )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( quizhq )
+static MACHINE_CONFIG_DERIVED( quizhq, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(quizhq_map)
 
@@ -3559,13 +3546,12 @@ static MACHINE_DRIVER_START( quizhq )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", taitof2_tc0100scn_intf)
 	MDRV_TC0110PCR_ADD("tc0110pcr", taitof2_tc0110pcr_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ssi )
+static MACHINE_CONFIG_DERIVED( ssi, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ssi_map)
 
@@ -3575,13 +3561,12 @@ static MACHINE_DRIVER_START( ssi )
 	MDRV_VIDEO_UPDATE(taitof2_ssi)
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gunfront )
+static MACHINE_CONFIG_DERIVED( gunfront, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gunfront_map)
 
@@ -3591,13 +3576,12 @@ static MACHINE_DRIVER_START( gunfront )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( growl )
+static MACHINE_CONFIG_DERIVED( growl, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(growl_map)
 
@@ -3607,13 +3591,12 @@ static MACHINE_DRIVER_START( growl )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mjnquest )
+static MACHINE_CONFIG_DERIVED( mjnquest, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mjnquest_map)
 
@@ -3622,13 +3605,12 @@ static MACHINE_DRIVER_START( mjnquest )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", taitof2_tc0100scn_intf)
 	MDRV_TC0110PCR_ADD("tc0110pcr", taitof2_tc0110pcr_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( footchmp )
+static MACHINE_CONFIG_DERIVED( footchmp, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(footchmp_map)
 
@@ -3640,13 +3622,12 @@ static MACHINE_DRIVER_START( footchmp )
 
 	MDRV_TC0480SCP_ADD("tc0480scp", footchmp_tc0480scp_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hthero )
+static MACHINE_CONFIG_DERIVED( hthero, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(footchmp_map)
 
@@ -3658,13 +3639,12 @@ static MACHINE_DRIVER_START( hthero )
 
 	MDRV_TC0360PRI_ADD("tc0360pri")
 	MDRV_TC0480SCP_ADD("tc0480scp", hthero_tc0480scp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( koshien )
+static MACHINE_CONFIG_DERIVED( koshien, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(koshien_map)
 
@@ -3674,13 +3654,12 @@ static MACHINE_DRIVER_START( koshien )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", koshien_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( yuyugogo )
+static MACHINE_CONFIG_DERIVED( yuyugogo, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(yuyugogo_map)
 
@@ -3690,13 +3669,12 @@ static MACHINE_DRIVER_START( yuyugogo )
 	MDRV_VIDEO_UPDATE(taitof2_yesnoj)
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ninjak )
+static MACHINE_CONFIG_DERIVED( ninjak, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ninjak_map)
 
@@ -3706,13 +3684,12 @@ static MACHINE_DRIVER_START( ninjak )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", finalb_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( solfigtr )
+static MACHINE_CONFIG_DERIVED( solfigtr, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(solfigtr_map)
 
@@ -3722,13 +3699,12 @@ static MACHINE_DRIVER_START( solfigtr )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", solfigtr_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qzquest )
+static MACHINE_CONFIG_DERIVED( qzquest, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qzquest_map)
 
@@ -3736,13 +3712,12 @@ static MACHINE_DRIVER_START( qzquest )
 	MDRV_VIDEO_EOF(taitof2_partial_buffer_delayed)
 
 	MDRV_TC0100SCN_ADD("tc0100scn", taitof2_tc0100scn_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( pulirula )
+static MACHINE_CONFIG_DERIVED( pulirula, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(pulirula_map)
 
@@ -3754,13 +3729,12 @@ static MACHINE_DRIVER_START( pulirula )
 	MDRV_TC0100SCN_ADD("tc0100scn", dondokod_tc0100scn_intf)
 	MDRV_TC0430GRW_ADD("tc0430grw", taitof2_tc0430grw_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( metalb )
+static MACHINE_CONFIG_DERIVED( metalb, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(metalb_map)
 
@@ -3772,13 +3746,12 @@ static MACHINE_DRIVER_START( metalb )
 
 	MDRV_TC0480SCP_ADD("tc0480scp", metalb_tc0480scp_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qzchikyu )
+static MACHINE_CONFIG_DERIVED( qzchikyu, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qzchikyu_map)
 
@@ -3787,13 +3760,12 @@ static MACHINE_DRIVER_START( qzchikyu )
 	MDRV_VIDEO_EOF(taitof2_partial_buffer_delayed_qzchikyu)
 
 	MDRV_TC0100SCN_ADD("tc0100scn", qzchikyu_tc0100scn_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( yesnoj )
+static MACHINE_CONFIG_DERIVED( yesnoj, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(yesnoj_map)
 
@@ -3803,13 +3775,12 @@ static MACHINE_DRIVER_START( yesnoj )
 	MDRV_VIDEO_UPDATE(taitof2_yesnoj)
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( deadconx )
+static MACHINE_CONFIG_DERIVED( deadconx, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(deadconx_map)
 
@@ -3820,13 +3791,12 @@ static MACHINE_DRIVER_START( deadconx )
 
 	MDRV_TC0480SCP_ADD("tc0480scp", deadconx_tc0480scp_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( deadconxj )
+static MACHINE_CONFIG_DERIVED( deadconxj, taito_f2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(deadconx_map)
 
@@ -3837,13 +3807,12 @@ static MACHINE_DRIVER_START( deadconxj )
 
 	MDRV_TC0480SCP_ADD("tc0480scp", deadconxj_tc0480scp_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( dinorex )
+static MACHINE_CONFIG_DERIVED( dinorex, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(dinorex_map)
 
@@ -3853,13 +3822,12 @@ static MACHINE_DRIVER_START( dinorex )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qjinsei )
+static MACHINE_CONFIG_DERIVED( qjinsei, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qjinsei_map)
 
@@ -3869,13 +3837,12 @@ static MACHINE_DRIVER_START( qjinsei )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qcrayon )
+static MACHINE_CONFIG_DERIVED( qcrayon, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qcrayon_map)
 
@@ -3885,13 +3852,12 @@ static MACHINE_DRIVER_START( qcrayon )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qcrayon2 )
+static MACHINE_CONFIG_DERIVED( qcrayon2, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qcrayon2_map)
 
@@ -3901,13 +3867,12 @@ static MACHINE_DRIVER_START( qcrayon2 )
 
 	MDRV_TC0100SCN_ADD("tc0100scn", liquidk_tc0100scn_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( driftout )
+static MACHINE_CONFIG_DERIVED( driftout, taito_f2_tc0510nio )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(taito_f2_tc0510nio)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(driftout_map)
 
@@ -3919,13 +3884,10 @@ static MACHINE_DRIVER_START( driftout )
 	MDRV_TC0100SCN_ADD("tc0100scn", dondokod_tc0100scn_intf)
 	MDRV_TC0430GRW_ADD("tc0430grw", taitof2_tc0430grw_intf)
 	MDRV_TC0360PRI_ADD("tc0360pri")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cameltrya )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitof2_state)
+static MACHINE_CONFIG_START( cameltrya, taitof2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,24000000/2)	/* verified on pcb  */
@@ -3972,13 +3934,10 @@ static MACHINE_DRIVER_START( cameltrya )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.10)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitof2_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( driveout )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitof2_state)
+static MACHINE_CONFIG_START( driveout, taitof2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,24000000/2)	/* 12 MHz */
@@ -4019,7 +3978,7 @@ static MACHINE_DRIVER_START( driveout )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitof2_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -5598,7 +5557,7 @@ static DRIVER_INIT( finalb )
 
 static DRIVER_INIT( cameltry )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 
 	state->last[0] = 0;
 	state->last[1] = 0;
@@ -5609,7 +5568,7 @@ static DRIVER_INIT( cameltry )
 
 static DRIVER_INIT( mjnquest )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 	int i, len = memory_region_length(machine, "gfx2");
 	UINT8 *gfx = memory_region(machine, "gfx2");
 
@@ -5636,7 +5595,7 @@ static STATE_POSTLOAD( driveout_postload )
 
 static DRIVER_INIT( driveout )
 {
-	taitof2_state *state = (taitof2_state *)machine->driver_data;
+	taitof2_state *state = machine->driver_data<taitof2_state>();
 
 	state->driveout_sound_latch = 0;
 	state->oki_bank = 0;

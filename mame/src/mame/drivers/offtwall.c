@@ -32,9 +32,9 @@
 
 static void update_interrupts(running_machine *machine)
 {
-	offtwall_state *state = (offtwall_state *)machine->driver_data;
-	cputag_set_input_line(machine, "maincpu", 4, state->atarigen.scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 6, state->atarigen.sound_int_state ? ASSERT_LINE : CLEAR_LINE);
+	offtwall_state *state = machine->driver_data<offtwall_state>();
+	cputag_set_input_line(machine, "maincpu", 4, state->scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 6, state->sound_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -53,11 +53,11 @@ static MACHINE_START( offtwall )
 
 static MACHINE_RESET( offtwall )
 {
-	offtwall_state *state = (offtwall_state *)machine->driver_data;
+	offtwall_state *state = machine->driver_data<offtwall_state>();
 
-	atarigen_eeprom_reset(&state->atarigen);
-	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
-	atarivc_reset(*machine->primary_screen, state->atarigen.atarivc_eof_data, 1);
+	atarigen_eeprom_reset(state);
+	atarigen_interrupt_reset(state, update_interrupts);
+	atarivc_reset(*machine->primary_screen, state->atarivc_eof_data, 1);
 	atarijsa_reset();
 }
 
@@ -90,9 +90,9 @@ static WRITE16_HANDLER( offtwall_atarivc_w )
 
 static READ16_HANDLER( special_port3_r )
 {
-	offtwall_state *state = (offtwall_state *)space->machine->driver_data;
+	offtwall_state *state = space->machine->driver_data<offtwall_state>();
 	int result = input_port_read(space->machine, "260010");
-	if (state->atarigen.cpu_to_sound_ready) result ^= 0x0020;
+	if (state->cpu_to_sound_ready) result ^= 0x0020;
 	return result;
 }
 
@@ -150,7 +150,7 @@ static WRITE16_HANDLER( io_latch_w )
 
 static READ16_HANDLER( bankswitch_r )
 {
-	offtwall_state *state = (offtwall_state *)space->machine->driver_data;
+	offtwall_state *state = space->machine->driver_data<offtwall_state>();
 
 	/* this is the table lookup; the bank is determined by the address that was requested */
 	state->bank_offset = (offset & 3) * 0x1000;
@@ -162,7 +162,7 @@ static READ16_HANDLER( bankswitch_r )
 
 static READ16_HANDLER( bankrom_r )
 {
-	offtwall_state *state = (offtwall_state *)space->machine->driver_data;
+	offtwall_state *state = space->machine->driver_data<offtwall_state>();
 
 	/* this is the banked ROM read */
 	logerror("%06X: %04X\n", cpu_get_previouspc(space->cpu), offset);
@@ -171,7 +171,7 @@ static READ16_HANDLER( bankrom_r )
         ROM bank area, we need to return the correct value to give the proper checksum */
 	if ((offset == 0x3000 || offset == 0x3001) && cpu_get_previouspc(space->cpu) > 0x37000)
 	{
-		UINT32 checksum = (memory_read_word(space, 0x3fd210) << 16) | memory_read_word(space, 0x3fd212);
+		UINT32 checksum = (space->read_word(0x3fd210) << 16) | space->read_word(0x3fd212);
 		UINT32 us = 0xaaaa5555 - checksum;
 		if (offset == 0x3001)
 			return us & 0xffff;
@@ -204,7 +204,7 @@ static READ16_HANDLER( bankrom_r )
 
 static READ16_HANDLER( spritecache_count_r )
 {
-	offtwall_state *state = (offtwall_state *)space->machine->driver_data;
+	offtwall_state *state = space->machine->driver_data<offtwall_state>();
 	int prevpc = cpu_get_previouspc(space->cpu);
 
 	/* if this read is coming from $99f8 or $9992, it's in the sprite copy loop */
@@ -259,7 +259,7 @@ static READ16_HANDLER( spritecache_count_r )
 
 static READ16_HANDLER( unknown_verify_r )
 {
-	offtwall_state *state = (offtwall_state *)space->machine->driver_data;
+	offtwall_state *state = space->machine->driver_data<offtwall_state>();
 	int prevpc = cpu_get_previouspc(space->cpu);
 	if (prevpc < 0x5c5e || prevpc > 0xc432)
 		return state->unknown_verify_base[offset];
@@ -278,7 +278,7 @@ static READ16_HANDLER( unknown_verify_r )
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x037fff) AM_ROM
 	AM_RANGE(0x038000, 0x03ffff) AM_READ(bankrom_r) AM_REGION("maincpu", 0x38000) AM_BASE_MEMBER(offtwall_state, bankrom_base)
-	AM_RANGE(0x120000, 0x120fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_BASE_SIZE_MEMBER(offtwall_state, atarigen.eeprom, atarigen.eeprom_size)
+	AM_RANGE(0x120000, 0x120fff) AM_READWRITE(atarigen_eeprom_r, atarigen_eeprom_w) AM_SHARE("eeprom")
 	AM_RANGE(0x260000, 0x260001) AM_READ_PORT("260000")
 	AM_RANGE(0x260002, 0x260003) AM_READ_PORT("260002")
 	AM_RANGE(0x260010, 0x260011) AM_READ(special_port3_r)
@@ -292,11 +292,11 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x260060, 0x260061) AM_WRITE(atarigen_eeprom_enable_w)
 	AM_RANGE(0x2a0000, 0x2a0001) AM_WRITE(watchdog_reset16_w)
 	AM_RANGE(0x3e0000, 0x3e0fff) AM_RAM_WRITE(atarigen_666_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x3effc0, 0x3effff) AM_READWRITE(offtwall_atarivc_r, offtwall_atarivc_w) AM_BASE_MEMBER(offtwall_state, atarigen.atarivc_data)
-	AM_RANGE(0x3f4000, 0x3f5eff) AM_RAM_WRITE(atarigen_playfield_latched_msb_w) AM_BASE_MEMBER(offtwall_state, atarigen.playfield)
-	AM_RANGE(0x3f5f00, 0x3f5f7f) AM_RAM AM_BASE_MEMBER(offtwall_state, atarigen.atarivc_eof_data)
+	AM_RANGE(0x3effc0, 0x3effff) AM_READWRITE(offtwall_atarivc_r, offtwall_atarivc_w) AM_BASE_MEMBER(offtwall_state, atarivc_data)
+	AM_RANGE(0x3f4000, 0x3f5eff) AM_RAM_WRITE(atarigen_playfield_latched_msb_w) AM_BASE_MEMBER(offtwall_state, playfield)
+	AM_RANGE(0x3f5f00, 0x3f5f7f) AM_RAM AM_BASE_MEMBER(offtwall_state, atarivc_eof_data)
 	AM_RANGE(0x3f5f80, 0x3f5fff) AM_RAM_WRITE(atarimo_0_slipram_w) AM_BASE(&atarimo_0_slipram)
-	AM_RANGE(0x3f6000, 0x3f7fff) AM_RAM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(offtwall_state, atarigen.playfield_upper)
+	AM_RANGE(0x3f6000, 0x3f7fff) AM_RAM_WRITE(atarigen_playfield_upper_w) AM_BASE_MEMBER(offtwall_state, playfield_upper)
 	AM_RANGE(0x3f8000, 0x3fcfff) AM_RAM
 	AM_RANGE(0x3fd000, 0x3fd7ff) AM_RAM_WRITE(atarimo_0_spriteram_w) AM_BASE(&atarimo_0_spriteram)
 	AM_RANGE(0x3fd800, 0x3fffff) AM_RAM
@@ -403,8 +403,7 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( offtwall )
-	MDRV_DRIVER_DATA(offtwall_state)
+static MACHINE_CONFIG_START( offtwall, offtwall_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, ATARI_CLOCK_14MHz/2)
@@ -412,7 +411,7 @@ static MACHINE_DRIVER_START( offtwall )
 
 	MDRV_MACHINE_START(offtwall)
 	MDRV_MACHINE_RESET(offtwall)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MDRV_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -429,8 +428,8 @@ static MACHINE_DRIVER_START( offtwall )
 	MDRV_VIDEO_UPDATE(offtwall)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(jsa_iii_mono_noadpcm)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(jsa_iii_mono_noadpcm)
+MACHINE_CONFIG_END
 
 
 
@@ -456,6 +455,9 @@ ROM_START( offtwall )
 	ROM_LOAD( "otw1015.bin", 0x060000, 0x20000, CRC(271f7856) SHA1(928bc5e7dc589ceb5f55e536b5a05c3866116a24) )
 	ROM_LOAD( "otw1017.bin", 0x080000, 0x20000, CRC(7f7f8012) SHA1(1123ea3c6cd2c73617a87d6a5bbb26fca8941af3) )
 	ROM_LOAD( "otw1019.bin", 0x0a0000, 0x20000, CRC(9efe511b) SHA1(db1f1d8792bf497bc9ad652b0b7d78c3abf0e817) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x1000, CRC(73dc2139) SHA1(28ee9be4b5a65708a4f3e7d88e98af15cd9badca) )
 ROM_END
 
 
@@ -475,6 +477,9 @@ ROM_START( offtwallc )
 	ROM_LOAD( "090-1615.rom", 0x060000, 0x20000, CRC(ac3642c7) SHA1(bb57e039c113c4ce5702983c8e01dbe286d7b58e) )
 	ROM_LOAD( "090-1617.rom", 0x080000, 0x20000, CRC(15208a89) SHA1(124484ab54959a1e6d9022a4f3ee4288a79c768b) )
 	ROM_LOAD( "090-1619.rom", 0x0a0000, 0x20000, CRC(8a5d79b3) SHA1(0a202d20e6c86989ce2223e10eadf9009dd6ca8e) )
+
+	ROM_REGION( 0x1000, "eeprom", 0 )
+	ROM_LOAD( "offtwall-eeprom.bin", 0x0000, 0x1000, CRC(73dc2139) SHA1(28ee9be4b5a65708a4f3e7d88e98af15cd9badca) )
 ROM_END
 
 
@@ -485,26 +490,10 @@ ROM_END
  *
  *************************************/
 
-static const UINT16 default_eeprom[] =
-{
-	0x0001,0x011A,0x012A,0x0146,0x0100,0x0168,0x0300,0x011E,
-	0x0700,0x0122,0x0600,0x0120,0x0400,0x0102,0x0300,0x017E,
-	0x0200,0x0128,0x0104,0x0100,0x014E,0x0100,0x013E,0x0122,
-	0x011A,0x012A,0x0146,0x0100,0x0168,0x0300,0x011E,0x0700,
-	0x0122,0x0600,0x0120,0x0400,0x0102,0x0300,0x017E,0x0200,
-	0x0128,0x0104,0x0100,0x014E,0x0100,0x013E,0x0122,0x1A00,
-	0x0154,0x0125,0x01DC,0x0100,0x0192,0x0105,0x01DC,0x0181,
-	0x012E,0x0106,0x0100,0x0105,0x0179,0x0132,0x0101,0x0100,
-	0x01D3,0x0105,0x0116,0x0127,0x0134,0x0100,0x0104,0x01B0,
-	0x0165,0x0102,0x1600,0x0000
-};
-
-
 static DRIVER_INIT( offtwall )
 {
-	offtwall_state *state = (offtwall_state *)machine->driver_data;
+	offtwall_state *state = machine->driver_data<offtwall_state>();
 
-	state->atarigen.eeprom_default = default_eeprom;
 	atarijsa_init(machine, "260010", 0x0040);
 
 	/* install son-of-slapstic workarounds */
@@ -516,9 +505,8 @@ static DRIVER_INIT( offtwall )
 
 static DRIVER_INIT( offtwalc )
 {
-	offtwall_state *state = (offtwall_state *)machine->driver_data;
+	offtwall_state *state = machine->driver_data<offtwall_state>();
 
-	state->atarigen.eeprom_default = default_eeprom;
 	atarijsa_init(machine, "260010", 0x0040);
 
 	/* install son-of-slapstic workarounds */

@@ -46,7 +46,7 @@ To Do:
 
 static WRITE8_HANDLER( yunsung8_bankswitch_w )
 {
-	yunsung8_state *state = (yunsung8_state *)space->machine->driver_data;
+	yunsung8_state *state = space->machine->driver_data<yunsung8_state>();
 
 	state->layers_ctrl = data & 0x30;	// Layers enable
 
@@ -107,7 +107,7 @@ static WRITE8_DEVICE_HANDLER( yunsung8_sound_bankswitch_w )
 
 static WRITE8_HANDLER( yunsung8_adpcm_w )
 {
-	yunsung8_state *state = (yunsung8_state *)space->machine->driver_data;
+	yunsung8_state *state = space->machine->driver_data<yunsung8_state>();
 
 	/* Swap the nibbles */
 	state->adpcm = ((data & 0xf) << 4) | ((data >> 4) & 0xf);
@@ -448,7 +448,7 @@ GFXDECODE_END
 
 static void yunsung8_adpcm_int( running_device *device )
 {
-	yunsung8_state *state = (yunsung8_state *)device->machine->driver_data;
+	yunsung8_state *state = device->machine->driver_data<yunsung8_state>();
 
 	msm5205_data_w(device, state->adpcm >> 4);
 	state->adpcm <<= 4;
@@ -467,7 +467,7 @@ static const msm5205_interface yunsung8_msm5205_interface =
 
 static MACHINE_START( yunsung8 )
 {
-	yunsung8_state *state = (yunsung8_state *)machine->driver_data;
+	yunsung8_state *state = machine->driver_data<yunsung8_state>();
 	UINT8 *MAIN = memory_region(machine, "maincpu");
 	UINT8 *AUDIO = memory_region(machine, "audiocpu");
 
@@ -491,7 +491,7 @@ static MACHINE_START( yunsung8 )
 
 static MACHINE_RESET( yunsung8 )
 {
-	yunsung8_state *state = (yunsung8_state *)machine->driver_data;
+	yunsung8_state *state = machine->driver_data<yunsung8_state>();
 
 	state->videobank = 0;
 	state->layers_ctrl = 0;
@@ -500,10 +500,7 @@ static MACHINE_RESET( yunsung8 )
 }
 
 
-static MACHINE_DRIVER_START( yunsung8 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(yunsung8_state)
+static MACHINE_CONFIG_START( yunsung8, yunsung8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 8000000)			/* Z80B */
@@ -543,7 +540,7 @@ static MACHINE_DRIVER_START( yunsung8 )
 	MDRV_SOUND_CONFIG(yunsung8_msm5205_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

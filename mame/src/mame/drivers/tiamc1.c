@@ -120,7 +120,7 @@
 
 static MACHINE_RESET( tiamc1 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	tiamc1_bankswitch_w(space, 0, 0);
 }
 
@@ -148,14 +148,14 @@ static ADDRESS_MAP_START( tiamc1_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xbd, 0xbd) AM_WRITE(tiamc1_bg_vshift_w)/* background V scroll */
 	AM_RANGE(0xbe, 0xbe) AM_WRITE(tiamc1_bankswitch_w) /* VRAM selector */
 	AM_RANGE(0xbf, 0xbf) AM_WRITENOP                 /* charset control */
-	AM_RANGE(0xc0, 0xc3) AM_WRITE(tiamc1_timer0_w)   /* timer 0 */
+	AM_RANGE(0xc0, 0xc3) AM_DEVWRITE("2x8253", tiamc1_timer0_w)   /* timer 0 */
 	AM_RANGE(0xd0, 0xd0) AM_READ_PORT("IN0")
 	AM_RANGE(0xd1, 0xd1) AM_READ_PORT("IN1")
 	AM_RANGE(0xd2, 0xd2) AM_READ_PORT("IN2")
 	AM_RANGE(0xd2, 0xd2) AM_WRITE(tiamc1_control_w)  /* coin counter and lockout */
 	AM_RANGE(0xd3, 0xd3) AM_WRITENOP                 /* 8255 ctrl. Used for i/o ports */
-	AM_RANGE(0xd4, 0xd7) AM_WRITE(tiamc1_timer1_w)   /* timer 1 */
-	AM_RANGE(0xda, 0xda) AM_WRITE(tiamc1_timer1_gate_w) /* timer 1 gate control */
+	AM_RANGE(0xd4, 0xd7) AM_DEVWRITE("2x8253", tiamc1_timer1_w)   /* timer 1 */
+	AM_RANGE(0xda, 0xda) AM_DEVWRITE("2x8253", tiamc1_timer1_gate_w) /* timer 1 gate control */
 ADDRESS_MAP_END
 
 static INPUT_PORTS_START( tiamc1 )
@@ -218,7 +218,7 @@ static GFXDECODE_START( tiamc1 )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( tiamc1 )
+static MACHINE_CONFIG_START( tiamc1, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8080,16000000/9)		 /* 16 MHz */
 	MDRV_CPU_PROGRAM_MAP(tiamc1_map)
@@ -248,7 +248,7 @@ static MACHINE_DRIVER_START( tiamc1 )
 
 	MDRV_SOUND_ADD("2x8253", TIAMC1, 16000000/9)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( konek )

@@ -33,8 +33,9 @@ struct _scmp_state
 	UINT8	SR;
 
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int					icount;
 
 	devcb_resolved_write8		flag_out_func;
@@ -69,24 +70,24 @@ INLINE UINT8 ROP(scmp_state *cpustate)
 {
 	UINT16 pc = cpustate->PC.w.l;
 	cpustate->PC.w.l = ADD12(cpustate->PC.w.l,1);
-	return memory_decrypted_read_byte(cpustate->program,  pc);
+	return cpustate->direct->read_decrypted_byte( pc);
 }
 
 INLINE UINT8 ARG(scmp_state *cpustate)
 {
 	UINT16 pc = cpustate->PC.w.l;
 	cpustate->PC.w.l = ADD12(cpustate->PC.w.l,1);
-	return memory_raw_read_byte(cpustate->program, pc);
+	return cpustate->direct->read_raw_byte(pc);
 }
 
 INLINE UINT8 RM(scmp_state *cpustate,UINT32 a)
 {
-	return memory_read_byte_8le(cpustate->program, a);
+	return cpustate->program->read_byte(a);
 }
 
 INLINE void WM(scmp_state *cpustate,UINT32 a, UINT8 v)
 {
-	memory_write_byte_8le(cpustate->program, a, v);
+	cpustate->program->write_byte(a, v);
 }
 
 INLINE void illegal(scmp_state *cpustate,UINT8 opcode)
@@ -514,6 +515,7 @@ static CPU_INIT( scmp )
 	cpustate->device = device;
 
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 
 	/* resolve callbacks */
 	devcb_resolve_write8(&cpustate->flag_out_func, &cpustate->config.flag_out_func, device);

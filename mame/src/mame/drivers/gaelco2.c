@@ -58,7 +58,7 @@ GFXDECODEINFO(0x0400000, 128)
 
 static ADDRESS_MAP_START( maniacsq_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM																				/* ROM */
-	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)		/* Sound Registers */
+	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)		/* Sound Registers */
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)		/* Video RAM */
 	AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)								/* Palette */
 	AM_RANGE(0x218004, 0x218009) AM_RAM AM_BASE(&gaelco2_vregs)														/* Video Registers */
@@ -155,7 +155,7 @@ static const gaelcosnd_interface maniacsq_snd_interface =
 	{ 0*0x0080000, 1*0x0080000, 0, 0 },		/* start of each ROM bank */
 };
 
-static MACHINE_DRIVER_START( maniacsq )
+static MACHINE_CONFIG_START( maniacsq, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 26000000/2)		/* 13 MHz? */
 	MDRV_CPU_PROGRAM_MAP(maniacsq_map)
@@ -185,7 +185,7 @@ static MACHINE_DRIVER_START( maniacsq )
 	MDRV_SOUND_CONFIG(maniacsq_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( maniacsq )
@@ -216,7 +216,7 @@ static READ16_HANDLER(p2_gun_y) {return (input_port_read(space->machine, "LIGHT1
 
 static ADDRESS_MAP_START( bang_map, ADDRESS_SPACE_PROGRAM, 16 )
     AM_RANGE(0x000000, 0x0fffff) AM_ROM																			/* ROM */
-    AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)	/* Sound Registers */
+    AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)	/* Sound Registers */
     AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)	/* Video RAM */
     AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)							/* Palette */
     AM_RANGE(0x218004, 0x218009) AM_READONLY																/* Video Registers */
@@ -287,7 +287,7 @@ static const eeprom_interface gaelco2_eeprom_interface =
 //  "*10010xxxxxx", /* erase all */
 };
 
-static MACHINE_DRIVER_START( bang )
+static MACHINE_CONFIG_START( bang, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 30000000/2)			/* 15 MHz */
 	MDRV_CPU_PROGRAM_MAP(bang_map)
@@ -319,7 +319,7 @@ static MACHINE_DRIVER_START( bang )
 	MDRV_SOUND_CONFIG(bang_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*
@@ -435,7 +435,7 @@ ROM_END
 
 static ADDRESS_MAP_START( alighunt_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM																				/* ROM */
-	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)		/* Sound Registers */
+	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)		/* Sound Registers */
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)		/* Video RAM */
 	AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)								/* Palette */
 	AM_RANGE(0x218004, 0x218009) AM_RAM AM_BASE(&gaelco2_vregs)														/* Video Registers */
@@ -531,7 +531,7 @@ static const gaelcosnd_interface alighunt_snd_interface =
 	{ 0*0x0400000, 1*0x0400000, 2*0x0400000, 3*0x0400000 }	/* start of each ROM bank */
 };
 
-static MACHINE_DRIVER_START( alighunt )
+static MACHINE_CONFIG_START( alighunt, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 24000000/2)			/* 12 MHz */
 	MDRV_CPU_PROGRAM_MAP(alighunt_map)
@@ -561,7 +561,7 @@ static MACHINE_DRIVER_START( alighunt )
 	MDRV_SOUND_CONFIG(alighunt_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*
@@ -647,7 +647,7 @@ static READ16_HANDLER ( dallas_kludge_r )
 
 static ADDRESS_MAP_START( touchgo_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM																					/* ROM */
-	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)			/* Sound Registers */
+	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)			/* Sound Registers */
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)			/* Video RAM */
 	AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)									/* Palette */
 	AM_RANGE(0x218004, 0x218009) AM_RAM AM_BASE(&gaelco2_vregs)															/* Video Registers */
@@ -774,7 +774,7 @@ static const gaelcosnd_interface touchgo_snd_interface =
 	{ 0*0x0400000, 1*0x0400000, 0, 0 }		/* start of each ROM bank */
 };
 
-static MACHINE_DRIVER_START( touchgo )
+static MACHINE_CONFIG_START( touchgo, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 32000000/2)			/* 16 MHz */
 	MDRV_CPU_PROGRAM_MAP(touchgo_map)
@@ -812,7 +812,7 @@ static MACHINE_DRIVER_START( touchgo )
 	MDRV_SOUND_CONFIG(touchgo_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*
 PCB Layout:
@@ -912,7 +912,7 @@ ROM_END
 
 static ADDRESS_MAP_START( snowboar_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM																						/* ROM */
-	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)				/* Sound Registers */
+	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)				/* Sound Registers */
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)				/* Video RAM */
 	AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)										/* Palette */
 	AM_RANGE(0x212000, 0x213fff) AM_RAM																						/* Extra RAM */
@@ -967,7 +967,7 @@ static const gaelcosnd_interface snowboar_snd_interface =
 	{ 0*0x0400000, 1*0x0400000, 0, 0 }		/* start of each ROM bank */
 };
 
-static MACHINE_DRIVER_START( snowboar )
+static MACHINE_CONFIG_START( snowboar, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 30000000/2)			/* 15 MHz */
 	MDRV_CPU_PROGRAM_MAP(snowboar_map)
@@ -999,7 +999,7 @@ static MACHINE_DRIVER_START( snowboar )
 	MDRV_SOUND_CONFIG(snowboar_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*
@@ -1098,7 +1098,7 @@ ROM_END
 
 static ADDRESS_MAP_START( wrally2_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM																			/* ROM */
-	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w) AM_BASE(&gaelco_sndregs)	/* Sound Registers */
+	AM_RANGE(0x202890, 0x2028ff) AM_DEVREADWRITE("gaelco", gaelcosnd_r, gaelcosnd_w)	/* Sound Registers */
 	AM_RANGE(0x200000, 0x20ffff) AM_RAM_WRITE(gaelco2_vram_w) AM_BASE_SIZE_GENERIC(spriteram)	/* Video RAM */
 	AM_RANGE(0x210000, 0x211fff) AM_RAM_WRITE(gaelco2_palette_w) AM_BASE_GENERIC(paletteram)							/* Palette */
 	AM_RANGE(0x212000, 0x213fff) AM_RAM																			/* Extra RAM */
@@ -1209,7 +1209,7 @@ static const gaelcosnd_interface wrally2_snd_interface =
 	{ 0*0x0200000, 1*0x0200000, 0, 0 }	/* start of each ROM bank */
 };
 
-static MACHINE_DRIVER_START( wrally2 )
+static MACHINE_CONFIG_START( wrally2, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 26000000/2)			/* 13 MHz */
 	MDRV_CPU_PROGRAM_MAP(wrally2_map)
@@ -1250,7 +1250,7 @@ static MACHINE_DRIVER_START( wrally2 )
 	MDRV_SOUND_CONFIG(wrally2_snd_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*
 PCB Layout:

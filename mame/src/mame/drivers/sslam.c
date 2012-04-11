@@ -217,11 +217,11 @@ static const UINT8 sslam_snd_loop[8][20] =
 
 static TIMER_CALLBACK( music_playback )
 {
-	sslam_state *state = (sslam_state *)machine->driver_data;
+	sslam_state *state = machine->driver_data<sslam_state>();
 	int pattern = 0;
 	okim6295_device *device = machine->device<okim6295_device>("oki");
 
-	if ((okim6295_r(device,0) & 0x08) == 0)
+	if ((device->read_status() & 0x08) == 0)
 	{
 		if (state->bar != 0) {
 			state->bar += 1;
@@ -242,8 +242,8 @@ static TIMER_CALLBACK( music_playback )
 		}
 		if (pattern) {
 			logerror("Changing bar in music track to pattern %02x\n",pattern);
-			okim6295_w(device,0,(0x80 | pattern));
-			okim6295_w(device,0,0x81);
+			device->write_command(0x80 | pattern);
+			device->write_command(0x81);
 		}
 	}
 
@@ -257,8 +257,9 @@ static TIMER_CALLBACK( music_playback )
 
 static void sslam_play(running_device *device, int track, int data)
 {
-	sslam_state *state = (sslam_state *)device->machine->driver_data;
-	int status = okim6295_r(device,0);
+	sslam_state *state = device->machine->driver_data<sslam_state>();
+	okim6295_device *oki = downcast<okim6295_device *>(device);
+	int status = oki->read_status();
 
 	if (data < 0x80) {
 		if (state->track) {
@@ -266,24 +267,24 @@ static void sslam_play(running_device *device, int track, int data)
 				state->track  = data;
 				state->bar = 1;
 				if (status & 0x08)
-					okim6295_w(device,0,0x40);
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x81);
+					oki->write_command(0x40);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x81);
 				timer_adjust_periodic(state->music_timer, ATTOTIME_IN_MSEC(4), 0, ATTOTIME_IN_HZ(250));	/* 250Hz for smooth sequencing */
 			}
 		}
 		else {
 			if ((status & 0x01) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x11);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x11);
 			}
 			else if ((status & 0x02) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x21);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x21);
 			}
 			else if ((status & 0x04) == 0) {
-				okim6295_w(device,0,(0x80 | data));
-				okim6295_w(device,0,0x41);
+				oki->write_command((0x80 | data));
+				oki->write_command(0x41);
 			}
 		}
 	}
@@ -295,7 +296,7 @@ static void sslam_play(running_device *device, int track, int data)
 			state->bar = 0;
 		}
 		data &= 0x7f;
-		okim6295_w(device,0,data);
+		oki->write_command(data);
 	}
 }
 
@@ -303,7 +304,7 @@ static WRITE16_DEVICE_HANDLER( sslam_snd_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		sslam_state *state = (sslam_state *)device->machine->driver_data;
+		sslam_state *state = device->machine->driver_data<sslam_state>();
 
 		logerror("%s Writing %04x to Sound CPU\n",cpuexec_describe_context(device->machine),data);
 		if (data >= 0x40) {
@@ -434,14 +435,14 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( playmark_snd_command_r )
 {
-	sslam_state *state = (sslam_state *)space->machine->driver_data;
+	sslam_state *state = space->machine->driver_data<sslam_state>();
 	UINT8 data = 0;
 
 	if ((state->oki_control & 0x38) == 0x30) {
 		data = soundlatch_r(space,0);
 	}
 	else if ((state->oki_control & 0x38) == 0x28) {
-		data = (okim6295_r(space->machine->device("oki"),0) & 0x0f);
+		data = (space->machine->device<okim6295_device>("oki")->read(*space,0) & 0x0f);
 	}
 
 	return data;
@@ -449,14 +450,14 @@ static READ8_HANDLER( playmark_snd_command_r )
 
 static WRITE8_HANDLER( playmark_oki_w )
 {
-	sslam_state *state = (sslam_state *)space->machine->driver_data;
+	sslam_state *state = space->machine->driver_data<sslam_state>();
 
 	state->oki_command = data;
 }
 
 static WRITE8_HANDLER( playmark_snd_control_w )
 {
-	sslam_state *state = (sslam_state *)space->machine->driver_data;
+	sslam_state *state = space->machine->driver_data<sslam_state>();
 
 	state->oki_control = data;
 
@@ -471,7 +472,7 @@ static WRITE8_HANDLER( playmark_snd_control_w )
 
 	if ((data & 0x38) == 0x18)
 	{
-		okim6295_w(space->machine->device("oki"), 0, state->oki_command);
+		space->machine->device<okim6295_device>("oki")->write(*space, 0, state->oki_command);
 	}
 
 //  !(data & 0x80) -> sound enable
@@ -710,9 +711,7 @@ GFXDECODE_END
 
 /* Machine Driver */
 
-static MACHINE_DRIVER_START( sslam )
-
-	MDRV_DRIVER_DATA( sslam_state )
+static MACHINE_CONFIG_START( sslam, sslam_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -741,11 +740,9 @@ static MACHINE_DRIVER_START( sslam )
 
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( powerbls )
-
-	MDRV_DRIVER_DATA( sslam_state )
+static MACHINE_CONFIG_START( powerbls, sslam_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -774,7 +771,7 @@ static MACHINE_DRIVER_START( powerbls )
 
 	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH)	/* verified on original PCB */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* maybe one dump is bad .. which? -> 2nd set was verified good from 2 pcbs */
 
@@ -931,7 +928,7 @@ ROM_END
 
 static DRIVER_INIT( sslam )
 {
-	sslam_state *state = (sslam_state *)machine->driver_data;
+	sslam_state *state = machine->driver_data<sslam_state>();
 	state->track = 0;
 	state->melody = 0;
 	state->bar = 0;
@@ -946,7 +943,7 @@ static DRIVER_INIT( sslam )
 
 static DRIVER_INIT( powerbls )
 {
-	sslam_state *state = (sslam_state *)machine->driver_data;
+	sslam_state *state = machine->driver_data<sslam_state>();
 
 	state_save_register_global(machine, state->oki_control);
 	state_save_register_global(machine, state->oki_command);

@@ -88,9 +88,10 @@ struct _pic16c62x_state
 
 
 	legacy_cpu_device *device;
-	const	address_space *program;
-	const	address_space *data;
-	const	address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *data;
+	address_space *io;
 };
 
 INLINE pic16c62x_state *get_safe_token(running_device *device)
@@ -126,16 +127,16 @@ struct _pic16c62x_instruction
 
 INLINE void update_internalram_ptr(pic16c62x_state *cpustate)
 {
-	cpustate->internalram = (UINT8 *)memory_get_write_ptr(cpustate->data, 0x00);
+	cpustate->internalram = (UINT8 *)cpustate->data->get_write_ptr(0x00);
 }
 
-#define PIC16C62x_RDOP(A)         (memory_decrypted_read_word(cpustate->program, (A)<<1))
-#define PIC16C62x_RAM_RDMEM(A)    ((UINT8)memory_read_byte_8le(cpustate->data, A))
-#define PIC16C62x_RAM_WRMEM(A,V)  (memory_write_byte_8le(cpustate->data, A,V))
-#define PIC16C62x_In(Port)        ((UINT8)memory_read_byte_8le(cpustate->io, (Port)))
-#define PIC16C62x_Out(Port,Value) (memory_write_byte_8le(cpustate->io, (Port),Value))
+#define PIC16C62x_RDOP(A)         (cpustate->direct->read_decrypted_word((A)<<1))
+#define PIC16C62x_RAM_RDMEM(A)    ((UINT8)cpustate->data->read_byte(A))
+#define PIC16C62x_RAM_WRMEM(A,V)  (cpustate->data->write_byte(A,V))
+#define PIC16C62x_In(Port)        ((UINT8)cpustate->io->read_byte((Port)))
+#define PIC16C62x_Out(Port,Value) (cpustate->io->write_byte((Port),Value))
 /************  Read the state of the T0 Clock input signal  ************/
-#define PIC16C62x_T0_In           (memory_read_byte_8le(cpustate->io, PIC16C62x_T0) >> 4)
+#define PIC16C62x_T0_In           (cpustate->io->read_byte(PIC16C62x_T0) >> 4)
 
 #define M_RDRAM(A)		(((A) == 0) ? cpustate->internalram[0] : PIC16C62x_RAM_RDMEM(A))
 #define M_WRTRAM(A,V)	do { if ((A) == 0) cpustate->internalram[0] = (V); else PIC16C62x_RAM_WRMEM(A,V); } while (0)
@@ -837,6 +838,7 @@ static CPU_INIT( pic16c62x )
 
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 

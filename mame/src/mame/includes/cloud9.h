@@ -4,19 +4,21 @@
 
 *************************************************************************/
 
-class cloud9_state
+#include "cpu/m6502/m6502.h"
+#include "machine/x2212.h"
+
+class cloud9_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cloud9_state(machine)); }
-
-	cloud9_state(running_machine &machine) { }
+	cloud9_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  maincpu(*this, "maincpu"),
+		  nvram(*this, "nvram") { }
 
 	/* memory pointers */
 	UINT8 *     videoram;
 	UINT8 *     spriteram;
 	UINT8 *     paletteram;
-//  UINT8 *     nvram_stage;    // currently this uses generic nvram handlers
-//  UINT8 *     nvram;      // currently this uses generic nvram handlers
 
 	/* video-related */
 	const UINT8 *syncprom;
@@ -34,7 +36,8 @@ public:
 	UINT8       irq_state;
 
 	/* devices */
-	running_device *maincpu;
+	required_device<m6502_device> maincpu;
+	required_device<x2212_device> nvram;
 };
 
 

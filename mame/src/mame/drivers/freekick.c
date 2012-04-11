@@ -58,13 +58,13 @@ static WRITE8_HANDLER( coin_w )
 
 static WRITE8_HANDLER( spinner_select_w )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	state->spinner = data & 1;
 }
 
 static READ8_HANDLER( spinner_r )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	return input_port_read(space->machine, state->spinner ? "IN3" : "IN2");
 }
 
@@ -75,20 +75,20 @@ static WRITE8_HANDLER( pbillrd_bankswitch_w )
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	state->nmi_en = data & 1;
 }
 
 static INTERRUPT_GEN( freekick_irqgen )
 {
-	freekick_state *state = (freekick_state *)device->machine->driver_data;
+	freekick_state *state = device->machine->driver_data<freekick_state>();
 	if (state->nmi_en)
 		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( oigas_5_w )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	if (data > 0xc0 && data < 0xe0)
 		state->cnt = 1;
 
@@ -101,7 +101,7 @@ static WRITE8_HANDLER( oigas_5_w )
 
 static READ8_HANDLER( oigas_3_r )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	switch (++state->cnt)
 	{
 	case 2: return ~(state->inval >> 8);
@@ -144,13 +144,13 @@ static READ8_HANDLER( oigas_2_r )
 
 static READ8_HANDLER( freekick_ff_r )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	return state->ff_data;
 }
 
 static WRITE8_HANDLER( freekick_ff_w )
 {
-	freekick_state *state = (freekick_state *)space->machine->driver_data;
+	freekick_state *state = space->machine->driver_data<freekick_state>();
 	state->ff_data = data;
 }
 
@@ -513,19 +513,19 @@ INPUT_PORTS_END
 
 static WRITE8_DEVICE_HANDLER( snd_rom_addr_l_w )
 {
-	freekick_state *state = (freekick_state *)device->machine->driver_data;
+	freekick_state *state = device->machine->driver_data<freekick_state>();
 	state->romaddr = (state->romaddr & 0xff00) | data;
 }
 
 static WRITE8_DEVICE_HANDLER( snd_rom_addr_h_w )
 {
-	freekick_state *state = (freekick_state *)device->machine->driver_data;
+	freekick_state *state = device->machine->driver_data<freekick_state>();
 	state->romaddr = (state->romaddr & 0x00ff) | (data << 8);
 }
 
 static READ8_DEVICE_HANDLER( snd_rom_r )
 {
-	freekick_state *state = (freekick_state *)device->machine->driver_data;
+	freekick_state *state = device->machine->driver_data<freekick_state>();
 	return memory_region(device->machine, "user1")[state->romaddr & 0x7fff];
 }
 
@@ -596,7 +596,7 @@ GFXDECODE_END
 
 static MACHINE_START( freekick )
 {
-	freekick_state *state = (freekick_state *)machine->driver_data;
+	freekick_state *state = machine->driver_data<freekick_state>();
 
 	state_save_register_global(machine, state->romaddr);
 	state_save_register_global(machine, state->spinner);
@@ -606,7 +606,7 @@ static MACHINE_START( freekick )
 
 static MACHINE_RESET( freekick )
 {
-	freekick_state *state = (freekick_state *)machine->driver_data;
+	freekick_state *state = machine->driver_data<freekick_state>();
 
 	state->romaddr = 0;
 	state->spinner = 0;
@@ -623,7 +623,7 @@ static MACHINE_START( pbillrd )
 
 static MACHINE_START( oigas )
 {
-	freekick_state *state = (freekick_state *)machine->driver_data;
+	freekick_state *state = machine->driver_data<freekick_state>();
 
 	state_save_register_global(machine, state->inval);
 	state_save_register_global(machine, state->outval);
@@ -634,7 +634,7 @@ static MACHINE_START( oigas )
 
 static MACHINE_RESET( oigas )
 {
-	freekick_state *state = (freekick_state *)machine->driver_data;
+	freekick_state *state = machine->driver_data<freekick_state>();
 
 	MACHINE_RESET_CALL(freekick);
 
@@ -643,8 +643,7 @@ static MACHINE_RESET( oigas )
 	state->cnt = 0;
 }
 
-static MACHINE_DRIVER_START( base )
-	MDRV_DRIVER_DATA(freekick_state)
+static MACHINE_CONFIG_START( base, freekick_state )
 
 	MDRV_CPU_ADD("maincpu",Z80, 18432000/6)	//confirmed
 	MDRV_CPU_PROGRAM_MAP(pbillrd_map)
@@ -680,17 +679,15 @@ static MACHINE_DRIVER_START( base )
 
 	MDRV_SOUND_ADD("sn4", SN76496, 12000000/4)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pbillrd )
-	MDRV_IMPORT_FROM(base)
+static MACHINE_CONFIG_DERIVED( pbillrd, base )
 
 	MDRV_MACHINE_START(pbillrd)
 	MDRV_MACHINE_RESET(freekick)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( freekickb )
-	MDRV_IMPORT_FROM(base)
+static MACHINE_CONFIG_DERIVED( freekickb, base )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(freekickb_map)
@@ -703,10 +700,9 @@ static MACHINE_DRIVER_START( freekickb )
 	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
 	MDRV_VIDEO_UPDATE(freekick)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gigas )
-	MDRV_IMPORT_FROM(base)
+static MACHINE_CONFIG_DERIVED( gigas, base )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gigas_map)
@@ -716,16 +712,15 @@ static MACHINE_DRIVER_START( gigas )
 	MDRV_MACHINE_RESET(freekick)
 
 	MDRV_VIDEO_UPDATE(gigas)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( oigas )
-	MDRV_IMPORT_FROM(gigas)
+static MACHINE_CONFIG_DERIVED( oigas, gigas )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(oigas_io_map)
 
 	MDRV_MACHINE_START(oigas)
 	MDRV_MACHINE_RESET(oigas)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1111,8 +1106,8 @@ ROM_END
 
 static DRIVER_INIT(gigasb)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0xbfff, memory_region(machine, "maincpu") + 0x10000);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	space->set_decrypted_region(0x0000, 0xbfff, memory_region(machine, "maincpu") + 0x10000);
 }
 
 

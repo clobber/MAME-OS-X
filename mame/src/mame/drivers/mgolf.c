@@ -7,12 +7,11 @@
 #include "emu.h"
 #include "cpu/m6502/m6502.h"
 
-class mgolf_state
+class mgolf_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mgolf_state(machine)); }
-
-	mgolf_state(running_machine &machine) { }
+	mgolf_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8*   video_ram;
@@ -33,7 +32,7 @@ public:
 
 static TILE_GET_INFO( get_tile_info )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	UINT8 code = state->video_ram[tile_index];
 
 	SET_TILE_INFO(0, code, code >> 7, 0);
@@ -42,7 +41,7 @@ static TILE_GET_INFO( get_tile_info )
 
 static WRITE8_HANDLER( mgolf_vram_w )
 {
-	mgolf_state *state = (mgolf_state *)space->machine->driver_data;
+	mgolf_state *state = space->machine->driver_data<mgolf_state>();
 	state->video_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
@@ -50,14 +49,14 @@ static WRITE8_HANDLER( mgolf_vram_w )
 
 static VIDEO_START( mgolf )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
 static VIDEO_UPDATE( mgolf )
 {
-	mgolf_state *state = (mgolf_state *)screen->machine->driver_data;
+	mgolf_state *state = screen->machine->driver_data<mgolf_state>();
 	int i;
 
 	/* draw playfield */
@@ -86,7 +85,7 @@ static VIDEO_UPDATE( mgolf )
 
 static void update_plunger( running_machine *machine )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	UINT8 val = input_port_read(machine, "BUTTON");
 
 	if (state->prev != val)
@@ -108,7 +107,7 @@ static void update_plunger( running_machine *machine )
 
 static TIMER_CALLBACK( interrupt_callback )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	int scanline = param;
 
 	update_plunger(machine);
@@ -126,14 +125,14 @@ static TIMER_CALLBACK( interrupt_callback )
 
 static double calc_plunger_pos(running_machine *machine)
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	return (attotime_to_double(timer_get_time(machine)) - attotime_to_double(state->time_released)) * (attotime_to_double(state->time_released) - attotime_to_double(state->time_pushed) + 0.2);
 }
 
 
 static READ8_HANDLER( mgolf_wram_r )
 {
-	mgolf_state *state = (mgolf_state *)space->machine->driver_data;
+	mgolf_state *state = space->machine->driver_data<mgolf_state>();
 	return state->video_ram[0x380 + offset];
 }
 
@@ -176,7 +175,7 @@ static READ8_HANDLER( mgolf_misc_r )
 
 static WRITE8_HANDLER( mgolf_wram_w )
 {
-	mgolf_state *state = (mgolf_state *)space->machine->driver_data;
+	mgolf_state *state = space->machine->driver_data<mgolf_state>();
 	state->video_ram[0x380 + offset] = data;
 }
 
@@ -302,7 +301,7 @@ GFXDECODE_END
 
 static MACHINE_START( mgolf )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -312,7 +311,7 @@ static MACHINE_START( mgolf )
 
 static MACHINE_RESET( mgolf )
 {
-	mgolf_state *state = (mgolf_state *)machine->driver_data;
+	mgolf_state *state = machine->driver_data<mgolf_state>();
 	timer_set(machine, machine->primary_screen->time_until_pos(16), NULL, 16, interrupt_callback);
 
 	state->mask = 0;
@@ -320,10 +319,7 @@ static MACHINE_RESET( mgolf )
 }
 
 
-static MACHINE_DRIVER_START( mgolf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mgolf_state)
+static MACHINE_CONFIG_START( mgolf, mgolf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, 12096000 / 16) /* ? */
@@ -347,7 +343,7 @@ static MACHINE_DRIVER_START( mgolf )
 	MDRV_VIDEO_UPDATE(mgolf)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( mgolf )

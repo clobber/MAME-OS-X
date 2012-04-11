@@ -83,7 +83,7 @@
 
 static WRITE8_DEVICE_HANDLER( ay8910_porta_w )
 {
-	arabian_state *state = (arabian_state *)device->machine->driver_data;
+	arabian_state *state = device->machine->driver_data<arabian_state>();
 
 	/*
         bit 7 = ENA
@@ -98,7 +98,7 @@ static WRITE8_DEVICE_HANDLER( ay8910_porta_w )
 
 static WRITE8_DEVICE_HANDLER( ay8910_portb_w )
 {
-	arabian_state *state = (arabian_state *)device->machine->driver_data;
+	arabian_state *state = device->machine->driver_data<arabian_state>();
 
 	/*
         bit 5 = /IREQ to custom CPU
@@ -125,7 +125,7 @@ static WRITE8_DEVICE_HANDLER( ay8910_portb_w )
 
 static READ8_HANDLER( custom_cpu_r )
 {
-	arabian_state *state = (arabian_state *)space->machine->driver_data;
+	arabian_state *state = space->machine->driver_data<arabian_state>();
 
 	/* since we don't have a simulator for the Fujitsu 8841 4-bit microprocessor */
 	/* we have to simulate its behavior; it looks like Arabian reads out of the  */
@@ -171,7 +171,7 @@ static READ8_HANDLER( custom_cpu_r )
 
 static WRITE8_HANDLER( custom_cpu_w )
 {
-	arabian_state *state = (arabian_state *)space->machine->driver_data;
+	arabian_state *state = space->machine->driver_data<arabian_state>();
 
 	state->custom_cpu_ram[0x7f0 + offset] = data;
 }
@@ -179,7 +179,7 @@ static WRITE8_HANDLER( custom_cpu_w )
 
 static void update_flip_state( running_machine *machine )
 {
-	arabian_state *state = (arabian_state *)machine->driver_data;
+	arabian_state *state = machine->driver_data<arabian_state>();
 
 	/* the custom CPU also controls the video flip control line; unfortunately,    */
 	/* it appears that the custom is smart enough to flip the screen itself, based */
@@ -199,7 +199,7 @@ static void update_flip_state( running_machine *machine )
 
 static WRITE8_HANDLER( custom_flip_w )
 {
-	arabian_state *state = (arabian_state *)space->machine->driver_data;
+	arabian_state *state = space->machine->driver_data<arabian_state>();
 
 	state->custom_cpu_ram[0x34b + offset] = data;
 	update_flip_state(space->machine);
@@ -208,7 +208,7 @@ static WRITE8_HANDLER( custom_flip_w )
 
 static WRITE8_HANDLER( custom_cocktail_w )
 {
-	arabian_state *state = (arabian_state *)space->machine->driver_data;
+	arabian_state *state = space->machine->driver_data<arabian_state>();
 
 	state->custom_cpu_ram[0x400 + offset] = data;
 	update_flip_state(space->machine);
@@ -374,7 +374,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( arabian )
 {
-	arabian_state *state = (arabian_state *)machine->driver_data;
+	arabian_state *state = machine->driver_data<arabian_state>();
 
 	state_save_register_global(machine, state->custom_cpu_reset);
 	state_save_register_global(machine, state->custom_cpu_busy);
@@ -382,7 +382,7 @@ static MACHINE_START( arabian )
 
 static MACHINE_RESET( arabian )
 {
-	arabian_state *state = (arabian_state *)machine->driver_data;
+	arabian_state *state = machine->driver_data<arabian_state>();
 
 	state->custom_cpu_reset = 0;
 	state->custom_cpu_busy = 0;
@@ -390,10 +390,7 @@ static MACHINE_RESET( arabian )
 	state->flip_screen = 0;
 }
 
-static MACHINE_DRIVER_START( arabian )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(arabian_state)
+static MACHINE_CONFIG_START( arabian, arabian_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MAIN_OSC/4)
@@ -423,7 +420,7 @@ static MACHINE_DRIVER_START( arabian )
 	MDRV_SOUND_ADD("aysnd", AY8910, MAIN_OSC/4/2)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -441,25 +438,25 @@ ROM_START( arabian )
 	ROM_LOAD( "ic4rev2.90", 0x6000, 0x2000, CRC(32b77b44) SHA1(9d7951e723bc65e3d607f89836f1436b99f2585b) )
 
 	ROM_REGION( 0x10000, "gfx1", 0 )
-	ROM_LOAD( "ic84.91",    0x0000, 0x2000, CRC(c4637822) SHA1(0c73d9a4db925421a535784780ad93bb0f091051) )
-	ROM_LOAD( "ic85.92",    0x2000, 0x2000, CRC(f7c6866d) SHA1(34f545c5f7c152cd59f7be0a72105f739852cd6a) )
-	ROM_LOAD( "ic86.93",    0x4000, 0x2000, CRC(71acd48d) SHA1(cd0bffed351b14c9aebbfc1d3d4d232a5b91a68f) )
-	ROM_LOAD( "ic87.94",    0x6000, 0x2000, CRC(82160b9a) SHA1(03511f6ebcf22ba709a80a565e71acf5bdecbabb) )
+	ROM_LOAD( "tvg-91.ic84", 0x0000, 0x2000, CRC(c4637822) SHA1(0c73d9a4db925421a535784780ad93bb0f091051) )
+	ROM_LOAD( "tvg-92.ic85", 0x2000, 0x2000, CRC(f7c6866d) SHA1(34f545c5f7c152cd59f7be0a72105f739852cd6a) )
+	ROM_LOAD( "tvg-93.ic86", 0x4000, 0x2000, CRC(71acd48d) SHA1(cd0bffed351b14c9aebbfc1d3d4d232a5b91a68f) )
+	ROM_LOAD( "tvg-94.ic87", 0x6000, 0x2000, CRC(82160b9a) SHA1(03511f6ebcf22ba709a80a565e71acf5bdecbabb) )
 ROM_END
 
 
 ROM_START( arabiana )
 	ROM_REGION( 0x10000, "maincpu", 0 )
-	ROM_LOAD( "ic1.87",     0x0000, 0x2000, CRC(51e9a6b1) SHA1(a2e6beab5380eed56972f5625be21b01c7e2082a) )
-	ROM_LOAD( "ic2.88",     0x2000, 0x2000, CRC(1cdcc1ab) SHA1(46886d53cc8a1c1d540fd0e1ddf1811fb256c1f3) )
-	ROM_LOAD( "ic3.89",     0x4000, 0x2000, CRC(b7b7faa0) SHA1(719418b7b7c057acb6d3060cf7061ffacf00798c) )
-	ROM_LOAD( "ic4.90",     0x6000, 0x2000, CRC(dbded961) SHA1(ecc09fa95f6dd58c4ac0e095a89ffd3aae681da4) )
+	ROM_LOAD( "tvg-87.ic1", 0x0000, 0x2000, CRC(51e9a6b1) SHA1(a2e6beab5380eed56972f5625be21b01c7e2082a) )
+	ROM_LOAD( "tvg-88.ic2", 0x2000, 0x2000, CRC(1cdcc1ab) SHA1(46886d53cc8a1c1d540fd0e1ddf1811fb256c1f3) )
+	ROM_LOAD( "tvg-89.ic3", 0x4000, 0x2000, CRC(b7b7faa0) SHA1(719418b7b7c057acb6d3060cf7061ffacf00798c) )
+	ROM_LOAD( "tvg-90.ic4", 0x6000, 0x2000, CRC(dbded961) SHA1(ecc09fa95f6dd58c4ac0e095a89ffd3aae681da4) )
 
 	ROM_REGION( 0x10000, "gfx1", 0 )
-	ROM_LOAD( "ic84.91",    0x0000, 0x2000, CRC(c4637822) SHA1(0c73d9a4db925421a535784780ad93bb0f091051) )
-	ROM_LOAD( "ic85.92",    0x2000, 0x2000, CRC(f7c6866d) SHA1(34f545c5f7c152cd59f7be0a72105f739852cd6a) )
-	ROM_LOAD( "ic86.93",    0x4000, 0x2000, CRC(71acd48d) SHA1(cd0bffed351b14c9aebbfc1d3d4d232a5b91a68f) )
-	ROM_LOAD( "ic87.94",    0x6000, 0x2000, CRC(82160b9a) SHA1(03511f6ebcf22ba709a80a565e71acf5bdecbabb) )
+	ROM_LOAD( "tvg-91.ic84", 0x0000, 0x2000, CRC(c4637822) SHA1(0c73d9a4db925421a535784780ad93bb0f091051) )
+	ROM_LOAD( "tvg-92.ic85", 0x2000, 0x2000, CRC(f7c6866d) SHA1(34f545c5f7c152cd59f7be0a72105f739852cd6a) )
+	ROM_LOAD( "tvg-93.ic86", 0x4000, 0x2000, CRC(71acd48d) SHA1(cd0bffed351b14c9aebbfc1d3d4d232a5b91a68f) )
+	ROM_LOAD( "tvg-94.ic87", 0x6000, 0x2000, CRC(82160b9a) SHA1(03511f6ebcf22ba709a80a565e71acf5bdecbabb) )
 ROM_END
 
 

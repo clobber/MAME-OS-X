@@ -4,12 +4,11 @@
 
 ***************************************************************************/
 
-class espial_state
+class espial_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, espial_state(machine)); }
-
-	espial_state(running_machine &machine) { }
+	espial_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *   videoram;	// espial, zodiack, marineb
 	UINT8 *   colorram;	// espial, marineb

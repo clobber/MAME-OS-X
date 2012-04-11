@@ -19,7 +19,7 @@
 
 static INTERRUPT_GEN( labyrunr_interrupt )
 {
-	labyrunr_state *state = (labyrunr_state *)device->machine->driver_data;
+	labyrunr_state *state = device->machine->driver_data<labyrunr_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
@@ -185,7 +185,7 @@ static const ym2203_interface ym2203_interface_2 =
 
 static MACHINE_START( labyrunr )
 {
-	labyrunr_state *state = (labyrunr_state *)machine->driver_data;
+	labyrunr_state *state = machine->driver_data<labyrunr_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 6, &ROM[0x10000], 0x4000);
@@ -193,10 +193,7 @@ static MACHINE_START( labyrunr )
 	state->k007121 = machine->device("k007121");
 }
 
-static MACHINE_DRIVER_START( labyrunr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(labyrunr_state)
+static MACHINE_CONFIG_START( labyrunr, labyrunr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8? */
@@ -239,7 +236,7 @@ static MACHINE_DRIVER_START( labyrunr )
 	MDRV_SOUND_ROUTE(1, "mono", 0.40)
 	MDRV_SOUND_ROUTE(2, "mono", 0.40)
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

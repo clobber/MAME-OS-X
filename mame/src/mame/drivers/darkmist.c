@@ -27,14 +27,8 @@ TODO:
 #include "cpu/z80/z80.h"
 #include "deprecat.h"
 #include "audio/t5182.h"
+#include "includes/darkmist.h"
 
-
-VIDEO_START(darkmist);
-VIDEO_UPDATE(darkmist);
-PALETTE_INIT(darkmist);
-
-extern UINT8 *darkmist_scroll;
-extern UINT8 *darkmist_spritebank;
 static UINT8 * darkmist_workram;
 
 int darkmist_hw;
@@ -76,7 +70,7 @@ static ADDRESS_MAP_START( memmap, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd681, 0xd681) AM_READ(t5182_sharedram_semaphore_snd_r)
 	AM_RANGE(0xd682, 0xd682) AM_WRITE(t5182_sharedram_semaphore_main_acquire_w)
 	AM_RANGE(0xd683, 0xd683) AM_WRITE(t5182_sharedram_semaphore_main_release_w)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_GENERIC(videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_MEMBER(darkmist_state, videoram)
 	AM_RANGE(0xe000, 0xefff) AM_RAM AM_BASE(&darkmist_workram)
 	AM_RANGE(0xf000, 0xffff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 ADDRESS_MAP_END
@@ -246,7 +240,7 @@ static INTERRUPT_GEN( darkmist_interrupt )
 
 
 
-static MACHINE_DRIVER_START( darkmist )
+static MACHINE_CONFIG_START( darkmist, darkmist_state )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
 	MDRV_CPU_PROGRAM_MAP(memmap)
@@ -278,7 +272,7 @@ static MACHINE_DRIVER_START( darkmist )
 	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( darkmist )
 	ROM_REGION( 0x18000, "maincpu", 0 )
@@ -423,7 +417,7 @@ static void decrypt_snd(running_machine *machine)
 
 static DRIVER_INIT(darkmist)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i, len;
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x10000);
@@ -457,7 +451,7 @@ static DRIVER_INIT(darkmist)
 		decrypt[i] = p;
 	}
 
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, decrypt);
+	space->set_decrypted_region(0x0000, 0x7fff, decrypt);
 	memory_set_bankptr(space->machine, "bank1",&ROM[0x010000]);
 
 	/* adr line swaps */

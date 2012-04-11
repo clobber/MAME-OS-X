@@ -103,13 +103,13 @@ static ADDRESS_MAP_START( paradise_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2004, 0x2004) AM_WRITE(paradise_palbank_w)	// Layers palette bank
 	AM_RANGE(0x2006, 0x2006) AM_WRITE(paradise_rombank_w)	// ROM bank
 	AM_RANGE(0x2007, 0x2007) AM_DEVWRITE("oki2", paradise_okibank_w)	// OKI 1 samples bank
-	AM_RANGE(0x2010, 0x2010) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)	// OKI 0
+	AM_RANGE(0x2010, 0x2010) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)	// OKI 0
 	AM_RANGE(0x2020, 0x2020) AM_READ_PORT("DSW1")
 	AM_RANGE(0x2021, 0x2021) AM_READ_PORT("DSW2")
 	AM_RANGE(0x2022, 0x2022) AM_READ_PORT("P1")
 	AM_RANGE(0x2023, 0x2023) AM_READ_PORT("P2")
 	AM_RANGE(0x2024, 0x2024) AM_READ_PORT("SYSTEM")
-	AM_RANGE(0x2030, 0x2030) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)	// OKI 1
+	AM_RANGE(0x2030, 0x2030) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)	// OKI 1
 	AM_RANGE(0x8000, 0xffff) AM_RAM_WRITE(paradise_pixmap_w) AM_BASE_MEMBER(paradise_state, videoram)	// Pixmap
 ADDRESS_MAP_END
 
@@ -119,7 +119,7 @@ static ADDRESS_MAP_START( torus_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(paradise_flipscreen_w)	// Flip Screen
 	AM_RANGE(0x2004, 0x2004) AM_WRITE(paradise_palbank_w)	// Layers palette bank
 	AM_RANGE(0x2006, 0x2006) AM_WRITE(paradise_rombank_w)	// ROM bank
-	AM_RANGE(0x2010, 0x2010) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)	// OKI 0
+	AM_RANGE(0x2010, 0x2010) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)	// OKI 0
 	AM_RANGE(0x2020, 0x2020) AM_READ_PORT("DSW1")
 	AM_RANGE(0x2021, 0x2021) AM_READ_PORT("DSW2")
 	AM_RANGE(0x2022, 0x2022) AM_READ_PORT("P1")
@@ -543,7 +543,7 @@ GFXDECODE_END
 
 static MACHINE_START( paradise )
 {
-	paradise_state *state = (paradise_state *)machine->driver_data;
+	paradise_state *state = machine->driver_data<paradise_state>();
 	int bank_n = memory_region_length(machine, "maincpu") / 0x4000 - 1;
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
@@ -556,16 +556,13 @@ static MACHINE_START( paradise )
 
 static MACHINE_RESET( paradise )
 {
-	paradise_state *state = (paradise_state *)machine->driver_data;
+	paradise_state *state = machine->driver_data<paradise_state>();
 
 	state->palbank = 0;
 	state->priority = 0;
 }
 
-static MACHINE_DRIVER_START( paradise )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(paradise_state)
+static MACHINE_CONFIG_START( paradise, paradise_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)			/* Z8400B - 6mhz Verified */
@@ -598,18 +595,18 @@ static MACHINE_DRIVER_START( paradise )
 
 	MDRV_OKIM6295_ADD("oki2", XTAL_12MHz/12, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tgtball )
+static MACHINE_CONFIG_DERIVED( tgtball, paradise )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(paradise)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(tgtball_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( torus )
+static MACHINE_CONFIG_DERIVED( torus, paradise )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(paradise)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(torus_map)
 	MDRV_CPU_IO_MAP(torus_io_map)
@@ -619,11 +616,11 @@ static MACHINE_DRIVER_START( torus )
 	MDRV_VIDEO_UPDATE(torus)
 
 	MDRV_DEVICE_REMOVE("oki2")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( madball )
+static MACHINE_CONFIG_DERIVED( madball, paradise )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(paradise)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(torus_map)
 	MDRV_CPU_IO_MAP(torus_io_map)
@@ -633,7 +630,7 @@ static MACHINE_DRIVER_START( madball )
 	MDRV_VIDEO_UPDATE(madball)
 
 	MDRV_DEVICE_REMOVE("oki2")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -1043,21 +1040,21 @@ ROM_END
 
 static DRIVER_INIT (paradise)
 {
-	paradise_state *state = (paradise_state *)machine->driver_data;
+	paradise_state *state = machine->driver_data<paradise_state>();
 	state->sprite_inc = 0x20;
 }
 
 // Inverted flipscreen and sprites are packed in less memory (same number though)
 static DRIVER_INIT (tgtball)
 {
-	paradise_state *state = (paradise_state *)machine->driver_data;
+	paradise_state *state = machine->driver_data<paradise_state>();
 	state->sprite_inc = 4;
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x2001, 0x2001, 0, 0, tgtball_flipscreen_w );
 }
 
 static DRIVER_INIT (torus)
 {
-	paradise_state *state = (paradise_state *)machine->driver_data;
+	paradise_state *state = machine->driver_data<paradise_state>();
 	state->sprite_inc = 4;
 	memory_install_write8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO), 0x2070, 0x2070, 0, 0, torus_coin_counter_w);
 }

@@ -62,7 +62,7 @@
 
 static INTERRUPT_GEN( tutankhm_interrupt )
 {
-	timeplt_state *state = (timeplt_state *)device->machine->driver_data;
+	timeplt_state *state = device->machine->driver_data<timeplt_state>();
 
 	/* flip flops cause the interrupt to be signalled every other frame */
 	state->irq_toggle ^= 1;
@@ -73,7 +73,7 @@ static INTERRUPT_GEN( tutankhm_interrupt )
 
 static WRITE8_HANDLER( irq_enable_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 
 	state->irq_enable = data & 1;
 	if (!state->irq_enable)
@@ -196,7 +196,7 @@ INPUT_PORTS_END
 
 static MACHINE_START( tutankhm )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	memory_configure_bank(machine, "bank1", 0, 16, memory_region(machine, "maincpu") + 0x10000, 0x1000);
 
@@ -210,7 +210,7 @@ static MACHINE_START( tutankhm )
 
 static MACHINE_RESET( tutankhm )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	state->irq_toggle = 0;
 	state->irq_enable = 0;
@@ -218,10 +218,7 @@ static MACHINE_RESET( tutankhm )
 	state->flip_y = 0;
 }
 
-static MACHINE_DRIVER_START( tutankhm )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(timeplt_state)
+static MACHINE_CONFIG_START( tutankhm, timeplt_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, XTAL_18_432MHz/12)	/* 1.5 MHz ??? */
@@ -242,8 +239,8 @@ static MACHINE_DRIVER_START( tutankhm )
 	MDRV_VIDEO_UPDATE(tutankhm)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(timeplt_sound)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(timeplt_sound)
+MACHINE_CONFIG_END
 
 
 /*************************************

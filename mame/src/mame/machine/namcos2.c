@@ -14,6 +14,7 @@ Namco System II
 #include "cpu/m6805/m6805.h"
 #include "includes/namcos21.h"
 #include "includes/namcos2.h"
+#include "machine/nvram.h"
 
 static TIMER_CALLBACK( namcos2_posirq_tick );
 static void InitC148(void);
@@ -105,12 +106,13 @@ ResetAllSubCPUs( running_machine *machine, int state )
 MACHINE_START( namcos2 )
 {
 	namcos2_eeprom = auto_alloc_array(machine, UINT8, namcos2_eeprom_size);
+	machine->device<nvram_device>("nvram")->set_base(namcos2_eeprom, namcos2_eeprom_size);
 	namcos2_posirq_timer = timer_alloc(machine, namcos2_posirq_tick, NULL);
 }
 
 MACHINE_RESET( namcos2 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	mFinalLapProtCount = 0;
 	namcos2_mcu_analog_ctrl = 0;
 	namcos2_mcu_analog_data = 0xaa;
@@ -135,29 +137,6 @@ MACHINE_RESET( namcos2 )
 /*************************************************************/
 /* EEPROM Load/Save and read/write handling                  */
 /*************************************************************/
-
-NVRAM_HANDLER( namcos2 )
-{
-	if (read_or_write)
-		mame_fwrite(file, namcos2_eeprom, namcos2_eeprom_size);
-	else if (file != NULL)
-		mame_fread(file, namcos2_eeprom, namcos2_eeprom_size);
-	else if (memory_region_length(machine, "nvram") == namcos2_eeprom_size)
-		memcpy(namcos2_eeprom, memory_region(machine, "nvram"), namcos2_eeprom_size);
-	else
-	{
-		if( namcos2_gametype == NAMCOS21_STARBLADE )
-		{
-			memset(namcos2_eeprom, 0x00, namcos2_eeprom_size);
-		}
-		else
-		{
-			memset(namcos2_eeprom, 0xff, namcos2_eeprom_size);
-		}
-	}
-}
-
-
 
 WRITE16_HANDLER( namcos2_68k_eeprom_w ){
 	if( ACCESSING_BITS_0_7 )
@@ -486,7 +465,7 @@ static void InitC148(void)
 }
 
 static UINT16
-ReadWriteC148( const address_space *space, offs_t offset, UINT16 data, int bWrite )
+ReadWriteC148( address_space *space, offs_t offset, UINT16 data, int bWrite )
 {
 	offs_t addr = ((offset * 2) + 0x1c0000) & 0x1fe000;
 	running_device *altcpu = NULL;

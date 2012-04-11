@@ -632,7 +632,7 @@ Driver by Takahiro Nogi (nogi@kt.rim.or.jp) 1999/11/06
 static SAMPLES_START( kageki_init_samples )
 {
 	running_machine *machine = device->machine;
-	tnzs_state *state = (tnzs_state *)machine->driver_data;
+	tnzs_state *state = machine->driver_data<tnzs_state>();
 	UINT8 *scan, *src;
 	INT16 *dest;
 	int start, size;
@@ -676,7 +676,7 @@ static SAMPLES_START( kageki_init_samples )
 
 static READ8_DEVICE_HANDLER( kageki_csport_r )
 {
-	tnzs_state *state = (tnzs_state *)device->machine->driver_data;
+	tnzs_state *state = device->machine->driver_data<tnzs_state>();
 	int dsw, dsw1, dsw2;
 
 	dsw1 = input_port_read(device->machine, "DSWA");
@@ -706,7 +706,7 @@ static READ8_DEVICE_HANDLER( kageki_csport_r )
 
 static WRITE8_DEVICE_HANDLER( kageki_csport_w )
 {
-	tnzs_state *state = (tnzs_state *)device->machine->driver_data;
+	tnzs_state *state = device->machine->driver_data<tnzs_state>();
 	char mess[80];
 
 	if (data > 0x3f)
@@ -805,7 +805,7 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( tnzsb_sound_command_w )
 {
-	tnzs_state *state = (tnzs_state *)space->machine->driver_data;
+	tnzs_state *state = space->machine->driver_data<tnzs_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
@@ -1561,7 +1561,7 @@ static const ym2203_interface ym2203_config =
 /* handler called by the 2203 emulator when the internal timers cause an IRQ */
 static void irqhandler( running_device *device, int irq )
 {
-	tnzs_state *state = (tnzs_state *)device->machine->driver_data;
+	tnzs_state *state = device->machine->driver_data<tnzs_state>();
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -1607,10 +1607,7 @@ static const samples_interface tnzs_samples_interface =
 	kageki_init_samples
 };
 
-static MACHINE_DRIVER_START( arknoid2 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( arknoid2, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* verified on pcb */
@@ -1647,13 +1644,10 @@ static MACHINE_DRIVER_START( arknoid2 )
 	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( drtoppel )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( drtoppel, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		/* 6.0 MHz ??? - Main board Crystal is 12MHz */
@@ -1690,13 +1684,10 @@ static MACHINE_DRIVER_START( drtoppel )
 	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tnzs )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( tnzs, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)		/* 6.0 MHz ??? - Main board Crystal is 12MHz */
@@ -1735,13 +1726,10 @@ static MACHINE_DRIVER_START( tnzs )
 	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( insectx )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( insectx, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* verified on pcb */
@@ -1777,13 +1765,10 @@ static MACHINE_DRIVER_START( insectx )
 	MDRV_SOUND_ADD("ymsnd", YM2203, XTAL_12MHz/4) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( kageki )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( kageki, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
@@ -1826,13 +1811,10 @@ static MACHINE_DRIVER_START( kageki )
 	MDRV_SOUND_ADD("samples", SAMPLES, 0)
 	MDRV_SOUND_CONFIG(tnzs_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tnzsb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( tnzsb, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
@@ -1875,12 +1857,10 @@ static MACHINE_DRIVER_START( tnzsb )
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 	MDRV_SOUND_ROUTE(3, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( kabukiz )
-
-	MDRV_IMPORT_FROM(tnzsb)
+static MACHINE_CONFIG_DERIVED( kabukiz, tnzsb )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("sub")
@@ -1898,13 +1878,10 @@ static MACHINE_DRIVER_START( kabukiz )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( jpopnics )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( jpopnics, tnzs_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2) /* Not verified - Main board Crystal is 12MHz */
@@ -1939,7 +1916,7 @@ static MACHINE_DRIVER_START( jpopnics )
 
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_12MHz/4) /* Not verified - Main board Crystal is 12MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

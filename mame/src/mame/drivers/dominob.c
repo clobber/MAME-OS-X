@@ -64,12 +64,11 @@ Notes:
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 
-class dominob_state
+class dominob_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dominob_state(machine)); }
-
-	dominob_state(running_machine &machine) { }
+	dominob_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  spriteram;
@@ -90,7 +89,7 @@ static VIDEO_START( dominob )
 
 static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	dominob_state *state = (dominob_state *)machine->driver_data;
+	dominob_state *state = machine->driver_data<dominob_state>();
 	int offs;
 
 	for (offs = 0; offs < state->spriteram_size; offs += 4)
@@ -120,7 +119,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 static VIDEO_UPDATE( dominob )
 {
-	dominob_state *state = (dominob_state *)screen->machine->driver_data;
+	dominob_state *state = screen->machine->driver_data<dominob_state>();
 	int x,y;
 	int index = 0;
 
@@ -289,10 +288,7 @@ static const ay8910_interface ay8910_config =
 };
 
 
-static MACHINE_DRIVER_START( dominob )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dominob_state)
+static MACHINE_CONFIG_START( dominob, dominob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,XTAL_12MHz/2)
@@ -319,7 +315,7 @@ static MACHINE_DRIVER_START( dominob )
 	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_12MHz/4)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

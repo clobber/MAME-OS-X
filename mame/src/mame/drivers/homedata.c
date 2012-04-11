@@ -226,7 +226,7 @@ Custom: GX61A01
 
 static INTERRUPT_GEN( homedata_irq )
 {
-	homedata_state *state = (homedata_state *)device->machine->driver_data;
+	homedata_state *state = device->machine->driver_data<homedata_state>();
 	state->vblank = 1;
 	cpu_set_input_line(device, M6809_FIRQ_LINE, HOLD_LINE);
 }
@@ -247,7 +247,7 @@ static INTERRUPT_GEN( upd7807_irq )
 
 static READ8_HANDLER( mrokumei_keyboard_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	int res = 0x3f,i;
 	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4" };
 
@@ -283,14 +283,14 @@ static READ8_HANDLER( mrokumei_keyboard_r )
 
 static WRITE8_HANDLER( mrokumei_keyboard_select_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	state->keyb = data;
 }
 
 
 static READ8_HANDLER( mrokumei_sound_io_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	if (state->sndbank & 4)
 		return(soundlatch_r(space, 0));
 	else
@@ -299,7 +299,7 @@ static READ8_HANDLER( mrokumei_sound_io_r )
 
 static WRITE8_HANDLER( mrokumei_sound_bank_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	/* bit 0 = ROM bank
        bit 2 = ROM or soundlatch
      */
@@ -308,7 +308,7 @@ static WRITE8_HANDLER( mrokumei_sound_bank_w )
 
 static WRITE8_HANDLER( mrokumei_sound_io_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	switch (offset & 0xff)
 	{
 		case 0x40:
@@ -322,7 +322,7 @@ static WRITE8_HANDLER( mrokumei_sound_io_w )
 
 static WRITE8_HANDLER( mrokumei_sound_cmd_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
 }
@@ -338,19 +338,19 @@ static WRITE8_HANDLER( mrokumei_sound_cmd_w )
 
 static READ8_HANDLER( reikaids_upd7807_porta_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	return state->upd7807_porta;
 }
 
 static WRITE8_HANDLER( reikaids_upd7807_porta_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	state->upd7807_porta = data;
 }
 
 static WRITE8_HANDLER( reikaids_upd7807_portc_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 
 	/* port C layout:
        7 coin counter
@@ -379,7 +379,7 @@ static WRITE8_HANDLER( reikaids_upd7807_portc_w )
 
 static READ8_HANDLER( reikaids_io_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	int res = input_port_read(space->machine, "IN2");	// bit 4 = coin, bit 5 = service
 
 	res |= BIT(state->upd7807_portc, 2) * 0x01;		// bit 0 = upd7807 status
@@ -397,14 +397,14 @@ static READ8_HANDLER( reikaids_io_r )
 
 static READ8_HANDLER( reikaids_snd_command_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	//logerror("%04x: sndmcd_r (%02x)\n", cpu_get_pc(space->cpu), state->snd_command);
 	return state->snd_command;
 }
 
 static WRITE8_HANDLER( reikaids_snd_command_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	state->snd_command = data;
 	//logerror("%04x: coprocessor_command_w %02x\n", cpu_get_pc(space->cpu), data);
 }
@@ -420,21 +420,21 @@ static WRITE8_HANDLER( reikaids_snd_command_w )
 
 static WRITE8_HANDLER( pteacher_snd_command_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	//logerror("%04x: snd_command_w %02x\n", cpu_get_pc(space->cpu), data);
 	state->from_cpu = data;
 }
 
 static READ8_HANDLER( pteacher_snd_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	//logerror("%04x: pteacher_snd_r %02x\n",cpu_get_pc(space->cpu),to_cpu);
 	return state->to_cpu;
 }
 
 static READ8_HANDLER( pteacher_io_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	/* bit 6: !vblank
      * bit 7: visible page
      * other bits seem unused
@@ -452,7 +452,7 @@ static READ8_HANDLER( pteacher_io_r )
 
 static READ8_HANDLER( pteacher_keyboard_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	static const char *const keynames[] = { "KEY0", "KEY1", "KEY2", "KEY3", "KEY4", "KEY5" };
 	int dips = input_port_read(space->machine, "DSW");
 
@@ -476,7 +476,7 @@ static READ8_HANDLER( pteacher_keyboard_r )
 
 static READ8_HANDLER( pteacher_upd7807_porta_r )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	if (!BIT(state->upd7807_portc, 6))
 		state->upd7807_porta = state->from_cpu;
 	else
@@ -487,20 +487,20 @@ static READ8_HANDLER( pteacher_upd7807_porta_r )
 
 static WRITE8_HANDLER( pteacher_snd_answer_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	state->to_cpu = data;
 	//logerror("%04x: to_cpu = %02x\n", cpu_get_pc(space->cpu), state->to_cpu);
 }
 
 static WRITE8_HANDLER( pteacher_upd7807_porta_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	state->upd7807_porta = data;
 }
 
 static WRITE8_HANDLER( pteacher_upd7807_portc_w )
 {
-	homedata_state *state = (homedata_state *)space->machine->driver_data;
+	homedata_state *state = space->machine->driver_data<homedata_state>();
 	/* port C layout:
        7 coin counter
        6 enable message from main CPU on port A
@@ -1147,7 +1147,7 @@ GFXDECODE_END
 
 static MACHINE_START( homedata )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -1168,7 +1168,7 @@ static MACHINE_START( homedata )
 
 static MACHINE_START( reikaids )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0xc000], 0x4000);
@@ -1185,7 +1185,7 @@ static MACHINE_START( reikaids )
 
 static MACHINE_START( pteacher )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0xc000], 0x4000);
@@ -1203,7 +1203,7 @@ static MACHINE_START( pteacher )
 
 static MACHINE_RESET( homedata )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 
 	state->visible_page = 0;
 	state->flipscreen = 0;
@@ -1221,8 +1221,8 @@ static MACHINE_RESET( homedata )
 
 static MACHINE_RESET( pteacher )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	homedata_state *state = machine->driver_data<homedata_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	/* on reset, ports are set as input (high impedance), therefore 0xff output */
 	pteacher_upd7807_portc_w(space, 0, 0xff);
@@ -1238,8 +1238,8 @@ static MACHINE_RESET( pteacher )
 
 static MACHINE_RESET( reikaids )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	homedata_state *state = machine->driver_data<homedata_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	/* on reset, ports are set as input (high impedance), therefore 0xff output */
 	reikaids_upd7807_portc_w(space, 0, 0xff);
@@ -1252,10 +1252,7 @@ static MACHINE_RESET( reikaids )
 	state->gfx_bank[1] = 0;	// this is not used by reikaids
 }
 
-static MACHINE_DRIVER_START( mrokumei )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(homedata_state)
+static MACHINE_CONFIG_START( mrokumei, homedata_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 16000000/4)	/* 4MHz ? */
@@ -1294,7 +1291,7 @@ static MACHINE_DRIVER_START( mrokumei )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /**************************************************************************/
@@ -1321,10 +1318,7 @@ static const UPD7810_CONFIG upd_config =
 };
 
 
-static MACHINE_DRIVER_START( reikaids )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(homedata_state)
+static MACHINE_CONFIG_START( reikaids, homedata_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 16000000/4)	/* 4MHz ? */
@@ -1370,15 +1364,12 @@ static MACHINE_DRIVER_START( reikaids )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /**************************************************************************/
 
-static MACHINE_DRIVER_START( pteacher )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(homedata_state)
+static MACHINE_CONFIG_START( pteacher, homedata_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 16000000/4)	/* 4MHz ? */
@@ -1421,25 +1412,21 @@ static MACHINE_DRIVER_START( pteacher )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mjkinjas )
-
-	MDRV_IMPORT_FROM(pteacher)
+static MACHINE_CONFIG_DERIVED( mjkinjas, pteacher )
 
 	MDRV_CPU_MODIFY("audiocpu")
 	MDRV_CPU_CLOCK(11000000)	/* 11MHz ? */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( lemnangl )
-
-	MDRV_IMPORT_FROM(pteacher)
+static MACHINE_CONFIG_DERIVED( lemnangl, pteacher )
 
 	/* video hardware */
 	MDRV_GFXDECODE(lemnangl)
 
 	MDRV_VIDEO_START(lemnangl)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static INPUT_PORTS_START( mirderby )
 INPUT_PORTS_END
@@ -1547,10 +1534,7 @@ GFXDECODE_END
 
 /* clocks are 16mhz and 9mhz */
 
-static MACHINE_DRIVER_START( mirderby )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(homedata_state)
+static MACHINE_CONFIG_START( mirderby, homedata_state )
 
 	MDRV_CPU_ADD("maincpu", M6809, 16000000/8)	/* 2 Mhz */
 	MDRV_CPU_PROGRAM_MAP(cpu2_map)
@@ -1592,7 +1576,7 @@ static MACHINE_DRIVER_START( mirderby )
 	MDRV_SOUND_ROUTE(1, "mono", 0.25)
 	MDRV_SOUND_ROUTE(2, "mono", 0.25)
 	MDRV_SOUND_ROUTE(3, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /**************************************************************************/
 
@@ -2060,13 +2044,13 @@ static DRIVER_INIT( mjikaga )
 
 static DRIVER_INIT( reikaids )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 	state->priority = 0;
 }
 
 static DRIVER_INIT( battlcry )
 {
-	homedata_state *state = (homedata_state *)machine->driver_data;
+	homedata_state *state = machine->driver_data<homedata_state>();
 	state->priority = 1; /* priority and initial value for bank write */
 }
 

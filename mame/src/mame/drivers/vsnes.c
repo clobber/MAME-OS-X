@@ -1370,14 +1370,10 @@ static INPUT_PORTS_START( vspinblj )
 
 	PORT_MODIFY("IN0")	/* IN0 */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(1)		/* Right flipper */
+	PORT_BIT( 0x02, IP_ACTIVE_HIGH, IPT_BUTTON2 ) PORT_PLAYER(2)
 
 	PORT_MODIFY("IN1")	/* IN1 */
 	PORT_BIT( 0x01, IP_ACTIVE_HIGH, IPT_BUTTON1 ) PORT_PLAYER(1)		/* Left flipper */
-
-	PORT_START("COIN")	/* IN2 */
-	PORT_BIT( 0x04, IP_ACTIVE_HIGH, IPT_SERVICE1 )		/* service credit? */
-	PORT_BIT( 0x20, IP_ACTIVE_HIGH, IPT_COIN1 )
-	PORT_BIT( 0x40, IP_ACTIVE_HIGH, IPT_COIN2 )
 INPUT_PORTS_END
 
 static INPUT_PORTS_START( goonies )
@@ -1645,7 +1641,7 @@ static const nes_interface nes_interface_2 =
 	"sub"
 };
 
-static MACHINE_DRIVER_START( vsnes )
+static MACHINE_CONFIG_START( vsnes, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", N2A03,N2A03_DEFAULTCLOCK)
@@ -1678,37 +1674,33 @@ static MACHINE_DRIVER_START( vsnes )
 
 	MDRV_SOUND_ADD("dac1", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( jajamaru )
-	MDRV_IMPORT_FROM( vsnes )
+static MACHINE_CONFIG_DERIVED( jajamaru, vsnes )
 
 	MDRV_DEVICE_REMOVE( "ppu1" )
 	MDRV_PPU2C05_01_ADD("ppu1", vsnes_ppu_interface_1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mightybj )
-	MDRV_IMPORT_FROM( vsnes )
+static MACHINE_CONFIG_DERIVED( mightybj, vsnes )
 
 	MDRV_DEVICE_REMOVE( "ppu1" )
 	MDRV_PPU2C05_02_ADD("ppu1", vsnes_ppu_interface_1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( vsgshoe )
-	MDRV_IMPORT_FROM( vsnes )
+static MACHINE_CONFIG_DERIVED( vsgshoe, vsnes )
 
 	MDRV_DEVICE_REMOVE( "ppu1" )
 	MDRV_PPU2C05_03_ADD("ppu1", vsnes_ppu_interface_1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( topgun )
-	MDRV_IMPORT_FROM( vsnes )
+static MACHINE_CONFIG_DERIVED( topgun, vsnes )
 
 	MDRV_DEVICE_REMOVE( "ppu1" )
 	MDRV_PPU2C05_04_ADD("ppu1", vsnes_ppu_interface_1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( vsdual )
+static MACHINE_CONFIG_START( vsdual, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", N2A03,N2A03_DEFAULTCLOCK)
@@ -1759,7 +1751,7 @@ static MACHINE_DRIVER_START( vsdual )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /******************************************************************************/

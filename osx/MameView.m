@@ -500,20 +500,26 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     [mAudioController osd_init: machine];
     [mTimingController osd_init: machine];
     
-    mTarget = render_target_alloc(machine, NULL, FALSE);
+    //mTarget = render_target_alloc(machine, NULL, FALSE);
+    mTarget = machine->render().target_alloc();
     
-    render_target_set_orientation(mTarget, ROT0);
-    render_target_set_layer_config(mTarget, LAYER_CONFIG_DEFAULT);
-    render_target_set_view(mTarget, 0);
+    //render_target_set_orientation(mTarget, ROT0);
+    //render_target_set_layer_config(mTarget, LAYER_CONFIG_DEFAULT);
+    //render_target_set_view(mTarget, 0);
+    mTarget->set_orientation(ROT0);
+    mTarget->layer_config();
+    mTarget->set_view(0);
 
     INT32 minimumWidth;
     INT32 minimumHeight;
-    render_target_get_minimum_size(mTarget, &minimumWidth, &minimumHeight);
+    //render_target_get_minimum_size(mTarget, &minimumWidth, &minimumHeight);
+    mTarget->compute_minimum_size(minimumWidth, minimumHeight);
     [self updateDisplayProperties];
     INT32 visibleWidth, visibleHeight;
-    render_target_compute_visible_area(mTarget, minimumWidth, minimumHeight,
+    //render_target_compute_visible_area
+    mTarget->compute_visible_area(minimumWidth, minimumHeight,
                                        mPixelAspectRatio, ROT0,
-                                       &visibleWidth, &visibleHeight);
+                                       visibleWidth, visibleHeight);
     JRLogInfo(@"Aspect ratio: %f, Minimum size: %dx%d, visible size: %dx%d",
               mPixelAspectRatio, minimumWidth, minimumHeight, visibleWidth,
               visibleHeight);
@@ -530,11 +536,12 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     const device_config * primaryScreen = screen_first(*mMachine->config);
     double targetRefresh = 60.0;
     // determine the refresh rate of the primary screen
+    const screen_device_config *primary_screen = screen_first(*machine->config);
     if (primaryScreen != NULL)
     {
-        //FIXME: Fix so this does not default to 60.0
         //const screen_config * config = (const screen_config*)primaryScreen->inline_config;
         //targetRefresh = ATTOSECONDS_TO_HZ(config->refresh);
+        targetRefresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
     }
     JRLogInfo(@"Target refresh: %.3f", targetRefresh);
     
@@ -608,7 +615,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     [self stopAnimation];
     [mAudioController osd_stop_audio_stream];
     [mRenderer osd_exit];
-    render_target_free(mTarget);
+    //render_target_free(mTarget);
+    machine->render().target_free(mTarget);
     
     [mWindowedCiContext release];
     mWindowedCiContext = nil;
@@ -1357,10 +1365,12 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     [self resize];
     
     NSOpenGLContext * currentContext = [self activeOpenGLContext];
+    static osd_lock *render_lock;
+    render_lock = osd_lock_alloc();
     
     if (mRenderInCoreVideoThread)
     {
-        const render_primitive_list * primitives = 0;
+        render_primitive_list * primitives = 0;
         NSSize renderSize;
         @synchronized(self)
         {
@@ -1371,8 +1381,12 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         
         if (primitives != 0)
         {
-            osd_lock_acquire(primitives->lock);
-            if (primitives->head != NULL)
+            osd_lock_acquire(render_lock);
+            //osd_lock_acquire(primitives->lock);
+            //osd_lock_acquire(osd_lock_alloc());
+            //primitives->acquire_lock();
+            //if (primitives->head != NULL)
+            if (primitives->first() != NULL)
             {
                 [mRenderer renderFrame: primitives
                               withSize: renderSize];
@@ -1380,7 +1394,9 @@ NSString * MameExitStatusKey = @"MameExitStatus";
                 chudRecordSignPost(MameRenderFrame, chudPointSignPost, primitives->head, 0, 0, 0);
 #endif
             }
-            osd_lock_release(primitives->lock);
+            //osd_lock_release(primitives->lock);
+            //osd_lock_release(osd_lock_alloc());
+            osd_lock_release(render_lock);
         }
     }
     
@@ -1586,32 +1602,38 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         code = 'W';
     }
 
-    render_target_set_max_update_rate(mTarget, mRefreshRate);
+    //render_target_set_max_update_rate(mTarget, mRefreshRate);
+    mTarget->set_max_update_rate(mRefreshRate);
     if (mRenderInCoreVideoThread)
     {
-        render_target_set_bounds(mTarget, renderSize.width, renderSize.height,
-                                 mPixelAspectRatio);
-        const render_primitive_list * primitives = render_target_get_primitives(mTarget);
+        //render_target_set_bounds(mTarget, renderSize.width, renderSize.height,
+        //                         mPixelAspectRatio);
+        mTarget->set_bounds(renderSize.width, renderSize.height, mPixelAspectRatio);
+        //const render_primitive_list * primitives = render_target_get_primitives(mTarget);
+        render_primitive_list & primitives = mTarget->get_primitives();
 #ifdef DEBUG_INSTRUMENTED
         chudRecordSignPost(MameGetPrimitives, chudPointSignPost, primitives->head, 0, 0, 0);
 #endif
         @synchronized(self)
         {
             mRenderSize = renderSize;
-            mPrimitives = primitives;
+            //mPrimitives = primitives;
+            mPrimitives = &primitives;
         }
     }
     else
     {
         [self lockOpenGLLock];
         
-        render_target_set_bounds(mTarget, renderSize.width, renderSize.height,
-                                 mPixelAspectRatio);
-        const render_primitive_list * primitives = render_target_get_primitives(mTarget);
+        //render_target_set_bounds(mTarget, renderSize.width, renderSize.height,
+        //                         mPixelAspectRatio);
+        mTarget->set_bounds(renderSize.width, renderSize.height, mPixelAspectRatio);
+        //const render_primitive_list * primitives = render_target_get_primitives(mTarget);
+        render_primitive_list & primitives = mTarget->get_primitives();
 #ifdef DEBUG_INSTRUMENTED
         chudRecordSignPost(MameGetPrimitives, chudPointSignPost, primitives->head, 0, 0, 0);
 #endif
-        [mRenderer renderFrame: primitives
+        [mRenderer renderFrame: &primitives
                       withSize: renderSize];
 #ifdef DEBUG_INSTRUMENTED
         chudRecordSignPost(MameRenderFrame, chudPointSignPost, primitives->head, 0, 0, 0);

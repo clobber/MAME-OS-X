@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class bottom9_state
+class bottom9_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bottom9_state(machine)); }
-
-	bottom9_state(running_machine &machine) { }
+	bottom9_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 //  UINT8 *    paletteram;    // currently this uses generic palette handling

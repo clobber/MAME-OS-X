@@ -120,7 +120,8 @@ struct _tms32031_state
 	tms32031_iack_func	iack_w;
 	device_irq_callback	irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 };
 
 INLINE tms32031_state *get_safe_token(running_device *device)
@@ -146,10 +147,10 @@ static UINT32 boot_loader(tms32031_state *tms, UINT32 boot_rom_addr);
     MEMORY ACCESSORS
 ***************************************************************************/
 
-#define ROPCODE(T,pc)		memory_decrypted_read_dword((T)->program, (pc) << 2)
+#define ROPCODE(T,pc)		(T)->direct->read_decrypted_dword((pc) << 2)
 
-#define RMEM(T,addr)		memory_read_dword_32le((T)->program, (addr) << 2)
-#define WMEM(T,addr,data)	memory_write_dword_32le((T)->program, (addr) << 2, data)
+#define RMEM(T,addr)		(T)->program->read_dword((addr) << 2)
+#define WMEM(T,addr,data)	(T)->program->write_dword((addr) << 2, data)
 
 
 
@@ -374,6 +375,7 @@ static CPU_INIT( tms32031 )
 	tms->irq_callback = irqcallback;
 	tms->device = device;
 	tms->program = device->space(AS_PROGRAM);
+	tms->direct = &tms->program->direct();
 
 	/* copy in the xf write routines */
 	tms->bootoffset = (configdata != NULL) ? configdata->bootoffset : 0;

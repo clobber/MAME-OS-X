@@ -336,9 +336,11 @@ ADDRESS_MAP_END
 
 */
 
+#ifdef UNUSED_CODE
 static ADDRESS_MAP_START( sound_prog_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0xffff) AM_ROM
 ADDRESS_MAP_END
+#endif
 
 /* Unknown R/W:
 
@@ -562,7 +564,7 @@ static const hd63484_interface jwildb52_hd63484_intf = { 1 };
 *    Machine Drivers     *
 *************************/
 
-static MACHINE_DRIVER_START( jwildb52 )
+static MACHINE_CONFIG_START( jwildb52, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, MAIN_CLOCK/9)	/* 2 MHz */
@@ -593,7 +595,7 @@ static MACHINE_DRIVER_START( jwildb52 )
 	MDRV_VIDEO_START(jwildb52)
 	MDRV_VIDEO_UPDATE(jwildb52)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************

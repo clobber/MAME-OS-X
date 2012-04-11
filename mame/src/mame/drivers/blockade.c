@@ -58,7 +58,7 @@
 
 static INTERRUPT_GEN( blockade_interrupt )
 {
-	blockade_state *state = (blockade_state *)device->machine->driver_data;
+	blockade_state *state = device->machine->driver_data<blockade_state>();
 	cpu_resume(device, SUSPEND_ANY_REASON);
 
 	if ((input_port_read(device->machine, "IN0") & 0x80) == 0)
@@ -76,7 +76,7 @@ static INTERRUPT_GEN( blockade_interrupt )
 
 static READ8_HANDLER( blockade_input_port_0_r )
 {
-	blockade_state *state = (blockade_state *)space->machine->driver_data;
+	blockade_state *state = space->machine->driver_data<blockade_state>();
 	/* coin latch is bit 7 */
 	UINT8 temp = (input_port_read(space->machine, "IN0") & 0x7f);
 
@@ -85,7 +85,7 @@ static READ8_HANDLER( blockade_input_port_0_r )
 
 static WRITE8_HANDLER( blockade_coin_latch_w )
 {
-	blockade_state *state = (blockade_state *)space->machine->driver_data;
+	blockade_state *state = space->machine->driver_data<blockade_state>();
 
 	if (data & 0x80)
 	{
@@ -466,7 +466,7 @@ static PALETTE_INIT( bw )
 
 static MACHINE_START( blockade )
 {
-	blockade_state *state = (blockade_state *)machine->driver_data;
+	blockade_state *state = machine->driver_data<blockade_state>();
 
 	state_save_register_global(machine, state->coin_latch);
 	state_save_register_global(machine, state->just_been_reset);
@@ -474,16 +474,13 @@ static MACHINE_START( blockade )
 
 static MACHINE_RESET( blockade )
 {
-	blockade_state *state = (blockade_state *)machine->driver_data;
+	blockade_state *state = machine->driver_data<blockade_state>();
 
 	state->coin_latch = 1;
 	state->just_been_reset = 0;
 }
 
-static MACHINE_DRIVER_START( blockade )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(blockade_state)
+static MACHINE_CONFIG_START( blockade, blockade_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK/10)
@@ -519,24 +516,21 @@ static MACHINE_DRIVER_START( blockade )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(blockade)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( comotion )
-	MDRV_IMPORT_FROM(blockade)
+static MACHINE_CONFIG_DERIVED( comotion, blockade )
 	MDRV_PALETTE_INIT(bw)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( blasto )
-	MDRV_IMPORT_FROM(blockade)
+static MACHINE_CONFIG_DERIVED( blasto, blockade )
 	MDRV_GFXDECODE(blasto)
 	MDRV_PALETTE_INIT(bw)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( hustle )
-	MDRV_IMPORT_FROM(blockade)
+static MACHINE_CONFIG_DERIVED( hustle, blockade )
 	MDRV_GFXDECODE(blasto)
 	MDRV_PALETTE_INIT(yellow)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

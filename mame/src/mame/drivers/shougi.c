@@ -87,12 +87,11 @@ PROM  : Type MB7051
 #include "sound/ay8910.h"
 #include "video/resnet.h"
 
-class shougi_state
+class shougi_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, shougi_state(machine)); }
-
-	shougi_state(running_machine &machine) { }
+	shougi_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *videoram;
 	int nmi_enabled;
@@ -163,7 +162,7 @@ static PALETTE_INIT( shougi )
 
 static VIDEO_UPDATE( shougi )
 {
-	shougi_state *state = (shougi_state *)screen->machine->driver_data;
+	shougi_state *state = screen->machine->driver_data<shougi_state>();
 	int offs;
 
 	for (offs = 0;offs <0x4000; offs++)
@@ -246,7 +245,7 @@ static WRITE8_HANDLER( shougi_mcu_halt_on_w )
 
 static WRITE8_HANDLER( nmi_disable_and_clear_line_w )
 {
-	shougi_state *state = (shougi_state *)space->machine->driver_data;
+	shougi_state *state = space->machine->driver_data<shougi_state>();
 
 	state->nmi_enabled = 0; /* disable NMIs */
 
@@ -257,14 +256,14 @@ static WRITE8_HANDLER( nmi_disable_and_clear_line_w )
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	shougi_state *state = (shougi_state *)space->machine->driver_data;
+	shougi_state *state = space->machine->driver_data<shougi_state>();
 
 	state->nmi_enabled = 1; /* enable NMIs */
 }
 
 static INTERRUPT_GEN( shougi_vblank_nmi )
 {
-	shougi_state *state = (shougi_state *)device->machine->driver_data;
+	shougi_state *state = device->machine->driver_data<shougi_state>();
 
 	if ( state->nmi_enabled == 1 )
 	{
@@ -306,7 +305,7 @@ ADDRESS_MAP_END
 /* sub */
 static READ8_HANDLER ( dummy_r )
 {
-	shougi_state *state = (shougi_state *)space->machine->driver_data;
+	shougi_state *state = space->machine->driver_data<shougi_state>();
 	state->r ^= 1;
 
 	if(state->r)
@@ -391,9 +390,7 @@ INPUT_PORTS_END
 
 
 
-static MACHINE_DRIVER_START( shougi )
-
-	MDRV_DRIVER_DATA( shougi_state )
+static MACHINE_CONFIG_START( shougi, shougi_state )
 
 	MDRV_CPU_ADD("maincpu", Z80,10000000/4)
 	MDRV_CPU_PROGRAM_MAP(main_map)
@@ -429,7 +426,7 @@ static MACHINE_DRIVER_START( shougi )
 
 	MDRV_SOUND_ADD("aysnd", AY8910, 10000000/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

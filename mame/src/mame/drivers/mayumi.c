@@ -9,16 +9,16 @@
 #include "emu.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
+#include "machine/nvram.h"
 
 #define MCLK 10000000
 
 
-class mayumi_state
+class mayumi_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mayumi_state(machine)); }
-
-	mayumi_state(running_machine &machine) { }
+	mayumi_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *    videoram;
@@ -41,7 +41,7 @@ public:
 
 static TILE_GET_INFO( get_tile_info )
 {
-	mayumi_state *state = (mayumi_state *)machine->driver_data;
+	mayumi_state *state = machine->driver_data<mayumi_state>();
 	int code = state->videoram[tile_index] + (state->videoram[tile_index + 0x800] & 0x1f) * 0x100;
 	int col = (state->videoram[tile_index + 0x1000] >> 3) & 0x1f;
 
@@ -50,20 +50,20 @@ static TILE_GET_INFO( get_tile_info )
 
 static VIDEO_START( mayumi )
 {
-	mayumi_state *state = (mayumi_state *)machine->driver_data;
+	mayumi_state *state = machine->driver_data<mayumi_state>();
 	state->tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 }
 
 static WRITE8_HANDLER( mayumi_videoram_w )
 {
-	mayumi_state *state = (mayumi_state *)space->machine->driver_data;
+	mayumi_state *state = space->machine->driver_data<mayumi_state>();
 	state->videoram[offset] = data;
 	tilemap_mark_tile_dirty(state->tilemap, offset & 0x7ff);
 }
 
 static VIDEO_UPDATE( mayumi )
 {
-	mayumi_state *state = (mayumi_state *)screen->machine->driver_data;
+	mayumi_state *state = screen->machine->driver_data<mayumi_state>();
 	tilemap_draw(bitmap, cliprect, state->tilemap, 0, 0);
 	return 0;
 }
@@ -76,7 +76,7 @@ static VIDEO_UPDATE( mayumi )
 
 static INTERRUPT_GEN( mayumi_interrupt )
 {
-	mayumi_state *state = (mayumi_state *)device->machine->driver_data;
+	mayumi_state *state = device->machine->driver_data<mayumi_state>();
 
 	if (state->int_enable)
 		 cpu_set_input_line(device, 0, HOLD_LINE);
@@ -90,7 +90,7 @@ static INTERRUPT_GEN( mayumi_interrupt )
 
 static WRITE8_HANDLER( bank_sel_w )
 {
-	mayumi_state *state = (mayumi_state *)space->machine->driver_data;
+	mayumi_state *state = space->machine->driver_data<mayumi_state>();
 	int bank = BIT(data, 7) | (BIT(data, 6) << 1);
 
 	memory_set_bank(space->machine, "bank1", bank);
@@ -102,13 +102,13 @@ static WRITE8_HANDLER( bank_sel_w )
 
 static WRITE8_HANDLER( input_sel_w )
 {
-	mayumi_state *state = (mayumi_state *)space->machine->driver_data;
+	mayumi_state *state = space->machine->driver_data<mayumi_state>();
 	state->input_sel = data;
 }
 
 static READ8_HANDLER( key_matrix_r )
 {
-	mayumi_state *state = (mayumi_state *)space->machine->driver_data;
+	mayumi_state *state = space->machine->driver_data<mayumi_state>();
 	int p, i, ret;
 	static const char *const keynames[2][5] =
 			{
@@ -138,7 +138,7 @@ static READ8_HANDLER( key_matrix_r )
 static ADDRESS_MAP_START( mayumi_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(mayumi_videoram_w) AM_BASE_MEMBER(mayumi_state, videoram)
 ADDRESS_MAP_END
 
@@ -349,7 +349,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( mayumi )
 {
-	mayumi_state *state = (mayumi_state *)machine->driver_data;
+	mayumi_state *state = machine->driver_data<mayumi_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
@@ -361,16 +361,13 @@ static MACHINE_START( mayumi )
 
 static MACHINE_RESET( mayumi )
 {
-	mayumi_state *state = (mayumi_state *)machine->driver_data;
+	mayumi_state *state = machine->driver_data<mayumi_state>();
 
 	state->int_enable = 0;
 	state->input_sel = 0;
 }
 
-static MACHINE_DRIVER_START( mayumi )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mayumi_state)
+static MACHINE_CONFIG_START( mayumi, mayumi_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MCLK/2) /* 5.000 MHz ? */
@@ -406,9 +403,9 @@ static MACHINE_DRIVER_START( mayumi )
 	MDRV_SOUND_ROUTE(2, "mono", 0.15)
 	MDRV_SOUND_ROUTE(3, "mono", 0.40)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

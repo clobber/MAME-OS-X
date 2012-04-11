@@ -914,7 +914,7 @@ static const ay8910_interface hexa_ay8910_config =
 
 static MACHINE_START( arkanoid )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 
 	state->mcu = machine->device("mcu");
 
@@ -939,7 +939,7 @@ static MACHINE_START( arkanoid )
 
 static MACHINE_RESET( arkanoid )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 
 	state->port_a_in = 0;
 	state->port_a_out = 0;
@@ -957,10 +957,7 @@ static MACHINE_RESET( arkanoid )
 	state->palettebank = 0;
 }
 
-static MACHINE_DRIVER_START( arkanoid )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(arkanoid_state)
+static MACHINE_CONFIG_START( arkanoid, arkanoid_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2) /* verified on pcb */
@@ -995,12 +992,10 @@ static MACHINE_DRIVER_START( arkanoid )
 	MDRV_SOUND_ADD("aysnd", YM2149, XTAL_12MHz/4/2) /* YM2149 clock is 3mhz, pin 26 is low so 3mhz/2 */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hexa )
-	/* driver data */
-	MDRV_DRIVER_DATA(arkanoid_state)
+static MACHINE_CONFIG_START( hexa, arkanoid_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_12MHz/2)	/* Imported from arkanoid - correct? */
@@ -1030,18 +1025,17 @@ static MACHINE_DRIVER_START( hexa )
 	MDRV_SOUND_ADD("aysnd", AY8910, XTAL_12MHz/4/2)	/* Imported from arkanoid - correct? */
 	MDRV_SOUND_CONFIG(hexa_ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bootleg )
-	MDRV_IMPORT_FROM(arkanoid)
+static MACHINE_CONFIG_DERIVED( bootleg, arkanoid )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bootleg_map)
 
 	MDRV_DEVICE_REMOVE("mcu")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************/
@@ -1459,21 +1453,21 @@ static void arkanoid_bootleg_init( running_machine *machine )
 
 static DRIVER_INIT( arkangc )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = ARKANGC;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkangc2 )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = ARKANGC2;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( block2 )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	// the graphics on this bootleg have the data scrambled
 	int tile;
 	UINT8* srcgfx = memory_region(machine,"gfx1");
@@ -1509,28 +1503,28 @@ static DRIVER_INIT( block2 )
 
 static DRIVER_INIT( arkblock )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = ARKBLOCK;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkbloc2 )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = ARKBLOC2;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( arkgcbl )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = ARKGCBL;
 	arkanoid_bootleg_init(machine);
 }
 
 static DRIVER_INIT( paddle2 )
 {
-	arkanoid_state *state = (arkanoid_state *)machine->driver_data;
+	arkanoid_state *state = machine->driver_data<arkanoid_state>();
 	state->bootleg_id = PADDLE2;
 	arkanoid_bootleg_init(machine);
 }

@@ -26,7 +26,7 @@ static TILEMAP_MAPPER( bg4x8_scan )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	blktiger_state *state = (blktiger_state *)machine->driver_data;
+	blktiger_state *state = machine->driver_data<blktiger_state>();
 	/* the tile priority table is a guess compiled by looking at the game. It
        was not derived from a PROM so it could be wrong. */
 	static const UINT8 split_table[16] =
@@ -48,7 +48,7 @@ static TILE_GET_INFO( get_bg_tile_info )
 
 static TILE_GET_INFO( get_tx_tile_info )
 {
-	blktiger_state *state = (blktiger_state *)machine->driver_data;
+	blktiger_state *state = machine->driver_data<blktiger_state>();
 	UINT8 attr = state->txvideoram[tile_index + 0x400];
 	SET_TILE_INFO(
 			0,
@@ -66,7 +66,12 @@ static TILE_GET_INFO( get_tx_tile_info )
 
 VIDEO_START( blktiger )
 {
-	blktiger_state *state = (blktiger_state *)machine->driver_data;
+	blktiger_state *state = machine->driver_data<blktiger_state>();
+
+	state->chon = 1;
+	state->bgon = 1;
+	state->objon = 1;
+	state->screen_layout = 0;
 
 	state->scroll_ram = auto_alloc_array(machine, UINT8, BGRAM_BANK_SIZE * BGRAM_BANKS);
 
@@ -98,20 +103,20 @@ VIDEO_START( blktiger )
 
 WRITE8_HANDLER( blktiger_txvideoram_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	state->txvideoram[offset] = data;
 	tilemap_mark_tile_dirty(state->tx_tilemap,offset & 0x3ff);
 }
 
 READ8_HANDLER( blktiger_bgvideoram_r )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	return state->scroll_ram[offset + state->scroll_bank];
 }
 
 WRITE8_HANDLER( blktiger_bgvideoram_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	offset += state->scroll_bank;
 
 	state->scroll_ram[offset] = data;
@@ -121,14 +126,14 @@ WRITE8_HANDLER( blktiger_bgvideoram_w )
 
 WRITE8_HANDLER( blktiger_bgvideoram_bank_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	state->scroll_bank = (data % BGRAM_BANKS) * BGRAM_BANK_SIZE;
 }
 
 
 WRITE8_HANDLER( blktiger_scrolly_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	int scrolly;
 
 	state->scroll_y[offset] = data;
@@ -139,7 +144,7 @@ WRITE8_HANDLER( blktiger_scrolly_w )
 
 WRITE8_HANDLER( blktiger_scrollx_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	int scrollx;
 
 	state->scroll_x[offset] = data;
@@ -151,7 +156,7 @@ WRITE8_HANDLER( blktiger_scrollx_w )
 
 WRITE8_HANDLER( blktiger_video_control_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	/* bits 0 and 1 are coin counters */
 	coin_counter_w(space->machine, 0,data & 1);
 	coin_counter_w(space->machine, 1,data & 2);
@@ -168,7 +173,7 @@ WRITE8_HANDLER( blktiger_video_control_w )
 
 WRITE8_HANDLER( blktiger_video_enable_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 
 	/* not sure which is which, but I think that bit 1 and 2 enable background and sprites */
 	/* bit 1 enables bg ? */
@@ -180,7 +185,7 @@ WRITE8_HANDLER( blktiger_video_enable_w )
 
 WRITE8_HANDLER( blktiger_screen_layout_w )
 {
-	blktiger_state *state = (blktiger_state *)space->machine->driver_data;
+	blktiger_state *state = space->machine->driver_data<blktiger_state>();
 	state->screen_layout = data;
 	tilemap_set_enable(state->bg_tilemap8x4, state->screen_layout);
 	tilemap_set_enable(state->bg_tilemap4x8, !state->screen_layout);
@@ -196,7 +201,7 @@ WRITE8_HANDLER( blktiger_screen_layout_w )
 
 static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-//  blktiger_state *state = (blktiger_state *)machine->driver_data;
+//  blktiger_state *state = machine->driver_data<blktiger_state>();
 	UINT8 *buffered_spriteram = machine->generic.buffered_spriteram.u8;
 	int offs;
 
@@ -227,7 +232,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 VIDEO_UPDATE( blktiger )
 {
-	blktiger_state *state = (blktiger_state *)screen->machine->driver_data;
+	blktiger_state *state = screen->machine->driver_data<blktiger_state>();
 
 	bitmap_fill(bitmap, cliprect, 1023);
 
@@ -242,12 +247,13 @@ VIDEO_UPDATE( blktiger )
 
 	if (state->chon)
 		tilemap_draw(bitmap, cliprect, state->tx_tilemap, 0, 0);
+
 	return 0;
 }
 
 VIDEO_EOF( blktiger )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	buffer_spriteram_w(space, 0, 0);
 }

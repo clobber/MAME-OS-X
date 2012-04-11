@@ -166,7 +166,7 @@ static UINT8 *decrypted;
 
 static WRITE8_HANDLER( audio_nmi_enable_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	/* for most games, this serves as the NMI enable for the audio CPU; however,
        lnc and disco use bit 0 of the first AY-8910's port A instead; many other
@@ -180,7 +180,7 @@ static WRITE8_HANDLER( audio_nmi_enable_w )
 
 static WRITE8_DEVICE_HANDLER( ay_audio_nmi_enable_w )
 {
-	btime_state *state = (btime_state *)device->machine->driver_data;
+	btime_state *state = device->machine->driver_data<btime_state>();
 
 	/* port A bit 0, when 1, inhibits the NMI */
 	if (state->audio_nmi_enable_type == AUDIO_ENABLE_AY8910)
@@ -192,7 +192,7 @@ static WRITE8_DEVICE_HANDLER( ay_audio_nmi_enable_w )
 
 static TIMER_DEVICE_CALLBACK( audio_nmi_gen )
 {
-	btime_state *state = (btime_state *)timer.machine->driver_data;
+	btime_state *state = timer.machine->driver_data<btime_state>();
 	int scanline = param;
 	state->audio_nmi_state = scanline & 8;
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, (state->audio_nmi_enabled && state->audio_nmi_state) ? ASSERT_LINE : CLEAR_LINE);
@@ -206,9 +206,9 @@ INLINE UINT8 swap_bits_5_6(UINT8 data)
 }
 
 
-static void btime_decrypt( const address_space *space )
+static void btime_decrypt( address_space *space )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 	UINT8 *src, *src1;
 	int addr, addr1;
 
@@ -239,7 +239,7 @@ static void btime_decrypt( const address_space *space )
 
 static WRITE8_HANDLER( lnc_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x3bff)                       ;
 	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space, offset - 0x3c00, data); return; }
@@ -260,7 +260,7 @@ static WRITE8_HANDLER( lnc_w )
 
 static WRITE8_HANDLER( mmonkey_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x3bff)                       ;
 	else if (offset >= 0x3c00 && offset <= 0x3fff) { lnc_videoram_w(space, offset - 0x3c00, data); return; }
@@ -280,7 +280,7 @@ static WRITE8_HANDLER( mmonkey_w )
 
 static WRITE8_HANDLER( btime_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x07ff)                     ;
 	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space, offset - 0x0c00, data);
@@ -299,7 +299,7 @@ static WRITE8_HANDLER( btime_w )
 
 static WRITE8_HANDLER( tisland_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x07ff)                     ;
 	else if (offset >= 0x0c00 && offset <= 0x0c0f) btime_paletteram_w(space, offset - 0x0c00, data);
@@ -320,7 +320,7 @@ static WRITE8_HANDLER( tisland_w )
 
 static WRITE8_HANDLER( zoar_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x07ff)					   ;
 	else if (offset >= 0x8000 && offset <= 0x87ff) ;
@@ -340,7 +340,7 @@ static WRITE8_HANDLER( zoar_w )
 
 static WRITE8_HANDLER( disco_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 
 	if      (offset <= 0x04ff)                     ;
 	else if (offset >= 0x2000 && offset <= 0x7fff) deco_charram_w(space, offset - 0x2000, data);
@@ -525,7 +525,7 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted_irq_hi )
 {
-	btime_state *state = (btime_state *)field->port->machine->driver_data;
+	btime_state *state = field->port->machine->driver_data<btime_state>();
 
 	if (newval)
 		cpu_set_input_line(state->maincpu, 0, HOLD_LINE);
@@ -533,7 +533,7 @@ static INPUT_CHANGED( coin_inserted_irq_hi )
 
 static INPUT_CHANGED( coin_inserted_irq_lo )
 {
-	btime_state *state = (btime_state *)field->port->machine->driver_data;
+	btime_state *state = field->port->machine->driver_data<btime_state>();
 
 	if (!newval)
 		cpu_set_input_line(state->maincpu, 0, HOLD_LINE);
@@ -541,21 +541,21 @@ static INPUT_CHANGED( coin_inserted_irq_lo )
 
 static INPUT_CHANGED( coin_inserted_nmi_lo )
 {
-	btime_state *state = (btime_state *)field->port->machine->driver_data;
+	btime_state *state = field->port->machine->driver_data<btime_state>();
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 
 static WRITE8_HANDLER( audio_command_w )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, 0, ASSERT_LINE);
 }
 
 static READ8_HANDLER( audio_command_r )
 {
-	btime_state *state = (btime_state *)space->machine->driver_data;
+	btime_state *state = space->machine->driver_data<btime_state>();
 	cpu_set_input_line(state->audiocpu, 0, CLEAR_LINE);
 	return soundlatch_r(space, offset);
 }
@@ -1425,7 +1425,7 @@ DISCRETE_SOUND_END
 
 static MACHINE_START( btime )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -1440,7 +1440,7 @@ static MACHINE_START( btime )
 
 static MACHINE_START( mmonkey )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 
 	MACHINE_START_CALL(btime);
 
@@ -1452,7 +1452,7 @@ static MACHINE_START( mmonkey )
 
 static MACHINE_RESET( btime )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 
 	/* by default, the audio NMI is disabled, except for bootlegs which don't use the enable */
 	state->audio_nmi_enabled = (state->audio_nmi_enable_type == AUDIO_ENABLE_NONE);
@@ -1469,7 +1469,7 @@ static MACHINE_RESET( btime )
 
 static MACHINE_RESET( lnc )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	*state->lnc_charbank = 1;
 
 	MACHINE_RESET_CALL(btime);
@@ -1477,7 +1477,7 @@ static MACHINE_RESET( lnc )
 
 static MACHINE_RESET( mmonkey )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 
 	MACHINE_RESET_CALL(lnc);
 
@@ -1487,10 +1487,7 @@ static MACHINE_RESET( mmonkey )
 	state->protection_ret = 0;
 }
 
-static MACHINE_DRIVER_START( btime )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(btime_state)
+static MACHINE_CONFIG_START( btime, btime_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, HCLK2)	/* seletable between H2/H4 via jumper */
@@ -1533,13 +1530,12 @@ static MACHINE_DRIVER_START( btime )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(btime_sound)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cookrace )
+static MACHINE_CONFIG_DERIVED( cookrace, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(cookrace_map)
 
@@ -1551,13 +1547,12 @@ static MACHINE_DRIVER_START( cookrace )
 	MDRV_PALETTE_LENGTH(16)
 
 	MDRV_VIDEO_UPDATE(cookrace)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( lnc )
+static MACHINE_CONFIG_DERIVED( lnc, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(lnc_map)
 
@@ -1569,34 +1564,31 @@ static MACHINE_DRIVER_START( lnc )
 
 	MDRV_PALETTE_INIT(lnc)
 	MDRV_VIDEO_UPDATE(lnc)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wtennis )
+static MACHINE_CONFIG_DERIVED( wtennis, lnc )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(lnc)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(eggs)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mmonkey )
+static MACHINE_CONFIG_DERIVED( mmonkey, wtennis )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(wtennis)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mmonkey_map)
 
 	MDRV_MACHINE_START(mmonkey)
 	MDRV_MACHINE_RESET(mmonkey)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sdtennis )
+static MACHINE_CONFIG_DERIVED( sdtennis, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(HCLK4)
 	MDRV_CPU_PROGRAM_MAP(bnj_map)
@@ -1607,24 +1599,22 @@ static MACHINE_DRIVER_START( sdtennis )
 
 	MDRV_VIDEO_START(bnj)
 	MDRV_VIDEO_UPDATE(bnj)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bnj )
+static MACHINE_CONFIG_DERIVED( bnj, sdtennis )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(sdtennis)
 
 	/* video hardware */
 	MDRV_DEVICE_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 1*8, 31*8-1) // 256 * 240, confirmed
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( zoar )
+static MACHINE_CONFIG_DERIVED( zoar, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(zoar_map)
 
@@ -1643,13 +1633,12 @@ static MACHINE_DRIVER_START( zoar )
 
 	MDRV_SOUND_REPLACE("ay2", AY8910, HCLK1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( disco )
+static MACHINE_CONFIG_DERIVED( disco, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(HCLK4)
 	MDRV_CPU_PROGRAM_MAP(disco_map)
@@ -1662,19 +1651,18 @@ static MACHINE_DRIVER_START( disco )
 	MDRV_PALETTE_LENGTH(32)
 
 	MDRV_VIDEO_UPDATE(disco)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tisland )
+static MACHINE_CONFIG_DERIVED( tisland, btime )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(btime)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(tisland_map)
 
 	/* video hardware */
 	MDRV_GFXDECODE(zoar)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -2077,12 +2065,12 @@ ROM_END
 
 static void decrypt_C10707_cpu(running_machine *machine, const char *cputag)
 {
-	const address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, cputag, ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0x10000);
 	UINT8 *rom = memory_region(machine, cputag);
 	offs_t addr;
 
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypt);
+	space->set_decrypted_region(0x0000, 0xffff, decrypt);
 
 	/* Swap bits 5 & 6 for opcodes */
 	for (addr = 0; addr < 0x10000; addr++)
@@ -2107,11 +2095,11 @@ static READ8_HANDLER( wtennis_reset_hack_r )
 
 static void init_rom1(running_machine *machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, "maincpu");
 
 	decrypted = auto_alloc_array(machine, UINT8, 0x10000);
-	memory_set_decrypted_region(space, 0x0000, 0xffff, decrypted);
+	space->set_decrypted_region(0x0000, 0xffff, decrypted);
 
 	/* For now, just copy the RAM array over to ROM. Decryption will happen */
 	/* at run time, since the CPU applies the decryption only if the previous */
@@ -2121,14 +2109,14 @@ static void init_rom1(running_machine *machine)
 
 static DRIVER_INIT( btime )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	init_rom1(machine);
 	state->audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( zoar )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	UINT8 *rom = memory_region(machine, "maincpu");
 
 	/* At location 0xD50A is what looks like an undocumented opcode. I tried
@@ -2143,7 +2131,7 @@ static DRIVER_INIT( zoar )
 
 static DRIVER_INIT( tisland )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	UINT8 *rom = memory_region(machine, "maincpu");
 
 	/* At location 0xa2b6 there's a strange RLA followed by a BPL that reads from an
@@ -2158,28 +2146,28 @@ static DRIVER_INIT( tisland )
 
 static DRIVER_INIT( lnc )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 	state->audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( bnj )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 	state->audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;
 }
 
 static DRIVER_INIT( disco )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	DRIVER_INIT_CALL(btime);
 	state->audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( cookrace )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 
 	memory_install_read_bank(cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM), 0x0200, 0x0fff, 0, 0, "bank10");
@@ -2189,14 +2177,14 @@ static DRIVER_INIT( cookrace )
 
 static DRIVER_INIT( protennb )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	DRIVER_INIT_CALL(btime);
 	state->audio_nmi_enable_type = AUDIO_ENABLE_AY8910;
 }
 
 static DRIVER_INIT( wtennis )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 
 	memory_install_read8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xc15f, 0xc15f, 0, 0, wtennis_reset_hack_r);
@@ -2208,7 +2196,7 @@ static DRIVER_INIT( wtennis )
 
 static DRIVER_INIT( sdtennis )
 {
-	btime_state *state = (btime_state *)machine->driver_data;
+	btime_state *state = machine->driver_data<btime_state>();
 	decrypt_C10707_cpu(machine, "maincpu");
 	decrypt_C10707_cpu(machine, "audiocpu");
 	state->audio_nmi_enable_type = AUDIO_ENABLE_DIRECT;

@@ -48,7 +48,7 @@ behavior we use .
 
 static WRITE16_HANDLER( mugsmash_reg2_w )
 {
-	mugsmash_state *state = (mugsmash_state *)space->machine->driver_data;
+	mugsmash_state *state = space->machine->driver_data<mugsmash_state>();
 
 	state->regs2[offset] = data;
 	//popmessage ("Regs2 %04x, %04x, %04x, %04x", state->regs2[0], state->regs2[1], state->regs2[2], state->regs2[3]);
@@ -196,7 +196,7 @@ static ADDRESS_MAP_START( mugsmash_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r,okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -391,7 +391,7 @@ GFXDECODE_END
 
 static void irq_handler(running_device *device, int irq)
 {
-	mugsmash_state *state = (mugsmash_state *)device->machine->driver_data;
+	mugsmash_state *state = device->machine->driver_data<mugsmash_state>();
 	cpu_set_input_line(state->audiocpu, 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
@@ -402,15 +402,13 @@ static const ym2151_interface ym2151_config =
 
 static MACHINE_START( mugsmash )
 {
-	mugsmash_state *state = (mugsmash_state *)machine->driver_data;
+	mugsmash_state *state = machine->driver_data<mugsmash_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
 }
 
-static MACHINE_DRIVER_START( mugsmash )
-
-	MDRV_DRIVER_DATA( mugsmash_state )
+static MACHINE_CONFIG_START( mugsmash, mugsmash_state )
 
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(mugsmash_map)
@@ -444,7 +442,7 @@ static MACHINE_DRIVER_START( mugsmash )
 	MDRV_OKIM6295_ADD("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)	/* sound fx */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( mugsmash )
 	ROM_REGION( 0x80000, "maincpu", 0 ) /* 68000 Code */

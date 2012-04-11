@@ -98,9 +98,10 @@ struct _tms32010_state
 	int		addr_mask;
 
 	legacy_cpu_device *device;
-	const	address_space *program;
-	const	address_space *data;
-	const	address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *data;
+	address_space *io;
 };
 
 INLINE tms32010_state *get_safe_token(running_device *device)
@@ -148,21 +149,21 @@ INLINE int add_branch_cycle(tms32010_state *cpustate);
  *  Read the state of the BIO pin
  */
 
-#define TMS32010_BIO_In (memory_read_word_16be(cpustate->io, TMS32010_BIO<<1))
+#define TMS32010_BIO_In (cpustate->io->read_word(TMS32010_BIO<<1))
 
 
 /****************************************************************************
  *  Input a word from given I/O port
  */
 
-#define TMS32010_In(Port) (memory_read_word_16be(cpustate->io, (Port)<<1))
+#define TMS32010_In(Port) (cpustate->io->read_word((Port)<<1))
 
 
 /****************************************************************************
  *  Output a word to given I/O port
  */
 
-#define TMS32010_Out(Port,Value) (memory_write_word_16be(cpustate->io, (Port)<<1,Value))
+#define TMS32010_Out(Port,Value) (cpustate->io->write_word((Port)<<1,Value))
 
 
 
@@ -170,14 +171,14 @@ INLINE int add_branch_cycle(tms32010_state *cpustate);
  *  Read a word from given ROM memory location
  */
 
-#define TMS32010_ROM_RDMEM(A) (memory_read_word_16be(cpustate->program, (A)<<1))
+#define TMS32010_ROM_RDMEM(A) (cpustate->program->read_word((A)<<1))
 
 
 /****************************************************************************
  *  Write a word to given ROM memory location
  */
 
-#define TMS32010_ROM_WRMEM(A,V) (memory_write_word_16be(cpustate->program, (A)<<1,V))
+#define TMS32010_ROM_WRMEM(A,V) (cpustate->program->write_word((A)<<1,V))
 
 
 
@@ -185,14 +186,14 @@ INLINE int add_branch_cycle(tms32010_state *cpustate);
  *  Read a word from given RAM memory location
  */
 
-#define TMS32010_RAM_RDMEM(A) (memory_read_word_16be(cpustate->data, (A)<<1))
+#define TMS32010_RAM_RDMEM(A) (cpustate->data->read_word((A)<<1))
 
 
 /****************************************************************************
  *  Write a word to given RAM memory location
  */
 
-#define TMS32010_RAM_WRMEM(A,V) (memory_write_word_16be(cpustate->data, (A)<<1,V))
+#define TMS32010_RAM_WRMEM(A,V) (cpustate->data->write_word((A)<<1,V))
 
 
 
@@ -202,7 +203,7 @@ INLINE int add_branch_cycle(tms32010_state *cpustate);
  *  used to greatly speed up emulation
  */
 
-#define TMS32010_RDOP(A) (memory_decrypted_read_word(cpustate->program, (A)<<1))
+#define TMS32010_RDOP(A) (cpustate->direct->read_decrypted_word((A)<<1))
 
 
 /****************************************************************************
@@ -211,7 +212,7 @@ INLINE int add_branch_cycle(tms32010_state *cpustate);
  *  that use different encoding mechanisms for opcodes and opcode arguments
  */
 
-#define TMS32010_RDOP_ARG(A) (memory_raw_read_word(cpustate->program, (A)<<1))
+#define TMS32010_RDOP_ARG(A) (cpustate->direct->read_raw_word((A)<<1))
 
 
 /************************************************************************
@@ -828,6 +829,7 @@ static CPU_INIT( tms32010 )
 
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->data = device->space(AS_DATA);
 	cpustate->io = device->space(AS_IO);
 }

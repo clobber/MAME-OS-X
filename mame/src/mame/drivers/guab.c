@@ -573,11 +573,11 @@ static INPUT_CHANGED( coin_inserted )
 	if (newval == 0)
 	{
 		UINT32 credit;
-		const address_space *space = cputag_get_address_space(field->port->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = cputag_get_address_space(field->port->machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 		/* Get the current credit value and add the new coin value */
-		credit = memory_read_dword(space, 0x8002c) + (UINT32)(FPTR)param;
-		memory_write_dword(space, 0x8002c, credit);
+		credit = space->read_dword(0x8002c) + (UINT32)(FPTR)param;
+		space->write_dword(0x8002c, credit);
 	}
 }
 
@@ -760,7 +760,7 @@ static MACHINE_RESET( guab )
 	memset(&fdc, 0, sizeof(fdc));
 }
 
-static MACHINE_DRIVER_START( guab )
+static MACHINE_CONFIG_START( guab, driver_device )
 	/* TODO: Verify clock */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
 	MDRV_CPU_PROGRAM_MAP(guab_map)
@@ -789,7 +789,7 @@ static MACHINE_DRIVER_START( guab )
 
 	/* 6840 PTM */
 	MDRV_PTM6840_ADD("6840ptm", ptm_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

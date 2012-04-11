@@ -49,7 +49,7 @@ struct _msm5205_state
 INLINE msm5205_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->type() == SOUND_MSM5205);
+	assert(device->type() == MSM5205);
 	return (msm5205_state *)downcast<legacy_device_base *>(device)->token();
 }
 
@@ -298,7 +298,16 @@ void msm5205_set_volume(running_device *device,int volume)
 	stream_set_output_gain(voice->stream,0,volume / 100.0);
 }
 
+void msm5205_change_clock_w(running_device *device, INT32 clock)
+{
+	msm5205_state *voice = get_safe_token(device);
+	attotime period;
 
+	voice->clock = clock;
+
+	period = attotime_mul(ATTOTIME_IN_HZ(voice->clock), voice->prescaler);
+	timer_adjust_periodic(voice->timer, period, 0, period);
+}
 
 
 /**************************************************************************

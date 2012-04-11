@@ -57,7 +57,7 @@ static MACHINE_RESET( starwars )
 	/* ESB-specific */
 	if (starwars_is_esb)
 	{
-		const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+		address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 		/* reset the slapstic */
 		slapstic_reset();
@@ -93,7 +93,7 @@ static WRITE8_HANDLER( irq_ack_w )
  *
  *************************************/
 
-static void esb_slapstic_tweak(const address_space *space, offs_t offset)
+static void esb_slapstic_tweak(address_space *space, offs_t offset)
 {
 	int new_bank = slapstic_tweak(space, offset);
 
@@ -127,12 +127,12 @@ static WRITE8_HANDLER( esb_slapstic_w )
  *
  *************************************/
 
-static DIRECT_UPDATE_HANDLER( esb_setdirect )
+DIRECT_UPDATE_HANDLER( esb_setdirect )
 {
 	/* if we are in the slapstic region, process it */
 	if ((address & 0xe000) == 0x8000)
 	{
-		offs_t pc = cpu_get_pc(space->cpu);
+		offs_t pc = cpu_get_pc(&direct.space().device());
 
 		/* filter out duplicates; we get these because the handler gets called for
            multiple reasons:
@@ -143,7 +143,7 @@ static DIRECT_UPDATE_HANDLER( esb_setdirect )
 		{
 			slapstic_last_pc = pc;
 			slapstic_last_address = address;
-			esb_slapstic_tweak(space, address & 0x1fff);
+			esb_slapstic_tweak(&direct.space(), address & 0x1fff);
 		}
 		return ~0;
 	}
@@ -159,7 +159,7 @@ static DIRECT_UPDATE_HANDLER( esb_setdirect )
  *************************************/
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x0000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0)
+	AM_RANGE(0x0000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0)
 	AM_RANGE(0x3000, 0x3fff) AM_ROM								/* vector_rom */
 	AM_RANGE(0x4300, 0x431f) AM_READ_PORT("IN0")
 	AM_RANGE(0x4320, 0x433f) AM_READ_PORT("IN1")
@@ -168,13 +168,13 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4380, 0x439f) AM_READ(starwars_adc_r)			/* a-d control result */
 	AM_RANGE(0x4400, 0x4400) AM_READWRITE(starwars_main_read_r, starwars_main_wr_w)
 	AM_RANGE(0x4401, 0x4401) AM_READ(starwars_main_ready_flag_r)
-	AM_RANGE(0x4500, 0x45ff) AM_DEVREADWRITE("x2212", x2212_read, x2212_write)
+	AM_RANGE(0x4500, 0x45ff) AM_DEVREADWRITE_MODERN("x2212", x2212_device, read, write)
 	AM_RANGE(0x4600, 0x461f) AM_WRITE(avgdvg_go_w)
 	AM_RANGE(0x4620, 0x463f) AM_WRITE(avgdvg_reset_w)
 	AM_RANGE(0x4640, 0x465f) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x4660, 0x467f) AM_WRITE(irq_ack_w)
 	AM_RANGE(0x4680, 0x469f) AM_READNOP AM_WRITE(starwars_out_w)
-	AM_RANGE(0x46a0, 0x46bf) AM_DEVWRITE("x2212", starwars_nstore_w)
+	AM_RANGE(0x46a0, 0x46bf) AM_WRITE(starwars_nstore_w)
 	AM_RANGE(0x46c0, 0x46c2) AM_WRITE(starwars_adc_select_w)
 	AM_RANGE(0x46e0, 0x46e0) AM_WRITE(starwars_soundrst_w)
 	AM_RANGE(0x4700, 0x4707) AM_WRITE(starwars_math_w)
@@ -216,9 +216,6 @@ ADDRESS_MAP_END
  *  set for starwars and esb - 06/2009
  *
  *************************************/
-
-
-
 
 static INPUT_PORTS_START( starwars )
 	PORT_START("IN0")
@@ -324,7 +321,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( starwars )
+static MACHINE_CONFIG_START( starwars, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, MASTER_CLOCK / 8)
@@ -336,11 +333,10 @@ static MACHINE_DRIVER_START( starwars )
 	MDRV_CPU_PROGRAM_MAP(sound_map)
 
 	MDRV_MACHINE_RESET(starwars)
-	MDRV_NVRAM_HANDLER(generic_0fill)
 
 	MDRV_RIOT6532_ADD("riot", MASTER_CLOCK / 8, starwars_riot6532_intf)
 
-	MDRV_X2212_ADD("x2212") /* nvram */
+	MDRV_X2212_ADD_AUTOSAVE("x2212") /* nvram */
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", VECTOR)
@@ -369,7 +365,7 @@ static MACHINE_DRIVER_START( starwars )
 
 	MDRV_SOUND_ADD("tms", TMS5220, MASTER_CLOCK/2/9)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -527,7 +523,8 @@ static DRIVER_INIT( esb )
 	slapstic_base = &rom[0x08000];
 
 	/* install an opcode base handler */
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), esb_setdirect);
+	address_space *space = machine->device<m6809_device>("maincpu")->space(AS_PROGRAM);
+	space->set_direct_update_handler(direct_update_delegate_create_static(esb_setdirect, *machine));
 
 	/* install read/write handlers for it */
 	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x8000, 0x9fff, 0, 0, esb_slapstic_r, esb_slapstic_w);

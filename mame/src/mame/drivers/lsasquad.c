@@ -540,7 +540,7 @@ GFXDECODE_END
 
 static void irqhandler(running_device *device, int irq)
 {
-	lsasquad_state *state = (lsasquad_state *)device->machine->driver_data;
+	lsasquad_state *state = device->machine->driver_data<lsasquad_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -566,7 +566,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( lsasquad )
 {
-	lsasquad_state *state = (lsasquad_state *)machine->driver_data;
+	lsasquad_state *state = machine->driver_data<lsasquad_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 8, &ROM[0x10000], 0x2000);
@@ -595,7 +595,7 @@ static MACHINE_START( lsasquad )
 
 static MACHINE_RESET( lsasquad )
 {
-	lsasquad_state *state = (lsasquad_state *)machine->driver_data;
+	lsasquad_state *state = machine->driver_data<lsasquad_state>();
 
 	state->sound_pending = 0;
 	state->sound_nmi_enable = 0;
@@ -616,10 +616,7 @@ static MACHINE_RESET( lsasquad )
 }
 
 /* Note: lsasquad clock values are not verified */
-static MACHINE_DRIVER_START( lsasquad )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(lsasquad_state)
+static MACHINE_CONFIG_START( lsasquad, lsasquad_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK / 4)
@@ -665,21 +662,17 @@ static MACHINE_DRIVER_START( lsasquad )
 	MDRV_SOUND_ROUTE(1, "mono", 0.12)
 	MDRV_SOUND_ROUTE(2, "mono", 0.12)
 	MDRV_SOUND_ROUTE(3, "mono", 0.63)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( storming )
-	MDRV_IMPORT_FROM( lsasquad )
+static MACHINE_CONFIG_DERIVED( storming, lsasquad )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(storming_map)
 
 	MDRV_DEVICE_REMOVE("mcu")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( daikaiju )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(lsasquad_state)
+static MACHINE_CONFIG_START( daikaiju, lsasquad_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK / 4)
@@ -726,7 +719,7 @@ static MACHINE_DRIVER_START( daikaiju )
 	MDRV_SOUND_ROUTE(1, "mono", 0.12)
 	MDRV_SOUND_ROUTE(2, "mono", 0.12)
 	MDRV_SOUND_ROUTE(3, "mono", 0.63)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

@@ -73,12 +73,12 @@ static WRITE8_HANDLER(bank_w)
 
 static TIMER_CALLBACK( subcpu_suspend )
 {
-    cputag_suspend(machine, "sub", SUSPEND_REASON_HALT, 1);
+    machine->device<cpu_device>("sub")->suspend(SUSPEND_REASON_HALT, 1);
 }
 
 static TIMER_CALLBACK( subcpu_resume )
 {
-    cputag_resume(machine, "sub", SUSPEND_REASON_HALT);
+    machine->device<cpu_device>("sub")->resume(SUSPEND_REASON_HALT);
     cputag_set_input_line(machine, "sub", INPUT_LINE_NMI, PULSE_LINE);
 }
 
@@ -185,7 +185,7 @@ ADDRESS_MAP_END
 
 /* sub 6809 */
 
-static void unlock_shared_ram(const address_space *space)
+static void unlock_shared_ram(address_space *space)
 {
     if(!space->machine->device<cpu_device>("sub")->suspended(SUSPEND_REASON_HALT))
     {
@@ -344,7 +344,7 @@ static const ym2203_interface ym2203_config =
     irqhandler
 };
 
-static MACHINE_DRIVER_START( sothello )
+static MACHINE_CONFIG_START( sothello, driver_device )
 
     /* basic machine hardware */
 
@@ -390,7 +390,7 @@ static MACHINE_DRIVER_START( sothello )
     MDRV_SOUND_CONFIG(msm_interface)
     MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

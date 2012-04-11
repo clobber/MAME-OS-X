@@ -1,10 +1,10 @@
+#include "sound/okim6295.h"
 
-class playmark_state
+class playmark_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, playmark_state(machine)); }
-
-	playmark_state(running_machine &machine) { }
+	playmark_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *     bgvideoram;
@@ -39,7 +39,7 @@ public:
 	int         old_oki_bank;
 
 	/* devices */
-	running_device *oki;
+	okim6295_device *oki;
 	running_device *eeprom;
 };
 

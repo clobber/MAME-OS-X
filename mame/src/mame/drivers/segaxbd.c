@@ -236,6 +236,7 @@ Notes:
 #include "includes/segas16.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/segaic16.h"
+#include "machine/nvram.h"
 #include "sound/2151intf.h"
 #include "sound/segapcm.h"
 #include "video/segaic16.h"
@@ -248,21 +249,13 @@ Notes:
 
 /*************************************
  *
- *  Statics
- *
- *************************************/
-
-static UINT16 *backupram1, *backupram2;
-
-/*************************************
- *
  *  Configuration
  *
  *************************************/
 
 static void xboard_generic_init(running_machine *machine)
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	/* init the FD1094 */
 	fd1094_driver_init(machine, "maincpu", NULL);
@@ -301,7 +294,7 @@ static void xboard_generic_init(running_machine *machine)
 
 static void update_main_irqs(running_machine *machine)
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 	int irq = 0;
 
 	if (state->timer_irq_state)
@@ -330,7 +323,7 @@ static void update_main_irqs(running_machine *machine)
 
 static TIMER_CALLBACK( scanline_callback )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	int scanline = param;
 	int next_scanline = (scanline + 2) % 262;
@@ -368,7 +361,7 @@ static TIMER_CALLBACK( scanline_callback )
 
 static void timer_ack_callback(running_machine *machine)
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	/* clear the timer IRQ */
 	state->timer_irq_state = 0;
@@ -385,8 +378,8 @@ static void timer_ack_callback(running_machine *machine)
 
 static TIMER_CALLBACK( delayed_sound_data_w )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
-	const address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	segas1x_state *state = machine->driver_data<segas1x_state>();
+	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 
 	soundlatch_w(space, 0, param);
 	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, ASSERT_LINE);
@@ -401,7 +394,7 @@ static void sound_data_w(running_machine *machine, UINT8 data)
 
 static void sound_cpu_irq(running_device *device, int state)
 {
-	segas1x_state *driver = (segas1x_state *)device->machine->driver_data;
+	segas1x_state *driver = device->machine->driver_data<segas1x_state>();
 
 	cpu_set_input_line(driver->soundcpu, 0, state);
 }
@@ -409,7 +402,7 @@ static void sound_cpu_irq(running_device *device, int state)
 
 static READ8_HANDLER( sound_data_r )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 
 	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, CLEAR_LINE);
 	return soundlatch_r(space, offset);
@@ -425,7 +418,7 @@ static READ8_HANDLER( sound_data_r )
 
 static void xboard_reset(running_device *device)
 {
-	segas1x_state *state = (segas1x_state *)device->machine->driver_data;
+	segas1x_state *state = device->machine->driver_data<segas1x_state>();
 
 	cpu_set_input_line(state->subcpu, INPUT_LINE_RESET, PULSE_LINE);
 	cpuexec_boost_interleave(device->machine, attotime_zero, ATTOTIME_IN_USEC(100));
@@ -454,7 +447,7 @@ static MACHINE_RESET( xboard )
 
 static READ16_HANDLER( adc_r )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	static const char *const ports[] = { "ADC0", "ADC1", "ADC2", "ADC3", "ADC4", "ADC5", "ADC6", "ADC7" };
 	int which = (state->iochip_regs[0][2] >> 2) & 7;
 
@@ -477,7 +470,7 @@ static WRITE16_HANDLER( adc_w )
 
 INLINE UINT16 iochip_r(running_machine *machine, int which, int port, int inputval)
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 	UINT16 result = state->iochip_regs[which][port];
 
 	/* if there's custom I/O, do that to get the input value */
@@ -546,7 +539,7 @@ static READ16_HANDLER( iochip_0_r )
 
 static WRITE16_HANDLER( iochip_0_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	UINT8 oldval;
 
 	/* access is via the low 8 bits */
@@ -622,7 +615,7 @@ static READ16_HANDLER( iochip_1_r )
 
 static WRITE16_HANDLER( iochip_1_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 
 	/* access is via the low 8 bits */
 	if (!ACCESSING_BITS_0_7)
@@ -658,7 +651,7 @@ static WRITE16_HANDLER( iocontrol_w )
 
 static WRITE16_HANDLER( aburner2_iochip_0_D_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 
 	/* access is via the low 8 bits */
 	if (!ACCESSING_BITS_0_7)
@@ -684,7 +677,7 @@ static WRITE16_HANDLER( aburner2_iochip_0_D_w )
 
 static WRITE16_HANDLER( loffire_sync0_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 
 	COMBINE_DATA(&state->loffire_sync[offset]);
 	cpuexec_boost_interleave(space->machine, attotime_zero, ATTOTIME_IN_USEC(10));
@@ -714,28 +707,6 @@ static WRITE16_HANDLER( smgp_excs_w )
 
 /*************************************
  *
- *  Capacitor-backed RAM
- *
- *************************************/
-
-static NVRAM_HANDLER( xboard )
-{
-	if (read_or_write)
-	{
-		mame_fwrite(file, backupram1, 0x4000);
-		mame_fwrite(file, backupram2, 0x4000);
-	}
-	else if (file)
-	{
-		mame_fread(file, backupram1, 0x4000);
-		mame_fread(file, backupram2, 0x4000);
-	}
-}
-
-
-
-/*************************************
- *
  *  Main CPU memory handlers
  *
  *************************************/
@@ -744,8 +715,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	ADDRESS_MAP_UNMAP_HIGH
 	ADDRESS_MAP_GLOBAL_MASK(0x3fffff)
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
-	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share1") AM_BASE(&backupram1)
-	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("share2") AM_BASE(&backupram2)
+	AM_RANGE(0x080000, 0x083fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("backup1")
+	AM_RANGE(0x0a0000, 0x0a3fff) AM_MIRROR(0x01c000) AM_RAM AM_SHARE("backup2")
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM_WRITE(segaic16_tileram_0_w) AM_BASE(&segaic16_tileram_0)
 	AM_RANGE(0x0d0000, 0x0d0fff) AM_MIRROR(0x00f000) AM_RAM_WRITE(segaic16_textram_0_w) AM_BASE(&segaic16_textram_0)
 	AM_RANGE(0x0e0000, 0x0e0007) AM_MIRROR(0x003ff8) AM_DEVREADWRITE("5248_main", segaic16_multiply_r, segaic16_multiply_w)
@@ -767,8 +738,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x2ec000, 0x2ecfff) AM_MIRROR(0x001000) AM_RAM AM_SHARE("share5") AM_BASE(&segaic16_roadram_0)
 	AM_RANGE(0x2ee000, 0x2effff) AM_READWRITE(segaic16_road_control_0_r, segaic16_road_control_0_w)
 //  AM_RANGE(0x2f0000, 0x2f3fff) AM_READWRITE(excs_r, excs_w)
-	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0x3fc000, 0x3fffff) AM_RAM AM_SHARE("share2")
+	AM_RANGE(0x3f8000, 0x3fbfff) AM_RAM AM_SHARE("backup1")
+	AM_RANGE(0x3fc000, 0x3fffff) AM_RAM AM_SHARE("backup2")
 ADDRESS_MAP_END
 
 
@@ -1363,10 +1334,7 @@ static const ic_315_5250_interface segaxb_5250_2_intf =
 	NULL, NULL
 };
 
-static MACHINE_DRIVER_START( xboard )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(segas1x_state)
+static MACHINE_CONFIG_START( xboard, segas1x_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK/4)
@@ -1380,7 +1348,8 @@ static MACHINE_DRIVER_START( xboard )
 	MDRV_CPU_IO_MAP(sound_portmap)
 
 	MDRV_MACHINE_RESET(xboard)
-	MDRV_NVRAM_HANDLER(xboard)
+	MDRV_NVRAM_ADD_0FILL("backup1")
+	MDRV_NVRAM_ADD_0FILL("backup2")
 	MDRV_QUANTUM_TIME(HZ(6000))
 
 	MDRV_315_5248_ADD("5248_main")
@@ -1415,16 +1384,15 @@ static MACHINE_DRIVER_START( xboard )
 	MDRV_SOUND_CONFIG(segapcm_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( smgp )
-	MDRV_IMPORT_FROM(xboard)
+static MACHINE_CONFIG_DERIVED( smgp, xboard )
 
 	MDRV_CPU_ADD("comm", Z80, 4000000)
 	MDRV_CPU_PROGRAM_MAP(smgp_comm_map)
 	MDRV_CPU_IO_MAP(smgp_comm_portmap)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -2848,7 +2816,7 @@ static DRIVER_INIT( generic_xboard )
 
 static DRIVER_INIT( aburner2 )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	xboard_generic_init(machine);
 
@@ -2860,7 +2828,7 @@ static DRIVER_INIT( aburner2 )
 
 static DRIVER_INIT( aburner )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	xboard_generic_init(machine);
 
@@ -2870,7 +2838,7 @@ static DRIVER_INIT( aburner )
 
 static DRIVER_INIT( loffire )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	xboard_generic_init(machine);
 	state->adc_reverse[1] = state->adc_reverse[3] = 1;
@@ -2889,7 +2857,7 @@ static DRIVER_INIT( smgp )
 
 static DRIVER_INIT( gprider )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	xboard_generic_init(machine);
 	state->gprider_hack = 1;

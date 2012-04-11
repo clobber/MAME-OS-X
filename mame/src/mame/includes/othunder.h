@@ -15,12 +15,11 @@ struct othunder_tempsprite
 };
 
 
-class othunder_state
+class othunder_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, othunder_state(machine)); }
-
-	othunder_state(running_machine &machine) { }
+	othunder_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *   spriteram;

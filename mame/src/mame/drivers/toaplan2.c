@@ -197,6 +197,7 @@ Armed Police Batrider
 Battle Garegga
 Mahou Daisakusen
 Battle Bakraid
+(emulated in video/gp9001.c)
 
 *********************************************************************
 
@@ -204,7 +205,7 @@ Game status:
 
 Teki Paki                      Working, but no sound. Missing sound MCU dump. Chip is protected. It's a QFP80 Hitachi HD647180.
 Ghox                           Working, but no sound. Missing sound MCU dump. It's a QFP80 Hitachi HD647180.
-Dogyuun                        Working, but no sound. MCU type is likely a NEC V25+. Chip is a PLCC94 stamped 'TS-002-MACH'.
+Dogyuun                        Working, no sound. MCU type is likely a NEC V25+. Chip is a PLCC94 stamped 'TS-002-MACH'.
 Knuckle Bash                   Working, but sound FX only (missing music). MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-004-DASH'.
                                         Some PCBs use another version stamped 'NITRO' which is the same chip type.
 Truxton 2                      Working.
@@ -216,7 +217,7 @@ FixEight bootleg               Working. One unknown ROM (same as pipibibi one). 
 Grind Stormer                  Working, but no sound. MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-007-SPY'.
 VFive                          Working, but no sound. MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-007-SPY'.
 Batsugun                       Working, but sound FX only (missing music) and wrong GFX priorities. MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-007-SPY'.
-Batsugun Sp'                   Working, but sound FX only (missing music) and wrong GFX priorities. MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-007-SPY'.
+Batsugun Sp'                  Working, but sound FX only (missing music) and wrong GFX priorities. MCU type is a NEC V25+. Chip is a PLCC94 stamped 'TS-007-SPY'.
 Snow Bros. 2                   Working.
 Mahou Daisakusen               Working.
 Shippu Mahou Daisakusen        Working.
@@ -259,36 +260,7 @@ To Do / Unknowns:
 #include "sound/okim6295.h"
 #include "sound/ymz280b.h"
 #include "includes/toaplan2.h"
-
-
-/**************** Machine stuff ******************/
-//#define USE_HD64x180          /* Define if CPU support is available */
-//#define USE_ENCRYPTED_V25S    /* Define to enable V25 even on games where it is encrypted */
-
-#define CPU_2_NONE		0x00
-#define CPU_2_Z80		0x5a
-#define CPU_2_HD647180	0xa5
-#define CPU_2_V25		0xff
-
-/************ Machine RAM related values ************/
-static UINT8 *toaplan2_shared_ram;
-static UINT8 *raizing_shared_ram;		/* Shared ram used in Shippumd and Mahoudai */
-static UINT16 *toaplan2_shared_ram16;	/* Really 8bit RAM connected to Z180 */
-#ifndef USE_ENCRYPTED_V25S
-static UINT16 *V25_shared_ram;			/* Really 8bit RAM connected to Z180 */
-#endif
-static UINT16 *fixeight_sec_cpu_mem;
-
-/********** Status related values **********/
-int toaplan2_sub_cpu = 0;
-static UINT16 mcu_data = 0;
-static UINT16 video_status;
-static INT8 old_p1_paddle_h;		/* For Ghox */
-static INT8 old_p2_paddle_h;
-static INT8 current_bank;			/* Z80 bank used in Battle Garegga and Batrider */
-static int raizing_sndirq_line;		/* IRQ4 for batrider, IRQ2 for bbakraid */
-static UINT16 raizing_Z80_busreq;
-static int bbakraid_unlimited_ver;
+#include "rendlay.h"
 
 static MACHINE_RESET(batsugun);
 static READ16_HANDLER( batsugun_share_r );
@@ -298,21 +270,23 @@ static READ16_HANDLER( batsugun_share2_r );
 static WRITE16_HANDLER( batsugun_share2_w );
 #endif
 
-static running_device *sub_cpu = NULL;
-
 /***************************************************************************
   Initialisation handlers
 ***************************************************************************/
 
 static void toaplan2_reset(running_device *device)
 {
-	if (sub_cpu != NULL)
-		cpu_set_input_line(sub_cpu, INPUT_LINE_RESET, PULSE_LINE);
+	toaplan2_state *state = device->machine->driver_data<toaplan2_state>();
+
+	if (state->sub_cpu != NULL)
+		cpu_set_input_line(state->sub_cpu, INPUT_LINE_RESET, PULSE_LINE);
 }
 
 static MACHINE_RESET( toaplan2 )
 {
-	mcu_data = 0x00;
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->mcu_data = 0x00;
 
 	/*
       All games execute a RESET instruction on init, presumably to reset the sound CPU.
@@ -324,29 +298,36 @@ static MACHINE_RESET( toaplan2 )
 
 static MACHINE_RESET( ghox )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
 	MACHINE_RESET_CALL(toaplan2);
-	old_p1_paddle_h = 0;
-	old_p2_paddle_h = 0;
+	state->old_p1_paddle_h = 0;
+	state->old_p2_paddle_h = 0;
 }
 
 static MACHINE_RESET( dogyuun )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
 	MACHINE_RESET_CALL(batsugun);
-	mcu_data = 0xffaa;
+	state->mcu_data = 0xffaa;
 }
 
 static MACHINE_RESET( vfive )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
 	MACHINE_RESET_CALL(batsugun);
-	mcu_data = 0xffaa;
+	state->mcu_data = 0xffaa;
 }
 
 static MACHINE_RESET( bgaregga )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
 	UINT8 *Z80 = (UINT8 *)memory_region(machine, "audiocpu");
 
 	// Set Z80 bank switch - default bank is 2
-	current_bank = 4;
+	state->current_bank = 4;
 	memory_configure_bank(machine, "bank1", 0, 16, Z80, 0x4000);
 	memory_set_bank(machine, "bank1", 4);
 
@@ -355,71 +336,83 @@ static MACHINE_RESET( bgaregga )
 
 static void register_state_save(running_machine *machine)
 {
-	state_save_register_global(machine, mcu_data);
-	state_save_register_global(machine, video_status);
-	state_save_register_global(machine, old_p1_paddle_h);
-	state_save_register_global(machine, old_p2_paddle_h);
-	state_save_register_global(machine, current_bank);
-	state_save_register_global(machine, raizing_Z80_busreq);
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state_save_register_global(machine, state->mcu_data);
+	state_save_register_global(machine, state->video_status);
+	state_save_register_global(machine, state->old_p1_paddle_h);
+	state_save_register_global(machine, state->old_p2_paddle_h);
+	state_save_register_global(machine, state->current_bank);
+	state_save_register_global(machine, state->z80_busreq);
 }
 
 static DRIVER_INIT( T2_Z80 )		/* init_t2_Z80(); */
 {
-	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = machine->device("audiocpu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->sub_cpu_type = CPU_2_Z80;
+	state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( T2_Z180 )
 {
-	toaplan2_sub_cpu = CPU_2_HD647180;
-	sub_cpu = machine->device("mcu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->sub_cpu_type = CPU_2_HD647180;
+	state->sub_cpu = machine->device("mcu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( T2_V25 )
 {
-	toaplan2_sub_cpu = CPU_2_V25;
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->sub_cpu_type = CPU_2_V25;
 	if (machine->device("mcu") != NULL)
-		sub_cpu = machine->device("mcu");
+		state->sub_cpu = machine->device("mcu");
 	else if (machine->device("audiocpu") != NULL)
-		sub_cpu = machine->device("audiocpu");
+		state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( T2_noZ80 )
 {
-	toaplan2_sub_cpu = CPU_2_NONE;
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->sub_cpu_type = CPU_2_NONE;
+	state->sub_cpu = NULL;
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( fixeight )
 {
-	sub_cpu = machine->device("audiocpu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
 
-	if (fixeight_sec_cpu_mem)
-	{
-		memory_install_ram(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x28f002, 0x28fbff, 0, 0, fixeight_sec_cpu_mem );
-	}
+	state->sub_cpu_type = CPU_2_V25;
+	state->sub_cpu = machine->device("audiocpu");
 
-	toaplan2_sub_cpu = CPU_2_V25;
+	memory_install_ram(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x28f002, 0x28fbff, 0, 0, NULL);
+
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( fixeighb )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
 	UINT16 *bgdata = (UINT16 *)memory_region(machine, "maincpu");
-	memory_set_bankptr(machine, "bank1", &bgdata[0x40000]); /* $80000 - $fffff */
 
-	toaplan2_sub_cpu = CPU_2_NONE;
+	memory_set_bankptr(machine, "bank1", &bgdata[0x40000]); /* $80000 - $fffff */
+	state->sub_cpu_type = CPU_2_NONE;
+	state->sub_cpu = NULL;
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( pipibibi )
 {
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
 	int A;
 	int oldword, newword;
-
 	UINT16 *pipibibi_68k_rom = (UINT16 *)(memory_region(machine, "maincpu"));
 
 	/* unscramble the 68K ROM data. */
@@ -493,34 +486,40 @@ static DRIVER_INIT( pipibibi )
 		pipibibi_68k_rom[A+3] = newword;
 	}
 
-	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = machine->device("audiocpu");
+	state->sub_cpu_type = CPU_2_Z80;
+	state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( batrider )
 {
-	raizing_sndirq_line = 4;
-	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = machine->device("audiocpu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->sndirq_line = 4;
+	state->sub_cpu_type = CPU_2_Z80;
+	state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( bbakraid )
 {
-	bbakraid_unlimited_ver = 0;
-	raizing_sndirq_line = 2;
-	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = machine->device("audiocpu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->unlimited_ver = 0;
+	state->sndirq_line = 2;
+	state->sub_cpu_type = CPU_2_Z80;
+	state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
 static DRIVER_INIT( bbakradu )
 {
-	bbakraid_unlimited_ver = 1;
-	raizing_sndirq_line = 2;
-	toaplan2_sub_cpu = CPU_2_Z80;
-	sub_cpu = machine->device("audiocpu");
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	state->unlimited_ver = 1;
+	state->sndirq_line = 2;
+	state->sub_cpu_type = CPU_2_Z80;
+	state->sub_cpu = machine->device("audiocpu");
 	register_state_save(machine);
 }
 
@@ -529,10 +528,7 @@ static DRIVER_INIT( bbakradu )
   Toaplan games
 ***************************************************************************/
 
-static READ16_HANDLER( toaplan2_inputport_0_word_r )
-{
-	return ((space->machine->primary_screen->vpos() + 15) % 262) >= 245;
-}
+
 
 
 static TIMER_CALLBACK( toaplan2_raise_irq )
@@ -558,26 +554,28 @@ static READ16_HANDLER( video_count_r )
 	/* +---------+---------+--------+---------------------------+ */
 	/*************** Control Signals are active low ***************/
 
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	int hpos = space->machine->primary_screen->hpos();
 	int vpos = space->machine->primary_screen->vpos();
-	video_status = 0xff00;						/* Set signals inactive */
+
+	state->video_status = 0xff00;						/* Set signals inactive */
 
 	vpos = (vpos + 15) % 262;
 
 	if ((hpos > 325) && (hpos < 380))
-		video_status &= ~0x8000;
+		state->video_status &= ~0x8000;
 	if ((vpos >= 247) && (vpos <= 250))
-		video_status &= ~0x4000;
+		state->video_status &= ~0x4000;
 	if (vpos >= 245)
-		video_status &= ~0x0100;
+		state->video_status &= ~0x0100;
 	if (vpos < 256)
-		video_status |= (vpos & 0xff);
+		state->video_status |= (vpos & 0xff);
 	else
-		video_status |= 0xff;
+		state->video_status |= 0xff;
 
 //  logerror("VC: vpos=%04x hpos=%04x VBL=%04x\n",vpos,hpos,space->machine->primary_screen->vblank());
 
-	return video_status;
+	return state->video_status;
 }
 
 static WRITE8_HANDLER( toaplan2_coin_w )
@@ -621,12 +619,16 @@ static WRITE16_HANDLER( toaplan2_v25_coin_word_w )
 
 	if (ACCESSING_BITS_0_7)
 	{
+		#ifdef USE_ENCRYPTED_V25S
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+		#endif
+
 		toaplan2_coin_w(space, offset, data & 0x0f);
 
 		#ifdef USE_ENCRYPTED_V25S
 		/* only the ram-based V25 based games access the following bits */
-		//cpu_set_input_line(sub_cpu, INPUT_LINE_RESET, (data & 0x0020) ? CLEAR_LINE : ASSERT_LINE );
-		cpu_set_input_line(sub_cpu, INPUT_LINE_HALT,  (data & 0x0010) ? CLEAR_LINE : ASSERT_LINE);
+		//cpu_set_input_line(state->sub_cpu, INPUT_LINE_RESET, (data & 0x0020) ? CLEAR_LINE : ASSERT_LINE );
+		cpu_set_input_line(state->sub_cpu, INPUT_LINE_HALT,  (data & 0x0010) ? CLEAR_LINE : ASSERT_LINE);
 		#endif
 
 	}
@@ -642,10 +644,12 @@ static WRITE16_HANDLER( toaplan2_v25_batsugun_coin_word_w )
 
 	if (ACCESSING_BITS_0_7)
 	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 		toaplan2_coin_w(space, offset, data & 0x0f);
 		/* only the ram-based V25 based games access the following bits */
-		//cpu_set_input_line(sub_cpu, INPUT_LINE_RESET, (data & 0x0020) ? CLEAR_LINE : ASSERT_LINE );
-		cpu_set_input_line(sub_cpu, INPUT_LINE_HALT,  (data & 0x0010) ? CLEAR_LINE : ASSERT_LINE);
+		//cpu_set_input_line(state->sub_cpu, INPUT_LINE_RESET, (data & 0x0020) ? CLEAR_LINE : ASSERT_LINE );
+		cpu_set_input_line(state->sub_cpu, INPUT_LINE_HALT,  (data & 0x0010) ? CLEAR_LINE : ASSERT_LINE);
 	}
 	if (ACCESSING_BITS_8_15 && (data & 0xff00) )
 	{
@@ -666,16 +670,20 @@ static WRITE16_HANDLER( shippumd_coin_word_w )
 	}
 }
 
-static READ16_HANDLER( toaplan2_shared_r )
+static READ16_HANDLER( z80_shared_r )
 {
-	return toaplan2_shared_ram[offset] & 0xff;
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	return state->z80_shared_ram[offset] & 0xff;
 }
 
-static WRITE16_HANDLER( toaplan2_shared_w )
+static WRITE16_HANDLER( z80_shared_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		toaplan2_shared_ram[offset] = data & 0xff;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->z80_shared_ram[offset] = data & 0xff;
 	}
 }
 
@@ -686,65 +694,58 @@ static WRITE16_HANDLER( toaplan2_hd647180_cpu_w )
 
 	if (ACCESSING_BITS_0_7)
 	{
-		if (toaplan2_sub_cpu == CPU_2_Z80)			/* Whoopee */
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		if (state->sub_cpu_type == CPU_2_Z80)			/* Whoopee */
 		{
-			toaplan2_shared_ram[0] = data & 0xff;
+			state->z80_shared_ram[0] = data & 0xff;
 		}
 		else										/* Teki Paki */
 		{
-			mcu_data = data & 0xff;
-			logerror("PC:%08x Writing command (%04x) to secondary CPU shared port\n",cpu_get_previouspc(space->cpu),mcu_data);
+			state->mcu_data = data & 0xff;
+			logerror("PC:%08x Writing command (%04x) to secondary CPU shared port\n", cpu_get_previouspc(space->cpu), state->mcu_data);
 		}
 	}
 }
 
 static CUSTOM_INPUT( c2map_r )
 {
+	toaplan2_state *state = field->port->machine->driver_data<toaplan2_state>();
+
 	/* For Teki Paki hardware */
 	/* bit 4 high signifies secondary CPU is ready */
 	/* bit 5 is tested low before V-Blank bit ??? */
-	switch (toaplan2_sub_cpu)
+	switch (state->sub_cpu_type)
 	{
-		case CPU_2_Z80:			mcu_data = toaplan2_shared_ram[0]; break; /* Whoopee */
-		case CPU_2_HD647180:	mcu_data = 0xff; break;					  /* Teki Paki */
-		default:				mcu_data = 0x00; break;
+		case CPU_2_Z80:			state->mcu_data = state->z80_shared_ram[0]; break; /* Whoopee */
+		case CPU_2_HD647180:	state->mcu_data = 0xff; break;					  /* Teki Paki */
+		default:				state->mcu_data = 0x00; break;
 	}
 
-	return (mcu_data == 0xff) ? 0x01 : 0x00;
-}
-
-static READ16_HANDLER( pipibibi_z80_status_r )
-{
-	return toaplan2_shared_ram[0] & 0xff;
-}
-
-static WRITE16_HANDLER( pipibibi_z80_task_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		toaplan2_shared_ram[0] = data & 0xff;
-	}
+	return (state->mcu_data == 0xff) ? 0x01 : 0x00;
 }
 
 static READ16_HANDLER( ghox_p1_h_analog_r )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	INT8 value, new_value;
 
 	new_value = input_port_read(space->machine, "PAD1");
-	if (new_value == old_p1_paddle_h) return 0;
-	value = new_value - old_p1_paddle_h;
-	old_p1_paddle_h = new_value;
+	if (new_value == state->old_p1_paddle_h) return 0;
+	value = new_value - state->old_p1_paddle_h;
+	state->old_p1_paddle_h = new_value;
 	return value;
 }
 
 static READ16_HANDLER( ghox_p2_h_analog_r )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	INT8 value, new_value;
 
 	new_value = input_port_read(space->machine, "PAD2");
-	if (new_value == old_p2_paddle_h) return 0;
-	value = new_value - old_p2_paddle_h;
-	old_p2_paddle_h = new_value;
+	if (new_value == state->old_p2_paddle_h) return 0;
+	value = new_value - state->old_p2_paddle_h;
+	state->old_p2_paddle_h = new_value;
 	return value;
 }
 
@@ -757,7 +758,10 @@ static WRITE16_HANDLER( ghox_mcu_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		mcu_data = data;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+		UINT16 *toaplan2_shared_ram16 = state->shared_ram16;
+
+		state->mcu_data = data;
 		if ((data >= 0xd0) && (data < 0xe0))
 		{
 			offset = ((data & 0x0f) * 2) + (0x38 / 2);
@@ -766,7 +770,7 @@ static WRITE16_HANDLER( ghox_mcu_w )
 		}
 		else
 		{
-			logerror("PC:%08x Writing %08x to HD647180 cpu shared ram status port\n",cpu_get_previouspc(space->cpu),mcu_data);
+			logerror("PC:%08x Writing %08x to HD647180 cpu shared ram status port\n", cpu_get_previouspc(space->cpu), state->mcu_data);
 		}
 		toaplan2_shared_ram16[0x56 / 2] = 0x004e;	/* Return a RTS instruction */
 		toaplan2_shared_ram16[0x58 / 2] = 0x0075;
@@ -809,14 +813,18 @@ static READ16_HANDLER( ghox_shared_ram_r )
        Offset $48 and $46 are accessed from around PC:06776
     */
 
-	return toaplan2_shared_ram16[offset] & 0xff;
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	return state->shared_ram16[offset] & 0xff;
 }
 
 static WRITE16_HANDLER( ghox_shared_ram_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		toaplan2_shared_ram16[offset] = data & 0xff;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->shared_ram16[offset] = data & 0xff;
 	}
 }
 
@@ -827,13 +835,17 @@ static READ16_HANDLER( shared_ram_r )
     the 68000 and the V25+ CPU. The 68000 reads the status of the V25+
     via a location of the shared memory.
 */
-	return toaplan2_shared_ram16[offset] & 0xff;
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	return state->shared_ram16[offset] & 0xff;
 }
 
 static WRITE16_HANDLER( shared_ram_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 		data &= 0xff;
 		switch (offset * 2)
 		{
@@ -842,14 +854,14 @@ static WRITE16_HANDLER( shared_ram_w )
 			case 0x9f0:
 			case 0xcf0:
 			case 0xcf8:
-			case 0xff8: toaplan2_shared_ram16[offset + 1] = data; /* Dogyuun */
-						toaplan2_shared_ram16[offset + 2] = data; /* FixEight */
+			case 0xff8: state->shared_ram16[offset + 1] = data; /* Dogyuun */
+						state->shared_ram16[offset + 2] = data; /* FixEight */
 						logerror("PC:%08x Writing (%04x) to shared RAM at %04x\n",cpu_get_previouspc(space->cpu),data,(offset*2));
 						if (data == 0x81) data = 0x0001;
 						break;
 			default:	break;
 		}
-		toaplan2_shared_ram16[offset] = data;
+		state->shared_ram16[offset] = data;
 	}
 }
 
@@ -858,13 +870,14 @@ static READ16_HANDLER( toaplan2_snd_cpu_r )
 /*** Status port includes NEC V25+ CPU POST codes. ************
  *** This is actually a part of the 68000/V25+ Shared RAM */
 
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	int response = 0xffff;
 
 	/* Provide successful POST responses */
-	if (mcu_data == 0xffaa)						/* Dogyuun */
+	if (state->mcu_data == 0xffaa)						/* Dogyuun */
 	{
 		response = 0xffaa;
-		mcu_data = 0xffff;
+		state->mcu_data = 0xffff;
 	}
 
 	logerror("PC:%06x reading status %08x from the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),response);
@@ -873,12 +886,14 @@ static READ16_HANDLER( toaplan2_snd_cpu_r )
 
 static WRITE16_HANDLER( dogyuun_snd_cpu_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		mcu_data = data;
+		state->mcu_data = data;
 		dogyuun_okisnd_w(space->machine->device("oki"), data);
 	}
-	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),mcu_data);
+	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n", cpu_get_previouspc(space->cpu), state->mcu_data);
 }
 
 
@@ -887,21 +902,22 @@ static READ16_HANDLER( fixeight_sec_cpu_r )
 /*** Status port includes NEC V25+ CPU POST codes. ************
  *** This is actually a part of the 68000/V25+ Shared RAM */
 
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	int response = 0xffff;
 
-	if ((mcu_data & 0xffff) == 0x0faa)
+	if ((state->mcu_data & 0xffff) == 0x0faa)
 	{
-		mcu_data = 0xffff;
+		state->mcu_data = 0xffff;
 		response = 0xffaa;
 	}
-	if ((mcu_data & 0xffff) == 0xff00)
+	if ((state->mcu_data & 0xffff) == 0xff00)
 	{
-		mcu_data = 0x0faa;
+		state->mcu_data = 0x0faa;
 		response = 0xffaa;		/* Second CPU passed POST response */
 	}
-	if ((mcu_data & 0xff00) == 0x0000)
+	if ((state->mcu_data & 0xff00) == 0x0000)
 	{
-		response = mcu_data;	/* Return the shared RAM data during POST */
+		response = state->mcu_data;	/* Return the shared RAM data during POST */
 	}
 	logerror("PC:%06x reading status %08x from the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),response);
 	return response;
@@ -909,14 +925,16 @@ static READ16_HANDLER( fixeight_sec_cpu_r )
 
 static WRITE16_HANDLER( fixeight_sec_cpu_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		if (mcu_data & 0xff00)
+		if (state->mcu_data & 0xff00)
 		{
-			mcu_data = (mcu_data & 0xff00) | (data & 0xff);
+			state->mcu_data = (state->mcu_data & 0xff00) | (data & 0xff);
 			fixeight_okisnd_w(space->machine->device("oki"), data);
 		}
-		else if (mcu_data == 0xff00)
+		else if (state->mcu_data == 0xff00)
 		{
 #if 0		/* check the 37B6 code */
 			/* copy nvram data to shared ram after post is complete */
@@ -928,50 +946,58 @@ static WRITE16_HANDLER( fixeight_sec_cpu_w )
 			/* game keeping service mode. It writes/reads the settings to/from */
 			/* these shared RAM locations. The secondary CPU reads/writes them */
 			/* from/to nvram to store the settings (a 93C45 EEPROM) */
-			//memory_install_ram(space, 0x28f002, 0x28fbff, 0, 0, fixeight_sec_cpu_mem);
+			//memory_install_ram(space, 0x28f002, 0x28fbff, 0, 0, NULL);
 			memory_install_read_port(space, 0x28f004, 0x28f005, 0, 0, "DSWA");	/* Dip Switch A - Wrong !!! */
 			memory_install_read_port(space, 0x28f006, 0x28f007, 0, 0, "DSWB");	/* Dip Switch B - Wrong !!! */
 			memory_install_read_port(space, 0x28f008, 0x28f009, 0, 0, "JMPR");	/* Territory Jumper block - Wrong !!! */
 
-			mcu_data = data;
+			state->mcu_data = data;
 		}
 		else
 		{
-			mcu_data = data;
+			state->mcu_data = data;
 		}
 	}
-	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),mcu_data);
+	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n", cpu_get_previouspc(space->cpu), state->mcu_data);
 }
 
 static WRITE16_HANDLER( vfive_snd_cpu_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		mcu_data = data;
+		state->mcu_data = data;
 	}
-	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n",cpu_get_previouspc(space->cpu),mcu_data);
+	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port\n", cpu_get_previouspc(space->cpu), state->mcu_data);
 }
 
 static WRITE16_HANDLER( batsugun_snd_cpu_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	if (ACCESSING_BITS_0_7)
 	{
-		mcu_data = data;
+		state->mcu_data = data;
 		batsugun_okisnd_w(space->machine->device("oki"), data);
 	}
-	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port %02x\n",cpu_get_previouspc(space->cpu),mcu_data,(offset*2));
+	logerror("PC:%06x Writing command (%04x) to the NEC V25+ secondary CPU port %02x\n", cpu_get_previouspc(space->cpu), state->mcu_data, (offset*2));
 }
 
 static READ16_HANDLER( V25_sharedram_r )
 {
-	return V25_shared_ram[offset] & 0xff;
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	return state->V25_shared_ram[offset] & 0xff;
 }
 
 static WRITE16_HANDLER( V25_sharedram_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		V25_shared_ram[offset] = data & 0xff;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->V25_shared_ram[offset] = data & 0xff;
 	}
 }
 #endif
@@ -1023,27 +1049,14 @@ static WRITE16_DEVICE_HANDLER( fixeighb_oki_bankswitch_w )
 ***************************************************************************/
 
 
-static READ16_HANDLER( raizing_shared_ram_r )
-{
-	return raizing_shared_ram[offset] & 0xff;
-}
-
-
-static WRITE16_HANDLER( raizing_shared_ram_w )
-{
-	if (ACCESSING_BITS_0_7)
-	{
-		raizing_shared_ram[offset] = data & 0xff;
-	}
-}
-
-
 static WRITE16_HANDLER( bgaregga_soundlatch_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 		soundlatch_w(space, offset, data & 0xff);
-		cpu_set_input_line(sub_cpu, 0, HOLD_LINE);
+		cpu_set_input_line(state->sub_cpu, 0, HOLD_LINE);
 	}
 }
 
@@ -1067,11 +1080,12 @@ static WRITE8_HANDLER( bgaregga_E00C_w )
 
 static WRITE8_HANDLER( bgaregga_bankswitch_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	int bank = (data & 0x0f) - 10 + 4;
 
-	if (bank != current_bank)
+	if (bank != state->current_bank)
 	{
-		current_bank = bank;
+		state->current_bank = bank;
 		memory_set_bank(space->machine, "bank1", bank);
 	}
 }
@@ -1117,12 +1131,14 @@ static WRITE8_HANDLER( raizing_okim6295_bankselect_3 )
 
 static WRITE8_HANDLER( batrider_bankswitch_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	int bank = data & 0x0f;
+
 	bank = (bank > 1) ? bank + 2 : bank;
 
-	if (bank != current_bank)
+	if (bank != state->current_bank)
 	{
-		current_bank = bank;
+		state->current_bank = bank;
 		memory_set_bank(space->machine, "bank1", bank);
 	}
 }
@@ -1136,7 +1152,9 @@ static READ16_HANDLER( batrider_z80_busack_r )
        ROM code. Failure to return the correct status incurrs a Sound Error.
     */
 
-	return raizing_Z80_busreq;			/* Loop BUSRQ to BUSAK */
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	return state->z80_busreq;			/* Loop BUSRQ to BUSAK */
 }
 
 
@@ -1144,7 +1162,9 @@ static WRITE16_HANDLER( batrider_z80_busreq_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
-		raizing_Z80_busreq = (data & 0xff);
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->z80_busreq = (data & 0xff);
 	}
 }
 
@@ -1165,8 +1185,10 @@ static WRITE16_HANDLER( batrider_soundlatch_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 		soundlatch_w(space, offset, data & 0xff);
-		cpu_set_input_line(sub_cpu, INPUT_LINE_NMI, ASSERT_LINE);
+		cpu_set_input_line(state->sub_cpu, INPUT_LINE_NMI, ASSERT_LINE);
 	}
 }
 
@@ -1175,8 +1197,10 @@ static WRITE16_HANDLER( batrider_soundlatch2_w )
 {
 	if (ACCESSING_BITS_0_7)
 	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 		soundlatch2_w(space, offset, data & 0xff);
-		cpu_set_input_line(sub_cpu, INPUT_LINE_NMI, ASSERT_LINE);
+		cpu_set_input_line(state->sub_cpu, INPUT_LINE_NMI, ASSERT_LINE);
 	}
 }
 
@@ -1190,22 +1214,28 @@ static WRITE16_HANDLER( raizing_unknown_w )
 
 static WRITE16_HANDLER( raizing_clear_sndirq_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	// not sure whether this is correct
 	// the 68K writes here during the sound IRQ handler, and nowhere else...
-	cputag_set_input_line(space->machine, "maincpu", raizing_sndirq_line, CLEAR_LINE);
+	cputag_set_input_line(space->machine, "maincpu", state->sndirq_line, CLEAR_LINE);
 }
 
 
 static WRITE8_HANDLER( raizing_sndirq_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	// if raizing_clear_sndirq_w() is correct, should this be ASSERT_LINE?
-	cputag_set_input_line(space->machine, "maincpu", raizing_sndirq_line, HOLD_LINE);
+	cputag_set_input_line(space->machine, "maincpu", state->sndirq_line, HOLD_LINE);
 }
 
 
 static WRITE8_HANDLER( raizing_clear_nmi_w )
 {
-	cpu_set_input_line(sub_cpu, INPUT_LINE_NMI, CLEAR_LINE);
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+	cpu_set_input_line(state->sub_cpu, INPUT_LINE_NMI, CLEAR_LINE);
 }
 
 
@@ -1267,6 +1297,7 @@ static const eeprom_interface bbakraid_93C66_intf =
 
 static READ16_HANDLER( bbakraid_nvram_r )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 	eeprom_device *eeprom = space->machine->device<eeprom_device>("eeprom");
 
 	/* Bit 1 returns the status of BUSAK from the Z80.
@@ -1277,7 +1308,7 @@ static READ16_HANDLER( bbakraid_nvram_r )
 
 	int data;
 	data  = ((eeprom_read_bit(eeprom) & 0x01) << 4);
-	data |= ((raizing_Z80_busreq >> 4) & 0x01);	/* Loop BUSRQ to BUSAK */
+	data |= ((state->z80_busreq >> 4) & 0x01);	/* Loop BUSRQ to BUSAK */
 
 	return data;
 }
@@ -1285,13 +1316,15 @@ static READ16_HANDLER( bbakraid_nvram_r )
 
 static WRITE16_HANDLER( bbakraid_nvram_w )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	if (data & ~0x001f)
 		logerror("CPU #0 PC:%06X - Unknown EEPROM data being written %04X\n",cpu_get_pc(space->cpu),data);
 
 	if ( ACCESSING_BITS_0_7 )
 		input_port_write(space->machine, "EEPROMOUT", data, 0xff);
 
-	raizing_Z80_busreq = data & 0x10;	/* see bbakraid_nvram_r above */
+	state->z80_busreq = data & 0x10;	/* see bbakraid_nvram_r above */
 }
 
 
@@ -1314,10 +1347,7 @@ static ADDRESS_MAP_START( tekipaki_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x020000, 0x03ffff) AM_ROM							/* extra for Whoopee */
 	AM_RANGE(0x080000, 0x082fff) AM_RAM
 	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x140000, 0x140001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x140004, 0x140007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x140008, 0x140009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x14000c, 0x14000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x140000, 0x14000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x180000, 0x180001) AM_READ_PORT("DSWA")
 	AM_RANGE(0x180010, 0x180011) AM_READ_PORT("DSWB")
 	AM_RANGE(0x180020, 0x180021) AM_READ_PORT("SYS")
@@ -1335,17 +1365,14 @@ static ADDRESS_MAP_START( ghox_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x080000, 0x083fff) AM_RAM
 	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x100000, 0x100001) AM_READ(ghox_p1_h_analog_r)	/* Paddle 1 */
-	AM_RANGE(0x140000, 0x140001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x140004, 0x140007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x140008, 0x140009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x14000c, 0x14000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x140000, 0x14000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x180000, 0x180001) AM_READWRITE(ghox_mcu_r, ghox_mcu_w)	/* really part of shared RAM */
 	AM_RANGE(0x180006, 0x180007) AM_READ_PORT("DSWA")
 	AM_RANGE(0x180008, 0x180009) AM_READ_PORT("DSWB")
 	AM_RANGE(0x180010, 0x180011) AM_READ_PORT("SYS")
 	AM_RANGE(0x18000c, 0x18000d) AM_READ_PORT("IN1")
 	AM_RANGE(0x18000e, 0x18000f) AM_READ_PORT("IN2")
-	AM_RANGE(0x180500, 0x180fff) AM_READWRITE(ghox_shared_ram_r, ghox_shared_ram_w) AM_BASE(&toaplan2_shared_ram16)
+	AM_RANGE(0x180500, 0x180fff) AM_READWRITE(ghox_shared_ram_r, ghox_shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)
 	AM_RANGE(0x181000, 0x181001) AM_WRITE(toaplan2_coin_word_w)
 	AM_RANGE(0x18100c, 0x18100d) AM_READ_PORT("JMPR")
 ADDRESS_MAP_END
@@ -1359,29 +1386,23 @@ static ADDRESS_MAP_START( dogyuun_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200018, 0x200019) AM_READ_PORT("SYS")
 	AM_RANGE(0x20001c, 0x20001d) AM_WRITE(toaplan2_v25_coin_word_w)
 #ifdef USE_ENCRYPTED_V25S
-//  AM_RANGE(0x21e000, 0x21fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)   /* $21f000 status port */
-//  AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
+	//AM_RANGE(0x21e000, 0x21fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)   /* $21f000 status port */
+	//AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
 	AM_RANGE(0x210000, 0x21efff) AM_READWRITE( batsugun_share2_r, batsugun_share2_w )
 	AM_RANGE(0x21f000, 0x21ffff) AM_READWRITE( batsugun_share_r, batsugun_share_w )
 #else
-	AM_RANGE(0x21e000, 0x21efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)
+	AM_RANGE(0x21e000, 0x21efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)
 	AM_RANGE(0x21f000, 0x21f001) AM_READWRITE(toaplan2_snd_cpu_r, dogyuun_snd_cpu_w)	/* V25+ status/command port */
 	AM_RANGE(0x21f004, 0x21f005) AM_READ_PORT("DSWA")
 	AM_RANGE(0x21f006, 0x21f007) AM_READ_PORT("DSWB")
 	AM_RANGE(0x21f008, 0x21f009) AM_READ_PORT("JMPR")
-	AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
+	AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
 #endif
 	/***** The following locations in 0x30000x are for video controller 1 ******/
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	/***** The following loctions in 0x50000x are for video controller 2 ******/
-	AM_RANGE(0x500000, 0x500001) AM_WRITE(toaplan2_1_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x500004, 0x500007) AM_READWRITE(toaplan2_1_videoram16_r, toaplan2_1_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x500008, 0x500009) AM_WRITE(toaplan2_1_scroll_reg_select_w)
-	AM_RANGE(0x50000c, 0x50000d) AM_WRITE(toaplan2_1_scroll_reg_data_w)
+	AM_RANGE(0x500000, 0x50000d) AM_DEVREADWRITE("gp9001vdp1", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x700000, 0x700001) AM_READ(video_count_r)			/* test bit 8 */
 ADDRESS_MAP_END
 
@@ -1398,10 +1419,7 @@ static ADDRESS_MAP_START( kbash_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x208014, 0x208015) AM_READ_PORT("IN2")
 	AM_RANGE(0x208018, 0x208019) AM_READ_PORT("SYS")
 	AM_RANGE(0x20801c, 0x20801d) AM_WRITE(toaplan2_coin_word_w)
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x700000, 0x700001) AM_READ(video_count_r)			/* test bit 8 */
 ADDRESS_MAP_END
@@ -1419,14 +1437,11 @@ static ADDRESS_MAP_START( kbash2_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200010, 0x200011) AM_READ_PORT("IN1")
 	AM_RANGE(0x200014, 0x200015) AM_READ_PORT("IN2")
 	AM_RANGE(0x200018, 0x200019) AM_READ_PORT("SYS")
-	AM_RANGE(0x200020, 0x200021) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0x200024, 0x200025) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x200020, 0x200021) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0x200024, 0x200025) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x200028, 0x200029) AM_DEVWRITE("oki1", oki_bankswitch_w)
 	AM_RANGE(0x20002c, 0x20002d) AM_READ(video_count_r)
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 ADDRESS_MAP_END
 
@@ -1434,17 +1449,14 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( truxton2_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x200000, 0x200001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x200004, 0x200007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)
-	AM_RANGE(0x200008, 0x200009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x20000c, 0x20000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x200000, 0x20000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x300000, 0x300fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x400000, 0x401fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x402000, 0x4021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
+	AM_RANGE(0x400000, 0x401fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x402000, 0x4021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
 	AM_RANGE(0x402200, 0x402fff) AM_RAM
-	AM_RANGE(0x403000, 0x4031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x403000, 0x4031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x403200, 0x403fff) AM_RAM
-	AM_RANGE(0x500000, 0x50ffff) AM_READWRITE(toaplan2_tx_gfxram16_r, toaplan2_tx_gfxram16_w) AM_BASE(&toaplan2_tx_gfxram16)
+	AM_RANGE(0x500000, 0x50ffff) AM_READWRITE(toaplan2_tx_gfxram16_r, toaplan2_tx_gfxram16_w) AM_BASE_MEMBER(toaplan2_state, tx_gfxram16)
 	AM_RANGE(0x600000, 0x600001) AM_READ(video_count_r)
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("DSWA")
 	AM_RANGE(0x700002, 0x700003) AM_READ_PORT("DSWB")
@@ -1452,7 +1464,7 @@ static ADDRESS_MAP_START( truxton2_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("IN1")
 	AM_RANGE(0x700008, 0x700009) AM_READ_PORT("IN2")
 	AM_RANGE(0x70000a, 0x70000b) AM_READ_PORT("SYS")
-	AM_RANGE(0x700010, 0x700011) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x700010, 0x700011) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x700014, 0x700017) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
 	AM_RANGE(0x70001e, 0x70001f) AM_WRITE(toaplan2_coin_word_w)		/* Coin count/lock */
 ADDRESS_MAP_END
@@ -1462,11 +1474,9 @@ static ADDRESS_MAP_START( pipibibs_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x082fff) AM_RAM
 	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x140000, 0x140001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x140004, 0x140007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)
-	AM_RANGE(0x140008, 0x140009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x14000c, 0x14000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
-	AM_RANGE(0x190000, 0x190fff) AM_READWRITE(toaplan2_shared_r, toaplan2_shared_w)
+	AM_RANGE(0x140000, 0x14000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
+
+	AM_RANGE(0x190000, 0x190fff) AM_READWRITE(z80_shared_r, z80_shared_w)
 	AM_RANGE(0x19c01c, 0x19c01d) AM_WRITE(toaplan2_coin_word_w)		/* Coin count/lock */
 	AM_RANGE(0x19c020, 0x19c021) AM_READ_PORT("DSWA")
 	AM_RANGE(0x19c024, 0x19c025) AM_READ_PORT("DSWB")
@@ -1476,19 +1486,19 @@ static ADDRESS_MAP_START( pipibibs_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x19c034, 0x19c035) AM_READ_PORT("IN2")
 ADDRESS_MAP_END
 
-
-static ADDRESS_MAP_START( pipibibi_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
+// odd scroll registers
+static ADDRESS_MAP_START( pipibibi_bootleg_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x03ffff) AM_ROM
 	AM_RANGE(0x080000, 0x082fff) AM_RAM
-	AM_RANGE(0x083000, 0x0837ff) AM_READWRITE(pipibibi_spriteram16_r, pipibibi_spriteram16_w)	/* SpriteRAM */
+	AM_RANGE(0x083000, 0x0837ff) AM_DEVREADWRITE("gp9001vdp0", pipibibi_bootleg_spriteram16_r, pipibibi_bootleg_spriteram16_w)	/* SpriteRAM */
 	AM_RANGE(0x083800, 0x087fff) AM_RAM				/* SpriteRAM (unused) */
 	AM_RANGE(0x0c0000, 0x0c0fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x120000, 0x120fff) AM_RAM				/* Copy of SpriteRAM ? */
-//  AM_RANGE(0x13f000, 0x13f001) AM_WRITENOP        /* ??? */
-	AM_RANGE(0x180000, 0x182fff) AM_READWRITE(pipibibi_videoram16_r, pipibibi_videoram16_w)		/* TileRAM */
-	AM_RANGE(0x188000, 0x18800f) AM_WRITE(pipibibi_scroll_w)
-	AM_RANGE(0x190002, 0x190003) AM_READ(pipibibi_z80_status_r)	/* Z80 ready ? */
-	AM_RANGE(0x190010, 0x190011) AM_WRITE(pipibibi_z80_task_w)	/* Z80 task to perform */
+	//AM_RANGE(0x13f000, 0x13f001) AM_WRITENOP        /* ??? */
+	AM_RANGE(0x180000, 0x182fff) AM_DEVREADWRITE("gp9001vdp0", pipibibi_bootleg_videoram16_r, pipibibi_bootleg_videoram16_w)		/* TileRAM */
+	AM_RANGE(0x188000, 0x18800f) AM_DEVWRITE("gp9001vdp0", pipibibi_bootleg_scroll_w)
+	AM_RANGE(0x190002, 0x190003) AM_READ(z80_shared_r)	/* Z80 ready ? */
+	AM_RANGE(0x190010, 0x190011) AM_WRITE(z80_shared_w)	/* Z80 task to perform */
 	AM_RANGE(0x19c01c, 0x19c01d) AM_WRITE(toaplan2_coin_word_w)	/* Coin count/lock */
 	AM_RANGE(0x19c020, 0x19c021) AM_READ_PORT("DSWA")
 	AM_RANGE(0x19c024, 0x19c025) AM_READ_PORT("DSWB")
@@ -1517,31 +1527,28 @@ static ADDRESS_MAP_START( fixeight_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200010, 0x200011) AM_READ_PORT("SYS")
 	AM_RANGE(0x20001c, 0x20001d) AM_WRITE(toaplan2_coin_word_w)	/* Coin count/lock */
 #ifdef USE_ENCRYPTED_V25S
-//  AM_RANGE(0x28e000, 0x28fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)   /* $28f000 status port */
-//  AM_RANGE(0x28fc00, 0x28ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
+	//AM_RANGE(0x28e000, 0x28fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)   /* $28f000 status port */
+	//AM_RANGE(0x28fc00, 0x28ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
 	AM_RANGE(0x280000, 0x28efff) AM_READWRITE( batsugun_share2_r, batsugun_share2_w )
 	AM_RANGE(0x28f000, 0x28ffff) AM_READWRITE( batsugun_share_r, batsugun_share_w )
 	AM_RANGE(0x700000, 0x700001) AM_WRITE(fixeight_subcpu_ctrl) // guess!!!
 #else
 	AM_RANGE(0x280000, 0x28dfff) AM_RAM							/* part of shared ram ? */
-	AM_RANGE(0x28e000, 0x28efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)
-	AM_RANGE(0x28f000, 0x28f001) AM_READWRITE(fixeight_sec_cpu_r, fixeight_sec_cpu_w) AM_BASE(&fixeight_sec_cpu_mem)	/* V25+ Command/Status port */
-//  AM_RANGE(0x28f002, 0x28f003) AM_READONLY             /* part of shared ram */
-//  AM_RANGE(0x28f004, 0x28f005) AM_READ_PORT("DSWA") /* Dip Switch A - Wrong !!! */
-//  AM_RANGE(0x28f006, 0x28f007) AM_READ_PORT("DSWB") /* Dip Switch B - Wrong !!! */
-//  AM_RANGE(0x28f008, 0x28f009) AM_READ_PORT("JMPR") /* Territory Jumper block - Wrong !!! */
-//  AM_RANGE(0x28f00a, 0x28fbff) AM_READONLY             /* part of shared ram */
-	AM_RANGE(0x28fc00, 0x28ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
+	AM_RANGE(0x28e000, 0x28efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)
+	AM_RANGE(0x28f000, 0x28f001) AM_READWRITE(fixeight_sec_cpu_r, fixeight_sec_cpu_w)	/* V25+ Command/Status port */
+	//AM_RANGE(0x28f002, 0x28f003) AM_READONLY             /* part of shared ram */
+	//AM_RANGE(0x28f004, 0x28f005) AM_READ_PORT("DSWA") /* Dip Switch A - Wrong !!! */
+	//AM_RANGE(0x28f006, 0x28f007) AM_READ_PORT("DSWB") /* Dip Switch B - Wrong !!! */
+	//AM_RANGE(0x28f008, 0x28f009) AM_READ_PORT("JMPR") /* Territory Jumper block - Wrong !!! */
+	//AM_RANGE(0x28f00a, 0x28fbff) AM_READONLY             /* part of shared ram */
+	AM_RANGE(0x28fc00, 0x28ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
 #endif
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
-	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
-	AM_RANGE(0x600000, 0x60ffff) AM_READWRITE(toaplan2_tx_gfxram16_r, toaplan2_tx_gfxram16_w) AM_BASE(&toaplan2_tx_gfxram16)
+	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
+	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
+	AM_RANGE(0x600000, 0x60ffff) AM_READWRITE(toaplan2_tx_gfxram16_r, toaplan2_tx_gfxram16_w) AM_BASE_MEMBER(toaplan2_state, tx_gfxram16)
 	AM_RANGE(0x800000, 0x800001) AM_READ(video_count_r)
 ADDRESS_MAP_END
 
@@ -1555,16 +1562,13 @@ static ADDRESS_MAP_START( fixeighb_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x20000c, 0x20000d) AM_READ_PORT("DSWB")
 	AM_RANGE(0x200010, 0x200011) AM_READ_PORT("SYS")
 	AM_RANGE(0x200014, 0x200015) AM_DEVWRITE("oki", fixeighb_oki_bankswitch_w)	/* Sound banking. Code at $4084c, $5070 */
-	AM_RANGE(0x200018, 0x200019) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x200018, 0x200019) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x20001c, 0x20001d) AM_READ_PORT("DSWA")
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
-	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
+	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x700000, 0x700001) AM_READ(video_count_r)
 	AM_RANGE(0x800000, 0x87ffff) AM_ROMBANK("bank1")
 ADDRESS_MAP_END
@@ -1579,49 +1583,47 @@ static ADDRESS_MAP_START( vfive_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x200018, 0x200019) AM_READ_PORT("SYS")
 	AM_RANGE(0x20001c, 0x20001d) AM_WRITE(toaplan2_v25_coin_word_w)	/* Coin count/lock */
 #ifdef USE_ENCRYPTED_V25S
-//  AM_RANGE(0x21e000, 0x21fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)   /* $21f000 status port */
-//  AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
+	//AM_RANGE(0x21e000, 0x21fbff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)   /* $21f000 status port */
+	//AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)    /* 16-bit on 68000 side, 8-bit on V25+ side */
 	AM_RANGE(0x210000, 0x21efff) AM_READWRITE( batsugun_share2_r, batsugun_share2_w )
 	AM_RANGE(0x21f000, 0x21ffff) AM_READWRITE( batsugun_share_r, batsugun_share_w )
 #else
-	AM_RANGE(0x21e000, 0x21efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE(&toaplan2_shared_ram16)
+	AM_RANGE(0x21e000, 0x21efff) AM_READWRITE(shared_ram_r, shared_ram_w) AM_BASE_MEMBER(toaplan2_state, shared_ram16)
 	AM_RANGE(0x21f000, 0x21f001) AM_READWRITE(toaplan2_snd_cpu_r, vfive_snd_cpu_w)	/* V25+ Command/Status port */
 	AM_RANGE(0x21f004, 0x21f005) AM_READ_PORT("DSWA")
 	AM_RANGE(0x21f006, 0x21f007) AM_READ_PORT("DSWB")
 	AM_RANGE(0x21f008, 0x21f009) AM_READ_PORT("JMPR")
-	AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE(&V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
+	AM_RANGE(0x21fc00, 0x21ffff) AM_READWRITE(V25_sharedram_r, V25_sharedram_w) AM_BASE_MEMBER(toaplan2_state, V25_shared_ram)	/* 16-bit on 68000 side, 8-bit on V25+ side */
 #endif
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x700000, 0x700001) AM_READ(video_count_r)
 ADDRESS_MAP_END
 
 
-static UINT8* batsugun_share;
-#ifdef USE_ENCRYPTED_V25S
-static UINT8* batsugun_share2;
-#endif
-
 static READ16_HANDLER( batsugun_share_r )
 {
-	return batsugun_share[offset] | batsugun_share[offset]<<8;
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
 
+	return state->batsugun_share[offset] | state->batsugun_share[offset]<<8;
 }
 
 static WRITE16_HANDLER( batsugun_share_w )
 {
-	/*
-    if (ACCESSING_BITS_8_15)
-    {
-        batsugun_share[offset] = data >> 8;
-    }
-    */
+#if 0
+	if (ACCESSING_BITS_8_15)
+	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->batsugun_share[offset] = data >> 8;
+	}
+#endif
+
 	if (ACCESSING_BITS_0_7)
 	{
-		batsugun_share[offset] = data;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->batsugun_share[offset] = data;
 	}
 }
 
@@ -1629,21 +1631,27 @@ static WRITE16_HANDLER( batsugun_share_w )
 /* To be removed... */
 static READ16_HANDLER( batsugun_share2_r )
 {
+	toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
 	return batsugun_share2[offset] | batsugun_share2[offset]<<8;
 }
 
 static WRITE16_HANDLER( batsugun_share2_w )
 {
-	/*
-    if (ACCESSING_BITS_8_15)
-    {
-        batsugun_share2[offset] = data >> 8;
-    }
-    */
+#if 0
+	if (ACCESSING_BITS_8_15)
+	{
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->batsugun_share2[offset] = data >> 8;
+	}
+#endif
 
 	if (ACCESSING_BITS_0_7)
 	{
-		batsugun_share2[offset] = data;
+		toaplan2_state *state = space->machine->driver_data<toaplan2_state>();
+
+		state->batsugun_share2[offset] = data;
 	}
 }
 #endif
@@ -1667,16 +1675,10 @@ static ADDRESS_MAP_START( batsugun_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x210000, 0x21ffff) AM_READWRITE( batsugun_share_r, batsugun_share_w )
 
 	/***** The following in 0x30000x are for video controller 1 ******/
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	/***** The following in 0x50000x are for video controller 2 ******/
-	AM_RANGE(0x500000, 0x500001) AM_WRITE(toaplan2_1_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x500004, 0x500007) AM_READWRITE(toaplan2_1_videoram16_r, toaplan2_1_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x500008, 0x500009) AM_WRITE(toaplan2_1_scroll_reg_select_w)
-	AM_RANGE(0x50000c, 0x50000d) AM_WRITE(toaplan2_1_scroll_reg_data_w)
+	AM_RANGE(0x500000, 0x50000d) AM_DEVREADWRITE("gp9001vdp1", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x700000, 0x700001) AM_READ(video_count_r)
 ADDRESS_MAP_END
 
@@ -1684,13 +1686,10 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( snowbro2_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)	/* VideoRAM selector/offset */
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x500000, 0x500003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff)
-	AM_RANGE(0x600000, 0x600001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x600000, 0x600001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x700000, 0x700001) AM_READ_PORT("JMPR")
 	AM_RANGE(0x700004, 0x700005) AM_READ_PORT("DSWA")
 	AM_RANGE(0x700008, 0x700009) AM_READ_PORT("DSWB")
@@ -1707,7 +1706,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mahoudai_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x07ffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(raizing_shared_ram_r, raizing_shared_ram_w)
+	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(z80_shared_r, z80_shared_w)
 	AM_RANGE(0x21c01c, 0x21c01d) AM_WRITE(toaplan2_coin_word_w)
 	AM_RANGE(0x21c020, 0x21c021) AM_READ_PORT("IN1")
 	AM_RANGE(0x21c024, 0x21c025) AM_READ_PORT("IN2")
@@ -1716,16 +1715,13 @@ static ADDRESS_MAP_START( mahoudai_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x21c030, 0x21c031) AM_READ_PORT("DSWB")
 	AM_RANGE(0x21c034, 0x21c035) AM_READ_PORT("JMPR")
 	AM_RANGE(0x21c03c, 0x21c03d) AM_READ(video_count_r)
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x401000, 0x4017ff) AM_RAM							/* Unused PaletteRAM */
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
+	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
 	AM_RANGE(0x502200, 0x502fff) AM_RAM
-	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x503200, 0x503fff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1733,7 +1729,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( shippumd_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(raizing_shared_ram_r, raizing_shared_ram_w)
+	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(z80_shared_r, z80_shared_w)
 //  AM_RANGE(0x21c008, 0x21c009) AM_WRITENOP                    /* ??? */
 	AM_RANGE(0x21c01c, 0x21c01d) AM_WRITE(shippumd_coin_word_w)
 	AM_RANGE(0x21c020, 0x21c021) AM_READ_PORT("IN1")
@@ -1743,16 +1739,13 @@ static ADDRESS_MAP_START( shippumd_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x21c030, 0x21c031) AM_READ_PORT("DSWB")
 	AM_RANGE(0x21c034, 0x21c035) AM_READ_PORT("JMPR")
 	AM_RANGE(0x21c03c, 0x21c03d) AM_READ(video_count_r)
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
 	AM_RANGE(0x401000, 0x4017ff) AM_RAM							/* Unused PaletteRAM */
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
+	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
 	AM_RANGE(0x502200, 0x502fff) AM_RAM
-	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x503200, 0x503fff) AM_RAM
 ADDRESS_MAP_END
 
@@ -1760,7 +1753,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( bgaregga_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0fffff) AM_ROM
 	AM_RANGE(0x100000, 0x10ffff) AM_RAM
-	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(raizing_shared_ram_r, raizing_shared_ram_w)
+	AM_RANGE(0x218000, 0x21bfff) AM_READWRITE(z80_shared_r, z80_shared_w)
 	AM_RANGE(0x21c01c, 0x21c01d) AM_WRITE(toaplan2_coin_word_w)
 	AM_RANGE(0x21c020, 0x21c021) AM_READ_PORT("IN1")
 	AM_RANGE(0x21c024, 0x21c025) AM_READ_PORT("IN2")
@@ -1769,15 +1762,12 @@ static ADDRESS_MAP_START( bgaregga_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x21c030, 0x21c031) AM_READ_PORT("DSWB")
 	AM_RANGE(0x21c034, 0x21c035) AM_READ_PORT("JMPR")
 	AM_RANGE(0x21c03c, 0x21c03d) AM_READ(video_count_r)
-	AM_RANGE(0x300000, 0x300001) AM_WRITE(toaplan2_0_voffs_w)
-	AM_RANGE(0x300004, 0x300007) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x300008, 0x300009) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x30000c, 0x30000d) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
+	AM_RANGE(0x300000, 0x30000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_r, gp9001_vdp_w)
 	AM_RANGE(0x400000, 0x400fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)
-	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
+	AM_RANGE(0x500000, 0x501fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)
+	AM_RANGE(0x502000, 0x5021ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
 	AM_RANGE(0x502200, 0x502fff) AM_RAM
-	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x503000, 0x5031ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x503200, 0x503fff) AM_RAM
 	AM_RANGE(0x600000, 0x600001) AM_WRITE(bgaregga_soundlatch_w)
 ADDRESS_MAP_END
@@ -1785,17 +1775,14 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( batrider_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0x200000, 0x201fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)	/* Text VideoRAM */
-	AM_RANGE(0x202000, 0x202fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram) AM_SIZE(&batrider_paletteram16_size)
-	AM_RANGE(0x203000, 0x2031ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
-	AM_RANGE(0x203200, 0x2033ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
-	AM_RANGE(0x203400, 0x207fff) AM_READWRITE(raizing_tx_gfxram16_r, raizing_tx_gfxram16_w)	/* Main RAM actually */
+	AM_RANGE(0x200000, 0x201fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)	/* Text VideoRAM */
+	AM_RANGE(0x202000, 0x202fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram) AM_SIZE_MEMBER(toaplan2_state, paletteram16_size)
+	AM_RANGE(0x203000, 0x2031ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
+	AM_RANGE(0x203200, 0x2033ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
+	AM_RANGE(0x203400, 0x207fff) AM_READWRITE(raizing_tx_gfxram16_r, raizing_tx_gfxram16_w) /* Main RAM actually */
 	AM_RANGE(0x208000, 0x20ffff) AM_RAM
 	AM_RANGE(0x300000, 0x37ffff) AM_READ(raizing_z80rom_r)
-	AM_RANGE(0x400000, 0x400001) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
-	AM_RANGE(0x400004, 0x400005) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x400008, 0x40000b) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x40000c, 0x40000d) AM_WRITE(toaplan2_0_voffs_w)
+	AM_RANGE(0x400000, 0x40000d) AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_alt_r, gp9001_vdp_alt_w)
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("IN")
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("SYS-DSW")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("DSW")
@@ -1816,17 +1803,14 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bbakraid_68k_mem, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x1fffff) AM_ROM
-	AM_RANGE(0x200000, 0x201fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE(&toaplan2_txvideoram16) AM_SIZE(&toaplan2_tx_vram_size)	/* Text VideoRAM */
-	AM_RANGE(0x202000, 0x202fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram) AM_SIZE(&batrider_paletteram16_size)
-	AM_RANGE(0x203000, 0x2031ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE(&toaplan2_txvideoram16_offs) AM_SIZE(&toaplan2_tx_offs_vram_size)
-	AM_RANGE(0x203200, 0x2033ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE(&toaplan2_txscrollram16) AM_SIZE(&toaplan2_tx_scroll_vram_size)
+	AM_RANGE(0x200000, 0x201fff) AM_READWRITE(toaplan2_txvideoram16_r, toaplan2_txvideoram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16, tx_vram_size)	/* Text VideoRAM */
+	AM_RANGE(0x202000, 0x202fff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram) AM_SIZE_MEMBER(toaplan2_state, paletteram16_size)
+	AM_RANGE(0x203000, 0x2031ff) AM_READWRITE(toaplan2_txvideoram16_offs_r, toaplan2_txvideoram16_offs_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txvideoram16_offs, tx_offs_vram_size)
+	AM_RANGE(0x203200, 0x2033ff) AM_READWRITE(toaplan2_txscrollram16_r, toaplan2_txscrollram16_w) AM_BASE_SIZE_MEMBER(toaplan2_state, txscrollram16, tx_scroll_vram_size)
 	AM_RANGE(0x203400, 0x207fff) AM_READWRITE(raizing_tx_gfxram16_r, raizing_tx_gfxram16_w)	/* Main RAM actually */
 	AM_RANGE(0x208000, 0x20ffff) AM_RAM
 	AM_RANGE(0x300000, 0x33ffff) AM_READ(raizing_z80rom_r)
-	AM_RANGE(0x400000, 0x400001) AM_READWRITE(toaplan2_inputport_0_word_r, toaplan2_0_scroll_reg_data_w)	/* VBlank */
-	AM_RANGE(0x400004, 0x400005) AM_WRITE(toaplan2_0_scroll_reg_select_w)
-	AM_RANGE(0x400008, 0x40000b) AM_READWRITE(toaplan2_0_videoram16_r, toaplan2_0_videoram16_w)	/* Tile/Sprite VideoRAM */
-	AM_RANGE(0x40000c, 0x40000d) AM_WRITE(toaplan2_0_voffs_w)
+	AM_RANGE(0x400000, 0x40000d)  AM_DEVREADWRITE("gp9001vdp0", gp9001_vdp_alt_r, gp9001_vdp_alt_w)
 	AM_RANGE(0x500000, 0x500001) AM_READ_PORT("IN")
 	AM_RANGE(0x500002, 0x500003) AM_READ_PORT("SYS-DSW")
 	AM_RANGE(0x500004, 0x500005) AM_READ_PORT("DSW")
@@ -1846,18 +1830,18 @@ ADDRESS_MAP_END
 
 
 
-static ADDRESS_MAP_START( sound_z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
+static ADDRESS_MAP_START( pipibibs_sound_z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE(&toaplan2_shared_ram)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM AM_BASE_MEMBER(toaplan2_state, z80_shared_ram)
 	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym3812_r, ym3812_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( raizing_sound_z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&raizing_shared_ram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_MEMBER(toaplan2_state, z80_shared_ram)
 	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0xe004, 0xe004) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xe004, 0xe004) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe00e, 0xe00e) AM_WRITE(toaplan2_coin_w)
 ADDRESS_MAP_END
 
@@ -1865,9 +1849,9 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( bgaregga_sound_z80_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0xbfff) AM_ROMBANK("bank1")
-	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE(&raizing_shared_ram)
+	AM_RANGE(0xc000, 0xdfff) AM_RAM AM_BASE_MEMBER(toaplan2_state, z80_shared_ram)
 	AM_RANGE(0xe000, 0xe001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0xe004, 0xe004) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xe004, 0xe004) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe006, 0xe006) AM_WRITE(raizing_okim6295_bankselect_0)
 	AM_RANGE(0xe008, 0xe008) AM_WRITE(raizing_okim6295_bankselect_1)
 	AM_RANGE(0xe00a, 0xe00a) AM_WRITE(bgaregga_bankswitch_w)
@@ -1893,8 +1877,8 @@ static ADDRESS_MAP_START( batrider_sound_z80_port, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x48, 0x48) AM_READ(soundlatch_r)
 	AM_RANGE(0x4a, 0x4a) AM_READ(soundlatch2_r)
 	AM_RANGE(0x80, 0x81) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x82, 0x82) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x84, 0x84) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x82, 0x82) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x84, 0x84) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x88, 0x88) AM_WRITE(batrider_bankswitch_w)
 	AM_RANGE(0xc0, 0xc0) AM_WRITE(raizing_okim6295_bankselect_0)
 	AM_RANGE(0xc2, 0xc2) AM_WRITE(raizing_okim6295_bankselect_1)
@@ -1937,7 +1921,7 @@ static ADDRESS_MAP_START( V25_kbash_mem, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x00000, 0x03fff) AM_ROM
 //  AM_RANGE(0x00000, 0x007ff) AM_RAM                           /* External shared RAM (Banked) */
 	AM_RANGE(0x04000, 0x04001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x04002, 0x04002) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x04002, 0x04002) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 //  AM_RANGE(0x04004, 0x04004) AM_DEVWRITE("oki", oki_bankswitch_w)
 	AM_RANGE(0x04008, 0x04008) AM_READ_PORT("IN1")
 	AM_RANGE(0x0400a, 0x0400a) AM_READ_PORT("IN2")
@@ -2379,7 +2363,7 @@ static READ8_HANDLER( kludge_r )
 
 static ADDRESS_MAP_START( V25_rambased_mem, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x00000, 0x00001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x00000, 0x07fff) AM_RAM AM_SHARE("share6") AM_BASE(&batsugun_share)
+	AM_RANGE(0x00000, 0x07fff) AM_RAM AM_SHARE("share6") AM_BASE_MEMBER(toaplan2_state, batsugun_share)
 
 //  AM_RANGE(0x40000, 0x477ff) AM_RAM AM_SHARE("share7")
 	AM_RANGE(0x40e00, 0x40eff) AM_RAM //internal V25 RAM
@@ -3765,8 +3749,10 @@ GFXDECODE_END
 
 static void irqhandler(running_device *device, int linestate)
 {
-	if (sub_cpu != NULL)		// wouldn't tekipaki have problem without this? "mcu" is not generally added
-		cpu_set_input_line(sub_cpu, 0, linestate);
+	toaplan2_state *state = device->machine->driver_data<toaplan2_state>();
+
+	if (state->sub_cpu != NULL)		// wouldn't tekipaki have problem without this? "mcu" is not generally added
+		cpu_set_input_line(state->sub_cpu, 0, linestate);
 }
 
 static const ym3812_interface ym3812_config =
@@ -3780,9 +3766,7 @@ static const ymz280b_interface ymz280b_config =
 };
 
 
-
-
-static MACHINE_DRIVER_START( tekipaki )
+static MACHINE_CONFIG_START( tekipaki, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* 10MHz Oscillator */
@@ -3808,9 +3792,13 @@ static MACHINE_DRIVER_START( tekipaki )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+
+	MDRV_DEVICE_ADD_VDP0
+
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -3818,10 +3806,10 @@ static MACHINE_DRIVER_START( tekipaki )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_27MHz/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ghox )
+static MACHINE_CONFIG_START( ghox, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* verified on pcb */
@@ -3847,16 +3835,18 @@ static MACHINE_DRIVER_START( ghox )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* x = modified to match batsugun 'unencrypted' code */
 
@@ -3884,7 +3874,7 @@ static const UINT8 ts002mach_decryption_table[256] = {
 
 static const nec_config ts002mach_config ={ ts002mach_decryption_table, };
 
-static MACHINE_DRIVER_START( dogyuun )
+static MACHINE_CONFIG_START( dogyuun, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_25MHz/2)			/* verified on pcb */
@@ -3906,12 +3896,25 @@ static MACHINE_DRIVER_START( dogyuun )
 	MDRV_SCREEN_SIZE(432, 262)
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
+#ifdef DUAL_SCREEN_VDPS
+	MDRV_SCREEN_ADD("screen2", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(432, 262)
+	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+
+	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
+#endif
+
 	MDRV_GFXDECODE(2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_1)
-	MDRV_VIDEO_EOF(toaplan2_1)
-	MDRV_VIDEO_UPDATE(dogyuun_1)
+	MDRV_DEVICE_ADD_VDP0
+	MDRV_DEVICE_ADD_VDP1
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(dogyuun)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -3921,7 +3924,7 @@ static MACHINE_DRIVER_START( dogyuun )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_25MHz/24, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* x = modified to match batsugun 'unencrypted' code - '?' likewise, but not so sure about them
   '!' = code stops being the same as batsugun at this point, might be wrong
@@ -3964,13 +3967,15 @@ static const nec_config ts004dash_config ={ ts004dash_decryption_table, };
 static MACHINE_RESET(kbash)
 {
 #ifndef USE_ENCRYPTED_V25S
-	cpu_set_input_line(sub_cpu, INPUT_LINE_HALT, ASSERT_LINE);
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	cpu_set_input_line(state->sub_cpu, INPUT_LINE_HALT, ASSERT_LINE);
 #endif
 }
 
 
 
-static MACHINE_DRIVER_START( kbash )
+static MACHINE_CONFIG_START( kbash, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz)			/* 16MHz Oscillator */
@@ -3998,9 +4003,11 @@ static MACHINE_DRIVER_START( kbash )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4010,10 +4017,11 @@ static MACHINE_DRIVER_START( kbash )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( kbash2 )
+static MACHINE_CONFIG_START( kbash2, toaplan2_state )
+
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz)			/* 16MHz Oscillator */
 	MDRV_CPU_PROGRAM_MAP(kbash2_68k_mem)
@@ -4033,9 +4041,11 @@ static MACHINE_DRIVER_START( kbash2 )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4045,10 +4055,10 @@ static MACHINE_DRIVER_START( kbash2 )
 
 	MDRV_OKIM6295_ADD("oki2", XTAL_16MHz/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( truxton2 )
+static MACHINE_CONFIG_START( truxton2, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz)			/* verified on pcb */
@@ -4069,9 +4079,11 @@ static MACHINE_DRIVER_START( truxton2 )
 	MDRV_GFXDECODE(truxton2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(truxton2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(truxton2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(truxton2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4081,18 +4093,18 @@ static MACHINE_DRIVER_START( truxton2 )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_16MHz/4, OKIM6295_PIN7_LOW) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( pipibibs )
+static MACHINE_CONFIG_START( pipibibs, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(pipibibs_68k_mem)
 	MDRV_CPU_VBLANK_INT("screen", toaplan2_vblank_irq4)
 
-	MDRV_CPU_ADD("audiocpu", Z80,XTAL_27MHz/8)			/* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(sound_z80_mem)
+	MDRV_CPU_ADD("audiocpu", Z80, XTAL_27MHz/8)			/* verified on pcb */
+	MDRV_CPU_PROGRAM_MAP(pipibibs_sound_z80_mem)
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
@@ -4110,9 +4122,11 @@ static MACHINE_DRIVER_START( pipibibs )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4120,10 +4134,10 @@ static MACHINE_DRIVER_START( pipibibs )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_27MHz/8)			/* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( whoopee )
+static MACHINE_CONFIG_START( whoopee, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* 10MHz Oscillator */
@@ -4149,9 +4163,11 @@ static MACHINE_DRIVER_START( whoopee )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4159,18 +4175,18 @@ static MACHINE_DRIVER_START( whoopee )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_27MHz/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( pipibibi )
+static MACHINE_CONFIG_START( pipibibi_bootleg, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* 10MHz Oscillator */
-	MDRV_CPU_PROGRAM_MAP(pipibibi_68k_mem)
+	MDRV_CPU_PROGRAM_MAP(pipibibi_bootleg_68k_mem)
 	MDRV_CPU_VBLANK_INT("screen", toaplan2_vblank_irq4)
 
 	MDRV_CPU_ADD("audiocpu", Z80, XTAL_27MHz/8)			/* ??? 3.37MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_z80_mem)
+	MDRV_CPU_PROGRAM_MAP(pipibibs_sound_z80_mem)
 
 	MDRV_QUANTUM_TIME(HZ(600))
 
@@ -4188,9 +4204,11 @@ static MACHINE_DRIVER_START( pipibibi )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4198,7 +4216,7 @@ static MACHINE_DRIVER_START( pipibibi )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_27MHz/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* x = modified to match batsugun 'unencrypted' code - '?' likewise, but not so sure about them */
 /* this one seems more different to the other tables */
@@ -4227,7 +4245,7 @@ static const UINT8 ts001turbo_decryption_table[256] = {
 static const nec_config ts001turbo_config ={ ts001turbo_decryption_table, };
 
 
-static MACHINE_DRIVER_START( fixeight )
+static MACHINE_CONFIG_START( fixeight, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz)			/* verified on pcb */
@@ -4256,9 +4274,11 @@ static MACHINE_DRIVER_START( fixeight )
 	MDRV_GFXDECODE(truxton2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(truxton2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(truxton2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(truxton2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4268,10 +4288,11 @@ static MACHINE_DRIVER_START( fixeight )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_16MHz/16, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( fixeighb )
+static MACHINE_CONFIG_START( fixeighb, toaplan2_state )
+
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)			/* 10MHz Oscillator */
 	MDRV_CPU_PROGRAM_MAP(fixeighb_68k_mem)
@@ -4291,16 +4312,18 @@ static MACHINE_DRIVER_START( fixeighb )
 	MDRV_GFXDECODE(fixeighb)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(truxton2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(truxton2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(fixeighb)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_OKIM6295_ADD("oki", XTAL_14MHz/16, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* according to the comments this chip has the same markings as the Batsugun chip,
    maybe they double map some opcodes on it and recycled the chips using unencrypted ones
@@ -4334,7 +4357,7 @@ static const UINT8 ts007spy_vfive_decryption_table[256] = {
 static const nec_config ts007spy_vfive_config ={ ts007spy_vfive_decryption_table, };
 
 
-static MACHINE_DRIVER_START( vfive )
+static MACHINE_CONFIG_START( vfive, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_20MHz/2)	/* verified on pcb */
@@ -4356,23 +4379,27 @@ static MACHINE_DRIVER_START( vfive )
 	MDRV_SCREEN_SIZE(432, 262)
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
+	MDRV_DEVICE_ADD_VDP0
+
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 
 	MDRV_SOUND_ADD("ymsnd", YM2151, XTAL_27MHz/8) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static MACHINE_RESET(batsugun)
 {
-	cpu_set_input_line(sub_cpu, INPUT_LINE_HALT, ASSERT_LINE);
+	toaplan2_state *state = machine->driver_data<toaplan2_state>();
+
+	cpu_set_input_line(state->sub_cpu, INPUT_LINE_HALT, ASSERT_LINE);
 }
 
 
@@ -4422,7 +4449,7 @@ static const nmk112_interface batrider_nmk112_intf =
 	"oki1", "oki2", 0
 };
 
-static MACHINE_DRIVER_START( batsugun )
+static MACHINE_CONFIG_START( batsugun, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)			/* 16MHz , 32MHz Oscillator */
@@ -4446,12 +4473,25 @@ static MACHINE_DRIVER_START( batsugun )
 	MDRV_SCREEN_SIZE(432, 262)
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
+#ifdef DUAL_SCREEN_VDPS
+	MDRV_SCREEN_ADD("screen2", RASTER)
+	MDRV_SCREEN_REFRESH_RATE(60)
+	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MDRV_SCREEN_SIZE(432, 262)
+	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
+
+	MDRV_DEFAULT_LAYOUT(layout_dualhsxs)
+#endif
+
 	MDRV_GFXDECODE(2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_1)
-	MDRV_VIDEO_EOF(toaplan2_1)
-	MDRV_VIDEO_UPDATE(batsugun_1)
+	MDRV_DEVICE_ADD_VDP0
+	MDRV_DEVICE_ADD_VDP1
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(batsugun)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4462,10 +4502,10 @@ static MACHINE_DRIVER_START( batsugun )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/8, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( snowbro2 )
+static MACHINE_CONFIG_START( snowbro2, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz)
@@ -4486,9 +4526,11 @@ static MACHINE_DRIVER_START( snowbro2 )
 	MDRV_GFXDECODE(toaplan2)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(toaplan2_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(toaplan2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(toaplan2)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(toaplan2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4498,10 +4540,10 @@ static MACHINE_DRIVER_START( snowbro2 )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_27MHz/10, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mahoudai )
+static MACHINE_CONFIG_START( mahoudai, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* 16MHz , 32MHz Oscillator */
@@ -4527,9 +4569,11 @@ static MACHINE_DRIVER_START( mahoudai )
 	MDRV_GFXDECODE(raizing)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(bgaregga_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(mahoudai_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(bgaregga)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4539,10 +4583,10 @@ static MACHINE_DRIVER_START( mahoudai )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( shippumd )
+static MACHINE_CONFIG_START( shippumd, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* 16MHz , 32MHz Oscillator */
@@ -4565,12 +4609,14 @@ static MACHINE_DRIVER_START( shippumd )
 	MDRV_SCREEN_SIZE(432, 262)
 	MDRV_SCREEN_VISIBLE_AREA(0, 319, 0, 239)
 
+	MDRV_DEVICE_ADD_VDP0
+
 	MDRV_GFXDECODE(raizing)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(bgaregga_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(truxton2_0)
+	MDRV_VIDEO_START(bgaregga)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4580,10 +4626,10 @@ static MACHINE_DRIVER_START( shippumd )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_32MHz/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bgaregga )
+static MACHINE_CONFIG_START( bgaregga, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* 16MHz , 32MHz Oscillator */
@@ -4609,9 +4655,11 @@ static MACHINE_DRIVER_START( bgaregga )
 	MDRV_GFXDECODE(raizing)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(bgaregga_0)
-	MDRV_VIDEO_EOF(toaplan2_0)
-	MDRV_VIDEO_UPDATE(truxton2_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(bgaregga)
+	MDRV_VIDEO_EOF(toaplan2)
+	MDRV_VIDEO_UPDATE(truxton2)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4623,10 +4671,10 @@ static MACHINE_DRIVER_START( bgaregga )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NMK112_ADD("nmk112", bgaregga_nmk112_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( batrider )
+static MACHINE_CONFIG_START( batrider, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* 16MHz , 32MHz Oscillator */
@@ -4653,8 +4701,10 @@ static MACHINE_DRIVER_START( batrider )
 	MDRV_GFXDECODE(batrider)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(batrider_0)
-	MDRV_VIDEO_UPDATE(batrider_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(batrider)
+	MDRV_VIDEO_UPDATE(batrider)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4669,9 +4719,9 @@ static MACHINE_DRIVER_START( batrider )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	MDRV_NMK112_ADD("nmk112", batrider_nmk112_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bbakraid )
+static MACHINE_CONFIG_START( bbakraid, toaplan2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_32MHz/2)		/* 16MHz , 32MHz Oscillator */
@@ -4700,8 +4750,10 @@ static MACHINE_DRIVER_START( bbakraid )
 	MDRV_GFXDECODE(batrider)
 	MDRV_PALETTE_LENGTH(0x10000) // we encode priority with colour in the tilemaps, so need a larger palette
 
-	MDRV_VIDEO_START(batrider_0)
-	MDRV_VIDEO_UPDATE(batrider_0)
+	MDRV_DEVICE_ADD_VDP0
+
+	MDRV_VIDEO_START(batrider)
+	MDRV_VIDEO_UPDATE(batrider)
 
 	/* sound hardware */
 	MDRV_SPEAKER_STANDARD_MONO("mono")
@@ -4710,15 +4762,14 @@ static MACHINE_DRIVER_START( bbakraid )
 	MDRV_SOUND_CONFIG(ymz280b_config)
 	MDRV_SOUND_ROUTE(0, "mono", 1.0)
 	MDRV_SOUND_ROUTE(1, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bbakradu )
-	MDRV_IMPORT_FROM(bbakraid)
+static MACHINE_CONFIG_DERIVED( bbakradu, bbakraid )
 
 	MDRV_DEVICE_REMOVE("eeprom")
 	MDRV_EEPROM_ADD("eeprom", bbakraid_93C66_intf)
 	MDRV_EEPROM_DATA(bbakraid_unlim_default, 512)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -5795,8 +5846,8 @@ GAME( 1991, tekipaki, 0,        tekipaki, tekipaki, T2_Z180,  ROT0,   "Toaplan",
 GAME( 1991, ghox,     0,        ghox,     ghox,     T2_Z180,  ROT270, "Toaplan", "Ghox (Spinner with Up/Down Axis)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1991, ghoxj,    ghox,     ghox,     ghox,     T2_Z180,  ROT270, "Toaplan", "Ghox (8-Way Joystick)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
-GAME( 1992, dogyuun,  0,        dogyuun,  dogyuun,  T2_V25,   ROT270, "Toaplan", "Dogyuun", GAME_NO_SOUND | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
-GAME( 1992, dogyuunk, dogyuun,  dogyuun,  dogyuunk, T2_V25,   ROT270, "Toaplan", "Dogyuun (Unite Trading license)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING )
+GAME( 1992, dogyuun,  0,        dogyuun,  dogyuun,  T2_V25,   ROT270, "Toaplan", "Dogyuun", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
+GAME( 1992, dogyuunk, dogyuun,  dogyuun,  dogyuunk, T2_V25,   ROT270, "Toaplan", "Dogyuun (Unite Trading license)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
 GAME( 1993, kbash,    0,        kbash,    kbash,    T2_V25,   ROT0,   "Toaplan", "Knuckle Bash", GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 
@@ -5807,7 +5858,7 @@ GAME( 1992, truxton2, 0,        truxton2, truxton2, T2_noZ80, ROT270, "Toaplan",
 GAME( 1991, pipibibs, 0,        pipibibs, pipibibs, T2_Z80,   ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Z80 sound cpu, set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1991, pipibibsa,pipibibs, pipibibs, pipibibs, T2_Z80,   ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Z80 sound cpu, set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1991, whoopee,  pipibibs, whoopee,  whoopee,  T2_Z180,  ROT0,   "Toaplan", "Pipi & Bibis / Whoopee!! (Whoopee!! board)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE ) // original Whoopee!! boards have a HD647180 instead of Z80
-GAME( 1991, pipibibi, pipibibs, pipibibi, pipibibi, pipibibi, ROT0,   "bootleg? (Ryouta Kikaku)", "Pipi & Bibis / Whoopee!! (bootleg?)", GAME_SUPPORTS_SAVE )
+GAME( 1991, pipibibi, pipibibs, pipibibi_bootleg, pipibibi, pipibibi, ROT0,   "bootleg? (Ryouta Kikaku)", "Pipi & Bibis / Whoopee!! (bootleg?)", GAME_SUPPORTS_SAVE )
 
 GAME( 1992, fixeight, 0,        fixeight, fixeight, fixeight, ROT270, "Toaplan", "FixEight", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING | GAME_SUPPORTS_SAVE )
 GAME( 1992, fixeightb,fixeight, fixeighb, fixeighb, fixeighb, ROT270, "bootleg", "FixEight (bootleg)", GAME_SUPPORTS_SAVE )
@@ -5816,9 +5867,9 @@ GAME( 1992, grindstm, vfive,    vfive,    grindstm, T2_V25,   ROT270, "Toaplan",
 GAME( 1992, grindstma,vfive,    vfive,    grindstm, T2_V25,   ROT270, "Toaplan", "Grind Stormer (older set)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1993, vfive,    0,        vfive,    vfive,    T2_V25,   ROT270, "Toaplan", "V-Five (Japan)", GAME_NO_SOUND | GAME_SUPPORTS_SAVE )
 
-GAME( 1993, batsugun,  0,        batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 1)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
-GAME( 1993, batsuguna, batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 2)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
-GAME( 1993, batsugunsp,batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (Special Ver.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE | GAME_NOT_WORKING ) // dual vdp mixing is broken ATM
+GAME( 1993, batsugun,  0,        batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 1)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1993, batsuguna, batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (set 2)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
+GAME( 1993, batsugunsp,batsugun, batsugun, batsugun, T2_V25,   ROT270, "Toaplan", "Batsugun (Special Ver.)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS | GAME_SUPPORTS_SAVE )
 
 GAME( 1994, snowbro2, 0,        snowbro2, snowbro2, T2_noZ80, ROT0,   "Hanafram", "Snow Bros. 2 - With New Elves / Otenki Paradise", GAME_SUPPORTS_SAVE )
 

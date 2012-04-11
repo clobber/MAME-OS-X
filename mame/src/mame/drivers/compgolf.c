@@ -24,19 +24,19 @@
 
 static WRITE8_DEVICE_HANDLER( compgolf_scrollx_lo_w )
 {
-	compgolf_state *state = (compgolf_state *)device->machine->driver_data;
+	compgolf_state *state = device->machine->driver_data<compgolf_state>();
 	state->scrollx_lo = data;
 }
 
 static WRITE8_DEVICE_HANDLER( compgolf_scrolly_lo_w )
 {
-	compgolf_state *state = (compgolf_state *)device->machine->driver_data;
+	compgolf_state *state = device->machine->driver_data<compgolf_state>();
 	state->scrolly_lo = data;
 }
 
 static WRITE8_HANDLER( compgolf_ctrl_w )
 {
-	compgolf_state *state = (compgolf_state *)space->machine->driver_data;
+	compgolf_state *state = space->machine->driver_data<compgolf_state>();
 
 	/* bit 4 and 6 are always set */
 
@@ -228,7 +228,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( compgolf )
 {
-	compgolf_state *state = (compgolf_state *)machine->driver_data;
+	compgolf_state *state = machine->driver_data<compgolf_state>();
 
 	state_save_register_global(machine, state->bank);
 	state_save_register_global(machine, state->scrollx_lo);
@@ -239,7 +239,7 @@ static MACHINE_START( compgolf )
 
 static MACHINE_RESET( compgolf )
 {
-	compgolf_state *state = (compgolf_state *)machine->driver_data;
+	compgolf_state *state = machine->driver_data<compgolf_state>();
 
 	state->bank = -1;
 	state->scrollx_lo = 0;
@@ -248,10 +248,7 @@ static MACHINE_RESET( compgolf )
 	state->scrolly_hi = 0;
 }
 
-static MACHINE_DRIVER_START( compgolf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(compgolf_state)
+static MACHINE_CONFIG_START( compgolf, compgolf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2000000)
@@ -281,7 +278,7 @@ static MACHINE_DRIVER_START( compgolf )
 	MDRV_SOUND_ADD("ymsnd", YM2203, 1500000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

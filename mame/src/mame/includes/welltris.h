@@ -1,9 +1,8 @@
-class welltris_state
+class welltris_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, welltris_state(machine)); }
-
-	welltris_state(running_machine &machine) { }
+	welltris_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	int pending_command;
 

@@ -294,6 +294,7 @@ Notes & Todo:
 #include "video/ppu2c0x.h"
 #include "cpu/z80/z80.h"
 #include "machine/rp5h01.h"
+#include "machine/nvram.h"
 #include "sound/dac.h"
 #include "sound/nes_apu.h"
 
@@ -336,18 +337,6 @@ static WRITE8_HANDLER( sprite_dma_w )
 	ppu2c0x_spriteram_dma( space, space->machine->device("ppu"), source );
 }
 
-static NVRAM_HANDLER( playch10 )
-{
-	UINT8 *mem = memory_region( machine, "cart" ) + 0x6000;
-
-	if ( read_or_write )
-		mame_fwrite( file, mem, 0x1000 );
-	else if (file)
-		mame_fread( file, mem, 0x1000 );
-	else
-		memset(mem, 0, 0x1000);
-}
-
 /* Only used in single monitor bios */
 static UINT8 *timedata;
 
@@ -383,7 +372,7 @@ static ADDRESS_MAP_START( bios_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM	// 8V
 	AM_RANGE(0x8800, 0x8fff) AM_READWRITE(ram_8w_r, ram_8w_w) AM_BASE(&ram_8w)	// 8W
-	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x9000, 0x97ff) AM_RAM_WRITE(playch10_videoram_w) AM_BASE_MEMBER(playch10_state, videoram)
 	AM_RANGE(0xc000, 0xdfff) AM_ROM
 	AM_RANGE(0xe000, 0xffff) AM_READWRITE(pc10_prot_r, pc10_prot_w)
 ADDRESS_MAP_END
@@ -684,7 +673,7 @@ static const nes_interface nes_config =
 };
 
 
-static MACHINE_DRIVER_START( playch10 )
+static MACHINE_CONFIG_START( playch10, playch10_state )
 	// basic machine hardware
 	MDRV_CPU_ADD("maincpu", Z80, 8000000/2)	// 4 MHz
 	MDRV_CPU_PROGRAM_MAP(bios_map)
@@ -730,21 +719,19 @@ static MACHINE_DRIVER_START( playch10 )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_RP5H01_ADD("rp5h01")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( playchnv )
-	MDRV_IMPORT_FROM(playch10)
-	MDRV_NVRAM_HANDLER(playch10)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( playchnv, playch10 )
+	MDRV_NVRAM_ADD_0FILL("nvram")
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( playch10_hboard )
-	MDRV_IMPORT_FROM(playch10)
+static MACHINE_CONFIG_DERIVED( playch10_hboard, playch10 )
 	MDRV_VIDEO_START(playch10_hboard)
 	MDRV_MACHINE_START(playch10_hboard)
 
 	MDRV_DEVICE_REMOVE("ppu")
 	MDRV_PPU2C03B_ADD("ppu", playch10_ppu_interface)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

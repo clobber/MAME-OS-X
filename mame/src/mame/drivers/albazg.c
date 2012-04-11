@@ -61,12 +61,11 @@ Code disassembling
 #include "machine/8255ppi.h"
 
 
-class albazg_state
+class albazg_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, albazg_state(machine)); }
-
-	albazg_state(running_machine &machine) { }
+	albazg_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  cus_ram;
@@ -89,7 +88,7 @@ public:
 
 static TILE_GET_INFO( y_get_bg_tile_info )
 {
-	albazg_state *state = (albazg_state *)machine->driver_data;
+	albazg_state *state = machine->driver_data<albazg_state>();
 	int code = state->videoram[tile_index];
 	int color = state->colorram[tile_index];
 
@@ -103,13 +102,13 @@ static TILE_GET_INFO( y_get_bg_tile_info )
 
 static VIDEO_START( yumefuda )
 {
-	albazg_state *state = (albazg_state *)machine->driver_data;
+	albazg_state *state = machine->driver_data<albazg_state>();
 	state->bg_tilemap = tilemap_create(machine, y_get_bg_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 static VIDEO_UPDATE( yumefuda )
 {
-	albazg_state *state = (albazg_state *)screen->machine->driver_data;
+	albazg_state *state = screen->machine->driver_data<albazg_state>();
 	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
 	return 0;
 }
@@ -134,14 +133,14 @@ GFXDECODE_END
 
 static WRITE8_HANDLER( yumefuda_vram_w )
 {
-	albazg_state *state = (albazg_state *)space->machine->driver_data;
+	albazg_state *state = space->machine->driver_data<albazg_state>();
 	state->videoram[offset] = data;
 	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
 
 static WRITE8_HANDLER( yumefuda_cram_w )
 {
-	albazg_state *state = (albazg_state *)space->machine->driver_data;
+	albazg_state *state = space->machine->driver_data<albazg_state>();
 	state->colorram[offset] = data;
 	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
 }
@@ -149,14 +148,14 @@ static WRITE8_HANDLER( yumefuda_cram_w )
 /*Custom RAM (Thrash Protection)*/
 static READ8_HANDLER( custom_ram_r )
 {
-	albazg_state *state = (albazg_state *)space->machine->driver_data;
+	albazg_state *state = space->machine->driver_data<albazg_state>();
 //  logerror("Custom RAM read at %02x PC = %x\n", offset + 0xaf80, cpu_get_pc(space->cpu));
 	return state->cus_ram[offset];// ^ 0x55;
 }
 
 static WRITE8_HANDLER( custom_ram_w )
 {
-	albazg_state *state = (albazg_state *)space->machine->driver_data;
+	albazg_state *state = space->machine->driver_data<albazg_state>();
 //  logerror("Custom RAM write at %02x : %02x PC = %x\n", offset + 0xaf80, data, cpu_get_pc(space->cpu));
 	if(state->prot_lock)
 		state->cus_ram[offset] = data;
@@ -165,14 +164,14 @@ static WRITE8_HANDLER( custom_ram_w )
 /*this might be used as NVRAM commands btw*/
 static WRITE8_HANDLER( prot_lock_w )
 {
-	albazg_state *state = (albazg_state *)space->machine->driver_data;
+	albazg_state *state = space->machine->driver_data<albazg_state>();
 //  logerror("PC %04x Prot lock value written %02x\n", cpu_get_pc(space->cpu), data);
 	state->prot_lock = data;
 }
 
 static READ8_DEVICE_HANDLER( mux_r )
 {
-	albazg_state *state = (albazg_state *)device->machine->driver_data;
+	albazg_state *state = device->machine->driver_data<albazg_state>();
 	switch(state->mux_data)
 	{
 		case 0x00: return input_port_read(device->machine, "IN0");
@@ -189,7 +188,7 @@ static READ8_DEVICE_HANDLER( mux_r )
 
 static WRITE8_DEVICE_HANDLER( mux_w )
 {
-	albazg_state *state = (albazg_state *)device->machine->driver_data;
+	albazg_state *state = device->machine->driver_data<albazg_state>();
 	int new_bank = (data & 0xc0) >> 6;
 
 	//0x10000 "Learn Mode"
@@ -376,7 +375,7 @@ INPUT_PORTS_END
 
 static MACHINE_START( yumefuda )
 {
-	albazg_state *state = (albazg_state *)machine->driver_data;
+	albazg_state *state = machine->driver_data<albazg_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x2000);
@@ -388,16 +387,13 @@ static MACHINE_START( yumefuda )
 
 static MACHINE_RESET( yumefuda )
 {
-	albazg_state *state = (albazg_state *)machine->driver_data;
+	albazg_state *state = machine->driver_data<albazg_state>();
 	state->mux_data = 0;
 	state->bank = -1;
 	state->prot_lock = 0;
 }
 
-static MACHINE_DRIVER_START( yumefuda )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(albazg_state)
+static MACHINE_CONFIG_START( yumefuda, albazg_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80 , MASTER_CLOCK/2) /* xtal is 12 Mhz, unknown divider*/
@@ -436,7 +432,7 @@ static MACHINE_DRIVER_START( yumefuda )
 	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/16) /* guessed to use the same xtal as the crtc */
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************************/
 

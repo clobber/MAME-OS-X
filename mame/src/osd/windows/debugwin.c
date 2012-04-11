@@ -95,7 +95,7 @@
 #define EDIT_BOX_STYLE_EX		0
 
 // combo box styles
-#define COMBO_BOX_STYLE			WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST
+#define COMBO_BOX_STYLE			WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL
 #define COMBO_BOX_STYLE_EX		0
 
 // horizontal scroll bar styles
@@ -259,6 +259,15 @@ static void smart_set_window_bounds(HWND wnd, HWND parent, RECT *bounds);
 static void smart_show_window(HWND wnd, BOOL show);
 static void smart_show_all(BOOL show);
 
+
+
+//============================================================
+//  osd_init_debugger
+//============================================================
+
+void osd_init_debugger(running_machine *machine)
+{
+}
 
 
 //============================================================
@@ -598,7 +607,7 @@ static void debugwin_window_free(debugwin_info *info)
 	for (viewnum = 0; viewnum < ARRAY_LENGTH(info->view); viewnum++)
 		if (info->view[viewnum].view != NULL)
 		{
-			info->machine->m_debug_view->free_view(*info->view[viewnum].view);
+			info->machine->debug_view().free_view(*info->view[viewnum].view);
 			info->view[viewnum].view = NULL;
 		}
 
@@ -842,7 +851,7 @@ static int debugwin_view_create(debugwin_info *info, int which, debug_view_type 
 		goto cleanup;
 
 	// create the debug view
-	view->view = info->machine->m_debug_view->alloc_view(type, debugwin_view_update, view);
+	view->view = info->machine->debug_view().alloc_view(type, debugwin_view_update, view);
 	if (view->view == NULL)
 		goto cleanup;
 
@@ -850,7 +859,7 @@ static int debugwin_view_create(debugwin_info *info, int which, debug_view_type 
 
 cleanup:
 	if (view->view)
-		info->machine->m_debug_view->free_view(*view->view);
+		info->machine->debug_view().free_view(*view->view);
 	if (view->hscroll)
 		DestroyWindow(view->hscroll);
 	if (view->vscroll)
@@ -1459,7 +1468,7 @@ static LRESULT CALLBACK debugwin_view_proc(HWND wnd, UINT message, WPARAM wparam
 			debug_view_xy topleft = info->view->visible_position();
 			topleft.x = debugwin_view_process_scroll(info, LOWORD(wparam), (HWND)lparam);
 			info->view->set_visible_position(topleft);
-			info->owner->machine->m_debug_view->flush_osd_updates();
+			info->owner->machine->debug_view().flush_osd_updates();
 			break;
 		}
 
@@ -1469,7 +1478,7 @@ static LRESULT CALLBACK debugwin_view_proc(HWND wnd, UINT message, WPARAM wparam
 			debug_view_xy topleft = info->view->visible_position();
 			topleft.y = debugwin_view_process_scroll(info, LOWORD(wparam), (HWND)lparam);
 			info->view->set_visible_position(topleft);
-			info->owner->machine->m_debug_view->flush_osd_updates();
+			info->owner->machine->debug_view().flush_osd_updates();
 			break;
 		}
 
@@ -1775,14 +1784,19 @@ static void memory_create_window(running_machine *machine)
 	SendMessage(info->otherwnd[0], WM_SETFONT, (WPARAM)debug_font, (LPARAM)FALSE);
 
 	// populate the combobox
+	int maxlength = 0;
 	for (const debug_view_source *source = info->view[0].view->source_list().head(); source != NULL; source = source->next())
 	{
+		int length = strlen(source->name());
+		if (length > maxlength)
+			maxlength = length;
 		TCHAR *t_name = tstring_from_utf8(source->name());
 		SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
 		osd_free(t_name);
 	}
 	const debug_view_source *source = info->view[0].view->source_list().match_device(curcpu);
 	SendMessage(info->otherwnd[0], CB_SETCURSEL, info->view[0].view->source_list().index(*source), 0);
+	SendMessage(info->otherwnd[0], CB_SETDROPPEDWIDTH, (maxlength + 2) * debug_font_width + vscroll_width, 0);
 	info->view[0].view->set_source(*source);
 
 	// set the child functions
@@ -2081,14 +2095,19 @@ static void disasm_create_window(running_machine *machine)
 	SendMessage(info->otherwnd[0], WM_SETFONT, (WPARAM)debug_font, (LPARAM)FALSE);
 
 	// populate the combobox
+	int maxlength = 0;
 	for (const debug_view_source *source = info->view[0].view->source_list().head(); source != NULL; source = source->next())
 	{
+		int length = strlen(source->name());
+		if (length > maxlength)
+			maxlength = length;
 		TCHAR *t_name = tstring_from_utf8(source->name());
 		SendMessage(info->otherwnd[0], CB_ADDSTRING, 0, (LPARAM)t_name);
 		osd_free(t_name);
 	}
 	const debug_view_source *source = info->view[0].view->source_list().match_device(curcpu);
 	SendMessage(info->otherwnd[0], CB_SETCURSEL, info->view[0].view->source_list().index(*source), 0);
+	SendMessage(info->otherwnd[0], CB_SETDROPPEDWIDTH, (maxlength + 2) * debug_font_width + vscroll_width, 0);
 	info->view[0].view->set_source(*source);
 
 	// set the child functions
@@ -2465,11 +2484,11 @@ void console_create_window(running_machine *machine)
 
 cleanup:
 	if (info->view[2].view)
-		machine->m_debug_view->free_view(*info->view[2].view);
+		machine->debug_view().free_view(*info->view[2].view);
 	if (info->view[1].view)
-		machine->m_debug_view->free_view(*info->view[1].view);
+		machine->debug_view().free_view(*info->view[1].view);
 	if (info->view[0].view)
-		machine->m_debug_view->free_view(*info->view[0].view);
+		machine->debug_view().free_view(*info->view[0].view);
 }
 
 

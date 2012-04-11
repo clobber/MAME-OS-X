@@ -174,7 +174,7 @@ static MACHINE_START( spacefb )
 
 static MACHINE_RESET( spacefb )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 	/* the 3 output ports are cleared on reset */
 	spacefb_port_0_w(space, 0, 0);
 	spacefb_port_1_w(space, 0, 0);
@@ -328,7 +328,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( spacefb )
+static MACHINE_CONFIG_START( spacefb, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, SPACEFB_MAIN_CPU_CLOCK)
@@ -353,9 +353,9 @@ static MACHINE_DRIVER_START( spacefb )
 	MDRV_SCREEN_RAW_PARAMS(SPACEFB_PIXEL_CLOCK, SPACEFB_HTOTAL, SPACEFB_HBEND, SPACEFB_HBSTART, SPACEFB_VTOTAL, SPACEFB_VBEND, SPACEFB_VBSTART)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(spacefb_audio)
+	MDRV_FRAGMENT_ADD(spacefb_audio)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

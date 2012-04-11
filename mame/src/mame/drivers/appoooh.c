@@ -171,7 +171,7 @@ Language
 
 static void appoooh_adpcm_int(running_device *device)
 {
-	appoooh_state *state = (appoooh_state *)device->machine->driver_data;
+	appoooh_state *state = device->machine->driver_data<appoooh_state>();
 
 	if (state->adpcm_address != 0xffffffff)
 	{
@@ -199,7 +199,7 @@ static void appoooh_adpcm_int(running_device *device)
 /* adpcm address write */
 static WRITE8_HANDLER( appoooh_adpcm_w )
 {
-	appoooh_state *state = (appoooh_state *)space->machine->driver_data;
+	appoooh_state *state = space->machine->driver_data<appoooh_state>();
 
 	state->adpcm_address = data << 8;
 	msm5205_reset_w(state->adpcm, 0);
@@ -402,7 +402,7 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( appoooh )
 {
-	appoooh_state *state = (appoooh_state *)machine->driver_data;
+	appoooh_state *state = machine->driver_data<appoooh_state>();
 
 	state->adpcm = machine->device("msm");
 
@@ -413,7 +413,7 @@ static MACHINE_START( appoooh )
 
 static MACHINE_RESET( appoooh )
 {
-	appoooh_state *state = (appoooh_state *)machine->driver_data;
+	appoooh_state *state = machine->driver_data<appoooh_state>();
 
 	state->adpcm_address = 0xffffffff;
 	state->adpcm_data = 0;
@@ -421,10 +421,7 @@ static MACHINE_RESET( appoooh )
 	state->priority = 0;
 }
 
-static MACHINE_DRIVER_START( appoooh_common )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(appoooh_state)
+static MACHINE_CONFIG_START( appoooh_common, appoooh_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* ??? the main xtal is 18.432 MHz */
@@ -450,13 +447,10 @@ static MACHINE_DRIVER_START( appoooh_common )
 	MDRV_SOUND_ADD("msm", MSM5205, 384000)
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( appoooh )
-
-	/* common machine hardware */
-	MDRV_IMPORT_FROM(appoooh_common)
+static MACHINE_CONFIG_DERIVED( appoooh, appoooh_common )
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -471,13 +465,10 @@ static MACHINE_DRIVER_START( appoooh )
 	MDRV_PALETTE_INIT(appoooh)
 	MDRV_VIDEO_START(appoooh)
 	MDRV_VIDEO_UPDATE(appoooh)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( robowres )
-
-	/* common machine hardware */
-	MDRV_IMPORT_FROM(appoooh_common)
+static MACHINE_CONFIG_DERIVED( robowres, appoooh_common )
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -492,7 +483,7 @@ static MACHINE_DRIVER_START( robowres )
 	MDRV_PALETTE_INIT(robowres)
 	MDRV_VIDEO_START(appoooh)
 	MDRV_VIDEO_UPDATE(robowres)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *
@@ -605,8 +596,8 @@ static DRIVER_INIT(robowres)
 
 static DRIVER_INIT(robowresb)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x1c000);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x1c000);
 }
 
 

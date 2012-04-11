@@ -1,10 +1,9 @@
 
-class ajax_state
+class ajax_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ajax_state(machine)); }
-
-	ajax_state(running_machine &machine) { }
+	ajax_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 //  UINT8 *    paletteram;    // currently this uses generic palette handling

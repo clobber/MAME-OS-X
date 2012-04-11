@@ -226,7 +226,7 @@ static INTERRUPT_GEN( commando_interrupt )
 
 static MACHINE_START( commando )
 {
-	commando_state *state = (commando_state *)machine->driver_data;
+	commando_state *state = machine->driver_data<commando_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -236,7 +236,7 @@ static MACHINE_START( commando )
 
 static MACHINE_RESET( commando )
 {
-	commando_state *state = (commando_state *)machine->driver_data;
+	commando_state *state = machine->driver_data<commando_state>();
 
 	state->scroll_x[0] = 0;
 	state->scroll_x[1] = 0;
@@ -245,10 +245,7 @@ static MACHINE_RESET( commando )
 }
 
 
-static MACHINE_DRIVER_START( commando )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(commando_state)
+static MACHINE_CONFIG_START( commando, commando_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, PHI_MAIN)	// ???
@@ -288,7 +285,7 @@ static MACHINE_DRIVER_START( commando )
 
 	MDRV_SOUND_ADD("ym2", YM2203, PHI_B/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* ROMs */
@@ -521,12 +518,12 @@ ROM_END
 
 static DRIVER_INIT( commando )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, "maincpu");
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0xc000);
 	int A;
 
-	memory_set_decrypted_region(space, 0x0000, 0xbfff, decrypt);
+	space->set_decrypted_region(0x0000, 0xbfff, decrypt);
 
 	// the first opcode is *not* encrypted
 	decrypt[0] = rom[0];
@@ -541,12 +538,12 @@ static DRIVER_INIT( commando )
 
 static DRIVER_INIT( spaceinv )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, "maincpu");
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, 0xc000);
 	int A;
 
-	memory_set_decrypted_region(space, 0x0000, 0xbfff, decrypt);
+	space->set_decrypted_region(0x0000, 0xbfff, decrypt);
 
 	// the first opcode *is* encrypted
 	for (A = 0; A < 0xc000; A++)

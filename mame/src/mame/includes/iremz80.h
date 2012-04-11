@@ -6,12 +6,11 @@
 
 /* These share sound hardware (in audio/irem.h) and hence driver data */
 
-class irem_z80_state
+class irem_z80_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, irem_z80_state(machine)); }
-
-	irem_z80_state(running_machine &machine) { }
+	irem_z80_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *              videoram;	// m52, m57, m58
@@ -69,9 +68,9 @@ public:
 
 /*----------- defined in audio/irem.c -----------*/
 
-MACHINE_DRIVER_EXTERN( m52_sound_c_audio );
-MACHINE_DRIVER_EXTERN( m52_large_audio );
-MACHINE_DRIVER_EXTERN( m62_audio );
+MACHINE_CONFIG_EXTERN( m52_sound_c_audio );
+MACHINE_CONFIG_EXTERN( m52_large_audio );
+MACHINE_CONFIG_EXTERN( m62_audio );
 
 WRITE8_HANDLER( irem_sound_cmd_w );
 

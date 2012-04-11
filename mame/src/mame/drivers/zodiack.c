@@ -87,7 +87,7 @@ TODO:
 
 static MACHINE_START( zodiack )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 
 	state_save_register_global(machine, state->percuss_hardware);
 	MACHINE_START_CALL(espial);
@@ -95,7 +95,7 @@ static MACHINE_START( zodiack )
 
 static MACHINE_RESET( zodiack )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 
 	state->percuss_hardware = 0;
 	MACHINE_RESET_CALL(espial);
@@ -103,7 +103,7 @@ static MACHINE_RESET( zodiack )
 
 static MACHINE_RESET( percuss )
 {
-	espial_state *state = (espial_state *)machine->driver_data;
+	espial_state *state = machine->driver_data<espial_state>();
 
 	state->percuss_hardware = 1;
 	MACHINE_RESET_CALL(espial);
@@ -523,10 +523,7 @@ static GFXDECODE_START( zodiack )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( zodiack )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(espial_state)
+static MACHINE_CONFIG_START( zodiack, espial_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.00 MHz??? */
@@ -561,12 +558,11 @@ static MACHINE_DRIVER_START( zodiack )
 
 	MDRV_SOUND_ADD("aysnd", AY8910, 1789750)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( percuss )
-	MDRV_IMPORT_FROM(zodiack)
+static MACHINE_CONFIG_DERIVED( percuss, zodiack )
 	MDRV_MACHINE_RESET(percuss)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

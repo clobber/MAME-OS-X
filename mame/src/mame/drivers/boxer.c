@@ -20,12 +20,11 @@
  *
  *************************************/
 
-class boxer_state
+class boxer_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, boxer_state(machine)); }
-
-	boxer_state(running_machine &machine) { }
+	boxer_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 * tile_ram;
@@ -47,7 +46,7 @@ public:
 
 static TIMER_CALLBACK( pot_interrupt )
 {
-	boxer_state *state = (boxer_state *)machine->driver_data;
+	boxer_state *state = machine->driver_data<boxer_state>();
 	int mask = param;
 
 	if (state->pot_latch & mask)
@@ -59,7 +58,7 @@ static TIMER_CALLBACK( pot_interrupt )
 
 static TIMER_CALLBACK( periodic_callback )
 {
-	boxer_state *state = (boxer_state *)machine->driver_data;
+	boxer_state *state = machine->driver_data<boxer_state>();
 	int scanline = param;
 
 	cpu_set_input_line(state->maincpu, 0, ASSERT_LINE);
@@ -112,7 +111,7 @@ static PALETTE_INIT( boxer )
 
 static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectangle* cliprect )
 {
-	boxer_state *state = (boxer_state *)machine->driver_data;
+	boxer_state *state = machine->driver_data<boxer_state>();
 	int n;
 
 	for (n = 0; n < 2; n++)
@@ -160,7 +159,7 @@ static void draw_boxer( running_machine *machine, bitmap_t* bitmap, const rectan
 
 static VIDEO_UPDATE( boxer )
 {
-	boxer_state *state = (boxer_state *)screen->machine->driver_data;
+	boxer_state *state = screen->machine->driver_data<boxer_state>();
 	int i, j;
 
 	bitmap_fill(bitmap, cliprect, 1);
@@ -205,7 +204,7 @@ static READ8_HANDLER( boxer_input_r )
 
 static READ8_HANDLER( boxer_misc_r )
 {
-	boxer_state *state = (boxer_state *)space->machine->driver_data;
+	boxer_state *state = space->machine->driver_data<boxer_state>();
 	UINT8 val = 0;
 
 	switch (offset & 3)
@@ -245,7 +244,7 @@ static WRITE8_HANDLER( boxer_sound_w )
 
 static WRITE8_HANDLER( boxer_pot_w )
 {
-	boxer_state *state = (boxer_state *)space->machine->driver_data;
+	boxer_state *state = space->machine->driver_data<boxer_state>();
 	/* BIT0 => HPOT1 */
 	/* BIT1 => VPOT1 */
 	/* BIT2 => RPOT1 */
@@ -261,7 +260,7 @@ static WRITE8_HANDLER( boxer_pot_w )
 
 static WRITE8_HANDLER( boxer_irq_reset_w )
 {
-	boxer_state *state = (boxer_state *)space->machine->driver_data;
+	boxer_state *state = space->machine->driver_data<boxer_state>();
 	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
 }
 
@@ -418,7 +417,7 @@ GFXDECODE_END
 
 static MACHINE_START( boxer )
 {
-	boxer_state *state = (boxer_state *)machine->driver_data;
+	boxer_state *state = machine->driver_data<boxer_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -428,7 +427,7 @@ static MACHINE_START( boxer )
 
 static MACHINE_RESET( boxer )
 {
-	boxer_state *state = (boxer_state *)machine->driver_data;
+	boxer_state *state = machine->driver_data<boxer_state>();
 	timer_set(machine, machine->primary_screen->time_until_pos(0), NULL, 0, periodic_callback);
 
 	state->pot_state = 0;
@@ -436,10 +435,7 @@ static MACHINE_RESET( boxer )
 }
 
 
-static MACHINE_DRIVER_START(boxer)
-
-	/* driver data */
-	MDRV_DRIVER_DATA(boxer_state)
+static MACHINE_CONFIG_START( boxer, boxer_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 16)
@@ -461,7 +457,7 @@ static MACHINE_DRIVER_START(boxer)
 	MDRV_VIDEO_UPDATE(boxer)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

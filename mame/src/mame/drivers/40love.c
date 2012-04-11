@@ -217,7 +217,6 @@ Notes - Has jumper setting for 122HZ or 61HZ)
 */
 
 #include "emu.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/m6805/m6805.h"
 #include "sound/ay8910.h"
@@ -227,7 +226,7 @@ Notes - Has jumper setting for 122HZ or 61HZ)
 
 static TIMER_CALLBACK( nmi_callback )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 	if (state->sound_nmi_enable)
 		cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 	else
@@ -242,13 +241,13 @@ static WRITE8_HANDLER( sound_command_w )
 
 static WRITE8_HANDLER( nmi_disable_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->sound_nmi_enable = 0;
 }
 
 static WRITE8_HANDLER( nmi_enable_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->sound_nmi_enable = 1;
 	if (state->pending_nmi)
 	{
@@ -296,7 +295,7 @@ static WRITE8_HANDLER( bank_select_w )
 
 static WRITE8_HANDLER( pix1_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 //  if (data > 7)
 //      logerror("pix1 = %2x\n", data);
 
@@ -304,7 +303,7 @@ static WRITE8_HANDLER( pix1_w )
 }
 static WRITE8_HANDLER( pix2_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 //  if ((data!=0x00) && (data != 0xff))
 //      logerror("pix2 = %2x\n", data);
 
@@ -315,14 +314,14 @@ static WRITE8_HANDLER( pix2_w )
 #if 0
 static READ8_HANDLER( pix1_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	return state->pix1;
 }
 #endif
 
 static READ8_HANDLER( pix2_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	int res;
 	int d1 = state->pix1 & 7;
 
@@ -400,7 +399,7 @@ static const UINT8 mcu_data2[0x80] =
 
 static WRITE8_HANDLER( undoukai_mcu_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	int ram_adr = state->mcu_ram[0x1b5] * 0x100 + state->mcu_ram[0x1b4];
 
 	int d, i;
@@ -560,7 +559,7 @@ static WRITE8_HANDLER( undoukai_mcu_w )
 
 static READ8_HANDLER( undoukai_mcu_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 
 	//  logerror("mcu_r %02x\n", state->from_mcu);
 
@@ -578,7 +577,7 @@ static READ8_HANDLER( undoukai_mcu_status_r )
 
 static DRIVER_INIT( undoukai )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x2000);
 
@@ -590,7 +589,7 @@ static DRIVER_INIT( undoukai )
 
 static DRIVER_INIT( 40love )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x2000);
 
@@ -616,20 +615,20 @@ static DRIVER_INIT( 40love )
 
 static READ8_HANDLER( from_snd_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->snd_flag = 0;
 	return state->snd_data;
 }
 
 static READ8_HANDLER( snd_flag_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	return state->snd_flag | 0xfd;
 }
 
 static WRITE8_HANDLER( to_main_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->snd_data = data;
 	state->snd_flag = 2;
 }
@@ -688,7 +687,7 @@ ADDRESS_MAP_END
 
 static MACHINE_RESET( ta7630 )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 	int i;
 
 	double db			= 0.0;
@@ -713,7 +712,7 @@ static MACHINE_RESET( ta7630 )
 
 static WRITE8_DEVICE_HANDLER( sound_control_0_w )
 {
-	buggychl_state *state = (buggychl_state *)device->machine->driver_data;
+	buggychl_state *state = device->machine->driver_data<buggychl_state>();
 	state->snd_ctrl0 = data & 0xff;
 //  popmessage("SND0 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
 
@@ -726,7 +725,7 @@ static WRITE8_DEVICE_HANDLER( sound_control_0_w )
 }
 static WRITE8_DEVICE_HANDLER( sound_control_1_w )
 {
-	buggychl_state *state = (buggychl_state *)device->machine->driver_data;
+	buggychl_state *state = device->machine->driver_data<buggychl_state>();
 	state->snd_ctrl1 = data & 0xff;
 //  popmessage("SND1 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
 	sound_set_output_gain(device, 4, state->vol_ctrl[(state->snd_ctrl1 >> 4) & 15] / 100.0);	/* group2 from msm5232 */
@@ -737,7 +736,7 @@ static WRITE8_DEVICE_HANDLER( sound_control_1_w )
 
 static WRITE8_DEVICE_HANDLER( sound_control_2_w )
 {
-	buggychl_state *state = (buggychl_state *)device->machine->driver_data;
+	buggychl_state *state = device->machine->driver_data<buggychl_state>();
 	int i;
 	state->snd_ctrl2 = data & 0xff;
 //  popmessage("SND2 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
@@ -748,7 +747,7 @@ static WRITE8_DEVICE_HANDLER( sound_control_2_w )
 
 static WRITE8_DEVICE_HANDLER( sound_control_3_w ) /* unknown */
 {
-	buggychl_state *state = (buggychl_state *)device->machine->driver_data;
+	buggychl_state *state = device->machine->driver_data<buggychl_state>();
 	state->snd_ctrl3 = data & 0xff;
 //  popmessage("SND3 0=%02x 1=%02x 2=%02x 3=%02x", state->snd_ctrl0, state->snd_ctrl1, state->snd_ctrl2, state->snd_ctrl3);
 }
@@ -997,7 +996,7 @@ static const msm5232_interface msm5232_config =
 
 static MACHINE_START( common )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 	state->mcu = machine->device("mcu");
@@ -1019,7 +1018,7 @@ static MACHINE_START( common )
 
 static MACHINE_START( 40love )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -1041,7 +1040,7 @@ static MACHINE_START( 40love )
 
 static MACHINE_START( undoukai )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -1056,7 +1055,7 @@ static MACHINE_START( undoukai )
 
 static MACHINE_RESET( common )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	MACHINE_RESET_CALL(ta7630);
 
@@ -1077,7 +1076,7 @@ static MACHINE_RESET( common )
 
 static MACHINE_RESET( 40love )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
 
@@ -1101,7 +1100,7 @@ static MACHINE_RESET( 40love )
 
 static MACHINE_RESET( undoukai )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 	int i;
 
 	MACHINE_RESET_CALL(common);
@@ -1119,10 +1118,7 @@ static MACHINE_RESET( undoukai )
 	}
 }
 
-static MACHINE_DRIVER_START( 40love )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(buggychl_state)
+static MACHINE_CONFIG_START( 40love, buggychl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",Z80,8000000/2) /* OK */
@@ -1131,7 +1127,7 @@ static MACHINE_DRIVER_START( 40love )
 
 	MDRV_CPU_ADD("audiocpu",Z80,8000000/2) /* OK */
 	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)	/* source/number of IRQs is unknown */
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,2*60)	/* source/number of IRQs is unknown */
 
 	MDRV_CPU_ADD("mcu",M68705,18432000/6) /* OK */
 	MDRV_CPU_PROGRAM_MAP(mcu_map)
@@ -1177,12 +1173,9 @@ static MACHINE_DRIVER_START( 40love )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( undoukai )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(buggychl_state)
+static MACHINE_CONFIG_START( undoukai, buggychl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",Z80,8000000/2)
@@ -1191,7 +1184,7 @@ static MACHINE_DRIVER_START( undoukai )
 
 	MDRV_CPU_ADD("audiocpu",Z80,8000000/2)
 	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold,2)	/* source/number of IRQs is unknown */
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold,2*60)	/* source/number of IRQs is unknown */
 
 //  MDRV_CPU_ADD("mcu",M68705,18432000/6)
 //  MDRV_CPU_PROGRAM_MAP(mcu_map)
@@ -1236,7 +1229,7 @@ static MACHINE_DRIVER_START( undoukai )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*******************************************************************************/
 

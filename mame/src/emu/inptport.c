@@ -2468,7 +2468,7 @@ static void frame_update(running_machine *machine)
 	INT32 mouse_target_y;
 	int mouse_button;
 
-profiler_mark_start(PROFILER_INPUT);
+g_profiler.start(PROFILER_INPUT);
 
 	/* record/playback information about the current frame */
 	playback_frame(machine, curtime);
@@ -2490,7 +2490,8 @@ profiler_mark_start(PROFILER_INPUT);
 	{
 		const char *tag = NULL;
 		input_port_value mask;
-		if (render_target_map_point_input(mouse_target, mouse_target_x, mouse_target_y, &tag, &mask, NULL, NULL))
+		float x, y;
+		if (mouse_target->map_point_input(mouse_target_x, mouse_target_y, tag, mask, x, y))
 			mouse_field = input_field_by_tag_and_mask(machine->m_portlist, tag, mask);
 	}
 
@@ -2546,7 +2547,7 @@ profiler_mark_start(PROFILER_INPUT);
 			}
 	}
 
-profiler_mark_end();
+g_profiler.stop();
 }
 
 
@@ -4420,7 +4421,7 @@ static time_t playback_init(running_machine *machine)
 
 	/* verify the header against the current game */
 	if (memcmp(machine->gamedrv->name, header + 0x14, strlen(machine->gamedrv->name) + 1) != 0)
-		fatalerror("Input file is for " GAMENOUN " '%s', not for current " GAMENOUN " '%s'\n", header + 0x14, machine->gamedrv->name);
+		mame_printf_info("Input file is for " GAMENOUN " '%s', not for current " GAMENOUN " '%s'\n", header + 0x14, machine->gamedrv->name);
 
 	/* enable compression */
 	mame_fcompress(portdata->playback_file, FCOMPRESS_MEDIUM);

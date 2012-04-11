@@ -226,6 +226,7 @@ Interrupts:
 #include "rendlay.h"
 #include "includes/qix.h"
 #include "cpu/m6809/m6809.h"
+#include "machine/nvram.h"
 
 #include "elecyoyo.lh"
 
@@ -548,9 +549,7 @@ static const m6809_config encryption_config =
 	TRUE,		/* encrypt only the first byte in 10 xx and 11 xx opcodes */
 };
 
-static MACHINE_DRIVER_START( qix_base )
-
-	MDRV_DRIVER_DATA(qix_state)
+static MACHINE_CONFIG_START( qix_base, qix_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, MAIN_CLOCK_OSC/4/4)	/* 1.25 MHz */
@@ -562,27 +561,25 @@ static MACHINE_DRIVER_START( qix_base )
 	MDRV_QUANTUM_PERFECT_CPU("maincpu")
 
 	MDRV_MACHINE_RESET(qix)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	MDRV_PIA6821_ADD("pia0", qix_pia_0_intf)
 	MDRV_PIA6821_ADD("pia1", qix_pia_1_intf)
 	MDRV_PIA6821_ADD("pia2", qix_pia_2_intf)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(qix_video)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(qix_video)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qix )
-	MDRV_IMPORT_FROM(qix_base)
-	MDRV_IMPORT_FROM(qix_audio)
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( qix, qix_base )
+	MDRV_FRAGMENT_ADD(qix_audio)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mcu )
+static MACHINE_CONFIG_DERIVED( mcu, qix )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(qix)
 
 	MDRV_CPU_ADD("mcu", M68705, COIN_CLOCK_OSC)	/* 1.00 MHz */
 	MDRV_CPU_PROGRAM_MAP(mcu_map)
@@ -591,26 +588,24 @@ static MACHINE_DRIVER_START( mcu )
 
 	MDRV_PIA6821_MODIFY("pia0", qixmcu_pia_0_intf)
 	MDRV_PIA6821_MODIFY("pia2", qixmcu_pia_2_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( zookeep )
+static MACHINE_CONFIG_DERIVED( zookeep, mcu )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(mcu)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(zoo_main_map)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(zookeep_video)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(zookeep_video)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( slither )
+static MACHINE_CONFIG_DERIVED( slither, qix_base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(qix_base)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(SLITHER_CLOCK_OSC/4/4)	/* 1.34 MHz */
@@ -619,11 +614,11 @@ static MACHINE_DRIVER_START( slither )
 	MDRV_PIA6821_MODIFY("pia2", slither_pia_2_intf)
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(slither_video)
+	MDRV_FRAGMENT_ADD(slither_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(slither_audio)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(slither_audio)
+MACHINE_CONFIG_END
 
 
 
@@ -1262,8 +1257,8 @@ static int kram3_decrypt(int address, int value)
 
 static DRIVER_INIT( kram3 )
 {
-	const address_space *mainspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	const address_space *videospace = cputag_get_address_space(machine, "videocpu", ADDRESS_SPACE_PROGRAM);
+	address_space *mainspace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *videospace = cputag_get_address_space(machine, "videocpu", ADDRESS_SPACE_PROGRAM);
 	//const UINT8 *patch;
 	UINT8 *rom, *decrypted;
 	int i;
@@ -1287,7 +1282,7 @@ static DRIVER_INIT( kram3 )
 	rom = memory_region(machine, "maincpu");
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
-	memory_set_decrypted_region(mainspace, 0xa000, 0xffff, decrypted);
+	mainspace->set_decrypted_region(0xa000, 0xffff, decrypted);
 
 	memcpy(decrypted,&rom[0xa000],0x6000);
 	for (i = 0xa000; i < 0x10000; ++i)
@@ -1300,7 +1295,7 @@ static DRIVER_INIT( kram3 )
 	rom = memory_region(machine, "videocpu");
 	decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 
-	memory_set_decrypted_region(videospace, 0xa000, 0xffff, decrypted);
+	videospace->set_decrypted_region(0xa000, 0xffff, decrypted);
 
 	memcpy(decrypted,&rom[0xa000],0x6000);
 	for (i = 0xa000; i < 0x10000; ++i)

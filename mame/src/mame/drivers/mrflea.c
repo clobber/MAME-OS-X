@@ -37,6 +37,27 @@ Video Board
    x  x  VD_J11 VD_J10  x  x  VD_J7 VD_J6     VD_K4 VD_K3 VD_K2 VD_K1
    x  x  VD-L11 VD_L10  x  x  VD_L7 VD_L6     VD_L4 VD_L3 VD_L2 VD_L1
 
+
+Stephh's notes (based on the games Z80 code and some tests) :
+
+  - DSW1 bits 0 and 1 determine the "Bonus life" value (1 OFF - 0 ON) :
+      * ......11 : 10000 points
+      * ......10 : 20000 points
+      * ......01 : 30000 points
+      * ......00 : 40000 points
+  - DSW1 bit 2 determines the "Bonus life" occurence (1 OFF - 0 ON) :
+      * .....1.. : many extra lives can be awarded every "value" points
+      * .....0.. : only one extra life can be awarded at "value" points
+  - When DSW1 bit 3 is OFF, you can't get any extra lives (code at 0x3368).
+  - I've decided to merge these 4 bits in a single choice for the end-user.
+  - Credits are coded on 1 byte (0xc6bd) then are divided by 2 for display
+    so it can display 1/2 credits when coinage is set to 2C_1C or 2C_3C.
+    Surprisingly, due to code at 0x2f77, credits are limited to 15 when
+    coinage is set to 1C_1C or 1C_2C and to 14 1/2 is set to 2C_1C or 2C_3C.
+  - Level is stored 1 byte (0xc70c), range 0x00-0x07 (code at 0x071d and 0x072c).
+    This means that if you complete level 8, you'll restart from level 1
+    with its initial difficulty (based on the Dip Switch settings).
+
 ******************************************************************/
 
 #include "emu.h"
@@ -54,14 +75,14 @@ Video Board
 
 static WRITE8_HANDLER( mrflea_main_w )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 	state->status |= 0x01; // pending command to main CPU
 	state->main = data;
 }
 
 static WRITE8_HANDLER( mrflea_io_w )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 	state->status |= 0x08; // pending command to IO CPU
 	state->io = data;
 	cpu_set_input_line(state->subcpu, 0, HOLD_LINE );
@@ -69,21 +90,21 @@ static WRITE8_HANDLER( mrflea_io_w )
 
 static READ8_HANDLER( mrflea_main_r )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 	state->status &= ~0x01; // main CPU command read
 	return state->main;
 }
 
 static READ8_HANDLER( mrflea_io_r )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 	state->status &= ~0x08; // IO CPU command read
 	return state->io;
 }
 
 static READ8_HANDLER( mrflea_main_status_r )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 
 	/*  0x01: main CPU command pending
         0x08: io cpu ready */
@@ -92,7 +113,7 @@ static READ8_HANDLER( mrflea_main_status_r )
 
 static READ8_HANDLER( mrflea_io_status_r )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 
 	/*  0x08: IO CPU command pending
         0x01: main cpu ready */
@@ -101,7 +122,7 @@ static READ8_HANDLER( mrflea_io_status_r )
 
 static INTERRUPT_GEN( mrflea_slave_interrupt )
 {
-	mrflea_state *state = (mrflea_state *)device->machine->driver_data;
+	mrflea_state *state = device->machine->driver_data<mrflea_state>();
 	if (cpu_getiloops(device) == 0 || (state->status & 0x08))
 		cpu_set_input_line(device, 0, HOLD_LINE);
 }
@@ -112,7 +133,7 @@ static READ8_HANDLER( mrflea_interrupt_type_r )
     1. triggered (in response to sound command)
     2. heartbeat (for music timing)
 */
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 
 	if (state->status & 0x08 )
 		return 0x00; /* process command */
@@ -122,7 +143,7 @@ static READ8_HANDLER( mrflea_interrupt_type_r )
 
 static WRITE8_HANDLER( mrflea_select1_w )
 {
-	mrflea_state *state = (mrflea_state *)space->machine->driver_data;
+	mrflea_state *state = space->machine->driver_data<mrflea_state>();
 	state->select1 = data;
 }
 
@@ -192,54 +213,44 @@ ADDRESS_MAP_END
  *
  *************************************/
 
+/* verified from Z80 code */
 static INPUT_PORTS_START( mrflea )
+	/* AY1 port 1 -> 0x807d (CPU1) -> 0xcabe (CPU0) with bits in reverse order */
 	PORT_START("IN0")
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_4WAY
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_4WAY
-	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT ) PORT_4WAY
+	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN )  PORT_4WAY
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_UP )    PORT_4WAY
+	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_LEFT )  PORT_4WAY
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_4WAY
 	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START1 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_START2 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON1 )
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_UNUSED )
 
+	/* AY1 port 0 -> 0x807e (CPU1) -> 0xcabf (CPU0) with bits in reverse order */
 	PORT_START("IN1")
-	PORT_BIT( 0x03, IP_ACTIVE_LOW, IPT_UNKNOWN )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0xf8, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0xfb, IP_ACTIVE_LOW, IPT_UNUSED )
 
+	/* AY2 port 1, cpl'ed -> 0x807f (CPU1) -> 0xcac1 (CPU0) */
 	PORT_START("DSW1")
-/*
-    ------xx
-    -----x--
-    ----x---
-*/
-	PORT_DIPNAME( 0x03, 0x03, "Bonus?" )
-	PORT_DIPSETTING( 0x03, "A" )
-	PORT_DIPSETTING( 0x02, "B" )
-	PORT_DIPSETTING( 0x01, "C" )
-	PORT_DIPSETTING( 0x00, "D" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING( 0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x08, 0x08, DEF_STR( Unknown ) )
-	PORT_DIPSETTING( 0x08, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x10, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x20, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x0f, 0x07, DEF_STR( Bonus_Life ) )       /* see notes - table of tables at 0x3475 (4 * 1 word, LSB first) */
+	PORT_DIPSETTING(    0x07, "Every 10k" )
+	PORT_DIPSETTING(    0x06, "Every 20k" )
+	PORT_DIPSETTING(    0x05, "Every 30k" )
+	PORT_DIPSETTING(    0x04, "Every 40k" )
+	PORT_DIPSETTING(    0x03, "10k only" )
+	PORT_DIPSETTING(    0x02, "20k only" )
+	PORT_DIPSETTING(    0x01, "30k only" )
+	PORT_DIPSETTING(    0x00, "40K only" )
+	PORT_DIPSETTING(    0x0f, DEF_STR( None ) )
+	PORT_DIPUNUSED( 0x10, 0x10 )
+	PORT_DIPUNUSED( 0x20, 0x20 )
+	PORT_DIPUNUSED( 0x40, 0x40 )
+	PORT_DIPUNUSED( 0x80, 0x80 )
 
+	/* AY2 port 0, cpl'ed -> 0x8080 (CPU1) -> 0xcac0 (CPU0) */
 	PORT_START("DSW2")
-	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )
+	PORT_DIPNAME( 0x03, 0x03, DEF_STR( Coinage ) )          /* see notes */
 	PORT_DIPSETTING( 0x02, DEF_STR( 2C_1C ) )
 	PORT_DIPSETTING( 0x03, DEF_STR( 1C_1C ) )
 	PORT_DIPSETTING( 0x00, DEF_STR( 2C_3C ) )
@@ -249,17 +260,13 @@ static INPUT_PORTS_START( mrflea )
 	PORT_DIPSETTING( 0x08, "4" )
 	PORT_DIPSETTING( 0x04, "5" )
 	PORT_DIPSETTING( 0x00, "7" )
-	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )       /* see notes */
 	PORT_DIPSETTING( 0x30, DEF_STR( Easy ) )
 	PORT_DIPSETTING( 0x20, DEF_STR( Medium ) )
 	PORT_DIPSETTING( 0x10, DEF_STR( Hard ) )
 	PORT_DIPSETTING( 0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unused ) )
-	PORT_DIPSETTING( 0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING( 0x00, DEF_STR( On ) )
+	PORT_DIPUNUSED( 0x40, 0x40 )
+	PORT_DIPUNUSED( 0x80, 0x80 )
 INPUT_PORTS_END
 
 
@@ -327,7 +334,7 @@ static const ay8910_interface mrflea_ay8910_interface_1 =
 
 static MACHINE_START( mrflea )
 {
-	mrflea_state *state = (mrflea_state *)machine->driver_data;
+	mrflea_state *state = machine->driver_data<mrflea_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->subcpu = machine->device("sub");
@@ -341,7 +348,7 @@ static MACHINE_START( mrflea )
 
 static MACHINE_RESET( mrflea )
 {
-	mrflea_state *state = (mrflea_state *)machine->driver_data;
+	mrflea_state *state = machine->driver_data<mrflea_state>();
 
 	state->gfx_bank = 0;
 	state->io = 0;
@@ -350,10 +357,7 @@ static MACHINE_RESET( mrflea )
 	state->select1 = 0;
 }
 
-static MACHINE_DRIVER_START( mrflea )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mrflea_state)
+static MACHINE_CONFIG_START( mrflea, mrflea_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000) /* 4 MHz? */
@@ -397,7 +401,7 @@ static MACHINE_DRIVER_START( mrflea )
 
 	MDRV_SOUND_ADD("ay3", AY8910, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

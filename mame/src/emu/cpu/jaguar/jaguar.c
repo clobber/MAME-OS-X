@@ -64,13 +64,13 @@ CPU_DISASSEMBLE( jaguardsp );
 
 #define CONDITION(x)		condition_table[(x) + ((jaguar->FLAGS & 7) << 5)]
 
-#define READBYTE(J,a)		memory_read_byte_32be((J)->program, a)
-#define READWORD(J,a)		memory_read_word_32be((J)->program, a)
-#define READLONG(J,a)		memory_read_dword_32be((J)->program, a)
+#define READBYTE(J,a)		(J)->program->read_byte(a)
+#define READWORD(J,a)		(J)->program->read_word(a)
+#define READLONG(J,a)		(J)->program->read_dword(a)
 
-#define WRITEBYTE(J,a,v)	memory_write_byte_32be((J)->program, a, v)
-#define WRITEWORD(J,a,v)	memory_write_word_32be((J)->program, a, v)
-#define WRITELONG(J,a,v)	memory_write_dword_32be((J)->program, a, v)
+#define WRITEBYTE(J,a,v)	(J)->program->write_byte(a, v)
+#define WRITEWORD(J,a,v)	(J)->program->write_word(a, v)
+#define WRITELONG(J,a,v)	(J)->program->write_dword(a, v)
 
 
 
@@ -101,7 +101,8 @@ struct _jaguar_state
 	device_irq_callback irq_callback;
 	jaguar_int_func cpu_interrupt;
 	legacy_cpu_device *device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 };
 
 
@@ -240,7 +241,7 @@ static void (*const dsp_op_table[64])(jaguar_state *jaguar, UINT16 op) =
     MEMORY ACCESSORS
 ***************************************************************************/
 
-#define ROPCODE(J,pc)		(memory_decrypted_read_word((J)->program, WORD_XOR_BE((UINT32)(pc))))
+#define ROPCODE(J,pc)		((J)->direct->read_decrypted_word(WORD_XOR_BE((UINT32)(pc))))
 
 
 
@@ -421,6 +422,7 @@ static void init_common(int isdsp, legacy_cpu_device *device, device_irq_callbac
 	jaguar->irq_callback = irqcallback;
 	jaguar->device = device;
 	jaguar->program = device->space(AS_PROGRAM);
+	jaguar->direct = &jaguar->program->direct();
 	if (configdata != NULL)
 		jaguar->cpu_interrupt = configdata->cpu_int_callback;
 
@@ -480,7 +482,7 @@ static CPU_EXECUTE( jaguargpu )
 	/* if we're halted, we shouldn't be here */
 	if (!(jaguar->ctrl[G_CTRL] & 1))
 	{
-		cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
+		//cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
 		jaguar->icount = 0;
 		return;
 	}
@@ -519,7 +521,7 @@ static CPU_EXECUTE( jaguardsp )
 	/* if we're halted, we shouldn't be here */
 	if (!(jaguar->ctrl[G_CTRL] & 1))
 	{
-		cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
+		//cpu_set_input_line(device, INPUT_LINE_HALT, ASSERT_LINE);
 		jaguar->icount = 0;
 		return;
 	}

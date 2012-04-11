@@ -110,7 +110,7 @@ static INTERRUPT_GEN( sys16_interrupt )
 
 static WRITE16_HANDLER( sound_command_nmi_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -149,7 +149,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -160,7 +160,7 @@ static WRITE16_HANDLER( sound_command_w )
 
 static WRITE16_HANDLER( sys16_coinctrl_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -206,7 +206,7 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( passht4b_service_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT16 val = input_port_read(space->machine, "SERVICE");
 
 	if(!(input_port_read(space->machine, "P1") & 0x40)) val &= 0xef;
@@ -244,19 +244,19 @@ static READ16_HANDLER( passht4b_service_r )
 
 static READ16_HANDLER( passht4b_io1_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	return state->passht4b_io1_val;
 }
 
 static READ16_HANDLER( passht4b_io2_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	return state->passht4b_io2_val;
 }
 
 static READ16_HANDLER( passht4b_io3_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	return state->passht4b_io3_val;
 }
 
@@ -293,7 +293,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( sys16_tilebank_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -366,13 +366,13 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( tturfbl_msm5205_data_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	state->sample_buffer = data;
 }
 
 static void tturfbl_msm5205_callback( running_device *device )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)device->machine->driver_data;
+	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 	msm5205_data_w(device, (state->sample_buffer >> 4) & 0x0f);
 
 	state->sample_buffer <<=  4;
@@ -390,7 +390,7 @@ static const msm5205_interface tturfbl_msm5205_interface  =
 
 static READ8_HANDLER( tturfbl_soundbank_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (state->soundbank_ptr)
 		return state->soundbank_ptr[offset & 0x3fff];
@@ -399,7 +399,7 @@ static READ8_HANDLER( tturfbl_soundbank_r )
 
 static WRITE8_HANDLER( tturfbl_soundbank_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *mem = memory_region(space->machine, "soundcpu");
 
 	switch(data)
@@ -492,14 +492,14 @@ ADDRESS_MAP_END
 
 static void set_tile_bank( running_machine *machine, int data )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	state->tile_bank0 = (data >> 4) & 0x0f;
 	state->tile_bank1 = data & 0x0f;
 }
 
 static void set_fg_page( running_machine *machine, int data )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	state->fg_page[0] = data >> 12;
 	state->fg_page[1] = (data >> 8) & 0x0f;
 	state->fg_page[2] = (data >> 4) & 0x0f;
@@ -508,14 +508,14 @@ static void set_fg_page( running_machine *machine, int data )
 
 static void set_bg_page( running_machine *machine, int data )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	state->bg_page[0] = data >> 12;
 	state->bg_page[1] = (data >> 8) & 0x0f;
 	state->bg_page[2] = (data >> 4) & 0x0f;
 	state->bg_page[3] = data & 0x0f;
 }
 
-
+#ifdef UNUSED_CODE
 static ADDRESS_MAP_START( bayroute_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x0bffff) AM_ROM
 	AM_RANGE(0x100000, 0x100003) AM_WRITENOP // tilebank control?
@@ -533,6 +533,7 @@ static ADDRESS_MAP_START( bayroute_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xff0006, 0xff0007) AM_WRITE(sound_command_w)
 	AM_RANGE(0xff0020, 0xff003f) AM_WRITENOP // config regs
 ADDRESS_MAP_END
+#endif
 
 /***************************************************************************/
 
@@ -560,7 +561,7 @@ static WRITE16_HANDLER( s16bl_fgpage_w )
 
 static WRITE16_HANDLER( s16bl_fgscrollx_bank_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0x1ff;
 	int bank = (data & 0xc000) >> 14;
 
@@ -573,7 +574,7 @@ static WRITE16_HANDLER( s16bl_fgscrollx_bank_w )
 
 static WRITE16_HANDLER( s16bl_fgscrollx_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0x1ff;
 
 	scroll += 0x200;
@@ -585,7 +586,7 @@ static WRITE16_HANDLER( s16bl_fgscrollx_w )
 
 static WRITE16_HANDLER( s16bl_fgscrolly_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0xff;
 
 	state->fg_scrolly = scroll;
@@ -593,7 +594,7 @@ static WRITE16_HANDLER( s16bl_fgscrolly_w )
 
 static WRITE16_HANDLER( s16bl_bgscrollx_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0x1ff;
 
 	scroll+= 0x200;
@@ -603,7 +604,7 @@ static WRITE16_HANDLER( s16bl_bgscrollx_w )
 
 static WRITE16_HANDLER( s16bl_bgscrolly_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0xff;
 
 	state->bg_scrolly = scroll;
@@ -657,7 +658,7 @@ ADDRESS_MAP_END
 
 static void datsu_set_pages( running_machine *machine )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	UINT16 page;
 
 	page = ((state->datsu_page[0] & 0x00f0) >>0) |
@@ -678,7 +679,7 @@ static void datsu_set_pages( running_machine *machine )
 
 static WRITE16_HANDLER( datsu_page0_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	COMBINE_DATA(&state->datsu_page[0]);
 	datsu_set_pages(space->machine);
@@ -686,7 +687,7 @@ static WRITE16_HANDLER( datsu_page0_w )
 
 static WRITE16_HANDLER( datsu_page1_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	COMBINE_DATA(&state->datsu_page[1]);
 	datsu_set_pages(space->machine);
@@ -694,7 +695,7 @@ static WRITE16_HANDLER( datsu_page1_w )
 
 static WRITE16_HANDLER( datsu_page2_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	COMBINE_DATA(&state->datsu_page[2]);
 	datsu_set_pages(space->machine);
@@ -702,7 +703,7 @@ static WRITE16_HANDLER( datsu_page2_w )
 
 static WRITE16_HANDLER( datsu_page3_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	COMBINE_DATA(&state->datsu_page[3]);
 	datsu_set_pages(space->machine);
@@ -761,7 +762,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( goldnaxeb2_fgscrollx_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0x1ff;
 	int bank = (data & 0xc000) >> 14;
 
@@ -773,7 +774,7 @@ static WRITE16_HANDLER( goldnaxeb2_fgscrollx_w )
 
 static WRITE16_HANDLER( goldnaxeb2_bgscrollx_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0x1ff;
 
 	scroll += 0x1f4;
@@ -784,7 +785,7 @@ static WRITE16_HANDLER( goldnaxeb2_bgscrollx_w )
 
 static WRITE16_HANDLER( goldnaxeb2_fgscrolly_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0xff;
 
 	scroll += 0x1;
@@ -793,7 +794,7 @@ static WRITE16_HANDLER( goldnaxeb2_fgscrolly_w )
 
 static WRITE16_HANDLER( goldnaxeb2_bgscrolly_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	int scroll = data & 0xff;
 
 	scroll += 0x1;
@@ -802,7 +803,7 @@ static WRITE16_HANDLER( goldnaxeb2_bgscrolly_w )
 
 static WRITE16_HANDLER( goldnaxeb2_fgpage_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT16 page;
 
 	COMBINE_DATA(&state->goldnaxeb2_fgpage[offset]);
@@ -818,7 +819,7 @@ static WRITE16_HANDLER( goldnaxeb2_fgpage_w )
 
 static WRITE16_HANDLER( goldnaxeb2_bgpage_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT16 page;
 
 	COMBINE_DATA(&state->goldnaxeb2_bgpage[offset]);
@@ -892,7 +893,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( eswat_tilebank0_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -958,7 +959,7 @@ ADDRESS_MAP_END
 
 static READ16_HANDLER( beautyb_unkx_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	state->beautyb_unkx++;
 	state->beautyb_unkx &= 0x7f;
@@ -1028,7 +1029,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( sys18_refreshenable_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -1038,7 +1039,7 @@ static WRITE16_HANDLER( sys18_refreshenable_w )
 
 static WRITE16_HANDLER( sys18_tilebank_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -1049,7 +1050,7 @@ static WRITE16_HANDLER( sys18_tilebank_w )
 
 static READ8_HANDLER( system18_bank_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (state->sound_bank != NULL)
 		return state->sound_bank[offset];
@@ -1069,7 +1070,7 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( sys18_soundbank_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *mem = memory_region(space->machine, "soundcpu");
 	int rom = (data >> 6) & 3;
 	int bank = (data & 0x3f);
@@ -1135,7 +1136,7 @@ ADDRESS_MAP_END
 
 static WRITE16_HANDLER( sound_command_irq_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -1205,13 +1206,13 @@ ADDRESS_MAP_END
 
 static WRITE8_HANDLER( shdancbl_msm5205_data_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	state->sample_buffer = data;
 }
 
 static void shdancbl_msm5205_callback(running_device *device)
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)device->machine->driver_data;
+	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 	msm5205_data_w(device, state->sample_buffer & 0x0f);
 
 	state->sample_buffer >>=  4;
@@ -1228,7 +1229,7 @@ static const msm5205_interface shdancbl_msm5205_interface  =
 
 static READ8_HANDLER( shdancbl_soundbank_r )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 
 	if (state->soundbank_ptr)
 		return state->soundbank_ptr[offset & 0x3fff];
@@ -1237,7 +1238,7 @@ static READ8_HANDLER( shdancbl_soundbank_r )
 
 static WRITE8_HANDLER( shdancbl_bankctrl_w )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)space->machine->driver_data;
+	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *mem = memory_region(space->machine, "soundcpu");
 
 	switch (data)
@@ -1992,10 +1993,7 @@ GFXDECODE_END
  *************************************/
 
 /* System 16A/B Bootlegs */
-static MACHINE_DRIVER_START( system16 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(segas1x_bootleg_state)
+static MACHINE_CONFIG_START( system16, segas1x_bootleg_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)
@@ -2025,12 +2023,12 @@ static MACHINE_DRIVER_START( system16 )
 	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.32)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.32)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static void sound_cause_nmi( running_device *device, int chip )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)device->machine->driver_data;
+	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 
 	/* upd7759 callback */
 	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, PULSE_LINE);
@@ -2043,10 +2041,9 @@ const upd7759_interface sys16_upd7759_interface  =
 };
 
 
-static MACHINE_DRIVER_START( system16_7759 )
+static MACHINE_CONFIG_DERIVED( system16_7759, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 
 	MDRV_CPU_MODIFY("soundcpu")
 	MDRV_CPU_PROGRAM_MAP(sound_7759_map)
@@ -2057,10 +2054,10 @@ static MACHINE_DRIVER_START( system16_7759 )
 	MDRV_SOUND_CONFIG(sys16_upd7759_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.48)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.48)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( system16_datsu_sound )
+static MACHINE_CONFIG_FRAGMENT( system16_datsu_sound )
 	/* TODO:
     - other games might use this sound configuration
     - speaker is likely to be mono for the bootlegs, not stereo.
@@ -2080,7 +2077,7 @@ static MACHINE_DRIVER_START( system16_datsu_sound )
 	MDRV_SOUND_CONFIG(tturfbl_msm5205_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static const sega16sp_interface shinobld_sega16sp_intf =
@@ -2093,10 +2090,9 @@ static const sega16sp_interface shinobld_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( shinobib )
+static MACHINE_CONFIG_DERIVED( shinobib, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(shinobib_map)
 
@@ -2104,7 +2100,7 @@ static MACHINE_DRIVER_START( shinobib )
 
 	MDRV_VIDEO_START( s16a_bootleg_shinobi )
 	MDRV_VIDEO_UPDATE( s16a_bootleg )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static const sega16sp_interface passshtb_sega16sp_intf =
 {
@@ -2116,10 +2112,9 @@ static const sega16sp_interface passshtb_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( passshtb )
+static MACHINE_CONFIG_DERIVED( passshtb, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16_7759)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(passshtb_map)
 
@@ -2127,13 +2122,12 @@ static MACHINE_DRIVER_START( passshtb )
 
 	MDRV_VIDEO_START( s16a_bootleg_passsht )
 	MDRV_VIDEO_UPDATE( s16a_bootleg )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( passsht4b )
+static MACHINE_CONFIG_DERIVED( passsht4b, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16_7759)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(passht4b_map)
 
@@ -2142,7 +2136,7 @@ static MACHINE_DRIVER_START( passsht4b )
 
 	MDRV_VIDEO_START( s16a_bootleg_passsht )
 	MDRV_VIDEO_UPDATE( s16a_bootleg_passht4b )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static const sega16sp_interface wb3bbl_sega16sp_intf =
 {
@@ -2154,10 +2148,9 @@ static const sega16sp_interface wb3bbl_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( wb3bb )
+static MACHINE_CONFIG_DERIVED( wb3bb, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(wb3bbl_map)
 
@@ -2165,7 +2158,7 @@ static MACHINE_DRIVER_START( wb3bb )
 
 	MDRV_VIDEO_START( s16a_bootleg_wb3bl )
 	MDRV_VIDEO_UPDATE( s16a_bootleg )
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static const sega16sp_interface s16bbl_x121_sega16sp_intf =
@@ -2178,10 +2171,7 @@ static const sega16sp_interface s16bbl_x121_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( goldnaxeb1 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(segas1x_bootleg_state)
+static MACHINE_CONFIG_START( goldnaxeb1, segas1x_bootleg_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)
@@ -2205,23 +2195,23 @@ static MACHINE_DRIVER_START( goldnaxeb1 )
 	MDRV_PALETTE_INIT( all_black )
 	MDRV_VIDEO_START(system16)
 	MDRV_VIDEO_UPDATE(system16)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( goldnaxeb2 )
+static MACHINE_CONFIG_DERIVED( goldnaxeb2, goldnaxeb1 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(goldnaxeb1)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(goldnaxeb2_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bayrouteb1 )
+static MACHINE_CONFIG_DERIVED( bayrouteb1, goldnaxeb1 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(goldnaxeb1)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bayrouteb1_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x107_sega16sp_intf =
 {
@@ -2233,22 +2223,21 @@ static const sega16sp_interface s16bbl_x107_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( bayrouteb2 )
+static MACHINE_CONFIG_DERIVED( bayrouteb2, goldnaxeb1 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(goldnaxeb1)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bayrouteb2_map)
 
-	MDRV_IMPORT_FROM(system16_datsu_sound)
+	MDRV_FRAGMENT_ADD(system16_datsu_sound)
 
 	MDRV_DEVICE_REMOVE("segaspr1")
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tturfbl )
+static MACHINE_CONFIG_DERIVED( tturfbl, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16_7759)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(tturfbl_map)
 
@@ -2263,7 +2252,7 @@ static MACHINE_DRIVER_START( tturfbl )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x112_sega16sp_intf =
 {
@@ -2275,15 +2264,14 @@ static const sega16sp_interface s16bbl_x112_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( dduxbl )
+static MACHINE_CONFIG_DERIVED( dduxbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(dduxbl_map)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x124_sega16sp_intf =
 {
@@ -2295,20 +2283,18 @@ static const sega16sp_interface s16bbl_x124_sega16sp_intf =
 	0, // use buffer
 };
 
-static MACHINE_DRIVER_START( eswatbl )
+static MACHINE_CONFIG_DERIVED( eswatbl, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16_7759)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(eswatbl_map)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x124_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( fpointbl )
+static MACHINE_CONFIG_DERIVED( fpointbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(fpointbl_map)
 
@@ -2316,35 +2302,30 @@ static MACHINE_DRIVER_START( fpointbl )
 	MDRV_CPU_PROGRAM_MAP(fpointbl_sound_map)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tetrisbl )
+static MACHINE_CONFIG_DERIVED( tetrisbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(tetrisbl_map)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( beautyb )
+static MACHINE_CONFIG_DERIVED( beautyb, system16 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system16)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(beautyb_map)
 
 	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* System 18 Bootlegs */
-static MACHINE_DRIVER_START( system18 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(segas1x_bootleg_state)
+static MACHINE_CONFIG_START( system18, segas1x_bootleg_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)
@@ -2388,31 +2369,28 @@ static MACHINE_DRIVER_START( system18 )
 	MDRV_SOUND_ADD("5c68", RF5C68, 8000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( astormbl )
+static MACHINE_CONFIG_DERIVED( astormbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system18)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(astormbl_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mwalkbl )
+static MACHINE_CONFIG_DERIVED( mwalkbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system18)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(mwalkbl_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( shdancbl )
+static MACHINE_CONFIG_DERIVED( shdancbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(system18)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(shdancbl_map)
 
@@ -2425,7 +2403,7 @@ static MACHINE_DRIVER_START( shdancbl )
 	MDRV_SOUND_CONFIG(shdancbl_msm5205_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -3292,7 +3270,7 @@ ROM_END
 
 static DRIVER_INIT( common )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	state->bg1_trans = 0;
 	state->splittab_bg_x = 0;
@@ -3319,7 +3297,7 @@ static DRIVER_INIT( common )
 /* Sys16A */
 static DRIVER_INIT( shinobl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 
@@ -3328,7 +3306,7 @@ static DRIVER_INIT( shinobl )
 
 static DRIVER_INIT( passsht )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 
@@ -3338,7 +3316,7 @@ static DRIVER_INIT( passsht )
 
 static DRIVER_INIT( wb3bbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 
@@ -3351,11 +3329,11 @@ static DRIVER_INIT( wb3bbl )
 /* Sys16B */
 static DRIVER_INIT( goldnaxeb1 )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	int i;
 	UINT8 *ROM = memory_region(machine, "maincpu");
 	UINT8 *KEY = memory_region(machine, "decryption");
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 data[0x1000];
 
 	// the decryption key is in a rom (part of an MSDOS executable...)
@@ -3374,7 +3352,7 @@ static DRIVER_INIT( goldnaxeb1 )
 		state->decrypted_region[i] = ROM[i] ^ data[(i & 0xfff) ^ 1];
 	}
 
-	memory_set_decrypted_region(space, 0x00000, 0xbffff, state->decrypted_region);
+	space->set_decrypted_region(0x00000, 0xbffff, state->decrypted_region);
 
 	DRIVER_INIT_CALL(common);
 
@@ -3390,7 +3368,7 @@ static DRIVER_INIT( bayrouteb1 )
 	//
 	// for now we use the code which is present in the unprotected bootleg set
 	// and modify the rom to use it
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	UINT16 *ROM2;
 	UINT16 *decrypted_region2;
 
@@ -3421,7 +3399,7 @@ static DRIVER_INIT( bayrouteb2 )
 
 static DRIVER_INIT( goldnaxeb2 )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 
@@ -3444,7 +3422,7 @@ static DRIVER_INIT( dduxbl )
 
 static DRIVER_INIT( eswatbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 	//state->splittab_fg_x = &sys16_textram[0x0f80];
@@ -3454,7 +3432,7 @@ static DRIVER_INIT( eswatbl )
 
 static DRIVER_INIT( fpointbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 
 	DRIVER_INIT_CALL(common);
 	//sys16_video_config(fpoint_update_proc, -0xb8, NULL);
@@ -3484,7 +3462,7 @@ static DRIVER_INIT( beautyb )
 /* Sys18 */
 static DRIVER_INIT( shdancbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *mem = memory_region(machine, "soundcpu");;
 
 	/* Copy first 32K of IC45 to Z80 address space */
@@ -3499,7 +3477,7 @@ static DRIVER_INIT( shdancbl )
 
 static DRIVER_INIT( mwalkbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *RAM =  memory_region(machine, "soundcpu");
 	static const int mwalk_sound_info[]  =
 	{
@@ -3521,7 +3499,7 @@ static DRIVER_INIT( mwalkbl )
 
 static DRIVER_INIT( astormbl )
 {
-	segas1x_bootleg_state *state = (segas1x_bootleg_state *)machine->driver_data;
+	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	UINT8 *RAM =  memory_region(machine, "soundcpu");
 	static const int astormbl_sound_info[]  =
 	{

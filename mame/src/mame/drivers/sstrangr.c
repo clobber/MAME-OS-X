@@ -14,12 +14,11 @@
 
 #define NUM_PENS	(8)
 
-class sstrangr_state
+class sstrangr_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, sstrangr_state(machine)); }
-
-	sstrangr_state(running_machine &machine) { }
+	sstrangr_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *ram;
 	UINT8 flip_screen;
@@ -36,7 +35,7 @@ public:
 
 static VIDEO_UPDATE( sstrangr )
 {
-	sstrangr_state *state = (sstrangr_state *)screen->machine->driver_data;
+	sstrangr_state *state = screen->machine->driver_data<sstrangr_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -85,7 +84,7 @@ static void get_pens(pen_t *pens)
 
 static VIDEO_UPDATE( sstrngr2 )
 {
-	sstrangr_state *state = (sstrangr_state *)screen->machine->driver_data;
+	sstrangr_state *state = screen->machine->driver_data<sstrangr_state>();
 	pen_t pens[NUM_PENS];
 	offs_t offs;
 	UINT8 *color_map_base;
@@ -133,7 +132,7 @@ static VIDEO_UPDATE( sstrngr2 )
 
 static WRITE8_HANDLER( port_w )
 {
-	sstrangr_state *state = (sstrangr_state *)space->machine->driver_data;
+	sstrangr_state *state = space->machine->driver_data<sstrangr_state>();
 
 	state->flip_screen = data & 0x20;
 }
@@ -192,9 +191,7 @@ static INPUT_PORTS_START( sstrangr )
 INPUT_PORTS_END
 
 
-static MACHINE_DRIVER_START( sstrangr )
-
-	MDRV_DRIVER_DATA( sstrangr_state )
+static MACHINE_CONFIG_START( sstrangr, sstrangr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",I8080,1996800)	/* clock is a guess, taken from mw8080bw */
@@ -213,7 +210,7 @@ static MACHINE_DRIVER_START( sstrangr )
 
 	/* sound hardware */
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -266,15 +263,14 @@ static INPUT_PORTS_START( sstrngr2 )
 INPUT_PORTS_END
 
 
-static MACHINE_DRIVER_START( sstrngr2 )
+static MACHINE_CONFIG_DERIVED( sstrngr2, sstrangr )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(sstrangr)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(sstrngr2)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -89,14 +89,14 @@ enum
 		DEVINFO_PTR_ROM_REGION = DEVINFO_PTR_FIRST,		// R/O: pointer to device-specific ROM region
 		DEVINFO_PTR_MACHINE_CONFIG,						// R/O: pointer to device-specific machine config
 
-		DEVINFO_PTR_INTERNAL_MEMORY_MAP,				// R/O: const addrmap_token *map
+		DEVINFO_PTR_INTERNAL_MEMORY_MAP,				// R/O: address_map_constructor map
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_0 = DEVINFO_PTR_INTERNAL_MEMORY_MAP + 0,
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_1 = DEVINFO_PTR_INTERNAL_MEMORY_MAP + 1,
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_2 = DEVINFO_PTR_INTERNAL_MEMORY_MAP + 2,
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_3 = DEVINFO_PTR_INTERNAL_MEMORY_MAP + 3,
 		DEVINFO_PTR_INTERNAL_MEMORY_MAP_LAST = DEVINFO_PTR_INTERNAL_MEMORY_MAP + ADDRESS_SPACES - 1,
 
-		DEVINFO_PTR_DEFAULT_MEMORY_MAP,					// R/O: const addrmap_token *map
+		DEVINFO_PTR_DEFAULT_MEMORY_MAP,					// R/O: address_map_constructor map
 		DEVINFO_PTR_DEFAULT_MEMORY_MAP_0 = DEVINFO_PTR_DEFAULT_MEMORY_MAP + 0,
 		DEVINFO_PTR_DEFAULT_MEMORY_MAP_1 = DEVINFO_PTR_DEFAULT_MEMORY_MAP + 1,
 		DEVINFO_PTR_DEFAULT_MEMORY_MAP_2 = DEVINFO_PTR_DEFAULT_MEMORY_MAP + 2,
@@ -228,13 +228,13 @@ const device_type name = configclass::static_alloc_device_config
 
 // reduced macros that are easier to use, and map to the above two macros
 #define DECLARE_LEGACY_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_device_config_base, legacy_device_base)
-#define DECLARE_LEGACY_SOUND_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(SOUND_##name, basename, basename##_sound_device_config, basename##_sound_device, legacy_sound_device_config_base, legacy_sound_device_base)
+#define DECLARE_LEGACY_SOUND_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_sound_device_config_base, legacy_sound_device_base)
 #define DECLARE_LEGACY_MEMORY_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_memory_device_config_base, legacy_memory_device_base)
 #define DECLARE_LEGACY_NVRAM_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_nvram_device_config_base, legacy_nvram_device_base)
 #define DECLARE_LEGACY_IMAGE_DEVICE(name, basename) _DECLARE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_image_device_config_base, legacy_image_device_base)
 
 #define DEFINE_LEGACY_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_device_config_base, legacy_device_base)
-#define DEFINE_LEGACY_SOUND_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(SOUND_##name, basename, basename##_sound_device_config, basename##_sound_device, legacy_sound_device_config_base, legacy_sound_device_base)
+#define DEFINE_LEGACY_SOUND_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_sound_device_config_base, legacy_sound_device_base)
 #define DEFINE_LEGACY_MEMORY_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_memory_device_config_base, legacy_memory_device_base)
 #define DEFINE_LEGACY_NVRAM_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_nvram_device_config_base, legacy_nvram_device_base)
 #define DEFINE_LEGACY_IMAGE_DEVICE(name, basename) _DEFINE_LEGACY_DEVICE(name, basename, basename##_device_config, basename##_device, legacy_image_device_config_base, legacy_image_device_base)
@@ -275,10 +275,11 @@ const device_type name = configclass::static_alloc_device_config
 //  DEVICE_CONFIGURATION_MACROS
 //**************************************************************************
 
+#define structsizeof(_struct, _field) sizeof(((_struct *)NULL)->_field)
+
 // inline device configurations that require 32 bits of storage in the token
 #define MDRV_DEVICE_CONFIG_DATA32_EXPLICIT(_size, _offset, _val) \
-	TOKEN_UINT32_PACK3(MCONFIG_TOKEN_DEVICE_CONFIG_DATA32, 8, _size, 4, _offset, 12), \
-	TOKEN_UINT32((UINT32)(_val)),
+	legacy_device_config_base::static_set_inline32(device, _offset, _size, (UINT32)(_val));
 
 #define MDRV_DEVICE_CONFIG_DATA32(_struct, _field, _val) \
 	MDRV_DEVICE_CONFIG_DATA32_EXPLICIT(structsizeof(_struct, _field), offsetof(_struct, _field), _val)
@@ -301,8 +302,7 @@ const device_type name = configclass::static_alloc_device_config
 
 // inline device configurations that require 32 bits of fixed-point storage in the token
 #define MDRV_DEVICE_CONFIG_DATAFP32_EXPLICIT(_size, _offset, _val, _fixbits) \
-	TOKEN_UINT32_PACK4(MCONFIG_TOKEN_DEVICE_CONFIG_DATAFP32, 8, _size, 4, _fixbits, 6, _offset, 12), \
-	TOKEN_UINT32((INT32)((float)(_val) * (float)(1 << (_fixbits)))),
+	legacy_device_config_base::static_set_inline_float(device, _offset, _size, (float)(_val));
 
 #define MDRV_DEVICE_CONFIG_DATAFP32(_struct, _field, _val, _fixbits) \
 	MDRV_DEVICE_CONFIG_DATAFP32_EXPLICIT(structsizeof(_struct, _field), offsetof(_struct, _field), _val, _fixbits)
@@ -325,8 +325,7 @@ const device_type name = configclass::static_alloc_device_config
 
 // inline device configurations that require 64 bits of storage in the token
 #define MDRV_DEVICE_CONFIG_DATA64_EXPLICIT(_size, _offset, _val) \
-	TOKEN_UINT32_PACK3(MCONFIG_TOKEN_DEVICE_CONFIG_DATA64, 8, _size, 4, _offset, 12), \
-	TOKEN_UINT64((UINT64)(_val)),
+	legacy_device_config_base::static_set_inline64(device, _offset, _size, (UINT64)(_val));
 
 #define MDRV_DEVICE_CONFIG_DATA64(_struct, _field, _val) \
 	MDRV_DEVICE_CONFIG_DATA64_EXPLICIT(structsizeof(_struct, _field), offsetof(_struct, _field), _val)
@@ -373,6 +372,8 @@ const device_type name = configclass::static_alloc_device_config
 //**************************************************************************
 
 union deviceinfo;
+class machine_config;
+class device_config;
 
 char *get_temp_string_buffer(void);
 resource_pool &machine_get_pool(running_machine &machine);
@@ -402,15 +403,15 @@ union deviceinfo
 	device_execute_func 	execute;					// DEVINFO_FCT_EXECUTE
 	device_nvram_func		nvram;						// DEVINFO_FCT_NVRAM
 	const rom_entry *		romregion;					// DEVINFO_PTR_ROM_REGION
-	const machine_config_token *machine_config;			// DEVINFO_PTR_MACHINE_CONFIG
-	const addrmap8_token *	internal_map8;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
-	const addrmap16_token *	internal_map16;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
-	const addrmap32_token *	internal_map32;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
-	const addrmap64_token *	internal_map64;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
-	const addrmap8_token *	default_map8;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
-	const addrmap16_token *	default_map16;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
-	const addrmap32_token *	default_map32;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
-	const addrmap64_token *	default_map64;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
+	machine_config_constructor machine_config;			// DEVINFO_PTR_MACHINE_CONFIG
+	address_map_constructor	internal_map8;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
+	address_map_constructor	internal_map16;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
+	address_map_constructor	internal_map32;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
+	address_map_constructor	internal_map64;				// DEVINFO_PTR_INTERNAL_MEMORY_MAP
+	address_map_constructor	default_map8;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
+	address_map_constructor	default_map16;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
+	address_map_constructor	default_map32;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
+	address_map_constructor	default_map64;				// DEVINFO_PTR_DEFAULT_MEMORY_MAP
 };
 
 
@@ -433,10 +434,15 @@ protected:
 	// basic information getters
 public:
 	virtual const rom_entry *rom_region() const { return reinterpret_cast<const rom_entry *>(get_legacy_config_ptr(DEVINFO_PTR_ROM_REGION)); }
-	virtual const machine_config_token *machine_config_tokens() const { return reinterpret_cast<const machine_config_token *>(get_legacy_config_ptr(DEVINFO_PTR_MACHINE_CONFIG)); }
+	virtual machine_config_constructor machine_config_additions() const { return reinterpret_cast<machine_config_constructor>(get_legacy_config_ptr(DEVINFO_PTR_MACHINE_CONFIG)); }
 
 	// access to legacy inline configuartion
 	void *inline_config() const { return m_inline_config; }
+
+	// inline configuration helpers
+	static void static_set_inline32(device_config *device, UINT32 offset, UINT32 size, UINT32 value);
+	static void static_set_inline64(device_config *device, UINT32 offset, UINT32 size, UINT64 value);
+	static void static_set_inline_float(device_config *device, UINT32 offset, UINT32 size, float value);
 
 protected:
 	// overrides

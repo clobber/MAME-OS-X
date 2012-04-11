@@ -219,7 +219,7 @@ Stephh's notes (based on the games M6502 code and some tests) :
 
 static READ8_HANDLER( exprraid_protection_r )
 {
-	exprraid_state *state = (exprraid_state *)space->machine->driver_data;
+	exprraid_state *state = space->machine->driver_data<exprraid_state>();
 	switch (offset)
 	{
 	case 0:
@@ -233,7 +233,7 @@ static READ8_HANDLER( exprraid_protection_r )
 
 static WRITE8_HANDLER( sound_cpu_command_w )
 {
-	exprraid_state *state = (exprraid_state *)space->machine->driver_data;
+	exprraid_state *state = space->machine->driver_data<exprraid_state>();
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line(state->slave, INPUT_LINE_NMI, PULSE_LINE);
 }
@@ -280,13 +280,13 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted_deco16 )
 {
-	exprraid_state *state = (exprraid_state *)field->port->machine->driver_data;
+	exprraid_state *state = field->port->machine->driver_data<exprraid_state>();
 	cpu_set_input_line(state->maincpu, DECO16_IRQ_LINE, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
 static INPUT_CHANGED( coin_inserted_nmi )
 {
-	exprraid_state *state = (exprraid_state *)field->port->machine->driver_data;
+	exprraid_state *state = field->port->machine->driver_data<exprraid_state>();
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
@@ -441,7 +441,7 @@ GFXDECODE_END
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
 static void irqhandler( running_device *device, int linestate )
 {
-	exprraid_state *state = (exprraid_state *)device->machine->driver_data;
+	exprraid_state *state = device->machine->driver_data<exprraid_state>();
 	cpu_set_input_line_and_vector(state->slave, 0, linestate, 0xff);
 }
 
@@ -453,7 +453,7 @@ static const ym3526_interface ym3526_config =
 #if 0
 static INTERRUPT_GEN( exprraid_interrupt )
 {
-	exprraid_state *state = (exprraid_state *)device->machine->driver_data;
+	exprraid_state *state = device->machine->driver_data<exprraid_state>();
 
 	if ((~input_port_read(device->machine, "IN2")) & 0xc0)
 	{
@@ -475,7 +475,7 @@ static INTERRUPT_GEN( exprraid_interrupt )
 
 static MACHINE_START( exprraid )
 {
-	exprraid_state *state = (exprraid_state *)machine->driver_data;
+	exprraid_state *state = machine->driver_data<exprraid_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->slave = machine->device("slave");
@@ -485,7 +485,7 @@ static MACHINE_START( exprraid )
 
 static MACHINE_RESET( exprraid )
 {
-	exprraid_state *state = (exprraid_state *)machine->driver_data;
+	exprraid_state *state = machine->driver_data<exprraid_state>();
 
 	state->bg_index[0] = 0;
 	state->bg_index[1] = 0;
@@ -493,10 +493,7 @@ static MACHINE_RESET( exprraid )
 	state->bg_index[3] = 0;
 }
 
-static MACHINE_DRIVER_START( exprraid )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(exprraid_state)
+static MACHINE_CONFIG_START( exprraid, exprraid_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", DECO16, 4000000)        /* 4 MHz ??? */
@@ -533,14 +530,13 @@ static MACHINE_DRIVER_START( exprraid )
 	MDRV_SOUND_ADD("ym2", YM3526, 3600000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( exprboot )
-	MDRV_IMPORT_FROM(exprraid)
+static MACHINE_CONFIG_DERIVED( exprboot, exprraid )
 
 	MDRV_CPU_REPLACE("maincpu", M6502, 4000000)        /* 4 MHz ??? */
 	MDRV_CPU_PROGRAM_MAP(master_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

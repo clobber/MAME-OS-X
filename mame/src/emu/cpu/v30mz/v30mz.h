@@ -74,30 +74,30 @@ typedef enum {
 
 #define DefaultBase(Seg) ((cpustate->seg_prefix && (Seg==DS || Seg==SS)) ? cpustate->prefix_base : cpustate->sregs[Seg] << 4)
 
-#define GetMemB(Seg,Off) ((UINT8)memory_read_byte_8le(cpustate->program, (DefaultBase(Seg)+(Off))))
-#define GetMemW(Seg,Off) ((UINT16) memory_read_byte_8le(cpustate->program, (DefaultBase(Seg)+(Off))) + (memory_read_byte_8le(cpustate->program, (DefaultBase(Seg)+((Off)+1)))<<8) )
+#define GetMemB(Seg,Off) ((UINT8)cpustate->program->read_byte((DefaultBase(Seg)+(Off))))
+#define GetMemW(Seg,Off) ((UINT16) cpustate->program->read_byte((DefaultBase(Seg)+(Off))) + (cpustate->program->read_byte((DefaultBase(Seg)+((Off)+1)))<<8) )
 
-#define PutMemB(Seg,Off,x) { memory_write_byte_8le(cpustate->program, (DefaultBase(Seg)+(Off)),(x)); }
+#define PutMemB(Seg,Off,x) { cpustate->program->write_byte((DefaultBase(Seg)+(Off)),(x)); }
 #define PutMemW(Seg,Off,x) { PutMemB(Seg,Off,(x)&0xff); PutMemB(Seg,(Off)+1,(BYTE)((x)>>8)); }
 
 /* Todo:  Remove these later - plus readword could overflow */
-#define ReadByte(ea) ((BYTE)memory_read_byte_8le(cpustate->program, (ea)))
-#define ReadWord(ea) (memory_read_byte_8le(cpustate->program, (ea))+(memory_read_byte_8le(cpustate->program, ((ea)+1))<<8))
-#define WriteByte(ea,val) { memory_write_byte_8le(cpustate->program, (ea),val); }
-#define WriteWord(ea,val) { memory_write_byte_8le(cpustate->program, (ea),(BYTE)(val)); memory_write_byte_8le(cpustate->program, ((ea)+1),(val)>>8); }
+#define ReadByte(ea) ((BYTE)cpustate->program->read_byte((ea)))
+#define ReadWord(ea) (cpustate->program->read_byte((ea))+(cpustate->program->read_byte(((ea)+1))<<8))
+#define WriteByte(ea,val) { cpustate->program->write_byte((ea),val); }
+#define WriteWord(ea,val) { cpustate->program->write_byte((ea),(BYTE)(val)); cpustate->program->write_byte(((ea)+1),(val)>>8); }
 
-#define read_port(port) memory_read_byte_8le(cpustate->io, port)
-#define write_port(port,val) memory_write_byte_8le(cpustate->io, port,val)
+#define read_port(port) cpustate->io->read_byte(port)
+#define write_port(port,val) cpustate->io->write_byte(port,val)
 
-#define FETCH (memory_raw_read_byte(cpustate->program, (cpustate->sregs[CS]<<4)+cpustate->ip++))
-#define FETCHOP (memory_decrypted_read_byte(cpustate->program, (cpustate->sregs[CS]<<4)+cpustate->ip++))
-#define FETCHWORD(var) { var=memory_raw_read_byte(cpustate->program, (((cpustate->sregs[CS]<<4)+cpustate->ip)))+(memory_raw_read_byte(cpustate->program, (((cpustate->sregs[CS]<<4)+cpustate->ip+1)))<<8); cpustate->ip+=2; }
+#define FETCH (cpustate->direct->read_raw_byte((cpustate->sregs[CS]<<4)+cpustate->ip++))
+#define FETCHOP (cpustate->direct->read_decrypted_byte((cpustate->sregs[CS]<<4)+cpustate->ip++))
+#define FETCHWORD(var) { var=cpustate->direct->read_raw_byte((((cpustate->sregs[CS]<<4)+cpustate->ip)))+(cpustate->direct->read_raw_byte((((cpustate->sregs[CS]<<4)+cpustate->ip+1)))<<8); cpustate->ip+=2; }
 #define PUSH(val) { cpustate->regs.w[SP]-=2; WriteWord((((cpustate->sregs[SS]<<4)+cpustate->regs.w[SP])),val); }
 #define POP(var) { var = ReadWord((((cpustate->sregs[SS]<<4)+cpustate->regs.w[SP]))); cpustate->regs.w[SP]+=2; }
-#define PEEK(addr) ((BYTE)memory_raw_read_byte(cpustate->program, addr))
-#define PEEKOP(addr) ((BYTE)memory_decrypted_read_byte(cpustate->program, addr))
+#define PEEK(addr) ((BYTE)cpustate->direct->read_raw_byte(addr))
+#define PEEKOP(addr) ((BYTE)cpustate->direct->read_decrypted_byte(addr))
 
-#define GetModRM UINT32 ModRM=memory_raw_read_byte(cpustate->program, (cpustate->sregs[CS]<<4)+cpustate->ip++)
+#define GetModRM UINT32 ModRM=cpustate->direct->read_raw_byte((cpustate->sregs[CS]<<4)+cpustate->ip++)
 
 /* Cycle count macros:
     CLK  - cycle count is the same on all processors

@@ -14,7 +14,7 @@
 
 static INPUT_CHANGED( coin_inserted )
 {
-	cheekyms_state *state = (cheekyms_state *)field->port->machine->driver_data;
+	cheekyms_state *state = field->port->machine->driver_data<cheekyms_state>();
 
 	/* this starts a 556 one-shot timer (and triggers a sound effect) */
 	if (newval)
@@ -111,16 +111,13 @@ GFXDECODE_END
 
 static MACHINE_START( cheekyms )
 {
-	cheekyms_state *state = (cheekyms_state *)machine->driver_data;
+	cheekyms_state *state = machine->driver_data<cheekyms_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->dac = machine->device("dac");
 }
 
-static MACHINE_DRIVER_START( cheekyms )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cheekyms_state)
+static MACHINE_CONFIG_START( cheekyms, cheekyms_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,5000000/2)  /* 2.5 MHz */
@@ -150,7 +147,7 @@ static MACHINE_DRIVER_START( cheekyms )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

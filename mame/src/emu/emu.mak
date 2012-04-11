@@ -37,6 +37,7 @@ OBJDIRS += \
 #-------------------------------------------------
 
 EMUOBJS = \
+	$(EMUOBJ)/addrmap.o \
 	$(EMUOBJ)/attotime.o \
 	$(EMUOBJ)/audit.o \
 	$(EMUOBJ)/cheat.o \
@@ -44,6 +45,7 @@ EMUOBJS = \
 	$(EMUOBJ)/config.o \
 	$(EMUOBJ)/crsshair.o \
 	$(EMUOBJ)/debugger.o \
+	$(EMUOBJ)/delegate.o \
 	$(EMUOBJ)/devcb.o \
 	$(EMUOBJ)/devcpu.o \
 	$(EMUOBJ)/devimage.o \
@@ -97,7 +99,6 @@ EMUOBJS = \
 	$(EMUOBJ)/video.o \
 	$(EMUOBJ)/watchdog.o \
 	$(EMUOBJ)/debug/debugcmd.o \
-	$(EMUOBJ)/debug/debugcmt.o \
 	$(EMUOBJ)/debug/debugcon.o \
 	$(EMUOBJ)/debug/debugcpu.o \
 	$(EMUOBJ)/debug/debughlp.o \
@@ -108,12 +109,8 @@ EMUOBJS = \
 	$(EMUOBJ)/debug/dvtext.o \
 	$(EMUOBJ)/debug/express.o \
 	$(EMUOBJ)/debug/textbuf.o \
-	$(EMUOBJ)/debugint/debugint.o
-
-ifdef PROFILER
-EMUOBJS += \
+	$(EMUOBJ)/debugint/debugint.o \
 	$(EMUOBJ)/profiler.o
-endif
 
 EMUSOUNDOBJS = \
 	$(EMUOBJ)/sound/filter.o \
@@ -155,6 +152,7 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/ds2401.o \
 	$(EMUMACHINE)/ds2404.o \
 	$(EMUMACHINE)/eeprom.o \
+	$(EMUMACHINE)/er2055.o \
 	$(EMUMACHINE)/f3853.o \
 	$(EMUMACHINE)/generic.o \
 	$(EMUMACHINE)/i8243.o \
@@ -177,6 +175,7 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/mc146818.o \
 	$(EMUMACHINE)/microtch.o \
 	$(EMUMACHINE)/msm6242.o \
+	$(EMUMACHINE)/nvram.o \
 	$(EMUMACHINE)/pc16552d.o \
 	$(EMUMACHINE)/pci.o \
 	$(EMUMACHINE)/pic8259.o \

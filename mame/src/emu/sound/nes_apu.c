@@ -75,7 +75,7 @@ struct _nesapu_state
 INLINE nesapu_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
-	assert(device->type() == SOUND_NES);
+	assert(device->type() == NES);
 	return (nesapu_state *)downcast<legacy_device_base *>(device)->token();
 }
 
@@ -384,7 +384,7 @@ static int8 apu_dpcm(nesapu_state *info, dpcm_t *chan)
 			bit_pos = 7 - (chan->bits_left & 7);
 			if (7 == bit_pos)
 			{
-				chan->cur_byte = memory_read_byte(info->APU.dpcm.memory, chan->address);
+				chan->cur_byte = info->APU.dpcm.memory->read_byte(chan->address);
 				chan->address++;
 				chan->length--;
 			}

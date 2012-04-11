@@ -77,6 +77,7 @@
 
 #include "emu.h"
 #include "video/s2636.h"
+#include "sound/s2636.h"
 
 /*************************************
  *
@@ -318,6 +319,15 @@ WRITE8_DEVICE_HANDLER( s2636_work_ram_w )
 
 	assert(offset < s2636->work_ram_size);
 
+	if ( offset == 0xc7 )
+	{
+		const s2636_interface *intf = get_interface(device);
+		if ( intf->sound && *intf->sound )
+		{
+			s2636_soundport_w(device->machine->device(intf->sound), 0, data);
+		}
+	}
+
 	s2636->work_ram[offset] = data;
 }
 
@@ -349,7 +359,7 @@ static DEVICE_START( s2636 )
 	s2636->x_offset = intf->x_offset;
 	s2636->y_offset = intf->y_offset;
 
-	s2636->work_ram = auto_alloc_array(device->machine, UINT8, intf->work_ram_size);
+	s2636->work_ram = auto_alloc_array_clear(device->machine, UINT8, intf->work_ram_size);
 	s2636->bitmap = auto_bitmap_alloc(device->machine, width, height, BITMAP_FORMAT_INDEXED16);
 	s2636->collision_bitmap = auto_bitmap_alloc(device->machine, width, height, BITMAP_FORMAT_INDEXED16);
 

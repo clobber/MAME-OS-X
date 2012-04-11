@@ -38,6 +38,7 @@
 ***************************************************************************/
 
 #include "emu.h"
+#include "debug/debugcpu.h"
 
 
 
@@ -136,44 +137,29 @@ void device_list::start_all()
 	state_save_register_presave(m_machine, static_pre_save, this);
 	state_save_register_postload(m_machine, static_post_load, this);
 
-	// iterate until we've started everything
-	int devcount = count();
-	int numstarted = 0;
-	while (numstarted < devcount)
+	// iterate over devices to start them
+	device_t *nextdevice;
+	for (device_t *device = first(); device != NULL; device = nextdevice)
 	{
-		// iterate over devices and start them
-		int prevstarted = numstarted;
-		for (device_t *device = first(); device != NULL; device = device->next())
-			if (!device->started())
-			{
-				// attempt to start the device, catching any expected exceptions
-				try
-				{
-					device->start();
-					numstarted++;
-				}
-				catch (device_missing_dependencies &)
-				{
-				}
-			}
+		// attempt to start the device, catching any expected exceptions
+		nextdevice = device->next();
+		try
+		{
+			mame_printf_verbose("Starting %s '%s'\n", device->name(), device->tag());
+			device->start();
+		}
 
-		// if we didn't start anything new, we're in trouble
-		if (numstarted == prevstarted)
-			fatalerror("Circular dependency in device startup; unable to start %d/%d devices\n", devcount - numstarted, devcount);
+		// handle missing dependencies by moving the device to the end
+		catch (device_missing_dependencies &)
+		{
+			// if we're the end, fail
+			mame_printf_verbose("  (missing dependencies; rescheduling)\n");
+			if (nextdevice == NULL)
+				throw emu_fatalerror("Circular dependency in device startup; unable to start %s '%s'\n", device->name(), device->tag());
+			detach(device);
+			append(device->tag(), device);
+		}
 	}
-}
-
-
-//-------------------------------------------------
-//  debug_setup_all - tell all the devices to set
-//  up any debugging they need
-//-------------------------------------------------
-
-void device_list::debug_setup_all()
-{
-	// iterate over devices and stop them
-	for (device_t *device = first(); device != NULL; device = device->next())
-		device->debug_setup();
 }
 
 
@@ -201,6 +187,11 @@ void device_list::static_reset(running_machine &machine)
 
 void device_list::static_exit(running_machine &machine)
 {
+	// first let the debugger save comments
+	if ((machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
+		debug_comment_save(&machine);
+
+	// then nuke the devices
 	machine.m_devicelist.reset();
 }
 
@@ -273,17 +264,6 @@ void device_config_interface::interface_config_complete()
 
 
 //-------------------------------------------------
-//  interface_process_token - default token
-//  processing for a given interface
-//-------------------------------------------------
-
-bool device_config_interface::interface_process_token(UINT32 entrytype, const machine_config_token *&tokens)
-{
-	return false;
-}
-
-
-//-------------------------------------------------
 //  interface_validity_check - default validation
 //  for a device after the configuration has been
 //  constructed
@@ -305,7 +285,7 @@ bool device_config_interface::interface_validity_check(const game_driver &driver
 //  device configuration
 //-------------------------------------------------
 
-device_config::device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock)
+device_config::device_config(const machine_config &mconfig, device_type type, const char *name, const char *tag, const device_config *owner, UINT32 clock, UINT32 param)
 	: m_next(NULL),
 	  m_owner(const_cast<device_config *>(owner)),
 	  m_interface_list(NULL),
@@ -317,8 +297,6 @@ device_config::device_config(const machine_config &mconfig, device_type type, co
 	  m_tag(tag),
 	  m_config_complete(false)
 {
-	memset(m_inline_data, 0, sizeof(m_inline_data));
-
 	// derive the clock from our owner if requested
 	if ((m_clock & 0xff000000) == 0xff000000)
 	{
@@ -350,124 +328,6 @@ void device_config::config_complete()
 
 	// then notify the device itself
 	device_config_complete();
-}
-
-
-//-------------------------------------------------
-//  process_token - process tokens
-//-------------------------------------------------
-
-void device_config::process_token(UINT32 entrytype, const machine_config_token *&tokens)
-{
-	int size, offset, bits, index;
-	UINT32 data32;
-	UINT64 data64;
-	bool processed = false;
-
-	// first process stuff we know about
-	switch (entrytype)
-	{
-		// specify device clock
-		case MCONFIG_TOKEN_DEVICE_CLOCK:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT64_UNPACK2(tokens, entrytype, 8, m_clock, 32);
-			processed = true;
-			break;
-
-		// specify pointer to static device configuration
-		case MCONFIG_TOKEN_DEVICE_CONFIG:
-			m_static_config = TOKEN_GET_PTR(tokens, voidptr);
-			processed = true;
-			break;
-
-		// provide inline device data packed into a 16-bit space
-		case MCONFIG_TOKEN_DEVICE_INLINE_DATA16:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK3(tokens, entrytype, 8, index, 8, data32, 16);
-			assert(index >= 0 && index < ARRAY_LENGTH(m_inline_data));
-			m_inline_data[index] = data32;
-			processed = true;
-			break;
-
-		// provide inline device data packed into a 32-bit space
-		case MCONFIG_TOKEN_DEVICE_INLINE_DATA32:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, index, 8);
-			assert(index >= 0 && index < ARRAY_LENGTH(m_inline_data));
-			m_inline_data[index] = TOKEN_GET_UINT32(tokens);
-			processed = true;
-			break;
-
-		// provide inline device data packed into a 64-bit space
-		case MCONFIG_TOKEN_DEVICE_INLINE_DATA64:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK2(tokens, entrytype, 8, index, 8);
-			assert(index >= 0 && index < ARRAY_LENGTH(m_inline_data));
-			TOKEN_EXTRACT_UINT64(tokens, m_inline_data[index]);
-			processed = true;
-			break;
-
-		// provide inline device data packed into a 32-bit word
-		case MCONFIG_TOKEN_DEVICE_CONFIG_DATA32:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK3(tokens, entrytype, 8, size, 4, offset, 12);
-			data32 = TOKEN_GET_UINT32(tokens);
-			switch (size)
-			{
-				case 1: *(UINT8 *) ((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data32; break;
-				case 2: *(UINT16 *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data32; break;
-				case 4: *(UINT32 *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data32; break;
-			}
-			processed = true;
-			break;
-
-		// provide inline device data packed into a 64-bit word
-		case MCONFIG_TOKEN_DEVICE_CONFIG_DATA64:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK3(tokens, entrytype, 8, size, 4, offset, 12);
-			TOKEN_EXTRACT_UINT64(tokens, data64);
-			switch (size)
-			{
-				case 1: *(UINT8 *) ((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data64; break;
-				case 2: *(UINT16 *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data64; break;
-				case 4: *(UINT32 *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data64; break;
-				case 8: *(UINT64 *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = data64; break;
-			}
-			processed = true;
-			break;
-
-		// provide inline floating-point device data packed into a fixed-point 32-bit word
-		case MCONFIG_TOKEN_DEVICE_CONFIG_DATAFP32:
-			TOKEN_UNGET_UINT32(tokens);
-			TOKEN_GET_UINT32_UNPACK4(tokens, entrytype, 8, size, 4, bits, 6, offset, 12);
-			data32 = TOKEN_GET_UINT32(tokens);
-			switch (size)
-			{
-				case 4: *(float *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = (float)(INT32)data32 / (float)(1 << bits); break;
-				case 8: *(double *)((UINT8 *)downcast<legacy_device_config_base *>(this)->inline_config() + offset) = (double)(INT32)data32 / (double)(1 << bits); break;
-			}
-			processed = true;
-			break;
-	}
-
-	// anything else might be handled by one of our interfaces
-	for (device_config_interface *intf = m_interface_list; intf != NULL; intf = intf->interface_next())
-		if (intf->interface_process_token(entrytype, tokens))
-		{
-			assert(!processed);
-			processed = true;
-		}
-
-	// or it might be processed by the device itself
-	if (device_process_token(entrytype, tokens))
-	{
-		assert(!processed);
-		processed = true;
-	}
-
-	// regardless, *somebody* must handle it
-	if (!processed)
-		throw emu_fatalerror("Unhandled token %d for device '%s'", entrytype, tag());
 }
 
 
@@ -506,18 +366,6 @@ void device_config::device_config_complete()
 
 
 //-------------------------------------------------
-//  device_process_token - process basic device
-//  tokens
-//-------------------------------------------------
-
-bool device_config::device_process_token(UINT32 entrytype, const machine_config_token *&tokens)
-{
-	// handle nothing by default
-	return false;
-}
-
-
-//-------------------------------------------------
 //  device_validity_check - validate a device after
 //  the configuration has been constructed
 //-------------------------------------------------
@@ -541,12 +389,12 @@ const rom_entry *device_config::rom_region() const
 
 
 //-------------------------------------------------
-//  machine_config_tokens - return a pointer to
-//  a set of machine configuration tokens
-//  describing sub-devices for this device
+//  machine_config - return a pointer to a machine
+//  config constructor describing sub-devices for
+//  this device
 //-------------------------------------------------
 
-const machine_config_token *device_config::machine_config_tokens() const
+machine_config_constructor device_config::machine_config_additions() const
 {
 	return NULL;
 }
@@ -700,7 +548,8 @@ device_t::device_t(running_machine &_machine, const device_config &config)
 	  m_baseconfig(config),
 	  m_unscaled_clock(config.m_clock),
 	  m_clock_scale(1.0),
-	  m_attoseconds_per_clock((config.m_clock == 0) ? 0 : HZ_TO_ATTOSECONDS(config.m_clock))
+	  m_attoseconds_per_clock((config.m_clock == 0) ? 0 : HZ_TO_ATTOSECONDS(config.m_clock)),
+	  m_auto_finder_list(NULL)
 {
 }
 
@@ -711,6 +560,7 @@ device_t::device_t(running_machine &_machine, const device_config &config)
 
 device_t::~device_t()
 {
+	auto_free(&m_machine, m_debug);
 }
 
 
@@ -843,6 +693,10 @@ void device_t::start()
 	// populate the region field
 	m_region = m_machine.region(tag());
 
+	// find all the registered devices
+	for (auto_finder_base *autodev = m_auto_finder_list; autodev != NULL; autodev = autodev->m_next)
+		autodev->findit(*this);
+
 	// let the interfaces do their pre-work
 	for (device_interface *intf = m_interface_list; intf != NULL; intf = intf->interface_next())
 		intf->interface_pre_start();
@@ -870,6 +724,13 @@ void device_t::start()
 
 	// force an update of the clock
 	notify_clock_changed();
+
+	// if we're debugging, create a device_debug object
+	if ((m_machine.debug_flags & DEBUG_FLAG_ENABLED) != 0)
+	{
+		m_debug = auto_alloc(&m_machine, device_debug(*this));
+		debug_setup();
+	}
 
 	// register our save states
 	state_save_register_device_item(this, 0, m_clock);
@@ -1008,6 +869,17 @@ void device_t::device_debug_setup()
 
 
 //-------------------------------------------------
+//  device_timer - called whenever a device timer
+//  fires
+//-------------------------------------------------
+
+void device_t::device_timer(emu_timer &timer, device_timer_id id, int param, void *ptr)
+{
+	// do nothing by default
+}
+
+
+//-------------------------------------------------
 //  notify_clock_changed - notify all interfaces
 //  that the clock has changed
 //-------------------------------------------------
@@ -1020,4 +892,73 @@ void device_t::notify_clock_changed()
 
 	// then notify the device
 	device_clock_changed();
+}
+
+
+//-------------------------------------------------
+//  register_auto_finder - add a new item to the
+//  list of stuff to find after we go live
+//-------------------------------------------------
+
+void device_t::register_auto_finder(auto_finder_base &autodev)
+{
+	// add to this list
+	autodev.m_next = m_auto_finder_list;
+	m_auto_finder_list = &autodev;
+}
+
+
+//-------------------------------------------------
+//  auto_finder_base - constructor
+//-------------------------------------------------
+
+device_t::auto_finder_base::auto_finder_base(device_t &base, const char *tag)
+	: m_next(NULL),
+	  m_tag(tag)
+{
+	// register ourselves with our device class
+	base.register_auto_finder(*this);
+}
+
+
+//-------------------------------------------------
+//  ~auto_finder_base - destructor
+//-------------------------------------------------
+
+device_t::auto_finder_base::~auto_finder_base()
+{
+}
+
+
+//-------------------------------------------------
+//  find_device - find a device; done here instead
+//  of inline in the template due to include
+//  dependency ordering
+//-------------------------------------------------
+
+device_t *device_t::auto_finder_base::find_device(device_t &base, const char *tag)
+{
+	return base.subdevice(tag);
+}
+
+
+//-------------------------------------------------
+//  find_shared_ptr - find a shared pointer
+//-------------------------------------------------
+
+void *device_t::auto_finder_base::find_shared_ptr(device_t &base, const char *tag)
+{
+	return memory_get_shared(*base.machine, tag);
+}
+
+
+//-------------------------------------------------
+//  find_shared_size - find a shared pointer size
+//-------------------------------------------------
+
+size_t device_t::auto_finder_base::find_shared_size(device_t &base, const char *tag)
+{
+	size_t result = 0;
+	memory_get_shared(*base.machine, tag, result);
+	return result;
 }

@@ -213,10 +213,10 @@ static void littlerb_recalc_regs(void)
 static void littlerb_data_write(running_machine *machine, UINT16 data, UINT16 mem_mask)
 {
 	UINT32 addr = littlerb_write_address>>4; // is this right? should we shift?
-	const address_space *vdp_space = machine->device<littlerb_vdp_device>("littlerbvdp")->space();
+	address_space *vdp_space = machine->device<littlerb_vdp_device>("littlerbvdp")->space();
 
 
-	memory_write_word_masked(vdp_space, addr*2, data, mem_mask);
+	vdp_space->write_word(addr*2, data, mem_mask);
 
 
 	// e000 / 2000 are used for palette writes, which should go to a RAMDAC, so probably mean no auto inc.
@@ -494,7 +494,7 @@ static INTERRUPT_GEN( littlerb )
 	cpu_set_input_line(device, 4, HOLD_LINE);
 }
 
-static MACHINE_DRIVER_START( littlerb )
+static MACHINE_CONFIG_START( littlerb, driver_device )
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
 	MDRV_CPU_PROGRAM_MAP(littlerb_main)
 	MDRV_CPU_VBLANK_INT("screen", littlerb)
@@ -513,7 +513,7 @@ static MACHINE_DRIVER_START( littlerb )
 
 //  MDRV_PALETTE_INIT(littlerb)
 	MDRV_VIDEO_UPDATE(littlerb)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( littlerb )
 	ROM_REGION( 0x100000, "maincpu", 0 ) /* 68000 Code */

@@ -22,6 +22,7 @@
 #include "profiler.h"
 
 CPU_DISASSEMBLE( sh2 );
+extern unsigned DasmSH2(char *buffer, unsigned pc, UINT16 opcode);
 
 #ifdef USE_SH2DRC
 
@@ -106,17 +107,17 @@ static void static_generate_memory_accessor(sh2_state *sh2, int size, int iswrit
 
 static void generate_update_cycles(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, drcuml_ptype ptype, UINT64 pvalue, int allow_exception);
 static void generate_checksum_block(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *seqhead, const opcode_desc *seqlast);
-static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc);
-static void generate_delay_slot(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc);
+static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc);
+static void generate_delay_slot(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc);
 
-static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc);
-static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
-static int generate_group_2(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
-static int generate_group_3(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode);
-static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
-static int generate_group_6(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
-static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
-static int generate_group_12(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot);
+static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc);
+static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
+static int generate_group_2(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
+static int generate_group_3(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, UINT32 ovrpc);
+static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
+static int generate_group_6(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
+static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
+static int generate_group_12(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc);
 
 static void code_compile_block(sh2_state *sh2, UINT8 mode, offs_t pc);
 
@@ -151,9 +152,9 @@ INLINE UINT16 RW(sh2_state *sh2, offs_t A)
 		return sh2_internal_r(sh2->internal, (A & 0x1fc)>>2, 0xffff << (((~A) & 2)*8)) >> (((~A) & 2)*8);
 
 	if (A >= 0xc0000000)
-		return memory_read_word_32be(sh2->program, A);
+		return sh2->program->read_word(A);
 
-	return memory_read_word_32be(sh2->program, A & AM);
+	return sh2->program->read_word(A & AM);
 }
 
 INLINE UINT32 RL(sh2_state *sh2, offs_t A)
@@ -162,9 +163,9 @@ INLINE UINT32 RL(sh2_state *sh2, offs_t A)
 		return sh2_internal_r(sh2->internal, (A & 0x1fc)>>2, 0xffffffff);
 
 	if (A >= 0xc0000000)
-		return memory_read_dword_32be(sh2->program, A);
+		return sh2->program->read_dword(A);
 
-	return memory_read_dword_32be(sh2->program, A & AM);
+	return sh2->program->read_dword(A & AM);
 }
 
 /*-------------------------------------------------
@@ -799,8 +800,8 @@ static CPU_RESET( sh2 )
 
 	m = sh2->m;
 	tsave = sh2->timer;
-	tsaved0 = sh2->dma_timer[0];
-	tsaved1 = sh2->dma_timer[1];
+	tsaved0 = sh2->dma_current_active_timer[0];
+	tsaved1 = sh2->dma_current_active_timer[1];
 
 	f = sh2->ftcsr_read_callback;
 	save_irqcallback = sh2->irq_callback;
@@ -822,13 +823,13 @@ static CPU_RESET( sh2 )
 	sh2->device = device;
 
 	sh2->timer = tsave;
-	sh2->dma_timer[0] = tsaved0;
-	sh2->dma_timer[1] = tsaved1;
+	sh2->dma_current_active_timer[0] = tsaved0;
+	sh2->dma_current_active_timer[1] = tsaved1;
 	sh2->m = m;
 	memset(sh2->m, 0, 0x200);
 
-	sh2->pc = memory_read_dword_32be(sh2->program, 0);
-	sh2->r[15] = memory_read_dword_32be(sh2->program, 4);
+	sh2->pc = sh2->program->read_dword(0);
+	sh2->r[15] = sh2->program->read_dword(4);
 	sh2->sr = I;
 
 	sh2->internal_irq_level = -1;
@@ -884,6 +885,18 @@ static CPU_EXECUTE( sh2 )
 	drcuml_state *drcuml = sh2->drcuml;
 	int execute_result;
 
+	// run any active DMAs now
+#ifndef USE_TIMER_FOR_DMA
+	for ( int i = 0; i < sh2->icount ; i++)
+	{
+		for( int dma=0;dma<1;dma++)
+		{
+			if (sh2->dma_timer_active[dma])
+				sh2_do_dma(sh2, dma);
+		}
+	}
+#endif
+
 	/* reset the cache if dirty */
 	if (sh2->cache_dirty)
 		code_flush_cache(sh2);
@@ -925,7 +938,7 @@ static void code_compile_block(sh2_state *sh2, UINT8 mode, offs_t pc)
 	drcuml_block *block;
 	jmp_buf errorbuf;
 
-	profiler_mark_start(PROFILER_DRC_COMPILE);
+	g_profiler.start(PROFILER_DRC_COMPILE);
 
 	/* get a description of this sequence */
 	desclist = drcfe_describe_code(sh2->drcfe, pc);
@@ -977,7 +990,7 @@ static void code_compile_block(sh2_state *sh2, UINT8 mode, offs_t pc)
 		}
 
 		/* validate this code block if we're not pointing into ROM */
-		if (memory_get_write_ptr(sh2->program, seqhead->physpc) != NULL)
+		if (sh2->program->get_write_ptr(seqhead->physpc) != NULL)
 			generate_checksum_block(sh2, block, &compiler, seqhead, seqlast);
 
 		/* label this instruction, if it may be jumped to locally */
@@ -989,7 +1002,7 @@ static void code_compile_block(sh2_state *sh2, UINT8 mode, offs_t pc)
 		/* iterate over instructions in the sequence and compile them */
 		for (curdesc = seqhead; curdesc != seqlast->next; curdesc = curdesc->next)
 		{
-			generate_sequence_instruction(sh2, block, &compiler, curdesc);
+			generate_sequence_instruction(sh2, block, &compiler, curdesc, 0xffffffff);
 		}
 
 		/* if we need to return to the start, do it */
@@ -1016,7 +1029,7 @@ static void code_compile_block(sh2_state *sh2, UINT8 mode, offs_t pc)
 
 	/* end the sequence */
 	drcuml_block_end(block);
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 /*-------------------------------------------------
@@ -1515,7 +1528,7 @@ static void generate_checksum_block(sh2_state *sh2, drcuml_block *block, compile
 	{
 		if (!(seqhead->flags & OPFLAG_VIRTUAL_NOOP))
 		{
-			void *base = memory_decrypted_read_ptr(sh2->program, SH2_CODE_XOR(seqhead->physpc));
+			void *base = sh2->direct->read_decrypted_ptr(SH2_CODE_XOR(seqhead->physpc));
 			UML_LOAD(block, IREG(0), base, IMM(0), WORD);							// load    i0,base,word
 			UML_CMP(block, IREG(0), IMM(seqhead->opptr.w[0]));						// cmp     i0,*opptr
 			UML_EXHc(block, IF_NE, sh2->nocode, IMM(epc(seqhead)));		// exne    nocode,seqhead->pc
@@ -1529,20 +1542,20 @@ static void generate_checksum_block(sh2_state *sh2, drcuml_block *block, compile
 		for (curdesc = seqhead->next; curdesc != seqlast->next; curdesc = curdesc->next)
 			if (!(curdesc->flags & OPFLAG_VIRTUAL_NOOP))
 			{
-				base = memory_decrypted_read_ptr(sh2->program, SH2_CODE_XOR(curdesc->physpc));
+				base = sh2->direct->read_decrypted_ptr(SH2_CODE_XOR(curdesc->physpc));
 				UML_LOAD(block, IREG(0), curdesc->opptr.w, IMM(0), WORD);			// load    i0,*opptr,0,word
 				UML_CMP(block, IREG(0), IMM(curdesc->opptr.w[0]));					// cmp     i0,*opptr
 				UML_EXHc(block, IF_NE, sh2->nocode, IMM(epc(seqhead)));	// exne    nocode,seqhead->pc
 			}
 #else
 		UINT32 sum = 0;
-		void *base = memory_decrypted_read_ptr(sh2->program, SH2_CODE_XOR(seqhead->physpc));
+		void *base = sh2->direct->read_decrypted_ptr(SH2_CODE_XOR(seqhead->physpc));
 		UML_LOAD(block, IREG(0), base, IMM(0), WORD);								// load    i0,base,word
 		sum += seqhead->opptr.w[0];
 		for (curdesc = seqhead->next; curdesc != seqlast->next; curdesc = curdesc->next)
 			if (!(curdesc->flags & OPFLAG_VIRTUAL_NOOP))
 			{
-				base = memory_decrypted_read_ptr(sh2->program, SH2_CODE_XOR(curdesc->physpc));
+				base = sh2->direct->read_decrypted_ptr(SH2_CODE_XOR(curdesc->physpc));
 				UML_LOAD(block, IREG(1), base, IMM(0), WORD);						// load    i1,*opptr,word
 				UML_ADD(block, IREG(0), IREG(0), IREG(1));							// add     i0,i0,i1
 				sum += curdesc->opptr.w[0];
@@ -1559,7 +1572,7 @@ static void generate_checksum_block(sh2_state *sh2, drcuml_block *block, compile
     for a single instruction in a sequence
 -------------------------------------------------*/
 
-static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc)
+static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc)
 {
 	offs_t expc;
 
@@ -1630,7 +1643,7 @@ static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, c
 	else if (!(desc->flags & OPFLAG_VIRTUAL_NOOP))
 	{
 		/* compile the instruction */
-		if (!generate_opcode(sh2, block, compiler, desc))
+		if (!generate_opcode(sh2, block, compiler, desc, ovrpc))
 		{
 			UML_MOV(block, MEM(&sh2->pc), IMM(desc->pc));							// mov     [pc],desc->pc
 			UML_MOV(block, MEM(&sh2->arg0), IMM(desc->opptr.w[0]));					// mov     [arg0],opcode
@@ -1643,13 +1656,13 @@ static void generate_sequence_instruction(sh2_state *sh2, drcuml_block *block, c
     generate_delay_slot
 ------------------------------------------------------------------*/
 
-static void generate_delay_slot(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc)
+static void generate_delay_slot(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc)
 {
 	compiler_state compiler_temp = *compiler;
 
 	/* compile the delay slot using temporary compiler state */
 	assert(desc->delay != NULL);
-	generate_sequence_instruction(sh2, block, &compiler_temp, desc->delay);				// <next instruction>
+	generate_sequence_instruction(sh2, block, &compiler_temp, desc->delay, ovrpc);				// <next instruction>
 
 	/* update the label */
 	compiler->labelnum = compiler_temp.labelnum;
@@ -1660,7 +1673,7 @@ static void generate_delay_slot(sh2_state *sh2, drcuml_block *block, compiler_st
     opcode
 -------------------------------------------------*/
 
-static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc)
+static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT32 ovrpc)
 {
 	UINT32 scratch, scratch2;
 	INT32 disp;
@@ -1671,7 +1684,7 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 	switch (opswitch)
 	{
 		case  0:
-			return generate_group_0(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_0(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 
 		case  1:	// MOVLS4
 			scratch = (opcode & 0x0f) * 4;
@@ -1685,11 +1698,11 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 			return TRUE;
 
 		case  2:
-			return generate_group_2(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_2(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 		case  3:
-			return generate_group_3(sh2, block, compiler, desc, opcode);
+			return generate_group_3(sh2, block, compiler, desc, opcode, ovrpc);
 		case  4:
-			return generate_group_4(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_4(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 
 		case  5:	// MOVLL4
 			scratch = (opcode & 0x0f) * 4;
@@ -1703,7 +1716,7 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 			return TRUE;
 
 		case  6:
-			return generate_group_6(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_6(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 
 		case  7:	// ADDI
 			scratch = opcode & 0xff;
@@ -1712,10 +1725,17 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 			return TRUE;
 
 		case  8:
-			return generate_group_8(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_8(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 
 		case  9:	// MOVWI
-			scratch = (desc->pc + 2) + ((opcode & 0xff) * 2) + 2;
+			if (ovrpc == 0xffffffff)
+			{
+				scratch = (desc->pc + 2) + ((opcode & 0xff) * 2) + 2;
+			}
+			else
+			{
+				scratch = (ovrpc + 2) + ((opcode & 0xff) * 2) + 2;
+			}
 
 			if (sh2->drcoptions & SH2DRC_STRICT_PCREL)
 			{
@@ -1735,11 +1755,10 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 			return TRUE;
 
 		case 10:	// BRA
-			generate_delay_slot(sh2, block, compiler, desc);
-
 			disp = ((INT32)opcode << 20) >> 20;
-
 			sh2->ea = (desc->pc + 2) + disp * 2 + 2;			// sh2->ea = pc+4 + disp*2 + 2
+
+			generate_delay_slot(sh2, block, compiler, desc, sh2->ea-2);
 
 			generate_update_cycles(sh2, block, compiler, IMM(sh2->ea), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), IMM(sh2->ea), sh2->nocode);	// hashjmp sh2->ea
@@ -1750,20 +1769,27 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 			// do this before running the delay slot
 			UML_ADD(block, MEM(&sh2->pr), IMM(desc->pc), IMM(4));	// add sh2->pr, desc->pc, #4 (skip the current insn & delay slot)
 
-			generate_delay_slot(sh2, block, compiler, desc);
-
 			disp = ((INT32)opcode << 20) >> 20;
-
 			sh2->ea = (desc->pc + 2) + disp * 2 + 2;			// sh2->ea = pc+4 + disp*2 + 2
+
+			generate_delay_slot(sh2, block, compiler, desc, sh2->ea-2);
+
 			generate_update_cycles(sh2, block, compiler, IMM(sh2->ea), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), IMM(sh2->ea), sh2->nocode);	// hashjmp sh2->ea
 			return TRUE;
 
 		case 12:
-			return generate_group_12(sh2, block, compiler, desc, opcode, in_delay_slot);
+			return generate_group_12(sh2, block, compiler, desc, opcode, in_delay_slot, ovrpc);
 
 		case 13:	// MOVLI
-			scratch = ((desc->pc + 4) & ~3) + ((opcode & 0xff) * 4);
+			if (ovrpc == 0xffffffff)
+			{
+				scratch = ((desc->pc + 4) & ~3) + ((opcode & 0xff) * 4);
+			}
+			else
+			{
+				scratch = ((ovrpc + 4) & ~3) + ((opcode & 0xff) * 4);
+			}
 
 			if (sh2->drcoptions & SH2DRC_STRICT_PCREL)
 			{
@@ -1794,7 +1820,7 @@ static int generate_opcode(sh2_state *sh2, drcuml_block *block, compiler_state *
 	return FALSE;
 }
 
-static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	switch (opcode & 0x3F)
 	{
@@ -1826,9 +1852,11 @@ static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state 
 			UML_ADD(block, MEM(&sh2->target), R32(Rn), IMM(4));	// add target, Rm, #4
 			UML_ADD(block, MEM(&sh2->target), MEM(&sh2->target), IMM(desc->pc));	// add target, target, pc
 
-			generate_delay_slot(sh2, block, compiler, desc);
-
+			// 32x Cosmic Carnage @ 6002cb0 relies on the delay slot
+			// clobbering the calculated PR, so do it first
 			UML_ADD(block, MEM(&sh2->pr), IMM(desc->pc), IMM(4));	// add sh2->pr, desc->pc, #4 (skip the current insn & delay slot)
+
+			generate_delay_slot(sh2, block, compiler, desc, sh2->target);
 
 			generate_update_cycles(sh2, block, compiler, MEM(&sh2->target), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), MEM(&sh2->target), sh2->nocode);	// jmp target
@@ -1894,7 +1922,7 @@ static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state 
 	case 0x0b: // RTS();
 		UML_MOV(block, MEM(&sh2->target), MEM(&sh2->pr));	// mov target, pr (in case of d-slot shenanigans)
 
-		generate_delay_slot(sh2, block, compiler, desc);
+		generate_delay_slot(sh2, block, compiler, desc, sh2->target);
 
 		generate_update_cycles(sh2, block, compiler, MEM(&sh2->target), TRUE);	// <subtract cycles>
 		UML_HASHJMP(block, IMM(0), MEM(&sh2->target), sh2->nocode);
@@ -2012,7 +2040,7 @@ static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state 
 		{
 			UML_ADD(block, MEM(&sh2->target), R32(Rn), IMM(desc->pc+4));	// add target, Rn, pc+4
 
-			generate_delay_slot(sh2, block, compiler, desc);
+			generate_delay_slot(sh2, block, compiler, desc, sh2->target);
 
 			generate_update_cycles(sh2, block, compiler, MEM(&sh2->target), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), MEM(&sh2->target), sh2->nocode);	// jmp target
@@ -2034,7 +2062,7 @@ static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state 
 		return TRUE;
 
 	case 0x2b: // RTE();
-		generate_delay_slot(sh2, block, compiler, desc);
+		generate_delay_slot(sh2, block, compiler, desc, 0xffffffff);
 
 		UML_MOV(block, IREG(0), R32(15));			// mov r0, R15
 		UML_CALLH(block, sh2->read32);				// call read32
@@ -2057,7 +2085,7 @@ static int generate_group_0(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_2(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_2(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	switch (opcode & 15)
 	{
@@ -2226,7 +2254,7 @@ static int generate_group_2(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_3(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode)
+static int generate_group_3(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, UINT32 ovrpc)
 {
 	switch (opcode & 15)
 	{
@@ -2338,7 +2366,7 @@ static int generate_group_3(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	switch (opcode & 0x3F)
 	{
@@ -2443,9 +2471,9 @@ static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state 
 	case 0x0b: // JSR(Rn);
 		UML_MOV(block, MEM(&sh2->target), R32(Rn));		// mov target, Rn
 
-		generate_delay_slot(sh2, block, compiler, desc);
-
 		UML_ADD(block, MEM(&sh2->pr), IMM(desc->pc), IMM(4));	// add sh2->pr, desc->pc, #4 (skip the current insn & delay slot)
+
+		generate_delay_slot(sh2, block, compiler, desc, sh2->target-4);
 
 		generate_update_cycles(sh2, block, compiler, MEM(&sh2->target), TRUE);	// <subtract cycles>
 		UML_HASHJMP(block, IMM(0), MEM(&sh2->target), sh2->nocode);	// and do the jump
@@ -2665,7 +2693,7 @@ static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state 
 	case 0x2b: // JMP(Rn);
 		UML_MOV(block, MEM(&sh2->target), R32(Rn));		// mov target, Rn
 
-		generate_delay_slot(sh2, block, compiler, desc);
+		generate_delay_slot(sh2, block, compiler, desc, sh2->target);
 
 		generate_update_cycles(sh2, block, compiler, MEM(&sh2->target), TRUE);	// <subtract cycles>
 		UML_HASHJMP(block, IMM(0), MEM(&sh2->target), sh2->nocode);	// jmp (target)
@@ -2703,7 +2731,7 @@ static int generate_group_4(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_6(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_6(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	switch (opcode & 15)
 	{
@@ -2833,7 +2861,7 @@ static int generate_group_6(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	INT32 disp;
 	UINT32 udisp;
@@ -2937,12 +2965,12 @@ static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state 
 			UML_TEST(block, MEM(&sh2->sr), IMM(T));		// test sh2->sr, T
 			UML_JMPc(block, IF_Z, compiler->labelnum);  	// jz compiler->labelnum
 
-			templabel = compiler->labelnum;			// save our label
-			compiler->labelnum++;				// make sure the delay slot doesn't use it
-			generate_delay_slot(sh2, block, compiler, desc);
-
 			disp = ((INT32)opcode << 24) >> 24;
 			sh2->ea = (desc->pc + 2) + disp * 2 + 2;    	// sh2->ea = destination
+
+			templabel = compiler->labelnum;			// save our label
+			compiler->labelnum++;				// make sure the delay slot doesn't use it
+			generate_delay_slot(sh2, block, compiler, desc, sh2->ea-2);
 
 			generate_update_cycles(sh2, block, compiler, IMM(sh2->ea), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), IMM(sh2->ea), sh2->nocode);	// jmp sh2->ea
@@ -2958,12 +2986,12 @@ static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state 
 			UML_TEST(block, MEM(&sh2->sr), IMM(T));		// test sh2->sr, T
 			UML_JMPc(block, IF_NZ, compiler->labelnum); 	// jnz compiler->labelnum
 
-			templabel = compiler->labelnum;			// save our label
-			compiler->labelnum++;				// make sure the delay slot doesn't use it
-			generate_delay_slot(sh2, block, compiler, desc);	// delay slot only if the branch is taken
-
 			disp = ((INT32)opcode << 24) >> 24;
 			sh2->ea = (desc->pc + 2) + disp * 2 + 2;    	// sh2->ea = destination
+
+			templabel = compiler->labelnum;			// save our label
+			compiler->labelnum++;				// make sure the delay slot doesn't use it
+			generate_delay_slot(sh2, block, compiler, desc, sh2->ea-2);	// delay slot only if the branch is taken
 
 			generate_update_cycles(sh2, block, compiler, IMM(sh2->ea), TRUE);	// <subtract cycles>
 			UML_HASHJMP(block, IMM(0), IMM(sh2->ea), sh2->nocode);	// jmp sh2->ea
@@ -2977,7 +3005,7 @@ static int generate_group_8(sh2_state *sh2, drcuml_block *block, compiler_state 
 	return FALSE;
 }
 
-static int generate_group_12(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot)
+static int generate_group_12(sh2_state *sh2, drcuml_block *block, compiler_state *compiler, const opcode_desc *desc, UINT16 opcode, int in_delay_slot, UINT32 ovrpc)
 {
 	UINT32 scratch;
 
@@ -3100,6 +3128,7 @@ static int generate_group_12(sh2_state *sh2, drcuml_block *block, compiler_state
 		UML_ADD(block, IREG(0), R32(0), MEM(&sh2->gbr));	// add r0, R0, gbr
 		UML_CALLH(block, sh2->read8);				// read8
 
+		UML_AND(block, IREG(0), IREG(0), IMM(opcode & 0xff));
 		UML_CMP(block, IREG(0), IMM(0));			// cmp r0, #0
 		UML_JMPc(block, IF_NZ, compiler->labelnum);		// jnz labelnum
 

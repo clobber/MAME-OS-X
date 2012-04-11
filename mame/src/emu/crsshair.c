@@ -154,8 +154,9 @@ static void create_bitmap(running_machine *machine, int player)
 	char filename[20];
 	rgb_t color = crosshair_colors[player];
 
-	/* if we have a bitmap for this player, kill it */
+	/* if we have a bitmap and texture for this player, kill it */
 	global_free(global.bitmap[player]);
+	machine->render().texture_free(global.texture[player]);
 
 	if (global.name[player][0] != 0)
 	{
@@ -196,8 +197,8 @@ static void create_bitmap(running_machine *machine, int player)
 	}
 
 	/* create a texture to reference the bitmap */
-	global.texture[player] = render_texture_alloc(render_texture_hq_scale, NULL);
-	render_texture_set_bitmap(global.texture[player], global.bitmap[player], NULL, TEXFORMAT_ARGB32, NULL);
+	global.texture[player] = machine->render().texture_alloc(render_texture::hq_scale);
+	global.texture[player]->set_bitmap(global.bitmap[player], NULL, TEXFORMAT_ARGB32);
 }
 
 
@@ -208,9 +209,6 @@ static void create_bitmap(running_machine *machine, int player)
 
 void crosshair_init(running_machine *machine)
 {
-	const input_port_config *port;
-	const input_field_config *field;
-
 	/* request a callback upon exiting */
 	machine->add_notifier(MACHINE_NOTIFY_EXIT, crosshair_exit);
 
@@ -221,8 +219,8 @@ void crosshair_init(running_machine *machine)
 	global.auto_time = CROSSHAIR_VISIBILITY_AUTOTIME_DEFAULT;
 
 	/* determine who needs crosshairs */
-	for (port = machine->m_portlist.first(); port != NULL; port = port->next())
-		for (field = port->fieldlist; field != NULL; field = field->next)
+	for (const input_port_config *port = machine->m_portlist.first(); port != NULL; port = port->next())
+		for (const input_field_config *field = port->fieldlist; field != NULL; field = field->next)
 			if (field->crossaxis != CROSSHAIR_AXIS_NONE)
 			{
 				int player = field->player;
@@ -258,13 +256,10 @@ void crosshair_init(running_machine *machine)
 
 static void crosshair_exit(running_machine &machine)
 {
-	int player;
-
 	/* free bitmaps and textures for each player */
-	for (player = 0; player < MAX_PLAYERS; player++)
+	for (int player = 0; player < MAX_PLAYERS; player++)
 	{
-		if (global.texture[player] != NULL)
-			render_texture_free(global.texture[player]);
+		machine.render().texture_free(global.texture[player]);
 		global.texture[player] = NULL;
 
 		global_free(global.bitmap[player]);
@@ -396,11 +391,10 @@ void crosshair_render(screen_device &screen)
 			((global.screen[player] == &screen) || (global.screen[player] == CROSSHAIR_SCREEN_ALL)))
 		{
 			/* add a quad assuming a 4:3 screen (this is not perfect) */
-			render_screen_add_quad(&screen,
-						global.x[player] - 0.03f, global.y[player] - 0.04f,
-						global.x[player] + 0.03f, global.y[player] + 0.04f,
-						MAKE_ARGB(0xc0, global.fade, global.fade, global.fade),
-						global.texture[player], PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
+			screen.container().add_quad(global.x[player] - 0.03f, global.y[player] - 0.04f,
+										global.x[player] + 0.03f, global.y[player] + 0.04f,
+										MAKE_ARGB(0xc0, global.fade, global.fade, global.fade),
+										global.texture[player], PRIMFLAG_BLENDMODE(BLENDMODE_ALPHA));
 		}
 }
 

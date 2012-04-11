@@ -354,7 +354,7 @@ static INTERRUPT_GEN(psikyosh_interrupt)
 // bit 0 controls game speed on readback, mechanism is a little weird
 static WRITE32_HANDLER( psikyosh_irqctrl_w )
 {
-	psikyosh_state *state = (psikyosh_state *)space->machine->driver_data;
+	psikyosh_state *state = space->machine->driver_data<psikyosh_state>();
 	if (!(data & 0x00c00000))
 	{
 		cpu_set_input_line(state->maincpu, 4, CLEAR_LINE);
@@ -363,7 +363,7 @@ static WRITE32_HANDLER( psikyosh_irqctrl_w )
 
 static WRITE32_HANDLER( paletteram32_RRRRRRRRGGGGGGGGBBBBBBBBxxxxxxxx_dword_w )
 {
-	psikyosh_state *state = (psikyosh_state *)space->machine->driver_data;
+	psikyosh_state *state = space->machine->driver_data<psikyosh_state>();
 	int r, g, b;
 	COMBINE_DATA(&state->paletteram[offset]);
 
@@ -376,7 +376,7 @@ static WRITE32_HANDLER( paletteram32_RRRRRRRRGGGGGGGGBBBBBBBBxxxxxxxx_dword_w )
 
 static WRITE32_HANDLER( psikyosh_vidregs_w )
 {
-	psikyosh_state *state = (psikyosh_state *)space->machine->driver_data;
+	psikyosh_state *state = space->machine->driver_data<psikyosh_state>();
 	COMBINE_DATA(&state->vidregs[offset]);
 
 	if (offset == 4) /* Configure bank for gfx test */
@@ -388,7 +388,7 @@ static WRITE32_HANDLER( psikyosh_vidregs_w )
 
 static READ32_HANDLER( psh_sample_r ) /* Send sample data for test */
 {
-	psikyosh_state *state = (psikyosh_state *)space->machine->driver_data;
+	psikyosh_state *state = space->machine->driver_data<psikyosh_state>();
 	UINT8 *ROM = memory_region(space->machine, "ymf");
 
 	return ROM[state->sample_offs++] << 16;
@@ -788,7 +788,7 @@ INPUT_PORTS_END
 
 static void irqhandler(running_device *device, int linestate)
 {
-	psikyosh_state *state = (psikyosh_state *)device->machine->driver_data;
+	psikyosh_state *state = device->machine->driver_data<psikyosh_state>();
 	cpu_set_input_line(state->maincpu, 12, linestate ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -800,7 +800,7 @@ static const ymf278b_interface ymf278b_config =
 
 static MACHINE_START( psikyosh )
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -811,10 +811,7 @@ static MACHINE_START( psikyosh )
 }
 
 
-static MACHINE_DRIVER_START( psikyo3v1 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(psikyosh_state)
+static MACHINE_CONFIG_START( psikyo3v1, psikyosh_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", SH2, MASTER_CLOCK/2)
@@ -850,19 +847,19 @@ static MACHINE_DRIVER_START( psikyo3v1 )
 	MDRV_SOUND_CONFIG(ymf278b_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( psikyo5 )
+static MACHINE_CONFIG_DERIVED( psikyo5, psikyo3v1 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(psikyo3v1)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ps5_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( psikyo5_240 )
+static MACHINE_CONFIG_DERIVED( psikyo5_240, psikyo3v1 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(psikyo3v1)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ps5_map)
@@ -870,7 +867,7 @@ static MACHINE_DRIVER_START( psikyo5_240 )
 	/* Ideally this would be driven off the video register. However, it doesn't changeat runtime and MAME will pick a better screen resolution if it knows upfront */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0, 40*8-1, 0, 30*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* PS3 */

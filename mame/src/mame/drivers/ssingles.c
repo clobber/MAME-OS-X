@@ -150,12 +150,11 @@ Dumped by Chack'n
 #define NUM_PENS (4*8)
 #define VMEM_SIZE 0x100
 
-class ssingles_state
+class ssingles_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ssingles_state(machine)); }
-
-	ssingles_state(running_machine &machine) { }
+	ssingles_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *videoram;
 	UINT8 *colorram;
@@ -178,7 +177,7 @@ static const UINT8 ssingles_colors[NUM_PENS*3]=
 
 static MC6845_UPDATE_ROW( update_row )
 {
-	ssingles_state *state = (ssingles_state *)device->machine->driver_data;
+	ssingles_state *state = device->machine->driver_data<ssingles_state>();
 	int cx,x;
 	UINT32 tile_address;
 	UINT16 cell,palette;
@@ -230,20 +229,20 @@ static const mc6845_interface mc6845_intf =
 
 static WRITE8_HANDLER(ssingles_videoram_w)
 {
-	ssingles_state *state = (ssingles_state *)space->machine->driver_data;
+	ssingles_state *state = space->machine->driver_data<ssingles_state>();
 	state->videoram[offset]=data;
 }
 
 static WRITE8_HANDLER(ssingles_colorram_w)
 {
-	ssingles_state *state = (ssingles_state *)space->machine->driver_data;
+	ssingles_state *state = space->machine->driver_data<ssingles_state>();
 	state->colorram[offset]=data;
 }
 
 
 static VIDEO_START(ssingles)
 {
-	ssingles_state *state = (ssingles_state *)machine->driver_data;
+	ssingles_state *state = machine->driver_data<ssingles_state>();
 
 	{
 		int i;
@@ -266,14 +265,14 @@ static VIDEO_UPDATE( ssingles )
 
 static READ8_HANDLER(c000_r)
 {
-	ssingles_state *state = (ssingles_state *)space->machine->driver_data;
+	ssingles_state *state = space->machine->driver_data<ssingles_state>();
 
 	return state->prot_data;
 }
 
 static READ8_HANDLER(c001_r)
 {
-	ssingles_state *state = (ssingles_state *)space->machine->driver_data;
+	ssingles_state *state = space->machine->driver_data<ssingles_state>();
 
 	state->prot_data=0xc4;
 	return 0;
@@ -281,7 +280,7 @@ static READ8_HANDLER(c001_r)
 
 static WRITE8_HANDLER(c001_w)
 {
-	ssingles_state *state = (ssingles_state *)space->machine->driver_data;
+	ssingles_state *state = space->machine->driver_data<ssingles_state>();
 
 	state->prot_data^=data^0x11;
 }
@@ -410,9 +409,7 @@ static INPUT_PORTS_START( ssingles )
 	PORT_DIPSETTING(	0x80, DEF_STR( Yes ) )
 INPUT_PORTS_END
 
-static MACHINE_DRIVER_START( ssingles )
-
-	MDRV_DRIVER_DATA( ssingles_state )
+static MACHINE_CONFIG_START( ssingles, ssingles_state )
 
 	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
 	MDRV_CPU_PROGRAM_MAP(ssingles_map)
@@ -439,13 +436,12 @@ static MACHINE_DRIVER_START( ssingles )
 	MDRV_SOUND_ADD("ay2", AY8910, 1500000) /* ? MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.5)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( atamanot )
-	MDRV_IMPORT_FROM( ssingles )
+static MACHINE_CONFIG_DERIVED( atamanot, ssingles )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(atamanot_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( ssingles )
 	ROM_REGION( 0x10000, "maincpu", 0 ) /* Z80 main CPU  */
@@ -551,7 +547,7 @@ ROM_END
 
 static DRIVER_INIT(ssingles)
 {
-	ssingles_state *state = (ssingles_state *)machine->driver_data;
+	ssingles_state *state = machine->driver_data<ssingles_state>();
 
 	state->videoram=auto_alloc_array_clear(machine, UINT8, VMEM_SIZE);
 	state->colorram=auto_alloc_array_clear(machine, UINT8, VMEM_SIZE);

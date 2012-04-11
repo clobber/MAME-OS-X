@@ -44,14 +44,14 @@ Stephh's notes (based on the game M68000 code and some tests) :
 
 static TIMER_CALLBACK( gcpinbal_interrupt1 )
 {
-	gcpinbal_state *state = (gcpinbal_state *)machine->driver_data;
+	gcpinbal_state *state = machine->driver_data<gcpinbal_state>();
 	cpu_set_input_line(state->maincpu, 1, HOLD_LINE);
 }
 
 #ifdef UNUSED_FUNCTION
 static TIMER_CALLBACK( gcpinbal_interrupt3 )
 {
-	gcpinbal_state *state = (gcpinbal_state *)machine->driver_data;
+	gcpinbal_state *state = machine->driver_data<gcpinbal_state>();
 	// IRQ3 is from the M6585
 //  if (!ADPCM_playing(0))
 	{
@@ -76,7 +76,7 @@ static INTERRUPT_GEN( gcpinbal_interrupt )
 
 static READ16_HANDLER( ioc_r )
 {
-	gcpinbal_state *state = (gcpinbal_state *)space->machine->driver_data;
+	gcpinbal_state *state = space->machine->driver_data<gcpinbal_state>();
 
 	/* 20 (only once), 76, a0 are read in log */
 
@@ -93,7 +93,7 @@ static READ16_HANDLER( ioc_r )
 
 		case 0x50:
 		case 0x51:
-			return okim6295_r(state->oki, 0) << 8;
+			return state->oki->read(*space, 0) << 8;
 
 	}
 
@@ -105,7 +105,7 @@ static READ16_HANDLER( ioc_r )
 
 static WRITE16_HANDLER( ioc_w )
 {
-	gcpinbal_state *state = (gcpinbal_state *)space->machine->driver_data;
+	gcpinbal_state *state = space->machine->driver_data<gcpinbal_state>();
 	COMBINE_DATA(&state->ioc_ram[offset]);
 
 //  switch (offset)
@@ -146,7 +146,7 @@ static WRITE16_HANDLER( ioc_w )
 		// OKIM6295
 		case 0x50:
 		case 0x51:
-			okim6295_w(state->oki, 0, data >> 8);
+			state->oki->write(*space, 0, data >> 8);
 			break;
 
 		// MSM6585 ADPCM - mini emulation
@@ -204,7 +204,7 @@ static WRITE16_HANDLER( ioc_w )
 /* Controlled through ioc? */
 static void gcp_adpcm_int( running_device *device )
 {
-	gcpinbal_state *state = (gcpinbal_state *)device->machine->driver_data;
+	gcpinbal_state *state = device->machine->driver_data<gcpinbal_state>();
 
 	if (state->adpcm_idle)
 		msm5205_reset_w(device, 1);
@@ -394,7 +394,7 @@ static const msm5205_interface msm5205_config =
 
 static MACHINE_START( gcpinbal )
 {
-	gcpinbal_state *state = (gcpinbal_state *)machine->driver_data;
+	gcpinbal_state *state = machine->driver_data<gcpinbal_state>();
 
 	state_save_register_global_array(machine, state->scrollx);
 	state_save_register_global_array(machine, state->scrolly);
@@ -412,7 +412,7 @@ static MACHINE_START( gcpinbal )
 
 static MACHINE_RESET( gcpinbal )
 {
-	gcpinbal_state *state = (gcpinbal_state *)machine->driver_data;
+	gcpinbal_state *state = machine->driver_data<gcpinbal_state>();
 	int i;
 
 	for (i = 0; i < 3; i++)
@@ -433,10 +433,7 @@ static MACHINE_RESET( gcpinbal )
 	state->msm_bank = 0;
 }
 
-static MACHINE_DRIVER_START( gcpinbal )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(gcpinbal_state)
+static MACHINE_CONFIG_START( gcpinbal, gcpinbal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 32000000/2)	/* 16 MHz ? */
@@ -469,7 +466,7 @@ static MACHINE_DRIVER_START( gcpinbal )
 	MDRV_SOUND_ADD("msm", MSM5205, 384000)
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

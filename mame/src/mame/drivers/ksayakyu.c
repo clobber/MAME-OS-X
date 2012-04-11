@@ -86,20 +86,20 @@ static WRITE8_HANDLER( bank_select_w )
 
 static WRITE8_HANDLER( latch_w )
 {
-	ksayakyu_state *state = (ksayakyu_state *)space->machine->driver_data;
+	ksayakyu_state *state = space->machine->driver_data<ksayakyu_state>();
 	state->sound_status &= ~0x80;
 	soundlatch_w(space, 0, data | 0x80);
 }
 
 static READ8_HANDLER (sound_status_r)
 {
-	ksayakyu_state *state = (ksayakyu_state *)space->machine->driver_data;
+	ksayakyu_state *state = space->machine->driver_data<ksayakyu_state>();
 	return state->sound_status | 4;
 }
 
 static WRITE8_HANDLER(tomaincpu_w)
 {
-	ksayakyu_state *state = (ksayakyu_state *)space->machine->driver_data;
+	ksayakyu_state *state = space->machine->driver_data<ksayakyu_state>();
 	state->sound_status |= 0x80;
 	soundlatch_w(space, 0, data);
 }
@@ -252,7 +252,7 @@ GFXDECODE_END
 
 static MACHINE_START( ksayakyu )
 {
-	ksayakyu_state *state = (ksayakyu_state *)machine->driver_data;
+	ksayakyu_state *state = machine->driver_data<ksayakyu_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 2, &ROM[0x10000], 0x4000);
@@ -264,17 +264,14 @@ static MACHINE_START( ksayakyu )
 
 static MACHINE_RESET( ksayakyu )
 {
-	ksayakyu_state *state = (ksayakyu_state *)machine->driver_data;
+	ksayakyu_state *state = machine->driver_data<ksayakyu_state>();
 
 	state->sound_status = 0xff;
 	state->video_ctrl = 0;
 	state->flipscreen = 0;
 }
 
-static MACHINE_DRIVER_START( ksayakyu )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(ksayakyu_state)
+static MACHINE_CONFIG_START( ksayakyu, ksayakyu_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,MAIN_CLOCK/8) //divider is guessed
@@ -318,7 +315,7 @@ static MACHINE_DRIVER_START( ksayakyu )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( ksayakyu )
 	ROM_REGION( 0x20000, "maincpu", 0 )

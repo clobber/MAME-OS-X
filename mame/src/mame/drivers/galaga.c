@@ -887,7 +887,7 @@ static MACHINE_START( galaga )
 
 static void bosco_latch_reset(running_machine *machine)
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int i;
 
 	/* Reset all latches */
@@ -914,7 +914,7 @@ static MACHINE_RESET( battles )
 static ADDRESS_MAP_START( bosco_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_WRITENOP			/* the only area different for each CPU */
 	AM_RANGE(0x6800, 0x6807) AM_READ(bosco_dsw_r)
-	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&namco_soundregs)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x6820, 0x6827) AM_WRITE(bosco_latch_w)						/* misc latches */
 	AM_RANGE(0x6830, 0x6830) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x7000, 0x70ff) AM_DEVREADWRITE("06xx_0", namco_06xx_data_r, namco_06xx_data_w)
@@ -936,7 +936,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( galaga_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_WRITENOP			/* the only area different for each CPU */
 	AM_RANGE(0x6800, 0x6807) AM_READ(bosco_dsw_r)
-	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&namco_soundregs)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x6820, 0x6827) AM_WRITE(bosco_latch_w)						/* misc latches */
 	AM_RANGE(0x6830, 0x6830) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x7000, 0x70ff) AM_DEVREADWRITE("06xx", namco_06xx_data_r, namco_06xx_data_w)
@@ -953,7 +953,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( xevious_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_WRITENOP			/* the only area different for each CPU */
 	AM_RANGE(0x6800, 0x6807) AM_READ(bosco_dsw_r)
-	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&namco_soundregs)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x6820, 0x6827) AM_WRITE(bosco_latch_w)	/* misc latches */
 	AM_RANGE(0x6830, 0x6830) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x7000, 0x70ff) AM_DEVREADWRITE("06xx", namco_06xx_data_r, namco_06xx_data_w)
@@ -973,7 +973,7 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( digdug_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM AM_WRITENOP			/* the only area different for each CPU */
-	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&namco_soundregs)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0x6820, 0x6827) AM_WRITE(bosco_latch_w)						/* misc latches */
 	AM_RANGE(0x6830, 0x6830) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0x7000, 0x70ff) AM_DEVREADWRITE("06xx", namco_06xx_data_r, namco_06xx_data_w)
@@ -1581,9 +1581,7 @@ static const samples_interface battles_samples_interface =
 
 
 
-static MACHINE_DRIVER_START( bosco )
-
-	MDRV_DRIVER_DATA(_galaga_state)
+static MACHINE_CONFIG_START( bosco, _galaga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -1636,12 +1634,10 @@ static MACHINE_DRIVER_START( bosco )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(bosco)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( galaga )
-
-	MDRV_DRIVER_DATA(_galaga_state)
+static MACHINE_CONFIG_START( galaga, _galaga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -1690,12 +1686,11 @@ static MACHINE_DRIVER_START( galaga )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(galaga)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( galagab )
+static MACHINE_CONFIG_DERIVED( galagab, galaga )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(galaga)
 
 	MDRV_DEVICE_REMOVE("54xx")
 	MDRV_DEVICE_REMOVE("06xx")
@@ -1708,12 +1703,10 @@ static MACHINE_DRIVER_START( galagab )
 
 	/* sound hardware */
 	MDRV_DEVICE_REMOVE("discrete")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( xevious )
-
-	MDRV_DRIVER_DATA(_galaga_state)
+static MACHINE_CONFIG_START( xevious, _galaga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -1762,12 +1755,11 @@ static MACHINE_DRIVER_START( xevious )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(galaga)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( battles )
+static MACHINE_CONFIG_DERIVED( battles, xevious )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM( xevious )
 
 	MDRV_DEVICE_REMOVE("50xx")
 	MDRV_DEVICE_REMOVE("54xx")
@@ -1793,12 +1785,10 @@ static MACHINE_DRIVER_START( battles )
 	MDRV_SOUND_ADD("samples", SAMPLES, 0)
 	MDRV_SOUND_CONFIG(battles_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( digdug )
-
-	MDRV_DRIVER_DATA(_galaga_state)
+static MACHINE_CONFIG_START( digdug, _galaga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -1842,16 +1832,15 @@ static MACHINE_DRIVER_START( digdug )
 	MDRV_SOUND_ADD("namco", NAMCO, MASTER_CLOCK/6/32)
 	MDRV_SOUND_CONFIG(namco_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.90 * 10.0 / 16.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( dzigzag )
+static MACHINE_CONFIG_DERIVED( dzigzag, digdug )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(digdug)
 
 	MDRV_CPU_ADD("sub3", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
 	MDRV_CPU_PROGRAM_MAP(dzigzag_mem4)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

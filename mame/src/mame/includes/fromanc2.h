@@ -1,10 +1,9 @@
 
-class fromanc2_state
+class fromanc2_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, fromanc2_state(machine)); }
-
-	fromanc2_state(running_machine &machine) { }
+	fromanc2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16   *paletteram[2];

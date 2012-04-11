@@ -158,14 +158,14 @@ static TIMER_CALLBACK( namco_50xx_latch_callback )
 {
 	namco_50xx_state *state = get_safe_token((running_device *)ptr);
 	state->latched_cmd = param;
-	state->latched_rw = 1;
+	state->latched_rw = 0;
 }
 
 
 static TIMER_CALLBACK( namco_50xx_readrequest_callback )
 {
 	namco_50xx_state *state = get_safe_token((running_device *)ptr);
-	state->latched_rw = 0;
+	state->latched_rw = 1;
 }
 
 
@@ -261,10 +261,10 @@ static ADDRESS_MAP_START( namco_50xx_map_io, ADDRESS_SPACE_IO, 8 )
 ADDRESS_MAP_END
 
 
-static MACHINE_DRIVER_START( namco_50xx )
+static MACHINE_CONFIG_FRAGMENT( namco_50xx )
 	MDRV_CPU_ADD("mcu", MB8842, DERIVED_CLOCK(1,1))		/* parent clock, internally divided by 6 */
 	MDRV_CPU_IO_MAP(namco_50xx_map_io)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( namco_50xx )

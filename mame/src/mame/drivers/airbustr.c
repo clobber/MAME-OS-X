@@ -228,7 +228,7 @@ Code at 505: waits for bit 1 to go low, writes command, waits for bit
 /* Read/Write Handlers */
 static READ8_HANDLER( devram_r )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 
 	// There's an MCU here, possibly
 	switch (offset)
@@ -263,7 +263,7 @@ static READ8_HANDLER( devram_r )
 
 static WRITE8_HANDLER( master_nmi_trigger_w )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	cpu_set_input_line(state->slave, INPUT_LINE_NMI, PULSE_LINE);
 }
 
@@ -274,7 +274,7 @@ static WRITE8_HANDLER( master_bankswitch_w )
 
 static WRITE8_HANDLER( slave_bankswitch_w )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 
 	memory_set_bank(space->machine, "bank2", data & 0x07);
 
@@ -291,7 +291,7 @@ static WRITE8_HANDLER( sound_bankswitch_w )
 
 static READ8_HANDLER( soundcommand_status_r )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 
 	// bits: 2 <-> ?    1 <-> soundlatch full   0 <-> soundlatch2 empty
 	return 4 + state->soundlatch_status * 2 + (1 - state->soundlatch2_status);
@@ -299,21 +299,21 @@ static READ8_HANDLER( soundcommand_status_r )
 
 static READ8_HANDLER( soundcommand_r )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	state->soundlatch_status = 0;	// soundlatch has been read
 	return soundlatch_r(space, 0);
 }
 
 static READ8_HANDLER( soundcommand2_r )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	state->soundlatch2_status = 0;	// soundlatch2 has been read
 	return soundlatch2_r(space, 0);
 }
 
 static WRITE8_HANDLER( soundcommand_w )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	soundlatch_w(space, 0, data);
 	state->soundlatch_status = 1;	// soundlatch has been written
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);	// cause a nmi to sub cpu
@@ -321,14 +321,14 @@ static WRITE8_HANDLER( soundcommand_w )
 
 static WRITE8_HANDLER( soundcommand2_w )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	soundlatch2_w(space, 0, data);
 	state->soundlatch2_status = 1;	// soundlatch2 has been written
 }
 
 static WRITE8_HANDLER( airbustr_paletteram_w )
 {
-	airbustr_state *state = (airbustr_state *)space->machine->driver_data;
+	airbustr_state *state = space->machine->driver_data<airbustr_state>();
 	int val;
 
 	/*  ! byte 1 ! ! byte 0 !   */
@@ -402,7 +402,7 @@ static ADDRESS_MAP_START( sound_io_map, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x00, 0x00) AM_WRITE(sound_bankswitch_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
-	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x04, 0x04) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x06, 0x06) AM_READWRITE(soundcommand_r, soundcommand2_w)
 ADDRESS_MAP_END
 
@@ -559,14 +559,14 @@ static const ym2203_interface ym2203_config =
 
 static INTERRUPT_GEN( master_interrupt )
 {
-	airbustr_state *state = (airbustr_state *)device->machine->driver_data;
+	airbustr_state *state = device->machine->driver_data<airbustr_state>();
 	state->master_addr ^= 0x02;
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, state->master_addr);
 }
 
 static INTERRUPT_GEN( slave_interrupt )
 {
-	airbustr_state *state = (airbustr_state *)device->machine->driver_data;
+	airbustr_state *state = device->machine->driver_data<airbustr_state>();
 	state->slave_addr ^= 0x02;
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, state->slave_addr);
 }
@@ -575,7 +575,7 @@ static INTERRUPT_GEN( slave_interrupt )
 
 static MACHINE_START( airbustr )
 {
-	airbustr_state *state = (airbustr_state *)machine->driver_data;
+	airbustr_state *state = machine->driver_data<airbustr_state>();
 	UINT8 *MASTER = memory_region(machine, "master");
 	UINT8 *SLAVE = memory_region(machine, "slave");
 	UINT8 *AUDIO = memory_region(machine, "audiocpu");
@@ -605,7 +605,7 @@ static MACHINE_START( airbustr )
 
 static MACHINE_RESET( airbustr )
 {
-	airbustr_state *state = (airbustr_state *)machine->driver_data;
+	airbustr_state *state = machine->driver_data<airbustr_state>();
 
 	state->soundlatch_status = state->soundlatch2_status = 0;
 	state->master_addr = 0xff;
@@ -630,10 +630,7 @@ static const kaneko_pandora_interface airbustr_pandora_config =
 	0, 0	/* x_offs, y_offs */
 };
 
-static MACHINE_DRIVER_START( airbustr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(airbustr_state)
+static MACHINE_CONFIG_START( airbustr, airbustr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("master", Z80, 6000000)	// ???
@@ -685,12 +682,11 @@ static MACHINE_DRIVER_START( airbustr )
 
 	MDRV_OKIM6295_ADD("oki", 12000000/4, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( airbustrb )
-	MDRV_IMPORT_FROM(airbustr)
+static MACHINE_CONFIG_DERIVED( airbustrb, airbustr )
 	MDRV_WATCHDOG_TIME_INIT(SEC(0)) // no protection device or watchdog
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* ROMs */

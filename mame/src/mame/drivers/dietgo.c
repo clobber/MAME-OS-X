@@ -34,7 +34,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP		/* YM2203 - this board doesn't have one */
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x130000, 0x130001) AM_NOP		/* This board only has 1 oki chip */
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
@@ -161,7 +161,7 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int state)
 {
-	dietgo_state *driver_state = (dietgo_state *)device->machine->driver_data;
+	dietgo_state *driver_state = device->machine->driver_data<dietgo_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
 }
 
@@ -192,17 +192,14 @@ static const deco16ic_interface dietgo_deco16ic_intf =
 
 static MACHINE_START( dietgo )
 {
-	dietgo_state *state = (dietgo_state *)machine->driver_data;
+	dietgo_state *state = machine->driver_data<dietgo_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
 	state->deco16ic = machine->device("deco_custom");
 }
 
-static MACHINE_DRIVER_START( dietgo )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dietgo_state)
+static MACHINE_CONFIG_START( dietgo, dietgo_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_28MHz/2) /* DE102 (verified on pcb) */
@@ -238,7 +235,7 @@ static MACHINE_DRIVER_START( dietgo )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_32_22MHz/32, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* Diet Go Go */
 

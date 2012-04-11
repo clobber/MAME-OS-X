@@ -32,7 +32,7 @@
 
 static READ8_HANDLER( hanaawas_input_port_0_r )
 {
-	hanaawas_state *state = (hanaawas_state *)space->machine->driver_data;
+	hanaawas_state *state = space->machine->driver_data<hanaawas_state>();
 	int i, ordinal = 0;
 	UINT16 buttons = 0;
 
@@ -66,7 +66,7 @@ static READ8_HANDLER( hanaawas_input_port_0_r )
 
 static WRITE8_HANDLER( hanaawas_inputs_mux_w )
 {
-	hanaawas_state *state = (hanaawas_state *)space->machine->driver_data;
+	hanaawas_state *state = space->machine->driver_data<hanaawas_state>();
 	state->mux = data;
 }
 
@@ -186,22 +186,19 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( hanaawas )
 {
-	hanaawas_state *state = (hanaawas_state *)machine->driver_data;
+	hanaawas_state *state = machine->driver_data<hanaawas_state>();
 
 	state_save_register_global(machine, state->mux);
 }
 
 static MACHINE_RESET( hanaawas )
 {
-	hanaawas_state *state = (hanaawas_state *)machine->driver_data;
+	hanaawas_state *state = machine->driver_data<hanaawas_state>();
 
 	state->mux = 0;
 }
 
-static MACHINE_DRIVER_START( hanaawas )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(hanaawas_state)
+static MACHINE_CONFIG_START( hanaawas, hanaawas_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,18432000/6)	/* 3.072 MHz ??? */
@@ -233,7 +230,7 @@ static MACHINE_DRIVER_START( hanaawas )
 	MDRV_SOUND_ADD("aysnd", AY8910, 18432000/12)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

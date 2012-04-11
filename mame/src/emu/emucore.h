@@ -303,7 +303,6 @@ public:
 		: code(_exitcode)
 	{
 		vsprintf(text, format, ap);
-		osd_break_into_debugger(text);
 	}
 
 	const char *string() const { return text; }
@@ -354,6 +353,184 @@ inline _Dest crosscast(_Source *src)
 //**************************************************************************
 //  COMMON TEMPLATES
 //**************************************************************************
+
+// ======================> simple_list
+
+template<class T>
+class simple_list
+{
+	DISABLE_COPYING(simple_list);
+
+	T *m_head;
+	T *m_tail;
+	resource_pool &m_pool;
+	int m_count;
+
+public:
+	simple_list(resource_pool &pool = global_resource_pool) :
+		m_head(NULL),
+		m_tail(NULL),
+		m_pool(pool),
+		m_count(0) { }
+
+	virtual ~simple_list() { reset(); }
+
+	resource_pool &pool() const { return m_pool; }
+
+	T *first() const { return m_head; }
+	T *last() const { return m_tail; }
+	int count() const { return m_count; }
+
+	void reset() { while (m_head != NULL) remove(*m_head); }
+
+	T &prepend(T &object)
+	{
+		object.m_next = m_head;
+		m_head = &object;
+		if (m_tail == NULL)
+			m_tail = m_head;
+		m_count++;
+		return object;
+	}
+
+	void prepend_list(simple_list<T> &list)
+	{
+		int count = list.count();
+		if (count == 0)
+			return;
+		T *tail = list.last();
+		T *head = list.detach_all();
+		tail->m_next = m_head;
+		m_head = head;
+		if (m_tail == NULL)
+			m_tail = tail;
+		m_count += count;
+	}
+
+	T &append(T &object)
+	{
+		object.m_next = NULL;
+		if (m_tail != NULL)
+			m_tail = m_tail->m_next = &object;
+		else
+			m_tail = m_head = &object;
+		m_count++;
+		return object;
+	}
+
+	void append_list(simple_list<T> &list)
+	{
+		int count = list.count();
+		if (count == 0)
+			return;
+		T *tail = list.last();
+		T *head = list.detach_all();
+		if (m_tail != NULL)
+			m_tail->m_next = head;
+		else
+			m_head = head;
+		m_tail = tail;
+		m_count += count;
+	}
+
+	T *detach_head()
+	{
+		T *result = m_head;
+		if (result != NULL)
+		{
+			m_head = result->m_next;
+			m_count--;
+			if (m_head == NULL)
+				m_tail = NULL;
+		}
+		return result;
+	}
+
+	T &detach(T &object)
+	{
+		T *prev = NULL;
+		for (T *cur = m_head; cur != NULL; prev = cur, cur = cur->m_next)
+			if (cur == &object)
+			{
+				if (prev != NULL)
+					prev->m_next = object.m_next;
+				else
+					m_head = object.m_next;
+				if (m_tail == &object)
+					m_tail = prev;
+				m_count--;
+				return object;
+			}
+		return object;
+	}
+
+	T *detach_all()
+	{
+		T *result = m_head;
+		m_head = m_tail = NULL;
+		m_count = 0;
+		return result;
+	}
+
+	void remove(T &object)
+	{
+		detach(object);
+		pool_free(m_pool, &object);
+	}
+
+	T *find(int index) const
+	{
+		for (T *cur = m_head; cur != NULL; cur = cur->m_next)
+			if (index-- == 0)
+				return cur;
+		return NULL;
+	}
+
+	int indexof(const T &object) const
+	{
+		int index = 0;
+		for (T *cur = m_head; cur != NULL; cur = cur->m_next)
+		{
+			if (cur == &object)
+				return index;
+			index++;
+		}
+		return -1;
+	}
+};
+
+
+// ======================> fixed_allocator
+
+template<class T>
+class fixed_allocator
+{
+	DISABLE_COPYING(fixed_allocator);
+
+public:
+	fixed_allocator(resource_pool &pool = global_resource_pool)
+		: m_pool(pool),
+		  m_freelist(pool) { }
+
+	T *alloc()
+	{
+		T *result = m_freelist.detach_head();
+		if (result == NULL)
+			result = m_pool.add_object(new T);
+		return result;
+	}
+
+	void reclaim(T *item) { if (item != NULL) m_freelist.append(*item); }
+	void reclaim(T &item) { m_freelist.append(item); }
+	void reclaim_all(simple_list<T> &list) { m_freelist.append_list(list); }
+
+private:
+	resource_pool &m_pool;
+	simple_list<T> m_freelist;
+};
+
+
+// ======================> tagged_list
 
 template<class T>
 class tagged_list
@@ -441,7 +618,7 @@ public:
 		return object;
 	}
 
-	void remove(T *object)
+	void detach(T *object)
 	{
 		for (T **objectptr = &m_head; *objectptr != NULL; objectptr = &(*objectptr)->m_next)
 			if (*objectptr == object)
@@ -450,9 +627,14 @@ public:
 				if (m_tailptr == &object->m_next)
 					m_tailptr = objectptr;
 				m_map.remove(object);
-				pool_free(m_pool, object);
 				return;
 			}
+	}
+
+	void remove(T *object)
+	{
+		detach(object);
+		pool_free(m_pool, object);
 	}
 
 	void remove(const char *tag)

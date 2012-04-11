@@ -89,9 +89,12 @@
  *
  *************************************/
 
-static READ16_HANDLER( nvram_r )
+static WRITE16_HANDLER( nvram_recall_w )
 {
-	return space->machine->generic.nvram.u16[offset] | 0xfff0;
+	foodf_state *state = space->machine->driver_data<foodf_state>();
+	state->m_nvram->recall(0);
+	state->m_nvram->recall(1);
+	state->m_nvram->recall(0);
 }
 
 
@@ -104,10 +107,10 @@ static READ16_HANDLER( nvram_r )
 
 static void update_interrupts(running_machine *machine)
 {
-	foodf_state *state = (foodf_state *)machine->driver_data;
-	cputag_set_input_line(machine, "maincpu", 1, state->atarigen.scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 2, state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
-	cputag_set_input_line(machine, "maincpu", 3, state->atarigen.scanline_int_state && state->atarigen.video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	foodf_state *state = machine->driver_data<foodf_state>();
+	cputag_set_input_line(machine, "maincpu", 1, state->scanline_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 2, state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "maincpu", 3, state->scanline_int_state && state->video_int_state ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -135,7 +138,7 @@ static TIMER_DEVICE_CALLBACK( scanline_update )
 
 static MACHINE_START( foodf )
 {
-	foodf_state *state = (foodf_state *)machine->driver_data;
+	foodf_state *state = machine->driver_data<foodf_state>();
 	atarigen_init(machine);
 	state_save_register_global(machine, state->whichport);
 }
@@ -143,8 +146,8 @@ static MACHINE_START( foodf )
 
 static MACHINE_RESET( foodf )
 {
-	foodf_state *state = (foodf_state *)machine->driver_data;
-	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
+	foodf_state *state = machine->driver_data<foodf_state>();
+	atarigen_interrupt_reset(state, update_interrupts);
 	timer_device *scan_timer = machine->device<timer_device>("scan_timer");
 	scan_timer->adjust(machine->primary_screen->time_until_pos(0));
 }
@@ -157,26 +160,23 @@ static MACHINE_RESET( foodf )
  *
  *************************************/
 
-static WRITE16_HANDLER( digital_w )
+static WRITE8_HANDLER( digital_w )
 {
-	foodf_state *state = (foodf_state *)space->machine->driver_data;
-	if (ACCESSING_BITS_0_7)
-	{
-		foodf_set_flip(state, data & 0x01);
+	foodf_state *state = space->machine->driver_data<foodf_state>();
+	foodf_set_flip(state, data & 0x01);
 
-		/* bit 1 = UPDATE */
+	state->m_nvram->store(data & 0x02);
 
-		if (!(data & 0x04))
-			atarigen_scanline_int_ack_w(space,0,0,0xffff);
-		if (!(data & 0x08))
-			atarigen_video_int_ack_w(space,0,0,0xffff);
+	if (!(data & 0x04))
+		atarigen_scanline_int_ack_w(space,0,0,0xffff);
+	if (!(data & 0x08))
+		atarigen_video_int_ack_w(space,0,0,0xffff);
 
-		output_set_led_value(0, (data >> 4) & 1);
-		output_set_led_value(1, (data >> 5) & 1);
+	output_set_led_value(0, (data >> 4) & 1);
+	output_set_led_value(1, (data >> 5) & 1);
 
-		coin_counter_w(space->machine, 0, (data >> 6) & 1);
-		coin_counter_w(space->machine, 1, (data >> 7) & 1);
-	}
+	coin_counter_w(space->machine, 0, (data >> 6) & 1);
+	coin_counter_w(space->machine, 1, (data >> 7) & 1);
 }
 
 
@@ -190,7 +190,7 @@ static WRITE16_HANDLER( digital_w )
 static READ16_HANDLER( analog_r )
 {
 	static const char *const portnames[] = { "STICK0_X", "STICK1_X", "STICK0_Y", "STICK1_Y" };
-	foodf_state *state = (foodf_state *)space->machine->driver_data;
+	foodf_state *state = space->machine->driver_data<foodf_state>();
 
 	return input_port_read(space->machine, portnames[state->whichport]);
 }
@@ -198,7 +198,7 @@ static READ16_HANDLER( analog_r )
 
 static WRITE16_HANDLER( analog_w )
 {
-	foodf_state *state = (foodf_state *)space->machine->driver_data;
+	foodf_state *state = space->machine->driver_data<foodf_state>();
 	state->whichport = offset ^ 3;
 }
 
@@ -210,18 +210,20 @@ static WRITE16_HANDLER( analog_w )
  *
  *************************************/
 
+// complete memory map derived from schematics
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
+	ADDRESS_MAP_UNMAP_HIGH
 	AM_RANGE(0x000000, 0x00ffff) AM_MIRROR(0x3e0000) AM_ROM
 	AM_RANGE(0x014000, 0x014fff) AM_MIRROR(0x3e3000) AM_RAM
 	AM_RANGE(0x018000, 0x018fff) AM_MIRROR(0x3e3000) AM_RAM
 	AM_RANGE(0x01c000, 0x01c0ff) AM_MIRROR(0x3e3f00) AM_RAM AM_BASE_GENERIC(spriteram)
-	AM_RANGE(0x800000, 0x8007ff) AM_MIRROR(0x03f800) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(foodf_state, atarigen.playfield)
-	AM_RANGE(0x900000, 0x9001ff) AM_MIRROR(0x03fe00) AM_RAM_READ(nvram_r) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x800000, 0x8007ff) AM_MIRROR(0x03f800) AM_RAM_WRITE(atarigen_playfield_w) AM_BASE_MEMBER(foodf_state, playfield)
+	AM_RANGE(0x900000, 0x9001ff) AM_MIRROR(0x03fe00) AM_DEVREADWRITE8_MODERN("nvram", x2212_device, read, write, 0x00ff)
 	AM_RANGE(0x940000, 0x940007) AM_MIRROR(0x023ff8) AM_READ(analog_r)
 	AM_RANGE(0x944000, 0x944007) AM_MIRROR(0x023ff8) AM_WRITE(analog_w)
-	AM_RANGE(0x948000, 0x948001) AM_MIRROR(0x023ffe) AM_READ_PORT("SYSTEM") AM_WRITE(digital_w)
+	AM_RANGE(0x948000, 0x948001) AM_MIRROR(0x023ffe) AM_READ_PORT("SYSTEM") AM_WRITE8(digital_w, 0x00ff)
 	AM_RANGE(0x950000, 0x9501ff) AM_MIRROR(0x023e00) AM_WRITE(foodf_paletteram_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x954000, 0x954001) AM_MIRROR(0x023ffe) AM_WRITENOP	/* RECALL */
+	AM_RANGE(0x954000, 0x954001) AM_MIRROR(0x023ffe) AM_WRITE(nvram_recall_w)
 	AM_RANGE(0x958000, 0x958001) AM_MIRROR(0x023ffe) AM_READWRITE(watchdog_reset16_r, watchdog_reset16_w)
 	AM_RANGE(0xa40000, 0xa4001f) AM_MIRROR(0x03ffe0) AM_DEVREADWRITE8("pokey2", pokey_r, pokey_w, 0x00ff)
 	AM_RANGE(0xa80000, 0xa8001f) AM_MIRROR(0x03ffe0) AM_DEVREADWRITE8("pokey1", pokey_r, pokey_w, 0x00ff)
@@ -353,8 +355,7 @@ static const pokey_interface pokey_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( foodf )
-	MDRV_DRIVER_DATA(foodf_state)
+static MACHINE_CONFIG_START( foodf, foodf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK/2)
@@ -363,7 +364,9 @@ static MACHINE_DRIVER_START( foodf )
 
 	MDRV_MACHINE_START(foodf)
 	MDRV_MACHINE_RESET(foodf)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+
+	MDRV_X2212_ADD_AUTOSAVE("nvram")
+
 	MDRV_WATCHDOG_VBLANK_INIT(8)
 
 	MDRV_TIMER_ADD("scan_timer", scanline_update)
@@ -391,7 +394,7 @@ static MACHINE_DRIVER_START( foodf )
 
 	MDRV_SOUND_ADD("pokey3", POKEY, MASTER_CLOCK/2/10)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

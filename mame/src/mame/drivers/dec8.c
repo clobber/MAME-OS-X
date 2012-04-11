@@ -54,25 +54,25 @@ To do:
 /* Only used by ghostb, gondo, garyoret, other games can control buffering */
 static VIDEO_EOF( dec8 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	buffer_spriteram_w(space, 0, 0);
 }
 
 static READ8_HANDLER( i8751_h_r )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	return state->i8751_return >> 8; /* MSB */
 }
 
 static READ8_HANDLER( i8751_l_r )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	return state->i8751_return & 0xff; /* LSB */
 }
 
 static WRITE8_HANDLER( i8751_reset_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 }
 
@@ -118,13 +118,13 @@ static TIMER_CALLBACK( dec8_i8751_timer_callback )
 {
 	// The schematics show a clocked LS194 shift register (3A) is used to automatically
 	// clear the IRQ request.  The MCU does not clear it itself.
-	dec8_state *state = (dec8_state *)machine->driver_data;
+	dec8_state *state = machine->driver_data<dec8_state>();
 	cpu_set_input_line(state->mcu, MCS51_INT1_LINE, CLEAR_LINE);
 }
 
 static WRITE8_HANDLER( dec8_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 
 	switch (offset)
 	{
@@ -147,7 +147,7 @@ static WRITE8_HANDLER( dec8_i8751_w )
 
 static WRITE8_HANDLER( srdarwin_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 
 	switch (offset)
@@ -222,7 +222,7 @@ bb63           = Square things again
 
 static WRITE8_HANDLER( shackled_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 
 	switch (offset)
@@ -251,7 +251,7 @@ static WRITE8_HANDLER( shackled_i8751_w )
 
 static WRITE8_HANDLER( lastmisn_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 
 	switch (offset)
@@ -283,7 +283,7 @@ static WRITE8_HANDLER( lastmisn_i8751_w )
 
 static WRITE8_HANDLER( csilver_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 
 	switch (offset)
@@ -313,7 +313,7 @@ static WRITE8_HANDLER( csilver_i8751_w )
 
 static WRITE8_HANDLER( garyoret_i8751_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->i8751_return = 0;
 
 	switch (offset)
@@ -349,7 +349,7 @@ static WRITE8_HANDLER( dec8_bank_w )
 /* Used by Ghostbusters, Meikyuu Hunter G & Gondomania */
 static WRITE8_HANDLER( ghostb_bank_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 
 	/* Bit 0: SECCLR - acknowledge interrupt from I8751
        Bit 1: NMI enable/disable
@@ -379,14 +379,14 @@ static WRITE8_HANDLER( csilver_control_w )
 
 static WRITE8_HANDLER( dec8_sound_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static void csilver_adpcm_int( running_device *device )
 {
-	dec8_state *state = (dec8_state *)device->machine->driver_data;
+	dec8_state *state = device->machine->driver_data<dec8_state>();
 	state->toggle ^= 1;
 	if (state->toggle)
 		cpu_set_input_line(state->audiocpu, M6502_IRQ_LINE, HOLD_LINE);
@@ -403,7 +403,7 @@ static READ8_DEVICE_HANDLER( csilver_adpcm_reset_r )
 
 static WRITE8_HANDLER( csilver_adpcm_data_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	state->msm5205next = data;
 }
 
@@ -416,7 +416,7 @@ static WRITE8_HANDLER( csilver_sound_bank_w )
 
 static WRITE8_HANDLER( oscar_int_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 	/* Deal with interrupts, coins also generate NMI to CPU 0 */
 	switch (offset)
 	{
@@ -438,7 +438,7 @@ static WRITE8_HANDLER( oscar_int_w )
 /* Used by Shackled, Last Mission, Captain Silver */
 static WRITE8_HANDLER( shackled_int_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 #if 0
 /* This is correct, but the cpus in Shackled need an interleave of about 5000!
     With lower interleave CPU 0 misses an interrupt at the start of the game
@@ -827,7 +827,7 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( dec8_mcu_from_main_r )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 
 	switch (offset)
 	{
@@ -846,7 +846,7 @@ static READ8_HANDLER( dec8_mcu_from_main_r )
 
 static WRITE8_HANDLER( dec8_mcu_to_main_w )
 {
-	dec8_state *state = (dec8_state *)space->machine->driver_data;
+	dec8_state *state = space->machine->driver_data<dec8_state>();
 
 	// Outputs P0 and P1 are latched
 	if (offset==0) state->i8751_port0=data;
@@ -1883,7 +1883,7 @@ GFXDECODE_END
 /* handler called by the 3812 emulator when the internal timers cause an IRQ */
 static void irqhandler( running_device *device, int linestate )
 {
-	dec8_state *state = (dec8_state *)device->machine->driver_data;
+	dec8_state *state = device->machine->driver_data<dec8_state>();
 	cpu_set_input_line(state->audiocpu, 0, linestate); /* M6502_IRQ_LINE */
 }
 
@@ -1907,7 +1907,7 @@ static const msm5205_interface msm5205_config =
 
 static INTERRUPT_GEN( gondo_interrupt )
 {
-	dec8_state *state = (dec8_state *)device->machine->driver_data;
+	dec8_state *state = device->machine->driver_data<dec8_state>();
 	if (state->nmi_enable)
 		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE); /* VBL */
 }
@@ -1915,7 +1915,7 @@ static INTERRUPT_GEN( gondo_interrupt )
 /* Coins generate NMI's */
 static INTERRUPT_GEN( oscar_interrupt )
 {
-	dec8_state *state = (dec8_state *)device->machine->driver_data;
+	dec8_state *state = device->machine->driver_data<dec8_state>();
 	if ((input_port_read(device->machine, "IN2") & 0x7) == 0x7) state->latch = 1;
 	if (state->latch && (input_port_read(device->machine, "IN2") & 0x7) != 0x7)
 	{
@@ -1929,7 +1929,7 @@ static INTERRUPT_GEN( oscar_interrupt )
 
 static MACHINE_START( dec8 )
 {
-	dec8_state *state = (dec8_state *)machine->driver_data;
+	dec8_state *state = machine->driver_data<dec8_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->subcpu = machine->device("sub");
@@ -1955,7 +1955,7 @@ static MACHINE_START( dec8 )
 
 static MACHINE_RESET( dec8 )
 {
-	dec8_state *state = (dec8_state *)machine->driver_data;
+	dec8_state *state = machine->driver_data<dec8_state>();
 	int i;
 
 	state->nmi_enable = state->i8751_port0 = state->i8751_port1 = 0;
@@ -1973,10 +1973,7 @@ static MACHINE_RESET( dec8 )
 }
 
 
-static MACHINE_DRIVER_START( cobracom )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( cobracom, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2000000)
@@ -2018,12 +2015,9 @@ static MACHINE_DRIVER_START( cobracom )
 	MDRV_SOUND_ADD("ym2", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ghostb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( ghostb, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)
@@ -2070,13 +2064,10 @@ static MACHINE_DRIVER_START( ghostb )
 	MDRV_SOUND_ADD("ym2", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( srdarwin )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( srdarwin, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809,2000000)  /* MC68A09EP */
@@ -2118,12 +2109,9 @@ static MACHINE_DRIVER_START( srdarwin )
 	MDRV_SOUND_ADD("ym2", YM3812, 3000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( gondo )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( gondo, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309,3000000*4) /* HD63C09EP */
@@ -2169,12 +2157,9 @@ static MACHINE_DRIVER_START( gondo )
 	MDRV_SOUND_ADD("ym2", YM3526, 3000000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( oscar )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( oscar, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, XTAL_12MHz/2) /* verified on pcb */
@@ -2220,12 +2205,9 @@ static MACHINE_DRIVER_START( oscar )
 	MDRV_SOUND_ADD("ym2", YM3526, XTAL_12MHz/4) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( lastmisn )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( lastmisn, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2000000)
@@ -2270,12 +2252,9 @@ static MACHINE_DRIVER_START( lastmisn )
 	MDRV_SOUND_ADD("ym2", YM3526, 3000000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( shackled )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( shackled, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2000000)
@@ -2320,12 +2299,9 @@ static MACHINE_DRIVER_START( shackled )
 	MDRV_SOUND_ADD("ym2", YM3526, 3000000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( csilver )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( csilver, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, XTAL_12MHz/8) /* verified on pcb */
@@ -2375,12 +2351,9 @@ static MACHINE_DRIVER_START( csilver )
 	MDRV_SOUND_ADD("msm", MSM5205, XTAL_384kHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(msm5205_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.88)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( garyoret )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dec8_state)
+static MACHINE_CONFIG_START( garyoret, dec8_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309,3000000*4) /* HD63C09EP */
@@ -2423,7 +2396,7 @@ static MACHINE_DRIVER_START( garyoret )
 	MDRV_SOUND_ADD("ym2", YM3526, 3000000)
 	MDRV_SOUND_CONFIG(ym3526_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.70)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 
@@ -3436,15 +3409,15 @@ ROM_END
 
 static DRIVER_INIT( dec8 )
 {
-	dec8_state *state = (dec8_state *)machine->driver_data;
+	dec8_state *state = machine->driver_data<dec8_state>();
 	state->latch = 0;
 }
 
 /* Ghostbusters, Darwin, Oscar use a "Deco 222" custom 6502 for sound. */
 static DRIVER_INIT( deco222 )
 {
-	dec8_state *state = (dec8_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
+	dec8_state *state = machine->driver_data<dec8_state>();
+	address_space *space = cputag_get_address_space(machine, "audiocpu", ADDRESS_SPACE_PROGRAM);
 	int A;
 	UINT8 *decrypt;
 	UINT8 *rom;
@@ -3453,7 +3426,7 @@ static DRIVER_INIT( deco222 )
 	rom = memory_region(machine, "audiocpu");
 	decrypt = auto_alloc_array(machine, UINT8, 0x8000);
 
-	memory_set_decrypted_region(space, 0x8000, 0xffff, decrypt);
+	space->set_decrypted_region(0x8000, 0xffff, decrypt);
 
 	for (A = 0x8000; A < 0x10000; A++)
 		decrypt[A - 0x8000] = (rom[A] & 0x9f) | ((rom[A] & 0x20) << 1) | ((rom[A] & 0x40) >> 1);

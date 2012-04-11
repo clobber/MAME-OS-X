@@ -52,12 +52,12 @@ static UINT16 bcd_sub( UINT16 a, UINT16 b);
 
 /* Static variables */
 
-#define RM(Addr) ((unsigned)memory_read_byte_8be(cpustate->program, Addr))
-#define WM(Addr,Value) (memory_write_byte_8be(cpustate->program, Addr, Value))
+#define RM(Addr) ((unsigned)cpustate->program->read_byte(Addr))
+#define WM(Addr,Value) (cpustate->program->write_byte(Addr, Value))
 
-#define IMMBYTE(b)	b = ((unsigned)memory_raw_read_byte(cpustate->program, pPC)); pPC++
-#define SIMMBYTE(b)	b = ((signed)memory_raw_read_byte(cpustate->program, pPC)); pPC++
-#define IMMWORD(w)	w.b.h = (unsigned)memory_raw_read_byte(cpustate->program, pPC++); w.b.l = (unsigned)memory_raw_read_byte(cpustate->program, pPC++)
+#define IMMBYTE(b)	b = ((unsigned)cpustate->direct->read_raw_byte(pPC)); pPC++
+#define SIMMBYTE(b)	b = ((signed)cpustate->direct->read_raw_byte(pPC)); pPC++
+#define IMMWORD(w)	w.b.h = (unsigned)cpustate->direct->read_raw_byte(pPC++); w.b.l = (unsigned)cpustate->direct->read_raw_byte(pPC++)
 
 #define PUSHBYTE(b) pSP++; WM(pSP,b)
 #define PUSHWORD(w) pSP++; WM(pSP,w.b.h); pSP++; WM(pSP,w.b.l)
@@ -74,8 +74,9 @@ struct _tms7000_state
 	UINT8		pf[0x100];	/* Perpherial file */
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int			icount;
 	int 		div_by_16_trigger;
 	int			cycles_per_INT2;
@@ -165,6 +166,7 @@ static CPU_INIT( tms7000 )
 	cpustate->irq_callback = irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
 	memset(cpustate->pf, 0, 0x100);
@@ -454,7 +456,7 @@ static CPU_EXECUTE( tms7000 )
 
 		if( cpustate->idle_state == 0 )
 		{
-			op = memory_decrypted_read_byte(cpustate->program, pPC++);
+			op = cpustate->direct->read_decrypted_byte(pPC++);
 
 			opfn[op](cpustate);
 		}
@@ -495,7 +497,7 @@ static CPU_EXECUTE( tms7000_exl )
 		if( cpustate->idle_state == 0 )
 		{
 
-			op = memory_decrypted_read_byte(cpustate->program, pPC++);
+			op = cpustate->direct->read_decrypted_byte(pPC++);
 
 			opfn_exl[op](cpustate);
 		}
@@ -599,19 +601,19 @@ static WRITE8_HANDLER( tms70x0_pf_w )	/* Perpherial file write */
 			break;
 
 		case 0x06: /* Port B write */
-			memory_write_byte_8be( cpustate->io, TMS7000_PORTB, data );
+			cpustate->io->write_byte( TMS7000_PORTB, data );
 			cpustate->pf[ 0x06 ] = data;
 			break;
 
 		case 0x08: /* Port C write */
 			temp1 = data & cpustate->pf[ 0x09 ];	/* Mask off input bits */
-			memory_write_byte_8be( cpustate->io, TMS7000_PORTC, temp1 );
+			cpustate->io->write_byte( TMS7000_PORTC, temp1 );
 			cpustate->pf[ 0x08 ] = temp1;
 			break;
 
 		case 0x0a: /* Port D write */
 			temp1 = data & cpustate->pf[ 0x0b ];	/* Mask off input bits */
-			memory_write_byte_8be( cpustate->io, TMS7000_PORTD, temp1 );
+			cpustate->io->write_byte( TMS7000_PORTD, temp1 );
 			cpustate->pf[ 0x0a ] = temp1;
 			break;
 
@@ -647,7 +649,7 @@ static READ8_HANDLER( tms70x0_pf_r )	/* Perpherial file read */
 			break;
 
 		case 0x04: /* Port A read */
-			result = memory_read_byte_8be( cpustate->io, TMS7000_PORTA );
+			result = cpustate->io->read_byte( TMS7000_PORTA );
 			break;
 
 
@@ -658,14 +660,14 @@ static READ8_HANDLER( tms70x0_pf_r )	/* Perpherial file read */
 
 		case 0x08: /* Port C read */
 			temp1 = cpustate->pf[ 0x08 ] & cpustate->pf[ 0x09 ];	/* Get previous output bits */
-			temp2 = memory_read_byte_8be( cpustate->io, TMS7000_PORTC );			/* Read port */
+			temp2 = cpustate->io->read_byte( TMS7000_PORTC );			/* Read port */
 			temp3 = temp2 & (~cpustate->pf[ 0x09 ]);				/* Mask off output bits */
 			result = temp1 | temp3;								/* OR together */
 			break;
 
 		case 0x0a: /* Port D read */
 			temp1 = cpustate->pf[ 0x0a ] & cpustate->pf[ 0x0b ];	/* Get previous output bits */
-			temp2 = memory_read_byte_8be( cpustate->io, TMS7000_PORTD );			/* Read port */
+			temp2 = cpustate->io->read_byte( TMS7000_PORTD );			/* Read port */
 			temp3 = temp2 & (~cpustate->pf[ 0x0b ]);				/* Mask off output bits */
 			result = temp1 | temp3;								/* OR together */
 			break;

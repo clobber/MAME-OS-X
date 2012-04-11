@@ -102,7 +102,7 @@ static const powerpc_config ppc603e_config =
 };
 
 
-static MACHINE_DRIVER_START( taitotz )
+static MACHINE_CONFIG_START( taitotz, driver_device )
 	MDRV_CPU_ADD("maincpu", PPC603E, 100000000)
 	MDRV_CPU_CONFIG(ppc603e_config)
 	MDRV_CPU_PROGRAM_MAP(ppc603e_mem)
@@ -119,7 +119,7 @@ static MACHINE_DRIVER_START( taitotz )
 
 	MDRV_VIDEO_START(taitotz)
 	MDRV_VIDEO_UPDATE(taitotz)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 #define TAITOTZ_BIOS	\
 	ROM_LOAD32_WORD_SWAP( "e68-05-1.ic6", 0x000000, 0x080000, CRC(6ad9b006) SHA1(f05a0ae26b6abaeda9c7944aee96c72b08fff7a5) )	\
@@ -182,10 +182,11 @@ ROM_START( batlgr2 )
 	ROM_LOAD( "e68-01.ic7", 0x000000, 0x010000, NO_DUMP )
 
 	DISK_REGION( "ide" )
+	DISK_IMAGE( "bg2_204j", 0, SHA1(7ac100fba39ae0b93980c0af2f0212a731106912) )
 ROM_END
 
 GAME( 1999, taitotz,  0, taitotz, taitotz, 0, ROT0, "Taito", "Type Zero BIOS", GAME_NO_SOUND|GAME_NOT_WORKING|GAME_IS_BIOS_ROOT)
 GAME( 1999, landhigh, taitotz, taitotz, taitotz, 0, ROT0, "Taito", "Landing High Japan", GAME_NOT_WORKING | GAME_NO_SOUND )
 GAME( 1999, batlgear, taitotz, taitotz, taitotz, 0, ROT0, "Taito", "Battle Gear", GAME_NOT_WORKING | GAME_NO_SOUND )
-GAME( 2000, batlgr2,  taitotz, taitotz, taitotz, 0, ROT0, "Taito", "Battle Gear 2", GAME_NOT_WORKING | GAME_NO_SOUND )
+GAME( 2000, batlgr2,  taitotz, taitotz, taitotz, 0, ROT0, "Taito", "Battle Gear 2 (v2.04J)", GAME_NOT_WORKING | GAME_NO_SOUND )
 

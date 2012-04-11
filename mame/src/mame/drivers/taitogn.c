@@ -328,15 +328,40 @@ Type 3 (PCMCIA Compact Flash Adaptor + Compact Flash card, sealed together with 
 #include "sound/psx.h"
 #include "audio/taito_zm.h"
 
-static unsigned char cis[512];
-static int locked;
+class taitogn_state : public psx_state
+{
+public:
+	taitogn_state(running_machine &machine, const driver_device_config_base &config)
+		: psx_state(machine, config) { }
+
+	intel_te28f160_device *biosflash;
+	intel_e28f400_device *pgmflash;
+	intel_te28f160_device *sndflash[3];
+
+	unsigned char cis[512];
+	int locked;
+
+	unsigned char rf5c296_reg;
+
+	UINT32 control, control2, control3;
+	int v;
+
+	UINT32 m_n_znsecsel;
+	UINT32 m_b_znsecport;
+	int m_n_dip_bit;
+	int m_b_lastclock;
+	emu_timer *dip_timer;
+
+	UINT32 coin_info;
+	UINT32 mux_data;
+};
+
 
 // rf5c296 is very inaccurate at that point, it hardcodes the gnet config
 
-static unsigned char rf5c296_reg = 0;
-
 static void rf5c296_reg_w(ATTR_UNUSED running_machine *machine, UINT8 reg, UINT8 data)
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
 	//  fprintf(stderr, "rf5c296_reg_w %02x, %02x (%s)\n", reg, data, cpuexec_describe_context(machine));
 	switch (reg)
 	{
@@ -346,7 +371,7 @@ static void rf5c296_reg_w(ATTR_UNUSED running_machine *machine, UINT8 reg, UINT8
 			if (!(data & 0x40))
 			{
 				devtag_reset(machine, "card");
-				locked = 0x1ff;
+				state->locked = 0x1ff;
 				ide_set_gnet_readlock (machine->device("card"), 1);
 			}
 		break;
@@ -364,6 +389,8 @@ static UINT8 rf5c296_reg_r(ATTR_UNUSED running_machine *machine, UINT8 reg)
 
 static WRITE32_HANDLER(rf5c296_io_w)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	if(offset < 2) {
 		ide_controller32_pcmcia_w(space->machine->device("card"), offset, data, mem_mask);
 		return;
@@ -371,14 +398,16 @@ static WRITE32_HANDLER(rf5c296_io_w)
 
 	if(offset == 0x3e0/4) {
 		if(ACCESSING_BITS_0_7)
-			rf5c296_reg = data;
+			state->rf5c296_reg = data;
 		if(ACCESSING_BITS_8_15)
-			rf5c296_reg_w(space->machine, rf5c296_reg, data >> 8);
+			rf5c296_reg_w(space->machine, state->rf5c296_reg, data >> 8);
 	}
 }
 
 static READ32_HANDLER(rf5c296_io_r)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	if(offset < 2)
 		return ide_controller32_pcmcia_r(space->machine->device("card"), offset, mem_mask);
 
@@ -387,9 +416,9 @@ static READ32_HANDLER(rf5c296_io_r)
 	if(offset == 0x3e0/4) {
 		UINT32 res = 0xffff0000;
 		if(ACCESSING_BITS_0_7)
-			res |= rf5c296_reg;
+			res |= state->rf5c296_reg;
 		if(ACCESSING_BITS_8_15)
-			res |= rf5c296_reg_r(space->machine, rf5c296_reg) << 8;
+			res |= rf5c296_reg_r(space->machine, state->rf5c296_reg) << 8;
 		return res;
 	}
 
@@ -400,13 +429,15 @@ static READ32_HANDLER(rf5c296_io_r)
 
 static READ32_HANDLER(rf5c296_mem_r)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	if(offset < 0x80)
-		return (cis[offset*2+1] << 16) | cis[offset*2];
+		return (state->cis[offset*2+1] << 16) | state->cis[offset*2];
 
 	switch(offset) {
 	case 0x080: return 0x00800041;
 	case 0x081: return 0x0000002e;
-	case 0x100: return locked ? 0x00010000 : 0;
+	case 0x100: return state->locked ? 0x00010000 : 0;
 	default:
 		return 0;
 	}
@@ -414,6 +445,8 @@ static READ32_HANDLER(rf5c296_mem_r)
 
 static WRITE32_HANDLER(rf5c296_mem_w)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	if(offset >= 0x140 && offset <= 0x144) {
 		UINT8 key[5];
 		int pos = (offset - 0x140)*2;
@@ -426,10 +459,10 @@ static WRITE32_HANDLER(rf5c296_mem_w)
 		chd_get_metadata(get_disk_handle(space->machine, "card"), HARD_DISK_KEY_METADATA_TAG, 0, key, 5, 0, 0, 0);
 		k = pos < 5 ? key[pos] : 0;
 		if(v == k)
-			locked &= ~(1 << pos);
+			state->locked &= ~(1 << pos);
 		else
-			locked |= 1 << pos;
-		if (!locked) {
+			state->locked |= 1 << pos;
+		if (!state->locked) {
 			ide_set_gnet_readlock (space->machine->device("card"), 0);
 		}
 	}
@@ -438,82 +471,100 @@ static WRITE32_HANDLER(rf5c296_mem_w)
 
 // Flash handling
 
-static UINT32 gen_flash_r(running_machine *machine, int chip, offs_t offset, UINT32 mem_mask)
+static UINT32 gen_flash_r(intelfsh16_device *device, offs_t offset, UINT32 mem_mask)
 {
 	UINT32 res = 0;
 	offset *= 2;
 	if(ACCESSING_BITS_0_15)
-		res |= intelflash_read(chip, offset);
+		res |= device->read(offset);
 	if(ACCESSING_BITS_16_31)
-		res |= intelflash_read(chip, offset+1) << 16;
+		res |= device->read(offset+1) << 16;
 	return res;
 }
 
-static void gen_flash_w(running_machine *machine, int chip, offs_t offset, UINT32 data, UINT32 mem_mask)
+static void gen_flash_w(intelfsh16_device *device, offs_t offset, UINT32 data, UINT32 mem_mask)
 {
 	offset *= 2;
 	if(ACCESSING_BITS_0_15)
-		intelflash_write(chip, offset, data);
+		device->write(offset, data);
 	if(ACCESSING_BITS_16_31)
-	    intelflash_write(chip, offset+1, data >> 16);
+	    device->write(offset+1, data >> 16);
 }
 
 
 static READ32_HANDLER(flash_subbios_r)
 {
-	return gen_flash_r(space->machine, 0, offset, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return gen_flash_r(state->biosflash, offset, mem_mask);
 }
 
 static WRITE32_HANDLER(flash_subbios_w)
 {
-	gen_flash_w(space->machine, 0, offset, data, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	gen_flash_w(state->biosflash, offset, data, mem_mask);
 }
 
 static READ32_HANDLER(flash_mn102_r)
 {
-	return gen_flash_r(space->machine, 1, offset, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return gen_flash_r(state->pgmflash, offset, mem_mask);
 }
 
 static WRITE32_HANDLER(flash_mn102_w)
 {
-	gen_flash_w(space->machine, 1, offset, data, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	gen_flash_w(state->pgmflash, offset, data, mem_mask);
 }
 
 static READ32_HANDLER(flash_s1_r)
 {
-	return gen_flash_r(space->machine, 2, offset, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return gen_flash_r(state->sndflash[0], offset, mem_mask);
 }
 
 static WRITE32_HANDLER(flash_s1_w)
 {
-	gen_flash_w(space->machine, 2, offset, data, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	gen_flash_w(state->sndflash[0], offset, data, mem_mask);
 }
 
 static READ32_HANDLER(flash_s2_r)
 {
-	return gen_flash_r(space->machine, 3, offset, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return gen_flash_r(state->sndflash[1], offset, mem_mask);
 }
 
 static WRITE32_HANDLER(flash_s2_w)
 {
-	gen_flash_w(space->machine, 3, offset, data, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	gen_flash_w(state->sndflash[1], offset, data, mem_mask);
 }
 
 static READ32_HANDLER(flash_s3_r)
 {
-	return gen_flash_r(space->machine, 4, offset, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return gen_flash_r(state->sndflash[2], offset, mem_mask);
 }
 
 static WRITE32_HANDLER(flash_s3_w)
 {
-	gen_flash_w(space->machine, 4, offset, data, mem_mask);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	gen_flash_w(state->sndflash[2], offset, data, mem_mask);
 }
-
-
 
 static void install_handlers(running_machine *machine, int mode)
 {
-	const address_space *a = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *a = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	if(mode == 0) {
 		// Mode 0 has access to the subbios, the mn102 flash and the rf5c296 mem zone
 		memory_install_readwrite32_handler(a, 0x1f000000, 0x1f1fffff, 0, 0, flash_subbios_r, flash_subbios_w);
@@ -531,28 +582,30 @@ static void install_handlers(running_machine *machine, int mode)
 
 // Misc. controls
 
-static UINT32 control = 0, control2 = 0, control3;
-
 static READ32_HANDLER(control_r)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	//      fprintf(stderr, "gn_r %08x @ %08x (%s)\n", 0x1fb00000+4*offset, mem_mask, cpuexec_describe_context(space->machine));
-	return control;
+	return state->control;
 }
 
 static WRITE32_HANDLER(control_w)
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	// 20 = watchdog
 	// 04 = select bank
 
 	// According to the rom code, bits 1-0 may be part of the bank
 	// selection too, but they're always 0.
 
-	UINT32 p = control;
+	UINT32 p = state->control;
 	running_device *mb3773 = space->machine->device("mb3773");
 
-	COMBINE_DATA(&control);
+	COMBINE_DATA(&state->control);
 
-	mb3773_set_ck(mb3773, (control & 0x20) >> 5);
+	mb3773_set_ck(mb3773, (state->control & 0x20) >> 5);
 
 #if 0
 	if((p ^ control) & ~0x20)
@@ -567,23 +620,29 @@ static WRITE32_HANDLER(control_w)
 				cpuexec_describe_context(space->machine));
 #endif
 
-	if((p ^ control) & 0x04)
-		install_handlers(space->machine, control & 4 ? 1 : 0);
+	if((p ^ state->control) & 0x04)
+		install_handlers(space->machine, state->control & 4 ? 1 : 0);
 }
 
 static WRITE32_HANDLER(control2_w)
 {
-	COMBINE_DATA(&control2);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	COMBINE_DATA(&state->control2);
 }
 
 static READ32_HANDLER(control3_r)
 {
-	return control3;
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return state->control3;
 }
 
 static WRITE32_HANDLER(control3_w)
 {
-	COMBINE_DATA(&control3);
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	COMBINE_DATA(&state->control3);
 }
 
 static READ32_HANDLER(gn_1fb70000_r)
@@ -606,10 +665,11 @@ static WRITE32_HANDLER(gn_1fb70000_w)
 
 static READ32_HANDLER(hack1_r)
 {
-	static int v = 0;
-	v = v ^ 8;
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	state->v = state->v ^ 8;
 	// Probably something to do with sound
-	return v;
+	return state->v;
 }
 
 
@@ -619,54 +679,56 @@ static READ32_HANDLER(hack1_r)
 static const UINT8 tt10[ 8 ] = { 0x80, 0x20, 0x38, 0x08, 0xf1, 0x03, 0xfe, 0xfc };
 static const UINT8 tt16[ 8 ] = { 0xc0, 0x04, 0xf9, 0xe1, 0x60, 0x70, 0xf2, 0x02 };
 
-static UINT32 m_n_znsecsel;
-static UINT32 m_b_znsecport;
-static int m_n_dip_bit;
-static int m_b_lastclock;
-static emu_timer *dip_timer;
-
 static READ32_HANDLER( znsecsel_r )
 {
-	return m_n_znsecsel;
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return state->m_n_znsecsel;
 }
 
 static void sio_znsec0_handler( running_machine *machine, int n_data )
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
 	if( ( n_data & PSX_SIO_OUT_CLOCK ) == 0 )
         {
-			if( m_b_lastclock )
+			if( state->m_b_lastclock )
 				psx_sio_input( machine, 0, PSX_SIO_IN_DATA, ( znsec_step( 0, ( n_data & PSX_SIO_OUT_DATA ) != 0 ) != 0 ) * PSX_SIO_IN_DATA );
-			m_b_lastclock = 0;
+			state->m_b_lastclock = 0;
         }
 	else
         {
-			m_b_lastclock = 1;
+			state->m_b_lastclock = 1;
         }
 }
 
 static void sio_znsec1_handler( running_machine *machine, int n_data )
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
 	if( ( n_data & PSX_SIO_OUT_CLOCK ) == 0 )
         {
-			if( m_b_lastclock )
+			if( state->m_b_lastclock )
 				psx_sio_input( machine, 0, PSX_SIO_IN_DATA, ( znsec_step( 1, ( n_data & PSX_SIO_OUT_DATA ) != 0 ) != 0 ) * PSX_SIO_IN_DATA );
-			m_b_lastclock = 0;
+			state->m_b_lastclock = 0;
         }
 	else
         {
-			m_b_lastclock = 1;
+			state->m_b_lastclock = 1;
         }
 }
 
 static void sio_pad_handler( running_machine *machine, int n_data )
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
 	if( ( n_data & PSX_SIO_OUT_DTR ) != 0 )
         {
-			m_b_znsecport = 1;
+			state->m_b_znsecport = 1;
         }
 	else
         {
-			m_b_znsecport = 0;
+			state->m_b_znsecport = 0;
         }
 
 	psx_sio_input( machine, 0, PSX_SIO_IN_DATA | PSX_SIO_IN_DSR, PSX_SIO_IN_DATA | PSX_SIO_IN_DSR );
@@ -674,63 +736,69 @@ static void sio_pad_handler( running_machine *machine, int n_data )
 
 static void sio_dip_handler( running_machine *machine, int n_data )
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
 	if( ( n_data & PSX_SIO_OUT_CLOCK ) == 0 )
 	{
-		if( m_b_lastclock )
+		if( state->m_b_lastclock )
 		{
-			int bit = ( ( input_port_read(machine, "DSW") >> m_n_dip_bit ) & 1 );
+			int bit = ( ( input_port_read(machine, "DSW") >> state->m_n_dip_bit ) & 1 );
 			psx_sio_input( machine, 0, PSX_SIO_IN_DATA, bit * PSX_SIO_IN_DATA );
-			m_n_dip_bit++;
-			m_n_dip_bit &= 7;
+			state->m_n_dip_bit++;
+			state->m_n_dip_bit &= 7;
 		}
-		m_b_lastclock = 0;
+		state->m_b_lastclock = 0;
 	}
 	else
 	{
-		m_b_lastclock = 1;
+		state->m_b_lastclock = 1;
 	}
 }
 
 static WRITE32_HANDLER( znsecsel_w )
 {
-	COMBINE_DATA( &m_n_znsecsel );
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
 
-	if( ( m_n_znsecsel & 0x80 ) == 0 )
+	COMBINE_DATA( &state->m_n_znsecsel );
+
+	if( ( state->m_n_znsecsel & 0x80 ) == 0 )
         {
-			psx_sio_install_handler( 0, sio_pad_handler );
+			psx_sio_install_handler( space->machine, 0, sio_pad_handler );
 			psx_sio_input( space->machine, 0, PSX_SIO_IN_DSR, 0 );
         }
-	else if( ( m_n_znsecsel & 0x08 ) == 0 )
+	else if( ( state->m_n_znsecsel & 0x08 ) == 0 )
         {
 			znsec_start( 1 );
-			psx_sio_install_handler( 0, sio_znsec1_handler );
+			psx_sio_install_handler( space->machine, 0, sio_znsec1_handler );
 			psx_sio_input( space->machine, 0, PSX_SIO_IN_DSR, 0 );
         }
-	else if( ( m_n_znsecsel & 0x04 ) == 0 )
+	else if( ( state->m_n_znsecsel & 0x04 ) == 0 )
         {
 			znsec_start( 0 );
-			psx_sio_install_handler( 0, sio_znsec0_handler );
+			psx_sio_install_handler( space->machine, 0, sio_znsec0_handler );
 			psx_sio_input( space->machine, 0, PSX_SIO_IN_DSR, 0 );
         }
 	else
         {
-			m_n_dip_bit = 0;
-			m_b_lastclock = 1;
+			state->m_n_dip_bit = 0;
+			state->m_b_lastclock = 1;
 
-			psx_sio_install_handler( 0, sio_dip_handler );
+			psx_sio_install_handler( space->machine, 0, sio_dip_handler );
 			psx_sio_input( space->machine, 0, PSX_SIO_IN_DSR, 0 );
 
-			timer_adjust_oneshot( dip_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( 100 ), 1 );
+			timer_adjust_oneshot( state->dip_timer, downcast<cpu_device *>(space->cpu)->cycles_to_attotime( 100 ), 1 );
         }
 }
 
 static TIMER_CALLBACK( dip_timer_fired )
 {
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
 	psx_sio_input( machine, 0, PSX_SIO_IN_DSR, param * PSX_SIO_IN_DSR );
 
 	if( param )
 	{
-		timer_adjust_oneshot(dip_timer, cputag_clocks_to_attotime(machine, "maincpu", 50), 0);
+		timer_adjust_oneshot(state->dip_timer, machine->device<cpu_device>("maincpu")->cycles_to_attotime(50), 0);
 	}
 }
 
@@ -760,33 +828,35 @@ static READ32_HANDLER( boardconfig_r )
 }
 
 
-static UINT32 coin_info;
-
 static WRITE32_HANDLER( coin_w )
 {
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
 	/* 0x01=counter
        0x02=coin lock 1
        0x08=??
        0x20=coin lock 2
        0x80=??
     */
-	COMBINE_DATA (&coin_info);
+	COMBINE_DATA (&state->coin_info);
 }
 
 static READ32_HANDLER( coin_r )
 {
-	return coin_info;
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
+
+	return state->coin_info;
 }
 
 /* mahjong panel handler (for Usagi & Mahjong Oh) */
 static READ32_HANDLER( gnet_mahjong_panel_r )
 {
-	static UINT32 mux_data;
+	taitogn_state *state = space->machine->driver_data<taitogn_state>();
 
-	mux_data = coin_info;
-	mux_data &= 0xcc;
+	state->mux_data = state->coin_info;
+	state->mux_data &= 0xcc;
 
-	switch(mux_data)
+	switch(state->mux_data)
 	{
 		case 0x04: return input_port_read(space->machine, "KEY0");
 		case 0x08: return input_port_read(space->machine, "KEY1");
@@ -800,42 +870,25 @@ static READ32_HANDLER( gnet_mahjong_panel_r )
 
 // Init and reset
 
-static NVRAM_HANDLER( coh3002t )
-{
-	nvram_handler_intelflash(machine, 0, file, read_or_write);
-	nvram_handler_intelflash(machine, 1, file, read_or_write);
-	nvram_handler_intelflash(machine, 2, file, read_or_write);
-	nvram_handler_intelflash(machine, 3, file, read_or_write);
-	nvram_handler_intelflash(machine, 4, file, read_or_write);
-
-	if(!file) {
-		// Only the subbios needs to preexist for the board to work
-		memcpy(intelflash_getmemptr(0), memory_region(machine, "subbios"), 0x200000);
-	}
-}
-
 static DRIVER_INIT( coh3002t )
 {
-	// Sub-bios (u30)
-	intelflash_init(machine, 0, FLASH_INTEL_TE28F160, 0);
+	taitogn_state *state = machine->driver_data<taitogn_state>();
 
-	// mn102 program flash (u27)
-	intelflash_init(machine, 1, FLASH_INTEL_E28F400, 0);
-
-	// Samples (u29, u55, u56)
-	intelflash_init(machine, 2, FLASH_INTEL_TE28F160, 0);
-	intelflash_init(machine, 3, FLASH_INTEL_TE28F160, 0);
-	intelflash_init(machine, 4, FLASH_INTEL_TE28F160, 0);
+	state->biosflash = machine->device<intel_te28f160_device>("biosflash");
+	state->pgmflash = machine->device<intel_e28f400_device>("pgmflash");
+	state->sndflash[0] = machine->device<intel_te28f160_device>("sndflash0");
+	state->sndflash[1] = machine->device<intel_te28f160_device>("sndflash1");
+	state->sndflash[2] = machine->device<intel_te28f160_device>("sndflash2");
 
 	psx_driver_init(machine);
 	znsec_init(0, tt10);
 	znsec_init(1, tt16);
-	psx_sio_install_handler(0, sio_pad_handler);
-	dip_timer = timer_alloc(machine,  dip_timer_fired, NULL );
+	psx_sio_install_handler(machine, 0, sio_pad_handler);
+	state->dip_timer = timer_alloc( machine, dip_timer_fired, NULL );
 
-	memset(cis, 0xff, 512);
+	memset(state->cis, 0xff, 512);
 	if (get_disk_handle(machine, "card") != NULL)
-		chd_get_metadata(get_disk_handle(machine, "card"), PCMCIA_CIS_METADATA_TAG, 0, cis, 512, 0, 0, 0);
+		chd_get_metadata(get_disk_handle(machine, "card"), PCMCIA_CIS_METADATA_TAG, 0, state->cis, 512, 0, 0, 0);
 }
 
 static DRIVER_INIT( coh3002t_mp )
@@ -846,10 +899,12 @@ static DRIVER_INIT( coh3002t_mp )
 
 static MACHINE_RESET( coh3002t )
 {
-	m_b_lastclock = 1;
-	locked = 0x1ff;
+	taitogn_state *state = machine->driver_data<taitogn_state>();
+
+	state->m_b_lastclock = 1;
+	state->locked = 0x1ff;
 	install_handlers(machine, 0);
-	control = 0;
+	state->control = 0;
 	psx_machine_init(machine);
 	devtag_reset(machine, "card");
 	ide_set_gnet_readlock(machine->device("card"), 1);
@@ -859,7 +914,7 @@ static MACHINE_RESET( coh3002t )
 }
 
 static ADDRESS_MAP_START( zn_map, ADDRESS_SPACE_PROGRAM, 32 )
-	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_SHARE("share1") AM_BASE(&g_p_n_psxram) AM_SIZE(&g_n_psxramsize) /* ram */
+	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_SHARE("share1") /* ram */
 	AM_RANGE(0x00400000, 0x007fffff) AM_RAM AM_SHARE("share1") /* ram mirror */
 	AM_RANGE(0x1f000000, 0x1f1fffff) AM_READWRITE(flash_s1_r, flash_s1_w)
 	AM_RANGE(0x1f200000, 0x1f3fffff) AM_READWRITE(flash_s2_r, flash_s2_w)
@@ -910,13 +965,12 @@ static void psx_spu_irq(running_device *device, UINT32 data)
 
 static const psx_spu_interface psxspu_interface =
 {
-	&g_p_n_psxram,
 	psx_spu_irq,
 	psx_dma_install_read_handler,
 	psx_dma_install_write_handler
 };
 
-static MACHINE_DRIVER_START( coh3002t )
+static MACHINE_CONFIG_START( coh3002t, taitogn_state )
 	/* basic machine hardware */
 	MDRV_CPU_ADD( "maincpu", PSXCPU, XTAL_100MHz )
 	MDRV_CPU_PROGRAM_MAP( zn_map)
@@ -948,12 +1002,17 @@ static MACHINE_DRIVER_START( coh3002t )
 
 	MDRV_AT28C16_ADD( "at28c16", 0 )
 	MDRV_IDE_CONTROLLER_ADD( "card", 0 )
-	MDRV_NVRAM_HANDLER( coh3002t )
 
 	MDRV_MB3773_ADD("mb3773")
 
-	MDRV_IMPORT_FROM( taito_zoom_sound )
-MACHINE_DRIVER_END
+	MDRV_INTEL_TE28F160_ADD("biosflash")
+	MDRV_INTEL_E28F400_ADD("pgmflash")
+	MDRV_INTEL_TE28F160_ADD("sndflash0")
+	MDRV_INTEL_TE28F160_ADD("sndflash1")
+	MDRV_INTEL_TE28F160_ADD("sndflash2")
+
+	MDRV_FRAGMENT_ADD( taito_zoom_sound )
+MACHINE_CONFIG_END
 
 static INPUT_PORTS_START( coh3002t )
 	PORT_START("P1")
@@ -1070,12 +1129,12 @@ INPUT_PORTS_END
 //
 
 #define ROM_LOAD16_WORD_BIOS(bios,name,offset,length,hash) \
-		ROMX_LOAD(name, offset, length, hash, ROM_GROUPWORD | ROM_BIOS(bios+1)) /* Note '+1' */
+		ROMX_LOAD(name, offset, length, hash, ROM_GROUPWORD | ROM_REVERSE | ROM_BIOS(bios+1)) /* Note '+1' */
 
 #define TAITOGNET_BIOS \
 	ROM_REGION32_LE( 0x080000, "mainbios", 0 ) \
 	ROM_LOAD( "coh-3002t.353", 0x000000, 0x080000, CRC(03967fa7) SHA1(0e17fec2286e4e25deb23d40e41ce0986f373d49) ) \
-	ROM_REGION16_LE( 0x200000, "subbios", 0 ) \
+	ROM_REGION( 0x200000, "biosflash", 0 ) \
 	ROM_SYSTEM_BIOS( 0, "v1",   "G-NET Bios v1" ) \
     	ROM_LOAD16_WORD_BIOS(0, "flash.u30", 0x000000, 0x200000, CRC(c48c8236) SHA1(c6dad60266ce2ff635696bc0d91903c543273559) ) \
 	ROM_SYSTEM_BIOS( 1, "v2",   "G-NET Bios v2" ) \

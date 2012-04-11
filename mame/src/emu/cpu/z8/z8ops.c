@@ -140,19 +140,19 @@ INSTRUCTION( ld_IR2_R1 )		{ mode_IR2_R1(load) }
 INSTRUCTION( ld_R1_IM )			{ mode_R1_IM(load) }
 INSTRUCTION( ld_IR1_IM )		{ mode_IR1_IM(load) }
 
-static void load_from_memory(z8_state *cpustate, const address_space *space)
+static void load_from_memory(z8_state *cpustate, address_space *space)
 {
 	UINT8 operands = fetch(cpustate);
 	UINT8 dst = get_working_register(cpustate, operands >> 4);
 	UINT8 src = get_working_register(cpustate, operands & 0x0f);
 
 	UINT16 address = register_pair_read(cpustate, src);
-	UINT8 data = memory_decrypted_read_byte(cpustate->program, address);
+	UINT8 data = cpustate->direct->read_decrypted_byte(address);
 
 	register_write(cpustate, dst, data);
 }
 
-static void load_to_memory(z8_state *cpustate, const address_space *space)
+static void load_to_memory(z8_state *cpustate, address_space *space)
 {
 	UINT8 operands = fetch(cpustate);
 	UINT8 src = get_working_register(cpustate, operands >> 4);
@@ -161,10 +161,10 @@ static void load_to_memory(z8_state *cpustate, const address_space *space)
 	UINT16 address = register_pair_read(cpustate, dst);
 	UINT8 data = register_read(cpustate, src);
 
-	memory_write_byte(cpustate->program, address, data);
+	cpustate->program->write_byte(address, data);
 }
 
-static void load_from_memory_autoinc(z8_state *cpustate, const address_space *space)
+static void load_from_memory_autoinc(z8_state *cpustate, address_space *space)
 {
 	UINT8 operands = fetch(cpustate);
 	UINT8 dst = get_working_register(cpustate, operands >> 4);
@@ -172,7 +172,7 @@ static void load_from_memory_autoinc(z8_state *cpustate, const address_space *sp
 	UINT8 src = get_working_register(cpustate, operands & 0x0f);
 
 	UINT16 address = register_pair_read(cpustate, src);
-	UINT8 data = memory_decrypted_read_byte(cpustate->program, address);
+	UINT8 data = cpustate->direct->read_decrypted_byte(address);
 
 	register_write(cpustate, real_dst, data);
 
@@ -180,7 +180,7 @@ static void load_from_memory_autoinc(z8_state *cpustate, const address_space *sp
 	register_pair_write(cpustate, src, address + 1);
 }
 
-static void load_to_memory_autoinc(z8_state *cpustate, const address_space *space)
+static void load_to_memory_autoinc(z8_state *cpustate, address_space *space)
 {
 	UINT8 operands = fetch(cpustate);
 	UINT8 src = get_working_register(cpustate, operands >> 4);
@@ -190,7 +190,7 @@ static void load_to_memory_autoinc(z8_state *cpustate, const address_space *spac
 	UINT16 address = register_pair_read(cpustate, dst);
 	UINT8 data = register_read(cpustate, real_src);
 
-	memory_write_byte(cpustate->program, address, data);
+	cpustate->program->write_byte(address, data);
 
 	register_pair_write(cpustate, dst, address + 1);
 	register_write(cpustate, src, real_src + 1);

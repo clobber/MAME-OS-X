@@ -26,6 +26,7 @@ General notes:
     the microcontroller is able to write to anywhere within main memory.
 
     Gold Medalist (bootleg) has a 68705 in place of the Alpha controller.
+     (Kyros bootleg also? we have decapped MCU dumps of different types for it)
 
     V boards have more memory and double the amount of colours as II boards.
 
@@ -97,7 +98,7 @@ Stephh's additional notes (based on the games M68000 code and some tests) :
       * bit 6 (when "Difficulty" Dip Switch is set to DEF_STR( Hard ) or DEF_STR( Hardest ))
         determines if some coordonates are displayed.
 
- 8)  'gangwarsb'
+ 8)  'gangwars'
 
   - When "Coin Slots" Dip Switch is set to "1", COIN2 only adds ONE credit
     and this has nothing to do with the microcontroller stuff.
@@ -127,7 +128,7 @@ Stephh's log (2002.06.19) :
   - Add READ16_HANDLER( *_cycle_r ) for the following games :
       * timesold1  (based on the one from 'timesold')
       * btlfield  (based on the one from 'timesold')
-      * gangwarsb  (I splitted the one from 'gangwars')
+      * gangwars  (I splitted the one from 'gangwarsu')
       * skyadvnt, skyadvntu and skyadvntj
   - Change manufacturer for the following games :
       * timesold
@@ -180,7 +181,7 @@ note: CLUT and color remap PROMs missing
 DIP locations verified from manuals for:
 - tnextspc
 - btlfield
-- gangwarsb
+- gangwars
 - skyadvnt
 - goldmedl
 - kyros
@@ -232,7 +233,7 @@ static READ16_HANDLER( kyros_dip_r )
 
 static READ16_HANDLER( control_1_r )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (state->invert_controls)
 		return ~(input_port_read(space->machine, "IN0") + (input_port_read(space->machine, "IN1") << 8));
@@ -242,7 +243,7 @@ static READ16_HANDLER( control_1_r )
 
 static READ16_HANDLER( control_2_r )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (state->invert_controls)
 		return ~(input_port_read(space->machine, "IN3") + ((~(1 << input_port_read(space->machine, "IN5"))) << 8));
@@ -258,7 +259,7 @@ static READ16_HANDLER( control_2_V_r )
 
 static READ16_HANDLER( control_3_r )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (state->invert_controls)
 		return ~(((~(1 << input_port_read(space->machine, "IN6"))) << 8) & 0xff00);
@@ -269,7 +270,7 @@ static READ16_HANDLER( control_3_r )
 /* High 4 bits of CN1 & CN2 */
 static READ16_HANDLER( control_4_r )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (state->invert_controls)
 		return ~((((~(1 << input_port_read(space->machine, "IN6"))) << 4) & 0xf000)
@@ -287,6 +288,7 @@ static READ16_HANDLER( jongbou_inputs_r )
 	inp2 = ((inp2 & 0x01) << 3) + ((inp2 & 0x02) << 1) + ((inp2 & 0x04) >> 1) + ((inp2 & 0x08) >> 3);
 	return input_port_read(space->machine, "IN0") | inp1 | inp2 << 4;
 }
+
 
 /******************************************************************************/
 
@@ -313,7 +315,7 @@ static WRITE16_HANDLER( alpha68k_V_sound_w )
 //AT
 static WRITE16_HANDLER( paddlema_soundlatch_w )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -324,7 +326,7 @@ static WRITE16_HANDLER( paddlema_soundlatch_w )
 
 static WRITE16_HANDLER( tnextspc_soundlatch_w )
 {
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -343,7 +345,7 @@ static READ16_HANDLER( kyros_alpha_trigger_r )
     */
 	static const UINT8 coinage1[8][2]={{1,1}, {1,5}, {1,3}, {2,3}, {1,2}, {1,6}, {1,4}, {3,2}};
 	static const UINT8 coinage2[8][2]={{1,1}, {5,1}, {3,1}, {7,1}, {2,1}, {6,1}, {4,1}, {8,1}};
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 	int source = state->shared_ram[offset];
 
 	switch (offset)
@@ -425,7 +427,7 @@ static READ16_HANDLER( alpha_II_trigger_r )
     */
 	static const UINT8 coinage1[8][2] = {{1,1}, {1,2}, {1,3}, {1,4}, {1,5}, {1,6}, {2,3}, {3,2}};
 	static const UINT8 coinage2[8][2] = {{1,1}, {2,1}, {3,1}, {4,1}, {5,1}, {6,1}, {7,1}, {8,1}};
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 	int source = state->shared_ram[offset];
 
 	switch (offset)
@@ -520,7 +522,7 @@ static READ16_HANDLER( alpha_V_trigger_r )
     */
 	static const UINT8 coinage1[8][2] = {{1,1}, {1,5}, {1,3}, {2,3}, {1,2}, {1,6}, {1,4}, {3,2}};
 	static const UINT8 coinage2[8][2] = {{1,1}, {5,1}, {3,1}, {7,1}, {2,1}, {6,1}, {4,1}, {8,1}};
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
+	alpha68k_state *state = space->machine->driver_data<alpha68k_state>();
 	int source = state->shared_ram[offset];
 
 	switch (offset)
@@ -1371,7 +1373,9 @@ static INPUT_PORTS_START( skyadvntu )
 	PORT_DIPSETTING(    0x00, DEF_STR( Free_Play ) )
 INPUT_PORTS_END
 
-static INPUT_PORTS_START( gangwars )
+
+
+static INPUT_PORTS_START( gangwarsu )
 	PORT_START("IN0")
 	ALPHA68K_PLAYER_INPUT_LSB( 1, IPT_BUTTON3, IPT_START1, IP_ACTIVE_LOW )
 
@@ -1423,9 +1427,9 @@ static INPUT_PORTS_START( gangwars )
 	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNUSED )
 INPUT_PORTS_END
 
-/* Same as 'gangwars' but bits 0-3 of 2nd set of Dip Switches are different */
-static INPUT_PORTS_START( gangwarsb )
-	PORT_INCLUDE( gangwars )	/* See notes about "IN2" (microcontroller) */
+/* Same as 'gangwarsu' but bits 0-3 of 2nd set of Dip Switches are different */
+static INPUT_PORTS_START( gangwars )
+	PORT_INCLUDE( gangwarsu )	/* See notes about "IN2" (microcontroller) */
 
 	PORT_MODIFY("IN3")
 	PORT_DIPUNUSED_DIPLOC( 0x04, 0x04, "SW2:1" )		/* Listed as "Unused" */
@@ -1539,8 +1543,8 @@ static INPUT_PORTS_START( tnextspc )
 	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 	PORT_DIPUNUSED_DIPLOC( 0x02, 0x02, "SW1:2" )			 /* Listed as "Unused" */
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Bonus_Life ) )		PORT_DIPLOCATION("SW1:3")
-	PORT_DIPSETTING(    0x04, "2nd Extend" )
+	PORT_DIPNAME( 0x04, 0x04, "Additional Bonus Life" )		PORT_DIPLOCATION("SW1:3")
+	PORT_DIPSETTING(    0x04, "2nd Extend ONLY" )
 	PORT_DIPSETTING(    0x00, "Every Extend" )
 	PORT_DIPUNUSED_DIPLOC( 0x08, 0x08, "SW1:4" )			 /* Listed as "Unused" */
 	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Coinage ) )			PORT_DIPLOCATION("SW1:5,6")
@@ -1621,9 +1625,9 @@ static const gfx_layout spritelayout =
 static const gfx_layout spritelayout_V =
 {
 	16,16,  /* 16*16 sprites */
-	0x5000,
+	RGN_FRAC(1,4),
 	4,      /* 4 bits per pixel */
-	{ 0, 0xa0000*8, 0x140000*8, 0x1e0000*8 },
+	{ RGN_FRAC(0,4), RGN_FRAC(1,4), RGN_FRAC(2,4), RGN_FRAC(3,4) },
 	{ 16*8+7, 16*8+6, 16*8+5, 16*8+4, 16*8+3, 16*8+2, 16*8+1, 16*8+0,
 	  7, 6, 5, 4, 3, 2, 1, 0 },
 	{ 0*8, 1*8, 2*8, 3*8, 4*8, 5*8, 6*8, 7*8,
@@ -1829,7 +1833,7 @@ static const ym2203_interface ym2203_config =
 
 static void YM3812_irq( running_device *device, int param )
 {
-	alpha68k_state *state = (alpha68k_state *)device->machine->driver_data;
+	alpha68k_state *state = device->machine->driver_data<alpha68k_state>();
 	cpu_set_input_line(state->audiocpu, 0, (param) ? HOLD_LINE : CLEAR_LINE);
 }
 
@@ -1852,7 +1856,7 @@ static INTERRUPT_GEN( alpha68k_interrupt )
 
 static MACHINE_START( common )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -1868,7 +1872,7 @@ static MACHINE_START( common )
 
 static MACHINE_RESET( common )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 
 	state->trigstate = 0;
 	state->deposits1 = 0;
@@ -1882,7 +1886,7 @@ static MACHINE_RESET( common )
 
 static MACHINE_START( alpha68k_V )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	UINT8 *ROM = memory_region(machine, "audiocpu");
 
 	memory_configure_bank(machine, "bank7", 0, 32, &ROM[0x10000], 0x4000);
@@ -1895,7 +1899,7 @@ static MACHINE_START( alpha68k_V )
 
 static MACHINE_RESET( alpha68k_V )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 
 	MACHINE_RESET_CALL(common);
 
@@ -1905,7 +1909,7 @@ static MACHINE_RESET( alpha68k_V )
 
 static MACHINE_RESET( alpha68k_II )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 
 	MACHINE_RESET_CALL(common);
 
@@ -1918,7 +1922,7 @@ static MACHINE_RESET( alpha68k_II )
 
 static MACHINE_START( alpha68k_II )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	UINT8 *ROM = memory_region(machine, "audiocpu");
 
 	memory_configure_bank(machine, "bank7", 0, 28, &ROM[0x10000], 0x4000);
@@ -1933,10 +1937,7 @@ static MACHINE_START( alpha68k_II )
 
 }
 
-static MACHINE_DRIVER_START( sstingry )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( sstingry, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 6000000) /* 24MHz/4? */
@@ -1984,12 +1985,9 @@ static MACHINE_DRIVER_START( sstingry )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 //ZT
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( kyros )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( kyros, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 6000000) /* 24MHz/4? */
@@ -2036,12 +2034,9 @@ static MACHINE_DRIVER_START( kyros )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
 //ZT
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( jongbou )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( jongbou, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
@@ -2075,12 +2070,9 @@ static MACHINE_DRIVER_START( jongbou )
 	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.65)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( alpha68k_I )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( alpha68k_I, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 6000000) /* 24MHz/4? */
@@ -2113,12 +2105,9 @@ static MACHINE_DRIVER_START( alpha68k_I )
 	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( alpha68k_II )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( alpha68k_II, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* Correct */
@@ -2158,19 +2147,15 @@ static MACHINE_DRIVER_START( alpha68k_II )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( btlfieldb )
-	MDRV_IMPORT_FROM(alpha68k_II)
+static MACHINE_CONFIG_DERIVED( btlfieldb, alpha68k_II )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_VBLANK_INT_HACK(alpha68k_interrupt,2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 //AT
-static MACHINE_DRIVER_START( alpha68k_II_gm )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( alpha68k_II_gm, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000)
@@ -2210,13 +2195,10 @@ static MACHINE_DRIVER_START( alpha68k_II_gm )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 //ZT
 
-static MACHINE_DRIVER_START( alpha68k_V )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( alpha68k_V, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* ? */
@@ -2256,12 +2238,9 @@ static MACHINE_DRIVER_START( alpha68k_V )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( alpha68k_V_sb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( alpha68k_V_sb, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000) /* ? */
@@ -2301,12 +2280,9 @@ static MACHINE_DRIVER_START( alpha68k_V_sb )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tnextspc )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(alpha68k_state)
+static MACHINE_CONFIG_START( tnextspc, alpha68k_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 9000000) /* Confirmed 18 MHz/2 */
@@ -2339,7 +2315,7 @@ static MACHINE_DRIVER_START( tnextspc )
 	MDRV_SOUND_ADD("ymsnd", YM3812, 4000000)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /******************************************************************************/
@@ -2775,11 +2751,11 @@ ROM_START( goldmedl )
 #endif
 
 	ROM_REGION( 0x80000, "audiocpu", 0 ) // banking is slightly different from other Alpha68kII games
-	ROM_LOAD( "38.bin",          0x00000,  0x08000, CRC(4bf251b8) SHA1(d69a6607e92dbe8081c7c66b6853f02d578ef73f) ) // we use the bootleg set instead
+	ROM_LOAD( "38.bin",          0x00000,  0x08000, BAD_DUMP CRC(4bf251b8) SHA1(d69a6607e92dbe8081c7c66b6853f02d578ef73f) ) // we use the bootleg set instead
 	ROM_CONTINUE(                0x18000,  0x08000 )
-	ROM_LOAD( "39.bin",          0x20000,  0x10000, CRC(1d92be86) SHA1(9b6e7141653ee7b7b1915a545d381419aec4e483) )
-	ROM_LOAD( "40.bin",          0x30000,  0x10000, CRC(8dafc4e8) SHA1(7d4898557ad638ab8461060bc7ae406d7d24c5a4) )
-	ROM_LOAD( "1.bin",           0x40000,  0x10000, CRC(1e78062c) SHA1(821c037edf32eb8b03e5c487d3bab0622337e80b) )
+	ROM_LOAD( "39.bin",          0x20000,  0x10000, BAD_DUMP CRC(1d92be86) SHA1(9b6e7141653ee7b7b1915a545d381419aec4e483) )
+	ROM_LOAD( "40.bin",          0x30000,  0x10000, BAD_DUMP CRC(8dafc4e8) SHA1(7d4898557ad638ab8461060bc7ae406d7d24c5a4) )
+	ROM_LOAD( "1.bin",           0x40000,  0x10000, BAD_DUMP CRC(1e78062c) SHA1(821c037edf32eb8b03e5c487d3bab0622337e80b) )
 //ZT
 	ROM_REGION( 0x010000, "gfx1", 0 )  /* chars */
 	ROM_LOAD( "gm.5",           0x000000, 0x08000, CRC(667f33f1) SHA1(6d05603b49927f09c9bb34e787b003eceaaf7062) )
@@ -2801,11 +2777,11 @@ ROM_START( goldmedla )
 	ROM_LOAD16_BYTE( "gm2-7.bin", 0x20001, 0x10000, CRC(8d579505) SHA1(81f225edbba1cac65275e2929336d076afbbd2bf) )
 
 	ROM_REGION( 0x80000, "audiocpu", 0 ) // banking is slightly different from other Alpha68kII games
-	ROM_LOAD( "38.bin",          0x00000,  0x08000, CRC(4bf251b8) SHA1(d69a6607e92dbe8081c7c66b6853f02d578ef73f) ) // we use the bootleg set instead
+	ROM_LOAD( "38.bin",          0x00000,  0x08000, BAD_DUMP CRC(4bf251b8) SHA1(d69a6607e92dbe8081c7c66b6853f02d578ef73f) ) // we use the bootleg set instead
 	ROM_CONTINUE(                0x18000,  0x08000 )
-	ROM_LOAD( "39.bin",          0x20000,  0x10000, CRC(1d92be86) SHA1(9b6e7141653ee7b7b1915a545d381419aec4e483) )
-	ROM_LOAD( "40.bin",          0x30000,  0x10000, CRC(8dafc4e8) SHA1(7d4898557ad638ab8461060bc7ae406d7d24c5a4) )
-	ROM_LOAD( "1.bin",           0x40000,  0x10000, CRC(1e78062c) SHA1(821c037edf32eb8b03e5c487d3bab0622337e80b) )
+	ROM_LOAD( "39.bin",          0x20000,  0x10000, BAD_DUMP CRC(1d92be86) SHA1(9b6e7141653ee7b7b1915a545d381419aec4e483) )
+	ROM_LOAD( "40.bin",          0x30000,  0x10000, BAD_DUMP CRC(8dafc4e8) SHA1(7d4898557ad638ab8461060bc7ae406d7d24c5a4) )
+	ROM_LOAD( "1.bin",           0x40000,  0x10000, BAD_DUMP CRC(1e78062c) SHA1(821c037edf32eb8b03e5c487d3bab0622337e80b) )
 
 	ROM_REGION( 0x010000, "gfx1", 0 )  /* chars */
 	ROM_LOAD( "gm.5",           0x000000, 0x08000, CRC(667f33f1) SHA1(6d05603b49927f09c9bb34e787b003eceaaf7062) )
@@ -2919,10 +2895,90 @@ ROM_START( skyadvntj )
 	ROM_LOAD( "sachr0",         0x1e0000, 0x80000, CRC(e281b204) SHA1(50a041c701970013b84826d67c8002ccd291bfdd) )
 ROM_END
 
+
 ROM_START( gangwars )
+	ROM_REGION( 0x40000, "maincpu", 0 )
+	ROM_LOAD16_BYTE( "gw-ver1-e1.19c", 0x00000, 0x20000, CRC(7752478e) SHA1(7266dd0d2c57433191ae4d1d4e17b32c8c3c8c73) )
+	ROM_LOAD16_BYTE( "gw-ver1-e2.19d", 0x00001, 0x20000, CRC(c2f3b85e) SHA1(79c215d8b43ec7728e3745b359e64f6bb8240881) )
+	ROM_REGION16_BE( 0x40000, "user1", 0 ) /* Extra code bank */
+	ROM_LOAD16_BYTE( "gw-ver1-e3.18c", 0x00000, 0x20000, CRC(2a5fe86e) SHA1(0e668f51430983a17e1965143a0bf3aa4d3156ee) )
+	ROM_LOAD16_BYTE( "gw-ver1-e4.18d", 0x00001, 0x20000, CRC(c8b60c53) SHA1(352c3bcc18cf63bcb757d774c2c2247ce0c4e736) )
+
+	ROM_REGION( 0x90000, "audiocpu", 0 )   /* Sound CPU */
+	ROM_LOAD( "gw-12.10f",      0x00000, 0x08000, CRC(e6d6c9cf) SHA1(c35a7a385592e55bdfe232d042f2228f4f7e9ffa) )
+	ROM_CONTINUE(                0x18000, 0x08000 )
+	ROM_LOAD( "gw-9.15f",      0x30000, 0x10000, CRC(84e5c946) SHA1(0b071d15b664a9c529713b1b896bdb5ebfa16c25) )
+	ROM_LOAD( "gw-10.13f",      0x50000, 0x10000, CRC(eb305d42) SHA1(93910cf60c1b8a87969888d8693c7d6782f1e799) )
+	ROM_LOAD( "gw-11.11f",      0x70000, 0x10000, CRC(7b9f2608) SHA1(8d61dfa32369450e396cc8a5d67c58eedb2167e6) )
+
+	ROM_REGION( 0x020000, "gfx1", 0 )  /* chars */
+	ROM_LOAD( "gw-13.4l",     0x000000, 0x10000, CRC(b75bf1d0) SHA1(c22c0049274c45701be0a7be2afc0517620a3a10) )
+
+	ROM_REGION( 0x400000, "gfx2", 0 )  /* sprites */
+	ROM_LOAD( "guernica-c3.17h",     0x000000, 0x80000, CRC(281a4138) SHA1(47fc0d91873996e05db87323c3b08a85863f90d9) )
+	ROM_LOAD( "gw-5.21f",            0x080000, 0x20000, CRC(9ef36031) SHA1(2faeb6a769991ab11403c6c37507b706a61bad69) )
+	ROM_LOAD( "guernica-c2.18h",     0x100000, 0x80000, CRC(2fcbea97) SHA1(eb60bf374ef771e379030d2b660a813be76bed5e) )
+	ROM_LOAD( "gw-6.20f",            0x180000, 0x20000, CRC(ddbbcda7) SHA1(1c368ad2a4ed31748c94545fc7c808aa53d76f64) )
+	ROM_LOAD( "guernica-c1.20h",     0x200000, 0x80000, CRC(5d384c3b) SHA1(9bc581501d52cc3280667a9ea34f2ba9c4b6ebb1) )
+	ROM_LOAD( "gw-7.18f",            0x280000, 0x20000, CRC(4656d377) SHA1(67d6f714cca3891be0173c543ece5e8ab699f645) )
+	ROM_LOAD( "guernica-c0.21h",     0x300000, 0x80000, CRC(e60c9882) SHA1(8cf1d9cf0db72977b303fd6b469611600631ab9a) )
+	ROM_LOAD( "gw-8.17f",            0x380000, 0x20000, CRC(798ed82a) SHA1(1932131e05aae0a77ba8d8ef947c1a3b0b5e3d43) )
+
+	/* there is a bootleg which is otherwise identical but has the following graphic ROM arrangement */
+#if 0
+	ROM_LOAD( "gwb_ic.308",     0x000000, 0x10000, CRC(321a2fdd) SHA1(b2f37f14a13bc2c2f78b2b0e27fde18a23146e22) )
+	ROM_LOAD( "gwb_ic.309",     0x010000, 0x10000, CRC(4d908f65) SHA1(6095a34ef4a6905d57c47af4a507dff3a04e5c07) )
+	ROM_LOAD( "gwb_ic.310",     0x020000, 0x10000, CRC(fc888541) SHA1(e732a03209a88fc7a23b4e4ff69a437d6fbfc2d1) )
+	ROM_LOAD( "gwb_ic.311",     0x030000, 0x10000, CRC(181b128b) SHA1(2646c9f9cca6277ddd764c07478798c8af3eb297) )
+	ROM_LOAD( "gwb_ic.312",     0x040000, 0x10000, CRC(930665f3) SHA1(03af85c45acb9600b27dcdd6ec96d147046030e5) )
+	ROM_LOAD( "gwb_ic.313",     0x050000, 0x10000, CRC(c18f4ca8) SHA1(f5cb666d5aa53f201b6664d1c18b89a211230e78) )
+	ROM_LOAD( "gwb_ic.314",     0x060000, 0x10000, CRC(dfc44b60) SHA1(311422d4ea77118c0058e9f1a824f74cfa79cb87) )
+	ROM_LOAD( "gwb_ic.307",     0x070000, 0x10000, CRC(28082a7f) SHA1(e30bade13e03bca49c1f7001c9440ce251ece15d) )
+	ROM_LOAD( "gwb_ic.280",     0x080000, 0x10000, CRC(222b3dcd) SHA1(f9afe24c01daefe61939672efa2cb68bcc7235f0) )
+	ROM_LOAD( "gwb_ic.321",     0x090000, 0x10000, CRC(6b421c7b) SHA1(d96f91dc7e5f46990b05701483edf43a828a8879) )
+
+	ROM_LOAD( "gwb_ic.300",     0x100000, 0x10000, CRC(f3fa0877) SHA1(7950ef86ee66d19693f0b7071a3a34d9200f5a19) )
+	ROM_LOAD( "gwb_ic.301",     0x110000, 0x10000, CRC(f8c866de) SHA1(c6baa41bab35d4d9e80c5c52db74e9eb6b9605f5) )
+	ROM_LOAD( "gwb_ic.302",     0x120000, 0x10000, CRC(5b0d587d) SHA1(852bec7d37d8cee33e5bc30080bf8a6a8d2472e5) )
+	ROM_LOAD( "gwb_ic.303",     0x130000, 0x10000, CRC(d8c0e102) SHA1(f660876ab3457230b1c37835f5ad1ccd1e8e821a) )
+	ROM_LOAD( "gwb_ic.304",     0x140000, 0x10000, CRC(b02bc9d8) SHA1(e0466b93c08363cceaba27c8d85e2609d12a10e7) )
+	ROM_LOAD( "gwb_ic.305",     0x150000, 0x10000, CRC(5e04a9aa) SHA1(663330b467eb6406719d4d6cf7b05835b1600a37) )
+	ROM_LOAD( "gwb_ic.306",     0x160000, 0x10000, CRC(e2172955) SHA1(af13776e6537e736815a1180a1f6bad385724b0c) )
+	ROM_LOAD( "gwb_ic.299",     0x170000, 0x10000, CRC(e39f5599) SHA1(3c08a8163b528ebbcb627c511ccc2edacf0653c2) )
+	ROM_LOAD( "gwb_ic.320",     0x180000, 0x10000, CRC(9a7b51d8) SHA1(0ab01972d838c938bfd07d7b4661a0ecd009b2cb) )
+	ROM_LOAD( "gwb_ic.319",     0x190000, 0x10000, CRC(c5b862b7) SHA1(a48be3e32ae5a656d8d239796e6e7bddd4a0805b) )
+
+	ROM_LOAD( "gwb_ic.292",     0x200000, 0x10000, CRC(c125f7be) SHA1(5d68abd91fa4fa18275c0597c51ce6d3e743d84d) )
+	ROM_LOAD( "gwb_ic.293",     0x210000, 0x10000, CRC(c04fce8e) SHA1(499edd3b16770d20368f49e5c66c299740831ff0) )
+	ROM_LOAD( "gwb_ic.294",     0x220000, 0x10000, CRC(4eda3df5) SHA1(574fef723ebd8fa116b4a379036ee5ec3eb10c90) )
+	ROM_LOAD( "gwb_ic.295",     0x230000, 0x10000, CRC(6e60c475) SHA1(928494400bbdc3571cb5b1ccb51d39537c5fd904) )
+	ROM_LOAD( "gwb_ic.296",     0x240000, 0x10000, CRC(99b2a557) SHA1(7a4053909cb5f4b2a32f3caac4e2ccdb64c2ce84) )
+	ROM_LOAD( "gwb_ic.297",     0x250000, 0x10000, CRC(10373f63) SHA1(98ee65c68823530ad2eefd6e570db2f38b59c48e) )
+	ROM_LOAD( "gwb_ic.298",     0x260000, 0x10000, CRC(df37ec4d) SHA1(d2670dde87970a6f33ca3cd81bdc9991d663bac6) )
+	ROM_LOAD( "gwb_ic.291",     0x270000, 0x10000, CRC(beb07a2e) SHA1(f2751bef1850db7173f119fc0cfeefdf47ed7a86) )
+	ROM_LOAD( "gwb_ic.318",     0x280000, 0x10000, CRC(9aeaddf9) SHA1(d609314015376672be8147b9eabbfe4c5611ab73) )
+	ROM_LOAD( "gwb_ic.317",     0x290000, 0x10000, CRC(1622fadd) SHA1(240eaf117145773e388220513c2906ad2ac5d68b) )
+
+	ROM_LOAD( "gwb_ic.284",     0x300000, 0x10000, CRC(4aa95d66) SHA1(e5bb51fd32a7e9dc23aa13de35b8757dc11f7908) )
+	ROM_LOAD( "gwb_ic.285",     0x310000, 0x10000, CRC(3a1f3ce0) SHA1(edd8820111a3ef9558286280dc819c6d9f21212f) )
+	ROM_LOAD( "gwb_ic.286",     0x320000, 0x10000, CRC(886e298b) SHA1(8e8b35a0b24c9c3a1d00079b60bdbaa6c8ce597b) )
+	ROM_LOAD( "gwb_ic.287",     0x330000, 0x10000, CRC(b9542e6a) SHA1(e5762db1a44a966d2c2b7e8a92abab577e24172f) )
+	ROM_LOAD( "gwb_ic.288",     0x340000, 0x10000, CRC(8e620056) SHA1(59ea29d681c4b001b656b4b8014b14ac78a69625) )
+	ROM_LOAD( "gwb_ic.289",     0x350000, 0x10000, CRC(c754d69f) SHA1(e64b8e1f719f5a95b7bcab2d25a40c8b819f7d4f) )
+	ROM_LOAD( "gwb_ic.290",     0x360000, 0x10000, CRC(306d1963) SHA1(2f19ba97b9bd1744b656095ae0244df2db03b09b) )
+	ROM_LOAD( "gwb_ic.283",     0x370000, 0x10000, CRC(b46e5761) SHA1(3c4c13c5896186fe36ace8704afeef84b0a0cb78) )
+	ROM_LOAD( "gwb_ic.316",     0x380000, 0x10000, CRC(655b1518) SHA1(d97fd911901f92786bc22dac8e085cf4fa0cb1e9) )
+	ROM_LOAD( "gwb_ic.315",     0x390000, 0x10000, CRC(e7c9b103) SHA1(6f70ca9b6a7439f9250145477f682f7487e11710) )
+#endif
+ROM_END
+
+ROM_START( gangwarsu )
 	ROM_REGION( 0x40000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "u1",        0x00000, 0x20000, CRC(11433507) SHA1(df32c14d4105d3ad899dfa8e9dbc2a1fe51dfa6a) )
 	ROM_LOAD16_BYTE( "u2",        0x00001, 0x20000, CRC(44cc375f) SHA1(38fc402014a816d9b1f7680407175adecfa39efe) )
+	ROM_REGION16_BE( 0x40000, "user1", 0 ) /* Extra code bank */
+	ROM_LOAD16_BYTE( "u3",        0x00000,  0x20000, CRC(de6fd3c0) SHA1(d957e8de3cb0eda1837376f687b8c272e97e1d11) )
+	ROM_LOAD16_BYTE( "u4",        0x00001,  0x20000, CRC(43f7f5d3) SHA1(13ea03cfae97d0067dcfdc6febb53dbe268a91eb) )
 
 	ROM_REGION( 0x90000, "audiocpu", 0 )   /* Sound CPU */
 	ROM_LOAD( "u12",            0x00000, 0x08000, CRC(2620caa1) SHA1(bd464abce0bedab68cb913321e76d83eb36ca374) )
@@ -2931,133 +2987,18 @@ ROM_START( gangwars )
 	ROM_LOAD( "u10",            0x50000, 0x10000, CRC(636978ae) SHA1(5d8093bc43192c89e230af318609222a69866b6e) )
 	ROM_LOAD( "u11",            0x30000, 0x10000, CRC(2218ceb9) SHA1(69a843308cb0628ad856a09a33cd148f36ce0d24) )
 
-/*
-
-These roms are from the bootleg version, the original graphics
-should be the same.  The original uses 4 512k mask roms and 4 128k
-eeproms to store the same data.  The 512k roms are not dumped but
-the 128k ones are and match these ones.
-
-*/
-
 	ROM_REGION( 0x020000, "gfx1", 0 )  /* chars */
 	ROM_LOAD( "gwb_ic.m19",     0x000000, 0x10000, CRC(b75bf1d0) SHA1(c22c0049274c45701be0a7be2afc0517620a3a10) )
 
-	ROM_REGION( 0x280000, "gfx2", 0 )  /* sprites */
-	ROM_LOAD( "gwb_ic.308",     0x000000, 0x10000, CRC(321a2fdd) SHA1(b2f37f14a13bc2c2f78b2b0e27fde18a23146e22) )
-	ROM_LOAD( "gwb_ic.309",     0x010000, 0x10000, CRC(4d908f65) SHA1(6095a34ef4a6905d57c47af4a507dff3a04e5c07) )
-	ROM_LOAD( "gwb_ic.310",     0x020000, 0x10000, CRC(fc888541) SHA1(e732a03209a88fc7a23b4e4ff69a437d6fbfc2d1) )
-	ROM_LOAD( "gwb_ic.311",     0x030000, 0x10000, CRC(181b128b) SHA1(2646c9f9cca6277ddd764c07478798c8af3eb297) )
-	ROM_LOAD( "gwb_ic.312",     0x040000, 0x10000, CRC(930665f3) SHA1(03af85c45acb9600b27dcdd6ec96d147046030e5) )
-	ROM_LOAD( "gwb_ic.313",     0x050000, 0x10000, CRC(c18f4ca8) SHA1(f5cb666d5aa53f201b6664d1c18b89a211230e78) )
-	ROM_LOAD( "gwb_ic.314",     0x060000, 0x10000, CRC(dfc44b60) SHA1(311422d4ea77118c0058e9f1a824f74cfa79cb87) )
-	ROM_LOAD( "gwb_ic.307",     0x070000, 0x10000, CRC(28082a7f) SHA1(e30bade13e03bca49c1f7001c9440ce251ece15d) )
-//  ROM_LOAD( "gwb_ic.320",     0x080000, 0x10000, CRC(9a7b51d8) SHA1(0ab01972d838c938bfd07d7b4661a0ecd009b2cb) )
-	ROM_LOAD( "gwb_ic.280",     0x080000, 0x10000, CRC(222b3dcd) SHA1(f9afe24c01daefe61939672efa2cb68bcc7235f0) ) //AT
-	ROM_LOAD( "gwb_ic.321",     0x090000, 0x10000, CRC(6b421c7b) SHA1(d96f91dc7e5f46990b05701483edf43a828a8879) )
-	ROM_LOAD( "gwb_ic.300",     0x0a0000, 0x10000, CRC(f3fa0877) SHA1(7950ef86ee66d19693f0b7071a3a34d9200f5a19) )
-	ROM_LOAD( "gwb_ic.301",     0x0b0000, 0x10000, CRC(f8c866de) SHA1(c6baa41bab35d4d9e80c5c52db74e9eb6b9605f5) )
-	ROM_LOAD( "gwb_ic.302",     0x0c0000, 0x10000, CRC(5b0d587d) SHA1(852bec7d37d8cee33e5bc30080bf8a6a8d2472e5) )
-	ROM_LOAD( "gwb_ic.303",     0x0d0000, 0x10000, CRC(d8c0e102) SHA1(f660876ab3457230b1c37835f5ad1ccd1e8e821a) )
-	ROM_LOAD( "gwb_ic.304",     0x0e0000, 0x10000, CRC(b02bc9d8) SHA1(e0466b93c08363cceaba27c8d85e2609d12a10e7) )
-	ROM_LOAD( "gwb_ic.305",     0x0f0000, 0x10000, CRC(5e04a9aa) SHA1(663330b467eb6406719d4d6cf7b05835b1600a37) )
-	ROM_LOAD( "gwb_ic.306",     0x100000, 0x10000, CRC(e2172955) SHA1(af13776e6537e736815a1180a1f6bad385724b0c) )
-	ROM_LOAD( "gwb_ic.299",     0x110000, 0x10000, CRC(e39f5599) SHA1(3c08a8163b528ebbcb627c511ccc2edacf0653c2) )
-//  ROM_LOAD( "gwb_ic.318",     0x120000, 0x10000, CRC(9aeaddf9) SHA1(d609314015376672be8147b9eabbfe4c5611ab73) )
-	ROM_LOAD( "gwb_ic.320",     0x120000, 0x10000, CRC(9a7b51d8) SHA1(0ab01972d838c938bfd07d7b4661a0ecd009b2cb) ) //AT
-	ROM_LOAD( "gwb_ic.319",     0x130000, 0x10000, CRC(c5b862b7) SHA1(a48be3e32ae5a656d8d239796e6e7bddd4a0805b) )
-	ROM_LOAD( "gwb_ic.292",     0x140000, 0x10000, CRC(c125f7be) SHA1(5d68abd91fa4fa18275c0597c51ce6d3e743d84d) )
-	ROM_LOAD( "gwb_ic.293",     0x150000, 0x10000, CRC(c04fce8e) SHA1(499edd3b16770d20368f49e5c66c299740831ff0) )
-	ROM_LOAD( "gwb_ic.294",     0x160000, 0x10000, CRC(4eda3df5) SHA1(574fef723ebd8fa116b4a379036ee5ec3eb10c90) )
-	ROM_LOAD( "gwb_ic.295",     0x170000, 0x10000, CRC(6e60c475) SHA1(928494400bbdc3571cb5b1ccb51d39537c5fd904) )
-	ROM_LOAD( "gwb_ic.296",     0x180000, 0x10000, CRC(99b2a557) SHA1(7a4053909cb5f4b2a32f3caac4e2ccdb64c2ce84) )
-	ROM_LOAD( "gwb_ic.297",     0x190000, 0x10000, CRC(10373f63) SHA1(98ee65c68823530ad2eefd6e570db2f38b59c48e) )
-	ROM_LOAD( "gwb_ic.298",     0x1a0000, 0x10000, CRC(df37ec4d) SHA1(d2670dde87970a6f33ca3cd81bdc9991d663bac6) )
-	ROM_LOAD( "gwb_ic.291",     0x1b0000, 0x10000, CRC(beb07a2e) SHA1(f2751bef1850db7173f119fc0cfeefdf47ed7a86) )
-//  ROM_LOAD( "gwb_ic.316",     0x1c0000, 0x10000, CRC(655b1518) SHA1(d97fd911901f92786bc22dac8e085cf4fa0cb1e9) )
-	ROM_LOAD( "gwb_ic.318",     0x1c0000, 0x10000, CRC(9aeaddf9) SHA1(d609314015376672be8147b9eabbfe4c5611ab73) ) //AT
-	ROM_LOAD( "gwb_ic.317",     0x1d0000, 0x10000, CRC(1622fadd) SHA1(240eaf117145773e388220513c2906ad2ac5d68b) )
-	ROM_LOAD( "gwb_ic.284",     0x1e0000, 0x10000, CRC(4aa95d66) SHA1(e5bb51fd32a7e9dc23aa13de35b8757dc11f7908) )
-	ROM_LOAD( "gwb_ic.285",     0x1f0000, 0x10000, CRC(3a1f3ce0) SHA1(edd8820111a3ef9558286280dc819c6d9f21212f) )
-	ROM_LOAD( "gwb_ic.286",     0x200000, 0x10000, CRC(886e298b) SHA1(8e8b35a0b24c9c3a1d00079b60bdbaa6c8ce597b) )
-	ROM_LOAD( "gwb_ic.287",     0x210000, 0x10000, CRC(b9542e6a) SHA1(e5762db1a44a966d2c2b7e8a92abab577e24172f) )
-	ROM_LOAD( "gwb_ic.288",     0x220000, 0x10000, CRC(8e620056) SHA1(59ea29d681c4b001b656b4b8014b14ac78a69625) )
-	ROM_LOAD( "gwb_ic.289",     0x230000, 0x10000, CRC(c754d69f) SHA1(e64b8e1f719f5a95b7bcab2d25a40c8b819f7d4f) )
-	ROM_LOAD( "gwb_ic.290",     0x240000, 0x10000, CRC(306d1963) SHA1(2f19ba97b9bd1744b656095ae0244df2db03b09b) )
-	ROM_LOAD( "gwb_ic.283",     0x250000, 0x10000, CRC(b46e5761) SHA1(3c4c13c5896186fe36ace8704afeef84b0a0cb78) )
-//  ROM_LOAD( "gwb_ic.280",     0x260000, 0x10000, CRC(222b3dcd) SHA1(f9afe24c01daefe61939672efa2cb68bcc7235f0) )
-	ROM_LOAD( "gwb_ic.316",     0x260000, 0x10000, CRC(655b1518) SHA1(d97fd911901f92786bc22dac8e085cf4fa0cb1e9) ) //AT
-	ROM_LOAD( "gwb_ic.315",     0x270000, 0x10000, CRC(e7c9b103) SHA1(6f70ca9b6a7439f9250145477f682f7487e11710) )
-
-	ROM_REGION16_BE( 0x40000, "user1", 0 ) /* Extra code bank */
-	ROM_LOAD16_BYTE( "u3",        0x00000,  0x20000, CRC(de6fd3c0) SHA1(d957e8de3cb0eda1837376f687b8c272e97e1d11) )
-	ROM_LOAD16_BYTE( "u4",        0x00001,  0x20000, CRC(43f7f5d3) SHA1(13ea03cfae97d0067dcfdc6febb53dbe268a91eb) )
-ROM_END
-
-ROM_START( gangwarsb )
-	ROM_REGION( 0x40000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "gwb_ic.m15", 0x00000, 0x20000, CRC(7752478e) SHA1(7266dd0d2c57433191ae4d1d4e17b32c8c3c8c73) )
-	ROM_LOAD16_BYTE( "gwb_ic.m16", 0x00001, 0x20000, CRC(c2f3b85e) SHA1(79c215d8b43ec7728e3745b359e64f6bb8240881) )
-
-	ROM_REGION( 0x90000, "audiocpu", 0 )   /* Sound CPU */
-	ROM_LOAD( "gwb_ic.380",      0x00000, 0x08000, CRC(e6d6c9cf) SHA1(c35a7a385592e55bdfe232d042f2228f4f7e9ffa) )
-	ROM_CONTINUE(                0x18000, 0x08000 )
-	ROM_LOAD( "gwb_ic.419",      0x30000, 0x10000, CRC(84e5c946) SHA1(0b071d15b664a9c529713b1b896bdb5ebfa16c25) )
-	ROM_LOAD( "gwb_ic.420",      0x50000, 0x10000, CRC(eb305d42) SHA1(93910cf60c1b8a87969888d8693c7d6782f1e799) )
-	ROM_LOAD( "gwb_ic.421",      0x70000, 0x10000, CRC(7b9f2608) SHA1(8d61dfa32369450e396cc8a5d67c58eedb2167e6) )
-
-	ROM_REGION( 0x020000, "gfx1", 0 )  /* chars */
-	ROM_LOAD( "gwb_ic.m19",     0x000000, 0x10000, CRC(b75bf1d0) SHA1(c22c0049274c45701be0a7be2afc0517620a3a10) )
-
-	ROM_REGION( 0x280000, "gfx2", 0 )  /* sprites */
-	ROM_LOAD( "gwb_ic.308",     0x000000, 0x10000, CRC(321a2fdd) SHA1(b2f37f14a13bc2c2f78b2b0e27fde18a23146e22) )
-	ROM_LOAD( "gwb_ic.309",     0x010000, 0x10000, CRC(4d908f65) SHA1(6095a34ef4a6905d57c47af4a507dff3a04e5c07) )
-	ROM_LOAD( "gwb_ic.310",     0x020000, 0x10000, CRC(fc888541) SHA1(e732a03209a88fc7a23b4e4ff69a437d6fbfc2d1) )
-	ROM_LOAD( "gwb_ic.311",     0x030000, 0x10000, CRC(181b128b) SHA1(2646c9f9cca6277ddd764c07478798c8af3eb297) )
-	ROM_LOAD( "gwb_ic.312",     0x040000, 0x10000, CRC(930665f3) SHA1(03af85c45acb9600b27dcdd6ec96d147046030e5) )
-	ROM_LOAD( "gwb_ic.313",     0x050000, 0x10000, CRC(c18f4ca8) SHA1(f5cb666d5aa53f201b6664d1c18b89a211230e78) )
-	ROM_LOAD( "gwb_ic.314",     0x060000, 0x10000, CRC(dfc44b60) SHA1(311422d4ea77118c0058e9f1a824f74cfa79cb87) )
-	ROM_LOAD( "gwb_ic.307",     0x070000, 0x10000, CRC(28082a7f) SHA1(e30bade13e03bca49c1f7001c9440ce251ece15d) )
-//  ROM_LOAD( "gwb_ic.320",     0x080000, 0x10000, CRC(9a7b51d8) SHA1(0ab01972d838c938bfd07d7b4661a0ecd009b2cb) )
-	ROM_LOAD( "gwb_ic.280",     0x080000, 0x10000, CRC(222b3dcd) SHA1(f9afe24c01daefe61939672efa2cb68bcc7235f0) ) //AT
-	ROM_LOAD( "gwb_ic.321",     0x090000, 0x10000, CRC(6b421c7b) SHA1(d96f91dc7e5f46990b05701483edf43a828a8879) )
-	ROM_LOAD( "gwb_ic.300",     0x0a0000, 0x10000, CRC(f3fa0877) SHA1(7950ef86ee66d19693f0b7071a3a34d9200f5a19) )
-	ROM_LOAD( "gwb_ic.301",     0x0b0000, 0x10000, CRC(f8c866de) SHA1(c6baa41bab35d4d9e80c5c52db74e9eb6b9605f5) )
-	ROM_LOAD( "gwb_ic.302",     0x0c0000, 0x10000, CRC(5b0d587d) SHA1(852bec7d37d8cee33e5bc30080bf8a6a8d2472e5) )
-	ROM_LOAD( "gwb_ic.303",     0x0d0000, 0x10000, CRC(d8c0e102) SHA1(f660876ab3457230b1c37835f5ad1ccd1e8e821a) )
-	ROM_LOAD( "gwb_ic.304",     0x0e0000, 0x10000, CRC(b02bc9d8) SHA1(e0466b93c08363cceaba27c8d85e2609d12a10e7) )
-	ROM_LOAD( "gwb_ic.305",     0x0f0000, 0x10000, CRC(5e04a9aa) SHA1(663330b467eb6406719d4d6cf7b05835b1600a37) )
-	ROM_LOAD( "gwb_ic.306",     0x100000, 0x10000, CRC(e2172955) SHA1(af13776e6537e736815a1180a1f6bad385724b0c) )
-	ROM_LOAD( "gwb_ic.299",     0x110000, 0x10000, CRC(e39f5599) SHA1(3c08a8163b528ebbcb627c511ccc2edacf0653c2) )
-//  ROM_LOAD( "gwb_ic.318",     0x120000, 0x10000, CRC(9aeaddf9) SHA1(d609314015376672be8147b9eabbfe4c5611ab73) )
-	ROM_LOAD( "gwb_ic.320",     0x120000, 0x10000, CRC(9a7b51d8) SHA1(0ab01972d838c938bfd07d7b4661a0ecd009b2cb) ) //AT
-	ROM_LOAD( "gwb_ic.319",     0x130000, 0x10000, CRC(c5b862b7) SHA1(a48be3e32ae5a656d8d239796e6e7bddd4a0805b) )
-	ROM_LOAD( "gwb_ic.292",     0x140000, 0x10000, CRC(c125f7be) SHA1(5d68abd91fa4fa18275c0597c51ce6d3e743d84d) )
-	ROM_LOAD( "gwb_ic.293",     0x150000, 0x10000, CRC(c04fce8e) SHA1(499edd3b16770d20368f49e5c66c299740831ff0) )
-	ROM_LOAD( "gwb_ic.294",     0x160000, 0x10000, CRC(4eda3df5) SHA1(574fef723ebd8fa116b4a379036ee5ec3eb10c90) )
-	ROM_LOAD( "gwb_ic.295",     0x170000, 0x10000, CRC(6e60c475) SHA1(928494400bbdc3571cb5b1ccb51d39537c5fd904) )
-	ROM_LOAD( "gwb_ic.296",     0x180000, 0x10000, CRC(99b2a557) SHA1(7a4053909cb5f4b2a32f3caac4e2ccdb64c2ce84) )
-	ROM_LOAD( "gwb_ic.297",     0x190000, 0x10000, CRC(10373f63) SHA1(98ee65c68823530ad2eefd6e570db2f38b59c48e) )
-	ROM_LOAD( "gwb_ic.298",     0x1a0000, 0x10000, CRC(df37ec4d) SHA1(d2670dde87970a6f33ca3cd81bdc9991d663bac6) )
-	ROM_LOAD( "gwb_ic.291",     0x1b0000, 0x10000, CRC(beb07a2e) SHA1(f2751bef1850db7173f119fc0cfeefdf47ed7a86) )
-//  ROM_LOAD( "gwb_ic.316",     0x1c0000, 0x10000, CRC(655b1518) SHA1(d97fd911901f92786bc22dac8e085cf4fa0cb1e9) )
-	ROM_LOAD( "gwb_ic.318",     0x1c0000, 0x10000, CRC(9aeaddf9) SHA1(d609314015376672be8147b9eabbfe4c5611ab73) ) //AT
-	ROM_LOAD( "gwb_ic.317",     0x1d0000, 0x10000, CRC(1622fadd) SHA1(240eaf117145773e388220513c2906ad2ac5d68b) )
-	ROM_LOAD( "gwb_ic.284",     0x1e0000, 0x10000, CRC(4aa95d66) SHA1(e5bb51fd32a7e9dc23aa13de35b8757dc11f7908) )
-	ROM_LOAD( "gwb_ic.285",     0x1f0000, 0x10000, CRC(3a1f3ce0) SHA1(edd8820111a3ef9558286280dc819c6d9f21212f) )
-	ROM_LOAD( "gwb_ic.286",     0x200000, 0x10000, CRC(886e298b) SHA1(8e8b35a0b24c9c3a1d00079b60bdbaa6c8ce597b) )
-	ROM_LOAD( "gwb_ic.287",     0x210000, 0x10000, CRC(b9542e6a) SHA1(e5762db1a44a966d2c2b7e8a92abab577e24172f) )
-	ROM_LOAD( "gwb_ic.288",     0x220000, 0x10000, CRC(8e620056) SHA1(59ea29d681c4b001b656b4b8014b14ac78a69625) )
-	ROM_LOAD( "gwb_ic.289",     0x230000, 0x10000, CRC(c754d69f) SHA1(e64b8e1f719f5a95b7bcab2d25a40c8b819f7d4f) )
-	ROM_LOAD( "gwb_ic.290",     0x240000, 0x10000, CRC(306d1963) SHA1(2f19ba97b9bd1744b656095ae0244df2db03b09b) )
-	ROM_LOAD( "gwb_ic.283",     0x250000, 0x10000, CRC(b46e5761) SHA1(3c4c13c5896186fe36ace8704afeef84b0a0cb78) )
-//  ROM_LOAD( "gwb_ic.280",     0x260000, 0x10000, CRC(222b3dcd) SHA1(f9afe24c01daefe61939672efa2cb68bcc7235f0) )
-	ROM_LOAD( "gwb_ic.316",     0x260000, 0x10000, CRC(655b1518) SHA1(d97fd911901f92786bc22dac8e085cf4fa0cb1e9) ) //AT
-	ROM_LOAD( "gwb_ic.315",     0x270000, 0x10000, CRC(e7c9b103) SHA1(6f70ca9b6a7439f9250145477f682f7487e11710) )
-
-	ROM_REGION16_BE( 0x40000, "user1", 0 ) /* Extra code bank */
-	ROM_LOAD16_BYTE( "gwb_ic.m17", 0x00000, 0x20000, CRC(2a5fe86e) SHA1(0e668f51430983a17e1965143a0bf3aa4d3156ee) )
-	ROM_LOAD16_BYTE( "gwb_ic.m18", 0x00001, 0x20000, CRC(c8b60c53) SHA1(352c3bcc18cf63bcb757d774c2c2247ce0c4e736) )
+	ROM_REGION( 0x400000, "gfx2", 0 )  /* sprites */
+	ROM_LOAD( "guernica-c3.17h",     0x000000, 0x80000, CRC(281a4138) SHA1(47fc0d91873996e05db87323c3b08a85863f90d9) )
+	ROM_LOAD( "gw-5.21f",            0x080000, 0x20000, CRC(9ef36031) SHA1(2faeb6a769991ab11403c6c37507b706a61bad69) )
+	ROM_LOAD( "guernica-c2.18h",     0x100000, 0x80000, CRC(2fcbea97) SHA1(eb60bf374ef771e379030d2b660a813be76bed5e) )
+	ROM_LOAD( "gw-6.20f",            0x180000, 0x20000, CRC(ddbbcda7) SHA1(1c368ad2a4ed31748c94545fc7c808aa53d76f64) )
+	ROM_LOAD( "guernica-c1.20h",     0x200000, 0x80000, CRC(5d384c3b) SHA1(9bc581501d52cc3280667a9ea34f2ba9c4b6ebb1) )
+	ROM_LOAD( "gw-7.18f",            0x280000, 0x20000, CRC(4656d377) SHA1(67d6f714cca3891be0173c543ece5e8ab699f645) )
+	ROM_LOAD( "guernica-c0.21h",     0x300000, 0x80000, CRC(e60c9882) SHA1(8cf1d9cf0db72977b303fd6b469611600631ab9a) )
+	ROM_LOAD( "gw-8.17f",            0x380000, 0x20000, CRC(798ed82a) SHA1(1932131e05aae0a77ba8d8ef947c1a3b0b5e3d43) )
 ROM_END
 
 ROM_START( sbasebal )
@@ -3128,109 +3069,9 @@ ROM_END
 
 /******************************************************************************/
 
-static READ16_HANDLER( timesold_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x4];
-
-	if (cpu_get_pc(space->cpu) == 0x9ea2 && (ret & 0xff00) == 0)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return 0x100 | (ret & 0xff);
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( timesold1_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x4];
-
-	if (cpu_get_pc(space->cpu) == 0x9e20 && (ret & 0xff00) == 0)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return 0x100 | (ret & 0xff);
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( btlfield_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x4];
-
-	if (cpu_get_pc(space->cpu) == 0x9e1c && (ret & 0xff00) == 0)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return 0x100 | (ret & 0xff);
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( skysoldr_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x4];
-
-	if (cpu_get_pc(space->cpu) == 0x1f4e && (ret & 0xff00) == 0)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return 0x100 | (ret & 0xff);
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( skyadvnt_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x4];
-
-	if (cpu_get_pc(space->cpu) == 0x1f78 && (ret & 0xff00) == 0)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return 0x100 | (ret & 0xff);
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( gangwars_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x103];
-
-	if (cpu_get_pc(space->cpu) == 0xbbb6)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return (ret + 2) & 0xff;
-	}
-
-	return ret;
-}
-
-static READ16_HANDLER( gangwarsb_cycle_r )
-{
-	alpha68k_state *state = (alpha68k_state *)space->machine->driver_data;
-	int ret = state->shared_ram[0x103];
-
-	if (cpu_get_pc(space->cpu) == 0xbbca)
-	{
-		cpu_spinuntil_int(space->cpu);
-		return (ret + 2) & 0xff;
-	}
-
-	return ret;
-}
-
-/******************************************************************************/
-
 static DRIVER_INIT( sstingry )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x00ff;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3238,7 +3079,7 @@ static DRIVER_INIT( sstingry )
 
 static DRIVER_INIT( kyros )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x0012;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3247,7 +3088,7 @@ static DRIVER_INIT( kyros )
 
 static DRIVER_INIT( jongbou )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x0c0000, 0x0c0001, 0, 0, jongbou_inputs_r);
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x00ff;
@@ -3257,15 +3098,14 @@ static DRIVER_INIT( jongbou )
 
 static DRIVER_INIT( paddlema )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->microcontroller_id = 0;
 	state->coin_id = 0;				// Not needed !
 }
 
 static DRIVER_INIT( timesold )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, timesold_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3273,8 +3113,7 @@ static DRIVER_INIT( timesold )
 
 static DRIVER_INIT( timesold1 )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, timesold1_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 1;
 	state->microcontroller_id = 0;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3282,8 +3121,7 @@ static DRIVER_INIT( timesold1 )
 
 static DRIVER_INIT( btlfield )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, btlfield_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 1;
 	state->microcontroller_id = 0;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3291,7 +3129,7 @@ static DRIVER_INIT( btlfield )
 
 static DRIVER_INIT( btlfieldb )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 1;
 	state->microcontroller_id = 0;
 	state->coin_id = 0x22 | (0x22 << 8); //not checked
@@ -3300,8 +3138,7 @@ static DRIVER_INIT( btlfieldb )
 
 static DRIVER_INIT( skysoldr )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, skysoldr_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	memory_set_bankptr(machine, "bank8", (memory_region(machine, "user1")) + 0x40000);
 	state->invert_controls = 0;
 	state->microcontroller_id = 0;
@@ -3310,7 +3147,7 @@ static DRIVER_INIT( skysoldr )
 
 static DRIVER_INIT( goldmedl )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8803; //AT
 	state->coin_id = 0x23 | (0x24 << 8);
@@ -3318,7 +3155,7 @@ static DRIVER_INIT( goldmedl )
 
 static DRIVER_INIT( goldmedla )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	memory_set_bankptr(machine, "bank8", memory_region(machine, "maincpu") + 0x20000);
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8803; //Guess - routine to handle coinage is the same as in 'goldmedl'
@@ -3327,8 +3164,7 @@ static DRIVER_INIT( goldmedla )
 
 static DRIVER_INIT( skyadvnt )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, skyadvnt_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8814;
 	state->coin_id = 0x22 | (0x22 << 8);
@@ -3336,27 +3172,24 @@ static DRIVER_INIT( skyadvnt )
 
 static DRIVER_INIT( skyadvntu )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40008, 0x40009, 0, 0, skyadvnt_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8814;
 	state->coin_id = 0x23 | (0x24 << 8);
 }
 
-static DRIVER_INIT( gangwars )
+static DRIVER_INIT( gangwarsu )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40206, 0x40207, 0, 0, gangwars_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	memory_set_bankptr(machine, "bank8", memory_region(machine, "user1"));
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8512;
 	state->coin_id = 0x23 | (0x24 << 8);
 }
 
-static DRIVER_INIT( gangwarsb )
+static DRIVER_INIT( gangwars )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
-	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x40206, 0x40207, 0, 0, gangwarsb_cycle_r);
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	memory_set_bankptr(machine, "bank8", memory_region(machine, "user1"));
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x8512;
@@ -3365,10 +3198,15 @@ static DRIVER_INIT( gangwarsb )
 
 static DRIVER_INIT( sbasebal )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
 
-	/* Game hangs on divide by zero?!  Patch it */
+	/* Patch protection check, it does a divide by zero because the MCU is trying to
+       calculate the ball speed when a strike is scored, notice that current emulation
+       just returns 49 mi/h every time that this event happens.
+       68k reads at [0x4023e], then subtracts this value with [0x41838], presumably it's raw speed minus angle.
+       main CPU then writes the result to RAM location [0x41866], probably just to signal the result to the MCU.
+       */
 	rom[0xb672/2] = 0x4e71;
 
 	/* And patch the ROM checksums */
@@ -3389,7 +3227,7 @@ static DRIVER_INIT( sbasebal )
 
 static DRIVER_INIT( tnextspc )
 {
-	alpha68k_state *state = (alpha68k_state *)machine->driver_data;
+	alpha68k_state *state = machine->driver_data<alpha68k_state>();
 	state->invert_controls = 0;
 	state->microcontroller_id = 0x890a;
 	state->coin_id = 0;				// Not needed !
@@ -3397,28 +3235,35 @@ static DRIVER_INIT( tnextspc )
 
 /******************************************************************************/
 
-GAME( 1986, sstingry,  0,        sstingry,       sstingry, sstingry, ROT90, "Alpha Denshi Co.",   "Super Stingray", GAME_SUPPORTS_SAVE )
-GAME( 1987, kyros,     0,        kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co. (World Games Inc. license)", "Kyros", GAME_SUPPORTS_SAVE )
-GAME( 1986, kyrosj,    kyros,    kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co.",   "Kyros No Yakata (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1987, jongbou,   0,        jongbou,        jongbou,  jongbou,  ROT90, "SNK",                "Mahjong Block Jongbou (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1988, paddlema,  0,        alpha68k_I,     paddlema, paddlema, ROT90, "SNK",                "Paddle Mania", GAME_SUPPORTS_SAVE )
-GAME( 1987, timesold,  0,        alpha68k_II,    timesold, timesold, ROT90, "Alpha Denshi Co. (SNK/Romstar license)", "Time Soldiers (US Rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1987, timesold1, timesold, alpha68k_II,    timesold, timesold1,ROT90, "Alpha Denshi Co. (SNK/Romstar license)", "Time Soldiers (US Rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1987, btlfield,  timesold, alpha68k_II,    btlfield, btlfield, ROT90, "Alpha Denshi Co. (SNK license)", "Battle Field (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1987, btlfieldb, timesold, btlfieldb,      btlfieldb,btlfieldb,ROT90, "bootleg",            "Battle Field (bootleg)", GAME_SUPPORTS_SAVE )
+GAME( 1986, sstingry,  0,        sstingry,       sstingry, sstingry, ROT90, "Alpha Denshi Co.",                                  "Super Stingray", GAME_SUPPORTS_SAVE )
+
+GAME( 1987, kyros,     0,        kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co. (World Games Inc. license)",       "Kyros", GAME_SUPPORTS_SAVE )
+GAME( 1986, kyrosj,    kyros,    kyros,          kyros,    kyros,    ROT90, "Alpha Denshi Co.",                                  "Kyros No Yakata (Japan)", GAME_SUPPORTS_SAVE )
+
+GAME( 1987, jongbou,   0,        jongbou,        jongbou,  jongbou,  ROT90, "SNK",                                               "Mahjong Block Jongbou (Japan)", GAME_SUPPORTS_SAVE )
+
+GAME( 1988, paddlema,  0,        alpha68k_I,     paddlema, paddlema, ROT90, "SNK",                                               "Paddle Mania", GAME_SUPPORTS_SAVE )
+
+GAME( 1987, timesold,  0,        alpha68k_II,    timesold, timesold, ROT90, "Alpha Denshi Co. (SNK/Romstar license)",            "Time Soldiers (US Rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1987, timesold1, timesold, alpha68k_II,    timesold, timesold1,ROT90, "Alpha Denshi Co. (SNK/Romstar license)",            "Time Soldiers (US Rev 1)", GAME_SUPPORTS_SAVE )
+
+GAME( 1987, btlfield,  timesold, alpha68k_II,    btlfield, btlfield, ROT90, "Alpha Denshi Co. (SNK license)",                    "Battle Field (Japan)", GAME_SUPPORTS_SAVE )
+GAME( 1987, btlfieldb, timesold, btlfieldb,      btlfieldb,btlfieldb,ROT90, "bootleg",                                           "Battle Field (bootleg)", GAME_SUPPORTS_SAVE )
+
 GAME( 1988, skysoldr,  0,        alpha68k_II,    skysoldr, skysoldr, ROT90, "Alpha Denshi Co. (SNK of America/Romstar license)", "Sky Soldiers (US)", GAME_SUPPORTS_SAVE )
-GAME( 1988, goldmedl,  0,        alpha68k_II_gm, goldmedl, goldmedl, ROT0,  "SNK",                "Gold Medalist", GAME_SUPPORTS_SAVE )
-GAME( 1988, goldmedla, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "SNK",                "Gold Medalist (alt)", GAME_SUPPORTS_SAVE )
-GAME( 1988, goldmedlb, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "bootleg",            "Gold Medalist (bootleg)", GAME_NOT_WORKING )
-GAME( 1989, skyadvnt,  0,        alpha68k_V,     skyadvnt, skyadvnt, ROT90, "Alpha Denshi Co.",   "Sky Adventure (World)", GAME_SUPPORTS_SAVE )
-GAME( 1989, skyadvntu, skyadvnt, alpha68k_V,     skyadvntu,skyadvntu,ROT90, "Alpha Denshi Co. (SNK of America license)", "Sky Adventure (US)", GAME_SUPPORTS_SAVE )
-GAME( 1989, skyadvntj, skyadvnt, alpha68k_V,     skyadvnt, skyadvnt, ROT90, "Alpha Denshi Co.",   "Sky Adventure (Japan)", GAME_SUPPORTS_SAVE )
-GAME( 1989, gangwars,  0,        alpha68k_V,     gangwars, gangwars, ROT0,  "Alpha Denshi Co.",   "Gang Wars (US)", GAME_SUPPORTS_SAVE )
-GAME( 1989, gangwarsb, gangwars, alpha68k_V,     gangwarsb,gangwarsb,ROT0,  "bootleg",            "Gang Wars (bootleg)", GAME_SUPPORTS_SAVE )
-#if SBASEBAL_HACK
-GAME( 1989, sbasebal,  0,        alpha68k_V_sb,  sbasebal, sbasebal, ROT0,  "Alpha Denshi Co.",   "Super Champion Baseball (Japan)", GAME_SUPPORTS_SAVE )
-#else
-GAME( 1989, sbasebal,  0,        alpha68k_V_sb,  sbasebal, sbasebal, ROT0,  "Alpha Denshi Co. (SNK of America license)", "Super Champion Baseball (US)", GAME_SUPPORTS_SAVE )
-#endif
-GAME( 1989, tnextspc,  0,        tnextspc,       tnextspc, tnextspc, ROT90, "SNK",                "The Next Space", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
-GAME( 1989, tnextspcj, tnextspc, tnextspc,       tnextspc, tnextspc, ROT90, "SNK (Pasadena International Corp. license)", "The Next Space (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+
+GAME( 1988, goldmedl,  0,        alpha68k_II_gm, goldmedl, goldmedl, ROT0,  "SNK",                                               "Gold Medalist", GAME_SUPPORTS_SAVE )
+GAME( 1988, goldmedla, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "SNK",                                               "Gold Medalist (alt)", GAME_SUPPORTS_SAVE )
+GAME( 1988, goldmedlb, goldmedl, alpha68k_II_gm, goldmedl, goldmedla,ROT0,  "bootleg",                                           "Gold Medalist (bootleg)", GAME_NOT_WORKING )
+
+GAME( 1989, skyadvnt,  0,        alpha68k_V,     skyadvnt, skyadvnt, ROT90, "Alpha Denshi Co.",                                  "Sky Adventure (World)", GAME_SUPPORTS_SAVE )
+GAME( 1989, skyadvntu, skyadvnt, alpha68k_V,     skyadvntu,skyadvntu,ROT90, "Alpha Denshi Co. (SNK of America license)",         "Sky Adventure (US)", GAME_SUPPORTS_SAVE )
+GAME( 1989, skyadvntj, skyadvnt, alpha68k_V,     skyadvnt, skyadvnt, ROT90, "Alpha Denshi Co.",                                  "Sky Adventure (Japan)", GAME_SUPPORTS_SAVE )
+
+GAME( 1989, gangwars,  0,        alpha68k_V,     gangwars, gangwars, ROT0,  "Alpha Denshi Co.",                                  "Gang Wars", GAME_SUPPORTS_SAVE )
+GAME( 1989, gangwarsu, gangwars, alpha68k_V,     gangwarsu,gangwarsu,ROT0,  "Alpha Denshi Co.",                                  "Gang Wars (US)", GAME_SUPPORTS_SAVE )
+
+GAME( 1989, sbasebal,  0,        alpha68k_V_sb,  sbasebal, sbasebal, ROT0,  "Alpha Denshi Co. (SNK of America license)",         "Super Champion Baseball (US)", GAME_SUPPORTS_SAVE | GAME_UNEMULATED_PROTECTION )
+
+GAME( 1989, tnextspc,  0,        tnextspc,       tnextspc, tnextspc, ROT90, "SNK",                                               "The Next Space", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )
+GAME( 1989, tnextspcj, tnextspc, tnextspc,       tnextspc, tnextspc, ROT90, "SNK (Pasadena International Corp. license)",        "The Next Space (Japan)", GAME_SUPPORTS_SAVE | GAME_NO_COCKTAIL )

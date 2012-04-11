@@ -84,15 +84,15 @@ typedef enum {
 
 /************************************************************************/
 
-#define read_byte(a)			(*cpustate->mem.rbyte)(cpustate->program, a)
-#define read_word(a)			(*cpustate->mem.rword)(cpustate->program, a)
-#define write_byte(a,d)			(*cpustate->mem.wbyte)(cpustate->program, (a),(d))
-#define write_word(a,d)			(*cpustate->mem.wword)(cpustate->program, (a),(d))
+#define read_mem_byte(a)			cpustate->program->read_byte(a)
+#define read_mem_word(a)			cpustate->program->read_word_unaligned(a)
+#define write_mem_byte(a,d)			cpustate->program->write_byte((a),(d))
+#define write_mem_word(a,d)			cpustate->program->write_word_unaligned((a),(d))
 
-#define read_port_byte(a)		(*cpustate->mem.rbyte)(cpustate->io, a)
-#define read_port_word(a)		(*cpustate->mem.rword)(cpustate->io, a)
-#define write_port_byte(a,d)	(*cpustate->mem.wbyte)(cpustate->io, (a),(d))
-#define write_port_word(a,d)	(*cpustate->mem.wword)(cpustate->io, (a),(d))
+#define read_port_byte(a)		cpustate->io->read_byte(a)
+#define read_port_word(a)		cpustate->io->read_word_unaligned(a)
+#define write_port_byte(a,d)	cpustate->io->write_byte((a),(d))
+#define write_port_word(a,d)	cpustate->io->write_word_unaligned((a),(d))
 
 /************************************************************************/
 
@@ -100,22 +100,22 @@ typedef enum {
 
 #define DefaultBase(Seg)		((cpustate->seg_prefix && (Seg == DS || Seg == SS)) ? cpustate->prefix_base : cpustate->base[Seg])
 
-#define GetMemB(Seg,Off)		(read_byte((DefaultBase(Seg) + (Off)) & AMASK))
-#define GetMemW(Seg,Off)		(read_word((DefaultBase(Seg) + (Off)) & AMASK))
-#define PutMemB(Seg,Off,x)		write_byte((DefaultBase(Seg) + (Off)) & AMASK, (x))
-#define PutMemW(Seg,Off,x)		write_word((DefaultBase(Seg) + (Off)) & AMASK, (x))
+#define GetMemB(Seg,Off)		(read_mem_byte((DefaultBase(Seg) + (Off)) & AMASK))
+#define GetMemW(Seg,Off)		(read_mem_word((DefaultBase(Seg) + (Off)) & AMASK))
+#define PutMemB(Seg,Off,x)		write_mem_byte((DefaultBase(Seg) + (Off)) & AMASK, (x))
+#define PutMemW(Seg,Off,x)		write_mem_word((DefaultBase(Seg) + (Off)) & AMASK, (x))
 
-#define PEEKBYTE(ea)			(read_byte((ea) & AMASK))
-#define ReadByte(ea)			(read_byte((ea) & AMASK))
-#define ReadWord(ea)			(read_word((ea) & AMASK))
-#define WriteByte(ea,val)		write_byte((ea) & AMASK, val);
-#define WriteWord(ea,val)		write_word((ea) & AMASK, val);
+#define PEEKBYTE(ea)			(read_mem_byte((ea) & AMASK))
+#define ReadByte(ea)			(read_mem_byte((ea) & AMASK))
+#define ReadWord(ea)			(read_mem_word((ea) & AMASK))
+#define WriteByte(ea,val)		write_mem_byte((ea) & AMASK, val);
+#define WriteWord(ea,val)		write_mem_word((ea) & AMASK, val);
 
-#define FETCH_XOR(a)			((a) ^ cpustate->mem.fetch_xor)
-#define FETCH					(memory_raw_read_byte(cpustate->program, FETCH_XOR(cpustate->pc++)))
-#define FETCHOP					(memory_decrypted_read_byte(cpustate->program, FETCH_XOR(cpustate->pc++)))
-#define PEEKOP(addr)			(memory_decrypted_read_byte(cpustate->program, FETCH_XOR(addr)))
-#define FETCHWORD(var)			{ var = memory_raw_read_byte(cpustate->program, FETCH_XOR(cpustate->pc)); var += (memory_raw_read_byte(cpustate->program, FETCH_XOR(cpustate->pc + 1)) << 8); cpustate->pc += 2; }
+#define FETCH_XOR(a)			((a) ^ cpustate->fetch_xor)
+#define FETCH					(cpustate->direct->read_raw_byte(FETCH_XOR(cpustate->pc++)))
+#define FETCHOP					(cpustate->direct->read_decrypted_byte(FETCH_XOR(cpustate->pc++)))
+#define PEEKOP(addr)			(cpustate->direct->read_decrypted_byte(FETCH_XOR(addr)))
+#define FETCHWORD(var)			{ var = cpustate->direct->read_raw_byte(FETCH_XOR(cpustate->pc)); var += (cpustate->direct->read_raw_byte(FETCH_XOR(cpustate->pc + 1)) << 8); cpustate->pc += 2; }
 #define CHANGE_PC(addr)
 #define PUSH(val)				{ cpustate->regs.w[SP] -= 2; WriteWord(((cpustate->base[SS] + cpustate->regs.w[SP]) & AMASK), val); }
 #define POP(var)				{ var = ReadWord(((cpustate->base[SS] + cpustate->regs.w[SP]) & AMASK)); cpustate->regs.w[SP] += 2; }

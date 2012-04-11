@@ -180,26 +180,7 @@ TODO:
 #include "sound/2151intf.h"
 #include "sound/namco.h"
 #include "sound/n63701x.h"
-
-extern UINT8 *rthunder_videoram1, *rthunder_videoram2, *rthunder_spriteram;
-
-PALETTE_INIT( namcos86 );
-VIDEO_START( namcos86 );
-VIDEO_UPDATE( namcos86 );
-VIDEO_EOF( namcos86 );
-READ8_HANDLER( rthunder_videoram1_r );
-WRITE8_HANDLER( rthunder_videoram1_w );
-READ8_HANDLER( rthunder_videoram2_r );
-WRITE8_HANDLER( rthunder_videoram2_w );
-WRITE8_HANDLER( rthunder_scroll0_w );
-WRITE8_HANDLER( rthunder_scroll1_w );
-WRITE8_HANDLER( rthunder_scroll2_w );
-WRITE8_HANDLER( rthunder_scroll3_w );
-WRITE8_HANDLER( rthunder_backcolor_w );
-WRITE8_HANDLER( rthunder_tilebank_select_w );
-READ8_HANDLER( rthunder_spriteram_r );
-WRITE8_HANDLER( rthunder_spriteram_w );
-
+#include "includes/namcos86.h"
 
 static WRITE8_HANDLER( bankswitch1_w )
 {
@@ -356,7 +337,7 @@ static ADDRESS_MAP_START( cpu1_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_READWRITE(rthunder_videoram1_r,rthunder_videoram1_w) AM_BASE(&rthunder_videoram1)
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(rthunder_videoram2_r,rthunder_videoram2_w) AM_BASE(&rthunder_videoram2)
 
-	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) AM_BASE(&namco_wavedata) /* PSG device, shared RAM */
+	AM_RANGE(0x4000, 0x43ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */
 
 	AM_RANGE(0x4000, 0x5fff) AM_READWRITE(rthunder_spriteram_r,rthunder_spriteram_w)
 
@@ -411,7 +392,7 @@ CPU2_MEMORY( wndrmomo, 0x2000, 0x4000, 0x6000, UNUSED, UNUSED, 0xc000, 0xc800 )
 static ADDRESS_MAP_START( NAME##_mcu_map, ADDRESS_SPACE_PROGRAM, 8 )					\
 	AM_RANGE(0x0000, 0x001f) AM_READWRITE(hd63701_internal_registers_r,hd63701_internal_registers_w)	\
 	AM_RANGE(0x0080, 0x00ff) AM_RAM														\
-	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r,namcos1_cus30_w) /* PSG device, shared RAM */	\
+	AM_RANGE(0x1000, 0x13ff) AM_DEVREADWRITE("namco", namcos1_cus30_r, namcos1_cus30_w) /* PSG device, shared RAM */	\
 	AM_RANGE(0x1400, 0x1fff) AM_RAM														\
 	AM_RANGE(ADDR_INPUT+0x00, ADDR_INPUT+0x01) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)	\
 	AM_RANGE(ADDR_INPUT+0x20, ADDR_INPUT+0x20) AM_READ_PORT("IN0")						\
@@ -1013,7 +994,7 @@ static const namco_interface namco_config =
 };
 
 
-static MACHINE_DRIVER_START( hopmappy )
+static MACHINE_CONFIG_START( hopmappy, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("cpu1", M6809, 49152000/32)
@@ -1059,37 +1040,34 @@ static MACHINE_DRIVER_START( hopmappy )
 	MDRV_SOUND_ADD("namco", NAMCO_CUS30, 49152000/2048)
 	MDRV_SOUND_CONFIG(namco_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( skykiddx )
+static MACHINE_CONFIG_DERIVED( skykiddx, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
 	MDRV_CPU_MODIFY("cpu2")
 	MDRV_CPU_PROGRAM_MAP(skykiddx_cpu2_map)
 
 	MDRV_CPU_MODIFY("mcu")
 	MDRV_CPU_PROGRAM_MAP(skykiddx_mcu_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( roishtar )
+static MACHINE_CONFIG_DERIVED( roishtar, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
 	MDRV_CPU_MODIFY("cpu2")
 	MDRV_CPU_PROGRAM_MAP(roishtar_cpu2_map)
 
 	MDRV_CPU_MODIFY("mcu")
 	MDRV_CPU_PROGRAM_MAP(roishtar_mcu_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( genpeitd )
+static MACHINE_CONFIG_DERIVED( genpeitd, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
 	MDRV_CPU_MODIFY("cpu2")
 	MDRV_CPU_PROGRAM_MAP(genpeitd_cpu2_map)
 
@@ -1099,13 +1077,12 @@ static MACHINE_DRIVER_START( genpeitd )
 	/* sound hardware */
 	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( rthunder )
+static MACHINE_CONFIG_DERIVED( rthunder, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
 	MDRV_CPU_MODIFY("cpu2")
 	MDRV_CPU_PROGRAM_MAP(rthunder_cpu2_map)
 
@@ -1115,13 +1092,12 @@ static MACHINE_DRIVER_START( rthunder )
 	/* sound hardware */
 	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( wndrmomo )
+static MACHINE_CONFIG_DERIVED( wndrmomo, hopmappy )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(hopmappy)
 	MDRV_CPU_MODIFY("cpu2")
 	MDRV_CPU_PROGRAM_MAP(wndrmomo_cpu2_map)
 
@@ -1131,7 +1107,7 @@ static MACHINE_DRIVER_START( wndrmomo )
 	/* sound hardware */
 	MDRV_SOUND_ADD("namco2", NAMCO_63701X, 6000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

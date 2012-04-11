@@ -59,7 +59,7 @@
 
 static INTERRUPT_GEN( timeplt_interrupt )
 {
-	timeplt_state *state = (timeplt_state *)device->machine->driver_data;
+	timeplt_state *state = device->machine->driver_data<timeplt_state>();
 
 	if (state->nmi_enable)
 		cpu_set_input_line(device, INPUT_LINE_NMI, ASSERT_LINE);
@@ -68,7 +68,7 @@ static INTERRUPT_GEN( timeplt_interrupt )
 
 static WRITE8_HANDLER( timeplt_nmi_enable_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 
 	state->nmi_enable = data & 1;
 	if (!state->nmi_enable)
@@ -355,14 +355,14 @@ GFXDECODE_END
 
 static MACHINE_START( common )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	state->maincpu = machine->device<cpu_device>("maincpu");
 }
 
 static MACHINE_START( timeplt )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	MACHINE_START_CALL(common);
 
@@ -371,15 +371,12 @@ static MACHINE_START( timeplt )
 
 static MACHINE_RESET( timeplt )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	state->nmi_enable = 0;
 }
 
-static MACHINE_DRIVER_START( timeplt )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(timeplt_state)
+static MACHINE_CONFIG_START( timeplt, timeplt_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/3/2)	/* not confirmed, but common for Konami games of the era */
@@ -406,12 +403,11 @@ static MACHINE_DRIVER_START( timeplt )
 	MDRV_VIDEO_UPDATE(timeplt)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(timeplt_sound)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(timeplt_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( psurge )
-	MDRV_IMPORT_FROM(timeplt)
+static MACHINE_CONFIG_DERIVED( psurge, timeplt )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -420,17 +416,16 @@ static MACHINE_DRIVER_START( psurge )
 
 	MDRV_MACHINE_START(common)
 	MDRV_MACHINE_RESET(0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( chkun )
-	MDRV_IMPORT_FROM(timeplt)
+static MACHINE_CONFIG_DERIVED( chkun, timeplt )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(chkun_main_map)
 
 	MDRV_VIDEO_START(chkun)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

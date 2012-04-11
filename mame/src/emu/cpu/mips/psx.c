@@ -186,7 +186,8 @@ struct _psxcpu_state
 	UINT32 multiplier_operand2;
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
+	address_space *program;
+	direct_read_data *direct;
 	int bus_attached;
 	UINT32 bad_byte_address_mask;
 	UINT32 bad_half_address_mask;
@@ -335,7 +336,7 @@ INLINE UINT8 psx_readbyte( psxcpu_state *psxcpu, UINT32 address )
 {
 	if( psxcpu->bus_attached )
 	{
-		return memory_read_byte_32le( psxcpu->program, address );
+		return psxcpu->program->read_byte( address );
 	}
 	else
 	{
@@ -347,7 +348,7 @@ INLINE UINT16 psx_readhalf( psxcpu_state *psxcpu, UINT32 address )
 {
 	if( psxcpu->bus_attached )
 	{
-		return memory_read_word_32le( psxcpu->program, address );
+		return psxcpu->program->read_word( address );
 	}
 	else
 	{
@@ -359,7 +360,7 @@ INLINE UINT32 psx_readword( psxcpu_state *psxcpu, UINT32 address )
 {
 	if( psxcpu->bus_attached )
 	{
-		return memory_read_dword_32le( psxcpu->program, address );
+		return psxcpu->program->read_dword( address );
 	}
 	else
 	{
@@ -371,7 +372,7 @@ INLINE UINT32 psx_readword_masked( psxcpu_state *psxcpu, UINT32 address, UINT32 
 {
 	if( psxcpu->bus_attached )
 	{
-		return memory_read_dword_masked_32le( psxcpu->program, address, mask );
+		return psxcpu->program->read_dword( address, mask );
 	}
 	else
 	{
@@ -383,7 +384,7 @@ INLINE void psx_writeword( psxcpu_state *psxcpu, UINT32 address, UINT32 data )
 {
 	if( psxcpu->bus_attached )
 	{
-		memory_write_dword_32le( psxcpu->program, address, data );
+		psxcpu->program->write_dword( address, data );
 	}
 	else
 	{
@@ -395,7 +396,7 @@ INLINE void psx_writeword_masked( psxcpu_state *psxcpu, UINT32 address, UINT32 d
 {
 	if( psxcpu->bus_attached )
 	{
-		memory_write_dword_masked_32le( psxcpu->program, address, data, mask );
+		psxcpu->program->write_dword( address, data, mask );
 	}
 	else
 	{
@@ -1300,7 +1301,7 @@ static WRITE32_HANDLER( psx_berr_w )
 	psxcpu->berr = 1;
 }
 
-static void mips_update_scratchpad( const address_space *space )
+static void mips_update_scratchpad( address_space *space )
 {
 	psxcpu_state *psxcpu = get_safe_token(space->cpu);
 
@@ -1342,7 +1343,7 @@ INLINE void mips_set_cp0r( psxcpu_state *psxcpu, int reg, UINT32 value )
 		( psxcpu->cp0r[ CP0_SR ] & SR_IEC ) != 0 &&
 		( psxcpu->cp0r[ CP0_SR ] & psxcpu->cp0r[ CP0_CAUSE ] & CAUSE_IP ) != 0 )
 	{
-		psxcpu->op = memory_decrypted_read_dword( psxcpu->program, psxcpu->pc );
+		psxcpu->op = psxcpu->direct->read_decrypted_dword( psxcpu->pc );
 		mips_execute_unstoppable_instructions( psxcpu, 1 );
 		mips_exception( psxcpu, EXC_INT );
 	}
@@ -1375,11 +1376,11 @@ static void mips_fetch_next_op( psxcpu_state *psxcpu )
 	{
 		UINT32 safepc = psxcpu->delayv & ~psxcpu->bad_word_address_mask;
 
-		psxcpu->op = memory_decrypted_read_dword( psxcpu->program, safepc );
+		psxcpu->op = psxcpu->direct->read_decrypted_dword( safepc );
 	}
 	else
 	{
-		psxcpu->op = memory_decrypted_read_dword( psxcpu->program, psxcpu->pc + 4 );
+		psxcpu->op = psxcpu->direct->read_decrypted_dword( psxcpu->pc + 4 );
 	}
 }
 
@@ -1636,6 +1637,7 @@ static CPU_INIT( psxcpu )
 	psxcpu->irq_callback = irqcallback;
 	psxcpu->device = device;
 	psxcpu->program = device->space(AS_PROGRAM);
+	psxcpu->direct = &psxcpu->program->direct();
 
 	mips_state_register( "psxcpu", device );
 }
@@ -1797,7 +1799,7 @@ static void mips_swc( psxcpu_state *psxcpu, int cop, int sr_cu )
 					}
 				}
 
-				data = memory_read_dword_32le( psxcpu->program, address );
+				data = psxcpu->program->read_dword( address );
 			}
 			break;
 
@@ -1852,7 +1854,7 @@ static CPU_EXECUTE( psxcpu )
 		if (LOG_BIOSCALL) log_bioscall( psxcpu );
 		debugger_instruction_hook(device,  psxcpu->pc );
 
-		psxcpu->op = memory_decrypted_read_dword( psxcpu->program, psxcpu->pc );
+		psxcpu->op = psxcpu->direct->read_decrypted_dword( psxcpu->pc );
 		switch( INS_OP( psxcpu->op ) )
 		{
 		case OP_SPECIAL:
@@ -2959,7 +2961,7 @@ static UINT32 getcp1dr( psxcpu_state *psxcpu, int reg )
 {
 	/* if a mtc/ctc precedes then this will get the value moved (which cop1 register is irrelevant). */
 	/* if a mfc/cfc follows then it will get the same value as this one. */
-	return memory_read_dword_32le( psxcpu->program, psxcpu->pc + 4 );
+	return psxcpu->program->read_dword( psxcpu->pc + 4 );
 }
 
 static void setcp1dr( psxcpu_state *psxcpu, int reg, UINT32 value )
@@ -2970,7 +2972,7 @@ static UINT32 getcp1cr( psxcpu_state *psxcpu, int reg )
 {
 	/* if a mtc/ctc precedes then this will get the value moved (which cop1 register is irrelevant). */
 	/* if a mfc/cfc follows then it will get the same value as this one. */
-	return memory_read_dword_32le( psxcpu->program, psxcpu->pc + 4 );
+	return psxcpu->program->read_dword( psxcpu->pc + 4 );
 }
 
 static void setcp1cr( psxcpu_state *psxcpu, int reg, UINT32 value )
@@ -2983,7 +2985,7 @@ static UINT32 getcp3dr( psxcpu_state *psxcpu, int reg )
 	/* if you have mtc/ctc with an mfc/cfc directly afterwards then you get the value that was moved. */
 	/* if you have an lwc with an mfc/cfc somewhere after it then you get the value that is loaded */
 	/* otherwise you get the next opcode. which register you transfer to or from is irrelevant. */
-	return memory_read_dword_32le( psxcpu->program, psxcpu->pc + 4 );
+	return psxcpu->program->read_dword( psxcpu->pc + 4 );
 }
 
 static void setcp3dr( psxcpu_state *psxcpu, int reg, UINT32 value )
@@ -2995,7 +2997,7 @@ static UINT32 getcp3cr( psxcpu_state *psxcpu, int reg )
 	/* if you have mtc/ctc with an mfc/cfc directly afterwards then you get the value that was moved. */
 	/* if you have an lwc with an mfc/cfc somewhere after it then you get the value that is loaded */
 	/* otherwise you get the next opcode. which register you transfer to or from is irrelevant. */
-	return memory_read_dword_32le( psxcpu->program, psxcpu->pc + 4 );
+	return psxcpu->program->read_dword( psxcpu->pc + 4 );
 }
 
 static void setcp3cr( psxcpu_state *psxcpu, int reg, UINT32 value )

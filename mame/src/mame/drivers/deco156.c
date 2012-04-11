@@ -22,28 +22,29 @@
 #include "sound/ymz280b.h"
 #include "video/deco16ic.h"
 
-class deco156_state
+class deco156_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, deco156_state(machine)); }
-
-	deco156_state(running_machine &machine)
-		: oki2(machine.device<okim6295_device>("oki2")) { }
+	deco156_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  maincpu(*this, "maincpu"),
+		  deco16ic(*this, "deco_custom"),
+		  oki2(*this, "oki2") { }
 
 	/* memory pointers */
 	UINT16 *  pf1_rowscroll;
 	UINT16 *  pf2_rowscroll;
 
 	/* devices */
-	cpu_device *maincpu;
-	deco16ic_device *deco16ic;
-	okim6295_device *oki2;
+	required_device<arm_device> maincpu;
+	required_device<deco16ic_device> deco16ic;
+	optional_device<okim6295_device> oki2;
 };
 
 
 static VIDEO_START( wcvol95 )
 {
-	deco156_state *state = (deco156_state *)machine->driver_data;
+	deco156_state *state = machine->driver_data<deco156_state>();
 
 	/* allocate the ram as 16-bit (we do it here because the CPU is 32-bit) */
 	state->pf1_rowscroll = auto_alloc_array(machine, UINT16, 0x800/2);
@@ -138,7 +139,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap,const rectan
 
 static VIDEO_UPDATE( wcvol95 )
 {
-	deco156_state *state = (deco156_state *)screen->machine->driver_data;
+	deco156_state *state = screen->machine->driver_data<deco156_state>();
 
 	bitmap_fill(screen->machine->priority_bitmap, NULL, 0);
 	bitmap_fill(bitmap, NULL, 0);
@@ -155,7 +156,7 @@ static VIDEO_UPDATE( wcvol95 )
 
 static WRITE32_HANDLER(hvysmsh_eeprom_w)
 {
-	deco156_state *state = (deco156_state *)space->machine->driver_data;
+	deco156_state *state = space->machine->driver_data<deco156_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		state->oki2->set_bank_base(0x40000 * (data & 0x7));
@@ -189,10 +190,10 @@ static WRITE32_HANDLER( deco156_nonbuffered_palette_w )
 	palette_set_color(space->machine,offset,MAKE_RGB(r,g,b));
 }
 
-static READ32_HANDLER( wcvol95_pf1_rowscroll_r ) { deco156_state *state = (deco156_state *)space->machine->driver_data; return state->pf1_rowscroll[offset] ^ 0xffff0000; }
-static READ32_HANDLER( wcvol95_pf2_rowscroll_r ) { deco156_state *state = (deco156_state *)space->machine->driver_data;	return state->pf2_rowscroll[offset] ^ 0xffff0000; }
-static WRITE32_HANDLER( wcvol95_pf1_rowscroll_w ) { deco156_state *state = (deco156_state *)space->machine->driver_data; data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->pf1_rowscroll[offset]); }
-static WRITE32_HANDLER( wcvol95_pf2_rowscroll_w ) { deco156_state *state = (deco156_state *)space->machine->driver_data; data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->pf2_rowscroll[offset]); }
+static READ32_HANDLER( wcvol95_pf1_rowscroll_r ) { deco156_state *state = space->machine->driver_data<deco156_state>(); return state->pf1_rowscroll[offset] ^ 0xffff0000; }
+static READ32_HANDLER( wcvol95_pf2_rowscroll_r ) { deco156_state *state = space->machine->driver_data<deco156_state>();	return state->pf2_rowscroll[offset] ^ 0xffff0000; }
+static WRITE32_HANDLER( wcvol95_pf1_rowscroll_w ) { deco156_state *state = space->machine->driver_data<deco156_state>(); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->pf1_rowscroll[offset]); }
+static WRITE32_HANDLER( wcvol95_pf2_rowscroll_w ) { deco156_state *state = space->machine->driver_data<deco156_state>(); data &= 0x0000ffff; mem_mask &= 0x0000ffff; COMBINE_DATA(&state->pf2_rowscroll[offset]); }
 
 
 static ADDRESS_MAP_START( hvysmsh_map, ADDRESS_SPACE_PROGRAM, 32 )
@@ -203,8 +204,8 @@ static ADDRESS_MAP_START( hvysmsh_map, ADDRESS_SPACE_PROGRAM, 32 )
 	AM_RANGE(0x120004, 0x120007) AM_WRITE(hvysmsh_eeprom_w)
 	AM_RANGE(0x120008, 0x12000b) AM_WRITENOP // IRQ ack?
 	AM_RANGE(0x12000c, 0x12000f) AM_DEVWRITE("oki1", hvysmsh_oki_0_bank_w)
-	AM_RANGE(0x140000, 0x140003) AM_DEVREADWRITE8("oki1", okim6295_r, okim6295_w, 0x000000ff)
-	AM_RANGE(0x160000, 0x160003) AM_DEVREADWRITE8("oki2", okim6295_r, okim6295_w, 0x000000ff)
+	AM_RANGE(0x140000, 0x140003) AM_DEVREADWRITE8_MODERN("oki1", okim6295_device, read, write, 0x000000ff)
+	AM_RANGE(0x160000, 0x160003) AM_DEVREADWRITE8_MODERN("oki2", okim6295_device, read, write, 0x000000ff)
 	AM_RANGE(0x180000, 0x18001f) AM_DEVREADWRITE("deco_custom", deco16ic_pf12_control_dword_r, deco16ic_pf12_control_dword_w)
 	AM_RANGE(0x190000, 0x191fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf1_data_dword_r, deco16ic_pf1_data_dword_w)
 	AM_RANGE(0x194000, 0x195fff) AM_DEVREADWRITE("deco_custom", deco16ic_pf2_data_dword_r, deco16ic_pf2_data_dword_w)
@@ -400,18 +401,7 @@ static const deco16ic_interface deco156_deco16ic_intf =
 	NULL
 };
 
-static MACHINE_START( deco156 )
-{
-	deco156_state *state = (deco156_state *)machine->driver_data;
-
-	state->maincpu = machine->device<cpu_device>("maincpu");
-	state->deco16ic = machine->device<deco16ic_device>("deco_custom");
-}
-
-static MACHINE_DRIVER_START( hvysmsh )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(deco156_state)
+static MACHINE_CONFIG_START( hvysmsh, deco156_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", ARM, 28000000) /* Unconfirmed */
@@ -419,8 +409,6 @@ static MACHINE_DRIVER_START( hvysmsh )
 	MDRV_CPU_VBLANK_INT("screen", deco32_vbl_interrupt)
 
 	MDRV_EEPROM_93C46_ADD("eeprom")
-
-	MDRV_MACHINE_START(deco156)
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
@@ -450,12 +438,9 @@ static MACHINE_DRIVER_START( hvysmsh )
 	MDRV_OKIM6295_ADD("oki2", 28000000/14, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.35)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( wcvol95 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(deco156_state)
+static MACHINE_CONFIG_START( wcvol95, deco156_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", ARM, 28000000) /* Unconfirmed */
@@ -463,8 +448,6 @@ static MACHINE_DRIVER_START( wcvol95 )
 	MDRV_CPU_VBLANK_INT("screen", deco32_vbl_interrupt)
 
 	MDRV_EEPROM_93C46_ADD("eeprom")
-
-	MDRV_MACHINE_START(deco156)
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM )
@@ -491,7 +474,7 @@ static MACHINE_DRIVER_START( wcvol95 )
 	MDRV_SOUND_CONFIG(ymz280b_intf)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /**********************************************************************************/

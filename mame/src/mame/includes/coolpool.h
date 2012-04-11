@@ -1,11 +1,12 @@
-class coolpool_state
+class coolpool_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, coolpool_state(machine)); }
-
-	coolpool_state(running_machine &machine) { }
+	coolpool_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  m_nvram(*this, "nvram") { }
 
 	UINT16 *vram_base;
+	required_shared_ptr<UINT16> m_nvram;
 
 	UINT8 cmd_pending;
 	UINT16 iop_cmd;

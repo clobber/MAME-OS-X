@@ -52,8 +52,9 @@
 #define DEVCB_TYPE_SELF				(1)
 #define DEVCB_TYPE_INPUT			(2)
 #define DEVCB_TYPE_DEVICE			(3)
-#define DEVCB_TYPE_MEMORY(space)	(4 + (space))
-#define DEVCB_TYPE_CPU_LINE(line)	(4 + ADDRESS_SPACES + (line))
+#define DEVCB_TYPE_DRIVER			(4)
+#define DEVCB_TYPE_MEMORY(space)	(5 + (space))
+#define DEVCB_TYPE_CPU_LINE(line)	(5 + ADDRESS_SPACES + (line))
 
 
 
@@ -61,17 +62,57 @@
     MACROS
 ***************************************************************************/
 
+// static template for a read_line stub function that calls through a given READ_LINE_MEMBER
+template<class _Class, int (_Class::*_Function)()>
+int devcb_line_stub(device_t *device)
+{
+	_Class *target = downcast<_Class *>(device);
+	return (target->*_Function)();
+}
+
+// static template for a read8 stub function that calls through a given READ8_MEMBER
+template<class _Class, UINT8 (_Class::*_Function)(address_space &, offs_t, UINT8)>
+UINT8 devcb_stub(device_t *device, offs_t offset)
+{
+	_Class *target = downcast<_Class *>(device);
+	return (target->*_Function)(*device->machine->m_nonspecific_space, offset, 0xff);
+}
+
+// static template for a write_line stub function that calls through a given WRITE_LINE_MEMBER
+template<class _Class, void (_Class::*_Function)(int state)>
+void devcb_line_stub(device_t *device, int state)
+{
+	_Class *target = downcast<_Class *>(device);
+	(target->*_Function)(state);
+}
+
+// static template for a write8 stub function that calls through a given WRITE8_MEMBER
+template<class _Class, void (_Class::*_Function)(address_space &, offs_t, UINT8, UINT8)>
+void devcb_stub(device_t *device, offs_t offset, UINT8 data)
+{
+	_Class *target = downcast<_Class *>(device);
+	(target->*_Function)(*device->machine->m_nonspecific_space, offset, data, 0xff);
+}
+
 #define DEVCB_NULL							{ DEVCB_TYPE_NULL }
 
 /* standard line or read/write handlers with the calling device passed */
-#define DEVCB_LINE(func)					{ DEVCB_TYPE_SELF, NULL, (func), NULL, NULL }
-#define DEVCB_LINE_GND						{ DEVCB_TYPE_SELF, NULL, devcb_line_gnd_r, NULL, NULL }
-#define DEVCB_LINE_VCC						{ DEVCB_TYPE_SELF, NULL, devcb_line_vcc_r, NULL, NULL }
-#define DEVCB_HANDLER(func)					{ DEVCB_TYPE_SELF, NULL, NULL, (func), NULL }
+#define DEVCB_LINE(func)						{ DEVCB_TYPE_SELF, NULL, (func), NULL, NULL }
+#define DEVCB_LINE_MEMBER(cls,memb)				{ DEVCB_TYPE_SELF, NULL, &devcb_line_stub<cls, &cls::memb>, NULL, NULL }
+#define DEVCB_LINE_GND							{ DEVCB_TYPE_SELF, NULL, devcb_line_gnd_r, NULL, NULL }
+#define DEVCB_LINE_VCC							{ DEVCB_TYPE_SELF, NULL, devcb_line_vcc_r, NULL, NULL }
+#define DEVCB_HANDLER(func)						{ DEVCB_TYPE_SELF, NULL, NULL, (func), NULL }
+#define DEVCB_MEMBER(cls,memb)					{ DEVCB_TYPE_SELF, NULL, NULL, &devcb_stub<cls, &cls::memb>, NULL }
+
+/* line or read/write handlers for the driver device */
+#define DEVCB_DRIVER_LINE_MEMBER(cls,memb)		{ DEVCB_TYPE_DRIVER, NULL, &devcb_line_stub<cls, &cls::memb>, NULL, NULL }
+#define DEVCB_DRIVER_MEMBER(cls,memb)			{ DEVCB_TYPE_DRIVER, NULL, NULL, &devcb_stub<cls, &cls::memb>, NULL }
 
 /* line or read/write handlers for another device */
-#define DEVCB_DEVICE_LINE(tag,func)			{ DEVCB_TYPE_DEVICE, tag, (func), NULL, NULL }
-#define DEVCB_DEVICE_HANDLER(tag,func)		{ DEVCB_TYPE_DEVICE, tag, NULL, (func), NULL }
+#define DEVCB_DEVICE_LINE(tag,func)				{ DEVCB_TYPE_DEVICE, tag, (func), NULL, NULL }
+#define DEVCB_DEVICE_LINE_MEMBER(tag,cls,memb)	{ DEVCB_TYPE_DEVICE, tag, &devcb_line_stub<cls, &cls::memb>, NULL, NULL }
+#define DEVCB_DEVICE_HANDLER(tag,func)			{ DEVCB_TYPE_DEVICE, tag, NULL, (func), NULL }
+#define DEVCB_DEVICE_MEMBER(tag,cls,memb)		{ DEVCB_TYPE_DEVICE, tag, NULL, &devcb_stub<cls, &cls::memb>, NULL }
 
 /* read/write handlers for a given CPU's address space */
 #define DEVCB_MEMORY_HANDLER(cpu,space,func) { DEVCB_TYPE_MEMORY(ADDRESS_SPACE_##space), (cpu), NULL, NULL, (func) }
@@ -86,6 +127,11 @@
 /* macros for defining read_line/write_line functions */
 #define READ_LINE_DEVICE_HANDLER(name)		int  name(ATTR_UNUSED device_t *device)
 #define WRITE_LINE_DEVICE_HANDLER(name) 	void name(ATTR_UNUSED device_t *device, ATTR_UNUSED int state)
+
+#define DECLARE_READ_LINE_MEMBER(name)		int  name()
+#define READ_LINE_MEMBER(name)				int  name()
+#define DECLARE_WRITE_LINE_MEMBER(name) 	void name(ATTR_UNUSED int state)
+#define WRITE_LINE_MEMBER(name)				void name(ATTR_UNUSED int state)
 
 /* macros for inline device handler initialization */
 
@@ -102,17 +148,14 @@
 #define MDRV_DEVICE_CONFIG_READ_HANDLER(_struct, _entry, _tag, _func) MDRV_DEVICE_CONFIG_DEVCB_GENERIC(read, _struct, _entry, _tag, DEVCB_TYPE_DEVICE, NULL, _func, NULL)
 #define MDRV_DEVICE_CONFIG_WRITE_HANDLER(_struct, _entry, _tag, _func) MDRV_DEVICE_CONFIG_DEVCB_GENERIC(write, _struct, _entry, _tag, DEVCB_TYPE_DEVICE, NULL, _func, NULL)
 
+
+
 /***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
 /* forward declarations */
 class device_config;
-
-
-/* read/write types for I/O lines (similar to read/write handlers but no offset) */
-typedef int (*read_line_device_func)(device_t *device);
-typedef void (*write_line_device_func)(device_t *device, int state);
 
 
 /* static structure used for device configuration when the desired callback type is a read_line_device_func */

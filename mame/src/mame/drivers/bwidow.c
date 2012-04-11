@@ -353,7 +353,7 @@ static WRITE8_HANDLER( irq_ack_w )
 
 static ADDRESS_MAP_START( bwidow_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x2800, 0x5fff) AM_ROM
 	AM_RANGE(0x6000, 0x67ff) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x6800, 0x6fff) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
@@ -387,7 +387,7 @@ static ADDRESS_MAP_START( spacduel_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0f00, 0x0f3f) AM_DEVWRITE("earom", atari_vg_earom_w)
 	AM_RANGE(0x1000, 0x100f) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x1400, 0x140f) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
-	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x27ff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x2800, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
@@ -709,7 +709,7 @@ static const pokey_interface pokey_interface_2 =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( bwidow )
+static MACHINE_CONFIG_START( bwidow, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, MASTER_CLOCK / 8)
@@ -737,24 +737,22 @@ static MACHINE_DRIVER_START( bwidow )
 	MDRV_SOUND_ADD("pokey2", POKEY, MASTER_CLOCK / 8)
 	MDRV_SOUND_CONFIG(pokey_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gravitar )
+static MACHINE_CONFIG_DERIVED( gravitar, bwidow )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(bwidow)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0, 420, 0, 400)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( lunarbat )
+static MACHINE_CONFIG_DERIVED( lunarbat, gravitar )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(gravitar)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(spacduel_map)
 
@@ -762,13 +760,12 @@ static MACHINE_DRIVER_START( lunarbat )
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_REFRESH_RATE(45)
 	MDRV_SCREEN_VISIBLE_AREA(0, 500, 0, 440)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( spacduel )
+static MACHINE_CONFIG_DERIVED( spacduel, gravitar )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(gravitar)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(spacduel_map)
 
@@ -776,7 +773,7 @@ static MACHINE_DRIVER_START( spacduel )
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_REFRESH_RATE(45)
 	MDRV_SCREEN_VISIBLE_AREA(0, 540, 0, 400)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -280,22 +280,19 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( funkybee )
 {
-	funkybee_state *state = (funkybee_state *)machine->driver_data;
+	funkybee_state *state = machine->driver_data<funkybee_state>();
 
 	state_save_register_global(machine, state->gfx_bank);
 }
 
 static MACHINE_RESET( funkybee )
 {
-	funkybee_state *state = (funkybee_state *)machine->driver_data;
+	funkybee_state *state = machine->driver_data<funkybee_state>();
 
 	state->gfx_bank = 0;
 }
 
-static MACHINE_DRIVER_START( funkybee )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(funkybee_state)
+static MACHINE_CONFIG_START( funkybee, funkybee_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz */
@@ -327,7 +324,7 @@ static MACHINE_DRIVER_START( funkybee )
 	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

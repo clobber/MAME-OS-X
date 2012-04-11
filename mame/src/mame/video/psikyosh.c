@@ -281,7 +281,7 @@ static void drawgfx_alphatable(bitmap_t *dest, const rectangle *cliprect, const 
 Zooming isn't supported just because it's not used and it would be slow */
 static void draw_bglayer( running_machine *machine, int layer, bitmap_t *bitmap, const rectangle *cliprect, UINT8 req_pri )
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	gfx_element *gfx;
 	int offs = 0, sx, sy;
 	int scrollx, scrolly, regbank, tilebank, alpha, alphamap, zoom, pri, size, width;
@@ -389,7 +389,7 @@ From there we extract data as we compose the image, one scanline at a time, blen
 into the RGB32 bitmap (with either the alpha information from the ARGB, or per-line alpha */
 static void draw_bglayerscroll( running_machine *machine, int layer, bitmap_t *bitmap, const rectangle *cliprect, UINT8 req_pri )
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	assert(BG_LINE(layer));
 
 	gfx_element *gfx = BG_DEPTH_8BPP(layer) ? machine->gfx[1] : machine->gfx[0];
@@ -438,14 +438,14 @@ static void draw_bglayerscroll( running_machine *machine, int layer, bitmap_t *b
 				cache_bitmap(tilemap_scanline, state, gfx, size, tilebank, alpha, last_bank);
 
 				/* zoomy and 'wibbly' effects - extract an entire row from tilemap */
-				profiler_mark_start(PROFILER_USER2);
+				g_profiler.start(PROFILER_USER2);
 				UINT32 tilemap_line[32 * 16];
 				UINT32 scr_line[64 * 8];
 				extract_scanline32(state->bg_bitmap, 0, tilemap_scanline, width, tilemap_line);
-				profiler_mark_end();
+				g_profiler.stop();
 
 				/* slow bit, needs optimising. apply scrollx and zoomx by assembling scanline from row */
-				profiler_mark_start(PROFILER_USER3);
+				g_profiler.start(PROFILER_USER3);
 				if(zoom) {
 					int step = state->bg_zoom[zoom];
 					int jj = 0x400 << 10; // ensure +ve for mod
@@ -459,10 +459,10 @@ static void draw_bglayerscroll( running_machine *machine, int layer, bitmap_t *b
 						scr_line[ii] = tilemap_line[(ii - scrollx + 0x400) % width];
 					}
 				}
-				profiler_mark_end();
+				g_profiler.stop();
 
 				/* blend line into output */
-				profiler_mark_start(PROFILER_USER4);
+				g_profiler.start(PROFILER_USER4);
 				if(alpha == 0xff) {
 					draw_scanline32_transpen(bitmap, 0, scanline, scr_width, scr_line);
 				}
@@ -472,7 +472,7 @@ static void draw_bglayerscroll( running_machine *machine, int layer, bitmap_t *b
 				else if (alpha < 0) {
 					draw_scanline32_argb(bitmap, 0, scanline, scr_width, scr_line);
 				}
-				profiler_mark_end();
+				g_profiler.stop();
 			}
 		}
 
@@ -484,7 +484,7 @@ static void draw_bglayerscroll( running_machine *machine, int layer, bitmap_t *b
 /* 3 BG layers, with priority */
 static void draw_background( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 req_pri )
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	int i;
 
 #ifdef DEBUG_KEYS
@@ -534,7 +534,7 @@ static void psikyosh_drawgfxzoom( running_machine *machine,
 		UINT32 code,UINT32 color,int flipx,int flipy,int offsx,int offsy,
 		int alpha, int zoomx, int zoomy, int wide, int high, UINT32 z)
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	rectangle myclip; /* Clip to screen boundaries */
 	int code_offset = 0;
 	int xtile, ytile, xpixel, ypixel;
@@ -542,7 +542,7 @@ static void psikyosh_drawgfxzoom( running_machine *machine,
 	if (!zoomx || !zoomy)
 		return;
 
-	profiler_mark_start(PROFILER_DRAWGFX);
+	g_profiler.start(PROFILER_DRAWGFX);
 
 	assert(dest_bmp->bpp == 32);
 
@@ -1065,7 +1065,7 @@ static void psikyosh_drawgfxzoom( running_machine *machine,
 			}
 		}
 	}
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
@@ -1115,7 +1115,7 @@ static void draw_sprites(running_machine *machine, bitmap_t *bitmap, const recta
 #endif
 
 
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	const gfx_element *gfx;
 	UINT32 *src = machine->generic.buffered_spriteram.u32; /* Use buffered spriteram */
 	UINT16 *list = (UINT16 *)src + 0x3800 / 2;
@@ -1195,7 +1195,7 @@ static void psikyosh_prelineblend( running_machine *machine, bitmap_t *bitmap, c
 	/* I suspect that it should be blended against black by the amount specified as
        gnbarich sets the 0x000000ff to 0x7f in test mode whilst the others use 0x80.
        tgm2 sets it to 0x00 on warning screen. Likely has no effect. */
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	UINT32 *dstline;
 	int bank = (state->vidregs[7] & 0xff000000) >> 24; /* bank is always 8 (0x4000) except for daraku/soldivid */
 	UINT32 *linefill = &state->bgram[(bank * 0x800) / 4 - 0x4000 / 4]; /* Per row */
@@ -1203,7 +1203,7 @@ static void psikyosh_prelineblend( running_machine *machine, bitmap_t *bitmap, c
 
 	assert(bitmap->bpp == 32);
 
-	profiler_mark_start(PROFILER_USER8);
+	g_profiler.start(PROFILER_USER8);
 	for (y = cliprect->min_y; y <= cliprect->max_y; y += 1) {
 
 		dstline = BITMAP_ADDR32(bitmap, y, 0);
@@ -1212,14 +1212,14 @@ static void psikyosh_prelineblend( running_machine *machine, bitmap_t *bitmap, c
 		for (x = cliprect->min_x; x <= cliprect->max_x; x += 1)
 			dstline[x] = linefill[y] >> 8;
 	}
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
 static void psikyosh_postlineblend( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect, UINT8 req_pri )
 {
 	/* There are 224 values for post-lineblending. Using one for every row currently */
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	UINT32 *dstline;
 	int bank = (state->vidregs[7] & 0xff000000) >> 24; /* bank is always 8 (i.e. 0x4000) except for daraku/soldivid */
 	UINT32 *lineblend = &state->bgram[(bank * 0x800) / 4 - 0x4000 / 4 + 0x400 / 4]; /* Per row */
@@ -1231,7 +1231,7 @@ static void psikyosh_postlineblend( running_machine *machine, bitmap_t *bitmap, 
 		return;
 	}
 
-	profiler_mark_start(PROFILER_USER8);
+	g_profiler.start(PROFILER_USER8);
 	for (y = cliprect->min_y; y <= cliprect->max_y; y += 1) {
 
 		dstline = BITMAP_ADDR32(bitmap, y, 0);
@@ -1247,13 +1247,13 @@ static void psikyosh_postlineblend( running_machine *machine, bitmap_t *bitmap, 
 				dstline[x] = alpha_blend_r32(dstline[x], lineblend[y] >> 8, 2 * (lineblend[y] & 0x7f));
 		}
 	}
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
 VIDEO_START( psikyosh )
 {
-	psikyosh_state *state = (psikyosh_state *)machine->driver_data;
+	psikyosh_state *state = machine->driver_data<psikyosh_state>();
 	int width = machine->primary_screen->width();
 	int height = machine->primary_screen->height();
 
@@ -1291,7 +1291,7 @@ VIDEO_START( psikyosh )
 VIDEO_UPDATE( psikyosh ) /* Note the z-buffer on each sprite to get correct priority */
 {
 	int i;
-	psikyosh_state *state = (psikyosh_state *)screen->machine->driver_data;
+	psikyosh_state *state = screen->machine->driver_data<psikyosh_state>();
 
 	// show only the priority associated with a given keypress(s) and/or hide sprites/tilemaps
 	int pri_debug = false;
@@ -1342,7 +1342,7 @@ popmessage   ("%08x %08x %08x %08x\n%08x %08x %08x %08x",
 
 VIDEO_EOF( psikyosh )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	buffer_spriteram32_w(space, 0, 0, 0xffffffff);
 }
 

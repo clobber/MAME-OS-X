@@ -188,7 +188,6 @@ Notes:
 ******************************************************************************/
 
 #include "emu.h"
-#include "video/system1.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
 #include "machine/z80pio.h"
@@ -197,6 +196,7 @@ Notes:
 #include "machine/segacrp2.h"
 #include "machine/mc8123.h"
 #include "sound/sn76496.h"
+#include "includes/system1.h"
 
 
 #define MASTER_CLOCK	XTAL_20MHz
@@ -555,11 +555,11 @@ static WRITE8_HANDLER( mcu_io_w )
 	switch ((mcu_control >> 3) & 3)
 	{
 		case 0:
-			memory_write_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), offset, data);
+			space->machine->device<z80_device>("maincpu")->space(AS_PROGRAM)->write_byte(offset, data);
 			break;
 
 		case 2:
-			memory_write_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_IO), offset, data);
+			space->machine->device<z80_device>("maincpu")->space(AS_IO)->write_byte(offset, data);
 			break;
 
 		default:
@@ -575,13 +575,13 @@ static READ8_HANDLER( mcu_io_r )
 	switch ((mcu_control >> 3) & 3)
 	{
 		case 0:
-			return memory_read_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_PROGRAM), offset);
+			return space->machine->device<z80_device>("maincpu")->space(AS_PROGRAM)->read_byte(offset);
 
 		case 1:
 			return memory_region(space->machine, "maincpu")[offset + 0x10000];
 
 		case 2:
-			return memory_read_byte(cputag_get_address_space(space->machine, "maincpu", ADDRESS_SPACE_IO), offset);
+			return space->machine->device<z80_device>("maincpu")->space(AS_IO)->read_byte(offset);
 
 		default:
 			logerror("%03X: MCU movx read mode %02X offset %04X\n",
@@ -2099,7 +2099,7 @@ static Z80PIO_INTERFACE( pio_interface )
  *************************************/
 
 /* original board with 64kbit ROMs and an 8255 PPI for outputs */
-static MACHINE_DRIVER_START( sys1ppi )
+static MACHINE_CONFIG_START( sys1ppi, system1_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK)	/* not really, see notes above */
@@ -2137,43 +2137,40 @@ static MACHINE_DRIVER_START( sys1ppi )
 
 	MDRV_SOUND_ADD("sn2", SN76489A, SOUND_CLOCK/2)	/* selectable via jumper */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* reduced visible area for scrolling games */
-static MACHINE_DRIVER_START( sys1ppis )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys1ppis, sys1ppi )
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0*8+8, 32*8-1-8, 0*8, 28*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
 /* revised board with 128kbit ROMs and a Z80 PIO for outputs */
-static MACHINE_DRIVER_START( sys1pio )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys1pio, sys1ppi )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_IO_MAP(system1_pio_io_map)
 
 	MDRV_DEVICE_REMOVE("ppi")
 	MDRV_Z80PIO_ADD("pio", MASTER_CLOCK, pio_interface)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* reduced visible area for scrolling games */
-static MACHINE_DRIVER_START( sys1pios )
-	MDRV_IMPORT_FROM( sys1pio )
+static MACHINE_CONFIG_DERIVED( sys1pios, sys1pio )
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0*8+8, 32*8-1-8, 0*8, 28*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
 /* this describes the additional 8751 MCU when present */
-static MACHINE_DRIVER_START( mcu )
+static MACHINE_CONFIG_FRAGMENT( mcu )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -2184,57 +2181,51 @@ static MACHINE_DRIVER_START( mcu )
 	MDRV_CPU_VBLANK_INT("screen", mcu_irq_assert)
 
 	MDRV_TIMER_ADD_PERIODIC("mcu_t0", mcu_t0_callback, MSEC(20))	/* ??? actual clock unknown */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
 /* alternate program map with RAM/collision swapped */
-static MACHINE_DRIVER_START( nob )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( nob, sys1ppi )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(nobo_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( nobm )
-	MDRV_IMPORT_FROM( nob )
+static MACHINE_CONFIG_DERIVED( nobm, nob )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("mcu", I8751, SOUND_CLOCK)
 	MDRV_CPU_IO_MAP(nob_mcu_io_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
 /* system2 video */
-static MACHINE_DRIVER_START( sys2 )
-	MDRV_IMPORT_FROM( sys1ppi )
+static MACHINE_CONFIG_DERIVED( sys2, sys1ppi )
 
 	MDRV_MACHINE_START(system2)
 
 	/* video hardware */
 	MDRV_VIDEO_START(system2)
 	MDRV_VIDEO_UPDATE(system2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sys2m )
-	MDRV_IMPORT_FROM( sys2 )
-	MDRV_IMPORT_FROM( mcu )
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( sys2m, sys2 )
+	MDRV_FRAGMENT_ADD( mcu )
+MACHINE_CONFIG_END
 
 /* system2 with rowscroll */
-static MACHINE_DRIVER_START( sys2row )
-	MDRV_IMPORT_FROM( sys2 )
+static MACHINE_CONFIG_DERIVED( sys2row, sys2 )
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(system2_rowscroll)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sys2rowm )
-	MDRV_IMPORT_FROM( sys2row )
-	MDRV_IMPORT_FROM( mcu )
-MACHINE_DRIVER_END
+static MACHINE_CONFIG_DERIVED( sys2rowm, sys2row )
+	MDRV_FRAGMENT_ADD( mcu )
+MACHINE_CONFIG_END
 
 
 
@@ -4600,8 +4591,8 @@ static READ8_HANDLER( nob_start_r )
 
 static DRIVER_INIT( nob )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 
 	DRIVER_INIT_CALL(bank44);
 
@@ -4632,7 +4623,7 @@ static DRIVER_INIT( nobb )
 //  ROM[0x10000 + 0 * 0x8000 + 0x3347] = 0x18;  // 'jr' instead of 'jr z'
 
 	/* Patch to get sound in later levels(the program enters into a tight loop)*/
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 	UINT8 *ROM2 = memory_region(machine, "soundcpu");
 
 	ROM2[0x02f9] = 0x28;//'jr z' instead of 'jr'
@@ -4648,16 +4639,16 @@ static DRIVER_INIT( nobb )
 
 static DRIVER_INIT( bootleg )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x10000);
 	DRIVER_INIT_CALL(bank00);
 }
 
 
 static DRIVER_INIT( bootsys2 )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	memory_set_decrypted_region(space, 0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x20000);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	space->set_decrypted_region(0x0000, 0x7fff, memory_region(machine, "maincpu") + 0x20000);
 	memory_configure_bank_decrypted(machine, "bank1", 0, 4, memory_region(machine, "maincpu") + 0x30000, 0x4000);
 	DRIVER_INIT_CALL(bank0c);
 }
@@ -4676,7 +4667,7 @@ static DRIVER_INIT( choplift )
 
 static DRIVER_INIT( shtngmst )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 	memory_install_read_port(iospace, 0x12, 0x12, 0x00, 0x00, "TRIGGER");
 	memory_install_read_port(iospace, 0x18, 0x18, 0x00, 0x03, "18");
 	memory_install_read_port(iospace, 0x1c, 0x1c, 0x00, 0x02, "GUNX");

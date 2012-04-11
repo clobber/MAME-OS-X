@@ -7,7 +7,7 @@ INLINE int READ_OP(saturn_state *cpustate)
 {
 	UINT8 data;
 	cpustate->icount-=3;
-        data=memory_decrypted_read_byte(cpustate->program, cpustate->pc);
+        data=cpustate->direct->read_decrypted_byte(cpustate->pc);
 	saturn_assert(data<0x10);
 	cpustate->pc=(cpustate->pc+1)&0xfffff;
 	return data;
@@ -17,7 +17,7 @@ INLINE int READ_OP_ARG(saturn_state *cpustate)
 {
 	UINT8 data;
 	cpustate->icount-=3;
-        data=memory_raw_read_byte(cpustate->program, cpustate->pc);
+        data=cpustate->direct->read_raw_byte(cpustate->pc);
 	saturn_assert(data<0x10);
 	cpustate->pc=(cpustate->pc+1)&0xfffff;
 	return data;
@@ -78,7 +78,7 @@ INLINE int READ_NIBBLE(saturn_state *cpustate, SaturnAdr adr)
 {
 	UINT8 data;
 	cpustate->icount-=3;
-	data=memory_read_byte(cpustate->program, adr&0xfffff);
+	data=cpustate->program->read_byte(adr&0xfffff);
 	saturn_assert(data<0x10);
 	if (cpustate->config&&cpustate->config->crc) cpustate->config->crc(cpustate->device, adr&0xfffff, data);
 	return data;
@@ -108,7 +108,7 @@ INLINE void WRITE_NIBBLE(saturn_state *cpustate, SaturnAdr adr, SaturnNib nib)
 {
 	cpustate->icount-=3;
 	saturn_assert(nib<0x10);
-	memory_write_byte(cpustate->program, adr&0xfffff,nib);
+	cpustate->program->write_byte(adr&0xfffff,nib);
 }
 
 #define BEGIN_B 0

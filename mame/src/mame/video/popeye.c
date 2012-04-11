@@ -7,6 +7,7 @@
 ***************************************************************************/
 
 #include "emu.h"
+#include "includes/popeye.h"
 
 UINT8 *popeye_videoram;
 UINT8 *popeye_colorram;
@@ -281,7 +282,7 @@ VIDEO_START( popeye )
 static void draw_background(running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect)
 {
 	int offs;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	if (lastflip != flip_screen_get(machine))
 	{

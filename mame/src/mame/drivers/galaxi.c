@@ -42,14 +42,14 @@ Notes:
 #include "emu.h"
 #include "cpu/m68000/m68000.h"
 #include "sound/okim6295.h"
+#include "machine/nvram.h"
 #include "galaxi.lh"
 
-class galaxi_state
+class galaxi_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, galaxi_state(machine)); }
-
-	galaxi_state(running_machine &machine) { }
+	galaxi_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *  bg1_ram;
@@ -75,77 +75,77 @@ public:
 
 static TILE_GET_INFO( get_bg1_tile_info )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 	UINT16 code = state->bg1_ram[tile_index];
 	SET_TILE_INFO(0, code, 0x10 + (code >> 12), 0);
 }
 
 static TILE_GET_INFO( get_bg2_tile_info )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 	UINT16 code = state->bg2_ram[tile_index];
 	SET_TILE_INFO(0, code, 0x10 + (code >> 12), 0);
 }
 
 static TILE_GET_INFO( get_bg3_tile_info )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 	UINT16 code = state->bg3_ram[tile_index];
 	SET_TILE_INFO(0, code, (code >> 12), 0);
 }
 
 static TILE_GET_INFO( get_bg4_tile_info )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 	UINT16 code = state->bg4_ram[tile_index];
 	SET_TILE_INFO(0, code, (code >> 12), 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 	UINT16 code = state->fg_ram[tile_index];
 	SET_TILE_INFO(1, code, 0x20 + (code >> 12), 0);
 }
 
 static WRITE16_HANDLER( galaxi_bg1_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->bg1_ram[offset]);
 	tilemap_mark_tile_dirty(state->bg1_tmap, offset);
 }
 
 static WRITE16_HANDLER( galaxi_bg2_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->bg2_ram[offset]);
 	tilemap_mark_tile_dirty(state->bg2_tmap, offset);
 }
 
 static WRITE16_HANDLER( galaxi_bg3_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->bg3_ram[offset]);
 	tilemap_mark_tile_dirty(state->bg3_tmap, offset);
 }
 
 static WRITE16_HANDLER( galaxi_bg4_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->bg4_ram[offset]);
 	tilemap_mark_tile_dirty(state->bg4_tmap, offset);
 }
 
 static WRITE16_HANDLER( galaxi_fg_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->fg_ram[offset]);
 	tilemap_mark_tile_dirty(state->fg_tmap, offset);
 }
 
 static VIDEO_START(galaxi)
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 
 	state->bg1_tmap = tilemap_create(machine, get_bg1_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
 	state->bg2_tmap = tilemap_create(machine, get_bg2_tile_info, tilemap_scan_rows, 16, 16, 0x20, 0x10);
@@ -166,7 +166,7 @@ static VIDEO_START(galaxi)
 
 static VIDEO_UPDATE(galaxi)
 {
-	galaxi_state *state = (galaxi_state *)screen->machine->driver_data;
+	galaxi_state *state = screen->machine->driver_data<galaxi_state>();
 	int layers_ctrl = -1;
 
 #ifdef MAME_DEBUG
@@ -199,27 +199,27 @@ static VIDEO_UPDATE(galaxi)
 
 static void show_out( running_machine *machine )
 {
-//  galaxi_state *state = (galaxi_state *)machine->driver_data;
+//  galaxi_state *state = machine->driver_data<galaxi_state>();
 //  popmessage("%04x %04x %04x", state->out[0], state->out[1], state->out[2]);
 }
 
 static WRITE16_HANDLER( galaxi_500000_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->out[0]);
 	show_out(space->machine);
 }
 
 static WRITE16_HANDLER( galaxi_500002_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 	COMBINE_DATA(&state->out[1]);
 	show_out(space->machine);
 }
 
 static WRITE16_HANDLER( galaxi_500004_w )
 {
-	galaxi_state *state = (galaxi_state *)space->machine->driver_data;
+	galaxi_state *state = space->machine->driver_data<galaxi_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -256,13 +256,13 @@ static WRITE16_HANDLER( galaxi_500004_w )
 
 static CUSTOM_INPUT( ticket_r )
 {
-	galaxi_state *state = (galaxi_state *)field->port->machine->driver_data;
+	galaxi_state *state = field->port->machine->driver_data<galaxi_state>();
 	return state->ticket && !(field->port->machine->primary_screen->frame_number() % 10);
 }
 
 static CUSTOM_INPUT( hopper_r )
 {
-	galaxi_state *state = (galaxi_state *)field->port->machine->driver_data;
+	galaxi_state *state = field->port->machine->driver_data<galaxi_state>();
 	return state->hopper && !(field->port->machine->primary_screen->frame_number() % 10);
 }
 
@@ -285,9 +285,9 @@ static ADDRESS_MAP_START( galaxi_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x500002, 0x500003) AM_WRITE(galaxi_500002_w)
 	AM_RANGE(0x500004, 0x500005) AM_WRITE(galaxi_500004_w)
 
-	AM_RANGE(0x700000, 0x700001) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x700000, 0x700001) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 
-	AM_RANGE(0x600000, 0x607fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// 2x DS1230Y (non volatile SRAM)
+	AM_RANGE(0x600000, 0x607fff) AM_RAM AM_SHARE("nvram")	// 2x DS1230Y (non volatile SRAM)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -373,7 +373,7 @@ GFXDECODE_END
 
 static MACHINE_START( galaxi )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 
 	state_save_register_global(machine, state->hopper);
 	state_save_register_global(machine, state->ticket);
@@ -382,7 +382,7 @@ static MACHINE_START( galaxi )
 
 static MACHINE_RESET( galaxi )
 {
-	galaxi_state *state = (galaxi_state *)machine->driver_data;
+	galaxi_state *state = machine->driver_data<galaxi_state>();
 
 	state->hopper = 0;
 	state->ticket = 0;
@@ -391,10 +391,7 @@ static MACHINE_RESET( galaxi )
 	state->out[2] = 0;
 }
 
-static MACHINE_DRIVER_START( galaxi )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(galaxi_state)
+static MACHINE_CONFIG_START( galaxi, galaxi_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_10MHz)	// ?
@@ -403,7 +400,7 @@ static MACHINE_DRIVER_START( galaxi )
 
 	MDRV_MACHINE_START(galaxi)
 	MDRV_MACHINE_RESET(galaxi)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -424,19 +421,19 @@ static MACHINE_DRIVER_START( galaxi )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_16MHz/16, OKIM6295_PIN7_LOW)	// ?
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( magjoker )
+static MACHINE_CONFIG_DERIVED( magjoker, galaxi )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(galaxi)
 
 	/* sound hardware */
 	MDRV_SOUND_MODIFY("oki")
 
 	/* ADPCM samples are recorded with extremely low volume */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 4.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

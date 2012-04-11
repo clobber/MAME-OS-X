@@ -21,7 +21,7 @@ static READ8_HANDLER( citycon_in_r )
 
 static READ8_HANDLER( citycon_irq_ack_r )
 {
-	citycon_state *state = (citycon_state *)space->machine->driver_data;
+	citycon_state *state = space->machine->driver_data<citycon_state>();
 	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
 
 	return 0;
@@ -189,7 +189,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( citycon )
 {
-	citycon_state *state = (citycon_state *)machine->driver_data;
+	citycon_state *state = machine->driver_data<citycon_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -198,16 +198,13 @@ static MACHINE_START( citycon )
 
 static MACHINE_RESET( citycon )
 {
-	citycon_state *state = (citycon_state *)machine->driver_data;
+	citycon_state *state = machine->driver_data<citycon_state>();
 
 	state->bg_image = 0;
 }
 
 
-static MACHINE_DRIVER_START( citycon )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(citycon_state)
+static MACHINE_CONFIG_START( citycon, citycon_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2048000)        /* 2.048 MHz ??? */
@@ -248,7 +245,7 @@ static MACHINE_DRIVER_START( citycon )
 	MDRV_SOUND_ROUTE(1, "mono", 0.40)
 	MDRV_SOUND_ROUTE(2, "mono", 0.40)
 	MDRV_SOUND_ROUTE(3, "mono", 0.20)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

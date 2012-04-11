@@ -80,15 +80,15 @@ typedef enum {
 
 /************************************************************************/
 
-#define read_byte(a)			(*nec_state->mem.rbyte)(nec_state->program, a)
-#define read_word(a)			(*nec_state->mem.rword)(nec_state->program, a)
-#define write_byte(a,d)			(*nec_state->mem.wbyte)(nec_state->program, (a),(d))
-#define write_word(a,d)			(*nec_state->mem.wword)(nec_state->program, (a),(d))
+#define read_mem_byte(a)			nec_state->program->read_byte(a)
+#define read_mem_word(a)			nec_state->program->read_word_unaligned(a)
+#define write_mem_byte(a,d)			nec_state->program->write_byte((a),(d))
+#define write_mem_word(a,d)			nec_state->program->write_word_unaligned((a),(d))
 
-#define read_port_byte(a)		(*nec_state->mem.rbyte)(nec_state->io, a)
-#define read_port_word(a)		(*nec_state->mem.rword)(nec_state->io, a)
-#define write_port_byte(a,d)	(*nec_state->mem.wbyte)(nec_state->io, (a),(d))
-#define write_port_word(a,d)	(*nec_state->mem.wword)(nec_state->io, (a),(d))
+#define read_port_byte(a)		nec_state->io->read_byte(a)
+#define read_port_word(a)		nec_state->io->read_word_unaligned(a)
+#define write_port_byte(a,d)	nec_state->io->write_byte((a),(d))
+#define write_port_word(a,d)	nec_state->io->write_word_unaligned((a),(d))
 
 /************************************************************************/
 
@@ -98,22 +98,22 @@ typedef enum {
 
 #define DefaultBase(Seg) ((nec_state->seg_prefix && (Seg==DS0 || Seg==SS)) ? nec_state->prefix_base : nec_state->sregs[Seg] << 4)
 
-#define GetMemB(Seg,Off) (read_byte(DefaultBase(Seg) + (Off)))
-#define GetMemW(Seg,Off) (read_word(DefaultBase(Seg) + (Off)))
+#define GetMemB(Seg,Off) (read_mem_byte(DefaultBase(Seg) + (Off)))
+#define GetMemW(Seg,Off) (read_mem_word(DefaultBase(Seg) + (Off)))
 
-#define PutMemB(Seg,Off,x) { write_byte(DefaultBase(Seg) + (Off), (x)); }
-#define PutMemW(Seg,Off,x) { write_word(DefaultBase(Seg) + (Off), (x)); }
+#define PutMemB(Seg,Off,x) { write_mem_byte(DefaultBase(Seg) + (Off), (x)); }
+#define PutMemW(Seg,Off,x) { write_mem_word(DefaultBase(Seg) + (Off), (x)); }
 
 /* prefetch timing */
 
 #define FETCH() 			fetch(nec_state)
-#define FETCH_XOR(a)		((a) ^ nec_state->mem.fetch_xor)
+#define FETCH_XOR(a)		((a) ^ nec_state->fetch_xor)
 #define FETCHWORD()			fetchword(nec_state)
 #define EMPTY_PREFETCH()	nec_state->prefetch_reset = 1
 
 
-#define PUSH(val) { nec_state->regs.w[SP]-=2; write_word((((nec_state->sregs[SS]<<4)+nec_state->regs.w[SP])),val); }
-#define POP(var) { var = read_word((((nec_state->sregs[SS]<<4)+nec_state->regs.w[SP]))); nec_state->regs.w[SP]+=2; }
+#define PUSH(val) { nec_state->regs.w[SP]-=2; write_mem_word((((nec_state->sregs[SS]<<4)+nec_state->regs.w[SP])),val); }
+#define POP(var) { var = read_mem_word((((nec_state->sregs[SS]<<4)+nec_state->regs.w[SP]))); nec_state->regs.w[SP]+=2; }
 
 #define GetModRM UINT32 ModRM=FETCH()
 
@@ -221,7 +221,7 @@ typedef enum {
 	}										\
 	else {									\
 		(*GetEA[ModRM])(nec_state);					\
-		tmp=read_byte(EA);					\
+		tmp=read_mem_byte(EA);					\
     }
 
 #define BITOP_WORD							\
@@ -231,7 +231,7 @@ typedef enum {
 	}										\
 	else {									\
 		(*GetEA[ModRM])(nec_state);					\
-		tmp=read_word(EA);					\
+		tmp=read_mem_word(EA);					\
     }
 
 #define BIT_NOT								\

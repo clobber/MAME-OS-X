@@ -25,6 +25,14 @@
 
 
 //**************************************************************************
+//  DEVICE DEFINITIONS
+//**************************************************************************
+
+const device_type Z80SIO = z80sio_device_config::static_alloc_device_config;
+
+
+
+//**************************************************************************
 //  CONSTANTS
 //**************************************************************************
 
@@ -362,6 +370,8 @@ z80sio_device::z80sio_device(running_machine &_machine, const z80sio_device_conf
 	  device_z80daisy_interface(_machine, config, *this),
 	  m_config(config)
 {
+	for (int i = 0; i < 8; i++)
+		m_int_state[i] = 0;
 }
 
 
@@ -896,5 +906,3 @@ WRITE8_DEVICE_HANDLER( z80sio_ba_cd_w )
 		case 3: z80sio_c_w(device, 1, data); break;
 	}
 }
-
-const device_type Z80SIO = z80sio_device_config::static_alloc_device_config;

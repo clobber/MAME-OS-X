@@ -85,8 +85,9 @@ struct _v30mz_state
 
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *io;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *io;
 	int icount;
 
 	UINT32 prefix_base;	/* base address of the latest prefix segment */
@@ -139,6 +140,7 @@ static CPU_RESET( nec )
 	cpustate->irq_callback = save_irqcallback;
 	cpustate->device = device;
 	cpustate->program = device->space(AS_PROGRAM);
+	cpustate->direct = &cpustate->program->direct();
 	cpustate->io = device->space(AS_IO);
 
 	cpustate->sregs[CS] = 0xffff;

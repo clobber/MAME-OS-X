@@ -274,7 +274,7 @@ GFXDECODE_END
 
 static MACHINE_START( gunsmoke )
 {
-	gunsmoke_state *state = (gunsmoke_state *)machine->driver_data;
+	gunsmoke_state *state = machine->driver_data<gunsmoke_state>();
 	UINT8 *rombase = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &rombase[0x10000], 0x4000);
@@ -287,7 +287,7 @@ static MACHINE_START( gunsmoke )
 
 static MACHINE_RESET( gunsmoke )
 {
-	gunsmoke_state *state = (gunsmoke_state *)machine->driver_data;
+	gunsmoke_state *state = machine->driver_data<gunsmoke_state>();
 
 	state->chon = 0;
 	state->objon = 0;
@@ -295,10 +295,7 @@ static MACHINE_RESET( gunsmoke )
 	state->sprite3bank = 0;
 }
 
-static MACHINE_DRIVER_START( gunsmoke )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(gunsmoke_state)
+static MACHINE_CONFIG_START( gunsmoke, gunsmoke_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)	// 4 MHz
@@ -341,7 +338,7 @@ static MACHINE_DRIVER_START( gunsmoke )
 	MDRV_SOUND_ROUTE(1, "mono", 0.22)
 	MDRV_SOUND_ROUTE(2, "mono", 0.22)
 	MDRV_SOUND_ROUTE(3, "mono", 0.14)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* ROMs */
 

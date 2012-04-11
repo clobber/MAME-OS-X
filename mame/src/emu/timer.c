@@ -36,6 +36,14 @@
 
 
 /***************************************************************************
+    DEVICE DEFINITIONS
+***************************************************************************/
+
+const device_type TIMER = timer_device_config::static_alloc_device_config;
+
+
+
+/***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
@@ -56,6 +64,8 @@ public:
 	attotime				period;			/* the repeat frequency of the timer */
 	attotime				start;			/* time when the timer was started */
 	attotime				expire;			/* time when the timer will expire */
+	device_t *				device;			/* for device timers, a pointer to the device */
+	device_timer_id				id;				/* for device timers, the ID of the timer */
 };
 
 
@@ -368,12 +378,17 @@ void timer_execute_timers(running_machine *machine)
 		global->callback_timer_expire_time = timer->expire;
 
 		/* call the callback */
-		if (was_enabled && timer->callback != NULL)
+		if (was_enabled)
 		{
-			LOG(("Timer %s:%d[%s] fired (expire=%s)\n", timer->file, timer->line, timer->func, attotime_string(timer->expire, 9)));
-			profiler_mark_start(PROFILER_TIMER_CALLBACK);
-			(*timer->callback)(machine, timer->ptr, timer->param);
-			profiler_mark_end();
+			if (timer->device != NULL)
+				timer->device->timer_fired(*timer, timer->id, timer->param, timer->ptr);
+			else if (timer->callback != NULL)
+			{
+				LOG(("Timer %s:%d[%s] fired (expire=%s)\n", timer->file, timer->line, timer->func, attotime_string(timer->expire, 9)));
+				g_profiler.start(PROFILER_TIMER_CALLBACK);
+				(*timer->callback)(machine, timer->ptr, timer->param);
+				g_profiler.stop();
+			}
 		}
 
 		/* clear the callback timer global */
@@ -513,6 +528,8 @@ static void timer_register_save(emu_timer *timer)
 	state_save_register_item(timer->machine, "timer", timer->func, count, timer->start.attoseconds);
 	state_save_register_item(timer->machine, "timer", timer->func, count, timer->expire.seconds);
 	state_save_register_item(timer->machine, "timer", timer->func, count, timer->expire.attoseconds);
+	if (timer->device != NULL)
+		state_save_register_item(timer->machine, "timer", timer->func, count, timer->id);
 }
 
 
@@ -588,7 +605,7 @@ int timer_count_anonymous(running_machine *machine)
     isn't primed yet
 -------------------------------------------------*/
 
-INLINE emu_timer *_timer_alloc_common(running_machine *machine, timer_fired_func callback, void *ptr, const char *file, int line, const char *func, int temp)
+INLINE emu_timer *_timer_alloc_common(running_machine *machine, device_t *device, device_timer_id id, timer_fired_func callback, void *ptr, const char *file, int line, const char *func, int temp)
 {
 	attotime time = get_current_time(machine);
 	emu_timer *timer = timer_new(machine);
@@ -603,6 +620,8 @@ INLINE emu_timer *_timer_alloc_common(running_machine *machine, timer_fired_func
 	timer->file = file;
 	timer->line = line;
 	timer->func = func;
+	timer->device = device;
+	timer->id = id;
 
 	/* compute the time of the next firing and insert into the list */
 	timer->start = time;
@@ -623,7 +642,12 @@ INLINE emu_timer *_timer_alloc_common(running_machine *machine, timer_fired_func
 
 emu_timer *_timer_alloc_internal(running_machine *machine, timer_fired_func callback, void *ptr, const char *file, int line, const char *func)
 {
-	return _timer_alloc_common(machine, callback, ptr, file, line, func, FALSE);
+	return _timer_alloc_common(machine, NULL, 0, callback, ptr, file, line, func, FALSE);
+}
+
+emu_timer *device_timer_alloc(device_t &device, UINT32 id, void *ptr)
+{
+	return _timer_alloc_common(device.machine, &device, id, NULL, ptr, __FILE__, __LINE__, device.tag(), FALSE);
 }
 
 
@@ -713,6 +737,13 @@ void timer_adjust_periodic(emu_timer *which, attotime start_delay, INT32 param, 
     SIMPLIFIED ANONYMOUS TIMER MANAGEMENT
 ***************************************************************************/
 
+void device_timer_call_after_resynch(device_t &device, device_timer_id id, INT32 param, void *ptr)
+{
+	emu_timer *timer = _timer_alloc_common(device.machine, &device, id, NULL, ptr, __FILE__, __LINE__, device.tag(), TRUE);
+	timer_adjust_oneshot(timer, attotime_zero, param);
+}
+
+
 /*-------------------------------------------------
     timer_pulse - allocate a pulse timer, which
     repeatedly calls the callback using the given
@@ -721,7 +752,7 @@ void timer_adjust_periodic(emu_timer *which, attotime start_delay, INT32 param, 
 
 void _timer_pulse_internal(running_machine *machine, attotime period, void *ptr, INT32 param, timer_fired_func callback, const char *file, int line, const char *func)
 {
-	emu_timer *timer = _timer_alloc_common(machine, callback, ptr, file, line, func, FALSE);
+	emu_timer *timer = _timer_alloc_common(machine, NULL, 0, callback, ptr, file, line, func, FALSE);
 	timer_adjust_periodic(timer, period, param, period);
 }
 
@@ -733,7 +764,7 @@ void _timer_pulse_internal(running_machine *machine, attotime period, void *ptr,
 
 void _timer_set_internal(running_machine *machine, attotime duration, void *ptr, INT32 param, timer_fired_func callback, const char *file, int line, const char *func)
 {
-	emu_timer *timer = _timer_alloc_common(machine, callback, ptr, file, line, func, TRUE);
+	emu_timer *timer = _timer_alloc_common(machine, NULL, 0, callback, ptr, file, line, func, TRUE);
 	timer_adjust_oneshot(timer, duration, param);
 }
 
@@ -759,15 +790,18 @@ void timer_reset(emu_timer *which, attotime duration)
 
 int timer_enable(emu_timer *which, int enable)
 {
-	int old;
+	int old = which->enabled;
 
-	/* set the enable flag */
-	old = which->enabled;
-	which->enabled = enable;
+	/* reschedule only if the state has changed */
+	if (old != enable)
+	{
+		/* set the enable flag */
+		which->enabled = enable;
 
-	/* remove the timer and insert back into the list */
-	timer_list_remove(which);
-	timer_list_insert(which);
+		/* remove the timer and insert back into the list */
+		timer_list_remove(which);
+		timer_list_insert(which);
+	}
 
 	return old;
 }
@@ -943,8 +977,8 @@ timer_device_config::timer_device_config(const machine_config &mconfig, const ch
 	  m_type(TIMER_TYPE_GENERIC),
 	  m_callback(NULL),
 	  m_ptr(NULL),
-	  m_start_delay(0),
-	  m_period(0),
+	  m_start_delay(attotime_zero),
+	  m_period(attotime_zero),
 	  m_param(0),
 	  m_screen(NULL),
 	  m_first_vpos(0),
@@ -975,23 +1009,93 @@ device_t *timer_device_config::alloc_device(running_machine &machine) const
 
 
 //-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
+//  static_configure_generic - configuration
+//  helper to set up a generic timer
 //-------------------------------------------------
 
-void timer_device_config::device_config_complete()
+void timer_device_config::static_configure_generic(device_config *device, timer_device_fired_func callback)
 {
-	// move inline data into its final home
-	m_type = static_cast<timer_type>(m_inline_data[INLINE_TYPE]);
-	m_callback = reinterpret_cast<timer_device_fired_func>(m_inline_data[INLINE_CALLBACK]);
-	m_ptr = reinterpret_cast<void *>(m_inline_data[INLINE_PTR]);
-	m_start_delay = static_cast<UINT64>(m_inline_data[INLINE_DELAY]);
-	m_period = static_cast<UINT64>(m_inline_data[INLINE_PERIOD]);
-	m_param = static_cast<UINT32>(m_inline_data[INLINE_PARAM]);
-	m_screen = reinterpret_cast<const char *>(m_inline_data[INLINE_SCREEN]);
-	m_first_vpos = static_cast<INT16>(m_inline_data[INLINE_FIRST_VPOS]);
-	m_increment = static_cast<INT16>(m_inline_data[INLINE_INCREMENT]);
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_type = TIMER_TYPE_GENERIC;
+	timer->m_callback = callback;
+}
+
+
+//-------------------------------------------------
+//  static_configure_periodic - configuration
+//  helper to set up a periodic timer
+//-------------------------------------------------
+
+void timer_device_config::static_configure_periodic(device_config *device, timer_device_fired_func callback, attotime period)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_type = TIMER_TYPE_PERIODIC;
+	timer->m_callback = callback;
+	timer->m_period = period;
+}
+
+
+//-------------------------------------------------
+//  static_configure_scanline - configuration
+//  helper to set up a scanline timer
+//-------------------------------------------------
+
+void timer_device_config::static_configure_scanline(device_config *device, timer_device_fired_func callback, const char *screen, int first_vpos, int increment)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_type = TIMER_TYPE_SCANLINE;
+	timer->m_callback = callback;
+	timer->m_screen = screen;
+	timer->m_first_vpos = first_vpos;
+	timer->m_increment = increment;
+}
+
+
+//-------------------------------------------------
+//  static_set_callback - configuration helper
+//  to set the callback
+//-------------------------------------------------
+
+void timer_device_config::static_set_callback(device_config *device, timer_device_fired_func callback)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_callback = callback;
+}
+
+
+//-------------------------------------------------
+//  static_set_start_delay - configuration helper
+//  to set the starting delay
+//-------------------------------------------------
+
+void timer_device_config::static_set_start_delay(device_config *device, attotime delay)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_start_delay = delay;
+}
+
+
+//-------------------------------------------------
+//  static_set_param - configuration helper to set
+//  the integer parameter
+//-------------------------------------------------
+
+void timer_device_config::static_set_param(device_config *device, int param)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_param = param;
+}
+
+
+//-------------------------------------------------
+//  static_set_ptr - configuration helper to set
+//  the pointer parameter
+//-------------------------------------------------
+
+void timer_device_config::static_set_ptr(device_config *device, void *ptr)
+{
+	timer_device_config *timer = downcast<timer_device_config *>(device);
+	timer->m_ptr = ptr;
 }
 
 
@@ -1008,16 +1112,16 @@ bool timer_device_config::device_validity_check(const game_driver &driver) const
 	switch (m_type)
 	{
 		case TIMER_TYPE_GENERIC:
-			if (m_screen != NULL || m_first_vpos != 0 || m_start_delay != 0)
+			if (m_screen != NULL || m_first_vpos != 0 || attotime_compare(m_start_delay, attotime_zero) != 0)
 				mame_printf_warning("%s: %s generic timer '%s' specified parameters for a scanline timer\n", driver.source_file, driver.name, tag());
-			if (m_period != 0 || m_start_delay != 0)
+			if (attotime_compare(m_period, attotime_zero) != 0 || attotime_compare(m_start_delay, attotime_zero) != 0)
 				mame_printf_warning("%s: %s generic timer '%s' specified parameters for a periodic timer\n", driver.source_file, driver.name, tag());
 			break;
 
 		case TIMER_TYPE_PERIODIC:
 			if (m_screen != NULL || m_first_vpos != 0)
 				mame_printf_warning("%s: %s periodic timer '%s' specified parameters for a scanline timer\n", driver.source_file, driver.name, tag());
-			if (m_period <= 0)
+			if (attotime_compare(m_period, attotime_zero) <= 0)
 			{
 				mame_printf_error("%s: %s periodic timer '%s' specified invalid period\n", driver.source_file, driver.name, tag());
 				error = true;
@@ -1025,7 +1129,7 @@ bool timer_device_config::device_validity_check(const game_driver &driver) const
 			break;
 
 		case TIMER_TYPE_SCANLINE:
-			if (m_period != 0 || m_start_delay != 0)
+			if (attotime_compare(m_period, attotime_zero) != 0 || attotime_compare(m_start_delay, attotime_zero) != 0)
 				mame_printf_warning("%s: %s scanline timer '%s' specified parameters for a periodic timer\n", driver.source_file, driver.name, tag());
 			if (m_param != 0)
 				mame_printf_warning("%s: %s scanline timer '%s' specified parameter which is ignored\n", driver.source_file, driver.name, tag());
@@ -1104,14 +1208,14 @@ void timer_device::device_reset()
 		{
 			// convert the period into attotime
 			attotime period = attotime_never;
-			if (m_config.m_period > 0)
+			if (attotime_compare(m_config.m_period, attotime_zero) > 0)
 			{
-				period = UINT64_ATTOTIME_TO_ATTOTIME(m_config.m_period);
+				period = m_config.m_period;
 
 				// convert the start_delay into attotime
 				attotime start_delay = attotime_zero;
-				if (m_config.m_start_delay > 0)
-					start_delay = UINT64_ATTOTIME_TO_ATTOTIME(m_config.m_start_delay);
+				if (attotime_compare(m_config.m_start_delay, attotime_zero) > 0)
+					start_delay = m_config.m_start_delay;
 
 				// allocate and start the backing timer
 				timer_adjust_periodic(m_timer, start_delay, m_config.m_param, period);
@@ -1169,5 +1273,3 @@ void timer_device::scanline_timer_callback(int scanline)
 	// adjust the timer
 	timer_adjust_oneshot(m_timer, m_screen->time_until_pos(next_vpos), 0);
 }
-
-const device_type TIMER = timer_device_config::static_alloc_device_config;

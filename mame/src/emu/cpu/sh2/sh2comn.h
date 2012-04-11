@@ -14,6 +14,9 @@
 
 #define USE_SH2DRC
 
+// do we use a timer for the DMA, or have it in CPU_EXECUTE
+#define USE_TIMER_FOR_DMA
+
 #ifdef USE_SH2DRC
 #include "cpu/drcfe.h"
 #include "cpu/drcuml.h"
@@ -116,8 +119,9 @@ typedef struct
 	INT8	irq_line_state[17];
 	device_irq_callback irq_callback;
 	legacy_cpu_device *device;
-	const address_space *program;
-	const address_space *internal;
+	address_space *program;
+	direct_read_data *direct;
+	address_space *internal;
 	UINT32	*m;
 	INT8  nmi_line_state;
 
@@ -131,11 +135,20 @@ typedef struct
 	int				icount;
 
 	emu_timer *timer;
-	emu_timer *dma_timer[2];
+	emu_timer *dma_current_active_timer[2];
 	int     dma_timer_active[2];
+
+	int active_dma_incs[2];
+	int active_dma_incd[2];
+	int active_dma_size[2];
+	int active_dma_steal[2];
+	UINT32 active_dma_src[2];
+	UINT32 active_dma_dst[2];
+	UINT32 active_dma_count[2];
 
 	int     is_slave, cpu_type;
 	int  (*dma_callback_kludge)(UINT32 src, UINT32 dst, UINT32 data, int size);
+	int  (*dma_callback_fifo_data_available)(UINT32 src, UINT32 dst, UINT32 data, int size);
 
 	void	(*ftcsr_read_callback)(UINT32 data);
 
@@ -175,5 +188,7 @@ void sh2_common_init(sh2_state *sh2, legacy_cpu_device *device, device_irq_callb
 void sh2_recalc_irq(sh2_state *sh2);
 void sh2_set_irq_line(sh2_state *sh2, int irqline, int state);
 void sh2_exception(sh2_state *sh2, const char *message, int irqline);
+void sh2_do_dma(sh2_state *sh2, int dma);
+void sh2_notify_dma_data_available(running_device *device);
 
 #endif /* __SH2COMN_H__ */

@@ -35,13 +35,13 @@
 
 static WRITE8_HANDLER( triothep_control_select_w )
 {
-	actfancr_state *state = (actfancr_state *)space->machine->driver_data;
+	actfancr_state *state = space->machine->driver_data<actfancr_state>();
 	state->trio_control_select = data;
 }
 
 static READ8_HANDLER( triothep_control_r )
 {
-	actfancr_state *state = (actfancr_state *)space->machine->driver_data;
+	actfancr_state *state = space->machine->driver_data<actfancr_state>();
 	switch (state->trio_control_select)
 	{
 		case 0: return input_port_read(space->machine, "P1");
@@ -56,7 +56,7 @@ static READ8_HANDLER( triothep_control_r )
 
 static WRITE8_HANDLER( actfancr_sound_w )
 {
-	actfancr_state *state = (actfancr_state *)space->machine->driver_data;
+	actfancr_state *state = space->machine->driver_data<actfancr_state>();
 	soundlatch_w(space, 0, data & 0xff);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
@@ -106,7 +106,7 @@ static ADDRESS_MAP_START( dec0_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0800, 0x0801) AM_DEVWRITE("ym1", ym2203_w)
 	AM_RANGE(0x1000, 0x1001) AM_DEVWRITE("ym2", ym3812_w)
 	AM_RANGE(0x3000, 0x3000) AM_READ(soundlatch_r)
-	AM_RANGE(0x3800, 0x3800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x3800, 0x3800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0x4000, 0xffff) AM_ROM
 ADDRESS_MAP_END
 
@@ -265,7 +265,7 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int linestate)
 {
-	actfancr_state *state = (actfancr_state *)device->machine->driver_data;
+	actfancr_state *state = device->machine->driver_data<actfancr_state>();
 	cpu_set_input_line(state->audiocpu, 0, linestate); /* IRQ */
 }
 
@@ -278,7 +278,7 @@ static const ym3812_interface ym3812_config =
 
 static MACHINE_START( actfancr )
 {
-	actfancr_state *state = (actfancr_state *)machine->driver_data;
+	actfancr_state *state = machine->driver_data<actfancr_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -286,7 +286,7 @@ static MACHINE_START( actfancr )
 
 static MACHINE_START( triothep )
 {
-	actfancr_state *state = (actfancr_state *)machine->driver_data;
+	actfancr_state *state = machine->driver_data<actfancr_state>();
 
 	MACHINE_START_CALL(actfancr);
 
@@ -295,7 +295,7 @@ static MACHINE_START( triothep )
 
 static MACHINE_RESET( actfancr )
 {
-	actfancr_state *state = (actfancr_state *)machine->driver_data;
+	actfancr_state *state = machine->driver_data<actfancr_state>();
 	int i;
 
 	state->flipscreen = 0;
@@ -308,7 +308,7 @@ static MACHINE_RESET( actfancr )
 
 static MACHINE_RESET( triothep )
 {
-	actfancr_state *state = (actfancr_state *)machine->driver_data;
+	actfancr_state *state = machine->driver_data<actfancr_state>();
 
 	MACHINE_RESET_CALL(actfancr);
 	state->trio_control_select = 0;
@@ -316,10 +316,7 @@ static MACHINE_RESET( triothep )
 
 /******************************************************************************/
 
-static MACHINE_DRIVER_START( actfancr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(actfancr_state)
+static MACHINE_CONFIG_START( actfancr, actfancr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",H6280,21477200/3) /* Should be accurate */
@@ -362,12 +359,9 @@ static MACHINE_DRIVER_START( actfancr )
 
 	MDRV_OKIM6295_ADD("oki", 1024188, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( triothep )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(actfancr_state)
+static MACHINE_CONFIG_START( triothep, actfancr_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu",H6280,XTAL_21_4772MHz/3) /* XIN=21.4772Mhz, verified on pcb */
@@ -410,7 +404,7 @@ static MACHINE_DRIVER_START( triothep )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_1_056MHz, OKIM6295_PIN7_HIGH) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.85)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 
@@ -584,7 +578,7 @@ ROM_END
 
 static READ8_HANDLER( cycle_r )
 {
-	actfancr_state *state = (actfancr_state *)space->machine->driver_data;
+	actfancr_state *state = space->machine->driver_data<actfancr_state>();
 	int pc = cpu_get_pc(space->cpu);
 	int ret = state->main_ram[0x26];
 
@@ -602,7 +596,7 @@ static READ8_HANDLER( cycle_r )
 
 static READ8_HANDLER( cyclej_r )
 {
-	actfancr_state *state = (actfancr_state *)space->machine->driver_data;
+	actfancr_state *state = space->machine->driver_data<actfancr_state>();
 	int pc = cpu_get_pc(space->cpu);
 	int ret = state->main_ram[0x26];
 

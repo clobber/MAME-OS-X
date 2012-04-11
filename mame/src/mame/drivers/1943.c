@@ -29,7 +29,6 @@
 */
 
 #include "emu.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "sound/2203intf.h"
 #include "includes/1943.h"
@@ -249,7 +248,7 @@ GFXDECODE_END
 
 static MACHINE_RESET( 1943 )
 {
-	_1943_state *state = (_1943_state *)machine->driver_data;
+	_1943_state *state = machine->driver_data<_1943_state>();
 
 	state->char_on = 0;
 	state->obj_on = 0;
@@ -257,9 +256,7 @@ static MACHINE_RESET( 1943 )
 	state->bg2_on = 0;
 }
 
-static MACHINE_DRIVER_START( 1943 )
-
-	MDRV_DRIVER_DATA(_1943_state)
+static MACHINE_CONFIG_START( 1943, _1943_state )
 
 	// basic machine hardware
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_24MHz/4)	/* verified on pcb */
@@ -268,7 +265,7 @@ static MACHINE_DRIVER_START( 1943 )
 
 	MDRV_CPU_ADD("audiocpu", Z80, XTAL_24MHz/8)	/* verified on pcb */
 	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq0_line_hold, 4)
+	MDRV_CPU_PERIODIC_INT(irq0_line_hold, 4*60)
 
 	MDRV_MACHINE_RESET(1943)
 
@@ -300,7 +297,7 @@ static MACHINE_DRIVER_START( 1943 )
 	MDRV_SOUND_ROUTE(1, "mono", 0.15)
 	MDRV_SOUND_ROUTE(2, "mono", 0.15)
 	MDRV_SOUND_ROUTE(3, "mono", 0.10)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /* ROMs */
 

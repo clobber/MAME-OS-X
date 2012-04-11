@@ -20,7 +20,7 @@
 
 static INTERRUPT_GEN( fastlane_interrupt )
 {
-	fastlane_state *state = (fastlane_state *)device->machine->driver_data;
+	fastlane_state *state = device->machine->driver_data<fastlane_state>();
 
 	if (cpu_getiloops(device) == 0)
 	{
@@ -36,7 +36,7 @@ static INTERRUPT_GEN( fastlane_interrupt )
 
 static WRITE8_HANDLER( k007121_registers_w )
 {
-	fastlane_state *state = (fastlane_state *)space->machine->driver_data;
+	fastlane_state *state = space->machine->driver_data<fastlane_state>();
 
 	if (offset < 8)
 		k007121_ctrl_w(state->k007121, offset, data);
@@ -46,7 +46,7 @@ static WRITE8_HANDLER( k007121_registers_w )
 
 static WRITE8_HANDLER( fastlane_bankswitch_w )
 {
-	fastlane_state *state = (fastlane_state *)space->machine->driver_data;
+	fastlane_state *state = space->machine->driver_data<fastlane_state>();
 
 	/* bits 0 & 1 coin counters */
 	coin_counter_w(space->machine, 0,data & 0x01);
@@ -103,6 +103,7 @@ ADDRESS_MAP_END
 
 ***************************************************************************/
 
+/* verified from HD6309 code */
 static INPUT_PORTS_START( fastlane )
 	PORT_START("DSW1")
 	KONAMI_COINAGE(DEF_STR( Free_Play ), "No Coin B")
@@ -114,21 +115,21 @@ static INPUT_PORTS_START( fastlane )
 	PORT_DIPSETTING(	0x02, "3" )
 	PORT_DIPSETTING(	0x01, "4" )
 	PORT_DIPSETTING(	0x00, "7" )
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x04, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x00, DEF_STR( Cabinet ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Upright ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Cocktail ) )
 	/* The bonus life affects the starting high score too, 20000 or 30000 */
 	PORT_DIPNAME( 0x18, 0x18, DEF_STR( Bonus_Life ) )
-	PORT_DIPSETTING(	0x18, "20000 100000" )
-	PORT_DIPSETTING(	0x10, "30000 150000" )
-	PORT_DIPSETTING(	0x08, "20000" )
-	PORT_DIPSETTING(	0x00, "30000" )
+	PORT_DIPSETTING(	0x18, "20k 100k 200k 400k 800k" )
+	PORT_DIPSETTING(	0x10, "30k 150k 300k 600k" )
+	PORT_DIPSETTING(	0x08, "20k only" )
+	PORT_DIPSETTING(	0x00, "30k only" )
 	PORT_DIPNAME( 0x60, 0x40, DEF_STR( Difficulty ) )
 	PORT_DIPSETTING(	0x60, DEF_STR( Easy ) )
 	PORT_DIPSETTING(	0x40, DEF_STR( Medium ) )
 	PORT_DIPSETTING(	0x20, DEF_STR( Hard ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( Hardest ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unknown ) )
+	PORT_DIPNAME( 0x80, 0x00, "Demo Music" )                /* when levels are played by the computer */
 	PORT_DIPSETTING(	0x80, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
 
@@ -136,9 +137,9 @@ static INPUT_PORTS_START( fastlane )
 	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Flip_Screen ) )
 	PORT_DIPSETTING(	0x01, DEF_STR( Off ) )
 	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x02, DEF_STR( Unknown ) )
-	PORT_DIPSETTING(	0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(	0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "Upright Controls" )
+	PORT_DIPSETTING(    0x02, DEF_STR( Single ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Dual ) )
 	PORT_SERVICE( 0x04, IP_ACTIVE_LOW )
 	PORT_DIPNAME( 0x08, 0x08, "Continue" )
 	PORT_DIPSETTING(	0x08, "3" )
@@ -200,7 +201,7 @@ static const k007232_interface k007232_interface_2 =
 
 static MACHINE_START( fastlane )
 {
-	fastlane_state *state = (fastlane_state *)machine->driver_data;
+	fastlane_state *state = machine->driver_data<fastlane_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
@@ -209,10 +210,7 @@ static MACHINE_START( fastlane )
 	state->k007121 = machine->device("k007121");
 }
 
-static MACHINE_DRIVER_START( fastlane )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(fastlane_state)
+static MACHINE_CONFIG_START( fastlane, fastlane_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, 3000000*4)		/* 24MHz/8? */
@@ -251,7 +249,7 @@ static MACHINE_DRIVER_START( fastlane )
 	MDRV_SOUND_CONFIG(k007232_interface_2)
 	MDRV_SOUND_ROUTE(0, "mono", 0.50)
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -279,4 +277,4 @@ ROM_START( fastlane )
 ROM_END
 
 
-GAME( 1987, fastlane, 0, fastlane, fastlane, 0, ROT90, "Konami", "Fast Lane", GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )
+GAME( 1987, fastlane, 0, fastlane, fastlane, 0, ROT90, "Konami", "Fast Lane", GAME_NO_COCKTAIL | GAME_IMPERFECT_COLORS | GAME_SUPPORTS_SAVE )

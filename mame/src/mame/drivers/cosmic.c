@@ -49,7 +49,7 @@ forcing all sprites on a row to have an added blue component.
 
 static WRITE8_HANDLER( panic_sound_output_w )
 {
-	cosmic_state *state = (cosmic_state *)space->machine->driver_data;
+	cosmic_state *state = space->machine->driver_data<cosmic_state>();
 
 	/* Sound Enable / Disable */
 	if (offset == 11)
@@ -125,7 +125,7 @@ static WRITE8_HANDLER( panic_sound_output2_w )
 
 static WRITE8_HANDLER( cosmicg_output_w )
 {
-	cosmic_state *state = (cosmic_state *)space->machine->driver_data;
+	cosmic_state *state = space->machine->driver_data<cosmic_state>();
 
 	/* Sound Enable / Disable */
 	if (offset == 12)
@@ -189,7 +189,7 @@ static WRITE8_HANDLER( cosmicg_output_w )
 
 static WRITE8_HANDLER( cosmica_sound_output_w )
 {
-	cosmic_state *state = (cosmic_state *)space->machine->driver_data;
+	cosmic_state *state = space->machine->driver_data<cosmic_state>();
 
 	/* Sound Enable / Disable */
 	if (offset == 11)
@@ -339,7 +339,7 @@ static INTERRUPT_GEN( panic_interrupt )
 
 static INTERRUPT_GEN( cosmica_interrupt )
 {
-	cosmic_state *state = (cosmic_state *)device->machine->driver_data;
+	cosmic_state *state = device->machine->driver_data<cosmic_state>();
 	state->pixel_clock = (state->pixel_clock + 2) & 0x3f;
 
 	if (state->pixel_clock == 0)
@@ -384,7 +384,7 @@ static INTERRUPT_GEN( nomnlnd_interrupt )
 
 static READ8_HANDLER( cosmica_pixel_clock_r )
 {
-	cosmic_state *state = (cosmic_state *)space->machine->driver_data;
+	cosmic_state *state = space->machine->driver_data<cosmic_state>();
 	return state->pixel_clock;
 }
 
@@ -1022,7 +1022,7 @@ static const samples_interface cosmicg_samples_interface =
 
 static MACHINE_START( cosmic )
 {
-	cosmic_state *state = (cosmic_state *)machine->driver_data;
+	cosmic_state *state = machine->driver_data<cosmic_state>();
 
 	state->samples = machine->device("samples");
 	state->dac = machine->device("dac");
@@ -1039,7 +1039,7 @@ static MACHINE_START( cosmic )
 
 static MACHINE_RESET( cosmic )
 {
-	cosmic_state *state = (cosmic_state *)machine->driver_data;
+	cosmic_state *state = machine->driver_data<cosmic_state>();
 
 	state->pixel_clock = 0;
 	state->background_enable = 0;
@@ -1049,10 +1049,7 @@ static MACHINE_RESET( cosmic )
 }
 
 
-static MACHINE_DRIVER_START( cosmic )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cosmic_state)
+static MACHINE_CONFIG_START( cosmic, cosmic_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,Z80_MASTER_CLOCK/6)	/* 1.8026 MHz*/
@@ -1066,13 +1063,12 @@ static MACHINE_DRIVER_START( cosmic )
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 	MDRV_SCREEN_SIZE(32*8, 32*8)
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 4*8, 28*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( panic )
+static MACHINE_CONFIG_DERIVED( panic, cosmic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(cosmic)
 	MDRV_CPU_MODIFY("maincpu")
 
 	MDRV_CPU_PROGRAM_MAP(panic_map)
@@ -1094,13 +1090,12 @@ static MACHINE_DRIVER_START( panic )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cosmica )
+static MACHINE_CONFIG_DERIVED( cosmica, cosmic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(cosmic)
 	MDRV_CPU_MODIFY("maincpu")
 
 	MDRV_CPU_PROGRAM_MAP(cosmica_map)
@@ -1123,13 +1118,10 @@ static MACHINE_DRIVER_START( cosmica )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cosmicg )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cosmic_state)
+static MACHINE_CONFIG_START( cosmicg, cosmic_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS9980, COSMICG_MASTER_CLOCK/8)
@@ -1165,13 +1157,12 @@ static MACHINE_DRIVER_START( cosmicg )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( magspot )
+static MACHINE_CONFIG_DERIVED( magspot, cosmic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(cosmic)
 	MDRV_CPU_MODIFY("maincpu")
 
 	MDRV_CPU_PROGRAM_MAP(magspot_map)
@@ -1189,23 +1180,21 @@ static MACHINE_DRIVER_START( magspot )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( devzone )
+static MACHINE_CONFIG_DERIVED( devzone, magspot )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(magspot)
 
 	/* video hardware */
 	MDRV_VIDEO_UPDATE(devzone)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( nomnlnd )
+static MACHINE_CONFIG_DERIVED( nomnlnd, cosmic )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(cosmic)
 	MDRV_CPU_MODIFY("maincpu")
 
 	MDRV_CPU_PROGRAM_MAP(magspot_map)
@@ -1223,7 +1212,7 @@ static MACHINE_DRIVER_START( nomnlnd )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( panic )
@@ -1579,7 +1568,7 @@ ROM_END
 static DRIVER_INIT( cosmicg )
 {
 	/* Program ROMs have data pins connected different from normal */
-	cosmic_state *state = (cosmic_state *)machine->driver_data;
+	cosmic_state *state = machine->driver_data<cosmic_state>();
 	offs_t offs, len;
 	UINT8 *rom;
 	len = memory_region_length(machine, "maincpu");
@@ -1604,7 +1593,7 @@ static DRIVER_INIT( cosmicg )
 
 static DRIVER_INIT( cosmica )
 {
-	cosmic_state *state = (cosmic_state *)machine->driver_data;
+	cosmic_state *state = machine->driver_data<cosmic_state>();
 	state->sound_enabled = 1;
 	state->dive_bomb_b_select = 0;
 }
@@ -1627,7 +1616,7 @@ static DRIVER_INIT( nomnlnd )
 
 static DRIVER_INIT( panic )
 {
-	cosmic_state *state = (cosmic_state *)machine->driver_data;
+	cosmic_state *state = machine->driver_data<cosmic_state>();
 	state->sound_enabled = 1;
 }
 

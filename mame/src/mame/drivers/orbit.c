@@ -33,7 +33,7 @@ Atari Orbit Driver
 
 static TIMER_DEVICE_CALLBACK( nmi_32v )
 {
-	orbit_state *state = (orbit_state *)timer.machine->driver_data;
+	orbit_state *state = timer.machine->driver_data<orbit_state>();
 	int scanline = param;
 	int nmistate = (scanline & 32) && (state->misc_flags & 4);
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, nmistate ? ASSERT_LINE : CLEAR_LINE);
@@ -42,7 +42,7 @@ static TIMER_DEVICE_CALLBACK( nmi_32v )
 
 static TIMER_CALLBACK( irq_off )
 {
-	orbit_state *state = (orbit_state *)machine->driver_data;
+	orbit_state *state = machine->driver_data<orbit_state>();
 	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
 }
 
@@ -63,7 +63,7 @@ static INTERRUPT_GEN( orbit_interrupt )
 
 static void update_misc_flags(running_machine *machine, UINT8 val)
 {
-	orbit_state *state = (orbit_state *)machine->driver_data;
+	orbit_state *state = machine->driver_data<orbit_state>();
 
 	state->misc_flags = val;
 
@@ -88,7 +88,7 @@ static void update_misc_flags(running_machine *machine, UINT8 val)
 
 static WRITE8_HANDLER( orbit_misc_w )
 {
-	orbit_state *state = (orbit_state *)space->machine->driver_data;
+	orbit_state *state = space->machine->driver_data<orbit_state>();
 	UINT8 bit = offset >> 1;
 
 	if (offset & 1)
@@ -274,7 +274,7 @@ GFXDECODE_END
 
 static MACHINE_START( orbit )
 {
-	orbit_state *state = (orbit_state *)machine->driver_data;
+	orbit_state *state = machine->driver_data<orbit_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->discrete = machine->device("discrete");
@@ -285,7 +285,7 @@ static MACHINE_START( orbit )
 
 static MACHINE_RESET( orbit )
 {
-	orbit_state *state = (orbit_state *)machine->driver_data;
+	orbit_state *state = machine->driver_data<orbit_state>();
 
 	update_misc_flags(machine, 0);
 	state->flip_screen = 0;
@@ -298,10 +298,7 @@ static MACHINE_RESET( orbit )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( orbit )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(orbit_state)
+static MACHINE_CONFIG_START( orbit, orbit_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6800, MASTER_CLOCK / 16)
@@ -331,7 +328,7 @@ static MACHINE_DRIVER_START( orbit )
 	MDRV_SOUND_CONFIG_DISCRETE(orbit)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

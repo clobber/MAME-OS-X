@@ -180,14 +180,14 @@ if (TEMPLOG)
 					// if we're not suspended, actually execute
 					if (exec->m_suspend == 0)
 					{
-						profiler_mark_start(exec->m_profiler);
+						g_profiler.start(exec->m_profiler);
 
 						// note that this global variable cycles_stolen can be modified
 						// via the call to cpu_execute
 						exec->m_cycles_stolen = 0;
 if (TEMPLOG) printf("Executing %s for %d cycles\n", exec->device().tag(), ran);
 						m_executing_device = exec;
-						*exec->m_icount = exec->m_cycles_running;
+						*exec->m_icountptr = exec->m_cycles_running;
 						if (!call_debugger)
 							exec->execute_run();
 						else
@@ -198,11 +198,11 @@ if (TEMPLOG) printf("Executing %s for %d cycles\n", exec->device().tag(), ran);
 						}
 
 						// adjust for any cycles we took back
-						assert(ran >= *exec->m_icount);
-						ran -= *exec->m_icount;
+						assert(ran >= *exec->m_icountptr);
+						ran -= *exec->m_icountptr;
 						assert(ran >= exec->m_cycles_stolen);
 						ran -= exec->m_cycles_stolen;
-						profiler_mark_end();
+						g_profiler.stop();
 					}
 else
 if (TEMPLOG) printf("Skipping %s for %d cycles\n", exec->device().tag(), ran);

@@ -23,26 +23,26 @@ Main CPU:
 
 static WRITE8_HANDLER( video_interrupt_w )
 {
-	kingofb_state *state = (kingofb_state *)space->machine->driver_data;
+	kingofb_state *state = space->machine->driver_data<kingofb_state>();
 	cpu_set_input_line_and_vector(state->video_cpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( sprite_interrupt_w )
 {
-	kingofb_state *state = (kingofb_state *)space->machine->driver_data;
+	kingofb_state *state = space->machine->driver_data<kingofb_state>();
 	cpu_set_input_line_and_vector(state->sprite_cpu, 0, HOLD_LINE, 0xff);
 }
 
 static WRITE8_HANDLER( scroll_interrupt_w )
 {
-	kingofb_state *state = (kingofb_state *)space->machine->driver_data;
+	kingofb_state *state = space->machine->driver_data<kingofb_state>();
 	sprite_interrupt_w(space, offset, data);
 	*state->scroll_y = data;
 }
 
 static WRITE8_HANDLER( sound_command_w )
 {
-	kingofb_state *state = (kingofb_state *)space->machine->driver_data;
+	kingofb_state *state = space->machine->driver_data<kingofb_state>();
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line_and_vector(state->audio_cpu, 0, HOLD_LINE, 0xff);
 }
@@ -448,7 +448,7 @@ static const ay8910_interface ay8910_config =
 
 static INTERRUPT_GEN( kingofb_interrupt )
 {
-	kingofb_state *state = (kingofb_state *)device->machine->driver_data;
+	kingofb_state *state = device->machine->driver_data<kingofb_state>();
 
 	if (state->nmi_enable)
 		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
@@ -456,7 +456,7 @@ static INTERRUPT_GEN( kingofb_interrupt )
 
 static MACHINE_START( kingofb )
 {
-	kingofb_state *state = (kingofb_state *)machine->driver_data;
+	kingofb_state *state = machine->driver_data<kingofb_state>();
 
 	state->video_cpu = machine->device("video");
 	state->sprite_cpu = machine->device("sprite");
@@ -468,16 +468,13 @@ static MACHINE_START( kingofb )
 
 static MACHINE_RESET( kingofb )
 {
-	kingofb_state *state = (kingofb_state *)machine->driver_data;
+	kingofb_state *state = machine->driver_data<kingofb_state>();
 
 	state->nmi_enable = 0;
 	state->palette_bank = 0;
 }
 
-static MACHINE_DRIVER_START( kingofb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(kingofb_state)
+static MACHINE_CONFIG_START( kingofb, kingofb_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
@@ -526,14 +523,11 @@ static MACHINE_DRIVER_START( kingofb )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* Ring King */
-static MACHINE_DRIVER_START( ringking )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(kingofb_state)
+static MACHINE_CONFIG_START( ringking, kingofb_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)        /* 4.0 MHz */
@@ -582,7 +576,7 @@ static MACHINE_DRIVER_START( ringking )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

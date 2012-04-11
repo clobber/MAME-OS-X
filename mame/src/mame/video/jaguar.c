@@ -309,13 +309,13 @@ INLINE int adjust_object_timer(running_machine *machine, int vc)
 
 void jaguar_gpu_suspend(running_machine *machine)
 {
-	cputag_suspend(machine, "gpu", SUSPEND_REASON_SPIN, 1);
+	machine->device<cpu_device>("gpu")->suspend(SUSPEND_REASON_SPIN, 1);
 }
 
 
 void jaguar_gpu_resume(running_machine *machine)
 {
-	cputag_resume(machine, "gpu", SUSPEND_REASON_SPIN);
+	machine->device<cpu_device>("gpu")->resume(SUSPEND_REASON_SPIN);
 }
 
 
@@ -493,8 +493,8 @@ static void jaguar_set_palette(UINT16 vmode)
 
 static UINT8 *get_jaguar_memory(running_machine *machine, UINT32 offset)
 {
-	const address_space *space = cputag_get_address_space(machine, "gpu", ADDRESS_SPACE_PROGRAM);
-	return (UINT8 *)memory_get_read_ptr(space, offset);
+	address_space *space = cputag_get_address_space(machine, "gpu", ADDRESS_SPACE_PROGRAM);
+	return (UINT8 *)space->get_read_ptr(offset);
 }
 
 
@@ -511,7 +511,7 @@ static void blitter_run(running_machine *machine)
 	UINT32 a1flags = blitter_regs[A1_FLAGS] & STATIC_FLAGS_MASK;
 	UINT32 a2flags = blitter_regs[A2_FLAGS] & STATIC_FLAGS_MASK;
 
-	profiler_mark_start(PROFILER_USER1);
+	g_profiler.start(PROFILER_USER1);
 
 	if (a1flags == a2flags)
 	{
@@ -600,7 +600,7 @@ if (++reps % 100 == 99)
 }
 
 	generic_blitter(machine, blitter_regs[B_CMD], blitter_regs[A1_FLAGS], blitter_regs[A2_FLAGS]);
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 static TIMER_CALLBACK( blitter_done )
@@ -673,7 +673,12 @@ READ16_HANDLER( jaguar_tom_regs_r )
 	return gpu_regs[offset];
 }
 
-#if 0
+/*
+FIXME: this should be 1, but then MAME performance will be s*** with this (i.e. it drops the performance from 400% to 6% on an i5 machine).
+But the PIT irq is definitely needed by some games (for example Pitfall refuses to enter into gameplay without this enabled).
+*/
+#define PIT_MULT_DBG_HACK 64
+
 static TIMER_CALLBACK( jaguar_pit )
 {
 	attotime sample_period;
@@ -682,16 +687,16 @@ static TIMER_CALLBACK( jaguar_pit )
 
 	if (gpu_regs[PIT0])
 	{
-		sample_period = ATTOTIME_IN_NSEC(machine->device("gpu")->unscaled_clock() / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
-//      timer_set(machine, sample_period, NULL, 0, jaguar_pit);
+		sample_period = ATTOTIME_IN_NSEC(((machine->device("gpu")->unscaled_clock()*PIT_MULT_DBG_HACK) / (1+gpu_regs[PIT0])) / (1+gpu_regs[PIT1]));
+		timer_set(machine, sample_period, NULL, 0, jaguar_pit);
 	}
 }
-#endif
+
 
 WRITE16_HANDLER( jaguar_tom_regs_w )
 {
 	UINT32 reg_store = gpu_regs[offset];
-//  attotime sample_period;
+	attotime sample_period;
 	if (offset < GPU_REGS)
 	{
 		COMBINE_DATA(&gpu_regs[offset]);
@@ -705,18 +710,13 @@ WRITE16_HANDLER( jaguar_tom_regs_w )
 				break;
 			case PIT0:
 			case PIT1:
-				if(gpu_regs[PIT0] && reg_store != gpu_regs[offset])
-					printf("Warning: PIT irq used\n");
-				break;
-#if 0
-			case PIT1:
-				if (gpu_regs[PIT0])
+				if (gpu_regs[PIT0] && gpu_regs[PIT0] != 0xffff) //FIXME: avoid too much small timers for now
 				{
-					sample_period = ATTOTIME_IN_NSEC(space->machine->device("gpu")->unscaled_clock() / (1+gpu_regs[PIT0]) / (1+gpu_regs[PIT1]));
+					sample_period = ATTOTIME_IN_NSEC(((space->machine->device("gpu")->unscaled_clock()*PIT_MULT_DBG_HACK) / (1+gpu_regs[PIT0])) / (1+gpu_regs[PIT1]));
 					timer_set(space->machine, sample_period, NULL, 0, jaguar_pit);
 				}
 				break;
-#endif
+
 			case INT1:
 				cpu_irq_state &= ~(gpu_regs[INT1] >> 8);
 				update_cpu_irq(space->machine);

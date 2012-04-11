@@ -162,7 +162,7 @@ static WRITE8_DEVICE_HANDLER( oki_bankswitch_w )
 
 static WRITE16_HANDLER( ddragon3_io_w )
 {
-	ddragon3_state *state = (ddragon3_state *)space->machine->driver_data;
+	ddragon3_state *state = space->machine->driver_data<ddragon3_state>();
 
 	COMBINE_DATA(&state->io_reg[offset]);
 
@@ -257,7 +257,7 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0xbfff) AM_ROM
 	AM_RANGE(0xc000, 0xc7ff) AM_RAM
 	AM_RANGE(0xc800, 0xc801) AM_DEVREADWRITE("ym2151", ym2151_r, ym2151_w)
-	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0xd800, 0xd800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xe000, 0xe000) AM_READ(soundlatch_r)
 	AM_RANGE(0xe800, 0xe800) AM_DEVWRITE("oki", oki_bankswitch_w)
 ADDRESS_MAP_END
@@ -266,7 +266,7 @@ static ADDRESS_MAP_START( ctribe_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ym2151", ym2151_status_port_r, ym2151_w)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
 ADDRESS_MAP_END
 
@@ -516,7 +516,7 @@ GFXDECODE_END
 
 static void dd3_ymirq_handler(running_device *device, int irq)
 {
-	ddragon3_state *state = (ddragon3_state *)device->machine->driver_data;
+	ddragon3_state *state = device->machine->driver_data<ddragon3_state>();
 	cpu_set_input_line(state->audiocpu, 0 , irq ? ASSERT_LINE : CLEAR_LINE );
 }
 
@@ -533,7 +533,7 @@ static const ym2151_interface ym2151_config =
 
 static TIMER_DEVICE_CALLBACK( ddragon3_scanline )
 {
-	ddragon3_state *state = (ddragon3_state *)timer.machine->driver_data;
+	ddragon3_state *state = timer.machine->driver_data<ddragon3_state>();
 	int scanline = param;
 
 	/* An interrupt is generated every 16 scanlines */
@@ -560,7 +560,7 @@ static TIMER_DEVICE_CALLBACK( ddragon3_scanline )
 
 static MACHINE_START( ddragon3 )
 {
-	ddragon3_state *state = (ddragon3_state *)machine->driver_data;
+	ddragon3_state *state = machine->driver_data<ddragon3_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -576,7 +576,7 @@ static MACHINE_START( ddragon3 )
 
 static MACHINE_RESET( ddragon3 )
 {
-	ddragon3_state *state = (ddragon3_state *)machine->driver_data;
+	ddragon3_state *state = machine->driver_data<ddragon3_state>();
 	int i;
 
 	state->vreg = 0;
@@ -590,10 +590,7 @@ static MACHINE_RESET( ddragon3 )
 		state->io_reg[i] = 0;
 }
 
-static MACHINE_DRIVER_START( ddragon3 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(ddragon3_state)
+static MACHINE_CONFIG_START( ddragon3, ddragon3_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
@@ -628,17 +625,15 @@ static MACHINE_DRIVER_START( ddragon3 )
 	MDRV_OKIM6295_ADD("oki", XTAL_1_056MHz, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ddragon3b )
-	MDRV_IMPORT_FROM(ddragon3)
+static MACHINE_CONFIG_DERIVED( ddragon3b, ddragon3 )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(dd3b_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ctribe )
-	MDRV_IMPORT_FROM(ddragon3)
+static MACHINE_CONFIG_DERIVED( ctribe, ddragon3 )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ctribe_map)
@@ -655,7 +650,7 @@ static MACHINE_DRIVER_START( ctribe )
 	MDRV_SOUND_MODIFY("oki")
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************************
  *

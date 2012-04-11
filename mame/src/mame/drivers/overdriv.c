@@ -36,16 +36,16 @@
 
 ***************************************************************************/
 
-static const UINT8 overdriv_default_eeprom[128] =
+static const UINT16 overdriv_default_eeprom[64] =
 {
-	0x77,0x58,0xFF,0xFF,0x00,0x78,0x90,0x00,0x00,0x78,0x70,0x00,0x00,0x78,0x50,0x00,
-	0x54,0x41,0x4B,0x51,0x31,0x36,0x46,0x55,0x4A,0xFF,0x03,0x00,0x02,0x70,0x02,0x50,
-	0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,
-	0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,
-	0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,
-	0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,
-	0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,
-	0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03,0x00,0xB4,0x03
+	0x7758,0xFFFF,0x0078,0x9000,0x0078,0x7000,0x0078,0x5000,
+	0x5441,0x4B51,0x3136,0x4655,0x4AFF,0x0300,0x0270,0x0250,
+	0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,
+	0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,
+	0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403,
+	0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,
+	0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,
+	0x0300,0xB403,0x00B4,0x0300,0xB403,0x00B4,0x0300,0xB403
 };
 
 
@@ -83,7 +83,7 @@ static INTERRUPT_GEN( cpuA_interrupt )
 
 static INTERRUPT_GEN( cpuB_interrupt )
 {
-	overdriv_state *state = (overdriv_state *)device->machine->driver_data;
+	overdriv_state *state = device->machine->driver_data<overdriv_state>();
 
 	if (k053246_is_irq_enabled(state->k053246))
 		cpu_set_input_line(device, 4, HOLD_LINE);
@@ -92,7 +92,7 @@ static INTERRUPT_GEN( cpuB_interrupt )
 
 static WRITE16_HANDLER( cpuA_ctrl_w )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -111,13 +111,13 @@ static WRITE16_HANDLER( cpuA_ctrl_w )
 
 static READ16_HANDLER( cpuB_ctrl_r )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 	return state->cpuB_ctrl;
 }
 
 static WRITE16_HANDLER( cpuB_ctrl_w )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 	COMBINE_DATA(&state->cpuB_ctrl);
 
 	if (ACCESSING_BITS_0_7)
@@ -139,19 +139,19 @@ static READ8_DEVICE_HANDLER( overdriv_sound_r )
 
 static WRITE16_HANDLER( overdriv_soundirq_w )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( overdriv_cpuB_irq5_w )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 	cpu_set_input_line(state->subcpu, 5, HOLD_LINE);
 }
 
 static WRITE16_HANDLER( overdriv_cpuB_irq6_w )
 {
-	overdriv_state *state = (overdriv_state *)space->machine->driver_data;
+	overdriv_state *state = space->machine->driver_data<overdriv_state>();
 	cpu_set_input_line(state->subcpu, 6, HOLD_LINE);
 }
 
@@ -296,7 +296,7 @@ static const k051316_interface overdriv_k051316_intf_2 =
 
 static MACHINE_START( overdriv )
 {
-	overdriv_state *state = (overdriv_state *)machine->driver_data;
+	overdriv_state *state = machine->driver_data<overdriv_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -316,7 +316,7 @@ static MACHINE_START( overdriv )
 
 static MACHINE_RESET( overdriv )
 {
-	overdriv_state *state = (overdriv_state *)machine->driver_data;
+	overdriv_state *state = machine->driver_data<overdriv_state>();
 
 	state->cpuB_ctrl = 0;
 	state->sprite_colorbase = 0;
@@ -329,10 +329,7 @@ static MACHINE_RESET( overdriv )
 	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
 }
 
-static MACHINE_DRIVER_START( overdriv )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(overdriv_state)
+static MACHINE_CONFIG_START( overdriv, overdriv_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,24000000/2)	/* 12 MHz */
@@ -393,7 +390,7 @@ static MACHINE_DRIVER_START( overdriv )
 	MDRV_SOUND_CONFIG(k053260_config)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.35)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.35)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

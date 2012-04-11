@@ -49,12 +49,11 @@ DAC               -26.6860Mhz
 #include "sound/2610intf.h"
 
 
-class _2mindril_state
+class _2mindril_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, _2mindril_state(machine)); }
-
-	_2mindril_state(running_machine &machine) { }
+	_2mindril_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *      map1ram;
@@ -94,7 +93,7 @@ public:
 
 static VIDEO_UPDATE( drill )
 {
-	_2mindril_state *state = (_2mindril_state *)screen->machine->driver_data;
+	_2mindril_state *state = screen->machine->driver_data<_2mindril_state>();
 	bitmap_fill(bitmap, NULL, 0);
 
 	DRAW_MAP(state->map1ram, 0)
@@ -123,7 +122,7 @@ static VIDEO_UPDATE( drill )
 
 static VIDEO_START( drill )
 {
-	_2mindril_state *state = (_2mindril_state *)machine->driver_data;
+	_2mindril_state *state = machine->driver_data<_2mindril_state>();
 
 	machine->gfx[0]->color_granularity = 16;
 	gfx_element_set_source(machine->gfx[1], (UINT8 *)state->charram);
@@ -131,7 +130,7 @@ static VIDEO_START( drill )
 
 static READ16_HANDLER( drill_io_r )
 {
-	_2mindril_state *state = (_2mindril_state *)space->machine->driver_data;
+	_2mindril_state *state = space->machine->driver_data<_2mindril_state>();
 
 //  if (offset * 2 == 0x4)
 	/*popmessage("PC=%08x %04x %04x %04x %04x %04x %04x %04x %04x", cpu_get_pc(space->cpu), state->iodata[0/2], state->iodata[2/2], state->iodata[4/2], state->iodata[6/2],
@@ -161,7 +160,7 @@ static READ16_HANDLER( drill_io_r )
 
 static WRITE16_HANDLER( drill_io_w )
 {
-	_2mindril_state *state = (_2mindril_state *)space->machine->driver_data;
+	_2mindril_state *state = space->machine->driver_data<_2mindril_state>();
 	COMBINE_DATA(&state->iodata[offset]);
 
 	switch(offset)
@@ -195,20 +194,20 @@ static WRITE16_HANDLER( drill_io_w )
 #ifdef UNUSED_FUNCTION
 static TIMER_CALLBACK( shutter_req )
 {
-	_2mindril_state *state = (_2mindril_state *)machine->driver_data;
+	_2mindril_state *state = machine->driver_data<_2mindril_state>();
 	state->shutter_sensor = param;
 }
 
 static TIMER_CALLBACK( defender_req )
 {
-	_2mindril_state *state = (_2mindril_state *)machine->driver_data;
+	_2mindril_state *state = machine->driver_data<_2mindril_state>();
 	state->defender_sensor = param;
 }
 #endif
 
 static WRITE16_HANDLER( sensors_w )
 {
-	_2mindril_state *state = (_2mindril_state *)space->machine->driver_data;
+	_2mindril_state *state = space->machine->driver_data<_2mindril_state>();
 
 	/*---- xxxx ---- ---- select "lamps" (guess)*/
 	/*---- ---- ---- -x-- lamp*/
@@ -237,7 +236,7 @@ static WRITE16_HANDLER( sensors_w )
 
 static WRITE16_HANDLER( charram_w )
 {
-	_2mindril_state *state = (_2mindril_state *)space->machine->driver_data;
+	_2mindril_state *state = space->machine->driver_data<_2mindril_state>();
 
 	COMBINE_DATA(&state->charram[offset]);
 	gfx_element_mark_dirty(space->machine->gfx[1], offset / 16);
@@ -415,7 +414,7 @@ static INTERRUPT_GEN( drill_interrupt )
 /* WRONG,it does something with 60000c & 700002,likely to be called when the player throws the ball.*/
 static void irqhandler(running_device *device, int irq)
 {
-//  _2mindril_state *state = (_2mindril_state *)machine->driver_data;
+//  _2mindril_state *state = machine->driver_data<_2mindril_state>();
 //  cpu_set_input_line(state->maincpu, 5, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -427,7 +426,7 @@ static const ym2610_interface ym2610_config =
 
 static MACHINE_START( drill )
 {
-	_2mindril_state *state = (_2mindril_state *)machine->driver_data;
+	_2mindril_state *state = machine->driver_data<_2mindril_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -437,14 +436,13 @@ static MACHINE_START( drill )
 
 static MACHINE_RESET( drill )
 {
-	_2mindril_state *state = (_2mindril_state *)machine->driver_data;
+	_2mindril_state *state = machine->driver_data<_2mindril_state>();
 
 	state->defender_sensor = 0;
 	state->shutter_sensor = 0;
 }
 
-static MACHINE_DRIVER_START( drill )
-	MDRV_DRIVER_DATA(_2mindril_state)
+static MACHINE_CONFIG_START( drill, _2mindril_state )
 
 	MDRV_CPU_ADD("maincpu", M68000, 16000000 )
 	MDRV_CPU_PROGRAM_MAP(drill_map)
@@ -473,7 +471,7 @@ static MACHINE_DRIVER_START( drill )
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
 	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
 	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( 2mindril )

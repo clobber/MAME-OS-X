@@ -35,7 +35,7 @@ Updates:
 
 static WRITE8_HANDLER( sound_cmd_w )
 {
-	kncljoe_state *state = (kncljoe_state *)space->machine->driver_data;
+	kncljoe_state *state = space->machine->driver_data<kncljoe_state>();
 
 	if ((data & 0x80) == 0)
 		soundlatch_w(space, 0, data & 0x7f);
@@ -65,13 +65,13 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( m6803_port1_w )
 {
-	kncljoe_state *state = (kncljoe_state *)device->machine->driver_data;
+	kncljoe_state *state = device->machine->driver_data<kncljoe_state>();
 	state->port1 = data;
 }
 
 static WRITE8_DEVICE_HANDLER( m6803_port2_w )
 {
-	kncljoe_state *state = (kncljoe_state *)device->machine->driver_data;
+	kncljoe_state *state = device->machine->driver_data<kncljoe_state>();
 
 	/* write latch */
 	if ((state->port2 & 0x01) && !(data & 0x01))
@@ -85,7 +85,7 @@ static WRITE8_DEVICE_HANDLER( m6803_port2_w )
 
 static READ8_DEVICE_HANDLER( m6803_port1_r )
 {
-	kncljoe_state *state = (kncljoe_state *)device->machine->driver_data;
+	kncljoe_state *state = device->machine->driver_data<kncljoe_state>();
 
 	if (state->port2 & 0x08)
 		return ay8910_r(device, 0);
@@ -99,7 +99,7 @@ static READ8_DEVICE_HANDLER( m6803_port2_r )
 
 static WRITE8_HANDLER( sound_irq_ack_w )
 {
-	kncljoe_state *state = (kncljoe_state *)space->machine->driver_data;
+	kncljoe_state *state = space->machine->driver_data<kncljoe_state>();
 	cpu_set_input_line(state->soundcpu, 0, CLEAR_LINE);
 }
 
@@ -250,7 +250,7 @@ static INTERRUPT_GEN (sound_nmi)
 
 static MACHINE_START( kncljoe )
 {
-	kncljoe_state *state = (kncljoe_state *)machine->driver_data;
+	kncljoe_state *state = machine->driver_data<kncljoe_state>();
 
 	state->soundcpu = machine->device("soundcpu");
 
@@ -263,7 +263,7 @@ static MACHINE_START( kncljoe )
 
 static MACHINE_RESET( kncljoe )
 {
-	kncljoe_state *state = (kncljoe_state *)machine->driver_data;
+	kncljoe_state *state = machine->driver_data<kncljoe_state>();
 
 	state->port1 = 0;
 	state->port2 = 0;
@@ -272,10 +272,7 @@ static MACHINE_RESET( kncljoe )
 	state->flipscreen = 0;
 }
 
-static MACHINE_DRIVER_START( kncljoe )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(kncljoe_state)
+static MACHINE_CONFIG_START( kncljoe, kncljoe_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_6MHz)  /* verified on pcb */
@@ -319,7 +316,7 @@ static MACHINE_DRIVER_START( kncljoe )
 
 	MDRV_SOUND_ADD("sn2", SN76489, XTAL_3_579545MHz) /* verified on pcb */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

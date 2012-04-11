@@ -38,6 +38,14 @@
 
 
 /***************************************************************************
+    DEVICE DEFINITIONS
+***************************************************************************/
+
+const device_type SPEAKER = speaker_device_config::static_alloc_device_config;
+
+
+
+/***************************************************************************
     TYPE DEFINITIONS
 ***************************************************************************/
 
@@ -73,7 +81,6 @@ static void sound_resume(running_machine &machine);
 static void sound_load(running_machine *machine, int config_type, xml_data_node *parentnode);
 static void sound_save(running_machine *machine, int config_type, xml_data_node *parentnode);
 static TIMER_CALLBACK( sound_update );
-static void route_sound(running_machine *machine);
 
 
 
@@ -117,12 +124,17 @@ void sound_init(running_machine *machine)
 {
 	sound_private *global;
 	const char *filename;
+        const char *filenameavi;
 
 	machine->sound_data = global = auto_alloc_clear(machine, sound_private);
 
-	/* handle -nosound */
+        /* get filename for WAV file or AVI file if specified */
+	filename = options_get_string(machine->options(), OPTION_WAVWRITE);
+        filenameavi = options_get_string(machine->options(), OPTION_AVIWRITE);
+
+	/* handle -nosound and lower sample rate if not recording WAV or AVI*/
 	global->nosound_mode = !options_get_bool(machine->options(), OPTION_SOUND);
-	if (global->nosound_mode)
+	if (global->nosound_mode && filename[0] == 0 && filenameavi[0] == 0)
 		machine->sample_rate = 11025;
 
 	/* count the speakers */
@@ -137,12 +149,7 @@ void sound_init(running_machine *machine)
 	global->update_timer = timer_alloc(machine, sound_update, NULL);
 	timer_adjust_periodic(global->update_timer, STREAMS_UPDATE_ATTOTIME, 0, STREAMS_UPDATE_ATTOTIME);
 
-	/* finally, do all the routing */
-	VPRINTF(("route_sound\n"));
-	route_sound(machine);
-
 	/* open the output WAV file if specified */
-	filename = options_get_string(machine->options(), OPTION_WAVWRITE);
 	if (filename[0] != 0)
 		global->wavfile = wav_open(filename, machine->sample_rate, 2);
 
@@ -175,49 +182,6 @@ static void sound_exit(running_machine &machine)
 
 	/* reset variables */
 	global->totalsnd = 0;
-}
-
-
-
-/***************************************************************************
-    INITIALIZATION HELPERS
-***************************************************************************/
-
-/*-------------------------------------------------
-    route_sound - route sound outputs to target
-    inputs
--------------------------------------------------*/
-
-static void route_sound(running_machine *machine)
-{
-	/* iterate again over all the sound chips */
-	device_sound_interface *sound = NULL;
-	for (bool gotone = machine->m_devicelist.first(sound); gotone; gotone = sound->next(sound))
-	{
-		int numoutputs = stream_get_device_outputs(*sound);
-
-		/* iterate over all routes */
-		for (const device_config_sound_interface::sound_route *route = sound->sound_config().m_route_list; route != NULL; route = route->m_next)
-		{
-			device_t *target_device = machine->device(route->m_target);
-			if (target_device->type() == SPEAKER)
-				continue;
-
-			int inputnum = route->m_input;
-
-			/* iterate over all outputs, matching any that apply */
-			for (int outputnum = 0; outputnum < numoutputs; outputnum++)
-				if (route->m_output == outputnum || route->m_output == ALL_OUTPUTS)
-				{
-					sound_stream *inputstream, *stream;
-					int streaminput, streamoutput;
-
-					if (stream_device_input_to_stream_input(target_device, inputnum++, &inputstream, &streaminput))
-						if (stream_device_output_to_stream_output(*sound, outputnum, &stream, &streamoutput))
-							stream_set_input(inputstream, streaminput, stream, streamoutput, route->m_gain);
-				}
-		}
-	}
 }
 
 
@@ -404,7 +368,7 @@ static TIMER_CALLBACK( sound_update )
 
 	VPRINTF(("sound_update\n"));
 
-	profiler_mark_start(PROFILER_SOUND);
+	g_profiler.start(PROFILER_SOUND);
 
 	leftmix = global->leftmix;
 	rightmix = global->rightmix;
@@ -412,7 +376,7 @@ static TIMER_CALLBACK( sound_update )
 
 	/* force all the speaker streams to generate the proper number of samples */
 	for (speaker_device *speaker = speaker_first(*machine); speaker != NULL; speaker = speaker_next(speaker))
-		speaker->mix(leftmix, rightmix, samples_this_update, !global->enabled || global->nosound_mode);
+		speaker->mix(leftmix, rightmix, samples_this_update, !global->enabled);
 
 	/* now downmix the final result */
 	finalmix_step = video_get_speed_factor();
@@ -443,7 +407,8 @@ static TIMER_CALLBACK( sound_update )
 	/* play the result */
 	if (finalmix_offset > 0)
 	{
-		osd_update_audio_stream(machine, finalmix, finalmix_offset / 2);
+		if (!global->nosound_mode)
+			osd_update_audio_stream(machine, finalmix, finalmix_offset / 2);
 		video_avi_add_sound(machine, finalmix, finalmix_offset / 2);
 		if (global->wavfile != NULL)
 			wav_add_data_16(global->wavfile, finalmix, finalmix_offset);
@@ -452,7 +417,7 @@ static TIMER_CALLBACK( sound_update )
 	/* update the streamer */
 	streams_update(machine);
 
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 
@@ -496,17 +461,16 @@ device_t *speaker_device_config::alloc_device(running_machine &machine) const
 
 
 //-------------------------------------------------
-//  device_config_complete - perform any
-//  operations now that the configuration is
-//  complete
+//  static_set_position - configuration helper to
+//  set the speaker position
 //-------------------------------------------------
 
-void speaker_device_config::device_config_complete()
+void speaker_device_config::static_set_position(device_config *device, double x, double y, double z)
 {
-	// move inline data into its final home
-	m_x = static_cast<double>(static_cast<INT32>(m_inline_data[INLINE_X])) / (double)(1 << 24);
-	m_y = static_cast<double>(static_cast<INT32>(m_inline_data[INLINE_Y])) / (double)(1 << 24);
-	m_z = static_cast<double>(static_cast<INT32>(m_inline_data[INLINE_Z])) / (double)(1 << 24);
+	speaker_device_config *speaker = downcast<speaker_device_config *>(device);
+	speaker->m_x = x;
+	speaker->m_y = y;
+	speaker->m_z = z;
 }
 
 
@@ -826,5 +790,3 @@ const char *sound_get_user_gain_name(running_machine *machine, int index)
 	speaker_device *speaker = index_to_input(machine, index, inputnum);
 	return (speaker != NULL) ? speaker->input_name(inputnum) : 0;
 }
-
-const device_type SPEAKER = speaker_device_config::static_alloc_device_config;

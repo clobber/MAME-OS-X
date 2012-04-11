@@ -49,13 +49,13 @@ static WRITE8_HANDLER( output_0_w )
 
 static READ8_HANDLER( input_1_r )
 {
-	tnzs_state *state = (tnzs_state *)space->machine->driver_data;
+	tnzs_state *state = space->machine->driver_data<tnzs_state>();
 	return (state->hop_io) | (state->bell_io) | (input_port_read(space->machine, "SP") & 0xff);
 }
 
 static WRITE8_HANDLER( output_1_w )
 {
-	tnzs_state *state = (tnzs_state *)space->machine->driver_data;
+	tnzs_state *state = space->machine->driver_data<tnzs_state>();
 
 	state->hop_io = (data & 0x40)>>4;
 	state->bell_io = (data & 0x80)>>4;
@@ -183,7 +183,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( cchance )
 {
-	tnzs_state *state = (tnzs_state *)machine->driver_data;
+	tnzs_state *state = machine->driver_data<tnzs_state>();
 	state->mcu = NULL;
 
 	state_save_register_global(machine, state->screenflip);
@@ -193,7 +193,7 @@ static MACHINE_START( cchance )
 
 static MACHINE_RESET( cchance )
 {
-	tnzs_state *state = (tnzs_state *)machine->driver_data;
+	tnzs_state *state = machine->driver_data<tnzs_state>();
 
 	state->screenflip = 0;
 	state->mcu_type = -1;
@@ -202,10 +202,7 @@ static MACHINE_RESET( cchance )
 
 }
 
-static MACHINE_DRIVER_START( cchance )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(tnzs_state)
+static MACHINE_CONFIG_START( cchance, tnzs_state )
 
 	MDRV_CPU_ADD("maincpu", Z80,4000000)		 /* ? MHz */
 	MDRV_CPU_PROGRAM_MAP(main_map)
@@ -235,7 +232,7 @@ static MACHINE_DRIVER_START( cchance )
 	MDRV_SOUND_ADD("aysnd", AY8910, 1500000/2)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( cchance )
 	ROM_REGION( 0x10000, "maincpu", 0 )

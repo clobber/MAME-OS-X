@@ -5,12 +5,11 @@
 #include "sound/dac.h"
 #include "includes/konamipt.h"
 
-class mogura_state
+class mogura_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, mogura_state(machine)); }
-
-	mogura_state(running_machine &machine) { }
+	mogura_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *   tileram;
@@ -60,7 +59,7 @@ static PALETTE_INIT( mogura )
 
 static TILE_GET_INFO( get_mogura_tile_info )
 {
-	mogura_state *state = (mogura_state *)machine->driver_data;
+	mogura_state *state = machine->driver_data<mogura_state>();
 	int code = state->tileram[tile_index];
 	int attr = state->tileram[tile_index + 0x800];
 
@@ -74,14 +73,14 @@ static TILE_GET_INFO( get_mogura_tile_info )
 
 static VIDEO_START( mogura )
 {
-	mogura_state *state = (mogura_state *)machine->driver_data;
+	mogura_state *state = machine->driver_data<mogura_state>();
 	gfx_element_set_source(machine->gfx[0], state->gfxram);
 	state->tilemap = tilemap_create(machine, get_mogura_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 }
 
 static VIDEO_UPDATE( mogura )
 {
-	mogura_state *state = (mogura_state *)screen->machine->driver_data;
+	mogura_state *state = screen->machine->driver_data<mogura_state>();
 	const rectangle &visarea = screen->visible_area();
 
 	/* tilemap layout is a bit strange ... */
@@ -105,14 +104,14 @@ static VIDEO_UPDATE( mogura )
 
 static WRITE8_HANDLER( mogura_tileram_w )
 {
-	mogura_state *state = (mogura_state *)space->machine->driver_data;
+	mogura_state *state = space->machine->driver_data<mogura_state>();
 	state->tileram[offset] = data;
 	tilemap_mark_tile_dirty(state->tilemap, offset & 0x7ff);
 }
 
 static WRITE8_HANDLER(mogura_dac_w)
 {
-	mogura_state *state = (mogura_state *)space->machine->driver_data;
+	mogura_state *state = space->machine->driver_data<mogura_state>();
 	dac_data_w(state->dac1, data & 0xf0);	/* left */
 	dac_data_w(state->dac2, (data & 0x0f) << 4);	/* right */
 }
@@ -120,7 +119,7 @@ static WRITE8_HANDLER(mogura_dac_w)
 
 static WRITE8_HANDLER ( mogura_gfxram_w )
 {
-	mogura_state *state = (mogura_state *)space->machine->driver_data;
+	mogura_state *state = space->machine->driver_data<mogura_state>();
 	state->gfxram[offset] = data ;
 
 	gfx_element_mark_dirty(space->machine->gfx[0], offset / 16);
@@ -193,17 +192,14 @@ GFXDECODE_END
 
 static MACHINE_START( mogura )
 {
-	mogura_state *state = (mogura_state *)machine->driver_data;
+	mogura_state *state = machine->driver_data<mogura_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->dac1 = machine->device("dac1");
 	state->dac2 = machine->device("dac2");
 }
 
-static MACHINE_DRIVER_START( mogura )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mogura_state)
+static MACHINE_CONFIG_START( mogura, mogura_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,3000000)		 /* 3 MHz */
@@ -237,7 +233,7 @@ static MACHINE_DRIVER_START( mogura )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( mogura )
 	ROM_REGION( 0x10000, "maincpu", 0 )

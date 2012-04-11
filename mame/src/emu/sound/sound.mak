@@ -72,6 +72,15 @@ $(SOUNDOBJ)/discrete.o:	$(SOUNDSRC)/discrete.c \
 						$(SOUNDSRC)/disc_wav.c
 
 
+#-------------------------------------------------
+# Apple custom sound chips
+#-------------------------------------------------
+
+ifneq ($(filter ASC,$(SOUNDS)),)
+SOUNDOBJS += $(SOUNDOBJ)/asc.o
+endif
+
+
 
 #-------------------------------------------------
 # Atari custom sound chips
@@ -392,6 +401,13 @@ SOUNDOBJS += $(SOUNDOBJ)/rf5c400.o
 endif
 
 
+#-------------------------------------------------
+# S2636 wave generator
+#-------------------------------------------------
+
+ifneq ($(filter S2636,$(SOUNDS)),)
+SOUNDOBJS += $(SOUNDOBJ)/s2636.o
+endif
 
 #-------------------------------------------------
 # Sega custom sound chips

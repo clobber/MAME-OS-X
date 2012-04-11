@@ -137,7 +137,8 @@ struct _m68_state_t
 	PAIR	ea; 		/* effective address */
 
 	/* Memory spaces */
-    const address_space *program;
+    address_space *program;
+    direct_read_data *direct;
 
 	UINT8	int_state;	/* SYNC and CWAI flags */
 	UINT8	nmi_state;
@@ -229,26 +230,26 @@ INLINE void fetch_effective_address( m68_state_t *m68_state );
 /****************************************************************************/
 /* Read a byte from given memory location                                   */
 /****************************************************************************/
-#define RM(Addr) ((unsigned)memory_read_byte_8be(m68_state->program, Addr))
+#define RM(Addr) ((unsigned)m68_state->program->read_byte(Addr))
 
 /****************************************************************************/
 /* Write a byte to given memory location                                    */
 /****************************************************************************/
-#define WM(Addr,Value) (memory_write_byte_8be(m68_state->program, Addr,Value))
+#define WM(Addr,Value) (m68_state->program->write_byte(Addr,Value))
 
 /****************************************************************************/
 /* Z80_RDOP() is identical to Z80_RDMEM() except it is used for reading     */
 /* opcodes. In case of system with memory mapped I/O, this function can be  */
 /* used to greatly speed up emulation                                       */
 /****************************************************************************/
-#define ROP(Addr) ((unsigned)memory_decrypted_read_byte(m68_state->program, Addr))
+#define ROP(Addr) ((unsigned)m68_state->direct->read_decrypted_byte(Addr))
 
 /****************************************************************************/
 /* Z80_RDOP_ARG() is identical to Z80_RDOP() except it is used for reading  */
 /* opcode arguments. This difference can be used to support systems that    */
 /* use different encoding mechanisms for opcodes and opcode arguments       */
 /****************************************************************************/
-#define ROP_ARG(Addr) ((unsigned)memory_raw_read_byte(m68_state->program, Addr))
+#define ROP_ARG(Addr) ((unsigned)m68_state->direct->read_raw_byte(Addr))
 
 /* macros to access memory */
 #define IMMBYTE(b)	b = ROP_ARG(PCD); PC++
@@ -522,6 +523,7 @@ static CPU_INIT( hd6309 )
 	m68_state->device = device;
 
 	m68_state->program = device->space(AS_PROGRAM);
+	m68_state->direct = &m68_state->program->direct();
 
 	/* setup regtable */
 

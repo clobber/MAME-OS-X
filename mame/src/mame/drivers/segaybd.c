@@ -27,6 +27,7 @@ Known games currently not dumped:
 #include "includes/segas16.h"
 #include "cpu/m68000/m68000.h"
 #include "machine/segaic16.h"
+#include "machine/nvram.h"
 #include "sound/2151intf.h"
 #include "sound/segapcm.h"
 #include "video/segaic16.h"
@@ -48,8 +49,6 @@ Known games currently not dumped:
  *
  *************************************/
 
-static UINT16 *backupram;
-
 /* callbacks to handle output */
 typedef void (*yboard_output_callback)(UINT16 data);
 static yboard_output_callback ybd_output_cb1, ybd_output_cb2;
@@ -64,7 +63,7 @@ static UINT16 pdrift_bank;
 
 static void yboard_generic_init( running_machine *machine )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	/* reset globals */
 	state->vblank_irq_state = 0;
@@ -84,7 +83,7 @@ static void yboard_generic_init( running_machine *machine )
 
 static void update_main_irqs(running_machine *machine)
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	cpu_set_input_line(state->maincpu, 2, state->timer_irq_state ? ASSERT_LINE : CLEAR_LINE);
 	cpu_set_input_line(state->subx, 2, state->timer_irq_state ? ASSERT_LINE : CLEAR_LINE);
@@ -137,7 +136,7 @@ static void update_main_irqs(running_machine *machine)
 
 static TIMER_DEVICE_CALLBACK( scanline_callback )
 {
-	segas1x_state *state = (segas1x_state *)timer.machine->driver_data;
+	segas1x_state *state = timer.machine->driver_data<segas1x_state>();
 	int scanline = param;
 
 	/* on scanline 'irq2_scanline' generate an IRQ2 */
@@ -193,7 +192,7 @@ static TIMER_DEVICE_CALLBACK( scanline_callback )
 
 static MACHINE_START( yboard )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->soundcpu = machine->device("soundcpu");
@@ -210,7 +209,7 @@ static MACHINE_START( yboard )
 
 static MACHINE_RESET( yboard )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
+	segas1x_state *state = machine->driver_data<segas1x_state>();
 
 	state->irq2_scanline = 170;
 
@@ -227,7 +226,7 @@ static MACHINE_RESET( yboard )
 
 static void sound_cpu_irq(running_device *device, int state)
 {
-	segas1x_state *driver = (segas1x_state *)device->machine->driver_data;
+	segas1x_state *driver = device->machine->driver_data<segas1x_state>();
 
 	cpu_set_input_line(driver->soundcpu, 0, state);
 }
@@ -235,8 +234,8 @@ static void sound_cpu_irq(running_device *device, int state)
 
 static TIMER_CALLBACK( delayed_sound_data_w )
 {
-	segas1x_state *state = (segas1x_state *)machine->driver_data;
-	const address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
+	segas1x_state *state = machine->driver_data<segas1x_state>();
+	address_space *space = cpu_get_address_space(state->maincpu, ADDRESS_SPACE_PROGRAM);
 
 	soundlatch_w(space, 0, param);
 	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, ASSERT_LINE);
@@ -252,7 +251,7 @@ static WRITE16_HANDLER( sound_data_w )
 
 static READ8_HANDLER( sound_data_r )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	cpu_set_input_line(state->soundcpu, INPUT_LINE_NMI, CLEAR_LINE);
 	return soundlatch_r(space, offset);
 }
@@ -267,7 +266,7 @@ static READ8_HANDLER( sound_data_r )
 
 static READ16_HANDLER( io_chip_r )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	static const char *const portnames[] = { "P1", "GENERAL", "PORTC", "PORTD", "PORTE", "DSW", "COINAGE", "PORTH" };
 	offset &= 0x1f/2;
 
@@ -315,7 +314,7 @@ static READ16_HANDLER( io_chip_r )
 
 static WRITE16_HANDLER( io_chip_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	UINT8 old;
 
 	/* generic implementation */
@@ -387,7 +386,7 @@ static WRITE16_HANDLER( io_chip_w )
 
 static READ16_HANDLER( analog_r )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	int result = 0xff;
 	if (ACCESSING_BITS_0_7)
 	{
@@ -400,28 +399,12 @@ static READ16_HANDLER( analog_r )
 
 static WRITE16_HANDLER( analog_w )
 {
-	segas1x_state *state = (segas1x_state *)space->machine->driver_data;
+	segas1x_state *state = space->machine->driver_data<segas1x_state>();
 	static const char *const ports[] = { "ADC0", "ADC1", "ADC2", "ADC3", "ADC4", "ADC5", "ADC6" };
 	int selected = ((offset & 3) == 3) ? (3 + (state->misc_io_data[0x08/2] & 3)) : (offset & 3);
 	int value = input_port_read_safe(space->machine, ports[selected], 0xff);
 
 	state->analog_data[offset & 3] = value;
-}
-
-
-
-/*************************************
- *
- *  Capacitor-backed RAM
- *
- *************************************/
-
-static NVRAM_HANDLER( yboard )
-{
-	if (read_or_write)
-		mame_fwrite(file, backupram, 0x4000);
-	else if (file)
-		mame_fread(file, backupram, 0x4000);
 }
 
 
@@ -463,7 +446,7 @@ static ADDRESS_MAP_START( subx_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x0c0000, 0x0cffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0x180000, 0x18ffff) AM_RAM AM_BASE(&segaic16_spriteram_1)
 	AM_RANGE(0x1f8000, 0x1fbfff) AM_RAM
-	AM_RANGE(0x1fc000, 0x1fffff) AM_RAM AM_BASE(&backupram)
+	AM_RANGE(0x1fc000, 0x1fffff) AM_RAM AM_SHARE("backupram")
 ADDRESS_MAP_END
 
 
@@ -1003,10 +986,7 @@ static const sega_pcm_interface segapcm_interface =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( yboard )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(segas1x_state)
+static MACHINE_CONFIG_START( yboard, segas1x_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK/4)
@@ -1024,7 +1004,7 @@ static MACHINE_DRIVER_START( yboard )
 
 	MDRV_MACHINE_START(yboard)
 	MDRV_MACHINE_RESET(yboard)
-	MDRV_NVRAM_HANDLER(yboard)
+	MDRV_NVRAM_ADD_0FILL("backupram")
 	MDRV_QUANTUM_TIME(HZ(6000))
 
 	MDRV_TIMER_ADD("int_timer", scanline_callback)
@@ -1063,7 +1043,7 @@ static MACHINE_DRIVER_START( yboard )
 	MDRV_SOUND_CONFIG(segapcm_interface)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

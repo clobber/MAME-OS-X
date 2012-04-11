@@ -150,7 +150,7 @@ Notes:
 
 static WRITE8_HANDLER( beast_data_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	state->data_to_beast = data;
 	state->z80_to_beast_full = 1;
@@ -160,7 +160,7 @@ static WRITE8_HANDLER( beast_data_w )
 
 static READ8_HANDLER( beast_data_r )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	state->beast_to_z80_full = 0;
 	return state->data_to_z80;
@@ -168,7 +168,7 @@ static READ8_HANDLER( beast_data_r )
 
 static READ8_HANDLER( beast_status_r )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 	return (!state->beast_to_z80_full << 2) | (state->z80_to_beast_full << 3);
 }
 
@@ -176,13 +176,13 @@ static READ8_HANDLER( beast_status_r )
 
 static WRITE8_HANDLER( trigger_nmi_on_cpu0 )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, PULSE_LINE);
 }
 
 static WRITE8_HANDLER( cpu0_bankswitch_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	data ^= state->bankxor;
 	memory_set_bank(space->machine, "bank1", data);
@@ -199,7 +199,7 @@ static WRITE8_HANDLER( cpu0_bankswitch_w )
  */
 static WRITE8_HANDLER( cpu1_bankswitch_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 	state->videoreg = data;
 
 	switch (data & 0xf)
@@ -239,7 +239,7 @@ static WRITE8_HANDLER( coin_count_w )
 
 static WRITE8_HANDLER( trigger_nmi_on_sound_cpu2 )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 	soundlatch_w(space, 0, data);
 	cpu_set_input_line(state->cpu2, INPUT_LINE_NMI, PULSE_LINE);
 } /* trigger_nmi_on_sound_cpu2 */
@@ -302,8 +302,8 @@ static ADDRESS_MAP_START( cpu2_port_am, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0x00, 0x00) AM_WRITE(cpu2_bankswitch_w)
 	AM_RANGE(0x02, 0x03) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
 	AM_RANGE(0x04, 0x04) AM_READ(soundlatch_r)
-	AM_RANGE(0x06, 0x06) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x07, 0x07) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x06, 0x06) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x07, 0x07) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 /******************************************************************************/
@@ -316,7 +316,7 @@ static READ8_HANDLER( beast_p0_r )
 
 static WRITE8_HANDLER( beast_p0_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	if (!BIT(state->beast_p0, 1) && BIT(data, 1))
 	{
@@ -332,7 +332,7 @@ static WRITE8_HANDLER( beast_p0_w )
 
 static READ8_HANDLER( beast_p1_r )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	if (BIT(state->beast_p0, 0) == 0)
 		return state->data_to_beast;
@@ -342,7 +342,7 @@ static READ8_HANDLER( beast_p1_r )
 
 static WRITE8_HANDLER( beast_p1_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	if (data == 0xff)
 	{
@@ -355,7 +355,7 @@ static WRITE8_HANDLER( beast_p1_w )
 
 static READ8_HANDLER( beast_p2_r )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	switch ((state->beast_p0 >> 2) & 3)
 	{
@@ -368,13 +368,13 @@ static READ8_HANDLER( beast_p2_r )
 
 static WRITE8_HANDLER( beast_p2_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 	state->beast_p2 = data;
 }
 
 static READ8_HANDLER( beast_p3_r )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	UINT8 dsw = 0;
 	UINT8 dsw1 = ~input_port_read(space->machine, "DSW1");
@@ -392,7 +392,7 @@ static READ8_HANDLER( beast_p3_r )
 
 static WRITE8_HANDLER( beast_p3_w )
 {
-	djboy_state *state = (djboy_state *)space->machine->driver_data;
+	djboy_state *state = space->machine->driver_data<djboy_state>();
 
 	state->beast_p3 = data;
 	cpu_set_input_line(state->cpu1, INPUT_LINE_RESET, data & 2 ? CLEAR_LINE : ASSERT_LINE);
@@ -515,7 +515,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( djboy_interrupt )
 { /* CPU1 uses interrupt mode 2. For now, just alternate the two interrupts. */
-	djboy_state *state = (djboy_state *)device->machine->driver_data;
+	djboy_state *state = device->machine->driver_data<djboy_state>();
 	state->addr ^= 0x02;
 	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, state->addr);
 }
@@ -530,7 +530,7 @@ static const kaneko_pandora_interface djboy_pandora_config =
 
 static MACHINE_START( djboy )
 {
-	djboy_state *state = (djboy_state *)machine->driver_data;
+	djboy_state *state = machine->driver_data<djboy_state>();
 	UINT8 *MAIN = memory_region(machine, "maincpu");
 	UINT8 *CPU1 = memory_region(machine, "cpu1");
 	UINT8 *CPU2 = memory_region(machine, "cpu2");
@@ -569,7 +569,7 @@ static MACHINE_START( djboy )
 
 static MACHINE_RESET( djboy )
 {
-	djboy_state *state = (djboy_state *)machine->driver_data;
+	djboy_state *state = machine->driver_data<djboy_state>();
 
 	state->videoreg = 0;
 	state->scrollx = 0;
@@ -582,8 +582,7 @@ static MACHINE_RESET( djboy )
 	state->z80_to_beast_full = 0;
 }
 
-static MACHINE_DRIVER_START( djboy )
-	MDRV_DRIVER_DATA(djboy_state)
+static MACHINE_CONFIG_START( djboy, djboy_state )
 
 	MDRV_CPU_ADD("maincpu", Z80, 6000000)
 	MDRV_CPU_PROGRAM_MAP(cpu0_am)
@@ -634,7 +633,7 @@ static MACHINE_DRIVER_START( djboy )
 
 	MDRV_OKIM6295_ADD("oki2", 12000000 / 8, OKIM6295_PIN7_LOW)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( djboy )
@@ -748,13 +747,13 @@ ROM_END
 
 static DRIVER_INIT( djboy )
 {
-	djboy_state *state = (djboy_state *)machine->driver_data;
+	djboy_state *state = machine->driver_data<djboy_state>();
 	state->bankxor = 0x00;
 }
 
 static DRIVER_INIT( djboyj )
 {
-	djboy_state *state = (djboy_state *)machine->driver_data;
+	djboy_state *state = machine->driver_data<djboy_state>();
 	state->bankxor = 0x1f;
 }
 

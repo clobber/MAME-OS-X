@@ -44,8 +44,8 @@ static ADDRESS_MAP_START( gomoku_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5000, 0x53ff) AM_RAM_WRITE(gomoku_videoram_w) AM_BASE(&gomoku_videoram)
 	AM_RANGE(0x5400, 0x57ff) AM_RAM_WRITE(gomoku_colorram_w) AM_BASE(&gomoku_colorram)
 	AM_RANGE(0x5800, 0x58ff) AM_RAM_WRITE(gomoku_bgram_w) AM_BASE(&gomoku_bgram)
-	AM_RANGE(0x6000, 0x601f) AM_WRITE(gomoku_sound1_w) AM_BASE(&gomoku_soundregs1)
-	AM_RANGE(0x6800, 0x681f) AM_WRITE(gomoku_sound2_w) AM_BASE(&gomoku_soundregs2)
+	AM_RANGE(0x6000, 0x601f) AM_DEVWRITE("gomoku", gomoku_sound1_w)
+	AM_RANGE(0x6800, 0x681f) AM_DEVWRITE("gomoku", gomoku_sound2_w)
 	AM_RANGE(0x7000, 0x7000) AM_WRITENOP
 	AM_RANGE(0x7001, 0x7001) AM_WRITE(gomoku_flipscreen_w)
 	AM_RANGE(0x7002, 0x7002) AM_WRITE(gomoku_bg_dispsw_w)
@@ -117,7 +117,7 @@ static GFXDECODE_START( gomoku )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( gomoku )
+static MACHINE_CONFIG_START( gomoku, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/12)		 /* 1.536 MHz ? */
 	MDRV_CPU_PROGRAM_MAP(gomoku_map)
@@ -143,7 +143,7 @@ static MACHINE_DRIVER_START( gomoku )
 
 	MDRV_SOUND_ADD("gomoku", GOMOKU, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( gomoku )

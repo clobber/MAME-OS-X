@@ -325,13 +325,14 @@ Stephh's notes (based on the game M68000 code and some tests) :
 #include "audio/taitosnd.h"
 #include "sound/2203intf.h"
 #include "sound/2151intf.h"
+#include "includes/rastan.h"
 #include "includes/rainbow.h"
 
 
 
 static WRITE16_HANDLER( jumping_sound_w )
 {
-	rainbow_state *state = (rainbow_state *)space->machine->driver_data;
+	rainbow_state *state = space->machine->driver_data<rainbow_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -403,7 +404,7 @@ static WRITE8_DEVICE_HANDLER( bankswitch_w )
 
 static READ8_HANDLER( jumping_latch_r )
 {
-	rainbow_state *state = (rainbow_state *)space->machine->driver_data;
+	rainbow_state *state = space->machine->driver_data<rainbow_state>();
 	return state->jumping_latch;
 }
 
@@ -627,7 +628,7 @@ GFXDECODE_END
 
 static void irqhandler( running_device *device, int irq )
 {
-	rainbow_state *state = (rainbow_state *)device->machine->driver_data;
+	rainbow_state *state = device->machine->driver_data<rainbow_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -666,7 +667,7 @@ static const tc0140syt_interface rainbow_tc0140syt_intf =
 
 static MACHINE_START( rainbow )
 {
-	rainbow_state *state = (rainbow_state *)machine->driver_data;
+	rainbow_state *state = machine->driver_data<rainbow_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -674,10 +675,7 @@ static MACHINE_START( rainbow )
 	state->pc090oj = machine->device("pc090oj");
 }
 
-static MACHINE_DRIVER_START( rainbow )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rainbow_state)
+static MACHINE_CONFIG_START( rainbow, rainbow_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_16MHz/2) /* verified on pcb */
@@ -716,14 +714,11 @@ static MACHINE_DRIVER_START( rainbow )
 	MDRV_SOUND_ROUTE(1, "mono", 0.50)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", rainbow_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* Jumping: The PCB has 2 Xtals, 24MHz and 18,432MHz */
-static MACHINE_DRIVER_START( jumping )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rainbow_state)
+static MACHINE_CONFIG_START( jumping, rainbow_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz/3)	/* not verified but matches original */
@@ -761,7 +756,7 @@ static MACHINE_DRIVER_START( jumping )
 
 	MDRV_SOUND_ADD("ym2", YM2203, XTAL_18_432MHz/6)	/* not verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************
@@ -895,7 +890,7 @@ static DRIVER_INIT( rainbowe )
 
 static DRIVER_INIT( jumping )
 {
-	rainbow_state *state = (rainbow_state *)machine->driver_data;
+	rainbow_state *state = machine->driver_data<rainbow_state>();
 	int i, len = memory_region_length(machine, "gfx2");
 	UINT8 *rom = memory_region(machine, "gfx2");
 

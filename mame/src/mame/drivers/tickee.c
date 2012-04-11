@@ -11,10 +11,12 @@
         * Tuts Tomb
         * Mouse Attack
         * Rapid Fire
+        * Mallet Madness
 
     Known bugs:
         * (Tickee) gun sometimes misfires
         * Mouse Attack dips and inputs need fixing
+        * Mallet Madness ticket dispenser isn't working
 
 ***************************************************************************/
 
@@ -24,6 +26,7 @@
 #include "video/tlc34076.h"
 #include "sound/ay8910.h"
 #include "sound/okim6295.h"
+#include "machine/nvram.h"
 
 #define CPU_CLOCK			XTAL_40MHz
 #define VIDEO_CLOCK			XTAL_14_31818MHz
@@ -134,7 +137,7 @@ static void scanline_update(screen_device &screen, bitmap_t *bitmap, int scanlin
 {
 	UINT16 *src = &tickee_vram[(params->rowaddr << 8) & 0x3ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
-	const rgb_t *pens = tlc34076_get_pens();
+	const rgb_t *pens = tlc34076_get_pens(screen.machine->device("tlc34076"));
 	int coladdr = params->coladdr << 1;
 	int x;
 
@@ -159,7 +162,7 @@ static void rapidfir_scanline_update(screen_device &screen, bitmap_t *bitmap, in
 {
 	UINT16 *src = &tickee_vram[(params->rowaddr << 8) & 0x3ff00];
 	UINT32 *dest = BITMAP_ADDR32(bitmap, scanline, 0);
-	const rgb_t *pens = tlc34076_get_pens();
+	const rgb_t *pens = tlc34076_get_pens(screen.machine->device("tlc34076"));
 	int coladdr = params->coladdr << 1;
 	int x;
 
@@ -195,14 +198,12 @@ static MACHINE_RESET( tickee )
 {
 	beamxadd = 50;
 	beamyadd = 0;
-	tlc34076_reset(6);
 }
 
 static MACHINE_RESET( rapidfir )
 {
 	beamxadd = 0;
 	beamyadd = -5;
-	tlc34076_reset(6);
 }
 
 
@@ -226,14 +227,14 @@ static READ16_HANDLER( rapidfir_transparent_r )
 }
 
 
-static void rapidfir_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void rapidfir_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	if (address < 0x800000)
 		memcpy(shiftreg, &tickee_vram[TOWORD(address)], TOBYTE(0x2000));
 }
 
 
-static void rapidfir_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+static void rapidfir_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	if (address < 0x800000)
 		memcpy(&tickee_vram[TOWORD(address)], shiftreg, TOBYTE(0x2000));
@@ -298,9 +299,14 @@ static READ16_HANDLER( rapidfir_gun2_r )
 
 static READ16_HANDLER( ff7f_r )
 {
+	/* Ticket dispenser status? */
 	return 0xff7f;
 }
 
+static WRITE16_HANDLER( ff7f_w )
+{
+	/* Ticket dispenser output? */
+}
 
 static WRITE16_HANDLER( rapidfir_control_w )
 {
@@ -354,8 +360,8 @@ static WRITE16_DEVICE_HANDLER( sound_bank_w )
 static ADDRESS_MAP_START( tickee_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&tickee_vram)
 	AM_RANGE(0x02000000, 0x02ffffff) AM_ROM AM_REGION("user1", 0)
-	AM_RANGE(0x04000000, 0x04003fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0x04100000, 0x041000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
+	AM_RANGE(0x04000000, 0x04003fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x04100000, 0x041000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0x04200000, 0x0420000f) AM_DEVREAD8("ym1", ay8910_r, 0x00ff)
 	AM_RANGE(0x04200000, 0x0420001f) AM_DEVWRITE8("ym1", ay8910_address_data_w, 0x00ff)
 	AM_RANGE(0x04200100, 0x0420010f) AM_DEVREAD8("ym2", ay8910_r, 0x00ff)
@@ -372,8 +378,8 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( ghoshunt_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&tickee_vram)
 	AM_RANGE(0x02000000, 0x02ffffff) AM_ROM AM_REGION("user1", 0)
-	AM_RANGE(0x04100000, 0x04103fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0x04200000, 0x042000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
+	AM_RANGE(0x04100000, 0x04103fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x04200000, 0x042000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0x04300000, 0x0430000f) AM_DEVREAD8("ym1", ay8910_r, 0x00ff)
 	AM_RANGE(0x04300000, 0x0430001f) AM_DEVWRITE8("ym1", ay8910_address_data_w, 0x00ff)
 	AM_RANGE(0x04300100, 0x0430010f) AM_DEVREAD8("ym2", ay8910_r, 0x00ff)
@@ -388,11 +394,11 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( mouseatk_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x00000000, 0x003fffff) AM_RAM AM_BASE(&tickee_vram)
 	AM_RANGE(0x02000000, 0x02ffffff) AM_ROM AM_REGION("user1", 0)
-	AM_RANGE(0x04000000, 0x04003fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0x04100000, 0x041000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
+	AM_RANGE(0x04000000, 0x04003fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0x04100000, 0x041000ff) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
 	AM_RANGE(0x04200000, 0x0420000f) AM_DEVREAD8("ym", ay8910_r, 0x00ff)
 	AM_RANGE(0x04200000, 0x0420000f) AM_DEVWRITE8("ym", ay8910_address_data_w, 0x00ff)
-	AM_RANGE(0x04200100, 0x0420010f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x04200100, 0x0420010f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x04400000, 0x0440007f) AM_WRITE(tickee_control_w) AM_BASE(&tickee_control)
 	AM_RANGE(0x04400040, 0x0440004f) AM_READ_PORT("IN2") // ?
 	AM_RANGE(0xc0000000, 0xc00001ff) AM_READWRITE(tms34010_io_register_r, tms34010_io_register_w)
@@ -418,10 +424,10 @@ static ADDRESS_MAP_START( rapidfir_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0xfc000b00, 0xfc000b0f) AM_READ_PORT("DSW0")
 	AM_RANGE(0xfc000c00, 0xfc000c1f) AM_READ_PORT("DSW1")
 	AM_RANGE(0xfc000e00, 0xfc000e1f) AM_READ(watchdog_reset16_r)
-	AM_RANGE(0xfc100000, 0xfc1000ff) AM_READWRITE(tlc34076_lsb_r, tlc34076_lsb_w)
-	AM_RANGE(0xfc200000, 0xfc207fff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0xfc300000, 0xfc30000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
-	AM_RANGE(0xfc400010, 0xfc40001f) AM_READ(ff7f_r)
+	AM_RANGE(0xfc100000, 0xfc1000ff) AM_MIRROR(0x80000) AM_DEVREADWRITE8("tlc34076", tlc34076_r, tlc34076_w, 0x00ff)
+	AM_RANGE(0xfc200000, 0xfc207fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xfc300000, 0xfc30000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
+	AM_RANGE(0xfc400010, 0xfc40001f) AM_READWRITE(ff7f_r, ff7f_w)
 	AM_RANGE(0xfe000000, 0xffffffff) AM_ROM AM_REGION("user1", 0)
 ADDRESS_MAP_END
 
@@ -726,7 +732,7 @@ static const tms34010_config rapidfir_tms_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( tickee )
+static MACHINE_CONFIG_START( tickee, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS34010, XTAL_40MHz)
@@ -734,12 +740,14 @@ static MACHINE_DRIVER_START( tickee )
 	MDRV_CPU_PROGRAM_MAP(tickee_map)
 
 	MDRV_MACHINE_RESET(tickee)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MDRV_NVRAM_ADD_1FILL("nvram")
 
 	MDRV_TICKET_DISPENSER_ADD("ticket1", 100, TICKET_MOTOR_ACTIVE_LOW, TICKET_STATUS_ACTIVE_HIGH)
 	MDRV_TICKET_DISPENSER_ADD("ticket2", 100, TICKET_MOTOR_ACTIVE_LOW, TICKET_STATUS_ACTIVE_HIGH)
 
 	/* video hardware */
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
+
 	MDRV_VIDEO_START(tickee)
 	MDRV_VIDEO_UPDATE(tms340x0)
 
@@ -757,19 +765,18 @@ static MACHINE_DRIVER_START( tickee )
 	MDRV_SOUND_ADD("ym2", YM2149, VIDEO_CLOCK/8)
 	MDRV_SOUND_CONFIG(ay8910_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ghoshunt )
-	MDRV_IMPORT_FROM(tickee)
+static MACHINE_CONFIG_DERIVED( ghoshunt, tickee )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(ghoshunt_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( rapidfir )
+static MACHINE_CONFIG_START( rapidfir, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS34010, XTAL_50MHz)
@@ -777,9 +784,11 @@ static MACHINE_DRIVER_START( rapidfir )
 	MDRV_CPU_PROGRAM_MAP(rapidfir_map)
 
 	MDRV_MACHINE_RESET(rapidfir)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MDRV_NVRAM_ADD_1FILL("nvram")
 
 	/* video hardware */
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
+
 	MDRV_VIDEO_START(tickee)
 	MDRV_VIDEO_UPDATE(tms340x0)
 
@@ -792,10 +801,10 @@ static MACHINE_DRIVER_START( rapidfir )
 
 	MDRV_OKIM6295_ADD("oki", OKI_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mouseatk )
+static MACHINE_CONFIG_START( mouseatk, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS34010, XTAL_40MHz)
@@ -803,12 +812,15 @@ static MACHINE_DRIVER_START( mouseatk )
 	MDRV_CPU_PROGRAM_MAP(mouseatk_map)
 
 	MDRV_MACHINE_RESET(tickee)
-	MDRV_NVRAM_HANDLER(generic_1fill)
+	MDRV_NVRAM_ADD_1FILL("nvram")
 
-	/* video hardware */
-	MDRV_VIDEO_UPDATE(tms340x0)
 	MDRV_TICKET_DISPENSER_ADD("ticket1", 100, TICKET_MOTOR_ACTIVE_LOW, TICKET_STATUS_ACTIVE_HIGH)
 	MDRV_TICKET_DISPENSER_ADD("ticket2", 100, TICKET_MOTOR_ACTIVE_LOW, TICKET_STATUS_ACTIVE_HIGH)
+
+	/* video hardware */
+	MDRV_TLC34076_ADD("tlc34076", TLC34076_6_BIT)
+
+	MDRV_VIDEO_UPDATE(tms340x0)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
 	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
@@ -823,7 +835,7 @@ static MACHINE_DRIVER_START( mouseatk )
 
 	MDRV_OKIM6295_ADD("oki", OKI_CLOCK, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.00)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -1047,8 +1059,8 @@ ROM_START( rapidfir ) /* Version 1.1, test menu shows "Build 239" */
 	ROM_LOAD16_BYTE( "rf11.u3",  0x300001, 0x80000, CRC(ac63b863) SHA1(c9160aec6179d1f550279b80fd4c2a14ce94fdab) )
 
 	ROM_REGION( 0x100000, "oki", 0 )
-	ROM_LOAD( "rf11.507", 0x000000, 0x80000, CRC(899d1e15) SHA1(ca22b4ad714a5212bc9347eb3a5b660c02bad7e5) )
-	ROM_LOAD( "rf11.510", 0x080000, 0x80000, CRC(6209c8fe) SHA1(bfbd63445b4ac2d4253c4b5354e1058070290084) )
+	ROM_LOAD( "rf11.u507", 0x000000, 0x80000, CRC(899d1e15) SHA1(ca22b4ad714a5212bc9347eb3a5b660c02bad7e5) )
+	ROM_LOAD( "rf11.u510", 0x080000, 0x80000, CRC(6209c8fe) SHA1(bfbd63445b4ac2d4253c4b5354e1058070290084) )
 ROM_END
 
 
@@ -1064,8 +1076,34 @@ ROM_START( rapidfire ) /* Version 1.0, test menu shows "Build 236" */
 	ROM_LOAD16_BYTE( "rf10.u3",  0x300001, 0x80000, CRC(d8d664db) SHA1(cd63fdc6fe4beb68ced57a2547f8302c1d2544dc) )
 
 	ROM_REGION( 0x100000, "oki", 0 )
-	ROM_LOAD( "rf10.507", 0x000000, 0x80000, CRC(7eab2af4) SHA1(bbb4b2b9f96add56c26f334a7242cdc81a64ce2d) )
-	ROM_LOAD( "rf10.510", 0x080000, 0x80000, CRC(ecd70be6) SHA1(5a26703e822776fecb3f6d729bf91e76db7a7141) )
+	ROM_LOAD( "rf10.u507", 0x000000, 0x80000, CRC(7eab2af4) SHA1(bbb4b2b9f96add56c26f334a7242cdc81a64ce2d) )
+	ROM_LOAD( "rf10.u510", 0x080000, 0x80000, CRC(ecd70be6) SHA1(5a26703e822776fecb3f6d729bf91e76db7a7141) )
+ROM_END
+
+
+/*
+
+Mallet Madness (v2.1)
+Hanaho Games, 1999 licensed to Capcom
+
+Same exact PCB as Rapid Fire
+
+*/
+
+
+ROM_START( maletmad ) /* Version 2.1 */
+	ROM_REGION16_LE( 0x400000, "user1", 0 )	/* 34010 code */
+	/* U8 & U9 not populated */
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u6",  0x100000, 0x80000, CRC(83309174) SHA1(d387c8bc4d3c640f16525241892cc8d5d5da7f60) )
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u7",  0x100001, 0x80000, CRC(4642587e) SHA1(076eda538d570074028e9b4394f1a8a459678137) )
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u4",  0x200000, 0x80000, CRC(70ca968c) SHA1(74c66a67568b428ae5e20377038c7ea0cd33b25e) )
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u5",  0x200001, 0x80000, CRC(c771418a) SHA1(cab360103a4d4195f5a9920746ae5df2866e24dc) )
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u2",  0x300000, 0x80000, CRC(08825aee) SHA1(d7c2098ce5d73e0ca4b02a654d5c958d999337e3) )
+	ROM_LOAD16_BYTE( "malletmadness_v2.1.u3",  0x300001, 0x80000, CRC(49a6bd62) SHA1(40d67fd7a3dded708366246d897682ffee88a2e1) )
+
+	ROM_REGION( 0x100000, "oki", 0 )
+	ROM_LOAD( "malletmadness_v2.1.u507", 0x000000, 0x80000, CRC(6a2c9021) SHA1(bff61ef696a2104a32aab6fdc51f504385d0c769) )
+	/* U510 not populated */
 ROM_END
 
 
@@ -1081,3 +1119,5 @@ GAME( 1996, tutstomb,  0,        ghoshunt, ghoshunt, 0, ROT0, "Island Design", "
 GAME( 1996, mouseatk,  0,        mouseatk, mouseatk, 0, ROT0, "ICE",           "Mouse Attack", 0 )
 GAME( 1998, rapidfir,  0,        rapidfir, rapidfir, 0, ROT0, "Hanaho Games",  "Rapid Fire v1.1", 0 )
 GAME( 1998, rapidfire, rapidfir, rapidfir, rapidfir, 0, ROT0, "Hanaho Games",  "Rapid Fire v1.0", 0 )
+GAME( 1999, maletmad,  0,        rapidfir, rapidfir, 0, ROT0, "Hanaho Games",  "Mallet Madness v2.1", 0 )
+

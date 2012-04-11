@@ -27,12 +27,11 @@ TODO:
 
 #define MASTER_CLOCK	XTAL_19_968MHz
 
-class nightgal_state
+class nightgal_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, nightgal_state(machine)); }
-
-	nightgal_state(running_machine &machine) { }
+	nightgal_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *    blit_buffer;
@@ -63,7 +62,7 @@ static READ8_HANDLER( blitter_status_r )
 
 static VIDEO_START( nightgal )
 {
-	nightgal_state *state = (nightgal_state *)machine->driver_data;
+	nightgal_state *state = machine->driver_data<nightgal_state>();
 	state->blit_buffer = auto_alloc_array(machine, UINT8, 256*256);
 
 	state_save_register_global_pointer(machine, state->blit_buffer, 256*256);
@@ -71,7 +70,7 @@ static VIDEO_START( nightgal )
 
 static VIDEO_UPDATE( nightgal )
 {
-	nightgal_state *state = (nightgal_state *)screen->machine->driver_data;
+	nightgal_state *state = screen->machine->driver_data<nightgal_state>();
 	int x, y;
 
 	for (y = cliprect->min_y; y <= cliprect->max_y; ++y)
@@ -107,7 +106,7 @@ static UINT8 nightgal_gfx_nibble( running_machine *machine, int niboffset )
 
 static void plot_nightgal_gfx_pixel( running_machine *machine, UINT8 pix, int x, int y )
 {
-	nightgal_state *state = (nightgal_state *)machine->driver_data;
+	nightgal_state *state = machine->driver_data<nightgal_state>();
 	if (y >= 512) return;
 	if (x >= 512) return;
 	if (y < 0) return;
@@ -121,7 +120,7 @@ static void plot_nightgal_gfx_pixel( running_machine *machine, UINT8 pix, int x,
 
 static WRITE8_HANDLER( nsc_true_blitter_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	int src, x, y, h, w, flipx;
 	state->true_blit[offset] = data;
 
@@ -176,7 +175,7 @@ static WRITE8_HANDLER( nsc_true_blitter_w )
 /* different register writes (probably a PAL line swapping).*/
 static WRITE8_HANDLER( sexygal_nsc_true_blitter_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	int src, x, y, h, w, flipx;
 	state->true_blit[offset] = data;
 
@@ -297,71 +296,71 @@ master-slave algorythm
 #define MAIN_Z80_HALT  if(offset == 2) state->z80_latch = 0x80
 //#define SUB_NCS_RUN state->ncs_latch = 0x00
 //#define SUB_NCS_HALT state->ncs_latch = 0x80
-
+#ifdef UNUSED_CODE
 static WRITE8_HANDLER( nsc_latch_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	cpu_set_input_line(state->subcpu, 0, HOLD_LINE );
 }
 
 static READ8_HANDLER( nsc_latch_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 
 	return state->z80_latch;
 }
 
 static WRITE8_HANDLER( z80_latch_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->nsc_latch = data;
 }
 
 static READ8_HANDLER( z80_latch_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	return state->nsc_latch;
 }
 
 /*z80 -> MCU video params*/
 static WRITE8_HANDLER( blitter_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->blit_raw_data[offset] = data;
 	MAIN_Z80_HALT;
 }
 
 static READ8_HANDLER( nsc_blit_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	MAIN_Z80_RUN;
 	return state->blit_raw_data[offset];
 }
-
+#endif
 /* TODO: simplify this (error in the document) */
 
 static WRITE8_HANDLER( royalqn_blitter_0_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->blit_raw_data[0] = data;
 }
 
 static WRITE8_HANDLER( royalqn_blitter_1_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->blit_raw_data[1] = data;
 }
 
 static WRITE8_HANDLER( royalqn_blitter_2_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->blit_raw_data[2] = data;
 	cpu_set_input_line(state->subcpu, 0, ASSERT_LINE );
 }
 
 static READ8_HANDLER( royalqn_nsc_blit_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 
 	if(offset == 2)
 		cpu_set_input_line(state->subcpu, 0, CLEAR_LINE );
@@ -371,34 +370,34 @@ static READ8_HANDLER( royalqn_nsc_blit_r )
 
 static READ8_HANDLER( royalqn_comm_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 
 	return (state->comms_ram[offset] & 0x80) | (0x7f); //bits 6-0 are undefined, presumably open bus
 }
 
 static WRITE8_HANDLER( royalqn_comm_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 
 	state->comms_ram[offset] = data & 0x80;
 }
 
-
+#ifdef UNUSED_CODE
 static WRITE8_HANDLER( blit_vregs_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->pen_raw_data[offset] = data;
 }
 
 static READ8_HANDLER( blit_vregs_r )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	return state->pen_raw_data[offset];
 }
-
+#endif
 static WRITE8_HANDLER( blit_true_vregs_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->pen_data[offset] = data;
 }
 
@@ -410,14 +409,14 @@ static WRITE8_HANDLER( blit_true_vregs_w )
 
 static WRITE8_HANDLER( mux_w )
 {
-	nightgal_state *state = (nightgal_state *)space->machine->driver_data;
+	nightgal_state *state = space->machine->driver_data<nightgal_state>();
 	state->mux_data = ~data;
 	//printf("%02x\n", state->mux_data);
 }
 
 static READ8_DEVICE_HANDLER( input_1p_r )
 {
-	nightgal_state *state = (nightgal_state *)device->machine->driver_data;
+	nightgal_state *state = device->machine->driver_data<nightgal_state>();
 	UINT8 cr_clear = input_port_read(device->machine, "CR_CLEAR");
 
 	switch (state->mux_data)
@@ -437,7 +436,7 @@ static READ8_DEVICE_HANDLER( input_1p_r )
 
 static READ8_DEVICE_HANDLER( input_2p_r )
 {
-	nightgal_state *state = (nightgal_state *)device->machine->driver_data;
+	nightgal_state *state = device->machine->driver_data<nightgal_state>();
 	UINT8 coin_port = input_port_read(device->machine, "COINS");
 
 	switch (state->mux_data)
@@ -464,7 +463,7 @@ static READ8_DEVICE_HANDLER( input_2p_r )
 /********************************
 * Night Gal
 ********************************/
-
+#ifdef UNUSED_CODE
 static ADDRESS_MAP_START( nightgal_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc100, 0xc100) AM_READ(nsc_latch_r)
@@ -500,6 +499,7 @@ static ADDRESS_MAP_START( nsc_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x1000, 0xdfff) AM_ROM AM_REGION("gfx1", 0 )
 	AM_RANGE(0xe000, 0xffff) AM_ROM AM_WRITENOP
 ADDRESS_MAP_END
+#endif
 
 /********************************
 * Sexy Gal
@@ -827,7 +827,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( nightgal )
 {
-	nightgal_state *state = (nightgal_state *)machine->driver_data;
+	nightgal_state *state = machine->driver_data<nightgal_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->subcpu = machine->device("sub");
@@ -844,7 +844,7 @@ static MACHINE_START( nightgal )
 
 static MACHINE_RESET( nightgal )
 {
-	nightgal_state *state = (nightgal_state *)machine->driver_data;
+	nightgal_state *state = machine->driver_data<nightgal_state>();
 
 	state->nsc_latch = 0;
 	state->z80_latch = 0;
@@ -856,10 +856,7 @@ static MACHINE_RESET( nightgal )
 	memset(state->pen_raw_data, 0, ARRAY_LENGTH(state->pen_raw_data));
 }
 
-static MACHINE_DRIVER_START( royalqn )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(nightgal_state)
+static MACHINE_CONFIG_START( royalqn, nightgal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,MASTER_CLOCK / 8)		 /* ? MHz */
@@ -896,11 +893,11 @@ static MACHINE_DRIVER_START( royalqn )
 	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK / 8)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sexygal )
+static MACHINE_CONFIG_DERIVED( sexygal, royalqn )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM( royalqn )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(sexygal_map)
 	MDRV_CPU_IO_MAP(sexygal_io)
@@ -915,15 +912,14 @@ static MACHINE_DRIVER_START( sexygal )
 	MDRV_SOUND_ADD("ymsnd", YM2203, MASTER_CLOCK / 8)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ngalsumr )
-	MDRV_IMPORT_FROM( royalqn )
+static MACHINE_CONFIG_DERIVED( ngalsumr, royalqn )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(royalqn_map)
 	MDRV_CPU_IO_MAP(royalqn_io)
 	MDRV_CPU_PERIODIC_INT(nmi_line_pulse,244)//???
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*
 Night Gal

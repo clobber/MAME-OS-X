@@ -56,20 +56,9 @@ Stephh's notes (based on the games M68000 code and some tests) :
 #include "cpu/m68000/m68000.h"
 #include "sound/2203intf.h"
 #include "sound/okim6295.h"
+#include "includes/sshangha.h"
 
 #define SSHANGHA_HACK	0
-
-VIDEO_START( sshangha );
-VIDEO_UPDATE( sshangha );
-
-WRITE16_HANDLER( sshangha_pf2_data_w );
-WRITE16_HANDLER( sshangha_pf1_data_w );
-WRITE16_HANDLER( sshangha_control_0_w );
-WRITE16_HANDLER( sshangha_video_w );
-
-extern UINT16 *sshangha_pf1_data;
-extern UINT16 *sshangha_pf2_data;
-extern UINT16 *sshangha_pf1_rowscroll, *sshangha_pf2_rowscroll;
 
 static UINT16 *sshangha_prot_data;
 
@@ -128,7 +117,7 @@ static READ16_HANDLER( deco_71_r )
 
 static MACHINE_RESET( sshangha )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	/* Such thing is needed as there is no code to turn the screen
        to normal orientation when the game is reset.
        I'm using the value that forces the screen to be in normal
@@ -211,7 +200,7 @@ static WRITE8_HANDLER(sshangha_sound_shared_w)
 static ADDRESS_MAP_START( sshangha_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xc000, 0xc001) AM_DEVREADWRITE("ymsnd", ym2203_r,ym2203_w)
-	AM_RANGE(0xc200, 0xc201) AM_DEVREADWRITE("oki",okim6295_r,okim6295_w)
+	AM_RANGE(0xc200, 0xc201) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 	AM_RANGE(0xf800, 0xf807) AM_READWRITE(sshangha_sound_shared_r,sshangha_sound_shared_w)
 	AM_RANGE(0xf808, 0xffff) AM_RAM
 ADDRESS_MAP_END
@@ -353,7 +342,7 @@ static const ym2203_interface ym2203_config =
 	irqhandler
 };
 
-static MACHINE_DRIVER_START( sshangha )
+static MACHINE_CONFIG_START( sshangha, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 28000000/2)
@@ -394,14 +383,13 @@ static MACHINE_DRIVER_START( sshangha )
 	MDRV_OKIM6295_ADD("oki", 1023924, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.27)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.27)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( sshanghb )
-	MDRV_IMPORT_FROM( sshangha )
+static MACHINE_CONFIG_DERIVED( sshanghb, sshangha )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(sshanghb_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 

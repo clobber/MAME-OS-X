@@ -112,12 +112,11 @@ PCB2  (Top board, CPU board)
 
 #define MASTER_CLOCK			XTAL_18_432MHz
 
-class sub_state
+class sub_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, sub_state(machine)); }
-
-	sub_state(running_machine &machine) { }
+	sub_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8* vid;
 	UINT8* attr;
@@ -133,7 +132,7 @@ static VIDEO_START(sub)
 
 static VIDEO_UPDATE(sub)
 {
-	sub_state *state = (sub_state *)screen->machine->driver_data;
+	sub_state *state = screen->machine->driver_data<sub_state>();
 	const gfx_element *gfx = screen->machine->gfx[0];
 	const gfx_element *gfx_1 = screen->machine->gfx[1];
 	int y,x;
@@ -244,7 +243,7 @@ static WRITE8_HANDLER( subm_to_sound_w )
 
 static WRITE8_HANDLER( nmi_mask_w )
 {
-	sub_state *state = (sub_state *)space->machine->driver_data;
+	sub_state *state = space->machine->driver_data<sub_state>();
 
 	state->nmi_en = data & 1;
 }
@@ -412,15 +411,13 @@ static PALETTE_INIT( sub )
 
 static INTERRUPT_GEN( subm_sound_irq )
 {
-	sub_state *state = (sub_state *)device->machine->driver_data;
+	sub_state *state = device->machine->driver_data<sub_state>();
 
 	if(state->nmi_en)
 		cputag_set_input_line(device->machine, "soundcpu", INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_DRIVER_START( sub )
-
-	MDRV_DRIVER_DATA( sub_state )
+static MACHINE_CONFIG_START( sub, sub_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80,MASTER_CLOCK/6)		 /* ? MHz */
@@ -457,7 +454,7 @@ static MACHINE_DRIVER_START( sub )
 
 	MDRV_SOUND_ADD("ay2", AY8910, MASTER_CLOCK/6/2) /* ? Mhz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.23)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( sub )

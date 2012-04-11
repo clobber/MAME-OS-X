@@ -180,7 +180,7 @@ static MACHINE_START( kangaroo )
 
 static MACHINE_START( kangaroo_mcu )
 {
-	kangaroo_state *state = (kangaroo_state *)machine->driver_data;
+	kangaroo_state *state = machine->driver_data<kangaroo_state>();
 
 	MACHINE_START_CALL(kangaroo);
 	memory_install_readwrite8_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0xef00, 0xefff, 0, 0, mcu_sim_r, mcu_sim_w);
@@ -190,7 +190,7 @@ static MACHINE_START( kangaroo_mcu )
 
 static MACHINE_RESET( kangaroo )
 {
-	kangaroo_state *state = (kangaroo_state *)machine->driver_data;
+	kangaroo_state *state = machine->driver_data<kangaroo_state>();
 
 	/* I think there is a bug in the startup checks of the game. At the very */
 	/* beginning, during the RAM check, it goes one byte too far, and ends up */
@@ -222,7 +222,7 @@ static MACHINE_RESET( kangaroo )
 
 static READ8_HANDLER( mcu_sim_r )
 {
-	kangaroo_state *state = (kangaroo_state *)space->machine->driver_data;
+	kangaroo_state *state = space->machine->driver_data<kangaroo_state>();
 	return ++state->clock & 0x0f;
 }
 
@@ -427,10 +427,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( nomcu )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(kangaroo_state)
+static MACHINE_CONFIG_START( nomcu, kangaroo_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/4)
@@ -459,17 +456,16 @@ static MACHINE_DRIVER_START( nomcu )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( mcu )
-	MDRV_IMPORT_FROM(nomcu)
+static MACHINE_CONFIG_DERIVED( mcu, nomcu )
 
 	MDRV_MACHINE_START(kangaroo_mcu)
 
 	MDRV_CPU_ADD("mcu", MB8841, MASTER_CLOCK/4/2)
 	MDRV_DEVICE_DISABLE()
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

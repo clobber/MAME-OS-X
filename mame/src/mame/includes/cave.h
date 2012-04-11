@@ -21,12 +21,11 @@ struct sprite_cave
 #define MAX_PRIORITY        4
 #define MAX_SPRITE_NUM      0x400
 
-class cave_state
+class cave_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cave_state(machine)); }
-
-	cave_state(running_machine &machine) { }
+	cave_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *     videoregs;

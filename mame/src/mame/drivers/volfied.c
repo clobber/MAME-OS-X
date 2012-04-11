@@ -209,7 +209,7 @@ GFXDECODE_END
 
 static void irqhandler( running_device *device, int irq )
 {
-	volfied_state *state = (volfied_state *)device->machine->driver_data;
+	volfied_state *state = device->machine->driver_data<volfied_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -233,7 +233,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( volfied )
 {
-	volfied_state *state = (volfied_state *)machine->driver_data;
+	volfied_state *state = machine->driver_data<volfied_state>();
 
 	volfied_cchip_init(machine);
 
@@ -257,10 +257,7 @@ static const tc0140syt_interface volfied_tc0140syt_intf =
 	"maincpu", "audiocpu"
 };
 
-static MACHINE_DRIVER_START( volfied )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(volfied_state)
+static MACHINE_CONFIG_START( volfied, volfied_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)   /* 8MHz */
@@ -302,7 +299,7 @@ static MACHINE_DRIVER_START( volfied )
 	MDRV_SOUND_ROUTE(3, "mono", 0.60)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", volfied_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

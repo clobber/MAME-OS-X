@@ -55,7 +55,7 @@ Note about version levels using Mutant Fighter as the example:
 
 static WRITE16_HANDLER( cninja_sound_w )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 
 	soundlatch_w(space, 0, data & 0xff);
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
@@ -63,7 +63,7 @@ static WRITE16_HANDLER( cninja_sound_w )
 
 static WRITE16_HANDLER( stoneage_sound_w )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 
 	soundlatch_w(space, 0, data & 0xff);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
@@ -71,7 +71,7 @@ static WRITE16_HANDLER( stoneage_sound_w )
 
 static TIMER_DEVICE_CALLBACK( interrupt_gen )
 {
-	cninja_state *state = (cninja_state *)timer.machine->driver_data;
+	cninja_state *state = timer.machine->driver_data<cninja_state>();
 
 	cpu_set_input_line(state->maincpu, (state->irq_mask & 0x10) ? 3 : 4, ASSERT_LINE);
 	state->raster_irq_timer->reset();
@@ -79,7 +79,7 @@ static TIMER_DEVICE_CALLBACK( interrupt_gen )
 
 static READ16_HANDLER( cninja_irq_r )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 
 	switch (offset)
 	{
@@ -99,7 +99,7 @@ static READ16_HANDLER( cninja_irq_r )
 
 static WRITE16_HANDLER( cninja_irq_w )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 
 	switch (offset)
 	{
@@ -151,7 +151,7 @@ static READ16_HANDLER( robocop2_prot_r )
 
 static WRITE16_HANDLER( cninja_pf12_control_w )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 	deco16ic_pf12_control_w(state->deco16ic, offset, data, mem_mask);
 	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
@@ -159,7 +159,7 @@ static WRITE16_HANDLER( cninja_pf12_control_w )
 
 static WRITE16_HANDLER( cninja_pf34_control_w )
 {
-	cninja_state *state = (cninja_state *)space->machine->driver_data;
+	cninja_state *state = space->machine->driver_data<cninja_state>();
 	deco16ic_pf34_control_w(state->deco16ic, offset, data, mem_mask);
 	space->machine->primary_screen->update_partial(space->machine->primary_screen->vpos());
 }
@@ -315,8 +315,8 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
@@ -327,8 +327,8 @@ static ADDRESS_MAP_START( sound_map_mutantf, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_READNOP AM_WRITENOP
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
@@ -340,7 +340,7 @@ static ADDRESS_MAP_START( stoneage_s_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8000, 0x87ff) AM_RAM
 	AM_RANGE(0x8800, 0x8801) AM_DEVREADWRITE("ymsnd", ym2151_r, ym2151_w)
 	AM_RANGE(0xa000, 0xa000) AM_READ(soundlatch_r)
-	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
+	AM_RANGE(0x9800, 0x9800) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
 ADDRESS_MAP_END
 
 /***********************************************************
@@ -721,19 +721,19 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int state)
 {
-	cninja_state *driver_state = (cninja_state *)device->machine->driver_data;
+	cninja_state *driver_state = device->machine->driver_data<cninja_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
 }
 
 static void sound_irq2(running_device *device, int state)
 {
-	cninja_state *driver_state = (cninja_state *)device->machine->driver_data;
+	cninja_state *driver_state = device->machine->driver_data<cninja_state>();
 	cpu_set_input_line(driver_state->audiocpu, 0, state);
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	cninja_state *state = (cninja_state *)device->machine->driver_data;
+	cninja_state *state = device->machine->driver_data<cninja_state>();
 
 	/* the second OKIM6295 ROM is bank switched */
 	state->oki2->set_bank_base((data & 1) * 0x40000);
@@ -828,7 +828,7 @@ static const deco16ic_interface mutantf_deco16ic_intf =
 
 static MACHINE_START( cninja )
 {
-	cninja_state *state = (cninja_state *)machine->driver_data;
+	cninja_state *state = machine->driver_data<cninja_state>();
 
 	state_save_register_global(machine, state->scanline);
 	state_save_register_global(machine, state->irq_mask);
@@ -836,16 +836,13 @@ static MACHINE_START( cninja )
 
 static MACHINE_RESET( cninja )
 {
-	cninja_state *state = (cninja_state *)machine->driver_data;
+	cninja_state *state = machine->driver_data<cninja_state>();
 
 	state->scanline = 0;
 	state->irq_mask = 0;
 }
 
-static MACHINE_DRIVER_START( cninja )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( cninja, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -892,12 +889,9 @@ static MACHINE_DRIVER_START( cninja )
 
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( stoneage )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( stoneage, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -942,13 +936,10 @@ static MACHINE_DRIVER_START( stoneage )
 
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cninjabl )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( cninjabl, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -989,13 +980,10 @@ static MACHINE_DRIVER_START( cninjabl )
 
 	MDRV_OKIM6295_ADD("oki1", 32220000/32, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( edrandy )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( edrandy, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)
@@ -1042,12 +1030,9 @@ static MACHINE_DRIVER_START( edrandy )
 
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( robocop2 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( robocop2, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -1097,12 +1082,9 @@ static MACHINE_DRIVER_START( robocop2 )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( mutantf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cninja_state)
+static MACHINE_CONFIG_START( mutantf, cninja_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -1146,7 +1128,7 @@ static MACHINE_DRIVER_START( mutantf )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.60)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /**********************************************************************************/
 

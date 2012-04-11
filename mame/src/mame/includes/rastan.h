@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class rastan_state
+class rastan_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, rastan_state(machine)); }
-
-	rastan_state(running_machine &machine) { }
+	rastan_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 //  UINT16 *    paletteram; // this currently uses generic palette handlers
@@ -35,3 +34,14 @@ public:
 WRITE16_HANDLER( rastan_spritectrl_w );
 
 VIDEO_UPDATE( rastan );
+VIDEO_START( jumping );
+
+VIDEO_UPDATE( rainbow );
+VIDEO_UPDATE( jumping );
+
+WRITE16_HANDLER( jumping_spritectrl_w );
+WRITE16_HANDLER( rainbow_spritectrl_w );
+
+WRITE16_HANDLER( opwolf_spritectrl_w );
+
+VIDEO_UPDATE( opwolf );

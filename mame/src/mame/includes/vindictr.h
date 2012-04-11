@@ -6,14 +6,11 @@
 
 #include "machine/atarigen.h"
 
-class vindictr_state
+class vindictr_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, vindictr_state(machine)); }
-
-	vindictr_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	vindictr_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 
 	UINT8			playfield_tile_bank;
 	UINT16			playfield_xscroll;

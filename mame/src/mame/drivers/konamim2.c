@@ -786,7 +786,7 @@ static void cde_handle_reports(void)
 	}
 }
 
-static void cde_dma_transfer(const address_space *space, int channel, int next)
+static void cde_dma_transfer(address_space *space, int channel, int next)
 {
 	UINT32 address;
 	//int length;
@@ -805,7 +805,7 @@ static void cde_dma_transfer(const address_space *space, int channel, int next)
 
 	for (i=0; i < cde_dma[channel].next_length; i++)
 	{
-		memory_write_byte(space, address, 0xff);		// TODO: do the real transfer...
+		space->write_byte(address, 0xff);		// TODO: do the real transfer...
 		address++;
 	}
 }
@@ -1130,7 +1130,7 @@ static INTERRUPT_GEN(m2)
 	cpu_set_input_line(device, INPUT_LINE_IRQ0, ASSERT_LINE);
 }
 
-static MACHINE_DRIVER_START( m2 )
+static MACHINE_CONFIG_START( m2, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", PPC602, 33000000)	/* actually PPC602, 66MHz */
@@ -1156,7 +1156,7 @@ static MACHINE_DRIVER_START( m2 )
 	MDRV_VIDEO_START(m2)
 	MDRV_VIDEO_UPDATE(m2)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( polystar )

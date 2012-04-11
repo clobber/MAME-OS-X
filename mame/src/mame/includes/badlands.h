@@ -6,14 +6,11 @@
 
 #include "machine/atarigen.h"
 
-class badlands_state
+class badlands_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, badlands_state(machine)); }
-
-	badlands_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	badlands_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 
 	UINT8			pedal_value[2];
 

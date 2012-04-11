@@ -43,12 +43,11 @@ A1                   2101            2101
 #define MASTER_CLOCK XTAL_18MHz
 
 
-class ace_state
+class ace_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ace_state(machine)); }
-
-	ace_state(running_machine &machine) { }
+	ace_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* video-related */
 	UINT8 *  ram2;
@@ -62,21 +61,21 @@ public:
 
 static WRITE8_HANDLER( ace_objpos_w )
 {
-	ace_state *state = (ace_state *)space->machine->driver_data;
+	ace_state *state = space->machine->driver_data<ace_state>();
 	state->objpos[offset] = data;
 }
 
 #if 0
 static READ8_HANDLER( ace_objpos_r )
 {
-	ace_state *state = (ace_state *)space->machine->driver_data;
+	ace_state *state = space->machine->driver_data<ace_state>();
 	return state->objpos[offset];
 }
 #endif
 
 static VIDEO_START( ace )
 {
-	ace_state *state = (ace_state *)machine->driver_data;
+	ace_state *state = machine->driver_data<ace_state>();
 	gfx_element_set_source(machine->gfx[1], state->characterram);
 	gfx_element_set_source(machine->gfx[2], state->characterram);
 	gfx_element_set_source(machine->gfx[3], state->characterram);
@@ -85,7 +84,7 @@ static VIDEO_START( ace )
 
 static VIDEO_UPDATE( ace )
 {
-	ace_state *state = (ace_state *)screen->machine->driver_data;
+	ace_state *state = screen->machine->driver_data<ace_state>();
 	int offs;
 
 	/* first of all, fill the screen with the background color */
@@ -131,7 +130,7 @@ static PALETTE_INIT( ace )
 
 static WRITE8_HANDLER( ace_characterram_w )
 {
-	ace_state *state = (ace_state *)space->machine->driver_data;
+	ace_state *state = space->machine->driver_data<ace_state>();
 	if (state->characterram[offset] != data)
 	{
 		if (data & ~0x07)
@@ -148,7 +147,7 @@ static WRITE8_HANDLER( ace_characterram_w )
 
 static WRITE8_HANDLER( ace_scoreram_w )
 {
-	ace_state *state = (ace_state *)space->machine->driver_data;
+	ace_state *state = space->machine->driver_data<ace_state>();
 	state->scoreram[offset] = data;
 	gfx_element_mark_dirty(space->machine->gfx[4], offset / 32);
 }
@@ -318,25 +317,31 @@ static GFXDECODE_START( ace )
 	GFXDECODE_ENTRY( NULL          , 0x8000, scorelayout, 0, 2 )    /* the game dynamically modifies this */
 GFXDECODE_END
 
+static STATE_POSTLOAD( ace_postload )
+{
+	gfx_element_mark_dirty(machine->gfx[1], 0);
+	gfx_element_mark_dirty(machine->gfx[2], 0);
+	gfx_element_mark_dirty(machine->gfx[3], 0);
+	gfx_element_mark_dirty(machine->gfx[4], 0);
+}
+
 static MACHINE_START( ace )
 {
-	ace_state *state = (ace_state *)machine->driver_data;
+	ace_state *state = machine->driver_data<ace_state>();
 	state_save_register_global_array(machine, state->objpos);
+	state_save_register_postload(machine, ace_postload, NULL);
 }
 
 static MACHINE_RESET( ace )
 {
-	ace_state *state = (ace_state *)machine->driver_data;
+	ace_state *state = machine->driver_data<ace_state>();
 	int i;
 
 	for (i = 0; i < 8; i++)
 		state->objpos[i] = 0;
 }
 
-static MACHINE_DRIVER_START( ace )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(ace_state)
+static MACHINE_CONFIG_START( ace, ace_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK/9)	/* 2 MHz ? */
@@ -362,7 +367,7 @@ static MACHINE_DRIVER_START( ace )
 	/* sound hardware */
 	/* ???? */
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

@@ -33,14 +33,14 @@ To do:
 #include "cpu/m68000/m68000.h"
 #include "machine/eeprom.h"
 #include "machine/ticket.h"
+#include "machine/nvram.h"
 #include "sound/okim6295.h"
 
-class astrocorp_state
+class astrocorp_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, astrocorp_state(machine)); }
-
-	astrocorp_state(running_machine &machine) { }
+	astrocorp_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *   spriteram;
@@ -59,7 +59,7 @@ public:
 
 static VIDEO_START( astrocorp )
 {
-	astrocorp_state *state = (astrocorp_state *)machine->driver_data;
+	astrocorp_state *state = machine->driver_data<astrocorp_state>();
 
 	state->bitmap = machine->primary_screen->alloc_compatible_bitmap();
 
@@ -92,7 +92,7 @@ static VIDEO_START( astrocorp )
 
 static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rectangle *cliprect )
 {
-	astrocorp_state *state = (astrocorp_state *)machine->driver_data;
+	astrocorp_state *state = machine->driver_data<astrocorp_state>();
 	UINT16 *source = state->spriteram;
 	UINT16 *finish = state->spriteram + state->spriteram_size / 2;
 
@@ -140,7 +140,7 @@ static void draw_sprites( running_machine *machine, bitmap_t *bitmap, const rect
 
 static VIDEO_UPDATE(astrocorp)
 {
-	astrocorp_state *state = (astrocorp_state *)screen->machine->driver_data;
+	astrocorp_state *state = screen->machine->driver_data<astrocorp_state>();
 
 	if (state->screen_enable & 1)
 		copybitmap(bitmap, state->bitmap, 0,0,0,0, cliprect);
@@ -157,7 +157,7 @@ static VIDEO_UPDATE(astrocorp)
 
 static WRITE16_HANDLER( astrocorp_draw_sprites_w )
 {
-	astrocorp_state *state = (astrocorp_state *)space->machine->driver_data;
+	astrocorp_state *state = space->machine->driver_data<astrocorp_state>();
 
 	UINT16 old = state->draw_sprites;
 	UINT16 now = COMBINE_DATA(&state->draw_sprites);
@@ -258,7 +258,7 @@ static WRITE16_HANDLER( skilldrp_outputs_w )
 
 static WRITE16_HANDLER( astrocorp_screen_enable_w )
 {
-	astrocorp_state *state = (astrocorp_state *)space->machine->driver_data;
+	astrocorp_state *state = space->machine->driver_data<astrocorp_state>();
 	COMBINE_DATA(&state->screen_enable);
 //  popmessage("%04X",data);
 	if (state->screen_enable & (~1))
@@ -273,7 +273,7 @@ static READ16_HANDLER( astrocorp_unk_r )
 // 5-6-5 Palette: BBBBB-GGGGGG-RRRRR
 static WRITE16_HANDLER( astrocorp_palette_w )
 {
-	astrocorp_state *state = (astrocorp_state *)space->machine->driver_data;
+	astrocorp_state *state = space->machine->driver_data<astrocorp_state>();
 	COMBINE_DATA(&state->paletteram[offset]);
 	palette_set_color_rgb(space->machine, offset,
 		pal5bit((state->paletteram[offset] >>  0) & 0x1f),
@@ -291,10 +291,10 @@ static ADDRESS_MAP_START( showhand_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x05a000, 0x05a001 ) AM_WRITE(showhand_outputs_w)
 	AM_RANGE( 0x05e000, 0x05e001 ) AM_READ_PORT("EEPROMIN")
 	AM_RANGE( 0x060000, 0x0601ff ) AM_RAM_WRITE(astrocorp_palette_w) AM_BASE_MEMBER(astrocorp_state, paletteram)
-	AM_RANGE( 0x070000, 0x073fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
+	AM_RANGE( 0x070000, 0x073fff ) AM_RAM AM_SHARE("nvram")	// battery
 	AM_RANGE( 0x080000, 0x080001 ) AM_DEVWRITE("oki", astrocorp_sound_bank_w)
 	AM_RANGE( 0x0a0000, 0x0a0001 ) AM_WRITE(astrocorp_screen_enable_w)
-	AM_RANGE( 0x0d0000, 0x0d0001 ) AM_READ(astrocorp_unk_r) AM_DEVWRITE8("oki", okim6295_w, 0xff00)
+	AM_RANGE( 0x0d0000, 0x0d0001 ) AM_READ(astrocorp_unk_r) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( showhanc_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -307,9 +307,9 @@ static ADDRESS_MAP_START( showhanc_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x088000, 0x088001 ) AM_WRITE(astrocorp_eeprom_w)
 	AM_RANGE( 0x08a000, 0x08a001 ) AM_WRITE(showhand_outputs_w)
 	AM_RANGE( 0x08e000, 0x08e001 ) AM_READ_PORT("EEPROMIN")
-	AM_RANGE( 0x090000, 0x093fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
+	AM_RANGE( 0x090000, 0x093fff ) AM_RAM AM_SHARE("nvram")	// battery
 	AM_RANGE( 0x0a0000, 0x0a0001 ) AM_WRITE(astrocorp_screen_enable_w)
-	AM_RANGE( 0x0e0000, 0x0e0001 ) AM_READ(astrocorp_unk_r) AM_DEVWRITE8("oki", okim6295_w, 0xff00)
+	AM_RANGE( 0x0e0000, 0x0e0001 ) AM_READ(astrocorp_unk_r) AM_DEVWRITE8_MODERN("oki", okim6295_device, write, 0xff00)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( skilldrp_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -322,14 +322,14 @@ static ADDRESS_MAP_START( skilldrp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x20e000, 0x20e001 ) AM_READ_PORT("EEPROMIN")
 	AM_RANGE( 0x380000, 0x3801ff ) AM_RAM_WRITE(astrocorp_palette_w) AM_BASE_MEMBER(astrocorp_state, paletteram)
 	AM_RANGE( 0x400000, 0x400001 ) AM_WRITE(astrocorp_screen_enable_w)
-	AM_RANGE( 0x500000, 0x507fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
+	AM_RANGE( 0x500000, 0x507fff ) AM_RAM AM_SHARE("nvram")	// battery
 	AM_RANGE( 0x580000, 0x580001 ) AM_DEVWRITE("oki", skilldrp_sound_bank_w)
-	AM_RANGE( 0x600000, 0x600001 ) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE( 0x600000, 0x600001 ) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( speeddrp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x000000, 0x01ffff ) AM_ROM
-	AM_RANGE( 0x280000, 0x283fff ) AM_RAM AM_BASE_SIZE_GENERIC(nvram)	// battery
+	AM_RANGE( 0x280000, 0x283fff ) AM_RAM AM_SHARE("nvram")	// battery
 	AM_RANGE( 0x380000, 0x380fff ) AM_RAM AM_BASE_SIZE_MEMBER(astrocorp_state, spriteram, spriteram_size)
 	AM_RANGE( 0x382000, 0x382001 ) AM_WRITE(astrocorp_draw_sprites_w)
 	AM_RANGE( 0x384000, 0x384001 ) AM_READ_PORT("INPUTS")
@@ -339,7 +339,7 @@ static ADDRESS_MAP_START( speeddrp_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE( 0x480000, 0x4801ff ) AM_RAM_WRITE(astrocorp_palette_w) AM_BASE_MEMBER(astrocorp_state, paletteram)
 	AM_RANGE( 0x500000, 0x500001 ) AM_WRITE(astrocorp_screen_enable_w)
 	AM_RANGE( 0x580000, 0x580001 ) AM_DEVWRITE("oki", skilldrp_sound_bank_w)
-	AM_RANGE( 0x600000, 0x600001 ) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE( 0x600000, 0x600001 ) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -459,17 +459,14 @@ GFXDECODE_END
 
 static const UINT16 showhand_default_eeprom[15] =	{0x0001,0x0007,0x000a,0x0003,0x0000,0x0009,0x0003,0x0000,0x0002,0x0001,0x0000,0x0000,0x0000,0x0000,0x0000};
 
-static MACHINE_DRIVER_START( showhand )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(astrocorp_state)
+static MACHINE_CONFIG_START( showhand, astrocorp_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_20MHz / 2)
 	MDRV_CPU_PROGRAM_MAP(showhand_map)
 	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 	MDRV_EEPROM_93C46_ADD("eeprom")
 	MDRV_EEPROM_DATA(showhand_default_eeprom, sizeof(showhand_default_eeprom))
 
@@ -492,14 +489,13 @@ static MACHINE_DRIVER_START( showhand )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_20MHz/20, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( showhanc )
-	MDRV_IMPORT_FROM( showhand )
+static MACHINE_CONFIG_DERIVED( showhanc, showhand )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(showhanc_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static INTERRUPT_GEN( skilldrp_irq )
@@ -511,17 +507,14 @@ static INTERRUPT_GEN( skilldrp_irq )
 	}
 }
 
-static MACHINE_DRIVER_START( skilldrp )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(astrocorp_state)
+static MACHINE_CONFIG_START( skilldrp, astrocorp_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2)	// JX-1689F1028N GRX586.V5
 	MDRV_CPU_PROGRAM_MAP(skilldrp_map)
 	MDRV_CPU_VBLANK_INT_HACK(skilldrp_irq, 2)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 	MDRV_EEPROM_93C46_ADD("eeprom")
 
 	MDRV_TICKET_DISPENSER_ADD("ticket", 200, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_LOW )
@@ -546,14 +539,13 @@ static MACHINE_DRIVER_START( skilldrp )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_24MHz/24, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( speeddrp )
-	MDRV_IMPORT_FROM( skilldrp )
+static MACHINE_CONFIG_DERIVED( speeddrp, skilldrp )
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(speeddrp_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

@@ -28,7 +28,7 @@
 
 static WRITE16_HANDLER( twocrude_control_w )
 {
-	cbuster_state *state = (cbuster_state *)space->machine->driver_data;
+	cbuster_state *state = space->machine->driver_data<cbuster_state>();
 
 	switch (offset << 1)
 	{
@@ -81,7 +81,7 @@ static WRITE16_HANDLER( twocrude_control_w )
 
 static READ16_HANDLER( twocrude_control_r )
 {
-	cbuster_state *state = (cbuster_state *)space->machine->driver_data;
+	cbuster_state *state = space->machine->driver_data<cbuster_state>();
 
 	switch (offset << 1)
 	{
@@ -133,8 +133,8 @@ static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_DEVREADWRITE("ym1", ym2203_r, ym2203_w)
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ym2", ym2151_r, ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r, okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r, okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
@@ -266,7 +266,7 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int state)
 {
-	cbuster_state *driver_state = (cbuster_state *)device->machine->driver_data;
+	cbuster_state *driver_state = device->machine->driver_data<cbuster_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
 }
 
@@ -295,7 +295,7 @@ static const deco16ic_interface twocrude_deco16ic_intf =
 
 static MACHINE_START( cbuster )
 {
-	cbuster_state *state = (cbuster_state *)machine->driver_data;
+	cbuster_state *state = machine->driver_data<cbuster_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -307,16 +307,13 @@ static MACHINE_START( cbuster )
 
 static MACHINE_RESET( cbuster )
 {
-	cbuster_state *state = (cbuster_state *)machine->driver_data;
+	cbuster_state *state = machine->driver_data<cbuster_state>();
 
 	state->prot = 0;
 	state->pri = 0;
 }
 
-static MACHINE_DRIVER_START( twocrude )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cbuster_state)
+static MACHINE_CONFIG_START( twocrude, cbuster_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000) /* Custom chip 59 */
@@ -362,7 +359,7 @@ static MACHINE_DRIVER_START( twocrude )
 
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /******************************************************************************/
 

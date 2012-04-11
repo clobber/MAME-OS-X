@@ -105,12 +105,11 @@ CRU lines:
    every 8 bytes */
 #define NUM_PENS	(8)
 
-class supertnk_state
+class supertnk_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, supertnk_state(machine)); }
-
-	supertnk_state(running_machine &machine) { }
+	supertnk_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 *videoram[3];
 	UINT8 rom_bank;
@@ -128,7 +127,7 @@ public:
 
 static WRITE8_HANDLER( supertnk_bankswitch_0_w )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 	offs_t bank_address;
 
 	state->rom_bank = (state->rom_bank & 0x02) | ((data << 0) & 0x01);
@@ -141,7 +140,7 @@ static WRITE8_HANDLER( supertnk_bankswitch_0_w )
 
 static WRITE8_HANDLER( supertnk_bankswitch_1_w )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 	offs_t bank_address;
 
 	state->rom_bank = (state->rom_bank & 0x01) | ((data << 1) & 0x02);
@@ -181,7 +180,7 @@ static WRITE8_HANDLER( supertnk_interrupt_ack_w )
 
 static VIDEO_START( supertnk )
 {
-	supertnk_state *state = (supertnk_state *)machine->driver_data;
+	supertnk_state *state = machine->driver_data<supertnk_state>();
 	offs_t i;
 	const UINT8 *prom = memory_region(machine, "proms");
 
@@ -200,7 +199,7 @@ static VIDEO_START( supertnk )
 
 static WRITE8_HANDLER( supertnk_videoram_w )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 
 	if (state->bitplane_select > 2)
 	{
@@ -217,7 +216,7 @@ static WRITE8_HANDLER( supertnk_videoram_w )
 
 static READ8_HANDLER( supertnk_videoram_r )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 	UINT8 ret = 0x00;
 
 	if (state->bitplane_select < 3)
@@ -229,7 +228,7 @@ static READ8_HANDLER( supertnk_videoram_r )
 
 static WRITE8_HANDLER( supertnk_bitplane_select_0_w )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 
 	state->bitplane_select = (state->bitplane_select & 0x02) | ((data << 0) & 0x01);
 }
@@ -237,7 +236,7 @@ static WRITE8_HANDLER( supertnk_bitplane_select_0_w )
 
 static WRITE8_HANDLER( supertnk_bitplane_select_1_w )
 {
-	supertnk_state *state = (supertnk_state *)space->machine->driver_data;
+	supertnk_state *state = space->machine->driver_data<supertnk_state>();
 
 	state->bitplane_select = (state->bitplane_select & 0x01) | ((data << 1) & 0x02);
 }
@@ -245,7 +244,7 @@ static WRITE8_HANDLER( supertnk_bitplane_select_1_w )
 
 static VIDEO_UPDATE( supertnk )
 {
-	supertnk_state *state = (supertnk_state *)screen->machine->driver_data;
+	supertnk_state *state = screen->machine->driver_data<supertnk_state>();
 	offs_t offs;
 
 	for (offs = 0; offs < 0x2000; offs++)
@@ -285,7 +284,7 @@ static VIDEO_UPDATE( supertnk )
 
 static MACHINE_RESET( supertnk )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	supertnk_bankswitch_0_w(space, 0, 0);
 	supertnk_bankswitch_1_w(space, 0, 0);
 
@@ -421,9 +420,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( supertnk )
-
-	MDRV_DRIVER_DATA( supertnk_state )
+static MACHINE_CONFIG_START( supertnk, supertnk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", TMS9980, 2598750) /* ? to which frequency is the 20.79 Mhz crystal mapped down? */
@@ -449,7 +446,7 @@ static MACHINE_DRIVER_START( supertnk )
 
 	MDRV_SOUND_ADD("aysnd", AY8910, 2000000)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

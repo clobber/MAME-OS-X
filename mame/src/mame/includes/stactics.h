@@ -7,12 +7,11 @@
 ****************************************************************************/
 
 
-class stactics_state
+class stactics_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, stactics_state(machine)); }
-
-	stactics_state(running_machine &machine) { }
+	stactics_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* machine state */
 	int    vert_pos;
@@ -42,7 +41,7 @@ public:
 
 /*----------- defined in video/stactics.c -----------*/
 
-MACHINE_DRIVER_EXTERN( stactics_video );
+MACHINE_CONFIG_EXTERN( stactics_video );
 
 WRITE8_HANDLER( stactics_scroll_ram_w );
 WRITE8_HANDLER( stactics_speed_latch_w );

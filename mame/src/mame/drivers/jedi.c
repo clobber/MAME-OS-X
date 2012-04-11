@@ -112,6 +112,7 @@
 
 #include "emu.h"
 #include "cpu/m6502/m6502.h"
+#include "machine/nvram.h"
 #include "includes/jedi.h"
 
 
@@ -124,7 +125,7 @@
 
 static TIMER_CALLBACK( generate_interrupt )
 {
-	jedi_state *state = (jedi_state *)machine->driver_data;
+	jedi_state *state = machine->driver_data<jedi_state>();
 	int scanline = param;
 
 	/* IRQ is set by /32V */
@@ -154,7 +155,7 @@ static WRITE8_HANDLER( main_irq_ack_w )
 
 static MACHINE_START( jedi )
 {
-	jedi_state *state = (jedi_state *)machine->driver_data;
+	jedi_state *state = machine->driver_data<jedi_state>();
 
 	/* set a timer to run the interrupts */
 	state->interrupt_timer = timer_alloc(machine, generate_interrupt, NULL);
@@ -177,7 +178,7 @@ static MACHINE_START( jedi )
 
 static MACHINE_RESET( jedi )
 {
-	jedi_state *state = (jedi_state *)machine->driver_data;
+	jedi_state *state = machine->driver_data<jedi_state>();
 
 	/* init globals */
 	state->a2d_select = 0;
@@ -209,7 +210,7 @@ static WRITE8_HANDLER( rom_banksel_w )
 
 static READ8_HANDLER( a2d_data_r )
 {
-	jedi_state *state = (jedi_state *)space->machine->driver_data;
+	jedi_state *state = space->machine->driver_data<jedi_state>();
 	UINT8 ret = 0;
 
 	switch (state->a2d_select)
@@ -224,7 +225,7 @@ static READ8_HANDLER( a2d_data_r )
 
 static WRITE8_HANDLER( a2d_select_w )
 {
-	jedi_state *state = (jedi_state *)space->machine->driver_data;
+	jedi_state *state = space->machine->driver_data<jedi_state>();
 
 	state->a2d_select = offset;
 }
@@ -245,16 +246,16 @@ static WRITE8_HANDLER( jedi_coin_counter_w )
 
 static WRITE8_HANDLER( nvram_data_w )
 {
-	jedi_state *state = (jedi_state *)space->machine->driver_data;
+	jedi_state *state = space->machine->driver_data<jedi_state>();
 
 	if (state->nvram_enabled)
-		space->machine->generic.nvram.u8[offset] = data;
+		state->m_nvram[offset] = data;
 }
 
 
 static WRITE8_HANDLER( nvram_enable_w )
 {
-	jedi_state *state = (jedi_state *)space->machine->driver_data;
+	jedi_state *state = space->machine->driver_data<jedi_state>();
 
 	state->nvram_enabled = ~offset & 1;
 }
@@ -269,7 +270,7 @@ static WRITE8_HANDLER( nvram_enable_w )
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x07ff) AM_RAM
-	AM_RANGE(0x0800, 0x08ff) AM_MIRROR(0x0300) AM_RAM_WRITE(nvram_data_w) AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x0800, 0x08ff) AM_MIRROR(0x0300) AM_RAM_WRITE(nvram_data_w) AM_SHARE("nvram")
 	AM_RANGE(0x0c00, 0x0c00) AM_MIRROR(0x03fe) AM_READ_PORT("0c00") AM_WRITENOP
 	AM_RANGE(0x0c01, 0x0c01) AM_MIRROR(0x03fe) AM_READ_PORT("0c01") AM_WRITENOP
 	AM_RANGE(0x1000, 0x13ff) AM_NOP
@@ -341,9 +342,7 @@ INPUT_PORTS_END
  *
  *************************************/
 
-static MACHINE_DRIVER_START( jedi )
-
-	MDRV_DRIVER_DATA(jedi_state)
+static MACHINE_CONFIG_START( jedi, jedi_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, JEDI_MAIN_CPU_CLOCK)
@@ -353,14 +352,14 @@ static MACHINE_DRIVER_START( jedi )
 
 	MDRV_MACHINE_START(jedi)
 	MDRV_MACHINE_RESET(jedi)
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_IMPORT_FROM(jedi_video)
+	MDRV_FRAGMENT_ADD(jedi_video)
 
 	/* audio hardware */
-	MDRV_IMPORT_FROM(jedi_audio)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(jedi_audio)
+MACHINE_CONFIG_END
 
 
 

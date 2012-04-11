@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class ojankohs_state
+class ojankohs_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ojankohs_state(machine)); }
-
-	ojankohs_state(running_machine &machine) { }
+	ojankohs_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *   videoram;
@@ -56,5 +55,5 @@ VIDEO_START( ojankoc );
 VIDEO_UPDATE( ojankohs );
 VIDEO_UPDATE( ojankoc );
 
-void ojankoc_flipscreen(const address_space *space, int data);
+void ojankoc_flipscreen(address_space *space, int data);
 

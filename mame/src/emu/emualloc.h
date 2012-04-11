@@ -87,7 +87,8 @@ public:
 		  m_ordered_next(NULL),
 		  m_ordered_prev(NULL),
 		  m_ptr(ptr),
-		  m_size(size) { }
+		  m_size(size),
+		  m_id(~(UINT64)0) { }
 	virtual ~resource_pool_item() { }
 
 	resource_pool_item *	m_next;
@@ -95,6 +96,7 @@ public:
 	resource_pool_item *	m_ordered_prev;
 	void *					m_ptr;
 	size_t					m_size;
+	UINT64					m_id;
 };
 
 
@@ -202,7 +204,7 @@ void dump_unfreed_mem();
 //**************************************************************************
 
 // standard new/delete operators (try to avoid using)
-inline void *operator new(std::size_t size) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new(std::size_t size) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, NULL, 0);
 	if (result == NULL)
@@ -210,7 +212,7 @@ inline void *operator new(std::size_t size) throw (std::bad_alloc)
 	return result;
 }
 
-inline void *operator new[](std::size_t size) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new[](std::size_t size) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, NULL, 0);
 	if (result == NULL)
@@ -218,13 +220,13 @@ inline void *operator new[](std::size_t size) throw (std::bad_alloc)
 	return result;
 }
 
-inline void operator delete(void *ptr)
+ATTR_FORCE_INLINE inline void operator delete(void *ptr) throw()
 {
 	if (ptr != NULL)
 		free_file_line(ptr, NULL, 0);
 }
 
-inline void operator delete[](void *ptr)
+ATTR_FORCE_INLINE inline void operator delete[](void *ptr) throw()
 {
 	if (ptr != NULL)
 		free_file_line(ptr, NULL, 0);
@@ -232,7 +234,7 @@ inline void operator delete[](void *ptr)
 
 
 // file/line new/delete operators
-inline void *operator new(std::size_t size, const char *file, int line) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new(std::size_t size, const char *file, int line) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, file, line);
 	if (result == NULL)
@@ -240,7 +242,7 @@ inline void *operator new(std::size_t size, const char *file, int line) throw (s
 	return result;
 }
 
-inline void *operator new[](std::size_t size, const char *file, int line) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new[](std::size_t size, const char *file, int line) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, file, line);
 	if (result == NULL)
@@ -248,13 +250,13 @@ inline void *operator new[](std::size_t size, const char *file, int line) throw 
 	return result;
 }
 
-inline void operator delete(void *ptr, const char *file, int line)
+ATTR_FORCE_INLINE inline void operator delete(void *ptr, const char *file, int line)
 {
 	if (ptr != NULL)
 		free_file_line(ptr, file, line);
 }
 
-inline void operator delete[](void *ptr, const char *file, int line)
+ATTR_FORCE_INLINE inline void operator delete[](void *ptr, const char *file, int line)
 {
 	if (ptr != NULL)
 		free_file_line(ptr, file, line);
@@ -262,7 +264,7 @@ inline void operator delete[](void *ptr, const char *file, int line)
 
 
 // file/line new/delete operators with zeroing
-inline void *operator new(std::size_t size, const char *file, int line, const zeromem_t &) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new(std::size_t size, const char *file, int line, const zeromem_t &) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, file, line);
 	if (result == NULL)
@@ -271,7 +273,7 @@ inline void *operator new(std::size_t size, const char *file, int line, const ze
 	return result;
 }
 
-inline void *operator new[](std::size_t size, const char *file, int line, const zeromem_t &) throw (std::bad_alloc)
+ATTR_FORCE_INLINE inline void *operator new[](std::size_t size, const char *file, int line, const zeromem_t &) throw (std::bad_alloc)
 {
 	void *result = malloc_file_line(size, file, line);
 	if (result == NULL)
@@ -280,13 +282,13 @@ inline void *operator new[](std::size_t size, const char *file, int line, const 
 	return result;
 }
 
-inline void operator delete(void *ptr, const char *file, int line, const zeromem_t &)
+ATTR_FORCE_INLINE inline void operator delete(void *ptr, const char *file, int line, const zeromem_t &)
 {
 	if (ptr != NULL)
 		free_file_line(ptr, file, line);
 }
 
-inline void operator delete[](void *ptr, const char *file, int line, const zeromem_t &)
+ATTR_FORCE_INLINE inline void operator delete[](void *ptr, const char *file, int line, const zeromem_t &)
 {
 	if (ptr != NULL)
 		free_file_line(ptr, file, line);

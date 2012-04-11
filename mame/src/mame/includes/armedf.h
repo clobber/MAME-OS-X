@@ -2,12 +2,11 @@
 
 
 
-class armedf_state
+class armedf_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, armedf_state(machine)); }
-
-	armedf_state(running_machine &machine) { }
+	armedf_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *  text_videoram;

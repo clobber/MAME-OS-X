@@ -60,19 +60,19 @@
 
 static WRITE8_DEVICE_HANDLER( dipsw_w )
 {
-	blueprnt_state *state = (blueprnt_state *)device->machine->driver_data;
+	blueprnt_state *state = device->machine->driver_data<blueprnt_state>();
 	state->dipsw = data;
 }
 
 static READ8_HANDLER( blueprnt_sh_dipsw_r )
 {
-	blueprnt_state *state = (blueprnt_state *)space->machine->driver_data;
+	blueprnt_state *state = space->machine->driver_data<blueprnt_state>();
 	return state->dipsw;
 }
 
 static WRITE8_HANDLER( blueprnt_sound_command_w )
 {
-	blueprnt_state *state = (blueprnt_state *)space->machine->driver_data;
+	blueprnt_state *state = space->machine->driver_data<blueprnt_state>();
 	soundlatch_w(space, offset, data);
 	cpu_set_input_line(state->audiocpu, INPUT_LINE_NMI, PULSE_LINE);
 }
@@ -281,7 +281,7 @@ static const ay8910_interface ay8910_interface_2 =
 
 static MACHINE_START( blueprnt )
 {
-	blueprnt_state *state = (blueprnt_state *)machine->driver_data;
+	blueprnt_state *state = machine->driver_data<blueprnt_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -290,17 +290,14 @@ static MACHINE_START( blueprnt )
 
 static MACHINE_RESET( blueprnt )
 {
-	blueprnt_state *state = (blueprnt_state *)machine->driver_data;
+	blueprnt_state *state = machine->driver_data<blueprnt_state>();
 
 	state->gfx_bank = 0;
 	state->dipsw = 0;
 }
 
 
-static MACHINE_DRIVER_START( blueprnt )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(blueprnt_state)
+static MACHINE_CONFIG_START( blueprnt, blueprnt_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 7000000/2)	// 3.5 MHz
@@ -340,7 +337,7 @@ static MACHINE_DRIVER_START( blueprnt )
 	MDRV_SOUND_ADD("ay2", AY8910, 10000000/2/2/2/2)
 	MDRV_SOUND_CONFIG(ay8910_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

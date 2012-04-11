@@ -76,7 +76,8 @@ typedef enum _MameFullScreenZoom
 
     running_machine * mMachine;
     render_target * mTarget;
-    const render_primitive_list * mPrimitives;
+    //const render_primitive_list * mPrimitives;
+    render_primitive_list * mPrimitives;
     MameRenderer * mRenderer;
     MameFrameRenderingOption mFrameRenderingOption;
     NSSize mRenderSize;

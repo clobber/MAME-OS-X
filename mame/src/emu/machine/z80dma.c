@@ -12,6 +12,8 @@
         - Only memory to memory is tested!
 
     TODO:
+        - reset command (C3) is handled improperly
+        - rewrite to match documentation
         - implement missing features
         - implement more asserts
         - implement a INPUT_LINE_BUSREQ for Z80. As a workaround,
@@ -23,6 +25,13 @@
 #include "memconv.h"
 #include "z80dma.h"
 #include "cpu/z80/z80daisy.h"
+
+
+//**************************************************************************
+//  DEVICE DEFINITIONS
+//**************************************************************************
+
+const device_type Z80DMA = z80dma_device_config::static_alloc_device_config;
 
 
 
@@ -365,7 +374,7 @@ void z80dma_device::z80daisy_irq_reti()
 //**************************************************************************
 
 //-------------------------------------------------
-//  interrupt_check - update IRQ line state
+//  is_ready - ready for DMA transfer?
 //-------------------------------------------------
 
 int z80dma_device::is_ready()
@@ -433,7 +442,7 @@ void z80dma_device::do_read()
 				else
 					m_latch = devcb_call_read8(&m_in_iorq_func, m_addressA);
 
-				if (LOG) logerror("A src: %04x \n",m_addressA);
+				if (LOG) logerror("Z80DMA '%s' A src: %04x %s -> data: %02x\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o", m_latch);
 				m_addressA += PORTA_FIXED ? 0 : PORTA_INC ? PORTA_STEP : -PORTA_STEP;
 			}
 			else
@@ -443,7 +452,7 @@ void z80dma_device::do_read()
 				else
 					m_latch = devcb_call_read8(&m_in_iorq_func, m_addressB);
 
-				if (LOG) logerror("B src: %04x \n",m_addressB);
+				if (LOG) logerror("Z80DMA '%s' B src: %04x %s -> data: %02x\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o", m_latch);
 				m_addressB += PORTB_FIXED ? 0 : PORTB_INC ? PORTB_STEP : -PORTB_STEP;
 			}
 			break;
@@ -451,7 +460,7 @@ void z80dma_device::do_read()
 			fatalerror("z80dma_do_operation: unhandled search & transfer mode !\n");
 			break;
 		default:
-			fatalerror("z80dma_do_operation: invalid mode %d!\n", mode);
+			logerror("z80dma_do_operation: invalid mode %d!\n", mode);
 			break;
 	}
 }
@@ -463,7 +472,7 @@ void z80dma_device::do_read()
 
 int z80dma_device::do_write()
 {
-	int done;
+	int done = 0;
 	UINT8 mode;
 
 	mode = TRANSFER_MODE;
@@ -480,7 +489,7 @@ int z80dma_device::do_write()
 				else
 					devcb_call_write8(&m_out_iorq_func, m_addressB, m_latch);
 
-				if (LOG) logerror("B dst: %04x \n",m_addressB);
+				if (LOG) logerror("Z80DMA '%s' B dst: %04x %s\n", tag(), m_addressB, PORTB_MEMORY ? "mem" : "i/o");
 				m_addressB += PORTB_FIXED ? 0 : PORTB_INC ? PORTB_STEP : -PORTB_STEP;
 			}
 			else
@@ -490,7 +499,7 @@ int z80dma_device::do_write()
 				else
 					devcb_call_write8(&m_out_iorq_func, m_addressA, m_latch);
 
-				if (LOG) logerror("A dst: %04x \n",m_addressA);
+				if (LOG) logerror("Z80DMA '%s' A dst: %04x %s\n", tag(), m_addressA, PORTA_MEMORY ? "mem" : "i/o");
 				m_addressA += PORTA_FIXED ? 0 : PORTA_INC ? PORTA_STEP : -PORTA_STEP;
 			}
 			m_count--;
@@ -521,7 +530,7 @@ int z80dma_device::do_write()
 			break;
 
 		default:
-			fatalerror("z80dma_do_operation: invalid mode %d!\n", mode);
+			logerror("z80dma_do_operation: invalid mode %d!\n", mode);
 			break;
 	}
 	if (done)
@@ -544,6 +553,8 @@ void z80dma_device::timerproc()
 	{
 		return;
 	}
+
+	if (m_is_read && !is_ready()) return;
 
 	if (m_is_read)
 	{
@@ -635,6 +646,8 @@ UINT8 z80dma_device::read()
 	if(m_read_cur_follow >= m_read_num_follow)
 		m_read_cur_follow = 0;
 
+	if (LOG) logerror("Z80DMA '%s' Read %02x\n", tag(), res);
+
 	return res;
 }
 
@@ -645,8 +658,12 @@ UINT8 z80dma_device::read()
 
 void z80dma_device::write(UINT8 data)
 {
+	if (LOG) logerror("Z80DMA '%s' Write %02x\n", tag(), data);
+
 	if (m_num_follow == 0)
 	{
+		m_reset_pointer = 0;
+
 		if ((data & 0x87) == 0) // WR2
 		{
 			WR2 = data;
@@ -699,14 +716,13 @@ void z80dma_device::write(UINT8 data)
 
 			WR6 = data;
 
-
 			switch (data)
 			{
 				case COMMAND_ENABLE_AFTER_RETI:
-					fatalerror("Unimplemented WR6 command %02x", data);
+					fatalerror("Z80DMA '%s' Unimplemented WR6 command %02x", tag(), data);
 					break;
 				case COMMAND_READ_STATUS_BYTE:
-					if (LOG) logerror("CMD Read status Byte\n");
+					if (LOG) logerror("Z80DMA '%s' CMD Read status Byte\n", tag());
         			READ_MASK = 0;
         			break;
 				case COMMAND_RESET_AND_DISABLE_INTERRUPTS:
@@ -717,7 +733,7 @@ void z80dma_device::write(UINT8 data)
 					m_status |= 0x08;
 					break;
 				case COMMAND_INITIATE_READ_SEQUENCE:
-					if (LOG) logerror("Initiate Read Sequence\n");
+					if (LOG) logerror("Z80DMA '%s' Initiate Read Sequence\n", tag());
 					m_read_cur_follow = m_read_num_follow = 0;
 					if(READ_MASK & 0x01) { m_read_regs_follow[m_read_num_follow++] = m_status; }
 					if(READ_MASK & 0x02) { m_read_regs_follow[m_read_num_follow++] = BLOCKLEN_L; } //byte counter (low)
@@ -725,12 +741,15 @@ void z80dma_device::write(UINT8 data)
 					if(READ_MASK & 0x08) { m_read_regs_follow[m_read_num_follow++] = PORTA_ADDRESS_L; } //port A address (low)
 					if(READ_MASK & 0x10) { m_read_regs_follow[m_read_num_follow++] = PORTA_ADDRESS_H; } //port A address (high)
 					if(READ_MASK & 0x20) { m_read_regs_follow[m_read_num_follow++] = PORTB_ADDRESS_L; } //port B address (low)
-					if(READ_MASK & 0x40) { m_read_regs_follow[m_read_num_follow++] = PORTA_ADDRESS_H; } //port B address (high)
+					if(READ_MASK & 0x40) { m_read_regs_follow[m_read_num_follow++] = PORTB_ADDRESS_H; } //port B address (high)
 					break;
 				case COMMAND_RESET:
-					if (LOG) logerror("Reset\n");
+					if (LOG) logerror("Z80DMA '%s' Reset\n", tag());
 					m_dma_enabled = 0;
 					m_force_ready = 0;
+					m_ip = 0;
+					m_ius = 0;
+					interrupt_check();
 					// Needs six reset commands to reset the DMA
 					{
 						UINT8 WRi;
@@ -749,62 +768,63 @@ void z80dma_device::write(UINT8 data)
 					m_addressB = PORTB_ADDRESS;
 					m_count = BLOCKLEN;
 					m_status |= 0x30;
-					if (LOG) logerror("Load A: %x B: %x N: %x\n", m_addressA, m_addressB, m_count);
+					if (LOG) logerror("Z80DMA '%s' Load A: %x B: %x N: %x\n", tag(), m_addressA, m_addressB, m_count);
 					break;
 				case COMMAND_DISABLE_DMA:
-					if (LOG) logerror("Disable DMA\n");
+					if (LOG) logerror("Z80DMA '%s' Disable DMA\n", tag());
 					m_dma_enabled = 0;
 					break;
 				case COMMAND_ENABLE_DMA:
-					if (LOG) logerror("Enable DMA\n");
+					if (LOG) logerror("Z80DMA '%s' Enable DMA\n", tag());
 					m_dma_enabled = 1;
+					update_status();
 					break;
 				case COMMAND_READ_MASK_FOLLOWS:
-					if (LOG) logerror("Set Read Mask\n");
+					if (LOG) logerror("Z80DMA '%s' Set Read Mask\n", tag());
 					m_regs_follow[m_num_follow++] = GET_REGNUM(READ_MASK);
 					break;
 				case COMMAND_CONTINUE:
-					if (LOG) logerror("Continue\n");
+					if (LOG) logerror("Z80DMA '%s' Continue\n", tag());
 					m_count = BLOCKLEN;
 					m_dma_enabled = 1;
 					//"match not found" & "end of block" status flags zeroed here
 					m_status |= 0x30;
 					break;
 				case COMMAND_RESET_PORT_A_TIMING:
-					if (LOG) logerror("Reset Port A Timing\n");
+					if (LOG) logerror("Z80DMA '%s' Reset Port A Timing\n", tag());
 					PORTA_TIMING = 0;
 					break;
 				case COMMAND_RESET_PORT_B_TIMING:
-					if (LOG) logerror("Reset Port B Timing\n");
+					if (LOG) logerror("Z80DMA '%s' Reset Port B Timing\n", tag());
 					PORTB_TIMING = 0;
 					break;
 				case COMMAND_FORCE_READY:
-					if (LOG) logerror("Force ready\n");
+					if (LOG) logerror("Z80DMA '%s' Force Ready\n", tag());
 					m_force_ready = 1;
 					update_status();
 					break;
 				case COMMAND_ENABLE_INTERRUPTS:
-					if (LOG) logerror("Enable IRQ\n");
+					if (LOG) logerror("Z80DMA '%s' Enable IRQ\n", tag());
 					WR3 |= 0x20;
 					break;
 				case COMMAND_DISABLE_INTERRUPTS:
-					if (LOG) logerror("Disable IRQ\n");
+					if (LOG) logerror("Z80DMA '%s' Disable IRQ\n", tag());
 					WR3 &= ~0x20;
 					break;
 				case COMMAND_REINITIALIZE_STATUS_BYTE:
-					if (LOG) logerror("Reinitialize status byte\n");
+					if (LOG) logerror("Z80DMA '%s' Reinitialize status byte\n", tag());
 					m_status |= 0x30;
 					m_ip = 0;
 					break;
 				case 0xFB:
-					if (LOG) logerror("Z80DMA undocumented command triggered 0x%02X!\n",data);
+					if (LOG) logerror("Z80DMA '%s' undocumented command triggered 0x%02X!\n", tag(), data);
 					break;
 				default:
-					fatalerror("Unknown WR6 command %02x", data);
+					fatalerror("Z80DMA '%s' Unknown WR6 command %02x", tag(), data);
 			}
 		}
 		else
-			fatalerror("Unknown base register %02x", data);
+			fatalerror("Z80DMA '%s' Unknown base register %02x", tag(), data);
 		m_cur_follow = 0;
 	}
 	else
@@ -823,6 +843,9 @@ void z80dma_device::write(UINT8 data)
 				m_regs_follow[m_num_follow++] = GET_REGNUM(INTERRUPT_VECTOR);
 			m_cur_follow = 0;
 		}
+
+		m_reset_pointer++;
+		if(m_reset_pointer >= 6) { m_reset_pointer = 0; }
 	}
 }
 
@@ -852,7 +875,7 @@ void z80dma_device::rdy_write_callback(int state)
 
 void z80dma_device::rdy_w(int state)
 {
-	if (LOG) logerror("RDY: %d Active High: %d\n", state, READY_ACTIVE_HIGH);
+	if (LOG) logerror("Z80DMA '%s' RDY: %d Active High: %d\n", tag(), state, READY_ACTIVE_HIGH);
 	timer_call_after_resynch(&m_machine, (void *)this, state, static_rdy_write_callback);
 }
 
@@ -872,18 +895,6 @@ void z80dma_device::wait_w(int state)
 
 void z80dma_device::bai_w(int state)
 {
-	if (m_ius)
-	{
-	    if (LOG) logerror("Z80DMA '%s' Return from Interrupt\n", tag());
-
-		/* clear interrupt under service flag */
-		m_ius = 0;
-	    interrupt_check();
-
-		return;
-	}
-
-	logerror("z80dma_irq_reti: failed to find an interrupt to clear IEO on!\n");
 }
 
 
@@ -898,5 +909,3 @@ WRITE8_DEVICE_HANDLER( z80dma_w ) { downcast<z80dma_device *>(device)->write(dat
 WRITE_LINE_DEVICE_HANDLER( z80dma_rdy_w ) { downcast<z80dma_device *>(device)->rdy_w(state); }
 WRITE_LINE_DEVICE_HANDLER( z80dma_wait_w ) { downcast<z80dma_device *>(device)->wait_w(state); }
 WRITE_LINE_DEVICE_HANDLER( z80dma_bai_w ) { downcast<z80dma_device *>(device)->bai_w(state); }
-
-const device_type Z80DMA = z80dma_device_config::static_alloc_device_config;

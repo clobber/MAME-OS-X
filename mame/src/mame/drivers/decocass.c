@@ -57,42 +57,42 @@ INLINE int swap_bits_5_6(int data)
 
 static WRITE8_HANDLER( ram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0x0000 + offset] = swap_bits_5_6(data);
 	state->rambase[0x0000 + offset] = data;
 }
 
 static WRITE8_HANDLER( charram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0x6000 + offset] = swap_bits_5_6(data);
 	decocass_charram_w(space, offset, data);
 }
 
 static WRITE8_HANDLER( fgvideoram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0xc000 + offset] = swap_bits_5_6(data);
 	decocass_fgvideoram_w(space, offset, data);
 }
 
 static WRITE8_HANDLER( fgcolorram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0xc400 + offset] = swap_bits_5_6(data);
 	decocass_colorram_w(space, offset, data);
 }
 
 static WRITE8_HANDLER( tileram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0xd000 + offset] = swap_bits_5_6(data);
 	decocass_tileram_w(space, offset, data);
 }
 
 static WRITE8_HANDLER( objectram_w )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	state->decrypted[0xd800 + offset] = swap_bits_5_6(data);
 	decocass_objectram_w(space, offset, data);
 }
@@ -102,14 +102,14 @@ static WRITE8_HANDLER( mirrorcolorram_w ) { offset = ((offset >> 5) & 0x1f) | ((
 
 static READ8_HANDLER( mirrorvideoram_r )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	offset = ((offset >> 5) & 0x1f) | ((offset & 0x1f) << 5);
 	return state->fgvideoram[offset];
 }
 
 static READ8_HANDLER( mirrorcolorram_r )
 {
-	decocass_state *state = (decocass_state *)space->machine->driver_data;
+	decocass_state *state = space->machine->driver_data<decocass_state>();
 	offset = ((offset >> 5) & 0x1f) | ((offset & 0x1f) << 5);
 	return state->colorram[offset];
 }
@@ -626,10 +626,7 @@ static PALETTE_INIT( decocass )
 }
 
 
-static MACHINE_DRIVER_START( decocass )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(decocass_state)
+static MACHINE_CONFIG_START( decocass, decocass_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, HCLK4)
@@ -669,241 +666,212 @@ static MACHINE_DRIVER_START( decocass )
 
 	MDRV_SOUND_ADD("ay2", AY8910, HCLK2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ctsttape )
+static MACHINE_CONFIG_DERIVED( ctsttape, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(ctsttape)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( chwy )
+static MACHINE_CONFIG_DERIVED( chwy, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(chwy)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( clocknch )
+static MACHINE_CONFIG_DERIVED( clocknch, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(clocknch)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ctisland )
+static MACHINE_CONFIG_DERIVED( ctisland, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(ctisland)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( csuperas )
+static MACHINE_CONFIG_DERIVED( csuperas, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(csuperas)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( castfant )
+static MACHINE_CONFIG_DERIVED( castfant, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(castfant)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cluckypo )
+static MACHINE_CONFIG_DERIVED( cluckypo, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cluckypo)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cterrani )
+static MACHINE_CONFIG_DERIVED( cterrani, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cterrani)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cexplore )
+static MACHINE_CONFIG_DERIVED( cexplore, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cexplore)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cprogolf )
+static MACHINE_CONFIG_DERIVED( cprogolf, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cprogolf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cmissnx )
+static MACHINE_CONFIG_DERIVED( cmissnx, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cmissnx)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cdiscon1 )
+static MACHINE_CONFIG_DERIVED( cdiscon1, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cdiscon1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cptennis )
+static MACHINE_CONFIG_DERIVED( cptennis, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cptennis)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ctornado )
+static MACHINE_CONFIG_DERIVED( ctornado, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(ctornado)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cbnj )
+static MACHINE_CONFIG_DERIVED( cbnj, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cbnj)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cburnrub )
+static MACHINE_CONFIG_DERIVED( cburnrub, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cburnrub)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cbtime )
+static MACHINE_CONFIG_DERIVED( cbtime, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cbtime)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cgraplop )
+static MACHINE_CONFIG_DERIVED( cgraplop, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cgraplop)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cgraplop2 )
+static MACHINE_CONFIG_DERIVED( cgraplop2, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cgraplop2)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( clapapa )
+static MACHINE_CONFIG_DERIVED( clapapa, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(clapapa)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cfghtice )
+static MACHINE_CONFIG_DERIVED( cfghtice, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cfghtice)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cprobowl )
+static MACHINE_CONFIG_DERIVED( cprobowl, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cprobowl)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cnightst )
+static MACHINE_CONFIG_DERIVED( cnightst, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cnightst)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cprosocc )
+static MACHINE_CONFIG_DERIVED( cprosocc, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cprosocc)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cppicf )
+static MACHINE_CONFIG_DERIVED( cppicf, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cppicf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cbdash )
+static MACHINE_CONFIG_DERIVED( cbdash, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cbdash)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cscrtry )
+static MACHINE_CONFIG_DERIVED( cscrtry, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cscrtry)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( cflyball )
+static MACHINE_CONFIG_DERIVED( cflyball, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(cflyball)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( czeroize )
+static MACHINE_CONFIG_DERIVED( czeroize, decocass )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(decocass)
 	MDRV_MACHINE_RESET(czeroize)
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(1*8, 32*8-1, 1*8, 31*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 #define ROM_LOAD_BIOS(bios,name,offset,length,hash) \
@@ -1355,16 +1323,16 @@ ROM_END
 
 static DRIVER_INIT( decocass )
 {
-	decocass_state *state = (decocass_state *)machine->driver_data;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	decocass_state *state = machine->driver_data<decocass_state>();
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, "maincpu");
 	int A;
 
 	/* allocate memory and mark all RAM regions with their decrypted pointers */
 	state->decrypted = auto_alloc_array(machine, UINT8, 0x10000);
-	memory_set_decrypted_region(space, 0x0000, 0xc7ff, &state->decrypted[0x0000]);
-	memory_set_decrypted_region(space, 0xd000, 0xdbff, &state->decrypted[0xd000]);
-	memory_set_decrypted_region(space, 0xf000, 0xffff, &state->decrypted[0xf000]);
+	space->set_decrypted_region(0x0000, 0xc7ff, &state->decrypted[0x0000]);
+	space->set_decrypted_region(0xd000, 0xdbff, &state->decrypted[0xd000]);
+	space->set_decrypted_region(0xf000, 0xffff, &state->decrypted[0xf000]);
 
 	/* Swap bits 5 & 6 for opcodes */
 	for (A = 0xf000; A < 0x10000; A++)
@@ -1380,7 +1348,7 @@ static DRIVER_INIT( decocass )
 
 static DRIVER_INIT( decocrom )
 {
-	decocass_state *state = (decocass_state *)machine->driver_data;
+	decocass_state *state = machine->driver_data<decocass_state>();
 	int romlength = memory_region_length(machine, "user3");
 	UINT8 *rom = memory_region(machine, "user3");
 	int i;

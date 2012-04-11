@@ -188,7 +188,7 @@ static WRITE8_HANDLER( bankswitch_w )
 
 static TIMER_CALLBACK( rsaga2_interrupt2  )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 2, HOLD_LINE);
 }
 
@@ -201,7 +201,7 @@ static INTERRUPT_GEN( rastansaga2_interrupt )
 
 static TIMER_CALLBACK( crimec_interrupt3 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 3, HOLD_LINE);
 }
 
@@ -214,7 +214,7 @@ static INTERRUPT_GEN( crimec_interrupt )
 
 static TIMER_CALLBACK( hitice_interrupt6 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 6, HOLD_LINE);
 }
 
@@ -227,7 +227,7 @@ static INTERRUPT_GEN( hitice_interrupt )
 
 static TIMER_CALLBACK( rambo3_interrupt1 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 1, HOLD_LINE);
 }
 
@@ -240,7 +240,7 @@ static INTERRUPT_GEN( rambo3_interrupt )
 
 static TIMER_CALLBACK( pbobble_interrupt5 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 5, HOLD_LINE);
 }
 
@@ -252,7 +252,7 @@ static INTERRUPT_GEN( pbobble_interrupt )
 
 static TIMER_CALLBACK( viofight_interrupt1 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 1, HOLD_LINE);
 }
 
@@ -264,7 +264,7 @@ static INTERRUPT_GEN( viofight_interrupt )
 
 static TIMER_CALLBACK( masterw_interrupt4 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 4, HOLD_LINE);
 }
 
@@ -276,7 +276,7 @@ static INTERRUPT_GEN( masterw_interrupt )
 
 static TIMER_CALLBACK( silentd_interrupt4 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 4, HOLD_LINE);
 }
 
@@ -288,7 +288,7 @@ static INTERRUPT_GEN( silentd_interrupt )
 
 static TIMER_CALLBACK( selfeena_interrupt4 )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 4, HOLD_LINE);
 }
 
@@ -300,7 +300,7 @@ static INTERRUPT_GEN( selfeena_interrupt )
 
 static TIMER_CALLBACK( sbm_interrupt5 )//4
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->maincpu, 5, HOLD_LINE);
 }
 
@@ -355,7 +355,7 @@ static READ16_HANDLER( trackx2_lo_r )
 
 static WRITE16_HANDLER( gain_control_w )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 	if (ACCESSING_BITS_8_15)
 	{
 		if (offset == 0)
@@ -390,13 +390,13 @@ static const eeprom_interface taitob_eeprom_intf =
 
 static READ16_HANDLER( eep_latch_r )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 	return state->eep_latch;
 }
 
 static WRITE16_HANDLER( eeprom_w )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 
 	COMBINE_DATA(&state->eep_latch);
 
@@ -431,13 +431,13 @@ static WRITE16_HANDLER( eeprom_w )
 
 static READ16_HANDLER( player_34_coin_ctrl_r )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 	return state->coin_word;
 }
 
 static WRITE16_HANDLER( player_34_coin_ctrl_w )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 
 	COMBINE_DATA(&state->coin_word);
 
@@ -450,7 +450,7 @@ static WRITE16_HANDLER( player_34_coin_ctrl_w )
 
 static READ16_HANDLER( pbobble_input_bypass_r )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 	switch (offset)
 	{
 		case 0x01:
@@ -463,7 +463,7 @@ static READ16_HANDLER( pbobble_input_bypass_r )
 
 static WRITE16_HANDLER( spacedxo_tc0220ioc_w )
 {
-	taitob_state *state = (taitob_state *)space->machine->driver_data;
+	taitob_state *state = space->machine->driver_data<taitob_state>();
 	if (ACCESSING_BITS_0_7)
 		tc0220ioc_w(state->tc0220ioc, offset, data & 0xff);
 	else
@@ -718,7 +718,7 @@ static ADDRESS_MAP_START( viofight_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x4000, 0x7fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x8000, 0x8fff) AM_RAM
 	AM_RANGE(0x9000, 0x9001) AM_DEVREADWRITE("ymsnd", ym2203_r, ym2203_w)
-	AM_RANGE(0xb000, 0xb001) AM_DEVREADWRITE("oki", okim6295_r, okim6295_w)		/* yes, both addresses for the same chip */
+	AM_RANGE(0xb000, 0xb001) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)		/* yes, both addresses for the same chip */
 	AM_RANGE(0xa000, 0xa000) AM_DEVWRITE("tc0140syt", tc0140syt_slave_port_w)
 	AM_RANGE(0xa001, 0xa001) AM_DEVREADWRITE("tc0140syt", tc0140syt_slave_comm_r, tc0140syt_slave_comm_w)
 ADDRESS_MAP_END
@@ -1628,7 +1628,7 @@ static INPUT_PORTS_START( viofight )
 	TAITO_JOY_UDLR_3_BUTTONS( 1 )
 
 	PORT_START("IN1")
-	TAITO_JOY_UDLR_2_BUTTONS( 2 )
+	TAITO_JOY_UDLR_3_BUTTONS( 2 )
 
 	TAITO_B_SYSTEM_INPUT
 INPUT_PORTS_END
@@ -2091,7 +2091,7 @@ GFXDECODE_END
 /* handler called by the YM2610 emulator when the internal timers cause an IRQ */
 static void irqhandler( running_device *device, int irq )
 {
-	taitob_state *state = (taitob_state *)device->machine->driver_data;
+	taitob_state *state = device->machine->driver_data<taitob_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -2126,7 +2126,7 @@ static const ym2203_interface ym2203_config =
 */
 static void mb87078_gain_changed( running_machine *machine, int channel, int percent )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 
 	if (channel == 1)
 	{
@@ -2192,7 +2192,7 @@ static const tc0140syt_interface taitob_tc0140syt_intf =
 
 static MACHINE_START( taitob )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -2208,16 +2208,13 @@ static MACHINE_START( taitob )
 
 static MACHINE_RESET( taitob )
 {
-	taitob_state *state = (taitob_state *)machine->driver_data;
+	taitob_state *state = machine->driver_data<taitob_state>();
 
 	state->eep_latch = 0;
 	state->coin_word = 0;
 }
 
-static MACHINE_DRIVER_START( rastsag2 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( rastsag2, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2261,13 +2258,10 @@ static MACHINE_DRIVER_START( rastsag2 )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ashura )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( ashura, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2311,13 +2305,10 @@ static MACHINE_DRIVER_START( ashura )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( crimec )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( crimec, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2361,13 +2352,10 @@ static MACHINE_DRIVER_START( crimec )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tetrist )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( tetrist, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz ???*/
@@ -2411,12 +2399,9 @@ static MACHINE_DRIVER_START( tetrist )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( tetrista )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( tetrista, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2461,12 +2446,9 @@ static MACHINE_DRIVER_START( tetrista )
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( hitice )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( hitice, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2515,13 +2497,10 @@ static MACHINE_DRIVER_START( hitice )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( rambo3 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( rambo3, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz/2)	/* verified on pcb */
@@ -2565,13 +2544,10 @@ static MACHINE_DRIVER_START( rambo3 )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( rambo3a )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( rambo3a, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz/2)	/* verified on pcb */
@@ -2615,12 +2591,9 @@ static MACHINE_DRIVER_START( rambo3a )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( pbobble )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( pbobble, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2668,13 +2641,10 @@ static MACHINE_DRIVER_START( pbobble )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( spacedx )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( spacedx, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2722,13 +2692,10 @@ static MACHINE_DRIVER_START( spacedx )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( spacedxo )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( spacedxo, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2772,13 +2739,10 @@ static MACHINE_DRIVER_START( spacedxo )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( qzshowby )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( qzshowby, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz according to the readme*/
@@ -2826,13 +2790,10 @@ static MACHINE_DRIVER_START( qzshowby )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( viofight )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( viofight, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2880,12 +2841,9 @@ static MACHINE_DRIVER_START( viofight )
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( masterw )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( masterw, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -2930,13 +2888,10 @@ static MACHINE_DRIVER_START( masterw )
 	MDRV_SOUND_ROUTE(3, "mono", 0.80)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( silentd )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( silentd, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)	/* 16 MHz ??? */
@@ -2980,13 +2935,10 @@ static MACHINE_DRIVER_START( silentd )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( selfeena )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( selfeena, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -3030,7 +2982,7 @@ static MACHINE_DRIVER_START( selfeena )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 #if 0
 static void ryujin_patch(void)
@@ -3042,10 +2994,7 @@ static void ryujin_patch(void)
 }
 #endif
 
-static MACHINE_DRIVER_START( ryujin )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( ryujin, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -3089,7 +3038,7 @@ static MACHINE_DRIVER_START( ryujin )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 #if 0
 static void sbm_patch(void)
@@ -3099,10 +3048,7 @@ static void sbm_patch(void)
 }
 #endif
 
-static MACHINE_DRIVER_START( sbm )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(taitob_state)
+static MACHINE_CONFIG_START( sbm, taitob_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 12000000)	/* 12 MHz */
@@ -3146,7 +3092,7 @@ static MACHINE_DRIVER_START( sbm )
 	MDRV_SOUND_ROUTE(2, "mono", 1.0)
 
 	MDRV_TC0140SYT_ADD("tc0140syt", taitob_tc0140syt_intf)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

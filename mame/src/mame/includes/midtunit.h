@@ -6,6 +6,16 @@
 
 #include "midyunit.h"
 
+class midtunit_state : public driver_device
+{
+public:
+	midtunit_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config),
+		  m_nvram(*this, "nvram") { }
+
+	required_shared_ptr<UINT16>	m_nvram;
+};
+
 /*----------- defined in machine/midtunit.c -----------*/
 
 WRITE16_HANDLER( midtunit_cmos_enable_w );
@@ -47,8 +57,8 @@ READ16_HANDLER( midtunit_vram_r );
 READ16_HANDLER( midtunit_vram_data_r );
 READ16_HANDLER( midtunit_vram_color_r );
 
-void midtunit_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
-void midtunit_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg);
+void midtunit_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
+void midtunit_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg);
 
 WRITE16_HANDLER( midtunit_control_w );
 WRITE16_HANDLER( midwunit_control_w );

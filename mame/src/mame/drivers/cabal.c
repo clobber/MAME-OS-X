@@ -54,7 +54,7 @@ Dip locations verified with Fabtek manual for the trackball version
 
 static MACHINE_RESET( cabalbl )
 {
-	cabal_state *state = (cabal_state *)machine->driver_data;
+	cabal_state *state = machine->driver_data<cabal_state>();
 	state->sound_command1 = state->sound_command2 = 0xff;
 }
 
@@ -63,7 +63,7 @@ static MACHINE_RESET( cabalbl )
 
 static WRITE16_HANDLER( cabalbl_sndcmd_w )
 {
-	cabal_state *state = (cabal_state *)space->machine->driver_data;
+	cabal_state *state = space->machine->driver_data<cabal_state>();
 
 	switch (offset)
 	{
@@ -81,7 +81,7 @@ static WRITE16_HANDLER( cabalbl_sndcmd_w )
 
 static WRITE16_HANDLER( track_reset_w )
 {
-	cabal_state *state = (cabal_state *)space->machine->driver_data;
+	cabal_state *state = space->machine->driver_data<cabal_state>();
 	int i;
 	static const char *const track_names[] = { "IN0", "IN1", "IN2", "IN3" };
 
@@ -91,7 +91,7 @@ static WRITE16_HANDLER( track_reset_w )
 
 static READ16_HANDLER( track_r )
 {
-	cabal_state *state = (cabal_state *)space->machine->driver_data;
+	cabal_state *state = space->machine->driver_data<cabal_state>();
 
 	switch (offset)
 	{
@@ -162,14 +162,14 @@ ADDRESS_MAP_END
 
 static READ8_HANDLER( cabalbl_snd2_r )
 {
-	cabal_state *state = (cabal_state *)space->machine->driver_data;
+	cabal_state *state = space->machine->driver_data<cabal_state>();
 
 	return BITSWAP8(state->sound_command2, 7,2,4,5,3,6,1,0);
 }
 
 static READ8_HANDLER( cabalbl_snd1_r )
 {
-	cabal_state *state = (cabal_state *)space->machine->driver_data;
+	cabal_state *state = space->machine->driver_data<cabal_state>();
 
 	return BITSWAP8(state->sound_command1, 7,2,4,5,3,6,1,0);
 }
@@ -484,9 +484,7 @@ static const msm5205_interface msm5205_interface_2 =
 	MSM5205_SEX_4B
 };
 
-static MACHINE_DRIVER_START( cabal )
-
-	MDRV_DRIVER_DATA(cabal_state)
+static MACHINE_CONFIG_START( cabal, cabal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb */
@@ -524,13 +522,11 @@ static MACHINE_DRIVER_START( cabal )
 
 	MDRV_SOUND_ADD("adpcm2", SEIBU_ADPCM, 8000) /* it should use the msm5205 */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS,"mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /* the bootleg has different sound hardware (2 extra Z80s for ADPCM playback) */
-static MACHINE_DRIVER_START( cabalbl )
-
-	MDRV_DRIVER_DATA(cabal_state)
+static MACHINE_CONFIG_START( cabalbl, cabal_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_20MHz/2) /* verified on pcb */
@@ -583,7 +579,7 @@ static MACHINE_DRIVER_START( cabalbl )
 	MDRV_SOUND_ADD("msm2", MSM5205, XTAL_12MHz/32) /* verified on pcb (no resonator)*/
 	MDRV_SOUND_CONFIG(msm5205_interface_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( cabal )
 	ROM_REGION( 0x50000, "maincpu", 0 )	/* 64k for cpu code */
@@ -841,11 +837,11 @@ ROM_END
 
 static void seibu_sound_bootleg(running_machine *machine,const char *cpu,int length)
 {
-	const address_space *space = cputag_get_address_space(machine, cpu, ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, cpu, ADDRESS_SPACE_PROGRAM);
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, length);
 	UINT8 *rom = memory_region(machine, cpu);
 
-	memory_set_decrypted_region(space, 0x0000, (length < 0x10000) ? (length - 1) : 0x1fff, decrypt);
+	space->set_decrypted_region(0x0000, (length < 0x10000) ? (length - 1) : 0x1fff, decrypt);
 
 	memcpy(decrypt, rom+length, length);
 

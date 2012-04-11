@@ -1,9 +1,8 @@
-class tunhunt_state
+class tunhunt_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, tunhunt_state(machine)); }
-
-	tunhunt_state(running_machine &machine) { }
+	tunhunt_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8 control;
 	UINT8 *workram;

@@ -12,24 +12,22 @@ extern DRIVER_INIT( mpnew );
 
 INPUT_PORTS_EXTERN( md_common );
 INPUT_PORTS_EXTERN( megadriv );
-INPUT_PORTS_EXTERN( aladbl );
-INPUT_PORTS_EXTERN( ssgbl );
 INPUT_PORTS_EXTERN( megadri6 );
-INPUT_PORTS_EXTERN( ssf2ghw );
-INPUT_PORTS_EXTERN( mk3ghw );
+INPUT_PORTS_EXTERN( ssf2mdb );
+INPUT_PORTS_EXTERN( mk3mdb );
 INPUT_PORTS_EXTERN( megdsvp );
 
-MACHINE_DRIVER_EXTERN( megadriv_timers );
+MACHINE_CONFIG_EXTERN( megadriv_timers );
 
-MACHINE_DRIVER_EXTERN( megdsvppal );
-MACHINE_DRIVER_EXTERN( megadriv );
-MACHINE_DRIVER_EXTERN( megadpal );
-MACHINE_DRIVER_EXTERN( megdsvp );
-MACHINE_DRIVER_EXTERN( genesis_32x );
-MACHINE_DRIVER_EXTERN( genesis_32x_pal );
-MACHINE_DRIVER_EXTERN( genesis_scd );
-MACHINE_DRIVER_EXTERN( genesis_32x_scd );
-MACHINE_DRIVER_EXTERN( md_bootleg );	// for topshoot.c & hshavoc.c
+MACHINE_CONFIG_EXTERN( megdsvppal );
+MACHINE_CONFIG_EXTERN( megadriv );
+MACHINE_CONFIG_EXTERN( megadpal );
+MACHINE_CONFIG_EXTERN( megdsvp );
+MACHINE_CONFIG_EXTERN( genesis_32x );
+MACHINE_CONFIG_EXTERN( genesis_32x_pal );
+MACHINE_CONFIG_EXTERN( genesis_scd );
+MACHINE_CONFIG_EXTERN( genesis_32x_scd );
+MACHINE_CONFIG_EXTERN( md_bootleg );	// for topshoot.c & hshavoc.c
 
 extern UINT16* megadriv_backupram;
 extern int megadriv_backupram_length;

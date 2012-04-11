@@ -5,15 +5,16 @@
 *************************************************************************/
 
 #include "machine/atarigen.h"
+#include "machine/x2212.h"
 
-class foodf_state
+class foodf_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, foodf_state(machine)); }
+	foodf_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config),
+		  m_nvram(*this, "nvram") { }
 
-	foodf_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	required_device<x2212_device> m_nvram;
 
 	double			rweights[3];
 	double			gweights[3];

@@ -276,8 +276,8 @@ static ADDRESS_MAP_START( main_program_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x030000, 0x033fff) AM_RAM		/* 68K and DSP shared RAM */
 	AM_RANGE(0x040000, 0x040fff) AM_RAM AM_BASE_SIZE_GENERIC(spriteram)
 	AM_RANGE(0x050000, 0x050dff) AM_RAM_WRITE(paletteram16_xBBBBBGGGGGRRRRR_word_w) AM_BASE_GENERIC(paletteram)
-	AM_RANGE(0x060000, 0x060001) AM_DEVWRITE("crtc", mc6845_address_w)
-	AM_RANGE(0x060002, 0x060003) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0x060000, 0x060001) AM_DEVWRITE8("crtc", mc6845_address_w, 0x00ff)
+	AM_RANGE(0x060002, 0x060003) AM_DEVWRITE8("crtc", mc6845_register_w, 0x00ff)
 	AM_RANGE(0x070000, 0x070003) AM_WRITE(twincobr_txscroll_w)	/* text layer scroll */
 	AM_RANGE(0x070004, 0x070005) AM_WRITE(twincobr_txoffs_w)	/* offset in text video RAM */
 	AM_RANGE(0x072000, 0x072003) AM_WRITE(twincobr_bgscroll_w)	/* bg layer scroll */
@@ -556,7 +556,7 @@ static const ym3812_interface ym3812_config =
 
 
 
-static MACHINE_DRIVER_START( twincobr )
+static MACHINE_CONFIG_START( twincobr, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, XTAL_28MHz/4)		/* 7MHz - Main board Crystal is 28MHz */
@@ -601,11 +601,10 @@ static MACHINE_DRIVER_START( twincobr )
 	MDRV_SOUND_ADD("ymsnd", YM3812, XTAL_28MHz/8)
 	MDRV_SOUND_CONFIG(ym3812_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( fsharkbt )
-	MDRV_IMPORT_FROM( twincobr )
+static MACHINE_CONFIG_DERIVED( fsharkbt, twincobr )
 
 	MDRV_CPU_ADD("mcu", I8741, XTAL_28MHz/16)
 	/* Program Map is internal to the CPU */
@@ -613,7 +612,7 @@ static MACHINE_DRIVER_START( fsharkbt )
 	MDRV_DEVICE_DISABLE()		/* Internal program code is not dumped */
 
 	MDRV_MACHINE_RESET(fsharkbt)	/* Reset fshark bootleg 8741 MCU data */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

@@ -45,7 +45,7 @@ D000      Paddle Position and Interrupt Reset
 #if 0
 static READ8_HANDLER( ripcord_IN2_r )
 {
-	circus_state *state = (circus_state *)space->machine->driver_data;
+	circus_state *state = space->machine->driver_data<circus_state>();
 	state->interrupt++;
 	logerror("circus_int: %02x\n", state->interrupt);
 	return readinputport (2);
@@ -266,7 +266,7 @@ static INTERRUPT_GEN( ripcord_interrupt )
 
 static MACHINE_START( circus )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->samples = machine->device("samples");
@@ -279,7 +279,7 @@ static MACHINE_START( circus )
 
 static MACHINE_RESET( circus )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 
 	state->clown_x = 0;
 	state->clown_y = 0;
@@ -287,10 +287,7 @@ static MACHINE_RESET( circus )
 }
 
 
-static MACHINE_DRIVER_START( circus )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(circus_state)
+static MACHINE_CONFIG_START( circus, circus_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, XTAL_11_289MHz / 16) /* 705.562kHz */
@@ -325,16 +322,15 @@ static MACHINE_DRIVER_START( circus )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(circus)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( robotbwl )
+static MACHINE_CONFIG_START( robotbwl, circus_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, XTAL_11_289MHz / 16) /* 705.562kHz */
 
 	/* driver data */
-	MDRV_DRIVER_DATA(circus_state)
 	MDRV_CPU_PROGRAM_MAP(circus_map)
 	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
 
@@ -366,12 +362,9 @@ static MACHINE_DRIVER_START( robotbwl )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(robotbwl)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( crash )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(circus_state)
+static MACHINE_CONFIG_START( crash, circus_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, XTAL_11_289MHz / 16) /* 705.562kHz */
@@ -406,12 +399,9 @@ static MACHINE_DRIVER_START( crash )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(crash)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( ripcord )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(circus_state)
+static MACHINE_CONFIG_START( ripcord, circus_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, XTAL_11_289MHz / 16) /* 705.562kHz */
@@ -446,7 +436,7 @@ static MACHINE_DRIVER_START( ripcord )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(circus)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -584,23 +574,23 @@ ROM_END
 
 static DRIVER_INIT( circus )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 	state->game_id = 1;
 }
 
 static DRIVER_INIT( robotbwl )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 	state->game_id = 2;
 }
 static DRIVER_INIT( crash )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 	state->game_id = 3;
 }
 static DRIVER_INIT( ripcord )
 {
-	circus_state *state = (circus_state *)machine->driver_data;
+	circus_state *state = machine->driver_data<circus_state>();
 	state->game_id = 4;
 }
 

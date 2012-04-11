@@ -283,6 +283,7 @@
 #include "emu.h"
 #include "cpu/mcs48/mcs48.h"
 #include "cpu/mcs51/mcs51.h"
+#include "machine/nvram.h"
 #include "sound/ay8910.h"
 #include "sound/dac.h"
 #include "videopkr.lh"
@@ -473,42 +474,6 @@ static VIDEO_UPDATE( videopkr )
 	tilemap_mark_all_tiles_dirty(bg_tilemap);
 	tilemap_draw(bitmap, cliprect, bg_tilemap, 0, 0);
 	return 0;
-}
-
-/********************
-*   NVRAM Handler   *
-********************/
-
-static NVRAM_HANDLER( videopkr )
-{
-	if (read_or_write)
-	{
-		mame_fwrite(file, data_ram, DATA_NVRAM_SIZE);
-		mame_fwrite(file, &count1, 8);
-		mame_fwrite(file, &count2, 8);
-		mame_fwrite(file, &count3, 8);
-		mame_fwrite(file, &count4, 8);
-
-	}
-	else
-	{
-		if (file)
-		{
-			mame_fread(file, data_ram, DATA_NVRAM_SIZE);
-			mame_fread(file, &count1, 8);
-			mame_fread(file, &count2, 8);
-			mame_fread(file, &count3, 8);
-			mame_fread(file, &count4, 8);
-		}
-		else
-		{
-			memset(data_ram, 0, DATA_NVRAM_SIZE);
-			memset(data_ram, count0, 8);
-			memset(data_ram, count0, 8);
-			memset(data_ram, count0, 8);
-			memset(data_ram, count0, 8);
-		}
-	}
 }
 
 
@@ -1191,6 +1156,8 @@ static MACHINE_START(videopkr)
 	p1 = 0xff;
 	ant_cio = 0;
 	count0 = 0;
+
+	machine->device<nvram_device>("nvram")->set_base(data_ram, sizeof(data_ram));
 }
 
 static const ay8910_interface ay8910_config =
@@ -1208,7 +1175,7 @@ static const ay8910_interface ay8910_config =
 *    Machine Drivers    *
 ************************/
 
-static MACHINE_DRIVER_START( videopkr )
+static MACHINE_CONFIG_START( videopkr, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8039, CPU_CLOCK)
@@ -1221,7 +1188,7 @@ static MACHINE_DRIVER_START( videopkr )
 	MDRV_CPU_PROGRAM_MAP(i8039_sound_mem)
 	MDRV_CPU_IO_MAP(i8039_sound_port)
 	MDRV_MACHINE_START(videopkr)
-	MDRV_NVRAM_HANDLER(videopkr)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	MDRV_TIMER_ADD_PERIODIC("t1_timer", sound_t1_callback, HZ(50))
 
@@ -1244,25 +1211,23 @@ static MACHINE_DRIVER_START( videopkr )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.55)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( blckjack )
+static MACHINE_CONFIG_DERIVED( blckjack, videopkr )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(videopkr)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_SIZE(32*8, 32*8)
 	MDRV_SCREEN_VISIBLE_AREA(4*8, 31*8-1, 2*8, 30*8-1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( videodad )
+static MACHINE_CONFIG_DERIVED( videodad, videopkr )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(videopkr)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(CPU_CLOCK_ALT)
 
@@ -1273,13 +1238,12 @@ static MACHINE_DRIVER_START( videodad )
 
 	MDRV_GFXDECODE(videodad)
 	MDRV_VIDEO_START(vidadcba)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( babypkr )
+static MACHINE_CONFIG_DERIVED( babypkr, videopkr )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(videopkr)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(CPU_CLOCK_ALT)
 	/* most likely romless or eprom */
@@ -1299,17 +1263,16 @@ static MACHINE_DRIVER_START( babypkr )
 	MDRV_SOUND_ADD("aysnd", AY8910, CPU_CLOCK / 6)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( fortune1 )
+static MACHINE_CONFIG_DERIVED( fortune1, videopkr )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(videopkr)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_CLOCK(CPU_CLOCK_ALT)
 
 	MDRV_PALETTE_INIT(fortune1)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*************************
 *        Rom Load        *

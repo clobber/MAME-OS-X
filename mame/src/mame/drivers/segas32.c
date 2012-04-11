@@ -489,7 +489,7 @@ static TIMER_DEVICE_CALLBACK( signal_v60_irq_callback )
 }
 
 
-static void int_control_w(const address_space *space, int offset, UINT8 data)
+static void int_control_w(address_space *space, int offset, UINT8 data)
 {
 	int duration;
 
@@ -628,7 +628,7 @@ static INTERRUPT_GEN( start_of_vblank_int )
  *
  *************************************/
 
-static UINT16 common_io_chip_r(const address_space *space, int which, offs_t offset, UINT16 mem_mask)
+static UINT16 common_io_chip_r(address_space *space, int which, offs_t offset, UINT16 mem_mask)
 {
 	static const char *const portnames[2][8] =
 			{
@@ -679,7 +679,7 @@ static UINT16 common_io_chip_r(const address_space *space, int which, offs_t off
 }
 
 
-static void common_io_chip_w(const address_space *space, int which, offs_t offset, UINT16 data, UINT16 mem_mask)
+static void common_io_chip_w(address_space *space, int which, offs_t offset, UINT16 data, UINT16 mem_mask)
 {
 	UINT8 old;
 
@@ -1311,7 +1311,7 @@ ADDRESS_MAP_END
  *************************************/
 
 static ADDRESS_MAP_START( ga2_v25_map, ADDRESS_SPACE_PROGRAM, 8 )
-	AM_RANGE(0x00000, 0x0ffff) AM_ROM
+	AM_RANGE(0x00000, 0x0ffff) AM_ROM AM_REGION("mcu", 0)
 	AM_RANGE(0x10000, 0x1ffff) AM_RAM AM_BASE(&ga2_dpram)
 	AM_RANGE(0xf0000, 0xfffff) AM_ROM AM_REGION("mcu", 0)
 ADDRESS_MAP_END
@@ -2183,7 +2183,7 @@ static READ16_HANDLER( dual_pcb_masterslave )
  *
  *************************************/
 
-static MACHINE_DRIVER_START( system32 )
+static MACHINE_CONFIG_START( system32, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", V60, MASTER_CLOCK/2)
@@ -2229,19 +2229,18 @@ static MACHINE_DRIVER_START( system32 )
 	MDRV_SOUND_ADD("rfsnd", RF5C68, RFC_CLOCK/4)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.55)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.55)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( system32_v25 )
-	MDRV_IMPORT_FROM(system32)
+static MACHINE_CONFIG_DERIVED( system32_v25, system32 )
 
 	/* add a V25 for protection */
 	MDRV_CPU_ADD("mcu", V25, 10000000)
 	MDRV_CPU_PROGRAM_MAP(ga2_v25_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( multi32 )
+static MACHINE_CONFIG_START( multi32, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", V70, MULTI32_CLOCK/2)
@@ -2290,7 +2289,7 @@ static MACHINE_DRIVER_START( multi32 )
 	MDRV_SOUND_ADD("sega", MULTIPCM, MASTER_CLOCK/4)
 	MDRV_SOUND_ROUTE(1, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -2834,7 +2833,7 @@ ROM_START( ga2 )
 	ROM_LOAD( "mpr14943",     0x300000, 0x100000, CRC(24d40333) SHA1(38faf8f3eac317a163e93bd2247fe98189b13d2d) )
 	ROM_LOAD( "mpr14942",     0x400000, 0x100000, CRC(a89b0e90) SHA1(e14c62418eb7f9a2deb2a6dcf635bedc1c73c253) )
 
-	ROM_REGION( 0x100000, "mcu", 0 ) /* Protection CPU */
+	ROM_REGION( 0x10000, "mcu", 0 ) /* Protection CPU */
 	ROM_LOAD( "epr14468", 0x00000, 0x10000, CRC(77634daa) SHA1(339169d164b9ed7dc3787b084d33effdc8e9efc1) )
 
 	ROM_REGION( 0x400000, "gfx1", 0 ) /* tiles */
@@ -4063,7 +4062,7 @@ static WRITE16_HANDLER( f1en_comms_echo_w )
 {
 	// pretend that slave is following master op, enables attract mode video with sound
 	if (ACCESSING_BITS_0_7)
-		memory_write_byte( space, 0x810049, data );
+		space->write_byte( 0x810049, data );
 }
 
 static DRIVER_INIT( f1en )
@@ -4151,7 +4150,7 @@ static DRIVER_INIT( radr )
 
 static DRIVER_INIT( scross )
 {
-	multipcm_sound_device *multipcm = machine->device<multipcm_sound_device>("sega");
+	multipcm_device *multipcm = machine->device<multipcm_device>("sega");
 	segas32_common_init(analog_custom_io_r, analog_custom_io_w);
 	memory_install_write8_device_handler(cputag_get_address_space(machine, "soundcpu", ADDRESS_SPACE_PROGRAM), multipcm, 0xb0, 0xbf, 0, 0, scross_bank_w);
 

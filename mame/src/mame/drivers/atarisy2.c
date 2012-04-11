@@ -157,14 +157,14 @@ static STATE_POSTLOAD( bankselect_postload );
 
 static void update_interrupts(running_machine *machine)
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 
-	if (state->atarigen.video_int_state)
+	if (state->video_int_state)
 		cputag_set_input_line(machine, "maincpu", 3, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 3, CLEAR_LINE);
 
-	if (state->atarigen.scanline_int_state)
+	if (state->scanline_int_state)
 		cputag_set_input_line(machine, "maincpu", 2, ASSERT_LINE);
 	else
 		cputag_set_input_line(machine, "maincpu", 2, CLEAR_LINE);
@@ -190,7 +190,7 @@ static void update_interrupts(running_machine *machine)
 
 static void scanline_update(screen_device &screen, int scanline)
 {
-	atarisy2_state *state = (atarisy2_state *)screen.machine->driver_data;
+	atarisy2_state *state = screen.machine->driver_data<atarisy2_state>();
 	if (scanline <= screen.height())
 	{
 		/* generate the 32V interrupt (IRQ 2) */
@@ -208,14 +208,13 @@ static void scanline_update(screen_device &screen, int scanline)
  *
  *************************************/
 
-static DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
+DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
-
 	/* make sure slapstic area looks like ROM */
 	if (address >= 0x8000 && address < 0x8200)
 	{
-		direct->raw = direct->decrypted = (UINT8 *)state->slapstic_base - 0x8000;
+		atarisy2_state *state = machine->driver_data<atarisy2_state>();
+		direct.explicit_configure(0x8000, 0x81ff, 0x1ff, (UINT8 *)state->slapstic_base);
 		return ~0;
 	}
 	return address;
@@ -224,7 +223,7 @@ static DIRECT_UPDATE_HANDLER( atarisy2_direct_handler )
 
 static MACHINE_START( atarisy2 )
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	atarigen_init(machine);
 
 	state_save_register_global(machine, state->interrupt_enable);
@@ -238,14 +237,16 @@ static MACHINE_START( atarisy2 )
 
 static MACHINE_RESET( atarisy2 )
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 
-	atarigen_eeprom_reset(&state->atarigen);
+	atarigen_eeprom_reset(state);
 	slapstic_reset();
-	atarigen_interrupt_reset(&state->atarigen, update_interrupts);
+	atarigen_interrupt_reset(state, update_interrupts);
 	atarigen_sound_io_reset(machine->device("soundcpu"));
 	atarigen_scanline_timer_reset(*machine->primary_screen, scanline_update, 64);
-	memory_set_direct_update_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), atarisy2_direct_handler);
+
+	address_space *main = machine->device<t11_device>("maincpu")->space(AS_PROGRAM);
+	main->set_direct_update_handler(direct_update_delegate_create_static(atarisy2_direct_handler, *machine));
 
 	state->p2portwr_state = 0;
 	state->p2portrd_state = 0;
@@ -263,7 +264,7 @@ static MACHINE_RESET( atarisy2 )
 
 static INTERRUPT_GEN( vblank_int )
 {
-	atarisy2_state *state = (atarisy2_state *)device->machine->driver_data;
+	atarisy2_state *state = device->machine->driver_data<atarisy2_state>();
 
 	/* clock the VBLANK through */
 	if (state->interrupt_enable & 8)
@@ -274,7 +275,7 @@ static INTERRUPT_GEN( vblank_int )
 static WRITE16_HANDLER( int0_ack_w )
 {
 	/* reset sound IRQ */
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	state->p2portrd_state = 0;
 	atarigen_update_interrupts(space->machine);
 }
@@ -290,7 +291,7 @@ static WRITE16_HANDLER( int1_ack_w )
 
 static TIMER_CALLBACK( delayed_int_enable_w )
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	state->interrupt_enable = param;
 }
 
@@ -331,7 +332,7 @@ static WRITE16_HANDLER( bankselect_w )
 		0x8e000, 0x86000, 0x7e000, 0x76000
 	};
 
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	int newword = state->bankselect[offset];
 	UINT8 *base;
 
@@ -345,8 +346,8 @@ static WRITE16_HANDLER( bankselect_w )
 
 static STATE_POSTLOAD( bankselect_postload )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 
 	bankselect_w(space, 0, state->bankselect[0], 0xffff);
 	bankselect_w(space, 1, state->bankselect[1], 0xffff);
@@ -362,11 +363,11 @@ static STATE_POSTLOAD( bankselect_postload )
 
 static READ16_HANDLER( switch_r )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	int result = input_port_read(space->machine, "1800") | (input_port_read(space->machine, "1801") << 8);
 
-	if (state->atarigen.cpu_to_sound_ready) result ^= 0x20;
-	if (state->atarigen.sound_to_cpu_ready) result ^= 0x10;
+	if (state->cpu_to_sound_ready) result ^= 0x20;
+	if (state->sound_to_cpu_ready) result ^= 0x10;
 
 	return result;
 }
@@ -374,11 +375,11 @@ static READ16_HANDLER( switch_r )
 
 static READ8_HANDLER( switch_6502_r )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	int result = input_port_read(space->machine, "1840");
 
-	if (state->atarigen.cpu_to_sound_ready) result |= 0x01;
-	if (state->atarigen.sound_to_cpu_ready) result |= 0x02;
+	if (state->cpu_to_sound_ready) result |= 0x01;
+	if (state->sound_to_cpu_ready) result |= 0x02;
 	if ((state->has_tms5220) && (tms5220_readyq_r(space->machine->device("tms")) == 0))
 		result &= ~0x04;
 	if (!(input_port_read(space->machine, "1801") & 0x80)) result |= 0x10;
@@ -389,7 +390,7 @@ static READ8_HANDLER( switch_6502_r )
 
 static WRITE8_HANDLER( switch_6502_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	if (state->has_tms5220)
 	{
@@ -408,7 +409,7 @@ static WRITE8_HANDLER( switch_6502_w )
 
 static WRITE16_HANDLER( adc_strobe_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	state->which_adc = offset & 3;
 }
 
@@ -416,7 +417,7 @@ static WRITE16_HANDLER( adc_strobe_w )
 static READ16_HANDLER( adc_r )
 {
 	static const char *const adcnames[] = { "ADC0", "ADC1", "ADC2", "ADC3" };
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	if (state->which_adc < state->pedal_count)
 		return ~input_port_read(space->machine, adcnames[state->which_adc]);
@@ -428,7 +429,7 @@ static READ16_HANDLER( adc_r )
 static READ8_HANDLER( leta_r )
 {
 	static const char *const letanames[] = { "LETA0", "LETA1", "LETA2", "LETA3" };
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
     if (state->pedal_count == -1)   /* 720 */
 	{
@@ -611,7 +612,7 @@ static WRITE8_HANDLER( mixer_w )
 
 static WRITE8_HANDLER( sound_reset_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	/* if no change, do nothing */
 	if ((data & 1) == state->sound_reset_state)
@@ -635,7 +636,7 @@ static WRITE8_HANDLER( sound_reset_w )
 
 static READ16_HANDLER( sound_r )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	/* clear the p2portwr state on a p1portrd */
 	state->p2portwr_state = 0;
@@ -648,7 +649,7 @@ static READ16_HANDLER( sound_r )
 
 static WRITE8_HANDLER( sound_6502_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	/* clock the state through */
 	state->p2portwr_state = (state->interrupt_enable & 2) != 0;
@@ -661,7 +662,7 @@ static WRITE8_HANDLER( sound_6502_w )
 
 static READ8_HANDLER( sound_6502_r )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 
 	/* clock the state through */
 	state->p2portrd_state = (state->interrupt_enable & 1) != 0;
@@ -681,7 +682,7 @@ static READ8_HANDLER( sound_6502_r )
 
 static WRITE8_HANDLER( tms5220_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	if (state->has_tms5220)
 	{
 		tms5220_data_w(space->machine->device("tms"), 0, data);
@@ -690,7 +691,7 @@ static WRITE8_HANDLER( tms5220_w )
 
 static WRITE8_HANDLER( tms5220_strobe_w )
 {
-	atarisy2_state *state = (atarisy2_state *)space->machine->driver_data;
+	atarisy2_state *state = space->machine->driver_data<atarisy2_state>();
 	if (state->has_tms5220)
 	{
 		tms5220_wsq_w(space->machine->device("tms"), 1-(offset & 1));
@@ -729,8 +730,8 @@ static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x15e0, 0x15e1) AM_MIRROR(0x001e) AM_WRITE(atarigen_video_int_ack_w)
 	AM_RANGE(0x1600, 0x1601) AM_MIRROR(0x007e) AM_WRITE(int_enable_w)
 	AM_RANGE(0x1680, 0x1681) AM_MIRROR(0x007e) AM_WRITE(atarigen_sound_w)
-	AM_RANGE(0x1700, 0x1701) AM_MIRROR(0x007e) AM_WRITE(atarisy2_xscroll_w) AM_BASE_MEMBER(atarisy2_state, atarigen.xscroll)
-	AM_RANGE(0x1780, 0x1781) AM_MIRROR(0x007e) AM_WRITE(atarisy2_yscroll_w) AM_BASE_MEMBER(atarisy2_state, atarigen.yscroll)
+	AM_RANGE(0x1700, 0x1701) AM_MIRROR(0x007e) AM_WRITE(atarisy2_xscroll_w) AM_BASE_MEMBER(atarisy2_state, xscroll)
+	AM_RANGE(0x1780, 0x1781) AM_MIRROR(0x007e) AM_WRITE(atarisy2_yscroll_w) AM_BASE_MEMBER(atarisy2_state, yscroll)
 	AM_RANGE(0x1800, 0x1801) AM_MIRROR(0x03fe) AM_READWRITE(switch_r, watchdog_reset16_w)
 	AM_RANGE(0x1c00, 0x1c01) AM_MIRROR(0x03fe) AM_READ(sound_r)
 	AM_RANGE(0x2000, 0x3fff) AM_READWRITE(atarisy2_videoram_r, atarisy2_videoram_w)
@@ -751,7 +752,7 @@ ADDRESS_MAP_END
 /* full memory map derived from schematics */
 static ADDRESS_MAP_START( sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_MIRROR(0x2000) AM_RAM
-	AM_RANGE(0x1000, 0x17ff) AM_MIRROR(0x2000) AM_RAM AM_BASE_SIZE_MEMBER(atarisy2_state, atarigen.eeprom, atarigen.eeprom_size)
+	AM_RANGE(0x1000, 0x17ff) AM_MIRROR(0x2000) AM_RAM AM_SHARE("eeprom")
 	AM_RANGE(0x1800, 0x180f) AM_MIRROR(0x2780) AM_DEVREADWRITE("pokey1", pokey_r, pokey_w)
 	AM_RANGE(0x1810, 0x1813) AM_MIRROR(0x278c) AM_READ(leta_r)
 	AM_RANGE(0x1830, 0x183f) AM_MIRROR(0x2780) AM_DEVREADWRITE("pokey2", pokey_r, pokey_w)
@@ -1141,8 +1142,7 @@ static const struct t11_setup t11_data =
 };
 
 
-static MACHINE_DRIVER_START( atarisy2 )
-	MDRV_DRIVER_DATA(atarisy2_state)
+static MACHINE_CONFIG_START( atarisy2, atarisy2_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", T11, MASTER_CLOCK/2)
@@ -1156,7 +1156,7 @@ static MACHINE_DRIVER_START( atarisy2 )
 
 	MDRV_MACHINE_START(atarisy2)
 	MDRV_MACHINE_RESET(atarisy2)
-	MDRV_NVRAM_HANDLER(atarigen)
+	MDRV_NVRAM_ADD_1FILL("eeprom")
 
 	/* video hardware */
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
@@ -1187,17 +1187,16 @@ static MACHINE_DRIVER_START( atarisy2 )
 	MDRV_SOUND_ADD("tms", TMS5220C, MASTER_CLOCK/4/4/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.75)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.75)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( sprint )
+static MACHINE_CONFIG_DERIVED( sprint, atarisy2 )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(atarisy2)
 
 	/* sound hardware */
 	MDRV_DEVICE_REMOVE("tms")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1243,6 +1242,9 @@ ROM_START( paperboy )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1282,6 +1284,9 @@ ROM_START( paperboyr2 )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1321,6 +1326,9 @@ ROM_START( paperboyr1 )
 
 	ROM_REGION( 0x2000, "gfx3", 0 )
 	ROM_LOAD( "vid_t06.rv1", 0x000000, 0x002000, CRC(60d7aebb) SHA1(ad74221c4270496ebcfedd46ea16dca2cda1b4be) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "paperboy-eeprom.bin", 0x0000, 0x0800, CRC(0a0e057b) SHA1(a7cd245e826580ff54a490b421f65a72de5a2ed2) )
 ROM_END
 
 
@@ -1386,6 +1394,9 @@ ROM_START( 720 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1451,6 +1462,9 @@ ROM_START( 720r3 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1516,6 +1530,9 @@ ROM_START( 720r2 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1581,6 +1598,9 @@ ROM_START( 720r1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1125.4t",  0x000000, 0x004000, CRC(6b7e2328) SHA1(cc9a315ccafe7228951b7c32cf3b31caa89ae7d3) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1646,6 +1666,9 @@ ROM_START( 720g )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1225.4t",  0x000000, 0x004000, CRC(264eda88) SHA1(f0f5fe87741e0e17117085cf45f700090a02cb94) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1711,6 +1734,9 @@ ROM_START( 720gr1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136047-1225.4t",  0x000000, 0x004000, CRC(264eda88) SHA1(f0f5fe87741e0e17117085cf45f700090a02cb94) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "720-eeprom.bin", 0x0000, 0x0800, CRC(a13090e3) SHA1(bc827ef76a3f9d96ffbd20a4099507c05bb46de4) )
 ROM_END
 
 
@@ -1756,6 +1782,9 @@ ROM_START( ssprint )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint-eeprom.bin", 0x0000, 0x0800, CRC(dfcd40de) SHA1(c68f0fd876b5edfd751bfa6c5967dc2a1e679b19) )
 ROM_END
 
 
@@ -1800,6 +1829,9 @@ ROM_START( ssprints )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-218.6t",   0x000000, 0x004000, CRC(8e500be1) SHA1(f21799bf97c8bf82328999cb912ad5f293035d55) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -1844,6 +1876,9 @@ ROM_START( ssprintf )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-218.6t",   0x000000, 0x004000, CRC(8e500be1) SHA1(f21799bf97c8bf82328999cb912ad5f293035d55) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -1888,6 +1923,9 @@ ROM_START( ssprintg )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -1932,6 +1970,9 @@ ROM_START( ssprint3 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -1976,6 +2017,9 @@ ROM_START( ssprintg1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2020,6 +2064,9 @@ ROM_START( ssprint1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136042-118.6t",   0x000000, 0x004000, CRC(8489d113) SHA1(f8ead7954d9be95792fd7e9d2487957d1e194641) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "ssprint1-eeprom.bin", 0x0000, 0x0800, CRC(62921dcc) SHA1(d394f53d8ad97b597d618238ff9b69ea48e86851) )
 ROM_END
 
 
@@ -2062,6 +2109,9 @@ ROM_START( csprints )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2104,6 +2154,9 @@ ROM_START( csprint )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2146,6 +2199,9 @@ ROM_START( csprints1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2188,6 +2244,9 @@ ROM_START( csprintf )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2230,6 +2289,9 @@ ROM_START( csprintg )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2272,6 +2334,9 @@ ROM_START( csprint2 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2314,6 +2379,9 @@ ROM_START( csprintg1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -2356,6 +2424,9 @@ ROM_START( csprint1 )
 
 	ROM_REGION( 0x4000, "gfx3", 0 )
 	ROM_LOAD( "136045-1117.6t",  0x000000, 0x004000, CRC(82da786d) SHA1(929cc4ebac3d4404e1a8b22b80aae975e0c9da85) )
+
+	ROM_REGION( 0x800, "eeprom", 0 )
+	ROM_LOAD( "csprint-eeprom.bin", 0x0000, 0x0800, CRC(064a6c9c) SHA1(b8867a554d97094ac9ec800a1d665cdb5a029b12) )
 ROM_END
 
 
@@ -3007,40 +3078,10 @@ ROM_END
 
 static DRIVER_INIT( paperboy )
 {
-	static const UINT16 compressed_default_eeprom[] =
-	{
-		0x0000,0x4300,0x0113,0x0124,0x0150,0x0153,0x0154,0x0100,
-		0x0112,0x01C0,0x0155,0x0143,0x0148,0x0100,0x0112,0x015C,
-		0x0154,0x014F,0x0149,0x0100,0x0111,0x01F8,0x0120,0x0152,
-		0x0153,0x0100,0x0111,0x0149,0x0159,0x0145,0x0120,0x0100,
-		0x0111,0x0130,0x014F,0x0120,0x0154,0x0100,0x0110,0x01CC,
-		0x0155,0x014F,0x0141,0x0100,0x0110,0x0168,0x0152,0x014E,
-		0x0142,0x0100,0x0110,0x0104,0x0120,0x0154,0x014C,0x0100,
-		0x010F,0x01A0,0x0120,0x014F,0x0145,0x0100,0x0126,0x01AC,
-		0x0150,0x0149,0x0147,0x0100,0x0126,0x0148,0x0141,0x0153,
-		0x0152,0x0100,0x0125,0x01E4,0x0150,0x0120,0x0145,0x0100,
-		0x0125,0x0180,0x0145,0x0154,0x0141,0x0100,0x0125,0x011C,
-		0x0152,0x0148,0x0154,0x0100,0x0124,0x01B8,0x0120,0x0245,
-		0x0100,0x0124,0x0154,0x0142,0x0120,0x0153,0x0100,0x0123,
-		0x01F0,0x014F,0x0120,0x0154,0x0100,0x0123,0x018C,0x0159,
-		0x0220,0x0100,0x0123,0x0128,0x0320,0x0100,0x013A,0x0134,
-		0x0144,0x0141,0x0154,0x0100,0x0139,0x01D0,0x0154,0x0148,
-		0x0145,0x0100,0x0139,0x016C,0x0142,0x014F,0x0159,0x0100,
-		0x0139,0x0108,0x0142,0x0146,0x0120,0x0100,0x0138,0x01A4,
-		0x014D,0x0145,0x0143,0x0100,0x0138,0x0140,0x0143,0x014A,
-		0x0120,0x0100,0x0137,0x01DC,0x014A,0x0145,0x0153,0x0100,
-		0x0137,0x0178,0x0150,0x0143,0x0154,0x0100,0x0137,0x0114,
-		0x014D,0x0241,0x0100,0x0136,0x01B0,0x0142,0x0141,0x0146,
-		0x0101,0x0400,0x010F,0x017F,0x012A,0x017F,0x013D,0x010F,
-		0x017F,0x012A,0x017F,0x013C,0x010F,0x017F,0x012A,0x017F,
-		0x013B,0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0xFC00,
-		0x0000
-	};
 	int i;
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
-	state->atarigen.eeprom_default = compressed_default_eeprom;
 	slapstic_init(machine, 105);
 
 	/* expand the 16k program ROMs into full 64k chunks */
@@ -3062,34 +3103,7 @@ static DRIVER_INIT( 720 )
 	/* without the default EEPROM, 720 hangs at startup due to communication
        issues with the sound CPU; temporarily increasing the sound CPU frequency
        to ~2.2MHz "fixes" the problem */
-	static const UINT16 compressed_default_eeprom[] =
-	{
-		0x0000,0x01ff,0x01d0,0x0107,0x0100,0x01d7,0x0300,0x01d7,0x0400,0x01d0,
-		0x0107,0x0100,0xffff,0x4fff,0x0100,0x014e,0x0120,0x0139,
-		0x01a4,0x0100,0x014c,0x012c,0x014e,0x01ce,0x0100,0x014a,
-		0x0138,0x014c,0x01f1,0x0100,0x0148,0x0144,0x0115,0x01d1,
-		0x0100,0x0146,0x0150,0x0215,0x0100,0x0144,0x015c,0x0149,
-		0x0117,0x0100,0x0142,0x0168,0x0148,0x0195,0x0100,0x0140,
-		0x0174,0x0111,0x0106,0x0100,0x013e,0x0180,0x0135,0x010d,
-		0x0100,0x013c,0x018c,0x014c,0x018d,0x0100,0x013a,0x0198,
-		0x0300,0x0138,0x01a4,0x0104,0x0121,0x0100,0x0136,0x01b0,
-		0x0108,0x0142,0x0100,0x0134,0x01bc,0x010c,0x0163,0x0100,
-		0x0132,0x01c8,0x0110,0x0184,0x0100,0x0130,0x01d4,0x0114,
-		0x01a5,0x0100,0x012e,0x01e0,0x0118,0x01c6,0x0100,0x012c,
-		0x01ec,0x011c,0x01e7,0x0100,0x012a,0x01f8,0x0121,0x0108,
-		0x0100,0x0129,0x0104,0x0125,0x0129,0x010f,0x0100,0x0163,
-		0x010e,0x01ca,0x0181,0x010e,0x0106,0x0120,0x010d,0x0189,
-		0x0162,0x010d,0x010c,0x0182,0x010c,0x01a1,0x01a2,0x010c,
-		0x0109,0x0171,0x010b,0x01a5,0x018f,0x010b,0x0146,0x0172,
-		0x010a,0x01b4,0x0186,0x010a,0x0105,0x0102,0x0109,0x0185,
-		0x0112,0x0109,0x0109,0x01cc,0x0108,0x01b5,0x01cf,0x0108,
-		0x0102,0x014b,0x0107,0x0182,0x0151,0x0107,0x0104,0x0190,
-		0x0106,0x0184,0x0142,0x0106,0x0105,0x0173,0x0105,0x0184,
-		0x0152,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0x06ff,
-		0x0000
-	};
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
-	state->atarigen.eeprom_default = compressed_default_eeprom;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	slapstic_init(machine, 107);
 
 	state->pedal_count = -1;
@@ -3098,13 +3112,12 @@ static DRIVER_INIT( 720 )
 }
 
 
-static void ssprint_init_common(running_machine *machine, const UINT16 *default_eeprom)
+static DRIVER_INIT( ssprint )
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	int i;
 	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
-	state->atarigen.eeprom_default = default_eeprom;
 	slapstic_init(machine, 108);
 
 	/* expand the 32k program ROMs into full 64k chunks */
@@ -3115,121 +3128,13 @@ static void ssprint_init_common(running_machine *machine, const UINT16 *default_
 	state->has_tms5220 = 0;
 }
 
-static DRIVER_INIT( ssprint )
-{
-	static const UINT16 compressed_default_eeprom[] =
-	{
-		0x0000,0x01FF,0x0E00,0x01FF,0x0100,0x0120,0x0100,0x0120,
-		0x0300,0x0120,0x0500,0x0120,0x01FF,0x0100,0x0140,0x0100,
-		0x0140,0x0110,0x0100,0x0110,0x0150,0x0100,0x0110,0x0300,
-		0x0140,0x01FF,0x0100,0x0160,0x0100,0x0160,0x0300,0x0160,
-		0x0500,0x0160,0x01FF,0x0100,0x0180,0x0100,0x0180,0x0300,
-		0x0180,0x0500,0x0180,0x01FF,0x0100,0x01A0,0x0100,0x01A0,
-		0x0300,0x01A0,0x0500,0x01A0,0x01FF,0x0100,0x01C0,0x0100,
-		0x01C0,0x0300,0x01C0,0x0500,0x01C0,0xFFFF,0x1EFF,0x0103,
-		0x01E8,0x0146,0x01D6,0x0103,0x01DE,0x0128,0x01B3,0x0103,
-		0x01D4,0x0144,0x0123,0x0103,0x01CA,0x011C,0x010B,0x0103,
-		0x01C0,0x0159,0x01BF,0x0103,0x01B6,0x0129,0x019F,0x0103,
-		0x01AC,0x014A,0x01C2,0x0103,0x01A2,0x010E,0x01DF,0x0103,
-		0x0198,0x0131,0x01BF,0x0103,0x018E,0x010D,0x0106,0x0103,
-		0x0184,0x010E,0x0186,0x0103,0x017A,0x0124,0x010C,0x0103,
-		0x0170,0x014A,0x0148,0x0103,0x0166,0x0151,0x01F2,0x0103,
-		0x015C,0x013E,0x013F,0x0103,0x0152,0x0111,0x0106,0x0103,
-		0x0148,0x0145,0x01B1,0x0103,0x013E,0x017E,0x0164,0x0103,
-		0x0134,0x017F,0x01E0,0x0103,0x012A,0x017F,0x01F3,0x0103,
-		0x0120,0x017F,0x01FF,0x0103,0x0116,0x012A,0x01D6,0x0103,
-		0x010C,0x0125,0x0176,0x0103,0x0102,0x014C,0x0161,0x0102,
-		0x01F8,0x0128,0x0101,0x0102,0x01EE,0x0101,0x0153,0x0102,
-		0x01E4,0x0109,0x0132,0x0102,0x01DA,0x012C,0x0132,0x0102,
-		0x01D0,0x0125,0x0186,0x0102,0x01C6,0x011D,0x011F,0xFF00,
-		0xFF00,0xFF00,0xFF00,0xFF00,0xFF00,0x0800,0x0000
-	};
-	ssprint_init_common(machine, compressed_default_eeprom);
-}
-
-static DRIVER_INIT( ssprint1 )
-{
-	static const UINT16 compressed_default_eeprom[] =
-	{
-		0x0000,0x1e00,0x01ff,0x2500,0x0103,0x01e8,0x0152,0x0157,
-		0x0157,0x0103,0x01de,0x014b,0x0146,0x0154,0x0103,0x01d4,
-		0x0152,0x0142,0x0144,0x0103,0x01ca,0x0148,0x0141,0x014c,
-		0x0103,0x01c0,0x0157,0x014e,0x0120,0x0103,0x01b6,0x014b,
-		0x014d,0x0120,0x0103,0x01ac,0x0153,0x0157,0x0143,0x0103,
-		0x01a2,0x0144,0x0157,0x0120,0x0103,0x0198,0x014d,0x014e,
-		0x0120,0x0103,0x018e,0x0144,0x0149,0x0147,0x0103,0x0184,
-		0x0144,0x0155,0x0147,0x0103,0x017a,0x014a,0x0141,0x014d,
-		0x0103,0x0170,0x0153,0x0153,0x0149,0x0103,0x0166,0x0155,
-		0x0150,0x0153,0x0103,0x015c,0x0150,0x0152,0x0120,0x0103,
-		0x0152,0x0145,0x0149,0x0147,0x0103,0x0148,0x0152,0x014e,
-		0x0152,0x0103,0x013e,0x0120,0x0154,0x0145,0x0103,0x0134,
-		0x0220,0x0141,0x0103,0x012a,0x0220,0x0154,0x0103,0x0420,
-		0x0103,0x0116,0x014b,0x0257,0x0103,0x010c,0x014a,0x014c,
-		0x0157,0x0103,0x0102,0x0154,0x0144,0x0142,0x0102,0x01f8,
-		0x014b,0x0141,0x0142,0x0102,0x01ee,0x0141,0x014b,0x0154,
-		0x0102,0x01e4,0x0143,0x014a,0x0153,0x0102,0x01da,0x014c,
-		0x0142,0x0153,0x0102,0x01d0,0x014a,0x014d,0x0147,0x0102,
-		0x01c6,0x0148,0x0149,0x0120,0x0110,0x0100,0x0110,0x0100,
-		0x0110,0x0100,0x0138,0x0110,0x0100,0x0110,0x0100,0x0110,
-		0x0100,0x0137,0x0110,0x0100,0x0110,0x0100,0x0110,0x0100,
-		0x0136,0x97ff,0x0103,0x01e8,0x0146,0x01d6,0x0103,0x01de,
-		0x0128,0x01b3,0x0103,0x01d4,0x0144,0x0123,0x0103,0x01ca,
-		0x011c,0x010b,0x0103,0x01c0,0x0159,0x01bf,0x0103,0x01b6,
-		0x0129,0x019f,0x0103,0x01ac,0x014a,0x01c2,0x0103,0x01a2,
-		0x010e,0x01df,0x0103,0x0198,0x0131,0x01bf,0x0103,0x018e,
-		0x010d,0x0106,0x0103,0x0184,0x010e,0x0186,0x0103,0x017a,
-		0x0124,0x010c,0x0103,0x0170,0x014a,0x0148,0x0103,0x0166,
-		0x0151,0x01f2,0x0103,0x015c,0x013e,0x013f,0x0103,0x0152,
-		0x0111,0x0106,0x0103,0x0148,0x0145,0x01b1,0x0103,0x013e,
-		0x017e,0x0164,0x0103,0x0134,0x017f,0x01e0,0x0103,0x012a,
-		0x017f,0x01f3,0x0103,0x0120,0x017f,0x01ff,0x0103,0x0116,
-		0x012a,0x01d6,0x0103,0x010c,0x0125,0x0176,0x0103,0x0102,
-		0x014c,0x0161,0x0102,0x01f8,0x0128,0x0101,0x0102,0x01ee,
-		0x0101,0x0153,0x0102,0x01e4,0x0109,0x0132,0x0102,0x01da,
-		0x012c,0x0132,0x0102,0x01d0,0x0125,0x0186,0x0102,0x01c6,
-		0x011d,0x011f,0x0200,0x0000
-	};
-	ssprint_init_common(machine, compressed_default_eeprom);
-}
-
 
 static DRIVER_INIT( csprint )
 {
-	static const UINT16 compressed_default_eeprom[] =
-	{
-		0x0000,0x01FF,0x0E00,0x0128,0x01D0,0x0127,0x0100,0x0120,
-		0x0300,0x01F7,0x01D0,0x0107,0x0300,0x0120,0x010F,0x01F0,
-		0x0140,0x0100,0x0140,0x0110,0x0100,0x0110,0x01A0,0x01F0,
-		0x0110,0x0300,0x0140,0x01FF,0x0100,0x0160,0x0100,0x0160,
-		0x0300,0x0160,0x0500,0x0160,0x01FF,0x0100,0x0180,0x0100,
-		0x0180,0x0300,0x0180,0x0500,0x0180,0x01FF,0x0100,0x01A0,
-		0x0100,0x01A0,0x0300,0x01A0,0x0500,0x01A0,0x01FF,0x0100,
-		0x01C0,0x0100,0x01C0,0x0300,0x01C0,0x0500,0x01C0,0xFFFF,
-		0x0100,0x0127,0x0110,0x0146,0x01D6,0x0100,0x0126,0x01AC,
-		0x0128,0x01B3,0x0100,0x0126,0x0148,0x0144,0x0123,0x0100,
-		0x0125,0x01E4,0x011C,0x010B,0x0100,0x0125,0x0180,0x0159,
-		0x01BF,0x0100,0x0125,0x011C,0x0129,0x019F,0x0100,0x0124,
-		0x0168,0x014A,0x01C2,0x0100,0x0124,0x0154,0x010E,0x01DF,
-		0x0100,0x0123,0x01F0,0x0131,0x01BF,0x0100,0x0123,0x018C,
-		0x010D,0x0106,0x0100,0x0123,0x0128,0x010E,0x0186,0x0100,
-		0x0122,0x01C4,0x0124,0x010C,0x0100,0x0122,0x0160,0x014A,
-		0x0148,0x0100,0x0121,0x01FC,0x0151,0x01F2,0x0100,0x0121,
-		0x0198,0x013E,0x013F,0x0100,0x0121,0x0134,0x0111,0x0106,
-		0x0100,0x0120,0x01D0,0x0145,0x01B1,0x0100,0x0120,0x016C,
-		0x017E,0x0164,0x0100,0x0120,0x0108,0x017F,0x01E0,0x0100,
-		0x011F,0x01A4,0x017F,0x01F3,0x0100,0x011F,0x0140,0x017F,
-		0x01FF,0x0100,0x011E,0x01DC,0x012A,0x01D6,0x0100,0x011E,
-		0x0178,0x0125,0x0176,0x0100,0x011E,0x0114,0x014C,0x0161,
-		0x0100,0x011D,0x01B0,0x0128,0x0101,0x0100,0x011D,0x014C,
-		0x0101,0x0153,0x0100,0x011C,0x01E8,0x0109,0x0132,0x0100,
-		0x011C,0x0184,0x012C,0x0132,0x0100,0x011C,0x0120,0x0125,
-		0x0186,0x0100,0x011B,0x01BC,0x011D,0x011F,0x0000
-	};
 	int i;
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 	UINT8 *cpu1 = memory_region(machine, "maincpu");
 
-	state->atarigen.eeprom_default = compressed_default_eeprom;
 	slapstic_init(machine, 109);
 
 	/* expand the 32k program ROMs into full 64k chunks */
@@ -3243,9 +3148,8 @@ static DRIVER_INIT( csprint )
 
 static DRIVER_INIT( apb )
 {
-	atarisy2_state *state = (atarisy2_state *)machine->driver_data;
+	atarisy2_state *state = machine->driver_data<atarisy2_state>();
 
-	state->atarigen.eeprom_default = NULL;
 	slapstic_init(machine, 110);
 
 	state->pedal_count = 2;
@@ -3273,12 +3177,12 @@ GAME( 1986, 720g,     720,      atarisy2, 720,      720,      ROT0,   "Atari Gam
 GAME( 1986, 720gr1,   720,      atarisy2, 720,      720,      ROT0,   "Atari Games", "720 Degrees (German, rev 1)", GAME_SUPPORTS_SAVE )
 
 GAME( 1986, ssprint,  0,        sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 4)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprint3, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (rev 3)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprint1, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintg, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (German, rev 2)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintg1,ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (German, rev 1)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprintf, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (French)", GAME_SUPPORTS_SAVE )
-GAME( 1986, ssprints, ssprint,  sprint,   ssprint,  ssprint1, ROT0,   "Atari Games", "Super Sprint (Spanish)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprint3, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 3)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprint1, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (rev 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintg, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (German, rev 2)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintg1,ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (German, rev 1)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprintf, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (French)", GAME_SUPPORTS_SAVE )
+GAME( 1986, ssprints, ssprint,  sprint,   ssprint,  ssprint,  ROT0,   "Atari Games", "Super Sprint (Spanish)", GAME_SUPPORTS_SAVE )
 
 GAME( 1986, csprint,  0,        sprint,   csprint,  csprint,  ROT0,   "Atari Games", "Championship Sprint (rev 3)", GAME_SUPPORTS_SAVE )
 GAME( 1986, csprint2, csprint,  sprint,   csprint,  csprint,  ROT0,   "Atari Games", "Championship Sprint (rev 2)", GAME_SUPPORTS_SAVE )

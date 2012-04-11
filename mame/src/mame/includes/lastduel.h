@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class lastduel_state
+class lastduel_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, lastduel_state(machine)); }
-
-	lastduel_state(running_machine &machine) { }
+	lastduel_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT16 *    vram;

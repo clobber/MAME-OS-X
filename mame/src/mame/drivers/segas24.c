@@ -696,7 +696,7 @@ static void reset_reset(running_machine *machine)
 	prev_resetcontrol = resetcontrol;
 }
 
-static void resetcontrol_w(const address_space *space, UINT8 data)
+static void resetcontrol_w(address_space *space, UINT8 data)
 {
 	resetcontrol = data;
 	logerror("Reset control %02x ('%s':%x)\n", resetcontrol, space->cpu->tag(), cpu_get_pc(space->cpu));
@@ -1772,7 +1772,7 @@ static const ym2151_interface ym2151_config =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( system24 )
+static MACHINE_CONFIG_START( system24, driver_device )
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK/2)
 	MDRV_CPU_PROGRAM_MAP(system24_cpu1_map)
@@ -1810,12 +1810,11 @@ static MACHINE_DRIVER_START( system24 )
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( system24_floppy )
-	MDRV_IMPORT_FROM(system24)
+static MACHINE_CONFIG_DERIVED( system24_floppy, system24 )
 	MDRV_NVRAM_HANDLER(system24)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

@@ -60,7 +60,7 @@ static WRITE16_HANDLER( blmbycar_okibank_w )
 
 static WRITE16_HANDLER( blmbycar_pot_wheel_reset_w )
 {
-	blmbycar_state *state = (blmbycar_state *)space->machine->driver_data;
+	blmbycar_state *state = space->machine->driver_data<blmbycar_state>();
 
 	if (ACCESSING_BITS_0_7)
 		state->pot_wheel = ~input_port_read(space->machine, "WHEEL") & 0xff;
@@ -68,7 +68,7 @@ static WRITE16_HANDLER( blmbycar_pot_wheel_reset_w )
 
 static WRITE16_HANDLER( blmbycar_pot_wheel_shift_w )
 {
-	blmbycar_state *state = (blmbycar_state *)space->machine->driver_data;
+	blmbycar_state *state = space->machine->driver_data<blmbycar_state>();
 
 	if (ACCESSING_BITS_0_7)
 	{
@@ -80,7 +80,7 @@ static WRITE16_HANDLER( blmbycar_pot_wheel_shift_w )
 
 static READ16_HANDLER( blmbycar_pot_wheel_r )
 {
-	blmbycar_state *state = (blmbycar_state *)space->machine->driver_data;
+	blmbycar_state *state = space->machine->driver_data<blmbycar_state>();
 	return ((state->pot_wheel & 0x80) ? 0x04 : 0) | (mame_rand(space->machine) & 0x08);
 }
 
@@ -123,14 +123,14 @@ static ADDRESS_MAP_START( blmbycar_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700008, 0x700009) AM_READ(blmbycar_pot_wheel_r)								// Wheel (potentiometer)
 	AM_RANGE(0x70000a, 0x70000b) AM_WRITENOP												// ? Wheel
 	AM_RANGE(0x70000c, 0x70000d) AM_WRITE(blmbycar_okibank_w)								// Sound
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)	// Sound
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	// Sound
 	AM_RANGE(0x70006a, 0x70006b) AM_WRITE(blmbycar_pot_wheel_reset_w)						// Wheel (potentiometer)
 	AM_RANGE(0x70007a, 0x70007b) AM_WRITE(blmbycar_pot_wheel_shift_w)						//
 ADDRESS_MAP_END
 
 static READ16_HANDLER( waterball_unk_r )
 {
-	blmbycar_state *state = (blmbycar_state *)space->machine->driver_data;
+	blmbycar_state *state = space->machine->driver_data<blmbycar_state>();
 
 	state->retvalue ^= 0x0008; // must toggle.. but not vblank?
 	return state->retvalue;
@@ -157,7 +157,7 @@ static ADDRESS_MAP_START( watrball_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700008, 0x700009) AM_READ(waterball_unk_r)   								// 0x0008 must toggle
 	AM_RANGE(0x70000a, 0x70000b) AM_WRITEONLY												// ?? busy
 	AM_RANGE(0x70000c, 0x70000d) AM_WRITE(blmbycar_okibank_w)								// Sound
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)	//
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)	//
 ADDRESS_MAP_END
 
 /***************************************************************************
@@ -341,7 +341,7 @@ GFXDECODE_END
 
 static MACHINE_START( blmbycar )
 {
-	blmbycar_state *state = (blmbycar_state *)machine->driver_data;
+	blmbycar_state *state = machine->driver_data<blmbycar_state>();
 
 	state_save_register_global(machine, state->pot_wheel);
 	state_save_register_global(machine, state->old_val);
@@ -349,17 +349,14 @@ static MACHINE_START( blmbycar )
 
 static MACHINE_RESET( blmbycar )
 {
-	blmbycar_state *state = (blmbycar_state *)machine->driver_data;
+	blmbycar_state *state = machine->driver_data<blmbycar_state>();
 
 	state->pot_wheel = 0;
 	state->old_val = 0;
 }
 
 
-static MACHINE_DRIVER_START( blmbycar )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(blmbycar_state)
+static MACHINE_CONFIG_START( blmbycar, blmbycar_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)	/* ? */
@@ -389,27 +386,24 @@ static MACHINE_DRIVER_START( blmbycar )
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static MACHINE_START( watrball )
 {
-	blmbycar_state *state = (blmbycar_state *)machine->driver_data;
+	blmbycar_state *state = machine->driver_data<blmbycar_state>();
 
 	state_save_register_global(machine, state->retvalue);
 }
 
 static MACHINE_RESET( watrball )
 {
-	blmbycar_state *state = (blmbycar_state *)machine->driver_data;
+	blmbycar_state *state = machine->driver_data<blmbycar_state>();
 
 	state->retvalue = 0;
 }
 
-static MACHINE_DRIVER_START( watrball )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(blmbycar_state)
+static MACHINE_CONFIG_START( watrball, blmbycar_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 10000000)	/* ? */
@@ -439,7 +433,7 @@ static MACHINE_DRIVER_START( watrball )
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***************************************************************************

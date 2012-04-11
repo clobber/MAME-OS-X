@@ -4,12 +4,11 @@
 
 ****************************************************************************/
 
-class astrof_state
+class astrof_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, astrof_state(machine)); }
-
-	astrof_state(running_machine &machine) { }
+	astrof_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* video-related */
 	UINT8 *    videoram;
@@ -40,12 +39,12 @@ public:
 
 /*----------- defined in audio/astrof.c -----------*/
 
-MACHINE_DRIVER_EXTERN( astrof_audio );
+MACHINE_CONFIG_EXTERN( astrof_audio );
 WRITE8_HANDLER( astrof_audio_1_w );
 WRITE8_HANDLER( astrof_audio_2_w );
 
-MACHINE_DRIVER_EXTERN( spfghmk2_audio );
+MACHINE_CONFIG_EXTERN( spfghmk2_audio );
 WRITE8_HANDLER( spfghmk2_audio_w );
 
-MACHINE_DRIVER_EXTERN( tomahawk_audio );
+MACHINE_CONFIG_EXTERN( tomahawk_audio );
 WRITE8_HANDLER( tomahawk_audio_w );

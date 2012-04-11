@@ -84,7 +84,7 @@ ADDRESS_MAP_END
 
 static INPUT_CHANGED( coin_inserted )
 {
-	skyfox_state *state = (skyfox_state *)field->port->machine->driver_data;
+	skyfox_state *state = field->port->machine->driver_data<skyfox_state>();
 	cpu_set_input_line(state->maincpu, INPUT_LINE_NMI, newval ? CLEAR_LINE : ASSERT_LINE);
 }
 
@@ -214,7 +214,7 @@ GFXDECODE_END
 
 static INTERRUPT_GEN( skyfox_interrupt )
 {
-	skyfox_state *state = (skyfox_state *)device->machine->driver_data;
+	skyfox_state *state = device->machine->driver_data<skyfox_state>();
 
 	/* Scroll the bg */
 	state->bg_pos += (state->bg_ctrl >> 1) & 0x7;	// maybe..
@@ -222,7 +222,7 @@ static INTERRUPT_GEN( skyfox_interrupt )
 
 static MACHINE_START( skyfox )
 {
-	skyfox_state *state = (skyfox_state *)machine->driver_data;
+	skyfox_state *state = machine->driver_data<skyfox_state>();
 
 	state->maincpu = machine->device("maincpu");
 
@@ -232,16 +232,13 @@ static MACHINE_START( skyfox )
 
 static MACHINE_RESET( skyfox )
 {
-	skyfox_state *state = (skyfox_state *)machine->driver_data;
+	skyfox_state *state = machine->driver_data<skyfox_state>();
 
 	state->bg_pos = 0;
 	state->bg_ctrl = 0;
 }
 
-static MACHINE_DRIVER_START( skyfox )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(skyfox_state)
+static MACHINE_CONFIG_START( skyfox, skyfox_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_8MHz/2) /* Verified at 4MHz */
@@ -276,7 +273,7 @@ static MACHINE_DRIVER_START( skyfox )
 
 	MDRV_SOUND_ADD("ym2", YM2203, XTAL_14_31818MHz/8) /* Verified at 1.789772MHz */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

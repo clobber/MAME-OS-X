@@ -7,12 +7,11 @@
 #define BW_DEBUG 0
 #define MAX_SOUNDS 16
 
-class bwing_state
+class bwing_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, bwing_state(machine)); }
-
-	bwing_state(running_machine &machine) { }
+	bwing_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *    videoram;

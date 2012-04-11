@@ -8,12 +8,11 @@
 #include "cpu/m6800/m6800.h"
 
 
-class cball_state
+class cball_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, cball_state(machine)); }
-
-	cball_state(running_machine &machine) { }
+	cball_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  video_ram;
@@ -28,7 +27,7 @@ public:
 
 static TILE_GET_INFO( get_tile_info )
 {
-	cball_state *state = (cball_state *)machine->driver_data;
+	cball_state *state = machine->driver_data<cball_state>();
 	UINT8 code = state->video_ram[tile_index];
 
 	SET_TILE_INFO(0, code, code >> 7, 0);
@@ -37,7 +36,7 @@ static TILE_GET_INFO( get_tile_info )
 
 static WRITE8_HANDLER( cball_vram_w )
 {
-	cball_state *state = (cball_state *)space->machine->driver_data;
+	cball_state *state = space->machine->driver_data<cball_state>();
 
 	state->video_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->bg_tilemap, offset);
@@ -46,14 +45,14 @@ static WRITE8_HANDLER( cball_vram_w )
 
 static VIDEO_START( cball )
 {
-	cball_state *state = (cball_state *)machine->driver_data;
+	cball_state *state = machine->driver_data<cball_state>();
 	state->bg_tilemap = tilemap_create(machine, get_tile_info, tilemap_scan_rows, 8, 8, 32, 32);
 }
 
 
 static VIDEO_UPDATE( cball )
 {
-	cball_state *state = (cball_state *)screen->machine->driver_data;
+	cball_state *state = screen->machine->driver_data<cball_state>();
 
 	/* draw playfield */
 	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
@@ -71,7 +70,7 @@ static VIDEO_UPDATE( cball )
 
 static TIMER_CALLBACK( interrupt_callback )
 {
-	cball_state *state = (cball_state *)machine->driver_data;
+	cball_state *state = machine->driver_data<cball_state>();
 	int scanline = param;
 
 	generic_pulse_irq_line(state->maincpu, 0);
@@ -87,7 +86,7 @@ static TIMER_CALLBACK( interrupt_callback )
 
 static MACHINE_START( cball )
 {
-	cball_state *state = (cball_state *)machine->driver_data;
+	cball_state *state = machine->driver_data<cball_state>();
 	state->maincpu = machine->device("maincpu");
 }
 
@@ -110,7 +109,7 @@ static PALETTE_INIT( cball )
 
 static READ8_HANDLER( cball_wram_r )
 {
-	cball_state *state = (cball_state *)space->machine->driver_data;
+	cball_state *state = space->machine->driver_data<cball_state>();
 
 	return state->video_ram[0x380 + offset];
 }
@@ -118,7 +117,7 @@ static READ8_HANDLER( cball_wram_r )
 
 static WRITE8_HANDLER( cball_wram_w )
 {
-	cball_state *state = (cball_state *)space->machine->driver_data;
+	cball_state *state = space->machine->driver_data<cball_state>();
 
 	state->video_ram[0x380 + offset] = data;
 }
@@ -224,10 +223,7 @@ static GFXDECODE_START( cball )
 GFXDECODE_END
 
 
-static MACHINE_DRIVER_START( cball )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(cball_state)
+static MACHINE_CONFIG_START( cball, cball_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6800, XTAL_12_096MHz / 16) /* ? */
@@ -251,7 +247,7 @@ static MACHINE_DRIVER_START( cball )
 	MDRV_VIDEO_UPDATE(cball)
 
 	/* sound hardware */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( cball )

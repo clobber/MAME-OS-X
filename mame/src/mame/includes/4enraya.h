@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class _4enraya_state
+class _4enraya_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, _4enraya_state(machine)); }
-
-	_4enraya_state(running_machine &machine) { }
+	_4enraya_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *    videoram;

@@ -15,13 +15,13 @@ The DS5002FP has up to 128KB undumped gameplay code making the game unplayable :
 
 static WRITE16_HANDLER( clr_int_w )
 {
-	glass_state *state = (glass_state *)space->machine->driver_data;
+	glass_state *state = space->machine->driver_data<glass_state>();
 	state->cause_interrupt = 1;
 }
 
 static INTERRUPT_GEN( glass_interrupt )
 {
-	glass_state *state = (glass_state *)device->machine->driver_data;
+	glass_state *state = device->machine->driver_data<glass_state>();
 
 	if (state->cause_interrupt)
 	{
@@ -92,7 +92,7 @@ static ADDRESS_MAP_START( glass_map, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x700006, 0x700007) AM_READ_PORT("P2")
 	AM_RANGE(0x700008, 0x700009) AM_WRITE(glass_blitter_w)													/* serial blitter */
 	AM_RANGE(0x70000c, 0x70000d) AM_WRITE(OKIM6295_bankswitch_w)											/* OKI6295 bankswitch */
-	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)					/* OKI6295 status register */
+	AM_RANGE(0x70000e, 0x70000f) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)					/* OKI6295 status register */
 	AM_RANGE(0x70000a, 0x70004b) AM_WRITE(glass_coin_w)														/* Coin Counters/Lockout */
 	AM_RANGE(0xfec000, 0xfeffff) AM_RAM																		/* Work RAM (partially shared with DS5002FP) */
 ADDRESS_MAP_END
@@ -173,7 +173,7 @@ INPUT_PORTS_END
 
 static MACHINE_START( glass )
 {
-	glass_state *state = (glass_state *)machine->driver_data;
+	glass_state *state = machine->driver_data<glass_state>();
 
 	state_save_register_global(machine, state->cause_interrupt);
 	state_save_register_global(machine, state->current_bit);
@@ -183,7 +183,7 @@ static MACHINE_START( glass )
 
 static MACHINE_RESET( glass )
 {
-	glass_state *state = (glass_state *)machine->driver_data;
+	glass_state *state = machine->driver_data<glass_state>();
 	int i;
 
 	state->cause_interrupt = 1;
@@ -194,10 +194,7 @@ static MACHINE_RESET( glass )
 		state->blitter_serial_buffer[i] = 0;
 }
 
-static MACHINE_DRIVER_START( glass )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(glass_state)
+static MACHINE_CONFIG_START( glass, glass_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,24000000/2)		/* 12 MHz (M680000 P12) */
@@ -226,7 +223,7 @@ static MACHINE_DRIVER_START( glass )
 
 	MDRV_OKIM6295_ADD("oki", 1056000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( glass ) /* Version 1.1 */
 	ROM_REGION( 0x080000, "maincpu", 0 )	/* 68000 code */

@@ -12,18 +12,18 @@ TODO:
 #include "cpu/z180/z180.h"
 #include "sound/2413intf.h"
 #include "sound/okim6295.h"
+#include "machine/nvram.h"
 
 
 /***************************************************************************
                                 Video Hardware
 ***************************************************************************/
 
-class spoker_state
+class spoker_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, spoker_state(machine)); }
-
-	spoker_state(running_machine &machine) { }
+	spoker_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	UINT8   *bg_tile_ram;
 	tilemap_t *bg_tilemap;
@@ -40,7 +40,7 @@ public:
 
 static WRITE8_HANDLER( bg_tile_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	state->bg_tile_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->bg_tilemap,offset);
@@ -48,21 +48,21 @@ static WRITE8_HANDLER( bg_tile_w )
 
 static TILE_GET_INFO( get_bg_tile_info )
 {
-	spoker_state *state = (spoker_state *)machine->driver_data;
+	spoker_state *state = machine->driver_data<spoker_state>();
 	int code = state->bg_tile_ram[tile_index];
 	SET_TILE_INFO(1 + (tile_index & 3), code & 0xff, 0, 0);
 }
 
 static TILE_GET_INFO( get_fg_tile_info )
 {
-	spoker_state *state = (spoker_state *)machine->driver_data;
+	spoker_state *state = machine->driver_data<spoker_state>();
 	int code = state->fg_tile_ram[tile_index] | (state->fg_color_ram[tile_index] << 8);
 	SET_TILE_INFO(0, code, (4*(code >> 14)+3), 0);
 }
 
 static WRITE8_HANDLER( fg_tile_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	state->fg_tile_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->fg_tilemap,offset);
@@ -70,7 +70,7 @@ static WRITE8_HANDLER( fg_tile_w )
 
 static WRITE8_HANDLER( fg_color_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	state->fg_color_ram[offset] = data;
 	tilemap_mark_tile_dirty(state->fg_tilemap,offset);
@@ -78,7 +78,7 @@ static WRITE8_HANDLER( fg_color_w )
 
 static VIDEO_START(spoker)
 {
-	spoker_state *state = (spoker_state *)machine->driver_data;
+	spoker_state *state = machine->driver_data<spoker_state>();
 
 	state->bg_tilemap = tilemap_create(machine, get_bg_tile_info, tilemap_scan_rows,	8,  32,	128, 8);
 	state->fg_tilemap = tilemap_create(machine, get_fg_tile_info, tilemap_scan_rows,	8,  8,	128, 32);
@@ -87,7 +87,7 @@ static VIDEO_START(spoker)
 
 static VIDEO_UPDATE(spoker)
 {
-	spoker_state *state = (spoker_state *)screen->machine->driver_data;
+	spoker_state *state = screen->machine->driver_data<spoker_state>();
 
 	bitmap_fill(bitmap, cliprect, get_black_pen(screen->machine));
 	tilemap_draw(bitmap, cliprect, state->bg_tilemap, 0, 0);
@@ -102,7 +102,7 @@ static VIDEO_UPDATE(spoker)
 static CUSTOM_INPUT( hopper_r )
 {
 	running_machine *machine = field->port->machine;
-	spoker_state *state = (spoker_state *)machine->driver_data;
+	spoker_state *state = machine->driver_data<spoker_state>();
 
 	if (state->hopper) return !(machine->primary_screen->frame_number()%10);
 	return input_code_pressed(machine, KEYCODE_H);
@@ -117,7 +117,7 @@ static void show_out(UINT8 *out)
 
 static WRITE8_HANDLER( spoker_nmi_and_coins_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	if ((state->nmi_enable ^ data) & (~0xdd))
 	{
@@ -140,7 +140,7 @@ static WRITE8_HANDLER( spoker_nmi_and_coins_w )
 
 static WRITE8_HANDLER( spoker_video_and_leds_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	set_led_status(space->machine, 4,	  data & 0x01);	// start?
 	set_led_status(space->machine, 5,	  data & 0x04);	// l_bet?
@@ -154,7 +154,7 @@ static WRITE8_HANDLER( spoker_video_and_leds_w )
 
 static WRITE8_HANDLER( spoker_leds_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	set_led_status(space->machine, 0, data & 0x01);	// stop_1
 	set_led_status(space->machine, 1, data & 0x02);	// stop_2
@@ -168,7 +168,7 @@ static WRITE8_HANDLER( spoker_leds_w )
 
 static WRITE8_HANDLER( spoker_magic_w )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	state->igs_magic[offset] = data;
 
@@ -188,7 +188,7 @@ static WRITE8_HANDLER( spoker_magic_w )
 
 static READ8_HANDLER( spoker_magic_r )
 {
-	spoker_state *state = (spoker_state *)space->machine->driver_data;
+	spoker_state *state = space->machine->driver_data<spoker_state>();
 
 	switch(state->igs_magic[0])
 	{
@@ -213,7 +213,7 @@ static READ8_HANDLER( spoker_magic_r )
 
 static ADDRESS_MAP_START( spoker_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE( 0x00000, 0x0f3ff ) AM_ROM
-	AM_RANGE( 0x0f400, 0x0ffff ) AM_RAM AM_BASE_SIZE_GENERIC( nvram )
+	AM_RANGE( 0x0f400, 0x0ffff ) AM_RAM AM_SHARE("nvram")
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( spoker_portmap, ADDRESS_SPACE_IO, 8 )
@@ -237,7 +237,7 @@ static ADDRESS_MAP_START( spoker_portmap, ADDRESS_SPACE_IO, 8 )
 
 	AM_RANGE( 0x64b0, 0x64b1 ) AM_DEVWRITE( "ymsnd", ym2413_w )
 
-	AM_RANGE( 0x64c0, 0x64c0 ) AM_DEVREADWRITE( "oki", okim6295_r, okim6295_w )
+	AM_RANGE( 0x64c0, 0x64c0 ) AM_DEVREADWRITE_MODERN("oki", okim6295_device, read, write)
 
 	AM_RANGE( 0x64d0, 0x64d1 ) AM_READWRITE( spoker_magic_r, spoker_magic_w )	// DSW1-5
 
@@ -370,7 +370,7 @@ GFXDECODE_END
 
 static MACHINE_RESET( spoker )
 {
-	spoker_state *state = (spoker_state *)machine->driver_data;
+	spoker_state *state = machine->driver_data<spoker_state>();
 
 	state->nmi_enable		=	0;
 	state->hopper			=	0;
@@ -379,15 +379,13 @@ static MACHINE_RESET( spoker )
 
 static INTERRUPT_GEN( spoker_interrupt )
 {
-	spoker_state *state = (spoker_state *)device->machine->driver_data;
+	spoker_state *state = device->machine->driver_data<spoker_state>();
 
 	 if (state->nmi_enable & 0x80)
 		cpu_set_input_line(device, INPUT_LINE_NMI, PULSE_LINE);
 }
 
-static MACHINE_DRIVER_START( spoker )
-
-	MDRV_DRIVER_DATA( spoker_state )
+static MACHINE_CONFIG_START( spoker, spoker_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z180, XTAL_12MHz / 2)	/* HD64180RP8, 8 MHz? */
@@ -397,7 +395,7 @@ static MACHINE_DRIVER_START( spoker )
 
 	MDRV_MACHINE_RESET(spoker)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -420,7 +418,7 @@ static MACHINE_DRIVER_START( spoker )
 
 	MDRV_OKIM6295_ADD("oki", XTAL_12MHz / 12, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 static DRIVER_INIT( spk116it )

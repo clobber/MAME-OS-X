@@ -699,6 +699,7 @@ static void rspcom_init(rsp_state *rsp, legacy_cpu_device *device, device_irq_ca
 	rsp->irq_callback = irqcallback;
 	rsp->device = device;
 	rsp->program = device->space(AS_PROGRAM);
+	rsp->direct = &rsp->program->direct();
 
 #if 1
     // Inaccurate.  RSP registers power on to a random state...
@@ -7206,7 +7207,7 @@ static void code_compile_block(rsp_state *rsp, offs_t pc)
 	drcuml_block *block;
 	jmp_buf errorbuf;
 
-	profiler_mark_start(PROFILER_DRC_COMPILE);
+	g_profiler.start(PROFILER_DRC_COMPILE);
 
 	/* get a description of this sequence */
 	desclist = drcfe_describe_code(rsp->impstate->drcfe, pc);
@@ -7258,7 +7259,7 @@ static void code_compile_block(rsp_state *rsp, offs_t pc)
 		}
 
 		/* validate this code block if we're not pointing into ROM */
-		if (memory_get_write_ptr(rsp->program, seqhead->physpc) != NULL)
+		if (rsp->program->get_write_ptr(seqhead->physpc) != NULL)
 			generate_checksum_block(rsp, block, &compiler, seqhead, seqlast);
 
 		/* label this instruction, if it may be jumped to locally */
@@ -7287,7 +7288,7 @@ static void code_compile_block(rsp_state *rsp, offs_t pc)
 
 	/* end the sequence */
 	drcuml_block_end(block);
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 /***************************************************************************
@@ -7601,7 +7602,7 @@ static void generate_checksum_block(rsp_state *rsp, drcuml_block *block, compile
 	{
 		if (!(seqhead->flags & OPFLAG_VIRTUAL_NOOP))
 		{
-			void *base = memory_decrypted_read_ptr(rsp->program, seqhead->physpc | 0x1000);
+			void *base = rsp->direct->read_decrypted_ptr(seqhead->physpc | 0x1000);
 			UML_LOAD(block, IREG(0), base, IMM(0), DWORD);							// load    i0,base,0,dword
 			UML_CMP(block, IREG(0), IMM(seqhead->opptr.l[0]));						// cmp     i0,opptr[0]
 			UML_EXHc(block, IF_NE, rsp->impstate->nocode, IMM(epc(seqhead)));		// exne    nocode,seqhead->pc
@@ -7612,13 +7613,13 @@ static void generate_checksum_block(rsp_state *rsp, drcuml_block *block, compile
 	else
 	{
 		UINT32 sum = 0;
-		void *base = memory_decrypted_read_ptr(rsp->program, seqhead->physpc | 0x1000);
+		void *base = rsp->direct->read_decrypted_ptr(seqhead->physpc | 0x1000);
 		UML_LOAD(block, IREG(0), base, IMM(0), DWORD);								// load    i0,base,0,dword
 		sum += seqhead->opptr.l[0];
 		for (curdesc = seqhead->next; curdesc != seqlast->next; curdesc = curdesc->next)
 			if (!(curdesc->flags & OPFLAG_VIRTUAL_NOOP))
 			{
-				base = memory_decrypted_read_ptr(rsp->program, curdesc->physpc | 0x1000);
+				base = rsp->direct->read_decrypted_ptr(curdesc->physpc | 0x1000);
 				UML_LOAD(block, IREG(1), base, IMM(0), DWORD);						// load    i1,base,dword
 				UML_ADD(block, IREG(0), IREG(0), IREG(1));							// add     i0,i0,i1
 				sum += curdesc->opptr.l[0];

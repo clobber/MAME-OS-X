@@ -48,16 +48,16 @@ ADDRESS_MAP_END
 static INPUT_PORTS_START( vp101 )
 INPUT_PORTS_END
 
-static const mips3_config config =
+static const mips3_config r5000_config =
 {
 	32768,				/* code cache size */
 	32768,				/* data cache size */
 	100000000			/* system (bus) clock */
 };
 
-static MACHINE_DRIVER_START( vp101 )
+static MACHINE_CONFIG_START( vp101, driver_device )
 	MDRV_CPU_ADD("maincpu", R5000LE, 300000000)	/* actually VR5500 with added NEC VR-series custom instructions */
-	MDRV_CPU_CONFIG(config)
+	MDRV_CPU_CONFIG(r5000_config)
 	MDRV_CPU_PROGRAM_MAP(main_map)
 
 	MDRV_SCREEN_ADD("screen", RASTER)
@@ -70,7 +70,7 @@ static MACHINE_DRIVER_START( vp101 )
 
 	MDRV_VIDEO_START(vp101)
 	MDRV_VIDEO_UPDATE(vp101)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START(jnero)
 	ROM_REGION(0x100000, "maincpu", 0)	/* Boot ROM */

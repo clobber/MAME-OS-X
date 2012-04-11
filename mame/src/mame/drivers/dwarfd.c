@@ -278,12 +278,11 @@ uPC1352C @ N3
 #include "cpu/i8085/i8085.h"
 #include "sound/ay8910.h"
 
-class dwarfd_state
+class dwarfd_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dwarfd_state(machine)); }
-
-	dwarfd_state(running_machine &machine) { }
+	dwarfd_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  dw_ram;
@@ -350,7 +349,7 @@ enum
 
 static WRITE8_HANDLER (i8275_preg_w) //param reg
 {
-	dwarfd_state *state = (dwarfd_state *)space->machine->driver_data;
+	dwarfd_state *state = space->machine->driver_data<dwarfd_state>();
 
 	switch (state->i8275Command)
 	{
@@ -471,7 +470,7 @@ static READ8_HANDLER (i8275_preg_r) //param reg
 
 static WRITE8_HANDLER (i8275_creg_w) //comand reg
 {
-	dwarfd_state *state = (dwarfd_state *)space->machine->driver_data;
+	dwarfd_state *state = space->machine->driver_data<dwarfd_state>();
 
 	switch (data>>5)
 	{
@@ -516,7 +515,7 @@ static READ8_HANDLER (i8275_sreg_r) //status
 
 static READ8_HANDLER(dwarfd_ram_r)
 {
-	dwarfd_state *state = (dwarfd_state *)space->machine->driver_data;
+	dwarfd_state *state = space->machine->driver_data<dwarfd_state>();
 
 	if (state->crt_access == 0)
 	{
@@ -532,7 +531,7 @@ static READ8_HANDLER(dwarfd_ram_r)
 
 static WRITE8_HANDLER(dwarfd_ram_w)
 {
-	dwarfd_state *state = (dwarfd_state *)space->machine->driver_data;
+	dwarfd_state *state = space->machine->driver_data<dwarfd_state>();
 	state->dw_ram[offset] = data;
 }
 
@@ -683,7 +682,7 @@ static VIDEO_START(dwarfd)
 
 static void drawCrt( running_machine *machine, bitmap_t *bitmap,const rectangle *cliprect )
 {
-	dwarfd_state *state = (dwarfd_state *)machine->driver_data;
+	dwarfd_state *state = machine->driver_data<dwarfd_state>();
 	int x, y;
 	for (y = 0; y < maxy; y++)
 	{
@@ -751,7 +750,7 @@ static VIDEO_UPDATE( dwarfd )
 
 static WRITE_LINE_DEVICE_HANDLER( dwarfd_sod_callback )
 {
-	dwarfd_state *driver_state = (dwarfd_state *)device->machine->driver_data;
+	dwarfd_state *driver_state = device->machine->driver_data<dwarfd_state>();
 	driver_state->crt_access = state;
 }
 
@@ -768,7 +767,7 @@ static I8085_CONFIG( dwarfd_i8085_config )
 #define NUM_LINES 25
 static INTERRUPT_GEN( dwarfd_interrupt )
 {
-	dwarfd_state *state = (dwarfd_state *)device->machine->driver_data;
+	dwarfd_state *state = device->machine->driver_data<dwarfd_state>();
 
 	if (cpu_getiloops(device) < NUM_LINES)
 	{
@@ -914,7 +913,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( dwarfd )
 {
-	dwarfd_state *state = (dwarfd_state *)machine->driver_data;
+	dwarfd_state *state = machine->driver_data<dwarfd_state>();
 
 	state_save_register_global(machine, state->bank);
 	state_save_register_global(machine, state->line);
@@ -938,7 +937,7 @@ static MACHINE_START( dwarfd )
 
 static MACHINE_RESET( dwarfd )
 {
-	dwarfd_state *state = (dwarfd_state *)machine->driver_data;
+	dwarfd_state *state = machine->driver_data<dwarfd_state>();
 
 	state->bank = 0;
 	state->line = 0;
@@ -958,10 +957,7 @@ static MACHINE_RESET( dwarfd )
 	state->i8275HorizontalRetrace = 0;
 }
 
-static MACHINE_DRIVER_START( dwarfd )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(dwarfd_state)
+static MACHINE_CONFIG_START( dwarfd, dwarfd_state )
 
 	/* basic machine hardware */
 	/* FIXME: The 8085A had a max clock of 6MHz, internally divided by 2! */
@@ -994,15 +990,14 @@ static MACHINE_DRIVER_START( dwarfd )
 	MDRV_SOUND_ADD("aysnd", AY8910, 1500000)
 	MDRV_SOUND_CONFIG(ay8910_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( qc )
-	MDRV_IMPORT_FROM( dwarfd )
+static MACHINE_CONFIG_DERIVED( qc, dwarfd )
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(qc_map)
 	MDRV_CPU_IO_MAP(qc_io_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 ROM_START( dwarfd )
 	ROM_REGION( 0x10000, "maincpu", 0 )
@@ -1141,7 +1136,7 @@ ROM_END
 
 static DRIVER_INIT(dwarfd)
 {
-	dwarfd_state *state = (dwarfd_state *)machine->driver_data;
+	dwarfd_state *state = machine->driver_data<dwarfd_state>();
 	int i;
 	UINT8 *src, *dst;
 

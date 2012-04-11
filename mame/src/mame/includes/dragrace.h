@@ -22,12 +22,11 @@
 #define DRAGRACE_ATTRACT_EN     NODE_09
 
 
-class dragrace_state
+class dragrace_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, dragrace_state(machine)); }
-
-	dragrace_state(running_machine &machine) { }
+	dragrace_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *  playfield_ram;

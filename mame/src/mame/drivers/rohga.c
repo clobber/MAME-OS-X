@@ -116,7 +116,7 @@
 
 static READ16_HANDLER( rohga_irq_ack_r )
 {
-	rohga_state *state = (rohga_state *)space->machine->driver_data;
+	rohga_state *state = space->machine->driver_data<rohga_state>();
 
 	cpu_set_input_line(state->maincpu, 6, CLEAR_LINE);
 	return 0;
@@ -127,7 +127,7 @@ static WRITE16_HANDLER( wizdfire_irq_ack_w )
 	/* This might actually do more, nitrobal for example sets 0xca->0xffff->0x80 at startup then writes 7 all the time
        except when a credit is inserted (writes 6 twice).
        Wizard Fire / Dark Seal 2 just writes 1 all the time, so I just don't trust it much for now... -AS */
-	rohga_state *state = (rohga_state *)space->machine->driver_data;
+	rohga_state *state = space->machine->driver_data<rohga_state>();
 	cpu_set_input_line(state->maincpu, 6, CLEAR_LINE);
 }
 
@@ -265,8 +265,8 @@ static ADDRESS_MAP_START( rohga_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x000000, 0x00ffff) AM_ROM
 	AM_RANGE(0x100000, 0x100001) AM_NOP
 	AM_RANGE(0x110000, 0x110001) AM_DEVREADWRITE("ymsnd", ym2151_r,ym2151_w)
-	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE("oki1", okim6295_r,okim6295_w)
-	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE("oki2", okim6295_r,okim6295_w)
+	AM_RANGE(0x120000, 0x120001) AM_DEVREADWRITE_MODERN("oki1", okim6295_device, read, write)
+	AM_RANGE(0x130000, 0x130001) AM_DEVREADWRITE_MODERN("oki2", okim6295_device, read, write)
 	AM_RANGE(0x140000, 0x140001) AM_READ(soundlatch_r)
 	AM_RANGE(0x1f0000, 0x1f1fff) AM_RAMBANK("bank8")
 	AM_RANGE(0x1fec00, 0x1fec01) AM_WRITE(h6280_timer_w)
@@ -722,13 +722,13 @@ GFXDECODE_END
 
 static void sound_irq(running_device *device, int state)
 {
-	rohga_state *driver_state = (rohga_state *)device->machine->driver_data;
+	rohga_state *driver_state = device->machine->driver_data<rohga_state>();
 	cpu_set_input_line(driver_state->audiocpu, 1, state); /* IRQ 2 */
 }
 
 static WRITE8_DEVICE_HANDLER( sound_bankswitch_w )
 {
-	rohga_state *state = (rohga_state *)device->machine->driver_data;
+	rohga_state *state = device->machine->driver_data<rohga_state>();
 	state->oki1->set_bank_base(BIT(data, 0) * 0x40000);
 	state->oki2->set_bank_base(BIT(data, 1) * 0x40000);
 }
@@ -772,10 +772,7 @@ static const deco16ic_interface nitrobal_deco16ic_intf =
 	rohga_bank_callback
 };
 
-static MACHINE_DRIVER_START( rohga )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rohga_state)
+static MACHINE_CONFIG_START( rohga, rohga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -818,12 +815,9 @@ static MACHINE_DRIVER_START( rohga )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( wizdfire )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rohga_state)
+static MACHINE_CONFIG_START( wizdfire, rohga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -865,12 +859,9 @@ static MACHINE_DRIVER_START( wizdfire )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( nitrobal )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rohga_state)
+static MACHINE_CONFIG_START( nitrobal, rohga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -912,12 +903,9 @@ static MACHINE_DRIVER_START( nitrobal )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( schmeisr )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(rohga_state)
+static MACHINE_CONFIG_START( schmeisr, rohga_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 14000000)
@@ -960,7 +948,7 @@ static MACHINE_DRIVER_START( schmeisr )
 	MDRV_OKIM6295_ADD("oki2", 32220000/16, OKIM6295_PIN7_HIGH)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.40)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /**********************************************************************************/
 

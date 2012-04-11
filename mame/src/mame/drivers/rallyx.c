@@ -205,7 +205,7 @@ TODO:
 
 static WRITE8_HANDLER( rallyx_interrupt_vector_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 
 	cpu_set_input_line_vector(state->maincpu, 0, data);
 	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
@@ -214,7 +214,7 @@ static WRITE8_HANDLER( rallyx_interrupt_vector_w )
 
 static WRITE8_HANDLER( rallyx_bang_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 
 	if (data == 0 && state->last_bang != 0)
 		sample_start(state->samples, 0, 0, 0);
@@ -224,7 +224,7 @@ static WRITE8_HANDLER( rallyx_bang_w )
 
 static WRITE8_HANDLER( rallyx_latch_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 	int bit = data & 1;
 
 	switch (offset)
@@ -269,7 +269,7 @@ static WRITE8_HANDLER( rallyx_latch_w )
 
 static WRITE8_HANDLER( locomotn_latch_w )
 {
-	timeplt_state *state = (timeplt_state *)space->machine->driver_data;
+	timeplt_state *state = space->machine->driver_data<timeplt_state>();
 	int bit = data & 1;
 
 	switch (offset)
@@ -323,7 +323,7 @@ static ADDRESS_MAP_START( rallyx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xa100, 0xa100) AM_READ_PORT("DSW")
 	AM_RANGE(0xa000, 0xa00f) AM_WRITEONLY AM_BASE_MEMBER(timeplt_state, radarattr)
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(watchdog_reset_w)
-	AM_RANGE(0xa100, 0xa11f) AM_DEVWRITE("namco", pacman_sound_w) AM_BASE(&namco_soundregs)
+	AM_RANGE(0xa100, 0xa11f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0xa130, 0xa130) AM_WRITE(rallyx_scrollx_w)
 	AM_RANGE(0xa140, 0xa140) AM_WRITE(rallyx_scrolly_w)
 	AM_RANGE(0xa170, 0xa170) AM_WRITENOP			/* ? */
@@ -874,7 +874,7 @@ static const samples_interface rallyx_samples_interface =
 
 static MACHINE_START( rallyx )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	state->maincpu = machine->device<cpu_device>("maincpu");
 	state->samples = machine->device("samples");
@@ -885,16 +885,13 @@ static MACHINE_START( rallyx )
 
 static MACHINE_RESET( rallyx )
 {
-	timeplt_state *state = (timeplt_state *)machine->driver_data;
+	timeplt_state *state = machine->driver_data<timeplt_state>();
 
 	state->last_bang = 0;
 	state->stars_enable = 0;
 }
 
-static MACHINE_DRIVER_START( rallyx )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(timeplt_state)
+static MACHINE_CONFIG_START( rallyx, timeplt_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -932,13 +929,10 @@ static MACHINE_DRIVER_START( rallyx )
 	MDRV_SOUND_ADD("samples", SAMPLES, 0)
 	MDRV_SOUND_CONFIG(rallyx_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( jungler )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(timeplt_state)
+static MACHINE_CONFIG_START( jungler, timeplt_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
@@ -966,45 +960,42 @@ static MACHINE_DRIVER_START( jungler )
 	MDRV_VIDEO_UPDATE(jungler)
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(locomotn_sound)
-MACHINE_DRIVER_END
+	MDRV_FRAGMENT_ADD(locomotn_sound)
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tactcian )
+static MACHINE_CONFIG_DERIVED( tactcian, jungler )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(jungler)
 
 	/* video hardware */
 	MDRV_VIDEO_START(locomotn)
 	MDRV_VIDEO_UPDATE(locomotn)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( locomotn )
+static MACHINE_CONFIG_DERIVED( locomotn, jungler )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(jungler)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 	MDRV_VIDEO_START(locomotn)
 	MDRV_VIDEO_UPDATE(locomotn)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( commsega )
+static MACHINE_CONFIG_DERIVED( commsega, jungler )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(jungler)
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 	MDRV_VIDEO_START(commsega)
 	MDRV_VIDEO_UPDATE(locomotn)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

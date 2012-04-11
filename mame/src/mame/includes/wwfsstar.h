@@ -1,9 +1,8 @@
-class wwfsstar_state
+class wwfsstar_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, wwfsstar_state(machine)); }
-
-	wwfsstar_state(running_machine &machine) { }
+	wwfsstar_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	int vblank;
 	int scrollx;

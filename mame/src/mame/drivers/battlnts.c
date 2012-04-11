@@ -27,14 +27,14 @@
 
 static INTERRUPT_GEN( battlnts_interrupt )
 {
-	battlnts_state *state = (battlnts_state *)device->machine->driver_data;
+	battlnts_state *state = device->machine->driver_data<battlnts_state>();
 	if (k007342_is_int_enabled(state->k007342))
 		cpu_set_input_line(device, HD6309_IRQ_LINE, HOLD_LINE);
 }
 
 static WRITE8_HANDLER( battlnts_sh_irqtrigger_w )
 {
-	battlnts_state *state = (battlnts_state *)space->machine->driver_data;
+	battlnts_state *state = space->machine->driver_data<battlnts_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
 
@@ -220,7 +220,7 @@ static const k007420_interface bladestl_k007420_intf =
 
 static MACHINE_START( battlnts )
 {
-	battlnts_state *state = (battlnts_state *)machine->driver_data;
+	battlnts_state *state = machine->driver_data<battlnts_state>();
 	UINT8 *ROM = memory_region(machine, "maincpu");
 
 	memory_configure_bank(machine, "bank1", 0, 4, &ROM[0x10000], 0x4000);
@@ -235,17 +235,14 @@ static MACHINE_START( battlnts )
 
 static MACHINE_RESET( battlnts )
 {
-	battlnts_state *state = (battlnts_state *)machine->driver_data;
+	battlnts_state *state = machine->driver_data<battlnts_state>();
 
 	state->layer_colorbase[0] = 0;
 	state->layer_colorbase[1] = 0;
 	state->spritebank = 0;
 }
 
-static MACHINE_DRIVER_START( battlnts )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(battlnts_state)
+static MACHINE_CONFIG_START( battlnts, battlnts_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", HD6309, XTAL_24MHz / 2 /* 3000000*4? */)
@@ -281,7 +278,7 @@ static MACHINE_DRIVER_START( battlnts )
 
 	MDRV_SOUND_ADD("ym2", YM3812, XTAL_24MHz / 8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************

@@ -75,7 +75,7 @@ WRITE8_DEVICE_HANDLER( turbo_sound_a_w )
 #if (!DISCRETE_TEST)
 	running_device *samples = device->machine->device("samples");
 #endif
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[0];
 	state->sound_state[0] = data;
 
@@ -124,7 +124,7 @@ WRITE8_DEVICE_HANDLER( turbo_sound_a_w )
 WRITE8_DEVICE_HANDLER( turbo_sound_b_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[1];
 	state->sound_state[1] = data;
 
@@ -147,7 +147,7 @@ WRITE8_DEVICE_HANDLER( turbo_sound_b_w )
 WRITE8_DEVICE_HANDLER( turbo_sound_c_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 
 	/* OSEL1-2 */
 	state->turbo_osel = (state->turbo_osel & 1) | ((data & 3) << 1);
@@ -193,7 +193,7 @@ static const samples_interface turbo_samples_interface =
 };
 
 
-MACHINE_DRIVER_START( turbo_samples )
+MACHINE_CONFIG_FRAGMENT( turbo_samples )
 
 	/* this is the cockpit speaker configuration */
 	MDRV_SPEAKER_ADD("fspeaker", 0.0, 0.0, 1.0)		/* front */
@@ -238,7 +238,7 @@ MACHINE_DRIVER_START( turbo_samples )
 
 	/* channel 9 = OSEL -> OCAR.W/WM */
 	MDRV_SOUND_ROUTE(9, "bspeaker",  0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*
     Cockpit: CN2 1+2 -> FRONT
@@ -297,7 +297,7 @@ MACHINE_DRIVER_END
 
 WRITE8_DEVICE_HANDLER( subroc3d_sound_a_w )
 {
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	state->sound_state[0] = data;
 
 	/* DIS0-3 contained in bits 0-3 */
@@ -328,7 +328,7 @@ INLINE void subroc3d_update_volume(running_device *samples, int leftchan, UINT8 
 WRITE8_DEVICE_HANDLER( subroc3d_sound_b_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[1];
 	state->sound_state[1] = data;
 
@@ -384,7 +384,7 @@ WRITE8_DEVICE_HANDLER( subroc3d_sound_b_w )
 WRITE8_DEVICE_HANDLER( subroc3d_sound_c_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[2];
 	state->sound_state[2] = data;
 
@@ -451,7 +451,7 @@ static const samples_interface subroc3d_samples_interface =
 };
 
 
-MACHINE_DRIVER_START( subroc3d_samples )
+MACHINE_CONFIG_FRAGMENT( subroc3d_samples )
 	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
 	MDRV_SOUND_ADD("samples", SAMPLES, 0)
@@ -488,7 +488,7 @@ MACHINE_DRIVER_START( subroc3d_samples )
 	/* PROLOGUE sound in channel 11 */
 	MDRV_SOUND_ROUTE(11, "lspeaker",  0.25)
 	MDRV_SOUND_ROUTE(11, "rspeaker", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -509,7 +509,7 @@ static void buckrog_update_samples(turbo_state *state, running_device *samples)
 WRITE8_DEVICE_HANDLER( buckrog_sound_a_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[0];
 	state->sound_state[0] = data;
 
@@ -535,7 +535,7 @@ WRITE8_DEVICE_HANDLER( buckrog_sound_a_w )
 WRITE8_DEVICE_HANDLER( buckrog_sound_b_w )
 {
 	running_device *samples = device->machine->device("samples");
-	turbo_state *state = (turbo_state *)device->machine->driver_data;
+	turbo_state *state = device->machine->driver_data<turbo_state>();
 	UINT8 diff = data ^ state->sound_state[1];
 	state->sound_state[1] = data;
 
@@ -606,12 +606,12 @@ static const samples_interface buckrog_samples_interface =
 };
 
 
-MACHINE_DRIVER_START( buckrog_samples )
+MACHINE_CONFIG_FRAGMENT( buckrog_samples )
 	MDRV_SPEAKER_STANDARD_MONO("mono")
 	MDRV_SOUND_ADD("samples", SAMPLES, 0)
 	MDRV_SOUND_CONFIG(buckrog_samples_interface)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

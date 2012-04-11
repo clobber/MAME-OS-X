@@ -137,7 +137,7 @@ INPUT_PORTS_END
 
 static WRITE8_HANDLER( sound_bank_w )
 {
-	ajax_state *state = (ajax_state *)space->machine->driver_data;
+	ajax_state *state = space->machine->driver_data<ajax_state>();
 	int bank_A, bank_B;
 
 	/* banks # for the 007232 (chip 1) */
@@ -205,10 +205,7 @@ static const k051316_interface ajax_k051316_intf =
 	ajax_zoom_callback
 };
 
-static MACHINE_DRIVER_START( ajax )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(ajax_state)
+static MACHINE_CONFIG_START( ajax, ajax_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", KONAMI, 3000000)	/* 12/4 MHz*/
@@ -262,7 +259,7 @@ static MACHINE_DRIVER_START( ajax )
 	MDRV_SOUND_CONFIG(k007232_interface_2)
 	MDRV_SOUND_ROUTE(0, "lspeaker", 0.50)
 	MDRV_SOUND_ROUTE(1, "rspeaker", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*

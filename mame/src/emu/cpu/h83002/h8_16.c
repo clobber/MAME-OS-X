@@ -23,11 +23,11 @@ CPU_DISASSEMBLE(h8_32);
 
 #define H8_SP	(7)
 
-#define h8_mem_read8(x) memory_read_byte(h8->program, x)
-#define h8_mem_read16(z, x) memory_read_word(h8->program, x)
-#define h8_mem_write8(x, y)  memory_write_byte(h8->program, x, y)
-#define h8_mem_write16(z, x, y) memory_write_word(h8->program, x, y)
-#define h8_readop16(x, y) memory_decrypted_read_word(x->program, y)
+#define h8_mem_read8(x) h8->program->read_byte(x)
+#define h8_mem_read16(z, x) h8->program->read_word(x)
+#define h8_mem_write8(x, y)  h8->program->write_byte(x, y)
+#define h8_mem_write16(z, x, y) h8->program->write_word(x, y)
+#define h8_readop16(x, y) x->direct->read_decrypted_word(y)
 
 // timing macros
 // note: we assume a system 12 - type setup where external access is 3+1 states
@@ -41,14 +41,14 @@ CPU_DISASSEMBLE(h8_32);
 
 INLINE UINT32 h8_mem_read32(h83xx_state *h8, offs_t address)
 {
-	UINT32 result = memory_read_word_16be(h8->program, address) << 16;
-	return result | memory_read_word_16be(h8->program, address + 2);
+	UINT32 result = h8->program->read_word(address) << 16;
+	return result | h8->program->read_word(address + 2);
 }
 
 INLINE void h8_mem_write32(h83xx_state *h8, offs_t address, UINT32 data)
 {
-	memory_write_word_16be(h8->program, address, data >> 16);
-	memory_write_word_16be(h8->program, address + 2, data);
+	h8->program->write_word(address, data >> 16);
+	h8->program->write_word(address + 2, data);
 }
 
 static void h8_check_irqs(h83xx_state *h8);
@@ -221,6 +221,7 @@ static CPU_INIT(h8)
 	h8->mode_8bit = 0;
 
 	h8->program = device->space(AS_PROGRAM);
+	h8->direct = &h8->program->direct();
 	h8->io = device->space(AS_IO);
 
 	state_save_register_device_item(device, 0, h8->h8err);

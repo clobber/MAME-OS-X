@@ -24,20 +24,20 @@ DIP Locations verified for:
 
 static READ8_HANDLER( bking_sndnmi_disable_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->sound_nmi_enable = 0;
 	return 0;
 }
 
 static WRITE8_HANDLER( bking_sndnmi_enable_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->sound_nmi_enable = 1;
 }
 
 static WRITE8_HANDLER( bking_soundlatch_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	int i, code = 0;
 
 	for (i = 0;i < 8;i++)
@@ -51,19 +51,19 @@ static WRITE8_HANDLER( bking_soundlatch_w )
 
 static WRITE8_HANDLER( bking3_addr_l_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->addr_l = data;
 }
 
 static WRITE8_HANDLER( bking3_addr_h_w )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	state->addr_h = data;
 }
 
 static READ8_HANDLER( bking3_extrarom_r )
 {
-	buggychl_state *state = (buggychl_state *)space->machine->driver_data;
+	buggychl_state *state = space->machine->driver_data<buggychl_state>();
 	UINT8 *rom = memory_region(space->machine, "user2");
 	return rom[state->addr_h * 256 + state->addr_l];
 }
@@ -411,7 +411,7 @@ static const ay8910_interface ay8910_config =
 
 static MACHINE_START( bking )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 
@@ -437,7 +437,7 @@ static MACHINE_START( bking )
 
 static MACHINE_START( bking3 )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	state->mcu = machine->device("mcu");
 
@@ -465,7 +465,7 @@ static MACHINE_START( bking3 )
 
 static MACHINE_RESET( bking )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	/* video */
 	state->pc3259_output[0] = 0;
@@ -492,7 +492,7 @@ static MACHINE_RESET( bking )
 
 static MACHINE_RESET( bking3 )
 {
-	buggychl_state *state = (buggychl_state *)machine->driver_data;
+	buggychl_state *state = machine->driver_data<buggychl_state>();
 
 	cputag_set_input_line(machine, "mcu", 0, CLEAR_LINE);
 
@@ -518,10 +518,7 @@ static MACHINE_RESET( bking3 )
 	state->ddr_c = 0;
 }
 
-static MACHINE_DRIVER_START( bking )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(buggychl_state)
+static MACHINE_CONFIG_START( bking, buggychl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("main_cpu", Z80, XTAL_12MHz/4)	/* 3 MHz */
@@ -567,10 +564,9 @@ static MACHINE_DRIVER_START( bking )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bking3 )
-	MDRV_IMPORT_FROM(bking)
+static MACHINE_CONFIG_DERIVED( bking3, bking )
 
 	MDRV_CPU_MODIFY("main_cpu")
 	MDRV_CPU_IO_MAP(bking3_io_map)
@@ -582,7 +578,7 @@ static MACHINE_DRIVER_START( bking3 )
 	MDRV_MACHINE_RESET(bking3)
 
 	MDRV_QUANTUM_TIME(HZ(6000))
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
 

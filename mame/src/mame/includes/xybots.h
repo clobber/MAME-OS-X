@@ -6,14 +6,11 @@
 
 #include "machine/atarigen.h"
 
-class xybots_state
+class xybots_state : public atarigen_state
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, xybots_state(machine)); }
-
-	xybots_state(running_machine &machine) { }
-
-	atarigen_state	atarigen;
+	xybots_state(running_machine &machine, const driver_device_config_base &config)
+		: atarigen_state(machine, config) { }
 
 	UINT16			h256;
 };

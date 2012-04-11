@@ -260,9 +260,7 @@ static const ym2203_interface ym2203_interface2 =
 	shootout_snd2_irq
 };
 
-static MACHINE_DRIVER_START( shootout )
-
-	MDRV_DRIVER_DATA( shootout_state )
+static MACHINE_CONFIG_START( shootout, shootout_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, 2000000)	/* 2 MHz? */
@@ -292,12 +290,10 @@ static MACHINE_DRIVER_START( shootout )
 	MDRV_SOUND_ADD("ymsnd", YM2203, 1500000)
 	MDRV_SOUND_CONFIG(ym2203_config)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( shootouj )
-
-	MDRV_DRIVER_DATA( shootout_state )
+static MACHINE_CONFIG_START( shootouj, shootout_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, 2000000)	/* 2 MHz? */
@@ -324,7 +320,7 @@ static MACHINE_DRIVER_START( shootouj )
 	MDRV_SOUND_ADD("ymsnd", YM2203, 1500000)
 	MDRV_SOUND_CONFIG(ym2203_interface2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( shootout )
@@ -413,13 +409,13 @@ ROM_END
 
 static DRIVER_INIT( shootout )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	int length = memory_region_length(machine, "maincpu");
 	UINT8 *decrypt = auto_alloc_array(machine, UINT8, length - 0x8000);
 	UINT8 *rom = memory_region(machine, "maincpu");
 	int A;
 
-	memory_set_decrypted_region(space, 0x8000, 0xffff, decrypt);
+	space->set_decrypted_region(0x8000, 0xffff, decrypt);
 
 	for (A = 0x8000;A < length;A++)
 		decrypt[A-0x8000] = (rom[A] & 0x9f) | ((rom[A] & 0x40) >> 1) | ((rom[A] & 0x20) << 1);

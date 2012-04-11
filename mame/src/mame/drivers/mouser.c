@@ -22,13 +22,13 @@
  * the NMI input on the main CPU */
 static WRITE8_HANDLER( mouser_nmi_enable_w )
 {
-	mouser_state *state = (mouser_state *)space->machine->driver_data;
+	mouser_state *state = space->machine->driver_data<mouser_state>();
 	state->nmi_enable = data;
 }
 
 static INTERRUPT_GEN( mouser_nmi_interrupt )
 {
-	mouser_state *state = (mouser_state *)device->machine->driver_data;
+	mouser_state *state = device->machine->driver_data<mouser_state>();
 
 	if (BIT(state->nmi_enable, 0))
 		nmi_line_pulse(device);
@@ -38,14 +38,14 @@ static INTERRUPT_GEN( mouser_nmi_interrupt )
 
 static WRITE8_HANDLER( mouser_sound_interrupt_w )
 {
-	mouser_state *state = (mouser_state *)space->machine->driver_data;
+	mouser_state *state = space->machine->driver_data<mouser_state>();
 	state->sound_byte = data;
 	cpu_set_input_line(state->audiocpu, 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( mouser_sound_byte_r )
 {
-	mouser_state *state = (mouser_state *)space->machine->driver_data;
+	mouser_state *state = space->machine->driver_data<mouser_state>();
 	return state->sound_byte;
 }
 
@@ -173,7 +173,7 @@ GFXDECODE_END
 
 static MACHINE_START( mouser )
 {
-	mouser_state *state = (mouser_state *)machine->driver_data;
+	mouser_state *state = machine->driver_data<mouser_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -184,16 +184,13 @@ static MACHINE_START( mouser )
 
 static MACHINE_RESET( mouser )
 {
-	mouser_state *state = (mouser_state *)machine->driver_data;
+	mouser_state *state = machine->driver_data<mouser_state>();
 
 	state->sound_byte = 0;
 	state->nmi_enable = 0;
 }
 
-static MACHINE_DRIVER_START( mouser )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(mouser_state)
+static MACHINE_CONFIG_START( mouser, mouser_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz ? */
@@ -230,7 +227,7 @@ static MACHINE_DRIVER_START( mouser )
 
 	MDRV_SOUND_ADD("ay2", AY8910, 4000000/2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 ROM_START( mouser )
@@ -286,12 +283,12 @@ static DRIVER_INIT( mouser )
 	/* Decode the opcodes */
 
 	offs_t i;
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 *rom = memory_region(machine, "maincpu");
 	UINT8 *decrypted = auto_alloc_array(machine, UINT8, 0x6000);
 	UINT8 *table = memory_region(machine, "user1");
 
-	memory_set_decrypted_region(space, 0x0000, 0x5fff, decrypted);
+	space->set_decrypted_region(0x0000, 0x5fff, decrypted);
 
 	for (i = 0; i < 0x6000; i++)
 	{

@@ -216,7 +216,7 @@
 
 static UINT8 analog_data;
 
-UINT8 rb_input_select;
+static UINT8 rb_input_select;
 
 
 
@@ -284,6 +284,12 @@ static READ8_DEVICE_HANDLER( redbaron_joy_r )
 	return input_port_read(device->machine, rb_input_select ? "FAKE1" : "FAKE2");
 }
 
+static WRITE8_DEVICE_HANDLER( redbaron_joysound_w )
+{
+	rb_input_select = data & 1;
+	redbaron_sounds_w(device, offset, data);
+}
+
 
 
 /*************************************
@@ -308,7 +314,7 @@ static ADDRESS_MAP_START( bzone_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1820, 0x182f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x1840, 0x1840) AM_DEVWRITE("discrete", bzone_sounds_w)
 	AM_RANGE(0x1860, 0x187f) AM_DEVWRITE("mathbox", mathbox_go_w)
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x3000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -326,13 +332,13 @@ static ADDRESS_MAP_START( redbaron_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x1802, 0x1802) AM_READ_PORT("IN4")
 	AM_RANGE(0x1804, 0x1804) AM_DEVREAD("mathbox", mathbox_lo_r)
 	AM_RANGE(0x1806, 0x1806) AM_DEVREAD("mathbox", mathbox_hi_r)
-	AM_RANGE(0x1808, 0x1808) AM_WRITE(redbaron_sounds_w)	/* and select joystick pot also */
+	AM_RANGE(0x1808, 0x1808) AM_DEVWRITE("custom", redbaron_joysound_w)	/* and select joystick pot also */
 	AM_RANGE(0x180a, 0x180a) AM_WRITENOP				/* sound reset, yet todo */
 	AM_RANGE(0x180c, 0x180c) AM_DEVWRITE("earom", atari_vg_earom_ctrl_w)
 	AM_RANGE(0x1810, 0x181f) AM_DEVREADWRITE("pokey", pokey_r, pokey_w)
 	AM_RANGE(0x1820, 0x185f) AM_DEVREADWRITE("earom", atari_vg_earom_r, atari_vg_earom_w)
 	AM_RANGE(0x1860, 0x187f) AM_DEVWRITE("mathbox", mathbox_go_w)
-	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&vectorram) AM_SIZE(&vectorram_size) AM_REGION("maincpu", 0x2000)
+	AM_RANGE(0x2000, 0x2fff) AM_RAM AM_BASE(&avgdvg_vectorram) AM_SIZE(&avgdvg_vectorram_size) AM_REGION("maincpu", 0x2000)
 	AM_RANGE(0x3000, 0x7fff) AM_ROM
 ADDRESS_MAP_END
 
@@ -549,7 +555,7 @@ static const pokey_interface redbaron_pokey_interface =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( bzone_base )
+static MACHINE_CONFIG_START( bzone_base, driver_device )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6502, BZONE_MASTER_CLOCK / 8)
@@ -570,23 +576,20 @@ static MACHINE_DRIVER_START( bzone_base )
 	/* Drivers */
 	MDRV_MATHBOX_ADD("mathbox")
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( bzone )
-
-	MDRV_IMPORT_FROM(bzone_base)
+static MACHINE_CONFIG_DERIVED( bzone, bzone_base )
 
 	/* sound hardware */
-	MDRV_IMPORT_FROM(bzone_audio)
+	MDRV_FRAGMENT_ADD(bzone_audio)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
-static MACHINE_DRIVER_START( redbaron )
+static MACHINE_CONFIG_DERIVED( redbaron, bzone_base )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(bzone_base)
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(redbaron_map)
 	MDRV_CPU_PERIODIC_INT(bzone_interrupt, (double)BZONE_MASTER_CLOCK / 4096 / 12)
@@ -612,7 +615,7 @@ static MACHINE_DRIVER_START( redbaron )
 	MDRV_SOUND_ADD("custom", REDBARON, 0)
 
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -800,7 +803,7 @@ static WRITE8_HANDLER( analog_select_w )
 
 static DRIVER_INIT( bradley )
 {
-	const address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	memory_install_ram(space, 0x400, 0x7ff, 0, 0, NULL);
 	memory_install_read_port(space, 0x1808, 0x1808, 0, 0, "1808");
 	memory_install_read_port(space, 0x1809, 0x1809, 0, 0, "1809");

@@ -1,9 +1,8 @@
-class sidepckt_state
+class sidepckt_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, sidepckt_state(machine)); }
-
-	sidepckt_state(running_machine &machine) { }
+	sidepckt_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	tilemap_t *bg_tilemap;
 	UINT8 *colorram;

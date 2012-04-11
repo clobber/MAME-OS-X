@@ -11,9 +11,9 @@
 
 #include "emu.h"
 #include "debugger.h"
+#include "osdepend.h"
 #include "debug/debugcpu.h"
 #include "debug/debugcmd.h"
-#include "debug/debugcmt.h"
 #include "debug/debugcon.h"
 #include "debug/express.h"
 #include "debug/debugvw.h"
@@ -72,7 +72,6 @@ void debugger_init(running_machine *machine)
 		debug_cpu_init(machine);
 		debug_command_init(machine);
 		debug_console_init(machine);
-		debug_comment_init(machine);
 
 		/* always initialize the internal render debugger */
 		debugint_init(machine);
@@ -91,6 +90,9 @@ void debugger_init(running_machine *machine)
 
 		/* listen in on the errorlog */
 		machine->add_logerror_callback(debug_errorlog_write_line);
+
+		/* initialize osd debugger features */
+		osd_init_debugger(machine);
 	}
 }
 

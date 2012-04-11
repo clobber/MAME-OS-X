@@ -30,7 +30,7 @@
 
 static TILE_GET_INFO( get_hitme_tile_info )
 {
-	hitme_state *state = (hitme_state *)machine->driver_data;
+	hitme_state *state = machine->driver_data<hitme_state>();
 
 	/* the code is the low 6 bits */
 	UINT8 code = state->videoram[tile_index] & 0x3f;
@@ -40,7 +40,7 @@ static TILE_GET_INFO( get_hitme_tile_info )
 
 static WRITE8_HANDLER( hitme_vidram_w )
 {
-	hitme_state *state = (hitme_state *)space->machine->driver_data;
+	hitme_state *state = space->machine->driver_data<hitme_state>();
 
 	/* mark this tile dirty */
 	state->videoram[offset] = data;
@@ -57,21 +57,21 @@ static WRITE8_HANDLER( hitme_vidram_w )
 
 static VIDEO_START( hitme )
 {
-	hitme_state *state = (hitme_state *)machine->driver_data;
+	hitme_state *state = machine->driver_data<hitme_state>();
 	state->tilemap = tilemap_create(machine, get_hitme_tile_info, tilemap_scan_rows, 8, 10, 40, 19);
 }
 
 
 static VIDEO_START( barricad )
 {
-	hitme_state *state = (hitme_state *)machine->driver_data;
+	hitme_state *state = machine->driver_data<hitme_state>();
 	state->tilemap = tilemap_create(machine, get_hitme_tile_info, tilemap_scan_rows, 8, 8, 32, 24);
 }
 
 
 static VIDEO_UPDATE( hitme )
 {
-	hitme_state *state = (hitme_state *)screen->machine->driver_data;
+	hitme_state *state = screen->machine->driver_data<hitme_state>();
 	/* the card width resistor comes from an input port, scaled to the range 0-25 kOhms */
 	double width_resist = input_port_read(screen->machine, "WIDTH") * 25000 / 100;
 	/* this triggers a oneshot for the following length of time */
@@ -119,7 +119,7 @@ static VIDEO_UPDATE( hitme )
 
 static VIDEO_UPDATE( barricad )
 {
-	hitme_state *state = (hitme_state *)screen->machine->driver_data;
+	hitme_state *state = screen->machine->driver_data<hitme_state>();
 	tilemap_draw(bitmap, cliprect, state->tilemap, 0, 0);
 	return 0;
 }
@@ -134,7 +134,7 @@ static VIDEO_UPDATE( barricad )
 
 static UINT8 read_port_and_t0( running_machine *machine, int port )
 {
-	hitme_state *state = (hitme_state *)machine->driver_data;
+	hitme_state *state = machine->driver_data<hitme_state>();
 	static const char *const portnames[] = { "IN0", "IN1", "IN2", "IN3" };
 
 	UINT8 val = input_port_read(machine, portnames[port]);
@@ -192,7 +192,7 @@ static WRITE8_DEVICE_HANDLER( output_port_0_w )
         In fact, it is very important that our timing calculation timeout AFTER the sound
         system's equivalent computation, or else we will hang notes.
     */
-	hitme_state *state = (hitme_state *)device->machine->driver_data;
+	hitme_state *state = device->machine->driver_data<hitme_state>();
 	UINT8 raw_game_speed = input_port_read(device->machine, "R3");
 	double resistance = raw_game_speed * 25000 / 100;
 	attotime duration = attotime_make(0, ATTOSECONDS_PER_SECOND * 0.45 * 6.8e-6 * resistance * (data + 1));
@@ -226,7 +226,7 @@ static WRITE8_DEVICE_HANDLER( output_port_1_w )
 
 static ADDRESS_MAP_START( hitme_map, ADDRESS_SPACE_PROGRAM, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0x1fff)
-	AM_RANGE(0x0000, 0x07ff) AM_ROM
+	AM_RANGE(0x0000, 0x09ff) AM_ROM
 	AM_RANGE(0x0c00, 0x0eff) AM_RAM_WRITE(hitme_vidram_w) AM_BASE_MEMBER(hitme_state, videoram)
 	AM_RANGE(0x1000, 0x10ff) AM_MIRROR(0x300) AM_RAM
 	AM_RANGE(0x1400, 0x14ff) AM_READ(hitme_port_0_r)
@@ -311,15 +311,12 @@ static MACHINE_START( hitme )
 
 static MACHINE_RESET( hitme )
 {
-	hitme_state *state = (hitme_state *)machine->driver_data;
+	hitme_state *state = machine->driver_data<hitme_state>();
 
 	state->timeout_time = attotime_zero;
 }
 
-static MACHINE_DRIVER_START( hitme )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(hitme_state)
+static MACHINE_CONFIG_START( hitme, hitme_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", I8080, MASTER_CLOCK/16)
@@ -349,7 +346,7 @@ static MACHINE_DRIVER_START( hitme )
 	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
 	MDRV_SOUND_CONFIG_DISCRETE(hitme)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -360,8 +357,7 @@ MACHINE_DRIVER_END
     Barricade or is the resolution set by a dip switch?
 */
 
-static MACHINE_DRIVER_START( barricad )
-	MDRV_IMPORT_FROM(hitme)
+static MACHINE_CONFIG_DERIVED( barricad, hitme )
 
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
@@ -372,7 +368,7 @@ static MACHINE_DRIVER_START( barricad )
 
 	MDRV_VIDEO_START(barricad)
 	MDRV_VIDEO_UPDATE(barricad)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -543,7 +539,48 @@ INPUT_PORTS_END
  *
  *************************************/
 
+/*
+Hit me by Ramtek
+
+Etched in copper on board   HIT ME by RAMTEK Made in U.S.A
+                ASSY 550596 D               D was as sticker
+                SER 957                 957 was a sticker
+
+Etched in copper on back    FAB 550595-C
+
+.b7         stamped     15347 7625
+                    HM2-0
+
+
+.c7 IM5605      handwritten HM-2-2
+
+.d7         stamped     15349 7625
+                    HM1-4
+
+.e7         stamped     15350 7625
+                    HM1-6
+
+.f7         stamped     15351 7625
+                    HM2-8
+
+.h7 IM560?      handwritten HM0-CG  hard to read
+
+All chips we read as 82s141 - guessed becuase of 24 pin pinout and 512x8 rom according to mame
+*/
+
 ROM_START( hitme )
+	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
+	ROM_LOAD( "hm2-0.b7", 0x0000, 0x0200, CRC(1b94caad) SHA1(30987e5cb0d55f3666dd63f04132a0e65988caea) )
+	ROM_LOAD( "hm-2-2.c7", 0x0200, 0x0200, CRC(fa7e8c33) SHA1(2d04635cee32d49cccd9a9a855b3a2be4295c2a5) )
+	ROM_LOAD( "hm1-4.d7", 0x0400, 0x0200, CRC(10dd4581) SHA1(eaa7c9e75f79befc8abf0bd0913bbf15dd04230e) )
+	ROM_LOAD( "hm1-6.e7", 0x0600, 0x0200, CRC(18e4c83c) SHA1(bce987da371b7946262d7dff65f61ff2fcb55bf6) )
+	ROM_LOAD( "hm2-8.f7", 0x0800, 0x0200, CRC(f28983f8) SHA1(89167cf41ba71d90cd6133751158bb99bfc5e829) )
+
+	ROM_REGION( 0x0400, "gfx1", ROMREGION_ERASE00 )
+	ROM_LOAD( "hmcg.h7", 0x0000, 0x0200, CRC(818f5fbe) SHA1(e2b3349e51ba57d14f3388ba93891bc6274b7a14) )
+ROM_END
+
+ROM_START( hitme1 )
 	ROM_REGION( 0x2000, "maincpu", ROMREGION_INVERT )
 	ROM_LOAD( "hm0.b7", 0x0000, 0x0200, CRC(6c48c50f) SHA1(42dc7c3461687e5be4393cc21d695bc84ae4f5dc) )
 	ROM_LOAD( "hm2.c7", 0x0200, 0x0200, CRC(25d47ba4) SHA1(6f3bb4ca6918dc07f37d0c0c7fe5ec53aa7171a5) )
@@ -598,7 +635,8 @@ ROM_END
  *
  *************************************/
 
-GAME( 1976, hitme,    0,        hitme,    hitme,    0, ROT0, "RamTek", "Hit Me",     GAME_SUPPORTS_SAVE )
+GAME( 1976, hitme,    0,        hitme,    hitme,    0, ROT0, "RamTek", "Hit Me (set 1)",  GAME_SUPPORTS_SAVE )
+GAME( 1976, hitme1,   hitme,    hitme,    hitme,    0, ROT0, "RamTek", "Hit Me (set 2)",  GAME_SUPPORTS_SAVE )
 GAME( 1976, m21,      hitme,    hitme,    hitme,    0, ROT0, "Mirco",  "21 (Mirco)", GAME_SUPPORTS_SAVE )
 GAME( 1976, barricad, 0,        barricad, barricad, 0, ROT0, "RamTek", "Barricade",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )
 GAME( 1976, brickyrd, barricad, barricad, barricad, 0, ROT0, "RamTek", "Brickyard",  GAME_IMPERFECT_SOUND | GAME_SUPPORTS_SAVE )

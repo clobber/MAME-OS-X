@@ -176,7 +176,7 @@ Stephh's notes (based on the games M68000 code and some tests) :
 
 static WRITE16_HANDLER( io_w )
 {
-	armedf_state *state = (armedf_state *)space->machine->driver_data;
+	armedf_state *state = space->machine->driver_data<armedf_state>();
 
 	COMBINE_DATA(&state->vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
@@ -186,7 +186,7 @@ static WRITE16_HANDLER( io_w )
 
 static WRITE16_HANDLER( terraf_io_w )
 {
-	armedf_state *state = (armedf_state *)space->machine->driver_data;
+	armedf_state *state = space->machine->driver_data<armedf_state>();
 
 	COMBINE_DATA(&state->vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
@@ -209,7 +209,7 @@ static WRITE16_HANDLER( terraf_io_w )
 
 static WRITE16_HANDLER( kodure_io_w )
 {
-	armedf_state *state = (armedf_state *)space->machine->driver_data;
+	armedf_state *state = space->machine->driver_data<armedf_state>();
 
 	COMBINE_DATA(&state->vreg);
 	/* bits 0 and 1 of armedf_vreg are coin counters */
@@ -236,7 +236,7 @@ static WRITE16_HANDLER( sound_command_w )
 #ifdef UNUSED_FUNCTION
 static WRITE16_HANDLER( legion_command_c )
 {
-	armedf_state *state = (armedf_state *)space->machine->driver_data;
+	armedf_state *state = space->machine->driver_data<armedf_state>();
 
 	COMBINE_DATA(&state->legion_cmd[offset]);
 	//logerror("Legion CMD %04x=%04x", offset, data);
@@ -762,7 +762,7 @@ GFXDECODE_END
 
 static MACHINE_START( armedf )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 
 	state_save_register_global(machine, state->mcu_mode);
 	state_save_register_global(machine, state->old_mcu_mode);
@@ -777,7 +777,7 @@ static MACHINE_START( armedf )
 
 static MACHINE_RESET( armedf )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 
 	state->mcu_mode = 0;
 	state->old_mcu_mode = 0;
@@ -791,10 +791,7 @@ static MACHINE_RESET( armedf )
 }
 
 
-static MACHINE_DRIVER_START( terraf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( terraf, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -836,12 +833,9 @@ static MACHINE_DRIVER_START( terraf )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( terrafb )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( terrafb, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -888,12 +882,9 @@ static MACHINE_DRIVER_START( terrafb )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( kodure )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( kodure, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -935,12 +926,9 @@ static MACHINE_DRIVER_START( kodure )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( armedf )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( armedf, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -982,12 +970,9 @@ static MACHINE_DRIVER_START( armedf )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( cclimbr2 )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( cclimbr2, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -1029,12 +1014,9 @@ static MACHINE_DRIVER_START( cclimbr2 )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( legion )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( legion, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -1076,12 +1058,9 @@ static MACHINE_DRIVER_START( legion )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( legiono )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(armedf_state)
+static MACHINE_CONFIG_START( legiono, armedf_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000, 8000000) /* 8 MHz?? */
@@ -1123,7 +1102,7 @@ static MACHINE_DRIVER_START( legiono )
 
 	MDRV_SOUND_ADD("dac2", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /*************************************
@@ -1527,32 +1506,32 @@ ROM_END
 
 static DRIVER_INIT( terraf )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 	state->scroll_type = 0;
 }
 
 static DRIVER_INIT( terrafu )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 	state->scroll_type = 5;
 }
 
 static DRIVER_INIT( armedf )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 	state->scroll_type = 1;
 }
 
 
 static DRIVER_INIT( kodure )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 	state->scroll_type = 2;
 }
 
 static DRIVER_INIT( legion )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 #if LEGION_HACK
 	/* This is a hack to allow you to use the extra features
          of 3 of the "Unused" Dip Switches (see notes above). */
@@ -1567,7 +1546,7 @@ static DRIVER_INIT( legion )
 
 static DRIVER_INIT( legiono )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 #if LEGION_HACK
 	/* This is a hack to allow you to use the extra features
          of 3 of the "Unused" Dip Switches (see notes above). */
@@ -1581,7 +1560,7 @@ static DRIVER_INIT( legiono )
 
 static DRIVER_INIT( cclimbr2 )
 {
-	armedf_state *state = (armedf_state *)machine->driver_data;
+	armedf_state *state = machine->driver_data<armedf_state>();
 	state->scroll_type = 4;
 }
 

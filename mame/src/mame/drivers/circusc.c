@@ -59,7 +59,7 @@ To enter service mode, keep 1&2 pressed on reset
 
 static MACHINE_START( circusc )
 {
-	circusc_state *state = (circusc_state *)machine->driver_data;
+	circusc_state *state = machine->driver_data<circusc_state>();
 
 	state->audiocpu = machine->device<cpu_device>("audiocpu");
 	state->sn1 = machine->device("sn1");
@@ -72,7 +72,7 @@ static MACHINE_START( circusc )
 
 static MACHINE_RESET( circusc )
 {
-	circusc_state *state = (circusc_state *)machine->driver_data;
+	circusc_state *state = machine->driver_data<circusc_state>();
 	state->sn_latch = 0;
 }
 
@@ -89,7 +89,7 @@ static READ8_HANDLER( circusc_sh_timer_r )
      * Can be shortened to:
      */
 
-	circusc_state *state = (circusc_state *)space->machine->driver_data;
+	circusc_state *state = space->machine->driver_data<circusc_state>();
 	int clock;
 
 	clock = state->audiocpu->total_cycles() >> 9;
@@ -99,7 +99,7 @@ static READ8_HANDLER( circusc_sh_timer_r )
 
 static WRITE8_HANDLER( circusc_sh_irqtrigger_w )
 {
-	circusc_state *state = (circusc_state *)space->machine->driver_data;
+	circusc_state *state = space->machine->driver_data<circusc_state>();
 	cpu_set_input_line_and_vector(state->audiocpu, 0, HOLD_LINE, 0xff);
 }
 
@@ -110,7 +110,7 @@ static WRITE8_HANDLER( circusc_coin_counter_w )
 
 static WRITE8_HANDLER(circusc_sound_w)
 {
-	circusc_state *state = (circusc_state *)space->machine->driver_data;
+	circusc_state *state = space->machine->driver_data<circusc_state>();
 
 	switch (offset & 7)
 	{
@@ -331,10 +331,7 @@ static DISCRETE_SOUND_START( circusc )
 
 DISCRETE_SOUND_END
 
-static MACHINE_DRIVER_START( circusc )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(circusc_state)
+static MACHINE_CONFIG_START( circusc, circusc_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809, 2048000)        /* 2 MHz */
@@ -380,7 +377,7 @@ static MACHINE_DRIVER_START( circusc )
 	MDRV_SOUND_CONFIG_DISCRETE(circusc)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

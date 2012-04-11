@@ -268,18 +268,15 @@ TODO:
 #include "sound/8950intf.h"
 
 
-static int countryc_trackball;
-
-static int marvins_sound_busy_flag;
-// FIXME this should be initialised on machine reset
-static int sound_status;
-
 /*********************************************************************/
 // Interrupt handlers common to all SNK triple Z80 games
 
 static READ8_HANDLER ( snk_cpuA_nmi_trigger_r )
 {
-	cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+	if(!space->debugger_access())
+	{
+		cputag_set_input_line(space->machine, "maincpu", INPUT_LINE_NMI, ASSERT_LINE);
+	}
 	return 0xff;
 }
 
@@ -290,7 +287,10 @@ static WRITE8_HANDLER( snk_cpuA_nmi_ack_w )
 
 static READ8_HANDLER ( snk_cpuB_nmi_trigger_r )
 {
-	cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, ASSERT_LINE);
+	if(!space->debugger_access())
+	{
+		cputag_set_input_line(space->machine, "sub", INPUT_LINE_NMI, ASSERT_LINE);
+	}
 	return 0xff;
 }
 
@@ -316,20 +316,26 @@ enum
 
 static WRITE8_HANDLER( marvins_soundlatch_w )
 {
-	marvins_sound_busy_flag = 1;
+	snk_state *state = space->machine->driver_data<snk_state>();
+
+	state->marvins_sound_busy_flag = 1;
 	soundlatch_w(space, offset, data);
 	cputag_set_input_line(space->machine, "audiocpu", 0, HOLD_LINE);
 }
 
 static READ8_HANDLER( marvins_soundlatch_r )
 {
-	marvins_sound_busy_flag = 0;
+	snk_state *state = space->machine->driver_data<snk_state>();
+
+	state->marvins_sound_busy_flag = 0;
 	return soundlatch_r(space, 0);
 }
 
 static CUSTOM_INPUT( marvins_sound_busy )
 {
-	return marvins_sound_busy_flag;
+	snk_state *state = field->port->machine->driver_data<snk_state>();
+
+	return state->marvins_sound_busy_flag;
 }
 
 static READ8_HANDLER( marvins_sound_nmi_ack_r )
@@ -342,22 +348,24 @@ static READ8_HANDLER( marvins_sound_nmi_ack_r )
 
 static TIMER_CALLBACK( sgladiat_sndirq_update_callback )
 {
+	snk_state *state = machine->driver_data<snk_state>();
+
 	switch(param)
 	{
 		case CMDIRQ_BUSY_ASSERT:
-			sound_status |= 8|4;
+			state->sound_status |= 8|4;
 			break;
 
 		case BUSY_CLEAR:
-			sound_status &= ~4;
+			state->sound_status &= ~4;
 			break;
 
 		case CMDIRQ_CLEAR:
-			sound_status &= ~8;
+			state->sound_status &= ~8;
 			break;
 	}
 
-	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, (sound_status & 0x8) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "audiocpu", INPUT_LINE_NMI, (state->sound_status & 0x8) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -411,38 +419,40 @@ static READ8_HANDLER( sgladiat_sound_irq_ack_r )
 
 static TIMER_CALLBACK( sndirq_update_callback )
 {
+	snk_state *state = machine->driver_data<snk_state>();
+
 	switch(param)
 	{
 		case YM1IRQ_ASSERT:
-			sound_status |= 1;
+			state->sound_status |= 1;
 			break;
 
 		case YM1IRQ_CLEAR:
-			sound_status &= ~1;
+			state->sound_status &= ~1;
 			break;
 
 		case YM2IRQ_ASSERT:
-			sound_status |= 2;
+			state->sound_status |= 2;
 			break;
 
 		case YM2IRQ_CLEAR:
-			sound_status &= ~2;
+			state->sound_status &= ~2;
 			break;
 
 		case CMDIRQ_BUSY_ASSERT:
-			sound_status |= 8|4;
+			state->sound_status |= 8|4;
 			break;
 
 		case BUSY_CLEAR:
-			sound_status &= ~4;
+			state->sound_status &= ~4;
 			break;
 
 		case CMDIRQ_CLEAR:
-			sound_status &= ~8;
+			state->sound_status &= ~8;
 			break;
 	}
 
-	cputag_set_input_line(machine, "audiocpu", 0, (sound_status & 0xb) ? ASSERT_LINE : CLEAR_LINE);
+	cputag_set_input_line(machine, "audiocpu", 0, (state->sound_status & 0xb) ? ASSERT_LINE : CLEAR_LINE);
 }
 
 
@@ -490,14 +500,18 @@ static WRITE8_HANDLER( snk_soundlatch_w )
 
 static CUSTOM_INPUT( snk_sound_busy )
 {
-	return (sound_status & 4) ? 1 : 0;
+	snk_state *state = field->port->machine->driver_data<snk_state>();
+
+	return (state->sound_status & 4) ? 1 : 0;
 }
 
 
 
 static READ8_HANDLER( snk_sound_status_r )
 {
-	return sound_status;
+	snk_state *state = space->machine->driver_data<snk_state>();
+
+	return state->sound_status;
 }
 
 static WRITE8_HANDLER( snk_sound_status_w )
@@ -578,7 +592,8 @@ static WRITE8_HANDLER( hardflags_scroll_msb_w )
 
 static int hardflags_check(running_machine *machine, int num)
 {
-	const UINT8 *sr = &machine->generic.spriteram.u8[0x800 + 4*num];
+	snk_state *state = machine->driver_data<snk_state>();
+	const UINT8 *sr = &state->spriteram[0x800 + 4*num];
 	int x = sr[2] + ((sr[3] & 0x80) << 1);
 	int y = sr[0] + ((sr[3] & 0x10) << 4);
 
@@ -671,7 +686,8 @@ static WRITE8_HANDLER( turbocheck_msb_w )
 
 static int turbofront_check(running_machine *machine, int small, int num)
 {
-	const UINT8 *sr = &machine->generic.spriteram.u8[0x800*small + 4*num];
+	snk_state *state = machine->driver_data<snk_state>();
+	const UINT8 *sr = &state->spriteram[0x800*small + 4*num];
 	int x = sr[2] + ((sr[3] & 0x80) << 1);
 	int y = sr[0] + ((sr[3] & 0x10) << 4);
 
@@ -730,19 +746,18 @@ hand, always returning 0xf inbetween valid values confuses the game.
 
 static CUSTOM_INPUT( gwar_rotary )
 {
-	static int last_value[2] = {0, 0};
-	static int cp_count[2] = {0, 0};
+	snk_state *state = field->port->machine->driver_data<snk_state>();
 	static const char *const ports[] = { "P1ROT", "P2ROT" };
 	int which = (int)(FPTR)param;
 	int value = input_port_read(field->port->machine, ports[which]);
 
-	if ((last_value[which] == 0x5 && value == 0x6) || (last_value[which] == 0x6 && value == 0x5))
+	if ((state->last_value[which] == 0x5 && value == 0x6) || (state->last_value[which] == 0x6 && value == 0x5))
 	{
-		if (!cp_count[which])
+		if (!state->cp_count[which])
 			value = 0xf;
-		cp_count[which] = (cp_count[which] + 1) & 0x07;
+		state->cp_count[which] = (state->cp_count[which] + 1) & 0x07;
 	}
-	last_value[which] = value;
+	state->last_value[which] = value;
 
 	return value;
 }
@@ -791,17 +806,23 @@ static WRITE8_HANDLER( tdfever_coin_counter_w )
 
 static WRITE8_HANDLER( countryc_trackball_w )
 {
-	countryc_trackball = data & 1;
+	snk_state *state = space->machine->driver_data<snk_state>();
+
+	state->countryc_trackball = data & 1;
 }
 
 static CUSTOM_INPUT( countryc_trackball_x )
 {
-	return input_port_read(field->port->machine, countryc_trackball ? "TRACKBALLX2" : "TRACKBALLX1");
+	snk_state *state = field->port->machine->driver_data<snk_state>();
+
+	return input_port_read(field->port->machine, state->countryc_trackball ? "TRACKBALLX2" : "TRACKBALLX1");
 }
 
 static CUSTOM_INPUT( countryc_trackball_y )
 {
-	return input_port_read(field->port->machine, countryc_trackball ? "TRACKBALLY2" : "TRACKBALLY1");
+	snk_state *state = field->port->machine->driver_data<snk_state>();
+
+	return input_port_read(field->port->machine, state->countryc_trackball ? "TRACKBALLY2" : "TRACKBALLY1");
 }
 
 
@@ -842,12 +863,12 @@ static ADDRESS_MAP_START( marvins_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8500, 0x8500) AM_READ_PORT("DSW2")
 	AM_RANGE(0x8600, 0x8600) AM_WRITE(marvins_flipscreen_w)
 	AM_RANGE(0x8700, 0x8700) AM_READWRITE(snk_cpuB_nmi_trigger_r, snk_cpuA_nmi_ack_w)
-	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_fg_videoram)
+	AM_RANGE(0xc000, 0xcfff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, fg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share3")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share4") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM AM_SHARE("share5")
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(snk_sp16_scrolly_w)
 	AM_RANGE(0xf900, 0xf900) AM_WRITE(snk_sp16_scrollx_w)
 	AM_RANGE(0xfa00, 0xfa00) AM_WRITE(snk_fg_scrolly_w)
@@ -889,13 +910,13 @@ static ADDRESS_MAP_START( madcrash_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8500, 0x8500) AM_READ_PORT("DSW2")
 	AM_RANGE(0x8600, 0x8600) AM_MIRROR(0xff) AM_WRITE(marvins_flipscreen_w)
 	AM_RANGE(0x8700, 0x8700) AM_READWRITE(snk_cpuB_nmi_trigger_r, snk_cpuA_nmi_ack_w)
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
 	AM_RANGE(0xc800, 0xc800) AM_MIRROR(0xff) AM_WRITE(marvins_palette_bank_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share3")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share4") AM_BASE(&snk_fg_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, fg_videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM AM_SHARE("share5")
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 	AM_RANGE(0xf800, 0xf800) AM_MIRROR(0xff) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xf900, 0xf900) AM_MIRROR(0xff) AM_WRITE(snk_bg_scrollx_w)
 	AM_RANGE(0xfa00, 0xfa00) AM_MIRROR(0xff) AM_WRITE(snk_sprite_split_point_w)
@@ -936,13 +957,13 @@ static ADDRESS_MAP_START( madcrush_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x8500, 0x8500) AM_READ_PORT("DSW2")
 	AM_RANGE(0x8600, 0x8600) AM_MIRROR(0xff) AM_WRITE(marvins_flipscreen_w)
 	AM_RANGE(0x8700, 0x8700) AM_READWRITE(snk_cpuB_nmi_trigger_r, snk_cpuA_nmi_ack_w)
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share4")  AM_BASE(&snk_fg_videoram)
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(marvins_fg_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, fg_videoram)
 	AM_RANGE(0xc800, 0xc800) AM_MIRROR(0xff) AM_WRITE(marvins_palette_bank_w)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share5")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2")AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM AM_SHARE("share3")
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE(&snk_tx_videoram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share6") AM_BASE_MEMBER(snk_state, tx_videoram)
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(snk_sp16_scrolly_w)
 	AM_RANGE(0xf900, 0xf900) AM_WRITE(snk_sp16_scrollx_w)
 	AM_RANGE(0xfa00, 0xfa00) AM_WRITE(snk_fg_scrolly_w)
@@ -989,9 +1010,9 @@ static ADDRESS_MAP_START( jcross_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd500, 0xd500) AM_WRITE(snk_sp16_scrollx_w)
 	AM_RANGE(0xd600, 0xd600) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xd700, 0xd700) AM_WRITE(snk_bg_scrollx_w)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
-	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xe000, 0xefff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 	AM_RANGE(0xffff, 0xffff) AM_WRITENOP	// simply a program patch to not write to two not existing video registers?
 ADDRESS_MAP_END
 
@@ -1020,10 +1041,10 @@ static ADDRESS_MAP_START( sgladiat_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd500, 0xd500) AM_WRITE(snk_sp16_scrollx_w)
 	AM_RANGE(0xd600, 0xd600) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xd700, 0xd700) AM_WRITE(snk_bg_scrollx_w)
-	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xe800, 0xefff) AM_RAM
-	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( sgladiat_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1057,9 +1078,9 @@ static ADDRESS_MAP_START( hal21_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xd500, 0xd500) AM_WRITE(snk_sp16_scrollx_w)
 	AM_RANGE(0xd600, 0xd600) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xd700, 0xd700) AM_WRITE(snk_bg_scrollx_w)
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_GENERIC(spriteram) AM_SHARE("share1")	// + work ram
-	AM_RANGE(0xe800, 0xf7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_BASE_MEMBER(snk_state, spriteram) AM_SHARE("share1")	// + work ram
+	AM_RANGE(0xe800, 0xf7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( hal21_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1088,9 +1109,9 @@ static ADDRESS_MAP_START( aso_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xce00, 0xce00) AM_WRITENOP	// always 05?
 	AM_RANGE(0xcf00, 0xcf00) AM_WRITE(aso_bg_bank_w)	// tile and palette bank
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share1")
-	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("share2") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xe800, 0xf7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share3") AM_BASE(&snk_bg_videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xe000, 0xe7ff) AM_RAM AM_SHARE("share2") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xe800, 0xf7ff) AM_RAM_WRITE(marvins_bg_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, bg_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( aso_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1121,9 +1142,9 @@ static ADDRESS_MAP_START( tnk3_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xcb00, 0xcb00) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xcc00, 0xcc00) AM_WRITE(snk_bg_scrollx_w)
 	AM_RANGE(0xcf00, 0xcf00) AM_WRITENOP	// fitegolf/countryc only. Either 0 or 1. Video related?
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_SHARE("share1") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xd800, 0xf7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM AM_SHARE("share1") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xd800, 0xf7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tnk3_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1167,9 +1188,9 @@ static ADDRESS_MAP_START( ikari_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xcea0, 0xcea0) AM_READ(hardflags6_r)
 	AM_RANGE(0xcee0, 0xcee0) AM_READ(hardflags7_r)
 	// note the mirror. ikari and victroad use d800, ikarijp uses d000
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_MIRROR(0x0800) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_MIRROR(0x0800) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( ikari_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1230,10 +1251,10 @@ static ADDRESS_MAP_START( bermudat_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xccd0, 0xccd0) AM_READ(turbocheck32_2_r)
 	AM_RANGE(0xcce0, 0xcce0) AM_READ(turbocheck32_3_r)
 	AM_RANGE(0xccf0, 0xccf0) AM_READ(turbocheck32_4_r)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share2")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( bermudat_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1276,10 +1297,10 @@ static ADDRESS_MAP_START( gwar_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xca00, 0xca00) AM_WRITENOP	// always 0?
 	AM_RANGE(0xca40, 0xca40) AM_WRITENOP	// always 0?
 	AM_RANGE(0xcac0, 0xcac0) AM_WRITE(snk_sprite_split_point_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share2")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share3") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( gwar_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -1303,10 +1324,10 @@ static ADDRESS_MAP_START( gwara_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc500, 0xc500) AM_READ_PORT("DSW1")
 	AM_RANGE(0xc600, 0xc600) AM_READ_PORT("DSW2")
 	AM_RANGE(0xc700, 0xc700) AM_READWRITE(snk_cpuB_nmi_trigger_r, snk_cpuA_nmi_ack_w)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share1") AM_BASE(&snk_tx_videoram)	// + work RAM
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share2") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share1") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share2") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share3")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share4") AM_BASE_GENERIC(spriteram)	// + work ram
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share4") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
 	AM_RANGE(0xf800, 0xf800) AM_WRITE(snk_bg_scrolly_w)
 	AM_RANGE(0xf840, 0xf840) AM_WRITE(snk_bg_scrollx_w)
 	AM_RANGE(0xf880, 0xf880) AM_WRITE(gwara_videoattrs_w)	// flip screen, scroll msb
@@ -1325,7 +1346,7 @@ static ADDRESS_MAP_START( gwara_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share1")
 	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share2")
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share3")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share4") AM_BASE_GENERIC(spriteram)	// + work ram
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM AM_SHARE("share4") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
 	AM_RANGE(0xf8c0, 0xf8c0) AM_WRITE(gwar_tx_bank_w)	// char and palette bank
 ADDRESS_MAP_END
 
@@ -1354,10 +1375,10 @@ static ADDRESS_MAP_START( tdfever_cpuA_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0xc900, 0xc900) AM_WRITE(tdfever_sp_scroll_msb_w)
 	AM_RANGE(0xc980, 0xc980) AM_WRITE(snk_sp32_scrolly_w)
 	AM_RANGE(0xc9c0, 0xc9c0) AM_WRITE(snk_sp32_scrollx_w)
-	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE(&snk_bg_videoram)
+	AM_RANGE(0xd000, 0xd7ff) AM_RAM_WRITE(snk_bg_videoram_w) AM_SHARE("share1") AM_BASE_MEMBER(snk_state, bg_videoram)
 	AM_RANGE(0xd800, 0xdfff) AM_RAM AM_SHARE("share2")
-	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(tdfever_spriteram_w) AM_SHARE("share3") AM_BASE_GENERIC(spriteram)	// + work ram
-	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE(&snk_tx_videoram)	// + work RAM
+	AM_RANGE(0xe000, 0xf7ff) AM_RAM_WRITE(tdfever_spriteram_w) AM_SHARE("share3") AM_BASE_MEMBER(snk_state, spriteram)	// + work ram
+	AM_RANGE(0xf800, 0xffff) AM_RAM_WRITE(snk_tx_videoram_w) AM_SHARE("share4") AM_BASE_MEMBER(snk_state, tx_videoram)	// + work RAM
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( tdfever_cpuB_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -3610,7 +3631,7 @@ GFXDECODE_END
 
 /**********************************************************************/
 
-static MACHINE_DRIVER_START( marvins )
+static MACHINE_CONFIG_START( marvins, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3360000)	/* 3.36 MHz */
@@ -3655,12 +3676,10 @@ static MACHINE_DRIVER_START( marvins )
 
 	MDRV_SOUND_ADD("wave", SNKWAVE, 8000000)	/* verified on schematics */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( vangrd2 )
-
-	MDRV_IMPORT_FROM(marvins)
+static MACHINE_CONFIG_DERIVED( vangrd2, marvins )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3668,12 +3687,10 @@ static MACHINE_DRIVER_START( vangrd2 )
 
 	MDRV_CPU_MODIFY("sub")
 	MDRV_CPU_PROGRAM_MAP(madcrash_cpuB_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( madcrush )
-
-	MDRV_IMPORT_FROM(marvins)
+static MACHINE_CONFIG_DERIVED( madcrush, marvins )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3681,10 +3698,10 @@ static MACHINE_DRIVER_START( madcrush )
 
 	MDRV_CPU_MODIFY("sub")
 	MDRV_CPU_PROGRAM_MAP(madcrush_cpuB_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( jcross )
+static MACHINE_CONFIG_START( jcross, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 3350000) /* NOT verified */
@@ -3726,12 +3743,10 @@ static MACHINE_DRIVER_START( jcross )
 
 	MDRV_SOUND_ADD("ay2", AY8910, 2000000)	/* NOT verified */
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.35)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( sgladiat )
-
-	MDRV_IMPORT_FROM(jcross)
+static MACHINE_CONFIG_DERIVED( sgladiat, jcross )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3745,12 +3760,10 @@ static MACHINE_DRIVER_START( sgladiat )
        of the screen when the Debug dip switch is on */
 
 	MDRV_VIDEO_START(sgladiat)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( hal21 )
-
-	MDRV_IMPORT_FROM(jcross)
+static MACHINE_CONFIG_DERIVED( hal21, jcross )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3766,10 +3779,10 @@ static MACHINE_DRIVER_START( hal21 )
 
 	/* video hardware */
 	MDRV_VIDEO_START(hal21)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tnk3 )
+static MACHINE_CONFIG_START( tnk3, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_4MHz/4) /* verified on pcb */
@@ -3807,12 +3820,10 @@ static MACHINE_DRIVER_START( tnk3 )
 	MDRV_SOUND_ADD("ym1", YM3526, XTAL_8MHz/2) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3526_config_1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( aso )
-
-	MDRV_IMPORT_FROM(tnk3)
+static MACHINE_CONFIG_DERIVED( aso, tnk3 )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3826,12 +3837,10 @@ static MACHINE_DRIVER_START( aso )
 
 	/* video hardware */
 	MDRV_VIDEO_START(aso)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( athena )
-
-	MDRV_IMPORT_FROM(tnk3)
+static MACHINE_CONFIG_DERIVED( athena, tnk3 )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("audiocpu")
@@ -3841,12 +3850,10 @@ static MACHINE_DRIVER_START( athena )
 	MDRV_SOUND_ADD("ym2", YM3526, XTAL_8MHz/2) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3526_config_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( fitegolf )
-
-	MDRV_IMPORT_FROM(tnk3)
+static MACHINE_CONFIG_DERIVED( fitegolf, tnk3 )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("audiocpu")
@@ -3857,10 +3864,10 @@ static MACHINE_DRIVER_START( fitegolf )
 	MDRV_SOUND_REPLACE("ym1", YM3812, XTAL_4MHz) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3812_config_1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( ikari )
+static MACHINE_CONFIG_START( ikari, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_13_4MHz/4) /* verified on pcb */
@@ -3902,12 +3909,10 @@ static MACHINE_DRIVER_START( ikari )
 	MDRV_SOUND_ADD("ym2", YM3526, XTAL_8MHz/2) /* verified on pcb */
 	MDRV_SOUND_CONFIG(ym3526_config_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( victroad )
-
-	MDRV_IMPORT_FROM(ikari)
+static MACHINE_CONFIG_DERIVED( victroad, ikari )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("audiocpu")
@@ -3917,10 +3922,10 @@ static MACHINE_DRIVER_START( victroad )
 	MDRV_SOUND_REPLACE("ym2", Y8950, XTAL_8MHz/2) /* verified on pcb */
 	MDRV_SOUND_CONFIG(y8950_config_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bermudat )
+static MACHINE_CONFIG_START( bermudat, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, XTAL_8MHz/2) /* verified on pcb */
@@ -3961,21 +3966,17 @@ static MACHINE_DRIVER_START( bermudat )
 	MDRV_SOUND_ADD("ym2", Y8950, XTAL_8MHz/2) /* verified on pcb */
 	MDRV_SOUND_CONFIG(y8950_config_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( psychos )
-
-	MDRV_IMPORT_FROM(bermudat)
+static MACHINE_CONFIG_DERIVED( psychos, bermudat )
 
 	/* video hardware */
 	MDRV_VIDEO_START(psychos)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gwar )
-
-	MDRV_IMPORT_FROM(bermudat)
+static MACHINE_CONFIG_DERIVED( gwar, bermudat )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3984,12 +3985,10 @@ static MACHINE_DRIVER_START( gwar )
 	MDRV_CPU_MODIFY("sub")
 	MDRV_CPU_PROGRAM_MAP(gwar_cpuB_map)
 
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( gwara )
-
-	MDRV_IMPORT_FROM(bermudat)
+static MACHINE_CONFIG_DERIVED( gwara, bermudat )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
@@ -3997,12 +3996,10 @@ static MACHINE_DRIVER_START( gwara )
 
 	MDRV_CPU_MODIFY("sub")
 	MDRV_CPU_PROGRAM_MAP(gwara_cpuB_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( chopper1 )
-
-	MDRV_IMPORT_FROM(bermudat)
+static MACHINE_CONFIG_DERIVED( chopper1, bermudat )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("sub")
@@ -4021,20 +4018,18 @@ static MACHINE_DRIVER_START( chopper1 )
 	MDRV_SOUND_REPLACE("ym1", YM3812, 4000000)
 	MDRV_SOUND_CONFIG(ym3812_config_1)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( choppera )
-
-	MDRV_IMPORT_FROM(chopper1)
+static MACHINE_CONFIG_DERIVED( choppera, chopper1 )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(gwar_cpuA_map)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tdfever )
+static MACHINE_CONFIG_START( tdfever, snk_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", Z80, 4000000)
@@ -4076,12 +4071,10 @@ static MACHINE_DRIVER_START( tdfever )
 	MDRV_SOUND_ADD("ym2", Y8950, 4000000)
 	MDRV_SOUND_CONFIG(y8950_config_2)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( tdfever2 )
-
-	MDRV_IMPORT_FROM(tdfever)
+static MACHINE_CONFIG_DERIVED( tdfever2, tdfever )
 
 	/* basic machine hardware */
 	MDRV_CPU_MODIFY("audiocpu")
@@ -4092,7 +4085,7 @@ static MACHINE_DRIVER_START( tdfever2 )
 	// apparently, no "ym1" in tdfever2
 	// (registers are written to but they cause sound not to work)
 	MDRV_DEVICE_REMOVE("ym1")
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 /***********************************************************************/

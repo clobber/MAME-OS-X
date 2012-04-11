@@ -152,21 +152,21 @@ static WRITE8_HANDLER( capbowl_rom_select_w )
 
 static READ8_HANDLER( track_0_r )
 {
-	capbowl_state *state = (capbowl_state *)space->machine->driver_data;
+	capbowl_state *state = space->machine->driver_data<capbowl_state>();
 	return (input_port_read(space->machine, "IN0") & 0xf0) | ((input_port_read(space->machine, "TRACKY") - state->last_trackball_val[0]) & 0x0f);
 }
 
 
 static READ8_HANDLER( track_1_r )
 {
-	capbowl_state *state = (capbowl_state *)space->machine->driver_data;
+	capbowl_state *state = space->machine->driver_data<capbowl_state>();
 	return (input_port_read(space->machine, "IN1") & 0xf0) | ((input_port_read(space->machine, "TRACKX") - state->last_trackball_val[1]) & 0x0f);
 }
 
 
 static WRITE8_HANDLER( track_reset_w )
 {
-	capbowl_state *state = (capbowl_state *)space->machine->driver_data;
+	capbowl_state *state = space->machine->driver_data<capbowl_state>();
 
 	/* reset the trackball counters */
 	state->last_trackball_val[0] = input_port_read(space->machine, "TRACKY");
@@ -185,7 +185,7 @@ static WRITE8_HANDLER( track_reset_w )
 
 static WRITE8_HANDLER( capbowl_sndcmd_w )
 {
-	capbowl_state *state = (capbowl_state *)space->machine->driver_data;
+	capbowl_state *state = space->machine->driver_data<capbowl_state>();
 	cpu_set_input_line(state->audiocpu, M6809_IRQ_LINE, HOLD_LINE);
 	soundlatch_w(space, offset, data);
 }
@@ -201,7 +201,7 @@ static WRITE8_HANDLER( capbowl_sndcmd_w )
 
 static void firqhandler( running_device *device, int irq )
 {
-	capbowl_state *state = (capbowl_state *)device->machine->driver_data;
+	capbowl_state *state = device->machine->driver_data<capbowl_state>();
 	cpu_set_input_line(state->audiocpu, 1, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -213,19 +213,12 @@ static void firqhandler( running_device *device, int irq )
  *
  *************************************/
 
-static NVRAM_HANDLER( capbowl )
+void capbowl_state::init_nvram(nvram_device &nvram, void *base, size_t size)
 {
-	if (read_or_write)
-		mame_fwrite(file, machine->generic.nvram.v, machine->generic.nvram_size);
-	else if (file)
-		mame_fread(file, machine->generic.nvram.v, machine->generic.nvram_size);
-	else
-	{
-		/* invalidate nvram to make the game initialize it.
-           A 0xff fill will cause the game to malfunction, so we use a
-           0x01 fill which seems OK */
-		memset(machine->generic.nvram.v, 0x01, machine->generic.nvram_size);
-	}
+	/* invalidate nvram to make the game initialize it.
+      A 0xff fill will cause the game to malfunction, so we use a
+      0x01 fill which seems OK */
+	memset(base, 0x01, size);
 }
 
 
@@ -240,7 +233,7 @@ static ADDRESS_MAP_START( capbowl_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROMBANK("bank1")
 	AM_RANGE(0x4000, 0x4000) AM_WRITEONLY AM_BASE_MEMBER(capbowl_state, rowaddress)
 	AM_RANGE(0x4800, 0x4800) AM_WRITE(capbowl_rom_select_w)
-	AM_RANGE(0x5000, 0x57ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x5000, 0x57ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(capbowl_tms34061_r, capbowl_tms34061_w)
 	AM_RANGE(0x6000, 0x6000) AM_WRITE(capbowl_sndcmd_w)
 	AM_RANGE(0x6800, 0x6800) AM_WRITE(track_reset_w)	/* + watchdog */
@@ -253,7 +246,7 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( bowlrama_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x001f) AM_READWRITE(bowlrama_blitter_r, bowlrama_blitter_w)
 	AM_RANGE(0x4000, 0x4000) AM_WRITEONLY AM_BASE_MEMBER(capbowl_state, rowaddress)
-	AM_RANGE(0x5000, 0x57ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
+	AM_RANGE(0x5000, 0x57ff) AM_RAM AM_SHARE("nvram")
 	AM_RANGE(0x5800, 0x5fff) AM_READWRITE(capbowl_tms34061_r, capbowl_tms34061_w)
 	AM_RANGE(0x6000, 0x6000) AM_WRITE(capbowl_sndcmd_w)
 	AM_RANGE(0x6800, 0x6800) AM_WRITE(track_reset_w)	/* + watchdog */
@@ -347,7 +340,7 @@ static const ym2203_interface ym2203_config =
 
 static MACHINE_START( capbowl )
 {
-	capbowl_state *state = (capbowl_state *)machine->driver_data;
+	capbowl_state *state = machine->driver_data<capbowl_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->audiocpu = machine->device("audiocpu");
@@ -359,7 +352,7 @@ static MACHINE_START( capbowl )
 
 static MACHINE_RESET( capbowl )
 {
-	capbowl_state *state = (capbowl_state *)machine->driver_data;
+	capbowl_state *state = machine->driver_data<capbowl_state>();
 
 	timer_set(machine, machine->primary_screen->time_until_pos(32), NULL, 32, capbowl_update);
 
@@ -369,10 +362,7 @@ static MACHINE_RESET( capbowl )
 }
 
 
-static MACHINE_DRIVER_START( capbowl )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(capbowl_state)
+static MACHINE_CONFIG_START( capbowl, capbowl_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M6809E, MASTER_CLOCK)
@@ -384,7 +374,7 @@ static MACHINE_DRIVER_START( capbowl )
 
 	MDRV_MACHINE_START(capbowl)
 	MDRV_MACHINE_RESET(capbowl)
-	MDRV_NVRAM_HANDLER(capbowl)
+	MDRV_NVRAM_ADD_CUSTOM("nvram", capbowl_state, init_nvram)
 
 	MDRV_TICKET_DISPENSER_ADD("ticket", 100, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_LOW)
 
@@ -410,13 +400,12 @@ static MACHINE_DRIVER_START( capbowl )
 
 	MDRV_SOUND_ADD("dac", DAC, 0)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( bowlrama )
+static MACHINE_CONFIG_DERIVED( bowlrama, capbowl )
 
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(capbowl)
 
 	MDRV_CPU_MODIFY("maincpu")
 	MDRV_CPU_PROGRAM_MAP(bowlrama_map)
@@ -424,7 +413,7 @@ static MACHINE_DRIVER_START( bowlrama )
 	/* video hardware */
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_VISIBLE_AREA(0, 359, 0, 239)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 

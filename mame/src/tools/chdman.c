@@ -776,7 +776,7 @@ static int do_createcd(int argc, char *argv[], int param)
 			goto cleanup;
 		}
 
-		printf("Track %d/%d (%s:%d,%d frames,%d hunks,swap %d,pregap %d,postgap %d)\n", i+1, toc.numtrks, track_info.fname[i], track_info.offset[i], toc.tracks[i].frames, trackhunks, track_info.swap[i], toc.tracks[i].pregap, toc.tracks[i].postgap);
+		printf("Track %02d/%02d (%s:%d,%d frames,%d hunks,swap %d,pregap %d,postgap %d)\n", i+1, toc.numtrks, track_info.fname[i], track_info.offset[i], toc.tracks[i].frames, trackhunks, track_info.swap[i], toc.tracks[i].pregap, toc.tracks[i].postgap);
 
 		/* loop over hunks */
 		for (curhunk = 0; curhunk < trackhunks; curhunk++, totalhunks++)
@@ -1528,7 +1528,7 @@ static int do_extractcd(int argc, char *argv[], int param)
 	cdrom_file *cdrom = NULL;
 	FILE *outfile = NULL;
 	const cdrom_toc *toc;
-	UINT64 out2offs;
+	UINT64 out2offs, discoffs;
 	file_error filerr;
 	chd_error err;
 	int track, cuemode;
@@ -1585,37 +1585,22 @@ static int do_extractcd(int argc, char *argv[], int param)
 	if (!cuemode)
 	{
 		fprintf(outfile, "CD_ROM\n\n\n");
+	}
 
-		filerr = core_fopen(outputfile2, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &outfile2);
-		if (filerr != FILERR_NONE)
-		{
-			fprintf(stderr, "Error opening output file '%s'\n", outputfile2);
-			err = CHDERR_CANT_CREATE_FILE;
-			goto cleanup;
-		}
+	filerr = core_fopen(outputfile2, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &outfile2);
+	if (filerr != FILERR_NONE)
+	{
+		fprintf(stderr, "Error opening output file '%s'\n", outputfile2);
+		err = CHDERR_CANT_CREATE_FILE;
+		goto cleanup;
 	}
 
 	/* process away */
 	out2offs = 0;
+	discoffs = 0;
 	for (track = 0; track < toc->numtrks; track++)
 	{
 		UINT32 m, s, f, frame, trackframes;
-		char trackoutname[512];
-
-		if (cuemode)
-		{
-			sprintf(trackoutname, "%s (track %02d).bin", outputfile2, track+1);
-
-			filerr = core_fopen(trackoutname, OPEN_FLAG_WRITE | OPEN_FLAG_CREATE, &outfile2);
-			if (filerr != FILERR_NONE)
-			{
-				fprintf(stderr, "Error opening output file '%s'\n", outputfile2);
-				err = CHDERR_CANT_CREATE_FILE;
-				goto cleanup;
-			}
-
-			out2offs = 0;
-		}
 
 		progress(TRUE, "Extracting track %d...   \r", track+1);
 
@@ -1625,7 +1610,10 @@ static int do_extractcd(int argc, char *argv[], int param)
 		{
 			char modestr[16];
 
-			fprintf(outfile, "FILE \"%s\" BINARY\n", trackoutname);
+			if (track == 0)
+			{
+				fprintf(outfile, "FILE \"%s\" BINARY\n", outputfile2);
+			}
 
 			switch (toc->tracks[track].trktype)
 			{
@@ -1649,8 +1637,6 @@ static int do_extractcd(int argc, char *argv[], int param)
 
 			fprintf(outfile, "  TRACK %02d %s\n", track+1, modestr);
 
-			fprintf(outfile, "    INDEX 00 00:00:00\n");
-
 			if (toc->tracks[track].pregap > 0)
 			{
 				f = toc->tracks[track].pregap;
@@ -1658,8 +1644,15 @@ static int do_extractcd(int argc, char *argv[], int param)
 				f %= 75;
 				m = s / 60;
 				s %= 60;
-				fprintf(outfile, "    INDEX 01 %02d:%02d:%02d\n", m, s, f);
+				fprintf(outfile, "    PREGAP %02d:%02d:%02d\n", m, s, f);
 			}
+
+			f = discoffs;
+			s = f / 75;
+			f %= 75;
+			m = s / 60;
+			s %= 60;
+			fprintf(outfile, "    INDEX 01 %02d:%02d:%02d\n", m, s, f);
 
 			if (toc->tracks[track].postgap > 0)
 			{
@@ -1747,6 +1740,19 @@ static int do_extractcd(int argc, char *argv[], int param)
 			/* read the raw data */
 			cdrom_read_data(cdrom, cdrom_get_track_start(cdrom, track) + frame, sector, toc->tracks[track].trktype);
 
+			/* for CDRWin, audio tracks must be reversed */
+			if ((cuemode) && (toc->tracks[track].trktype == CD_TRACK_AUDIO))
+			{
+				int swapindex;
+
+				for (swapindex = 0; swapindex < toc->tracks[track].datasize; swapindex += 2)
+				{
+					UINT8 swaptemp = sector[swapindex];
+					sector[swapindex] = sector[swapindex+1];
+					sector[swapindex + 1] = swaptemp;
+				}
+			}
+
 			/* write it out */
 			core_fseek(outfile2, out2offs, SEEK_SET);
 			byteswritten = core_fwrite(outfile2, sector, toc->tracks[track].datasize);
@@ -1757,6 +1763,7 @@ static int do_extractcd(int argc, char *argv[], int param)
 				goto cleanup;
 			}
 			out2offs += toc->tracks[track].datasize;
+			discoffs++;
 
 			/* read the subcode data */
 			if (toc->tracks[track].subtype != CD_SUB_NONE)
@@ -1776,12 +1783,6 @@ static int do_extractcd(int argc, char *argv[], int param)
 			}
 		}
 		progress(TRUE, "Extracting track %d... complete         \n", track+1);
-
-		if (cuemode)
-		{
-			core_fclose(outfile2);
-			outfile2 = NULL;
-		}
 	}
 	progress(TRUE, "Completed!\n");
 

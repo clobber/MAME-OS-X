@@ -4,12 +4,11 @@
 
 *************************************************************************/
 
-class ksayakyu_state
+class ksayakyu_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, ksayakyu_state(machine)); }
-
-	ksayakyu_state(running_machine &machine) { }
+	ksayakyu_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* memory pointers */
 	UINT8 *    videoram;

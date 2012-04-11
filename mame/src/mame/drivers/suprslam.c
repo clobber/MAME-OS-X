@@ -92,7 +92,7 @@ EB26IC73.BIN    27C240      /  Main Program
 
 static WRITE16_HANDLER( sound_command_w )
 {
-	suprslam_state *state = (suprslam_state *)space->machine->driver_data;
+	suprslam_state *state = space->machine->driver_data<suprslam_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		state->pending_command = 1;
@@ -104,14 +104,14 @@ static WRITE16_HANDLER( sound_command_w )
 #if 0
 static READ16_HANDLER( pending_command_r )
 {
-	suprslam_state *state = (suprslam_state *)space->machine->driver_data;
+	suprslam_state *state = space->machine->driver_data<suprslam_state>();
 	return pending_command;
 }
 #endif
 
 static WRITE8_HANDLER( pending_command_clear_w )
 {
-	suprslam_state *state = (suprslam_state *)space->machine->driver_data;
+	suprslam_state *state = space->machine->driver_data<suprslam_state>();
 	state->pending_command = 0;
 }
 
@@ -280,7 +280,7 @@ GFXDECODE_END
 
 static void irqhandler(running_device *device, int irq)
 {
-	suprslam_state *state = (suprslam_state *)device->machine->driver_data;
+	suprslam_state *state = device->machine->driver_data<suprslam_state>();
 	cpu_set_input_line(state->audiocpu, 0, irq ? ASSERT_LINE : CLEAR_LINE);
 }
 
@@ -298,7 +298,7 @@ static const k053936_interface suprslam_k053936_intf =
 
 static MACHINE_START( suprslam )
 {
-	suprslam_state *state = (suprslam_state *)machine->driver_data;
+	suprslam_state *state = machine->driver_data<suprslam_state>();
 
 	state->audiocpu = machine->device("audiocpu");
 	state->k053936 = machine->device("k053936");
@@ -310,15 +310,14 @@ static MACHINE_START( suprslam )
 
 static MACHINE_RESET( suprslam )
 {
-	suprslam_state *state = (suprslam_state *)machine->driver_data;
+	suprslam_state *state = machine->driver_data<suprslam_state>();
 
 	state->screen_bank = 0;
 	state->bg_bank = 0;
 	state->pending_command = 0;
 }
 
-static MACHINE_DRIVER_START( suprslam )
-	MDRV_DRIVER_DATA(suprslam_state)
+static MACHINE_CONFIG_START( suprslam, suprslam_state )
 
 	MDRV_CPU_ADD("maincpu", M68000, 16000000)
 	MDRV_CPU_PROGRAM_MAP(suprslam_map)
@@ -357,7 +356,7 @@ static MACHINE_DRIVER_START( suprslam )
 	MDRV_SOUND_ROUTE(0, "rspeaker", 0.25)
 	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
 	MDRV_SOUND_ROUTE(2, "rspeaker", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /*** ROM LOADING *************************************************************/
 

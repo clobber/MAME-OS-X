@@ -220,13 +220,13 @@ READ16_HANDLER( midtunit_vram_color_r )
  *
  *************************************/
 
-void midtunit_to_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midtunit_to_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(shiftreg, &local_videoram[address >> 3], 2 * 512 * sizeof(UINT16));
 }
 
 
-void midtunit_from_shiftreg(const address_space *space, UINT32 address, UINT16 *shiftreg)
+void midtunit_from_shiftreg(address_space *space, UINT32 address, UINT16 *shiftreg)
 {
 	memcpy(&local_videoram[address >> 3], shiftreg, 2 * 512 * sizeof(UINT16));
 }
@@ -570,12 +570,6 @@ static const dma_draw_func prefix[32] =																			\
 };
 
 
-/* allow for custom blitters */
-#ifdef midtunit_CUSTOM_BLITTERS
-#include "midtblit.c"
-#endif
-
-
 /*** blitter family declarations ***/
 DECLARE_BLITTER_SET(dma_draw_skip_scale,       dma_state.bpp, EXTRACTGEN,   SKIP_YES, SCALE_YES)
 DECLARE_BLITTER_SET(dma_draw_noskip_scale,     dma_state.bpp, EXTRACTGEN,   SKIP_NO,  SCALE_YES)
@@ -687,7 +681,7 @@ WRITE16_HANDLER( midtunit_dma_w )
 	if (!(command & 0x8000))
 		return;
 
-	profiler_mark_start(PROFILER_USER1);
+	g_profiler.start(PROFILER_USER1);
 
 	/* determine bpp */
 	bpp = (command >> 12) & 7;
@@ -795,7 +789,7 @@ if (LOG_DMA)
 skipdma:
 	timer_set(space->machine, ATTOTIME_IN_NSEC(41 * pixels), NULL, 0, dma_callback);
 
-	profiler_mark_end();
+	g_profiler.stop();
 }
 
 

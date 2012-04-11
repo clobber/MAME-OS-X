@@ -73,6 +73,18 @@ quaquiz2 - no inputs, needs NVRAM
 #include "sound/ay8910.h"
 #include "machine/8255ppi.h"
 #include "video/tms9927.h"
+#include "machine/nvram.h"
+
+
+class statriv2_state : public driver_device
+{
+public:
+	statriv2_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
+
+	UINT8 *videoram;
+};
+
 
 #define MASTER_CLOCK		12440000
 
@@ -97,16 +109,20 @@ static UINT8 last_coin;
 
 static TILE_GET_INFO( horizontal_tile_info )
 {
-	int code = machine->generic.videoram.u8[0x400+tile_index];
-	int attr = machine->generic.videoram.u8[tile_index] & 0x3f;
+	statriv2_state *state = machine->driver_data<statriv2_state>();
+	UINT8 *videoram = state->videoram;
+	int code = videoram[0x400+tile_index];
+	int attr = videoram[tile_index] & 0x3f;
 
 	SET_TILE_INFO(0, code, attr, 0);
 }
 
 static TILE_GET_INFO( vertical_tile_info )
 {
-	int code = machine->generic.videoram.u8[0x400+tile_index];
-	int attr = machine->generic.videoram.u8[tile_index] & 0x3f;
+	statriv2_state *state = machine->driver_data<statriv2_state>();
+	UINT8 *videoram = state->videoram;
+	int code = videoram[0x400+tile_index];
+	int attr = videoram[tile_index] & 0x3f;
 
 	SET_TILE_INFO(0, ((code & 0x7f) << 1) | ((code & 0x80) >> 7), attr, 0);
 }
@@ -150,7 +166,9 @@ static VIDEO_START( vertical )
 
 static WRITE8_HANDLER( statriv2_videoram_w )
 {
-	space->machine->generic.videoram.u8[offset] = data;
+	statriv2_state *state = space->machine->driver_data<statriv2_state>();
+	UINT8 *videoram = state->videoram;
+	videoram[offset] = data;
 	tilemap_mark_tile_dirty(statriv2_tilemap, offset & 0x3ff);
 }
 
@@ -271,8 +289,8 @@ static const ppi8255_interface ppi8255_intf =
 static ADDRESS_MAP_START( statriv2_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
 	AM_RANGE(0x4000, 0x43ff) AM_RAM
-	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_BASE_SIZE_GENERIC(nvram)
-	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE_GENERIC(videoram)
+	AM_RANGE(0x4800, 0x48ff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xc800, 0xcfff) AM_RAM_WRITE(statriv2_videoram_w) AM_BASE_MEMBER(statriv2_state, videoram)
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( statriv2_io_map, ADDRESS_SPACE_IO, 8 )
@@ -283,6 +301,7 @@ static ADDRESS_MAP_START( statriv2_io_map, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
 
+#ifdef UNUSED_CODE
 static ADDRESS_MAP_START( statusbj_io, ADDRESS_SPACE_IO, 8 )
 	ADDRESS_MAP_GLOBAL_MASK(0xff)
 	AM_RANGE(0x20, 0x23) AM_DEVREADWRITE("ppi", ppi8255_r, ppi8255_w)
@@ -290,6 +309,7 @@ static ADDRESS_MAP_START( statusbj_io, ADDRESS_SPACE_IO, 8 )
 	AM_RANGE(0xb1, 0xb1) AM_DEVREAD("aysnd", ay8910_r)
 	AM_RANGE(0xc0, 0xcf) AM_DEVREADWRITE("tms", tms9927_r, tms9927_w)
 ADDRESS_MAP_END
+#endif
 
 
 
@@ -565,7 +585,7 @@ static const tms9927_interface tms9927_intf =
  *
  *************************************/
 
-static MACHINE_DRIVER_START( statriv2 )
+static MACHINE_CONFIG_START( statriv2, statriv2_state )
 	/* basic machine hardware */
 	/* FIXME: The 8085A had a max clock of 6MHz, internally divided by 2! */
     MDRV_CPU_ADD("maincpu", I8085A, MASTER_CLOCK)
@@ -573,7 +593,7 @@ static MACHINE_DRIVER_START( statriv2 )
 	MDRV_CPU_IO_MAP(statriv2_io_map)
 	MDRV_CPU_VBLANK_INT("screen", statriv2_interrupt)
 
-	MDRV_NVRAM_HANDLER(generic_0fill)
+	MDRV_NVRAM_ADD_0FILL("nvram")
 
 	/* 1x 8255 */
 	MDRV_PPI8255_ADD("ppi", ppi8255_intf)
@@ -597,26 +617,26 @@ static MACHINE_DRIVER_START( statriv2 )
 
 	MDRV_SOUND_ADD("aysnd", AY8910, MASTER_CLOCK/8)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( statriv2v )
+static MACHINE_CONFIG_DERIVED( statriv2v, statriv2 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(statriv2)
 
 	MDRV_SCREEN_MODIFY("screen")
 	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/2, 392, 0, 256, 262, 0, 256)
 
 	MDRV_VIDEO_START(vertical)
 	MDRV_GFXDECODE(vertical)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
-static MACHINE_DRIVER_START( funcsino )
+static MACHINE_CONFIG_DERIVED( funcsino, statriv2 )
+
 	/* basic machine hardware */
-	MDRV_IMPORT_FROM(statriv2)
 
     MDRV_CPU_MODIFY("maincpu")
     MDRV_CPU_CLOCK(MASTER_CLOCK/2)	/* 3 MHz?? seems accurate */
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
 
@@ -1100,7 +1120,7 @@ static WRITE8_HANDLER( laserdisc_io_w )
 
 static DRIVER_INIT( laserdisc )
 {
-	const address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
+	address_space *iospace = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_IO);
 	memory_install_readwrite8_handler(iospace, 0x28, 0x2b, 0, 0, laserdisc_io_r, laserdisc_io_w);
 }
 

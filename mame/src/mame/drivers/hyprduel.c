@@ -48,7 +48,7 @@ fix comms so it boots, it's a bit of a hack for hyperduel at the moment ;-)
 
 static void update_irq_state( running_machine *machine )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 	int irq = state->requested_int & ~*state->irq_enable;
 
 	cpu_set_input_line(state->maincpu, 3, (irq & state->int_num) ? ASSERT_LINE : CLEAR_LINE);
@@ -56,13 +56,13 @@ static void update_irq_state( running_machine *machine )
 
 static TIMER_CALLBACK( vblank_end_callback )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 	state->requested_int &= ~param;
 }
 
 static INTERRUPT_GEN( hyprduel_interrupt )
 {
-	hyprduel_state *state = (hyprduel_state *)device->machine->driver_data;
+	hyprduel_state *state = device->machine->driver_data<hyprduel_state>();
 	int line = RASTER_LINES - cpu_getiloops(device);
 
 	if (line == RASTER_LINES)
@@ -81,13 +81,13 @@ static INTERRUPT_GEN( hyprduel_interrupt )
 
 static READ16_HANDLER( hyprduel_irq_cause_r )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	return state->requested_int;
 }
 
 static WRITE16_HANDLER( hyprduel_irq_cause_w )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	if (ACCESSING_BITS_0_7)
 	{
 		if (data == state->int_num)
@@ -102,7 +102,7 @@ static WRITE16_HANDLER( hyprduel_irq_cause_w )
 
 static WRITE16_HANDLER( hyprduel_subcpu_control_w )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 
 	switch (data)
 	{
@@ -135,7 +135,7 @@ static WRITE16_HANDLER( hyprduel_subcpu_control_w )
 
 static READ16_HANDLER( hyprduel_cpusync_trigger1_r )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	if (state->cpu_trigger == 1001)
 	{
 		cpuexec_trigger(space->machine, 1001);
@@ -147,7 +147,7 @@ static READ16_HANDLER( hyprduel_cpusync_trigger1_r )
 
 static WRITE16_HANDLER( hyprduel_cpusync_trigger1_w )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	COMBINE_DATA(&state->sharedram1[0x00040e / 2 + offset]);
 
 	if (((state->sharedram1[0x00040e / 2] << 16) + state->sharedram1[0x000410 / 2]) != 0x00)
@@ -163,7 +163,7 @@ static WRITE16_HANDLER( hyprduel_cpusync_trigger1_w )
 
 static READ16_HANDLER( hyprduel_cpusync_trigger2_r )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	if (state->cpu_trigger == 1002)
 	{
 		cpuexec_trigger(space->machine, 1002);
@@ -175,7 +175,7 @@ static READ16_HANDLER( hyprduel_cpusync_trigger2_r )
 
 static WRITE16_HANDLER( hyprduel_cpusync_trigger2_w )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	COMBINE_DATA(&state->sharedram1[0x000408 / 2 + offset]);
 
 	if (ACCESSING_BITS_8_15)
@@ -191,7 +191,7 @@ static WRITE16_HANDLER( hyprduel_cpusync_trigger2_w )
 
 static TIMER_CALLBACK( magerror_irq_callback )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 	cpu_set_input_line(state->subcpu, 1, HOLD_LINE);
 }
 
@@ -209,7 +209,7 @@ static TIMER_CALLBACK( magerror_irq_callback )
 
 static READ16_HANDLER( hyprduel_bankedrom_r )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	UINT8 *ROM = memory_region(space->machine, "gfx1");
 	size_t  len = memory_region_length(space->machine, "gfx1");
 
@@ -267,7 +267,7 @@ static READ16_HANDLER( hyprduel_bankedrom_r )
 
 static TIMER_CALLBACK( hyprduel_blit_done )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 	state->requested_int |= 1 << state->blitter_bit;
 	update_irq_state(machine);
 }
@@ -277,7 +277,7 @@ INLINE int blt_read( const UINT8 *ROM, const int offs )
 	return ROM[offs];
 }
 
-INLINE void blt_write( const address_space *space, const int tmap, const offs_t offs, const UINT16 data, const UINT16 mask )
+INLINE void blt_write( address_space *space, const int tmap, const offs_t offs, const UINT16 data, const UINT16 mask )
 {
 	switch( tmap )
 	{
@@ -291,7 +291,7 @@ INLINE void blt_write( const address_space *space, const int tmap, const offs_t 
 
 static WRITE16_HANDLER( hyprduel_blitter_w )
 {
-	hyprduel_state *state = (hyprduel_state *)space->machine->driver_data;
+	hyprduel_state *state = space->machine->driver_data<hyprduel_state>();
 	COMBINE_DATA(&state->blitter_regs[offset]);
 
 	if (offset == 0xc / 2)
@@ -459,7 +459,7 @@ static ADDRESS_MAP_START( hyprduel_map2, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x000000, 0x003fff) AM_RAM AM_SHARE("share1")						/* shadow ($c00000 - $c03fff : vector) */
 	AM_RANGE(0x004000, 0x007fff) AM_READONLY AM_WRITENOP AM_SHARE("share3")			/* shadow ($fe4000 - $fe7fff : read only) */
 	AM_RANGE(0x400000, 0x400003) AM_DEVREADWRITE8("ymsnd", ym2151_r, ym2151_w, 0x00ff )
-	AM_RANGE(0x400004, 0x400005) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x400004, 0x400005) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0x800000, 0x800001) AM_NOP
 	AM_RANGE(0xc00000, 0xc07fff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xfe0000, 0xfe3fff) AM_RAM AM_SHARE("share2")
@@ -506,7 +506,7 @@ static ADDRESS_MAP_START( magerror_map2, ADDRESS_SPACE_PROGRAM, 16 )
 	AM_RANGE(0x004000, 0x007fff) AM_READONLY AM_WRITENOP AM_SHARE("share3")			/* shadow ($fe4000 - $fe7fff : read only) */
 	AM_RANGE(0x400000, 0x400003) AM_NOP
 	AM_RANGE(0x800000, 0x800003) AM_READNOP AM_DEVWRITE8("ymsnd", ym2413_w, 0x00ff)
-	AM_RANGE(0x800004, 0x800005) AM_DEVREADWRITE8("oki", okim6295_r, okim6295_w, 0x00ff)
+	AM_RANGE(0x800004, 0x800005) AM_DEVREADWRITE8_MODERN("oki", okim6295_device, read, write, 0x00ff)
 	AM_RANGE(0xc00000, 0xc1ffff) AM_RAM AM_SHARE("share1")
 	AM_RANGE(0xfe0000, 0xfe3fff) AM_RAM AM_SHARE("share2")
 	AM_RANGE(0xfe4000, 0xffffff) AM_RAM AM_SHARE("share3")
@@ -623,7 +623,7 @@ GFXDECODE_END
 
 static void sound_irq( running_device *device, int state )
 {
-	hyprduel_state *hyprduel = (hyprduel_state *)device->machine->driver_data;
+	hyprduel_state *hyprduel = device->machine->driver_data<hyprduel_state>();
 	cpu_set_input_line(hyprduel->subcpu, 1, HOLD_LINE);
 }
 
@@ -638,7 +638,7 @@ static const ym2151_interface ym2151_config =
 
 static MACHINE_RESET( hyprduel )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 
 	/* start with cpu2 halted */
 	cputag_set_input_line(machine, "sub", INPUT_LINE_RESET, ASSERT_LINE);
@@ -652,7 +652,7 @@ static MACHINE_RESET( hyprduel )
 
 static MACHINE_START( hyprduel )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 
 	state->maincpu = machine->device("maincpu");
 	state->subcpu = machine->device("sub");
@@ -665,16 +665,13 @@ static MACHINE_START( hyprduel )
 
 static MACHINE_START( magerror )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 
 	MACHINE_START_CALL(hyprduel);
 	timer_adjust_periodic(state->magerror_irq_timer, attotime_zero, 0, ATTOTIME_IN_HZ(968));		/* tempo? */
 }
 
-static MACHINE_DRIVER_START( hyprduel )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(hyprduel_state)
+static MACHINE_CONFIG_START( hyprduel, hyprduel_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,20000000/2)		/* 10MHz */
@@ -714,13 +711,10 @@ static MACHINE_DRIVER_START( hyprduel )
 	MDRV_OKIM6295_ADD("oki", 4000000/16/16*132, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.57)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.57)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-static MACHINE_DRIVER_START( magerror )
-
-	/* driver data */
-	MDRV_DRIVER_DATA(hyprduel_state)
+static MACHINE_CONFIG_START( magerror, hyprduel_state )
 
 	/* basic machine hardware */
 	MDRV_CPU_ADD("maincpu", M68000,20000000/2)		/* 10MHz */
@@ -759,7 +753,7 @@ static MACHINE_DRIVER_START( magerror )
 	MDRV_OKIM6295_ADD("oki", 4000000/16/16*132, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.57)
 	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.57)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 /***************************************************************************
                                 ROMs Loading
@@ -813,7 +807,7 @@ ROM_END
 
 static DRIVER_INIT( hyprduel )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 
 	state->int_num = 0x02;
 
@@ -826,7 +820,7 @@ static DRIVER_INIT( hyprduel )
 
 static DRIVER_INIT( magerror )
 {
-	hyprduel_state *state = (hyprduel_state *)machine->driver_data;
+	hyprduel_state *state = machine->driver_data<hyprduel_state>();
 
 	state->int_num = 0x01;
 	state->magerror_irq_timer = timer_alloc(machine, magerror_irq_callback, NULL);

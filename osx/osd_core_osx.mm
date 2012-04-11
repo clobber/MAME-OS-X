@@ -474,3 +474,12 @@ file_error osd_get_full_path(char **dst, const char *path)
     
 	return err;
 }
+
+
+//============================================================
+//  osd_init_debugger
+//============================================================
+void osd_init_debugger(running_machine *machine)
+{
+}
+

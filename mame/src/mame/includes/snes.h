@@ -395,12 +395,11 @@ struct snes_superscope
 typedef void (*snes_io_read)(running_machine *machine);
 typedef UINT8 (*snes_oldjoy_read)(running_machine *machine);
 
-class snes_state
+class snes_state : public driver_device
 {
 public:
-	static void *alloc(running_machine &machine) { return auto_alloc_clear(&machine, snes_state(machine)); }
-
-	snes_state(running_machine &machine) { }
+	snes_state(running_machine &machine, const driver_device_config_base &config)
+		: driver_device(machine, config) { }
 
 	/* misc */
 	UINT16                htmult;		/* in 512 wide, we run HTOTAL double and halve it on latching */
@@ -462,7 +461,7 @@ public:
 	/* devices */
 	_5a22_device *maincpu;
 	spc700_device *soundcpu;
-	snes_sound_sound_device *spc700;
+	snes_sound_device *spc700;
 	cpu_device *superfx;
 };
 
@@ -545,8 +544,6 @@ extern WRITE8_HANDLER( superfx_w_bank3 );
 
 WRITE_LINE_DEVICE_HANDLER( snes_extern_irq_w );
 
-
-extern void snes_latch_counters(running_machine *machine);
 
 extern UINT8  *snes_ram;			/* Main memory */
 
@@ -663,6 +660,8 @@ extern struct snes_cart_info snes_cart;
 /*----------- defined in video/snes.c -----------*/
 
 extern struct SNES_PPU_STRUCT snes_ppu;
+
+extern void snes_latch_counters(running_machine *machine);
 
 extern VIDEO_START( snes );
 extern VIDEO_UPDATE( snes );

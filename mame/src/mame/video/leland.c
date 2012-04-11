@@ -52,14 +52,15 @@ static emu_timer *scanline_timer;
 
 static TIMER_CALLBACK( scanline_callback )
 {
+	running_device *audio = machine->device("custom");
 	int scanline = param;
 
 	/* update the DACs */
 	if (!(leland_dac_control & 0x01))
-		leland_dac_update(0, leland_video_ram[(last_scanline) * 256 + 160]);
+		leland_dac_update(audio, 0, leland_video_ram[(last_scanline) * 256 + 160]);
 
 	if (!(leland_dac_control & 0x02))
-		leland_dac_update(1, leland_video_ram[(last_scanline) * 256 + 161]);
+		leland_dac_update(audio, 1, leland_video_ram[(last_scanline) * 256 + 161]);
 
 	last_scanline = scanline;
 
@@ -169,7 +170,7 @@ static void leland_video_addr_w(int offset, int data, int num)
  *
  *************************************/
 
-static int leland_vram_port_r(const address_space *space, int offset, int num)
+static int leland_vram_port_r(address_space *space, int offset, int num)
 {
 	struct vram_state_data *state = vram_state + num;
 	int addr = state->addr;
@@ -216,7 +217,7 @@ static int leland_vram_port_r(const address_space *space, int offset, int num)
  *
  *************************************/
 
-static void leland_vram_port_w(const address_space *space, int offset, int data, int num)
+static void leland_vram_port_w(address_space *space, int offset, int data, int num)
 {
 	struct vram_state_data *state = vram_state + num;
 	int addr = state->addr;
@@ -306,7 +307,7 @@ WRITE8_HANDLER( leland_master_video_addr_w )
 
 static TIMER_CALLBACK( leland_delayed_mvram_w )
 {
-	const address_space *space = cputag_get_address_space(machine, "master", ADDRESS_SPACE_PROGRAM);
+	address_space *space = cputag_get_address_space(machine, "master", ADDRESS_SPACE_PROGRAM);
 
 	int num = (param >> 16) & 1;
 	int offset = (param >> 8) & 0xff;
@@ -534,7 +535,7 @@ static VIDEO_UPDATE( ataxx )
  *
  *************************************/
 
-MACHINE_DRIVER_START( leland_video )
+MACHINE_CONFIG_FRAGMENT( leland_video )
 
 	MDRV_VIDEO_ATTRIBUTES(VIDEO_ALWAYS_UPDATE)
 	MDRV_VIDEO_START(leland)
@@ -547,13 +548,11 @@ MACHINE_DRIVER_START( leland_video )
 	MDRV_SCREEN_SIZE(40*8, 32*8)
 	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 30*8-1)
 	MDRV_SCREEN_REFRESH_RATE(60)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
 
 
-MACHINE_DRIVER_START( ataxx_video )
-
-	MDRV_IMPORT_FROM(leland_video)
+MACHINE_CONFIG_DERIVED( ataxx_video, leland_video )
 
 	MDRV_VIDEO_START(ataxx)
 	MDRV_VIDEO_UPDATE(ataxx)
-MACHINE_DRIVER_END
+MACHINE_CONFIG_END
