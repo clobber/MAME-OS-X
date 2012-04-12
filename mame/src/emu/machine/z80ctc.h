@@ -5,6 +5,23 @@
     Copyright Nicola Salmoria and the MAME Team.
     Visit http://mamedev.org for licensing and usage restrictions.
 
+****************************************************************************
+                            _____   _____
+                    D4   1 |*    \_/     | 28  D3
+                    D5   2 |             | 27  D2
+                    D6   3 |             | 26  D1
+                    D7   4 |             | 25  D0
+                   GND   5 |             | 24  +5V
+                   _RD   6 |             | 23  CLK/TRG0
+                ZC/TOO   7 |   Z80-CTC   | 22  CLK/TRG1
+                ZC/TO1   8 |             | 21  CLK/TRG2
+                ZC/TO2   9 |             | 20  CLK/TRG3
+                 _IORQ  10 |             | 19  CS1
+                   IEO  11 |             | 18  CS0
+                  _INT  12 |             | 17  _RESET
+                   IEI  13 |             | 16  _CE
+                   _M1  14 |_____________| 15  CLK
+
 ***************************************************************************/
 
 #ifndef __Z80CTC_H__
@@ -32,9 +49,9 @@ const int NOTIMER_3 = (1<<3);
 	const z80ctc_interface (name)=
 
 
-#define MDRV_Z80CTC_ADD(_tag, _clock, _intrf) \
-	MDRV_DEVICE_ADD(_tag, Z80CTC, _clock) \
-	MDRV_DEVICE_CONFIG(_intrf)
+#define MCFG_Z80CTC_ADD(_tag, _clock, _intrf) \
+	MCFG_DEVICE_ADD(_tag, Z80CTC, _clock) \
+	MCFG_DEVICE_CONFIG(_intrf)
 
 
 

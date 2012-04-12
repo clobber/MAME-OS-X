@@ -370,7 +370,7 @@ static WRITE8_HANDLER( tturfbl_msm5205_data_w )
 	state->sample_buffer = data;
 }
 
-static void tturfbl_msm5205_callback( running_device *device )
+static void tturfbl_msm5205_callback( device_t *device )
 {
 	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 	msm5205_data_w(device, (state->sample_buffer >> 4) & 0x0f);
@@ -400,7 +400,7 @@ static READ8_HANDLER( tturfbl_soundbank_r )
 static WRITE8_HANDLER( tturfbl_soundbank_w )
 {
 	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *mem = memory_region(space->machine, "soundcpu");
+	UINT8 *mem = space->machine->region("soundcpu")->base();
 
 	switch(data)
 	{
@@ -471,11 +471,11 @@ ADDRESS_MAP_END
 
 static WRITE8_DEVICE_HANDLER( upd7759_bank_w ) //*
 {
-	int offs, size = memory_region_length(device->machine, "soundcpu") - 0x10000;
+	int offs, size = device->machine->region("soundcpu")->bytes() - 0x10000;
 
 	upd7759_reset_w(device, data & 0x40);
 	offs = 0x10000 + (data * 0x4000) % size;
-	memory_set_bankptr(device->machine, "bank1", memory_region(device->machine, "soundcpu") + offs);
+	memory_set_bankptr(device->machine, "bank1", device->machine->region("soundcpu")->base() + offs);
 }
 
 
@@ -1071,7 +1071,7 @@ ADDRESS_MAP_END
 static WRITE8_HANDLER( sys18_soundbank_w )
 {
 	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *mem = memory_region(space->machine, "soundcpu");
+	UINT8 *mem = space->machine->region("soundcpu")->base();
 	int rom = (data >> 6) & 3;
 	int bank = (data & 0x3f);
 	int mask = state->sound_info[rom * 2 + 0];
@@ -1210,7 +1210,7 @@ static WRITE8_HANDLER( shdancbl_msm5205_data_w )
 	state->sample_buffer = data;
 }
 
-static void shdancbl_msm5205_callback(running_device *device)
+static void shdancbl_msm5205_callback(device_t *device)
 {
 	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 	msm5205_data_w(device, state->sample_buffer & 0x0f);
@@ -1239,7 +1239,7 @@ static READ8_HANDLER( shdancbl_soundbank_r )
 static WRITE8_HANDLER( shdancbl_bankctrl_w )
 {
 	segas1x_bootleg_state *state = space->machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *mem = memory_region(space->machine, "soundcpu");
+	UINT8 *mem = space->machine->region("soundcpu")->base();
 
 	switch (data)
 	{
@@ -1833,7 +1833,7 @@ static INPUT_PORTS_START( astormbl )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 )
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 )
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 )
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE2 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY
@@ -1843,7 +1843,7 @@ static INPUT_PORTS_START( astormbl )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(2)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE3 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(2)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(2)
@@ -1853,7 +1853,7 @@ static INPUT_PORTS_START( astormbl )
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(3)
 	PORT_BIT( 0x02, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(3)
 	PORT_BIT( 0x04, IP_ACTIVE_LOW, IPT_BUTTON3 ) PORT_PLAYER(3)
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_UNKNOWN )
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_SERVICE4 )
 	PORT_BIT( 0x10, IP_ACTIVE_LOW, IPT_JOYSTICK_DOWN ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x20, IP_ACTIVE_LOW, IPT_JOYSTICK_UP ) PORT_8WAY PORT_PLAYER(3)
 	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_JOYSTICK_RIGHT ) PORT_8WAY PORT_PLAYER(3)
@@ -1870,7 +1870,7 @@ static INPUT_PORTS_START( astormbl )
 	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_COIN1 )
 
 	PORT_START("COINAGE")
-	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) ) PORT_DIPLOCATION("SW1:1,2,3,4")
+	PORT_DIPNAME( 0x0f, 0x0f, DEF_STR( Coin_A ) )		PORT_DIPLOCATION("SW1:1,2,3,4")
 	PORT_DIPSETTING(    0x07, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x08, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x09, DEF_STR( 2C_1C ) )
@@ -1887,7 +1887,48 @@ static INPUT_PORTS_START( astormbl )
 	PORT_DIPSETTING(    0x0b, DEF_STR( 1C_5C ) )
 	PORT_DIPSETTING(    0x0a, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x00, "Free Play (if Coin B too) or 1/1" )
-	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) ) PORT_DIPLOCATION("SW1:5,6,7,8")
+
+/*  2nd Coin Slot listed as "Not Used" in Test Mode for Alien Storm Bootlegs  */
+
+	PORT_DIPUNUSED_DIPLOC( 0x10, 0x10, "SW1:5" )
+	PORT_DIPUNUSED_DIPLOC( 0x20, 0x20, "SW1:6" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, 0x40, "SW1:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, 0x80, "SW1:8" )
+
+	PORT_START("DSW1")
+	PORT_DIPNAME( 0x01, 0x01, "Start Credit" )		PORT_DIPLOCATION("SW2:1")
+	PORT_DIPSETTING(    0x01, "1" )
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )	PORT_DIPLOCATION("SW2:2")
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:3,4,5")
+	PORT_DIPSETTING(    0x04, DEF_STR( Easiest ) )
+	PORT_DIPSETTING(    0x08, DEF_STR( Easier ) )
+	PORT_DIPSETTING(    0x0c, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x1c, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x14, DEF_STR( Harder ) )
+	PORT_DIPSETTING(    0x18, DEF_STR( Hardest ) )
+	PORT_DIPSETTING(    0x00, "Special" )
+	PORT_DIPNAME( 0x20, 0x20, "Coin Chutes" )		PORT_DIPLOCATION("SW2:6")
+	PORT_DIPSETTING(    0x20, "3" )
+	PORT_DIPSETTING(    0x00, "1" )
+	PORT_DIPUNUSED_DIPLOC( 0x40, IP_ACTIVE_LOW, "SW2:7" )
+	PORT_DIPUNUSED_DIPLOC( 0x80, IP_ACTIVE_LOW, "SW2:8" )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( mwalkbl )
+	PORT_INCLUDE( astormbl )
+
+        PORT_MODIFY("P3")
+	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START3 )
+
+	PORT_MODIFY("SERVICE")
+	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_SERVICE4 )
+
+	PORT_MODIFY("COINAGE")
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:5,6,7,8") PORT_CONDITION("DSW1",0x20,PORTCOND_EQUALS,0x20)
 	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) )
 	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
 	PORT_DIPSETTING(    0x90, DEF_STR( 2C_1C ) )
@@ -1905,62 +1946,74 @@ static INPUT_PORTS_START( astormbl )
 	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
 	PORT_DIPSETTING(    0x00, "Free Play (if Coin A too) or 1/1" )
 
-	PORT_START("DSW1")
-	PORT_DIPNAME( 0x01, 0x01, "2 Credits to Start" )
-	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x02, 0x00, DEF_STR( Demo_Sounds ) )
-	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x1c, 0x1c, DEF_STR( Difficulty ) )
-	PORT_DIPSETTING(    0x04, DEF_STR( Easiest ) )
-	PORT_DIPSETTING(    0x08, DEF_STR( Easier ) )
-	PORT_DIPSETTING(    0x0c, DEF_STR( Easy ) )
-	PORT_DIPSETTING(    0x1c, DEF_STR( Normal ) )
-	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
-	PORT_DIPSETTING(    0x14, DEF_STR( Harder ) )
-	PORT_DIPSETTING(    0x18, DEF_STR( Hardest ) )
-	PORT_DIPSETTING(    0x00, "Special" )
-	PORT_DIPNAME( 0x20, 0x20, "Coin Chutes" )
-	PORT_DIPSETTING(    0x20, "3" )
-	PORT_DIPSETTING(    0x00, "1" )
-	PORT_DIPNAME( 0x40, 0x40, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x40, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-	PORT_DIPNAME( 0x80, 0x80, DEF_STR( Unused ) )
-	PORT_DIPSETTING(    0x80, DEF_STR( Off ) )
-	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
-INPUT_PORTS_END
-
-static INPUT_PORTS_START( mwalkbl )
-	PORT_INCLUDE( astormbl )
-
-	PORT_MODIFY("P3")
-	PORT_BIT( 0x08, IP_ACTIVE_LOW, IPT_START3 )
-
-	PORT_MODIFY("SERVICE")
-	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
-	PORT_BIT( 0x40, IP_ACTIVE_LOW, IPT_UNKNOWN )
-	PORT_BIT( 0x80, IP_ACTIVE_LOW, IPT_UNKNOWN )
-
 	PORT_MODIFY("DSW1")
-	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Lives ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:3")
 	PORT_DIPSETTING(    0x04, "2" )
 	PORT_DIPSETTING(    0x00, "3" )
-	PORT_DIPNAME( 0x08, 0x08, "Player Vitality" )
+	PORT_DIPNAME( 0x08, 0x08, "Player Vitality" )		PORT_DIPLOCATION("SW2:4")
 	PORT_DIPSETTING(    0x08, DEF_STR( Low ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( High ) )
-	PORT_DIPNAME( 0x10, 0x00, "Play Mode" )
+	PORT_DIPNAME( 0x10, 0x00, "Play Mode" )			PORT_DIPLOCATION("SW2:5")
 	PORT_DIPSETTING(    0x10, "2 Players" )
 	PORT_DIPSETTING(    0x00, "3 Players" )
-	PORT_DIPNAME( 0x20, 0x20, "Coin Mode" )
+	PORT_DIPNAME( 0x20, 0x20, "Coin Mode" )			PORT_DIPLOCATION("SW2:6")
 	PORT_DIPSETTING(    0x20, "Common" )
 	PORT_DIPSETTING(    0x00, "Individual" )
-	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) )
+	PORT_DIPNAME( 0xc0, 0xc0, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:7,8")
 	PORT_DIPSETTING(    0x80, DEF_STR( Easy ) )
 	PORT_DIPSETTING(    0xc0, DEF_STR( Normal ) )
 	PORT_DIPSETTING(    0x40, DEF_STR( Hard ) )
 	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+INPUT_PORTS_END
+
+static INPUT_PORTS_START( shdancbl )
+	PORT_INCLUDE( astormbl )
+
+	PORT_MODIFY("P2")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_MODIFY("P3")
+	PORT_BIT( 0xff, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_MODIFY("COINAGE")
+	PORT_DIPNAME( 0xf0, 0xf0, DEF_STR( Coin_B ) )		PORT_DIPLOCATION("SW1:5,6,7,8")
+	PORT_DIPSETTING(    0x70, DEF_STR( 4C_1C ) )
+	PORT_DIPSETTING(    0x80, DEF_STR( 3C_1C ) )
+	PORT_DIPSETTING(    0x90, DEF_STR( 2C_1C ) )
+	PORT_DIPSETTING(    0x50, "2 Coins/1 Credit 5/3 6/4" )
+	PORT_DIPSETTING(    0x40, "2 Coins/1 Credit 4/3" )
+	PORT_DIPSETTING(    0xf0, DEF_STR( 1C_1C ) )
+	PORT_DIPSETTING(    0x10, "1 Coin/1 Credit 2/3" )
+	PORT_DIPSETTING(    0x20, "1 Coin/1 Credit 4/5" )
+	PORT_DIPSETTING(    0x30, "1 Coin/1 Credit 5/6" )
+	PORT_DIPSETTING(    0x60, DEF_STR( 2C_3C ) )
+	PORT_DIPSETTING(    0xe0, DEF_STR( 1C_2C ) )
+	PORT_DIPSETTING(    0xd0, DEF_STR( 1C_3C ) )
+	PORT_DIPSETTING(    0xc0, DEF_STR( 1C_4C ) )
+	PORT_DIPSETTING(    0xb0, DEF_STR( 1C_5C ) )
+	PORT_DIPSETTING(    0xa0, DEF_STR( 1C_6C ) )
+	PORT_DIPSETTING(    0x00, "Free Play (if Coin A too) or 1/1" )
+
+	PORT_MODIFY("SERVICE")
+	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_COIN1 )
+	PORT_BIT( 0xc0, IP_ACTIVE_LOW, IPT_UNKNOWN )
+
+	PORT_MODIFY("DSW1")
+	PORT_DIPNAME( 0x0C, 0x04, DEF_STR( Lives ) )		PORT_DIPLOCATION("SW2:3,4")
+	PORT_DIPSETTING(    0x00, "2" )
+	PORT_DIPSETTING(    0x0c, "3" )
+	PORT_DIPSETTING(    0x08, "4" )
+	PORT_DIPSETTING(    0x04, "5" )
+	PORT_DIPNAME( 0x30, 0x30, DEF_STR( Difficulty ) )	PORT_DIPLOCATION("SW2:5,6")
+	PORT_DIPSETTING(    0x20, DEF_STR( Easy ) )
+	PORT_DIPSETTING(    0x30, DEF_STR( Normal ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Hard ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( Hardest ) )
+	PORT_DIPNAME( 0xc0, 0xc0, "Time Adjust" )		PORT_DIPLOCATION("SW2:7,8")
+	PORT_DIPSETTING(    0x80, "3:30" )
+	PORT_DIPSETTING(    0xc0, "3:00" )
+	PORT_DIPSETTING(    0x40, "2:40" )
+	PORT_DIPSETTING(    0x00, "2:20" )
 INPUT_PORTS_END
 
 
@@ -1996,37 +2049,37 @@ GFXDECODE_END
 static MACHINE_CONFIG_START( system16, segas1x_bootleg_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)
-	MDRV_CPU_VBLANK_INT("screen", sys16_interrupt)
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)
+	MCFG_CPU_VBLANK_INT("screen", sys16_interrupt)
 
-	MDRV_CPU_ADD("soundcpu", Z80, 4000000)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_io_map)
+	MCFG_CPU_ADD("soundcpu", Z80, 4000000)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_io_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 28*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(40*8, 28*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MDRV_GFXDECODE(sys16)
-	MDRV_PALETTE_LENGTH(2048*SHADOW_COLORS_MULTIPLIER)
+	MCFG_GFXDECODE(sys16)
+	MCFG_PALETTE_LENGTH(2048*SHADOW_COLORS_MULTIPLIER)
 
-	MDRV_VIDEO_START(system16)
-	MDRV_VIDEO_UPDATE(system16)
+	MCFG_VIDEO_START(system16)
+	MCFG_VIDEO_UPDATE(system16)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.32)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.32)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 4000000)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.32)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.32)
 MACHINE_CONFIG_END
 
 
-static void sound_cause_nmi( running_device *device, int chip )
+static void sound_cause_nmi( device_t *device, int chip )
 {
 	segas1x_bootleg_state *state = device->machine->driver_data<segas1x_bootleg_state>();
 
@@ -2045,15 +2098,15 @@ static MACHINE_CONFIG_DERIVED( system16_7759, system16 )
 
 	/* basic machine hardware */
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(sound_7759_map)
-	MDRV_CPU_IO_MAP(sound_7759_io_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(sound_7759_map)
+	MCFG_CPU_IO_MAP(sound_7759_io_map)
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("7759", UPD7759, UPD7759_STANDARD_CLOCK)
-	MDRV_SOUND_CONFIG(sys16_upd7759_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.48)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.48)
+	MCFG_SOUND_ADD("7759", UPD7759, UPD7759_STANDARD_CLOCK)
+	MCFG_SOUND_CONFIG(sys16_upd7759_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.48)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.48)
 MACHINE_CONFIG_END
 
 
@@ -2063,20 +2116,20 @@ static MACHINE_CONFIG_FRAGMENT( system16_datsu_sound )
     - speaker is likely to be mono for the bootlegs, not stereo.
     - check msm5205 frequency.
     */
-	MDRV_CPU_ADD("soundcpu",Z80, 4000000)
-	MDRV_CPU_PROGRAM_MAP(tturfbl_sound_map)
-	MDRV_CPU_IO_MAP(tturfbl_sound_io_map)
+	MCFG_CPU_ADD("soundcpu",Z80, 4000000)
+	MCFG_CPU_PROGRAM_MAP(tturfbl_sound_map)
+	MCFG_CPU_IO_MAP(tturfbl_sound_io_map)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ymsnd", YM2151, 4000000)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.32)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.32)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 4000000)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.32)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.32)
 
-	MDRV_SOUND_ADD("5205", MSM5205, 220000)
-	MDRV_SOUND_CONFIG(tturfbl_msm5205_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+	MCFG_SOUND_ADD("5205", MSM5205, 220000)
+	MCFG_SOUND_CONFIG(tturfbl_msm5205_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 MACHINE_CONFIG_END
 
 
@@ -2093,13 +2146,13 @@ static const sega16sp_interface shinobld_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( shinobib, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(shinobib_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(shinobib_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", shinobld_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", shinobld_sega16sp_intf)
 
-	MDRV_VIDEO_START( s16a_bootleg_shinobi )
-	MDRV_VIDEO_UPDATE( s16a_bootleg )
+	MCFG_VIDEO_START( s16a_bootleg_shinobi )
+	MCFG_VIDEO_UPDATE( s16a_bootleg )
 MACHINE_CONFIG_END
 
 static const sega16sp_interface passshtb_sega16sp_intf =
@@ -2115,27 +2168,27 @@ static const sega16sp_interface passshtb_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( passshtb, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(passshtb_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(passshtb_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", passshtb_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", passshtb_sega16sp_intf)
 
-	MDRV_VIDEO_START( s16a_bootleg_passsht )
-	MDRV_VIDEO_UPDATE( s16a_bootleg )
+	MCFG_VIDEO_START( s16a_bootleg_passsht )
+	MCFG_VIDEO_UPDATE( s16a_bootleg )
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( passsht4b, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(passht4b_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(passht4b_map)
 
 	// wrong
-	MDRV_SEGA16SP_ADD("segaspr1", passshtb_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", passshtb_sega16sp_intf)
 
-	MDRV_VIDEO_START( s16a_bootleg_passsht )
-	MDRV_VIDEO_UPDATE( s16a_bootleg_passht4b )
+	MCFG_VIDEO_START( s16a_bootleg_passsht )
+	MCFG_VIDEO_UPDATE( s16a_bootleg_passht4b )
 MACHINE_CONFIG_END
 
 static const sega16sp_interface wb3bbl_sega16sp_intf =
@@ -2151,13 +2204,13 @@ static const sega16sp_interface wb3bbl_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( wb3bb, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(wb3bbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(wb3bbl_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", wb3bbl_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", wb3bbl_sega16sp_intf)
 
-	MDRV_VIDEO_START( s16a_bootleg_wb3bl )
-	MDRV_VIDEO_UPDATE( s16a_bootleg )
+	MCFG_VIDEO_START( s16a_bootleg_wb3bl )
+	MCFG_VIDEO_UPDATE( s16a_bootleg )
 MACHINE_CONFIG_END
 
 
@@ -2174,43 +2227,43 @@ static const sega16sp_interface s16bbl_x121_sega16sp_intf =
 static MACHINE_CONFIG_START( goldnaxeb1, segas1x_bootleg_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)
-	MDRV_CPU_PROGRAM_MAP(goldnaxeb1_map)
-	MDRV_CPU_VBLANK_INT("screen", sys16_interrupt)
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)
+	MCFG_CPU_PROGRAM_MAP(goldnaxeb1_map)
+	MCFG_CPU_VBLANK_INT("screen", sys16_interrupt)
 
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 28*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(40*8, 28*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MDRV_GFXDECODE(sys16)
-	MDRV_PALETTE_LENGTH(2048*SHADOW_COLORS_MULTIPLIER)
+	MCFG_GFXDECODE(sys16)
+	MCFG_PALETTE_LENGTH(2048*SHADOW_COLORS_MULTIPLIER)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x121_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x121_sega16sp_intf)
 
-	MDRV_PALETTE_INIT( all_black )
-	MDRV_VIDEO_START(system16)
-	MDRV_VIDEO_UPDATE(system16)
+	MCFG_PALETTE_INIT( all_black )
+	MCFG_VIDEO_START(system16)
+	MCFG_VIDEO_UPDATE(system16)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( goldnaxeb2, goldnaxeb1 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(goldnaxeb2_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(goldnaxeb2_map)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( bayrouteb1, goldnaxeb1 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(bayrouteb1_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(bayrouteb1_map)
 MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x107_sega16sp_intf =
@@ -2226,32 +2279,32 @@ static const sega16sp_interface s16bbl_x107_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( bayrouteb2, goldnaxeb1 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(bayrouteb2_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(bayrouteb2_map)
 
-	MDRV_FRAGMENT_ADD(system16_datsu_sound)
+	MCFG_FRAGMENT_ADD(system16_datsu_sound)
 
-	MDRV_DEVICE_REMOVE("segaspr1")
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
+	MCFG_DEVICE_REMOVE("segaspr1")
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( tturfbl, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(tturfbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(tturfbl_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(tturfbl_sound_map)
-	MDRV_CPU_IO_MAP(tturfbl_sound_io_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(tturfbl_sound_map)
+	MCFG_CPU_IO_MAP(tturfbl_sound_io_map)
 
-	MDRV_DEVICE_REMOVE("7759")
-	MDRV_SOUND_ADD("5205", MSM5205, 220000)
-	MDRV_SOUND_CONFIG(tturfbl_msm5205_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+	MCFG_DEVICE_REMOVE("7759")
+	MCFG_SOUND_ADD("5205", MSM5205, 220000)
+	MCFG_SOUND_CONFIG(tturfbl_msm5205_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
 MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x112_sega16sp_intf =
@@ -2267,10 +2320,10 @@ static const sega16sp_interface s16bbl_x112_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( dduxbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(dduxbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(dduxbl_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
 MACHINE_CONFIG_END
 
 static const sega16sp_interface s16bbl_x124_sega16sp_intf =
@@ -2286,41 +2339,41 @@ static const sega16sp_interface s16bbl_x124_sega16sp_intf =
 static MACHINE_CONFIG_DERIVED( eswatbl, system16_7759 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(eswatbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(eswatbl_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x124_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x124_sega16sp_intf)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( fpointbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(fpointbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(fpointbl_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(fpointbl_sound_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(fpointbl_sound_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( tetrisbl, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(tetrisbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(tetrisbl_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( beautyb, system16 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(beautyb_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(beautyb_map)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x112_sega16sp_intf)
 MACHINE_CONFIG_END
 
 
@@ -2328,81 +2381,81 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_START( system18, segas1x_bootleg_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, 10000000)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 10000000)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("soundcpu", Z80, 8000000)
-	MDRV_CPU_PROGRAM_MAP(sound_18_map)
-	MDRV_CPU_IO_MAP(sound_18_io_map)
+	MCFG_CPU_ADD("soundcpu", Z80, 8000000)
+	MCFG_CPU_PROGRAM_MAP(sound_18_map)
+	MCFG_CPU_IO_MAP(sound_18_io_map)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(40*8, 28*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(40*8, 28*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 40*8-1, 0*8, 28*8-1)
 
-	MDRV_GFXDECODE(sys16)
-	MDRV_PALETTE_LENGTH((2048+2048)*SHADOW_COLORS_MULTIPLIER) // 64 extra colours for vdp (but we use 2048 so shadow mask works)
+	MCFG_GFXDECODE(sys16)
+	MCFG_PALETTE_LENGTH((2048+2048)*SHADOW_COLORS_MULTIPLIER) // 64 extra colours for vdp (but we use 2048 so shadow mask works)
 
-	MDRV_VIDEO_START(system18old)
-	MDRV_VIDEO_UPDATE(system18old)
+	MCFG_VIDEO_START(system18old)
+	MCFG_VIDEO_UPDATE(system18old)
 
-	MDRV_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
+	MCFG_SEGA16SP_ADD("segaspr1", s16bbl_x107_sega16sp_intf)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("3438.0", YM3438, 8000000)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
-	MDRV_SOUND_ROUTE(2, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(3, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("3438.0", YM3438, 8000000)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.40)
+	MCFG_SOUND_ROUTE(2, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(3, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("3438.1", YM3438, 8000000)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 0.40)
-	MDRV_SOUND_ROUTE(2, "lspeaker", 0.40)
-	MDRV_SOUND_ROUTE(3, "rspeaker", 0.40)
+	MCFG_SOUND_ADD("3438.1", YM3438, 8000000)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 0.40)
+	MCFG_SOUND_ROUTE(2, "lspeaker", 0.40)
+	MCFG_SOUND_ROUTE(3, "rspeaker", 0.40)
 
-	MDRV_SOUND_ADD("5c68", RF5C68, 8000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("5c68", RF5C68, 8000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( astormbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(astormbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(astormbl_map)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( mwalkbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(mwalkbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(mwalkbl_map)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( shdancbl, system18 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(shdancbl_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(shdancbl_map)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(shdancbl_sound_map)
-	MDRV_CPU_IO_MAP(shdancbl_sound_io_map)
-	MDRV_DEVICE_REMOVE("5c68")
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(shdancbl_sound_map)
+	MCFG_CPU_IO_MAP(shdancbl_sound_io_map)
+	MCFG_DEVICE_REMOVE("5c68")
 
-	MDRV_SOUND_ADD("5205", MSM5205, 200000)
-	MDRV_SOUND_CONFIG(shdancbl_msm5205_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
+	MCFG_SOUND_ADD("5205", MSM5205, 200000)
+	MCFG_SOUND_CONFIG(shdancbl_msm5205_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "lspeaker", 0.80)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "rspeaker", 0.80)
 MACHINE_CONFIG_END
 
 
@@ -3331,8 +3384,8 @@ static DRIVER_INIT( goldnaxeb1 )
 {
 	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
 	int i;
-	UINT8 *ROM = memory_region(machine, "maincpu");
-	UINT8 *KEY = memory_region(machine, "decryption");
+	UINT8 *ROM = machine->region("maincpu")->base();
+	UINT8 *KEY = machine->region("decryption")->base();
 	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 	UINT8 data[0x1000];
 
@@ -3375,7 +3428,7 @@ static DRIVER_INIT( bayrouteb1 )
 	// decrypt
 	DRIVER_INIT_CALL( goldnaxeb1 );
 
-	ROM2 = (UINT16*)memory_region(machine, "maincpu");
+	ROM2 = (UINT16*)machine->region("maincpu")->base();
 	decrypted_region2 = (UINT16*)state->decrypted_region;
 
 	// patch interrupt vector
@@ -3390,7 +3443,7 @@ static DRIVER_INIT( bayrouteb1 )
 
 static DRIVER_INIT( bayrouteb2 )
 {
-	UINT8 *mem = memory_region(machine, "soundcpu");
+	UINT8 *mem = machine->region("soundcpu")->base();
 
 	memcpy(mem, mem + 0x10000, 0x8000);
 
@@ -3408,7 +3461,7 @@ static DRIVER_INIT( goldnaxeb2 )
 
 static DRIVER_INIT( tturfbl )
 {
-	UINT8 *mem = memory_region(machine, "soundcpu");
+	UINT8 *mem = machine->region("soundcpu")->base();
 
 	memcpy(mem, mem + 0x10000, 0x8000);
 
@@ -3444,7 +3497,7 @@ static DRIVER_INIT( fpointbl )
 /* Tetris-based */
 static DRIVER_INIT( beautyb )
 {
-	UINT16*rom = (UINT16*)memory_region( machine, "maincpu" );
+	UINT16*rom = (UINT16*)machine->region( "maincpu" )->base();
 	int x;
 
 	for (x = 0; x < 0x8000; x++)
@@ -3463,7 +3516,7 @@ static DRIVER_INIT( beautyb )
 static DRIVER_INIT( shdancbl )
 {
 	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *mem = memory_region(machine, "soundcpu");;
+	UINT8 *mem = machine->region("soundcpu")->base();;
 
 	/* Copy first 32K of IC45 to Z80 address space */
 	memcpy(mem, mem + 0x10000, 0x8000);
@@ -3478,7 +3531,7 @@ static DRIVER_INIT( shdancbl )
 static DRIVER_INIT( mwalkbl )
 {
 	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *RAM =  memory_region(machine, "soundcpu");
+	UINT8 *RAM =  machine->region("soundcpu")->base();
 	static const int mwalk_sound_info[]  =
 	{
 		0x0f, 0x00000, // ROM #1 = 128K
@@ -3500,7 +3553,7 @@ static DRIVER_INIT( mwalkbl )
 static DRIVER_INIT( astormbl )
 {
 	segas1x_bootleg_state *state = machine->driver_data<segas1x_bootleg_state>();
-	UINT8 *RAM =  memory_region(machine, "soundcpu");
+	UINT8 *RAM =  machine->region("soundcpu")->base();
 	static const int astormbl_sound_info[]  =
 	{
 		0x0f, 0x00000, // ROM #1 = 128K
@@ -3551,4 +3604,4 @@ GAME( 1991, iqpipe,      0,         beautyb,     tetris,    beautyb,    ROT0,   
 GAME( 1990, astormbl,    astorm,    astormbl,    astormbl,  astormbl,   ROT0,   "bootleg", "Alien Storm (bootleg, set 1)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1990, astormb2,    astorm,    astormbl,    astormbl,  astormbl,   ROT0,   "bootleg", "Alien Storm (bootleg, set 2)", GAME_IMPERFECT_GRAPHICS | GAME_NO_SOUND )
 GAME( 1990, mwalkbl,     mwalk,     mwalkbl,     mwalkbl,   mwalkbl,    ROT0,   "bootleg", "Michael Jackson's Moonwalker (bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
-GAME( 1989, shdancbl,    shdancer,  shdancbl,    mwalkbl,   shdancbl,   ROT0,   "bootleg", "Shadow Dancer (bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
+GAME( 1989, shdancbl,    shdancer,  shdancbl,    shdancbl,  shdancbl,   ROT0,   "bootleg", "Shadow Dancer (bootleg)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )

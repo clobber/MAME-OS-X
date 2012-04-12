@@ -1881,7 +1881,7 @@ static void init_port_types(running_machine *machine)
 	}
 
 	/* ask the OSD to customize the list */
-	osd_customize_input_type_list(&portdata->typestatelist->typedesc);
+	machine->osd().customize_input_type_list(&portdata->typestatelist->typedesc);
 
 	/* now iterate over the OSD-modified types */
 	for (curtype = portdata->typestatelist; curtype != NULL; curtype = curtype->next)
@@ -2624,7 +2624,7 @@ static void frame_update_digital_joysticks(running_machine *machine)
 					if ((joystick->current4way & (JOYDIR_UP_BIT | JOYDIR_DOWN_BIT)) &&
 						(joystick->current4way & (JOYDIR_LEFT_BIT | JOYDIR_RIGHT_BIT)))
 					{
-						if (mame_rand(machine) & 1)
+						if (machine->rand() & 1)
 							joystick->current4way &= ~(JOYDIR_LEFT_BIT | JOYDIR_RIGHT_BIT);
 						else
 							joystick->current4way &= ~(JOYDIR_UP_BIT | JOYDIR_DOWN_BIT);
@@ -4667,7 +4667,7 @@ static void record_frame(running_machine *machine, attotime curtime)
 		record_write_uint64(machine, curtime.attoseconds);
 
 		/* then the current speed */
-		record_write_uint32(machine, video_get_speed_percent(machine) * (double)(1 << 20));
+		record_write_uint32(machine, machine->video().speed_percent() * (double)(1 << 20));
 	}
 }
 

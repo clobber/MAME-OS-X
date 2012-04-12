@@ -164,12 +164,12 @@ public:
 
 INLINE UINT32 tagmap_hash(const char *string)
 {
-	UINT32 hash = (string[0] << 5) + string[1];
+	UINT32 hash = *string++;
 	char c;
 
-	string += 2;
 	while ((c = *string++) != 0)
 		hash = ((hash << 5) | (hash >> 27)) + c;
+
 	return hash;
 }
 

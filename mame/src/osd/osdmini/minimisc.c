@@ -40,13 +40,14 @@
 //============================================================
 
 #include "osdcore.h"
+#include <stdlib.h>
 
 
 //============================================================
 //  osd_alloc
 //============================================================
 
-void *osd_alloc(size_t size)
+void *osd_malloc(size_t size)
 {
 	return malloc(size);
 }
@@ -92,3 +93,15 @@ void osd_break_into_debugger(const char *message)
 {
 	// there is no standard way to do this, so ignore it
 }
+
+
+//============================================================
+//  osd_get_clipboard_text
+//============================================================
+
+char *osd_get_clipboard_text(void)
+{
+	// can't support clipboards generically
+	return NULL;
+}
+

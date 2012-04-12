@@ -53,6 +53,7 @@ VIDEO_START( vb )
 	bg_tilemap = tilemap_create(machine, get_bg_tile_info,background_scan, 8, 8,64,64);
 
 	tilemap_set_scroll_rows(bg_tilemap,32);
+	vball_gfxset=0;
 	vb_bgprombank=0xff;
 	vb_spprombank=0xff;
 }
@@ -83,7 +84,7 @@ void vb_bgprombank_w( running_machine *machine, int bank )
 
 	if (bank==vb_bgprombank) return;
 
-	color_prom = memory_region(machine, "proms") + bank*0x80;
+	color_prom = machine->region("proms")->base() + bank*0x80;
 	for (i=0;i<128;i++, color_prom++) {
 		palette_set_color_rgb(machine,i,pal4bit(color_prom[0] >> 0),pal4bit(color_prom[0] >> 4),
 				       pal4bit(color_prom[0x800] >> 0));
@@ -99,7 +100,7 @@ void vb_spprombank_w( running_machine *machine, int bank )
 
 	if (bank==vb_spprombank) return;
 
-	color_prom = memory_region(machine, "proms")+0x400 + bank*0x80;
+	color_prom = machine->region("proms")->base()+0x400 + bank*0x80;
 	for (i=128;i<256;i++,color_prom++)	{
 		palette_set_color_rgb(machine,i,pal4bit(color_prom[0] >> 0),pal4bit(color_prom[0] >> 4),
 				       pal4bit(color_prom[0x800] >> 0));

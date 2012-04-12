@@ -12,7 +12,7 @@
 
 #define xxxx 0x00
 
-static const UINT8 ga2_v25_opcode_table[256] = {
+const UINT8 ga2_v25_opcode_table[256] = {
      xxxx,xxxx,0xEA,xxxx,xxxx,0x8B,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,
      xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0xFA,
      xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,xxxx,0x49,xxxx,xxxx,xxxx,
@@ -33,40 +33,21 @@ static const UINT8 ga2_v25_opcode_table[256] = {
 
 #undef xxxx
 
-static void nec_v25_cpu_decrypt(running_machine *machine)
+void decrypt_ga2_protrom(running_machine *machine)
 {
 	int i;
-	address_space *space = cputag_get_address_space(machine, "mcu", ADDRESS_SPACE_PROGRAM);
-	UINT8 *rom = memory_region(machine, "mcu");
-	UINT8* decrypted = auto_alloc_array(machine, UINT8, 0x10000);
+	UINT8 *rom = machine->region("mcu")->base();
 	UINT8* temp = auto_alloc_array(machine, UINT8, 0x100000);
-
-	// set CPU3 opcode base
-	space->set_decrypted_region(0x00000, 0x0ffff, decrypted);
-	space->set_decrypted_region(0xf0000, 0xfffff, decrypted);
 
 	// make copy of ROM so original can be overwritten
 	memcpy(temp, rom, 0x10000);
 
+	// unscramble the address lines
 	for(i = 0; i < 0x10000; i++)
-	{
-		int j = BITSWAP16(i, 14, 11, 15, 12, 13, 4, 3, 7, 5, 10, 2, 8, 9, 6, 1, 0);
-
-		// normal ROM data with address swap undone
-		rom[i] = temp[j];
-
-		// decryped opcodes with address swap undone
-		decrypted[i] = ga2_v25_opcode_table[ temp[j] ];
-	}
+		rom[i] = temp[BITSWAP16(i, 14, 11, 15, 12, 13, 4, 3, 7, 5, 10, 2, 8, 9, 6, 1, 0)];
 
 	auto_free(machine, temp);
 }
-
-void decrypt_ga2_protrom(running_machine *machine)
-{
-	nec_v25_cpu_decrypt(machine);
-}
-
 
 WRITE16_HANDLER( ga2_dpram_w )
 {
@@ -132,7 +113,7 @@ WRITE16_HANDLER(sonic_level_load_protection)
 		}
 		else
 		{
-			const UINT8 *ROM = memory_region(space->machine, "maincpu");
+			const UINT8 *ROM = space->machine->region("maincpu")->base();
 			level =  *((ROM + LEVEL_ORDER_ARRAY) + (system32_workram[CLEARED_LEVELS / 2] * 2) - 1);
 			level |= *((ROM + LEVEL_ORDER_ARRAY) + (system32_workram[CLEARED_LEVELS / 2] * 2) - 2) << 8;
 		}
@@ -182,7 +163,7 @@ WRITE16_HANDLER(brival_protection_w)
 	};
 	char ret[32];
 	int curProtType;
-	UINT8 *ROM = memory_region(space->machine, "maincpu");
+	UINT8 *ROM = space->machine->region("maincpu")->base();
 
 	switch (offset)
 	{
@@ -224,7 +205,7 @@ WRITE16_HANDLER(brival_protection_w)
  ******************************************************************************
  ******************************************************************************/
 
-void darkedge_fd1149_vblank(running_device *device)
+void darkedge_fd1149_vblank(device_t *device)
 {
 	address_space *space = cpu_get_address_space(device, ADDRESS_SPACE_PROGRAM);
 

@@ -390,10 +390,13 @@ static void sp_dma(int direction)
             src = (UINT8*)&rdram[sp_dram_addr / 4];
             dst = (sp_mem_addr & 0x1000) ? (UINT8*)&rsp_imem[(sp_mem_addr & 0xfff) / 4] : (UINT8*)&rsp_dmem[(sp_mem_addr & 0xfff) / 4];
 
+			//printf("CPU %08x -> RSP %08x\n", sp_dram_addr, 0x04000000 | sp_mem_addr);
             for (i=0; i < sp_dma_length; i++)
             {
-                dst[BYTE4_XOR_BE(i)] = src[BYTE4_XOR_BE(i)];
+				//printf("%02x ", src[i]);
+				dst[i] = src[i];
             }
+            //printf("\n");
 
             sp_mem_addr += sp_dma_length;
             sp_dram_addr += sp_dma_length;
@@ -408,10 +411,13 @@ static void sp_dma(int direction)
             src = (sp_mem_addr & 0x1000) ? (UINT8*)&rsp_imem[(sp_mem_addr & 0xfff) / 4] : (UINT8*)&rsp_dmem[(sp_mem_addr & 0xfff) / 4];
             dst = (UINT8*)&rdram[sp_dram_addr / 4];
 
+			//printf("RSP %08x -> CPU %08x\n", 0x04000000 | sp_mem_addr, sp_dram_addr);
             for (i=0; i < sp_dma_length; i++)
             {
-                dst[BYTE4_XOR_BE(i)] = src[BYTE4_XOR_BE(i)];
+				//printf("%02x ", src[i]);
+                dst[i] = src[i];
             }
+            //printf("\n");
 
             sp_mem_addr += sp_dma_length;
             sp_dram_addr += sp_dma_length;
@@ -421,7 +427,7 @@ static void sp_dma(int direction)
 	}
 }
 
-static void sp_set_status(running_device *device, UINT32 status)
+static void sp_set_status(device_t *device, UINT32 status)
 {
 	if (status & 0x1)
 	{
@@ -729,6 +735,7 @@ READ32_DEVICE_HANDLER( n64_dp_reg_r )
 {
 	_n64_state *state = device->machine->driver_data<_n64_state>();
 
+	//printf("%08x\n", offset);
 	switch (offset)
 	{
 		case 0x00/4:		// DP_START_REG
@@ -755,6 +762,7 @@ WRITE32_DEVICE_HANDLER( n64_dp_reg_w )
 {
 	_n64_state *state = device->machine->driver_data<_n64_state>();
 
+	//printf("%08x: %08x\n", offset, data);
 	switch (offset)
 	{
 		case 0x00/4:		// DP_START_REG
@@ -1090,6 +1098,8 @@ static AUDIO_DMA *audio_fifo_get_top(void)
         return NULL;
     }
 }
+
+#define N64_ATTOTIME_NORMALIZE(a)   do { while ((a).attoseconds >= ATTOSECONDS_PER_SECOND) { (a).seconds++; (a).attoseconds -= ATTOSECONDS_PER_SECOND; } } while (0)
 
 static void start_audio_dma(running_machine *machine)
 {
@@ -2011,7 +2021,7 @@ MACHINE_START( n64 )
 	/* configure fast RAM regions for DRC */
 	mips3drc_add_fastram(machine->device("maincpu"), 0x00000000, 0x007fffff, FALSE, rdram);
 
-	rspdrc_set_options(machine->device("rsp"), 0);
+	rspdrc_set_options(machine->device("rsp"), RSPDRC_STRICT_VERIFY);
 	rspdrc_add_imem(machine->device("rsp"), rsp_imem);
 	rspdrc_add_dmem(machine->device("rsp"), rsp_dmem);
 	rspdrc_flush_drc_cache(machine->device("rsp"));
@@ -2022,8 +2032,8 @@ MACHINE_START( n64 )
 MACHINE_RESET( n64 )
 {
 	int i;
-	//UINT32 *pif_rom   = (UINT32*)memory_region(machine, "user1");
-	UINT32 *cart = (UINT32*)memory_region(machine, "user2");
+	//UINT32 *pif_rom   = (UINT32*)machine->region("user1")->base();
+	UINT32 *cart = (UINT32*)machine->region("user2")->base();
 	UINT64 boot_checksum;
 
 	mi_version = 0;

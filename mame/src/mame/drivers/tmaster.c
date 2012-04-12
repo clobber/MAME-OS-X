@@ -118,7 +118,7 @@ To Do:
 
 static struct
 {
-	running_device *duart68681;
+	device_t *duart68681;
 } tmaster_devices;
 
 /***************************************************************************
@@ -149,12 +149,12 @@ static WRITE16_DEVICE_HANDLER( tmaster_oki_bank_w )
 
 ***************************************************************************/
 
-static void duart_irq_handler(running_device *device, UINT8 vector)
+static void duart_irq_handler(device_t *device, UINT8 vector)
 {
 	cputag_set_input_line_and_vector(device->machine, "maincpu", 4, HOLD_LINE, vector);
 };
 
-static void duart_tx(running_device *device, int channel, UINT8 data)
+static void duart_tx(device_t *device, int channel, UINT8 data)
 {
 	if ( channel == 0 )
 	{
@@ -331,7 +331,7 @@ static void tmaster_draw(running_machine *machine)
 {
 	int x,y,x0,x1,y0,y1,dx,dy,flipx,flipy,sx,sy,sw,sh, addr, mode, layer,buffer, color;
 
-	UINT8 *gfxdata	=	memory_region( machine, "blitter" ) + tmaster_gfx_offs;
+	UINT8 *gfxdata	=	machine->region( "blitter" )->base() + tmaster_gfx_offs;
 
 	UINT16 pen;
 
@@ -470,7 +470,7 @@ static READ16_HANDLER( tmaster_blitter_r )
 
 static READ16_HANDLER( tmaster_coins_r )
 {
-	return input_port_read(space->machine, "COIN")|(mame_rand(space->machine)&0x0800);
+	return input_port_read(space->machine, "COIN")|(space->machine->rand()&0x0800);
 }
 
 static ADDRESS_MAP_START( tmaster_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -546,7 +546,7 @@ static const char *const galgames_eeprom_names[5] = { GALGAMES_EEPROM_BIOS, GALG
 
 static READ16_HANDLER( galgames_eeprom_r )
 {
-	running_device *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
+	device_t *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
 
 	return eeprom_read_bit(eeprom) ? 0x80 : 0x00;
 }
@@ -558,7 +558,7 @@ static WRITE16_HANDLER( galgames_eeprom_w )
 
 	if ( ACCESSING_BITS_0_7 )
 	{
-		running_device *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
+		device_t *eeprom = space->machine->device(galgames_eeprom_names[galgames_cart]);
 
 		// latch the bit
 		eeprom_write_bit(eeprom, data & 0x0001);
@@ -600,12 +600,12 @@ static WRITE16_HANDLER( galgames_palette_data_w )
 // Sound
 static READ16_HANDLER( galgames_okiram_r )
 {
-	return memory_region(space->machine, "oki")[offset] | 0xff00;
+	return space->machine->region("oki")->base()[offset] | 0xff00;
 }
 static WRITE16_HANDLER( galgames_okiram_w )
 {
 	if (ACCESSING_BITS_0_7)
-		memory_region(space->machine, "oki")[offset] = data & 0xff;
+		space->machine->region("oki")->base()[offset] = data & 0xff;
 }
 
 // Carts (preliminary, PIC communication is not implemented)
@@ -847,7 +847,7 @@ static MACHINE_START( tmaster )
 static MACHINE_RESET( tmaster )
 {
 	tmaster_gfx_offs = 0;
-	tmaster_gfx_size = memory_region_length(machine, "blitter");
+	tmaster_gfx_size = machine->region("blitter")->bytes();
 
 	tmaster_devices.duart68681 = machine->device( "duart68681" );
 }
@@ -872,40 +872,40 @@ static const duart68681_config tmaster_duart68681_config =
 };
 
 static MACHINE_CONFIG_START( tm3k, driver_device )
-	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2) /* 12MHz */
-	MDRV_CPU_PROGRAM_MAP(tmaster_map)
-	MDRV_CPU_VBLANK_INT_HACK(tm3k_interrupt,2+20) // ??
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2) /* 12MHz */
+	MCFG_CPU_PROGRAM_MAP(tmaster_map)
+	MCFG_CPU_VBLANK_INT_HACK(tm3k_interrupt,2+20) // ??
 
-	MDRV_MACHINE_START(tmaster)
-	MDRV_MACHINE_RESET(tmaster)
+	MCFG_MACHINE_START(tmaster)
+	MCFG_MACHINE_RESET(tmaster)
 
-	MDRV_DUART68681_ADD( "duart68681", XTAL_8_664MHz / 2 /*??*/, tmaster_duart68681_config )
+	MCFG_DUART68681_ADD( "duart68681", XTAL_8_664MHz / 2 /*??*/, tmaster_duart68681_config )
 
-	MDRV_NVRAM_ADD_0FILL("nvram")
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(400, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 400-1, 0, 256-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(400, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 400-1, 0, 256-1)
 
-	MDRV_PALETTE_LENGTH(0x1000)
+	MCFG_PALETTE_LENGTH(0x1000)
 
-	MDRV_VIDEO_START(tmaster)
-	MDRV_VIDEO_UPDATE(tmaster)
+	MCFG_VIDEO_START(tmaster)
+	MCFG_VIDEO_UPDATE(tmaster)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_OKIM6295_ADD("oki", XTAL_32MHz / 16, OKIM6295_PIN7_HIGH)  /* 2MHz; clock frequency & pin 7 not verified */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_OKIM6295_ADD("oki", XTAL_32MHz / 16, OKIM6295_PIN7_HIGH)  /* 2MHz; clock frequency & pin 7 not verified */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( tm, tm3k )
 
-	MDRV_OKIM6295_REPLACE("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_OKIM6295_REPLACE("oki", 1122000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 
@@ -938,37 +938,37 @@ static MACHINE_RESET( galgames )
 }
 
 static MACHINE_CONFIG_START( galgames, driver_device )
-	MDRV_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2)
-	MDRV_CPU_PROGRAM_MAP(galgames_map)
-	MDRV_CPU_VBLANK_INT_HACK(galgames_interrupt, 1+20)	// ??
+	MCFG_CPU_ADD("maincpu", M68000, XTAL_24MHz / 2)
+	MCFG_CPU_PROGRAM_MAP(galgames_map)
+	MCFG_CPU_VBLANK_INT_HACK(galgames_interrupt, 1+20)	// ??
 
 	// 5 EEPROMs on the motherboard (for BIOS + 4 Carts)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_BIOS,  galgames_eeprom_interface)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART1, galgames_eeprom_interface)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART2, galgames_eeprom_interface)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART3, galgames_eeprom_interface)
-	MDRV_EEPROM_ADD(GALGAMES_EEPROM_CART4, galgames_eeprom_interface)
+	MCFG_EEPROM_ADD(GALGAMES_EEPROM_BIOS,  galgames_eeprom_interface)
+	MCFG_EEPROM_ADD(GALGAMES_EEPROM_CART1, galgames_eeprom_interface)
+	MCFG_EEPROM_ADD(GALGAMES_EEPROM_CART2, galgames_eeprom_interface)
+	MCFG_EEPROM_ADD(GALGAMES_EEPROM_CART3, galgames_eeprom_interface)
+	MCFG_EEPROM_ADD(GALGAMES_EEPROM_CART4, galgames_eeprom_interface)
 
-	MDRV_MACHINE_RESET( galgames )
+	MCFG_MACHINE_RESET( galgames )
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_SIZE(400, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 400-1, 0, 256-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_SIZE(400, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 400-1, 0, 256-1)
 
-	MDRV_PALETTE_LENGTH(0x1000)	// only 0x100 used
+	MCFG_PALETTE_LENGTH(0x1000)	// only 0x100 used
 
-	MDRV_VIDEO_START(galgames)
-	MDRV_VIDEO_UPDATE(tmaster)
+	MCFG_VIDEO_START(galgames)
+	MCFG_VIDEO_UPDATE(tmaster)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_OKIM6295_ADD("oki", XTAL_24MHz / 8, OKIM6295_PIN7_LOW) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_OKIM6295_ADD("oki", XTAL_24MHz / 8, OKIM6295_PIN7_LOW) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 /*
@@ -978,7 +978,7 @@ MACHINE_CONFIG_END
     fffe f2f7 8557 c119 0000 0000 2340 188e
 */
 static MACHINE_CONFIG_DERIVED( galgame2, galgames )
-//  MDRV_CPU_ADD("pic", PIC12C508, XTAL_24MHz / 2)
+//  MCFG_CPU_ADD("pic", PIC12C508, XTAL_24MHz / 2)
 MACHINE_CONFIG_END
 
 
@@ -1010,14 +1010,14 @@ ROM_START( tm )
 	ROM_LOAD16_BYTE( "tmaster_v300_euro.u52", 0x000001, 0x080000, CRC(e9fd30fc) SHA1(d91ea05d5f574603883336729fb9df705688945d) ) /* Ver: 3.00 Euro 11-25-96 */
 
 	ROM_REGION( 0x400000, "blitter", ROMREGION_ERASE )	// Blitter gfx
-	ROM_LOAD16_BYTE( "tmaster.u38", 0x100000, 0x080000, CRC(68885ef6) SHA1(010602b59c33c3e490491a296ddaf8952e315b83) ) /* Same as U38 below */
-	ROM_LOAD16_BYTE( "tmaster.u36", 0x100001, 0x080000, CRC(204096ec) SHA1(9239923b7eedb6003c63ef2e8ff224edee657bbc) ) /* Same as U36 below */
+	ROM_LOAD16_BYTE( "tmaster_v21.u38", 0x100000, 0x080000, CRC(68885ef6) SHA1(010602b59c33c3e490491a296ddaf8952e315b83) ) /* Marked as Rev 2.1 */
+	ROM_LOAD16_BYTE( "tmaster_v21.u36", 0x100001, 0x080000, CRC(204096ec) SHA1(9239923b7eedb6003c63ef2e8ff224edee657bbc) ) /* Marked as Rev 2.1 */
 	// unused gap
-	ROM_LOAD16_BYTE( "tmaster.u39", 0x300000, 0x080000, CRC(cbb716cb) SHA1(4e8d8f6cbfb25a8161ff8fe7505d6b209650dd2b) ) /* Different then U39 below, newer or region specific? */
-	ROM_LOAD16_BYTE( "tmaster.u37", 0x300001, 0x080000, CRC(e0b6a9f7) SHA1(7e057ca87833c682e5be03668469259bbdefbf20) ) /* Different then U37 below, newer or region specific? */
+	ROM_LOAD16_BYTE( "tmaster_v300.u39", 0x300000, 0x080000, CRC(cbb716cb) SHA1(4e8d8f6cbfb25a8161ff8fe7505d6b209650dd2b) ) /* Marked as Rev 3.00 */
+	ROM_LOAD16_BYTE( "tmaster_v300.u37", 0x300001, 0x080000, CRC(e0b6a9f7) SHA1(7e057ca87833c682e5be03668469259bbdefbf20) ) /* Marked as Rev 3.00 */
 
 	ROM_REGION( 0x100000, "oki", 0 ) // Samples
-	ROM_LOAD( "tmaster.u8", 0x40000, 0x040000, CRC(f39ad4cf) SHA1(9bcb9a5dd3636d6541eeb3e737c7253ab0ed4e8d) ) /* Same as U8 below */
+	ROM_LOAD( "tmaster.u8", 0x40000, 0x040000, CRC(f39ad4cf) SHA1(9bcb9a5dd3636d6541eeb3e737c7253ab0ed4e8d) ) /* Marked as Rev 1.0 */
 	ROM_CONTINUE(           0xc0000, 0x040000 )
 ROM_END
 
@@ -1027,8 +1027,8 @@ ROM_START( tmdo )
 	ROM_LOAD16_BYTE( "tmaster_v22-01.u52", 0x000001, 0x080000, CRC(6c2c643f) SHA1(8dd7930f4c499483ca46b0b97bde94cb8d6e06aa) ) /* Ver: 2.2-01 Standard 10-17-96 */
 
 	ROM_REGION( 0x400000, "blitter", ROMREGION_ERASE )	// Blitter gfx
-	ROM_LOAD16_BYTE( "tmaster.u38", 0x100000, 0x080000, CRC(68885ef6) SHA1(010602b59c33c3e490491a296ddaf8952e315b83) ) /* Marked as Rev 2.1 */
-	ROM_LOAD16_BYTE( "tmaster.u36", 0x100001, 0x080000, CRC(204096ec) SHA1(9239923b7eedb6003c63ef2e8ff224edee657bbc) ) /* Marked as Rev 2.1 */
+	ROM_LOAD16_BYTE( "tmaster_v21.u38", 0x100000, 0x080000, CRC(68885ef6) SHA1(010602b59c33c3e490491a296ddaf8952e315b83) ) /* Marked as Rev 2.1 */
+	ROM_LOAD16_BYTE( "tmaster_v21.u36", 0x100001, 0x080000, CRC(204096ec) SHA1(9239923b7eedb6003c63ef2e8ff224edee657bbc) ) /* Marked as Rev 2.1 */
 	// unused gap
 	ROM_LOAD16_BYTE( "tmaster_v21.u39", 0x300000, 0x080000, CRC(a4445260) SHA1(915347f69d7ea45f8f299a67d77ff437983495d2) ) /* Marked as Rev 2.1 */
 	ROM_LOAD16_BYTE( "tmaster_v21.u37", 0x300001, 0x080000, CRC(0e140a3e) SHA1(10a34e3b95c0d36fe687fe8c1124ef244a93d720) ) /* Marked as Rev 2.1 */
@@ -1595,7 +1595,7 @@ ROM_END
 
 static DRIVER_INIT( tm4k )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x834ce/2] = 0x4e75;
@@ -1616,7 +1616,7 @@ Protection resembles that of tm5k rather than tm4ka:
 
 static DRIVER_INIT( tm4ka )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x83476/2] = 0x4e75;
@@ -1638,7 +1638,7 @@ Protection starts:
 
 static DRIVER_INIT( tm4kb )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x82b7a/2] = 0x4e75;
@@ -1659,7 +1659,7 @@ Protection starts:
 
 static DRIVER_INIT( tm5k )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x96002/2] = 0x4e75;
@@ -1682,7 +1682,7 @@ Protection starts:
 
 static DRIVER_INIT( tm5kca )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x95ffe/2] = 0x4e75;
@@ -1694,7 +1694,7 @@ static DRIVER_INIT( tm5kca )
 
 static DRIVER_INIT( tm5ka )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x96b30/2] = 0x4e75;
@@ -1715,7 +1715,7 @@ Protection starts:
 
 static DRIVER_INIT( tm7k )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x81730/2] = 0x4e75;
@@ -1738,7 +1738,7 @@ Protection starts:
 
 static DRIVER_INIT( tm7ka )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x81594/2] = 0x4e75;
@@ -1761,7 +1761,7 @@ Protection starts:
 
 static DRIVER_INIT( tm7keval ) /* kit came with a security key labeled A-21657-004, which is a TM5000 key */
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x8949e/2] = 0x4e75;
@@ -1784,7 +1784,7 @@ Protection starts:
 
 static DRIVER_INIT( tm8k )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// protection
 	ROM[0x78b70/2] = 0x4e75;
@@ -1807,7 +1807,7 @@ Protection starts:
 
 static DRIVER_INIT( galgames )
 {
-	UINT8 *ROM	=	memory_region(machine, "maincpu");
+	UINT8 *ROM	=	machine->region("maincpu")->base();
 	int cart;
 
 	// RAM bank at 0x000000-0x03ffff and 0x200000-0x23ffff
@@ -1829,9 +1829,9 @@ static DRIVER_INIT( galgames )
 
 	for (cart = 1; cart <= 4; cart++)
 	{
-		UINT8 *CART = memory_region(machine, "maincpu");
+		UINT8 *CART = machine->region("maincpu")->base();
 
-		if  (0x200000 * (cart+1) <= memory_region_length(machine, "maincpu"))
+		if  (0x200000 * (cart+1) <= machine->region("maincpu")->bytes())
 			CART += 0x200000 * cart;
 
 		memory_configure_bank(machine, GALGAMES_BANK_200000_R, GALGAMES_ROM0+cart, 1, CART,          0x40000);
@@ -1841,7 +1841,7 @@ static DRIVER_INIT( galgames )
 
 static DRIVER_INIT( galgame2 )
 {
-	UINT16 *ROM = (UINT16 *)memory_region( machine, "maincpu" );
+	UINT16 *ROM = (UINT16 *)machine->region( "maincpu" )->base();
 
 	// Patch BIOS to see the game code as first cartridge (until the PIC therein is emulated)
 	ROM[0x118da/2] = 0x4a06;

@@ -212,14 +212,14 @@ static void sound_pause(running_machine &machine)
 {
 	sound_private *global = machine.sound_data;
 	global->muted |= 0x02;
-	osd_set_mastervolume(global->muted ? -32 : global->attenuation);
+	machine.osd().set_mastervolume(global->muted ? -32 : global->attenuation);
 }
 
 static void sound_resume(running_machine &machine)
 {
 	sound_private *global = machine.sound_data;
 	global->muted &= ~0x02;
-	osd_set_mastervolume(global->muted ? -32 : global->attenuation);
+	machine.osd().set_mastervolume(global->muted ? -32 : global->attenuation);
 }
 
 
@@ -235,7 +235,7 @@ void sound_mute(running_machine *machine, int mute)
 		global->muted |= 0x01;
 	else
 		global->muted &= ~0x01;
-	osd_set_mastervolume(global->muted ? -32 : global->attenuation);
+	machine->osd().set_mastervolume(global->muted ? -32 : global->attenuation);
 }
 
 
@@ -247,7 +247,7 @@ void sound_set_attenuation(running_machine *machine, int attenuation)
 {
 	sound_private *global = machine->sound_data;
 	global->attenuation = attenuation;
-	osd_set_mastervolume(global->muted ? -32 : global->attenuation);
+	machine->osd().set_mastervolume(global->muted ? -32 : global->attenuation);
 }
 
 
@@ -379,7 +379,7 @@ static TIMER_CALLBACK( sound_update )
 		speaker->mix(leftmix, rightmix, samples_this_update, !global->enabled);
 
 	/* now downmix the final result */
-	finalmix_step = video_get_speed_factor();
+	finalmix_step = machine->video().speed_factor();
 	finalmix_offset = 0;
 	for (sample = global->finalmix_leftover; sample < samples_this_update * 100; sample += finalmix_step)
 	{
@@ -408,8 +408,8 @@ static TIMER_CALLBACK( sound_update )
 	if (finalmix_offset > 0)
 	{
 		if (!global->nosound_mode)
-			osd_update_audio_stream(machine, finalmix, finalmix_offset / 2);
-		video_avi_add_sound(machine, finalmix, finalmix_offset / 2);
+			machine->osd().update_audio_stream(finalmix, finalmix_offset / 2);
+		machine->video().add_sound_to_recording(finalmix, finalmix_offset / 2);
 		if (global->wavfile != NULL)
 			wav_add_data_16(global->wavfile, finalmix, finalmix_offset);
 	}

@@ -394,9 +394,9 @@ char *osd_getenv(const char *name)
 //  osd_wait_for_debugger
 //============================================================
 //void osd_wait_for_debugger(const device_config *device, int firststop)
-void osd_wait_for_debugger(running_device *device, int firststop)
-{
-}
+//void osd_wait_for_debugger(running_device *device, int firststop)
+//{
+//}
 
 //============================================================
 //  osd_get_volume_name
@@ -482,4 +482,3 @@ file_error osd_get_full_path(char **dst, const char *path)
 void osd_init_debugger(running_machine *machine)
 {
 }
-

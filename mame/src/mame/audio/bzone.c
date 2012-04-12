@@ -237,9 +237,9 @@ struct bzone_custom_filter_context
 
 #define CD4066_R_ON		270
 
-static DISCRETE_STEP(bzone_custom_filter)
+DISCRETE_STEP(bzone_custom_filter)
 {
-	struct bzone_custom_filter_context *context = (struct bzone_custom_filter_context *)node->context;
+	DISCRETE_DECLARE_CONTEXT(bzone_custom_filter)
 
 	int		in0 = (BZONE_CUSTOM_FILTER__IN0 == 0) ? 0 : 1;
 	double	v;
@@ -254,9 +254,9 @@ static DISCRETE_STEP(bzone_custom_filter)
 	node->output[0] += (v - node->output[0]) * context->exponent;
 }
 
-static DISCRETE_RESET(bzone_custom_filter)
+DISCRETE_RESET(bzone_custom_filter)
 {
-	struct bzone_custom_filter_context   *context = (struct bzone_custom_filter_context *)node->context;
+	DISCRETE_DECLARE_CONTEXT(bzone_custom_filter)
 
 	context->gain[0] = BZONE_CUSTOM_FILTER__R1 + BZONE_CUSTOM_FILTER__R2;
 	context->gain[0] = BZONE_CUSTOM_FILTER__R5 / context->gain[0] + 1;
@@ -409,14 +409,14 @@ WRITE8_DEVICE_HANDLER( bzone_sounds_w )
 
 MACHINE_CONFIG_FRAGMENT( bzone_audio )
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("pokey",  POKEY, BZONE_MASTER_CLOCK / 8)
-	MDRV_SOUND_CONFIG(bzone_pokey_interface)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
+	MCFG_SOUND_ADD("pokey",  POKEY, BZONE_MASTER_CLOCK / 8)
+	MCFG_SOUND_CONFIG(bzone_pokey_interface)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
 
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(bzone)
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(bzone)
 
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0 / BZ_FINAL_GAIN)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0 / BZ_FINAL_GAIN)
 MACHINE_CONFIG_END

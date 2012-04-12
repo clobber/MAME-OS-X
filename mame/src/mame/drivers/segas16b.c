@@ -1318,7 +1318,7 @@ static WRITE16_HANDLER( unknown_rgn2_w )
 static WRITE8_DEVICE_HANDLER( upd7759_control_w )
 {
 	segas1x_state *state = device->machine->driver_data<segas1x_state>();
-	int size = memory_region_length(device->machine, "soundcpu") - 0x10000;
+	int size = device->machine->region("soundcpu")->bytes() - 0x10000;
 	if (size > 0)
 	{
 		int bankoffs = 0;
@@ -1375,7 +1375,7 @@ static WRITE8_DEVICE_HANDLER( upd7759_control_w )
 				bankoffs += (data & 0x07) * 0x04000;
 				break;
 		}
-		memory_set_bankptr(device->machine, "bank1", memory_region(device->machine, "soundcpu") + 0x10000 + (bankoffs % size));
+		memory_set_bankptr(device->machine, "bank1", device->machine->region("soundcpu")->base() + 0x10000 + (bankoffs % size));
 	}
 }
 
@@ -1386,7 +1386,7 @@ static READ8_DEVICE_HANDLER( upd7759_status_r )
 }
 
 
-static void upd7759_generate_nmi(running_device *device, int state)
+static void upd7759_generate_nmi(device_t *device, int state)
 {
 	segas1x_state *driver = device->machine->driver_data<segas1x_state>();
 
@@ -1776,10 +1776,9 @@ static WRITE16_HANDLER( sjryuko_custom_io_w )
 	{
 		case 0x0000/2:
 			if (((state->mj_last_val ^ data) & 4) && (data & 4))
-			{
 				state->mj_input_num = (state->mj_input_num + 1) % 6;
-				state->mj_last_val = data;
-			}
+
+			state->mj_last_val = data;
 			break;
 	}
 	standard_io_w(space, offset, data, mem_mask);
@@ -3272,49 +3271,49 @@ GFXDECODE_END
 static MACHINE_CONFIG_START( system16b, segas1x_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, MASTER_CLOCK_10MHz)
-	MDRV_CPU_PROGRAM_MAP(system16b_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, MASTER_CLOCK_10MHz)
+	MCFG_CPU_PROGRAM_MAP(system16b_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_10MHz/2)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
-	MDRV_CPU_IO_MAP(sound_portmap)
+	MCFG_CPU_ADD("soundcpu", Z80, MASTER_CLOCK_10MHz/2)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_IO_MAP(sound_portmap)
 
-	MDRV_MACHINE_RESET(system16b)
-	MDRV_NVRAM_ADD_0FILL("nvram")
+	MCFG_MACHINE_RESET(system16b)
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
 	/* video hardware */
-	MDRV_GFXDECODE(segas16b)
-	MDRV_PALETTE_LENGTH(2048*3)
+	MCFG_GFXDECODE(segas16b)
+	MCFG_PALETTE_LENGTH(2048*3)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK_25MHz/4, 400, 0, 320, 262, 0, 224)
 
-	MDRV_VIDEO_START(system16b)
-	MDRV_VIDEO_UPDATE(system16b)
+	MCFG_VIDEO_START(system16b)
+	MCFG_VIDEO_UPDATE(system16b)
 
-	MDRV_SEGA16SP_ADD_16B("segaspr1")
+	MCFG_SEGA16SP_ADD_16B("segaspr1")
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymsnd", YM2151, MASTER_CLOCK_8MHz/2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.43)
+	MCFG_SOUND_ADD("ymsnd", YM2151, MASTER_CLOCK_8MHz/2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.43)
 
-	MDRV_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
-	MDRV_SOUND_CONFIG(upd7759_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.48)
+	MCFG_SOUND_ADD("upd", UPD7759, UPD7759_STANDARD_CLOCK)
+	MCFG_SOUND_CONFIG(upd7759_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.48)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( system16b_8751, system16b )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_VBLANK_INT("screen", i8751_main_cpu_vblank)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_VBLANK_INT("screen", i8751_main_cpu_vblank)
 
-	MDRV_CPU_ADD("mcu", I8751, MASTER_CLOCK_8MHz)
-	MDRV_CPU_IO_MAP(mcu_io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_pulse)
+	MCFG_CPU_ADD("mcu", I8751, MASTER_CLOCK_8MHz)
+	MCFG_CPU_IO_MAP(mcu_io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_pulse)
 MACHINE_CONFIG_END
 
 /* same as the above, but with custom Sega ICs */
@@ -3326,16 +3325,16 @@ static const ic_315_5250_interface sys16b_5250_intf =
 
 static MACHINE_CONFIG_DERIVED( system16b_5248, system16b )
 
-	MDRV_315_5248_ADD("315_5248")
-	MDRV_315_5250_ADD("315_5250_1", sys16b_5250_intf)
-	MDRV_315_5250_ADD("315_5250_2", sys16b_5250_intf)
+	MCFG_315_5248_ADD("315_5248")
+	MCFG_315_5250_ADD("315_5250_1", sys16b_5250_intf)
+	MCFG_315_5250_ADD("315_5250_2", sys16b_5250_intf)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( system16b_8751_5248, system16b_8751 )
 
-	MDRV_315_5248_ADD("315_5248")
-	MDRV_315_5250_ADD("315_5250_1", sys16b_5250_intf)
-	MDRV_315_5250_ADD("315_5250_2", sys16b_5250_intf)
+	MCFG_315_5248_ADD("315_5248")
+	MCFG_315_5250_ADD("315_5250_1", sys16b_5250_intf)
+	MCFG_315_5250_ADD("315_5250_2", sys16b_5250_intf)
 MACHINE_CONFIG_END
 
 
@@ -3349,21 +3348,21 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( atomicp, system16b ) /* 10MHz CPU Clock verified */
 
 	/* basic machine hardware */
-	MDRV_DEVICE_REMOVE("soundcpu")
+	MCFG_DEVICE_REMOVE("soundcpu")
 
-	MDRV_MACHINE_START(atomicp)
-	MDRV_TIMER_ADD_PERIODIC("atomicp_timer", atomicp_sound_irq, HZ(10000))
+	MCFG_MACHINE_START(atomicp)
+	MCFG_TIMER_ADD_PERIODIC("atomicp_timer", atomicp_sound_irq, HZ(10000))
 
 	/* sound hardware */
-	MDRV_SOUND_REPLACE("ymsnd", YM2413, XTAL_20MHz/4) /* 20MHz OSC divided by 4 (verified) */
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_REPLACE("ymsnd", YM2413, XTAL_20MHz/4) /* 20MHz OSC divided by 4 (verified) */
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_DEVICE_REMOVE("upd")
+	MCFG_DEVICE_REMOVE("upd")
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( timescan, system16b )
-	MDRV_VIDEO_START(timscanr)
+	MCFG_VIDEO_START(timscanr)
 MACHINE_CONFIG_END
 
 
@@ -4225,8 +4224,8 @@ ROM_START( bullet )
 	ROM_LOAD16_BYTE( "epr-11012.a6",  0x020000, 0x08000, CRC(3992f159) SHA1(50686b394693ab01cbd159ae661f326c8eee50b8) )
 	ROM_LOAD16_BYTE( "epr-11009.a3",  0x020001, 0x08000, CRC(df199999) SHA1(2669e923aa4f1bedc788401f44ad19c318658f00) )
 
-	ROM_REGION( 0x2000, "user1", 0 ) /* decryption key -- still WIP */
-	ROM_LOAD( "317-0041.key", 0x0000, 0x2000, BAD_DUMP CRC(a30ae46c) SHA1(5e7361ab1f1d30c59d7f29152bc6f7175a0aa102) )
+	ROM_REGION( 0x2000, "user1", 0 ) /* decryption key */
+	ROM_LOAD( "317-0041.key", 0x0000, 0x2000, CRC(4cd4861a) SHA1(7578cfbd3efa28fa5eda0c007750b23060a305eb) )
 
 	ROM_REGION( 0x30000, "gfx1", 0 ) /* tiles */
 	ROM_LOAD( "epr-10994.b9",  0x00000, 0x10000, CRC(3035468a) SHA1(778366815a2a74188d72d64c5e1e95215bc4ca81) )
@@ -4872,6 +4871,7 @@ ROM_END
     Golden Axe (Japan), Sega System 16B
     CPU: FD1094 (317-0121)
     ROM Board: 171-5704
+    Sega ID# for ROM board: 834-7002-04
 */
 ROM_START( goldnaxej )
 	ROM_REGION( 0x0c0000, "maincpu", 0 ) /* 68000 code */
@@ -6594,7 +6594,7 @@ GAME( 1989, bayroute,   0,        system16b,      bayroute, generic_5704,       
 GAME( 1989, bayroutej,  bayroute, system16b,      bayroute, generic_5704,       ROT0,   "Sunsoft / Sega", "Bay Route (set 2, Japan, FD1094 317-0115)", 0 )
 GAME( 1989, bayroute1,  bayroute, system16b,      bayroute, generic_5358,       ROT0,   "Sunsoft / Sega", "Bay Route (set 1, US, unprotected)", 0 )
 
-GAME( 1987, bullet,     0,        system16b,      bullet,   generic_5358_small, ROT0,   "Sega",           "Bullet (FD1094 317-0041)", GAME_UNEMULATED_PROTECTION )
+GAME( 1987, bullet,     0,        system16b,      bullet,   generic_5358_small, ROT0,   "Sega",           "Bullet (FD1094 317-0041)", 0 )
 /* Charon */
 GAME( 1991, cotton,     0,        system16b,      cotton,   generic_5704,       ROT0,   "Sega / Success", "Cotton (set 3, World, FD1094 317-0181a)", 0 )
 GAME( 1991, cottonu,    cotton,   system16b,      cotton,   generic_5704,       ROT0,   "Sega / Success", "Cotton (set 2, US, FD1094 317-0180)", 0 )
@@ -6735,8 +6735,8 @@ static WRITE16_HANDLER( isgsm_cart_addr_low_w )
 // when reading from this port the data is xored by a fixed value depending on the cart
 static READ16_HANDLER( isgsm_cart_data_r )
 {
-	int size = memory_region_length(space->machine,"gamecart_rgn");
-	UINT8* rgn = memory_region(space->machine,"gamecart_rgn");
+	int size = space->machine->region("gamecart_rgn")->bytes();
+	UINT8* rgn = space->machine->region("gamecart_rgn")->base();
 
 	isgsm_cart_addr++;
 
@@ -6760,16 +6760,16 @@ static WRITE16_HANDLER( isgsm_data_w )
 
 	switch (isgsm_type&0x0f)
 	{
-		case 0x0: dest = memory_region(space->machine,"gfx2");
+		case 0x0: dest = space->machine->region("gfx2")->base();
 			break;
 
-		case 0x1: dest = memory_region(space->machine,"gfx1");
+		case 0x1: dest = space->machine->region("gfx1")->base();
 			break;
 
-		case 0x2: dest = memory_region(space->machine,"soundcpu");
+		case 0x2: dest = space->machine->region("soundcpu")->base();
 			break;
 
-		case 0x3: dest = memory_region(space->machine,"maincpu");
+		case 0x3: dest = space->machine->region("maincpu")->base();
 			break;
 
 		default: // no other cases?
@@ -6880,7 +6880,7 @@ static WRITE16_HANDLER( isgsm_data_w )
 
 			dest[isgsm_addr] = byte;
 
-			if (dest == memory_region(space->machine,"gfx1"))
+			if (dest == space->machine->region("gfx1")->base())
 			{
 
 				// we need to re-decode the tiles if writing to this area to keep MAME happy
@@ -6974,14 +6974,14 @@ static WRITE16_HANDLER( isgsm_main_bank_change_w )
 	// other values on real hw have strange results, change memory mapping etc??
 	if (data==1)
 	{
-		memory_set_bankptr(space->machine,ISGSM_MAIN_BANK, memory_region(space->machine, "maincpu"));
+		memory_set_bankptr(space->machine,ISGSM_MAIN_BANK, space->machine->region("maincpu")->base());
 	}
 }
 
 static MACHINE_START( isgsm )
 {
-	memory_set_bankptr(machine,ISGSM_CART_BANK, memory_region(machine, "gamecart_rgn"));
-	memory_set_bankptr(machine,ISGSM_MAIN_BANK, memory_region(machine, "bios"));
+	memory_set_bankptr(machine,ISGSM_CART_BANK, machine->region("gamecart_rgn")->base());
+	memory_set_bankptr(machine,ISGSM_MAIN_BANK, machine->region("bios")->base());
 }
 
 static ADDRESS_MAP_START( isgsm_map, ADDRESS_SPACE_PROGRAM, 16 )
@@ -7140,8 +7140,8 @@ static MACHINE_RESET( isgsm )
 	for (int i = 0; i < 16; i++)
 		segaic16_sprites_set_bank(machine, 0, i, i);
 
-	memory_set_bankptr(machine,ISGSM_CART_BANK, memory_region(machine, "gamecart_rgn"));
-	memory_set_bankptr(machine,ISGSM_MAIN_BANK, memory_region(machine, "bios"));
+	memory_set_bankptr(machine,ISGSM_CART_BANK, machine->region("gamecart_rgn")->base());
+	memory_set_bankptr(machine,ISGSM_MAIN_BANK, machine->region("bios")->base());
 	devtag_reset( machine, "maincpu" );
 }
 
@@ -7149,14 +7149,14 @@ static MACHINE_RESET( isgsm )
 static MACHINE_CONFIG_DERIVED( isgsm, system16b )
 	/* basic machine hardware */
 
-	MDRV_DEVICE_REMOVE("maincpu")
+	MCFG_DEVICE_REMOVE("maincpu")
 
-	MDRV_CPU_ADD("maincpu", M68000, 16000000) // no obvious CPU, but seems to be clocked faster than an original system16 based on the boot times
-	MDRV_CPU_PROGRAM_MAP(isgsm_map)
-	MDRV_CPU_VBLANK_INT("screen", irq4_line_hold)
+	MCFG_CPU_ADD("maincpu", M68000, 16000000) // no obvious CPU, but seems to be clocked faster than an original system16 based on the boot times
+	MCFG_CPU_PROGRAM_MAP(isgsm_map)
+	MCFG_CPU_VBLANK_INT("screen", irq4_line_hold)
 
-	MDRV_MACHINE_START(isgsm)
-	MDRV_MACHINE_RESET(isgsm)
+	MCFG_MACHINE_START(isgsm)
+	MCFG_MACHINE_RESET(isgsm)
 
 MACHINE_CONFIG_END
 
@@ -7169,7 +7169,7 @@ DRIVER_INIT( isgsm )
 
 	// decrypt the bios...
 	UINT16* temp = (UINT16*)malloc(0x20000);
-	UINT16* rom = (UINT16*)memory_region(machine, "bios");
+	UINT16* rom = (UINT16*)machine->region("bios")->base();
 	int i;
 
 	for (i=0;i<0x10000;i++)
@@ -7186,7 +7186,7 @@ DRIVER_INIT( shinfz )
 	DRIVER_INIT_CALL( isgsm );
 
 	UINT16* temp = (UINT16*)malloc(0x200000);
-	UINT16* rom = (UINT16*)memory_region(machine, "gamecart_rgn");
+	UINT16* rom = (UINT16*)machine->region("gamecart_rgn")->base();
 	int i;
 
 	for (i=0;i<0x100000;i++)
@@ -7206,7 +7206,7 @@ DRIVER_INIT( tetrbx )
 	DRIVER_INIT_CALL( isgsm );
 
 	UINT16* temp = (UINT16*)malloc(0x80000);
-	UINT16* rom = (UINT16*)memory_region(machine, "gamecart_rgn");
+	UINT16* rom = (UINT16*)machine->region("gamecart_rgn")->base();
 	int i;
 
 	for (i=0;i<0x80000/2;i++)

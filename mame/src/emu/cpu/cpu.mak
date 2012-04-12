@@ -669,6 +669,7 @@ $(CPUOBJ)/i86/i286.o:	$(CPUSRC)/i86/i286.c \
 						$(CPUSRC)/i86/instr86.c \
 						$(CPUSRC)/i86/instr186.c \
 						$(CPUSRC)/i86/instr286.c \
+						$(CPUSRC)/i86/modrm286.h \
 						$(I86DEPS)
 
 $(CPUOBJ)/i386/i386.o:	$(CPUSRC)/i386/i386.c \
@@ -1146,6 +1147,8 @@ $(CPUOBJ)/powerpc/ppcdrc.o:	$(CPUSRC)/powerpc/ppcdrc.c \
 ifneq ($(filter NEC,$(CPUS)),)
 OBJDIRS += $(CPUOBJ)/nec
 CPUOBJS += $(CPUOBJ)/nec/nec.o
+CPUOBJS += $(CPUOBJ)/nec/v25.o
+CPUOBJS += $(CPUOBJ)/nec/v25sfr.o
 DASMOBJS += $(CPUOBJ)/nec/necdasm.o
 endif
 
@@ -1158,10 +1161,23 @@ endif
 $(CPUOBJ)/nec/nec.o:	$(CPUSRC)/nec/nec.c \
 						$(CPUSRC)/nec/nec.h \
 						$(CPUSRC)/nec/necea.h \
-						$(CPUSRC)/nec/nechost.h \
+						$(CPUSRC)/nec/necinstr.c \
 						$(CPUSRC)/nec/necinstr.h \
 						$(CPUSRC)/nec/necmodrm.h \
 						$(CPUSRC)/nec/necpriv.h
+
+$(CPUOBJ)/nec/v25.o:	$(CPUSRC)/nec/v25.c \
+						$(CPUSRC)/nec/nec.h \
+						$(CPUSRC)/nec/necea.h \
+						$(CPUSRC)/nec/necinstr.c \
+						$(CPUSRC)/nec/v25instr.c \
+						$(CPUSRC)/nec/v25instr.h \
+						$(CPUSRC)/nec/necmodrm.h \
+						$(CPUSRC)/nec/v25priv.h
+
+$(CPUOBJ)/nec/v25sfr.o:	$(CPUSRC)/nec/v25sfr.c \
+						$(CPUSRC)/nec/nec.h \
+						$(CPUSRC)/nec/v25priv.h
 
 $(CPUOBJ)/v30mz/v30mz.o:	$(CPUSRC)/v30mz/v30mz.c \
 							$(CPUSRC)/v30mz/v30mz.h \

@@ -67,7 +67,7 @@ public:
 	/* devices */
 	cpu_device *soundcpu;
 	cpu_device *prot;
-	running_device *ics;
+	device_t *ics;
 };
 
 extern UINT16 *pgm_mainram;	// used by nvram handler, we cannot move it to driver data struct
@@ -94,6 +94,8 @@ void pgm_kovshp_decrypt(running_machine *machine);
 void pgm_killbldp_decrypt(running_machine *machine);
 void pgm_svg_decrypt(running_machine *machine);
 void pgm_dw2001_decrypt(running_machine *machine);
+void pgm_ket_decrypt(running_machine *machine);
+void pgm_espgal_decrypt(running_machine *machine);
 
 /*----------- defined in machine/pgmprot.c -----------*/
 

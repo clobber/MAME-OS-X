@@ -1793,56 +1793,56 @@ static const ay8910_interface ay8910_interface_4 =
 static MACHINE_CONFIG_START( nomcu, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",Z80,8000000/2)      /* 4 MHz */
-	MDRV_CPU_PROGRAM_MAP(taitosj_main_nomcu_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu",Z80,8000000/2)      /* 4 MHz */
+	MCFG_CPU_PROGRAM_MAP(taitosj_main_nomcu_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,6000000/2)    /* 3 MHz */
-	MDRV_CPU_PROGRAM_MAP(taitosj_audio_map)
+	MCFG_CPU_ADD("audiocpu", Z80,6000000/2)    /* 3 MHz */
+	MCFG_CPU_PROGRAM_MAP(taitosj_audio_map)
 			/* interrupts: */
 			/* - no interrupts synced with vblank */
 			/* - NMI triggered by the main CPU */
 			/* - periodic IRQ, with frequency 6000000/(4*16*16*10*16) = 36.621 Hz, */
-	MDRV_CPU_PERIODIC_INT(irq0_line_hold, (double)6000000/(4*16*16*10*16))
+	MCFG_CPU_PERIODIC_INT(irq0_line_hold, (double)6000000/(4*16*16*10*16))
 
-	MDRV_MACHINE_START(taitosj)
-	MDRV_MACHINE_RESET(taitosj)
+	MCFG_MACHINE_START(taitosj)
+	MCFG_MACHINE_RESET(taitosj)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(2500) /* not accurate */)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(taitosj)
-	MDRV_PALETTE_LENGTH(64)
+	MCFG_GFXDECODE(taitosj)
+	MCFG_PALETTE_LENGTH(64)
 
-	MDRV_VIDEO_START(taitosj)
-	MDRV_VIDEO_UPDATE(taitosj)
+	MCFG_VIDEO_START(taitosj)
+	MCFG_VIDEO_UPDATE(taitosj)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 6000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_1)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay1", AY8910, 6000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_1)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 6000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_2)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay2", AY8910, 6000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_2)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay3", AY8910, 6000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_3)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
+	MCFG_SOUND_ADD("ay3", AY8910, 6000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_3)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.15)
 
-	MDRV_SOUND_ADD("ay4", AY8910, 6000000/4)
-	MDRV_SOUND_CONFIG(ay8910_interface_4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
+	MCFG_SOUND_ADD("ay4", AY8910, 6000000/4)
+	MCFG_SOUND_CONFIG(ay8910_interface_4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.30)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.20)
 MACHINE_CONFIG_END
 
 
@@ -1850,23 +1850,23 @@ MACHINE_CONFIG_END
 static MACHINE_CONFIG_DERIVED( mcu, nomcu )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(taitosj_main_mcu_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(taitosj_main_mcu_map)
 
-	MDRV_CPU_ADD("mcu", M68705,3000000)      /* xtal is 3MHz, divided by 4 internally */
-	MDRV_CPU_PROGRAM_MAP(taitosj_mcu_map)
+	MCFG_CPU_ADD("mcu", M68705,3000000)      /* xtal is 3MHz, divided by 4 internally */
+	MCFG_CPU_PROGRAM_MAP(taitosj_mcu_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(HZ(6000))
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( kikstart, mcu )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(kikstart_main_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(kikstart_main_map)
 
-	MDRV_VIDEO_UPDATE(kikstart)
+	MCFG_VIDEO_UPDATE(kikstart)
 MACHINE_CONFIG_END
 
 
@@ -1966,6 +1966,42 @@ ROM_START( junglek )
 	ROM_REGION( 0x0100, "proms", 0 )      /* layer PROM */
 	ROM_LOAD( "eb16.22",      0x0000, 0x0100, CRC(b833b5ea) SHA1(d233f1bf8a3e6cd876853ffd721b9b64c61c9047) )
 ROM_END
+
+// seems to be based on the junglek - Jungle King (Japan) revision
+// this is sometimes sold as a prototype, it isn't, it's a cheaply hacked bootleg - it isn't even based on the oldest code revision!
+ROM_START( jungleby )
+	ROM_REGION( 0x12000, "maincpu", 0 )
+	ROM_LOAD( "j1.bin",   0x00000, 0x1000, CRC(6f2ac11f) SHA1(c6592d369449140ed4a8dffea76f4809e0f76f06) ) // modified copyright
+	ROM_LOAD( "j2.bin",   0x01000, 0x1000, CRC(07cc9a21) SHA1(3fe35935e0a430ab0edc6a762623972fa37ea926) )
+	ROM_LOAD( "j3.bin",   0x02000, 0x1000, CRC(a20e5a48) SHA1(af961b671dc4c865d0181d08a70b902bb96f29d0) )
+	ROM_LOAD( "j4.bin",   0x03000, 0x1000, CRC(19ea7f83) SHA1(2399cc89f73811575c3f644d5c04ef13ceec6838) )
+	ROM_LOAD( "j5.bin",   0x04000, 0x1000, CRC(844365ea) SHA1(af34712620e4b784a5014283d3111048c5f81a56) )
+	ROM_LOAD( "j6.bin",   0x05000, 0x1000, CRC(27a95fd5) SHA1(160ee5d11126ac4155b479e43ec1bd6a4e9e21e7) )
+	ROM_LOAD( "j7.bin",   0x06000, 0x1000, CRC(5c3199e0) SHA1(c57dec92998b971d76aecd23674c25cf7b8be667) )
+	ROM_LOAD( "j8.bin",   0x07000, 0x1000, CRC(895e5708) SHA1(66261a266d026d90074eafb564d647bde3a7b736) ) // modified title logo
+
+	/* 10000-10fff space for another banked ROM (not used) */
+	ROM_LOAD( "j9.bin",     0x11000, 0x1000, CRC(1a9c0a26) SHA1(82f4cebeba90419e83a00427b671985824babd7a) ) /* banked at 7000 */
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "j10.bin",   0x0000, 0x1000, CRC(dee7f5d4) SHA1(cd8179a17ccd054fb470c4eee97192c2dd226397) )
+	ROM_LOAD( "j11.bin",   0x1000, 0x1000, CRC(bffd3d21) SHA1(a2b3393e9694d6979d39ab0f1ab82b7ef892b3da) )
+	ROM_LOAD( "j12.bin",   0x2000, 0x1000, CRC(cee485fc) SHA1(1e0c52ec6b1d3cfd47247db71bcf3fe476c32039) )
+
+	ROM_REGION( 0x8000, "gfx1", 0 )   /* graphic ROMs used at runtime */
+	ROM_LOAD( "j13.bin",     0x0000, 0x1000, CRC(8f83c290) SHA1(aa95ed2d2e15f573e092e8eed7d80479512d9409) )
+	ROM_LOAD( "j14.bin",     0x1000, 0x1000, CRC(89fd19f1) SHA1(fc7dfe3a1d78ac37a036fa9d8ebf3a33a2f4cbe8) )
+	ROM_LOAD( "j15.bin",     0x2000, 0x1000, CRC(70e8fc12) SHA1(505c90c662d372d28cb38201433054b8e3d723d1) )
+	ROM_LOAD( "j16.bin",     0x3000, 0x1000, CRC(bcbac1a3) SHA1(bcd5fc9b3791ab67e0ad9f9ced7226853e9a2a00) )
+	ROM_LOAD( "j17.bin",     0x4000, 0x1000, CRC(b946c87d) SHA1(d16cb6bf38e00ae11c204cbf8f400f8a85c807c2) )
+	ROM_LOAD( "j18.bin",     0x5000, 0x1000, CRC(320db2e1) SHA1(ca8722010712302b491eb5f51d73043bcb2ddc8f) )
+	ROM_LOAD( "j19.bin",     0x6000, 0x1000, CRC(8438eb41) SHA1(fc76747abe91e965390e06533c56b6cd4e2d62a0) ) // modified tiles for title logo
+	ROM_LOAD( "j20.bin",     0x7000, 0x1000, CRC(932eb667) SHA1(4bf7c01ab212b616931a21a43a453521aa01ff36) )
+
+	ROM_REGION( 0x0100, "proms", 0 )      /* layer PROM */
+	ROM_LOAD( "eb16.22",      0x0000, 0x0100, CRC(b833b5ea) SHA1(d233f1bf8a3e6cd876853ffd721b9b64c61c9047) )
+ROM_END
+
 
 ROM_START( junglekj2 )
 	ROM_REGION( 0x12000, "maincpu", 0 )
@@ -2738,6 +2774,7 @@ GAME( 1982, junglekj2,junglek,  nomcu,    junglek,    taitosj, ROT180, "Taito Co
 GAME( 1982, jungleh,  junglek,  nomcu,    junglek,    taitosj, ROT180, "Taito America Corporation", "Jungle Hunt (US)", GAME_SUPPORTS_SAVE )
 GAME( 1983, junglehbr,junglek,  nomcu,    junglek,    junglhbr,ROT180, "Taito do Brasil",   "Jungle Hunt (Brazil)", GAME_SUPPORTS_SAVE )
 GAME( 1982, piratpet, junglek,  nomcu,    piratpet,   taitosj, ROT180, "Taito America Corporation", "Pirate Pete", GAME_SUPPORTS_SAVE )
+GAME( 1982, jungleby, junglek,  nomcu,    junglek,    taitosj, ROT180, "bootleg", "Jungle Boy (bootleg)", GAME_SUPPORTS_SAVE )
 GAME( 1982, alpine,   0,        nomcu,    alpine,     alpine,  ROT270, "Taito Corporation", "Alpine Ski (set 1)", GAME_SUPPORTS_SAVE )
 GAME( 1982, alpinea,  alpine,   nomcu,    alpinea,    alpinea, ROT270, "Taito Corporation", "Alpine Ski (set 2)", GAME_SUPPORTS_SAVE )
 GAME( 1982, timetunl, 0,        nomcu,    timetunl,   taitosj, ROT0,   "Taito Corporation", "Time Tunnel", GAME_SUPPORTS_SAVE )

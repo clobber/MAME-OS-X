@@ -18,7 +18,7 @@
 
 #define LOG_ICW		0
 #define LOG_OCW		0
-#define LOG_GENERAL	0
+#define LOG_GENERAL	 0
 
 typedef enum
 {
@@ -70,7 +70,7 @@ struct pic8259
 };
 
 
-INLINE pic8259_t *get_safe_token(running_device *device) {
+INLINE pic8259_t *get_safe_token(device_t *device) {
 	assert( device != NULL );
 	assert( device->type() == PIC8259 );
 	return ( pic8259_t *) downcast<legacy_device_base *>(device)->token();
@@ -79,7 +79,7 @@ INLINE pic8259_t *get_safe_token(running_device *device) {
 
 static TIMER_CALLBACK( pic8259_timerproc )
 {
-	running_device *device = (running_device *)ptr;
+	device_t *device = (device_t *)ptr;
 	pic8259_t	*pic8259 = get_safe_token(device);
 	int irq;
 	UINT8 mask;
@@ -118,7 +118,7 @@ INLINE void pic8259_set_timer(pic8259_t *pic8259)
 }
 
 
-static void pic8259_set_irq_line(running_device *device, int irq, int state)
+static void pic8259_set_irq_line(device_t *device, int irq, int state)
 {
 	pic8259_t	*pic8259 = get_safe_token(device);
 	UINT8		old_irq_lines = pic8259->irq_lines;
@@ -157,7 +157,7 @@ WRITE_LINE_DEVICE_HANDLER( pic8259_ir5_w ) { pic8259_set_irq_line(device, 5, sta
 WRITE_LINE_DEVICE_HANDLER( pic8259_ir6_w ) { pic8259_set_irq_line(device, 6, state); }
 WRITE_LINE_DEVICE_HANDLER( pic8259_ir7_w ) { pic8259_set_irq_line(device, 7, state); }
 
-int pic8259_acknowledge(running_device *device)
+int pic8259_acknowledge(device_t *device)
 {
 	pic8259_t	*pic8259 = get_safe_token(device);
 	UINT8 mask;
@@ -174,6 +174,8 @@ int pic8259_acknowledge(running_device *device)
 				logerror("pic8259_acknowledge(): PIC acknowledge IRQ #%d\n", irq);
 			pic8259->irr &= ~mask;
 			pic8259->esr &= ~mask;
+			pic8259->irq_lines &= ~mask;
+
 			if (!pic8259->auto_eoi)
 				pic8259->isr |= mask;
 			pic8259_set_timer(pic8259);
@@ -205,14 +207,14 @@ READ8_DEVICE_HANDLER( pic8259_r )
 			{
 				/* Polling mode */
 				if ( pic8259->isr & ~pic8259->imr )
-				{
-					int irq;
-
 					pic8259_acknowledge( device );
 
+				if ( pic8259->irr & ~pic8259->imr )
+				{
+					int irq;
 					for ( irq = 0; irq < IRQ_COUNT; irq++ )
 					{
-						if ( ( 1 << irq ) & pic8259->isr & ~pic8259->imr )
+						if ( ( 1 << irq ) & pic8259->irr & ~pic8259->imr )
 						{
 							data = 0x80 | irq;
 							break;
@@ -269,6 +271,7 @@ WRITE8_DEVICE_HANDLER( pic8259_w )
 				pic8259->icw4_needed		= (data & 0x01) ? 1 : 0;
 				pic8259->vector_addr_low	= (data & 0xe0);
 				pic8259->state			= STATE_ICW2;
+				pic8259->irq_lines          = 0x00;
 			}
 			else if (pic8259->state == STATE_READY)
 			{

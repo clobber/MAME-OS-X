@@ -149,7 +149,7 @@ int mame_is_valid_machine(running_machine *machine)
     mame_execute - run the core emulation
 -------------------------------------------------*/
 
-int mame_execute(core_options *options)
+int mame_execute(osd_interface &osd, core_options *options)
 {
 	bool firstgame = true;
 	bool firstrun = true;
@@ -192,7 +192,7 @@ int mame_execute(core_options *options)
 		const machine_config *config = global_alloc(machine_config(*driver));
 
 		// create the machine structure and driver
-		running_machine *machine = global_alloc(running_machine(*config, *options, started_empty));
+		running_machine *machine = global_alloc(running_machine(*config, osd, *options, started_empty));
 
 		// looooong term: remove this
 		global_machine = machine;
@@ -514,7 +514,7 @@ void mame_parse_ini_files(core_options *options, const game_driver *driver)
 		parse_ini_file(options, "debug", OPTION_PRIORITY_DEBUG_INI);
 
 	/* if we have a valid game driver, parse game-specific INI files */
-	if (driver != NULL)
+	if (driver != NULL && driver != &GAME_NAME(empty))
 	{
 #ifndef MESS
 		const game_driver *parent = driver_get_clone(driver);
@@ -529,7 +529,7 @@ void mame_parse_ini_files(core_options *options, const game_driver *driver)
 		/* parse "vector.ini" for vector games */
 		{
 			machine_config config(*driver);
-			for (const screen_device_config *devconfig = screen_first(config); devconfig != NULL; devconfig = screen_next(devconfig))
+			for (const screen_device_config *devconfig = config.first_screen(); devconfig != NULL; devconfig = devconfig->next_screen())
 				if (devconfig->screen_type() == SCREEN_TYPE_VECTOR)
 				{
 					parse_ini_file(options, "vector", OPTION_PRIORITY_VECTOR_INI);
@@ -566,6 +566,11 @@ static int parse_ini_file(core_options *options, const char *name, int priority)
 	file_error filerr;
 	mame_file *file;
 
+	/* update game name so depending callback options could be added */
+	if (priority==OPTION_PRIORITY_DRIVER_INI) {
+		options_force_option_callback(options, OPTION_GAMENAME, name, priority);
+	}
+
 	/* don't parse if it has been disabled */
 	if (!options_get_bool(options, OPTION_READCONFIG))
 		return FALSE;
@@ -575,11 +580,6 @@ static int parse_ini_file(core_options *options, const char *name, int priority)
 	filerr = mame_fopen_options(options, SEARCHPATH_INI, fname, OPEN_FLAG_READ, &file);
 	if (filerr != FILERR_NONE)
 		return FALSE;
-
-	/* update game name so depending callback options could be added */
-	if (priority==OPTION_PRIORITY_DRIVER_INI) {
-		options_force_option_callback(options, OPTION_GAMENAME, name, priority);
-	}
 
 	/* parse the file and close it */
 	mame_printf_verbose("Parsing %s.ini\n", name);

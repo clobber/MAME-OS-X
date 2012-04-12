@@ -49,7 +49,7 @@
 USE_DISPATCH_GL = 1
 
 # uncomment and change the next line to compile and link to specific
-# SDL library. This is currently only supported for unix!
+# SDL library. This is currently supported for unix and win32.
 # There is no need to play with this option unless you are doing
 # active development on sdlmame or SDL.
 
@@ -140,6 +140,7 @@ ifeq ($(TARGETOS),freebsd)
 BASE_TARGETOS = unix
 SYNC_IMPLEMENTATION = tc
 DEFS += -DNO_AFFINITY_NP
+LIBS += -lutil
 # /usr/local/include is not considered a system include directory
 # on FreeBSD. GL.h resides there and throws warnings
 CCOMFLAGS += -isystem /usr/local/include
@@ -151,6 +152,13 @@ endif
 ifeq ($(TARGETOS),openbsd)
 BASE_TARGETOS = unix
 SYNC_IMPLEMENTATION = ntc
+LIBS += -lutil
+endif
+
+ifeq ($(TARGETOS),netbsd)
+BASE_TARGETOS = unix
+SYNC_IMPLEMENTATION = ntc
+LIBS += -lutil
 endif
 
 ifeq ($(TARGETOS),solaris)
@@ -257,6 +265,8 @@ OSDCOREOBJS = \
 	$(SDLOBJ)/strconv.o	\
 	$(SDLOBJ)/sdldir.o	\
 	$(SDLOBJ)/sdlfile.o 	\
+	$(SDLOBJ)/sdlptty_$(BASE_TARGETOS).o	\
+	$(SDLOBJ)/sdlsocket.o	\
 	$(SDLOBJ)/sdlmisc_$(BASE_TARGETOS).o	\
 	$(SDLOBJ)/sdlos_$(BASE_TARGETOS).o	\
 	$(SDLOBJ)/sdlsync_$(SYNC_IMPLEMENTATION).o     \
@@ -337,13 +347,28 @@ endif
 endif
 
 ifndef SDL_INSTALL_ROOT
-INCPATH += `sdl-config --cflags`
+INCPATH += `sdl-config --cflags  | sed 's:/SDL::'`
 LIBS += -lm `sdl-config --libs`
+
 else
-INCPATH += -I$(SDL_INSTALL_ROOT)/include
-CCOMFLAGS += -D_GNU_SOURCE=1
-LIBS += -lm -L$(SDL_INSTALL_ROOT)/lib -Wl,-rpath,$(SDL_INSTALL_ROOT)/lib -lSDL
+# The commented out statements document what sdl-config returns when build from svn.
+# sdl-config --libs on ubuntu returns "-L/usr/lib -lSDL" which is not what we really
+# want in a multi-version SDL environment. Should the svn sdl-config at some point
+# return the same output, we need the commented out section again.
+
+#INCPATH += -I$(SDL_INSTALL_ROOT)/include
+#CCOMFLAGS += -D_GNU_SOURCE=1
+#LIBS += -lm -L$(SDL_INSTALL_ROOT)/lib -Wl,-rpath,$(SDL_INSTALL_ROOT)/lib -lSDL
+
+# FIXME: remove the directfb ref. later. This is just there for now to work around an issue with SDL1.3.
+INCPATH += -I$(SDL_INSTALL_ROOT)/include/directfb
+INCPATH += `$(SDL_INSTALL_ROOT)/bin/sdl-config --cflags  | sed 's:/SDL::'`
+LIBS += -lm `$(SDL_INSTALL_ROOT)/bin/sdl-config --libs`
 endif
+
+INCPATH += `pkg-config --cflags fontconfig`
+LIBS += `pkg-config --libs fontconfig`
+LIBS += -lSDL_ttf -lutil
 
 endif # Unix
 

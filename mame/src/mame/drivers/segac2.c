@@ -9,21 +9,22 @@
     Sega's C2 was used between 1989 and 1994, the hardware being very similar to that
     used by the Sega MegaDrive/Genesis Home Console Sega produced around the same time.
 
-    The Columns manual call this system 'System 14' instead of system C/C2.
+    The Columns and Bloxeed (USA) manual call this system 'System 14' instead of system C/C2.
 
 
     todo: fill in protection chip data
 
     Year  Game                       Developer         Protection Chip  Board  Number
-    ====  ====================       ================  ===============  =====  ======
+    ====  ====================       ================  ===============  =====  =========
     1989  Bloxeed                    Sega / Elorg      n/a              C
+    1989  Bloxeed (USA)              Sega / Elorg      317-0140         C      171-5880B
     1990  Columns                    Sega              317-0149         C      171-5880B
     1990  Columns II                 Sega              317-0160         C
     1990  ThunderForce AC            Sega / Technosoft 317-0172         C2
     1990  Borench                    Sega              317-0173         C2
     1991  Twin Squash                Sega              317-0193         C2
     1992  Ribbit!                    Sega              317-0178         C2
-    1992  Puyo Puyo                  Sega / Compile    317-0203         C2
+    1992  Puyo Puyo                  Sega / Compile    317-0203         C2     171-5992A
     1992  Tant-R (Japan)             Sega              317-0211         C2
     1992  Tant-R (Korea)             Sega              ?                C2
     1994  PotoPoto (Japan)           Sega              317-0218         C2
@@ -76,8 +77,8 @@
 
 #include "includes/megadriv.h"
 
-#define XL1_CLOCK			640000
-#define XL2_CLOCK			53693175
+#define XL1_CLOCK			XTAL_640kHz
+#define XL2_CLOCK			XTAL_53_693175MHz
 
 
 #define LOG_PROTECTION		1
@@ -140,8 +141,8 @@ static MACHINE_RESET( segac2 )
 
 	/* determine how many sound banks */
 	sound_banks = 0;
-	if (memory_region(machine, "upd"))
-		sound_banks = memory_region_length(machine, "upd") / 0x20000;
+	if (machine->region("upd")->base())
+		sound_banks = machine->region("upd")->bytes() / 0x20000;
 
 	/* reset the protection */
 	prot_write_buf = 0;
@@ -429,7 +430,7 @@ static WRITE16_HANDLER( io_chip_w )
 			}
 			if (sound_banks > 1)
 			{
-				running_device *upd = space->machine->device("upd");
+				device_t *upd = space->machine->device("upd");
 				newbank = (data >> 2) & (sound_banks - 1);
 				upd7759_set_bank_base(upd, newbank * 0x20000);
 			}
@@ -439,7 +440,7 @@ static WRITE16_HANDLER( io_chip_w )
 		case 0x1c/2:
 			if (sound_banks > 1)
 			{
-				running_device *upd = space->machine->device("upd");
+				device_t *upd = space->machine->device("upd");
 				upd7759_reset_w(upd, (data >> 1) & 1);
 			}
 			break;
@@ -1313,7 +1314,7 @@ INPUT_PORTS_END
     Sound interfaces
 ******************************************************************************/
 
-static void  segac2_irq2_interrupt(running_device *device, int state)
+static void  segac2_irq2_interrupt(device_t *device, int state)
 {
 	//printf("sound irq %d\n", state);
 	cputag_set_input_line(device->machine, "maincpu", 2, state ? ASSERT_LINE : CLEAR_LINE);
@@ -1364,41 +1365,41 @@ static VIDEO_UPDATE(segac2_new)
 static MACHINE_CONFIG_START( segac, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, XL2_CLOCK/6)
-	MDRV_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_ADD("maincpu", M68000, XL2_CLOCK/6)
+	MCFG_CPU_PROGRAM_MAP(main_map)
 
-	MDRV_MACHINE_START(segac2)
-	MDRV_MACHINE_RESET(segac2)
-	MDRV_NVRAM_ADD_RANDOM_FILL("nvram")
+	MCFG_MACHINE_START(segac2)
+	MCFG_MACHINE_RESET(segac2)
+	MCFG_NVRAM_ADD_RANDOM_FILL("nvram")
 
-	MDRV_FRAGMENT_ADD(megadriv_timers)
+	MCFG_FRAGMENT_ADD(megadriv_timers)
 
 	/* video hardware */
-	//MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS)
+	//MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS | VIDEO_HAS_HIGHLIGHTS)
 
-	MDRV_SCREEN_ADD("megadriv", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)) // Vblank handled manually.
-	MDRV_SCREEN_SIZE(64*8, 64*8)
-	MDRV_SCREEN_VISIBLE_AREA(0, 32*8-1, 0, 28*8-1)
+	MCFG_SCREEN_ADD("megadriv", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)) // Vblank handled manually.
+	MCFG_SCREEN_SIZE(64*8, 64*8)
+	MCFG_SCREEN_VISIBLE_AREA(0, 32*8-1, 0, 28*8-1)
 
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(segac2_new)
-	MDRV_VIDEO_UPDATE(segac2_new)
-	MDRV_VIDEO_EOF( megadriv )
+	MCFG_VIDEO_START(segac2_new)
+	MCFG_VIDEO_UPDATE(segac2_new)
+	MCFG_VIDEO_EOF( megadriv )
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymsnd", YM3438, XL2_CLOCK/7)
-	MDRV_SOUND_CONFIG(ym3438_intf)
-	MDRV_SOUND_ROUTE(0, "mono", 0.50)
+	MCFG_SOUND_ADD("ymsnd", YM3438, XL2_CLOCK/7)
+	MCFG_SOUND_CONFIG(ym3438_intf)
+	MCFG_SOUND_ROUTE(0, "mono", 0.50)
 	/* right channel not connected */
 
-	MDRV_SOUND_ADD("snsnd", SN76496, XL2_CLOCK/15)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("snsnd", SN76496, XL2_CLOCK/15)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
 
@@ -1407,8 +1408,8 @@ static MACHINE_CONFIG_DERIVED( segac2, segac )
 	/* basic machine hardware */
 
 	/* sound hardware */
-	MDRV_SOUND_ADD("upd", UPD7759, XL1_CLOCK)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_SOUND_ADD("upd", UPD7759, XL1_CLOCK)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
 
@@ -1434,10 +1435,16 @@ ROM_END
 
 ROM_START( bloxeedu ) /* Bloxeed USA (C System Version)  (c)1989 Sega / Elorg */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr12997a.32", 0x000000, 0x020000, CRC(23655bc9) SHA1(32fc1f75a43aa49dc656d40d34ec10f3f0a2bdb3) )
-	ROM_LOAD16_BYTE( "epr12996a.31", 0x000001, 0x020000, CRC(83c83f0c) SHA1(ca8e2ad7cceabd8de7a91b91cb92eafb6dd3171f) )
-	ROM_LOAD16_BYTE( "epr12993.34", 0x040000, 0x020000, CRC(487bc8fc) SHA1(3fb205bf56f35443e993e08b39c1a08c13ca5e3b) )
-	ROM_LOAD16_BYTE( "epr12992.33", 0x040001, 0x020000, CRC(19b0084c) SHA1(b3ba0f3d8d39a19aa66edb24885ea21192e22704) )
+	ROM_LOAD16_BYTE( "epr-12997a.ic32", 0x000000, 0x020000, CRC(23655bc9) SHA1(32fc1f75a43aa49dc656d40d34ec10f3f0a2bdb3) )
+	ROM_LOAD16_BYTE( "epr-12996a.ic31", 0x000001, 0x020000, CRC(83c83f0c) SHA1(ca8e2ad7cceabd8de7a91b91cb92eafb6dd3171f) )
+	ROM_LOAD16_BYTE( "epr-12993.ic34",  0x040000, 0x020000, CRC(487bc8fc) SHA1(3fb205bf56f35443e993e08b39c1a08c13ca5e3b) )
+	ROM_LOAD16_BYTE( "epr-12992.ic33",  0x040001, 0x020000, CRC(19b0084c) SHA1(b3ba0f3d8d39a19aa66edb24885ea21192e22704) )
+
+	ROM_REGION( 0x0004, "pals", 0 )
+	ROM_LOAD( "315-5393.ic24", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5394.ic25", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5395.ic26", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "317-0140.ic27", 0x0000, 0x0001, NO_DUMP ) /* EPM4032DC (Protection Chip) */
 ROM_END
 
 
@@ -1618,7 +1625,7 @@ ROM_START( puyo ) /* Puyo Puyo  (c)1992 Sega / Compile */
 	ROM_LOAD( "epr-15196.4", 0x000000, 0x020000, CRC(79112b3b) SHA1(fc3a202e1e2ff39950d4af689b7fcca86c301805) )
 ROM_END
 
-ROM_START( puyoj ) /* Puyo Puyo  (c)1992 Sega / Compile */
+ROM_START( puyoj ) /* Puyo Puyo (Rev B)  (c)1992 Sega / Compile */
 	ROM_REGION( 0x200000, "maincpu", 0 )
 	ROM_LOAD16_BYTE( "epr-15036b.32", 0x000000, 0x020000, CRC(5310ca1b) SHA1(dcfe2bf7476b640dfb790e8716e75b483d535e48) )
 	ROM_LOAD16_BYTE( "epr-15035b.31", 0x000001, 0x020000, CRC(bc62e400) SHA1(12bb6031574838a28889f6edb31dbb689265287c) )
@@ -1632,14 +1639,20 @@ ROM_END
 
 ROM_START( puyoja ) /* Puyo Puyo (Rev A)  (c)1992 Sega / Compile */
 	ROM_REGION( 0x200000, "maincpu", 0 )
-	ROM_LOAD16_BYTE( "epr-15036a.32", 0x000000, 0x020000, CRC(61b35257) SHA1(e09a7e992999befc88fc7928a478d1e2d14d7b08) )
-	ROM_LOAD16_BYTE( "epr-15035a.31", 0x000001, 0x020000, CRC(dfebb6d9) SHA1(6f685729ef4660c2eba409c5236c6d2f313eef5b) )
+	ROM_LOAD16_BYTE( "epr-15036a.ic32", 0x000000, 0x020000, CRC(61b35257) SHA1(e09a7e992999befc88fc7928a478d1e2d14d7b08) )
+	ROM_LOAD16_BYTE( "epr-15035a.ic31", 0x000001, 0x020000, CRC(dfebb6d9) SHA1(6f685729ef4660c2eba409c5236c6d2f313eef5b) )
 	/* 0x040000 - 0x100000 Empty */
-	ROM_LOAD16_BYTE( "epr-15038.34", 0x100000, 0x020000, CRC(3b9eea0c) SHA1(e3e6148c1769834cc0061932eb035daa79673144) )
-	ROM_LOAD16_BYTE( "epr-15037.33", 0x100001, 0x020000, CRC(be2f7974) SHA1(77027ced7a62f94e9fc6e8a0a4ac0c62f7ea813b) )
+	ROM_LOAD16_BYTE( "epr-15038.ic34",  0x100000, 0x020000, CRC(3b9eea0c) SHA1(e3e6148c1769834cc0061932eb035daa79673144) )
+	ROM_LOAD16_BYTE( "epr-15037.ic33",  0x100001, 0x020000, CRC(be2f7974) SHA1(77027ced7a62f94e9fc6e8a0a4ac0c62f7ea813b) )
 
 	ROM_REGION( 0x020000, "upd", 0 )
-	ROM_LOAD( "epr-15034.4", 0x000000, 0x020000, CRC(5688213b) SHA1(f3f234e482871ca903a782e51008f3bfed04ee63) )
+	ROM_LOAD( "epr-15034.ic4", 0x000000, 0x020000, CRC(5688213b) SHA1(f3f234e482871ca903a782e51008f3bfed04ee63) )
+
+	ROM_REGION( 0x0004, "pals", 0 )
+	ROM_LOAD( "315-5452.ic24", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5394.ic25", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "315-5395.ic26", 0x0000, 0x0001, NO_DUMP ) /* PALCE16V8H-25PC */
+	ROM_LOAD( "317-0203.ic27", 0x0000, 0x0001, NO_DUMP ) /* EPM4032DC-25 (Protection Chip) */
 ROM_END
 
 ROM_START( puyobl ) /* Puyo Puyo  (c)1992 Sega / Compile  Bootleg */
@@ -1821,7 +1834,7 @@ it should be, otherwise I don't see how the formula could be computed.
 
 static void segac2_common_init(running_machine* machine, int (*func)(int in))
 {
-	running_device *upd = machine->device("upd");
+	device_t *upd = machine->device("upd");
 
 	DRIVER_INIT_CALL( megadriv_c2 );
 
@@ -2156,7 +2169,7 @@ static DRIVER_INIT( ichirjbl )
 {
 
 	/* when did this actually work? - the protection is patched but the new check fails? */
-	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
+	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
 	rom[0x390/2] = 0x6600;
 
 	segac2_common_init(machine, NULL);

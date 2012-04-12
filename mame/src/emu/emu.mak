@@ -30,6 +30,11 @@ OBJDIRS += \
 	$(EMUOBJ)/layout \
 	$(EMUOBJ)/video \
 
+OSDSRC = $(SRC)/osd
+OSDOBJ = $(OBJ)/osd
+
+OBJDIRS += \
+	$(OSDOBJ)
 
 
 #-------------------------------------------------
@@ -84,6 +89,7 @@ EMUOBJS = \
 	$(EMUOBJ)/rendutil.o \
 	$(EMUOBJ)/romload.o \
 	$(EMUOBJ)/schedule.o \
+	$(EMUOBJ)/screen.o \
 	$(EMUOBJ)/softlist.o \
 	$(EMUOBJ)/sound.o \
 	$(EMUOBJ)/state.o \
@@ -110,7 +116,8 @@ EMUOBJS = \
 	$(EMUOBJ)/debug/express.o \
 	$(EMUOBJ)/debug/textbuf.o \
 	$(EMUOBJ)/debugint/debugint.o \
-	$(EMUOBJ)/profiler.o
+	$(EMUOBJ)/profiler.o \
+	$(OSDOBJ)/osdepend.o
 
 EMUSOUNDOBJS = \
 	$(EMUOBJ)/sound/filter.o \
@@ -184,6 +191,9 @@ EMUMACHINEOBJS = \
 	$(EMUMACHINE)/roc10937.o \
 	$(EMUMACHINE)/rp5h01.o \
 	$(EMUMACHINE)/rtc65271.o \
+	$(EMUMACHINE)/s3c2400.o \
+	$(EMUMACHINE)/s3c2410.o \
+	$(EMUMACHINE)/s3c2440.o \
 	$(EMUMACHINE)/scsi.o \
 	$(EMUMACHINE)/scsicd.o \
 	$(EMUMACHINE)/scsidev.o \
@@ -260,6 +270,10 @@ $(EMUOBJ)/rendfont.o:	$(EMUOBJ)/uismall.fh
 
 $(EMUOBJ)/video.o:	$(EMUSRC)/rendersw.c
 $(EMUVIDEO)/v9938.o:	$(EMUSRC)/video/v9938mod.c
+
+$(EMUMACHINE)/s3c2400.o:	$(EMUSRC)/machine/s3c24xx.c
+$(EMUMACHINE)/s3c2410.o:	$(EMUSRC)/machine/s3c24xx.c
+$(EMUMACHINE)/s3c2440.o:	$(EMUSRC)/machine/s3c24xx.c
 
 
 #-------------------------------------------------

@@ -145,14 +145,14 @@ static ADDRESS_MAP_START( pandoras_master_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x2000) AM_WRITE(pandoras_cpub_irqtrigger_w)							/* cause FIRQ on CPU B */
 	AM_RANGE(0x2001, 0x2001) AM_WRITE(watchdog_reset_w)										/* watchdog reset */
 	AM_RANGE(0x4000, 0x5fff) AM_ROM															/* space for diagnostic ROM */
-	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("share4")											/* Shared RAM with CPU B */
+	AM_RANGE(0x6000, 0x67ff) AM_RAM AM_SHARE("share4")										/* Shared RAM with CPU B */
 	AM_RANGE(0x8000, 0xffff) AM_ROM															/* ROM */
 ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( pandoras_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x0fff) AM_RAM AM_SHARE("share1")										/* Work RAM (Shared with CPU A) */
-	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(pandoras_cram_w) AM_SHARE("share2")						/* Color RAM (shared with CPU A) */
-	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(pandoras_vram_w) AM_SHARE("share3")						/* Video RAM (shared with CPU A) */
+	AM_RANGE(0x1000, 0x13ff) AM_RAM_WRITE(pandoras_cram_w) AM_SHARE("share2")				/* Color RAM (shared with CPU A) */
+	AM_RANGE(0x1400, 0x17ff) AM_RAM_WRITE(pandoras_vram_w) AM_SHARE("share3")				/* Video RAM (shared with CPU A) */
 	AM_RANGE(0x1800, 0x1800) AM_READ_PORT("DSW1")
 	AM_RANGE(0x1800, 0x1807) AM_WRITE(pandoras_int_control_w)								/* INT control */
 	AM_RANGE(0x1a00, 0x1a00) AM_READ_PORT("SYSTEM")
@@ -163,7 +163,7 @@ static ADDRESS_MAP_START( pandoras_slave_map, ADDRESS_SPACE_PROGRAM, 8 )
 //  AM_RANGE(0x1e00, 0x1e00) AM_READNOP                                                     /* ??? seems to be important */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(watchdog_reset_w)										/* watchdog reset */
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(pandoras_cpua_irqtrigger_w)							/* cause FIRQ on CPU A */
-	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE("share4")												/* Shared RAM with the CPU A */
+	AM_RANGE(0xc000, 0xc7ff) AM_RAM AM_SHARE("share4")										/* Shared RAM with the CPU A */
 	AM_RANGE(0xe000, 0xffff) AM_ROM															/* ROM */
 ADDRESS_MAP_END
 
@@ -172,8 +172,8 @@ static ADDRESS_MAP_START( pandoras_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x2000, 0x23ff) AM_RAM															/* RAM */
 	AM_RANGE(0x4000, 0x4000) AM_READ(soundlatch_r)											/* soundlatch_r */
 	AM_RANGE(0x6000, 0x6000) AM_DEVWRITE("aysnd", ay8910_address_w)							/* AY-8910 */
-	AM_RANGE(0x6001, 0x6001) AM_DEVREAD("aysnd", ay8910_r)										/* AY-8910 */
-	AM_RANGE(0x6002, 0x6002) AM_DEVWRITE("aysnd", ay8910_data_w)								/* AY-8910 */
+	AM_RANGE(0x6001, 0x6001) AM_DEVREAD("aysnd", ay8910_r)									/* AY-8910 */
+	AM_RANGE(0x6002, 0x6002) AM_DEVWRITE("aysnd", ay8910_data_w)							/* AY-8910 */
 	AM_RANGE(0x8000, 0x8000) AM_WRITE(pandoras_i8039_irqtrigger_w)							/* cause INT on the 8039 */
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(soundlatch2_w)										/* sound command to the 8039 */
 ADDRESS_MAP_END
@@ -352,50 +352,50 @@ static const ay8910_interface ay8910_config =
 static MACHINE_CONFIG_START( pandoras, pandoras_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M6809, MASTER_CLOCK/6)	/* CPU A */
-	MDRV_CPU_PROGRAM_MAP(pandoras_master_map)
-	MDRV_CPU_VBLANK_INT("screen", pandoras_master_interrupt)
+	MCFG_CPU_ADD("maincpu", M6809, MASTER_CLOCK/6)	/* CPU A */
+	MCFG_CPU_PROGRAM_MAP(pandoras_master_map)
+	MCFG_CPU_VBLANK_INT("screen", pandoras_master_interrupt)
 
-	MDRV_CPU_ADD("sub", M6809, MASTER_CLOCK/6)		/* CPU B */
-	MDRV_CPU_PROGRAM_MAP(pandoras_slave_map)
-	MDRV_CPU_VBLANK_INT("screen", pandoras_slave_interrupt)
+	MCFG_CPU_ADD("sub", M6809, MASTER_CLOCK/6)		/* CPU B */
+	MCFG_CPU_PROGRAM_MAP(pandoras_slave_map)
+	MCFG_CPU_VBLANK_INT("screen", pandoras_slave_interrupt)
 
-	MDRV_CPU_ADD("audiocpu", Z80, SOUND_CLOCK/8)
-	MDRV_CPU_PROGRAM_MAP(pandoras_sound_map)
+	MCFG_CPU_ADD("audiocpu", Z80, SOUND_CLOCK/8)
+	MCFG_CPU_PROGRAM_MAP(pandoras_sound_map)
 
-	MDRV_CPU_ADD("mcu", I8039, SOUND_CLOCK/2)
-	MDRV_CPU_PROGRAM_MAP(pandoras_i8039_map)
-	MDRV_CPU_IO_MAP(pandoras_i8039_io_map)
+	MCFG_CPU_ADD("mcu", I8039, SOUND_CLOCK/2)
+	MCFG_CPU_PROGRAM_MAP(pandoras_i8039_map)
+	MCFG_CPU_IO_MAP(pandoras_i8039_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(3000))	/* slices per frame */
+	MCFG_QUANTUM_TIME(HZ(6000))	/* 100 CPU slices per frame - needed for correct synchronization of the sound CPUs */
 
-	MDRV_MACHINE_START(pandoras)
-	MDRV_MACHINE_RESET(pandoras)
+	MCFG_MACHINE_START(pandoras)
+	MCFG_MACHINE_RESET(pandoras)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(pandoras)
-	MDRV_PALETTE_LENGTH(16*16+16*16)
+	MCFG_GFXDECODE(pandoras)
+	MCFG_PALETTE_LENGTH(16*16+16*16)
 
-	MDRV_PALETTE_INIT(pandoras)
-	MDRV_VIDEO_START(pandoras)
-	MDRV_VIDEO_UPDATE(pandoras)
+	MCFG_PALETTE_INIT(pandoras)
+	MCFG_VIDEO_START(pandoras)
+	MCFG_VIDEO_UPDATE(pandoras)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("aysnd", AY8910, SOUND_CLOCK/8)
-	MDRV_SOUND_CONFIG(ay8910_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
+	MCFG_SOUND_ADD("aysnd", AY8910, SOUND_CLOCK/8)
+	MCFG_SOUND_CONFIG(ay8910_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.40)
 
-	MDRV_SOUND_ADD("dac", DAC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
+	MCFG_SOUND_ADD("dac", DAC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.25)
 MACHINE_CONFIG_END
 
 

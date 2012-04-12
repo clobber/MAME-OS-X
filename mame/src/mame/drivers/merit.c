@@ -93,7 +93,7 @@ static MACHINE_START(merit)
 
 static READ8_HANDLER( questions_r )
 {
-	UINT8 *questions = memory_region(space->machine, "user1");
+	UINT8 *questions = space->machine->region("user1")->base();
 	int address;
 
 	switch(question_address >> 16)
@@ -211,9 +211,9 @@ static MC6845_UPDATE_ROW( update_row )
 	UINT16 x = 0;
 	int rlen;
 
-	gfx[0] = memory_region(device->machine, "gfx1");
-	gfx[1] = memory_region(device->machine, "gfx2");
-	rlen = memory_region_length(device->machine, "gfx2");
+	gfx[0] = device->machine->region("gfx1")->base();
+	gfx[1] = device->machine->region("gfx2")->base();
+	rlen = device->machine->region("gfx2")->bytes();
 
 	//ma = ma ^ 0x7ff;
 	for (cx = 0; cx < x_count; cx++)
@@ -340,7 +340,7 @@ static WRITE8_HANDLER(casino5_bank_w)
 
 static CUSTOM_INPUT(rndbit_r)
 {
-	return mame_rand(field->port->machine);
+	return field->port->machine->rand();
 }
 
 static ADDRESS_MAP_START( pitboss_map, ADDRESS_SPACE_PROGRAM, 8 )
@@ -466,6 +466,22 @@ ADDRESS_MAP_END
 static ADDRESS_MAP_START( trvwhziv_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
 	AM_RANGE(0xa000, 0xbfff) AM_RAM
+	AM_RANGE(0xc004, 0xc007) AM_MIRROR(0x1df0) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
+	AM_RANGE(0xc008, 0xc00b) AM_MIRROR(0x1df0) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
+	AM_RANGE(0xce00, 0xceff) AM_READWRITE(questions_r, high_offset_w)
+	AM_RANGE(0xd600, 0xd6ff) AM_WRITE(low_offset_w)
+	AM_RANGE(0xda00, 0xdaff) AM_WRITE(med_offset_w)
+	AM_RANGE(0xe000, 0xe000) AM_MIRROR(0x05f0) AM_DEVWRITE("crtc", mc6845_address_w)
+	AM_RANGE(0xe001, 0xe001) AM_MIRROR(0x05f0) AM_DEVWRITE("crtc", mc6845_register_w)
+	AM_RANGE(0xe800, 0xefff) AM_RAM AM_BASE(&ram_attr)
+	AM_RANGE(0xf000, 0xf7ff) AM_RAM AM_BASE(&ram_video)
+	AM_RANGE(0xf800, 0xfbff) AM_READWRITE(palette_r, palette_w)
+ADDRESS_MAP_END
+
+static ADDRESS_MAP_START( dtrvwz5_map, ADDRESS_SPACE_PROGRAM, 8 )
+	AM_RANGE(0x0000, 0x7fff) AM_ROM
+	AM_RANGE(0x8000, 0x9fff) AM_RAM AM_SHARE("nvram")
+	AM_RANGE(0xb000, 0xb0ff) AM_ROM /* protection? code jumps here */
 	AM_RANGE(0xc004, 0xc007) AM_MIRROR(0x1df0) AM_DEVREADWRITE("ppi8255_0", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xc008, 0xc00b) AM_MIRROR(0x1df0) AM_DEVREADWRITE("ppi8255_1", ppi8255_r, ppi8255_w)
 	AM_RANGE(0xce00, 0xceff) AM_READWRITE(questions_r, high_offset_w)
@@ -791,6 +807,33 @@ static INPUT_PORTS_START( trvwhziv )
 	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
 INPUT_PORTS_END
 
+static INPUT_PORTS_START( dtrvwh5 )
+	PORT_INCLUDE( trivia )
+
+	PORT_MODIFY("DSW")
+	PORT_DIPNAME( 0x01, 0x01, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x01, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x02, 0x02, "Answers Shown" )
+	PORT_DIPSETTING(    0x02, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x04, 0x04, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x04, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x08, 0x08, "Hi Scores Retained" )
+	PORT_DIPSETTING(    0x08, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x10, 0x10, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x10, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x20, 0x20, DEF_STR( Unused ) )
+	PORT_DIPSETTING(    0x20, DEF_STR( Off ) )
+	PORT_DIPSETTING(    0x00, DEF_STR( On ) )
+	PORT_DIPNAME( 0x80, 0x80, "Coctail Type" )
+	PORT_DIPSETTING(    0x80, "Regular Coctail" )
+	PORT_DIPSETTING(    0x00, "Single Side Coctail" )
+INPUT_PORTS_END
+
 static INPUT_PORTS_START( pitboss )
 	PORT_START("IN0")
 	PORT_BIT( 0x01, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_CODE(KEYCODE_Z) PORT_NAME("P1/P2 Button 1")
@@ -1106,7 +1149,7 @@ INPUT_PORTS_END
 
 static VIDEO_UPDATE( merit )
 {
-	running_device *mc6845 = screen->machine->device("crtc");
+	device_t *mc6845 = screen->machine->device("crtc");
 	mc6845_update(mc6845, bitmap, cliprect);
 
 	return 0;
@@ -1169,104 +1212,111 @@ void merit_state::dodge_nvram_init(nvram_device &nvram, void *base, size_t size)
 static MACHINE_START(casino5)
 {
 	MACHINE_START_CALL(merit);
-	memory_configure_bank(machine, "bank1", 0, 2, memory_region(machine, "maincpu") + 0x2000, 0x2000);
-	memory_configure_bank(machine, "bank2", 0, 2, memory_region(machine, "maincpu") + 0x6000, 0x2000);
+	memory_configure_bank(machine, "bank1", 0, 2, machine->region("maincpu")->base() + 0x2000, 0x2000);
+	memory_configure_bank(machine, "bank2", 0, 2, machine->region("maincpu")->base() + 0x6000, 0x2000);
 	memory_set_bank(machine, "bank1", 0);
 	memory_set_bank(machine, "bank2", 0);
 }
 
 static MACHINE_CONFIG_START( pitboss, merit_state )
-	MDRV_CPU_ADD("maincpu",Z80, CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(pitboss_map)
-	MDRV_CPU_IO_MAP(trvwhiz_io_map)
+	MCFG_CPU_ADD("maincpu",Z80, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(pitboss_map)
+	MCFG_CPU_IO_MAP(trvwhiz_io_map)
 
-	MDRV_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
-	MDRV_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
+	MCFG_PPI8255_ADD( "ppi8255_0", ppi8255_intf[0] )
+	MCFG_PPI8255_ADD( "ppi8255_1", ppi8255_intf[1] )
 
-	MDRV_MACHINE_START(merit)
+	MCFG_MACHINE_START(merit)
 	/* video hardware */
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
-	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 512, 0, 512, 256, 0, 256)	/* temporary, CRTC will configure screen */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB32)
+	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 512, 0, 512, 256, 0, 256)	/* temporary, CRTC will configure screen */
 
-	MDRV_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
+	MCFG_MC6845_ADD("crtc", MC6845, CRTC_CLOCK, mc6845_intf)
 
-	MDRV_VIDEO_UPDATE(merit)
+	MCFG_VIDEO_UPDATE(merit)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("aysnd", AY8910, CRTC_CLOCK)
-	MDRV_SOUND_CONFIG(merit_ay8912_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
+	MCFG_SOUND_ADD("aysnd", AY8910, CRTC_CLOCK)
+	MCFG_SOUND_CONFIG(merit_ay8912_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.33)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( casino5, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(casino5_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(casino5_map)
 
-	MDRV_NVRAM_ADD_0FILL("nvram")
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_MACHINE_START(casino5)
+	MCFG_MACHINE_START(casino5)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( bigappg, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(bigappg_map)
-	MDRV_CPU_IO_MAP(tictac_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(bigappg_map)
+	MCFG_CPU_IO_MAP(tictac_io_map)
 
-	MDRV_NVRAM_ADD_0FILL("nvram")
+	MCFG_NVRAM_ADD_0FILL("nvram")
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( dodge, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(dodge_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(dodge_map)
 
-	MDRV_NVRAM_REPLACE_CUSTOM("nvram", merit_state, dodge_nvram_init)
+	MCFG_NVRAM_REPLACE_CUSTOM("nvram", merit_state, dodge_nvram_init)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( tictac, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(tictac_map)
-	MDRV_CPU_IO_MAP(tictac_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(tictac_map)
+	MCFG_CPU_IO_MAP(tictac_io_map)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( trvwhiz, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(trvwhiz_map)
-	MDRV_CPU_IO_MAP(trvwhiz_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(trvwhiz_map)
+	MCFG_CPU_IO_MAP(trvwhiz_io_map)
+MACHINE_CONFIG_END
+
+static MACHINE_CONFIG_DERIVED( dtrvwz5, pitboss )
+
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(dtrvwz5_map)
+	MCFG_CPU_IO_MAP(tictac_io_map)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( phrcraze, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(phrcraze_map)
-	MDRV_CPU_IO_MAP(phrcraze_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(phrcraze_map)
+	MCFG_CPU_IO_MAP(phrcraze_io_map)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( trvwhziv, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(trvwhziv_map)
-	MDRV_CPU_IO_MAP(tictac_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(trvwhziv_map)
+	MCFG_CPU_IO_MAP(tictac_io_map)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( couple, pitboss )
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(couple_map)
-	MDRV_CPU_IO_MAP(tictac_io_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(couple_map)
+	MCFG_CPU_IO_MAP(tictac_io_map)
 
-	MDRV_DEVICE_MODIFY("ppi8255_0")
-	MDRV_DEVICE_CONFIG( ppi8255_couple_intf[0])
-	MDRV_DEVICE_MODIFY("ppi8255_1")
-	MDRV_DEVICE_CONFIG( ppi8255_couple_intf[1])
+	MCFG_DEVICE_MODIFY("ppi8255_0")
+	MCFG_DEVICE_CONFIG( ppi8255_couple_intf[0])
+	MCFG_DEVICE_MODIFY("ppi8255_1")
+	MCFG_DEVICE_CONFIG( ppi8255_couple_intf[1])
 MACHINE_CONFIG_END
 
 
@@ -1649,6 +1699,31 @@ ROM_START( trvwz4a )
 	ROM_LOAD( "merit2_5.0",  0x08000, 0x8000, CRC(e07d139f) SHA1(e364dcc628719c1bcdc119bdb2f3c98b5538c411) ) // sex trivia III
 ROM_END
 
+ROM_START( dtrvwz5 )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "6221-70_u5-0a.u5", 0x0000, 0x8000, CRC(e5917a71) SHA1(2acebe337600cd490da1c6fb2d83e2e378e584f1) )
+
+	ROM_REGION( 0x6000, "gfx1", 0 )
+	ROM_LOAD( "trv3.u39", 0x0000, 0x2000, CRC(81a34357) SHA1(87ae9db78f043dbdcd1d50473fc09284eceaf884) )
+	ROM_LOAD( "trv3.u38", 0x2000, 0x2000, CRC(c4082020) SHA1(744dc8745f3d54754184571b64664ee5c1497fb4) )
+	ROM_LOAD( "trv3.u37", 0x4000, 0x2000, CRC(5e5e6fb3) SHA1(c182233367de6c9cda0e49a5958bb07460a5f300) )
+
+	ROM_REGION( 0x2000, "gfx2", 0 )
+	ROM_LOAD( "trv3.u40", 0x0000, 0x2000, CRC(a2c934f2) SHA1(214cc1f47c11618457a7885712585c977107cab7) )
+
+	ROM_REGION( 0xa0000, "user1", ROMREGION_ERASEFF ) /* questions */
+	ROM_LOAD( "tw5-06_fif-1.1",  0x08000, 0x8000, CRC(300f245c) SHA1(9c380000ba5a6c826025e32f0e46932e234b46bc) )
+	ROM_LOAD( "tw5-06_fif-2.2",  0x18000, 0x8000, CRC(99ee9cbe) SHA1(d6a4a604a070436b0acb1c774687f6c2266c8807) )
+	ROM_LOAD( "tw5-06_six-1.3",  0x28000, 0x8000, CRC(87354939) SHA1(6e3de6df944da75e28d36dce3cca9b45a8936bf4) )
+	ROM_LOAD( "tw5-06_six-2.4",  0x38000, 0x8000, CRC(ea8ed7ae) SHA1(2c084a88773e6f611a6cc6d847b9d74f5c8bfc77) )
+	ROM_LOAD( "tw5-06_sev-1.5",  0x48000, 0x8000, CRC(fd5099aa) SHA1(81e978597aa348c77001f72763744491cfdad1d1) )
+	ROM_LOAD( "tw5-06_sev-2.6",  0x58000, 0x8000, CRC(523520c8) SHA1(7dff9cda1ade5d3b4e573e77b7ec93ee8ae13c86) )
+	ROM_LOAD( "tw5-06_eig-1.7",  0x68000, 0x8000, CRC(3a2a4562) SHA1(45565622d7057047b02050dcd34ff6f02663507d) )
+	ROM_LOAD( "tw5-06_eig-2.8",  0x78000, 0x8000, CRC(cb7e9035) SHA1(d3344fb318f2241c07933c4b8e3525c219ea3aa6) )
+	ROM_LOAD( "tw5-06_sx5-1.9",  0x88000, 0x8000, CRC(6ae2a208) SHA1(3cc935e616c247c6885319acc6a6ca92ee6fc3c0) )
+	ROM_LOAD( "tw5-06_sx5-2.10", 0x98000, 0x8000, CRC(790184fc) SHA1(9c8b56852b31d3312f26a5901487f6b31d9e9b4f) )
+ROM_END
+
 /*
 
 crt200 rev e-1
@@ -1695,6 +1770,29 @@ ROM_START( tictac )
 	ROM_LOAD( "merit.pb8",    0x78000, 0x8000, CRC(206cfc0d) SHA1(78f6b684713459a617096aa3ffe6e9e62583938c) )
 	ROM_LOAD( "merit.pb9",    0x88000, 0x8000, CRC(9333dbca) SHA1(dd87e6f69d60580fdb6f979398edbeb1a51be355) )
 	ROM_LOAD( "merit.pba",    0x98000, 0x8000, CRC(6eda81f4) SHA1(6d64344691e3e52035a7d30fb3e762f0bd397db7) )
+ROM_END
+
+ROM_START( tictacv )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "6221-22_u5-0.u5",  0x00000, 0x8000,  CRC(c3acd686) SHA1(0c652e88675e2098be2f26e8f1acefc9e69d630f) )
+
+	ROM_REGION( 0x6000, "gfx1", 0 )
+	ROM_LOAD( "ttts_u-39.u39",    0x00000, 0x2000, CRC(20103ed6) SHA1(52741ba8e3b57a32446d3bf4d6f6d8368954fd54) )
+	ROM_LOAD( "ttts_u-38.u38",    0x02000, 0x2000, CRC(32e791b9) SHA1(f206aef25b3a9b7042d804e628c356f7d8d3cdbe) )
+	ROM_LOAD( "ttts_u-37.u37",    0x04000, 0x2000, CRC(adf19f83) SHA1(af2c0b9782f8e93a7c5e2a5ecc937694773d8ad0) )
+
+	ROM_REGION( 0x2000, "gfx2", 0 )
+	ROM_LOAD( "ttts_u-40.u40",    0x00000, 0x2000, CRC(c7071c98) SHA1(88e1b26f198cfbbd86b492356f60fc1b81b38d97) )
+
+	ROM_REGION( 0xa0000, "user1", ROMREGION_ERASEFF ) /* questions */
+	ROM_LOAD( "gen-004_01a.7",    0x08000, 0x8000, CRC(d1584173) SHA1(7a2190203f478f446cc70c473c345e7cc332e049) ) /* Trivia catagories are: */
+	ROM_LOAD( "gen-004_02a.8",    0x18000, 0x8000, CRC(d00ab1fd) SHA1(c94269c8a478e88f71aeca94c6f20fc05a9c62bd) ) /* General Interest, Sports, Entertainment & Sex Trivia III */
+	ROM_LOAD( "spo-004_01a.1",    0x28000, 0x8000, CRC(71b398a9) SHA1(5ea07c409afd52c7d08592b30ff0ff3b72c3f8c3) )
+	ROM_LOAD( "spo-004_02a.2",    0x38000, 0x8000, CRC(eb34672f) SHA1(c472fc4445fc434029a2740dfc1d9ab9b1ef9f87) )
+	ROM_LOAD( "spo-004_03a.3",    0x48000, 0x8000, CRC(8eea30b9) SHA1(fe1d0332106631f56bc6c57a888da9e4e63fa52f) )
+	ROM_LOAD( "ent-004_01.4",     0x58000, 0x8000, CRC(3f45064d) SHA1(de109ac0b19fd1cd7f0020cc174c2da21708108c) )
+	ROM_LOAD( "ent-004_02a.5",    0x68000, 0x8000, CRC(f1c446cd) SHA1(9a6f18defbb64e202ae12e1a59502b8f2d6a58a6) )
+	ROM_LOAD( "ent-004_03.6",     0x78000, 0x8000, CRC(206cfc0d) SHA1(78f6b684713459a617096aa3ffe6e9e62583938c) )
 ROM_END
 
 ROM_START( phrcraze )
@@ -1916,7 +2014,7 @@ static DRIVER_INIT( key_7 )
 
 static DRIVER_INIT( couple )
 {
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine->region("maincpu")->base();
 
 	#if 0 //quick rom compare test
 	{
@@ -1937,6 +2035,34 @@ static DRIVER_INIT( couple )
       update 20060118 by f205v: now we have 3 dumps from 3 different boards and they
       all behave the same...*/
 	memory_set_bankptr(machine, "bank1",ROM + 0x10000 + (0x2000 * 2));
+}
+
+static DRIVER_INIT( dtrvwz5 )
+{
+	int i;
+	UINT8 *ROM = machine->region("maincpu")->base();
+	/* fill b000 - b0ff with ret 0xc9 */
+	for ( i = 0xb000; i < 0xb100; i++ )
+		ROM[i] = 0xc9;
+
+	ROM[0xb000] = 0xc9; /* ret */
+
+	/* called by subroutine which reads inputs */
+	ROM[0xb001] = 0x7a; /* ld   a,d */
+	ROM[0xb002] = 0xa4; /* and  h */
+	ROM[0xb003] = 0x47; /* ld   b,a */
+	ROM[0xb004] = 0x7b; /* ld   a,e */
+	ROM[0xb005] = 0xa5; /* and  l */
+	ROM[0xb006] = 0x4f; /* ld   c,a */
+	ROM[0xb007] = 0x7a; /* ld   a,d */
+	ROM[0xb008] = 0xb4; /* or   h */
+	ROM[0xb009] = 0x57; /* ld   d,a */
+	ROM[0xb00a] = 0x7b; /* ld   a,e */
+	ROM[0xb00b] = 0xb5; /* or   l */
+	ROM[0xb00c] = 0x5f; /* ld   e,a */
+	ROM[0xb00a] = 0xc9; /* ret */
+
+	decryption_key = 6;
 }
 
 GAME( 1983, pitboss,  0,       pitboss,  pitboss,  0,      ROT0,  "Merit", "The Pit Boss (Set 1)",                        GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS )
@@ -1962,7 +2088,8 @@ GAME( 1985, trvwz3v,  trvwz3h, trvwhiz,  trivia,   key_0,  ROT90, "Merit", "Triv
 GAME( 1985, trvwz4,   0,       trvwhziv, trvwhziv, key_5,  ROT90, "Merit", "Trivia ? Whiz (Edition 4) (question set 1)",  GAME_SUPPORTS_SAVE )
 GAME( 1985, trvwz4a,  trvwz4,  trvwhziv, trvwhziv, key_5,  ROT90, "Merit", "Trivia ? Whiz (Edition 4) (question set 2)",  GAME_SUPPORTS_SAVE )
 
-GAME( 1985, tictac,   0,       tictac,   tictac,   key_4,  ROT0,  "Merit", "Tic Tac Trivia",                              GAME_SUPPORTS_SAVE )
+GAME( 1985, tictac,   0,       tictac,   tictac,   key_4,  ROT0,  "Merit", "Tic Tac Trivia (Horizontal)",                 GAME_SUPPORTS_SAVE )
+GAME( 1985, tictacv,  tictac,  tictac,   tictac,   key_4,  ROT90, "Merit", "Tic Tac Trivia (Vertical)",                   GAME_SUPPORTS_SAVE )
 
 GAME( 1986, phrcraze, 0,       phrcraze, phrcraze, key_7,  ROT0,  "Merit", "Phraze Craze (set 1)",                        GAME_SUPPORTS_SAVE )
 GAME( 1986, phrcrazea,phrcraze,phrcraze, phrcraze, key_7,  ROT0,  "Merit", "Phraze Craze (set 2)",                        GAME_SUPPORTS_SAVE )
@@ -1973,6 +2100,8 @@ GAME( 1986, phrcrazev,phrcraze,phrcraze, phrcrazs, key_7,  ROT90, "Merit", "Phra
 GAME( 1986, bigappg,  0,       bigappg,  bigappg,  0,      ROT0,  "Merit", "Big Apple Games",                             GAME_SUPPORTS_SAVE )
 
 GAME( 1986, dodge,    0,       dodge,    couple,   0,      ROT0,  "Merit", "Dodge City",                                  GAME_SUPPORTS_SAVE | GAME_IMPERFECT_GRAPHICS | GAME_NOT_WORKING )
+
+GAME( 1987, dtrvwz5,  0,       dtrvwz5,  dtrvwh5,  dtrvwz5,ROT0,  "Merit", "Deluxe Trivia ? Whiz (Edition 5)",  GAME_SUPPORTS_SAVE )
 
 GAME( 1988, couple,   0,       couple,   couple,   couple, ROT0,  "Merit", "The Couples (Set 1)",                         GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )
 GAME( 1988, couplep,  couple,  couple,   couplep,  couple, ROT0,  "Merit", "The Couples (Set 2)",                         GAME_IMPERFECT_GRAPHICS | GAME_UNEMULATED_PROTECTION )

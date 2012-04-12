@@ -49,15 +49,16 @@ and 2764 eprom (swapped D3/D4 and D5/D6 data lines)
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
-#include "includes/iremz80.h"
+#include "audio/irem.h"
+#include "includes/travrusa.h"
 
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(irem_z80_state, videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(travrusa_videoram_w) AM_BASE_MEMBER(travrusa_state, videoram)
 	AM_RANGE(0x9000, 0x9000) AM_WRITE(travrusa_scroll_x_low_w)
 	AM_RANGE(0xa000, 0xa000) AM_WRITE(travrusa_scroll_x_high_w)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(irem_z80_state, spriteram, spriteram_size)
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(travrusa_state, spriteram, spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(travrusa_flipscreen_w)	/* + coin counters - not written by shtrider */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("SYSTEM")		/* IN0 */
@@ -290,48 +291,48 @@ GFXDECODE_END
 
 static MACHINE_RESET( travrusa )
 {
-	irem_z80_state *state = machine->driver_data<irem_z80_state>();
+	travrusa_state *state = machine->driver_data<travrusa_state>();
 
 	state->scrollx[0] = 0;
 	state->scrollx[1] = 0;
 }
 
-static MACHINE_CONFIG_START( travrusa, irem_z80_state )
+static MACHINE_CONFIG_START( travrusa, travrusa_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, 4000000)	/* 4 MHz (?) */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_MACHINE_RESET(travrusa)
+	MCFG_MACHINE_RESET(travrusa)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(56.75)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(56.75)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
 				/* the Lode Runner manual (similar but different hardware) */
 				/* talks about 55Hz and 1790ms vblank duration. */
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 0*8, 32*8-1)
 
-	MDRV_GFXDECODE(travrusa)
+	MCFG_GFXDECODE(travrusa)
 
-	MDRV_PALETTE_LENGTH(16*8+16*8)
+	MCFG_PALETTE_LENGTH(16*8+16*8)
 
-	MDRV_PALETTE_INIT(travrusa)
-	MDRV_VIDEO_START(travrusa)
-	MDRV_VIDEO_UPDATE(travrusa)
+	MCFG_PALETTE_INIT(travrusa)
+	MCFG_VIDEO_START(travrusa)
+	MCFG_VIDEO_UPDATE(travrusa)
 
 	/* sound hardware */
-	MDRV_FRAGMENT_ADD(m52_sound_c_audio)
+	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( shtrider, travrusa )
 
 	/* video hardware */
-	MDRV_GFXDECODE(shtrider)
-	MDRV_PALETTE_INIT(shtrider)
+	MCFG_GFXDECODE(shtrider)
+	MCFG_PALETTE_INIT(shtrider)
 MACHINE_CONFIG_END
 
 
@@ -453,7 +454,7 @@ ROM_END
 static DRIVER_INIT( motorace )
 {
 	int A, j;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine->region("maincpu")->base();
 	UINT8 *buffer = auto_alloc_array(machine, UINT8, 0x2000);
 
 	memcpy(buffer, rom, 0x2000);
@@ -471,7 +472,7 @@ static DRIVER_INIT( motorace )
 static DRIVER_INIT( shtridra )
 {
 	int A;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine->region("maincpu")->base();
 
 	/* D3/D4  and  D5/D6 swapped */
 	for (A = 0; A < 0x2000; A++)

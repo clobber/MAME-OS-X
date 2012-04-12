@@ -75,13 +75,14 @@ struct _i80286_state
 	int halted;         /* Is the CPU halted ? */
 
 	int icount;
-	unsigned prefix_base;
 	char seg_prefix;
+	UINT8	prefix_seg;
 	unsigned ea;
 	UINT16 eo; /* HJB 12/13/98 effective offset of the address (before segment is added) */
+	UINT8 ea_seg;	/* effective segment of the address */
 };
 
-INLINE i80286_state *get_safe_token(running_device *device)
+INLINE i80286_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
 	assert(device->type() == I80286);
@@ -105,7 +106,7 @@ static struct i80x86_timing timing;
 #define i8086_state i80286_state
 
 #include "ea.h"
-#include "modrm.h"
+#include "modrm286.h"
 #include "instr86.h"
 #include "instr186.h"
 #include "instr286.h"
@@ -148,14 +149,6 @@ static void i80286_set_a20_line(i80286_state *cpustate, int state)
 static CPU_RESET( i80286 )
 {
 	i80286_state *cpustate = get_safe_token(device);
-	static int urinit=1;
-
-	/* in my docu not all registers are initialized! */
-	if (urinit) {
-		i80286_urinit();
-		urinit=0;
-
-	}
 
 	cpustate->sregs[CS] = 0xf000;
 	cpustate->base[CS] = 0xff0000;
@@ -234,7 +227,14 @@ static CPU_EXECUTE( i80286 )
 		cpustate->seg_prefix=FALSE;
 		cpustate->prevpc = cpustate->pc;
 
-		TABLE286 // call instruction
+		try
+		{
+			TABLE286 // call instruction
+		}
+		catch (int e)
+		{
+			i80286_trap2(cpustate,e);
+		}
     }
 
 	/* adjust for any interrupts that came in */
@@ -246,7 +246,7 @@ extern int i386_dasm_one(char *buffer, UINT32 eip, const UINT8 *oprom, int mode)
 
 static CPU_DISASSEMBLE( i80286 )
 {
-	return i386_dasm_one(buffer, pc, oprom, 16);
+	return i386_dasm_one(buffer, pc, oprom, 2);
 }
 
 static CPU_INIT( i80286 )
@@ -302,6 +302,8 @@ static CPU_INIT( i80286 )
 		cpustate->amask = 0x00ffff;
 
 	cpustate->fetch_xor = BYTE_XOR_LE(0);
+
+	i80286_urinit();
 }
 
 
@@ -399,7 +401,7 @@ CPU_GET_INFO( i80286 )
 		case CPUINFO_INT_CLOCK_MULTIPLIER:				info->i = 1;							break;
 		case CPUINFO_INT_CLOCK_DIVIDER:					info->i = 1;							break;
 		case CPUINFO_INT_MIN_INSTRUCTION_BYTES:			info->i = 1;							break;
-		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 15;							break;
+		case CPUINFO_INT_MAX_INSTRUCTION_BYTES:			info->i = 10;							break;
 		case CPUINFO_INT_MIN_CYCLES:					info->i = 1;							break;
 		case CPUINFO_INT_MAX_CYCLES:					info->i = 50;							break;
 
@@ -484,7 +486,7 @@ CPU_GET_INFO( i80286 )
 					cpustate->flags & 0x0001 ? 'C' : '.');
 			break;
 
-		case CPUINFO_STR_REGISTER + I80286_PC:			sprintf(info->s, "PC:%04X", cpustate->pc); break;
+		case CPUINFO_STR_REGISTER + I80286_PC:			sprintf(info->s, "PC:%06X", cpustate->pc); break;
 		case CPUINFO_STR_REGISTER + I80286_IP:			sprintf(info->s, "IP: %04X", cpustate->pc - cpustate->base[CS]); break;
 		case CPUINFO_STR_REGISTER + I80286_SP:			sprintf(info->s, "SP: %04X", cpustate->regs.w[SP]); break;
 		case CPUINFO_STR_REGISTER + I80286_FLAGS:		sprintf(info->s, "F:%04X", cpustate->flags); break;

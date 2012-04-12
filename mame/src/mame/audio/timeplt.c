@@ -14,10 +14,32 @@
 #include "cpu/z80/z80.h"
 #include "sound/ay8910.h"
 #include "sound/flt_rc.h"
-#include "includes/timeplt.h"
+#include "audio/timeplt.h"
 
 
 #define MASTER_CLOCK         XTAL_14_31818MHz
+
+typedef struct _timeplt_audio_state timeplt_audio_state;
+struct _timeplt_audio_state
+{
+	UINT8    last_irq_state;
+	cpu_device *soundcpu;
+
+	device_t *filter_0_0;
+	device_t *filter_0_1;
+	device_t *filter_0_2;
+	device_t *filter_1_0;
+	device_t *filter_1_1;
+	device_t *filter_1_2;
+};
+
+INLINE timeplt_audio_state *get_safe_token( device_t *device )
+{
+	assert(device != NULL);
+	assert(device->type() == TIMEPLT_AUDIO);
+
+	return (timeplt_audio_state *)downcast<legacy_device_base *>(device)->token();
+}
 
 
 /*************************************
@@ -26,9 +48,10 @@
  *
  *************************************/
 
-static SOUND_START( timeplt )
+static DEVICE_START( timeplt_audio )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
+	running_machine *machine = device->machine;
+	timeplt_audio_state *state = get_safe_token(device);
 
 	state->soundcpu = machine->device<cpu_device>("tpsound");
 	state->filter_0_0 = machine->device("filter.0.0");
@@ -39,7 +62,7 @@ static SOUND_START( timeplt )
 	state->filter_1_2 = machine->device("filter.1.2");
 
 	state->last_irq_state = 0;
-	state_save_register_global(machine, state->last_irq_state);
+	state_save_register_device_item(device, 0, state->last_irq_state);
 }
 
 
@@ -69,7 +92,7 @@ static SOUND_START( timeplt )
 
 static READ8_DEVICE_HANDLER( timeplt_portB_r )
 {
-	timeplt_state *state = device->machine->driver_data<timeplt_state>();
+	timeplt_audio_state *state = get_safe_token(device);
 
 	static const int timeplt_timer[10] =
 	{
@@ -87,7 +110,7 @@ static READ8_DEVICE_HANDLER( timeplt_portB_r )
  *
  *************************************/
 
-static void filter_w( running_device *device, int data )
+static void filter_w( device_t *device, int data )
 {
 	int C = 0;
 
@@ -100,9 +123,10 @@ static void filter_w( running_device *device, int data )
 }
 
 
-static WRITE8_HANDLER( timeplt_filter_w )
+static WRITE8_DEVICE_HANDLER( timeplt_filter_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	timeplt_audio_state *state = get_safe_token(device);
+
 	filter_w(state->filter_1_0, (offset >>  0) & 3);
 	filter_w(state->filter_1_1, (offset >>  2) & 3);
 	filter_w(state->filter_1_2, (offset >>  4) & 3);
@@ -121,7 +145,8 @@ static WRITE8_HANDLER( timeplt_filter_w )
 
 WRITE8_HANDLER( timeplt_sh_irqtrigger_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	device_t *audio = space->machine->device("timeplt_audio");
+	timeplt_audio_state *state = get_safe_token(audio);
 
 	if (state->last_irq_state == 0 && data)
 	{
@@ -147,14 +172,14 @@ static ADDRESS_MAP_START( timeplt_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x5000, 0x5000) AM_MIRROR(0x0fff) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x0fff) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
 	AM_RANGE(0x7000, 0x7000) AM_MIRROR(0x0fff) AM_DEVWRITE("ay2", ay8910_address_w)
-	AM_RANGE(0x8000, 0xffff) AM_WRITE(timeplt_filter_w)
+	AM_RANGE(0x8000, 0xffff) AM_DEVWRITE("timeplt_audio", timeplt_filter_w)
 ADDRESS_MAP_END
 
 
 static ADDRESS_MAP_START( locomotn_sound_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x1fff) AM_ROM
 	AM_RANGE(0x2000, 0x23ff) AM_MIRROR(0x0c00) AM_RAM
-	AM_RANGE(0x3000, 0x3fff) AM_WRITE(timeplt_filter_w)
+	AM_RANGE(0x3000, 0x3fff) AM_DEVWRITE("timeplt_audio", timeplt_filter_w)
 	AM_RANGE(0x4000, 0x4000) AM_MIRROR(0x0fff) AM_DEVREADWRITE("ay1", ay8910_r, ay8910_data_w)
 	AM_RANGE(0x5000, 0x5000) AM_MIRROR(0x0fff) AM_DEVWRITE("ay1", ay8910_address_w)
 	AM_RANGE(0x6000, 0x6000) AM_MIRROR(0x0fff) AM_DEVREADWRITE("ay2", ay8910_r, ay8910_data_w)
@@ -174,7 +199,7 @@ static const ay8910_interface timeplt_ay8910_interface =
 	AY8910_LEGACY_OUTPUT,
 	AY8910_DEFAULT_LOADS,
 	DEVCB_MEMORY_HANDLER("tpsound", PROGRAM, soundlatch_r),
-	DEVCB_HANDLER(timeplt_portB_r),
+	DEVCB_DEVICE_HANDLER("timeplt_audio", timeplt_portB_r),
 	DEVCB_NULL,
 	DEVCB_NULL
 };
@@ -190,44 +215,60 @@ static const ay8910_interface timeplt_ay8910_interface =
 MACHINE_CONFIG_FRAGMENT( timeplt_sound )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("tpsound",Z80,MASTER_CLOCK/8)
-	MDRV_CPU_PROGRAM_MAP(timeplt_sound_map)
-
-	MDRV_SOUND_START(timeplt)
+	MCFG_CPU_ADD("tpsound",Z80,MASTER_CLOCK/8)
+	MCFG_CPU_PROGRAM_MAP(timeplt_sound_map)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay1", AY8910, MASTER_CLOCK/8)
-	MDRV_SOUND_CONFIG(timeplt_ay8910_interface)
-	MDRV_SOUND_ROUTE(0, "filter.0.0", 0.60)
-	MDRV_SOUND_ROUTE(1, "filter.0.1", 0.60)
-	MDRV_SOUND_ROUTE(2, "filter.0.2", 0.60)
+	MCFG_SOUND_ADD("timeplt_audio", TIMEPLT_AUDIO, 0)
 
-	MDRV_SOUND_ADD("ay2", AY8910, MASTER_CLOCK/8)
-	MDRV_SOUND_ROUTE(0, "filter.1.0", 0.60)
-	MDRV_SOUND_ROUTE(1, "filter.1.1", 0.60)
-	MDRV_SOUND_ROUTE(2, "filter.1.2", 0.60)
+	MCFG_SOUND_ADD("ay1", AY8910, MASTER_CLOCK/8)
+	MCFG_SOUND_CONFIG(timeplt_ay8910_interface)
+	MCFG_SOUND_ROUTE(0, "filter.0.0", 0.60)
+	MCFG_SOUND_ROUTE(1, "filter.0.1", 0.60)
+	MCFG_SOUND_ROUTE(2, "filter.0.2", 0.60)
 
-	MDRV_SOUND_ADD("filter.0.0", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.0.1", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.0.2", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("ay2", AY8910, MASTER_CLOCK/8)
+	MCFG_SOUND_ROUTE(0, "filter.1.0", 0.60)
+	MCFG_SOUND_ROUTE(1, "filter.1.1", 0.60)
+	MCFG_SOUND_ROUTE(2, "filter.1.2", 0.60)
 
-	MDRV_SOUND_ADD("filter.1.0", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.1.1", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
-	MDRV_SOUND_ADD("filter.1.2", FILTER_RC, 0)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.0.0", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.0.1", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.0.2", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+
+	MCFG_SOUND_ADD("filter.1.0", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.1.1", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("filter.1.2", FILTER_RC, 0)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 
 MACHINE_CONFIG_DERIVED( locomotn_sound, timeplt_sound )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("tpsound")
-	MDRV_CPU_PROGRAM_MAP(locomotn_sound_map)
+	MCFG_CPU_MODIFY("tpsound")
+	MCFG_CPU_PROGRAM_MAP(locomotn_sound_map)
 MACHINE_CONFIG_END
+
+/*****************************************************************************
+    DEVICE DEFINITION
+*****************************************************************************/
+
+
+static const char DEVTEMPLATE_SOURCE[] = __FILE__;
+
+#define DEVTEMPLATE_ID(p,s)				p##timeplt_audio##s
+#define DEVTEMPLATE_FEATURES			DT_HAS_START
+#define DEVTEMPLATE_NAME				"Time Pilot Audio"
+#define DEVTEMPLATE_FAMILY				"Time Pilot Audio IC"
+#include "devtempl.h"
+
+DEFINE_LEGACY_SOUND_DEVICE(TIMEPLT_AUDIO, timeplt_audio);
+

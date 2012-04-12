@@ -56,7 +56,7 @@ Glitch list!
           be removed from the ROM definition.
 
     Perfect Soliders:
-        Shortly into the fight, the sound CPU enters a tight loop, conitnuously
+        Shortly into the fight, the sound CPU enters a tight loop, continuously
         writing to the status port and with interrupts disabled. I don't see how
         it is supposed to get out of that loop. Maybe it's not supposed to enter
         it at all?
@@ -181,7 +181,7 @@ Notes:
       62256: 32K x8 SRAM
 
       Custom chips:
-                   NANAO 08J27261A1 (PLCC84, encrypted V30 sound CPU, clocked at 14.31818MHz on pins 78 & 79)
+                   NANAO 08J27261A1 (PLCC84, encrypted V35 sound CPU, clocked at 14.31818MHz on pins 78 & 79)
                    NANAO GA23 (QFP180)
 
 
@@ -221,7 +221,7 @@ static TIMER_CALLBACK( m92_scanline_interrupt );
 
 static void set_m92_bank(running_machine *machine)
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine->region("maincpu")->base();
 	memory_set_bankptr(machine, "bank1",&RAM[bankaddress]);
 }
 
@@ -275,14 +275,14 @@ static TIMER_CALLBACK( m92_scanline_interrupt )
 
 static READ16_HANDLER( m92_eeprom_r )
 {
-	UINT8 *RAM = memory_region(space->machine, "user1");
+	UINT8 *RAM = space->machine->region("user1")->base();
 //  logerror("%05x: EEPROM RE %04x\n",cpu_get_pc(space->cpu),offset);
 	return RAM[offset] | 0xff00;
 }
 
 static WRITE16_HANDLER( m92_eeprom_w )
 {
-	UINT8 *RAM = memory_region(space->machine, "user1");
+	UINT8 *RAM = space->machine->region("user1")->base();
 //  logerror("%05x: EEPROM WR %04x\n",cpu_get_pc(space->cpu),offset);
 	if (ACCESSING_BITS_0_7)
 		RAM[offset] = data;
@@ -897,7 +897,7 @@ GFXDECODE_END
 
 /***************************************************************************/
 
-static void sound_irq(running_device *device, int state)
+static void sound_irq(device_t *device, int state)
 {
 	if (state)
 		timer_call_after_resynch(device->machine, NULL, YM2151_ASSERT, setvector_callback);
@@ -920,165 +920,165 @@ void m92_sprite_interrupt(running_machine *machine)
 static MACHINE_CONFIG_START( m92, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",V33,18000000/2)	/* NEC V33, 18 MHz clock */
-	MDRV_CPU_PROGRAM_MAP(m92_map)
-	MDRV_CPU_IO_MAP(m92_portmap)
+	MCFG_CPU_ADD("maincpu",V33,18000000/2)	/* NEC V33, 18 MHz clock */
+	MCFG_CPU_PROGRAM_MAP(m92_map)
+	MCFG_CPU_IO_MAP(m92_portmap)
 
-	MDRV_CPU_ADD("soundcpu" ,V30, 14318180/2)	/* 14.31818 MHz */
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("soundcpu" ,V35, 14318180/2)	/* 14.31818 MHz */
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_MACHINE_START(m92)
-	MDRV_MACHINE_RESET(m92)
+	MCFG_MACHINE_START(m92)
+	MCFG_MACHINE_RESET(m92)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
 
-	MDRV_GFXDECODE(m92)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(m92)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(m92)
-	MDRV_VIDEO_UPDATE(m92)
+	MCFG_VIDEO_START(m92)
+	MCFG_VIDEO_UPDATE(m92)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymsnd", YM2151, 14318180/4)
-	MDRV_SOUND_CONFIG(ym2151_config)
-	MDRV_SOUND_ROUTE(0, "mono", 0.40)
-	MDRV_SOUND_ROUTE(1, "mono", 0.40)
+	MCFG_SOUND_ADD("ymsnd", YM2151, 14318180/4)
+	MCFG_SOUND_CONFIG(ym2151_config)
+	MCFG_SOUND_ROUTE(0, "mono", 0.40)
+	MCFG_SOUND_ROUTE(1, "mono", 0.40)
 
-	MDRV_SOUND_ADD("irem", IREMGA20, 14318180/4)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("irem", IREMGA20, 14318180/4)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 
 static const nec_config gunforce_config ={	gunforce_decryption_table, };
 static MACHINE_CONFIG_DERIVED( gunforce, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(gunforce_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(gunforce_config)
 MACHINE_CONFIG_END
 
 static const nec_config bmaster_config ={ bomberman_decryption_table, };
 static MACHINE_CONFIG_DERIVED( bmaster, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(bmaster_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(bmaster_config)
 MACHINE_CONFIG_END
 
 static const nec_config lethalth_config ={ lethalth_decryption_table, };
 static MACHINE_CONFIG_DERIVED( lethalth, m92 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(lethalth_map)
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(lethalth_config)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(lethalth_map)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(lethalth_config)
 MACHINE_CONFIG_END
 
 static const nec_config uccops_config ={ dynablaster_decryption_table, };
 static MACHINE_CONFIG_DERIVED( uccops, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(uccops_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(uccops_config)
 MACHINE_CONFIG_END
 
 static const nec_config mysticri_config ={ mysticri_decryption_table, };
 static MACHINE_CONFIG_DERIVED( mysticri, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(mysticri_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(mysticri_config)
 MACHINE_CONFIG_END
 
 static const nec_config majtitl2_config ={ majtitl2_decryption_table, };
 static MACHINE_CONFIG_DERIVED( majtitl2, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(majtitl2_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(majtitl2_config)
 MACHINE_CONFIG_END
 
 static const nec_config hook_config ={ hook_decryption_table, };
 static MACHINE_CONFIG_DERIVED( hook, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(hook_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(hook_config)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_START( ppan, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",V33,18000000/2)
-	MDRV_CPU_PROGRAM_MAP(m92_map)
-	MDRV_CPU_IO_MAP(m92_portmap)
+	MCFG_CPU_ADD("maincpu",V33,18000000/2)
+	MCFG_CPU_PROGRAM_MAP(m92_map)
+	MCFG_CPU_IO_MAP(m92_portmap)
 
 	/* no Sound CPU */
 
-	MDRV_MACHINE_START(m92)
-	MDRV_MACHINE_RESET(m92)
+	MCFG_MACHINE_START(m92)
+	MCFG_MACHINE_RESET(m92)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_BUFFERS_SPRITERAM)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(512, 256)
-	MDRV_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(512, 256)
+	MCFG_SCREEN_VISIBLE_AREA(80, 511-112, 8, 247) /* 320 x 240 */
 
-	MDRV_GFXDECODE(m92)
-	MDRV_PALETTE_LENGTH(2048)
+	MCFG_GFXDECODE(m92)
+	MCFG_PALETTE_LENGTH(2048)
 
-	MDRV_VIDEO_START(m92)
-	MDRV_VIDEO_UPDATE(m92)
+	MCFG_VIDEO_START(m92)
+	MCFG_VIDEO_UPDATE(m92)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_OKIM6295_ADD("oki", 1000000, OKIM6295_PIN7_HIGH) // clock frequency & pin 7 not verified
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 MACHINE_CONFIG_END
 
 static const nec_config rtypeleo_config ={ rtypeleo_decryption_table, };
 static MACHINE_CONFIG_DERIVED( rtypeleo, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(rtypeleo_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(rtypeleo_config)
 MACHINE_CONFIG_END
 
 
 static const nec_config inthunt_config ={ inthunt_decryption_table, };
 static MACHINE_CONFIG_DERIVED( inthunt, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(inthunt_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(inthunt_config)
 MACHINE_CONFIG_END
 
 
 static const nec_config nbbatman_config ={ leagueman_decryption_table, };
 static MACHINE_CONFIG_DERIVED( nbbatman, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(nbbatman_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(nbbatman_config)
 MACHINE_CONFIG_END
 
 
 static const nec_config psoldier_config ={ psoldier_decryption_table, };
 static MACHINE_CONFIG_DERIVED( psoldier, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(psoldier_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(psoldier_config)
 	/* video hardware */
-	MDRV_GFXDECODE(2)
+	MCFG_GFXDECODE(2)
 MACHINE_CONFIG_END
 
 static const nec_config dsoccr94_config ={ dsoccr94_decryption_table, };
 static MACHINE_CONFIG_DERIVED( dsoccr94j, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(dsoccr94_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(dsoccr94_config)
 	/* video hardware */
-	MDRV_GFXDECODE(2)
+	MCFG_GFXDECODE(2)
 MACHINE_CONFIG_END
 
 static const nec_config gunforc2_config ={ lethalth_decryption_table, };
 static MACHINE_CONFIG_DERIVED( gunforc2, m92 )
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_CONFIG(gunforc2_config)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_CONFIG(gunforc2_config)
 MACHINE_CONFIG_END
 
 
@@ -1293,7 +1293,7 @@ ROM_START( gunforce )
 	ROM_LOAD16_BYTE( "gf_h1-c.5l", 0x040001, 0x20000, CRC(c84188b7) SHA1(ff710be742f610d90538db296acdd435260bef12) )
 	ROM_LOAD16_BYTE( "gf_l1-c.5j", 0x040000, 0x20000, CRC(b189f72a) SHA1(f17d87349a57e1a4b20c4947e41edd7c39eaca13) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "gf_sh0.rom", 0x000001, 0x010000, CRC(3f8f16e0) SHA1(a9f568c1b585c2cf13b21716954dac0a89936fc6) )
 	ROM_LOAD16_BYTE( "gf_sl0.rom", 0x000000, 0x010000, CRC(db0b13a3) SHA1(6723026010610b706725a5284a7b8d70fe479dae) )
 
@@ -1320,7 +1320,7 @@ ROM_START( gunforcej )
 	ROM_LOAD16_BYTE( "gfb_h1-e.5l", 0x040001, 0x20000, CRC(d9744f5d) SHA1(056d6e6e9874c33dcebe2e0ec946117d5eaa5d76) )
 	ROM_LOAD16_BYTE( "gfb_l1-e.5j", 0x040000, 0x20000, CRC(a0f7b61b) SHA1(5fc7fc3f57e82a9ae4e1f3c3e8e3e3b0bd3ff8f5) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "gf_sh0.rom",0x000001, 0x010000, CRC(3f8f16e0) SHA1(a9f568c1b585c2cf13b21716954dac0a89936fc6) )
 	ROM_LOAD16_BYTE( "gf_sl0.rom",0x000000, 0x010000, CRC(db0b13a3) SHA1(6723026010610b706725a5284a7b8d70fe479dae) )
 
@@ -1347,7 +1347,7 @@ ROM_START( gunforceu )
 	ROM_LOAD16_BYTE( "gf_h1-d.5l", 0x040001, 0x20000, CRC(08a3736c) SHA1(0ae904cf486a371f8b635c1f9dc5201e38a73f5a) )
 	ROM_LOAD16_BYTE( "gf_l1-d.5j", 0x040000, 0x20000, CRC(435f524f) SHA1(65c282ec50123747880850bc32c7ace0471ed9f2) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "gf_sh0.rom",0x000001, 0x010000, CRC(3f8f16e0) SHA1(a9f568c1b585c2cf13b21716954dac0a89936fc6) )
 	ROM_LOAD16_BYTE( "gf_sl0.rom",0x000000, 0x010000, CRC(db0b13a3) SHA1(6723026010610b706725a5284a7b8d70fe479dae) )
 
@@ -1455,7 +1455,7 @@ ROM_START( hook )
 	ROM_LOAD16_BYTE( "h-h1.rom",  0x080001, 0x020000, CRC(264ba1f0) SHA1(49ecf9b3e5375629607fb747abe264406065580b) )
 	ROM_LOAD16_BYTE( "h-l1.rom",  0x080000, 0x020000, CRC(f9913731) SHA1(be7871d6843e76f66fae6b501c5ee83ccc366463) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "h-sh0.rom", 0x000001, 0x010000, CRC(86a4e56e) SHA1(61163010e713be64368a4126f17d33cbdcf0c5ed) )
 	ROM_LOAD16_BYTE( "h-sl0.rom", 0x000000, 0x010000, CRC(10fd9676) SHA1(1b51181a8f0711997e107e9a8b8f44341d08ea81) )
 
@@ -1482,7 +1482,7 @@ ROM_START( hooku )
 	ROM_LOAD16_BYTE( "h-h1.rom",  0x080001, 0x020000, CRC(264ba1f0) SHA1(49ecf9b3e5375629607fb747abe264406065580b) )
 	ROM_LOAD16_BYTE( "h-l1.rom",  0x080000, 0x020000, CRC(f9913731) SHA1(be7871d6843e76f66fae6b501c5ee83ccc366463) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "h-sh0.rom", 0x000001, 0x010000, CRC(86a4e56e) SHA1(61163010e713be64368a4126f17d33cbdcf0c5ed) )
 	ROM_LOAD16_BYTE( "h-sl0.rom", 0x000000, 0x010000, CRC(10fd9676) SHA1(1b51181a8f0711997e107e9a8b8f44341d08ea81) )
 
@@ -1509,7 +1509,7 @@ ROM_START( hookj )
 	ROM_LOAD16_BYTE( "h-h1.rom",  0x080001, 0x020000, CRC(264ba1f0) SHA1(49ecf9b3e5375629607fb747abe264406065580b) )
 	ROM_LOAD16_BYTE( "h-l1.rom",  0x080000, 0x020000, CRC(f9913731) SHA1(be7871d6843e76f66fae6b501c5ee83ccc366463) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "h-sh0-a.3l", 0x000001, 0x010000, CRC(bd3d1f61) SHA1(0c884a0b5519f9c0823128872baf7b0c4078e5c4) )
 	ROM_LOAD16_BYTE( "h-sl0-a.3n", 0x000000, 0x010000, CRC(76371def) SHA1(b7a86fd4eecdd8a538c32e08cd920c27bd50924b) )
 
@@ -1561,7 +1561,7 @@ ROM_START( rtypeleo )
 	ROM_LOAD16_BYTE( "rtl-h1-d.bin", 0x080001, 0x020000, CRC(352ff444) SHA1(e302bc8dbf80abe5c1aaf02e92473fc72a796e72) )
 	ROM_LOAD16_BYTE( "rtl-l1-d.bin", 0x080000, 0x020000, CRC(fd34ea46) SHA1(aca12d46ebff94505d03884e45805e84bbece6a7) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "rtl-sh0a.bin", 0x000001, 0x010000, CRC(e518b4e3) SHA1(44ec1d6b27bc3e49ad967f43960398ba1a19c5e3) )
 	ROM_LOAD16_BYTE( "rtl-sl0a.bin", 0x000000, 0x010000, CRC(896f0d36) SHA1(9246b1a5a8717dd823340d4cb79012a3df6fa4b7) )
 
@@ -1588,7 +1588,7 @@ ROM_START( rtypeleoj )
 	ROM_LOAD16_BYTE( "rtl-h1-d.bin", 0x080001, 0x020000, CRC(352ff444) SHA1(e302bc8dbf80abe5c1aaf02e92473fc72a796e72) )
 	ROM_LOAD16_BYTE( "rtl-l1-d.bin", 0x080000, 0x020000, CRC(fd34ea46) SHA1(aca12d46ebff94505d03884e45805e84bbece6a7) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "rtl-sh0a.bin", 0x000001, 0x010000, CRC(e518b4e3) SHA1(44ec1d6b27bc3e49ad967f43960398ba1a19c5e3) )
 	ROM_LOAD16_BYTE( "rtl-sl0a.bin", 0x000000, 0x010000, CRC(896f0d36) SHA1(9246b1a5a8717dd823340d4cb79012a3df6fa4b7) )
 
@@ -1615,7 +1615,7 @@ ROM_START( mysticri )
 	ROM_LOAD16_BYTE( "mr-h1-b.bin", 0x080001, 0x010000, CRC(e17649b9) SHA1(fb09a0ccd22475d81ba667c88d1b5eb7cc64728f) )
 	ROM_LOAD16_BYTE( "mr-l1-b.bin", 0x080000, 0x010000, CRC(a87c62b4) SHA1(d3cae0f420faeb4556767b6ad817fc39d31b7273) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "mr-sh0.bin", 0x000001, 0x010000, CRC(50d335e4) SHA1(a1a92e95fbd6b99d904a82cea4a1ff6fd2ac8dde) )
 	ROM_LOAD16_BYTE( "mr-sl0.bin", 0x000000, 0x010000, CRC(0fa32721) SHA1(1561ddd2597592060b8a78f1dff6cbb25fb7cd2e) )
 
@@ -1642,7 +1642,7 @@ ROM_START( gunhohki )
 	ROM_LOAD16_BYTE( "mr-h1.bin", 0x080001, 0x010000, CRC(c9532b60) SHA1(b83322ba7bb3eea4c64dd65b3c0a5cade61841d8) )
 	ROM_LOAD16_BYTE( "mr-l1.bin", 0x080000, 0x010000, CRC(6349b520) SHA1(406620d9c63ce3d6801105c8122e1d0bbe6152ad) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "mr-sh0.bin", 0x000001, 0x010000, CRC(50d335e4) SHA1(a1a92e95fbd6b99d904a82cea4a1ff6fd2ac8dde) )
 	ROM_LOAD16_BYTE( "mr-sl0.bin", 0x000000, 0x010000, CRC(0fa32721) SHA1(1561ddd2597592060b8a78f1dff6cbb25fb7cd2e) )
 
@@ -1669,7 +1669,7 @@ ROM_START( mysticrib )
 	ROM_LOAD16_BYTE( "h1", 0x080001, 0x010000, CRC(4dcb085b) SHA1(7c053f5ef2978e574d3d2d9f5c12035473d13c3b) )
 	ROM_LOAD16_BYTE( "l1", 0x080000, 0x010000, CRC(88df4f70) SHA1(f55769a107fe3f5446d8268f66e895b02727c61e) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	// older revision code? rev 3.31, doesn't work?
 	ROM_LOAD16_BYTE( "sh0", 0x000001, 0x010000, CRC(fc7221ee) SHA1(4e714f31ce0d1bb2f6c649a26af748f96912848e) )
 	ROM_LOAD16_BYTE( "sl0", 0x000000, 0x010000, CRC(65c809e6) SHA1(45a860b250219a15aa8a2177251f4d3f2e559b9e) )
@@ -1698,7 +1698,7 @@ ROM_START( uccops )
 	ROM_LOAD16_BYTE( "uc_h1.rom", 0x080001, 0x020000, CRC(8d29bcd6) SHA1(470b77d1b8f88824bac294bd12a205a23dad2287) )
 	ROM_LOAD16_BYTE( "uc_l1.rom", 0x080000, 0x020000, CRC(a8a402d8) SHA1(0b40fb69f0a3e24e6b60117d2d2fd4cc170bc621) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "uc_sh0.rom", 0x000001, 0x010000, CRC(df90b198) SHA1(6b334457f06f6b9cfb355ba3d399bebb37b5733e) )
 	ROM_LOAD16_BYTE( "uc_sl0.rom", 0x000000, 0x010000, CRC(96c11aac) SHA1(16c47b4f97f0532fff30bb163f26d8cf6b923a2e) )
 
@@ -1725,7 +1725,7 @@ ROM_START( uccopsu )
 	ROM_LOAD16_BYTE( "uc_h1-g.rom", 0x080001, 0x020000, CRC(6b8ca2de) SHA1(1096b93bbaa4c97d4900e8c083cde99195cad5ba) )
 	ROM_LOAD16_BYTE( "uc_l1-g.rom", 0x080000, 0x020000, CRC(2bdec7dd) SHA1(58817099e74fd5bc299b7bc14d83ee75ed200b53) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "uc_sh0.rom", 0x000001, 0x010000, CRC(df90b198) SHA1(6b334457f06f6b9cfb355ba3d399bebb37b5733e) )
 	ROM_LOAD16_BYTE( "uc_sl0.rom", 0x000000, 0x010000, CRC(96c11aac) SHA1(16c47b4f97f0532fff30bb163f26d8cf6b923a2e) )
 
@@ -1766,7 +1766,7 @@ ROM_START( uccopsar ) /* Alpha Renewal Version */
 	ROM_LOAD16_BYTE( "uc_h1.ic27",   0x080001, 0x020000, CRC(79d79742) SHA1(f9c03c4d42b5b3d0f0185462868b04f1bb679f90) )
 	ROM_LOAD16_BYTE( "uc_l1.ic38",   0x080000, 0x020000, CRC(37211581) SHA1(b8fdff96b2c7d5cf2975dcf81c00581ccb595c15) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "uc_sh0.ic30", 0x000001, 0x010000, CRC(f0ca1b03) SHA1(07154a2c747091f8be23587c109d91ed1672da6e) )
 	ROM_LOAD16_BYTE( "uc_sl0.ic31", 0x000000, 0x010000, CRC(d1661723) SHA1(bdc00196aa2074e7b21e5949f73e9f2b93d76fd9) )
 
@@ -1793,7 +1793,7 @@ ROM_START( uccopsj )
 	ROM_LOAD16_BYTE( "uc_h1_a.ic27", 0x080001, 0x020000, CRC(83f78dea) SHA1(6d197c3ea76beac31c3ea6e54a3ffea9d6c0c653) )
 	ROM_LOAD16_BYTE( "uc_l1_a.ic38", 0x080000, 0x020000, CRC(19628280) SHA1(e6c06cb7c37e46a7db3b4f318e836aa5a2390eda) )
 
-	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V30 = NANAO custom D80001 (?) */
+	ROM_REGION( 0x100000, "soundcpu", 0 )	/* 1MB for the audio CPU - encrypted V35 = NANAO custom D80001 (?) */
 	ROM_LOAD16_BYTE( "uc_sh0.ic30", 0x000001, 0x010000, CRC(f0ca1b03) SHA1(07154a2c747091f8be23587c109d91ed1672da6e) )
 	ROM_LOAD16_BYTE( "uc_sl0.ic31", 0x000000, 0x010000, CRC(d1661723) SHA1(bdc00196aa2074e7b21e5949f73e9f2b93d76fd9) )
 
@@ -2071,7 +2071,7 @@ ROM_END
 
 static void init_m92(running_machine *machine, int hasbanks)
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine->region("maincpu")->base();
 
 	if (hasbanks)
 	{
@@ -2084,7 +2084,7 @@ static void init_m92(running_machine *machine, int hasbanks)
 		memory_set_bankptr(machine, "bank2", &RAM[0xc0000]);
 	}
 
-	RAM = memory_region(machine, "soundcpu");
+	RAM = machine->region("soundcpu")->base();
 
 	if (RAM)
 		memcpy(RAM + 0xffff0, RAM + 0x1fff0, 0x10); /* Sound cpu Start vector */
@@ -2165,7 +2165,7 @@ static DRIVER_INIT( lethalth )
 
 static DRIVER_INIT( nbbatman )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine->region("maincpu")->base();
 
 	init_m92(machine, 1);
 
@@ -2195,7 +2195,7 @@ static DRIVER_INIT( dsoccr94j )
 
 static DRIVER_INIT( gunforc2 )
 {
-	UINT8 *RAM = memory_region(machine, "maincpu");
+	UINT8 *RAM = machine->region("maincpu")->base();
 	init_m92(machine, 1);
 	memcpy(RAM + 0x80000, RAM + 0x100000, 0x20000);
 }

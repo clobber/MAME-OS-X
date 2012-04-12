@@ -138,7 +138,7 @@ static char giant_string_buffer[65536] = { 0 };
 //  running_machine - constructor
 //-------------------------------------------------
 
-running_machine::running_machine(const machine_config &_config, core_options &options, bool exit_to_game_select)
+running_machine::running_machine(const machine_config &_config, osd_interface &osd, core_options &options, bool exit_to_game_select)
 	: m_regionlist(m_respool),
 	  m_devicelist(m_respool),
 	  config(&_config),
@@ -168,7 +168,6 @@ running_machine::running_machine(const machine_config &_config, core_options &op
 	  input_data(NULL),
 	  input_port_data(NULL),
 	  ui_input_data(NULL),
-	  cheat_data(NULL),
 	  debugcpu_data(NULL),
 	  generic_machine_data(NULL),
 	  generic_video_data(NULL),
@@ -176,6 +175,7 @@ running_machine::running_machine(const machine_config &_config, core_options &op
 	  m_logerror_list(NULL),
 	  m_scheduler(*this),
 	  m_options(options),
+	  m_osd(osd),
 	  m_basename(_config.gamedrv().name),
 	  m_current_phase(MACHINE_PHASE_PREINIT),
 	  m_paused(false),
@@ -190,7 +190,9 @@ running_machine::running_machine(const machine_config &_config, core_options &op
 	  m_saveload_searchpath(NULL),
 	  m_rand_seed(0x9d14abd7),
 	  m_driver_device(NULL),
+	  m_cheat(NULL),
 	  m_render(NULL),
+	  m_video(NULL),
 	  m_debug_view(NULL)
 {
 	memset(gfx, 0, sizeof(gfx));
@@ -209,7 +211,7 @@ running_machine::running_machine(const machine_config &_config, core_options &op
 	assert(m_driver_device != NULL);
 
 	// find devices
-	primary_screen = screen_first(*this);
+	primary_screen = downcast<screen_device *>(m_devicelist.first(SCREEN));
 	for (device_t *device = m_devicelist.first(); device != NULL; device = device->next())
 		if (dynamic_cast<cpu_device *>(device) != NULL)
 		{
@@ -229,7 +231,7 @@ running_machine::running_machine(const machine_config &_config, core_options &op
 
 running_machine::~running_machine()
 {
-	/* clear flag for added devices */
+	// clear flag for added devices
 	options_set_bool(&m_options, OPTION_ADDED_DEVICE_OPTIONS, FALSE, OPTION_PRIORITY_CMDLINE);
 }
 
@@ -273,9 +275,7 @@ void running_machine::start()
 	state_save_allow_registration(this, true);
 	palette_init(this);
 	m_render = auto_alloc(this, render_manager(*this));
-	ui_init(this);
 	generic_machine_init(this);
-	generic_video_init(this);
 	generic_sound_init(this);
 
 	// initialize the timers and allocate a soft_reset timer
@@ -284,7 +284,11 @@ void running_machine::start()
 	m_soft_reset_timer = timer_alloc(this, static_soft_reset, NULL);
 
 	// init the osd layer
-	osd_init(this);
+	m_osd.init(*this);
+
+	// create the video manager
+	m_video = auto_alloc(this, video_manager(*this));
+	ui_init(this);
 
 	// initialize the base time (needed for doing record/playback)
 	time(&m_base_time);
@@ -308,6 +312,9 @@ void running_machine::start()
 	memory_init(this);
 	watchdog_init(this);
 
+	// must happen after memory_init because this relies on generic.spriteram
+	generic_video_init(this);
+
 	// allocate the gfx elements prior to device initialization
 	gfx_init(this);
 
@@ -319,7 +326,6 @@ void running_machine::start()
 	tilemap_init(this);
 	crosshair_init(this);
 	sound_init(this);
-	video_init(this);
 
 	// initialize the debugger
 	if ((debug_flags & DEBUG_FLAG_ENABLED) != 0)
@@ -343,8 +349,7 @@ void running_machine::start()
 		schedule_load("auto");
 
 	// set up the cheat engine
-	if (options_get_bool(&m_options, OPTION_CHEAT))
-		cheat_init(this);
+	m_cheat = auto_alloc(this, cheat_manager(*this));
 
 	// disallow save state registrations starting here
 	state_save_allow_registration(this, false);
@@ -399,7 +404,7 @@ int running_machine::run(bool firstrun)
 
 			// otherwise, just pump video updates through
 			else
-				video_frame_update(this, false);
+				m_video->frame_update();
 
 			// handle save/load
 			if (m_saveload_schedule != SLS_NONE)
@@ -611,15 +616,15 @@ void running_machine::resume()
 //  region_alloc - allocates memory for a region
 //-------------------------------------------------
 
-region_info *running_machine::region_alloc(const char *name, UINT32 length, UINT32 flags)
+memory_region *running_machine::region_alloc(const char *name, UINT32 length, UINT32 flags)
 {
     // make sure we don't have a region of the same name; also find the end of the list
-    region_info *info = m_regionlist.find(name);
+    memory_region *info = m_regionlist.find(name);
     if (info != NULL)
 		fatalerror("region_alloc called with duplicate region name \"%s\"\n", name);
 
 	// allocate the region
-	return m_regionlist.append(name, auto_alloc(this, region_info(*this, name, length, flags)));
+	return m_regionlist.append(name, auto_alloc(this, memory_region(*this, name, length, flags)));
 }
 
 
@@ -893,10 +898,10 @@ void running_machine::logfile_callback(running_machine &machine, const char *buf
 ***************************************************************************/
 
 //-------------------------------------------------
-//  region_info - constructor
+//  memory_region - constructor
 //-------------------------------------------------
 
-region_info::region_info(running_machine &machine, const char *name, UINT32 length, UINT32 flags)
+memory_region::memory_region(running_machine &machine, const char *name, UINT32 length, UINT32 flags)
 	: m_machine(machine),
 	  m_next(NULL),
 	  m_name(name),
@@ -908,10 +913,10 @@ region_info::region_info(running_machine &machine, const char *name, UINT32 leng
 
 
 //-------------------------------------------------
-//  ~region_info - destructor
+//  ~memory_region - destructor
 //-------------------------------------------------
 
-region_info::~region_info()
+memory_region::~memory_region()
 {
 	auto_free(&m_machine, m_base.v);
 }
@@ -1183,7 +1188,7 @@ void driver_device::device_start()
 
 	// call palette_init if present
 	if (m_config.m_palette_init != NULL)
-		(*m_config.m_palette_init)(&m_machine, memory_region(machine, "proms"));
+		(*m_config.m_palette_init)(&m_machine, machine->region("proms")->base());
 
 	// start the various pieces
 	driver_start();

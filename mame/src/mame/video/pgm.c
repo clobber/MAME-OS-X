@@ -10,8 +10,8 @@
 static void pgm_prepare_sprite( running_machine *machine, int wide, int high, int palt, int boffset )
 {
 	pgm_state *state = machine->driver_data<pgm_state>();
-	UINT8 *bdata = memory_region(machine, "sprmask");
-	size_t  bdatasize = memory_region_length(machine, "sprmask") - 1;
+	UINT8 *bdata = machine->region("sprmask")->base();
+	size_t  bdatasize = machine->region("sprmask")->bytes() - 1;
 	UINT8 *adata = state->sprite_a_region;
 	size_t  adatasize = state->sprite_a_region_size - 1;
 	int xcnt, ycnt;
@@ -261,7 +261,7 @@ static void draw_sprites( running_machine *machine, bitmap_t* spritebitmap, UINT
 		if (xpos > 0x3ff) xpos -=0x800;
 		if (ypos > 0x1ff) ypos -=0x400;
 
-		if (high == 0) break; /* is this right? */
+		if (!sprite_source[4]) break; /* is this right? */
 
 		//if ((priority == 1) && (pri == 0)) break;
 
@@ -303,8 +303,6 @@ static TILE_GET_INFO( get_pgm_tx_tilemap_tile_info )
 	colour = (state->tx_videoram[tile_index * 2 + 1] & 0x3e) >> 1;
 	flipyx = (state->tx_videoram[tile_index * 2 + 1] & 0xc0) >> 6;
 
-	if (tileno > 0xbfff) { tileno -= 0xc000 ; tileno += 0x20000; } /* not sure about this */
-
 	SET_TILE_INFO(0,tileno,colour,TILE_FLIPYX(flipyx));
 }
 
@@ -325,8 +323,7 @@ static TILE_GET_INFO( get_pgm_bg_tilemap_tile_info )
 	int tileno, colour, flipyx;
 
 	tileno = state->bg_videoram[tile_index *2] & 0xffff;
-	if (tileno > 0x7ff)
-		tileno += 0x1000; /* Tiles 0x800+ come from the GAME Roms */
+
 	colour = (state->bg_videoram[tile_index * 2 + 1] & 0x3e) >> 1;
 	flipyx = (state->bg_videoram[tile_index * 2 + 1] & 0xc0) >> 6;
 
@@ -345,9 +342,9 @@ VIDEO_START( pgm )
 	state->tx_tilemap = tilemap_create(machine, get_pgm_tx_tilemap_tile_info, tilemap_scan_rows, 8, 8, 64, 32);
 	tilemap_set_transparent_pen(state->tx_tilemap, 15);
 
-	state->bg_tilemap = tilemap_create(machine, get_pgm_bg_tilemap_tile_info, tilemap_scan_rows, 32, 32, 64, 64);
+	state->bg_tilemap = tilemap_create(machine, get_pgm_bg_tilemap_tile_info, tilemap_scan_rows, 32, 32, 64, 16);
 	tilemap_set_transparent_pen(state->bg_tilemap, 31);
-	tilemap_set_scroll_rows(state->bg_tilemap, 64 * 32);
+	tilemap_set_scroll_rows(state->bg_tilemap, 16 * 32);
 
 	state->tmppgmbitmap = auto_bitmap_alloc(machine, 448, 224, BITMAP_FORMAT_RGB32);
 
@@ -378,7 +375,7 @@ VIDEO_UPDATE( pgm )
 	tilemap_set_scrolly(state->bg_tilemap,0, state->videoregs[0x2000/2]);
 
 	for (y = 0; y < 224; y++)
-		tilemap_set_scrollx(state->bg_tilemap, (y + state->videoregs[0x2000 / 2]) & 0x7ff, state->videoregs[0x3000 / 2] + state->rowscrollram[y]);
+		tilemap_set_scrollx(state->bg_tilemap, (y + state->videoregs[0x2000 / 2]) & 0x1ff, state->videoregs[0x3000 / 2] + state->rowscrollram[y]);
 
 	{
 		int y, x;

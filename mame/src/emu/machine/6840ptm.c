@@ -103,7 +103,6 @@ ptm6840_device::ptm6840_device(running_machine &_machine, const ptm6840_device_c
     : device_t(_machine, config),
       m_config(config)
 {
-
 }
 
 
@@ -114,7 +113,6 @@ ptm6840_device::ptm6840_device(running_machine &_machine, const ptm6840_device_c
 void ptm6840_device::device_start()
 {
 	m_internal_clock = m_config.m_internal_clock;
-
 	/* resolve callbacks */
 	for (int i = 0; i < 3; i++)
 	{
@@ -181,7 +179,6 @@ void ptm6840_device::device_reset()
 	m_t3_divisor			 = 1;
 	m_status_read_since_int = 0;
 	m_IRQ                   = 0;
-
 	for (int i = 0; i < 3; i++)
 	{
 		m_counter[i] = 0xffff;
@@ -197,7 +194,7 @@ void ptm6840_device::device_reset()
     ptm6840_get_status - Get enabled status
 -------------------------------------------------*/
 
-int ptm6840_get_status( running_device *device, int clock )
+int ptm6840_get_status( device_t *device, int clock )
 {
 	return downcast<ptm6840_device*>(device)->ptm6840_get_status(clock);
 }
@@ -213,7 +210,7 @@ int ptm6840_device::ptm6840_get_status( int clock )
     ptm6840_get_irq - Get IRQ state
 -------------------------------------------------*/
 
-int ptm6840_get_irq( running_device *device )
+int ptm6840_get_irq( device_t *device )
 {
 	return downcast<ptm6840_device*>(device)->ptm6840_get_irq();
 }
@@ -336,7 +333,7 @@ void ptm6840_device::ptm_tick(int counter, int count)
     update_interrupts - Update Internal Interrupts
 -------------------------------------------------*/
 
-void update_interrupts( running_device *device )
+void update_interrupts( device_t *device )
 {
 	downcast<ptm6840_device*>(device)->update_interrupts();
 }
@@ -676,6 +673,10 @@ void ptm6840_device::ptm6840_timeout(int idx)
 
 				/* No changes in output until reinit */
 				m_fired[idx] = 1;
+
+				m_status_reg |= (1 << idx);
+				m_status_read_since_int &= ~(1 << idx);
+				update_interrupts();
 			}
 		}
 	}
@@ -783,7 +784,7 @@ WRITE8_DEVICE_HANDLER( ptm6840_set_c3 )
     ptm6840_get_count - get count value
 -------------------------------------------------*/
 
-UINT16 ptm6840_get_count(running_device *device, int counter)
+UINT16 ptm6840_get_count(device_t *device, int counter)
 {
 	return downcast<ptm6840_device*>(device)->ptm6840_get_count(counter);
 }
@@ -798,7 +799,7 @@ UINT16 ptm6840_device::ptm6840_get_count(int counter)
     ptm6840_set_ext_clock - set external clock frequency
 ------------------------------------------------------------*/
 
-void ptm6840_set_ext_clock(running_device *device, int counter, double clock)
+void ptm6840_set_ext_clock(device_t *device, int counter, double clock)
 {
 	downcast<ptm6840_device*>(device)->ptm6840_set_ext_clock(counter, clock);
 }
@@ -850,7 +851,7 @@ void ptm6840_device::ptm6840_set_ext_clock(int counter, double clock)
     ptm6840_get_ext_clock - get external clock frequency
 ------------------------------------------------------------*/
 
-int ptm6840_get_ext_clock( running_device *device, int counter )
+int ptm6840_get_ext_clock( device_t *device, int counter )
 {
 	return downcast<ptm6840_device*>(device)->ptm6840_get_ext_clock(counter);
 }

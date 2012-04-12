@@ -69,7 +69,7 @@ static WRITE8_HANDLER(mux_select_w)
 
 WRITE8_HANDLER(st0016_rom_bank_w)
 {
-	memory_set_bankptr(space->machine,  "bank1", memory_region(space->machine, "maincpu") + (data* 0x4000) + 0x10000 );
+	memory_set_bankptr(space->machine,  "bank1", space->machine->region("maincpu")->base() + (data* 0x4000) + 0x10000 );
 	st0016_rom_bank=data;
 }
 
@@ -432,40 +432,40 @@ static const st0016_interface st0016_config =
 
 static MACHINE_CONFIG_START( st0016, driver_device )
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
-	MDRV_CPU_PROGRAM_MAP(st0016_mem)
-	MDRV_CPU_IO_MAP(st0016_io)
+	MCFG_CPU_ADD("maincpu",Z80,8000000) /* 8 MHz ? */
+	MCFG_CPU_PROGRAM_MAP(st0016_mem)
+	MCFG_CPU_IO_MAP(st0016_io)
 
-	MDRV_CPU_VBLANK_INT_HACK(st0016_int,5) /*  4*nmi + int0 */
+	MCFG_CPU_VBLANK_INT_HACK(st0016_int,5) /*  4*nmi + int0 */
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(48*8, 48*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 48*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(48*8, 48*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 48*8-1, 0*8, 48*8-1)
 
-	MDRV_GFXDECODE(st0016)
-	MDRV_PALETTE_LENGTH(16*16*4+1)
+	MCFG_GFXDECODE(st0016)
+	MCFG_PALETTE_LENGTH(16*16*4+1)
 
-	MDRV_VIDEO_START(st0016)
-	MDRV_VIDEO_UPDATE(st0016)
+	MCFG_VIDEO_START(st0016)
+	MCFG_VIDEO_UPDATE(st0016)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("stsnd", ST0016, 0)
-	MDRV_SOUND_CONFIG(st0016_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("stsnd", ST0016, 0)
+	MCFG_SOUND_CONFIG(st0016_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( mayjinsn, st0016 )
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_IO_MAP(st0016_m2_io)
-	MDRV_CPU_ADD("sub", V810, 10000000)//25 Mhz ?
-	MDRV_CPU_PROGRAM_MAP(v810_mem)
-	MDRV_QUANTUM_TIME(HZ(60))
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_IO_MAP(st0016_m2_io)
+	MCFG_CPU_ADD("sub", V810, 10000000)//25 Mhz ?
+	MCFG_CPU_PROGRAM_MAP(v810_mem)
+	MCFG_QUANTUM_TIME(HZ(60))
 MACHINE_CONFIG_END
 
 /*************************************
@@ -516,6 +516,18 @@ ROM_START( nratechu )
 	ROM_LOAD( "sx012-01",   0x10000, 0x80000,   CRC(6ca01d57) SHA1(065848f19ecf2dc1f7bbc7ddd87bca502e4b8b16) )
 	ROM_LOAD( "sx012-02",   0x110000, 0x100000, CRC(40a4e354) SHA1(8120ce8deee6805050a5b083a334c3743c09566b) )
 	ROM_COPY( "maincpu",  0x10000, 0x00000, 0x08000 )
+ROM_END
+
+/* PCB E51-00001 (almost identical to above) */
+
+ROM_START( dcrown )
+	ROM_REGION( 0x290000, "maincpu", 0 )
+	ROM_LOAD( "dc1.u31",0x010000, 0x80000, CRC(e55200b8) SHA1(20a968dc895bb636b064c29b4b53c6ffa49fea36) )
+	ROM_LOAD( "dc2.u32",0x090000, 0x80000, CRC(05b6192f) SHA1(6af6e7b2c681f2791a7f89a528a95eb976c8ba84) )
+	ROM_LOAD( "dc3.u33",0x110000, 0x80000, CRC(f23c1975) SHA1(118d6054922a733d23363c53bb331d84c78e50ad) )
+	ROM_LOAD( "dc4.u34",0x190000, 0x80000, CRC(0d1c2c61) SHA1(7e4dc20ab683ce0f61dd939cfd9b17714ba2343a) )
+
+	ROM_COPY( "maincpu",   0x010000, 0x000000, 0x08000 )
 ROM_END
 
 /*
@@ -658,13 +670,13 @@ static DRIVER_INIT(nratechu)
 static DRIVER_INIT(mayjinsn)
 {
 	st0016_game=4|0x80;
-	memory_set_bankptr(machine, "bank2", memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", machine->region("user1")->base());
 }
 
 static DRIVER_INIT(mayjisn2)
 {
 	st0016_game=4;
-	memory_set_bankptr(machine, "bank2", memory_region(machine, "user1"));
+	memory_set_bankptr(machine, "bank2", machine->region("user1")->base());
 }
 
 /*************************************
@@ -679,3 +691,4 @@ GAME(  1994, mayjisn2,	0,	  mayjinsn, mayjisn2, mayjisn2, ROT0, "Seta",  "Mayjin
 GAME(  1995, koikois,	 0,	  st0016, koikois, renju, ROT0, "Visco",  "Koi Koi Shimasho", GAME_IMPERFECT_GRAPHICS)
 /* Not working */
 GAME( 1994, mayjinsn,	0,	  mayjinsn, st0016,   mayjinsn, ROT0, "Seta",  "Mayjinsen",GAME_IMPERFECT_GRAPHICS|GAME_NOT_WORKING)
+GAME( 199?, dcrown,	0,	  st0016,   renju,    renju,    ROT0, "<unknown>", "Dream Crown", GAME_NOT_WORKING)

@@ -192,7 +192,8 @@ TODO:
 #include "cpu/z80/z80.h"
 #include "sound/namco.h"
 #include "sound/samples.h"
-#include "includes/timeplt.h"
+#include "audio/timeplt.h"
+#include "includes/rallyx.h"
 
 #define MASTER_CLOCK	XTAL_18_432MHz
 
@@ -205,7 +206,7 @@ TODO:
 
 static WRITE8_HANDLER( rallyx_interrupt_vector_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	rallyx_state *state = space->machine->driver_data<rallyx_state>();
 
 	cpu_set_input_line_vector(state->maincpu, 0, data);
 	cpu_set_input_line(state->maincpu, 0, CLEAR_LINE);
@@ -214,7 +215,7 @@ static WRITE8_HANDLER( rallyx_interrupt_vector_w )
 
 static WRITE8_HANDLER( rallyx_bang_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	rallyx_state *state = space->machine->driver_data<rallyx_state>();
 
 	if (data == 0 && state->last_bang != 0)
 		sample_start(state->samples, 0, 0, 0);
@@ -224,7 +225,7 @@ static WRITE8_HANDLER( rallyx_bang_w )
 
 static WRITE8_HANDLER( rallyx_latch_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	rallyx_state *state = space->machine->driver_data<rallyx_state>();
 	int bit = data & 1;
 
 	switch (offset)
@@ -269,7 +270,7 @@ static WRITE8_HANDLER( rallyx_latch_w )
 
 static WRITE8_HANDLER( locomotn_latch_w )
 {
-	timeplt_state *state = space->machine->driver_data<timeplt_state>();
+	rallyx_state *state = space->machine->driver_data<rallyx_state>();
 	int bit = data & 1;
 
 	switch (offset)
@@ -316,12 +317,12 @@ static WRITE8_HANDLER( locomotn_latch_w )
 
 static ADDRESS_MAP_START( rallyx_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(rallyx_videoram_w) AM_BASE_MEMBER(timeplt_state, videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(rallyx_videoram_w) AM_BASE_MEMBER(rallyx_state, videoram)
 	AM_RANGE(0x9800, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa080, 0xa080) AM_READ_PORT("P2")
 	AM_RANGE(0xa100, 0xa100) AM_READ_PORT("DSW")
-	AM_RANGE(0xa000, 0xa00f) AM_WRITEONLY AM_BASE_MEMBER(timeplt_state, radarattr)
+	AM_RANGE(0xa000, 0xa00f) AM_WRITEONLY AM_BASE_MEMBER(rallyx_state, radarattr)
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xa100, 0xa11f) AM_DEVWRITE("namco", pacman_sound_w)
 	AM_RANGE(0xa130, 0xa130) AM_WRITE(rallyx_scrollx_w)
@@ -338,13 +339,13 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( jungler_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(rallyx_videoram_w) AM_BASE_MEMBER(timeplt_state, videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(rallyx_videoram_w) AM_BASE_MEMBER(rallyx_state, videoram)
 	AM_RANGE(0x9800, 0x9fff) AM_RAM
 	AM_RANGE(0xa000, 0xa000) AM_READ_PORT("P1")
 	AM_RANGE(0xa080, 0xa080) AM_READ_PORT("P2")
 	AM_RANGE(0xa100, 0xa100) AM_READ_PORT("DSW1")
 	AM_RANGE(0xa180, 0xa180) AM_READ_PORT("DSW2")
-	AM_RANGE(0xa000, 0xa00f) AM_MIRROR(0x00f0) AM_WRITEONLY AM_BASE_MEMBER(timeplt_state, radarattr)	// jungler writes to a03x
+	AM_RANGE(0xa000, 0xa00f) AM_MIRROR(0x00f0) AM_WRITEONLY AM_BASE_MEMBER(rallyx_state, radarattr)	// jungler writes to a03x
 	AM_RANGE(0xa080, 0xa080) AM_WRITE(watchdog_reset_w)
 	AM_RANGE(0xa100, 0xa100) AM_WRITE(soundlatch_w)
 	AM_RANGE(0xa130, 0xa130) AM_WRITE(rallyx_scrollx_w)	/* only jungler and tactcian */
@@ -874,7 +875,7 @@ static const samples_interface rallyx_samples_interface =
 
 static MACHINE_START( rallyx )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
+	rallyx_state *state = machine->driver_data<rallyx_state>();
 
 	state->maincpu = machine->device<cpu_device>("maincpu");
 	state->samples = machine->device("samples");
@@ -885,82 +886,82 @@ static MACHINE_START( rallyx )
 
 static MACHINE_RESET( rallyx )
 {
-	timeplt_state *state = machine->driver_data<timeplt_state>();
+	rallyx_state *state = machine->driver_data<rallyx_state>();
 
 	state->last_bang = 0;
 	state->stars_enable = 0;
 }
 
-static MACHINE_CONFIG_START( rallyx, timeplt_state )
+static MACHINE_CONFIG_START( rallyx, rallyx_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(rallyx_map)
-	MDRV_CPU_IO_MAP(io_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_assert)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(rallyx_map)
+	MCFG_CPU_IO_MAP(io_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_assert)
 
-	MDRV_MACHINE_START(rallyx)
-	MDRV_MACHINE_RESET(rallyx)
+	MCFG_MACHINE_START(rallyx)
+	MCFG_MACHINE_RESET(rallyx)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60.606060)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60.606060)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(rallyx)
-	MDRV_PALETTE_LENGTH(64*4+4)
+	MCFG_GFXDECODE(rallyx)
+	MCFG_PALETTE_LENGTH(64*4+4)
 
-	MDRV_PALETTE_INIT(rallyx)
-	MDRV_VIDEO_START(rallyx)
-	MDRV_VIDEO_UPDATE(rallyx)
+	MCFG_PALETTE_INIT(rallyx)
+	MCFG_VIDEO_START(rallyx)
+	MCFG_VIDEO_UPDATE(rallyx)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("namco", NAMCO, MASTER_CLOCK/6/32) /* 96 KHz */
-	MDRV_SOUND_CONFIG(namco_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("namco", NAMCO, MASTER_CLOCK/6/32) /* 96 KHz */
+	MCFG_SOUND_CONFIG(namco_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
-	MDRV_SOUND_ADD("samples", SAMPLES, 0)
-	MDRV_SOUND_CONFIG(rallyx_samples_interface)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SOUND_ADD("samples", SAMPLES, 0)
+	MCFG_SOUND_CONFIG(rallyx_samples_interface)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 MACHINE_CONFIG_END
 
 
-static MACHINE_CONFIG_START( jungler, timeplt_state )
+static MACHINE_CONFIG_START( jungler, rallyx_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
-	MDRV_CPU_PROGRAM_MAP(jungler_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)	/* 3.072 MHz */
+	MCFG_CPU_PROGRAM_MAP(jungler_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_MACHINE_START(rallyx)
-	MDRV_MACHINE_RESET(rallyx)
+	MCFG_MACHINE_START(rallyx)
+	MCFG_MACHINE_RESET(rallyx)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_HAS_SHADOWS)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second, vblank duration */)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(36*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0)	/* frames per second, vblank duration */)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(36*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 36*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(jungler)
-	MDRV_PALETTE_LENGTH(64*4+4+64)
+	MCFG_GFXDECODE(jungler)
+	MCFG_PALETTE_LENGTH(64*4+4+64)
 
-	MDRV_PALETTE_INIT(jungler)
-	MDRV_VIDEO_START(jungler)
-	MDRV_VIDEO_UPDATE(jungler)
+	MCFG_PALETTE_INIT(jungler)
+	MCFG_VIDEO_START(jungler)
+	MCFG_VIDEO_UPDATE(jungler)
 
 	/* sound hardware */
-	MDRV_FRAGMENT_ADD(locomotn_sound)
+	MCFG_FRAGMENT_ADD(locomotn_sound)
 MACHINE_CONFIG_END
 
 
@@ -969,8 +970,8 @@ static MACHINE_CONFIG_DERIVED( tactcian, jungler )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MDRV_VIDEO_START(locomotn)
-	MDRV_VIDEO_UPDATE(locomotn)
+	MCFG_VIDEO_START(locomotn)
+	MCFG_VIDEO_UPDATE(locomotn)
 MACHINE_CONFIG_END
 
 
@@ -979,10 +980,10 @@ static MACHINE_CONFIG_DERIVED( locomotn, jungler )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MDRV_VIDEO_START(locomotn)
-	MDRV_VIDEO_UPDATE(locomotn)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_VIDEO_START(locomotn)
+	MCFG_VIDEO_UPDATE(locomotn)
 MACHINE_CONFIG_END
 
 
@@ -991,10 +992,10 @@ static MACHINE_CONFIG_DERIVED( commsega, jungler )
 	/* basic machine hardware */
 
 	/* video hardware */
-	MDRV_SCREEN_MODIFY("screen")
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
-	MDRV_VIDEO_START(commsega)
-	MDRV_VIDEO_UPDATE(locomotn)
+	MCFG_SCREEN_MODIFY("screen")
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_VIDEO_START(commsega)
+	MCFG_VIDEO_UPDATE(locomotn)
 MACHINE_CONFIG_END
 
 

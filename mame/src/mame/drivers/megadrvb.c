@@ -513,8 +513,8 @@ INPUT_PORTS_START( srmdb )
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START1 ) // start
 
 	PORT_MODIFY("PAD2")
-	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_NAME("P1 Shoot") // a
-	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_NAME("P1 Jump") // b
+	PORT_BIT( 0x0010, IP_ACTIVE_LOW, IPT_BUTTON1 ) PORT_PLAYER(2) PORT_NAME("P2 Shoot") // a
+	PORT_BIT( 0x0020, IP_ACTIVE_LOW, IPT_BUTTON2 ) PORT_PLAYER(2) PORT_NAME("P2 Jump") // b
 	PORT_BIT( 0x0040, IP_ACTIVE_LOW, IPT_UNUSED ) // c (duplicate shoot button)
 	PORT_BIT( 0x0080, IP_ACTIVE_LOW, IPT_START2 )
 
@@ -650,7 +650,7 @@ static DRIVER_INIT( aladmdb )
      * Game does a check @ 1afc00 with work RAM fff57c that makes it play like the original console version (i.e. 8 energy hits instead of 2)
      */
 	#if ENERGY_CONSOLE_MODE
-	UINT16 *rom = (UINT16 *)memory_region(machine, "maincpu");
+	UINT16 *rom = (UINT16 *)machine->region("maincpu")->base();
 	rom[0x1afc08/2] = 0x6600;
 	#endif
 
@@ -666,7 +666,7 @@ static DRIVER_INIT( aladmdb )
 static DRIVER_INIT( mk3mdb )
 {
 	int x;
-	UINT8 *rom = memory_region(machine, "maincpu");
+	UINT8 *rom = machine->region("maincpu")->base();
 
 	for (x=0x000001;x<0x100001;x+=2)
 	{
@@ -716,7 +716,7 @@ static DRIVER_INIT( ssf2mdb )
 	memory_install_read_bank(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400000, 0x5fffff, 0, 0, "bank5");
 	memory_unmap_write(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x400000, 0x5fffff, 0, 0);
 
-	memory_set_bankptr(machine,  "bank5", memory_region( machine, "maincpu" ) + 0x400000 );
+	memory_set_bankptr(machine,  "bank5", machine->region( "maincpu" )->base() + 0x400000 );
 
 	memory_install_read16_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), 0x770070, 0x770075, 0, 0, ssf2mdb_dsw_r );
 
@@ -727,7 +727,7 @@ static DRIVER_INIT( ssf2mdb )
 static DRIVER_INIT( srmdb )
 {
 	int x;
-	UINT8* rom = memory_region(machine, "maincpu");
+	UINT8* rom = machine->region("maincpu")->base();
 
 	/* todo, reduce bitswaps to single swap */
 	for (x=0x00001;x<0x40000;x+=2)

@@ -101,7 +101,7 @@ void device_config_execute_interface::static_set_disable(device_config *device)
 {
 	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
 	if (exec == NULL)
-		throw emu_fatalerror("MDRV_DEVICE_DISABLE called on device '%s' with no execute interface", device->tag());
+		throw emu_fatalerror("MCFG_DEVICE_DISABLE called on device '%s' with no execute interface", device->tag());
 	exec->m_disabled = true;
 }
 
@@ -115,7 +115,7 @@ void device_config_execute_interface::static_set_vblank_int(device_config *devic
 {
 	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
 	if (exec == NULL)
-		throw emu_fatalerror("MDRV_DEVICE_VBLANK_INT called on device '%s' with no execute interface", device->tag());
+		throw emu_fatalerror("MCFG_DEVICE_VBLANK_INT called on device '%s' with no execute interface", device->tag());
 	exec->m_vblank_interrupt = function;
 	exec->m_vblank_interrupts_per_frame = rate;
 	exec->m_vblank_interrupt_screen = tag;
@@ -131,7 +131,7 @@ void device_config_execute_interface::static_set_periodic_int(device_config *dev
 {
 	device_config_execute_interface *exec = dynamic_cast<device_config_execute_interface *>(device);
 	if (exec == NULL)
-		throw emu_fatalerror("MDRV_DEVICE_PERIODIC_INT called on device '%s' with no execute interface", device->tag());
+		throw emu_fatalerror("MCFG_DEVICE_PERIODIC_INT called on device '%s' with no execute interface", device->tag());
 	exec->m_timed_interrupt = function;
 	exec->m_timed_interrupt_period = rate;
 }
@@ -219,7 +219,7 @@ bool device_config_execute_interface::interface_validity_check(const game_driver
 	/* validate the interrupts */
 	if (m_vblank_interrupt != NULL)
 	{
-		if (screen_count(m_machine_config) == 0)
+		if (m_machine_config.m_devicelist.count(SCREEN) == 0)
 		{
 			mame_printf_error("%s: %s device '%s' has a VBLANK interrupt, but the driver is screenless!\n", driver.source_file, driver.name, devconfig->tag());
 			error = true;
@@ -629,7 +629,7 @@ void device_execute_interface::interface_post_reset()
 
 		// old style 'hack' setup - use screen #0
 		else
-			screen = screen_first(m_machine);
+			screen = m_machine.first_screen();
 
 		assert(screen != NULL);
 		screen->register_vblank_callback(static_on_vblank, NULL);

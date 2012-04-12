@@ -62,16 +62,17 @@ struct _i8086_state
 	address_space *io;
 	int icount;
 
-	unsigned prefix_base;		   /* base address of the latest prefix segment */
 	char seg_prefix;				   /* prefix segment indicator */
+	UINT8	prefix_seg;					/* The prefixed segment */
 	unsigned ea;
 	UINT16 eo; /* HJB 12/13/98 effective offset of the address (before segment is added) */
+	UINT8 ea_seg;	/* effective segment of the address */
 
 	devcb_resolved_write_line	out_tmrout0_func;
 	devcb_resolved_write_line	out_tmrout1_func;
 };
 
-INLINE i8086_state *get_safe_token(running_device *device)
+INLINE i8086_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
 	assert(device->type() == I8086 ||
@@ -110,7 +111,7 @@ static UINT8 parity_table[256];
 
 
 /***************************************************************************/
-static void i8086_state_register(running_device *device)
+static void i8086_state_register(device_t *device)
 {
 	i8086_state *cpustate = get_safe_token(device);
 	state_save_register_device_item_array(device, 0, cpustate->regs.w);
@@ -341,7 +342,7 @@ static CPU_EXECUTE( i8086 )
 
 static CPU_DISASSEMBLE( i8086 )
 {
-	return i386_dasm_one(buffer, pc, oprom, 16);
+	return i386_dasm_one(buffer, pc, oprom, 1);
 }
 
 

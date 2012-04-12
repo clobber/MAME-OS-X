@@ -113,7 +113,7 @@ ToDo / Notes:
 
 (per-game issues)
 -stress: accesses the Sound Memory Expansion Area (0x05a00000-0x05afffff), unknown purpose;
--smleague / finlarch: it randomly hangs / crashes,it works if you use a ridiculous MDRV_INTERLEAVE number,might need strict
+-smleague / finlarch: it randomly hangs / crashes,it works if you use a ridiculous MCFG_INTERLEAVE number,might need strict
  SH-2 synching.
 -various: find idle skip if possible.
 -suikoenb/shanhigw + others: why do we get 2 credits on startup? Cause might be by a communication with the M68k
@@ -838,7 +838,7 @@ static READ32_HANDLER ( stv_io_r32 )
 				}
 			}
 			//default:
-			//case 0x40: return mame_rand(space->machine);
+			//case 0x40: return space->machine->rand();
 			default:
 			//popmessage("%02x PORT SEL",port_sel);
 			return (input_port_read(space->machine, "P1") << 16) | (input_port_read(space->machine, "P2"));
@@ -2385,7 +2385,7 @@ DRIVER_INIT ( stv )
 #ifdef UNUSED_FUNCTION
 static void print_game_info(void)
 {
-	UINT8 *ROM = memory_region(machine, "user1");
+	UINT8 *ROM = machine->region("user1")->base();
 	static FILE *print_file = NULL;
 	UINT8 STR[0x100];
 	UINT32 src_i,dst_i;
@@ -2490,7 +2490,7 @@ static const sh2_cpu_core sh2_conf_slave  = { 1, NULL };
 
 static int scsp_last_line = 0;
 
-static void scsp_irq(running_device *device, int irq)
+static void scsp_irq(device_t *device, int irq)
 {
 	// don't bother the 68k if it's off
 	if (!en_68k)
@@ -2855,47 +2855,47 @@ static MACHINE_RESET( stv )
 static MACHINE_CONFIG_START( stv, driver_device )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", SH2, MASTER_CLOCK_352/2) // 28.6364 MHz
-	MDRV_CPU_PROGRAM_MAP(stv_mem)
-	MDRV_CPU_VBLANK_INT("screen",stv_interrupt)
-	MDRV_CPU_CONFIG(sh2_conf_master)
+	MCFG_CPU_ADD("maincpu", SH2, MASTER_CLOCK_352/2) // 28.6364 MHz
+	MCFG_CPU_PROGRAM_MAP(stv_mem)
+	MCFG_CPU_VBLANK_INT("screen",stv_interrupt)
+	MCFG_CPU_CONFIG(sh2_conf_master)
 
-	MDRV_CPU_ADD("slave", SH2, MASTER_CLOCK_352/2) // 28.6364 MHz
-	MDRV_CPU_PROGRAM_MAP(stv_mem)
-	MDRV_CPU_CONFIG(sh2_conf_slave)
+	MCFG_CPU_ADD("slave", SH2, MASTER_CLOCK_352/2) // 28.6364 MHz
+	MCFG_CPU_PROGRAM_MAP(stv_mem)
+	MCFG_CPU_CONFIG(sh2_conf_slave)
 
-	MDRV_CPU_ADD("audiocpu", M68000, MASTER_CLOCK_352/5) //11.46 MHz
-	MDRV_CPU_PROGRAM_MAP(sound_mem)
+	MCFG_CPU_ADD("audiocpu", M68000, MASTER_CLOCK_352/5) //11.46 MHz
+	MCFG_CPU_PROGRAM_MAP(sound_mem)
 
-	MDRV_MACHINE_START(stv)
-	MDRV_MACHINE_RESET(stv)
+	MCFG_MACHINE_START(stv)
+	MCFG_MACHINE_RESET(stv)
 
-	MDRV_EEPROM_93C46_ADD("eeprom") /* Actually 93c45 */
+	MCFG_EEPROM_93C46_ADD("eeprom") /* Actually 93c45 */
 
-	MDRV_TIMER_ADD("scan_timer", hblank_in_irq)
-	MDRV_TIMER_ADD("t1_timer", timer1_irq)
-	MDRV_TIMER_ADD("vbout_timer", vblank_out_irq)
-	MDRV_TIMER_ADD("sector_timer", stv_sector_cb)
+	MCFG_TIMER_ADD("scan_timer", hblank_in_irq)
+	MCFG_TIMER_ADD("t1_timer", timer1_irq)
+	MCFG_TIMER_ADD("vbout_timer", vblank_out_irq)
+	MCFG_TIMER_ADD("sector_timer", stv_sector_cb)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_AFTER_VBLANK)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
-	MDRV_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 400, 0, 320, 262, 0, 224)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_RGB15)
+	MCFG_SCREEN_RAW_PARAMS(PIXEL_CLOCK, 400, 0, 320, 262, 0, 224)
 
-	MDRV_PALETTE_LENGTH(2048+(2048*2))//standard palette + extra memory for rgb brightness.
-	MDRV_GFXDECODE(stv)
+	MCFG_PALETTE_LENGTH(2048+(2048*2))//standard palette + extra memory for rgb brightness.
+	MCFG_GFXDECODE(stv)
 
-	MDRV_VIDEO_START(stv_vdp2)
-	MDRV_VIDEO_UPDATE(stv_vdp2)
+	MCFG_VIDEO_START(stv_vdp2)
+	MCFG_VIDEO_UPDATE(stv_vdp2)
 
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("scsp", SCSP, 0)
-	MDRV_SOUND_CONFIG(scsp_config)
-	MDRV_SOUND_ROUTE(0, "lspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "rspeaker", 1.0)
+	MCFG_SOUND_ADD("scsp", SCSP, 0)
+	MCFG_SOUND_CONFIG(scsp_config)
+	MCFG_SOUND_ROUTE(0, "lspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "rspeaker", 1.0)
 MACHINE_CONFIG_END
 
 #define ROM_LOAD16_WORD_SWAP_BIOS(bios,name,offset,length,hash) \
@@ -4015,7 +4015,7 @@ by Sega titles,and this is a Sunsoft game)It's likely to be a left-over...
 
 static DRIVER_INIT( sanjeon )
 {
-	UINT8 *src    = memory_region       ( machine, "user1" );
+	UINT8 *src    = machine->region       ( "user1" )->base();
 	int x;
 
 	for (x=0;x<0x3000000;x++)
@@ -4053,7 +4053,7 @@ GAME( 1995, ejihon,    stvbios, stv, stv,		stv,    	ROT0,   "Sega", 						"Ejiho
 GAME( 1995, fhboxers,  stvbios, stv, stv,		fhboxers,	ROT0,   "Sega", 						"Funky Head Boxers (JUETBKAL 951218 V1.000)", GAME_NO_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1994, gaxeduel,  stvbios, stv, stv,		gaxeduel,	ROT0,   "Sega", 	    				"Golden Axe - The Duel (JUETL 950117 V1.000)", GAME_IMPERFECT_SOUND )
 GAME( 1998, grdforce,  stvbios, stv, stv,		grdforce,	ROT0,   "Success",  					"Guardian Force (JUET 980318 V0.105)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
-GAME( 1998, groovef,   stvbios, stv, stv,		groovef,	ROT0,   "Atlus",    					"Power Instinct 3 - Groove On Fight (J 970416 V1.001)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
+GAME( 1998, groovef,   stvbios, stv, stv,		groovef,	ROT0,   "Atlus",    					"Groove on Fight - Gouketsuji Ichizoku 3 (J 970416 V1.001)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1997, hanagumi,  stvbios, stv, stv,		hanagumi,	ROT0,   "Sega",     					"Hanagumi Taisen Columns - Sakura Wars (J 971007 V1.010)", GAME_IMPERFECT_GRAPHICS | GAME_IMPERFECT_SOUND )
 GAME( 1996, introdon,  stvbios, stv, stv,		stv,    	ROT0,   "Sunsoft / Success",			"Karaoke Quiz Intro Don Don! (J 960213 V1.000)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )
 GAME( 1995, kiwames,   stvbios, stv, stvmp,		stv,    	ROT0,   "Athena",   					"Pro Mahjong Kiwame S (J 951020 V1.208)", GAME_IMPERFECT_SOUND | GAME_IMPERFECT_GRAPHICS )

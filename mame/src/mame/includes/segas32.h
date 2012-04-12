@@ -23,12 +23,13 @@ WRITE16_HANDLER( brival_protection_w );
 
 READ16_HANDLER( darkedge_protection_r );
 WRITE16_HANDLER( darkedge_protection_w );
-void darkedge_fd1149_vblank(running_device *device);
+void darkedge_fd1149_vblank(device_t *device);
 WRITE16_HANDLER( jleague_protection_w );
 
 READ16_HANDLER( dbzvrvs_protection_r );
 WRITE16_HANDLER( dbzvrvs_protection_w );
 
+extern const UINT8 ga2_v25_opcode_table[];
 void decrypt_ga2_protrom(running_machine *machine);
 READ16_HANDLER( ga2_dpram_r );
 WRITE16_HANDLER( ga2_dpram_w );

@@ -108,11 +108,11 @@ typedef struct
 	const UINT8 *rom;
 	devcb_resolved_read8 ext_mem_read;
 	devcb_resolved_write8 ext_mem_write;
-	void (*irq_callback)(running_device *, int);
+	void (*irq_callback)(device_t *, int);
 
 	UINT32 clock;
 	sound_stream * stream;
-	running_device *device;
+	device_t *device;
 } YMF271Chip;
 
 // slot mapping assists
@@ -122,7 +122,6 @@ static const int pcm_tab[] = { 0, 4, 8, -1, 12, 16, 20, -1, 24, 28, 32, -1, 36, 
 static INT16 *wavetable[8];
 static double plfo_table[4][8][LFO_LENGTH];
 static int alfo_table[4][LFO_LENGTH];
-static INT32 *mix;
 
 #define ENV_ATTACK		0
 #define ENV_DECAY1		1
@@ -157,12 +156,12 @@ static const double DCTime[] =
 	11.41,		9.12,		7.60,		6.51,		5.69,		5.69,		5.69,		5.69
 };
 
-/* Notes about the LFO Frequency Table below;
+/* Notes about the LFO Frequency Table below:
 
     There are 2 known errors in the LFO table listed in the original manual.
 
-    Both 201 & 202 were listed as 3.74490.  202 has be corrected to 3.91513
-    232 was listed as 13.35547 but has been replaced with 14.35547.
+    Both 201 & 202 are listed as 3.74490.  202 has been computed/corrected to 3.91513
+    232 was listed as 13.35547 but has been replaced with the correct value of 14.35547.
 
   Corrections are computed values based on formulas by Olivier Galibert & Nicola Salmoria listed below:
 
@@ -273,7 +272,7 @@ static int channel_attenuation[16];
 static int total_level[128];
 static int env_volume_table[256];
 
-INLINE YMF271Chip *get_safe_token(running_device *device)
+INLINE YMF271Chip *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
 	assert(device->type() == YMF271);
@@ -709,6 +708,7 @@ static STREAM_UPDATE( ymf271_update )
 	int i, j;
 	int op;
 	INT32 *mixp;
+	INT32 mix[48000*2];
 	YMF271Chip *chip = (YMF271Chip *)param;
 
 	memset(mix, 0, sizeof(mix[0])*samples*2);
@@ -1403,9 +1403,12 @@ static TIMER_CALLBACK( ymf271_timer_b_tick )
 
 static UINT8 ymf271_read_ext_memory(YMF271Chip *chip, UINT32 address)
 {
-	if( chip->ext_mem_read.read ) {
+	if( chip->ext_mem_read.read )
+	{
 		return devcb_call_read8(&chip->ext_mem_read, address);
-	} else {
+	}
+	else
+	{
 		if( address < 0x800000)
 			return chip->rom[address];
 	}
@@ -1671,11 +1674,9 @@ static void init_tables(running_machine *machine)
 		tri_wave = ((i % (LFO_LENGTH/2)) * ALFO_MAX) / (LFO_LENGTH/2);
 		alfo_table[3][i] = (i < (LFO_LENGTH/2)) ? ALFO_MAX-tri_wave : tri_wave;
 	}
-
-	mix = auto_alloc_array(machine, INT32, 48000*2);
 }
 
-static void init_state(YMF271Chip *chip, running_device *device)
+static void init_state(YMF271Chip *chip, device_t *device)
 {
 	int i;
 
@@ -1750,7 +1751,7 @@ static void init_state(YMF271Chip *chip, running_device *device)
 	state_save_register_device_item(device, 0, chip->ext_read);
 }
 
-static void ymf271_init(running_device *device, YMF271Chip *chip, UINT8 *rom, void (*cb)(running_device *,int), const devcb_read8 *ext_read, const devcb_write8 *ext_write)
+static void ymf271_init(device_t *device, YMF271Chip *chip, UINT8 *rom, void (*cb)(device_t *,int), const devcb_read8 *ext_read, const devcb_write8 *ext_write)
 {
 	chip->timA = timer_alloc(device->machine, ymf271_timer_a_tick, chip);
 	chip->timB = timer_alloc(device->machine, ymf271_timer_b_tick, chip);

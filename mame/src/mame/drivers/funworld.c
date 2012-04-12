@@ -40,6 +40,7 @@
   * Royal Card (austrian, set 4),                     TAB Austria,        1991.
   * Royal Card (austrian, set 5),                     TAB Austria,        1991.
   * Royal Card (austrian, set 6),                     TAB Austria,        1991.
+  * Royal Card (TAB original),                        TAB Austria,        1991.
   * Royal Card (slovak, encrypted),                   Evona Electronic,   1991.
   * Royal Card Professional 2.0,                      Digital Dreams,     1993.
   * Lucky Lady (3x3 deal),                            TAB Austria,        1991.
@@ -809,7 +810,7 @@ static UINT8 funquiz_question_bank = 0x80;
 
 static READ8_HANDLER( questions_r )
 {
-	UINT8* quiz = memory_region(space->machine,"questions");
+	UINT8* quiz = space->machine->region("questions")->base();
 	int extraoffset = ((funquiz_question_bank & 0x1f) * 0x8000);
 
 	// if 0x80 is set, read the 2nd half of the question rom (contains header info)
@@ -2108,104 +2109,104 @@ static const mc6845_interface mc6845_intf =
 
 static MACHINE_CONFIG_START( fw1stpal, driver_device )
     /* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M65SC02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(funworld_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", M65SC02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(funworld_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_NVRAM_ADD_0FILL("nvram")
+	MCFG_NVRAM_ADD_0FILL("nvram")
 
-	MDRV_PIA6821_ADD("pia0", pia0_intf)
-	MDRV_PIA6821_ADD("pia1", pia1_intf)
+	MCFG_PIA6821_ADD("pia0", pia0_intf)
+	MCFG_PIA6821_ADD("pia1", pia1_intf)
 
     /* video hardware */
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE((124+1)*4, (30+1)*8)				/* Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1) */
-	MDRV_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 29*8-1)	/* Taken from MC6845 init, registers 01 & 06 */
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE((124+1)*4, (30+1)*8)				/* Taken from MC6845 init, registers 00 & 04. Normally programmed with (value-1) */
+	MCFG_SCREEN_VISIBLE_AREA(0*4, 96*4-1, 0*8, 29*8-1)	/* Taken from MC6845 init, registers 01 & 06 */
 
-	MDRV_GFXDECODE(fw1stpal)
+	MCFG_GFXDECODE(fw1stpal)
 
-	MDRV_PALETTE_LENGTH(0x200)
-	MDRV_PALETTE_INIT(funworld)
-	MDRV_VIDEO_START(funworld)
-	MDRV_VIDEO_UPDATE(funworld)
+	MCFG_PALETTE_LENGTH(0x200)
+	MCFG_PALETTE_INIT(funworld)
+	MCFG_VIDEO_START(funworld)
+	MCFG_VIDEO_UPDATE(funworld)
 
-	MDRV_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/8, mc6845_intf)	/* 2MHz, veryfied on jollycrd & royalcrd */
+	MCFG_MC6845_ADD("crtc", MC6845, MASTER_CLOCK/8, mc6845_intf)	/* 2MHz, veryfied on jollycrd & royalcrd */
 
     /* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_SOUND_CONFIG(ay8910_intf)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)	/* analyzed to avoid clips */
+	MCFG_SOUND_ADD("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_SOUND_CONFIG(ay8910_intf)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)	/* analyzed to avoid clips */
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( fw2ndpal, fw1stpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(funworld_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(funworld_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_GFXDECODE(fw2ndpal)
+	MCFG_GFXDECODE(fw2ndpal)
 MACHINE_CONFIG_END
 
 
 
 static MACHINE_CONFIG_DERIVED( funquiz, fw1stpal )
-//  MDRV_FRAGMENT_ADD(fw2ndpal)
+//  MCFG_FRAGMENT_ADD(fw2ndpal)
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(funquiz_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(funquiz_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_SOUND_REPLACE("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_SOUND_CONFIG(funquiz_ay8910_intf)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)
+	MCFG_SOUND_REPLACE("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_SOUND_CONFIG(funquiz_ay8910_intf)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 2.5)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( magicrd2, fw1stpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(magicrd2_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(magicrd2_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_VIDEO_START(magicrd2)
+	MCFG_VIDEO_START(magicrd2)
 
-	MDRV_SOUND_REPLACE("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_SOUND_CONFIG(ay8910_intf)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.5)	/* analyzed to avoid clips */
+	MCFG_SOUND_REPLACE("ay8910", AY8910, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_SOUND_CONFIG(ay8910_intf)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.5)	/* analyzed to avoid clips */
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( royalcd1, fw1stpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* (G65SC02P in pro version) 2MHz */
-	MDRV_CPU_PROGRAM_MAP(magicrd2_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* (G65SC02P in pro version) 2MHz */
+	MCFG_CPU_PROGRAM_MAP(magicrd2_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( royalcd2, fw2ndpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(magicrd2_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(magicrd2_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( cuoreuno, fw1stpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(cuoreuno_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(cuoreuno_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 MACHINE_CONFIG_END
 
 static MACHINE_CONFIG_DERIVED( saloon, fw1stpal )
 
-	MDRV_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
-	MDRV_CPU_PROGRAM_MAP(saloon_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_REPLACE("maincpu", M65C02, MASTER_CLOCK/8)	/* 2MHz */
+	MCFG_CPU_PROGRAM_MAP(saloon_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 MACHINE_CONFIG_END
 
 
@@ -3271,6 +3272,30 @@ ROM_END
 
 
 /*
+   Royal Card (TAB Austria original)
+   With respective original PLD properly dumped.
+*/
+
+ROM_START( royalcrdt )
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "r1_0.bin", 0x8000, 0x8000, CRC(829a6a1d) SHA1(b7064e4d60e33d0875eb73525230ea3b99f10542) )
+
+	ROM_REGION( 0x10000, "gfx1", 0 )
+	ROM_LOAD( "novr3_0.bin", 0x0000, 0x8000, CRC(85e77661) SHA1(7d7a765c1bfcfeb9eb91d2519b22d734f20eab24) )
+	ROM_LOAD( "novr2_0.bin", 0x8000, 0x8000, CRC(41f7a0b3) SHA1(9aff2b8832d2a4f868daa9849a0bfe5e44f88fc0) )
+
+	ROM_REGION( 0x0200, "proms", 0 )
+	ROM_LOAD( "jop1.bin",    0x0000, 0x0200, CRC(8bc86f48) SHA1(4c677ab9314a1f571e35104b22659e6811aeb194) )
+
+	ROM_REGION( 0x0800, "nvram", 0 )
+	ROM_LOAD( "royalcrdt_nv.bin",  0x0000, 0x0800, CRC(67a6e68b) SHA1(d7ab01c4d9bd4fe58b5d0f4a945c00c5c4906008) )
+
+	ROM_REGION( 0x0200, "plds", 0 )	/* Device type is 16L8 */
+	ROM_LOAD( "tab01_3.bin",    0x0000, 0x0104, CRC(a13a7a0a) SHA1(28e918ece4dcfa3883d2439c226b2f125d43f386) )
+ROM_END
+
+
+/*
     Royal Card (set 7, encrypted)
     -----------------------------
 
@@ -3309,6 +3334,7 @@ ROM_START( royalcrdf )	/* encrypted program rom */
 	ROM_LOAD( "1-peel18cv8p.bin", 0x0200, 0x0155, NO_DUMP )	/* not present in the set */
 	ROM_LOAD( "2-peel18cv8p.bin", 0x0400, 0x0155, NO_DUMP )	/* not present in the set */
 ROM_END
+
 
 
 ROM_START( royalcrdp )
@@ -4023,7 +4049,7 @@ static DRIVER_INIT( tabblue )
 *****************************************************************************************************/
 
 	int x, na, nb, nad, nbd;
-	UINT8 *src = memory_region( machine, "gfx1" );
+	UINT8 *src = machine->region( "gfx1" )->base();
 
 
 	for (x=0x0000; x < 0x10000; x++)
@@ -4053,7 +4079,7 @@ static DRIVER_INIT( magicd2a )
 
 ******************************************************************/
 {
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine->region("maincpu")->base();
 
 	ROM[0xc1c6] = 0x92;
 }
@@ -4062,8 +4088,8 @@ static DRIVER_INIT( magicd2b )
 /*** same as blue TAB PCB, with the magicd2a patch ***/
 {
 	int x, na, nb, nad, nbd;
-	UINT8 *src = memory_region( machine, "gfx1" );
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *src = machine->region( "gfx1" )->base();
+	UINT8 *ROM = machine->region("maincpu")->base();
 
 	for (x=0x0000; x < 0x10000; x++)
 	{
@@ -4082,7 +4108,7 @@ static DRIVER_INIT( magicd2b )
 static DRIVER_INIT( soccernw )
 {
 /* temporary patch to avoid hardware errors for debug purposes */
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine->region("maincpu")->base();
 
 	ROM[0x80b2] = 0xa9;
 	ROM[0x80b3] = 0x00;
@@ -4117,16 +4143,16 @@ static DRIVER_INIT( saloon )
 
 *************************************************/
 {
-	UINT8 *rom = memory_region(machine, "maincpu");
-	int size = memory_region_length(machine, "maincpu");
+	UINT8 *rom = machine->region("maincpu")->base();
+	int size = machine->region("maincpu")->bytes();
 	int start = 0x8000;
 
-	UINT8 *gfxrom = memory_region(machine, "gfx1");
-	int sizeg = memory_region_length(machine, "gfx1");
+	UINT8 *gfxrom = machine->region("gfx1")->base();
+	int sizeg = machine->region("gfx1")->bytes();
 	int startg = 0;
 
-	UINT8 *prom = memory_region(machine, "proms");
-	int sizep = memory_region_length(machine, "proms");
+	UINT8 *prom = machine->region("proms")->base();
+	int sizep = machine->region("proms")->bytes();
 	int startp = 0;
 
 	UINT8 *buffer;
@@ -4211,7 +4237,7 @@ static DRIVER_INIT( multiwin )
 
 ******************************************************/
 {
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine->region("maincpu")->base();
 	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	int x;
@@ -4230,7 +4256,7 @@ static DRIVER_INIT( multiwin )
 		ROM[x+0x10000] = code;
 	}
 
-	space->set_decrypted_region(0x8000, 0xffff, memory_region(machine, "maincpu") + 0x18000);
+	space->set_decrypted_region(0x8000, 0xffff, machine->region("maincpu")->base() + 0x18000);
 }
 
 static DRIVER_INIT( royalcdc )
@@ -4244,7 +4270,7 @@ static DRIVER_INIT( royalcdc )
 
 ******************************************************/
 
-	UINT8 *ROM = memory_region(machine, "maincpu");
+	UINT8 *ROM = machine->region("maincpu")->base();
 	address_space *space = cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM);
 
 	int x;
@@ -4283,7 +4309,7 @@ static DRIVER_INIT( royalcdc )
 		ROM[x+0x10000] = code;
 	}
 
-	space->set_decrypted_region(0x6000, 0xffff, memory_region(machine, "maincpu") + 0x16000);
+	space->set_decrypted_region(0x6000, 0xffff, machine->region("maincpu")->base() + 0x16000);
 }
 
 
@@ -4323,6 +4349,7 @@ GAMEL( 1991, royalcrdb, royalcrd, royalcd1, royalcrd,  0,        ROT0, "TAB Aust
 GAMEL( 1991, royalcrdc, royalcrd, royalcd2, royalcrd,  0,        ROT0, "TAB Austria",     "Royal Card (Austrian, set 4)",                    GAME_IMPERFECT_GRAPHICS, layout_jollycrd )
 GAMEL( 1991, royalcrdd, royalcrd, royalcd1, royalcrd,  0,        ROT0, "TAB Austria",     "Royal Card (Austrian, set 5)",                    0,                       layout_royalcrd )
 GAMEL( 1991, royalcrde, royalcrd, royalcd1, royalcrd,  0,        ROT0, "TAB Austria",     "Royal Card (Austrian, set 6)",                    0,                       layout_jollycrd )
+GAMEL( 1991, royalcrdt, royalcrd, royalcd1, royalcrd,  0,        ROT0, "TAB Austria",     "Royal Card (TAB original)",                       0,                       layout_jollycrd )
 GAME(  1991, royalcrdf, royalcrd, royalcd1, royalcrd,  royalcdc, ROT0, "Evona Electronic","Royal Card (Slovak, encrypted)",                  GAME_NOT_WORKING )
 GAME(  1993, royalcrdp, royalcrd, cuoreuno, royalcrd,  0,        ROT0, "Digital Dreams",  "Royal Card v2.0 Professional",                    GAME_NOT_WORKING )
 GAMEL( 1991, lluck3x3,  royalcrd, cuoreuno, royalcrd,  0,        ROT0, "TAB Austria",     "Lucky Lady (3x3 deal)",                           0,                       layout_jollycrd )
@@ -4342,5 +4369,5 @@ GAME(  1993, jokercrd,  0,        fw2ndpal, funworld,  0,        ROT0, "Vesely S
 GAME(  199?, mongolnw,  0,        royalcd1, royalcrd,  0,        ROT0, "bootleg",         "Mongolfier New (Italian)",                        GAME_NOT_WORKING )
 GAME(  199?, soccernw,  0,        royalcd1, royalcrd,  soccernw, ROT0, "bootleg",         "Soccer New (Italian)",                            GAME_NOT_WORKING )
 GAME(  198?, saloon,    0,        saloon,   saloon,    saloon,   ROT0, "<unknown>",       "Saloon (French, encrypted)",                      GAME_NOT_WORKING )
-GAME(  198?, funquiz,   0,        funquiz,  funquiz,   0,        ROT0, "Funworld",        "Fun World Quiz (Austrian)",                       0 )
+GAME(  198?, funquiz,   0,        funquiz,  funquiz,   0,        ROT0, "Funworld / " O_UMLAUT "hlinger", "Fun World Quiz (Austrian)",                   0 )
 

@@ -180,8 +180,11 @@ const int DEBUG_FLAG_OSD_ENABLED	= 0x00001000;		// The OSD debugger is enabled
 // forward declarations
 class gfx_element;
 class colortable_t;
-class debug_view_manager;
+class cheat_manager;
 class render_manager;
+class video_manager;
+class debug_view_manager;
+class osd_interface;
 
 typedef struct _mame_private mame_private;
 typedef struct _cpuexec_private cpuexec_private;
@@ -197,7 +200,6 @@ typedef struct _sound_private sound_private;
 typedef struct _input_private input_private;
 typedef struct _input_port_private input_port_private;
 typedef struct _ui_input_private ui_input_private;
-typedef struct _cheat_private cheat_private;
 typedef struct _debugcpu_private debugcpu_private;
 typedef struct _debugvw_private debugvw_private;
 typedef struct _generic_machine_private generic_machine_private;
@@ -206,7 +208,7 @@ typedef struct _generic_audio_private generic_audio_private;
 
 
 // template specializations
-typedef tagged_list<region_info> region_list;
+typedef tagged_list<memory_region> region_list;
 
 
 // legacy callback functions
@@ -216,24 +218,24 @@ typedef UINT32 (*video_update_func)(screen_device *screen, bitmap_t *bitmap, con
 
 
 
-// ======================> region_info
+// ======================> memory_region
 
 // memory region object; should eventually be renamed memory_region
-class region_info
+class memory_region
 {
-	DISABLE_COPYING(region_info);
+	DISABLE_COPYING(memory_region);
 
 	friend class running_machine;
 	template<class T> friend class tagged_list;
-	friend resource_pool_object<region_info>::~resource_pool_object();
+	friend resource_pool_object<memory_region>::~resource_pool_object();
 
 	// construction/destruction
-	region_info(running_machine &machine, const char *name, UINT32 length, UINT32 flags);
-	~region_info();
+	memory_region(running_machine &machine, const char *name, UINT32 length, UINT32 flags);
+	~memory_region();
 
 public:
 	// getters
-	region_info *next() const { return m_next; }
+	memory_region *next() const { return m_next; }
 	UINT8 *base() const { return (this != NULL) ? m_base.u8 : NULL; }
 	UINT8 *end() const { return (this != NULL) ? m_base.u8 + m_length : NULL; }
 	UINT32 bytes() const { return (this != NULL) ? m_length : 0; }
@@ -265,7 +267,7 @@ public:
 private:
 	// internal data
 	running_machine &		m_machine;
-	region_info *			m_next;
+	memory_region *			m_next;
 	astring					m_name;
 	generic_ptr				m_base;
 	UINT32					m_length;
@@ -337,14 +339,14 @@ class running_machine : public bindable_object
 
 public:
 	// construction/destruction
-	running_machine(const machine_config &config, core_options &options, bool exit_to_game_select = false);
+	running_machine(const machine_config &config, osd_interface &osd, core_options &options, bool exit_to_game_select = false);
 	~running_machine();
 
 	// fetch items by name
 	inline device_t *device(const char *tag);
 	template<class T> inline T *device(const char *tag) { return downcast<T *>(device(tag)); }
 	inline const input_port_config *port(const char *tag);
-	inline const region_info *region(const char *tag);
+	inline const memory_region *region(const char *tag);
 
 	// configuration helpers
 	UINT32 total_colors() const { return m_config.m_total_colors; }
@@ -360,6 +362,8 @@ public:
 	bool new_driver_pending() const { return (m_new_driver_pending != NULL); }
 	const char *new_driver_name() const { return m_new_driver_pending->name; }
 	device_scheduler &scheduler() { return m_scheduler; }
+	osd_interface &osd() const { return m_osd; }
+	screen_device *first_screen() const { return primary_screen; }
 
 	// immediate operations
 	int run(bool firstrun);
@@ -382,11 +386,13 @@ public:
 	void current_datetime(system_time &systime);
 
 	// regions
-	region_info *region_alloc(const char *name, UINT32 length, UINT32 flags);
+	memory_region *region_alloc(const char *name, UINT32 length, UINT32 flags);
 	void region_free(const char *name);
 
 	// managers
+	cheat_manager &cheat() const { assert(m_cheat != NULL); return *m_cheat; }
 	render_manager &render() const { assert(m_render != NULL); return *m_render; }
+	video_manager &video() const { assert(m_video != NULL); return *m_video; }
 	debug_view_manager &debug_view() const { assert(m_debug_view != NULL); return *m_debug_view; }
 
 	// misc
@@ -450,7 +456,6 @@ public:
 	input_private *			input_data;			// internal data from input.c
 	input_port_private *	input_port_data;	// internal data from inptport.c
 	ui_input_private *		ui_input_data;		// internal data from uiinput.c
-	cheat_private *			cheat_data;			// internal data from cheat.c
 	debugcpu_private *		debugcpu_data;		// internal data from debugcpu.c
 	generic_machine_private *generic_machine_data; // internal data from machine/generic.c
 	generic_video_private *	generic_video_data;	// internal data from video/generic.c
@@ -493,6 +498,7 @@ private:
 
 	device_scheduler		m_scheduler;		// scheduler object
 	core_options &			m_options;
+	osd_interface &			m_osd;
 
 	astring					m_context;			// context string
 	astring					m_basename;			// basename used for game-related paths
@@ -525,7 +531,9 @@ private:
 	time_t					m_base_time;
 
 	driver_device *			m_driver_device;
+	cheat_manager *			m_cheat;			// internal data from cheat.c
 	render_manager *		m_render;			// internal data from render.c
+	video_manager *			m_video;			// internal data from video.c
 	debug_view_manager *	m_debug_view;		// internal data from debugvw.c
 };
 
@@ -655,26 +663,9 @@ inline const input_port_config *running_machine::port(const char *tag)
 	return m_portlist.find(tag);
 }
 
-inline const region_info *running_machine::region(const char *tag)
+inline const memory_region *running_machine::region(const char *tag)
 {
 	return m_regionlist.find(tag);
-}
-
-inline UINT32 mame_rand(running_machine *machine)
-{
-	return machine->rand();
-}
-
-inline UINT8 *memory_region(running_machine *machine, const char *name)
-{
-	const region_info *region = machine->region(name);
-	return (region != NULL) ? region->base() : NULL;
-}
-
-inline UINT32 memory_region_length(running_machine *machine, const char *name)
-{
-	const region_info *region = machine->region(name);
-	return (region != NULL) ? region->bytes() : 0;
 }
 
 

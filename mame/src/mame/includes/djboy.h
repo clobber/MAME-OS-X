@@ -18,7 +18,6 @@ public:
 
 	/* ROM banking */
 	UINT8		bankxor;
-	UINT8		addr;
 
 	/* video-related */
 	tilemap_t	*background;
@@ -36,11 +35,11 @@ public:
 	UINT8		beast_p3;
 
 	/* devices */
-	running_device *maincpu;
-	running_device *cpu1;
-	running_device *cpu2;
-	running_device *pandora;
-	running_device *beast;
+	device_t *maincpu;
+	device_t *cpu1;
+	device_t *cpu2;
+	device_t *pandora;
+	device_t *beast;
 };
 
 

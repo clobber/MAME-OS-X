@@ -11,8 +11,9 @@
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
+#include "audio/irem.h"
 #include "includes/iremipt.h"
-#include "includes/iremz80.h"
+#include "includes/m58.h"
 
 #define MASTER_CLOCK		XTAL_18_432MHz
 
@@ -25,13 +26,13 @@
 
 static ADDRESS_MAP_START( yard_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x5fff) AM_ROM
-	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(yard_videoram_w) AM_BASE_MEMBER(irem_z80_state, videoram)
+	AM_RANGE(0x8000, 0x8fff) AM_RAM_WRITE(yard_videoram_w) AM_BASE_MEMBER(m58_state, videoram)
 	AM_RANGE(0x9000, 0x9fff) AM_WRITE(yard_scroll_panel_w)
-	AM_RANGE(0xc820, 0xc87f) AM_RAM AM_BASE_SIZE_MEMBER(irem_z80_state, spriteram, spriteram_size)
-	AM_RANGE(0xa000, 0xa000) AM_RAM AM_BASE_MEMBER(irem_z80_state, yard_scroll_x_low)
-	AM_RANGE(0xa200, 0xa200) AM_RAM AM_BASE_MEMBER(irem_z80_state, yard_scroll_x_high)
-	AM_RANGE(0xa400, 0xa400) AM_RAM AM_BASE_MEMBER(irem_z80_state, yard_scroll_y_low)
-	AM_RANGE(0xa800, 0xa800) AM_RAM AM_BASE_MEMBER(irem_z80_state, yard_score_panel_disabled)
+	AM_RANGE(0xc820, 0xc87f) AM_RAM AM_BASE_SIZE_MEMBER(m58_state, spriteram, spriteram_size)
+	AM_RANGE(0xa000, 0xa000) AM_RAM AM_BASE_MEMBER(m58_state, yard_scroll_x_low)
+	AM_RANGE(0xa200, 0xa200) AM_RAM AM_BASE_MEMBER(m58_state, yard_scroll_x_high)
+	AM_RANGE(0xa400, 0xa400) AM_RAM AM_BASE_MEMBER(m58_state, yard_scroll_y_low)
+	AM_RANGE(0xa800, 0xa800) AM_RAM AM_BASE_MEMBER(m58_state, yard_score_panel_disabled)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(yard_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0")
@@ -187,27 +188,27 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( yard, irem_z80_state )
+static MACHINE_CONFIG_START( yard, m58_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/3/2)
-	MDRV_CPU_PROGRAM_MAP(yard_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/3/2)
+	MCFG_CPU_PROGRAM_MAP(yard_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MDRV_GFXDECODE(yard)
-	MDRV_PALETTE_LENGTH(256+256+256)
+	MCFG_GFXDECODE(yard)
+	MCFG_PALETTE_LENGTH(256+256+256)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 0, 256, 282, 42, 266)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 0, 256, 282, 42, 266)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 
-	MDRV_PALETTE_INIT(yard)
-	MDRV_VIDEO_START(yard)
-	MDRV_VIDEO_UPDATE(yard)
+	MCFG_PALETTE_INIT(yard)
+	MCFG_VIDEO_START(yard)
+	MCFG_VIDEO_UPDATE(yard)
 
 	/* sound hardware */
-	MDRV_FRAGMENT_ADD(m52_large_audio)
+	MCFG_FRAGMENT_ADD(m52_large_audio)
 MACHINE_CONFIG_END
 
 
@@ -433,7 +434,7 @@ static DRIVER_INIT( yard85 )
 	// on these sets the content of the sprite color PROM needs reversing
 	//  are the proms on the other sets from bootleg boards, or hand modified?
 	UINT8* buffer = auto_alloc_array(machine, UINT8, 0x10);
-	UINT8* region = memory_region(machine,"proms");
+	UINT8* region = machine->region("proms")->base();
 	int i;
 
 	for (i=0;i<0x10;i++)

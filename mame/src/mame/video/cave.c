@@ -543,8 +543,8 @@ static void get_sprite_info_cave( running_machine *machine )
 {
 	cave_state *state = machine->driver_data<cave_state>();
 	pen_t base_pal = 0;
-	const UINT8 *base_gfx = memory_region(machine, "sprites");
-	int code_max = memory_region_length(machine, "sprites") / (16*16);
+	const UINT8 *base_gfx = machine->region("sprites")->base();
+	int code_max = machine->region("sprites")->bytes() / (16*16);
 
 	UINT16 *source;
 	UINT16 *finish;
@@ -672,8 +672,8 @@ static void get_sprite_info_donpachi( running_machine *machine )
 {
 	cave_state *state = machine->driver_data<cave_state>();
 	pen_t base_pal = 0;
-	const UINT8 *base_gfx = memory_region(machine, "sprites");
-	int code_max = memory_region_length(machine, "sprites") / (16*16);
+	const UINT8 *base_gfx = machine->region("sprites")->base();
+	int code_max = machine->region("sprites")->bytes() / (16*16);
 
 	UINT16 *source;
 	UINT16 *finish;
@@ -1743,7 +1743,7 @@ void cave_get_sprite_info( running_machine *machine )
 	cave_state *state = machine->driver_data<cave_state>();
 	if (state->kludge == 3)	/* mazinger metmqstr */
 	{
-		if (video_skip_this_frame() == 0)
+		if (machine->video().skip_this_frame() == 0)
 		{
 			state->spriteram_bank = state->spriteram_bank_delay;
 			(*state->get_sprite_info)(machine);
@@ -1752,7 +1752,7 @@ void cave_get_sprite_info( running_machine *machine )
 	}
 	else
 	{
-		if (video_skip_this_frame() == 0)
+		if (machine->video().skip_this_frame() == 0)
 		{
 			state->spriteram_bank = state->videoregs[4] & 1;
 			(*state->get_sprite_info)(machine);

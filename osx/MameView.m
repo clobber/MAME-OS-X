@@ -532,15 +532,11 @@ NSString * MameExitStatusKey = @"MameExitStatus";
         mOptimalSize.height *= 2;
     }
     
-    //const device_config * primaryScreen = video_screen_first(mMachine->config);
-    const device_config * primaryScreen = screen_first(*mMachine->config);
     double targetRefresh = 60.0;
     // determine the refresh rate of the primary screen
-    const screen_device_config *primary_screen = screen_first(*machine->config);
-    if (primaryScreen != NULL)
+    const screen_device_config *primary_screen = machine->config->first_screen();
+    if (primary_screen != NULL)
     {
-        //const screen_config * config = (const screen_config*)primaryScreen->inline_config;
-        //targetRefresh = ATTOSECONDS_TO_HZ(config->refresh);
         targetRefresh = ATTOSECONDS_TO_HZ(primary_screen->refresh());
     }
     JRLogInfo(@"Target refresh: %.3f", targetRefresh);
@@ -813,7 +809,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     BOOL value;
     @synchronized(self)
     {
-        value = video_get_throttle();
+        //value = video_get_throttle();
+        value = mMachine->video().throttled();
     }
     return value;
 }
@@ -822,7 +819,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
 {
     @synchronized(self)
     {
-        video_set_throttle(flag? 1 : 0);
+        //video_set_throttle(flag? 1 : 0);
+        //mMachine->video().set_throttled(flag? 1 : 0);
     }
 }
 
@@ -831,7 +829,8 @@ NSString * MameExitStatusKey = @"MameExitStatus";
 {
     @synchronized(self)
     {
-        video_set_throttle(!video_get_throttle());
+        //video_set_throttle(!video_get_throttle());
+        mMachine->video().set_throttled(!mMachine->video().throttled());
     }
 }
 
@@ -1180,9 +1179,11 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     mMameIsPaused = NO;
     // [self updateMouseCursor];
     
+    osd_interface osd;
     MameConfiguration * configuration =
         [MameConfiguration defaultConfiguration];
-    int exitStatus = mame_execute([configuration coreOptions]);
+    
+    int exitStatus = mame_execute(osd, [configuration coreOptions]);
     mMameIsRunning = NO;
     mMameIsPaused = NO;
     [self updateMouseCursor];

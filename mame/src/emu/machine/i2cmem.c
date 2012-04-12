@@ -38,7 +38,7 @@ Up to 4096 bytes can be addressed.
 
 #define VERBOSE_LEVEL ( 0 )
 
-INLINE void ATTR_PRINTF( 3, 4 ) verboselog( running_device *device, int n_level, const char *s_fmt, ... )
+INLINE void ATTR_PRINTF( 3, 4 ) verboselog( device_t *device, int n_level, const char *s_fmt, ... )
 {
 	if( VERBOSE_LEVEL >= n_level )
 	{
@@ -367,7 +367,6 @@ void i2cmem_device::set_sda_line( int state )
 			{
 				verboselog( this, 1, "stop\n" );
 				m_state = STATE_IDLE;
-				m_byteaddr = 0;
 			}
 			else
 			{
@@ -570,7 +569,7 @@ READ_LINE_DEVICE_HANDLER( i2cmem_sda_read )
 
 int i2cmem_device::read_sda_line()
 {
-	int res = m_sdar & m_sdaw & 1;
+	int res = m_sdar & 1;
 
 	verboselog( this, 2, "read sda %d\n", res );
 
@@ -584,7 +583,7 @@ int i2cmem_device::read_sda_line()
 
 int i2cmem_device::address_mask()
 {
-	return ( 1 << m_config.m_address_bits ) - 1;
+	return (m_config.m_data_size - 1);
 }
 
 int i2cmem_device::select_device()

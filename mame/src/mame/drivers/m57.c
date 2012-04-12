@@ -49,8 +49,9 @@
 
 #include "emu.h"
 #include "cpu/z80/z80.h"
+#include "audio/irem.h"
 #include "includes/iremipt.h"
-#include "includes/iremz80.h"
+#include "includes/m57.h"
 
 
 #define MASTER_CLOCK		XTAL_18_432MHz
@@ -65,9 +66,9 @@
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x7fff) AM_ROM
-	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE_MEMBER(irem_z80_state, videoram)
-	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_MEMBER(irem_z80_state, scrollram)
-	AM_RANGE(0xc820, 0xc8ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(irem_z80_state, spriteram, spriteram_size)
+	AM_RANGE(0x8000, 0x87ff) AM_RAM_WRITE(m57_videoram_w) AM_BASE_MEMBER(m57_state, videoram)
+	AM_RANGE(0x9000, 0x91ff) AM_RAM AM_BASE_MEMBER(m57_state, scrollram)
+	AM_RANGE(0xc820, 0xc8ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m57_state, spriteram, spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_WRITE(m57_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0")
@@ -222,32 +223,32 @@ GFXDECODE_END
  *
  *************************************/
 
-static MACHINE_CONFIG_START( m57, irem_z80_state )
+static MACHINE_CONFIG_START( m57, m57_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)	/* verified on pcb */
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, XTAL_18_432MHz/6)	/* verified on pcb */
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(57)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(57)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(1790)	/* accurate frequency, measured on a Moon Patrol board, is 56.75Hz. */)
 				/* the Lode Runner manual (similar but different hardware) */
 				/* talks about 55Hz and 1790ms vblank duration. */
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(1*8, 31*8-1, 1*8, 31*8-1)
 
-	MDRV_GFXDECODE(m57)
-	MDRV_PALETTE_LENGTH(32*8+32*8)
+	MCFG_GFXDECODE(m57)
+	MCFG_PALETTE_LENGTH(32*8+32*8)
 
-	MDRV_PALETTE_INIT(m57)
-	MDRV_VIDEO_START(m57)
-	MDRV_VIDEO_UPDATE(m57)
+	MCFG_PALETTE_INIT(m57)
+	MCFG_VIDEO_START(m57)
+	MCFG_VIDEO_UPDATE(m57)
 
 	/* sound hardware */
-	MDRV_FRAGMENT_ADD(m52_sound_c_audio)
+	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
 MACHINE_CONFIG_END
 
 

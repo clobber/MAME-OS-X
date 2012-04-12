@@ -43,9 +43,10 @@
 ***************************************************************************/
 
 #include "emu.h"
-#include "includes/iremipt.h"
-#include "includes/iremz80.h"
 #include "cpu/z80/z80.h"
+#include "audio/irem.h"
+#include "includes/iremipt.h"
+#include "includes/m52.h"
 
 
 #define MASTER_CLOCK		XTAL_18_432MHz
@@ -59,10 +60,10 @@
 
 static ADDRESS_MAP_START( main_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x3fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(irem_z80_state, videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(irem_z80_state, colorram)
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, colorram)
 	AM_RANGE(0x8800, 0x8800) AM_MIRROR(0x07ff) AM_READ(m52_protection_r)
-	AM_RANGE(0xc800, 0xcbff) AM_MIRROR(0x0400) AM_WRITEONLY AM_BASE_SIZE_MEMBER(irem_z80_state, spriteram, spriteram_size)
+	AM_RANGE(0xc800, 0xcbff) AM_MIRROR(0x0400) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, spriteram, spriteram_size)
 	AM_RANGE(0xd000, 0xd000) AM_MIRROR(0x07fc) AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_MIRROR(0x07fc) AM_WRITE(m52_flipscreen_w)	/* + coin counters */
 	AM_RANGE(0xd000, 0xd000) AM_MIRROR(0x07f8) AM_READ_PORT("IN0")
@@ -76,9 +77,9 @@ ADDRESS_MAP_END
 
 static ADDRESS_MAP_START( alpha1v_map, ADDRESS_SPACE_PROGRAM, 8 )
 	AM_RANGE(0x0000, 0x6fff) AM_ROM
-	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(irem_z80_state, videoram)
-	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(irem_z80_state, colorram)
-	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(irem_z80_state, spriteram, spriteram_size) AM_SHARE("share1") // bigger or mirrored?
+	AM_RANGE(0x8000, 0x83ff) AM_RAM_WRITE(m52_videoram_w) AM_BASE_MEMBER(m52_state, videoram)
+	AM_RANGE(0x8400, 0x87ff) AM_RAM_WRITE(m52_colorram_w) AM_BASE_MEMBER(m52_state, colorram)
+	AM_RANGE(0xc800, 0xc9ff) AM_WRITEONLY AM_BASE_SIZE_MEMBER(m52_state, spriteram, spriteram_size) AM_SHARE("share1") // bigger or mirrored?
 	AM_RANGE(0xd000, 0xd000) AM_READ_PORT("IN0") AM_WRITE(irem_sound_cmd_w)
 	AM_RANGE(0xd001, 0xd001) AM_READ_PORT("IN1") AM_WRITE(alpha1v_flipscreen_w)
 	AM_RANGE(0xd002, 0xd002) AM_READ_PORT("IN2")
@@ -381,7 +382,7 @@ GFXDECODE_END
 
 static MACHINE_RESET( m52 )
 {
-	irem_z80_state *state = machine->driver_data<irem_z80_state>();
+	m52_state *state = machine->driver_data<m52_state>();
 
 	state->bg1xpos = 0;
 	state->bg1ypos = 0;
@@ -390,38 +391,38 @@ static MACHINE_RESET( m52 )
 	state->bgcontrol = 0;
 }
 
-static MACHINE_CONFIG_START( m52, irem_z80_state )
+static MACHINE_CONFIG_START( m52, m52_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)
-	MDRV_CPU_PROGRAM_MAP(main_map)
-	MDRV_CPU_IO_MAP(main_portmap)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("maincpu", Z80, MASTER_CLOCK/6)
+	MCFG_CPU_PROGRAM_MAP(main_map)
+	MCFG_CPU_IO_MAP(main_portmap)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_MACHINE_RESET(m52)
+	MCFG_MACHINE_RESET(m52)
 
 	/* video hardware */
-	MDRV_GFXDECODE(m52)
-	MDRV_PALETTE_LENGTH(128*4+16*4+3*4)
+	MCFG_GFXDECODE(m52)
+	MCFG_PALETTE_LENGTH(128*4+16*4+3*4)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 136, 376, 282, 22, 274)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(MASTER_CLOCK/3, 384, 136, 376, 282, 22, 274)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 
-	MDRV_PALETTE_INIT(m52)
-	MDRV_VIDEO_START(m52)
-	MDRV_VIDEO_UPDATE(m52)
+	MCFG_PALETTE_INIT(m52)
+	MCFG_VIDEO_START(m52)
+	MCFG_VIDEO_UPDATE(m52)
 
 	/* sound hardware */
-	MDRV_FRAGMENT_ADD(m52_sound_c_audio)
+	MCFG_FRAGMENT_ADD(m52_sound_c_audio)
 MACHINE_CONFIG_END
 
 
 static MACHINE_CONFIG_DERIVED( alpha1v, m52 )
 
 	/* basic machine hardware */
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(alpha1v_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(alpha1v_map)
 MACHINE_CONFIG_END
 
 

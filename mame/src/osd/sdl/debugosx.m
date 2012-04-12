@@ -36,6 +36,7 @@
 
 // MAMEOS headers
 #include "debugosx.h"
+#include "osdsdl.h"
 
 
 
@@ -63,27 +64,27 @@ static void console_create_window(running_machine *machine);
 
 
 //============================================================
-//  osd_init_debugger
+//  sdl_osd_interface::init_debugger
 //============================================================
 
-void osd_init_debugger(running_machine *machine)
+void sdl_osd_interface::init_debugger()
 {
 }
 
 //============================================================
-//  osd_wait_for_debugger
+//  sdl_osd_interface::wait_for_debugger
 //============================================================
 
-void osd_wait_for_debugger(running_device *device, int firststop)
+void sdl_osd_interface::wait_for_debugger(device_t &device, bool firststop)
 {
 	// create a console window
 	if (main_console == nil)
-		console_create_window(device->machine);
+		console_create_window(&machine());
 
 	// make sure the debug windows are visible
 	waiting_for_debugger = YES;
 	if (firststop) {
-		NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSValue valueWithPointer:device],
+		NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:[NSValue valueWithPointer:&device],
 																		@"MAMEDebugDevice",
 																		nil];
 		[[NSNotificationCenter defaultCenter] postNotificationName:MAMEShowDebuggerNotification
@@ -734,7 +735,7 @@ void console_create_window(running_machine *machine)
 
 - (NSSize)maximumFrameSize {
 	debug_view_xy				max;
-	running_device				*curcpu = debug_cpu_get_visible_cpu(machine);
+	device_t				*curcpu = debug_cpu_get_visible_cpu(machine);
 	const debug_view_source		*source = view->source_list().match_device(curcpu);
 
 	max.x = max.y = 0;
@@ -781,7 +782,7 @@ void console_create_window(running_machine *machine)
 }
 
 
-- (void)selectSubviewForCPU:(running_device *)device {
+- (void)selectSubviewForCPU:(device_t *)device {
 	const debug_view_source		*selected = view->source();
 	const debug_view_source		*source = view->source_list().match_device(device);
 	if ( selected != source ) {
@@ -1019,7 +1020,7 @@ void console_create_window(running_machine *machine)
 
 - (NSSize)maximumFrameSize {
 	debug_view_xy				max;
-	running_device				*curcpu = debug_cpu_get_visible_cpu(machine);
+	device_t				*curcpu = debug_cpu_get_visible_cpu(machine);
 	const debug_view_source		*source = view->source_list().match_device(curcpu);
 
 	max.x = max.y = 0;
@@ -1066,7 +1067,7 @@ void console_create_window(running_machine *machine)
 }
 
 
-- (void)selectSubviewForCPU:(running_device *)device {
+- (void)selectSubviewForCPU:(device_t *)device {
 	const debug_view_source     *selected = view->source();
 	const debug_view_source     *source = view->source_list().match_device(device);
 	if ( selected != source ) {
@@ -1143,7 +1144,7 @@ void console_create_window(running_machine *machine)
 		if (debug_cpu_get_visible_cpu(machine) == space->cpu) {
 			offs_t address = downcast<debug_view_disasm *>(view)->selected_address();
 			if (useConsole) {
-				NSString *command = [NSString stringWithFormat:@"go %lX", (unsigned long)address];
+				NSString *command = [NSString stringWithFormat:@"go 0x%lX", (unsigned long)address];
 				debug_console_execute_command(machine, [command UTF8String], 1);
 			} else {
 				debug_cpu_get_visible_cpu(machine)->debug()->go(address);
@@ -1257,7 +1258,7 @@ void console_create_window(running_machine *machine)
 
 - (NSSize)maximumFrameSize {
 	debug_view_xy				max;
-	running_device				*curcpu = debug_cpu_get_visible_cpu(machine);
+	device_t				*curcpu = debug_cpu_get_visible_cpu(machine);
 	const debug_view_source		*source = view->source_list().match_device(curcpu);
 
 
@@ -1291,7 +1292,7 @@ void console_create_window(running_machine *machine)
 }
 
 
-- (void)selectSubviewForCPU:(running_device *)device {
+- (void)selectSubviewForCPU:(device_t *)device {
 	//dv = get_view(dmain, DVT_STATE);
 	view->set_source(*view->source_list().match_device(device));
 }
@@ -1541,7 +1542,7 @@ void console_create_window(running_machine *machine)
 
 
 - (void)showDebugger:(NSNotification *)notification {
-	running_device *device = (running_device *) [[[notification userInfo] objectForKey:@"MAMEDebugDevice"] pointerValue];
+	device_t *device = (device_t *) [[[notification userInfo] objectForKey:@"MAMEDebugDevice"] pointerValue];
 	if (device->machine == machine) {
 		if (![window isVisible] && ![window isMiniaturized])
 			[window orderFront:self];
@@ -1741,7 +1742,7 @@ void console_create_window(running_machine *machine)
 }
 
 
-- (void)setCPU:(running_device *)device {
+- (void)setCPU:(device_t *)device {
 	[regView selectSubviewForCPU:device];
 	[dasmView selectSubviewForCPU:device];
 	[window setTitle:[NSString stringWithFormat:@"Debug: %s - %s '%s'",
@@ -1788,7 +1789,7 @@ void console_create_window(running_machine *machine)
 
 
 - (void)showDebugger:(NSNotification *)notification {
-	running_device *device = (running_device * )[[[notification userInfo] objectForKey:@"MAMEDebugDevice"] pointerValue];
+	device_t *device = (device_t * )[[[notification userInfo] objectForKey:@"MAMEDebugDevice"] pointerValue];
 	if (device->machine == machine) {
 		[self setCPU:device];
 		[window makeKeyAndOrderFront:self];

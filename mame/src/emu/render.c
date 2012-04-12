@@ -356,8 +356,19 @@ void render_primitive_list::append_or_return(render_primitive &prim, bool clippe
 //-------------------------------------------------
 
 render_texture::render_texture()
+	: m_manager(NULL),
+	  m_next(NULL),
+	  m_bitmap(NULL),
+	  m_palette(NULL),
+	  m_format(TEXFORMAT_ARGB32),
+	  m_scaler(NULL),
+	  m_param(NULL),
+	  m_curseq(0),
+	  m_bcglookup(NULL),
+	  m_bcglookup_entries(0)
 {
-	// no initialization because we rely on reset() to do it
+	m_sbounds.min_x = m_sbounds.min_y = m_sbounds.max_x = m_sbounds.max_y = 0;
+	memset(m_scaled, 0, sizeof(m_scaled));
 }
 
 
@@ -367,22 +378,7 @@ render_texture::render_texture()
 
 render_texture::~render_texture()
 {
-	// free all scaled versions
-	for (int scalenum = 0; scalenum < ARRAY_LENGTH(m_scaled); scalenum++)
-	{
-		m_manager->invalidate_all(m_scaled[scalenum].bitmap);
-		auto_free(&m_manager->machine(), m_scaled[scalenum].bitmap);
-	}
-
-	// invalidate references to the original bitmap as well
-	m_manager->invalidate_all(m_bitmap);
-
-	// release palette references
-	if (m_palette != NULL)
-		palette_deref(m_palette);
-
-	// free any B/C/G lookup tables
-	auto_free(&m_manager->machine(), m_bcglookup);
+	release();
 }
 
 
@@ -394,10 +390,42 @@ render_texture::~render_texture()
 void render_texture::reset(render_manager &manager, texture_scaler_func scaler, void *param)
 {
 	m_manager = &manager;
-	memset(&m_next, 0, FPTR(&m_bcglookup_entries + 1) - FPTR(&m_next));
-	m_format = TEXFORMAT_ARGB32;
 	m_scaler = scaler;
 	m_param = param;
+}
+
+
+//-------------------------------------------------
+//  release - release resources when we are freed
+//-------------------------------------------------
+
+void render_texture::release()
+{
+	// free all scaled versions
+	for (int scalenum = 0; scalenum < ARRAY_LENGTH(m_scaled); scalenum++)
+	{
+		m_manager->invalidate_all(m_scaled[scalenum].bitmap);
+		auto_free(&m_manager->machine(), m_scaled[scalenum].bitmap);
+		m_scaled[scalenum].bitmap = NULL;
+		m_scaled[scalenum].seqid = 0;
+	}
+
+	// invalidate references to the original bitmap as well
+	m_manager->invalidate_all(m_bitmap);
+	m_bitmap = NULL;
+	m_sbounds.min_x = m_sbounds.min_y = m_sbounds.max_x = m_sbounds.max_y = 0;
+	m_format = TEXFORMAT_ARGB32;
+	m_curseq = 0;
+
+	// release palette references
+	if (m_palette != NULL)
+		palette_deref(m_palette);
+	m_palette = NULL;
+
+	// free any B/C/G lookup tables
+	auto_free(&m_manager->machine(), m_bcglookup);
+	m_bcglookup = NULL;
+	m_bcglookup_entries = 0;
 }
 
 
@@ -789,7 +817,7 @@ void render_container::add_char(float x0, float y0, float height, float aspect, 
 	render_bounds bounds;
 	bounds.x0 = x0;
 	bounds.y0 = y0;
-	render_texture *texture = render_font_get_char_texture_and_bounds(&font, height, aspect, ch, &bounds);
+	render_texture *texture = font.get_char_texture_and_bounds(height, aspect, ch, bounds);
 
 	// add it like a quad
 	item &newitem = add_generic(CONTAINER_ITEM_QUAD, bounds.x0, bounds.y0, bounds.x1, bounds.y1, argb);
@@ -1148,6 +1176,78 @@ void render_target::set_max_texture_size(int maxwidth, int maxheight)
 {
 	m_maxtexwidth = maxwidth;
 	m_maxtexheight = maxheight;
+}
+
+
+//-------------------------------------------------
+//  configured_view - select a view for this
+//  target based on the configuration parameters
+//-------------------------------------------------
+
+int render_target::configured_view(const char *viewname, int targetindex, int numtargets)
+{
+	layout_view *view = NULL;
+	int viewindex;
+
+	// auto view just selects the nth view
+	if (strcmp(viewname, "auto") != 0)
+	{
+		// scan for a matching view name
+		for (view = view_by_index(viewindex = 0); view != NULL; view = view_by_index(++viewindex))
+			if (mame_strnicmp(view->name(), viewname, strlen(viewname)) == 0)
+				break;
+	}
+
+	// if we don't have a match, default to the nth view
+	int scrcount = m_manager.machine().m_devicelist.count(SCREEN);
+	if (view == NULL && scrcount > 0)
+	{
+		// if we have enough targets to be one per screen, assign in order
+		if (numtargets >= scrcount)
+		{
+			int ourindex = index() % scrcount;
+			screen_device *screen;
+			for (screen = m_manager.machine().first_screen(); screen != NULL; screen = screen->next_screen())
+				if (ourindex-- == 0)
+					break;
+
+			// find the first view with this screen and this screen only
+			for (view = view_by_index(viewindex = 0); view != NULL; view = view_by_index(++viewindex))
+			{
+				const render_screen_list &viewscreens = view->screens();
+				if (viewscreens.count() == 1 && viewscreens.contains(*screen))
+					break;
+				if (viewscreens.count() == 0)
+				{
+					view = NULL;
+					break;
+				}
+			}
+		}
+
+		// otherwise, find the first view that has all the screens
+		if (view == NULL)
+		{
+			for (view = view_by_index(viewindex = 0); view != NULL; view = view_by_index(++viewindex))
+			{
+				const render_screen_list &viewscreens = view->screens();
+				if (viewscreens.count() == 0)
+					break;
+				if (viewscreens.count() >= scrcount)
+				{
+					screen_device *screen;
+					for (screen = m_manager.machine().first_screen(); screen != NULL; screen = screen->next_screen())
+						if (!viewscreens.contains(*screen))
+							break;
+					if (screen == NULL)
+						break;
+				}
+			}
+		}
+	}
+
+	// make sure it's a valid view
+	return (view != NULL) ? view_index(*view) : 0;
 }
 
 
@@ -1548,7 +1648,7 @@ void render_target::load_layout_files(const char *layoutfile, bool singlefile)
 			load_layout_file(cloneof->name, "default");
 
 	// now do the built-in layouts for single-screen games
-	if (screen_count(m_manager.machine().m_config) == 1)
+	if (m_manager.machine().m_devicelist.count(SCREEN) == 1)
 	{
 		if (gamedrv->flags & ORIENTATION_SWAP_XY)
 			load_layout_file(NULL, layout_vertical);
@@ -2366,7 +2466,7 @@ render_manager::render_manager(running_machine &machine)
 	config_register(&machine, "video", config_load_static, config_save_static);
 
 	// create one container per screen
-	for (screen_device *screen = screen_first(machine); screen != NULL; screen = screen_next(screen))
+	for (screen_device *screen = machine.first_screen(); screen != NULL; screen = screen->next_screen())
 		screen->set_container(*container_alloc(screen));
 }
 
@@ -2508,8 +2608,31 @@ render_texture *render_manager::texture_alloc(texture_scaler_func scaler, void *
 void render_manager::texture_free(render_texture *texture)
 {
 	if (texture != NULL)
+	{
 		m_live_textures--;
+		texture->release();
+	}
 	m_texture_allocator.reclaim(texture);
+}
+
+
+//-------------------------------------------------
+//  font_alloc - allocate a new font instance
+//-------------------------------------------------
+
+render_font *render_manager::font_alloc(const char *filename)
+{
+	return auto_alloc(&m_machine, render_font(*this, filename));
+}
+
+
+//-------------------------------------------------
+//  font_free - release a font instance
+//-------------------------------------------------
+
+void render_manager::font_free(render_font *font)
+{
+	auto_free(&m_machine, font);
 }
 
 

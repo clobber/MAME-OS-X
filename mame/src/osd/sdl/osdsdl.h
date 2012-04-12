@@ -1,6 +1,17 @@
 #ifndef _osdsdl_h_
 #define _osdsdl_h_
 
+#include <SDL/SDL.h>
+
+//============================================================
+//  Temporary SDL 1.3 defines
+//============================================================
+
+// set this to 0 if compiling against a "hg update 4464"
+// checkout of SDL 1.3
+
+#define SDL13_POST_HG4464	(1)
+
 //============================================================
 //  System dependent defines
 //============================================================
@@ -114,6 +125,45 @@
 #else
 #define SDLOPTVAL_GLLIB					SDLOPTVAL_AUTO
 #endif
+
+
+//============================================================
+//  TYPE DEFINITIONS
+//============================================================
+
+typedef void *osd_font;
+
+class sdl_osd_interface : public osd_interface
+{
+public:
+	// construction/destruction
+	sdl_osd_interface();
+	virtual ~sdl_osd_interface();
+
+	// general overridables
+	virtual void init(running_machine &machine);
+	virtual void update(bool skip_redraw);
+
+	// debugger overridables
+	virtual void init_debugger();
+	virtual void wait_for_debugger(device_t &device, bool firststop);
+
+	// audio overridables
+	virtual void update_audio_stream(const INT16 *buffer, int samples_this_frame);
+	virtual void set_mastervolume(int attenuation);
+
+	// input overridables
+	virtual void customize_input_type_list(input_type_desc *typelist);
+
+	// font overridables
+	virtual osd_font font_open(const char *name, int &height);
+	virtual void font_close(osd_font font);
+	virtual bitmap_t *font_get_bitmap(osd_font font, unicode_char chnum, INT32 &width, INT32 &xoffs, INT32 &yoffs);
+
+private:
+	static void osd_exit(running_machine &machine);
+};
+
 
 
 //============================================================

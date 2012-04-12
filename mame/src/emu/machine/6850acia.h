@@ -34,9 +34,9 @@
     DEVICE CONFIGURATION MACROS
 ***************************************************************************/
 
-#define MDRV_ACIA6850_ADD(_tag, _config) \
-	MDRV_DEVICE_ADD(_tag, ACIA6850, 0) \
-	MDRV_DEVICE_CONFIG(_config)
+#define MCFG_ACIA6850_ADD(_tag, _config) \
+	MCFG_DEVICE_ADD(_tag, ACIA6850, 0) \
+	MCFG_DEVICE_CONFIG(_config)
 
 #define ACIA6850_INTERFACE(_name) \
 	const acia6850_interface(_name) =
@@ -113,8 +113,10 @@ public:
 	void tx_clock_in();
 	void rx_clock_in();
 
-	void set_rx_clock(int clock) { m_rx_clock = clock; }
-	void set_tx_clock(int clock) { m_tx_clock = clock; }
+	void set_rx_clock(int clock);
+	void set_tx_clock(int clock);
+
+	void receive_data(UINT8 data);
 
 protected:
     // device-level overrides
@@ -217,11 +219,13 @@ extern const device_type ACIA6850;
     PROTOTYPES
 ***************************************************************************/
 
-void acia6850_tx_clock_in(running_device *device) ATTR_NONNULL(1);
-void acia6850_rx_clock_in(running_device *device) ATTR_NONNULL(1);
+void acia6850_tx_clock_in(device_t *device) ATTR_NONNULL(1);
+void acia6850_rx_clock_in(device_t *device) ATTR_NONNULL(1);
 
-void acia6850_set_rx_clock(running_device *device, int clock) ATTR_NONNULL(1);
-void acia6850_set_tx_clock(running_device *device, int clock) ATTR_NONNULL(1);
+void acia6850_set_rx_clock(device_t *device, int clock) ATTR_NONNULL(1);
+void acia6850_set_tx_clock(device_t *device, int clock) ATTR_NONNULL(1);
+
+void acia6850_receive_data(device_t *device, UINT8 data) ATTR_NONNULL(1);
 
 WRITE8_DEVICE_HANDLER( acia6850_ctrl_w );
 READ8_DEVICE_HANDLER( acia6850_stat_r );

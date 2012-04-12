@@ -790,7 +790,7 @@ static void sdlinput_deregister_joysticks(running_machine *machine)
 //  sdlinput_register_mice
 //============================================================
 
-#if (SDL_VERSION_ATLEAST(1,3,0))
+#if (!SDL13_POST_HG4464 && SDL_VERSION_ATLEAST(1,3,0))
 static void sdlinput_register_mice(running_machine *machine)
 {
 	int index, physical_mouse;
@@ -1002,7 +1002,7 @@ static kt_table * sdlinput_read_keymap(running_machine *machine)
 //  sdlinput_register_keyboards
 //============================================================
 
-#if (SDL_VERSION_ATLEAST(1,3,0))
+#if (!SDL13_POST_HG4464 && SDL_VERSION_ATLEAST(1,3,0))
 static void sdlinput_register_keyboards(running_machine *machine)
 {
 	int physical_keyboard;
@@ -1586,10 +1586,10 @@ int sdlinput_should_hide_mouse(running_machine *machine)
 
 
 //============================================================
-//  osd_customize_inputport_list
+//  customize_input_type_list
 //============================================================
 
-void osd_customize_input_type_list(input_type_desc *typelist)
+void sdl_osd_interface::customize_input_type_list(input_type_desc *typelist)
 {
 	int mameid_code ,ui_code;
 	input_type_desc *typedesc;

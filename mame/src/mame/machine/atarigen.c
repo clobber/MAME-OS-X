@@ -115,8 +115,8 @@ void atarigen_init(running_machine *machine)
 	int i;
 
 	/* allocate timers for all screens */
-	assert(screen_count(*machine) <= ARRAY_LENGTH(state->screen_timer));
-	for (i = 0, screen = screen_first(*machine); screen != NULL; i++, screen = screen_next(screen))
+	assert(machine->m_devicelist.count(SCREEN) <= ARRAY_LENGTH(state->screen_timer));
+	for (i = 0, screen = machine->first_screen(); screen != NULL; i++, screen = screen->next_screen())
 	{
 		state->screen_timer[i].screen = screen;
 		state->screen_timer[i].scanline_interrupt_timer = timer_alloc(machine, scanline_interrupt_callback, (void *)screen);
@@ -481,7 +481,7 @@ DIRECT_UPDATE_HANDLER( atarigen_slapstic_setdirect )
     slapstic and sets the chip number.
 ---------------------------------------------------------------*/
 
-void atarigen_slapstic_init(running_device *device, offs_t base, offs_t mirror, int chipnum)
+void atarigen_slapstic_init(device_t *device, offs_t base, offs_t mirror, int chipnum)
 {
 	atarigen_state *state = device->machine->driver_data<atarigen_state>();
 
@@ -569,7 +569,7 @@ READ16_HANDLER( atarigen_slapstic_r )
     atarigen_sound_io_reset: Resets the state of the sound I/O.
 ---------------------------------------------------------------*/
 
-void atarigen_sound_io_reset(running_device *device)
+void atarigen_sound_io_reset(device_t *device)
 {
 	atarigen_state *state = device->machine->driver_data<atarigen_state>();
 
@@ -624,7 +624,7 @@ WRITE8_HANDLER( atarigen_6502_irq_ack_w )
     IRQ line.
 ---------------------------------------------------------------*/
 
-void atarigen_ym2151_irq_gen(running_device *device, int irq)
+void atarigen_ym2151_irq_gen(device_t *device, int irq)
 {
 	atarigen_state *state = device->machine->driver_data<atarigen_state>();
 	state->ym2151_int = irq;
@@ -1370,7 +1370,7 @@ int atarigen_get_hblank(screen_device &screen)
 
 void atarigen_halt_until_hblank_0(screen_device &screen)
 {
-	running_device *cpu = screen.machine->device("maincpu");
+	device_t *cpu = screen.machine->device("maincpu");
 
 	/* halt the CPU until the next HBLANK */
 	int hpos = screen.hpos();
@@ -1473,7 +1473,7 @@ WRITE32_HANDLER( atarigen_666_paletteram32_w )
 
 static TIMER_CALLBACK( unhalt_cpu )
 {
-	running_device *cpu = (running_device *)ptr;
+	device_t *cpu = (device_t *)ptr;
 	cpu_set_input_line(cpu, INPUT_LINE_HALT, CLEAR_LINE);
 }
 

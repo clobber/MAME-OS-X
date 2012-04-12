@@ -137,7 +137,6 @@ Notes:
 */
 
 #include "emu.h"
-#include "deprecat.h"
 #include "cpu/z80/z80.h"
 #include "cpu/mcs51/mcs51.h"
 #include "sound/2203intf.h"
@@ -513,11 +512,17 @@ GFXDECODE_END
 
 /******************************************************************************/
 
-static INTERRUPT_GEN( djboy_interrupt )
-{ /* CPU1 uses interrupt mode 2. For now, just alternate the two interrupts. */
-	djboy_state *state = device->machine->driver_data<djboy_state>();
-	state->addr ^= 0x02;
-	cpu_set_input_line_and_vector(device, 0, HOLD_LINE, state->addr);
+/* Main Z80 uses IM2 */
+static TIMER_DEVICE_CALLBACK( djboy_scanline )
+{
+	int scanline = param;
+
+	if(scanline == 240) // vblank-out irq
+		cputag_set_input_line_and_vector(timer.machine, "maincpu", 0, HOLD_LINE, 0xfd);
+
+	/* Pandora "sprite end dma" irq? TODO: timing is clearly off, attract mode relies on this */
+	if(scanline == 64)
+		cputag_set_input_line_and_vector(timer.machine, "maincpu", 0, HOLD_LINE, 0xff);
 }
 
 static const kaneko_pandora_interface djboy_pandora_config =
@@ -531,9 +536,9 @@ static const kaneko_pandora_interface djboy_pandora_config =
 static MACHINE_START( djboy )
 {
 	djboy_state *state = machine->driver_data<djboy_state>();
-	UINT8 *MAIN = memory_region(machine, "maincpu");
-	UINT8 *CPU1 = memory_region(machine, "cpu1");
-	UINT8 *CPU2 = memory_region(machine, "cpu2");
+	UINT8 *MAIN = machine->region("maincpu")->base();
+	UINT8 *CPU1 = machine->region("cpu1")->base();
+	UINT8 *CPU2 = machine->region("cpu2")->base();
 
 	memory_configure_bank(machine, "bank1", 0, 4,  &MAIN[0x00000], 0x2000);
 	memory_configure_bank(machine, "bank1", 4, 28, &MAIN[0x10000], 0x2000);
@@ -552,8 +557,6 @@ static MACHINE_START( djboy )
 	state_save_register_global(machine, state->videoreg);
 	state_save_register_global(machine, state->scrollx);
 	state_save_register_global(machine, state->scrolly);
-
-	state_save_register_global(machine, state->addr);
 
 	/* Kaneko BEAST */
 	state_save_register_global(machine, state->data_to_beast);
@@ -575,8 +578,6 @@ static MACHINE_RESET( djboy )
 	state->scrollx = 0;
 	state->scrolly = 0;
 
-	state->addr = 0xff;
-
 	state->beast_int0_l = 1;
 	state->beast_to_z80_full = 0;
 	state->z80_to_beast_full = 0;
@@ -584,55 +585,55 @@ static MACHINE_RESET( djboy )
 
 static MACHINE_CONFIG_START( djboy, djboy_state )
 
-	MDRV_CPU_ADD("maincpu", Z80, 6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu0_am)
-	MDRV_CPU_IO_MAP(cpu0_port_am)
-	MDRV_CPU_VBLANK_INT_HACK(djboy_interrupt, 2)
+	MCFG_CPU_ADD("maincpu", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu0_am)
+	MCFG_CPU_IO_MAP(cpu0_port_am)
+	MCFG_TIMER_ADD_SCANLINE("scantimer", djboy_scanline, "screen", 0, 1)
 
-	MDRV_CPU_ADD("cpu1", Z80, 6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu1_am)
-	MDRV_CPU_IO_MAP(cpu1_port_am)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("cpu1", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu1_am)
+	MCFG_CPU_IO_MAP(cpu1_port_am)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("cpu2", Z80, 6000000)
-	MDRV_CPU_PROGRAM_MAP(cpu2_am)
-	MDRV_CPU_IO_MAP(cpu2_port_am)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("cpu2", Z80, 6000000)
+	MCFG_CPU_PROGRAM_MAP(cpu2_am)
+	MCFG_CPU_IO_MAP(cpu2_port_am)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("beast", I80C51, 6000000)
-	MDRV_CPU_IO_MAP(djboy_mcu_io_map)
+	MCFG_CPU_ADD("beast", I80C51, 6000000)
+	MCFG_CPU_IO_MAP(djboy_mcu_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(HZ(6000))
 
-	MDRV_MACHINE_START(djboy)
-	MDRV_MACHINE_RESET(djboy)
+	MCFG_MACHINE_START(djboy)
+	MCFG_MACHINE_RESET(djboy)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(57.5)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(256, 256)
-	MDRV_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(57.5)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(256, 256)
+	MCFG_SCREEN_VISIBLE_AREA(0, 256-1, 16, 256-16-1)
 
-	MDRV_GFXDECODE(djboy)
-	MDRV_PALETTE_LENGTH(0x200)
+	MCFG_GFXDECODE(djboy)
+	MCFG_PALETTE_LENGTH(0x200)
 
-	MDRV_KANEKO_PANDORA_ADD("pandora", djboy_pandora_config)
+	MCFG_KANEKO_PANDORA_ADD("pandora", djboy_pandora_config)
 
-	MDRV_VIDEO_START(djboy)
-	MDRV_VIDEO_UPDATE(djboy)
-	MDRV_VIDEO_EOF(djboy)
+	MCFG_VIDEO_START(djboy)
+	MCFG_VIDEO_UPDATE(djboy)
+	MCFG_VIDEO_EOF(djboy)
 
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ymsnd", YM2203, 3000000)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
+	MCFG_SOUND_ADD("ymsnd", YM2203, 3000000)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.80)
 
-	MDRV_OKIM6295_ADD("oki1", 12000000 / 8, OKIM6295_PIN7_LOW)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_OKIM6295_ADD("oki1", 12000000 / 8, OKIM6295_PIN7_LOW)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 
-	MDRV_OKIM6295_ADD("oki2", 12000000 / 8, OKIM6295_PIN7_LOW)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
+	MCFG_OKIM6295_ADD("oki2", 12000000 / 8, OKIM6295_PIN7_LOW)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 0.50)
 MACHINE_CONFIG_END
 
 

@@ -45,7 +45,17 @@
 #elif defined(__linux__)
 #define SDLMAME_LINUX 1
 
-#elif defined(__FreeBSD__) || defined(__DragonFly__) || defined(__OpenBSD__)
+#elif defined(__FreeBSD__)
+#define SDLMAME_FREEBSD 1
+#elif defined(__DragonFly__)
+#define SDLMAME_DRAGONFLY 1
+#elif defined(__OpenBSD__)
+#define SDLMAME_OPENBSD 1
+#elif defined(__NetBSD__)
+#define SDLMAME_NETBSD 1
+#endif
+
+#if defined(__DragonFly__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #define SDLMAME_BSD 1
 #endif
 

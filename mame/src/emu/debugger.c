@@ -92,7 +92,7 @@ void debugger_init(running_machine *machine)
 		machine->add_logerror_callback(debug_errorlog_write_line);
 
 		/* initialize osd debugger features */
-		osd_init_debugger(machine);
+		machine->osd().init_debugger();
 	}
 }
 
@@ -104,7 +104,7 @@ void debugger_init(running_machine *machine)
 
 void debugger_refresh_display(running_machine *machine)
 {
-	video_frame_update(machine, TRUE);
+	machine->video().frame_update(true);
 }
 
 

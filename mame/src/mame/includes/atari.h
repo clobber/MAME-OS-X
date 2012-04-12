@@ -28,7 +28,7 @@ void atari_machine_start(running_machine *machine);
 
 MACHINE_START( atarixl );
 
-void atari_interrupt_cb(running_device *device, int mask);
+void atari_interrupt_cb(device_t *device, int mask);
 
 void a800_handle_keyboard(running_machine *machine);
 void a5200_handle_keypads(running_machine *machine);
@@ -592,6 +592,8 @@ INTERRUPT_GEN( a400_interrupt );
 INTERRUPT_GEN( a800_interrupt );
 INTERRUPT_GEN( a800xl_interrupt );
 INTERRUPT_GEN( a5200_interrupt );
+
+extern PALETTE_INIT( atari );
 
 /*----------- defined in drivers/maxaflex.c -----------*/
 

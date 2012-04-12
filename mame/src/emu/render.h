@@ -168,7 +168,7 @@ class screen_device;
 class render_container;
 class render_manager;
 typedef struct _xml_data_node xml_data_node;
-typedef struct _render_font render_font;
+class render_font;
 struct object_transform;
 class layout_element;
 class layout_view;
@@ -418,6 +418,9 @@ class render_texture
 	// reset before re-use
 	void reset(render_manager &manager, texture_scaler_func scaler = NULL, void *param = NULL);
 
+	// release resources when freed
+	void release();
+
 public:
 	// getters
 	int format() const { return m_format; }
@@ -627,6 +630,9 @@ public:
 	void set_screen_overlay_enabled(bool enable) { m_layerconfig.set_screen_overlay_enabled(enable); update_layer_config(); }
 	void set_zoom_to_screen(bool zoom) { m_layerconfig.set_zoom_to_screen(zoom); update_layer_config(); }
 
+	// view configuration helper
+	int configured_view(const char *viewname, int targetindex, int numtargets);
+
 	// view information
 	const char *view_name(int viewindex);
 	const render_screen_list &view_screens(int viewindex);
@@ -741,6 +747,10 @@ public:
 	// textures
 	render_texture *texture_alloc(texture_scaler_func scaler = NULL, void *param = NULL);
 	void texture_free(render_texture *texture);
+
+	// fonts
+	render_font *font_alloc(const char *filename = NULL);
+	void font_free(render_font *font);
 
 	// reference tracking
 	void invalidate_all(void *refptr);

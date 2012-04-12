@@ -105,7 +105,7 @@ static WRITE8_HANDLER( gyruss_irq_clear_w )
 	cpu_set_input_line(state->audiocpu_2, 0, CLEAR_LINE);
 }
 
-static void filter_w( running_device *device, int chip, int data )
+static void filter_w( device_t *device, int chip, int data )
 {
 	int i;
 
@@ -508,78 +508,78 @@ static MACHINE_START( gyruss )
 static MACHINE_CONFIG_START( gyruss, gyruss_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
-	MDRV_CPU_PROGRAM_MAP(main_cpu1_map)
-	MDRV_CPU_VBLANK_INT("screen", nmi_line_pulse)
+	MCFG_CPU_ADD("maincpu", Z80, 3072000)	/* 3.072 MHz (?) */
+	MCFG_CPU_PROGRAM_MAP(main_cpu1_map)
+	MCFG_CPU_VBLANK_INT("screen", nmi_line_pulse)
 
-	MDRV_CPU_ADD("sub", M6809, 2000000)        /* 2 MHz ??? */
-	MDRV_CPU_PROGRAM_MAP(main_cpu2_map)
-	MDRV_CPU_VBLANK_INT("screen", irq0_line_hold)
+	MCFG_CPU_ADD("sub", M6809, 2000000)        /* 2 MHz ??? */
+	MCFG_CPU_PROGRAM_MAP(main_cpu2_map)
+	MCFG_CPU_VBLANK_INT("screen", irq0_line_hold)
 
-	MDRV_CPU_ADD("audiocpu", Z80,14318180/4)	/* 3.579545 MHz */
-	MDRV_CPU_PROGRAM_MAP(audio_cpu1_map)
-	MDRV_CPU_IO_MAP(audio_cpu1_io_map)
+	MCFG_CPU_ADD("audiocpu", Z80,14318180/4)	/* 3.579545 MHz */
+	MCFG_CPU_PROGRAM_MAP(audio_cpu1_map)
+	MCFG_CPU_IO_MAP(audio_cpu1_io_map)
 
-	MDRV_CPU_ADD("audio2", I8039,8000000)	/* 8MHz crystal */
-	MDRV_CPU_PROGRAM_MAP(audio_cpu2_map)
-	MDRV_CPU_IO_MAP(audio_cpu2_io_map)
+	MCFG_CPU_ADD("audio2", I8039,8000000)	/* 8MHz crystal */
+	MCFG_CPU_PROGRAM_MAP(audio_cpu2_map)
+	MCFG_CPU_IO_MAP(audio_cpu2_io_map)
 
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_QUANTUM_TIME(HZ(6000))
 
-	MDRV_MACHINE_START(gyruss)
+	MCFG_MACHINE_START(gyruss)
 
 	/* video hardware */
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_REFRESH_RATE(60)
-	MDRV_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
-	MDRV_SCREEN_SIZE(32*8, 32*8)
-	MDRV_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_REFRESH_RATE(60)
+	MCFG_SCREEN_VBLANK_TIME(ATTOSECONDS_IN_USEC(0))
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_SIZE(32*8, 32*8)
+	MCFG_SCREEN_VISIBLE_AREA(0*8, 32*8-1, 2*8, 30*8-1)
 
-	MDRV_GFXDECODE(gyruss)
-	MDRV_PALETTE_LENGTH(16*4+16*16)
+	MCFG_GFXDECODE(gyruss)
+	MCFG_PALETTE_LENGTH(16*4+16*16)
 
-	MDRV_PALETTE_INIT(gyruss)
-	MDRV_VIDEO_START(gyruss)
-	MDRV_VIDEO_UPDATE(gyruss)
+	MCFG_PALETTE_INIT(gyruss)
+	MCFG_VIDEO_START(gyruss)
+	MCFG_VIDEO_UPDATE(gyruss)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
+	MCFG_SPEAKER_STANDARD_STEREO("lspeaker", "rspeaker")
 
-	MDRV_SOUND_ADD("ay1", AY8910, 14318180/8)
-	MDRV_SOUND_CONFIG(ay8910_interface_1)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 1)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 2)
+	MCFG_SOUND_ADD("ay1", AY8910, 14318180/8)
+	MCFG_SOUND_CONFIG(ay8910_interface_1)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 0)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 1)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 2)
 
-	MDRV_SOUND_ADD("ay2", AY8910, 14318180/8)
-	MDRV_SOUND_CONFIG(ay8910_interface_2)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 3)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 4)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 5)
+	MCFG_SOUND_ADD("ay2", AY8910, 14318180/8)
+	MCFG_SOUND_CONFIG(ay8910_interface_2)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 3)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 4)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 5)
 
-	MDRV_SOUND_ADD("ay3", AY8910, 14318180/8)
-	MDRV_SOUND_CONFIG(ay8910_interface_3)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 6)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 7)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 8)
+	MCFG_SOUND_ADD("ay3", AY8910, 14318180/8)
+	MCFG_SOUND_CONFIG(ay8910_interface_3)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 6)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 7)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 8)
 
-	MDRV_SOUND_ADD("ay4", AY8910, 14318180/8)
-	MDRV_SOUND_CONFIG(ay8910_interface_4)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 9)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 10)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 11)
+	MCFG_SOUND_ADD("ay4", AY8910, 14318180/8)
+	MCFG_SOUND_CONFIG(ay8910_interface_4)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 9)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 10)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 11)
 
-	MDRV_SOUND_ADD("ay5", AY8910, 14318180/8)
-	MDRV_SOUND_CONFIG(ay8910_interface_5)
-	MDRV_SOUND_ROUTE_EX(0, "discrete", 1.0, 12)
-	MDRV_SOUND_ROUTE_EX(1, "discrete", 1.0, 13)
-	MDRV_SOUND_ROUTE_EX(2, "discrete", 1.0, 14)
+	MCFG_SOUND_ADD("ay5", AY8910, 14318180/8)
+	MCFG_SOUND_CONFIG(ay8910_interface_5)
+	MCFG_SOUND_ROUTE_EX(0, "discrete", 1.0, 12)
+	MCFG_SOUND_ROUTE_EX(1, "discrete", 1.0, 13)
+	MCFG_SOUND_ROUTE_EX(2, "discrete", 1.0, 14)
 
-	MDRV_SOUND_ADD("discrete", DISCRETE, 0)
-	MDRV_SOUND_CONFIG_DISCRETE(gyruss_sound)
-	MDRV_SOUND_ROUTE(0, "rspeaker", 1.0)
-	MDRV_SOUND_ROUTE(1, "lspeaker",  1.0)
+	MCFG_SOUND_ADD("discrete", DISCRETE, 0)
+	MCFG_SOUND_CONFIG_DISCRETE(gyruss_sound)
+	MCFG_SOUND_ROUTE(0, "rspeaker", 1.0)
+	MCFG_SOUND_ROUTE(1, "lspeaker",  1.0)
 MACHINE_CONFIG_END
 
 
@@ -656,6 +656,39 @@ ROM_START( gyrussce )
 	ROM_LOAD( "gyrussk.pr2",  0x0120, 0x0100, CRC(de823a81) SHA1(1af94b2a6a319a89b238a5076a2867f1cfd279b0) )	/* character lookup table */
 ROM_END
 
+ROM_START( gyrussb ) /* PCB has stickers stating "TAITO (NEW ZEALAND) LTD" */
+	ROM_REGION( 0x10000, "maincpu", 0 )
+	ROM_LOAD( "1.bin",        0x0000, 0x2000, CRC(6bc21c10) SHA1(9d44f766398b9994f90edb2ffb272b4f22564854) ) /* Labeled as "1", minor code patch / redirection */
+	ROM_LOAD( "gyrussk.2",    0x2000, 0x2000, CRC(a4ec03e4) SHA1(08c33ad7fcc2ad5e5787a1050284e3f8164f4618) ) /* Labeled as "2" */
+	ROM_LOAD( "gyrussk.3",    0x4000, 0x2000, CRC(27454a98) SHA1(030c7df225652ee20d5ef64d005eb011dc89a27d) ) /* Labeled as "3" */
+	/* the diagnostics ROM would go here */
+
+	ROM_REGION( 0x10000, "sub", 0 )
+	ROM_LOAD( "gyrussk.9",    0xe000, 0x2000, CRC(822bf27e) SHA1(36d5bea2392a7d3476dd797dc05602705cfa23ef) ) /* Labeled as "9" */
+
+	ROM_REGION( 0x10000, "audiocpu", 0 )
+	ROM_LOAD( "gyrussk.1a",   0x0000, 0x2000, CRC(f4ae1c17) SHA1(ae568c96a31d910afe30d2b7eeb9ed1ed07290e3) ) /* Labeled as "11" */
+	ROM_LOAD( "gyrussk.2a",   0x2000, 0x2000, CRC(ba498115) SHA1(9cd1f42898cc590f39ba7cb3c975b0b3d3062eba) ) /* Labeled as "12" */
+	/* the diagnostics ROM would go here */
+
+	ROM_REGION( 0x1000, "audio2", 0 )	/* 8039 */
+	ROM_LOAD( "gyrussk.3a",   0x0000, 0x1000, CRC(3f9b5dea) SHA1(6e807da02c2885b18e8cc2199f12f6be9040bf75) ) /* Labeled as "13" */
+
+	ROM_REGION( 0x8000, "gfx1", 0 )
+	ROM_LOAD( "gyrussk.6",    0x0000, 0x2000, CRC(c949db10) SHA1(fcb8bcbd2bdd751fecb322a33c8a92fb6f07a7ab) ) /* Labeled as "6" */
+	ROM_LOAD( "gyrussk.5",    0x2000, 0x2000, CRC(4f22411a) SHA1(763bcd039f8c1838a0d7da7d4dadc14a26e25596) ) /* Labeled as "5" */
+	ROM_LOAD( "gyrussk.8",    0x4000, 0x2000, CRC(47cd1fbc) SHA1(8203c4ff0b1cd7b4dbc708e300bfeac1e7366e09) ) /* Labeled as "8" */
+	ROM_LOAD( "gyrussk.7",    0x6000, 0x2000, CRC(8e8d388c) SHA1(8f2928d71c02aba977d67575d6e34d69bda2b9d4) ) /* Labeled as "7" */
+
+	ROM_REGION( 0x2000, "gfx2", 0 )
+	ROM_LOAD( "gyrussk.4",    0x0000, 0x2000, CRC(27d8329b) SHA1(564ff945465a23d93a93137ad277298770dfa06a) ) /* Labeled as "4" */
+
+	ROM_REGION( 0x0220, "proms", 0 )
+	ROM_LOAD( "gyrussk.pr3",  0x0000, 0x0020, CRC(98782db3) SHA1(b891e43b25187faca8002919ccb44d744daa3594) )	/* palette */
+	ROM_LOAD( "gyrussk.pr1",  0x0020, 0x0100, CRC(7ed057de) SHA1(c04069ae1e2c62f9b3048844cd8cf5e1b03b7d3c) )	/* sprite lookup table */
+	ROM_LOAD( "gyrussk.pr2",  0x0120, 0x0100, CRC(de823a81) SHA1(1af94b2a6a319a89b238a5076a2867f1cfd279b0) )	/* character lookup table */
+ROM_END
+
 ROM_START( venus )
 	ROM_REGION( 0x10000, "maincpu", 0 )
 	ROM_LOAD( "r1",           0x0000, 0x2000, CRC(d030abb1) SHA1(14a70e15f5df9ef957779771d8915203d3828532) )
@@ -698,4 +731,5 @@ static DRIVER_INIT( gyruss )
 
 GAME( 1983, gyruss,   0,        gyruss,   gyruss,   gyruss, ROT90, "Konami", "Gyruss (Konami)", GAME_SUPPORTS_SAVE )
 GAME( 1983, gyrussce, gyruss,   gyruss,   gyrussce, gyruss, ROT90, "Konami (Centuri license)", "Gyruss (Centuri)", GAME_SUPPORTS_SAVE )
+GAME( 1983, gyrussb,  gyruss,   gyruss,   gyruss,   gyruss, ROT90, "bootleg", "Gyruss", GAME_SUPPORTS_SAVE ) /* Supposed Taito NZ license, but (c) Konami */
 GAME( 1983, venus,    gyruss,   gyruss,   gyruss,   gyruss, ROT90, "bootleg", "Venus", GAME_SUPPORTS_SAVE )

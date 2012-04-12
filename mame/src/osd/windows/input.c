@@ -756,10 +756,10 @@ int wininput_vkey_for_mame_code(input_code code)
 
 
 //============================================================
-//  osd_customize_mapping_list
+//  customize_input_type_list
 //============================================================
 
-void osd_customize_input_type_list(input_type_desc *typelist)
+void windows_osd_interface::customize_input_type_list(input_type_desc *typelist)
 {
 	input_type_desc *typedesc;
 
@@ -791,7 +791,7 @@ void osd_customize_input_type_list(input_type_desc *typelist)
 
 #ifdef MESS
 			case IPT_UI_THROTTLE:
-				input_seq_set_0(&typedesc->seq[SEQ_TYPE_STANDARD]);
+				input_seq_set_1(&typedesc->seq[SEQ_TYPE_STANDARD], KEYCODE_F10);
 				break;
 #endif
 		}

@@ -7,12 +7,12 @@
     Golden Tee variants & World Class Bowling Deluxe additions by Brian A. Troha
 
     Games supported:
-        * Time Killers (2 sets)
+        * Time Killers (3 sets)
         * Bloodstorm (4 sets)
         * Hard Yardage (2 sets)
         * Pairs (3 sets)
         * Driver's Edge (1 set)
-        * World Class Bowling (9 sets)
+        * World Class Bowling (10 sets)
         * Street Fighter: The Movie (4 sets)
         * Shuffleshot (3 sets)
         * Golden Tee 3D Golf (11 sets)
@@ -656,7 +656,7 @@ static READ32_HANDLER( gtclass_prot_result_r )
 
 static WRITE8_HANDLER( sound_bank_w )
 {
-	memory_set_bankptr(space->machine, "bank1", &memory_region(space->machine, "soundcpu")[0x10000 + data * 0x4000]);
+	memory_set_bankptr(space->machine, "bank1", &space->machine->region("soundcpu")->base()[0x10000 + data * 0x4000]);
 }
 
 
@@ -912,7 +912,7 @@ void itech32_state::nvram_init(nvram_device &nvram, void *base, size_t length)
 	// if nvram is the main RAM, don't overwrite exception vectors
 	int start = (base == main_ram) ? 0x80 : 0x00;
 	for (int i = start; i < length; i++)
-		((UINT8 *)base)[i] = mame_rand(machine);
+		((UINT8 *)base)[i] = machine->rand();
 
 	// due to accessing uninitialized RAM, we need this hack
 	if (is_drivedge)
@@ -1706,38 +1706,38 @@ static const es5506_interface es5506_config =
 static MACHINE_CONFIG_START( timekill, itech32_state )
 
 	/* basic machine hardware */
-	MDRV_CPU_ADD("maincpu", M68000, CPU_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(timekill_map)
-	MDRV_CPU_VBLANK_INT("screen", generate_int1)
+	MCFG_CPU_ADD("maincpu", M68000, CPU_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(timekill_map)
+	MCFG_CPU_VBLANK_INT("screen", generate_int1)
 
-	MDRV_CPU_ADD("soundcpu", M6809, SOUND_CLOCK/8)
-	MDRV_CPU_PROGRAM_MAP(sound_map)
+	MCFG_CPU_ADD("soundcpu", M6809, SOUND_CLOCK/8)
+	MCFG_CPU_PROGRAM_MAP(sound_map)
 
-	MDRV_MACHINE_RESET(itech32)
-	MDRV_NVRAM_ADD_CUSTOM("nvram", itech32_state, nvram_init)
+	MCFG_MACHINE_RESET(itech32)
+	MCFG_NVRAM_ADD_CUSTOM("nvram", itech32_state, nvram_init)
 
-	MDRV_TICKET_DISPENSER_ADD("ticket", 200, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_HIGH)
+	MCFG_TICKET_DISPENSER_ADD("ticket", 200, TICKET_MOTOR_ACTIVE_HIGH, TICKET_STATUS_ACTIVE_HIGH)
 
 	/* video hardware */
-	MDRV_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
-	MDRV_PALETTE_LENGTH(8192)
+	MCFG_VIDEO_ATTRIBUTES(VIDEO_UPDATE_BEFORE_VBLANK)
+	MCFG_PALETTE_LENGTH(8192)
 
-	MDRV_SCREEN_ADD("screen", RASTER)
-	MDRV_SCREEN_RAW_PARAMS(VIDEO_CLOCK, 508, 0, 384, 262, 0, 256)
-	MDRV_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
+	MCFG_SCREEN_ADD("screen", RASTER)
+	MCFG_SCREEN_RAW_PARAMS(VIDEO_CLOCK, 508, 0, 384, 262, 0, 256)
+	MCFG_SCREEN_FORMAT(BITMAP_FORMAT_INDEXED16)
 
-	MDRV_VIDEO_START(itech32)
-	MDRV_VIDEO_UPDATE(itech32)
+	MCFG_VIDEO_START(itech32)
+	MCFG_VIDEO_UPDATE(itech32)
 
 	/* sound hardware */
-	MDRV_SPEAKER_STANDARD_MONO("mono")
+	MCFG_SPEAKER_STANDARD_MONO("mono")
 
-	MDRV_SOUND_ADD("ensoniq", ES5506, SOUND_CLOCK)
-	MDRV_SOUND_CONFIG(es5506_config)
-	MDRV_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
+	MCFG_SOUND_ADD("ensoniq", ES5506, SOUND_CLOCK)
+	MCFG_SOUND_CONFIG(es5506_config)
+	MCFG_SOUND_ROUTE(ALL_OUTPUTS, "mono", 1.0)
 
 	/* via */
-	MDRV_VIA6522_ADD("via6522_0", SOUND_CLOCK/8, via_interface)
+	MCFG_VIA6522_ADD("via6522_0", SOUND_CLOCK/8, via_interface)
 MACHINE_CONFIG_END
 
 
@@ -1745,11 +1745,11 @@ static MACHINE_CONFIG_DERIVED( bloodstm, timekill )
 
 	/* basic machine hardware */
 
-	MDRV_CPU_MODIFY("maincpu")
-	MDRV_CPU_PROGRAM_MAP(bloodstm_map)
+	MCFG_CPU_MODIFY("maincpu")
+	MCFG_CPU_PROGRAM_MAP(bloodstm_map)
 
 	/* video hardware */
-	MDRV_PALETTE_LENGTH(32768)
+	MCFG_PALETTE_LENGTH(32768)
 MACHINE_CONFIG_END
 
 
@@ -1757,19 +1757,19 @@ static MACHINE_CONFIG_DERIVED( drivedge, bloodstm )
 
 	/* basic machine hardware */
 
-	MDRV_CPU_REPLACE("maincpu", M68EC020, CPU020_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(drivedge_map)
+	MCFG_CPU_REPLACE("maincpu", M68EC020, CPU020_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(drivedge_map)
 
-	MDRV_CPU_ADD("dsp1", TMS32031, TMS_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(drivedge_tms1_map)
+	MCFG_CPU_ADD("dsp1", TMS32031, TMS_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(drivedge_tms1_map)
 
-	MDRV_CPU_ADD("dsp2", TMS32031, TMS_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(drivedge_tms2_map)
+	MCFG_CPU_ADD("dsp2", TMS32031, TMS_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(drivedge_tms2_map)
 
-//  MDRV_CPU_ADD("comm", M6803, 8000000/4) -- network CPU
+//  MCFG_CPU_ADD("comm", M6803, 8000000/4) -- network CPU
 
-	MDRV_MACHINE_RESET(drivedge)
-	MDRV_QUANTUM_TIME(HZ(6000))
+	MCFG_MACHINE_RESET(drivedge)
+	MCFG_QUANTUM_TIME(HZ(6000))
 MACHINE_CONFIG_END
 
 
@@ -1777,16 +1777,16 @@ static MACHINE_CONFIG_DERIVED( sftm, bloodstm )
 
 	/* basic machine hardware */
 
-	MDRV_CPU_REPLACE("maincpu", M68EC020, CPU020_CLOCK)
-	MDRV_CPU_PROGRAM_MAP(itech020_map)
-	MDRV_CPU_VBLANK_INT("screen", generate_int1)
+	MCFG_CPU_REPLACE("maincpu", M68EC020, CPU020_CLOCK)
+	MCFG_CPU_PROGRAM_MAP(itech020_map)
+	MCFG_CPU_VBLANK_INT("screen", generate_int1)
 
-	MDRV_CPU_MODIFY("soundcpu")
-	MDRV_CPU_PROGRAM_MAP(sound_020_map)
-	MDRV_CPU_VBLANK_INT_HACK(irq1_line_assert,4)
+	MCFG_CPU_MODIFY("soundcpu")
+	MCFG_CPU_PROGRAM_MAP(sound_020_map)
+	MCFG_CPU_VBLANK_INT_HACK(irq1_line_assert,4)
 
 	/* via */
-	MDRV_DEVICE_REMOVE("via6522_0")
+	MCFG_DEVICE_REMOVE("via6522_0")
 MACHINE_CONFIG_END
 
 
@@ -1794,7 +1794,7 @@ static MACHINE_CONFIG_DERIVED( tourny, sftm )
 
 	/* basic machine hardware */
 
-	MDRV_M48T02_ADD( "m48t02"  )
+	MCFG_M48T02_ADD( "m48t02"  )
 MACHINE_CONFIG_END
 
 
@@ -1860,6 +1860,30 @@ ROM_START( timekill131 )
 	ROM_LOAD16_BYTE( "tksrom02.u26", 0x200000, 0x80000, CRC(051ced3e) SHA1(6b63c4837e709806ffea9a37d93933635d356a6e) )
 ROM_END
 
+ROM_START( timekill121 )
+	ROM_REGION16_BE( 0x80000, "user1", 0 )
+	ROM_LOAD16_BYTE( "tk00v121.u54", 0x00000, 0x40000, CRC(4938a940) SHA1(c42c5067ba0536ab22071c80a50434905acd93c2) )
+	ROM_LOAD16_BYTE( "tk01v121.u53", 0x00001, 0x40000, CRC(0bb75c40) SHA1(99829ecb0692ea8b313bd8c2e982258c97599b06) )
+
+	ROM_REGION( 0x28000, "soundcpu", 0 )
+	ROM_LOAD( "tksnd.u17", 0x10000, 0x18000, CRC(ab1684c3) SHA1(cc7e591fd160b259f8aecddb2c5a3c36e4e37b2f) )
+	ROM_CONTINUE(          0x08000, 0x08000 )
+
+	ROM_REGION( 0x880000, "gfx1", 0 )
+	ROM_LOAD32_BYTE( "tk0_rom.1", 0x000000, 0x200000, CRC(94cbf6f8) SHA1(dac5c4d9c8e42336c236ecc3c72b3b1f8282dc2f) )
+	ROM_LOAD32_BYTE( "tk1_rom.2", 0x000001, 0x200000, CRC(c07dea98) SHA1(dd8b88beb9781579eb0a17231ad2a274b70ae1bc) )
+	ROM_LOAD32_BYTE( "tk2_rom.3", 0x000002, 0x200000, CRC(183eed2a) SHA1(3905268fe45ecc47cd4d349666b4d33efda2140b) )
+	ROM_LOAD32_BYTE( "tk3_rom.4", 0x000003, 0x200000, CRC(b1da1058) SHA1(a1d483701c661d69cecc9d073b23683b119f5ef1) )
+	ROM_LOAD32_BYTE( "tkgrom.01", 0x800000, 0x020000, CRC(b030c3d9) SHA1(f5c21285ec8ff4f74205e0cf18da67e733e31183) )
+	ROM_LOAD32_BYTE( "tkgrom.02", 0x800001, 0x020000, CRC(e98492a4) SHA1(fe8fb4bd3900109f3872f2930e8ddc9d19f599fd) )
+	ROM_LOAD32_BYTE( "tkgrom.03", 0x800002, 0x020000, CRC(6088fa64) SHA1(a3eee10bdef48fefec3836f551172dbe0819acf6) )
+	ROM_LOAD32_BYTE( "tkgrom.04", 0x800003, 0x020000, CRC(95be2318) SHA1(60580c87d63a114df44e2580e138128388ff447b) )
+
+	ROM_REGION16_BE( 0x400000, "ensoniq.2", ROMREGION_ERASE00 )
+	ROM_LOAD16_BYTE( "tksrom00.u18", 0x000000, 0x80000, CRC(79d8b83a) SHA1(78934b4d0ccca8fefcf8277e4296eb1d59cd575b) )
+	ROM_LOAD16_BYTE( "tksrom01.u20", 0x100000, 0x80000, CRC(ec01648c) SHA1(b83c66cf22db5d89b9ed79b79861b79429d8380c) )
+	ROM_LOAD16_BYTE( "tksrom02.u26", 0x200000, 0x80000, CRC(051ced3e) SHA1(6b63c4837e709806ffea9a37d93933635d356a6e) )
+ROM_END
 
 ROM_START( bloodstm )
 	ROM_REGION16_BE( 0x80000, "user1", 0 )
@@ -2361,6 +2385,41 @@ ROM_START( wcbowl15 )	/* Version 1.5 (3-tier board set: P/N 1059 Rev 3, P/N 1079
 	ROM_REGION16_BE( 0x80000, "user1", 0 )
 	ROM_LOAD16_BYTE( "wcb_v15.u83", 0x00000, 0x20000, CRC(3ca9ab85) SHA1(364946dceb3f7279b7d67d9d685a98ba7f4901aa) ) /* Labeled as "WCB V1.5 (U83)" */
 	ROM_LOAD16_BYTE( "wcb_v15.u88", 0x00001, 0x20000, CRC(d43e6fad) SHA1(fd72f6945e7f5ef86dc28503749d18086dd29906) ) /* Labeled as "WCB V1.5 (U88)" */
+
+	ROM_REGION( 0x28000, "soundcpu", 0 )
+	ROM_LOAD( "wcb_snd2.u17", 0x10000, 0x18000, CRC(c14907ba) SHA1(e52fb87c1f9b5847efc0ef15eb7e6c04dcf38110) ) /* Labeled as "WCB SND V2.0" */
+	ROM_CONTINUE(             0x08000, 0x08000 )
+
+	ROM_REGION( 0x880000, "gfx1", 0 )
+	/* No known set specificly checks for this, however the GROM data may be in the form of four 8 Meg roms:
+    ROM_LOAD32_BYTE( "wcb8grom.0_0", 0x000000, 0x100000, CRC(40837737) SHA1(f073943ec6f84285a8559553fb292ec1f8a629d0) ) Labeled as "WCB GROM0_0 *" ect
+    ROM_LOAD32_BYTE( "wcb8grom.0_1", 0x000001, 0x100000, CRC(1615aee8) SHA1(6184919371a894b1d6f2e06a2b328cb55abed4a9) )
+    ROM_LOAD32_BYTE( "wcb8grom.0_2", 0x000002, 0x100000, CRC(d8e0b06e) SHA1(4981c0cf16df68a1b4da7ebf65ca587c21292478) )
+    ROM_LOAD32_BYTE( "wcb8grom.0_3", 0x000003, 0x100000, CRC(0348a7f0) SHA1(462f77514c0e9a28da63732a4f31e9483d4c483e) )
+    */
+	ROM_LOAD32_BYTE( "wcb_grm0.0", 0x000000, 0x080000, CRC(5d79aaae) SHA1(e1bf5c46843f69b8bac41dde73d89ba59b4c8b7f) )
+	ROM_LOAD32_BYTE( "wcb_grm0.1", 0x000001, 0x080000, CRC(e26dcedb) SHA1(15441b97dd3d50d28007062fe28841fa3f762ec9) )
+	ROM_LOAD32_BYTE( "wcb_grm0.2", 0x000002, 0x080000, CRC(32735875) SHA1(4017a8577d8efa8c5b95bd30723ebbf6ecaeba2b) )
+	ROM_LOAD32_BYTE( "wcb_grm0.3", 0x000003, 0x080000, CRC(019d0ab8) SHA1(3281eada296ad746da80ef6e5909c50b03b90d08) )
+	ROM_LOAD32_BYTE( "wcb_grm1.0", 0x200000, 0x080000, CRC(8bd31762) SHA1(a7274c8173b4fb04a6aed0b6a622b52a811a8c83) )
+	ROM_LOAD32_BYTE( "wcb_grm1.1", 0x200001, 0x080000, CRC(b3f761fc) SHA1(5880ca1423cea9a7ca3d0875c8db33787f4056d4) )
+	ROM_LOAD32_BYTE( "wcb_grm1.2", 0x200002, 0x080000, CRC(c22f44ad) SHA1(b25b11346ee1812b2be79105faf64faa0302c105) )
+	ROM_LOAD32_BYTE( "wcb_grm1.3", 0x200003, 0x080000, CRC(036084c4) SHA1(6d2e402d2f4565e037a2676ba676e4b1da2b5dfe) )
+	ROM_FILL(                      0x400000, 0x480000, 0xff )
+
+	ROM_REGION16_BE( 0x400000, "ensoniq.0", ROMREGION_ERASE00 )
+	ROM_LOAD16_BYTE( "ensoniq.2mx", 0x000000, 0x200000, CRC(0814ab80) SHA1(e92525f7cf58cf480510c278fea705f67225e58f) ) /* Ensoniq 2MX16U 1350901801 */
+
+	ROM_REGION16_BE( 0x400000, "ensoniq.2", ROMREGION_ERASE00 )
+	ROM_LOAD16_BYTE( "wcb_srm.0",  0x000000, 0x080000, CRC(115bcd1f) SHA1(c321bf3145c11de1351c8f9cd554ab3d6600e854) )
+	ROM_LOAD16_BYTE( "wcb_srm.1",  0x100000, 0x080000, CRC(87a4a4d8) SHA1(60db2f466686481857eb39b90ac7a19d0a96adac) )
+ROM_END
+
+
+ROM_START( wcbowl14 )	/* Version 1.4 (3-tier board set: P/N 1059 Rev 3, P/N 1079 Rev 1 & P/N 1060 Rev 0) */
+	ROM_REGION16_BE( 0x80000, "user1", 0 )
+	ROM_LOAD16_BYTE( "wcb_v14.u83", 0x00000, 0x20000, CRC(7086131f) SHA1(86fe6f725785a5b1a0fc13ca60823f30713253bc) ) /* Labeled as "WCB V1.4 (U83)" */
+	ROM_LOAD16_BYTE( "wcb_v14.u88", 0x00001, 0x20000, CRC(0225aac1) SHA1(dd37ff8405e98c61acd042d23be93de24af37884) ) /* Labeled as "WCB V1.4 (U88)" */
 
 	ROM_REGION( 0x28000, "soundcpu", 0 )
 	ROM_LOAD( "wcb_snd2.u17", 0x10000, 0x18000, CRC(c14907ba) SHA1(e52fb87c1f9b5847efc0ef15eb7e6c04dcf38110) ) /* Labeled as "WCB SND V2.0" */
@@ -4014,7 +4073,7 @@ static DRIVER_INIT( wcbowln )	/* PIC 16C54 labeled as ITBWL-3 */
 
 static void install_timekeeper(running_machine *machine)
 {
-	running_device *device = machine->device("m48t02");
+	device_t *device = machine->device("m48t02");
 	memory_install_readwrite32_device_handler(cputag_get_address_space(machine, "maincpu", ADDRESS_SPACE_PROGRAM), device, 0x681000, 0x6817ff, 0, 0, timekeeper_32be_r, timekeeper_32be_w);
 }
 
@@ -4154,6 +4213,7 @@ Label1  bne.s       Label1          ; Infinite loop if result isn't 0x80
 
 GAME( 1992, timekill,    0,        timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies",   "Time Killers (v1.32)", 0 )
 GAME( 1992, timekill131, timekill, timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies",   "Time Killers (v1.31)", 0 )
+GAME( 1992, timekill121, timekill, timekill, timekill, timekill, ROT0, "Strata/Incredible Technologies",   "Time Killers (v1.21)", 0 )
 GAME( 1993, hardyard,    0,        bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies",   "Hard Yardage (v1.20)", 0 )
 GAME( 1993, hardyard10,  hardyard, bloodstm, hardyard, hardyard, ROT0, "Strata/Incredible Technologies",   "Hard Yardage (v1.00)", 0 )
 GAME( 1994, bloodstm,    0,        bloodstm, bloodstm, bloodstm, ROT0, "Strata/Incredible Technologies",   "Blood Storm (v2.22)", 0 )
@@ -4169,6 +4229,7 @@ GAME( 1995, wcbowl165,   wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredib
 GAME( 1995, wcbowl161,   wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",          "World Class Bowling (v1.61)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
 GAME( 1995, wcbowl16,    wcbowl,   sftm,     shufbowl, wcbowln,  ROT0, "Incredible Technologies",          "World Class Bowling (v1.6)" , 0) /* PIC 16C54 labeled as ITBWL-3 */
 GAME( 1995, wcbowl15,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",          "World Class Bowling (v1.5)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
+GAME( 1995, wcbowl14,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",          "World Class Bowling (v1.4)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
 GAME( 1995, wcbowl13,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",          "World Class Bowling (v1.3)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
 GAME( 1995, wcbowl12,    wcbowl,   bloodstm, wcbowl,   wcbowl,   ROT0, "Incredible Technologies",          "World Class Bowling (v1.2)" , 0) /* PIC 16C54 labeled as ITBWL-1 */
 GAME( 1995, sftm,        0,        sftm,     sftm,     sftm,     ROT0, "Capcom / Incredible Technologies", "Street Fighter: The Movie (v1.12)" , 0) /* PIC 16C54 labeled as ITSF-1 */

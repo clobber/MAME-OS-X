@@ -68,11 +68,38 @@ void arm7_dt_w_callback(arm_state *cpustate, UINT32 insn, UINT32 *prn, void (*wr
 #define ARM7REG(reg)        cpustate->sArmRegister[reg]
 #define ARM7_ICOUNT         cpustate->iCount
 
-INLINE arm_state *get_safe_token(running_device *device)
+INLINE arm_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
-	assert(device->type() == ARM7 || device->type() == ARM7_BE || device->type() == ARM9 || device->type() == PXA255);
+	assert(device->type() == ARM7 || device->type() == ARM7_BE || device->type() == ARM7500 || device->type() == ARM9 || device->type() == ARM920T || device->type() == PXA255);
 	return (arm_state *)downcast<legacy_cpu_device *>(device)->token();
+}
+
+void set_cpsr( arm_state *cpustate, UINT32 val)
+{
+	if ((val & 0x10) != (ARM7REG(eCPSR) & 0x10))
+	{
+		if (val & 0x10)
+		{
+			// 26 -> 32
+			val = (val & 0x0FFFFF3F) | (R15 & 0xF0000000) /* N Z C V */ | ((R15 & 0x0C000000) >> (26 - 6)) /* I F */;
+			R15 = R15 & 0x03FFFFFC;
+		}
+		else
+		{
+			// 32 -> 26
+			R15 = (R15 & 0x03FFFFFC) /* PC */ | (val & 0xF0000000) /* N Z C V */ | ((val & 0x000000C0) << (26 - 6)) /* I F */ | (val & 0x00000003) /* M1 M0 */;
+		}
+	}
+	else
+	{
+		if (!(val & 0x10))
+		{
+			// mirror bits in pc
+			R15 = (R15 & 0x03FFFFFF) | (val & 0xF0000000) /* N Z C V */ | ((val & 0x000000C0) << (26 - 6)) /* I F */;
+		}
+	}
+	ARM7REG(eCPSR) = val;
 }
 
 INLINE INT64 saturate_qbit_overflow(arm_state *cpustate, INT64 res)
@@ -128,25 +155,94 @@ INLINE UINT32 arm7_tlb_get_second_level_descriptor( arm_state *cpustate, UINT32 
     return cpustate->program->read_dword( desc_lvl2 );
 }
 
-INLINE UINT32 arm7_tlb_translate(arm_state *cpustate, UINT32 vaddr)
+INLINE UINT32 arm7_tlb_translate(arm_state *cpustate, UINT32 vaddr, int mode)
 {
-    UINT32 desc_lvl1 = arm7_tlb_get_first_level_descriptor( cpustate, vaddr );
+    UINT32 desc_lvl1;
     UINT32 desc_lvl2 = 0;
-    UINT32 paddr = vaddr;
+    UINT32 paddr;
+    UINT8 domain, permission;
+
+    if (vaddr < 32 * 1024 * 1024)
+    {
+    	UINT32 pid = ((COPRO_FCSE_PID >> 25) & 0x7F);
+    	if (pid > 0)
+    	{
+    		//LOG( ( "ARM7: FCSE PID vaddr %08X -> %08X\n", vaddr, vaddr + (pid * (32 * 1024 * 1024))) );
+    		vaddr = vaddr + (((COPRO_FCSE_PID >> 25) & 0x7F) * (32 * 1024 * 1024));
+    	}
+    }
+
+    desc_lvl1 = arm7_tlb_get_first_level_descriptor( cpustate, vaddr );
+
+    paddr = vaddr;
+
+#if ARM7_MMU_ENABLE_HACK
+    if ((R15 == (cpustate->mmu_enable_addr + 4)) || (R15 == (cpustate->mmu_enable_addr + 8)))
+    {
+        LOG( ( "ARM7: fetch flat, PC = %08x, vaddr = %08x\n", R15, vaddr ) );
+    	return vaddr;
+    }
+    else
+    {
+    	cpustate->mmu_enable_addr = 1;
+    }
+#endif
+
+	domain = (desc_lvl1 >> 5) & 0xF;
+	permission = (COPRO_DOMAIN_ACCESS_CONTROL >> (domain << 1)) & 3;
 
     switch( desc_lvl1 & 3 )
     {
         case COPRO_TLB_UNMAPPED:
             // Unmapped, generate a translation fault
-            LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, PC = %08x, vaddr = %08x\n", R15, vaddr ) );
+            if (mode == ARM7_TLB_ABORT_D)
+            {
+	            LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, PC = %08x, vaddr = %08x\n", R15, vaddr ) );
+            	COPRO_FAULT_STATUS = (5 << 0);
+            	COPRO_FAULT_ADDRESS = vaddr;
+            	cpustate->pendingAbtD = 1;
+            }
+            else if (mode == ARM7_TLB_ABORT_P)
+            {
+	            LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, PC = %08x, vaddr = %08x\n", R15, vaddr ) );
+            	cpustate->pendingAbtP = 1;
+            }
             break;
         case COPRO_TLB_COARSE_TABLE:
             // Entry is the physical address of a coarse second-level table
-            desc_lvl2 = arm7_tlb_get_second_level_descriptor( cpustate, TLB_COARSE, desc_lvl1, vaddr );
+            if (permission == 1)
+            {
+	            desc_lvl2 = arm7_tlb_get_second_level_descriptor( cpustate, TLB_COARSE, desc_lvl1, vaddr );
+            }
+            else
+            {
+    	    	LOG( ( "domain %d permission = %d\n", domain, permission ) );
+                LOG( ( "ARM7: Coarse Table, Section Domain fault on virtual address, vaddr = %08x, domain = %08x, PC = %08x\n", vaddr, domain, R15 ) );
+            }
             break;
         case COPRO_TLB_SECTION_TABLE:
             // Entry is a section
-            paddr = ( desc_lvl1 & COPRO_TLB_SECTION_PAGE_MASK ) | ( vaddr & ~COPRO_TLB_SECTION_PAGE_MASK );
+            if ((permission == 1) || (permission == 3))
+            {
+            	paddr = ( desc_lvl1 & COPRO_TLB_SECTION_PAGE_MASK ) | ( vaddr & ~COPRO_TLB_SECTION_PAGE_MASK );
+            }
+            else
+            {
+                if (mode == ARM7_TLB_ABORT_D)
+                {
+	    	    	LOG( ( "domain %d permission = %d\n", domain, permission ) );
+	                LOG( ( "ARM7: Section Table, Section Domain fault on virtual address, vaddr = %08x, domain = %08x, PC = %08x\n", vaddr, domain, R15 ) );
+                	COPRO_FAULT_STATUS = (9 << 0);
+                	COPRO_FAULT_ADDRESS = vaddr;
+            	    cpustate->pendingAbtD = 1;
+            	}
+            	else if (mode == ARM7_TLB_ABORT_P)
+            	{
+	    	    	LOG( ( "domain %d permission = %d\n", domain, permission ) );
+	                LOG( ( "ARM7: Section Table, Section Domain fault on virtual address, vaddr = %08x, domain = %08x, PC = %08x\n", vaddr, domain, R15 ) );
+            	    cpustate->pendingAbtP = 1;
+            	}
+            }
             break;
         case COPRO_TLB_FINE_TABLE:
             // Entry is the physical address of a fine second-level table
@@ -163,7 +259,18 @@ INLINE UINT32 arm7_tlb_translate(arm_state *cpustate, UINT32 vaddr)
         {
             case COPRO_TLB_UNMAPPED:
                 // Unmapped, generate a translation fault
-                LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, vaddr = %08x\n", vaddr ) );
+                if (mode == ARM7_TLB_ABORT_D)
+                {
+	                LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, vaddr = %08x, PC %08X\n", vaddr, R15 ) );
+                	COPRO_FAULT_STATUS = (7 << 0);
+                	COPRO_FAULT_ADDRESS = vaddr;
+	        	    cpustate->pendingAbtD = 1;
+	            }
+	            else if (mode == ARM7_TLB_ABORT_P)
+	            {
+	                LOG( ( "ARM7: Not Yet Implemented: Translation fault on unmapped virtual address, vaddr = %08x, PC %08X\n", vaddr, R15 ) );
+            		cpustate->pendingAbtP = 1;
+		        }
                 break;
             case COPRO_TLB_LARGE_PAGE:
                 // Large page descriptor
@@ -194,7 +301,7 @@ static CPU_TRANSLATE( arm7 )
 	/* only applies to the program address space and only does something if the MMU's enabled */
 	if( space == ADDRESS_SPACE_PROGRAM && ( COPRO_CTRL & COPRO_CTRL_MMU_EN ) )
 	{
-		*address = arm7_tlb_translate(cpustate, *address);
+		*address = arm7_tlb_translate(cpustate, *address, ARM7_TLB_NO_ABORT);
 	}
 	return TRUE;
 }
@@ -245,6 +352,17 @@ static CPU_RESET( arm7_be )
 	cpustate->endian = ENDIANNESS_BIG;
 }
 
+static CPU_RESET( arm7500 )
+{
+	arm_state *cpustate = get_safe_token(device);
+
+	// must call core reset
+	arm7_core_reset(device);
+
+	cpustate->archRev = 3;	// ARMv3
+	cpustate->archFlags = 0;
+}
+
 static CPU_RESET( arm9 )
 {
 	arm_state *cpustate = get_safe_token(device);
@@ -254,6 +372,17 @@ static CPU_RESET( arm9 )
 
 	cpustate->archRev = 5;	// ARMv5
 	cpustate->archFlags = eARM_ARCHFLAGS_T | eARM_ARCHFLAGS_E;	// has TE extensions
+}
+
+static CPU_RESET( arm920t )
+{
+	arm_state *cpustate = get_safe_token(device);
+
+	// must call core reset
+	arm7_core_reset(device);
+
+	cpustate->archRev = 4;	// ARMv4
+	cpustate->archFlags = eARM_ARCHFLAGS_T;	// has T extension
 }
 
 static CPU_RESET( pxa255 )
@@ -460,7 +589,7 @@ CPU_GET_INFO( arm7 )
 
         case CPUINFO_INT_PREVIOUSPC:            info->i = 0;    /* not implemented */           break;
         case CPUINFO_INT_PC:
-        case CPUINFO_INT_REGISTER + ARM7_PC:    info->i = R15;                                  break;
+        case CPUINFO_INT_REGISTER + ARM7_PC:    info->i = GET_PC;                                  break;
         case CPUINFO_INT_SP:                    info->i = GetRegister(cpustate, 13);            break;
 
         /* FIRQ Mode Shadowed Registers */
@@ -525,7 +654,7 @@ CPU_GET_INFO( arm7 )
         break;
 
         /* registers shared by all operating modes */
-        case CPUINFO_STR_REGISTER + ARM7_PC:    sprintf(info->s, "PC  :%08x", R15);            break;
+        case CPUINFO_STR_REGISTER + ARM7_PC:    sprintf(info->s, "PC  :%08x", GET_PC);            break;
         case CPUINFO_STR_REGISTER + ARM7_R0:    sprintf(info->s, "R0  :%08x", ARM7REG( 0));    break;
         case CPUINFO_STR_REGISTER + ARM7_R1:    sprintf(info->s, "R1  :%08x", ARM7REG( 1));    break;
         case CPUINFO_STR_REGISTER + ARM7_R2:    sprintf(info->s, "R2  :%08x", ARM7REG( 2));    break;
@@ -588,12 +717,34 @@ CPU_GET_INFO( arm7_be )
 	}
 }
 
+CPU_GET_INFO( arm7500 )
+{
+    switch (state)
+    {
+        case CPUINFO_FCT_RESET:		info->reset = CPU_RESET_NAME(arm7500);		break;
+        case DEVINFO_STR_NAME:		strcpy(info->s, "ARM7500");				break;
+		default:					CPU_GET_INFO_CALL(arm7);
+		break;
+    }
+}
+
 CPU_GET_INFO( arm9 )
 {
     switch (state)
     {
         case CPUINFO_FCT_RESET:                 info->reset = CPU_RESET_NAME(arm9);                       break;
         case DEVINFO_STR_NAME:             strcpy(info->s, "ARM9");                        break;
+	default:	CPU_GET_INFO_CALL(arm7);
+		break;
+    }
+}
+
+CPU_GET_INFO( arm920t )
+{
+    switch (state)
+    {
+        case CPUINFO_FCT_RESET:                 info->reset = CPU_RESET_NAME(arm920t);                       break;
+        case DEVINFO_STR_NAME:             strcpy(info->s, "ARM920T");                        break;
 	default:	CPU_GET_INFO_CALL(arm7);
 		break;
     }
@@ -666,7 +817,9 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
 	}
 	else
 	{
-		fatalerror("ARM7: Unhandled coprocessor %d (archFlags %x)\n", cpnum, cpustate->archFlags);
+		LOG( ("ARM7: Unhandled coprocessor %d (archFlags %x)\n", cpnum, cpustate->archFlags) );
+		cpustate->pendingUnd = 1;
+		return 0;
 	}
     }
 
@@ -703,6 +856,8 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
 				else
 				{
 					data = 0x41 | (1 << 23) | (7 << 12);
+					//data = (0x41 << 24) | (1 << 20) | (2 << 16) | (0x920 << 4) | (0 << 0); // ARM920T (S3C24xx)
+					//data = (0x41 << 24) | (0 << 20) | (1 << 16) | (0x710 << 4) | (0 << 0); // ARM7500
 				}
 				break;
 
@@ -735,6 +890,7 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
 		    break;
 	    	case 1:	// cache type
 			data = 0x0f0d2112;	// HACK: value expected by ARMWrestler (probably Nintendo DS ARM9's value)
+			//data = (6 << 25) | (1 << 24) | (0x172 << 12) | (0x172 << 0); // ARM920T (S3C24xx)
 			break;
 		case 2: // TCM type
 			data = 0;
@@ -756,15 +912,19 @@ static READ32_DEVICE_HANDLER( arm7_rt_r_callback )
             break;
         case 3:             // Domain Access Control
             LOG( ( "arm7_rt_r_callback, Domain Access Control\n" ) );
+            data = COPRO_DOMAIN_ACCESS_CONTROL;
             break;
         case 5:             // Fault Status
             LOG( ( "arm7_rt_r_callback, Fault Status\n" ) );
+            data = COPRO_FAULT_STATUS;
             break;
         case 6:             // Fault Address
             LOG( ( "arm7_rt_r_callback, Fault Address\n" ) );
+            data = COPRO_FAULT_ADDRESS;
             break;
         case 13:            // Read Process ID (PID)
             LOG( ( "arm7_rt_r_callback, Read PID\n" ) );
+            data = COPRO_FCSE_PID;
             break;
         case 14:            // Read Breakpoint
             LOG( ( "arm7_rt_r_callback, Read Breakpoint\n" ) );
@@ -825,6 +985,16 @@ static WRITE32_DEVICE_HANDLER( arm7_rt_w_callback )
                    ( data & COPRO_CTRL_ROM ) >> COPRO_CTRL_ROM_SHIFT,
                    ( data & COPRO_CTRL_ICACHE_EN ) >> COPRO_CTRL_ICACHE_EN_SHIFT ) );
             LOG( ( "    Int Vector Adjust:%d\n", ( data & COPRO_CTRL_INTVEC_ADJUST ) >> COPRO_CTRL_INTVEC_ADJUST_SHIFT ) );
+#if ARM7_MMU_ENABLE_HACK
+            if (((data & COPRO_CTRL_MMU_EN) != 0) && ((COPRO_CTRL & COPRO_CTRL_MMU_EN) == 0))
+            {
+            	cpustate->mmu_enable_addr = R15;
+            }
+            if (((data & COPRO_CTRL_MMU_EN) == 0) && ((COPRO_CTRL & COPRO_CTRL_MMU_EN) != 0))
+            {
+            	R15 = arm7_tlb_translate( cpustate, R15, ARM7_TLB_NO_ABORT);
+            }
+#endif
             COPRO_CTRL = data & COPRO_CTRL_MASK;
             break;
         case 2:             // Translation Table Base
@@ -833,12 +1003,15 @@ static WRITE32_DEVICE_HANDLER( arm7_rt_w_callback )
             break;
         case 3:             // Domain Access Control
             LOG( ( "arm7_rt_w_callback Domain Access Control = %08x (%d) (%d)\n", data, op2, op3 ) );
+            COPRO_DOMAIN_ACCESS_CONTROL = data;
             break;
         case 5:             // Fault Status
             LOG( ( "arm7_rt_w_callback Fault Status = %08x (%d) (%d)\n", data, op2, op3 ) );
+            COPRO_FAULT_STATUS = data;
             break;
         case 6:             // Fault Address
             LOG( ( "arm7_rt_w_callback Fault Address = %08x (%d) (%d)\n", data, op2, op3 ) );
+            COPRO_FAULT_ADDRESS = data;
             break;
         case 7:             // Cache Operations
 //            LOG( ( "arm7_rt_w_callback Cache Ops = %08x (%d) (%d)\n", data, op2, op3 ) );
@@ -851,6 +1024,7 @@ static WRITE32_DEVICE_HANDLER( arm7_rt_w_callback )
             break;
         case 13:            // Write Process ID (PID)
             LOG( ( "arm7_rt_w_callback Write PID = %08x (%d) (%d)\n", data, op2, op3 ) );
+            COPRO_FCSE_PID = data;
             break;
         case 14:            // Write Breakpoint
             LOG( ( "arm7_rt_w_callback Write Breakpoint = %08x (%d) (%d)\n", data, op2, op3 ) );
@@ -873,6 +1047,8 @@ void arm7_dt_w_callback(arm_state *cpustate, UINT32 insn, UINT32 *prn, void (*wr
 
 DEFINE_LEGACY_CPU_DEVICE(ARM7, arm7);
 DEFINE_LEGACY_CPU_DEVICE(ARM7_BE, arm7_be);
+DEFINE_LEGACY_CPU_DEVICE(ARM7500, arm7500);
 DEFINE_LEGACY_CPU_DEVICE(ARM9, arm9);
+DEFINE_LEGACY_CPU_DEVICE(ARM920T, arm920t);
 DEFINE_LEGACY_CPU_DEVICE(PXA255, pxa255);
 DEFINE_LEGACY_CPU_DEVICE(SA1110, sa1110);

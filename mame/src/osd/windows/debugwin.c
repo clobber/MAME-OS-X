@@ -51,6 +51,7 @@
 // MAME headers
 #include "emu.h"
 #include "uiinput.h"
+#include "debugger.h"
 #include "debug/debugvw.h"
 #include "debug/dvdisasm.h"
 #include "debug/dvmemory.h"
@@ -58,7 +59,6 @@
 #include "debug/debugvw.h"
 #include "debug/debugcon.h"
 #include "debug/debugcpu.h"
-#include "debugger.h"
 
 // MAMEOS headers
 #include "debugwin.h"
@@ -250,7 +250,7 @@ static void disasm_update_caption(running_machine *machine, HWND wnd);
 static void console_create_window(running_machine *machine);
 static void console_recompute_children(debugwin_info *info);
 static void console_process_string(debugwin_info *info, const char *string);
-static void console_set_cpu(running_device *device);
+static void console_set_cpu(device_t *device);
 
 static HMENU create_standard_menubar(void);
 static int global_handle_command(debugwin_info *info, WPARAM wparam, LPARAM lparam);
@@ -262,29 +262,20 @@ static void smart_show_all(BOOL show);
 
 
 //============================================================
-//  osd_init_debugger
+//  wait_for_debugger
 //============================================================
 
-void osd_init_debugger(running_machine *machine)
-{
-}
-
-
-//============================================================
-//  osd_wait_for_debugger
-//============================================================
-
-void osd_wait_for_debugger(running_device *device, int firststop)
+void windows_osd_interface::wait_for_debugger(device_t &device, bool firststop)
 {
 	MSG message;
 
 	// create a console window
 	if (main_console == NULL)
-		console_create_window(device->machine);
+		console_create_window(&machine());
 
 	// update the views in the console to reflect the current CPU
 	if (main_console != NULL)
-		console_set_cpu(device);
+		console_set_cpu(&device);
 
 	// when we are first stopped, adjust focus to us
 	if (firststop && main_console != NULL)
@@ -299,7 +290,7 @@ void osd_wait_for_debugger(running_device *device, int firststop)
 	smart_show_all(TRUE);
 
 	// run input polling to ensure that our status is in sync
-	wininput_poll(device->machine);
+	wininput_poll(&machine());
 
 	// get and process messages
 	GetMessage(&message, NULL, 0, 0);
@@ -317,7 +308,7 @@ void osd_wait_for_debugger(running_device *device, int firststop)
 
 		// process everything else
 		default:
-			winwindow_dispatch_message(device->machine, &message);
+			winwindow_dispatch_message(&machine(), &message);
 			break;
 	}
 
@@ -1732,7 +1723,7 @@ static void log_create_window(running_machine *machine)
 
 static void memory_create_window(running_machine *machine)
 {
-	running_device *curcpu = debug_cpu_get_visible_cpu(machine);
+	device_t *curcpu = debug_cpu_get_visible_cpu(machine);
 	debugwin_info *info;
 	HMENU optionsmenu;
 
@@ -2049,7 +2040,7 @@ static void memory_update_caption(running_machine *machine, HWND wnd)
 
 static void disasm_create_window(running_machine *machine)
 {
-	running_device *curcpu = debug_cpu_get_visible_cpu(machine);
+	device_t *curcpu = debug_cpu_get_visible_cpu(machine);
 	debugwin_info *info;
 	HMENU optionsmenu;
 
@@ -2261,7 +2252,7 @@ static int disasm_handle_command(debugwin_info *info, WPARAM wparam, LPARAM lpar
 					if (dasmview->cursor_visible() && debug_cpu_get_visible_cpu(info->machine) == dasmview->source()->device())
 					{
 						offs_t address = dasmview->selected_address();
-						sprintf(command, "go %X", address);
+						sprintf(command, "go 0x%X", address);
 						debug_console_execute_command(info->machine, command, 1);
 					}
 					return 1;
@@ -2568,7 +2559,7 @@ static void console_process_string(debugwin_info *info, const char *string)
 //  console_set_cpu
 //============================================================
 
-static void console_set_cpu(running_device *device)
+static void console_set_cpu(device_t *device)
 {
 	// first set all the views to the new cpu number
 	main_console->view[0].view->set_source(*main_console->view[0].view->source_list().match_device(device));

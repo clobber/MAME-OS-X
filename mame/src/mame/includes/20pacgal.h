@@ -15,10 +15,10 @@ public:
 
 	/* memory pointers */
 	UINT8 *char_gfx_ram;
-	UINT8 *sprite_gfx_ram;
+	UINT8 sprite_gfx_ram[0x2000];
 	UINT8 *video_ram;
-	UINT8 *sprite_ram;
-	UINT8 *sprite_color_lookup;
+	UINT8 sprite_ram[0x180];
+	UINT8 sprite_color_lookup[0x100];
 	UINT8 *flip;
 	UINT8 *stars_seed;
 	UINT8 *stars_ctrl;
@@ -27,8 +27,8 @@ public:
 	UINT8 game_selected;	/* 0 = Ms. Pac-Man, 1 = Galaga */
 
 	/* devices */
-	running_device *maincpu;
-	running_device *eeprom;
+	device_t *maincpu;
+	device_t *eeprom;
 
 	/* bank support */
 	UINT8 *ram_48000;

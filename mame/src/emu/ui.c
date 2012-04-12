@@ -239,9 +239,6 @@ int ui_init(running_machine *machine)
 	/* make sure we clean up after ourselves */
 	machine->add_notifier(MACHINE_NOTIFY_EXIT, ui_exit);
 
-	/* allocate the font and messagebox string */
-	ui_font = render_font_alloc(*machine, "ui.bdf");
-
 	/* initialize the other UI bits */
 	ui_menu_init(machine);
 	ui_gfx_init(machine);
@@ -263,8 +260,7 @@ int ui_init(running_machine *machine)
 static void ui_exit(running_machine &machine)
 {
 	/* free the font */
-	if (ui_font != NULL)
-		render_font_free(ui_font);
+	machine.render().font_free(ui_font);
 	ui_font = NULL;
 }
 
@@ -328,11 +324,11 @@ int ui_display_startup_screens(running_machine *machine, int first_time, int sho
 
 		/* loop while we have a handler */
 		while (ui_handler_callback != handler_ingame && !machine->scheduled_event_pending() && !ui_menu_is_force_game_select())
-			video_frame_update(machine, FALSE);
+			machine->video().frame_update();
 
 		/* clear the handler and force an update */
 		ui_set_handler(handler_ingame, 0);
-		video_frame_update(machine, FALSE);
+		machine->video().frame_update();
 	}
 
 	/* if we're the empty driver, force the menus on */
@@ -361,7 +357,7 @@ void ui_set_startup_text(running_machine *machine, const char *text, int force)
 	if (force || (curtime - lastupdatetime) > osd_ticks_per_second() / 4)
 	{
 		lastupdatetime = curtime;
-		video_frame_update(machine, FALSE);
+		machine->video().frame_update();
 	}
 }
 
@@ -389,7 +385,8 @@ void ui_update_and_render(running_machine *machine, render_container *container)
 	}
 
 	/* render any cheat stuff at the bottom */
-	cheat_render_text(machine, container);
+	if (machine->phase() >= MACHINE_PHASE_RESET)
+		machine->cheat().render_text(*container);
 
 	/* call the current UI handler */
 	assert(ui_handler_callback != NULL);
@@ -411,8 +408,11 @@ void ui_update_and_render(running_machine *machine, render_container *container)
     ui_get_font - return the UI font
 -------------------------------------------------*/
 
-render_font *ui_get_font(void)
+render_font *ui_get_font(running_machine &machine)
 {
+	/* allocate the font and messagebox string */
+	if (ui_font == NULL)
+		ui_font = machine.render().font_alloc(options_get_string(machine.options(), OPTION_UI_FONT));
 	return ui_font;
 }
 
@@ -424,7 +424,7 @@ render_font *ui_get_font(void)
 
 float ui_get_line_height(running_machine &machine)
 {
-	INT32 raw_font_pixel_height = render_font_get_pixel_height(ui_font);
+	INT32 raw_font_pixel_height = ui_get_font(machine)->pixel_height();
 	render_target &ui_target = machine.render().ui_target();
 	INT32 target_pixel_height = ui_target.height();
 	float one_to_one_line_height;
@@ -469,7 +469,7 @@ float ui_get_line_height(running_machine &machine)
 
 float ui_get_char_width(running_machine &machine, unicode_char ch)
 {
-	return render_font_get_char_width(ui_font, ui_get_line_height(machine), machine.render().ui_aspect(), ch);
+	return ui_get_font(machine)->char_width(ui_get_line_height(machine), machine.render().ui_aspect(), ch);
 }
 
 
@@ -480,7 +480,7 @@ float ui_get_char_width(running_machine &machine, unicode_char ch)
 
 float ui_get_string_width(running_machine &machine, const char *s)
 {
-	return render_font_get_utf8string_width(ui_font, ui_get_line_height(machine), machine.render().ui_aspect(), s);
+	return ui_get_font(machine)->utf8string_width(ui_get_line_height(machine), machine.render().ui_aspect(), s);
 }
 
 
@@ -667,7 +667,7 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 
 			if (draw != DRAW_NONE)
 			{
-				container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_font, linechar);
+				container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), linechar);
 				curx += ui_get_char_width(machine, linechar);
 			}
 			linestart += linecharcount;
@@ -676,11 +676,11 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 		/* append ellipses if needed */
 		if (wrap == WRAP_TRUNCATE && *s != 0 && draw != DRAW_NONE)
 		{
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_font, '.');
+			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
 			curx += ui_get_char_width(machine, '.');
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_font, '.');
+			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
 			curx += ui_get_char_width(machine, '.');
-			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_font, '.');
+			container->add_char(curx, cury, lineheight, machine.render().ui_aspect(), fgcolor, *ui_get_font(machine), '.');
 			curx += ui_get_char_width(machine, '.');
 		}
 
@@ -723,35 +723,48 @@ void ui_draw_text_full(render_container *container, const char *origs, float x, 
 
 void ui_draw_text_box(render_container *container, const char *text, int justify, float xpos, float ypos, rgb_t backcolor)
 {
-	float target_width, target_height;
-	float target_x, target_y;
+	float line_height = ui_get_line_height(container->manager().machine());
+	float max_width = 2.0f * ((xpos <= 0.5f) ? xpos : 1.0f - xpos) - 2.0f * UI_BOX_LR_BORDER;
+	float target_width = max_width;
+	float target_height = line_height;
+	float target_x = 0, target_y = 0;
+	float last_target_height = 0;
 
-	/* compute the multi-line target width/height */
-	ui_draw_text_full(container, text, 0, 0, 1.0f - 2.0f * UI_BOX_LR_BORDER,
-				justify, WRAP_WORD, DRAW_NONE, ARGB_WHITE, ARGB_BLACK, &target_width, &target_height);
-	if (target_height > 1.0f - 2.0f * UI_BOX_TB_BORDER)
-		target_height = floor((1.0f - 2.0f * UI_BOX_TB_BORDER) / ui_get_line_height(container->manager().machine())) * ui_get_line_height(container->manager().machine());
+	// limit this iteration to a finite number of passes
+	for (int pass = 0; pass < 5; pass++)
+	{
+		/* determine the target location */
+		target_x = xpos - 0.5f * target_width;
+		target_y = ypos - 0.5f * target_height;
 
-	/* determine the target location */
-	target_x = xpos - 0.5f * target_width;
-	target_y = ypos - 0.5f * target_height;
+		/* make sure we stay on-screen */
+		if (target_x < UI_BOX_LR_BORDER)
+			target_x = UI_BOX_LR_BORDER;
+		if (target_x + target_width + UI_BOX_LR_BORDER > 1.0f)
+			target_x = 1.0f - UI_BOX_LR_BORDER - target_width;
+		if (target_y < UI_BOX_TB_BORDER)
+			target_y = UI_BOX_TB_BORDER;
+		if (target_y + target_height + UI_BOX_TB_BORDER > 1.0f)
+			target_y = 1.0f - UI_BOX_TB_BORDER - target_height;
 
-	/* make sure we stay on-screen */
-	if (target_x < UI_BOX_LR_BORDER)
-		target_x = UI_BOX_LR_BORDER;
-	if (target_x + target_width + UI_BOX_LR_BORDER > 1.0f)
-		target_x = 1.0f - UI_BOX_LR_BORDER - target_width;
-	if (target_y < UI_BOX_TB_BORDER)
-		target_y = UI_BOX_TB_BORDER;
-	if (target_y + target_height + UI_BOX_TB_BORDER > 1.0f)
-		target_y = 1.0f - UI_BOX_TB_BORDER - target_height;
+		/* compute the multi-line target width/height */
+		ui_draw_text_full(container, text, target_x, target_y, target_width + 0.00001f,
+					justify, WRAP_WORD, DRAW_NONE, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, &target_width, &target_height);
+		if (target_height > 1.0f - 2.0f * UI_BOX_TB_BORDER)
+			target_height = floor((1.0f - 2.0f * UI_BOX_TB_BORDER) / line_height) * line_height;
+
+		/* if we match our last value, we're done */
+		if (target_height == last_target_height)
+			break;
+		last_target_height = target_height;
+	}
 
 	/* add a box around that */
 	ui_draw_outlined_box(container, target_x - UI_BOX_LR_BORDER,
 					 target_y - UI_BOX_TB_BORDER,
 					 target_x + target_width + UI_BOX_LR_BORDER,
 					 target_y + target_height + UI_BOX_TB_BORDER, backcolor);
-	ui_draw_text_full(container, text, target_x, target_y, target_width,
+	ui_draw_text_full(container, text, target_x, target_y, target_width + 0.00001f,
 				justify, WRAP_WORD, DRAW_NORMAL, UI_TEXT_COLOR, UI_TEXT_BG_COLOR, NULL, NULL);
 }
 
@@ -987,7 +1000,7 @@ static astring &warnings_string(running_machine *machine, astring &string)
 
 astring &game_info_astring(running_machine *machine, astring &string)
 {
-	int scrcount = screen_count(*machine->config);
+	int scrcount = machine->m_devicelist.count(SCREEN);
 	int found_sound = FALSE;
 
 	/* print description, manufacturer, and CPU: */
@@ -1064,7 +1077,7 @@ astring &game_info_astring(running_machine *machine, astring &string)
 		string.cat("None\n");
 	else
 	{
-		for (screen_device *screen = screen_first(*machine); screen != NULL; screen = screen_next(screen))
+		for (screen_device *screen = machine->first_screen(); screen != NULL; screen = screen->next_screen())
 		{
 			if (scrcount > 1)
 			{
@@ -1282,7 +1295,8 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 	/* first draw the FPS counter */
 	if (showfps || osd_ticks() < showfps_end)
 	{
-		ui_draw_text_full(container, video_get_speed_text(machine), 0.0f, 0.0f, 1.0f,
+		astring tempstring;
+		ui_draw_text_full(container, machine->video().speed_text(tempstring), 0.0f, 0.0f, 1.0f,
 					JUSTIFY_RIGHT, WRAP_WORD, DRAW_OPAQUE, ARGB_WHITE, ARGB_BLACK, NULL, NULL);
 	}
 	else
@@ -1396,7 +1410,7 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 
 	/* handle a save snapshot request */
 	if (ui_input_pressed(machine, IPT_UI_SNAPSHOT))
-		video_save_active_screen_snapshots(machine);
+		machine->video().save_active_screen_snapshots();
 
 	/* toggle pause */
 	if (ui_input_pressed(machine, IPT_UI_PAUSE))
@@ -1415,19 +1429,19 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 
 	/* handle a toggle cheats request */
 	if (ui_input_pressed(machine, IPT_UI_TOGGLE_CHEAT))
-		cheat_set_global_enable(machine, !cheat_get_global_enable(machine));
+		machine->cheat().set_enable(!machine->cheat().enabled());
 
 	/* toggle movie recording */
 	if (ui_input_pressed(machine, IPT_UI_RECORD_MOVIE))
 	{
-		if (!video_mng_is_movie_active(machine))
+		if (!machine->video().is_recording())
 		{
-			video_mng_begin_recording(machine, NULL);
+			machine->video().begin_recording(NULL, video_manager::MF_MNG);
 			popmessage("REC START");
 		}
 		else
 		{
-			video_mng_end_recording(machine);
+			machine->video().end_recording();
 			popmessage("REC STOP");
 		}
 	}
@@ -1444,10 +1458,10 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 	if (ui_input_pressed(machine, IPT_UI_FRAMESKIP_INC))
 	{
 		/* get the current value and increment it */
-		int newframeskip = video_get_frameskip() + 1;
+		int newframeskip = machine->video().frameskip() + 1;
 		if (newframeskip > MAX_FRAMESKIP)
 			newframeskip = -1;
-		video_set_frameskip(newframeskip);
+		machine->video().set_frameskip(newframeskip);
 
 		/* display the FPS counter for 2 seconds */
 		ui_show_fps_temp(2.0);
@@ -1457,10 +1471,10 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 	if (ui_input_pressed(machine, IPT_UI_FRAMESKIP_DEC))
 	{
 		/* get the current value and decrement it */
-		int newframeskip = video_get_frameskip() - 1;
+		int newframeskip = machine->video().frameskip() - 1;
 		if (newframeskip < -1)
 			newframeskip = MAX_FRAMESKIP;
-		video_set_frameskip(newframeskip);
+		machine->video().set_frameskip(newframeskip);
 
 		/* display the FPS counter for 2 seconds */
 		ui_show_fps_temp(2.0);
@@ -1468,16 +1482,16 @@ static UINT32 handler_ingame(running_machine *machine, render_container *contain
 
 	/* toggle throttle? */
 	if (ui_input_pressed(machine, IPT_UI_THROTTLE))
-		video_set_throttle(!video_get_throttle());
+		machine->video().set_throttled(!machine->video().throttled());
 
 	/* check for fast forward */
 	if (input_type_pressed(machine, IPT_UI_FAST_FORWARD, 0))
 	{
-		video_set_fastforward(TRUE);
+		machine->video().set_fastforward(true);
 		ui_show_fps_temp(0.5);
 	}
 	else
-		video_set_fastforward(FALSE);
+		machine->video().set_fastforward(false);
 
 	return 0;
 }
@@ -1646,7 +1660,7 @@ static slider_state *slider_init(running_machine *machine)
 	}
 
 	/* add screen parameters */
-	for (screen_device *screen = screen_first(*machine); screen != NULL; screen = screen_next(screen))
+	for (screen_device *screen = machine->first_screen(); screen != NULL; screen = screen->next_screen())
 	{
 		int defxscale = floor(screen->config().xscale() * 1000.0f + 0.5f);
 		int defyscale = floor(screen->config().yscale() * 1000.0f + 0.5f);
@@ -1715,7 +1729,7 @@ static slider_state *slider_init(running_machine *machine)
 		}
 	}
 
-	for (screen_device *screen = screen_first(*machine); screen != NULL; screen = screen_next(screen))
+	for (screen_device *screen = machine->first_screen(); screen != NULL; screen = screen->next_screen())
 		if (screen->screen_type() == SCREEN_TYPE_VECTOR)
 		{
 			/* add flicker control */
@@ -2116,7 +2130,7 @@ static INT32 slider_beam(running_machine *machine, void *arg, astring *string, I
 
 static char *slider_get_screen_desc(screen_device &screen)
 {
-	int scrcount = screen_count(*screen.machine->config);
+	int scrcount = screen.machine->m_devicelist.count(SCREEN);
 	static char descbuf[256];
 
 	if (scrcount > 1)
