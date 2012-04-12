@@ -304,12 +304,12 @@ OSStatus static MyRenderer(void	* inRefCon,
     }
 }
 
-- (void) osd_update_audio_stream: (running_machine *) machine
-                          buffer: (INT16 *) buffer
+- (void) //osd_update_audio_stream: (running_machine *) machine
+                          buffer: (const INT16 *) buffer
               samples_this_frame: (int) samples_this_frame;
 {
     mSamplesThisFrame = samples_this_frame;
-    if (machine->sample_rate != 0 && mRingBuffer && !mPaused)
+    if (mRingBuffer && !mPaused)
     {
         int inputBytes = samples_this_frame * mBytesPerFrame;
         void * writePointer;

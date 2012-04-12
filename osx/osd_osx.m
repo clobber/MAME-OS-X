@@ -89,7 +89,7 @@ void osx_osd_interface::init(running_machine &machine)
 //void osd_init(running_machine *machine)
 {
     //add_exit_callback(machine, mame_did_exit);
-    //machine->add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit); //removed, testing
+    machine.add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit);
     //add_pause_callback(machine, mame_did_pause);
     
     [sController osd_init: &machine];
@@ -153,9 +153,11 @@ void osd_set_audio_controller(MameAudioController * audioController)
 void osx_osd_interface::update_audio_stream(const INT16 *buffer, int samples_this_frame)
 //void osd_update_audio_stream(running_machine *machine, INT16 *buffer, int samples_this_frame)
 {
-    //[sAudioController osd_update_audio_stream: machine
+    //[sAudioController     running_machine: machine
     //                                   buffer: buffer
     //                       samples_this_frame: samples_this_frame];
+    [sAudioController      buffer: buffer
+                           samples_this_frame: samples_this_frame];
 }
 
 void osx_osd_interface::set_mastervolume(int attenuation)
