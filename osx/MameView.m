@@ -1179,7 +1179,7 @@ NSString * MameExitStatusKey = @"MameExitStatus";
     mMameIsPaused = NO;
     // [self updateMouseCursor];
     
-    osd_interface osd;
+    osx_osd_interface osd;
     MameConfiguration * configuration =
         [MameConfiguration defaultConfiguration];
     

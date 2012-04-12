@@ -42,7 +42,25 @@ static void warning_callback(void *param, const char *format, va_list argptr);
 static void info_callback(void *param, const char *format, va_list argptr);
 static void debug_callback(void *param, const char *format, va_list argptr);
 static void log_callback(void *param, const char *format, va_list argptr);
- 
+
+//-------------------------------------------------
+//  osd_interface - constructor
+//-------------------------------------------------
+
+osd_interface::osd_interface()
+: m_machine(NULL)
+{
+}
+
+
+//-------------------------------------------------
+//  osd_interface - destructor
+//-------------------------------------------------
+
+osd_interface::~osd_interface()
+{
+}
+
 /******************************************************************************
 
     Core
@@ -66,13 +84,14 @@ void osd_set_controller(MameView * controller)
                             sController, NULL, NULL);
 }
 
-void osd_init(running_machine *machine)
+void osx_osd_interface::init(running_machine &machine)
+//void osd_init(running_machine *machine)
 {
     //add_exit_callback(machine, mame_did_exit);
-    machine->add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit);
+    //machine->add_notifier(MACHINE_NOTIFY_EXIT, mame_did_exit); //removed, testing
     //add_pause_callback(machine, mame_did_pause);
     
-    [sController osd_init: machine];
+    [sController osd_init: &machine];
     return;
 }
 
@@ -130,14 +149,16 @@ void osd_set_audio_controller(MameAudioController * audioController)
     sAudioController = audioController;
 }
 
-void osd_update_audio_stream(running_machine *machine, INT16 *buffer, int samples_this_frame)
+void osx_osd_interface::update_audio_stream(const INT16 *buffer, int samples_this_frame)
+//void osd_update_audio_stream(running_machine *machine, INT16 *buffer, int samples_this_frame)
 {
-    [sAudioController osd_update_audio_stream: machine
-                                       buffer: buffer
-                           samples_this_frame: samples_this_frame];
+    //[sAudioController osd_update_audio_stream: machine
+    //                                   buffer: buffer
+    //                       samples_this_frame: samples_this_frame];
 }
 
-void osd_set_mastervolume(int attenuation)
+void osx_osd_interface::set_mastervolume(int attenuation)
+//void osd_set_mastervolume(int attenuation)
 {
     [sAudioController osd_set_mastervolume: attenuation];
 }
@@ -174,7 +195,8 @@ INT32 osd_get_code_value(os_code code)
 }
 #endif
 
-void osd_customize_input_type_list(input_type_desc *defaults)
+void osx_osd_interface::customize_input_type_list(input_type_desc *defaults)
+//void osd_customize_input_type_list(input_type_desc *defaults)
 {
     [sInputController osd_customize_input_type_list: defaults];
 }
@@ -185,13 +207,14 @@ void osd_customize_input_type_list(input_type_desc *defaults)
     Display
 
 ******************************************************************************/
-
-void osd_update(running_machine *machine, int skip_redraw)
+void osx_osd_interface::update(bool skip_redraw)
+//void osd_update(running_machine *machine, int skip_redraw)
 {
     [sController osd_update: skip_redraw];
 }
 
-void osd_wait_for_debugger(const device_config *device, int firststop)
+void osd_interface::wait_for_debugger(device_t &device, bool firststop)
+//void osd_wait_for_debugger(const device_config *device, int firststop)
 {
 }
 
