@@ -38,6 +38,7 @@
 #import <mach/mach_host.h>
 #import <IOKit/graphics/IOGraphicsLib.h>
 #import "osd_osx.h"
+#import "osx_osd_interface.h"
 
 #define MAME_EXPORT_MOVIE 0
 

@@ -26,6 +26,7 @@
 #include "render.h"
 #include "unicode.h"
 #import "osd_osx.h"
+#import "osx_osd_interface.h"
 #import "MameView.h"
 #import "MameInputController.h"
 #import "MameAudioController.h"
@@ -44,11 +45,11 @@ static void debug_callback(void *param, const char *format, va_list argptr);
 static void log_callback(void *param, const char *format, va_list argptr);
 
 //-------------------------------------------------
-//  osd_interface - constructor
+//  osx_osd_interface - constructor
 //-------------------------------------------------
-
-osd_interface::osd_interface()
-: m_machine(NULL)
+osx_osd_interface::osx_osd_interface()
+//osd_interface::osd_interface()
+//: m_machine(NULL)
 {
 }
 
@@ -56,8 +57,8 @@ osd_interface::osd_interface()
 //-------------------------------------------------
 //  osd_interface - destructor
 //-------------------------------------------------
-
-osd_interface::~osd_interface()
+osx_osd_interface::~osx_osd_interface()
+//osd_interface::~osd_interface()
 {
 }
 
@@ -213,7 +214,7 @@ void osx_osd_interface::update(bool skip_redraw)
     [sController osd_update: skip_redraw];
 }
 
-void osd_interface::wait_for_debugger(device_t &device, bool firststop)
+void osx_osd_interface::wait_for_debugger(device_t &device, bool firststop)
 //void osd_wait_for_debugger(const device_config *device, int firststop)
 {
 }
@@ -221,4 +222,47 @@ void osd_interface::wait_for_debugger(device_t &device, bool firststop)
 static void link_functions(void)
 {
     osd_work_queue_items(0);
+}
+
+//-------------------------------------------------
+//  init_debugger - perform debugger-specific
+//  initialization
+//-------------------------------------------------
+
+void osx_osd_interface::init_debugger()
+{
+}
+
+//-------------------------------------------------
+//  font_open - attempt to "open" a handle to the
+//  font with the given name
+//-------------------------------------------------
+
+osd_font osx_osd_interface::font_open(const char *name, int &height)
+{
+	return NULL;
+}
+
+
+//-------------------------------------------------
+//  font_close - release resources associated with
+//  a given OSD font
+//-------------------------------------------------
+
+void osx_osd_interface::font_close(osd_font font)
+{
+}
+
+
+//-------------------------------------------------
+//  font_get_bitmap - allocate and populate a
+//  BITMAP_FORMAT_ARGB32 bitmap containing the
+//  pixel values MAKE_ARGB(0xff,0xff,0xff,0xff)
+//  or MAKE_ARGB(0x00,0xff,0xff,0xff) for each
+//  pixel of a black & white font
+//-------------------------------------------------
+
+bitmap_t *osx_osd_interface::font_get_bitmap(osd_font font, unicode_char chnum, INT32 &width, INT32 &xoffs, INT32 &yoffs)
+{
+	return NULL;
 }

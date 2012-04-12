@@ -3531,6 +3531,7 @@
 		94AE545E15365FC70020C7D0 /* sdlwork.c in Sources */ = {isa = PBXBuildFile; fileRef = 94AE545D15365FC70020C7D0 /* sdlwork.c */; };
 		94AE5461153660790020C7D0 /* osxutils.h in Headers */ = {isa = PBXBuildFile; fileRef = 94AE545F153660790020C7D0 /* osxutils.h */; };
 		94AE5462153660790020C7D0 /* osxutils.m in Sources */ = {isa = PBXBuildFile; fileRef = 94AE5460153660790020C7D0 /* osxutils.m */; };
+		94AE54641536A97B0020C7D0 /* osx_osd_interface.h in Headers */ = {isa = PBXBuildFile; fileRef = 94AE54631536A8D90020C7D0 /* osx_osd_interface.h */; };
 		94CEB8A01534AF08001A266E /* imageutl.c in Sources */ = {isa = PBXBuildFile; fileRef = 94CEB89A1534AF08001A266E /* imageutl.c */; };
 		94CEB8A11534AF08001A266E /* imageutl.h in Headers */ = {isa = PBXBuildFile; fileRef = 94CEB89B1534AF08001A266E /* imageutl.h */; };
 		94CEB8A21534AF08001A266E /* opresolv.c in Sources */ = {isa = PBXBuildFile; fileRef = 94CEB89C1534AF08001A266E /* opresolv.c */; };
@@ -7483,6 +7484,7 @@
 		94AE545D15365FC70020C7D0 /* sdlwork.c */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.cpp; fileEncoding = 4; name = sdlwork.c; path = mame/src/osd/sdl/sdlwork.c; sourceTree = SOURCE_ROOT; };
 		94AE545F153660790020C7D0 /* osxutils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = osxutils.h; path = mame/src/osd/sdl/osxutils.h; sourceTree = SOURCE_ROOT; };
 		94AE5460153660790020C7D0 /* osxutils.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = osxutils.m; path = mame/src/osd/sdl/osxutils.m; sourceTree = SOURCE_ROOT; };
+		94AE54631536A8D90020C7D0 /* osx_osd_interface.h */ = {isa = PBXFileReference; explicitFileType = sourcecode.cpp.h; path = osx_osd_interface.h; sourceTree = "<group>"; };
 		94CEB89A1534AF08001A266E /* imageutl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = imageutl.c; sourceTree = "<group>"; };
 		94CEB89B1534AF08001A266E /* imageutl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = imageutl.h; sourceTree = "<group>"; };
 		94CEB89C1534AF08001A266E /* opresolv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = opresolv.c; sourceTree = "<group>"; };
@@ -11586,6 +11588,7 @@
 				5548EBE70ABCA30E008D1F74 /* MameFileManager.m */,
 				55744C190AAB4FC800EC1423 /* osinline.h */,
 				5574492D0AAB28D900EC1423 /* osd_cpu.h */,
+				94AE54631536A8D90020C7D0 /* osx_osd_interface.h */,
 				55CDE8D70AAC93E90021CEA0 /* osd_osx.h */,
 				556A4D890AA514C300602CC5 /* osd_osx.m */,
 				5567B2E30BBA336A00EA2072 /* osd_core_osx.mm */,
@@ -12160,6 +12163,7 @@
 			files = (
 				94299951152A814000A214B6 /* emucore.h in Headers */,
 				55BEF9FB0AEC61E400357340 /* ThreadSafeQueue.h in Headers */,
+				94AE54641536A97B0020C7D0 /* osx_osd_interface.h in Headers */,
 				55BEF9FC0AEC61E400357340 /* osinline.h in Headers */,
 				55BEF9FE0AEC61E400357340 /* osd_osx.h in Headers */,
 				55BEF9FF0AEC61E400357340 /* osd_cpu.h in Headers */,
