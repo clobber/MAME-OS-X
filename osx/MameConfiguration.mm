@@ -71,7 +71,8 @@ static MameConfiguration * sDefaultConfiguration = nil;
 
 - (void)dealloc
 {
-    
+    //delete mCoreOptions;
+
     [super dealloc];
 }
 
@@ -355,8 +356,7 @@ static MameConfiguration * sDefaultConfiguration = nil;
 - (NSString *) getStringOption: (const char *) name;
 {
     //const char * value = options_get_string(mCoreOptions, name);
-    const char * value = NULL; //Temp hack to fix startup crash
-    //const char * value = mCoreOptions->name;
+    const char * value = mCoreOptions->value(name);
     return [NSString stringWithUTF8String: value];
 }
 
